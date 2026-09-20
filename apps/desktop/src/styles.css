@@ -2090,12 +2090,15 @@ body:not(:has([data-settings-workspace])):has([data-chat-surface][data-conversat
    implementation as a normal chat. */
 .aino-home-layout {
   container-type: inline-size;
-  display: flex;
+  display: grid;
   width: 100%;
   min-width: 0;
   height: 100%;
-  align-items: safe center;
-  justify-content: center;
+  /* The reference leaves slightly more breathing room below the composition.
+     Flexible tracks collapse when content needs the space in shorter panes. */
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 7fr) auto minmax(0, 9fr);
+  justify-items: center;
   /* This surface already reserves the real composer in its measured slot. */
   padding-bottom: 0;
   pointer-events: auto;
@@ -2103,12 +2106,12 @@ body:not(:has([data-settings-workspace])):has([data-chat-surface][data-conversat
 }
 
 .aino-home-content {
+  grid-row: 2;
   display: flex;
   width: min(57.25rem, 100%);
   min-width: 0;
   flex-direction: column;
   align-items: center;
-  transform: translateY(clamp(-3rem, -5vh, -1rem));
   font-family: var(--aino-landing-font);
 }
 
@@ -2116,7 +2119,7 @@ body:not(:has([data-settings-workspace])):has([data-chat-surface][data-conversat
   margin: 0;
   color: var(--aino-landing-title);
   font-family: Georgia, 'Times New Roman', serif;
-  font-size: clamp(2rem, 5cqi, 3.25rem);
+  font-size: clamp(2rem, 6cqi, 3.25rem);
   font-weight: 650;
   line-height: 1.25;
   letter-spacing: 1px;
@@ -2222,6 +2225,12 @@ body:not(:has([data-settings-workspace])):has([data-chat-surface][data-conversat
      composer whenever the window is narrower than the approved composition. */
   width: calc(100% - 2rem);
   padding-inline: 0;
+}
+
+/* Home reserves the composer inside the intro. The ordinary empty-state
+   wrapper's bottom-composer clearance would otherwise shift this slot twice. */
+[data-chat-surface][data-home-layout] [data-slot='aui_empty-placeholder'] {
+  padding-top: 0;
 }
 
 [data-chat-surface][data-home-layout] [data-slot='composer-dock'] {
@@ -2595,10 +2604,6 @@ body:not(:has([data-settings-workspace])):has([data-chat-surface][data-conversat
 @media (max-height: 48rem) {
   [data-chat-surface][data-home-layout] {
     --aino-home-composer-height: 11.5rem;
-  }
-
-  .aino-home-content {
-    transform: none;
   }
 
   .aino-home-composer-slot {

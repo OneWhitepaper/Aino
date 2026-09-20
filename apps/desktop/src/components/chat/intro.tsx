@@ -232,6 +232,7 @@ export function Intro({ home, onInsertPrompt, onPickFiles, personality, seed }: 
   const [mountSeed] = useState(() => Math.floor(Math.random() * 100000))
   const copy = resolveCopy(personality, mountSeed + (seed ?? 0), locale)
   const showHome = home ?? Boolean(onInsertPrompt || onPickFiles)
+  const homeLayoutRef = useRef<HTMLElement>(null)
   const homeContentRef = useRef<HTMLDivElement>(null)
   const homeSlotRef = useRef<HTMLDivElement>(null)
 
@@ -239,11 +240,12 @@ export function Intro({ home, onInsertPrompt, onPickFiles, personality, seed }: 
   // before this lazy intro, or survive its replacement on a project switch.
   // Ordinary positioning avoids Chromium's stale CSS-anchor paint layers.
   useLayoutEffect(() => {
+    const layout = homeLayoutRef.current
     const content = homeContentRef.current
     const slot = homeSlotRef.current
     const surface = content?.closest<HTMLElement>('[data-chat-surface]')
 
-    if (!content || !slot || !surface) {
+    if (!layout || !content || !slot || !surface) {
       return
     }
 
@@ -258,6 +260,9 @@ export function Intro({ home, onInsertPrompt, onPickFiles, personality, seed }: 
     const observer = new ResizeObserver(syncTop)
     observer.observe(surface)
     observer.observe(content)
+    // Parent clearance can reposition this fixed-size content without changing
+    // either the content or chat surface bounds. Observe the sizing owner too.
+    observer.observe(layout)
 
     return () => {
       observer.disconnect()
@@ -307,7 +312,7 @@ export function Intro({ home, onInsertPrompt, onPickFiles, personality, seed }: 
     ]
 
     return (
-      <section className="aino-home-layout" data-home-layout="" data-slot="aui_intro">
+      <section className="aino-home-layout" data-home-layout="" data-slot="aui_intro" ref={homeLayoutRef}>
         <div className="aino-home-content" ref={homeContentRef}>
           <h1 className="aino-home-title">{WORDMARK}</h1>
           <p className="aino-home-subtitle">{subtitle}</p>
