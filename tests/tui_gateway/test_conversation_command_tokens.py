@@ -126,6 +126,12 @@ def test_private_skill_body_reaches_only_selected_profile_as_one_cached_user_tur
             hosted.runtime._process_room(room)
             task = next(t for t in driver.list_tasks(store.db_path, room_id='writer') if t['identity'].turn_id == f't{i}')
             assert task['status'] == 'settled', task
+            # Settlement precedes callback publication. Reconcile its public
+            # event before preparing the next participant against this revision.
+            hosted.conversations.prepare_room(room)
+            responses = [e for e in store.events('writer').events
+                         if e['kind'] == 'conversation.response' and e['payload']['turn_id'] == f't{i}']
+            assert len(responses) == 1
             frozen = store.input_for_task(task)
             sid = hosted.conversations._runtime_id(frozen)
             receipt = server._sessions[sid]['agent']._session_db.get_conversation_input_receipt(f'i{i}')
