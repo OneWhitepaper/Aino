@@ -1056,6 +1056,7 @@ export interface GroupsListResult {
 /** ``gateway/hosted_rooms.py::_room_from_row`` plus the branch-only keys ``create`` (legacy adoption), ``state`` (``authority_claim``) and ``rename`` (``event``) add. */
 export interface Room {
   room_id: string
+  purpose: string
   name: string
   members: RoomMember[]
   authority_gateway_id: string

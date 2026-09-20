@@ -1,4 +1,4 @@
-"""Durable state for gateway-hosted Bot Mode rooms.
+"""Durable container state for hosted discussions and ordinary conversations.
 
 Owns only hosted-room identity and its append-only event log; delivery, relay leasing and agent turns
 belong to the relay and the hosted-room driver, so the log composes with a durable relay without a second
@@ -21,6 +21,9 @@ from gateway.hosted_rooms_common import (
     identifier, open_sqlite, table_columns, table_exists, transaction, utf8_len)
 
 PROTOCOL_VERSION = 2
+DISCUSSION_PURPOSE = "discussion"
+CONVERSATION_PURPOSE = "conversation"
+_ROOM_PURPOSES = frozenset({DISCUSSION_PURPOSE, CONVERSATION_PURPOSE})
 MAX_ROOM_ID_CHARS = 128
 MAX_EVENT_ID_CHARS = 128
 MAX_ROOM_NAME_CHARS = 200
@@ -47,8 +50,11 @@ _JOURNAL_MODE_LOCK_RETRIES = 8
 
 _EVENT_KIND_RE = re.compile(r"^[a-z][a-z0-9_.-]*$")
 _CONTROL_EVENT_KINDS = frozenset({"authority.claimed", "authority.lost", "room.disbanded", "room.stop_requested"})
+_CONVERSATION_EVENT_KINDS = frozenset({"conversation.input", "conversation.response"})
 _EVENT_KINDS_BY_ACTOR = {
-    "user": frozenset({"message.user"}), "member": frozenset({"message.member"}),
+    "user": frozenset({"message.user", "conversation.input"}),
+    "member": frozenset({"message.member"}),
+    "participant": frozenset({"conversation.response"}),
     "gateway": frozenset({
         "member.unavailable", "room.activity", "room.stop_requested", "turn.deferred", "turn.reassigned",
         "turn.cancelled", "turn.failed", "turn.settled", "turn.started"}),
@@ -87,6 +93,8 @@ _REMOTE_RUNS_BODY = """
 _SCHEMA_DDL = (
     """CREATE TABLE IF NOT EXISTS hosted_rooms (
             room_id TEXT PRIMARY KEY,
+            purpose TEXT NOT NULL DEFAULT 'discussion'
+                CHECK (purpose IN ('discussion', 'conversation')),
             name TEXT NOT NULL,
             members_json TEXT NOT NULL,
             authority_gateway_id TEXT NOT NULL,
@@ -157,10 +165,10 @@ _EVENT_COLUMNS = ("room_id, seq, event_id, kind, actor_json, authority_epoch, pa
 _SELECT_EVENT = f"SELECT {_EVENT_COLUMNS} FROM hosted_room_events WHERE room_id=? AND event_id=?"
 _INSERT_EVENT = (f"INSERT INTO hosted_room_events ({_EVENT_COLUMNS}) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
 _ROOM_COLUMNS = (
-    "room_id, name, members_json, authority_gateway_id, authority_epoch, next_seq, revision,"
+    "room_id, purpose, name, members_json, authority_gateway_id, authority_epoch, next_seq, revision,"
     " created_at, updated_at, disbanded_at")
 _ROOM_COLUMNS_WITH_BYTES = (
-    "room_id, name, members_json, authority_gateway_id, authority_epoch, next_seq, event_bytes,"
+    "room_id, purpose, name, members_json, authority_gateway_id, authority_epoch, next_seq, event_bytes,"
     " revision, created_at, updated_at, disbanded_at")
 _SELECT_ROOM = f"SELECT {_ROOM_COLUMNS} FROM hosted_rooms WHERE room_id=?"
 _SELECT_ROOM_WITH_BYTES = f"SELECT {_ROOM_COLUMNS_WITH_BYTES} FROM hosted_rooms WHERE room_id=?"
@@ -338,6 +346,8 @@ def _migrate_remote_run_schema(conn: sqlite3.Connection) -> None:
 _LEGACY_ACTOR_JSON = _system_actor_json("legacy").replace("'", "''")
 # (table, column, ddl) applied in this exact order; each table's PRAGMA is read on first use.
 _LEGACY_COLUMN_DDL = (
+    ("hosted_rooms", "purpose",
+     "ALTER TABLE hosted_rooms ADD COLUMN purpose TEXT NOT NULL DEFAULT 'discussion'"),
     ("hosted_rooms", "authority_gateway_id",
      "ALTER TABLE hosted_rooms ADD COLUMN authority_gateway_id TEXT NOT NULL DEFAULT 'legacy'"),
     ("hosted_rooms", "authority_epoch",
@@ -481,13 +491,24 @@ def _reload(conn: sqlite3.Connection, sql: str, params: tuple, missing: str) -> 
 def _room_from_row(row: sqlite3.Row, *, idempotent: bool = False) -> dict[str, Any]:
     keys = row.keys()  # sqlite3.Row: ``x in row`` scans values, so ``.keys()`` is load-bearing.
     return {
-        "room_id": row["room_id"], "name": row["name"], "members": json.loads(row["members_json"]),
+        "room_id": row["room_id"], "purpose": row["purpose"],
+        "name": row["name"], "members": json.loads(row["members_json"]),
         "authority_gateway_id": row["authority_gateway_id"], "authority_epoch": int(row["authority_epoch"]),
         "revision": int(row["revision"]), "created_at": float(row["created_at"]),
         "updated_at": float(row["updated_at"]), "idempotent": idempotent,
         **({"disbanded_at": float(row["disbanded_at"])} if "disbanded_at" in keys and row["disbanded_at"] is not None
            else {}),
         **({"latest_seq": int(row["next_seq"]) - 1} if "next_seq" in keys else {})}
+
+
+def _require_room_purpose(room: sqlite3.Row, purpose: str) -> None:
+    if str(room["purpose"]) != purpose:
+        raise RoomNotFoundError("hosted room not found")
+
+
+def _require_event_purpose(purpose: str, kind: str) -> None:
+    if kind in _CONVERSATION_EVENT_KINDS and purpose != CONVERSATION_PURPOSE:
+        raise HostedRoomError("conversation events require a conversation room")
 
 
 def _event_from_row(row: sqlite3.Row, *, idempotent: bool = False) -> dict[str, Any]:
@@ -703,6 +724,19 @@ def _reservation_superseded(row: sqlite3.Row, gateway_id: str, epoch: int) -> bo
     return row_epoch > epoch or (row_epoch == epoch and str(row["authority_gateway_id"]) != gateway_id)
 
 
+def _require_peer_room_purpose(conn: sqlite3.Connection, room_id: str) -> None:
+    room = conn.execute("SELECT purpose FROM hosted_rooms WHERE room_id=?", (room_id,)).fetchone()
+    if room is not None:
+        _require_room_purpose(room, DISCUSSION_PURPOSE)
+
+
+def require_peer_room_purpose(db_path: DbPath, *, room_id: Any) -> None:
+    """Allow prospective remote discussions, but never reuse a local conversation identity."""
+    room_id = _room_id(room_id)
+    with _transaction(db_path) as conn:
+        _require_peer_room_purpose(conn, room_id)
+
+
 def reserve_peer_room(
     db_path: DbPath, *, claims: Mapping[str, Any], expires_at: float, now: float | None = None) -> None:
     """Fence direct Desktop prompts before the first peer run is admitted."""
@@ -713,6 +747,7 @@ def reserve_peer_room(
     values = _reservation_claims(claims)
     room_id, _, target_profile, gateway_id, epoch = values
     with _transaction(db_path, immediate=True) as conn:
+        _require_peer_room_purpose(conn, room_id)
         conn.execute("DELETE FROM hosted_room_peer_reservations WHERE expires_at<=?", (timestamp,))
         authority_rows = conn.execute(
             f"""SELECT authority_gateway_id, authority_epoch
@@ -841,58 +876,82 @@ def _adopt_legacy_room(
     return {**_room_from_row(existing, idempotent=True), "adopted": True, "claim_event": _event_from_row(claim_event)}
 
 
+def _validate_purpose(value: Any) -> str:
+    if not isinstance(value, str) or value not in _ROOM_PURPOSES:
+        raise HostedRoomError("invalid room purpose")
+    return value
+
+
+def _create_room_locked(
+    conn: sqlite3.Connection, *, room_id: str, purpose: str, name: str,
+    normalized_members: list[dict[str, Any]], members_json: str,
+    authority_gateway_id: str, now: float,
+) -> dict[str, Any]:
+    """Create one room on the caller's transaction boundary."""
+    if _is_retired(conn, room_id):
+        raise RoomConflictError("room_id belongs to a disbanded room")
+    existing = conn.execute(_SELECT_ROOM_WITH_BYTES, (room_id,)).fetchone()
+    if existing is not None:
+        if existing["disbanded_at"] is not None:
+            raise RoomConflictError("room_id belongs to a disbanded room")
+        if existing["purpose"] != purpose:
+            raise RoomConflictError("room_id already exists for a different purpose")
+        legacy_adoption = (existing["authority_gateway_id"] == "legacy" and authority_gateway_id != "legacy")
+        members_match = existing["members_json"] == members_json or (
+            legacy_adoption and _legacy_members_match(existing["members_json"], normalized_members))
+        if existing["name"] != name or not members_match:
+            raise RoomConflictError("room_id already exists with different state")
+        if legacy_adoption:
+            return _adopt_legacy_room(
+                conn, existing, room_id=room_id, members_json=members_json,
+                authority_gateway_id=authority_gateway_id, now=now)
+        if existing["authority_gateway_id"] != authority_gateway_id:
+            raise RoomConflictError("room_id already belongs to a different authority")
+        return _room_from_row(existing, idempotent=True)
+    active = conn.execute("SELECT COUNT(*) FROM hosted_rooms WHERE disbanded_at IS NULL").fetchone()[0]
+    if int(active) >= MAX_ACTIVE_ROOMS:
+        if purpose == DISCUSSION_PURPOSE:
+            raise HostedRoomError("This host has too many active Group Chats. Delete one and try again.")
+        raise HostedRoomError("This host has too many active conversations. Archive one and try again.")
+    conn.execute(
+        f"""INSERT INTO hosted_rooms ({_ROOM_COLUMNS_WITH_BYTES})
+            VALUES (?, ?, ?, ?, ?, 1, 1, 0, 1, ?, ?, NULL)""",
+        (room_id, purpose, name, members_json, authority_gateway_id, now, now))
+    row = _reload(
+        conn, f"SELECT {_ROOM_COLUMNS} FROM hosted_rooms WHERE room_id=?", (room_id,),
+        "created room could not be reloaded")
+    return {**_room_from_row(row), "members": normalized_members}
+
+
 def create_room(
     db_path: DbPath, *, room_id: Any, name: Any, members: Any, authority_gateway_id: Any, now: float | None = None
 ) -> dict[str, Any]:
-    """Create a room, or return the identical existing room idempotently."""
+    """Create a discussion room, or return the identical existing room idempotently."""
     room_id = _room_id(room_id)
     name = _validate_room_name(name)
     normalized_members, members_json = _validate_members(members)
     authority_gateway_id = _actor_id(authority_gateway_id, "authority_gateway_id")
     now = _now(now)
     with _transaction(db_path, immediate=True) as conn:
-        if _is_retired(conn, room_id):
-            raise RoomConflictError("room_id belongs to a disbanded room")
-        existing = conn.execute(_SELECT_ROOM_WITH_BYTES, (room_id,)).fetchone()
-        if existing is not None:
-            if existing["disbanded_at"] is not None:
-                raise RoomConflictError("room_id belongs to a disbanded room")
-            legacy_adoption = (existing["authority_gateway_id"] == "legacy" and authority_gateway_id != "legacy")
-            members_match = existing["members_json"] == members_json or (
-                legacy_adoption and _legacy_members_match(existing["members_json"], normalized_members))
-            if existing["name"] != name or not members_match:
-                raise RoomConflictError("room_id already exists with different state")
-            if legacy_adoption:
-                return _adopt_legacy_room(
-                    conn, existing, room_id=room_id, members_json=members_json,
-                    authority_gateway_id=authority_gateway_id, now=now)
-            if existing["authority_gateway_id"] != authority_gateway_id:
-                raise RoomConflictError("room_id already belongs to a different authority")
-            return _room_from_row(existing, idempotent=True)
-        active = conn.execute("SELECT COUNT(*) FROM hosted_rooms WHERE disbanded_at IS NULL").fetchone()[0]
-        if int(active) >= MAX_ACTIVE_ROOMS:
-            raise HostedRoomError("This host has too many active Group Chats. Delete one and try again.")
-        conn.execute(
-            f"""INSERT INTO hosted_rooms ({_ROOM_COLUMNS_WITH_BYTES})
-                VALUES (?, ?, ?, ?, 1, 1, 0, 1, ?, ?, NULL)""",
-            (room_id, name, members_json, authority_gateway_id, now, now))
-        row = _reload(
-            conn, """SELECT room_id, name, members_json, authority_gateway_id, authority_epoch, revision,
-                created_at, updated_at FROM hosted_rooms WHERE room_id=?""", (room_id,),
-            "created room could not be reloaded")
-    return {**_room_from_row(row), "members": normalized_members}
+        return _create_room_locked(
+            conn, room_id=room_id, purpose=DISCUSSION_PURPOSE, name=name,
+            normalized_members=normalized_members, members_json=members_json,
+            authority_gateway_id=authority_gateway_id, now=now)
 
 
 def list_rooms(
-    db_path: DbPath, *, include_disbanded: bool = False, limit: int = MAX_ROOM_LIST_LIMIT, offset: int = 0
+    db_path: DbPath, *, include_disbanded: bool = False, limit: int = MAX_ROOM_LIST_LIMIT, offset: int = 0,
+    purpose: str = DISCUSSION_PURPOSE,
 ) -> list[dict[str, Any]]:
     """Return one bounded read-only page ordered by most recent change."""
     limit = _bounded_limit(limit, MAX_ROOM_LIST_LIMIT)
     offset = _non_negative(offset, "offset")
+    purpose = _validate_purpose(purpose)
     with closing(_read_connection(db_path)) as conn:
         rows = conn.execute(
-            f"""SELECT {_ROOM_COLUMNS} FROM hosted_rooms WHERE disbanded_at IS NULL OR ?
-                ORDER BY updated_at DESC, room_id ASC LIMIT ? OFFSET ?""", (int(include_disbanded), limit, offset)
+            f"""SELECT {_ROOM_COLUMNS} FROM hosted_rooms WHERE purpose=? AND (disbanded_at IS NULL OR ?)
+                ORDER BY updated_at DESC, room_id ASC LIMIT ? OFFSET ?""",
+            (purpose, int(include_disbanded), limit, offset)
         ).fetchall()
     return [_room_from_row(row) for row in rows]
 
@@ -907,6 +966,7 @@ def rename_room(db_path: DbPath, *, room_id: Any, event_id: Any, name: Any, now:
     payload_json = _payload_json({"name": name})
     with _transaction(db_path, immediate=True) as conn:
         room = _room_row(conn, _SELECT_ROOM_WITH_BYTES, (room_id,), room_id)
+        _require_room_purpose(room, DISCUSSION_PURPOSE)
         if room["disbanded_at"] is not None:
             raise RoomNotFoundError("hosted room not found")
         existing = _load_event(conn, room_id, event_id)
@@ -926,16 +986,48 @@ def rename_room(db_path: DbPath, *, room_id: Any, event_id: Any, name: Any, now:
         return {**_room_from_row(updated), "event": _event_from_row(_load_event(conn, room_id, event_id))}
 
 
+def _append_event_locked(
+    conn: sqlite3.Connection, *, room_id: str, purpose: str, event_id: str, kind: str,
+    normalized_actor: dict[str, str], actor_json: str, payload_json: str,
+    authority_gateway_id: str, authority_epoch: int, now: float,
+) -> dict[str, Any]:
+    """Append one validated event on the caller's transaction boundary."""
+    room = _room_row(
+        conn, """SELECT purpose, next_seq, event_bytes, authority_gateway_id, authority_epoch
+            FROM hosted_rooms WHERE room_id=? AND disbanded_at IS NULL""", (room_id,), room_id)
+    _require_room_purpose(room, purpose)
+    _require_event_purpose(purpose, kind)
+    existing = _load_event(conn, room_id, event_id)
+    if existing is not None:
+        if _event_content(existing) != (kind, actor_json, authority_epoch, payload_json):
+            raise EventConflictError("event_id already exists with different content")
+        return {**_event_from_row(existing, idempotent=True), "actor": normalized_actor}
+    _require_authority(room, authority_gateway_id, authority_epoch, "stale hosted room authority")
+    seq = int(room["next_seq"])
+    event_bytes = _insert_event(
+        conn, room, room_id, seq, event_id, kind, actor_json, authority_epoch, payload_json, now,
+        allow_control=kind in _CONTROL_EVENT_KINDS)
+    _fenced_update(conn, """UPDATE hosted_rooms SET next_seq=?, event_bytes=event_bytes+?, updated_at=?
+            WHERE room_id=? AND next_seq=?""", (seq + 1, event_bytes, now, room_id, seq),
+        RuntimeError("hosted room sequence advance lost its write fence"))
+    row = _reload(
+        conn, f"SELECT {_EVENT_COLUMNS} FROM hosted_room_events WHERE room_id=? AND seq=?", (room_id, seq),
+        "appended event could not be reloaded")
+    return {**_event_from_row(row), "actor": normalized_actor}
+
+
 def append_event(
     db_path: DbPath, *, room_id: Any, event_id: Any, kind: Any, actor: Any, payload: Any,
-    authority_gateway_id: Any = None, authority_epoch: Any = None, now: float | None = None) -> dict[str, Any]:
+    authority_gateway_id: Any = None, authority_epoch: Any = None, now: float | None = None,
+    purpose: str = DISCUSSION_PURPOSE,
+) -> dict[str, Any]:
     """Append one immutable event and allocate its per-room sequence atomically; repeating an ``event_id``
     with identical content returns the original, different content fails closed."""
     room_id = _room_id(room_id)
+    purpose = _validate_purpose(purpose)
     event_id = _event_id(event_id)
     kind = _validate_event_kind(kind)
     normalized_actor, actor_json = _validate_actor(actor, kind=kind)
-    # Every admitted actor kind is room-scoped, so authority fields are always required.
     authority_gateway_id = _actor_id(authority_gateway_id, "authority_gateway_id")
     if normalized_actor["kind"] == "gateway" and normalized_actor["id"] != authority_gateway_id:
         raise HostedRoomError("gateway actor.id must match authority_gateway_id")
@@ -945,37 +1037,22 @@ def append_event(
     payload_json = _payload_json(payload)
     now = _now(now)
     with _transaction(db_path, immediate=True) as conn:
-        existing = _load_event(conn, room_id, event_id)
-        if existing is not None:
-            if _event_content(existing) != (kind, actor_json, authority_epoch, payload_json):
-                raise EventConflictError("event_id already exists with different content")
-            return _event_from_row(existing, idempotent=True)
-        room = _room_row(
-            conn, """SELECT next_seq, event_bytes, authority_gateway_id, authority_epoch
-                FROM hosted_rooms WHERE room_id=? AND disbanded_at IS NULL""", (room_id,), room_id)
-        _require_authority(room, authority_gateway_id, authority_epoch, "stale hosted room authority")
-        seq = int(room["next_seq"])
-        event_bytes = _insert_event(
-            conn, room, room_id, seq, event_id, kind, actor_json, authority_epoch, payload_json, now,
-            allow_control=kind in _CONTROL_EVENT_KINDS)
-        _fenced_update(conn, """UPDATE hosted_rooms SET next_seq=?, event_bytes=event_bytes+?, updated_at=?
-                WHERE room_id=? AND next_seq=?""", (seq + 1, event_bytes, now, room_id, seq),
-            RuntimeError("hosted room sequence advance lost its write fence"))
-        row = _reload(
-            conn, f"SELECT {_EVENT_COLUMNS} FROM hosted_room_events WHERE room_id=? AND seq=?", (room_id, seq),
-            "appended event could not be reloaded")
-    return {**_event_from_row(row), "actor": normalized_actor}
+        return _append_event_locked(
+            conn, room_id=room_id, purpose=purpose, event_id=event_id, kind=kind,
+            normalized_actor=normalized_actor, actor_json=actor_json, payload_json=payload_json,
+            authority_gateway_id=authority_gateway_id, authority_epoch=authority_epoch, now=now)
 
 
-def _probe(path: Path, table: str, query: str, params: tuple[Any, ...], unavailable: str) -> bool:
+def _probe(path: Path, table: str, query: str, params: tuple[Any, ...], unavailable: str) -> sqlite3.Row | None:
     """Non-blocking existence probe: short timeout, no schema creation or migration."""
     if not path.is_file():
-        return False
+        return None
     try:
         with closing(open_sqlite(path, timeout=0.05)) as conn:
+            conn.row_factory = sqlite3.Row
             table_row = conn.execute(
                 f"SELECT 1 FROM sqlite_master WHERE type='table' AND name='{table}' LIMIT 1").fetchone()
-            return table_row is not None and conn.execute(query, params).fetchone() is not None
+            return conn.execute(query, params).fetchone() if table_row is not None else None
     except sqlite3.Error as exc:
         raise RoomProbeUnavailableError(unavailable) from exc
 
@@ -984,9 +1061,12 @@ def probe_hosted_room(db_path: DbPath, *, room_id: Any) -> bool:
     """Check room ownership without creating or migrating the shared store; runs on the synchronous
     prompt-admission path for older Desktop clients, so it fails fast under contention instead of blocking
     the WebSocket reader for SQLite's ten-second timeout."""
-    return _probe(
-        Path(db_path), "hosted_rooms", "SELECT 1 FROM hosted_rooms WHERE room_id=? AND disbanded_at IS NULL LIMIT 1",
+    room = _probe(
+        Path(db_path), "hosted_rooms", "SELECT * FROM hosted_rooms WHERE room_id=? "
+        "AND disbanded_at IS NULL LIMIT 1",
         (_room_id(room_id),), "hosted room ownership is temporarily unavailable")
+    # Pre-purpose schemas contain only discussions; this admission probe must not migrate them.
+    return room is not None and ("purpose" not in room.keys() or room["purpose"] == DISCUSSION_PURPOSE)
 
 
 def probe_peer_room_reservation(
@@ -995,17 +1075,22 @@ def probe_peer_room_reservation(
     params = (_room_id(room_id), _actor_id(target_profile, "target_profile"), _now(now))
     return _probe(
         Path(db_path), "hosted_room_peer_reservations", _SELECT_LIVE_RESERVATION, params,
-        "peer room ownership is temporarily unavailable")
+        "peer room ownership is temporarily unavailable") is not None
 
 
-def room_state(db_path: DbPath, *, room_id: Any, include_disbanded: bool = False) -> dict[str, Any]:
+def room_state(
+    db_path: DbPath, *, room_id: Any, include_disbanded: bool = False,
+    purpose: str = DISCUSSION_PURPOSE,
+) -> dict[str, Any]:
     """Return durable replay and authority state for one room."""
     room_id = _room_id(room_id)
+    purpose = _validate_purpose(purpose)
     with _transaction(db_path) as conn:
         row = _room_row(
             conn,
             f"""SELECT {_ROOM_COLUMNS} FROM hosted_rooms WHERE room_id=? AND (disbanded_at IS NULL
                 OR ?)""", (room_id, int(include_disbanded)), room_id)
+        _require_room_purpose(row, purpose)
         claim_row = conn.execute(
             f"""SELECT {_EVENT_COLUMNS} FROM hosted_room_events WHERE room_id=?
                 AND kind='authority.claimed' AND authority_epoch=? ORDER BY seq DESC LIMIT 1""",
@@ -1040,8 +1125,9 @@ def claim_authority(
     claim_payload_json = _claim_payload_json(expected_gateway_id, new_gateway_id, target_epoch)
     with _transaction(db_path, immediate=True) as conn:
         row = _room_row(
-            conn, """SELECT authority_gateway_id, authority_epoch, next_seq, event_bytes
+            conn, """SELECT purpose, authority_gateway_id, authority_epoch, next_seq, event_bytes
                 FROM hosted_rooms WHERE room_id=? AND disbanded_at IS NULL""", (room_id,), room_id)
+        _require_room_purpose(row, DISCUSSION_PURPOSE)
         existing_event = _load_event(conn, room_id, event_id)
         idempotent = existing_event is not None
         if idempotent:
@@ -1064,8 +1150,7 @@ def claim_authority(
                 AuthorityConflictError("hosted room authority changed"))
             existing_event = _load_event(conn, room_id, event_id)
         state_row = _reload(
-            conn, """SELECT room_id, name, members_json, authority_gateway_id, authority_epoch, next_seq,
-                revision, created_at, updated_at FROM hosted_rooms WHERE room_id=?""", (room_id,),
+            conn, f"SELECT {_ROOM_COLUMNS} FROM hosted_rooms WHERE room_id=?", (room_id,),
             "claimed room could not be reloaded")
     if existing_event is None:  # pragma: no cover - both claim paths set it
         raise RuntimeError("authority claim event could not be reloaded")
@@ -1101,8 +1186,11 @@ def disband_room(
     _require_positive_int(expected_epoch, "expected_epoch")
     now = _now(now)
     with _transaction(db_path, immediate=True) as conn:
-        room = conn.execute("""SELECT authority_gateway_id, authority_epoch, next_seq, event_bytes, disbanded_at
+        room = conn.execute("""SELECT purpose, authority_gateway_id, authority_epoch, next_seq,
+                event_bytes, disbanded_at
                 FROM hosted_rooms WHERE room_id=?""", (room_id,)).fetchone()
+        if room is not None:
+            _require_room_purpose(room, DISCUSSION_PURPOSE)
         if (replay := _disband_replay(conn, room_id, room)) is not None:
             return replay
         _require_authority(room, expected_gateway_id, expected_epoch, "stale hosted room authority")
@@ -1125,16 +1213,19 @@ def disband_room(
 
 
 def read_events(
-    db_path: DbPath, *, room_id: Any, since_seq: Any = 0, limit: Any = 100, include_disbanded: bool = False
+    db_path: DbPath, *, room_id: Any, since_seq: Any = 0, limit: Any = 100,
+    include_disbanded: bool = False, purpose: str = DISCUSSION_PURPOSE,
 ) -> dict[str, Any]:
     """Read a monotonic room-log delta after ``since_seq``."""
     room_id = _room_id(room_id)
+    purpose = _validate_purpose(purpose)
     since_seq = _non_negative(since_seq, "since_seq")
     limit = _bounded_limit(limit, MAX_LOG_LIMIT)
     with _transaction(db_path) as conn:
         room = _room_row(
-            conn, """SELECT next_seq, authority_gateway_id, authority_epoch FROM hosted_rooms
+            conn, """SELECT purpose, next_seq, authority_gateway_id, authority_epoch FROM hosted_rooms
                 WHERE room_id=? AND (disbanded_at IS NULL OR ?)""", (room_id, int(include_disbanded)), room_id)
+        _require_room_purpose(room, purpose)
         latest_seq = int(room["next_seq"]) - 1
         authority = {"gateway_id": str(room["authority_gateway_id"]), "epoch": int(room["authority_epoch"])}
         if since_seq > latest_seq:
@@ -1160,7 +1251,8 @@ def read_events(
     def build_page(page_events: list[dict[str, Any]]) -> dict[str, Any]:
         cursor = page_events[-1]["seq"] if page_events else since_seq
         return {"events": page_events, "cursor": cursor, "latest_seq": latest_seq, "has_more": cursor < latest_seq,
-                "authority": authority}
+                "authority": authority,
+                **({"purpose": purpose} if purpose != DISCUSSION_PURPOSE else {})}
     def fits(page_events: list[dict[str, Any]]) -> bool:
         page_json = json.dumps(build_page(page_events), ensure_ascii=False, separators=(",", ":"))
         return utf8_len(page_json) <= MAX_LOG_PAGE_BYTES

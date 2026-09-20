@@ -23264,6 +23264,10 @@
             "title": "Room Id",
             "type": "string"
           },
+          "purpose": {
+            "title": "Purpose",
+            "type": "string"
+          },
           "name": {
             "title": "Name",
             "type": "string"
@@ -23372,6 +23376,7 @@
         },
         "required": [
           "room_id",
+          "purpose",
           "name",
           "members",
           "authority_gateway_id",

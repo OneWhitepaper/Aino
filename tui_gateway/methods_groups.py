@@ -252,9 +252,10 @@ def _(rid, params: dict, db_path, _catalog=_local_catalog, _expiry=_grant_expiry
     """Mint one target-issued room/profile grant for a prospective home."""
     from gateway.hosted_room_peer import (
         decode_room_grant, gateway_room_grant_secret, issue_room_grant)
-    from gateway.hosted_rooms import local_authority_gateway_id, reserve_peer_room
+    from gateway.hosted_rooms import local_authority_gateway_id, require_peer_room_purpose, reserve_peer_room
     if not _room_link_run_storage_durable():
         raise ValueError("durable run idempotency storage is required")
+    require_peer_room_purpose(db_path, room_id=params.get("room_id"))
     installation_id = local_authority_gateway_id()
     profile = _requested_profile(params)
     ttl = float(params.get("ttl_seconds", 3600))
@@ -346,12 +347,12 @@ def _(rid, params: dict, service) -> dict:
 @_room_method("groups.list", code=5110, db=True)
 def _(rid, params: dict, db_path) -> dict:
     """List rooms hosted by this gateway."""
-    from gateway.hosted_rooms import MAX_ROOM_LIST_LIMIT, list_rooms
+    from gateway.hosted_rooms import DISCUSSION_PURPOSE, MAX_ROOM_LIST_LIMIT, list_rooms
     limit = params.get("limit", MAX_ROOM_LIST_LIMIT)
     offset = params.get("offset", 0)
     rooms = list_rooms(
         db_path, include_disbanded=params.get("include_disbanded") is True, limit=limit,
-        offset=offset)
+        offset=offset, purpose=DISCUSSION_PURPOSE)
     next_offset = offset + limit if len(rooms) == limit else None
     return _ok(rid, {"rooms": rooms, "next_offset": next_offset})
 
@@ -369,10 +370,11 @@ def _(rid, params: dict, service) -> dict:
 @_room_method("groups.state", code=5115, room_code=4114, db=True)
 def _(rid, params: dict, db_path) -> dict:
     """Return one hosted room's replay cursor and fenced authority state."""
-    from gateway.hosted_rooms import room_state
+    from gateway.hosted_rooms import DISCUSSION_PURPOSE, room_state
     room = room_state(
         db_path, room_id=params.get("room_id"),
-        include_disbanded=params.get("include_disbanded") is True)
+        include_disbanded=params.get("include_disbanded") is True,
+        purpose=DISCUSSION_PURPOSE)
     service = get_hosted_room_service()
     result = {"room": room}
     if service is not None and room.get("disbanded_at") is None:
@@ -439,6 +441,9 @@ def _(rid, params: dict, service) -> dict:
 @_room_method("groups.approve", code=5119, service_code=4115)
 def _(rid, params: dict, service) -> dict:
     """Resolve one exact approval requested by a local or peer room member."""
+    room_lookup = getattr(service, "_room", None)
+    if callable(room_lookup):
+        room_lookup(str(params.get("room_id") or ""))
     result = service.approve_room_task(
         str(params.get("room_id") or ""), member_id=str(params.get("member_id") or ""),
         task_id=str(params.get("task_id") or ""),
@@ -450,6 +455,9 @@ def _(rid, params: dict, service) -> dict:
 @_room_method("groups.retry", code=5118, service_code=4115)
 def _(rid, params: dict, service) -> dict:
     """Retry one indeterminate room task after explicit user confirmation."""
+    room_lookup = getattr(service, "_room", None)
+    if callable(room_lookup):
+        room_lookup(str(params.get("room_id") or ""))
     task = service.retry_room_task(
         str(params.get("room_id") or ""), task_id=str(params.get("task_id") or ""))
     if not isinstance(task, dict):
