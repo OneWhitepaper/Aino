@@ -340,9 +340,20 @@ class SessionMessagesMixin:
     def append_messages_batch(
         self, session_id: str, messages: List[Dict[str, Any]], compression_lock_holder: Optional[str] = None,
         turn_lease_holder: Optional[str] = None, chunk_rows: Optional[int] = None,
-        turn_lease_ttl_seconds: float = 300.0) -> int:
+        turn_lease_ttl_seconds: float = 300.0, *, conversation_input=None,
+        input_message_index: Optional[int] = None):
         """Append *messages* in ONE write txn (all rows land or none, guards run once); returns the inserted
-        count. ``chunk_rows`` bounds txn size for LARGE copies (branch seeds; FTS triggers run per row)."""
+        count, or the input receipt for a managed batch. Managed input is identified by an explicit
+        batch index from the trusted agent scope, never metadata in a user message.
+        ``chunk_rows`` bounds txn size for LARGE copies (branch seeds; FTS triggers run per row)."""
+        if conversation_input is not None:
+            from agent.conversation_input import ManagedConversationInput
+            if not isinstance(conversation_input, ManagedConversationInput):
+                raise TypeError("conversation_input must be ManagedConversationInput")
+            if chunk_rows is not None:
+                raise ValueError("managed input batch cannot be split across transactions")
+            if not isinstance(input_message_index, int) or not 0 <= input_message_index < len(messages):
+                raise ValueError("managed input requires its batch row index")
         if not messages:
             return 0
         if chunk_rows is not None and len(messages) > chunk_rows:
@@ -356,9 +367,31 @@ class SessionMessagesMixin:
             from agent.transcript_repair import resolve_and_repair_transcript_batch
             inserted_rows = resolve_and_repair_transcript_batch(conn, session_id, messages,
                 encode_content_fn=self._encode_content, decode_content_fn=self._decode_content)
-            inserted, tool_calls_total = self._insert_message_rows(conn, session_id, inserted_rows)
-            self._bump_session_counters(conn, session_id, inserted, tool_calls_total, unit=False)
-            return inserted
+            if conversation_input is None:
+                inserted, tool_calls_total = self._insert_message_rows(conn, session_id, inserted_rows)
+                self._bump_session_counters(conn, session_id, inserted, tool_calls_total, unit=False)
+                return inserted
+            input_row = messages[input_message_index]
+            receipt = None
+            # Preserve batch order and assistant repair, including rows before the managed input.
+            for row in inserted_rows:
+                if row is input_row:
+                    receipt = self._accept_conversation_input_on_conn(
+                        conn, session_id, message=row, **vars(conversation_input),
+                        compression_lock_holder=compression_lock_holder,
+                        turn_lease_holder=turn_lease_holder,
+                        turn_lease_ttl_seconds=turn_lease_ttl_seconds,
+                    )
+                    if receipt.idempotent:
+                        from agent.conversation_input import ConversationInputRecoveryRequired
+                        raise ConversationInputRecoveryRequired(receipt)
+                    row["_row_id"] = receipt.message_row_id
+                else:
+                    inserted, tool_calls = self._insert_message_rows(conn, session_id, [row])
+                    self._bump_session_counters(conn, session_id, inserted, tool_calls, unit=False)
+            if receipt is None:
+                raise RuntimeError("managed input missing from repaired batch")
+            return receipt
         return self._execute_write(_do, patience_s=self._TRANSCRIPT_WRITE_PATIENCE_S)
 
     def set_latest_matching_message_display_kind(self, session_id: str, *, role: str, content: str,

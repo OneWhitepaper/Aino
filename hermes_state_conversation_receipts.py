@@ -73,6 +73,27 @@ class SessionConversationReceiptsMixin:
         )
         return None if row is None else self._input_receipt(row, idempotent=True)
 
+    def recover_conversation_input_receipt(
+        self, session_id: str, *, input_id: str, input_digest: str,
+        conversation_id: str, participant_id: str, session_generation: int,
+    ) -> Optional[InputReceipt]:
+        """Recover by stable identity across compression without regenerating a row payload."""
+        with self._read_ctx() as conn:
+            row = conn.execute(
+                f"SELECT {_RECEIPT_COLUMNS} FROM conversation_input_receipts WHERE input_id = ?",
+                (input_id,),
+            ).fetchone()
+            if row is None:
+                return None
+            expected = (input_digest, conversation_id, participant_id, session_generation)
+            actual = tuple(row[key] for key in (
+                "input_digest", "conversation_id", "participant_id", "session_generation"))
+            if expected != actual or self._session_turn_lease_key_on_conn(
+                conn, session_id
+            ) != self._session_turn_lease_key_on_conn(conn, row["session_id"]):
+                raise ValueError(f"conversation input {input_id!r} conflicts with its durable receipt")
+            return self._input_receipt(row, idempotent=True)
+
     def accept_conversation_input(
         self,
         session_id: str,
@@ -115,6 +136,9 @@ class SessionConversationReceiptsMixin:
         conversation_id: str,
         participant_id: str,
         session_generation: int,
+        compression_lock_holder: Optional[str] = None,
+        turn_lease_holder: Optional[str] = None,
+        turn_lease_ttl_seconds: float = 300.0,
     ) -> InputReceipt:
         """Transaction-owned form used when input admission joins another Profile flush."""
         session_id = _required_text(session_id, "session_id")
@@ -162,7 +186,9 @@ class SessionConversationReceiptsMixin:
         self._check_transcript_write_guards(
             conn,
             session_id,
-            None,
+            compression_lock_holder,
+            turn_lease_holder=turn_lease_holder,
+            turn_lease_ttl_seconds=turn_lease_ttl_seconds,
             reject_active_turn_lease=True,
             reject_active_compression_lock=True,
         )

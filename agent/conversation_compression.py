@@ -2801,6 +2801,12 @@ def _fold_todo_snapshot(agent: Any, compressed: list) -> None:
 def _rebuild_system_prompt_at_boundary(agent: Any, system_message: str) -> str:
     """Refresh tool schemas and rebuild the system prompt at the commit boundary."""
     cached_system_prompt = agent._cached_system_prompt
+    if getattr(agent, "_conversation_snapshot_guard", None) is not None:
+        # This generation's Profile configuration is frozen. Compression may replace
+        # transcript context, but cannot import new tools, permissions, memory or skills.
+        if not isinstance(cached_system_prompt, str):
+            raise RuntimeError("managed conversation compression requires its frozen prompt")
+        return cached_system_prompt
     agent._invalidate_system_prompt()
 
     # Refresh dynamic tool schemas at the same admitted-commit boundary that rebuilds the system prompt
@@ -2986,16 +2992,19 @@ def _publish_rotated_compaction(
     old_title = agent._session_db.get_session_title(agent.session_id)
     new_session_id = mint_session_id()
     from agent.context_compressor import _DB_PERSISTED_MARKER
+    from agent.conversation_input import managed_compaction_rows, sync_managed_compaction_rows
+    durable_compressed = managed_compaction_rows(agent, compressed)
     agent._session_db.publish_compression_child(
         parent_session_id=old_session_id, child_session_id=new_session_id,
         source=agent.platform or os.environ.get("HERMES_SESSION_SOURCE", "cli"), model=agent.model,
-        model_config=agent._session_init_model_config, system_prompt=new_system_prompt, messages=compressed,
+        model_config=agent._session_init_model_config, system_prompt=new_system_prompt, messages=durable_compressed,
         cwd=getattr(agent, "working_directory", None), profile_name=_profile_for_child,
         compression_lock_holder=lease.holder, require_compression_lease=lease.holder is not None,
         require_lease_refresh=lease.holder is not None, lease_ttl_seconds=lease.ttl,
         watermark=(lease.watermark if _foreign_tail_ceiling is not None else None),
         watermark_ceiling=_foreign_tail_ceiling,
     )
+    sync_managed_compaction_rows(agent, compressed, durable_compressed)
     # `already_present` stamping is done by run_agent's _sync_persisted_markers;
     # this branch covers inserted/merged only; direct callers must use that wrapper.
     if compressed_user_turn_outcome in {"inserted", "merged"}:
@@ -3284,12 +3293,15 @@ def _commit_compaction(
                 from agent.context_compressor import PROACTIVE_PRUNE_REARM_MODEL_CONFIG_KEY, stamp_db_persisted_markers
                 # Tail rows tagged by compress() are archived as superseded duplicates, not
                 # compacted=1. Count against the FINAL list — salvage may have dropped rows.
+                from agent.conversation_input import managed_compaction_rows, sync_managed_compaction_rows
+                durable_compressed = managed_compaction_rows(agent, compressed)
                 agent._session_db.archive_and_compact(
-                    agent.session_id, compressed, model_config_patch={PROACTIVE_PRUNE_REARM_MODEL_CONFIG_KEY: None},
+                    agent.session_id, durable_compressed, model_config_patch={PROACTIVE_PRUNE_REARM_MODEL_CONFIG_KEY: None},
                     watermark=lease.watermark, lock_holder=lease.holder,
                     tail_count=sum(1 for m in compressed if id(m) in _tail_tagged_ids),
                 )
                 split_status = "in_place_committed"
+                sync_managed_compaction_rows(agent, compressed, durable_compressed)
                 # compress() returned marker-swept copies; stamp them as persisted or the next
                 # flush re-INSERTs the whole compacted transcript, doubling the live set. Reset
                 # the flush identity set so next turn diffs against the COMPACTED transcript.
@@ -3720,6 +3732,9 @@ def compress_context(
             return messages, commit.refused_prompt
         compressed = commit.compressed
         split_status = commit.split_status
+        compression_committed = getattr(agent, "_conversation_compression_committed", None)
+        if commit.session_commit_succeeded and compression_committed is not None:
+            compression_committed(agent)
         _compressed_est = _finish_compaction_boundary(
             agent, compressed, new_system_prompt=new_system_prompt, old_session_id=commit.old_session_id,
             in_place=in_place, compacted_in_place=commit.compacted_in_place,
