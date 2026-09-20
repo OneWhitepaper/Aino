@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any
 
 from gateway import hosted_rooms
+from gateway.hosted_room_conversation_context_store import ConversationContextStoreMixin, initialize_context_schema
 from gateway.hosted_room_conversation_types import (
     Admission, ConversationRecord, EventPage, ParticipantBinding, ParticipantRef, ProjectRef, TurnSubmission)
 
@@ -142,13 +143,14 @@ def _record_from_rows(room: sqlite3.Row, metadata: sqlite3.Row, general: sqlite3
         revision=int(room["revision"]), archived=metadata["archived_at"] is not None)
 
 
-class ConversationStore:
+class ConversationStore(ConversationContextStoreMixin):
     """Persist ordinary conversation metadata beside the shared Hosted event log."""
 
     def __init__(self, db_path: Path) -> None:
         self.db_path = Path(db_path)
         with hosted_rooms._transaction(self.db_path, immediate=True) as conn:
             _initialize_schema(conn)
+            initialize_context_schema(conn)
 
     def create(
         self, conversation_id: str, title: str, general: ParticipantRef,
