@@ -512,7 +512,9 @@ CREATE TABLE IF NOT EXISTS gateway_heartbeats (
     started_at REAL NOT NULL,
     last_heartbeat REAL NOT NULL,
     profile TEXT NOT NULL DEFAULT '',
-    host TEXT NOT NULL DEFAULT ''
+    host TEXT NOT NULL DEFAULT '',
+    process_started_at REAL,
+    capabilities_json TEXT NOT NULL DEFAULT '{}'
 );
 
 CREATE TABLE IF NOT EXISTS compression_locks (

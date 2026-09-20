@@ -45,6 +45,7 @@ class TurnEnvelope:
     source_event_ids: tuple[str, ...]
     through_seq: int
     summary_through_seq: int
+    voice_context_digest: str | None = None
 
 
 def _attribute(name: str, value: object) -> str:

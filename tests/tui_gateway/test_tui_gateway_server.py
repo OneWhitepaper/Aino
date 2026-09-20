@@ -20,6 +20,14 @@ from tui_gateway import server
 from tui_gateway.transport import bind_transport, reset_transport
 
 
+@pytest.fixture
+def prompt_store(tmp_path):
+    """Prompt lifecycle tests use a real unmigrated store for the durable write fence."""
+    from hermes_state import SessionDB
+    with SessionDB(tmp_path / "prompt-state.db") as db:
+        yield db
+
+
 def _without_turn_metrics(value):
     """Compare transcript/event structure while allowing diagnostic sidecars.
 
@@ -1390,7 +1398,7 @@ def test_usage_ticker_stop_join_prevents_late_ticks(monkeypatch):
     assert events[-1] == "message.complete"
 
 
-def test_run_prompt_submit_never_ticks_after_message_complete(monkeypatch):
+def test_run_prompt_submit_never_ticks_after_message_complete(monkeypatch, prompt_store):
     """End-to-end ordering through _run_prompt_submit: live session.usage ticks
     happen strictly before message.complete, never after it."""
     events: list[str] = []
@@ -1419,7 +1427,7 @@ def test_run_prompt_submit_never_ticks_after_message_complete(monkeypatch):
     monkeypatch.setattr(server.threading, "Thread", _ImmediateThread)
     monkeypatch.setattr(server, "make_stream_renderer", lambda cols: None)
     monkeypatch.setattr(server, "render_message", lambda raw, cols: None)
-    monkeypatch.setattr(server, "_get_db", lambda: None)
+    monkeypatch.setattr(server, "_get_db", lambda: prompt_store)
 
     class _Agent:
         def run_conversation(
@@ -1449,6 +1457,7 @@ def test_run_prompt_submit_never_ticks_after_message_complete(monkeypatch):
     assert "message.complete" in events
     last_tick = max(i for i, e in enumerate(events) if e == "session.usage")
     assert last_tick < events.index("message.complete")
+
 
 
 def test_usage_ticker_unbounded_join_waits_out_blocked_emit(monkeypatch):
@@ -1505,7 +1514,7 @@ def test_usage_ticker_unbounded_join_waits_out_blocked_emit(monkeypatch):
     assert order == ["session.usage", "message.complete"]
 
 
-def test_run_prompt_submit_joins_ticker_without_timeout(monkeypatch):
+def test_run_prompt_submit_joins_ticker_without_timeout(monkeypatch, prompt_store):
     """_run_prompt_submit must join the ticker with NO timeout. A timed join
     can expire while a tick sits in a stalled transport write (up to
     _WS_WRITE_TIMEOUT_S = 10s) and abandon it to land after message.complete;
@@ -1534,7 +1543,7 @@ def test_run_prompt_submit_joins_ticker_without_timeout(monkeypatch):
     monkeypatch.setattr(server, "_emit", lambda event_type, sid, payload=None: None)
     monkeypatch.setattr(server, "make_stream_renderer", lambda cols: None)
     monkeypatch.setattr(server, "render_message", lambda raw, cols: None)
-    monkeypatch.setattr(server, "_get_db", lambda: None)
+    monkeypatch.setattr(server, "_get_db", lambda: prompt_store)
 
     class _Agent:
         def run_conversation(
@@ -1555,6 +1564,7 @@ def test_run_prompt_submit_joins_ticker_without_timeout(monkeypatch):
         server._sessions.pop("sid", None)
 
     assert joins == [None], f"expected one unbounded join, got {joins}"
+
 
 
 def test_tui_verbose_tool_details_fail_closed_when_redaction_fails(monkeypatch):
@@ -6411,6 +6421,10 @@ def test_prompt_submit_rejects_negative_truncate_ordinal(monkeypatch):
     replaced = []
 
     class _FakeDB:
+        def assert_session_not_migrated(self, session_id):
+            # This isolated persistence stub has no migrated session records.
+            return None
+
         def replace_messages(
             self,
             key,
@@ -6555,6 +6569,10 @@ def test_prompt_submit_refuses_unconfirmed_nonempty_truncation(monkeypatch):
     replaced = []
 
     class _FakeDB:
+        def assert_session_not_migrated(self, session_id):
+            # This isolated persistence stub has no migrated session records.
+            return None
+
         def replace_messages(
             self,
             key,
@@ -6620,6 +6638,10 @@ def test_prompt_submit_truncates_by_message_id(monkeypatch):
     replaced = []
 
     class _FakeDB:
+        def assert_session_not_migrated(self, session_id):
+            # This isolated persistence stub has no migrated session records.
+            return None
+
         def replace_messages(
             self,
             key,
@@ -6765,6 +6787,10 @@ def test_prompt_submit_refuses_ordinal_only_when_history_has_row_ids(monkeypatch
     replaced = []
 
     class _FakeDB:
+        def assert_session_not_migrated(self, session_id):
+            # This isolated persistence stub has no migrated session records.
+            return None
+
         def replace_messages(
             self,
             key,
@@ -6824,6 +6850,10 @@ def test_prompt_submit_refuses_ordinal_only_when_durable_history_is_unstamped(mo
     ]
 
     class _FakeDB:
+        def assert_session_not_migrated(self, session_id):
+            # This isolated persistence stub has no migrated session records.
+            return None
+
         def get_messages_as_conversation(self, key, **kwargs):
             assert key == "session-key"
             assert kwargs["include_row_ids"] is True
@@ -6868,6 +6898,10 @@ def test_prompt_submit_truncates_by_row_id(monkeypatch):
     replaced = []
 
     class _FakeDB:
+        def assert_session_not_migrated(self, session_id):
+            # This isolated persistence stub has no migrated session records.
+            return None
+
         def replace_messages(
             self,
             key,
@@ -6920,6 +6954,10 @@ def test_prompt_submit_truncates_by_string_row_id(monkeypatch):
     replaced = []
 
     class _FakeDB:
+        def assert_session_not_migrated(self, session_id):
+            # This isolated persistence stub has no migrated session records.
+            return None
+
         def replace_messages(
             self,
             key,
@@ -7081,6 +7119,10 @@ def test_prompt_submit_refuses_empty_truncation_without_confirm(monkeypatch):
     replaced = []
 
     class _FakeDB:
+        def assert_session_not_migrated(self, session_id):
+            # This isolated persistence stub has no migrated session records.
+            return None
+
         def replace_messages(
             self,
             key,
@@ -7177,6 +7219,10 @@ def test_prompt_submit_empty_truncation_allowed_with_confirm(monkeypatch):
             self._target()
 
     class _FakeDB:
+        def assert_session_not_migrated(self, session_id):
+            # This isolated persistence stub has no migrated session records.
+            return None
+
         def replace_messages(
             self,
             key,
@@ -8419,6 +8465,10 @@ def test_session_create_drops_pending_title_on_valueerror(monkeypatch):
             }
 
     class _FakeDB:
+        def assert_session_not_migrated(self, session_id):
+            # This isolated persistence stub has no migrated session records.
+            return None
+
         def set_session_title(self, _key, _title):
             raise ValueError("Title already in use")
 
@@ -10018,6 +10068,10 @@ def test_config_set_model_recovers_failed_profile_resume_after_build_completes(
         )
 
     class FakeDb:
+        def assert_session_not_migrated(self, session_id):
+            # This isolated persistence stub has no migrated session records.
+            return None
+
         def __init__(self, *_args, **_kwargs):
             pass
 
@@ -11176,6 +11230,10 @@ def test_slash_exec_r7_read_commands_use_metadata_mirror_flag_on(monkeypatch):
     ]
 
     class _DB:
+        def assert_session_not_migrated(self, session_id):
+            # This isolated persistence stub has no migrated session records.
+            return None
+
         def get_session(self, key):
             assert key == "session-key"
             return {
@@ -13177,6 +13235,10 @@ def test_prompt_submit_can_truncate_before_user_ordinal(monkeypatch):
     server._sessions["sid"] = _session(agent=_Agent(), history=original_history)
 
     class _StubDb:
+        def assert_session_not_migrated(self, session_id):
+            # This isolated persistence stub has no migrated session records.
+            return None
+
         def __init__(self):
             self.replaced = []
 
@@ -13249,6 +13311,10 @@ def test_prompt_submit_refuses_turn_when_truncate_persist_fails(monkeypatch):
     server._sessions["trunc-fail-sid"] = sess
 
     class _FailDb:
+        def assert_session_not_migrated(self, session_id):
+            # This isolated persistence stub has no migrated session records.
+            return None
+
         def get_messages_as_conversation(self, *_args, **_kwargs):
             return []
 
@@ -13348,6 +13414,10 @@ def test_prompt_submit_truncate_ordinal_skips_display_kind_rows(monkeypatch):
     server._sessions["sid"] = _session(agent=_Agent(), history=original_history)
 
     class _StubDb:
+        def assert_session_not_migrated(self, session_id):
+            # This isolated persistence stub has no migrated session records.
+            return None
+
         def __init__(self):
             self.replaced = []
 
@@ -13456,6 +13526,10 @@ def test_prompt_submit_truncate_translates_display_prefix_ordinal(monkeypatch):
     )
 
     class _StubDb:
+        def assert_session_not_migrated(self, session_id):
+            # This isolated persistence stub has no migrated session records.
+            return None
+
         def __init__(self):
             self.replaced = []
 
@@ -13589,6 +13663,10 @@ def test_prompt_submit_row_id_accepts_full_lineage_ordinal(monkeypatch):
     replaced = []
 
     class _FakeDB:
+        def assert_session_not_migrated(self, session_id):
+            # This isolated persistence stub has no migrated session records.
+            return None
+
         def replace_messages(
             self,
             key,
@@ -15820,6 +15898,10 @@ def test_session_branch_writes_to_parent_profile_db(monkeypatch, tmp_path):
     seen: dict = {"msgs": []}
 
     class LaunchDB:
+        def assert_session_not_migrated(self, session_id):
+            # This isolated persistence stub has no migrated session records.
+            return None
+
         def get_session_title(self, _key):
             seen["launch"] = True
             return "L"
@@ -15834,6 +15916,10 @@ def test_session_branch_writes_to_parent_profile_db(monkeypatch, tmp_path):
             return True
 
     class ProfileDB:
+        def assert_session_not_migrated(self, session_id):
+            # This isolated persistence stub has no migrated session records.
+            return None
+
         def __init__(self, db_path=None):
             seen["db_path"] = db_path
             seen.setdefault("inits", 0)
@@ -16274,6 +16360,10 @@ def test_session_branch_installs_parent_profile_secret_scope(monkeypatch, tmp_pa
     seen: dict = {"msgs": []}
 
     class ProfileDB:
+        def assert_session_not_migrated(self, session_id):
+            # This isolated persistence stub has no migrated session records.
+            return None
+
         def __init__(self, db_path=None):
             pass
 
@@ -16373,10 +16463,18 @@ def test_session_branch_uses_persisted_display_history_after_compaction(monkeypa
     ]
 
     class LaunchDB:
+        def assert_session_not_migrated(self, session_id):
+            # This isolated persistence stub has no migrated session records.
+            return None
+
         def get_session_title(self, _key):
             return "launch"
 
     class ProfileDB:
+        def assert_session_not_migrated(self, session_id):
+            # This isolated persistence stub has no migrated session records.
+            return None
+
         def __init__(self, db_path=None):
             seen.setdefault("inits", 0)
             seen["inits"] += 1
@@ -16804,7 +16902,7 @@ class _ImmediateThread:
         self._target()
 
 
-def test_prompt_submit_wires_live_title_rename_callback(monkeypatch):
+def test_prompt_submit_wires_live_title_rename_callback(monkeypatch, prompt_store):
     """The gateway hands the agent a hook so a new title repaints the sidebar.
 
     Titling itself moved into the shared turn prologue (agent/turn_context.py),
@@ -16837,7 +16935,7 @@ def test_prompt_submit_wires_live_title_rename_callback(monkeypatch):
     )
     monkeypatch.setattr(server, "make_stream_renderer", lambda cols: None)
     monkeypatch.setattr(server, "render_message", lambda raw, cols: None)
-    monkeypatch.setattr(server, "_get_db", lambda: None)
+    monkeypatch.setattr(server, "_get_db", lambda: prompt_store)
 
     server.handle_request(
         {
@@ -16864,7 +16962,8 @@ def test_prompt_submit_wires_live_title_rename_callback(monkeypatch):
     ) in emitted
 
 
-def test_prompt_submit_surfaces_backend_error_as_visible_text(monkeypatch):
+
+def test_prompt_submit_surfaces_backend_error_as_visible_text(monkeypatch, prompt_store):
     """When the backend fails with no visible response (e.g. invalid model slug
     → provider 4xx), the TUI must surface result['error'] as visible text
     instead of emitting a blank message.complete turn."""
@@ -16891,7 +16990,7 @@ def test_prompt_submit_surfaces_backend_error_as_visible_text(monkeypatch):
     )
     monkeypatch.setattr(server, "make_stream_renderer", lambda cols: None)
     monkeypatch.setattr(server, "render_message", lambda raw, cols: None)
-    monkeypatch.setattr(server, "_get_db", lambda: None)
+    monkeypatch.setattr(server, "_get_db", lambda: prompt_store)
 
     server.handle_request(
         {
@@ -16909,7 +17008,8 @@ def test_prompt_submit_surfaces_backend_error_as_visible_text(monkeypatch):
     assert "kimi-k2.6" in payload.get("text", "")
 
 
-def test_prompt_submit_preserves_empty_response_without_error(monkeypatch):
+
+def test_prompt_submit_preserves_empty_response_without_error(monkeypatch, prompt_store):
     """An empty final_response with NO backend error must stay empty — do not
     synthesize an error string. Preserves the existing None/empty-sentinel
     semantics owned by downstream handlers."""
@@ -16934,7 +17034,7 @@ def test_prompt_submit_preserves_empty_response_without_error(monkeypatch):
     )
     monkeypatch.setattr(server, "make_stream_renderer", lambda cols: None)
     monkeypatch.setattr(server, "render_message", lambda raw, cols: None)
-    monkeypatch.setattr(server, "_get_db", lambda: None)
+    monkeypatch.setattr(server, "_get_db", lambda: prompt_store)
 
     server.handle_request(
         {
@@ -16952,6 +17052,7 @@ def test_prompt_submit_preserves_empty_response_without_error(monkeypatch):
     # Text stays empty — we did NOT fabricate an "Error:" string
     text = payload.get("text", "")
     assert text in {"", None}, f"expected empty text, got {text!r}"
+
 
 
 # ── active live TUI sessions ─────────────────────────────────────────
@@ -17064,7 +17165,7 @@ def test_session_active_list_excludes_finalized_sessions(monkeypatch):
 
 
 
-def test_session_activate_returns_inflight_stream_before_completion(monkeypatch):
+def test_session_activate_returns_inflight_stream_before_completion(monkeypatch, prompt_store):
     """Switching into a still-running live session must hydrate partial output.
 
     The committed session history is only updated after run_conversation returns,
@@ -17096,7 +17197,7 @@ def test_session_activate_returns_inflight_stream_before_completion(monkeypatch)
     server._sessions["sid-live"] = _session(agent=_Agent())
     monkeypatch.setattr(server, "make_stream_renderer", lambda cols: None)
     monkeypatch.setattr(server, "render_message", lambda raw, cols: None)
-    monkeypatch.setattr(server, "_get_db", lambda: None)
+    monkeypatch.setattr(server, "_get_db", lambda: prompt_store)
     monkeypatch.setattr(server, "_session_info", lambda agent: {"model": agent.model})
 
     def _emit(event, sid, payload=None):
@@ -17156,6 +17257,7 @@ def test_session_activate_returns_inflight_stream_before_completion(monkeypatch)
         release.set()
         done.wait(2)
         server._sessions.pop("sid-live", None)
+
 
 
 def test_session_activate_returns_prompt_queued_during_busy_turn(monkeypatch):
@@ -21373,6 +21475,10 @@ def test_personality_marker_does_not_shift_truncate_ordinal(monkeypatch):
             self._target()
 
     class _StubDb:
+        def assert_session_not_migrated(self, session_id):
+            # This isolated persistence stub has no migrated session records.
+            return None
+
         def __init__(self):
             self.replaced = []
 
@@ -21493,6 +21599,10 @@ def test_prompt_submit_truncation_archives_instead_of_deleting(monkeypatch):
             self._target()
 
     class _StubDb:
+        def assert_session_not_migrated(self, session_id):
+            # This isolated persistence stub has no migrated session records.
+            return None
+
         def get_messages_as_conversation(self, *_args, **_kwargs):
             return []
 
@@ -21567,6 +21677,10 @@ def test_prompt_submit_unmatched_row_id_refuses_even_with_ordinal(monkeypatch):
     replaced = []
 
     class _FakeDB:
+        def assert_session_not_migrated(self, session_id):
+            # This isolated persistence stub has no migrated session records.
+            return None
+
         def replace_messages(
             self,
             key,
@@ -21618,6 +21732,10 @@ def test_prompt_submit_unmatched_message_id_refuses_even_with_ordinal(monkeypatc
     replaced = []
 
     class _FakeDB:
+        def assert_session_not_migrated(self, session_id):
+            # This isolated persistence stub has no migrated session records.
+            return None
+
         def replace_messages(
             self,
             key,
@@ -21683,6 +21801,10 @@ def test_prompt_submit_row_id_resolves_via_db_when_memory_lacks_stamps(monkeypat
     ]
 
     class _FakeDB:
+        def assert_session_not_migrated(self, session_id):
+            # This isolated persistence stub has no migrated session records.
+            return None
+
         def replace_messages(
             self,
             key,
@@ -22027,6 +22149,10 @@ def test_prompt_submit_row_id_db_fallback_ordinal_mapping_verifies_content(
     ]
 
     class _FakeDB:
+        def assert_session_not_migrated(self, session_id):
+            # This isolated persistence stub has no migrated session records.
+            return None
+
         def replace_messages(
             self,
             key,
@@ -22272,6 +22398,10 @@ def test_prompt_submit_unconfirmed_truncation_refuses_before_target_resolution(
     db_reads = []
 
     class _SpyDB:
+        def assert_session_not_migrated(self, session_id):
+            # This isolated persistence stub has no migrated session records.
+            return None
+
         def get_messages_as_conversation(self, *a, **k):
             db_reads.append(1)
             return []

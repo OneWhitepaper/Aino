@@ -26,7 +26,37 @@ class ConversationProjectRef(Params):
     execution_environment_id: str
 
 
+class MigrationReceipt(Result):
+    migration_id: str
+    conversation_id: str
+    source_profile: str
+    source_lineage_id: str
+    source_cutoff_row_id: int
+    status: Literal['preparing', 'importing', 'complete', 'failed']
+    source_session_ids: list[str] = Field(default_factory=list)
+
+
+class ConversationAdoptParams(Params):
+    source_profile: str
+    lineage_id: str
+    conversation_id: str
+    input_id: str
+
+
+class ConversationAdoptResult(Result):
+    migration: MigrationReceipt
+
+
+method('conversations.adopt', params=ConversationAdoptParams, result=ConversationAdoptResult,
+       doc='Adopt owned quiescent legacy public history with a permanent source execution fence.')
+
+
+from .conversation_history_types import ConversationBranchReceipt, ConversationEventProvenance
+
+
 class ConversationRecord(Result):
+    branch: ConversationBranchReceipt | None = None
+    migration: MigrationReceipt | None = None
     conversation_id: str
     title: str
     general: ConversationParticipantRef
@@ -53,6 +83,8 @@ class ConversationCatalogResult(Result):
 
 
 class ConversationCapabilities(Result):
+    scoped_commands: bool = False
+    supported_read_commands: list[str] = Field(default_factory=list)
     max_attachment_bytes: int | None = Field(default=None, ge=1)
     max_attachments: int | None = Field(default=None, ge=1)
     protocol_version: int
@@ -62,6 +94,7 @@ class ConversationCapabilities(Result):
 
 
 class ConversationCreateParams(Params):
+    auto_title: bool = False
     conversation_id: str
     title: str
     general_participant_id: str
@@ -120,6 +153,7 @@ class ConversationDelegation(Result):
 
 
 class ConversationGetResult(ConversationResult):
+    migration: MigrationReceipt | None = None
     participants: list[ConversationParticipantBinding]
     active_turn: ConversationTurn | None
     pending_delegations: list[ConversationDelegation]
@@ -132,6 +166,8 @@ class ConversationSendParams(ConversationParams):
     text: str
     attachment_ids: list[str] = Field(default_factory=list)
     command_token: str | None = None
+    surface: Literal["voice-live"] | None = None
+    voice_context: str | None = Field(default=None, max_length=6000)
     expected_revision: int
 
 
@@ -161,6 +197,7 @@ class ConversationActor(Result):
 
 
 class ConversationEvent(Result):
+    provenance: ConversationEventProvenance | None = None
     room_id: str
     seq: int
     event_id: str
@@ -201,6 +238,8 @@ class ConversationRetryParams(ConversationParams):
 
 
 class ConversationRefreshParams(ConversationParams):
+    reasoning_effort: str | None = None
+    fast: bool | None = None
     participant_id: str
     expected_generation: int = Field(ge=1)
     model_source: Literal['aino', 'byok'] | None = None
@@ -213,6 +252,8 @@ class ConversationRefreshResult(Result):
 
 
 class ConversationPrepareParams(ConversationParams):
+    reasoning_effort: str | None = None
+    fast: bool | None = None
     participant_id: str
     expected_revision: int | None = Field(default=None, ge=1)
     expected_generation: int = Field(default=1, ge=1)
@@ -270,7 +311,16 @@ class ConversationRuntimeSnapshotParams(ConversationParams):
     session_generation: int = Field(ge=1)
 
 
+class ConversationOptionCapabilities(Result):
+    reasoning: bool | None = None
+    fast: bool | None = None
+    can_disable_reasoning: bool | None = None
+
+
 class ConversationModelSnapshot(Result):
+    capabilities: ConversationOptionCapabilities | None = None
+    reasoning_effort: str | None = None
+    fast: bool = False
     model: str
     provider: str | None
     model_source: str | None
@@ -290,3 +340,40 @@ class ConversationRuntimeSnapshotResult(Result):
 method('conversations.runtime_snapshot', params=ConversationRuntimeSnapshotParams,
        result=ConversationRuntimeSnapshotResult,
        doc='Reattach an existing participant generation and replay its exact live child/request ownership.')
+
+
+class ConversationArchiveParams(ConversationParams):
+    expected_revision: int = Field(ge=1)
+
+
+class ConversationRenameParams(ConversationArchiveParams):
+    title: str
+
+
+method('conversations.archive', params=ConversationArchiveParams, result=ConversationResult,
+       doc='Archive an owned idle conversation without deleting any public history.')
+method('conversations.rename', params=ConversationRenameParams, result=ConversationResult,
+       doc='Set an owned conversation title with revision and manual-title authority.')
+
+
+class ConversationExportCursor(Params):
+    revision: int = Field(ge=1)
+    cutoff: int = Field(ge=0)
+    phase: Literal['events', 'content']
+    after_seq: int = Field(ge=0)
+    content_index: int = Field(ge=0)
+    offset_bytes: int = Field(ge=0)
+
+
+class ConversationExportParams(ConversationParams):
+    cursor: ConversationExportCursor | None = None
+
+
+class ConversationExportResult(Result):
+    filename: str | None
+    chunk: str
+    cursor: ConversationExportCursor | None
+
+
+method('conversations.export', params=ConversationExportParams, result=ConversationExportResult,
+       doc='Download bounded segments of an owned public JSON package with full referenced content and attachments.')

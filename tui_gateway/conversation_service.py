@@ -1,6 +1,8 @@
 """Specified-participant policy composed with the existing Hosted room worker."""
 from __future__ import annotations
 
+from gateway.hosted_room_conversation_maintenance import managed_store
+
 import hashlib
 import json
 import threading
@@ -41,6 +43,7 @@ class _Preparation:
         self.revision += 1
 
 
+@managed_store
 class ConversationService:
     def __init__(self, server, *, db_path: Path):
         self.server, self.db_path = server, Path(db_path)
@@ -55,16 +58,35 @@ class ConversationService:
         server._conversation_service = self
 
     def capabilities(self):
+        from .conversation_commands import supported_read_commands
         from .conversation_attachments import max_attachment_bytes
         from gateway.hosted_room_conversation_store import _MAX_ATTACHMENTS
         from hermes_cli.config_effective import load_user_config_effective
         config = load_user_config_effective(self.db_path.parent / 'config.yaml')
-        settings = config.get('conversations')
-        enabled = isinstance(settings, dict) and settings.get('enabled') is True
+        from hermes_cli.config_defaults import DEFAULT_CONFIG
+        settings = config.get('conversations', {})
+        enabled = (isinstance(settings, dict)
+                   and settings.get('enabled', DEFAULT_CONFIG['conversations']['enabled']) is True)
+        reason = None if enabled else 'Multi-agent conversations are not enabled on this gateway.'
+        if enabled:
+            from gateway.hosted_room_conversation_compat import require_compatible_backends, ConversationUpgradeRequired
+            try:
+                require_compatible_backends(self.db_path)
+            except ConversationUpgradeRequired as exc:
+                enabled, reason = False, str(exc)
+        if enabled:
+            try:
+                # General is mandatory; an unavailable optional expert only disables
+                # its catalog row. Resolve the install home even under a Profile scope.
+                _validate_environment(self.server, self.db_path.parent, None,
+                                      hosted_rooms.local_authority_gateway_id())
+            except (ConversationBindingError, ValueError) as exc:
+                enabled, reason = False, str(exc)
         return {'protocol_version': 1, 'enabled': enabled,
+                'scoped_commands': True, 'supported_read_commands': supported_read_commands(),
                 'max_attachment_bytes': max_attachment_bytes(self.db_path),
                 'max_attachments': _MAX_ATTACHMENTS,
-                'reason': None if enabled else 'Multi-agent conversations are not enabled on this gateway.',
+                'reason': reason,
                 'supported_execution_environments': ['local']}
 
     def catalog(self):
@@ -96,7 +118,7 @@ class ConversationService:
         project, _registered = SharedProjects(self.server).validate_source(value)
         return project
 
-    def create(self, conversation_id, title, general_participant_id, project_ref=None):
+    def create(self, conversation_id, title, general_participant_id, project_ref=None, auto_title=False):
         owner = request_owner_key(self.server, write=True)
         capabilities = self.capabilities()
         if not capabilities['enabled']:
@@ -104,16 +126,26 @@ class ConversationService:
         general = self._participant(general_participant_id)
         if not general.is_general:
             raise ConversationBindingError('general participant must be the default assistant')
-        return {'conversation': asdict(self.store.create(conversation_id, title, general, self._project(project_ref), owner_key=owner))}
+        return {'conversation': self._public_record(self.store.create(conversation_id, title, general, self._project(project_ref), owner_key=owner, auto_title=auto_title))}
+
+    def archive(self, conversation_id, expected_revision):
+        owner = self._authorize(conversation_id, write=True)
+        return {'conversation': self._public_record(self.store.archive(
+            conversation_id, expected_revision, owner_key=owner))}
+
+    def rename(self, conversation_id, title, expected_revision):
+        owner = self._authorize(conversation_id, write=True)
+        return {'conversation': self._public_record(self.store.rename(
+            conversation_id, title, expected_revision, owner_key=owner))}
 
     def list(self, cursor=None, limit=100, project_ref=None, include_archived=False):
         rows, cursor, more = self.store.list_conversations(cursor=cursor, limit=limit,
             project=ProjectRef(**project_ref) if project_ref else None, include_archived=include_archived,
             owner_key=request_owner_key(self.server), shared_project=True)
-        return {'conversations': [asdict(r) for r in rows], 'cursor': cursor, 'has_more': more}
+        return {'conversations': [self._public_record(r) for r in rows], 'cursor': cursor, 'has_more': more}
 
     def prepare(self, conversation_id, participant_id, expected_generation=1,
-                model_source=None, model_id=None, expected_revision=None):
+                model_source=None, model_id=None, expected_revision=None, reasoning_effort=None, fast=None):
         from tui_gateway.session_conversation_binding import prepare_conversation_session
         with self._lock:
             self._authorize(conversation_id, write=True)
@@ -133,7 +165,8 @@ class ConversationService:
             if binding.session_generation != expected_generation:
                 raise ConversationBindingError('participant generation changed')
             result = prepare_conversation_session(self.server, binding=binding, project=record.project,
-                source='desktop', model_source=model_source, model_id=model_id)
+                source='desktop', model_source=model_source, model_id=model_id,
+                reasoning_effort=reasoning_effort, fast=fast)
             if self.hosted:
                 self.hosted.wakeup()
             return {**result, 'previous_revision': record.revision,
@@ -155,6 +188,13 @@ class ConversationService:
                 return sid
         return None
 
+    def _public_record(self, record):
+        from gateway.hosted_room_conversation_migration import migration_receipt
+        from gateway.hosted_room_conversation_history import branch_receipt
+        with hosted_rooms._transaction(self.db_path) as conn:
+            return {**asdict(record), 'migration': migration_receipt(conn, record.conversation_id),
+                    'branch': branch_receipt(conn, record.conversation_id)}
+
     def get(self, conversation_id):
         self._authorize(conversation_id)
         record = self.store.get(conversation_id)
@@ -166,24 +206,35 @@ class ConversationService:
                     'participant_id': frozen['participant_id'], 'session_generation': frozen['session_generation'],
                     'task_id': active['identity'].task_id, 'execution_generation': active['execution_generation'],
                     'status': active['status'], 'runtime_id': self._runtime_id(frozen)}
-        return {'conversation': asdict(record), 'participants': [asdict(b) for b in self.store.participants(conversation_id)],
+        return {'conversation': self._public_record(record), 'migration': self._public_record(record)['migration'], 'participants': [asdict(b) for b in self.store.participants(conversation_id)],
                 'active_turn': turn, 'pending_delegations': self.notifications.delegations(conversation_id)}
 
     def events(self, conversation_id, after_seq=0, limit=100):
         self._authorize(conversation_id)
         page = self.store.events(conversation_id, after_seq, limit)
-        return {'events': list(page.events), 'cursor': page.cursor, 'has_more': page.has_more}
+        from gateway.hosted_room_conversation_history import event_provenance
+        with hosted_rooms._transaction(self.db_path) as conn:
+            events = [{**event, 'provenance': event_provenance(conn, conversation_id, event['event_id'])}
+                      for event in page.events]
+        return {'events': events, 'cursor': page.cursor, 'has_more': page.has_more}
 
     def send(self, conversation_id, turn_id, input_id, participant_id, text,
-             expected_revision, attachment_ids=None, command_token=None):
+             expected_revision, attachment_ids=None, command_token=None, surface=None, voice_context=None):
+        from gateway.hosted_room_conversation_voice import voice_context_digest, freeze_voice_context
+        voice_digest = voice_context_digest(surface, voice_context)
         request = TurnSubmission(turn_id, input_id, participant_id, text, tuple(attachment_ids or ()))
         with self._lock:
             owner = self._authorize(conversation_id, write=True)
+            from gateway.hosted_room_conversation_migration import require_migration_complete
+            with hosted_rooms._transaction(self.db_path) as conn:
+                require_migration_complete(conn, conversation_id)
             from gateway.hosted_room_conversation_commands import ConversationCommandTokens, freeze_command
             resolution = ConversationCommandTokens(self.db_path).for_send(owner=owner,
                 conversation_id=conversation_id, request=request, revision=expected_revision, token=command_token)
-            if replay := self.store.replay(conversation_id, request, command_resolution=resolution):
+            if replay := self.store.replay(conversation_id, request, command_resolution=resolution, voice_digest=voice_digest):
                 return {'admission': asdict(replay)}
+            from gateway.hosted_room_conversation_compat import require_compatible_backends
+            require_compatible_backends(self.db_path)
             record = self.store.check_admission(conversation_id, expected_revision)
             from .conversation_attachments import ConversationAttachments
             attachments = ConversationAttachments(self)
@@ -211,6 +262,7 @@ class ConversationService:
                     main_runtime=self.server._sessions[runtime.runtime_id]["agent"]._current_main_runtime())
             envelope = attachments.freeze(conversation_id, request, envelope)
             envelope = freeze_command(envelope, resolution)
+            envelope = freeze_voice_context(envelope, voice_digest, voice_context)
             admission = self.store.admit_turn(binding, request, envelope,
                 expected_revision=preparation.revision, input_cutoff=room['latest_seq'], command_resolution=resolution)
         if self.hosted:
@@ -261,6 +313,8 @@ class ConversationService:
     def retry(self, conversation_id, turn_id, input_id, expected_generation):
         owner = self._authorize(conversation_id, write=True)
         task = driver.get_task(self.db_path, task_identity(conversation_id, turn_id, input_id))
+        if (task.get('result') or {}).get('error') == 'restored_snapshot_requires_stop':
+            raise ConversationBindingError('restored conversation work must be stopped before starting a new turn')
         if task['execution_generation'] != expected_generation:
             raise ConversationBindingError('execution generation changed')
         if task['status'] in ('indeterminate', 'deferred', 'running', 'stopping'):
@@ -280,10 +334,11 @@ class ConversationService:
         from gateway.hosted_room_conversation_commands import ConversationCommandTokens
         resolution = ConversationCommandTokens(self.db_path).for_reconciliation(
             owner=owner, conversation_id=conversation_id, input_id=input_id)
-        return {'admission': asdict(self.store.replay(conversation_id, request, command_resolution=resolution))}
+        return {'admission': asdict(self.store.replay(conversation_id, request, command_resolution=resolution,
+            voice_digest=json.loads(frozen['envelope_json']).get('voice_context_digest')))}
 
     def refresh(self, conversation_id, participant_id, expected_generation,
-                model_source=None, model_id=None):
+                model_source=None, model_id=None, reasoning_effort=None, fast=None):
         from tui_gateway.session_conversation_binding import refresh_conversation_preparation
         with self._lock:
             self._authorize(conversation_id, write=True)
@@ -294,6 +349,6 @@ class ConversationService:
                 raise ConversationBindingError('participant generation changed')
             prepared = refresh_conversation_preparation(self.server, binding=binding,
                 project=self.store.get(conversation_id).project, source='desktop',
-                model_source=model_source, model_id=model_id)
+                model_source=model_source, model_id=model_id, reasoning_effort=reasoning_effort, fast=fast)
             return {'binding': asdict(replace(binding, session_generation=prepared['session_generation'],
                                               lineage_id=prepared['stored_session_id'])), 'preparation': prepared}

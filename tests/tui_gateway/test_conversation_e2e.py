@@ -23,9 +23,15 @@ def test_general_writer_reviewer_general_writer_keeps_public_history_and_private
 
     server, store, install, home, root = runtime_env
     frames = []
+    completion_events = {f"t{index}": threading.Event() for index in range(5)}
     class Sink:
         def write(self, frame):
             frames.append(frame)
+            params = frame.get("params", {})
+            if params.get("type") == "message.complete":
+                event = completion_events.get(params.get("conversation", {}).get("turn_id"))
+                if event is not None:
+                    event.set()
             return True
     monkeypatch.setattr(server, '_stdio_transport', Sink())
     monkeypatch.setattr(server, '_emit', lambda event, sid, payload=None:
@@ -97,6 +103,8 @@ def test_general_writer_reviewer_general_writer_keeps_public_history_and_private
             task = next(t for t in driver.list_tasks(store.db_path, room_id='shared-novel')
                         if t['identity'].turn_id == f't{index}')
             assert task['status'] == 'settled', task
+            # Shared task durability precedes asynchronous transport publication.
+            assert completion_events[f't{index}'].wait(timeout=30)
             completed = [frame['params'] for frame in frames if frame.get('method') == 'event'
                          and frame['params'].get('type') == 'message.complete'
                          and frame['params'].get('conversation', {}).get('turn_id') == f't{index}']

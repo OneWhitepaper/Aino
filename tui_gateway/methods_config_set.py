@@ -477,6 +477,9 @@ _CONFIG_SETTERS = {
 def _(rid, params: dict) -> dict:
     key, value = params.get("key", ""), params.get("value", "")
     session = _sessions.get(params.get("session_id", ""))
+    from .session_conversation_binding import legacy_migration_refusal
+    if refusal := legacy_migration_refusal(rid, session):
+        return refusal
     from .session_conversation_binding import conversation_metadata, require_conversation_mutation_allowed
     if session and conversation_metadata(session) and key in {"model", "reasoning", "fast", "personality"}:
         display_only = ((key == "fast" and _word(value) == "status") or

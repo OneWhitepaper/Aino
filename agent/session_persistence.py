@@ -1,6 +1,8 @@
 """Durable transcript persistence for ``AIAgent`` (mixin; MRO-resolved from ``run_agent``): SQLite flush
 with intrinsic ``_DB_PERSISTED_MARKER`` dedup, ephemeral-scaffolding filtering, explicit
 trajectory export."""
+
+from agent.conversation_maintenance import managed_agent_call
 import hashlib
 
 import logging
@@ -209,6 +211,7 @@ def _db_flush_collect(agent, messages: List[Dict], conversation_history: Optiona
     return batch_rows, batch_msgs
 
 
+@managed_agent_call
 def _db_flush_write(agent, batch_rows: List[Dict[str, Any]], batch_msgs: List[Dict]) -> None:
     """One transaction for the turn's new rows: on failure nothing lands and no markers are stamped."""
     if not batch_rows:
@@ -302,6 +305,7 @@ class SessionPersistenceMixin:
         if platform_id is not None:  # load-bearing for restart drain-window recovery dedup (has_platform_message_id)
             msg["platform_message_id"] = platform_id
 
+    @managed_agent_call
     def _persist_session(self, messages: List[Dict], conversation_history: List[Dict] = None):
         """Save to SQLite on any exit path. Trailing empty-response scaffolding is dropped from
         the live list; the persist override is applied to the DB row only.
@@ -347,6 +351,7 @@ class SessionPersistenceMixin:
 
     _repair_message_sequence = _forward("agent.agent_runtime_helpers", "repair_message_sequence")
 
+    @managed_agent_call
     def _flush_messages_to_session_db(self, messages: List[Dict], conversation_history: Optional[List[Dict]] = None):
         """Serialize direct and turn-boundary session flushes per agent."""
         with _persist_lock(self):

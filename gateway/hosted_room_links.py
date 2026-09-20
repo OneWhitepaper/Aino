@@ -60,11 +60,11 @@ class StoredRoomLink:
         if transport_security != detected_security:
             raise HostedRoomPeerError("transport_security does not match target_url")
         grant = str(value["grant"] or "")
-        if not grant or len(grant) > MAX_GRANT_CHARS:
-            raise HostedRoomPeerError("room grant is missing or too large")
         status = str(value.get("status") or "ready")
         if status not in _STATUSES:
             raise HostedRoomPeerError("stored room link status is invalid")
+        if (not grant and status != "needs_reauthorization") or len(grant) > MAX_GRANT_CHARS:
+            raise HostedRoomPeerError("room grant is missing or too large")
         updated_at = float(value["updated_at"])
         if not updated_at > 0:
             raise HostedRoomPeerError("updated_at must be positive")

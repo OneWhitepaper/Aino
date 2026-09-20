@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from agent.conversation_maintenance import managed_session_call
+
 import hashlib
 import json
 import time
@@ -73,6 +75,7 @@ class SessionConversationReceiptsMixin:
         )
         return None if row is None else self._input_receipt(row, idempotent=True)
 
+    @managed_session_call
     def recover_conversation_input_receipt(
         self, session_id: str, *, input_id: str, input_digest: str,
         conversation_id: str, participant_id: str, session_generation: int,
@@ -94,6 +97,7 @@ class SessionConversationReceiptsMixin:
                 raise ValueError(f"conversation input {input_id!r} conflicts with its durable receipt")
             return self._input_receipt(row, idempotent=True)
 
+    @managed_session_call
     def accept_conversation_input(
         self,
         session_id: str,

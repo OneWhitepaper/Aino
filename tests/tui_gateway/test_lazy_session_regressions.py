@@ -197,6 +197,7 @@ class TestPendingTitleValueError:
         from tui_gateway import server
 
         mock_db = MagicMock()
+        mock_db.assert_session_not_migrated = MagicMock(return_value=None)
         mock_db.set_session_title.side_effect = ValueError("duplicate title")
 
         class _Agent:

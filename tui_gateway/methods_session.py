@@ -1472,6 +1472,9 @@ def _branch_source_history(db, session: dict, old_key: str) -> list:
 
 @_session_method("session.branch", live=True)
 def _(rid, params: dict, session: dict) -> dict:
+    from .session_conversation_binding import legacy_migration_refusal
+    if refusal := legacy_migration_refusal(rid, session):
+        return refusal
     # Write into the parent's profile-scoped state.db; the launch handle would orphan rows.
     with _session_db(session) as db:
         if db is None:

@@ -5,12 +5,26 @@ per process). Bodies are rebound onto server.py's globals (method_ctx.bind_modul
 from __future__ import annotations
 
 import contextlib
+import contextvars
 import threading
 
 from .method_ctx import HandlerRegistry, bind_module
 
 _registry = HandlerRegistry()
 method = _registry.method
+
+
+def _voice_method(name):
+    def decorate(handler):
+        def scoped(rid, params):
+            profile = params.get('profile')
+            if not profile:
+                return handler(rid, params)
+            home = _profile_home(profile) or _hermes_home
+            with _profile_build_scope(home):
+                return handler(rid, params)
+        return method(name)(scoped)
+    return decorate
 
 
 # ── Voice state: HERMES_VOICE / HERMES_VOICE_TTS are runtime-only env flags (never config.yaml)
@@ -69,7 +83,7 @@ def _tts_lease_async(lease: str, active: bool) -> None:
             (acquire_tts_lease if active else release_tts_lease)(lease)
         except Exception as e:
             logger.debug("voice: tts lease %s active=%s failed: %s", lease, active, e)
-    threading.Thread(target=_run, name=f"tts-lease-{lease}", daemon=True).start()
+    threading.Thread(target=contextvars.copy_context().run, args=(_run,), name=f"tts-lease-{lease}", daemon=True).start()
 
 
 def _running_sessions() -> list:
@@ -106,7 +120,7 @@ def _tts_stream_begin() -> Optional[queue.Queue]:
     _tts_stream_stop()
     text_queue: queue.Queue = queue.Queue()
     stop, done = threading.Event(), threading.Event()
-    threading.Thread(target=stream_tts_to_speaker, args=(text_queue, stop, done), daemon=True).start()
+    threading.Thread(target=contextvars.copy_context().run, args=(stream_tts_to_speaker, text_queue, stop, done), daemon=True).start()
     global _tts_stream_state
     with _tts_stream_lock:
         _tts_stream_state = {"stop": stop, "done": done}
@@ -152,7 +166,7 @@ def _arm_full_duplex_listener() -> None:
         if _fd_listener_active:
             return
         _fd_listener_active = True
-    threading.Thread(target=_full_duplex_listener, daemon=True, name="voice-full-duplex").start()
+    threading.Thread(target=contextvars.copy_context().run, args=(_full_duplex_listener,), daemon=True, name="voice-full-duplex").start()
 
 
 def _arm_barge_listener_if_enabled() -> None:
@@ -275,7 +289,7 @@ def _speak_text_with_barge(text: str) -> None:
             done.set()
             with _fd_listener_lock:
                 _fd_speak_pipelines.discard((stop, done))
-    threading.Thread(target=_speak, daemon=True).start()
+    threading.Thread(target=contextvars.copy_context().run, args=(_speak,), daemon=True).start()
     _arm_barge_listener_if_enabled()
 
 
@@ -376,7 +390,7 @@ def _wake_resume_if_owner(owner: "Transport", *, retry_seconds: float = 15.0,
         finally:
             with _wake_resume_retry_lock:
                 _wake_resume_retry_active = False
-    threading.Thread(target=_retry, daemon=True, name="wake-resume-retry").start()
+    threading.Thread(target=contextvars.copy_context().run, args=(_retry,), daemon=True, name="wake-resume-retry").start()
     return False
 
 
@@ -428,7 +442,8 @@ def _wake_detect_handler(transport, sid: str, phrase: str, new_session: bool):
                 "start_new_session": new_session})
         finally:
             reset_transport(token)
-    return _on_detect
+    context = contextvars.copy_context()
+    return lambda: context.copy().run(_on_detect)
 
 
 @method("gateway.capabilities")
@@ -446,7 +461,7 @@ def _(rid, params: dict) -> dict:
     return _ok(rid, {"pong": True})
 
 
-@method("wake.start")
+@_voice_method("wake.start")
 def _(rid, params: dict) -> dict:
     """Arm the wake-word listener for the calling surface ("tui" | "gui"); ``{started: False,
     reason}`` when disabled/owned/not ready. ``persist: true`` (explicit gesture) also flips
@@ -507,7 +522,7 @@ def _(rid, params: dict) -> dict:
         **_frame_fields(frame)})
 
 
-@method("wake.stop")
+@_voice_method("wake.stop")
 def _(rid, params: dict) -> dict:
     """Stop this surface's listener; ``persist: true`` also writes ``wake_word.enabled: false``."""
     stopped = _release_wake_for_transport(_caller_transport())
@@ -522,7 +537,7 @@ def _(rid, params: dict) -> dict:
     return _owner_result(rid, "stopped", stopped, disabled_persisted=disabled_persisted)
 
 
-@method("wake.pause")
+@_voice_method("wake.pause")
 def _(rid, params: dict) -> dict:
     """Release the mic (e.g. while the desktop's browser captures audio)."""
     try:
@@ -535,7 +550,7 @@ def _(rid, params: dict) -> dict:
     return _owner_result(rid, "paused", paused)
 
 
-@method("wake.resume")
+@_voice_method("wake.resume")
 def _(rid, params: dict) -> dict:
     """Reclaim the mic after a pause; no-op if the listener isn't armed."""
     resumed = _wake_resume_if_owner(_caller_transport())
@@ -543,7 +558,7 @@ def _(rid, params: dict) -> dict:
     return _owner_result(rid, "resumed", resumed)
 
 
-@method("wake.status")
+@_voice_method("wake.status")
 def _(rid, params: dict) -> dict:
     try:
         from tools.wake_word import (
@@ -582,7 +597,7 @@ def _(rid, params: dict) -> dict:
         return _err(rid, 5026, str(e))
 
 
-@method("wake.feed")
+@_voice_method("wake.feed")
 def _(rid, params: dict) -> dict:
     """Push client-captured PCM (``pcm``/``pcm_b64``: base64 int16 mono LE, 16 kHz only) into the
     armed detector (``capture: "client"``) — mic-less remote backends can run openWakeWord."""
@@ -669,7 +684,7 @@ _VOICE_TOGGLE_ACTIONS = {
     "tts": _voice_toggle_tts}
 
 
-@method("voice.toggle")
+@_voice_method("voice.toggle")
 def _(rid, params: dict) -> dict:
     """CLI parity for ``/voice``: ``status``; ``on``/``off`` flip voice *mode* (off also tears
     down the continuous loop); ``tts`` toggles speech output (requires mode on)."""
@@ -700,7 +715,7 @@ def _vr_on_status(state):
         _resume_voice_wake()
 
 
-@method("voice.record")
+@_voice_method("voice.record")
 def _(rid, params: dict) -> dict:
     """VAD-bounded push-to-talk. ``start`` emits ``voice.transcript`` when silence stops the
     capture; ``stop`` forces transcription. Three silent captures emit ``no_speech_limit``."""
@@ -762,7 +777,7 @@ def _(rid, params: dict) -> dict:
         return _err(rid, 5025, str(e))
 
 
-@method("voice.tts")
+@_voice_method("voice.tts")
 def _(rid, params: dict) -> dict:
     text = params.get("text", "")
     if not text:
@@ -771,7 +786,7 @@ def _(rid, params: dict) -> dict:
         import hermes_cli.voice  # noqa: F401  (a missing module must answer 5026, not die in a thread)
     except Exception as e:
         return _err(rid, 5026, "voice module not available" if isinstance(e, ImportError) else str(e))
-    threading.Thread(target=_speak_text_with_barge, args=(text,), daemon=True).start()
+    threading.Thread(target=contextvars.copy_context().run, args=(_speak_text_with_barge, text), daemon=True).start()
     return _ok(rid, {"status": "speaking"})
 
 

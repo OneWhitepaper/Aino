@@ -431,7 +431,7 @@ def _catalog_skills(cat: _Catalog, skills: dict[str, dict]) -> None:
         skills[k] = {"usage": usage(name), "origin": origin_of(name)}
 
 
-@_rpc("commands.catalog", 5020)
+@_scoped_rpc("commands.catalog", 5020)
 def _(rid, params: dict) -> dict:
     """Registry-backed slash metadata, categorized, no aliases. Discovery failures land in ``warning``
     (skills' message wins, then quick commands', then plugins')."""
@@ -828,6 +828,9 @@ def _(rid, params: dict) -> dict:
     name, arg = _resolve_name(params.get("name", "").lstrip("/")), params.get("arg", "")
     session = _sessions.get(params.get("session_id", ""))
 
+    from .session_conversation_binding import legacy_migration_refusal
+    if refusal := legacy_migration_refusal(rid, session):
+        return refusal
     if session and session.get("_conversation_binding"):
         return _err(rid, 4120, "Send commands through the conversation or explicitly refresh its participant")
     # Stage order is load-bearing: quick > plugin > bundle > skill > built-in.
@@ -846,6 +849,9 @@ def _(rid, params: dict) -> dict:
     session, err = _sess_nowait(params, rid)
     if err:
         return err
+    from .session_conversation_binding import legacy_migration_refusal
+    if refusal := legacy_migration_refusal(rid, session):
+        return refusal
     cmd = params.get("command", "").strip()
     if not cmd:
         return _err(rid, 4004, "empty command")

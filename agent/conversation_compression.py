@@ -10,6 +10,8 @@ one pass per session at a time (durable lock) but sessions run concurrently, so 
 
 from __future__ import annotations
 
+from agent.conversation_maintenance import managed_agent_call
+
 import concurrent.futures
 import contextlib
 import copy
@@ -3576,6 +3578,7 @@ def _announce_compression_start(
     return _CompactionLifecycle(agent, bool(status))
 
 
+@managed_agent_call
 def compress_context(
     agent: Any, messages: list, system_message: str, *, approx_tokens: Optional[int] = None,
     task_id: str = "default", focus_topic: Optional[str] = None, force: bool = False,

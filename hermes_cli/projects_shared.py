@@ -1,6 +1,8 @@
 """Shared project identity; Profile registrations remain authoritative mutation targets."""
 from __future__ import annotations
 
+from gateway.hosted_room_conversation_maintenance import managed_store
+
 import hashlib
 import json
 from dataclasses import dataclass
@@ -32,6 +34,7 @@ def _initialize(conn):
         PRIMARY KEY(install_id, environment_id, registration_profile, source_project_id))''')
 
 
+@managed_store
 class SharedProjectStore:
     def __init__(self, db_path: Path):
         self.db_path = Path(db_path)

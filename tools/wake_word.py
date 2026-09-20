@@ -14,6 +14,7 @@ import logging
 import os
 import queue
 import sys
+import contextvars
 import threading
 import time
 from contextlib import suppress
@@ -508,7 +509,7 @@ class WakeWordDetector:
             self._stop.clear()
             ready = threading.Event()
             startup_errors: list[BaseException] = []
-            self._thread = threading.Thread(target=self._run, args=(ready, startup_errors),
+            self._thread = threading.Thread(target=contextvars.copy_context().run, args=(self._run, ready, startup_errors),
                                             daemon=True, name="wake-word")
             self._thread.start()
         if not ready.wait(_START_TIMEOUT_SECONDS):
@@ -611,7 +612,7 @@ class WakeWordDetector:
         logger.info("wake word: phrase detected — firing callback")
         if not self._callback_inflight.is_set():
             self._callback_inflight.set()
-            threading.Thread(target=self._dispatch_wake, daemon=True, name="wake-word-callback").start()
+            threading.Thread(target=contextvars.copy_context().run, args=(self._dispatch_wake,), daemon=True, name="wake-word-callback").start()
 
     def _run(self, ready: threading.Event, startup_errors: list[BaseException]) -> None:
         frame_length = self.engine.frame_length

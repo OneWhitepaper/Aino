@@ -1,6 +1,8 @@
 """Durable conversation authority, independent of whether any participant session exists."""
 from __future__ import annotations
 
+from gateway.hosted_room_conversation_maintenance import managed_call
+
 from gateway import hosted_rooms
 
 LOCAL_OWNER = 'legacy-local'
@@ -48,6 +50,7 @@ def require_owner_locked(conn, conversation_id: str, expected_owner: str, *, cla
         raise ConversationOwnershipError('conversation is unavailable to this owner')
 
 
+@managed_call
 def require_owner(db_path, conversation_id: str, expected_owner: str, *, claim_unowned=False) -> None:
     with hosted_rooms._transaction(db_path, immediate=True) as conn:
         initialize_owner_schema(conn)

@@ -1,6 +1,8 @@
 """Shared attachment ownership, frozen provenance and trusted local turn staging."""
 from __future__ import annotations
 
+from gateway.hosted_room_conversation_maintenance import managed_store
+
 import base64
 import hashlib
 import json
@@ -40,6 +42,30 @@ def attachment_locked(conn, conversation_id, attachment_id):
         key: row[key] for key in ('id', 'sha256', 'size_bytes', 'mime_type')}}
 
 
+def validate_attachment_bytes(data_base64, mime_type, *, max_bytes):
+    """Pure byte/MIME validation shared by upload and pre-fence legacy adoption."""
+    if not isinstance(data_base64, str) or len(data_base64) > 4 * ((max_bytes + 2) // 3):
+        raise ValueError('attachment exceeds content size budget')
+    try:
+        data = base64.b64decode(data_base64, validate=True)
+    except (ValueError, TypeError) as exc:
+        raise ValueError('invalid attachment base64') from exc
+    if not data or len(data) > max_bytes:
+        raise ValueError('empty or oversized attachment')
+    if mime_type.startswith('image/'):
+        from io import BytesIO
+        from PIL import Image
+        try:
+            with Image.open(BytesIO(data)) as image:
+                if Image.MIME.get(image.format) != mime_type:
+                    raise ValueError('image MIME differs from its bytes')
+                image.verify()
+        except (OSError, SyntaxError) as exc:
+            raise ValueError('invalid image attachment') from exc
+    return data
+
+
+@managed_store
 class ConversationAttachments:
     def __init__(self, service):
         self.service = service
@@ -51,26 +77,9 @@ class ConversationAttachments:
         self.service._authorize(conversation_id, write=True)
         if self.service.store.get(conversation_id).archived:
             raise ValueError('conversation is archived')
-        max_bytes = max_attachment_bytes(self.service.db_path)
-        if not isinstance(data_base64, str) or len(data_base64) > 4 * ((max_bytes + 2) // 3):
-            raise ValueError('attachment exceeds content size budget')
-        try:
-            data = base64.b64decode(data_base64, validate=True)
-        except (ValueError, TypeError) as exc:
-            raise ValueError('invalid attachment base64') from exc
-        if not data or len(data) > max_bytes:
-            raise ValueError('empty or oversized attachment')
+        data = validate_attachment_bytes(data_base64, mime_type,
+                                         max_bytes=max_attachment_bytes(self.service.db_path))
         filename = self.service.server._sanitize_attachment_name(filename.replace('\\', '/'))
-        if mime_type.startswith('image/'):
-            from io import BytesIO
-            from PIL import Image
-            try:
-                with Image.open(BytesIO(data)) as image:
-                    if Image.MIME.get(image.format) != mime_type:
-                        raise ValueError('image MIME differs from its bytes')
-                    image.verify()
-            except (OSError, SyntaxError) as exc:
-                raise ValueError('invalid image attachment') from exc
         ref = self.content.put_for_conversation(conversation_id, data, mime_type)
         attachment_id = hashlib.sha256((ref.id + '\0' + filename).encode()).hexdigest()
         with hosted_rooms._transaction(self.service.db_path, immediate=True) as conn:

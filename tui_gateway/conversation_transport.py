@@ -72,7 +72,7 @@ class ConversationTransport:
                     try:
                         ref = ConversationContentStore(self.service.db_path).put_for_conversation(
                             self.frozen['conversation_id'], receipt['text'].encode('utf-8'),
-                            'text/plain; charset=utf-8')
+                            'text/plain; charset=utf-8', input_id=self.frozen['input_id'])
                         receipt = {**receipt, 'text': '', 'content_ref': asdict(ref)}
                     except ContentQuotaError as exc:
                         receipt = {**receipt, 'status': 'failed', 'text': '', 'error': str(exc)}

@@ -6,9 +6,13 @@ from gateway import hosted_rooms, hosted_room_driver
 from gateway.hosted_room_conversation_context import ContextBudgetError
 from tui_gateway.session_conversation_binding import ConversationBindingError
 from tui_gateway.conversation_projects import set_conversation_project
+from tui_gateway.conversation_migration import adopt_conversation
+from tui_gateway.conversation_export import export_conversation
 
-_METHODS = ('capabilities', 'participants', 'create', 'list', 'get', 'send', 'events', 'stop', 'retry', 'refresh', 'prepare', 'runtime_snapshot', 'attach', 'content', 'set_project')
-_COORDINATORS = {'set_project': set_conversation_project}
+from tui_gateway.conversation_history import branch, regenerate, react, reactions, cancel_draft
+
+_METHODS = ('export', 'cancel_draft', 'branch', 'regenerate', 'react', 'reactions', 'archive', 'rename', 'adopt', 'capabilities', 'participants', 'create', 'list', 'get', 'send', 'events', 'stop', 'retry', 'refresh', 'prepare', 'runtime_snapshot', 'attach', 'content', 'set_project')
+_COORDINATORS = {'export': export_conversation, 'cancel_draft': cancel_draft, 'branch': branch, 'regenerate': regenerate, 'react': react, 'reactions': reactions, 'set_project': set_conversation_project, 'adopt': adopt_conversation}
 
 
 def get_conversation_service(server):

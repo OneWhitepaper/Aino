@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from gateway.hosted_room_conversation_maintenance import managed_store
+
 import json
 from dataclasses import asdict
 
@@ -81,9 +83,17 @@ def _coverage(conn, conversation_id: str, participant_id: str, generation: int,
     for row in rows:
         received.update(json.loads(row["source_ids_json"]))
         received.add(row["event_id"])
+    from gateway.hosted_room_conversation_history import _has_table
+    inherited = {row['event_id'] for row in conn.execute(
+        'SELECT event_id FROM hosted_conversation_branch_events WHERE conversation_id=?',
+        (conversation_id,))} if _has_table(conn, 'hosted_conversation_branch_events') else set()
     own = set()
     for row in conn.execute("""SELECT event_id, actor_json, payload_json FROM hosted_room_events
             WHERE room_id=? AND kind='conversation.response'""", (conversation_id,)):
+        # Branches preserve public author/generation metadata, but start new private
+        # runtimes. Only responses produced here can prove private context coverage.
+        if row['event_id'] in inherited:
+            continue
         actor, payload = json.loads(row["actor_json"]), json.loads(row["payload_json"])
         if actor["id"] == participant_id and payload.get("session_generation") == generation:
             own.add(row["event_id"])
@@ -100,6 +110,7 @@ def _coverage(conn, conversation_id: str, participant_id: str, generation: int,
     )
 
 
+@managed_store
 class ConversationContextStoreMixin:
     """The existing ConversationStore owns these tables and its transaction boundary."""
 

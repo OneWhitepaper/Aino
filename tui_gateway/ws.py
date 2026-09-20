@@ -20,6 +20,15 @@ from tui_gateway.event_replay import replay_epoch
 
 _log = logging.getLogger(__name__)
 
+# Granted only by the HTTP upgrade route after its install-token/request gates.
+_INSTALL_OWNER_AUTHORITY = object()
+
+
+def is_install_owner_transport(peer) -> bool:
+    return (isinstance(peer, WSTransport) and not peer.closed
+            and peer._install_owner_authority is _INSTALL_OWNER_AUTHORITY)
+
+
 # Scale-to-zero: tell the (separate) gateway process a dashboard/desktop/TUI client is attached via
 # the mtime of a marker file it reads in its idle predicate (gateway/scale_to_zero.py). Clients ping
 # every 15s; one write per 5s per process is plenty.
@@ -88,7 +97,7 @@ class WSTransport:
     deadlock, so it detects that and fires-and-forgets. Loop-thread callers needing completion use ``write_async``."""
 
     def __init__(self, ws: Any, loop: asyncio.AbstractEventLoop, *, peer: str = "unknown",
-                 auth_identity: dict | None = None) -> None:
+                 auth_identity: dict | None = None, install_owner_authority=None) -> None:
         self._ws = ws
         self._loop = loop
         self._peer = peer
@@ -96,6 +105,7 @@ class WSTransport:
         #: for legacy-token/stdio. RPC params can never populate it: sole identity authority for browser controllers
         #: and for the ``user_id`` the agent is built with (``server._session_auth_user_id``).
         self.auth_identity = auth_identity
+        self._install_owner_authority = install_owner_authority
         self._closed = False
         # Token-coalescing buffer. The lock guards the buffer + "armed" flag against worker threads
         # calling write(); the timer handle is only ever touched on the loop thread.
@@ -262,7 +272,8 @@ class _SendFailed(Exception):
     """Raised by handle_ws._reply when a reply could not be written: ends the read loop."""
 
 
-async def handle_ws(ws: Any, *, auth_identity: dict | None = None, subprotocol: str | None = None) -> None:
+async def handle_ws(ws: Any, *, auth_identity: dict | None = None, subprotocol: str | None = None,
+                    install_owner_authority=None) -> None:
     """Run one WebSocket session. Wire-compatible with ``tui_gateway.entry``. *auth_identity* is the server-minted
     ``{user_id, provider}`` recorded at WS-upgrade auth, stored as ``WSTransport.auth_identity`` (the only identity
     authority for browser-controller registration); callers that omit it (harnesses, embedded TUI child) get None."""
@@ -289,7 +300,8 @@ async def handle_ws(ws: Any, *, auth_identity: dict | None = None, subprotocol: 
         _note_dashboard_client_activity(force=True)
         _disable_nagle(ws)
         _log.info("ws accepted peer=%s", peer)
-        transport = WSTransport(ws, asyncio.get_running_loop(), peer=peer, auth_identity=auth_identity)
+        transport = WSTransport(ws, asyncio.get_running_loop(), peer=peer, auth_identity=auth_identity,
+                                install_owner_authority=install_owner_authority)
         # resolve_skin() is sync I/O + CPU; pooled so the read loop can drain the frontend's initial RPC burst.
         skin_payload = await asyncio.to_thread(server.resolve_skin)
         # change_events: this backend broadcasts pet/cron/sessions.changed, so clients can demote legacy

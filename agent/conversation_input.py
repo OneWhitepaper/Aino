@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from contextlib import contextmanager
+from agent.conversation_maintenance import managed_input_context
 from dataclasses import dataclass
 from typing import Callable
 
@@ -50,6 +51,7 @@ def current_conversation_input(agent) -> ConversationInputAdmission | None:
 
 
 @contextmanager
+@managed_input_context
 def managed_conversation_input(agent, identity: ManagedConversationInput, *, on_persisted=None):
     """Bind ONE synchronous turn; existing input IDs require recovery, never model replay.
 

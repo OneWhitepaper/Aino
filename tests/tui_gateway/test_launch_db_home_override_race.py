@@ -108,7 +108,7 @@ def test_prompt_background_turn_survives_parent_close(launch_db_env, tmp_path, m
     profile_home.mkdir(parents=True)
     parent_db = registry.acquire(profile_home / "state.db")
     parent = type("Parent", (), {"model": "m", "provider": "p", "_fallback_chain": [], "_session_db": parent_db})()
-    session = {"agent": parent, "session_key": "k", "profile_home": None}
+    session = {"agent": parent, "session_key": "k", "profile_home": str(profile_home)}
     seen = {}
 
     class FakeAgent:

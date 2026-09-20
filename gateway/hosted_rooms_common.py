@@ -113,13 +113,18 @@ def connect(
     """
     def _initialize(conn: sqlite3.Connection) -> None:
         if not ready(conn):
-            try:
-                conn.execute("BEGIN IMMEDIATE")
-                initialize(conn)
-                conn.commit()
-            except Exception:
-                conn.rollback()
-                raise
+            from gateway.hosted_room_conversation_maintenance import managed_operation
+            with managed_operation(Path(db_path).resolve().parent):
+                _initialize_locked(conn)
+
+    def _initialize_locked(conn):
+        try:
+            conn.execute("BEGIN IMMEDIATE")
+            initialize(conn)
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
     # Late import: a gateway that outlives an on-disk upgrade has the OLD sqlite_util cached.
     from hermes_cli.sqlite_util import open_db
 

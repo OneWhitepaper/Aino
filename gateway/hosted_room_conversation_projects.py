@@ -1,4 +1,6 @@
 """Atomic project transitions retain old runtime snapshots and retire their generations."""
+
+from gateway.hosted_room_conversation_maintenance import managed_call
 from dataclasses import asdict
 import time
 
@@ -8,6 +10,7 @@ from gateway.hosted_room_conversation_owners import require_owner_locked
 from gateway.hosted_room_conversation_store import _binding_from_row, _project, _project_json
 
 
+@managed_call
 def change_conversation_project(store, conversation_id, project, *, expected_revision, owner_key):
     project = _project(project)
     with hosted_rooms._transaction(store.db_path, immediate=True) as conn:

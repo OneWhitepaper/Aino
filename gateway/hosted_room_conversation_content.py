@@ -1,6 +1,8 @@
 """Immutable shared content with separately metered conversation ownership."""
 from __future__ import annotations
 
+from gateway.hosted_room_conversation_maintenance import managed_store
+
 import hashlib
 import shutil
 from dataclasses import asdict, dataclass
@@ -37,6 +39,8 @@ def storage_limits(db_path: Path) -> dict[str, int]:
 
 
 def initialize_content_schema(conn):
+    from .hosted_room_conversation_budget import initialize_budget_schema
+    initialize_budget_schema(conn)
     conn.execute('''CREATE TABLE IF NOT EXISTS hosted_conversation_content (
         id TEXT PRIMARY KEY, sha256 TEXT NOT NULL, size_bytes INTEGER NOT NULL,
         mime_type TEXT NOT NULL, data BLOB NOT NULL)''')
@@ -77,6 +81,7 @@ def validate_reference_locked(conn, conversation_id, value, *, text=False):
     return ref
 
 
+@managed_store
 class ConversationContentStore:
     def __init__(self, db_path: Path):
         self.db_path = Path(db_path)
@@ -90,10 +95,8 @@ class ConversationContentStore:
         if conn.execute('''SELECT 1 FROM hosted_conversation_content_owners
                 WHERE conversation_id=? AND content_id=?''', (conversation_id, ref.id)).fetchone():
             return
-        used = conn.execute('''SELECT COALESCE(SUM(c.size_bytes),0) FROM hosted_conversation_content c
-            JOIN hosted_conversation_content_owners o ON o.content_id=c.id
-            WHERE o.conversation_id=?''', (conversation_id,)).fetchone()[0]
-        if used + ref.size_bytes > limits['max_conversation_bytes']:
+        from .hosted_room_conversation_budget import usage
+        if usage(conn, conversation_id) + ref.size_bytes > limits['max_conversation_bytes']:
             raise ContentQuotaError('Conversation content budget exhausted; archive or export history.')
         self._disk_admission(0, limits)
         conn.execute('INSERT INTO hosted_conversation_content_owners VALUES (?, ?)', (conversation_id, ref.id))
@@ -103,7 +106,7 @@ class ConversationContentStore:
         if shutil.disk_usage(self.db_path.parent).free < size * 2 + limits['min_free_disk_bytes']:
             raise ContentQuotaError('Insufficient disk space for conversation content.')
 
-    def _put(self, data, mime_type, conversation_id=None):
+    def _put(self, data, mime_type, conversation_id=None, input_id=None):
         if not isinstance(data, bytes):
             raise TypeError('content must be bytes')
         if (not isinstance(mime_type, str) or not mime_type.strip() or len(mime_type) > 255
@@ -114,12 +117,17 @@ class ConversationContentStore:
         ref = ContentRef(content_id, digest, len(data), mime_type)
         limits = storage_limits(self.db_path)
         with hosted_rooms._transaction(self.db_path, immediate=True) as conn:
+            if input_id is not None and not conn.execute('SELECT 1 FROM hosted_conversation_content_owners '
+                    'WHERE conversation_id=? AND content_id=?', (conversation_id, ref.id)).fetchone():
+                conn.execute('UPDATE hosted_conversation_output_reservations SET bytes=MAX(0,bytes-?) '
+                    'WHERE conversation_id=? AND input_id=?', (len(data), conversation_id, input_id))
             exists = conn.execute('SELECT * FROM hosted_conversation_content WHERE id=?', (ref.id,)).fetchone()
             if exists and (ContentRef(**{key: exists[key] for key in ('id', 'sha256', 'size_bytes', 'mime_type')}) != ref
                            or bytes(exists['data']) != data):
                 raise ValueError('content ID conflicts with stored content')
             if not exists:
-                used = conn.execute('SELECT COALESCE(SUM(size_bytes),0) FROM hosted_conversation_content').fetchone()[0]
+                from .hosted_room_conversation_budget import usage
+                used = usage(conn)
                 if len(data) > limits['max_content_bytes'] or used + len(data) > limits['max_total_bytes']:
                     raise ContentQuotaError('Shared content budget exhausted; archive or export history.')
                 self._disk_admission(len(data), limits)
@@ -132,9 +140,9 @@ class ConversationContentStore:
     def put(self, data: bytes, mime_type: str) -> ContentRef:
         return self._put(data, mime_type)
 
-    def put_for_conversation(self, conversation_id: str, data: bytes, mime_type: str) -> ContentRef:
+    def put_for_conversation(self, conversation_id: str, data: bytes, mime_type: str, *, input_id=None) -> ContentRef:
         """Atomically admit both bytes and their ownership, before accepting an attachment."""
-        return self._put(data, mime_type, conversation_id)
+        return self._put(data, mime_type, conversation_id, input_id)
 
     def associate(self, conversation_id: str, content_id: str) -> ContentRef:
         limits = storage_limits(self.db_path)

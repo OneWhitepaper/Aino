@@ -9,6 +9,7 @@ from . import (  # noqa: F401
     conversation_commands,
     conversation_attachments,
     conversation_projects,
+    conversation_history,
     config_free_tier_control,
     events,
     groups_bot_relay,

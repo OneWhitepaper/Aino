@@ -927,10 +927,12 @@ DEFAULT_CONFIG = {
     },
 
     "conversations": {
-        # Enable ordinary multi-agent conversations after testing this gateway.
+        # Capabilities still require a supported General runtime and compatible owners.
         # Disabling creation preserves existing conversation history and running work.
-        "enabled": False,
+        "enabled": True,
         "storage": {
+            "max_active_conversations": 2000,
+            "max_events_per_conversation": 100000,
             "max_total_bytes": 1024**3,
             "max_conversation_bytes": 256 * 1024**2,
             "max_content_bytes": 16 * 1024**2,

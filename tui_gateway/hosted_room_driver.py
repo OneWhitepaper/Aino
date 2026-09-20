@@ -9,6 +9,8 @@ sessions reuse ``Group: <room_id>`` so a local-to-hosted migration keeps one tra
 
 from __future__ import annotations
 
+from gateway.hosted_room_conversation_maintenance import managed_runtime_call
+
 import threading
 import time
 import uuid
@@ -500,6 +502,7 @@ class HostedRoomRuntime:
             if should_wake:
                 self.wakeup()
 
+    @managed_runtime_call
     def _process_room(self, binding: HostedRoomBinding) -> None:
         if self.prepare_room is not None:
             self.prepare_room(binding)
@@ -675,6 +678,7 @@ class HostedRoomRuntime:
         self._drop_lease(binding.room_id)
         self._ambiguous_rooms[binding.room_id] = attempt.lease.expires_at
 
+    @managed_runtime_call
     def _on_terminal(
         self, binding: HostedRoomBinding, attempt: state.TaskAttempt, receipt: Mapping[str, Any]
     ) -> None:

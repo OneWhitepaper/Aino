@@ -354,7 +354,7 @@ def _after_complete_turn(sid: str, session: dict, st: _TurnRun, raw: Any) -> Non
     # everything otherwise); barge-aware.
     if st.tts_queue is None and isinstance(raw, str) and raw.strip() and _voice_tts_enabled():
         try:
-            threading.Thread(target=_speak_text_with_barge, args=(raw,), daemon=True).start()
+            threading.Thread(target=contextvars.copy_context().run, args=(_speak_text_with_barge, raw), daemon=True).start()
         except ImportError:
             logger.warning("voice TTS skipped: hermes_cli.voice unavailable")
         except Exception as e:

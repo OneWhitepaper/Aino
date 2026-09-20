@@ -1,6 +1,8 @@
 """Explicit source routing for the shared project index on the current backend."""
 from __future__ import annotations
 
+from gateway.hosted_room_conversation_maintenance import managed_call
+
 import os
 from dataclasses import asdict, replace
 from pathlib import Path
@@ -97,6 +99,7 @@ class SharedProjects:
         return {'projects': [asdict(project) for project in projects], 'available_environments': ['local'],
                 'unavailable_sources': unavailable}
 
+    @managed_call
     def register(self, registration_profile, name, canonical_path, environment_id='local'):
         self._environment(registration_profile, environment_id)
         path = canonical_local_path(canonical_path)
@@ -124,6 +127,7 @@ class SharedProjects:
             raise ValueError('shared project has no available source')
         return {'project': asdict(project)}
 
+    @managed_call
     def mutate(self, shared_project_id, source, *, name=None, delete=False):
         supplied = ProjectRef(**source)
         project = self.store.resolve(shared_project_id)

@@ -16,6 +16,10 @@ _REFRESH_COMMANDS = frozenset(('model', 'models', 'personality', 'profile', 'pro
     'tools', 'toolsets', 'prompt', 'reasoning', 'effort', 'fast', 'new', 'reset', 'cwd'))
 
 
+def supported_read_commands():
+    return sorted((*_READ_FORMATTERS, 'model', 'help'))
+
+
 class ConversationCommandError(ConversationBindingError):
     def __init__(self, message, reason):
         super().__init__(message)
@@ -29,7 +33,7 @@ def read_command_output(server, sid, session, name, arg):
     if name == 'model':
         return server._format_live_model_output(session)
     if name == 'help':
-        commands = sorted((*_READ_FORMATTERS, 'model', 'help'))
+        commands = supported_read_commands()
         return ('Private participant commands: ' + ', '.join('/' + name for name in commands)
                 + '\nUse the participant refresh action to change its configuration for a new generation.')
     formatter = _READ_FORMATTERS.get(name)

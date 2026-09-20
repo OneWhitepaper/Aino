@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import contextlib
+import contextvars
 import json
 import logging
 import os
@@ -199,9 +200,10 @@ def _transcribe_wav(wav_path: str, fail_msg: str, debug_prefix: Optional[str] = 
 
 def _deactivate(on_status: Optional[Callable[[str], None]] = None) -> None:
     """Mark the continuous loop inactive and (optionally) report ``"idle"``."""
-    global _continuous_active
+    global _continuous_active, _continuous_context
     with _continuous_lock:
         _continuous_active = False
+        _continuous_context = None
     _safe_call(on_status, "idle")
 
 
@@ -253,6 +255,7 @@ def _voice_activity_held() -> bool:
 # manual stop instead of reporting "no speech detected"; unset → on_silent_limit fires.
 _NO_CALLBACKS: tuple = (None, None, None, None)
 _continuous_callbacks: tuple = _NO_CALLBACKS
+_continuous_context: contextvars.Context | None = None
 _continuous_no_speech_count = 0
 _CONTINUOUS_NO_SPEECH_LIMIT = 3
 
@@ -346,7 +349,7 @@ def start_continuous(
     first, so the consumer only reflects "voice off" — like the manual stop control.
     """
     global _continuous_active, _continuous_recorder, _continuous_auto_restart, _continuous_no_speech_count
-    global _continuous_callbacks
+    global _continuous_callbacks, _continuous_context
 
     with _continuous_lock:
         if _continuous_active:
@@ -358,6 +361,7 @@ def start_continuous(
         _continuous_active = True
         _continuous_auto_restart = auto_restart
         _continuous_callbacks = (on_transcript, on_status, on_silent_limit, on_stop_phrase)
+        _continuous_context = contextvars.copy_context()
         if auto_restart:
             _continuous_no_speech_count = 0
 
@@ -375,7 +379,8 @@ def start_continuous(
     # conflict on macOS.
     _play_beep(frequency=880, count=1)
     try:
-        rec.start(on_silence_stop=_continuous_on_silence)
+        capture_context = contextvars.copy_context()
+        rec.start(on_silence_stop=lambda: capture_context.copy().run(_continuous_on_silence))
     except Exception as e:
         logger.error("failed to start continuous recording: %s", e)
         _debug(f"start_continuous: rec.start raised {type(e).__name__}: {e}")
@@ -393,7 +398,7 @@ def stop_continuous(force_transcribe: bool = False) -> None:
     the buffer is discarded.
     """
     global _continuous_active, _continuous_stopping, _continuous_recorder, _continuous_no_speech_count
-    global _continuous_callbacks
+    global _continuous_callbacks, _continuous_context
 
     with _continuous_lock:
         if not _continuous_active:
@@ -401,6 +406,8 @@ def stop_continuous(force_transcribe: bool = False) -> None:
         _continuous_active = False
         rec = _continuous_recorder
         callbacks = _continuous_callbacks
+        capture_context = _continuous_context or contextvars.copy_context()
+        _continuous_context = None
         track_no_speech = force_transcribe and not _continuous_auto_restart
         _continuous_stopping = rec is not None
         _continuous_callbacks = _NO_CALLBACKS
@@ -418,7 +425,7 @@ def stop_continuous(force_transcribe: bool = False) -> None:
                 _safe_call(rec.cancel, warn="failed to cancel recorder: %s")
                 wav_path = None
             threading.Thread(
-                target=_finish_forced_stop, args=(wav_path, callbacks, track_no_speech), daemon=True
+                target=capture_context.copy().run, args=(_finish_forced_stop, wav_path, callbacks, track_no_speech), daemon=True
             ).start()
             return
         # cancel() (not stop()) discards buffered frames — the loop is over, we don't want to
@@ -536,7 +543,8 @@ def _rearm_after_turn(rec: Any, on_status, no_speech: int) -> None:
     _debug(f"_continuous_on_silence: restarting loop (no_speech={no_speech})")
     _play_beep(frequency=880, count=1)
     try:
-        rec.start(on_silence_stop=_continuous_on_silence)
+        capture_context = contextvars.copy_context()
+        rec.start(on_silence_stop=lambda: capture_context.copy().run(_continuous_on_silence))
     except Exception as e:
         logger.error("failed to restart continuous recording: %s", e)
         _debug(f"_continuous_on_silence: restart raised {type(e).__name__}: {e}")

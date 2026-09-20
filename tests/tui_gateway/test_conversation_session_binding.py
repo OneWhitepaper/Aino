@@ -450,11 +450,20 @@ def test_preparation_reserves_managed_identity_through_binding_and_cold_recovery
     token = bind_transport(owner)
     try:
         revision = store.get('conversation').revision
-        refreshed = refresh_conversation_preparation(server, binding=binding, project=None, source='desktop')
+        with pytest.raises(ConversationBindingError, match='Fast mode'):
+            refresh_conversation_preparation(server, binding=binding, project=None, source='desktop', fast=True)
+        assert store.get('conversation').revision == revision
+        refreshed = refresh_conversation_preparation(server, binding=binding, project=None, source='desktop',
+                                                     reasoning_effort='low', fast=False)
         assert refreshed['session_generation'] == binding.session_generation + 1
         assert refreshed['stored_session_id'] != first['stored_session_id']
         assert refreshed['model_config']['model_id'] == first['model_config']['model_id']
+        assert refreshed['model_config']['reasoning_config'] == {'enabled': True, 'effort': 'low'}
+        assert refreshed['model_config']['service_tier'] == 'normal'
         assert refreshed['model_status'] == 'awaiting_managed_credentials'
+        draft = ConversationBindings(store.db_path).public_model_snapshot(
+            'conversation', 'writer', refreshed['session_generation'], include_prepared=True)
+        assert draft['reasoning_effort'] == 'low' and draft['capabilities']['reasoning'] is True
         assert server._sessions[refreshed['session_id']]['agent'] is None
         assert store.get('conversation').revision == revision + 1
         next_binding = replace(binding, session_generation=refreshed['session_generation'],
@@ -517,3 +526,63 @@ def test_prepared_expert_deleted_by_profile_operation_refuses_send_without_fallb
     assert not any(s.get('_conversation_binding', {}).get('participant_id') == general
                    for s in server._sessions.values())
     assert not removed.exists()
+
+
+def test_generation_options_validate_before_advance_and_restore_explicit_disable(runtime_env):
+    from gateway.hosted_room_conversation_bindings import ConversationBindings
+    server, store, install, home, root = runtime_env
+    cfg_path = home / 'profiles' / 'writer' / 'config.yaml'
+    cfg = yaml.safe_load(cfg_path.read_text())
+    cfg['model_overrides'] = {'custom:test': {'gpt-4.1-mini': {'supports_reasoning': True}}}
+    cfg['agent'].update(reasoning_effort='high', service_tier='priority')
+    cfg_path.write_text(yaml.safe_dump(cfg))
+    original_config = cfg_path.read_bytes()
+    binding = _conversation(store, install)
+    prepared = prepare_conversation_session(server, binding=binding, project=None, source='desktop',
+                                            reasoning_effort='high')
+    first = resolve_conversation_session(server, binding=binding, project=None, source='desktop')
+    old = server._sessions[first.runtime_id]
+    old_state = (copy.deepcopy(first.model_snapshot), copy.deepcopy(old['history']), old['agent']._cached_system_prompt)
+    shared = ConversationBindings(store.db_path)
+    assert shared.public_model_snapshot('conversation', 'writer', 1)['fast'] is True
+    revision = store.get('conversation').revision
+    for selection in ({'reasoning_effort': 'invalid'}, {'fast': 'false'},
+                      {'model_source': 'byok', 'model_id': 'gpt-4.1-mini', 'fast': True},
+                      {'model_source': 'aino', 'model_id': 'opaque-unbound', 'reasoning_effort': 'high'}):
+        with pytest.raises(ConversationBindingError):
+            refresh_conversation_preparation(server, binding=binding, project=None, source='desktop', **selection)
+        assert store.get('conversation').revision == revision
+        assert store.participants('conversation')[1].session_generation == 1
+    refreshed = refresh_conversation_preparation(server, binding=binding, project=None, source='desktop',
+                                                 reasoning_effort='none', fast=False)
+    updated = replace(binding, session_generation=refreshed['session_generation'], lineage_id=refreshed['stored_session_id'])
+    assert refreshed['model_config']['reasoning_config'] == {'enabled': False}
+    assert refreshed['model_config']['service_tier'] == 'normal'
+    from tui_gateway.conversation_service import ConversationService
+    service = ConversationService(server, db_path=store.db_path)
+    draft_options = service.runtime_snapshot('conversation', 'writer', updated.session_generation)['model_snapshot']
+    assert draft_options['reasoning_effort'] == 'none'
+    assert draft_options['capabilities']['reasoning'] is True
+    assert shared.public_model_snapshot('conversation', 'writer', updated.session_generation) is None
+    sid = refreshed['session_id']
+    del server._sessions[sid]
+    resumed = prepare_conversation_session(server, binding=updated, project=None, source='desktop')
+    assert resumed['session_id'] != sid
+    second = resolve_conversation_session(server, binding=updated, project=None, source='desktop')
+    options = shared.public_model_snapshot('conversation', 'writer', second.session_generation)
+    assert options['reasoning_effort'] == 'none' and options['fast'] is False
+    assert options['capabilities']['reasoning'] is True
+    assert options['capabilities']['fast'] is False
+    assert (first.model_snapshot, old['history'], old['agent']._cached_system_prompt) == old_state
+    assert cfg_path.read_bytes() == original_config
+    # A later partial choice keeps an explicit normal tier instead of re-inheriting priority.
+    third = refresh_conversation_preparation(server, binding=updated, project=None, source='desktop', reasoning_effort='low')
+    assert third['model_config']['service_tier'] == 'normal'
+    # A verified native route accepts an explicit priority selection without changing another generation.
+    cfg['model'] = {'default': 'grok-4.6', 'provider': 'xai'}
+    cfg_path.write_text(yaml.safe_dump(cfg))
+    (cfg_path.parent / '.env').write_text('XAI_API_KEY=fixture-native-priority\n')
+    fast_binding = _conversation(store, install, name='native-fast')
+    native = prepare_conversation_session(server, binding=fast_binding, project=None, source='desktop', fast=True)
+    assert native['model_config']['service_tier'] == 'priority'
+    assert first.model_snapshot == old_state[0]

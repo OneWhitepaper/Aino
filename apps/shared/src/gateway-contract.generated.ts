@@ -556,8 +556,28 @@ export interface ProjectFacts {
   verifyCommands: string[]
   contextFiles: string[]
 }
+export interface ConversationAdoptParams {
+  source_profile: string
+  lineage_id: string
+  conversation_id: string
+  input_id: string
+}
+export interface ConversationAdoptResult {
+  migration: MigrationReceipt
+}
+export interface MigrationReceipt {
+  migration_id: string
+  conversation_id: string
+  source_profile: string
+  source_lineage_id: string
+  source_cutoff_row_id: number
+  status: 'preparing' | 'importing' | 'complete' | 'failed'
+  source_session_ids?: string[]
+}
 export interface ConversationPrepareParams {
   conversation_id: string
+  reasoning_effort?: string | null
+  fast?: boolean | null
   participant_id: string
   expected_revision?: number | null
   expected_generation?: number
@@ -577,6 +597,8 @@ export interface ConversationPrepareResult {
 /** Client→server method params / server→client request params. Unknown keys are rejected. */
 export type Params = Record<string, never>
 export interface ConversationCapabilities {
+  scoped_commands?: boolean
+  supported_read_commands?: string[]
   max_attachment_bytes?: number | null
   max_attachments?: number | null
   protocol_version: number
@@ -600,6 +622,7 @@ export interface ConversationParticipantRef {
   is_general?: boolean
 }
 export interface ConversationCreateParams {
+  auto_title?: boolean
   conversation_id: string
   title: string
   general_participant_id: string
@@ -616,12 +639,34 @@ export interface ConversationResult {
   conversation: ConversationRecord
 }
 export interface ConversationRecord {
+  branch?: ConversationBranchReceipt | null
+  migration?: MigrationReceipt | null
   conversation_id: string
   title: string
   general: ConversationParticipantRef
   project: ConversationProjectRef | null
   revision: number
   archived: boolean
+}
+export interface ConversationBranchReceipt {
+  operation_id: string
+  conversation_id: string
+  source_conversation_id: string
+  source_event_id: string
+  source_revision: number
+  source_cutoff_seq: number
+  kind: 'branch' | 'edit'
+  draft?: ConversationHistoryDraft | null
+  draft_pending: boolean
+  draft_cancelled?: boolean
+}
+export interface ConversationHistoryDraft {
+  input_id: string
+  turn_id: string
+  participant_id: string
+  text: string
+  attachment_ids: string[]
+  source_event_id: string
 }
 export interface ConversationListParams {
   cursor?: string | null
@@ -639,6 +684,7 @@ export interface ConversationParams {
 }
 export interface ConversationGetResult {
   conversation: ConversationRecord
+  migration?: MigrationReceipt | null
   participants: ConversationParticipantBinding[]
   active_turn: ConversationTurn | null
   pending_delegations: ConversationDelegation[]
@@ -675,6 +721,8 @@ export interface ConversationSendParams {
   text: string
   attachment_ids?: string[]
   command_token?: string | null
+  surface?: 'voice-live' | null
+  voice_context?: string | null
   expected_revision: number
 }
 export interface ConversationAdmissionResult {
@@ -700,6 +748,7 @@ export interface ConversationEventsResult {
   has_more: boolean
 }
 export interface ConversationEvent {
+  provenance?: ConversationEventProvenance | null
   room_id: string
   seq: number
   event_id: string
@@ -709,6 +758,12 @@ export interface ConversationEvent {
   payload: Record<string, unknown>
   created_at: number
   idempotent?: boolean
+}
+export interface ConversationEventProvenance {
+  conversation_id: string
+  event_id: string
+  seq: number
+  payload_sha256: string
 }
 export interface ConversationActor {
   kind: string
@@ -733,6 +788,8 @@ export interface ConversationRetryParams {
 }
 export interface ConversationRefreshParams {
   conversation_id: string
+  reasoning_effort?: string | null
+  fast?: boolean | null
   participant_id: string
   expected_generation: number
   model_source?: 'aino' | 'byok' | null
@@ -1206,6 +1263,7 @@ export interface CompletionItem {
   kind?: string | null
 }
 export interface CompleteSlashParams {
+  profile?: string | null
   text?: string | null
 }
 /** ``replace_from`` is the column the accepted item replaces from. */
@@ -2147,10 +2205,18 @@ export interface ConversationRuntimeSnapshotResult {
   background_activities: ConversationActivityCoordinates[]
 }
 export interface ConversationModelSnapshot {
+  capabilities?: ConversationOptionCapabilities | null
+  reasoning_effort?: string | null
+  fast?: boolean
   model: string
   provider: string | null
   model_source: string | null
   model_id: string | null
+}
+export interface ConversationOptionCapabilities {
+  reasoning?: boolean | null
+  fast?: boolean | null
+  can_disable_reasoning?: boolean | null
 }
 export interface ConversationActivityCoordinates {
   conversation_id: string
@@ -2160,6 +2226,32 @@ export interface ConversationActivityCoordinates {
   task_id: string
   execution_generation: number
   runtime_id: string
+}
+export interface ConversationArchiveParams {
+  conversation_id: string
+  expected_revision: number
+}
+export interface ConversationRenameParams {
+  conversation_id: string
+  expected_revision: number
+  title: string
+}
+export interface ConversationExportParams {
+  conversation_id: string
+  cursor?: ConversationExportCursor | null
+}
+export interface ConversationExportCursor {
+  revision: number
+  cutoff: number
+  phase: 'events' | 'content'
+  after_seq: number
+  content_index: number
+  offset_bytes: number
+}
+export interface ConversationExportResult {
+  filename: string | null
+  chunk: string
+  cursor: ConversationExportCursor | null
 }
 export interface ConversationCommandParams {
   conversation_id: string
@@ -2229,6 +2321,65 @@ export interface ConversationSetProjectParams {
 export interface ConversationSetProjectResult {
   conversation: ConversationRecord
   participants: ConversationParticipantBinding[]
+}
+export interface ConversationBranchParams {
+  conversation_id: string
+  source_event_id: string
+  expected_revision: number
+  target_conversation_id: string
+  operation_id: string
+  edit_text?: string | null
+}
+export interface ConversationBranchResult {
+  conversation: ConversationRecord
+  branch: ConversationBranchReceipt
+}
+export interface ConversationRegenerateParams {
+  conversation_id: string
+  source_event_id: string
+  expected_revision: number
+  input_id: string
+  turn_id: string
+}
+export interface ConversationRegenerateResult {
+  admission: ConversationAdmission
+  regenerates_event_id: string
+}
+export interface ConversationReactParams {
+  conversation_id: string
+  event_id: string
+  operation_id: string
+  emoji?: string | null
+  expected_reaction_revision: number
+}
+export interface ConversationReactResult {
+  reaction: ConversationReactionState
+}
+export interface ConversationReactionState {
+  event_id: string
+  revision: number
+  reactions: ConversationReaction[]
+}
+export interface ConversationReaction {
+  emoji: string
+  author: string
+  at: number
+}
+export interface ConversationReactionsParams {
+  conversation_id: string
+  event_ids: string[]
+}
+export interface ConversationReactionsResult {
+  reactions: ConversationReactionState[]
+}
+export interface ConversationCancelDraftParams {
+  conversation_id: string
+  input_id: string
+  operation_id: string
+  expected_revision: number
+}
+export interface ConversationCancelDraftResult {
+  conversation: ConversationRecord
 }
 export interface GroupsCapabilitiesParams {
   profile?: string | null
@@ -4653,8 +4804,16 @@ export interface RpcMethods {
   'connectors.connect': { params: ConnectorsConnectParams; result: ConnectorsConnectResult }
   /** Connector catalog + connection state for one owned session (``available=False`` when the toolset is off). */
   'connectors.list': { params: ConnectorsListParams; result: ConnectorsListResult }
+  /** Adopt owned quiescent legacy public history with a permanent source execution fence. */
+  'conversations.adopt': { params: ConversationAdoptParams; result: ConversationAdoptResult }
+  /** Archive an owned idle conversation without deleting any public history. */
+  'conversations.archive': { params: ConversationArchiveParams; result: ConversationResult }
   /** Upload immutable conversation-owned bytes without admitting a user input. */
   'conversations.attach': { params: ConversationAttachParams; result: ConversationAttachResult }
+  /** Snapshot owned idle public history into a new conversation; edits return a durable unsent draft for normal preparation and sending. */
+  'conversations.branch': { params: ConversationBranchParams; result: ConversationBranchResult }
+  /** Cancel the exact unsent edited draft with owner and revision checks; copied public history remains immutable. */
+  'conversations.cancel_draft': { params: ConversationCancelDraftParams; result: ConversationCancelDraftResult }
   /** Report verified ordinary-conversation topology and rollout availability. */
   'conversations.capabilities': { params: Params; result: ConversationCapabilities }
   /** Read a private notice from the selected owned participant generation without admitting a turn. */
@@ -4665,6 +4824,8 @@ export interface RpcMethods {
   'conversations.create': { params: ConversationCreateParams; result: ConversationResult }
   /** Replay a page of durable public conversation events. */
   'conversations.events': { params: ConversationEventsParams; result: ConversationEventsResult }
+  /** Download bounded segments of an owned public JSON package with full referenced content and attachments. */
+  'conversations.export': { params: ConversationExportParams; result: ConversationExportResult }
   /** Read public conversation identity, participants and outstanding work. */
   'conversations.get': { params: ConversationParams; result: ConversationGetResult }
   /** List ordinary conversations independently from the selected Profile. */
@@ -4673,8 +4834,16 @@ export interface RpcMethods {
   'conversations.participants': { params: Params; result: ConversationCatalogResult }
   /** Prepare the exact participant session for ordinary authenticated model binding before sending. */
   'conversations.prepare': { params: ConversationPrepareParams; result: ConversationPrepareResult }
+  /** Set or clear the owner reaction on one public event without rewriting its bytes. */
+  'conversations.react': { params: ConversationReactParams; result: ConversationReactResult }
+  /** Read owner-scoped reaction metadata for exact public event identities. */
+  'conversations.reactions': { params: ConversationReactionsParams; result: ConversationReactionsResult }
   /** Explicitly start a new participant generation from current Profile configuration. */
   'conversations.refresh': { params: ConversationRefreshParams; result: ConversationRefreshResult }
+  /** Intentionally admit a new answer attempt related to a settled public result; this never retries uncertain work. */
+  'conversations.regenerate': { params: ConversationRegenerateParams; result: ConversationRegenerateResult }
+  /** Set an owned conversation title with revision and manual-title authority. */
+  'conversations.rename': { params: ConversationRenameParams; result: ConversationResult }
   /** Reconcile an admitted input; uncertain execution is never blindly replayed. */
   'conversations.retry': { params: ConversationRetryParams; result: ConversationAdmissionResult }
   /** Reattach an existing participant generation and replay its exact live child/request ownership. */
@@ -5107,17 +5276,26 @@ export const RPC_METHODS = [
   'config.show',
   'connectors.connect',
   'connectors.list',
+  'conversations.adopt',
+  'conversations.archive',
   'conversations.attach',
+  'conversations.branch',
+  'conversations.cancel_draft',
   'conversations.capabilities',
   'conversations.command',
   'conversations.content',
   'conversations.create',
   'conversations.events',
+  'conversations.export',
   'conversations.get',
   'conversations.list',
   'conversations.participants',
   'conversations.prepare',
+  'conversations.react',
+  'conversations.reactions',
   'conversations.refresh',
+  'conversations.regenerate',
+  'conversations.rename',
   'conversations.retry',
   'conversations.runtime_snapshot',
   'conversations.send',

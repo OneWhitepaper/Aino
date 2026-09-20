@@ -1,6 +1,8 @@
 """Durable runtime generations in the conversation authority's shared database."""
 from __future__ import annotations
 
+from gateway.hosted_room_conversation_maintenance import managed_store
+
 import json
 import time
 from dataclasses import asdict, replace
@@ -23,6 +25,17 @@ def saved_model_selection(record):
     return selection
 
 
+def public_options(snapshot):
+    reasoning = snapshot.get('reasoning_config')
+    effort = None
+    if isinstance(reasoning, dict):
+        effort = 'none' if reasoning.get('enabled') is False else reasoning.get('effort')
+    caps = snapshot.get('option_capabilities')
+    public_caps = {key: caps.get(key) for key in ('reasoning', 'fast', 'can_disable_reasoning')} if isinstance(caps, dict) else None
+    return {'reasoning_effort': effort, 'fast': snapshot.get('service_tier') == 'priority', 'capabilities': public_caps}
+
+
+@managed_store
 class ConversationBindings:
     def __init__(self, db_path: Path):
         self.db_path = Path(db_path)
@@ -41,20 +54,21 @@ class ConversationBindings:
                 conn.execute("ALTER TABLE hosted_room_conversation_runtimes "
                              "ADD COLUMN selection_json TEXT NOT NULL DEFAULT '{}'")
 
-    def public_model_snapshot(self, conversation_id: str, participant_id: str, generation: int) -> dict | None:
-        """Display only the completed immutable generation, including after a refresh."""
+    def public_model_snapshot(self, conversation_id: str, participant_id: str, generation: int, *, include_prepared=False) -> dict | None:
+        """Public events require completion; the runtime picker may display a validated draft."""
         with hosted_rooms._transaction(self.db_path) as conn:
             row = conn.execute("""SELECT model_snapshot,capability_digest
                 FROM hosted_room_conversation_runtimes
                 WHERE conversation_id=? AND participant_id=? AND session_generation=?""",
                 (conversation_id, participant_id, generation)).fetchone()
-        if row is None or not row['capability_digest']:
+        if row is None or (not row['capability_digest'] and not include_prepared):
             return None
         snapshot = json.loads(row['model_snapshot'])
         if not snapshot.get('model'):
             return None
         # Runtime storage includes routing and owner data; none belongs in the public log.
-        return {key: snapshot.get(key) for key in ('model', 'provider', 'model_source', 'model_id')}
+        return {**{key: snapshot.get(key) for key in ('model', 'provider', 'model_source', 'model_id')},
+                **public_options(snapshot)}
 
     def _current(self, conn, binding: ParticipantBinding, project: ProjectRef | None = None,
                  *, check_project: bool = False):
@@ -84,14 +98,14 @@ class ConversationBindings:
                 (binding.conversation_id, binding.participant.participant_id, binding.session_generation)).fetchone()
             return dict(row) if row else None
 
-    def previous_model_selection(self, binding: ParticipantBinding) -> dict:
+    def previous_runtime(self, binding: ParticipantBinding) -> dict | None:
         with hosted_rooms._transaction(self.db_path) as conn:
             self._current(conn, binding)
-            row = conn.execute('''SELECT selection_json,model_snapshot FROM hosted_room_conversation_runtimes
+            row = conn.execute('''SELECT * FROM hosted_room_conversation_runtimes
                 WHERE conversation_id=? AND participant_id=? AND session_generation<?
                 ORDER BY session_generation DESC LIMIT 1''',
                 (binding.conversation_id, binding.participant.participant_id, binding.session_generation)).fetchone()
-            return saved_model_selection(dict(row) if row else None)
+            return dict(row) if row else None
 
     def publish(self, binding: ParticipantBinding, project: ProjectRef | None, record: dict) -> dict:
         """Reserve the exact generation only after its Profile session row is durable."""

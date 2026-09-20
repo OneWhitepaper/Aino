@@ -5,6 +5,8 @@ Only the current local backend is supported. No transport-supplied marker grants
 """
 from __future__ import annotations
 
+from gateway.hosted_room_conversation_maintenance import managed_call
+
 import contextlib
 import contextvars
 import hashlib
@@ -114,6 +116,11 @@ def _restore_model(server, session, stored):
     session['model_override'] = overrides.get('model_override')
     session['resume_runtime_overrides'] = overrides
     session['managed_model_params'] = overrides.get('managed_model_params')
+    # A prepared BYOK draft may not have resolved its provider yet. The ordinary
+    # deferred builder then skips resume overrides; keep explicit option pins on
+    # its existing create-option path as well (including disabled/normal).
+    session['create_reasoning_override'] = overrides.get('reasoning_config_override')
+    session['create_service_tier_override'] = overrides.get('service_tier_override')
 
 
 def _capabilities(agent) -> str:
@@ -126,6 +133,21 @@ def _model_snapshot(server, agent) -> dict:
     snapshot.pop(_MARKER, None)
     # An explicit ordinary tier must not turn into the Profile's current priority on resume.
     snapshot['service_tier'] = getattr(agent, 'service_tier', None) or 'normal'
+    with server._sessions_lock:
+        session = next((s for s in server._sessions.values() if s.get('agent') is agent), None)
+    stored = conversation_metadata(session) if session else None
+    frozen = json.loads(stored['model_snapshot']) if stored and stored.get('capability_digest') else {}
+    if stored and stored.get('capability_digest'):
+        if 'option_capabilities' in frozen:
+            snapshot['option_capabilities'] = frozen['option_capabilities']
+    elif snapshot.get('model_source') == 'aino':
+        from .conversation_model_options import managed_capabilities
+        caps = managed_capabilities(server, stored, snapshot.get('model_id'))
+        if caps:
+            snapshot['option_capabilities'] = caps
+    else:
+        from .conversation_model_options import byok_capabilities
+        snapshot['option_capabilities'] = byok_capabilities(snapshot.get('model'), snapshot.get('provider'), snapshot.get('base_url'))
     return snapshot
 
 
@@ -174,9 +196,11 @@ def _model_selection(model_source: str | None, model_id: str | None) -> dict:
     return {k: v for k, v in {'model_source': model_source, 'model_id': model_id}.items() if v is not None}
 
 
+@managed_call
 def prepare_conversation_session(server, *, binding: ParticipantBinding,
                                  project: ProjectRef | None, source: str,
-                                 model_source: str | None = None, model_id: str | None = None) -> dict:
+                                 model_source: str | None = None, model_id: str | None = None,
+                                 reasoning_effort: str | None = None, fast: bool | None = None) -> dict:
     """Reserve a durable Profile draft before the owner obtains its managed-model ticket.
 
     Preparation does not build an agent or claim a persisted system prompt. The ordinary
@@ -185,14 +209,16 @@ def prepare_conversation_session(server, *, binding: ParticipantBinding,
     """
     if source != 'desktop':
         raise ConversationBindingError('conversation sessions currently require the desktop surface')
-    selection = _model_selection(model_source, model_id)
+    from .conversation_model_options import option_selection, validate_options, merge_selection
+    selection = {**_model_selection(model_source, model_id), **option_selection(reasoning_effort, fast)}
     with _resolution_lock:
         store = _store(server)
         from .conversation_authority import require_conversation_owner
         require_conversation_owner(server, store.db_path, binding.conversation_id, write=True, claim_unowned=True)
         stored = store.resolve(binding, project)
-        if stored is None and not selection:
-            selection = store.previous_model_selection(binding)
+        previous = store.previous_runtime(binding) if stored is None else None
+        if stored is None:
+            selection = merge_selection(saved_model_selection(previous), selection)
         profile = binding.participant.profile
         profile_home = server._profile_home(profile)
         _validate_environment(server, profile_home, project, binding.participant.install_id)
@@ -201,11 +227,13 @@ def prepare_conversation_session(server, *, binding: ParticipantBinding,
             if (stored['cwd'], stored['profile_home'], stored['source']) != (
                     cwd, str(Path(profile_home or server._hermes_home).resolve()), source):
                 raise ConversationBindingError('generation environment changed; explicitly start a new generation')
-            if selection and selection != json.loads(stored.get('selection_json') or '{}'):
+            saved_selection = saved_model_selection(stored)
+            if any(saved_selection.get(key) != value for key, value in selection.items()):
                 raise ConversationBindingError('participant model selection is fixed; explicitly refresh its generation')
             result = _call(server, 'session.resume', {'session_id': stored['lineage_id'],
                 'profile': profile, 'source': source, 'omit_messages': True})
         else:
+            validate_options(server, profile_home, selection, previous)
             marker = {'conversation_id': binding.conversation_id,
                       'participant_id': binding.participant.participant_id,
                       'session_generation': binding.session_generation}
@@ -234,6 +262,15 @@ def prepare_conversation_session(server, *, binding: ParticipantBinding,
                 raise ConversationBindingError('participant management marker did not persist')
             if row.get('model'):
                 initial.setdefault('model', row['model'])
+            if any(key in selection for key in ('reasoning_effort', 'fast')):
+                from .conversation_model_options import managed_capabilities, prepared_byok_options
+                if selection.get('model_source') == 'aino':
+                    caps = managed_capabilities(server, previous, selection.get('model_id'))
+                    if caps:
+                        initial.update(model=caps['model'], provider='aino', option_capabilities=caps)
+                else:
+                    with server._profile_build_scope(profile_home):
+                        initial.update(prepared_byok_options(server, selection))
             stored = store.publish(binding, project, {
                 **marker, 'lineage_id': session['session_key'], 'profile': profile,
                 'profile_home': _home(server, session), 'cwd': cwd, 'source': source,
@@ -253,6 +290,7 @@ def prepare_conversation_session(server, *, binding: ParticipantBinding,
                 'model_config': config}
 
 
+@managed_call
 def resolve_conversation_session(server, *, binding: ParticipantBinding,
                                  project: ProjectRef | None, source: str) -> RuntimeBinding:
     """Build exactly the reserved draft after its real owner completes credential binding."""
@@ -291,13 +329,16 @@ def resolve_conversation_session(server, *, binding: ParticipantBinding,
                               binding.participant.profile, source, json.loads(stored['model_snapshot']))
 
 
+@managed_call
 def refresh_conversation_preparation(server, *, binding: ParticipantBinding,
                                      project: ProjectRef | None, source: str,
-                                     model_source: str | None = None, model_id: str | None = None) -> dict:
+                                     model_source: str | None = None, model_id: str | None = None,
+                                     reasoning_effort: str | None = None, fast: bool | None = None) -> dict:
     """Explicitly advance, then reserve the new generation for its owner's credential rendezvous."""
     if source != 'desktop':
         raise ConversationBindingError('conversation sessions currently require the desktop surface')
-    selection = _model_selection(model_source, model_id)
+    from .conversation_model_options import option_selection, validate_options, merge_selection
+    selection = {**_model_selection(model_source, model_id), **option_selection(reasoning_effort, fast)}
     with _resolution_lock:
         from .conversation_authority import require_conversation_owner
         require_conversation_owner(server, _store(server).db_path, binding.conversation_id, write=True)
@@ -305,13 +346,14 @@ def refresh_conversation_preparation(server, *, binding: ParticipantBinding,
                               project, binding.participant.install_id)
         store = _store(server)
         stored = store.resolve(binding, project)
-        if not selection and stored:
-            selection = saved_model_selection(stored)
+        selection = merge_selection(saved_model_selection(stored), selection)
+        validate_options(server, server._profile_home(binding.participant.profile), selection, stored)
         _cwd(store, binding.conversation_id, project)
         updated = store.advance(binding, project)
         return prepare_conversation_session(server, binding=updated, project=project, source=source, **selection)
 
 
+@managed_call
 def refresh_conversation_session(server, *, binding: ParticipantBinding,
                                  project: ProjectRef | None, source: str) -> RuntimeBinding:
     """Internal synchronous refresh; desktop uses the preparation rendezvous before resolution."""
@@ -340,10 +382,12 @@ def prepare_conversation_agent(server, session: dict, agent) -> None:
     # The core invokes this after its real prompt write and before calling the model.
     agent._session_init_model_config = {**getattr(agent, '_session_init_model_config', {}),
                                         _MARKER: conversation_row_marker(session)}
+    agent._conversation_maintenance_root = str(_store(server).db_path.parent)
     agent._conversation_snapshot_guard = lambda active: _verify_snapshot(server, session, active)
     agent._conversation_compression_committed = lambda active: _compression_committed(server, session, active)
 
 
+@managed_call
 def _compression_committed(server, session: dict, agent) -> None:
     try:
         _verify_snapshot(server, session, agent)
@@ -352,6 +396,7 @@ def _compression_committed(server, session: dict, agent) -> None:
         raise
 
 
+@managed_call
 def _verify_snapshot(server, session: dict, agent) -> None:
     if failure := session.get('_conversation_snapshot_error'):
         raise ConversationBindingError(failure)
@@ -445,6 +490,7 @@ def issue_conversation_submission(server, runtime: RuntimeBinding, *, attempt: d
 
 
 def require_conversation_submission(session: dict, proof: object | None) -> tuple[str, ...] | None:
+    require_legacy_migration_writable(session)
     stored = conversation_metadata(session)
     if stored is None:
         if proof is not None:
@@ -458,6 +504,36 @@ def require_conversation_submission(session: dict, proof: object | None) -> tupl
 
 
 def require_conversation_mutation_allowed(session: dict | None) -> None:
+    if session:
+        require_legacy_migration_writable(session)
     if session and conversation_metadata(session):
         raise ConversationBindingError(
             'This session is managed by its conversation. Send through the conversation or explicitly refresh its participant.')
+
+
+class ConversationStorageUnavailable(ConversationBindingError):
+    pass
+
+
+def require_legacy_migration_writable(session):
+    from tui_gateway import server
+    session_id = session.get('session_key')
+    if not session_id:
+        return
+    with server._session_db(session) as db:
+        if db is None:
+            raise ConversationStorageUnavailable('session storage unavailable: source database cannot verify migration state')
+        db.assert_session_not_migrated(session_id)
+
+
+def legacy_migration_refusal(rid, session):
+    from tui_gateway import server
+    from hermes_state_migration import SessionMigratedError
+    try:
+        if session:
+            require_legacy_migration_writable(session)
+    except SessionMigratedError as exc:
+        return server._err(rid, 4120, str(exc), data={'conversation_id': exc.conversation_id})
+    except ConversationBindingError as exc:
+        return server._err(rid, 4120, str(exc))
+    return None

@@ -1,6 +1,8 @@
 """Atomic public input, frozen context and existing driver admission."""
 from __future__ import annotations
 
+from gateway.hosted_room_conversation_maintenance import managed_store
+
 import json
 import time
 from dataclasses import asdict
@@ -14,6 +16,7 @@ class ConversationBusyError(hosted_rooms.RoomConflictError):
     pass
 
 
+@managed_store
 class ConversationAdmissionMixin:
     def participants(self, conversation_id):
         from .hosted_room_conversation_store import _binding_from_row
@@ -41,7 +44,7 @@ class ConversationAdmissionMixin:
             records = tuple(self._get_locked(conn, row[0]) for row in ids[:limit])
             return records, records[-1].conversation_id if len(ids) > limit else None, len(ids) > limit
 
-    def _replay_locked(self, conn, conversation_id, submission, command_resolution=None):
+    def _replay_locked(self, conn, conversation_id, submission, command_resolution=None, voice_digest=None):
         from .hosted_room_conversation_store import _admission_from_row
         row = conn.execute('''SELECT * FROM hosted_room_conversation_inputs
             WHERE conversation_id=? AND (input_id=? OR turn_id=?)''',
@@ -55,12 +58,14 @@ class ConversationAdmissionMixin:
             raise hosted_rooms.RoomConflictError('input_id or turn_id already has different content or recipient')
         from .hosted_room_conversation_commands import validate_command_replay_locked
         validate_command_replay_locked(conn, conversation_id, submission.input_id, command_resolution)
+        from .hosted_room_conversation_voice import validate_voice_replay_locked
+        validate_voice_replay_locked(conn, conversation_id, submission.input_id, voice_digest)
         return _admission_from_row(row, idempotent=True)
 
-    def replay(self, conversation_id, submission, *, command_resolution=None):
+    def replay(self, conversation_id, submission, *, command_resolution=None, voice_digest=None):
         with hosted_rooms._transaction(self.db_path, immediate=True) as conn:
             self._get_locked(conn, conversation_id)
-            return self._replay_locked(conn, conversation_id, submission, command_resolution)
+            return self._replay_locked(conn, conversation_id, submission, command_resolution, voice_digest)
 
     def _check_admission_locked(self, conn, conversation_id, expected_revision, *, continuation_notification_id=None):
         record = self._get_locked(conn, conversation_id)
@@ -83,8 +88,10 @@ class ConversationAdmissionMixin:
 
     def admit_turn(self, binding, submission, envelope, *, expected_revision, input_cutoff, command_resolution=None):
         from .hosted_room_conversation import plan_conversation_turn
+        from .hosted_room_conversation_compat import require_compatible_backends
+        require_compatible_backends(self.db_path)
         with hosted_rooms._transaction(self.db_path, immediate=True) as conn:
-            if replay := self._replay_locked(conn, binding.conversation_id, submission, command_resolution):
+            if replay := self._replay_locked(conn, binding.conversation_id, submission, command_resolution, envelope.voice_context_digest):
                 return replay
             record = self._check_admission_locked(conn, binding.conversation_id, expected_revision)
             current = conn.execute('''SELECT session_generation, lineage_id FROM
@@ -96,9 +103,13 @@ class ConversationAdmissionMixin:
                 raise hosted_rooms.RoomConflictError('conversation context or participant generation changed')
             from .hosted_room_conversation_commands import consume_command_locked
             consume_command_locked(conn, command_resolution, binding, submission)
+            from .hosted_room_conversation_budget import reserve_output
+            reserve_output(conn, binding.conversation_id, submission.input_id)
+            from .hosted_room_conversation_voice import retain_voice_storage_locked
             admission = self._append_input_locked(conn, binding.conversation_id, submission, command_resolution=command_resolution)
             self._prepare_input_locked(conn, binding, submission.input_id, envelope)
             plan = plan_conversation_turn(record, binding, submission, admission, envelope)
+            retain_voice_storage_locked(conn, binding.conversation_id, submission.input_id, envelope, plan.payload)
             driver._admit_task_locked(conn, plan.identity, payload=plan.payload, clock=time.time)
             return admission
 

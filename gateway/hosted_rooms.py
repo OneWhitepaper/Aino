@@ -7,6 +7,8 @@ transport queue. Callers supply the database path (production handlers use the g
 
 from __future__ import annotations
 
+from gateway.hosted_room_conversation_maintenance import room_call
+
 import hashlib
 import json
 import re
@@ -173,7 +175,7 @@ _ROOM_COLUMNS_WITH_BYTES = (
     " revision, created_at, updated_at, disbanded_at")
 _SELECT_ROOM = f"SELECT {_ROOM_COLUMNS} FROM hosted_rooms WHERE room_id=?"
 _SELECT_ROOM_WITH_BYTES = f"SELECT {_ROOM_COLUMNS_WITH_BYTES} FROM hosted_rooms WHERE room_id=?"
-_SUM_EVENT_BYTES = "SELECT COALESCE(SUM(event_bytes), 0) FROM hosted_rooms"
+_SUM_EVENT_BYTES = "SELECT COALESCE(SUM(event_bytes), 0) FROM hosted_rooms WHERE purpose='discussion'"
 _INSERT_RETIRED = ("INSERT OR IGNORE INTO hosted_room_retired_ids (room_id, retired_at) VALUES (?, ?)")
 _RETIRE_FROM_ROOMS = (
     "INSERT OR IGNORE INTO hosted_room_retired_ids (room_id, retired_at)"
@@ -537,7 +539,12 @@ def _insert_event(
     conn: sqlite3.Connection, room: sqlite3.Row, room_id: str, seq: int, event_id: str, kind: str, actor_json: str,
     epoch: int, payload_json: str, now: float, *, allow_control: bool = False) -> int:
     """Capacity-check then INSERT one event at ``seq``; returns its accounted bytes."""
-    event_bytes = _prepare_event(conn, room, event_id, kind, actor_json, payload_json, allow_control=allow_control)
+    if room['purpose'] == CONVERSATION_PURPOSE:
+        from .hosted_room_conversation_budget import prepare_event
+        event_bytes = utf8_len(event_id, kind, actor_json, payload_json)
+        prepare_event(conn, room_id, kind, payload_json, event_bytes)
+    else:
+        event_bytes = _prepare_event(conn, room, event_id, kind, actor_json, payload_json, allow_control=allow_control)
     conn.execute(_INSERT_EVENT, (room_id, seq, event_id, kind, actor_json, epoch, payload_json, now))
     return event_bytes
 
@@ -909,8 +916,15 @@ def _create_room_locked(
         if existing["authority_gateway_id"] != authority_gateway_id:
             raise RoomConflictError("room_id already belongs to a different authority")
         return _room_from_row(existing, idempotent=True)
-    active = conn.execute("SELECT COUNT(*) FROM hosted_rooms WHERE disbanded_at IS NULL").fetchone()[0]
-    if int(active) >= MAX_ACTIVE_ROOMS:
+    active_limit = MAX_ACTIVE_ROOMS
+    if purpose == CONVERSATION_PURPOSE:
+        from .hosted_room_conversation_budget import limits_for_connection
+        limits, _ = limits_for_connection(conn)
+        active_limit = limits['max_active_conversations']
+        active = conn.execute("SELECT COUNT(*) FROM hosted_room_conversations WHERE archived_at IS NULL").fetchone()[0]
+    else:
+        active = conn.execute("SELECT COUNT(*) FROM hosted_rooms WHERE disbanded_at IS NULL AND purpose=?", (purpose,)).fetchone()[0]
+    if int(active) >= active_limit:
         if purpose == DISCUSSION_PURPOSE:
             raise HostedRoomError("This host has too many active Group Chats. Delete one and try again.")
         raise HostedRoomError("This host has too many active conversations. Archive one and try again.")
@@ -924,6 +938,7 @@ def _create_room_locked(
     return {**_room_from_row(row), "members": normalized_members}
 
 
+@room_call
 def create_room(
     db_path: DbPath, *, room_id: Any, name: Any, members: Any, authority_gateway_id: Any, now: float | None = None
 ) -> dict[str, Any]:
@@ -957,6 +972,7 @@ def list_rooms(
     return [_room_from_row(row) for row in rows]
 
 
+@room_call
 def rename_room(db_path: DbPath, *, room_id: Any, event_id: Any, name: Any, now: float | None = None) -> dict[str, Any]:
     """Rename a live room and append its replay event atomically."""
     room_id = _room_id(room_id)
@@ -1017,6 +1033,7 @@ def _append_event_locked(
     return {**_event_from_row(row), "actor": normalized_actor}
 
 
+@room_call
 def append_event(
     db_path: DbPath, *, room_id: Any, event_id: Any, kind: Any, actor: Any, payload: Any,
     authority_gateway_id: Any = None, authority_epoch: Any = None, now: float | None = None,
@@ -1099,6 +1116,7 @@ def room_state(
     return {**_room_from_row(row), **({"authority_claim": _event_from_row(claim_row)} if claim_row is not None else {})}
 
 
+@room_call
 def request_room_stop(
     db_path: DbPath, *, room_id: Any, cancel_id: Any, expected_gateway_id: Any, expected_epoch: Any) -> dict[str, Any]:
     """Append an idempotent fence that supersedes earlier user turns."""
@@ -1109,6 +1127,7 @@ def request_room_stop(
         payload={"cancel_id": cancel_id}, authority_gateway_id=expected_gateway_id, authority_epoch=expected_epoch)
 
 
+@room_call
 def claim_authority(
     db_path: DbPath, *, room_id: Any, expected_gateway_id: Any, expected_epoch: Any, new_gateway_id: Any, event_id: Any,
     now: float | None = None) -> dict[str, Any]:
@@ -1178,6 +1197,7 @@ def _disband_replay(conn: sqlite3.Connection, room_id: str, room: sqlite3.Row | 
         **({"event": _event_from_row(event, idempotent=True)} if event is not None else {})}
 
 
+@room_call
 def disband_room(
     db_path: DbPath, *, room_id: Any, expected_gateway_id: Any, expected_epoch: Any, now: float | None = None
 ) -> dict[str, Any]:

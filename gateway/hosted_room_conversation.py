@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from gateway.hosted_room_conversation_maintenance import managed_call
+
 import hashlib
 
 from gateway.hosted_room_conversation_context import TurnEnvelope
@@ -38,6 +40,7 @@ def plan_conversation_turn(
     )
 
 
+@managed_call
 def publish_conversation_terminal(store, binding, task):
     """A single stable event per task execution; never publish a bounded preview as the answer."""
     from gateway import hosted_rooms
@@ -62,7 +65,7 @@ def publish_conversation_terminal(store, binding, task):
         text = ''
     elif not unsupported and len(text.encode('utf-8')) > 64 * 1024:
         content_ref = asdict(content.put_for_conversation(
-            binding.room_id, text.encode('utf-8'), 'text/plain; charset=utf-8'))
+            binding.room_id, text.encode('utf-8'), 'text/plain; charset=utf-8', input_id=frozen['input_id']))
         text = ''
     if unsupported:
         text = ''
@@ -72,13 +75,15 @@ def publish_conversation_terminal(store, binding, task):
     from gateway.hosted_room_conversation_bindings import ConversationBindings
     model_snapshot = ConversationBindings(store.db_path).public_model_snapshot(
         binding.room_id, frozen['participant_id'], frozen['session_generation'])
+    from gateway.hosted_room_conversation_history import terminal_relation
+    relation = terminal_relation(store, binding.room_id, frozen['input_id'])
     participant = next(b.participant for b in store.participants(binding.room_id)
                        if b.participant.participant_id == frozen['participant_id'])
     return hosted_rooms.append_event(store.db_path, room_id=binding.room_id, purpose='conversation',
         event_id=event_id,
         kind='conversation.response', actor={'kind': 'participant', 'id': participant.participant_id,
                                             'display_name': participant.display_name},
-        payload={'text': text, 'status': status, 'error': error, 'model_snapshot': model_snapshot,
+        payload={**relation, 'text': text, 'status': status, 'error': error, 'model_snapshot': model_snapshot,
                  'turn_id': frozen['turn_id'], 'input_id': frozen['input_id'],
                  'task_id': task['identity'].task_id, 'execution_generation': task['execution_generation'],
                  'session_generation': frozen['session_generation'], 'reply_to_event_id': frozen['event_id'],

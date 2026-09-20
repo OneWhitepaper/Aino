@@ -1,6 +1,8 @@
 """Exact logical-turn stop and authenticated reconnection to live participant generations."""
 from __future__ import annotations
 
+from gateway.hosted_room_conversation_maintenance import managed_call
+
 import time
 from dataclasses import asdict
 
@@ -57,7 +59,22 @@ def _cancel_task(service, task, *, logical_turn=False):
             return False
         if current['status'] in _TERMINAL:
             return True
+        restored = ((current.get('result') or {}).get('error') == 'restored_snapshot_requires_stop'
+                    and current['status'] in ('indeterminate', 'stopping')
+                    and all(current.get(key) is None for key in
+                            ('run_gateway_id', 'run_process_generation', 'run_lease_generation')))
         try:
+            if restored:
+                # Offline restore revoked every execution fence. Only this exact
+                # restored generation is known not to own a live external turn.
+                cancel_id = current.get('cancel_id') or f"restored-stop:{identity.turn_id}:{current['execution_generation']}"
+                if current['status'] != 'stopping':
+                    current = driver.begin_task_cancel(service.db_path, identity, cancel_id=cancel_id,
+                        expected_cancel_generation=current['cancel_generation'],
+                        expected_execution_generation=current['execution_generation'], clock=time.time)
+                result = driver.complete_task_cancel(service.db_path, identity, cancel_id=cancel_id,
+                    expected_cancel_generation=current['cancel_generation'], clock=time.time)
+                return result['status'] == 'cancelled'
             if service.hosted is not None:
                 result = service.hosted.runtime.cancel(identity,
                     cancel_id=f"conversation-stop:{identity.turn_id}:{current['execution_generation']}",
@@ -108,6 +125,7 @@ def _cancel_origin_requests(conversation_id, coordinates):
         server_requests._emit_cancel(request, 'interrupted')
 
 
+@managed_call
 def stop_conversation(service, conversation_id, turn_id, execution_generation, include_delegations=False):
     with service._lock:
         service.notifications.recover_dead_origins()
@@ -161,7 +179,7 @@ def runtime_snapshot(service, conversation_id, participant_id, session_generatio
         raise ConversationBindingError('participant generation changed')
     from gateway.hosted_room_conversation_bindings import ConversationBindings
     model_snapshot = ConversationBindings(service.db_path).public_model_snapshot(
-        conversation_id, participant_id, session_generation)
+        conversation_id, participant_id, session_generation, include_prepared=True)
     result = {'model_snapshot': model_snapshot, 'available': False, 'runtime_id': None, 'subagents': [], 'open_requests': [],
               'activity': None, 'background_activities': []}
     live = _live_generation(service, conversation_id, participant_id, session_generation)

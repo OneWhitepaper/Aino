@@ -193,7 +193,7 @@ _HOSTED_TASK_FIELDS = {"room_id", "task_id", "thread_id", "turn_id", "execution_
 def _hosted_submit_error(rid, session, hosted_task, hosted_terminal_callback, conversation_proof=None):
     """Validate the hosted-room turn proof carried by an internal submit."""
     if session.get("_conversation_binding"):
-        from .session_conversation_binding import require_conversation_submission
+        from .session_conversation_binding import require_conversation_submission, ConversationStorageUnavailable
         try:
             conversation_image_paths = require_conversation_submission(session, conversation_proof)
         except RuntimeError as exc:
@@ -585,12 +585,14 @@ def _(rid, params: dict) -> dict:
     if raw_author is not None and not isinstance(raw_author, DeliveryAuthor):
         return _err(rid, 4124, "turn author is stamped by the gateway, never by a client")
     turn_author = raw_author.author if raw_author is not None else None
-    from .session_conversation_binding import require_conversation_submission
+    from .session_conversation_binding import require_conversation_submission, ConversationStorageUnavailable
     conversation_proof = params.get("_conversation_proof")
     try:
         conversation_image_paths = require_conversation_submission(session, conversation_proof)
+    except ConversationStorageUnavailable as exc:
+        return _err(rid, 5072, str(exc))
     except RuntimeError as exc:
-        return _err(rid, 4120, str(exc))
+        return _err(rid, 4120, str(exc), data={"conversation_id": exc.conversation_id} if hasattr(exc, "conversation_id") else None)
     hosted_task = params.get("_hosted_task")
     from .managed_session import submit_refusal
     if reason := submit_refusal(sid, session):
@@ -979,6 +981,19 @@ def _spawn_side_agent(
     """Run ``body()`` on a daemon thread under the session's profile home (the ContextVar
     doesn't propagate across threads) and cwd; its text — or ``error: <exc>`` — lands on
     ``parent`` as ``event`` with ``task_id`` (+ ``extra``).  Replies ``{task_id}``."""
+    from .session_conversation_binding import legacy_migration_refusal
+    if refusal := legacy_migration_refusal(rid, session):
+        return refusal
+    activity_key = session.get('session_key')
+    if activity_key:
+        from hermes_state_migration import SessionMigratedError
+        with _session_db(session) as db:
+            if db is None:
+                return _err(rid, 4120, 'Source session database is unavailable')
+            try:
+                db.begin_migration_activity(activity_key, task_id)
+            except SessionMigratedError as exc:
+                return _err(rid, 4120, str(exc), data={'conversation_id': exc.conversation_id})
     extra = extra or {}
 
     def run():
@@ -998,11 +1013,26 @@ def _spawn_side_agent(
         except Exception as e:
             _emit(event, parent, {"task_id": task_id, **extra, "text": f"error: {e}"})
         finally:
-            if cleanup is not None:
-                cleanup()
-            _clear_session_context(session_tokens)
+            try:
+                if cleanup is not None:
+                    cleanup()
+            finally:
+                try:
+                    if activity_key:
+                        with _session_db(session) as db:
+                            if db is not None:
+                                db.end_migration_activity(task_id)
+                finally:
+                    _clear_session_context(session_tokens)
 
-    threading.Thread(target=run, daemon=True).start()
+    try:
+        threading.Thread(target=run, daemon=True).start()
+    except BaseException:
+        if activity_key:
+            with _session_db(session) as db:
+                if db is not None:
+                    db.end_migration_activity(task_id)
+        raise
     return _ok(rid, {"task_id": task_id})
 
 

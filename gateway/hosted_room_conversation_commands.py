@@ -1,6 +1,8 @@
 """Frozen private command expansions consumed with the public input transaction."""
 from __future__ import annotations
 
+from gateway.hosted_room_conversation_maintenance import managed_store
+
 import hashlib
 import json
 import secrets
@@ -23,6 +25,7 @@ def _initialize(conn):
             REFERENCES hosted_room_conversation_participants(conversation_id, participant_id))''')
 
 
+@managed_store
 class ConversationCommandTokens:
     def __init__(self, db_path):
         self.db_path = db_path

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from gateway.hosted_room_conversation_maintenance import managed_store
+
 import hashlib
 import json
 import sqlite3
@@ -11,6 +13,7 @@ from typing import Any
 
 from gateway import hosted_rooms
 from gateway.hosted_room_conversation_admission import ConversationAdmissionMixin
+from gateway.hosted_room_conversation_metadata import ConversationMetadataMixin, initialize_metadata_schema, derive_first_public_title
 from gateway.hosted_room_conversation_owners import initialize_owner_schema, require_owner_locked
 from gateway.hosted_room_conversation_context_store import ConversationContextStoreMixin, initialize_context_schema
 from gateway.hosted_room_conversation_types import (
@@ -147,20 +150,36 @@ def _record_from_rows(room: sqlite3.Row, metadata: sqlite3.Row, general: sqlite3
         archived=metadata["archived_at"] is not None)
 
 
-class ConversationStore(ConversationAdmissionMixin, ConversationContextStoreMixin):
+@managed_store
+class ConversationStore(ConversationAdmissionMixin, ConversationContextStoreMixin, ConversationMetadataMixin):
     """Persist ordinary conversation metadata beside the shared Hosted event log."""
 
     def __init__(self, db_path: Path) -> None:
         self.db_path = Path(db_path)
         with hosted_rooms._transaction(self.db_path, immediate=True) as conn:
             _initialize_schema(conn)
+            initialize_metadata_schema(conn)
             initialize_context_schema(conn)
             initialize_owner_schema(conn)
+            from .hosted_room_conversation_migration import initialize_migration_schema
+            initialize_migration_schema(conn)
 
     def create(
         self, conversation_id: str, title: str, general: ParticipantRef,
-        project: ProjectRef | None, *, owner_key: str | None = None,
+        project: ProjectRef | None, *, owner_key: str | None = None, migration_import=None, auto_title=False,
     ) -> ConversationRecord:
+        from .hosted_room_conversation_compat import require_compatible_backends
+        require_compatible_backends(self.db_path)
+        with hosted_rooms._transaction(self.db_path, immediate=True) as conn:
+            return self._create_locked(conn, conversation_id, title, general, project,
+                owner_key=owner_key, migration_import=migration_import, auto_title=auto_title)
+
+    def _create_locked(
+        self, conn, conversation_id: str, title: str, general: ParticipantRef,
+        project: ProjectRef | None, *, owner_key: str | None = None, migration_import=None, auto_title=False,
+    ) -> ConversationRecord:
+        if type(auto_title) is not bool:
+            raise ValueError('auto_title must be a boolean')
         conversation_id = hosted_rooms._room_id(conversation_id)
         title = hosted_rooms._validate_room_name(title)
         general = _participant(general, require_general=True)
@@ -168,47 +187,53 @@ class ConversationStore(ConversationAdmissionMixin, ConversationContextStoreMixi
         project_json = _project_json(project)
         authority_gateway_id = hosted_rooms.local_authority_gateway_id()
         now = hosted_rooms._now(None)
-        with hosted_rooms._transaction(self.db_path, immediate=True) as conn:
-            existing = conn.execute("SELECT 1 FROM hosted_room_conversations WHERE conversation_id=?",
-                                    (conversation_id,)).fetchone()
-            if owner_key is not None and existing is not None:
-                require_owner_locked(conn, conversation_id, owner_key)
-            hosted_rooms._create_room_locked(
-                conn, room_id=conversation_id, purpose=_PURPOSE, name=title,
-                normalized_members=[], members_json="[]",
-                authority_gateway_id=authority_gateway_id, now=now)
-            metadata = conn.execute(
-                "SELECT * FROM hosted_room_conversations WHERE conversation_id=?",
-                (conversation_id,)).fetchone()
-            if metadata is None:
-                conn.execute(
-                    """INSERT INTO hosted_room_conversations(
-                           conversation_id, general_participant_id, project_json, archived_at
-                       ) VALUES (?, ?, ?, NULL)""",
-                    (conversation_id, general.participant_id, project_json))
-                conn.execute(
-                    """INSERT INTO hosted_room_conversation_participants(
-                           conversation_id, participant_id, install_id, profile, display_name,
-                           is_general, session_generation, lineage_id
-                       ) VALUES (?, ?, ?, ?, ?, 1, 1, NULL)""",
-                    (conversation_id, general.participant_id, general.install_id,
-                     general.profile, general.display_name))
-            else:
-                existing_general = conn.execute(
-                    """SELECT * FROM hosted_room_conversation_participants
-                       WHERE conversation_id=? AND participant_id=?""",
-                    (conversation_id, metadata["general_participant_id"])).fetchone()
-                if (
-                    metadata["general_participant_id"] != general.participant_id
-                    or metadata["project_json"] != project_json
-                    or existing_general is None
-                    or _participant_from_row(existing_general) != general
-                ):
-                    raise hosted_rooms.RoomConflictError(
-                        "conversation_id already exists with different metadata")
-            if owner_key is not None and existing is None:
-                conn.execute("INSERT INTO hosted_conversation_owners VALUES (?,?)", (conversation_id, owner_key))
-            return self._get_locked(conn, conversation_id)
+        existing = conn.execute("SELECT 1 FROM hosted_room_conversations WHERE conversation_id=?",
+                                (conversation_id,)).fetchone()
+        if owner_key is not None and existing is not None:
+            require_owner_locked(conn, conversation_id, owner_key)
+        hosted_rooms._create_room_locked(
+            conn, room_id=conversation_id, purpose=_PURPOSE, name=title,
+            normalized_members=[], members_json="[]",
+            authority_gateway_id=authority_gateway_id, now=now)
+        metadata = conn.execute(
+            "SELECT * FROM hosted_room_conversations WHERE conversation_id=?",
+            (conversation_id,)).fetchone()
+        if metadata is None:
+            conn.execute(
+                """INSERT INTO hosted_room_conversations(
+                       conversation_id, general_participant_id, project_json, archived_at, title_source
+                   ) VALUES (?, ?, ?, NULL, ?)""",
+                (conversation_id, general.participant_id, project_json, "initial" if auto_title else "user"))
+            conn.execute(
+                """INSERT INTO hosted_room_conversation_participants(
+                       conversation_id, participant_id, install_id, profile, display_name,
+                       is_general, session_generation, lineage_id
+                   ) VALUES (?, ?, ?, ?, ?, 1, 1, NULL)""",
+                (conversation_id, general.participant_id, general.install_id,
+                 general.profile, general.display_name))
+        else:
+            existing_general = conn.execute(
+                """SELECT * FROM hosted_room_conversation_participants
+                   WHERE conversation_id=? AND participant_id=?""",
+                (conversation_id, metadata["general_participant_id"])).fetchone()
+            if (
+                metadata["general_participant_id"] != general.participant_id
+                or metadata["project_json"] != project_json
+                or existing_general is None
+                or _participant_from_row(existing_general) != general
+            ):
+                raise hosted_rooms.RoomConflictError(
+                    "conversation_id already exists with different metadata")
+        if owner_key is not None and existing is None:
+            conn.execute("INSERT INTO hosted_conversation_owners VALUES (?,?)", (conversation_id, owner_key))
+        if migration_import is not None and existing is None:
+            receipt, migration_input_id, manifest = migration_import
+            payload = asdict(receipt); payload['status'] = 'importing'
+            conn.execute('INSERT INTO hosted_conversation_migrations VALUES (?,?,?,?,?,?,NULL)',
+                (receipt.migration_id, migration_input_id, conversation_id, owner_key,
+                 json.dumps(payload), json.dumps(manifest, sort_keys=True, ensure_ascii=False)))
+        return self._get_locked(conn, conversation_id)
+
 
     def _get_locked(self, conn: sqlite3.Connection, conversation_id: str) -> ConversationRecord:
         room = hosted_rooms._room_row(conn, hosted_rooms._SELECT_ROOM, (conversation_id,), conversation_id)
@@ -290,6 +315,8 @@ class ConversationStore(ConversationAdmissionMixin, ConversationContextStoreMixi
             for item in submission.attachment_ids)
         attachment_ids_json = hosted_rooms._canonical_json(
             list(attachment_ids), label="attachment_ids", max_bytes=64 * 1024)
+        from .hosted_room_conversation_migration import require_migration_complete
+        require_migration_complete(conn, conversation_id)
         record = self._get_locked(conn, conversation_id)
         if record.archived:
             raise hosted_rooms.RoomConflictError("conversation is archived")
@@ -308,6 +335,8 @@ class ConversationStore(ConversationAdmissionMixin, ConversationContextStoreMixi
                     "input_id or turn_id already exists with different content or recipient")
             from .hosted_room_conversation_commands import validate_command_replay_locked
             validate_command_replay_locked(conn, conversation_id, input_id, command_resolution)
+            from .hosted_room_conversation_voice import validate_voice_replay_locked
+            validate_voice_replay_locked(conn, conversation_id, submission.input_id, None)
             return _admission_from_row(row, idempotent=True)
         binding = conn.execute(
             """SELECT * FROM hosted_room_conversation_participants
@@ -323,6 +352,8 @@ class ConversationStore(ConversationAdmissionMixin, ConversationContextStoreMixi
             "attachment_ids": list(attachment_ids), "target_participant_id": participant_id,
             "target_display_name_at_time": str(binding["display_name"]),
             "author_display_name_at_time": _AUTHOR_DISPLAY_NAME}
+        from .hosted_room_conversation_history import input_relation_locked
+        payload.update(input_relation_locked(conn, conversation_id, submission, command_resolution))
         if attachment_ids and conn.execute("SELECT 1 FROM sqlite_master WHERE name='hosted_conversation_attachments'").fetchone():
             payload['attachments'] = []
             for item in attachment_ids:
@@ -344,6 +375,7 @@ class ConversationStore(ConversationAdmissionMixin, ConversationContextStoreMixi
             payload_json=hosted_rooms._payload_json(payload),
             authority_gateway_id=str(room["authority_gateway_id"]),
             authority_epoch=int(room["authority_epoch"]), now=hosted_rooms._now(None))
+        derive_first_public_title(conn, conversation_id, submission.text)
         conn.execute(
             """INSERT INTO hosted_room_conversation_inputs(
                    conversation_id, turn_id, input_id, event_id, participant_id, text,

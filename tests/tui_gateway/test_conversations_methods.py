@@ -9,6 +9,7 @@ def test_registered_contract_and_atomic_admission(tmp_path, monkeypatch):
     from tui_gateway.conversation_service import ConversationService
     home = tmp_path / '.hermes'
     home.mkdir()
+    (home / 'config.yaml').write_text('conversations:\n  enabled: false\n')
     monkeypatch.setenv('HERMES_HOME', str(home))
     monkeypatch.setattr(server, '_hermes_home', home)
     service = ConversationService(server, db_path=home / 'shared-state.db')
@@ -161,7 +162,7 @@ def test_real_runtime_admission_replay_receipt_and_publication(runtime_env, monk
         model_snapshot = responses[0]['payload']['model_snapshot']
         session = server._sessions[cold['session_id']]
         assert model_snapshot['model'] == session['agent'].model
-        assert set(model_snapshot) == {'model', 'provider', 'model_source', 'model_id'}
+        assert set(model_snapshot) == {'model', 'provider', 'model_source', 'model_id', 'reasoning_effort', 'fast', 'capabilities'}
         assert model_snapshot['model_id'] == ('catalog-model' if managed else None)
         # Profile edits cannot relabel a durable answer or its still-live generation.
         cfg_path = home / 'profiles' / 'writer' / 'config.yaml'
@@ -232,14 +233,16 @@ def test_real_runtime_admission_replay_receipt_and_publication(runtime_env, monk
         assert len(driver.list_tasks(store.db_path, room_id='c')) == 1
         assert len([e for e in store.events('c').events if e['kind'] == 'conversation.input']) == 1
         monkeypatch.setattr(service_module, 'prepare_turn_envelope', original_prepare)
-        # A provider still running after interrupt acknowledgement cannot be reported stopped.
+        # Keep the actual agent invocation alive after its interrupt is acknowledged.
+        # Holding HTTP alone is insufficient: transport abort can end the client while
+        # the server handler remains blocked, correctly allowing a confirmed stop.
         arrived, release = threading.Event(), threading.Event()
-        original_post = _MockHandler.do_POST
-        def held_post(handler):
+        original_run = session['agent'].run_conversation
+        def held_run(*args, **kwargs):
             arrived.set()
-            assert release.wait(10)
-            original_post(handler)
-        monkeypatch.setattr(_MockHandler, 'do_POST', held_post)
+            assert release.wait(30)
+            return original_run(*args, **kwargs)
+        monkeypatch.setattr(session['agent'], 'run_conversation', held_run)
         with hosted_rooms._transaction(store.db_path, immediate=True) as conn:
             conn.execute("DELETE FROM hosted_conversation_input_acks WHERE input_id='i'")
         call('send', **{**request, 'turn_id': 'stop-turn', 'input_id': 'stop-input',
@@ -248,14 +251,14 @@ def test_real_runtime_admission_replay_receipt_and_publication(runtime_env, monk
         worker = threading.Thread(target=hosted.runtime._process_room, args=(binding,), daemon=True)
         worker.start()
         try:
-            assert arrived.wait(5)
+            assert arrived.wait(30)
             active = call('get', conversation_id='c')['active_turn']
             stopped = call('stop', conversation_id='c', turn_id='stop-turn',
                            execution_generation=active['execution_generation'])
             assert stopped['status'] == 'requested'
         finally:
             release.set()
-            worker.join(10)
+            worker.join(30)
         assert not worker.is_alive()
         stopped = call('stop', conversation_id='c', turn_id='stop-turn',
                        execution_generation=active['execution_generation'])

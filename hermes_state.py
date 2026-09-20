@@ -44,6 +44,7 @@ from hermes_state_fts import SessionFtsSetupMixin, load_fts5_cjk_extension
 from hermes_state_portability import SessionPortabilityMixin
 from hermes_state_telegram import SessionTelegramTopicsMixin
 from hermes_state_schema import SessionSchemaMixin
+from hermes_state_migration import SessionMigrationMixin
 import hermes_state_holders as _state_holders
 import hermes_state_lockguard as _lockguard
 from hermes_state_dbfile import (
@@ -396,7 +397,7 @@ def _foreign_state_db_holders(db_path: Path) -> List[Tuple[int, str]]:
 
 
 class SessionDB(
-    SessionSessionsMixin, SessionFtsSetupMixin, SessionSearchMixin, SessionSchemaMixin,
+    SessionMigrationMixin, SessionSessionsMixin, SessionFtsSetupMixin, SessionSearchMixin, SessionSchemaMixin,
     SessionPortabilityMixin, SessionTelegramTopicsMixin, SessionCompressionMixin,
     SessionGatewayMixin, SessionMaintenanceMixin, SessionUsageMixin, SessionTitlesMixin,
     SessionMessagesMixin, SessionConversationReceiptsMixin, SessionRewindMixin,

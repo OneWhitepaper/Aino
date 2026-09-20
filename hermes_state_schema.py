@@ -1,3 +1,5 @@
+
+from agent.conversation_maintenance import managed_schema_call
 """Schema creation, column reconciliation, and FTS DDL management for SessionDB.
 
 Plain mixin for ``hermes_state.SessionDB`` (no ``__init__``/state of its own).
@@ -878,6 +880,7 @@ class SessionSchemaMixin:
 
     # ── _init_schema ───────────────────────────────────────────────────────
 
+    @managed_schema_call
     def _init_schema(self):
         """Create tables and FTS if missing, reconcile columns, run data migrations. Column
         additions are declarative via _reconcile_columns(), so reordered migrations can
@@ -903,6 +906,8 @@ class SessionSchemaMixin:
         # already at v22+ when the column landed — the version-gated rebuild is unreachable there, #73823).
         # Same PK-rebuild constraint as gateway_routing above.
         self._heal_session_model_usage_pk(cursor)
+        from hermes_state_migration import initialize_migration_schema
+        initialize_migration_schema(self._conn)
 
         # Indexes referencing reconciler-added columns must be created AFTER _reconcile_columns
         # (in SCHEMA_SQL the executescript would fail on legacy DBs).

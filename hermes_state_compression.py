@@ -4,6 +4,10 @@ Mixin bound onto ``SessionDB`` via the MRO, built on its ``_read_ctx`` /
 ``_execute_write`` / ``_write_sql`` / ``_read_one`` primitives."""
 
 from __future__ import annotations
+from hermes_state_conversation_retention import protected_session_ids
+
+
+from agent.conversation_maintenance import managed_session_call
 
 import json
 import logging
@@ -70,6 +74,7 @@ def _claim_lease_row(conn, table: str, key_col: str, key: str, holder: str, now:
 class SessionCompressionMixin:
     """Compression lineage, cooldown/streak counters, locks and turn leases."""
 
+    @managed_session_call
     def reopen_if_explicitly_closed(
         self, session_id: str, *, provenance: str, patience_s: Optional[float] = None,
     ) -> Optional[str]:
@@ -113,6 +118,7 @@ class SessionCompressionMixin:
                 "compress and a later close is recorded (#106459)", session_id, reason, provenance)
         return reason
 
+    @managed_session_call
     def find_live_compression_child(self, parent_session_id: str) -> Optional[Dict[str, Any]]:
         """The unique live direct child of a compression-ended session, else None. A stale
         agent whose parent was rotated elsewhere may recover only when the lineage names
@@ -141,6 +147,7 @@ class SessionCompressionMixin:
             ).fetchall()
         return self._session_row_dict(rows[0]) if len(rows) == 1 else None
 
+    @managed_session_call
     def reopen_orphaned_compression_session(self, session_id: str) -> bool:
         """Reopen a compression parent only when no continuation was published (older
         builds could leave a closed parent after an interrupted handoff). Conservative:
@@ -221,6 +228,7 @@ class SessionCompressionMixin:
                 parent["thread_id"], parent["display_name"], parent["origin_json"], time.time()),
         )
 
+    @managed_session_call
     def publish_compression_child(
         self, *, parent_session_id: str, child_session_id: str, source: str,
         messages: List[Dict[str, Any]], model: str = None, model_config: Dict[str, Any] = None,
@@ -311,6 +319,7 @@ class SessionCompressionMixin:
         except sqlite3.Error as exc:
             logger.warning("%s(%s) failed: %s", op, session_id, exc)
 
+    @managed_session_call
     def record_compression_failure_cooldown(
         self, session_id: str, cooldown_until: float, error: Optional[str] = None) -> None:
         """Persist the active compression-failure cooldown. Merge-max with any longer live deadline so a
@@ -326,6 +335,7 @@ class SessionCompressionMixin:
             "THEN compression_failure_cooldown_until ELSE ? END, compression_failure_error = ? WHERE id = ?",
             (cooldown_until, cooldown_until, error, session_id))
 
+    @managed_session_call
     def get_compression_failure_cooldown(self, session_id: str) -> Optional[Dict[str, Any]]:
         """Return the active (unexpired) compression-failure cooldown, or None."""
         now = time.time()
@@ -334,12 +344,14 @@ class SessionCompressionMixin:
             return None
         return {"cooldown_until": float(row[0]), "remaining_seconds": float(row[0]) - now, "error": row[1]}
 
+    @managed_session_call
     def get_compression_failure_cooldown_row(self, session_id: str) -> Dict[str, Any]:
         """Exact stored cooldown columns, no expiry filtering, so compression cancellation
         can roll back an expired, partially-null, or absent row exactly."""
         row = self._read_one(_COOLDOWN_ROW_SQL, (session_id,)) if session_id else None
         return _cooldown_row(False, None, None) if row is None else _cooldown_row(True, row[0], row[1])
 
+    @managed_session_call
     def restore_compression_failure_cooldown_row(self, session_id: str, snapshot: Dict[str, Any]) -> None:
         """Restore and verify an exact cooldown-row snapshot. Unlike record/clear this
         rollback API propagates write and verification failures: cancellation must not be
@@ -369,6 +381,7 @@ class SessionCompressionMixin:
             raise RuntimeError(
                 f"compression cooldown rollback verification failed: expected={expected!r}, actual={actual!r}")
 
+    @managed_session_call
     def clear_compression_failure_cooldown(self, session_id: str) -> None:
         """Clear any persisted compression-failure cooldown for a session."""
         if not session_id:
@@ -390,26 +403,31 @@ class SessionCompressionMixin:
     def _write_session_column(self, column: str, session_id: str, value: Any) -> None:
         self._write_sql(f"UPDATE sessions SET {column} = ? WHERE id = ?", (value, session_id))
 
+    @managed_session_call
     def get_compression_fallback_streak(self, session_id: str) -> int:
         """Return the persisted deterministic-fallback streak."""
         return self._read_session_number("compression_fallback_streak", session_id, int, 0)
 
+    @managed_session_call
     def set_compression_fallback_streak(self, session_id: str, streak: int) -> None:
         """Persist the deterministic-fallback streak for one session."""
         if session_id:
             self._write_session_column("compression_fallback_streak", session_id, max(0, int(streak)))
 
+    @managed_session_call
     def get_compression_ineffective_count(self, session_id: str) -> int:
         """Persisted ineffective-compaction strike count — the durable half of the built-in
         compressor's anti-thrash guard, so a fresh compressor bound to a resumed session
         inherits an armed/tripped guard across restarts."""
         return self._read_session_number("compression_ineffective_count", session_id, int, 0)
 
+    @managed_session_call
     def set_compression_ineffective_count(self, session_id: str, count: int) -> None:
         """Persist the ineffective-compaction strike count for one session."""
         if session_id:
             self._write_session_column("compression_ineffective_count", session_id, max(0, int(count)))
 
+    @managed_session_call
     def get_compression_recovery_deadline(self, session_id: str) -> float:
         """Persisted anti-thrash recovery deadline (epoch; ``0.0`` = not armed). Durable
         because the gateway rebuilds the compressor every turn / cache eviction.
@@ -420,6 +438,7 @@ class SessionCompressionMixin:
         """
         return self._read_session_number("compression_recovery_deadline", session_id, float, 0.0)
 
+    @managed_session_call
     def set_compression_recovery_deadline(self, session_id: str, deadline: float) -> None:
         """Persist the anti-thrash recovery deadline; ``0`` / ``None`` disarms it."""
         if not session_id:
@@ -430,6 +449,7 @@ class SessionCompressionMixin:
             normalized = 0.0
         self._write_session_column("compression_recovery_deadline", session_id, normalized or None)
 
+    @managed_session_call
     def refresh_compression_lock(self, session_id: str, holder: str, ttl_seconds: float = 300.0) -> bool:
         """Extend the compression lock lease if ``holder`` still owns it. Ownership is decided by ``holder``
         alone, deliberately NOT ``expires_at``: a live owner whose refresher stalled past its TTL must be
@@ -448,6 +468,7 @@ class SessionCompressionMixin:
             logger.warning("refresh_compression_lock(%s) failed: %s", session_id, exc)
             return False
 
+    @managed_session_call
     def try_acquire_compression_lock(self, session_id: str, holder: str, ttl_seconds: float = 300.0) -> bool:
         """Try to atomically acquire the compression lock for ``session_id``. ``False``: another holder owns
         a live lock and the caller MUST NOT compress (its rotation would split the lineage). Expired
@@ -473,6 +494,7 @@ class SessionCompressionMixin:
             logger.warning("try_acquire_compression_lock(%s) failed: %s", session_id, exc)
             return False
 
+    @managed_session_call
     def release_compression_lock(self, session_id: str, holder: str) -> None:
         """Release the compression lock iff we own it; idempotent when gone/reclaimed."""
         if not session_id:
@@ -516,6 +538,7 @@ class SessionCompressionMixin:
         with self._read_ctx() as conn:
             return self._session_turn_lease_key_on_conn(conn, session_id)
 
+    @managed_session_call
     def try_acquire_session_turn_lease(
         self, session_id: str, holder: str, *, ttl_seconds: float = 300.0, patience_s: Optional[float] = None,
     ) -> bool:
@@ -528,6 +551,7 @@ class SessionCompressionMixin:
         now = time.time()
         expires_at = now + max(0.1, float(ttl_seconds))
         def _do(conn):
+            self._assert_session_not_migrated_on_conn(conn, session_id)
             conversation_id = self._session_turn_lease_key_on_conn(conn, session_id)
             return _claim_lease_row(
                 conn, "session_turn_leases", "conversation_id", conversation_id, holder, now, expires_at,
@@ -535,6 +559,7 @@ class SessionCompressionMixin:
             )[0]
         return bool(self._execute_write(_do, patience_s=patience_s))
 
+    @managed_session_call
     def acquire_session_turn_lease(
         self, session_id: str, holder: str, *, ttl_seconds: float = 300.0,
         wait_seconds: float = 1800.0, poll_interval_seconds: float = 1.0, on_wait=None,
@@ -580,12 +605,14 @@ class SessionCompressionMixin:
                 last_notice_at = now
             time.sleep(min(max(0.01, float(poll_interval_seconds)), remaining))
 
+    @managed_session_call
     def refresh_session_turn_lease(self, session_id: str, holder: str, *, ttl_seconds: float = 300.0) -> bool:
         """Extend a turn lease only while ``holder`` still owns it."""
         if not session_id or not holder:
             return False
         expires_at = time.time() + max(0.1, float(ttl_seconds))
         def _do(conn):
+            self._assert_session_not_migrated_on_conn(conn, session_id)
             conversation_id = self._session_turn_lease_key_on_conn(conn, session_id)
             return conn.execute(
                 "UPDATE session_turn_leases SET expires_at = ? "
@@ -593,6 +620,7 @@ class SessionCompressionMixin:
             ).rowcount > 0
         return bool(self._execute_write(_do))
 
+    @managed_session_call
     def release_session_turn_lease(self, session_id: str, holder: str) -> None:
         """Release a turn lease iff ``holder`` still owns it; idempotent."""
         if not session_id or not holder:
@@ -604,6 +632,7 @@ class SessionCompressionMixin:
                 (conversation_id, holder))
         self._execute_write(_do)
 
+    @managed_session_call
     def get_compression_lock_holder(self, session_id: str) -> Optional[str]:
         """Current (non-expired) holder for ``session_id``, or None. Diagnostic only."""
         if not session_id:
@@ -620,11 +649,9 @@ class SessionCompressionMixin:
         Fix for #20001.
         """
         cutoff = time.time() - 604800  # 7 days
-        return self._write_rowcount(
-                """
-                UPDATE sessions
-                SET ended_at = ?,
-                    end_reason = 'orphaned_compression'
+        def write(conn):
+            protected = protected_session_ids(conn)
+            rows = conn.execute("""SELECT id FROM sessions
                 WHERE api_call_count = 0
                   AND end_reason IS NULL
                   AND ended_at IS NULL
@@ -640,10 +667,14 @@ class SessionCompressionMixin:
                       SELECT 1 FROM messages m
                       WHERE m.session_id = sessions.id
                   )
-                """,
-                (time.time(), cutoff),
-        ) or 0
+                """, (cutoff,)).fetchall()
+            ids = [row[0] for row in rows if row[0] not in protected]
+            conn.executemany("UPDATE sessions SET ended_at=?,end_reason='orphaned_compression' WHERE id=?",
+                             [(time.time(), sid) for sid in ids])
+            return len(ids)
+        return self._execute_write(write) or 0
 
+    @managed_session_call
     def get_compression_chain(self, session_id: str) -> List[str]:
         """Walk the compression-continuation chain forward: root-first through the tip (``[session_id]``
         when no continuation); ``get_compression_tip`` is the last element. A continuation is a child of
@@ -666,6 +697,7 @@ class SessionCompressionMixin:
             chain.append(child_id)
         return chain
 
+    @managed_session_call
     def get_compression_tip(self, session_id: str) -> Optional[str]:
         """Live tip of a compression chain (``get_compression_chain`` semantics); the input
         id when no continuation exists."""
@@ -679,6 +711,7 @@ class SessionCompressionMixin:
         parent = self.get_session(parent_id)
         return bool(parent and parent.get("end_reason") == "compression")
 
+    @managed_session_call
     def get_compression_lineage(self, session_id: str) -> List[str]:
         """Return compression ancestors through tip in chronological order."""
         session = self.get_session(session_id)

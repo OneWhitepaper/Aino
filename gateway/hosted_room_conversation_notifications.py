@@ -1,6 +1,8 @@
 """Durable background origins and FIFO continuation admission in the Hosted database."""
 from __future__ import annotations
 
+from gateway.hosted_room_conversation_maintenance import managed_store
+
 import hashlib
 import json
 import os
@@ -10,6 +12,7 @@ from gateway import hosted_rooms, hosted_room_driver as driver
 from gateway.hosted_room_conversation_types import TurnSubmission
 
 
+@managed_store
 class ConversationNotifications:
     def __init__(self, store):
         self.store, self.db_path = store, store.db_path
@@ -165,6 +168,8 @@ class ConversationNotifications:
                 WHERE conversation_id=? AND notification_id=?''', (conversation_id, notification_id)).fetchone())
 
     def admit_continuation(self, notification, binding, envelope, *, expected_revision, input_cutoff):
+        from .hosted_room_conversation_compat import require_compatible_backends
+        require_compatible_backends(self.db_path)
         from gateway.hosted_room_conversation import plan_conversation_turn
         from gateway.hosted_room_conversation_admission import ConversationBusyError
         request = continuation_submission(notification)
@@ -190,6 +195,8 @@ class ConversationNotifications:
             cutoff = conn.execute('SELECT next_seq-1 FROM hosted_rooms WHERE room_id=?', (binding.conversation_id,)).fetchone()[0]
             if tuple(generation) != (binding.session_generation, binding.lineage_id) or cutoff != input_cutoff:
                 raise hosted_rooms.RoomConflictError('continuation context changed')
+            from .hosted_room_conversation_budget import reserve_output
+            reserve_output(conn, binding.conversation_id, request.input_id)
             admission = self._append_continuation_locked(conn, binding, request, current)
             self.store._prepare_input_locked(conn, binding, request.input_id, envelope)
             plan = plan_conversation_turn(record, binding, request, admission, envelope)
