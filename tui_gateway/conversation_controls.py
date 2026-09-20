@@ -118,8 +118,10 @@ def stop_conversation(service, conversation_id, turn_id, execution_generation, i
     # Signal outside the service lock: completion callbacks may need that same lock to finish.
     units = [identity for identity in origins if not identity.startswith(('process:', 'kanban:'))]
     children_stopped = _interrupt_units(units) if include_delegations else True
-    _cancel_origin_requests(conversation_id, coordinates)
     tasks_stopped = all([_cancel_task(service, task, logical_turn=include_delegations) for task in tasks])
+    # Interrupt the participant before waking its blocked tool. Otherwise the
+    # resumed tool can race Stop into the next model-call generation guard.
+    _cancel_origin_requests(conversation_id, coordinates)
     if service.hosted:
         service.hosted.wakeup()
     return {'status': 'confirmed' if tasks_stopped and children_stopped else 'requested'}

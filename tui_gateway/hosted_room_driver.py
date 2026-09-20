@@ -509,6 +509,15 @@ class HostedRoomRuntime:
             if self._tasks(binding, "running") and self.clock() < deferred_until:
                 return
             self._ambiguous_rooms.pop(binding.room_id, None)
+        queued = self._tasks(binding, "queued")
+        recovering = any(self._tasks(binding, status) for status in ("running", "stopping", "indeterminate"))
+        if not recovering:
+            # Shared Profile gateways see every room, but only the process with
+            # the live participant can execute it. Never reserve its queue while
+            # idle or waiting for an owner connected to another process.
+            if not queued or not self._route_available(queued[0], binding):
+                self._release_room_lease(binding.room_id)
+                return
         lease = self._ensure_lease(binding)
         if (lease.room_id, lease.lease_generation) not in self._recovered_leases:
             state.recover_room(self.db_path, lease, clock=self.clock)
@@ -519,19 +528,11 @@ class HostedRoomRuntime:
         if self._reconcile_indeterminate(binding, lease):
             return
         for task in self._tasks(binding, "queued"):
-            retry = self._unavailable_route_retries.get(
-                (task["identity"].room_id, _member_id(task)))
-            if self._stop.is_set() or (
-                    retry is not None and self.clock() < retry["next_attempt_at"]):
+            if self._stop.is_set():
                 return
-            check_available = getattr(self._transport_for(binding, task), "check_available", None)
-            if callable(check_available):
-                try:
-                    check_available()
-                except Exception as exc:
-                    self._defer_unavailable_route(task)
-                    self._record_error(f"participant unavailable before task admission: {exc}")
-                    return
+            if not self._route_available(task, binding):
+                self._release_room_lease(binding.room_id)
+                return
             lease = self._renew_lease_if_needed(lease)
             attempt = state.start_task(
                 self.db_path, task["identity"], lease,
@@ -540,6 +541,28 @@ class HostedRoomRuntime:
             current = state.get_task(self.db_path, task["identity"])
             if current["status"] not in state.TERMINAL_STATUSES:
                 return
+
+    def _route_available(self, task, binding) -> bool:
+        retry = self._unavailable_route_retries.get((task['identity'].room_id, _member_id(task)))
+        if retry is not None and self.clock() < retry['next_attempt_at']:
+            return False
+        check = getattr(self._transport_for(binding, task), 'check_available', None)
+        if callable(check):
+            try:
+                check()
+            except Exception as exc:
+                self._defer_unavailable_route(task)
+                self._record_error(f"participant unavailable before task admission: {exc}")
+                return False
+        return True
+
+    def _release_room_lease(self, room_id: str) -> None:
+        with self._status_lock:
+            lease = self._leases.get(room_id)
+        if lease is not None:
+            with suppress(state.StaleLeaseError):
+                state.release_lease(self.db_path, lease, clock=self.clock)
+            self._drop_lease(room_id)
 
     def _defer_unavailable_route(self, task: Mapping[str, Any]) -> float:
         key = (task["identity"].room_id, _member_id(task))
