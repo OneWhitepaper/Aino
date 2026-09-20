@@ -10,6 +10,7 @@ import threading
 from http.server import HTTPServer, ThreadingHTTPServer
 
 import yaml
+import pytest
 
 from tests.agent.test_api_content_sidecar import _MockHandler, _text_resp, _tc_resp
 from tests.tui_gateway.test_conversation_session_binding import runtime_env  # noqa: F401
@@ -183,6 +184,18 @@ def test_model_can_use_real_terminal_and_automatically_delegate_inside_conversat
         captured_requests = []
         response_queue = []
 
+        def do_GET(self):  # noqa: N802
+            if self.path not in ('/v1/models', '/models'):
+                self.send_error(404)
+                return
+            body = json.dumps({'data': [{'id': 'gpt-4.1-mini', 'context_length': 128000,
+                'pricing': {'prompt': '0.000001', 'completion': '0.000002'}}]}).encode()
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json')
+            self.send_header('Content-Length', str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
         def do_POST(self):  # noqa: N802
             body = self.rfile.read(int(self.headers.get('Content-Length', 0)))
             request = json.loads(body)
@@ -210,6 +223,25 @@ def test_model_can_use_real_terminal_and_automatically_delegate_inside_conversat
                 response = _text_resp('Main terminal and delegated child completed')
             if response['choices'][0]['message'].get('tool_calls'):
                 response['choices'][0]['message']['tool_calls'][0]['id'] = f'call-{child}-{len(tool_results)}'
+            response['usage'] = {'prompt_tokens': 1000, 'completion_tokens': 100, 'total_tokens': 1100}
+            if request.get('stream'):
+                delta = dict(response['choices'][0]['message'])
+                if delta.get('tool_calls'):
+                    delta['tool_calls'] = [dict(call, index=i) for i, call in enumerate(delta['tool_calls'])]
+                self.send_response(200)
+                self.send_header('Content-Type', 'text/event-stream')
+                self.end_headers()
+                chunks = [
+                    {'id': 'metered', 'choices': [{'index': 0, 'delta': delta, 'finish_reason': None}]},
+                    {'id': 'metered', 'choices': [{'index': 0, 'delta': {},
+                     'finish_reason': response['choices'][0]['finish_reason']}]},
+                    {'id': 'metered', 'choices': [], 'usage': response['usage']},
+                ]
+                for chunk in chunks:
+                    self.wfile.write(f'data: {json.dumps(chunk)}\n\n'.encode())
+                self.wfile.write(b'data: [DONE]\n\n')
+                self.wfile.flush()
+                return
             # Each handler owns its response queue; parent and actual child share this HTTP boundary.
             self.__class__ = type('RequestHandler', (Provider,), {'response_queue': [response], 'captured_requests': []})
             self.rfile = io.BytesIO(body)
@@ -218,7 +250,7 @@ def test_model_can_use_real_terminal_and_automatically_delegate_inside_conversat
     http = ThreadingHTTPServer(('127.0.0.1', 0), Provider)
     worker = threading.Thread(target=http.serve_forever, daemon=True)
     worker.start()
-    config_path = home / 'config.yaml'
+    config_path = home / 'profiles' / 'writer' / 'config.yaml'
     config = yaml.safe_load(config_path.read_text())
     config['providers']['test']['api'] = f'http://127.0.0.1:{http.server_port}/v1'
     config['toolsets'] = ['terminal', 'delegation']
@@ -245,6 +277,14 @@ def test_model_can_use_real_terminal_and_automatically_delegate_inside_conversat
     monkeypatch.setattr(server, 'get_conversation_service', lambda: service)
     async_delegation._reset_for_tests()
     completed_events = []
+    from tools import delegate_tool_results
+    rollups = []
+    rollup = delegate_tool_results._rollup_children_cost
+    def observe_rollup(parent, cost):
+        before = parent.session_estimated_cost_usd
+        rollup(parent, cost)
+        rollups.append((parent, cost, parent.session_estimated_cost_usd - before))
+    monkeypatch.setattr(delegate_tool_results, '_rollup_children_cost', observe_rollup)
     completion_finalized = threading.Event()
     finalize = async_delegation._finalize
 
@@ -264,7 +304,14 @@ def test_model_can_use_real_terminal_and_automatically_delegate_inside_conversat
     try:
         general = next(row['participant']['participant_id'] for row in service.catalog() if row['participant']['is_general'])
         created = service.create('tool-proof', 'Tool proof', general, project_ref)['conversation']
-        service.send('tool-proof', 'tool-turn', 'tool-input', general, 'Run the project tool and child check.', created['revision'])
+        participants = {row['participant']['profile']: row['participant']['participant_id']
+                        for row in service.catalog()}
+        writer = participants['writer']
+        service.send('tool-proof', 'tool-turn', 'tool-input', writer, 'Run the project tool and child check.', created['revision'])
+        # Preparation is the backend consequence of selecting B/General while
+        # A owns the admitted turn; accounting never receives mutable UI state.
+        for profile in ('reviewer', 'default'):
+            service.prepare('tool-proof', participants[profile])
         room = service.bindings()[0]
         hosted.runtime.turn_timeout_seconds = 40
         hosted.runtime._process_room(room)
@@ -278,7 +325,8 @@ def test_model_can_use_real_terminal_and_automatically_delegate_inside_conversat
         assert len(completed_events) == 1
         event = completed_events[0]
         assert event['type'] == 'async_delegation'
-        sid, session = next((sid, s) for sid, s in server._sessions.items() if s.get('_conversation_binding'))
+        sid, session = next((sid, s) for sid, s in server._sessions.items()
+                            if s.get('_conversation_binding', {}).get('participant_id') == writer)
         assert server._notif_handle_event(sid, session, event, set(), process_registry,
                                          format_process_notification, [], owned=False)
         service.prepare_room(room)
@@ -300,6 +348,44 @@ def test_model_can_use_real_terminal_and_automatically_delegate_inside_conversat
             'Main terminal and delegated child completed', 'Main received the child result']
         assert 'CHILD_CONTENT_UNIQUE' not in json.dumps(public)
         assert session['agent']._session_db.get_conversation_input_receipt('tool-input') is not None
+        child_finishes = [frame['params'] for frame in frames if frame.get('method') == 'event'
+                          and frame['params'].get('type') == 'subagent.complete']
+        assert len(child_finishes) == 1
+        child_usage = child_finishes[0]['payload']
+        assert child_usage['input_tokens'] > 0 and child_usage['output_tokens'] > 0
+        assert len(rollups) == 1
+        charged_parent, child_cost, increment = rollups[0]
+        assert child_cost > 0 and increment == pytest.approx(child_cost)
+        assert charged_parent is session['agent']
+        assert child_finishes[0]['conversation']['participant_id'] == writer
+        agent = session['agent']
+        assert agent.session_prompt_tokens == 1000 * agent.session_api_calls > 0
+        assert agent.session_output_tokens == 100 * agent.session_api_calls > 0
+        child_row = agent._session_db.get_session(child_usage['child_session_id'])
+        assert child_row['parent_session_id'] == agent.session_id
+        assert child_row['input_tokens'] == child_usage['input_tokens']
+        assert child_row['output_tokens'] == child_usage['output_tokens']
+        assert child_row['estimated_cost_usd'] == pytest.approx(child_cost)
+        # The excess over actual parent API usage must equal real child spend.
+        from agent.usage_pricing import CanonicalUsage, estimate_usage_cost
+        parent_cost = estimate_usage_cost(agent.model, CanonicalUsage(
+            input_tokens=agent.session_prompt_tokens, output_tokens=agent.session_output_tokens),
+            provider=agent.provider, base_url=agent.base_url)
+        assert agent.session_estimated_cost_usd == pytest.approx(
+            float(parent_cost.amount_usd) + child_cost)
+        uncharged = [other for other in server._sessions.values()
+                     if other.get('_conversation_binding', {}).get('participant_id')
+                     in (general, participants['reviewer'])]
+        assert len(uncharged) == 2
+        for other in uncharged:
+            assert other['agent'] is None
+            with server._session_db(other) as db:
+                row = db.get_session(other['session_key'])
+                assert not row['input_tokens'] and not row['output_tokens']
+                assert not row['estimated_cost_usd']
+        usage_frames = [frame['params'] for frame in frames if frame.get('method') == 'event'
+                        and frame['params'].get('type') == 'message.complete']
+        assert usage_frames and all(e['conversation']['participant_id'] == writer for e in usage_frames)
     finally:
         hosted.stop(timeout=1)
         async_delegation._reset_for_tests()

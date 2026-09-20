@@ -479,3 +479,41 @@ def test_preparation_reserves_managed_identity_through_binding_and_cold_recovery
         reset_transport(token)
     for live_id in (sid, new_sid):
         get_registry().clear_session(live_id)
+
+
+def test_prepared_expert_deleted_by_profile_operation_refuses_send_without_fallback(runtime_env, monkeypatch):
+    from hermes_cli import profiles
+    from gateway.hosted_room_conversation_types import TurnSubmission
+    from tui_gateway.conversation_service import ConversationService
+
+    server, store, install, home, root = runtime_env
+    service = ConversationService(server, db_path=store.db_path)
+    participants = {row['participant']['profile']: row['participant']['participant_id']
+                    for row in service.catalog()}
+    general, writer = participants['default'], participants['writer']
+    service.create('deleted-expert', 'Historical conversation', general)
+    prepared = service.prepare('deleted-expert', writer)
+    session = server._sessions[prepared['session_id']]
+    assert session['_conversation_binding']['participant_id'] == writer
+    assert session['profile_home'] == str(home / 'profiles' / 'writer')
+    # Historical input is already durable independently of the expert's private
+    # session DB. Deleting the Profile must not delete this public projection.
+    store.append_input('deleted-expert', TurnSubmission('old-turn', 'old-input', writer, 'Earlier public request'))
+    before = service.events('deleted-expert')
+    assert any(e['payload'].get('text') == 'Earlier public request' for e in before['events'])
+    revision = store.get('deleted-expert').revision
+    # This isolated Profile has no OS backend process. Keep process discovery
+    # outside the test; tombstoning, DB release and filesystem deletion stay real.
+    monkeypatch.setattr(profiles, '_profile_bound_backend_pids', lambda *_: [])
+    removed = profiles.delete_profile('writer', yes=True)
+    assert removed == home / 'profiles' / 'writer' and not removed.exists()
+    assert writer not in {r['participant']['participant_id'] for r in service.catalog()}
+    with pytest.raises(ConversationBindingError, match='unavailable'):
+        service.send('deleted-expert', 'deleted-turn', 'deleted-input', writer,
+                     'Do not send this to General', revision)
+    assert service.events('deleted-expert') == before
+    assert store.get('deleted-expert').revision == revision
+    assert service._tasks('deleted-expert') == []
+    assert not any(s.get('_conversation_binding', {}).get('participant_id') == general
+                   for s in server._sessions.values())
+    assert not removed.exists()
