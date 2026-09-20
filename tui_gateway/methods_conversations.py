@@ -5,8 +5,10 @@ from gateway.hosted_room_conversation_admission import ConversationBusyError
 from gateway import hosted_rooms, hosted_room_driver
 from gateway.hosted_room_conversation_context import ContextBudgetError
 from tui_gateway.session_conversation_binding import ConversationBindingError
+from tui_gateway.conversation_projects import set_conversation_project
 
-_METHODS = ('capabilities', 'participants', 'create', 'list', 'get', 'send', 'events', 'stop', 'retry', 'refresh', 'prepare', 'runtime_snapshot', 'attach', 'content')
+_METHODS = ('capabilities', 'participants', 'create', 'list', 'get', 'send', 'events', 'stop', 'retry', 'refresh', 'prepare', 'runtime_snapshot', 'attach', 'content', 'set_project')
+_COORDINATORS = {'set_project': set_conversation_project}
 
 
 def get_conversation_service(server):
@@ -38,7 +40,8 @@ def _handler(server, suffix):
             if suffix == 'participants':
                 result = {'participants': service.catalog()}
             else:
-                result = getattr(service, suffix)(**params)
+                coordinator = _COORDINATORS.get(suffix)
+                result = coordinator(service, **params) if coordinator else getattr(service, suffix)(**params)
             check_result(contract, result)
             return server._ok(rid, result)
         except ConversationBusyError as exc:

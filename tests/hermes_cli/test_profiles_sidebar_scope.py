@@ -160,6 +160,13 @@ class TestCrossProfileProjectTree:
         declared = [project for project in payload["projects"] if not project["isNoProject"]]
         assert [project["path"] for project in declared] == [str(shared)]
         assert declared[0]["sessionCount"] == 2
+        from gateway import hosted_rooms
+        from hermes_cli.projects_shared import SharedProjectStore
+        indexed = SharedProjectStore(hosted_rooms.default_db_path()).resolve(declared[0]['shared_project_id'])
+        assert {s.registration_profile for s in indexed.sources} == {'default', 'worker'}
+        assert {(s['registration_profile'], s['project_id']) for s in declared[0]['sources']} == {
+            (s.registration_profile, s.project_id) for s in indexed.sources}
+
 
     def test_group_totals_add_up_the_sessions_the_group_counts(self, client, profiles_on_disk, tmp_path):
         # A header total is only meaningful if it covers exactly what the header

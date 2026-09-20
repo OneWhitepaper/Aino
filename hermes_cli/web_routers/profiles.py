@@ -546,7 +546,7 @@ def _merge_profile_tree(
             session["profile"] = profile
             session["is_default_profile"] = profile == "default"
 
-        key = project.get("path") or project["id"]
+        key = project.get("_shared_merge_key") or project.get("path") or project["id"]
         existing = merged.get(key)
         if existing is None:
             merged[key] = project
@@ -558,6 +558,9 @@ def _merge_profile_tree(
             existing, project = project, existing
             merged[key] = existing
 
+        existing["sources"] = (existing.get("sources") or []) + (project.get("sources") or [])
+        if project.get("shared_project_id"):
+            existing["shared_project_id"] = project["shared_project_id"]
         repos: Dict[str, Dict[str, Any]] = {r["id"]: r for r in existing.get("repos") or []}
         _merge_by_id(repos, project.get("repos") or [], "groups")
         existing["repos"] = list(repos.values())
@@ -584,6 +587,11 @@ def get_profiles_projects_tree(preview_limit: int = 3, session_limit: int = 2000
     that writes (policy reconciliation), which a read-only fan-out must not do.
     """
     from tui_gateway import server as gateway_server
+    from gateway import hosted_rooms
+    from hermes_cli.projects_shared import SharedProjectStore
+    from tui_gateway.projects_shared import annotate_profile_tree
+    install_id = hosted_rooms.local_authority_gateway_id()
+    shared_store = SharedProjectStore(hosted_rooms.default_db_path())
     merged: Dict[str, Dict[str, Any]] = {}
     scoped_session_ids: List[str] = []
     errors: List[Dict[str, str]] = []
@@ -594,12 +602,15 @@ def get_profiles_projects_tree(preview_limit: int = 3, session_limit: int = 2000
                 tree, _active_id = gateway_server._build_project_tree(
                     db, preview_limit=preview_limit, hydrate=False,
                     session_limit=session_limit, include_discovered=False)
+                annotate_profile_tree(gateway_server, shared_store, tree["projects"], name, home, install_id)
                 _merge_profile_tree(merged, tree["projects"], name, preview_limit)
                 scoped_session_ids.extend(tree["scoped_session_ids"])
         _read_profile_db(name, home, errors, _read)
 
     # active_id is None: ownership is per profile, so no project is "the active one" here.
     projects = sorted(merged.values(), key=lambda p: p.get("lastActive") or 0, reverse=True)
+    for project in projects:
+        project.pop("_shared_merge_key", None)
     return {"projects": projects, "active_id": None, "scoped_session_ids": scoped_session_ids,
             "errors": errors}
 

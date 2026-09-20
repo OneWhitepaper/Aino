@@ -1,7 +1,7 @@
 """Projects (``projects.*`` — per-profile multi-folder workspaces, repo discovery, sidebar tree)
 and the pet mascot surface (``pet.*`` — gallery, sprite payloads, adopt/remove/rename).
 
-Every method here is profile-scoped: the desktop's ``projectParams`` / ``petRpc`` wrappers add
+Legacy methods here are profile-scoped: the desktop's ``projectParams`` / ``petRpc`` wrappers add
 ``profile`` so app-global remote mode reads the focused profile's ``projects.db`` / ``config.yaml``.
 The pet wire predates the snake_case rule and travels camelCase (``displayName``,
 ``spritesheetBase64``); the field names below are those wire keys verbatim.
@@ -14,6 +14,7 @@ from pydantic import Field
 from .base import JsonValue, Params, Result
 from .common import OkResult, OpenModel, ProfileParams, StoredSessionRow
 from .registry import method
+from .conversations import ConversationProjectRef
 
 # ── projects: stored rows ─────────────────────────────────────────────────────────────────────
 
@@ -479,3 +480,66 @@ class PetScaleResult(Result):
 
 method("pet.scale", params=PetScaleParams, result=PetScaleResult,
        doc="Persist display.pet.scale (clamped to engine bounds) from the desktop slider.")
+
+
+# Shared identities retain explicit Profile source references for every write.
+
+
+class SharedProject(Result):
+    id: str
+    install_id: str
+    environment_id: str
+    canonical_path: str
+    name: str
+    sources: list[ConversationProjectRef]
+
+
+class SharedProjectUnavailableSource(Result):
+    registration_profile: str
+    project_id: str
+    reason: str
+
+
+class SharedProjectsResult(Result):
+    projects: list[SharedProject]
+    available_environments: list[str]
+    unavailable_sources: list[SharedProjectUnavailableSource]
+
+
+class SharedProjectRegisterParams(Params):
+    registration_profile: str = Field(min_length=1)
+    name: str = Field(min_length=1)
+    canonical_path: str = Field(min_length=1)
+    environment_id: str = 'local'
+
+
+class SharedProjectResolveParams(Params):
+    shared_project_id: str
+
+
+class SharedProjectResult(Result):
+    project: SharedProject
+
+
+class SharedProjectMutationParams(SharedProjectResolveParams):
+    source: ConversationProjectRef
+
+
+class SharedProjectUpdateParams(SharedProjectMutationParams):
+    name: str = Field(min_length=1)
+
+
+class SharedProjectMutationResult(Result):
+    project: SharedProject | None
+
+
+method('projects.shared.list', params=Params, result=SharedProjectsResult,
+       doc='List shared project identities with exact available Profile registration sources.')
+method('projects.shared.register', params=SharedProjectRegisterParams, result=SharedProjectResult,
+       doc='Create or reuse an explicit local Profile project registration and index its shared identity.')
+method('projects.shared.resolve', params=SharedProjectResolveParams, result=SharedProjectResult,
+       doc='Resolve a shared identity to current available registration sources.')
+method('projects.shared.update', params=SharedProjectUpdateParams, result=SharedProjectMutationResult,
+       doc='Rename only the explicitly identified source registration.')
+method('projects.shared.delete', params=SharedProjectMutationParams, result=SharedProjectMutationResult,
+       doc='Delete only the explicitly identified source registration; project files are untouched.')

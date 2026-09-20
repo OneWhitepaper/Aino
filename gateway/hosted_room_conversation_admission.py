@@ -23,16 +23,21 @@ class ConversationAdmissionMixin:
                 'SELECT * FROM hosted_room_conversation_participants WHERE conversation_id=? ORDER BY participant_id',
                 (conversation_id,)))
 
-    def list_conversations(self, *, cursor=None, limit=100, project=None, include_archived=False, owner_key=None):
+    def list_conversations(self, *, cursor=None, limit=100, project=None, include_archived=False, owner_key=None, shared_project=False):
         with hosted_rooms._transaction(self.db_path) as conn:
             project_json = (hosted_rooms._canonical_json(asdict(project), label='project', max_bytes=65536)
                             if project is not None else None)
             ids = conn.execute('''SELECT conversation_id FROM hosted_room_conversations
                 WHERE (? OR archived_at IS NULL) AND (? IS NULL OR conversation_id>?)
-                AND (? IS NULL OR project_json=?)
+                AND (? IS NULL OR (NOT ? AND project_json=?) OR (? AND
+                    json_extract(project_json, '$.install_id')=? AND
+                    json_extract(project_json, '$.execution_environment_id')=? AND
+                    json_extract(project_json, '$.cwd')=?))
                 AND (? IS NULL OR conversation_id IN (SELECT conversation_id FROM hosted_conversation_owners WHERE owner_key=?))
                 ORDER BY conversation_id LIMIT ?''',
-                (include_archived, cursor, cursor, project_json, project_json, owner_key, owner_key, limit + 1)).fetchall()
+                (include_archived, cursor, cursor, project_json, shared_project, project_json, shared_project,
+                 project.install_id if project else None, project.execution_environment_id if project else None,
+                 project.cwd if project else None, owner_key, owner_key, limit + 1)).fetchall()
             records = tuple(self._get_locked(conn, row[0]) for row in ids[:limit])
             return records, records[-1].conversation_id if len(ids) > limit else None, len(ids) > limit
 

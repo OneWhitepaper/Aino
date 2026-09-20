@@ -2221,6 +2221,15 @@ export interface ConversationContentResult {
   has_more: boolean
   sha256: string
 }
+export interface ConversationSetProjectParams {
+  conversation_id: string
+  project_ref: ConversationProjectRef | null
+  expected_revision: number
+}
+export interface ConversationSetProjectResult {
+  conversation: ConversationRecord
+  participants: ConversationParticipantBinding[]
+}
 export interface GroupsCapabilitiesParams {
   profile?: string | null
 }
@@ -2997,6 +3006,48 @@ export interface PetScaleParams {
 export interface PetScaleResult {
   ok: boolean
   scale: number
+}
+export interface SharedProjectsResult {
+  projects: SharedProject[]
+  available_environments: string[]
+  unavailable_sources: SharedProjectUnavailableSource[]
+}
+export interface SharedProject {
+  id: string
+  install_id: string
+  environment_id: string
+  canonical_path: string
+  name: string
+  sources: ConversationProjectRef[]
+}
+export interface SharedProjectUnavailableSource {
+  registration_profile: string
+  project_id: string
+  reason: string
+}
+export interface SharedProjectRegisterParams {
+  registration_profile: string
+  name: string
+  canonical_path: string
+  environment_id?: string
+}
+export interface SharedProjectResult {
+  project: SharedProject
+}
+export interface SharedProjectResolveParams {
+  shared_project_id: string
+}
+export interface SharedProjectUpdateParams {
+  shared_project_id: string
+  source: ConversationProjectRef
+  name: string
+}
+export interface SharedProjectMutationResult {
+  project: SharedProject | null
+}
+export interface SharedProjectMutationParams {
+  shared_project_id: string
+  source: ConversationProjectRef
 }
 /** ``text`` is normally a string; the relay / hosted paths may hand a structured (parts list) payload, and the busy path renders it. Truncation (rewind / edit / regenerate) needs explicit consent: ``confirm_truncate`` plus one durable target (``truncate_before_row_id`` preferred, ``truncate_before_message_id``, or the legacy ``truncate_before_user_ordinal``). */
 export interface PromptSubmitParams {
@@ -4630,6 +4681,8 @@ export interface RpcMethods {
   'conversations.runtime_snapshot': { params: ConversationRuntimeSnapshotParams; result: ConversationRuntimeSnapshotResult }
   /** Admit one immutable user input for the selected participant. */
   'conversations.send': { params: ConversationSendParams; result: ConversationAdmissionResult }
+  /** Change the project and explicitly advance idle participant generations without altering public history. */
+  'conversations.set_project': { params: ConversationSetProjectParams; result: ConversationSetProjectResult }
   /** Stop the exact execution generation and optionally its owned delegations. */
   'conversations.stop': { params: ConversationStopParams; result: ConversationStopResult }
   /** List/add/remove/pause/resume cron jobs in the (optionally profile-scoped) cron store. */
@@ -4834,6 +4887,16 @@ export interface RpcMethods {
   'projects.set_active': { params: ProjectsSetActiveParams; result: ActiveIdResult }
   /** Make one attached folder the project's primary path. */
   'projects.set_primary': { params: ProjectFolderParams; result: ProjectResult }
+  /** Delete only the explicitly identified source registration; project files are untouched. */
+  'projects.shared.delete': { params: SharedProjectMutationParams; result: SharedProjectMutationResult }
+  /** List shared project identities with exact available Profile registration sources. */
+  'projects.shared.list': { params: Params; result: SharedProjectsResult }
+  /** Create or reuse an explicit local Profile project registration and index its shared identity. */
+  'projects.shared.register': { params: SharedProjectRegisterParams; result: SharedProjectResult }
+  /** Resolve a shared identity to current available registration sources. */
+  'projects.shared.resolve': { params: SharedProjectResolveParams; result: SharedProjectResult }
+  /** Rename only the explicitly identified source registration. */
+  'projects.shared.update': { params: SharedProjectUpdateParams; result: SharedProjectMutationResult }
   /** Project → repo → lane overview with counts and a few preview sessions per project. */
   'projects.tree': { params: ProjectsTreeParams; result: ProjectsTreeResult }
   /** Patch a project's display fields; answers the refreshed project. */
@@ -5058,6 +5121,7 @@ export const RPC_METHODS = [
   'conversations.retry',
   'conversations.runtime_snapshot',
   'conversations.send',
+  'conversations.set_project',
   'conversations.stop',
   'cron.manage',
   'delegation.pause',
@@ -5160,6 +5224,11 @@ export const RPC_METHODS = [
   'projects.remove_folder',
   'projects.set_active',
   'projects.set_primary',
+  'projects.shared.delete',
+  'projects.shared.list',
+  'projects.shared.register',
+  'projects.shared.resolve',
+  'projects.shared.update',
   'projects.tree',
   'projects.update',
   'prompt.background',

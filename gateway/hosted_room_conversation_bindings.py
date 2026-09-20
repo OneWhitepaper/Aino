@@ -14,6 +14,15 @@ class ConversationBindingError(RuntimeError):
     """A runtime cannot safely continue this generation."""
 
 
+def saved_model_selection(record):
+    selection = json.loads(record.get('selection_json') or '{}') if record else {}
+    if record and not selection:
+        snapshot = json.loads(record['model_snapshot'])
+        if snapshot.get('model_source') == 'aino':
+            selection = {'model_source': 'aino', 'model_id': snapshot['model_id']}
+    return selection
+
+
 class ConversationBindings:
     def __init__(self, db_path: Path):
         self.db_path = Path(db_path)
@@ -74,6 +83,15 @@ class ConversationBindings:
                 WHERE conversation_id=? AND participant_id=? AND session_generation=?""",
                 (binding.conversation_id, binding.participant.participant_id, binding.session_generation)).fetchone()
             return dict(row) if row else None
+
+    def previous_model_selection(self, binding: ParticipantBinding) -> dict:
+        with hosted_rooms._transaction(self.db_path) as conn:
+            self._current(conn, binding)
+            row = conn.execute('''SELECT selection_json,model_snapshot FROM hosted_room_conversation_runtimes
+                WHERE conversation_id=? AND participant_id=? AND session_generation<?
+                ORDER BY session_generation DESC LIMIT 1''',
+                (binding.conversation_id, binding.participant.participant_id, binding.session_generation)).fetchone()
+            return saved_model_selection(dict(row) if row else None)
 
     def publish(self, binding: ParticipantBinding, project: ProjectRef | None, record: dict) -> dict:
         """Reserve the exact generation only after its Profile session row is durable."""

@@ -92,20 +92,9 @@ class ConversationService:
     def _project(self, value):
         if value is None:
             return None
-        from hermes_cli import projects_db
-        project = ProjectRef(**value)
-        if project.install_id != hosted_rooms.local_authority_gateway_id() or project.execution_environment_id != 'local':
-            raise ConversationBindingError('project execution environment is unavailable')
-        profile_home = self.server._profile_home(project.registration_profile)
-        home = Path(profile_home or self.server._hermes_home)
-        with projects_db.connect_closing(home / 'projects.db') as conn:
-            registered = projects_db.get_project(conn, project.project_id)
-        if registered is None or registered.archived or not registered.primary_path:
-            raise ConversationBindingError('project registration is unavailable')
-        cwd = str(Path(registered.primary_path).resolve())
-        if str(Path(project.cwd).resolve()) != cwd:
-            raise ConversationBindingError('project directory differs from its registration')
-        return replace(project, cwd=cwd)
+        from .projects_shared import SharedProjects
+        project, _registered = SharedProjects(self.server).validate_source(value)
+        return project
 
     def create(self, conversation_id, title, general_participant_id, project_ref=None):
         owner = request_owner_key(self.server, write=True)
@@ -120,7 +109,7 @@ class ConversationService:
     def list(self, cursor=None, limit=100, project_ref=None, include_archived=False):
         rows, cursor, more = self.store.list_conversations(cursor=cursor, limit=limit,
             project=ProjectRef(**project_ref) if project_ref else None, include_archived=include_archived,
-            owner_key=request_owner_key(self.server))
+            owner_key=request_owner_key(self.server), shared_project=True)
         return {'conversations': [asdict(r) for r in rows], 'cursor': cursor, 'has_more': more}
 
     def prepare(self, conversation_id, participant_id, expected_generation=1,

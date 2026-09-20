@@ -17,7 +17,7 @@ from pathlib import Path
 from typing import Any
 
 from gateway import hosted_room_driver as driver, hosted_rooms
-from gateway.hosted_room_conversation_bindings import ConversationBindingError, ConversationBindings
+from gateway.hosted_room_conversation_bindings import ConversationBindingError, ConversationBindings, saved_model_selection
 from gateway.hosted_room_conversation_types import ParticipantBinding, ProjectRef
 
 _MARKER = 'conversation_binding'
@@ -191,6 +191,8 @@ def prepare_conversation_session(server, *, binding: ParticipantBinding,
         from .conversation_authority import require_conversation_owner
         require_conversation_owner(server, store.db_path, binding.conversation_id, write=True, claim_unowned=True)
         stored = store.resolve(binding, project)
+        if stored is None and not selection:
+            selection = store.previous_model_selection(binding)
         profile = binding.participant.profile
         profile_home = server._profile_home(profile)
         _validate_environment(server, profile_home, project, binding.participant.install_id)
@@ -211,8 +213,8 @@ def prepare_conversation_session(server, *, binding: ParticipantBinding,
             try:
                 params = {'profile': profile, 'source': source, 'cwd': cwd, 'hidden': True,
                           'title': 'Conversation participant', 'close_on_disconnect': False, **selection}
-                if model_id and model_source != 'aino':
-                    params['model'] = model_id
+                if selection.get('model_id') and selection.get('model_source') != 'aino':
+                    params['model'] = selection['model_id']
                 result = _call(server, 'session.create', params)
             finally:
                 _pending_creation.reset(token)
@@ -304,11 +306,7 @@ def refresh_conversation_preparation(server, *, binding: ParticipantBinding,
         store = _store(server)
         stored = store.resolve(binding, project)
         if not selection and stored:
-            selection = json.loads(stored.get('selection_json') or '{}')
-            if not selection:
-                snapshot = json.loads(stored['model_snapshot'])
-                if snapshot.get('model_source') == 'aino':
-                    selection = {'model_source': 'aino', 'model_id': snapshot['model_id']}
+            selection = saved_model_selection(stored)
         _cwd(store, binding.conversation_id, project)
         updated = store.advance(binding, project)
         return prepare_conversation_session(server, binding=updated, project=project, source=source, **selection)

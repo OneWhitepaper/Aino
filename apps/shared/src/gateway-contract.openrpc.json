@@ -907,6 +907,24 @@
       }
     },
     {
+      "name": "conversations.set_project",
+      "summary": "Change the project and explicitly advance idle participant generations without altering public history.",
+      "params": [
+        {
+          "name": "params",
+          "schema": {
+            "$ref": "#/components/schemas/ConversationSetProjectParams"
+          }
+        }
+      ],
+      "result": {
+        "name": "result",
+        "schema": {
+          "$ref": "#/components/schemas/ConversationSetProjectResult"
+        }
+      }
+    },
+    {
       "name": "conversations.stop",
       "summary": "Stop the exact execution generation and optionally its owned delegations.",
       "params": [
@@ -2739,6 +2757,96 @@
         "name": "result",
         "schema": {
           "$ref": "#/components/schemas/ProjectResult"
+        }
+      }
+    },
+    {
+      "name": "projects.shared.delete",
+      "summary": "Delete only the explicitly identified source registration; project files are untouched.",
+      "params": [
+        {
+          "name": "params",
+          "schema": {
+            "$ref": "#/components/schemas/SharedProjectMutationParams"
+          }
+        }
+      ],
+      "result": {
+        "name": "result",
+        "schema": {
+          "$ref": "#/components/schemas/SharedProjectMutationResult"
+        }
+      }
+    },
+    {
+      "name": "projects.shared.list",
+      "summary": "List shared project identities with exact available Profile registration sources.",
+      "params": [
+        {
+          "name": "params",
+          "schema": {
+            "$ref": "#/components/schemas/Params"
+          }
+        }
+      ],
+      "result": {
+        "name": "result",
+        "schema": {
+          "$ref": "#/components/schemas/SharedProjectsResult"
+        }
+      }
+    },
+    {
+      "name": "projects.shared.register",
+      "summary": "Create or reuse an explicit local Profile project registration and index its shared identity.",
+      "params": [
+        {
+          "name": "params",
+          "schema": {
+            "$ref": "#/components/schemas/SharedProjectRegisterParams"
+          }
+        }
+      ],
+      "result": {
+        "name": "result",
+        "schema": {
+          "$ref": "#/components/schemas/SharedProjectResult"
+        }
+      }
+    },
+    {
+      "name": "projects.shared.resolve",
+      "summary": "Resolve a shared identity to current available registration sources.",
+      "params": [
+        {
+          "name": "params",
+          "schema": {
+            "$ref": "#/components/schemas/SharedProjectResolveParams"
+          }
+        }
+      ],
+      "result": {
+        "name": "result",
+        "schema": {
+          "$ref": "#/components/schemas/SharedProjectResult"
+        }
+      }
+    },
+    {
+      "name": "projects.shared.update",
+      "summary": "Rename only the explicitly identified source registration.",
+      "params": [
+        {
+          "name": "params",
+          "schema": {
+            "$ref": "#/components/schemas/SharedProjectUpdateParams"
+          }
+        }
+      ],
+      "result": {
+        "name": "result",
+        "schema": {
+          "$ref": "#/components/schemas/SharedProjectMutationResult"
         }
       }
     },
@@ -10943,6 +11051,58 @@
           "expected_revision"
         ],
         "title": "ConversationSendParams",
+        "type": "object"
+      },
+      "ConversationSetProjectParams": {
+        "additionalProperties": false,
+        "properties": {
+          "conversation_id": {
+            "title": "Conversation Id",
+            "type": "string"
+          },
+          "project_ref": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ConversationProjectRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "expected_revision": {
+            "minimum": 1,
+            "title": "Expected Revision",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "conversation_id",
+          "project_ref",
+          "expected_revision"
+        ],
+        "title": "ConversationSetProjectParams",
+        "type": "object"
+      },
+      "ConversationSetProjectResult": {
+        "additionalProperties": false,
+        "properties": {
+          "conversation": {
+            "$ref": "#/components/schemas/ConversationRecord"
+          },
+          "participants": {
+            "items": {
+              "$ref": "#/components/schemas/ConversationParticipantBinding"
+            },
+            "title": "Participants",
+            "type": "array"
+          }
+        },
+        "required": [
+          "conversation",
+          "participants"
+        ],
+        "title": "ConversationSetProjectResult",
         "type": "object"
       },
       "ConversationStopParams": {
@@ -30044,6 +30204,226 @@
           }
         },
         "title": "SetupStatusResult",
+        "type": "object"
+      },
+      "SharedProject": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "install_id": {
+            "title": "Install Id",
+            "type": "string"
+          },
+          "environment_id": {
+            "title": "Environment Id",
+            "type": "string"
+          },
+          "canonical_path": {
+            "title": "Canonical Path",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "sources": {
+            "items": {
+              "$ref": "#/components/schemas/ConversationProjectRef"
+            },
+            "title": "Sources",
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "install_id",
+          "environment_id",
+          "canonical_path",
+          "name",
+          "sources"
+        ],
+        "title": "SharedProject",
+        "type": "object"
+      },
+      "SharedProjectMutationParams": {
+        "additionalProperties": false,
+        "properties": {
+          "shared_project_id": {
+            "title": "Shared Project Id",
+            "type": "string"
+          },
+          "source": {
+            "$ref": "#/components/schemas/ConversationProjectRef"
+          }
+        },
+        "required": [
+          "shared_project_id",
+          "source"
+        ],
+        "title": "SharedProjectMutationParams",
+        "type": "object"
+      },
+      "SharedProjectMutationResult": {
+        "additionalProperties": false,
+        "properties": {
+          "project": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SharedProject"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "project"
+        ],
+        "title": "SharedProjectMutationResult",
+        "type": "object"
+      },
+      "SharedProjectRegisterParams": {
+        "additionalProperties": false,
+        "properties": {
+          "registration_profile": {
+            "minLength": 1,
+            "title": "Registration Profile",
+            "type": "string"
+          },
+          "name": {
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "canonical_path": {
+            "minLength": 1,
+            "title": "Canonical Path",
+            "type": "string"
+          },
+          "environment_id": {
+            "default": "local",
+            "title": "Environment Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "registration_profile",
+          "name",
+          "canonical_path"
+        ],
+        "title": "SharedProjectRegisterParams",
+        "type": "object"
+      },
+      "SharedProjectResolveParams": {
+        "additionalProperties": false,
+        "properties": {
+          "shared_project_id": {
+            "title": "Shared Project Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "shared_project_id"
+        ],
+        "title": "SharedProjectResolveParams",
+        "type": "object"
+      },
+      "SharedProjectResult": {
+        "additionalProperties": false,
+        "properties": {
+          "project": {
+            "$ref": "#/components/schemas/SharedProject"
+          }
+        },
+        "required": [
+          "project"
+        ],
+        "title": "SharedProjectResult",
+        "type": "object"
+      },
+      "SharedProjectUnavailableSource": {
+        "additionalProperties": false,
+        "properties": {
+          "registration_profile": {
+            "title": "Registration Profile",
+            "type": "string"
+          },
+          "project_id": {
+            "title": "Project Id",
+            "type": "string"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "registration_profile",
+          "project_id",
+          "reason"
+        ],
+        "title": "SharedProjectUnavailableSource",
+        "type": "object"
+      },
+      "SharedProjectUpdateParams": {
+        "additionalProperties": false,
+        "properties": {
+          "shared_project_id": {
+            "title": "Shared Project Id",
+            "type": "string"
+          },
+          "source": {
+            "$ref": "#/components/schemas/ConversationProjectRef"
+          },
+          "name": {
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "shared_project_id",
+          "source",
+          "name"
+        ],
+        "title": "SharedProjectUpdateParams",
+        "type": "object"
+      },
+      "SharedProjectsResult": {
+        "additionalProperties": false,
+        "properties": {
+          "projects": {
+            "items": {
+              "$ref": "#/components/schemas/SharedProject"
+            },
+            "title": "Projects",
+            "type": "array"
+          },
+          "available_environments": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Available Environments",
+            "type": "array"
+          },
+          "unavailable_sources": {
+            "items": {
+              "$ref": "#/components/schemas/SharedProjectUnavailableSource"
+            },
+            "title": "Unavailable Sources",
+            "type": "array"
+          }
+        },
+        "required": [
+          "projects",
+          "available_environments",
+          "unavailable_sources"
+        ],
+        "title": "SharedProjectsResult",
         "type": "object"
       },
       "ShellExecParams": {

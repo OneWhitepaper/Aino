@@ -398,3 +398,5 @@ def _build_project_tree(
 def register(server) -> None:
     """Publish this module's helpers + handlers onto ``server``, rebound to its globals."""
     bind_module(globals(), server, skip=("_",))
+    from .projects_shared import register as register_shared_projects
+    register_shared_projects(server)
