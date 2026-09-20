@@ -5,13 +5,19 @@ let fixture: MockBackendFixture
 const rendererErrors: string[] = []
 
 test.beforeAll(async () => {
-  fixture = await setupMockBackend({ extraConfig: 'desktop:\n  repo_scan_enabled: false\naccount:\n  dev_mode: true' })
+  fixture = await setupMockBackend({
+    extraDisplayConfig: '  language: en',
+    extraConfig: 'desktop:\n  repo_scan_enabled: false\naccount:\n  dev_mode: true'
+  })
   const { page } = fixture
   page.on('pageerror', error => rendererErrors.push(error.message))
   page.on('console', message => {
     if (message.type() === 'error') rendererErrors.push(message.text())
   })
-  await page.getByRole('textbox', { name: 'Email or phone', exact: true }).fill('appearance-mode@example.com')
+  expect(
+    await page.evaluate(() => (window as Window & { hermesDesktop?: { accountAdapter?: string } }).hermesDesktop?.accountAdapter)
+  ).toBe('legacy-development')
+  await page.getByRole('textbox', { name: 'Phone number', exact: true }).fill('13800000102')
   await page.getByRole('checkbox', { name: 'Agree to the user agreement and privacy policy', exact: true }).check()
   await page.getByRole('button', { name: 'Send code', exact: true }).click()
   await page.getByRole('textbox', { name: 'Verification code', exact: true }).fill('1234')
