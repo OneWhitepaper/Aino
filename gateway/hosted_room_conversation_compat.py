@@ -1,15 +1,22 @@
 """Gate new conversation work on the live install owners' existing heartbeat evidence."""
 from contextlib import closing
 import json
+import math
 import os
 from pathlib import Path
 import sqlite3
 import sys
+import time
 
 import psutil
 
 from gateway.hosted_rooms import HostedRoomError
 from hermes_state_holders import canonical_sqlite_path
+
+
+# Match the orphan sweeper's default heartbeat window (2 × 6-hour session TTL).
+# Only remote evidence expires; a live local owner must still prove compatibility.
+_FOREIGN_HEARTBEAT_STALENESS_SECONDS = 2 * 6 * 3600
 
 
 class ConversationUpgradeRequired(HostedRoomError):
@@ -35,7 +42,7 @@ def _heartbeats(root):
                 birth='process_started_at' if 'process_started_at' in columns else 'NULL AS process_started_at'
                 caps='capabilities_json' if 'capabilities_json' in columns else "'{}' AS capabilities_json"
                 yield from (dict(row) for row in conn.execute(
-                    f'SELECT backend_id,pid,started_at,host,{birth},{caps} FROM gateway_heartbeats'))
+                    f'SELECT backend_id,pid,started_at,last_heartbeat,host,{birth},{caps} FROM gateway_heartbeats'))
         except sqlite3.Error as exc:
             raise ConversationUpgradeRequired('Cannot verify installed backend compatibility; retry after other backends settle') from exc
 
@@ -75,11 +82,16 @@ def require_compatible_backends(db_path):
     path=Path(db_path)
     compatible=set()
     host=os.uname().nodename if hasattr(os,'uname') else 'host'
+    cutoff = time.time() - _FOREIGN_HEARTBEAT_STALENESS_SECONDS
     for row in _heartbeats(path.parent):
+        if row['host'] and row['host']!=host:
+            heartbeat = row['last_heartbeat']
+            if isinstance(heartbeat, (int, float)) and math.isfinite(heartbeat) and heartbeat < cutoff:
+                continue
+            # A remote PID, even one equal to ours, says nothing about local liveness.
+            raise ConversationUpgradeRequired('Shared conversation storage requires local, upgraded backend owners')
         if row['pid']==os.getpid():
             continue  # This call is itself the current backend's capability implementation.
-        if row['host'] and row['host']!=host:
-            raise ConversationUpgradeRequired('Shared conversation storage requires local, upgraded backend owners')
         try:
             birth=psutil.Process(row['pid']).create_time()
         except psutil.NoSuchProcess:

@@ -25,7 +25,8 @@ root=pathlib.Path(sys.argv[1]); mode=sys.argv[2]
 fd=os.open(root/'shared-state.db',os.O_RDONLY if mode=='readonly' else os.O_RDWR)
 if mode not in ('unknown','readonly'):
     with SessionDB(root/'state.db') as db:
-        extra={} if mode=='legacy' else {'process_started_at':psutil.Process().create_time()-(60 if mode=='stale' else 0),'capabilities':backend_capabilities()}
+        extra={} if mode in ('legacy','expired-legacy') else {'process_started_at':psutil.Process().create_time()-(60 if mode=='stale' else 0),'capabilities':backend_capabilities()}
+        extra['last_heartbeat']=time.time()-7*24*3600 if mode.startswith('expired-') else time.time()
         db.register_backend_heartbeat(backend_id='compat-child',pid=os.getpid(),started_at=time.time(),host=os.uname().nodename,**extra)
 (root/'compat-ready').touch()
 while not (root/'compat-release').exists():time.sleep(.02)
@@ -39,7 +40,7 @@ os.close(fd)
             threading.Event().wait(.01)
         assert ready.exists()
         # Native access flags can prove a raw read-only descriptor; portable fallback stays conservative.
-        allowed=owner_mode=='current' or (owner_mode=='readonly' and sys.platform in ('darwin','linux'))
+        allowed=owner_mode in ('current','expired-current') or (owner_mode=='readonly' and sys.platform in ('darwin','linux'))
         caps=call('capabilities')
         assert caps['enabled'] is allowed,caps
         result=rpc('create',conversation_id='next',title='Next',general_participant_id=general)
@@ -69,3 +70,27 @@ def test_readonly_source_does_not_claim_mac_backend_ownership(runtime_env,monkey
 @pytest.mark.linux_only
 def test_readonly_source_does_not_claim_linux_backend_ownership(runtime_env,monkeypatch):
     _owner_check(runtime_env,monkeypatch,'readonly')
+
+
+@pytest.mark.parametrize('owner_mode', ['expired-legacy', 'expired-current'])
+def test_expired_local_heartbeat_still_checks_live_process(runtime_env, monkeypatch, owner_mode):
+    _owner_check(runtime_env, monkeypatch, owner_mode)
+
+
+@pytest.mark.parametrize('pid', [os.getpid(), 2147483647])
+def test_foreign_heartbeat_expires_without_using_local_pid_or_deleting_history(runtime_env, monkeypatch, pid):
+    from hermes_state import SessionDB
+    _server, store, _install, home, _root = runtime_env
+    _hosted, _rpc, call, _general = _setup(runtime_env, monkeypatch)
+    with SessionDB(home / 'state.db') as db:
+        db.register_backend_heartbeat(
+            backend_id='old-host', pid=pid, started_at=time.time()-8*24*3600,
+            last_heartbeat=time.time()-7*24*3600, host='previous-network-host')
+        assert call('capabilities')['enabled'] is True
+        assert any(row['backend_id']=='old-host' for row in db.list_backend_heartbeats())
+        db.register_backend_heartbeat(
+            backend_id='old-host', pid=pid, started_at=time.time(),
+            last_heartbeat=time.time(), host='previous-network-host')
+        result = call('capabilities')
+        assert result['enabled'] is False
+        assert 'local, upgraded' in result['reason']

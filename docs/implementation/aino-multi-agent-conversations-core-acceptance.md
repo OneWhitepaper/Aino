@@ -160,3 +160,32 @@ retain the work context, and each expert keeps its private Profile runtime. Auto
 canonical Bot Chat and Agent Hub remain covered by the relevant regression suites. Final independent
 reviews closed the branch-context, project-capture, rich-input/IME, unchanged-draft, compatibility
 and test-synchronization findings. The implementation branch and worktree are retained for integration.
+
+## Existing-install launch correction
+
+The first user launch after local acceptance revealed an upgrade case absent from the clean-HOME
+matrix: expired backend heartbeat rows retained earlier network hostnames. Compatibility admission
+rejected every foreign-host row before checking its age, so the real updated backend returned
+`enabled: false` and the ordinary Home/New flow correctly fell back to the legacy composer.
+The initial launch confirmation checked the loaded source path but missed that disabled capability.
+
+The compatibility reader now includes `last_heartbeat`. Only foreign-host evidence expires after
+the existing orphan sweeper's default 12-hour window; records are not deleted. A fresh foreign
+record still refuses admission, even when its PID equals this process. Local live owners still
+require valid birth/capability evidence regardless of heartbeat age, and writable-file checks remain.
+Recent hostname changes inside that window remain conservatively gated.
+
+The regression was reproduced in temporary databases before the fix (2 failed, 7 passed, one
+host-only skip). Corrected focused suites passed 30 tests with two host-only skips; independent
+review reran compatibility coverage with 9 passed and one Linux-only skip, all with retries disabled.
+The existing native fixture now seeds an expired prior-host heartbeat using the real SessionDB.
+Its original initial-home/keyboard-New scenario passed on the fixed backend; desktop noEmit and
+Ruff passed. Receipts: `/tmp/aino-foreign-heartbeat-red2.log`,
+`/tmp/aino-foreign-heartbeat-green.log`, `/tmp/aino-foreign-heartbeat-independent.log`,
+`/tmp/aino-stale-heartbeat-native-green.log`, `/tmp/aino-stale-heartbeat-native-types.log`.
+
+After restarting the user's source desktop, the live capability returned `enabled: true` with no
+refusal reason. The actual New action opened a managed conversation, and the visible responder
+menu listed Aino and the existing codex expert alongside the `@` selector. This check sent no model
+message and did not import or delete old conversations. It supplements the isolated acceptance;
+the whole suites were not rerun for this targeted compatibility correction.

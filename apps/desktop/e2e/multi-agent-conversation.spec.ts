@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
@@ -111,7 +112,26 @@ test.beforeAll(async () => {
     )
   }
 
-  const { app, page } = await launchDesktop(buildAppEnv(sandbox, { HOME: sandbox.root }), { fakeMedia: true })
+  // Existing installations retain crashed backend rows under earlier network hostnames.
+  const repoRoot = path.resolve(import.meta.dirname, '../../..')
+  const env = buildAppEnv(sandbox, { HOME: sandbox.root })
+  execFileSync(
+    path.join(repoRoot, '.venv/bin/python'),
+    [
+      '-c',
+      `
+import os, time
+from pathlib import Path
+from hermes_state import SessionDB
+expired = time.time() - 7 * 24 * 60 * 60
+with SessionDB(Path(os.environ['HERMES_HOME']) / 'state.db') as db:
+    db.register_backend_heartbeat(backend_id='previous-network-backend', pid=os.getpid(),
+        host='previous-network.invalid', started_at=expired, last_heartbeat=expired)
+`
+    ],
+    { cwd: repoRoot, env, stdio: 'pipe' }
+  )
+  const { app, page } = await launchDesktop(env, { fakeMedia: true })
   page.on('pageerror', error => rendererErrors.push(error.message))
   await page.emulateMedia({ reducedMotion: 'reduce' })
   fixture = {
