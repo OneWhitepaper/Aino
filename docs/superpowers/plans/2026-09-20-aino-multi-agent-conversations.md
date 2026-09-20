@@ -36,7 +36,7 @@
 ## 当前基线与工作区交接
 
 - 基线提交：`148c35ab27bd752b19e1e35273229d714ac57d4b`。
-- 当前分支：`codex/aino-platform-identity-models-billing`；远端基准为 OneWhitepaper/Aino。
+- 原工作区分支：`codex/aino-platform-identity-models-billing`；实施分支：`codex/multi-agent-conversations`，位于 `.worktrees/multi-agent-conversations`；远端基准为 OneWhitepaper/Aino。
 - 已有未提交界面工作包括 Profile 导航、配置页、移除设置重复入口、技能隔离及对应测试。执行者先逐项审阅 diff，保存到仓库外的任务快照；隔离 worktree 必须应用这份已审阅的增量，不能只从 HEAD 启动后丢掉已完成工作。不得携入真实密钥、Profile 数据库或项目产物。
 - 架构 / 计划原所在目录被忽略；本次仅对四个项目文档增加精确跟踪例外，其余 superpowers 文件仍忽略。
 - 之前已有 Hosted 基础回归：4 文件、174 通过；这不是新功能测试，也不能代替实施后的验证。
@@ -92,6 +92,10 @@ git check-ignore --no-index docs/superpowers/specs/2026-09-20-aino-multi-agent-c
 
 - [x] 用户确认架构，补充身份可见性与自动子代理兼容。
 - [x] 核实当前代码落点、制定 A / B 子计划并修正文档跟踪问题。
-- [ ] 完成 A 计划及 G1–G3。
-- [ ] 完成 B 计划及 G4–G5。
-- [ ] 对实际实现填写测试结果和剩余风险；不得沿用基线通过数宣称新功能完成。
+- [x] 完成 A 计划及 G1–G3。
+- [x] 完成 B 计划及 G4–G5（本机验收；Docker/Nix、其他宿主与外部服务边界见验收记录）。
+- [x] 对实际实现填写测试结果和剩余风险；不得沿用基线通过数宣称新功能完成。
+
+最终结果见 [实施与验收记录](../../implementation/aino-multi-agent-conversations-core-acceptance.md)。
+默认已开启；全量 Python 的唯一测试竞态修复后定向复测通过，最终真实桌面 17 个场景全部通过。
+代码保存在实施分支，未推送、部署或迁移真实用户数据。
