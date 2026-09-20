@@ -90,3 +90,281 @@
   --aino-action-bg: var(--ui-text-primary);
   --aino-action-fg: var(--ui-bg-chrome);
 }
+
+/* ─────────────────────────────────────────────────────────────────────────
+   AINO SURFACE LANGUAGE
+
+   Chat is the product's visual anchor: a quiet paper surface, one-pixel
+   seams, generous whitespace, graphite actions, and soft neutral selection
+   bands.  The routes that sit beside chat used to opt into their own chrome
+   (bright blue outlines, dense boxed rows, and heavy modal frames).  Keep the
+   route components and their behavior intact, but let every durable page and
+   route overlay inherit the same visual contract here.
+
+   The variables are scoped to semantic surface markers rather than route
+   names.  That keeps contributed content and future pages on the same ladder,
+   and makes the treatment safe for the translucent-window modes: surfaces
+   still paint through the existing --ui-* tokens instead of forcing an opaque
+   background.
+   ───────────────────────────────────────────────────────────────────────── */
+
+/* Palette and control appearance are global in styles/aino-theme.css and the
+   UI primitives. These markers own page layout only, so portals and auxiliary
+   renderers cannot drift from their parent page. */
+
+/* Durable pages use the same type face and paper as the landing chat.  The
+   surface token remains transparent when Glass is enabled, so native material
+   behavior is preserved. */
+:is([data-aino-page-shell], [data-aino-settings]) {
+  background: var(--aino-surface-bg) !important;
+  color: var(--aino-surface-ink);
+  font-family: var(--aino-landing-font);
+}
+
+:is([data-aino-page-shell], [data-aino-settings]) [data-aino-page-content] {
+  background: var(--aino-surface-bg) !important;
+}
+
+/* Page headers are a single quiet seam, not a second title bar. */
+[data-aino-page-header] {
+  border-bottom-color: var(--aino-surface-stroke) !important;
+  background: var(--aino-surface-bg) !important;
+}
+
+[data-aino-page-header] [data-tour='page-tabs'] [data-tour^='tab-'] {
+  border: 0 !important;
+  border-radius: 0.5rem;
+  color: var(--ui-text-tertiary);
+  text-decoration: none;
+}
+
+[data-aino-page-header] [data-tour='page-tabs'] [data-tour^='tab-']:hover {
+  background: var(--aino-surface-hover) !important;
+  color: var(--aino-surface-ink);
+}
+
+[data-aino-page-header] [data-tour='page-tabs'] [data-tour^='tab-'][data-active='true'] {
+  background: transparent !important;
+  color: var(--aino-surface-ink);
+  box-shadow: inset 0 -2px 0 var(--ui-accent);
+  font-weight: 600;
+}
+
+[data-aino-page-header] input {
+  color: var(--aino-surface-ink);
+}
+
+/* The app rail is shared by every page.  Route selection follows chat's soft
+   band; the old inset blue ring is intentionally removed. */
+[data-aino-sidebar] {
+  background: var(--aino-surface-rail) !important;
+  border-color: var(--aino-surface-stroke) !important;
+  font-family: var(--aino-landing-font);
+}
+
+[data-aino-sidebar] [data-sidebar='menu-button'] {
+  border: 0 !important;
+  border-radius: var(--aino-radius-control) !important;
+  box-shadow: none !important;
+  color: var(--aino-surface-ink);
+}
+
+[data-aino-sidebar] [data-sidebar='menu-button']:hover,
+[data-aino-sidebar] [data-sidebar='menu-button']:focus-visible {
+  background: var(--aino-surface-hover) !important;
+  color: var(--aino-surface-ink);
+}
+
+[data-aino-sidebar] [data-sidebar='menu-button'][data-active='true'] {
+  background: var(--aino-surface-active) !important;
+  color: var(--aino-surface-ink) !important;
+  box-shadow: none !important;
+}
+
+[data-aino-sidebar] [data-slot='sidebar-nav-icon'] {
+  color: var(--aino-surface-muted);
+}
+
+[data-aino-sidebar] [data-slot='sidebar-identity-footer'] {
+  border-top-color: var(--aino-surface-stroke) !important;
+}
+
+[data-aino-sidebar] [data-sidebar-session-row][data-selected='true'] {
+  background: var(--aino-surface-active) !important;
+  box-shadow: none !important;
+}
+
+/* Settings navigation is the same rail pattern at a different scale. */
+[data-aino-settings] [data-aino-overlay-nav] {
+  background: var(--aino-surface-rail) !important;
+  border-right: 1px solid var(--aino-surface-stroke);
+  padding-inline: 0.75rem;
+}
+
+[data-aino-settings] [data-aino-overlay-nav] [data-tour^='nav-'] {
+  min-height: 2rem;
+  height: 2rem;
+  border-color: transparent !important;
+  border-radius: 0.625rem !important;
+  color: var(--aino-surface-muted);
+  padding-inline: 0.625rem;
+}
+
+[data-aino-settings] [data-aino-overlay-nav] [data-tour^='nav-']:hover,
+[data-aino-settings] [data-aino-overlay-nav] [data-tour^='nav-']:focus-visible {
+  background: var(--aino-surface-hover) !important;
+  color: var(--aino-surface-ink);
+}
+
+[data-aino-settings] [data-aino-overlay-nav] [data-tour^='nav-'][data-active='true'] {
+  background: var(--aino-surface-active) !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+  color: var(--aino-surface-ink) !important;
+  font-weight: 600;
+}
+
+[data-aino-settings] [data-aino-overlay-main] {
+  background: var(--aino-surface-bg) !important;
+}
+
+[data-aino-settings] [data-settings-profile-controls],
+[data-aino-settings] [data-settings-profile-controls] + * {
+  border-color: var(--aino-surface-stroke) !important;
+}
+
+/* Master/detail pages: the list reads as a calm rail and the inspector as the
+   open conversation canvas.  A single seam replaces nested blue frames. */
+[data-aino-master-detail] {
+  background: var(--aino-surface-bg) !important;
+}
+
+[data-aino-list-column] {
+  background: var(--aino-surface-rail) !important;
+  border-right: 1px solid var(--aino-surface-stroke);
+  padding: 0.75rem 0.625rem !important;
+}
+
+[data-aino-list-column] > :is(ul, div) {
+  min-width: 0;
+}
+
+[data-aino-detail-column] {
+  background: var(--aino-surface-bg) !important;
+}
+
+[data-aino-detail-column] > div > div {
+  max-width: min(54rem, 100%) !important;
+}
+
+[data-aino-master-detail] :is([data-aino-cap-row], [data-panel-row], [data-aino-active='true']) {
+  border-radius: 0.625rem !important;
+}
+
+[data-aino-master-detail] :is([data-aino-cap-row], [data-panel-row], [data-aino-active='true']):hover {
+  background: var(--aino-surface-hover) !important;
+}
+
+[data-aino-master-detail]
+  :is([data-aino-cap-row][data-active='true'], [data-panel-row][data-active='true'], [data-aino-active='true']) {
+  background: var(--aino-surface-active) !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+  color: var(--aino-surface-ink) !important;
+}
+
+[data-aino-empty-state] {
+  color: var(--aino-surface-ink);
+}
+
+[data-aino-empty-state] :is(p, div) {
+  font-family: var(--aino-landing-font);
+}
+
+/* Route overlays use the same flat elevation rule as chat widgets: one soft
+   scrim, one hairline, one downward shadow. */
+[data-aino-overlay] {
+  background: var(--aino-scrim) !important;
+  backdrop-filter: blur(1px) saturate(0.96) !important;
+  -webkit-backdrop-filter: blur(1px) saturate(0.96) !important;
+}
+
+[data-aino-overlay-card] {
+  border: 1px solid var(--stroke-nous) !important;
+  border-radius: var(--aino-radius-panel) !important;
+  background: var(--ui-chat-surface-background) !important;
+  box-shadow: var(--shadow-nous) !important;
+  font-family: var(--aino-landing-font);
+}
+
+[data-aino-overlay-card] [data-aino-overlay-nav] {
+  background: var(--ui-sidebar-surface-background) !important;
+  border-right: 1px solid var(--aino-surface-stroke);
+}
+
+[data-aino-overlay-card] [data-aino-overlay-main] {
+  background: var(--ui-chat-surface-background) !important;
+}
+
+[data-aino-overlay-card] [data-aino-overlay-nav] [data-tour^='nav-'] {
+  border-color: transparent !important;
+  border-radius: 0.625rem !important;
+  color: var(--ui-text-secondary);
+}
+
+[data-aino-overlay-card] [data-aino-overlay-nav] [data-tour^='nav-']:hover,
+[data-aino-overlay-card] [data-aino-overlay-nav] [data-tour^='nav-']:focus-visible {
+  background: var(--ui-row-hover-background) !important;
+  color: var(--ui-text-primary);
+}
+
+[data-aino-overlay-card] [data-aino-overlay-nav] [data-tour^='nav-'][data-active='true'] {
+  background: var(--ui-row-active-background) !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+  color: var(--ui-text-primary) !important;
+  font-weight: 600;
+}
+
+[data-aino-overlay-card] [data-aino-panel-body] {
+  gap: 1rem !important;
+}
+
+[data-aino-overlay-card] [data-aino-panel-list] {
+  border-right: 1px solid var(--aino-surface-stroke);
+  padding-right: 0.75rem;
+}
+
+[data-aino-overlay-card] [data-panel-row][data-active='true'] {
+  background: var(--ui-row-active-background) !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+}
+
+[data-aino-overlay-card] [data-panel-row]:hover {
+  background: var(--ui-row-hover-background) !important;
+}
+
+/* The embedded hub is cross-origin, so only its host frame can be themed.
+   This removes the old bright blue shell while leaving the external content
+   and install bridge untouched. */
+[data-aino-hub-frame] {
+  border: 1px solid var(--aino-surface-stroke) !important;
+  border-radius: 0.75rem !important;
+  background: var(--ui-bg-editor);
+}
+
+/* Small-screen parity: the same rails collapse into a single quiet row. */
+@media (max-width: 47.5rem) {
+  [data-aino-list-column] {
+    border-right: 0;
+    border-bottom: 1px solid var(--aino-surface-stroke);
+  }
+
+  [data-aino-overlay-card] [data-aino-panel-list] {
+    border-right: 0;
+    border-bottom: 1px solid var(--aino-surface-stroke);
+    padding-right: 0;
+    padding-bottom: 0.5rem;
+  }
+}
