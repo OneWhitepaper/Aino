@@ -1,3 +1,4 @@
+import { handleConversationGatewayEvent } from '../conversation-events'
 import { type GatewayEvent, registryBackendScopeKey } from '@hermes/shared'
 import { useCallback, useEffect, useRef } from 'react'
 
@@ -132,6 +133,9 @@ export function useGatewayEventHandler(deps: GatewayEventDeps) {
 
   return useCallback(
     (event: GatewayEvent) => {
+      if (handleConversationGatewayEvent(event)) {
+        return
+      }
       const payload = event.payload as GatewayEventPayload | undefined
 
       // "From the active profile" must mean "from the active SOURCE": every

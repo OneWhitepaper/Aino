@@ -20,6 +20,7 @@ function target(owner: SessionOwnerScope, sessionId: string) {
   return {
     connection_id: typeof owner === 'object' && owner ? owner.connectionId : '',
     profile: typeof owner === 'object' && owner ? owner.profile : owner || 'default',
+    ...(typeof owner === 'object' && owner?.targetProfile ? { session_profile: owner.targetProfile } : {}),
     session_id: sessionId
   }
 }

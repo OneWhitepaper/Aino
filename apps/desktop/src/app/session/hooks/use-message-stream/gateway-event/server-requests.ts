@@ -1,3 +1,4 @@
+import { handleConversationServerRequest, isForegroundConversationRequest } from '../conversation-events'
 import { readActivePreview } from '@/app/chat/right-rail/preview-reader'
 import { readActiveTerminal } from '@/app/right-sidebar/terminal/buffer'
 import { pendingClarifyToolPayload } from '@/app/session/hooks/use-session-actions/restore-pending-clarify'
@@ -420,6 +421,7 @@ export function handleServerRequest(
   deps: ServerRequestContext['deps'],
   activeSessionId: null | string
 ): boolean {
+  if (handleConversationServerRequest(request)) return true
   const handler = SERVER_REQUEST_HANDLERS[request.method]
 
   if (!handler) {
@@ -428,7 +430,7 @@ export function handleServerRequest(
 
   const sessionId = str(request.params.session_id)
 
-  handler({ deps, request, sessionId, isActiveSession: Boolean(sessionId) && sessionId === activeSessionId })
+  handler({ deps, request, sessionId, isActiveSession: request.params.conversation ? isForegroundConversationRequest(request) : Boolean(sessionId) && sessionId === activeSessionId })
 
   return true
 }

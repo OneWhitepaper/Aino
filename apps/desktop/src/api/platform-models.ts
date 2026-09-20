@@ -77,7 +77,12 @@ export async function bindPlatformModel(
   try {
     ticket = await requestOwner<{ managed_model_binding?: number; session_ticket?: string }>(
       'session.managed_model_ticket',
-      { session_id: input.session_id, model_id: input.model_id, owner },
+      {
+        session_id: input.session_id,
+        model_id: input.model_id,
+        owner,
+        ...(input.session_profile ? { profile: input.session_profile } : {})
+      },
       10_000
     )
   } catch (error) {

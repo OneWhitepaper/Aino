@@ -135,7 +135,11 @@ export function createPlatformRuntimeBindingController(options: {
       if (
         ![input.session_id, input.model_id, input.session_ticket].every(
           s => typeof s === 'string' && s.length > 0 && s.length <= 256
-        )
+        ) ||
+        (input.session_profile !== undefined &&
+          (typeof input.session_profile !== 'string' ||
+            !input.session_profile.trim() ||
+            input.session_profile.length > 256))
       ) {
         return failure('invalid_platform_input')
       }
@@ -202,7 +206,12 @@ export function createPlatformRuntimeBindingController(options: {
 
         slot.pending = binding
         const owner = { platform_origin: options.origin, user_id: account }
-        const params = { session_id: input.session_id, profile: target.profile, owner, model_id: input.model_id }
+        const params = {
+          session_id: input.session_id,
+          profile: input.session_profile ?? target.profile,
+          owner,
+          model_id: input.model_id
+        }
 
         // Capability and live session authorization are proven BEFORE obtaining
         // the inference secret. Older gateways fail here without receiving a Key.
@@ -284,20 +293,21 @@ export function createPlatformRuntimeBindingController(options: {
               return
             }
 
-            const renewed = await retained.rpc.request<{ bound?: boolean; model_id?: string; binding_revision?: number }>(
-              'session.renew_managed_model',
-              {
-                ...params,
-                binding_revision: revision,
-                model: next.model.model,
-                api_mode: next.model.api_mode,
-                capabilities: next.model.capabilities,
-                credential_id: next.credential_id,
-                api_key: next.api_key,
-                base_url: next.base_url,
-                expires_at: next.expires_at
-              }
-            )
+            const renewed = await retained.rpc.request<{
+              bound?: boolean
+              model_id?: string
+              binding_revision?: number
+            }>('session.renew_managed_model', {
+              ...params,
+              binding_revision: revision,
+              model: next.model.model,
+              api_mode: next.model.api_mode,
+              capabilities: next.model.capabilities,
+              credential_id: next.credential_id,
+              api_key: next.api_key,
+              base_url: next.base_url,
+              expires_at: next.expires_at
+            })
 
             if (!stillOwned()) {
               return
@@ -332,7 +342,7 @@ export function createPlatformRuntimeBindingController(options: {
               'session.clear_managed_model',
               {
                 session_id: input.session_id,
-                profile: binding.target.profile,
+                profile: input.session_profile ?? binding.target.profile,
                 binding_revision: claimedRevision
               },
               2000

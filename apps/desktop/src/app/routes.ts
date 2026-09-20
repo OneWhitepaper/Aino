@@ -6,6 +6,7 @@ import { registry } from '@/contrib/registry'
 
 type NavigateLike = (to: string, options?: { replace?: boolean }) => void
 
+export const CONVERSATION_ROUTE_PREFIX = '/conversations/'
 export const SESSION_ROUTE_PREFIX = '/'
 export const NEW_CHAT_ROUTE = '/'
 export const SETTINGS_ROUTE = '/settings'
@@ -25,6 +26,7 @@ export type AppView =
   | 'agents'
   | 'artifacts'
   | 'chat'
+  | 'conversation'
   | 'command-center'
   | 'cron'
   // A contributed (plugin) full page at its own route — NOT chat. Without this
@@ -198,11 +200,35 @@ export function routeSessionId(pathname: string): string | null {
  * passes through unchanged.
  */
 export function primaryRouteSelectedSessionId(pathname: string, storeSelectedSessionId: string | null): string | null {
-  if (isNewChatRoute(pathname)) {
+  if (isNewChatRoute(pathname) || routePathname(pathname).startsWith(CONVERSATION_ROUTE_PREFIX)) {
     return null
   }
 
   return routeSessionId(pathname) ?? storeSelectedSessionId
+}
+
+export function routeConversationId(pathname: string): string | null {
+  const path = routePathname(pathname)
+
+  if (!path.startsWith(CONVERSATION_ROUTE_PREFIX)) {
+    return null
+  }
+
+  const id = path.slice(CONVERSATION_ROUTE_PREFIX.length)
+
+  if (!id || id.includes('/')) {
+    return null
+  }
+
+  try {
+    return decodeURIComponent(id)
+  } catch {
+    return null
+  }
+}
+
+export function conversationRoute(conversationId: string): string {
+  return `${CONVERSATION_ROUTE_PREFIX}${encodeURIComponent(conversationId)}`
 }
 
 export function sessionRoute(sessionId: string): string {
@@ -211,6 +237,10 @@ export function sessionRoute(sessionId: string): string {
 
 export function appViewForPath(pathname: string): AppView {
   const path = routePathname(pathname)
+
+  if (routeConversationId(path)) {
+    return 'conversation'
+  }
 
   if (isNewChatRoute(path) || routeSessionId(path)) {
     return 'chat'

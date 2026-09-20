@@ -368,6 +368,7 @@ export function registerPlatformIpc({
         const bindInput = {
           connection_id: boundedString(value, 'connection_id', 256),
           profile: boundedString(value, 'profile', 256),
+          ...(value.session_profile === undefined ? {} : { session_profile: field(value, 'session_profile', 256) }),
           session_id: field(value, 'session_id', 256),
           model_id: field(value, 'model_id', 256),
           session_ticket: field(value, 'session_ticket', 256),

@@ -3157,6 +3157,53 @@ interface UpstreamTranslations {
   }
 
   composer: {
+    conversation: {
+      commandDraftChanged: string
+      attachmentTooLarge: string
+      attachmentLimitUnavailable: string
+      attachmentCountExceeded: string
+
+      privateNotice: string
+      refreshConfiguration: string
+      refreshExplanation: string
+      configurationRefreshed: string
+      configurationBusy: string
+
+      contentLoading: string
+      contentInvalid: string
+      downloadAttachment: string
+      uploading: string
+      fileReadFailed: string
+
+      mcpDeferred: string
+      generation: string
+      runtimeChanged: string
+      childUnavailable: string
+      clarifyExpired: string
+
+      title: string
+      create: string
+      loading: string
+      unavailable: string
+      refresh: string
+      history: string
+      mention: string
+      textOnly: string
+      modelUnavailable: string
+      subagent: string
+      stopAll: string
+      reconcile: string
+      allowOnce: string
+      deny: string
+      answer: string
+      requestUnsupported: string
+    }
+    expertSelector: {
+      choose: string
+      clear: string
+      nextReply: string
+      unavailable: string
+    }
     message: string
     automaticModel: string
     wakingProfile: (profile: string) => string

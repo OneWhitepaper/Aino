@@ -610,6 +610,23 @@ describe('attached shared-remote group turns (#96493)', () => {
     expect(secondaryGateways).toHaveLength(0)
   })
 
+  it('keeps conversation RPCs strict while preserving explicit participant session routing', async () => {
+    const primary = makePrimary()
+    setPrimaryGateway(primary as never, 'voter')
+    setPrimaryGatewayConnection({ connectionId: 'homelab' })
+    installAttachedSharedRemote()
+    await ensureGatewayForProfile('voter')
+    await requestGatewayForAgent('homelab', 'default', 'conversations.get', { conversation_id: 'public' })
+    await requestGatewayForAgent('homelab', 'default', 'session.managed_model_ticket', {
+      session_id: 'writer-runtime', profile: 'writer'
+    })
+    expect(primary.request).toHaveBeenCalledWith('conversations.get', { conversation_id: 'public' })
+    expect(primary.request).toHaveBeenCalledWith('session.managed_model_ticket', {
+      session_id: 'writer-runtime', profile: 'writer'
+    })
+    expect(secondaryGateways).toHaveLength(0)
+  })
+
   it('still dials a secondary when the attached source is not a shared remote', async () => {
     const primary = makePrimary()
     setPrimaryGateway(primary as never, 'default')

@@ -31,6 +31,9 @@ import type { SidebarActions, WiringActions } from './types'
 // Same lazy-view split as DesktopController — pages load on demand. The
 // full-page views the workspace route table mounts live here; modal overlays
 // (agents/command-center/…) are the controller's and stay in wiring.tsx.
+const ConversationRoute = lazy(async () => ({
+  default: (await import('../chat/conversation-route')).ConversationRoute
+}))
 const ArtifactsView = lazy(async () => ({ default: (await import('../artifacts')).ArtifactsView }))
 const MessagingView = lazy(async () => ({ default: (await import('../messaging')).MessagingView }))
 const SkillsView = lazy(async () => ({ default: (await import('../skills')).SkillsView }))
@@ -137,6 +140,7 @@ export const ChatRoutesSurface = memo(function ChatRoutesSurface({
   return (
     <Routes>
       <Route element={chatView} index />
+      <Route element={page(<ConversationRoute />)} path="conversations/:conversationId" />
       <Route element={chatView} path=":sessionId" />
       <Route element={page(<SkillsView setStatusbarItemGroup={setStatusbarItemGroup} />)} path="skills" />
       <Route element={page(<MessagingView setStatusbarItemGroup={setStatusbarItemGroup} />)} path="messaging" />

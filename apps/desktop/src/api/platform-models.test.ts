@@ -57,6 +57,16 @@ it('requests the ticket on the session owner route before calling the native bin
     10_000
   )
   expect(bind).toHaveBeenCalledWith({ ...input, session_ticket: 'single-use-ticket' })
+  const participant = { ...input, profile: 'default', session_profile: 'writer' }
+  expect((await bindPlatformModel(participant, account)).ok).toBe(true)
+  expect(requestGatewayForAgent).toHaveBeenLastCalledWith(
+    'local',
+    'default',
+    'session.managed_model_ticket',
+    { session_id: input.session_id, model_id: input.model_id, owner, profile: 'writer' },
+    10_000
+  )
+  expect(bind).toHaveBeenLastCalledWith({ ...participant, session_ticket: 'single-use-ticket' })
   bind.mockClear()
   expect((await bindPlatformModel({ ...input, expected_account_revision: 6 }, account)).ok).toBe(false)
   vi.mocked(requestGatewayForAgent).mockRejectedValue(new Error('raw remote error'))
