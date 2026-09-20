@@ -1,10 +1,12 @@
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import type * as Nanostores from 'nanostores'
+import { MemoryRouter, useLocation } from 'react-router'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { deleteProfile } from '@/hermes'
 import { retireLocalProfileGateways } from '@/store/gateway'
 import { refreshProfiles, selectProfile, setActiveProfile } from '@/store/profile'
+import { setSettingsScope } from '@/store/settings-scope'
 import type { ProfileInfo } from '@/types/hermes'
 
 import { ProfilesView } from './index'
@@ -27,6 +29,12 @@ vi.mock('@/components/chat/code-editor', () => ({
   CodeEditor: () => null
 }))
 
+vi.mock('./workspace-controls', () => ({ WorkspaceControls: () => null }))
+vi.mock('../skills', () => ({
+  SkillsView: ({ fixedProfile }: { fixedProfile: string }) => <div data-testid="capabilities-scope">{fixedProfile}</div>
+}))
+vi.mock('@/store/settings-scope', () => ({ setSettingsScope: vi.fn() }))
+
 vi.mock('@/hermes', () => ({
   createProfile: vi.fn(async () => ({ name: 'x', ok: true, path: '/x' })),
   deleteProfile: vi.fn(async () => ({ ok: true, path: '/x' })),
@@ -41,21 +49,28 @@ vi.mock('@/store/notifications', () => ({
 }))
 
 vi.mock('@/store/gateway', () => ({
+  $activeGatewayConnectionId: require('nanostores').atom(null),
   retireLocalProfileGateways: vi.fn()
 }))
 
-const { $activeGatewayProfile: activeGateway, $profileColors } = vi.hoisted(() => {
+const {
+  $activeGatewayProfile: activeGateway,
+  $profileColors,
+  $profiles
+} = vi.hoisted(() => {
   const { atom } = require('nanostores') as typeof Nanostores
 
   return {
     $activeGatewayProfile: atom<string>('default'),
-    $profileColors: atom<Record<string, string>>({})
+    $profileColors: atom<Record<string, string>>({}),
+    $profiles: atom<ProfileInfo[]>([])
   }
 })
 
 vi.mock('@/store/profile', () => ({
   $activeGatewayProfile: activeGateway,
   $profileColors,
+  $profiles,
   normalizeProfileKey: (name: null | string | undefined) => (name ?? '').trim() || 'default',
   profileLabel: (profile: { display_name?: string; name: string }) =>
     (profile.display_name ?? '').trim() || profile.name,
@@ -67,6 +82,14 @@ vi.mock('@/store/profile', () => ({
 // The one non-default profile these tests act on. Its name doubles as the row's
 // accessible name, so the delete helper queries by it rather than a literal.
 const NAMED_PROFILE = 'work'
+
+function mockProfiles(profiles: ProfileInfo[]) {
+  vi.mocked(refreshProfiles).mockImplementation(async () => {
+    $profiles.set(profiles)
+
+    return profiles
+  })
+}
 
 function makeProfile(name: string, isDefault = false): ProfileInfo {
   return {
@@ -94,7 +117,24 @@ function realClick(el: HTMLElement) {
 // mount setState isn't left unwrapped.
 async function renderProfilesView() {
   await act(async () => {
-    render(<ProfilesView onClose={vi.fn()} />)
+    render(
+      <MemoryRouter initialEntries={['/profiles']}>
+        <ProfilesView />
+        <CurrentLocation />
+      </MemoryRouter>
+    )
+  })
+}
+
+function CurrentLocation() {
+  const location = useLocation()
+
+  return <output data-testid="location">{location.pathname + location.search}</output>
+}
+
+async function browseProfile(name: string) {
+  await act(async () => {
+    fireEvent.click(screen.getAllByRole('button', { name }).find(button => !button.hasAttribute('aria-haspopup'))!)
   })
 }
 
@@ -119,8 +159,45 @@ async function deleteTheNamedProfile() {
 }
 
 describe('ProfilesView', () => {
+  it('browses and configures another workspace without switching until explicitly selected', async () => {
+    vi.mocked(selectProfile).mockClear()
+    mockProfiles([makeProfile('default', true), makeProfile(NAMED_PROFILE)])
+    activeGateway.set('default')
+
+    await renderProfilesView()
+    await browseProfile(NAMED_PROFILE)
+    fireEvent.click(screen.getByRole('button', { name: 'Capabilities' }))
+
+    expect((await screen.findByTestId('capabilities-scope')).textContent).toBe(NAMED_PROFILE)
+    expect(selectProfile).not.toHaveBeenCalled()
+    expect(activeGateway.get()).toBe('default')
+
+    act(() => $profiles.set([...$profiles.get(), makeProfile('imported')]))
+    expect(screen.getByRole('heading', { name: NAMED_PROFILE })).toBeTruthy()
+    expect(screen.getAllByRole('button', { name: 'imported' }).length).toBeGreaterThan(0)
+
+    fireEvent.click(screen.getByRole('button', { name: `Switch to ${NAMED_PROFILE}` }))
+    expect(selectProfile).toHaveBeenCalledExactlyOnceWith(NAMED_PROFILE)
+  })
+
+  it('opens model settings for the browsed workspace without changing the active chat profile', async () => {
+    vi.mocked(selectProfile).mockClear()
+    vi.mocked(setSettingsScope).mockClear()
+    mockProfiles([makeProfile('default', true), makeProfile(NAMED_PROFILE)])
+    activeGateway.set('default')
+
+    await renderProfilesView()
+    await browseProfile(NAMED_PROFILE)
+    fireEvent.click(screen.getByRole('button', { name: 'Configure model' }))
+
+    expect(setSettingsScope).toHaveBeenCalledExactlyOnceWith(NAMED_PROFILE)
+    expect(screen.getByTestId('location').textContent).toBe('/settings?tab=config:model')
+    expect(selectProfile).not.toHaveBeenCalled()
+    expect(activeGateway.get()).toBe('default')
+  })
+
   it('opens the shared create dialog with the SOUL.md field (parity with the rail)', async () => {
-    vi.mocked(refreshProfiles).mockResolvedValue([])
+    mockProfiles([])
 
     await renderProfilesView()
 
@@ -138,7 +215,7 @@ describe('ProfilesView', () => {
 
     deleteProfileMock.mockClear()
     retireLocalProfileGatewaysMock.mockClear()
-    vi.mocked(refreshProfiles).mockResolvedValue([makeProfile('default', true), makeProfile(NAMED_PROFILE)])
+    mockProfiles([makeProfile('default', true), makeProfile(NAMED_PROFILE)])
     activeGateway.set(NAMED_PROFILE)
 
     await renderProfilesView()
@@ -156,7 +233,7 @@ describe('ProfilesView', () => {
   it('leaves the active profile alone when a different profile is deleted', async () => {
     vi.mocked(selectProfile).mockClear()
     vi.mocked(setActiveProfile).mockClear()
-    vi.mocked(refreshProfiles).mockResolvedValue([makeProfile('default', true), makeProfile(NAMED_PROFILE)])
+    mockProfiles([makeProfile('default', true), makeProfile(NAMED_PROFILE)])
     activeGateway.set('default')
 
     await renderProfilesView()

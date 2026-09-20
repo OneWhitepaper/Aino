@@ -22,6 +22,7 @@ import {
   MESSAGING_ROUTE,
   navigateToWorkspacePage,
   NEW_CHAT_ROUTE,
+  PROFILES_ROUTE,
   routePathname,
   ROUTES_AREA,
   routeSessionId,
@@ -147,21 +148,24 @@ describe('syncWorkspaceRoute', () => {
     expect(revealTreePane).not.toHaveBeenCalled()
   })
 
-  it.each([SETTINGS_ROUTE, `${SETTINGS_ROUTE}?tab=keys`])('fronts the Settings workspace on %s', to => {
-    syncWorkspaceRoute(to)
+  it.each([SETTINGS_ROUTE, `${SETTINGS_ROUTE}?tab=keys`, PROFILES_ROUTE])(
+    'fronts the management workspace on %s',
+    to => {
+      syncWorkspaceRoute(to)
 
-    expect($workspaceIsPage.get()).toBe(true)
-    expect(fronted()).toBe(true)
-  })
+      expect($workspaceIsPage.get()).toBe(true)
+      expect(fronted()).toBe(true)
+    }
+  )
 })
 
 describe('navigateToWorkspacePage', () => {
-  it('navigates and fronts, so a re-click on the page you are already on still shows it', () => {
+  it.each([SKILLS_ROUTE, PROFILES_ROUTE])('navigates and fronts %s even on a re-click', to => {
     const navigate = vi.fn()
 
-    navigateToWorkspacePage(navigate, SKILLS_ROUTE)
+    navigateToWorkspacePage(navigate, to)
 
-    expect(navigate).toHaveBeenCalledWith(SKILLS_ROUTE, undefined)
+    expect(navigate).toHaveBeenCalledWith(to, undefined)
     expect(fronted()).toBe(true)
   })
 

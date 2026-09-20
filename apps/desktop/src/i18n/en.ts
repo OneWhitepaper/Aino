@@ -3244,6 +3244,11 @@ export const en: Translations = {
 
   profiles: {
     close: 'Close profiles',
+    workspaceDesc: 'Each workspace holds one agent’s independent configuration, skills, memory, and conversations.',
+    currentBadge: 'Current workspace',
+    overview: 'Overview',
+    capabilities: 'Capabilities',
+    configureModel: 'Configure model',
     nameHint: 'Lowercase letters, digits, hyphens, and underscores. Must start with a letter or digit.',
     title: 'Profiles',
     count: count => `${count} ${count === 1 ? 'profile' : 'profiles'}`,
@@ -3671,6 +3676,7 @@ export const en: Translations = {
     },
     nav: {
       'new-session': 'New session',
+      profiles: 'Workspaces',
       skills: 'Capabilities',
       messaging: 'Messaging',
       artifacts: 'Artifacts',

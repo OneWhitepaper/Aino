@@ -141,6 +141,7 @@ import {
   ARTIFACTS_ROUTE,
   CRON_ROUTE,
   MESSAGING_ROUTE,
+  PROFILES_ROUTE,
   SESSION_IMPORT_ROUTE,
   SETTINGS_ROUTE,
   SIDEBAR_NAV_AREA,
@@ -205,6 +206,13 @@ const SIDEBAR_NAV: SidebarNavItem[] = [
     icon: props => <AinoDesignIcon src={navNewSessionIcon} {...props} />,
     action: 'new-session',
     keybindActionId: 'session.new'
+  },
+  {
+    id: 'profiles',
+    label: '',
+    icon: props => <Codicon name="organization" {...props} />,
+    route: PROFILES_ROUTE,
+    keybindActionId: 'nav.profiles'
   },
   {
     id: 'skills',
@@ -1530,6 +1538,7 @@ export function ChatSidebar({
 
                 const active =
                   (item.id === 'skills' && currentView === 'skills') ||
+                  (item.id === 'profiles' && currentView === 'profiles') ||
                   (item.id === 'messaging' && currentView === 'messaging') ||
                   (item.id === 'artifacts' && currentView === 'artifacts') ||
                   (item.id === 'cron' && currentView === 'cron') ||

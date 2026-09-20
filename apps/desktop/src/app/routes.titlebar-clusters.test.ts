@@ -13,6 +13,8 @@ describe('hidesFixedTitlebarClusters', () => {
     expect(hidesFixedTitlebarClusters('skills')).toBe(false)
     expect(hidesFixedTitlebarClusters('messaging')).toBe(false)
     expect(hidesFixedTitlebarClusters('artifacts')).toBe(false)
+    expect(hidesFixedTitlebarClusters('profiles')).toBe(false)
+    expect(isOverlayView('profiles')).toBe(false)
   })
 
   it('does not treat extension as an overlay', () => {

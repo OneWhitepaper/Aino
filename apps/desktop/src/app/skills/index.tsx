@@ -283,10 +283,13 @@ export function SkillsView({
   const scopeConnectionId =
     scopeProfile && typeof scopeProfile === 'object' ? (scopeProfile.connectionId ?? '').trim() || 'local' : null
 
-  // Scoped to a DIFFERENT backend than the window's active gateway? The MCP
-  // tab's live-reload RPC rides the active gateway socket, which would reload
-  // the wrong machine — withhold it for cross-backend scopes.
-  const crossBackendScope = scopeConnectionId !== null && scopeConnectionId !== (activeGatewayConnectionId() ?? 'local')
+  // Live MCP reload belongs to the active (connection, profile) pair. Editing
+  // another workspace saves its config without disturbing the active chat.
+  const scopeProfileName = scopeProfile && typeof scopeProfile === 'object' ? scopeProfile.profile : scopeProfile
+
+  const canReloadActiveScope =
+    (scopeConnectionId === null || scopeConnectionId === (activeGatewayConnectionId() ?? 'local')) &&
+    normalizeProfileKey(scopeProfileName) === normalizeProfileKey(activeProfile)
 
   const { data: profilesData } = useQuery({
     queryKey: ['capabilities-profiles'],
@@ -895,12 +898,7 @@ export function SkillsView({
                 scopeSelector={profileScopeSelector}
               />
             ) : mode === 'mcp' ? (
-              // The gateway instance backs ONLY the live `reload.mcp` RPC, and
-              // it is the ACTIVE gateway's socket — for a scope pinned to a
-              // different backend that RPC would hot-reload the wrong
-              // machine's MCP servers, so it is withheld (config edits still
-              // apply on that backend's next session).
-              <McpTab gateway={crossBackendScope ? null : gateway} key={`mcp-${scopeKey}`} profile={scopeProfile} />
+              <McpTab gateway={canReloadActiveScope ? gateway : null} key={`mcp-${scopeKey}`} profile={scopeProfile} />
             ) : (skillsFailed || toolsetsFailed) && (!skills || !toolsets) ? (
               <PanelEmpty
                 action={

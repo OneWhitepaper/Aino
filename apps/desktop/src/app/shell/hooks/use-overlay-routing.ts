@@ -23,7 +23,6 @@ export function useOverlayRouting() {
   const agentsOpen = currentView === 'agents'
   const starmapOpen = currentView === 'starmap'
   const cronOpen = currentView === 'cron'
-  const profilesOpen = currentView === 'profiles'
   const webhooksOpen = currentView === 'webhooks'
   const chatOpen = currentView === 'chat'
   const overlayOpen = isOverlayView(currentView)
@@ -76,22 +75,19 @@ export function useOverlayRouting() {
     returnPathRef.current = NEW_CHAT_ROUTE
   }, [])
 
-  const closeOverlayToPreviousRoute = useCallback(
-    () => {
-      const target = returnPathRef.current || NEW_CHAT_ROUTE
+  const closeOverlayToPreviousRoute = useCallback(() => {
+    const target = returnPathRef.current || NEW_CHAT_ROUTE
 
-      // A command-center launch from Settings temporarily changes the shared
-      // return target to `/settings`. Restore the outer chat/page target as
-      // soon as that overlay closes, otherwise Settings' own Back control
-      // would navigate to itself forever.
-      if (appViewForPath(target) === 'settings') {
-        returnPathRef.current = nonRouteReturnPathRef.current || NEW_CHAT_ROUTE
-      }
+    // A command-center launch from Settings temporarily changes the shared
+    // return target to `/settings`. Restore the outer chat/page target as
+    // soon as that overlay closes, otherwise Settings' own Back control
+    // would navigate to itself forever.
+    if (appViewForPath(target) === 'settings') {
+      returnPathRef.current = nonRouteReturnPathRef.current || NEW_CHAT_ROUTE
+    }
 
-      navigate(target, { replace: true })
-    },
-    [navigate]
-  )
+    navigate(target, { replace: true })
+  }, [navigate])
 
   const toggleCommandCenter = useCallback(() => {
     if (commandCenterOpen) {
@@ -116,7 +112,6 @@ export function useOverlayRouting() {
     openAgents,
     openCommandCenterSection,
     openStarmap,
-    profilesOpen,
     resetOverlayReturnRoute,
     settingsOpen,
     starmapOpen,

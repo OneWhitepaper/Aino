@@ -63,7 +63,6 @@ import { SettingsSystemControls } from './system-status-controls'
 import type { SettingsPageProps, SettingsView as SettingsViewId } from './types'
 import { vaultOwnerKey, VaultSettings } from './vault-settings'
 import { SettingsVersionControl } from './version-control'
-import { SettingsWorkspaceControls } from './workspace-controls'
 
 const SETTINGS_VIEWS: readonly SettingsViewId[] = [
   ...SECTIONS.map(s => `config:${s.id}` as SettingsViewId),
@@ -424,7 +423,6 @@ export function SettingsView({
 
   const navFooter = (
     <div className="flex w-full flex-col gap-1 border-t border-(--ui-stroke-tertiary) pt-2 max-[47.5rem]:w-auto max-[47.5rem]:flex-row max-[47.5rem]:border-0 max-[47.5rem]:pt-0">
-      <SettingsWorkspaceControls />
       <SettingsSystemControls
         onOpenCommandCenter={onOpenCommandCenter}
         onOpenCommandCenterSection={onOpenCommandCenterSection}

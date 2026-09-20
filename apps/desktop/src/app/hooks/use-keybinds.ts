@@ -207,7 +207,7 @@ export function useKeybinds(deps: KeybindRuntimeDeps): void {
     },
     'nav.commandCenter': deps.toggleCommandCenter,
     'nav.settings': () => navigate(SETTINGS_ROUTE),
-    'nav.profiles': () => navigate(PROFILES_ROUTE),
+    'nav.profiles': () => navigateToWorkspacePage(navigate, PROFILES_ROUTE),
     'nav.skills': () => navigateToWorkspacePage(navigate, SKILLS_ROUTE),
     'nav.messaging': () => navigateToWorkspacePage(navigate, MESSAGING_ROUTE),
     'nav.artifacts': () => navigateToWorkspacePage(navigate, ARTIFACTS_ROUTE),
