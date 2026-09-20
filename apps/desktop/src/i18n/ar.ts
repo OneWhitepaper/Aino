@@ -1651,6 +1651,11 @@ export const ar = defineLocale({
   },
   profiles: {
     close: 'إغلاق',
+    workspaceDesc: 'تحتفظ كل مساحة عمل بإعدادات وكيل مستقل ومهاراته وذاكرته ومحادثاته.',
+    currentBadge: 'مساحة العمل الحالية',
+    overview: 'الإعدادات الأساسية',
+    capabilities: 'المهارات والأدوات',
+    configureModel: 'إعداد النموذج',
     nameHint: 'اسم الملف الشخصي',
     title: 'الملفات الشخصية',
     count: count => `${count} ملف شخصي`,
@@ -1956,6 +1961,7 @@ export const ar = defineLocale({
     },
     nav: {
       'new-session': 'جلسة جديدة',
+      profiles: 'مساحات العمل',
       skills: 'المهارات',
       messaging: 'المراسلة',
       artifacts: 'العناصر',

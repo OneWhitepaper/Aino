@@ -141,7 +141,10 @@ one-off at the call site.
   its registration, files and conversations; its unpinned chats return to Recent.
   Project menus own folder membership and the primary folder. Removing a project
   or folder registration never deletes files or conversation history. Profile
-  management lives under Settings → Advanced workspaces; All profiles is a browse
+  management lives in Sidebar → Workspaces. Selecting a row only previews its
+  configuration; switching is an explicit action. The page reuses profile
+  creation, cloning, rename/delete and SOUL editing,
+  with profile-scoped model and capability controls. All profiles is a browse
   scope, and opening a folder resolves to the active writable profile.
 - **Sidebar identity is the signed-in account.** Its circular avatar and name
   open Settings → My account. Use the account display name, falling back to its

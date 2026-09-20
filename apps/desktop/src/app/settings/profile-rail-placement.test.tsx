@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, within } from '@testing-library/react'
+import { cleanup, render, within } from '@testing-library/react'
 import { atom } from 'nanostores'
 import { MemoryRouter } from 'react-router'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -84,7 +84,7 @@ vi.mock('./system-status-controls', () => ({ SettingsSystemControls: () => null 
 afterEach(cleanup)
 
 describe('Settings profile controls placement', () => {
-  it('keeps workspace management under an advanced disclosure in settings', () => {
+  it('keeps workspace management in the main sidebar instead of settings navigation', () => {
     const { container } = render(
       <MemoryRouter initialEntries={['/settings?tab=about']}>
         <SettingsView
@@ -99,8 +99,6 @@ describe('Settings profile controls placement', () => {
     const settingsNav = container.querySelector<HTMLElement>('[data-settings-workspace] [data-tour="overlay-nav"]')!
 
     expect(settingsNav?.querySelector('[data-slot="profile-rail"]')).toBeNull()
-    fireEvent.click(within(settingsNav).getByRole('button', { name: 'Advanced workspaces' }))
-    expect(settingsNav?.querySelector('[data-slot="profile-rail"]')).toBeTruthy()
-    expect(within(settingsNav).getByRole('switch', { name: 'All profiles' })).toBeTruthy()
+    expect(within(settingsNav).queryByRole('button', { name: 'Manage profiles…' })).toBeNull()
   })
 })

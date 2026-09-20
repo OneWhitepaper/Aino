@@ -2256,6 +2256,11 @@ export const ja = defineLocale({
 
   profiles: {
     close: 'プロファイルを閉じる',
+    workspaceDesc: '各ワークスペースには、エージェント独自の設定、スキル、メモリ、会話が保存されます。',
+    currentBadge: '現在のワークスペース',
+    overview: '基本設定',
+    capabilities: 'スキルとツール',
+    configureModel: 'モデルを設定',
     nameHint: '小文字、数字、ハイフン、アンダースコア。文字または数字で始める必要があります。',
     title: 'プロファイル',
     count: count => `${count} プロファイル`,
@@ -2596,6 +2601,7 @@ export const ja = defineLocale({
     },
     nav: {
       'new-session': '新しいセッション',
+      profiles: 'ワークスペース',
       skills: 'スキルとツール',
       messaging: 'メッセージング',
       artifacts: 'アーティファクト',

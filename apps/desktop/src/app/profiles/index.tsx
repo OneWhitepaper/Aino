@@ -1,23 +1,33 @@
 import { useStore } from '@nanostores/react'
-import type * as React from 'react'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useNavigate } from 'react-router'
 
 import { CodeEditor } from '@/components/chat/code-editor'
 import { PageLoader } from '@/components/page-loader'
 import { Button } from '@/components/ui/button'
 import { ProfileGlyph } from '@/components/ui/profile-glyph'
+import { SegmentedControl } from '@/components/ui/segmented-control'
 import { getProfileSoul, type ProfileInfo, updateProfileSoul } from '@/hermes'
 import { useI18n } from '@/i18n'
 import { displayPath } from '@/lib/display-path'
 import { AlertTriangle, Save } from '@/lib/icons'
 import { resolveProfileColor } from '@/lib/profile-color'
 import { normalize } from '@/lib/text'
+import { $activeGatewayConnectionId } from '@/store/gateway'
 import { notify, notifyError } from '@/store/notifications'
-import { $profileColors, profileLabel, refreshProfiles } from '@/store/profile'
+import {
+  $activeGatewayProfile,
+  $profileColors,
+  $profiles,
+  normalizeProfileKey,
+  profileLabel,
+  refreshProfiles,
+  selectProfile
+} from '@/store/profile'
+import { setSettingsScope } from '@/store/settings-scope'
 
 import { useRefreshHotkey } from '../hooks/use-refresh-hotkey'
 import {
-  Panel,
   PanelAddButton,
   PanelBody,
   PanelDetail,
@@ -30,19 +40,27 @@ import {
   PanelPill,
   PanelSectionLabel
 } from '../overlays/panel'
+import { navigateToWorkspacePage, SETTINGS_ROUTE } from '../routes'
 
 import { CreateProfileDialog } from './create-profile-dialog'
 import { DeleteProfileDialog } from './delete-profile-dialog'
 import { RenameProfileDialog } from './rename-profile-dialog'
+import { WorkspaceControls } from './workspace-controls'
 
-interface ProfilesViewProps {
-  onClose: () => void
+const SkillsView = lazy(async () => ({ default: (await import('../skills')).SkillsView }))
+
+export function ProfilesView() {
+  const connectionId = useStore($activeGatewayConnectionId)
+
+  return <ProfilesManager key={connectionId ?? ''} />
 }
 
-export function ProfilesView({ onClose }: ProfilesViewProps) {
+function ProfilesManager() {
   const { t } = useI18n()
   const p = t.profiles
-  const [profiles, setProfiles] = useState<null | ProfileInfo[]>(null)
+  const activeProfile = useStore($activeGatewayProfile)
+  const profiles = useStore($profiles)
+  const [loaded, setLoaded] = useState(false)
   const [selectedName, setSelectedName] = useState<null | string>(null)
   const [query, setQuery] = useState('')
   const [createOpen, setCreateOpen] = useState(false)
@@ -51,15 +69,8 @@ export function ProfilesView({ onClose }: ProfilesViewProps) {
 
   const refresh = useCallback(async () => {
     try {
-      const list = await refreshProfiles()
-      setProfiles(list)
-      setSelectedName(current => {
-        if (current && list.some(p => p.name === current)) {
-          return current
-        }
-
-        return list.find(p => p.is_default)?.name ?? list[0]?.name ?? null
-      })
+      await refreshProfiles()
+      setLoaded(true)
     } catch (err) {
       notifyError(err, p.failedLoad)
     }
@@ -71,19 +82,29 @@ export function ProfilesView({ onClose }: ProfilesViewProps) {
     void refresh()
   }, [refresh])
 
-  const selected = useMemo(() => {
-    if (!profiles) {
-      return null
+  useEffect(() => {
+    if (!loaded) {
+      return
     }
 
+    setSelectedName(current =>
+      current && profiles.some(profile => profile.name === current)
+        ? current
+        : (profiles.find(profile => normalizeProfileKey(profile.name) === normalizeProfileKey(activeProfile))?.name ??
+          profiles[0]?.name ??
+          null)
+    )
+  }, [activeProfile, loaded, profiles])
+
+  const selected = useMemo(() => {
     return profiles.find(p => p.name === selectedName) ?? profiles[0] ?? null
   }, [profiles, selectedName])
 
   const visibleProfiles = useMemo(() => {
     const q = normalize(query)
 
-    if (!profiles || !q) {
-      return profiles ?? []
+    if (!q) {
+      return profiles
     }
 
     return profiles.filter(
@@ -103,8 +124,15 @@ export function ProfilesView({ onClose }: ProfilesViewProps) {
   )
 
   return (
-    <Panel closeLabel={p.close} onClose={onClose}>
-      {!profiles ? (
+    <section
+      aria-label={t.sidebar.nav.profiles}
+      className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden p-4 sm:p-5"
+      data-aino-page-shell=""
+      data-workspaces-page=""
+    >
+      <PanelHeader subtitle={loaded ? p.count(profiles.length) : undefined} title={t.sidebar.nav.profiles} />
+      <p className="mb-4 text-xs leading-relaxed text-muted-foreground">{p.workspaceDesc}</p>
+      {!loaded ? (
         <PageLoader label={p.loading} />
       ) : profiles.length === 0 ? (
         <PanelEmpty
@@ -119,7 +147,6 @@ export function ProfilesView({ onClose }: ProfilesViewProps) {
         />
       ) : (
         <>
-          <PanelHeader subtitle={p.count(profiles.length)} title={p.title} />
           <PanelBody>
             <PanelList
               onSearchChange={setQuery}
@@ -130,6 +157,7 @@ export function ProfilesView({ onClose }: ProfilesViewProps) {
               {visibleProfiles.map(profile => (
                 <ProfileRow
                   active={selected?.name === profile.name}
+                  current={normalizeProfileKey(profile.name) === normalizeProfileKey(activeProfile)}
                   key={profile.name}
                   menuItems={
                     profile.is_default
@@ -151,10 +179,17 @@ export function ProfilesView({ onClose }: ProfilesViewProps) {
                 />
               ))}
               <PanelAddButton label={p.newProfile} onClick={() => setCreateOpen(true)} />
+              <div className="mt-auto border-t border-(--ui-stroke-tertiary) pt-2">
+                <WorkspaceControls />
+              </div>
             </PanelList>
 
             {selected ? (
-              <ProfileDetail key={selected.name} profile={selected} />
+              <ProfileDetail
+                current={normalizeProfileKey(selected.name) === normalizeProfileKey(activeProfile)}
+                key={selected.name}
+                profile={selected}
+              />
             ) : (
               <PanelEmpty description={p.selectPrompt} icon="account" />
             )}
@@ -174,7 +209,7 @@ export function ProfilesView({ onClose }: ProfilesViewProps) {
         onClose={() => setCreateOpen(false)}
         onCreated={selectAndRefresh}
         open={createOpen}
-        profiles={profiles ?? []}
+        profiles={profiles}
       />
 
       <DeleteProfileDialog
@@ -186,21 +221,24 @@ export function ProfilesView({ onClose }: ProfilesViewProps) {
         open={pendingDelete !== null}
         profile={pendingDelete}
       />
-    </Panel>
+    </section>
   )
 }
 
 function ProfileRow({
   active,
+  current,
   menuItems,
   onSelect,
   profile
 }: {
   active: boolean
+  current: boolean
   menuItems: PanelMenuItem[]
   onSelect: () => void
   profile: ProfileInfo
 }) {
+  const { t } = useI18n()
   const colors = useStore($profileColors)
 
   return (
@@ -216,6 +254,7 @@ function ProfileRow({
       }
       menuItems={menuItems}
       menuLabel={profileLabel(profile)}
+      meta={current ? t.profiles.currentBadge : undefined}
       onSelect={onSelect}
       rowKey={profile.name}
       title={profileLabel(profile)}
@@ -223,17 +262,21 @@ function ProfileRow({
   )
 }
 
-function ProfileDetail({ profile }: { profile: ProfileInfo }) {
+function ProfileDetail({ current, profile }: { current: boolean; profile: ProfileInfo }) {
   const { t } = useI18n()
   const p = t.profiles
+  const navigate = useNavigate()
+  const [section, setSection] = useState<'overview' | 'capabilities'>('overview')
+  const [capabilitiesVisited, setCapabilitiesVisited] = useState(false)
 
   return (
-    <PanelDetail>
-      <header className="space-y-3">
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-4">
+      <header className="flex shrink-0 flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
             <h3 className="text-[0.95rem] font-semibold tracking-tight text-foreground">{profileLabel(profile)}</h3>
             {profile.is_default && <PanelPill tone="good">{p.defaultBadge}</PanelPill>}
+            {current && <PanelPill tone="good">{p.currentBadge}</PanelPill>}
             {profile.has_env && <PanelPill tone="muted">.env</PanelPill>}
           </div>
           <p
@@ -243,27 +286,65 @@ function ProfileDetail({ profile }: { profile: ProfileInfo }) {
             {displayPath(profile.path)}
           </p>
         </div>
-
-        <PanelMeta
-          rows={[
-            {
-              label: p.modelLabel,
-              value: profile.model ? (
-                <span className="font-mono">
-                  {profile.model}
-                  {profile.provider ? <span className="text-muted-foreground/55"> · {profile.provider}</span> : null}
-                </span>
-              ) : (
-                <span className="text-muted-foreground/55">{p.notSet}</span>
-              )
-            },
-            { label: p.skillsLabel, value: profile.skill_count }
-          ]}
-        />
+        <Button disabled={current} onClick={() => selectProfile(profile.name)} size="sm" variant="outline">
+          {current ? p.currentBadge : p.switchToProfile(profileLabel(profile))}
+        </Button>
       </header>
 
-      <SoulEditor profileName={profile.name} />
-    </PanelDetail>
+      <SegmentedControl
+        onChange={value => {
+          setSection(value)
+
+          if (value === 'capabilities') {
+            setCapabilitiesVisited(true)
+          }
+        }}
+        options={[
+          { id: 'overview', label: p.overview },
+          { id: 'capabilities', label: p.capabilities }
+        ]}
+        value={section}
+      />
+
+      <div className={section === 'overview' ? 'flex min-h-0 flex-1 flex-col' : 'hidden'}>
+        <PanelDetail>
+          <PanelMeta
+            rows={[
+              {
+                label: p.modelLabel,
+                value: profile.model ? (
+                  <span className="font-mono">
+                    {profile.model}
+                    {profile.provider ? <span className="text-muted-foreground/55"> · {profile.provider}</span> : null}
+                  </span>
+                ) : (
+                  <span className="text-muted-foreground/55">{p.notSet}</span>
+                )
+              },
+              { label: p.skillsLabel, value: profile.skill_count }
+            ]}
+          />
+          <Button
+            onClick={() => {
+              setSettingsScope(profile.name)
+              navigateToWorkspacePage(navigate, `${SETTINGS_ROUTE}?tab=config:model`)
+            }}
+            size="sm"
+            variant="outline"
+          >
+            {p.configureModel}
+          </Button>
+          <SoulEditor profileName={profile.name} />
+        </PanelDetail>
+      </div>
+      {capabilitiesVisited && (
+        <div className={section === 'capabilities' ? 'min-h-0 flex-1 overflow-hidden' : 'hidden'}>
+          <Suspense fallback={<PageLoader label={p.loading} />}>
+            <SkillsView embedded fixedProfile={profile.name} />
+          </Suspense>
+        </div>
+      )}
+    </div>
   )
 }
 

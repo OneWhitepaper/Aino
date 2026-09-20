@@ -20,6 +20,8 @@ const getUsageAnalytics = vi.fn()
 const getProfiles = vi.fn()
 const getSkillContent = vi.fn()
 const getOfficialSkills = vi.fn()
+const getHermesConfigRecord = vi.fn()
+const saveMcpServers = vi.fn()
 
 // Partial mock: keep the real module (SkillsView pulls in @/store/profile,
 // whose import-time subscription calls setApiRequestProfile) and stub only the
@@ -37,7 +39,13 @@ vi.mock('@/hermes', async importOriginal => ({
   getUsageAnalytics: (days: number, profile?: null | string) => getUsageAnalytics(days, profile),
   getProfiles: () => getProfiles(),
   getSkillContent: (name: string, profile?: null | string) => getSkillContent(name, profile),
-  getOfficialSkills: (profile?: null | string) => getOfficialSkills(profile)
+  getOfficialSkills: (profile?: null | string) => getOfficialSkills(profile),
+  getHermesConfigRecord: (profile?: HermesApi.ProfileScope) => getHermesConfigRecord(profile),
+  saveMcpServers: (servers: Record<string, unknown>, profile?: HermesApi.ProfileScope) =>
+    saveMcpServers(servers, profile),
+  getMcpCatalog: vi.fn(async () => ({ entries: [] })),
+  testMcpServer: vi.fn(async () => ({ ok: true, tools: [] })),
+  getLogs: vi.fn(async () => ({ lines: [] }))
 }))
 
 // Notifications hit nanostores/timers we don't care about here.
@@ -45,6 +53,9 @@ vi.mock('@/store/notifications', () => ({
   notify: vi.fn(),
   notifyError: vi.fn()
 }))
+
+// MCP scope behavior uses the real service toggle; CodeMirror layout is unrelated.
+vi.mock('@/components/chat/json-document-editor', () => ({ JsonDocumentEditor: () => null }))
 
 // The catalog Install button routes through the hub action pipeline — stub the
 // action entrypoint (real module kept: SkillsView reads $hubActions and the
@@ -127,6 +138,51 @@ afterEach(() => {
 // all 11 tests (2× in a row on PR #93612, plus a main run the same hour).
 // Give this file headroom; the tests are not slow individually.
 describe('SkillsView toolset management', { timeout: 60_000 }, () => {
+  it('saves another workspace’s MCP configuration without reloading the active workspace', async () => {
+    const { $gateway } = await import('@/store/gateway')
+    const { $activeGatewayProfile } = await import('@/store/profile')
+    const previousGateway = $gateway.get()
+    const previousProfile = $activeGatewayProfile.get()
+    const request = vi.fn(async () => ({ ok: true }))
+    const server = { command: 'test-mcp', args: [] }
+    getHermesConfigRecord.mockResolvedValue({ mcp_servers: { 'workspace-server': server } })
+    saveMcpServers.mockResolvedValue({ ok: true })
+
+    try {
+      $gateway.set({ request } as never)
+      $activeGatewayProfile.set('default')
+
+      for (const profile of ['researcher', 'default']) {
+        await act(async () => {
+          render(
+            <QueryClientProvider client={queryClient}>
+              <MemoryRouter initialEntries={['/profiles']}>
+                <SkillsView embedded fixedProfile={profile} />
+              </MemoryRouter>
+            </QueryClientProvider>
+          )
+        })
+        await act(async () => {
+          fireEvent.click(screen.getByRole('button', { name: 'MCP' }))
+        })
+
+        const toggle = await screen.findByRole('switch', { name: 'workspace-server' })
+        await act(async () => fireEvent.click(toggle))
+
+        expect(saveMcpServers).toHaveBeenLastCalledWith({ 'workspace-server': { ...server, enabled: false } }, profile)
+        expect(request.mock.calls.length).toBe(profile === 'default' ? 1 : 0)
+        expect($activeGatewayProfile.get()).toBe('default')
+        cleanup()
+      }
+
+      expect(request).toHaveBeenCalledWith('reload.mcp', expect.any(Object))
+    } finally {
+      cleanup()
+      $gateway.set(previousGateway)
+      $activeGatewayProfile.set(previousProfile)
+    }
+  })
+
   it('localizes skill provenance badges for Simplified Chinese users', async () => {
     getSkills.mockResolvedValue([
       {

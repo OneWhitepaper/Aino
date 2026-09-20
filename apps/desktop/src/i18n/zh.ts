@@ -3431,6 +3431,11 @@ export const zh = defineLocale({
 
   profiles: {
     close: '关闭工作区',
+    workspaceDesc: '每个工作区保存一位智能体的独立配置、技能、记忆和会话。',
+    currentBadge: '当前工作区',
+    overview: '基本配置',
+    capabilities: '技能与工具',
+    configureModel: '配置模型',
     nameHint: '小写字母、数字、连字符和下划线。必须以字母或数字开头。',
     title: '工作区',
     count: count => `${count} 个工作区`,
@@ -3936,6 +3941,7 @@ export const zh = defineLocale({
     },
     nav: {
       'new-session': '新建会话',
+      profiles: '工作区',
       skills: '技能与工具',
       messaging: '消息平台',
       artifacts: '产物',

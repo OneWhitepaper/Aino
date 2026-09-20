@@ -2207,6 +2207,11 @@ export const ru = defineLocale({
   },
   profiles: {
     close: 'Закрыть профили',
+    workspaceDesc: 'Каждое рабочее пространство хранит отдельные настройки, навыки, память и беседы одного агента.',
+    currentBadge: 'Текущее пространство',
+    overview: 'Основные настройки',
+    capabilities: 'Навыки и инструменты',
+    configureModel: 'Настроить модель',
     nameHint: 'Строчные буквы, цифры, дефисы и подчёркивания. Должно начинаться с буквы или цифры.',
     title: 'Профили',
     count: count => `${count} ${RU_PLURAL(count, 'профиль', 'профиля', 'профилей')}`,
@@ -2509,6 +2514,7 @@ export const ru = defineLocale({
     },
     nav: {
       'new-session': 'Новый сеанс',
+      profiles: 'Рабочие пространства',
       skills: 'Возможности',
       messaging: 'Сообщения',
       artifacts: 'Артефакты',

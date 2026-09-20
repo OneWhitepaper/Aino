@@ -14,21 +14,32 @@ import { useContributions } from '@/contrib/react/use-contributions'
 import { translateNow } from '@/i18n'
 import { $routeTiles, closeRouteTile, type RouteTile } from '@/store/route-tiles'
 
-import { ARTIFACTS_ROUTE, contributedRoutes, MESSAGING_ROUTE, ROUTES_AREA, SKILLS_ROUTE } from '../routes'
+import {
+  ARTIFACTS_ROUTE,
+  contributedRoutes,
+  MESSAGING_ROUTE,
+  PROFILES_ROUTE,
+  ROUTES_AREA,
+  SKILLS_ROUTE
+} from '../routes'
 
 import { paneMirror } from './pane-mirror'
 
 const SkillsView = lazy(async () => ({ default: (await import('../skills')).SkillsView }))
 const MessagingView = lazy(async () => ({ default: (await import('../messaging')).MessagingView }))
 const ArtifactsView = lazy(async () => ({ default: (await import('../artifacts')).ArtifactsView }))
+const ProfilesView = lazy(async () => ({ default: (await import('../profiles')).ProfilesView }))
 
 // Built-in page views + their pane titles, keyed by route.
-const BUILTIN_PAGES: Record<string, { render: () => ReactNode; titleKey: 'artifacts' | 'capabilities' | 'messaging' }> =
-  {
-    [ARTIFACTS_ROUTE]: { render: () => <ArtifactsView />, titleKey: 'artifacts' },
-    [MESSAGING_ROUTE]: { render: () => <MessagingView />, titleKey: 'messaging' },
-    [SKILLS_ROUTE]: { render: () => <SkillsView />, titleKey: 'capabilities' }
-  }
+const BUILTIN_PAGES: Record<
+  string,
+  { render: () => ReactNode; titleKey: 'artifacts' | 'capabilities' | 'messaging' | 'profiles' }
+> = {
+  [ARTIFACTS_ROUTE]: { render: () => <ArtifactsView />, titleKey: 'artifacts' },
+  [MESSAGING_ROUTE]: { render: () => <MessagingView />, titleKey: 'messaging' },
+  [SKILLS_ROUTE]: { render: () => <SkillsView />, titleKey: 'capabilities' },
+  [PROFILES_ROUTE]: { render: () => <ProfilesView />, titleKey: 'profiles' }
+}
 
 /** Humanize a route path into a tab title: `/my-atlas` → `My Atlas`. */
 const humanizePath = (path: string): string =>

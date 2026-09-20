@@ -2247,6 +2247,11 @@ export const zhHant = defineLocale({
 
   profiles: {
     close: '關閉設定檔',
+    workspaceDesc: '每個工作區保存一位智慧體的獨立設定、技能、記憶與對話。',
+    currentBadge: '目前工作區',
+    overview: '基本設定',
+    capabilities: '技能與工具',
+    configureModel: '設定模型',
     nameHint: '小寫字母、數字、連字號和底線。必須以字母或數字開頭。',
     title: '設定檔',
     count: count => `${count} 個設定檔`,
@@ -2580,6 +2585,7 @@ export const zhHant = defineLocale({
     },
     nav: {
       'new-session': '新工作階段',
+      profiles: '工作區',
       skills: '技能與工具',
       messaging: '訊息平台',
       artifacts: '成品',

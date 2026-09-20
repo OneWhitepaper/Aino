@@ -192,6 +192,7 @@ describe('ChatSidebar navigation activity', () => {
     })
 
     for (const [pathname, currentView, label] of [
+      ['/profiles', 'profiles', 'Workspaces'],
       ['/skills', 'skills', 'Capabilities'],
       ['/messaging', 'messaging', 'Messaging'],
       ['/artifacts', 'artifacts', 'Artifacts'],

@@ -8,14 +8,14 @@ import { Switch } from '@/components/ui/switch'
 import { useI18n } from '@/i18n'
 import { $profileScope, ALL_PROFILES, setShowAllProfiles } from '@/store/profile'
 
-export function SettingsWorkspaceControls() {
+export function WorkspaceControls() {
   const { t } = useI18n()
   const [open, setOpen] = useState(false)
   const scope = useStore($profileScope)
   const id = useId()
 
   return (
-    <div className="min-w-0" data-settings-profile-controls="">
+    <div className="min-w-0" data-workspace-profile-controls="">
       <Button
         aria-controls={id}
         aria-expanded={open}

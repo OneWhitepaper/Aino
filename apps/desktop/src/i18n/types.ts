@@ -2655,6 +2655,11 @@ interface UpstreamTranslations {
 
   profiles: {
     close: string
+    workspaceDesc: string
+    currentBadge: string
+    overview: string
+    capabilities: string
+    configureModel: string
     nameHint: string
     title: string
     count: (count: number) => string
