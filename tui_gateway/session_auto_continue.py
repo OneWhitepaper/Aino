@@ -60,8 +60,7 @@ def _maybe_schedule_auto_continue(sid: str, session: dict, session_key: str) -> 
     build via _run_prompt_submit, so the client that just resumed streams it."""
     # Hosted room turns are recovered by their durable task/lease state machine; generic auto-continue would bypass
     # its execution generation and duplicate work.
-    if (session.get("source") == "bot_room" or session.get("managed_model_params")
-            or session.get("_conversation_binding")):
+    if session.get("source") == "bot_room" or session.get("managed_model_params"):
         return None
     home = _session_home(session)
     if (marker := read_turn_marker(home, session_key)) is None:

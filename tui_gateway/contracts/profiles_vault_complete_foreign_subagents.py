@@ -47,7 +47,7 @@ method("complete.path", params=CompletePathParams, result=CompletionItemsResult,
        doc="Path / @-reference completions for the composer (files, folders, profiles, plugin providers).")
 
 
-class CompleteSlashParams(ProfileParams):
+class CompleteSlashParams(Params):
     text: str | None = None
 
 

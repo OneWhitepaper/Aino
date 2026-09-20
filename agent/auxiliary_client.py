@@ -1073,6 +1073,33 @@ def _scoped_key_env(name: str) -> str:
     return (os.getenv(name) or "").strip()
 
 
+# Codex Responses → chat.completions adapter, so aux consumers need no changes.
+def _parse_codex_final_response(final: Any) -> Tuple[List[str], List[Any], Any]:
+    """Split a completed Responses object into (text_parts, tool_calls, usage) in chat.completions shape."""
+    text_parts: List[str] = []
+    tool_calls_raw: List[Any] = []
+    for item in (getattr(final, "output", None) or []):
+        item_type = _field(item, "type")
+        if item_type == "message":
+            for part in (_field(item, "content") or []):
+                if _field(part, "type") in {"output_text", "text"}:
+                    text_parts.append(_field(part, "text", ""))
+        elif item_type == "function_call":
+            tool_calls_raw.append(SimpleNamespace(
+                id=_field(item, "call_id", ""), type="function",
+                function=SimpleNamespace(
+                    name=_field(item, "name", ""), arguments=_field(item, "arguments", "{}"))))
+    usage = None
+    resp_usage = getattr(final, "usage", None)
+    if resp_usage:
+        def _u(key: str) -> int:
+            return getattr(resp_usage, key, 0) or (resp_usage.get(key, 0) if isinstance(resp_usage, dict) else 0)
+        usage = SimpleNamespace(
+            prompt_tokens=_u("input_tokens"), completion_tokens=_u("output_tokens"),
+            total_tokens=_u("total_tokens"))
+    return text_parts, tool_calls_raw, usage
+
+
 def _close_quietly(target: Any, failure_note: Optional[str]) -> None:
     """Call ``target.close()`` if present; a failure is debug-logged under ``failure_note`` (silent when None)."""
     close = getattr(target, "close", None)
@@ -1450,8 +1477,7 @@ class _CodexCompletionsAdapter:
         guard = _CodexStreamGuard(self._client, total_timeout)
         try:
             guard.start()
-            from agent.codex_runtime import _bypass_sdk_request_transform
-            from agent.auxiliary_responses import consume_auxiliary_responses, normalize_auxiliary_response
+            from agent.codex_runtime import _bypass_sdk_request_transform, _consume_codex_event_stream
             # Keep bulk wire payload out of the SDK's GIL-holding request transform.
             stream_kwargs = _bypass_sdk_request_transform({**resp_kwargs, "stream": True})
             event_stream = self._client.responses.create(**stream_kwargs)
@@ -1466,14 +1492,14 @@ class _CodexCompletionsAdapter:
                 if hasattr(event_stream, "output"):
                     final = event_stream
                 else:
-                    final = consume_auxiliary_responses(
+                    final = _consume_codex_event_stream(
                         event_stream, model=str(resp_kwargs.get("model") or model), on_event=guard.on_event
                     )
             finally:
                 guard.release_stream(event_stream)
             if final is None:
                 raise RuntimeError("Codex auxiliary Responses stream did not return a final response")
-            response = normalize_auxiliary_response(final, model)
+            text_parts, tool_calls_raw, usage = _parse_codex_final_response(final)
         except Exception as exc:
             if guard.timed_out.is_set():
                 raise TimeoutError(guard.timeout_message()) from exc
@@ -1481,7 +1507,15 @@ class _CodexCompletionsAdapter:
             raise
         finally:
             guard.finish()
-        return response
+        # Shape the result like chat.completions.
+        message = SimpleNamespace(
+            role="assistant", content="".join(text_parts).strip() or None,
+            tool_calls=tool_calls_raw or None,
+        )
+        choice = SimpleNamespace(
+            index=0, message=message, finish_reason="stop" if not tool_calls_raw else "tool_calls"
+        )
+        return SimpleNamespace(choices=[choice], model=model, usage=usage)
 
 
 class _ChatShim:

@@ -20,29 +20,6 @@ const accountErrors: Record<string, string> = {
 }
 
 export const en: Translations = {
-  sharedProjects: {
-    project: 'Project',
-    noProject: 'No project',
-    unavailable: 'unavailable',
-    open: 'Open folder in this window',
-    register: 'Add project',
-    source: 'Save project under',
-    choose: 'Choose expert',
-    name: 'Project name',
-    directory: 'Folder path on this connection',
-    create: 'Add project folder',
-    error: 'Shared projects unavailable',
-    retry: 'Retry',
-    confirm: 'Change conversation project',
-    generation: 'All experts will use this folder for future messages. Earlier messages keep their original context.',
-    apply: 'Apply project change',
-    cancel: 'Cancel',
-    unsupported: 'This project environment cannot be browsed',
-    loading: 'Loading folder…',
-    opened: 'Opened project folders',
-    empty: 'No folders opened in this window.',
-    close: 'Close folder'
-  },
   platformRechargeErrors: {
     conflict:
       'An earlier request already created an order. Close this window and open the original order in order history. Do not pay again.',
@@ -3266,15 +3243,6 @@ export const en: Translations = {
   },
 
   profiles: {
-    allProjects: 'All projects',
-    projectSourceRequired: 'Open the project from its exact source before starting a conversation.',
-    adoptConversation: 'Continue as conversation',
-    adoptFailed: 'Could not move this conversation. Retry when its work has finished.',
-    newConversationFailed: 'Could not start conversation. Try again.',
-    openConversationFailed: 'Could not open conversation. Try again.',
-    hubTitle: 'Agent Hub',
-    projectAgentHelp: 'Projects organize materials and tasks; agents decide who handles this turn.',
-    hubUnavailable: 'Agent Hub is unavailable. Enable the Agent Hub plugin in Settings.',
     close: 'Close profiles',
     workspaceDesc: 'Each workspace holds one agent’s independent configuration, skills, memory, and conversations.',
     currentBadge: 'Current workspace',
@@ -3708,7 +3676,7 @@ export const en: Translations = {
     },
     nav: {
       'new-session': 'New session',
-      profiles: 'Agent Hub',
+      profiles: 'Workspaces',
       skills: 'Capabilities',
       messaging: 'Messaging',
       artifacts: 'Artifacts',
@@ -3991,56 +3959,6 @@ export const en: Translations = {
   },
 
   composer: {
-    conversation: {
-      commandDraftChanged: 'The draft changed while resolving the command. Submit again to use the current draft.',
-      attachmentTooLarge: 'This file exceeds the backend upload limit. Choose a smaller file.',
-      attachmentLimitUnavailable: 'This backend does not advertise upload limits. Update it before uploading.',
-      attachmentCountExceeded: 'Too many attachments for one message. Remove a file and retry.',
-
-      privateNotice: 'Private notice',
-      refreshConfiguration: 'Refresh expert configuration',
-      refreshExplanation:
-        'The next reply uses this expert’s saved configuration. Shared history and project stay unchanged. Finish current work first; settings typed into a slash command are not applied.',
-      configurationRefreshed: 'Expert configuration refreshed for the next reply.',
-      configurationBusy: 'Finish current work or reconcile the pending send before changing configuration.',
-
-      contentLoading: 'Loading full answer…',
-      contentInvalid: 'Content verification failed. Retry loading the original content.',
-      downloadAttachment: 'Download attachment',
-      uploading: 'Uploading…',
-      fileReadFailed: 'Could not read file',
-
-      mcpDeferred:
-        'New tools will be used after you refresh this expert’s configuration or start a new conversation. This turn keeps its current tools.',
-      generation: 'Configuration version',
-      runtimeChanged: 'Conversation runtime changed; refresh before responding',
-      childUnavailable: 'Subagent is no longer available',
-      clarifyExpired: 'Clarification request expired',
-
-      title: 'Conversation',
-      create: 'Create conversation',
-      loading: 'Loading conversation…',
-      unavailable: 'Conversations are unavailable on this backend.',
-      refresh: 'Refresh',
-      history: 'Conversation history',
-      mention: 'Choose responder with @',
-      textOnly:
-        'Read commands show private notices. Supported skills and bundles run as the selected expert; other slash commands are rejected.',
-      modelUnavailable: 'Model unavailable',
-      subagent: 'Subagent',
-      stopAll: 'Stop including subagents',
-      reconcile: 'Reconcile send',
-      allowOnce: 'Allow once',
-      deny: 'Deny',
-      answer: 'Answer',
-      requestUnsupported: 'This request requires a response type not yet supported here.'
-    },
-    expertSelector: {
-      choose: 'Choose responder',
-      clear: 'Clear expert selection',
-      nextReply: 'Who replies next',
-      unavailable: 'Selected expert unavailable'
-    },
     message: 'Message',
     automaticModel: 'Auto',
     wakingProfile: profile => `Waking up ${profile}…`,

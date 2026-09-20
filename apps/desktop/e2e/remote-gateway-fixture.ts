@@ -83,9 +83,7 @@ export async function startRemoteGateway(
       cwd: REPO_ROOT,
       detached: true,
       env: {
-        ...buildAppEnv(sandbox, { HOME: sandbox.root }),
-        // A worktree can share the main checkout's venv entry point; load this source.
-        PYTHONPATH: REPO_ROOT,
+        ...buildAppEnv(sandbox),
         HERMES_HOME: home,
         HERMES_DASHBOARD_SESSION_TOKEN: REMOTE_TOKEN
       },

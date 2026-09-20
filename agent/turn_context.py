@@ -410,9 +410,6 @@ def _persist_under_lock(agent: Any, fn, failure_msg: str, pending_cli_message: A
                 fn()
     except Exception:
         logger.warning(failure_msg, agent.session_id or "none", exc_info=True)
-        from agent.conversation_input import current_conversation_input
-        if current_conversation_input(agent) is not None:
-            raise
     finally:
         if not isinstance(pending_cli_message, dict) or pending_cli_message.get("_db_persisted"):
             agent._pending_cli_user_message = None
@@ -831,18 +828,12 @@ def _stamp_api_content_sidecar(
             return
         try:
             if isinstance(_row_id, int):
-                updated = _db.set_message_api_content(agent.session_id, _row_id, durable_content, _api_content)
+                _db.set_message_api_content(agent.session_id, _row_id, durable_content, _api_content)
             else:
                 # Compacted copies carry no row id; positional is safe only because
                 # archive_and_compact just made this message the newest active user row.
-                updated = _db.set_latest_user_api_content(agent.session_id, durable_content, _api_content)
-            from agent.conversation_input import current_conversation_input
-            if current_conversation_input(agent) is not None and updated != 1:
-                raise RuntimeError("managed input api_content backfill did not update its row")
+                _db.set_latest_user_api_content(agent.session_id, durable_content, _api_content)
         except Exception:
-            from agent.conversation_input import current_conversation_input
-            if current_conversation_input(agent) is not None:
-                raise
             logger.warning("api_content backfill failed for session=%s", agent.session_id or "none", exc_info=True)
 
 
@@ -935,8 +926,6 @@ def build_turn_context(
         agent, user_message, persist_user_message, persist_user_timestamp,
         persist_user_platform_id, persist_user_display_kind, persist_user_display_metadata,
     )
-    from agent.conversation_input import bind_conversation_input_message
-    bind_conversation_input_message(agent, user_msg)
     _hydrate_from_history(agent, conversation_history)
     # Every estimator this turn prices images at the cost learned from this model's real usage.
     bind_image_token_cost(agent)
@@ -977,12 +966,6 @@ def build_turn_context(
 
     _ensure_session_row(agent, pending_cli_message)
 
-    from agent.conversation_input import current_conversation_input
-    if current_conversation_input(agent) is not None:
-        # Compaction may materialize this user before the final sidecar exists. Admit it
-        # through the ordinary flush first so a crash cannot leave an unreceipted input.
-        _persist_turn_start(agent, messages, conversation_history, pending_cli_message)
-
     compaction = run_turn_start_compaction(
         agent, messages=messages, system_message=system_message,
         active_system_prompt=active_system_prompt, conversation_history=conversation_history,
@@ -1019,11 +1002,6 @@ def build_turn_context(
         )
 
     _persist_turn_start(agent, messages, conversation_history, pending_cli_message)
-    snapshot_guard = getattr(agent, "_conversation_snapshot_guard", None)
-    if snapshot_guard is not None:
-        snapshot_guard(agent)
-    from agent.conversation_input import complete_conversation_input
-    complete_conversation_input(agent)
 
     # Title the session now: the row exists and titling depends only on the user's ask,
     # so it runs concurrently with the turn. Daemon thread, no-op once titled.
@@ -1072,9 +1050,6 @@ def build_api_messages(
     ``ephemeral_system_prompt``) is added at API time only — ``messages`` stays untouched
     beyond the sidecar stamp, and the system prompt is built ONCE per session and
     replayed verbatim."""
-    snapshot_guard = getattr(agent, "_conversation_snapshot_guard", None)
-    if snapshot_guard is not None:
-        snapshot_guard(agent)
     from agent.agent_runtime_helpers import fill_empty_non_final_wire_payload
     from agent.conversation_loop import _clone_message_for_send
     from agent.replay_cleanup import canonicalize_replay_history

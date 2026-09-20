@@ -122,11 +122,8 @@ export async function listAllProfileSessions(
   archived: 'exclude' | 'include' | 'only' = 'exclude',
   order: 'created' | 'recent' = 'recent',
   profile: 'all' | (string & {}) = 'all',
-  filter: SessionSourceFilter = {},
-  scope?: ProfileScope
+  filter: SessionSourceFilter = {}
 ): Promise<PaginatedSessions> {
-  const requestScope = scope === undefined ? { ...connectionScoped(), ...profileScoped() } : capabilityScoped(scope)
-  const connectionId = requestScope.connectionId ?? ambientOwnerConnectionId()
   const sourceParam = filter.source ? `&source=${encodeURIComponent(filter.source)}` : ''
 
   const excludeParam = filter.excludeSources?.length
@@ -134,7 +131,7 @@ export async function listAllProfileSessions(
     : ''
 
   const result = await hermesApi<PaginatedSessions>({
-    ...requestScope,
+    ...profileScoped(),
     path:
       `/api/profiles/sessions?limit=${limit}&offset=0&min_messages=${Math.max(0, minMessages)}` +
       `&archived=${archived}&order=${order}&profile=${encodeURIComponent(profile)}${sourceParam}${excludeParam}`,
@@ -143,51 +140,9 @@ export async function listAllProfileSessions(
 
   return {
     ...result,
-    sessions: pageWindow(
-      stampRowsWithOwningConnection(result.sessions, connectionId, typeof scope === 'object' && scope !== null),
-      limit
-    ),
+    sessions: pageWindow(stampActiveConnectionOwner(result.sessions), limit),
     offset: 0
   }
-}
-
-/** Read each registered source directly; an ambient connection pin is not a global history query. */
-export async function listAllSourceProfileSessions(
-  connectionIds: readonly string[],
-  limit: number,
-  filter: SessionSourceFilter
-): Promise<
-  PaginatedSessions & {
-    failed_connections: string[]
-    failed_profiles: Array<{ connection_id: string; profile: string }>
-  }
-> {
-  const sources = [...new Set(connectionIds)]
-
-  const pages = await Promise.allSettled(
-    sources.map(connectionId =>
-      listAllProfileSessions(limit, 1, 'exclude', 'recent', 'all', filter, { connectionId, profile: 'default' })
-    )
-  )
-
-  const sessions: SessionInfo[] = []
-  const failed_connections: string[] = []
-  const failed_profiles: Array<{ connection_id: string; profile: string }> = []
-  let total = 0
-  pages.forEach((page, index) => {
-    if (page.status === 'rejected') {
-      failed_connections.push(sources[index])
-    } else {
-      sessions.push(...page.value.sessions)
-      total += page.value.total
-      failed_profiles.push(
-        ...(page.value.errors ?? []).map(error => ({ connection_id: sources[index], profile: error.profile }))
-      )
-    }
-  })
-  sessions.sort((a, b) => (b.last_active ?? b.started_at) - (a.last_active ?? a.started_at))
-
-  return { sessions: pageWindow(sessions, limit), total, offset: 0, limit, failed_connections, failed_profiles }
 }
 
 // Batched sidebar slices in one request: recents (scoped to the active profile),

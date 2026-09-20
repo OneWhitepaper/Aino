@@ -24,8 +24,20 @@ def _restore_stdout():
 
 @pytest.fixture()
 def server():
-    import importlib
-    mod = importlib.import_module("tui_gateway.server")
+    # The sys.modules mocks only need to cover the *initial* import — once
+    # tui_gateway.server is cached, they are inert. Keeping them active for
+    # the whole test poisons any module first imported inside a test body:
+    # e.g. hermes_cli.active_sessions would bind the mocked get_hermes_home
+    # (a fixed shared path) forever, leaking active-session registry entries
+    # across every later test in the process. Scope the patch to the import.
+    with patch.dict("sys.modules", {
+        "hermes_constants": MagicMock(get_hermes_home=MagicMock(return_value="/tmp/hermes_test")),
+        "hermes_cli.env_loader": MagicMock(),
+        "hermes_cli.banner": MagicMock(),
+        "hermes_state": MagicMock(),
+    }):
+        import importlib
+        mod = importlib.import_module("tui_gateway.server")
 
     # Snapshot the RPC registry: several tests below stub handlers
     # ("slash.exec", "fast.ping", ...) directly in the module-level dict,

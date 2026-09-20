@@ -735,8 +735,6 @@ class TestRuntimeModelConfigDropsStaleKeys:
         from tui_gateway.server import _runtime_model_config
 
         agent = _agent_like()
-        agent.reasoning_config = {"enabled": False}
-        agent.service_tier = "priority"
         agent._managed_model_metadata = {
             "model_source": "aino",
             "model_id": "fixture-a",
@@ -759,8 +757,7 @@ class TestRuntimeModelConfigDropsStaleKeys:
 
         assert _runtime_model_config(agent, existing) == {
             "max_iterations": 4,
-            "reasoning_config": agent.reasoning_config,
-            "service_tier": agent.service_tier,
+            "reasoning_config": {"enabled": False},
             "max_tokens": 1024,
             "yolo_mode": True,
             "_delegate_from": "parent-session",

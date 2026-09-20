@@ -20,29 +20,6 @@ const accountErrors: Record<string, string> = {
 }
 
 export const zh = defineLocale({
-  sharedProjects: {
-    project: '项目',
-    noProject: '无项目',
-    unavailable: '不可用',
-    open: '在此窗口打开文件夹',
-    register: '添加项目',
-    source: '将项目保存在',
-    choose: '选择专家',
-    name: '项目名称',
-    directory: '此连接上的文件夹路径',
-    create: '添加项目文件夹',
-    error: '共享项目不可用',
-    retry: '重试',
-    confirm: '更改对话项目',
-    generation: '所有专家将在后续消息中使用此文件夹。历史消息保留其原始上下文。',
-    apply: '应用项目更改',
-    cancel: '取消',
-    unsupported: '无法浏览此项目环境',
-    loading: '正在加载文件夹…',
-    opened: '已打开的项目文件夹',
-    empty: '此窗口尚未打开文件夹。',
-    close: '关闭文件夹'
-  },
   connectors: {
     title: '连接你的应用',
     connect: '连接',
@@ -3453,15 +3430,6 @@ export const zh = defineLocale({
   },
 
   profiles: {
-    allProjects: '所有项目',
-    projectSourceRequired: '请先从明确来源打开项目，再新建会话。',
-    adoptConversation: '接入普通会话',
-    adoptFailed: '暂时无法接入。请在当前工作完成后重试。',
-    newConversationFailed: '无法新建会话，请重试。',
-    openConversationFailed: '无法打开会话，请重试。',
-    hubTitle: '智能体中心',
-    projectAgentHelp: '项目整理资料与任务；智能体决定本轮由谁处理。',
-    hubUnavailable: '智能体中心暂不可用。请在设置中启用 Agent Hub 插件。',
     close: '关闭工作区',
     workspaceDesc: '每个工作区保存一位智能体的独立配置、技能、记忆和会话。',
     currentBadge: '当前工作区',
@@ -3973,7 +3941,7 @@ export const zh = defineLocale({
     },
     nav: {
       'new-session': '新建会话',
-      profiles: '智能体中心',
+      profiles: '工作区',
       skills: '技能与工具',
       messaging: '消息平台',
       artifacts: '产物',
@@ -4253,54 +4221,6 @@ export const zh = defineLocale({
   },
 
   composer: {
-    conversation: {
-      commandDraftChanged: '解析命令时草稿发生变化，请重新提交当前草稿。',
-      attachmentTooLarge: '文件超出此后端的上传限制，请选择较小文件。',
-      attachmentLimitUnavailable: '此后端未提供上传限制，请先更新后端。',
-      attachmentCountExceeded: '单条消息的附件过多，请移除文件后重试。',
-
-      privateNotice: '私有提示',
-      refreshConfiguration: '刷新专家配置',
-      refreshExplanation:
-        '下一次回复将使用此专家已保存的配置，共享历史和项目保持不变。请先等待当前工作结束；此操作不会应用斜杠命令中输入的设置。',
-      configurationRefreshed: '专家配置已刷新，下一次回复将使用更新后的配置。',
-      configurationBusy: '请先结束当前工作或核实待定发送，再更改配置。',
-
-      contentLoading: '正在加载完整回答…',
-      contentInvalid: '内容校验失败，请重试加载原始内容。',
-      downloadAttachment: '下载附件',
-      uploading: '正在上传…',
-      fileReadFailed: '无法读取文件',
-
-      mcpDeferred: '新工具将在你刷新此专家配置或开启新会话后使用，本轮保持当前工具。',
-      generation: '配置版本',
-      runtimeChanged: '会话运行已更改，请刷新后再操作',
-      childUnavailable: '子代理已不可用',
-      clarifyExpired: '澄清请求已过期',
-
-      title: '会话',
-      create: '创建会话',
-      loading: '正在加载会话…',
-      unavailable: '此后端暂不支持此类会话。',
-      refresh: '刷新',
-      history: '会话记录',
-      mention: '通过 @ 选择回复者',
-      textOnly: '读取命令仅显示私有提示。支持的技能和技能包由所选专家执行；其他斜杠命令将被拒绝。',
-      modelUnavailable: '模型信息暂不可用',
-      subagent: '子代理',
-      stopAll: '停止并包括子代理',
-      reconcile: '核实发送结果',
-      allowOnce: '允许一次',
-      deny: '拒绝',
-      answer: '回答',
-      requestUnsupported: '此处暂不支持此请求所需的回答类型。'
-    },
-    expertSelector: {
-      choose: '选择回复者',
-      clear: '取消专家选择',
-      nextReply: '下一次由谁回复',
-      unavailable: '所选专家暂不可用'
-    },
     message: '消息',
     automaticModel: '自动',
     wakingProfile: profile => `正在唤醒 ${profile}…`,

@@ -1,15 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import {
-  appViewForPath,
-  conversationRoute,
-  NEW_CHAT_ROUTE,
-  primaryRouteSelectedSessionId,
-  routeConversationId,
-  routeSessionId,
-  sessionRoute,
-  SETTINGS_ROUTE
-} from './routes'
+import { NEW_CHAT_ROUTE, primaryRouteSelectedSessionId, sessionRoute, SETTINGS_ROUTE } from './routes'
 
 const SESS_A = 'sess-a'
 const SESS_B = 'sess-b'
@@ -36,13 +27,4 @@ describe('primaryRouteSelectedSessionId', () => {
   it('returns null on a non-chat route with no store selection', () => {
     expect(primaryRouteSelectedSessionId(SETTINGS_ROUTE, null)).toBeNull()
   })
-})
-
-it('keeps public conversation routes separate from a leftover runtime selection', () => {
-  const route = conversationRoute('public/id')
-  expect(routeConversationId(route + '?tab=activity')).toBe('public/id')
-  expect(routeSessionId(route)).toBeNull()
-  expect(primaryRouteSelectedSessionId(route, 'old-runtime')).toBeNull()
-  expect(appViewForPath(route)).toBe('conversation')
-  expect(routeConversationId('/conversations/%')).toBeNull()
 })

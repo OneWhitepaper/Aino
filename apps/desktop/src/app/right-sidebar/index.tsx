@@ -12,14 +12,12 @@ import { useDelayedTrue } from '@/hooks/use-delayed-true'
 import { useI18n } from '@/i18n'
 import { normalizeOrLocalPreviewTarget } from '@/lib/local-preview'
 import { cn } from '@/lib/utils'
-import { $foregroundConversationOwner } from '@/store/conversation-runtime'
 import { notifyError } from '@/store/notifications'
 import { openPreview } from '@/store/preview'
 import { $toolSession, $toolWorkspaceCwd, toolSessionIsCurrent } from '@/store/tool-session'
 
 import { SidebarPanelLabel } from '../shell/sidebar-label'
 
-import { SharedProjectTree } from './files/shared-project-tree'
 import { ProjectTree } from './files/tree'
 import { useProjectTree } from './files/use-project-tree'
 
@@ -29,16 +27,6 @@ interface RightSidebarPaneProps {
 }
 
 export function RightSidebarPane({ onActivateFile, onActivateFolder }: RightSidebarPaneProps = {}) {
-  const conversationOwner = useStore($foregroundConversationOwner)
-
-  if (conversationOwner) {
-    return <SharedProjectTree owner={conversationOwner} />
-  }
-
-  return <SessionRightSidebarPane onActivateFile={onActivateFile} onActivateFolder={onActivateFolder} />
-}
-
-function SessionRightSidebarPane({ onActivateFile, onActivateFolder }: RightSidebarPaneProps) {
   const { t } = useI18n()
   const r = t.rightSidebar
   const session = useStore($toolSession)

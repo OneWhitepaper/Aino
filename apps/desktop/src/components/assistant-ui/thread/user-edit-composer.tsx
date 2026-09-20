@@ -56,7 +56,14 @@ import {
 } from '@/app/chat/hooks/use-composer-actions'
 import { uploadComposerAttachment } from '@/app/session/hooks/use-prompt-actions'
 import { hermesDirectiveFormatter } from '@/components/assistant-ui/directive-text'
-import { HumanMessageContainer } from '@/components/assistant-ui/thread/user-message'
+import {
+  HumanMessageContainer,
+  StopGlyph,
+  USER_ACTION_ICON_BUTTON_CLASS,
+  USER_ACTION_ICON_SIZE,
+  USER_BUBBLE_BASE_CLASS
+} from '@/components/assistant-ui/thread/user-message'
+import { Codicon } from '@/components/ui/codicon'
 import type { HermesGateway } from '@/hermes'
 import { useI18n } from '@/i18n'
 import { attachmentDisplayText, attachmentId, pathLabel } from '@/lib/chat-runtime'
@@ -70,8 +77,6 @@ import { notifyError } from '@/store/notifications'
 import { $terminalBackend } from '@/store/session'
 import { isSessionRemote } from '@/store/session-states'
 import { notifyThreadEditClose } from '@/store/thread-scroll'
-
-import { UserEditBubble, UserEditSubmitButton } from './user-edit-surface'
 
 interface UserEditComposerProps {
   cwd: string | null
@@ -822,8 +827,13 @@ export const UserEditComposer: FC<UserEditComposerProps> = ({ cwd, gateway, sess
               placement={triggerPlacement}
             />
           )}
-          <UserEditBubble
-            className={cn(COMPOSER_DROP_FADE_CLASS, dragActive && COMPOSER_DROP_ACTIVE_CLASS)}
+          <div
+            className={cn(
+              USER_BUBBLE_BASE_CLASS,
+              'ui-prompt-input__container relative border-(--ui-stroke-secondary) data-[expanded=true]:min-h-20',
+              COMPOSER_DROP_FADE_CLASS,
+              dragActive && COMPOSER_DROP_ACTIVE_CLASS
+            )}
             data-expanded={expanded ? 'true' : undefined}
           >
             <div
@@ -887,18 +897,30 @@ export const UserEditComposer: FC<UserEditComposerProps> = ({ cwd, gateway, sess
                 {copy.attachingFile}
               </span>
             )}
-            <UserEditSubmitButton
+            <button
+              aria-label={copy.sendEdited}
+              className={cn('absolute right-2 bottom-2 size-5', USER_ACTION_ICON_BUTTON_CLASS)}
               disabled={!canSubmit || submitting || staging}
-              onSubmit={() => {
+              onClick={() => {
                 const editor = editorRef.current
 
                 if (editor) {
                   submitEdit(editor)
                 }
               }}
-              submitting={submitting}
-            />
-          </UserEditBubble>
+              // Keep focus in the editor on click: macOS doesn't focus a button
+              // on mousedown, so without this the arrow-click blurs the editor,
+              // the blur timer cancels the edit (tearing down the composer
+              // core), and the click's send() then throws against a dead core —
+              // the edit silently never sends. The restore button guards the
+              // same way.
+              onPointerDown={event => event.preventDefault()}
+              title={copy.sendEdited}
+              type="button"
+            >
+              {submitting ? StopGlyph : <Codicon name="arrow-up" size={USER_ACTION_ICON_SIZE} />}
+            </button>
+          </div>
         </div>
       </HumanMessageContainer>
     </ComposerPrimitive.Root>

@@ -19,12 +19,10 @@ import { cn } from '@/lib/utils'
 import { $wakeWord, toggleWakeWord } from '@/store/wake-word'
 
 import { ACTIVE_ICON_BTN, GHOST_ICON_BTN } from './control-classes'
-import { useOwnedVoice } from './owned-voice-context'
 import type { ChatBarState, VoiceStatus } from './types'
 import { VoiceEngineRows } from './voice-engine-rows'
 
 export interface VoiceMenuProps {
-  liveFeatures?: boolean
   autoSpeak: boolean
   disabled: boolean
   /** Narrow composers include dictation here; wider ones keep its button inline. */
@@ -53,7 +51,6 @@ export interface VoiceMenuProps {
  */
 export function VoiceMenu({
   autoSpeak,
-  liveFeatures = true,
   disabled,
   includeDictation = true,
   state,
@@ -64,9 +61,7 @@ export function VoiceMenu({
 }: VoiceMenuProps) {
   const { t } = useI18n()
   const c = t.composer
-  const owned = useOwnedVoice()
-  const ambientWake = useStore($wakeWord)
-  const wake = owned ? owned.wake : ambientWake
+  const wake = useStore($wakeWord)
 
   const phrase = wake.phrase || 'hey hermes'
   const dictating = includeDictation && (state.voice.active || voiceStatus !== 'idle')
@@ -114,7 +109,7 @@ export function VoiceMenu({
       <DropdownMenuContent align="end" className="min-w-52">
         <DropdownMenuItem
           className={dropdownMenuRow}
-          disabled={disabled || !liveFeatures}
+          disabled={disabled}
           onSelect={() => {
             triggerHaptic('open')
             onStartConversation()
@@ -124,7 +119,7 @@ export function VoiceMenu({
           {c.startVoice}
         </DropdownMenuItem>
         <DropdownMenuSeparator />
-        <VoiceEngineRows disabled={disabled || !liveFeatures} />
+        <VoiceEngineRows disabled={disabled} />
         <DropdownMenuSeparator />
         {/* Checkbox items, because all three are toggles the user is reading
             the CURRENT state of — the reason they were pressed-state buttons
@@ -147,7 +142,7 @@ export function VoiceMenu({
         <DropdownMenuCheckboxItem
           checked={autoSpeak}
           className={dropdownMenuRow}
-          disabled={disabled || !liveFeatures}
+          disabled={disabled}
           onSelect={event => {
             event.preventDefault()
             triggerHaptic(autoSpeak ? 'close' : 'open')
@@ -160,11 +155,11 @@ export function VoiceMenu({
         <DropdownMenuCheckboxItem
           checked={wakeListening}
           className={dropdownMenuRow}
-          disabled={disabled || !liveFeatures || wake.pending}
+          disabled={disabled || wake.pending}
           onSelect={event => {
             event.preventDefault()
             triggerHaptic(wakeListening ? 'close' : 'open')
-            void (owned ? owned.toggleWake() : toggleWakeWord())
+            void toggleWakeWord()
           }}
         >
           {wakeListening ? <Ear className={iconSize.sm} /> : <EarOff className={iconSize.sm} />}

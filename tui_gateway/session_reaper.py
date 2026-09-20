@@ -152,7 +152,6 @@ def _session_is_lru_evictable(sid: str, session: dict) -> bool:
     it loses its client): never evict a session mid-turn, awaiting input, still building, owning live delegated
     work, or on a live transport. Lazy watch sessions never start a build, so their unset agent_ready must not
     make them immortal."""
-    # The delegation guard includes durable, admitted-to-FIFO background results for managed conversations.
     if session.get("running") or _session_pending_kind(sid) or _session_has_active_delegations(sid, session):
         return False
     ready = session.get("agent_ready")
@@ -368,10 +367,7 @@ def _refresh_backend_heartbeat() -> None:
     if db is None:
         return
     try:
-        from gateway.hosted_room_conversation_compat import backend_capabilities
-        import psutil
         db.register_backend_heartbeat(
-            process_started_at=psutil.Process().create_time(), capabilities=backend_capabilities(),
             backend_id=_backend_id_for_this_process(), pid=os.getpid(), started_at=_gateway_started_at(),
             profile=_current_profile_name(), host=_reaper_hostname())
     except Exception:

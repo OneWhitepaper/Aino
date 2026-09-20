@@ -26,25 +26,6 @@ def _owned_subagent_records(session_id, transport, owner):
                 and r.get("owner_session_record") is owner]
 
 
-def _current_subagent_write_authority(session_id):
-    """Snapshot attachment permits reads; managed child controls also require owner writes."""
-    transport, owner = _current_session_steer_authority(session_id)
-    metadata = (owner or {}).get("_conversation_binding")
-    if metadata:
-        from . import server
-        from .conversation_authority import require_conversation_owner
-        from gateway.hosted_room_conversation_owners import ConversationOwnershipError, owner_key
-
-        try:
-            actual_owner = require_conversation_owner(
-                server, server._conversation_db_path, metadata["conversation_id"], write=True)
-        except ConversationOwnershipError:
-            return None, None
-        if actual_owner != owner_key(metadata.get("auth_user_id")):
-            return None, None
-    return transport, owner
-
-
 @method("subagent.list")
 def _(rid, params):
     session_id = _str_param(params, "session_id")
@@ -66,7 +47,7 @@ def _(rid, params):
     if not subagent_id:
         return _err(rid, 4000, "subagent_id required")
     session_id = _str_param(params, "session_id")
-    transport, owner = _current_subagent_write_authority(session_id)
+    transport, owner = _current_session_steer_authority(session_id)
     if transport is None or owner is None:
         return _err(rid, 4001, "session not found or not owned by this transport")
     record = next((r for r in _owned_subagent_records(session_id, transport, owner)

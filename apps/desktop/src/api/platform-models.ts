@@ -28,14 +28,11 @@ function safeBindingCode(error: unknown): string | null {
   }
 
   const record = error as { code?: unknown; data?: unknown }
-  const data =
-    record.data && typeof record.data === 'object' ? (record.data as { code?: unknown; error?: unknown }) : null
+  const data = record.data && typeof record.data === 'object' ? (record.data as { code?: unknown; error?: unknown }) : null
   const nested = data?.error && typeof data.error === 'object' ? (data.error as { code?: unknown }) : null
   const candidates = [record.code, data?.code, nested?.code]
 
-  return (
-    candidates.find((code): code is string => typeof code === 'string' && SAFE_PLATFORM_BINDING_CODES.has(code)) ?? null
-  )
+  return candidates.find((code): code is string => typeof code === 'string' && SAFE_PLATFORM_BINDING_CODES.has(code)) ?? null
 }
 
 function bindingFailure(error: unknown): BindPlatformModelResult {
@@ -80,12 +77,7 @@ export async function bindPlatformModel(
   try {
     ticket = await requestOwner<{ managed_model_binding?: number; session_ticket?: string }>(
       'session.managed_model_ticket',
-      {
-        session_id: input.session_id,
-        model_id: input.model_id,
-        owner,
-        ...(input.session_profile ? { profile: input.session_profile } : {})
-      },
+      { session_id: input.session_id, model_id: input.model_id, owner },
       10_000
     )
   } catch (error) {

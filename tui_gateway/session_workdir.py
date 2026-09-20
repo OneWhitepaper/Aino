@@ -130,8 +130,6 @@ def _effective_terminal_backend() -> str:
 def _display_session_cwd(session: dict | None) -> str:
     """Session cwd for display/probe surfaces, healed past deleted worktrees (healed value persisted back; local only)."""
     cwd = _session_cwd(session)
-    if session and session.get("_conversation_binding"):
-        return cwd  # A missing project is unavailable; never silently adopt an ancestor.
     if not _is_local_terminal_backend():
         return cwd
     healed = _heal_dead_cwd(cwd)
@@ -149,8 +147,6 @@ def _reconcile_session_cwd_from_terminal(session: dict | None) -> bool:
     never overridden. Local backends only (a remote cwd cannot be stat'ed or git-probed here)."""
     # An explicit choice only moves by another explicit action; a cwd adopted HERE is marked `cwd_from_settle` so
     # successive settles keep following.
-    if session and session.get("_conversation_binding"):
-        return False
     if not session or not _is_local_terminal_backend():
         return False
     if session.get("explicit_cwd") and not session.get("cwd_from_settle"):
@@ -243,9 +239,6 @@ def _workdir_row_model_config(session: dict) -> tuple[str, dict]:
     for flag in ("room_plumbing", "follow_profile_config"):
         if session.get(flag):
             model_config[flag] = True
-    from .session_conversation_binding import conversation_row_marker
-    if marker := conversation_row_marker(session):
-        model_config["conversation_binding"] = marker
     return row_model, model_config
 
 
@@ -383,8 +376,6 @@ def _rewind_active_session_history(
     """Rewind one canonical user turn while retaining carrier scaffolding. Caller holds ``history_lock``. Persistent
     sessions go through ``SessionDB.rewind_user_turn`` (the durable transcript is the authority; memory is installed
     only after the commit); a session without a key rewinds the warm history alone."""
-    from .session_conversation_binding import require_conversation_mutation_allowed
-    require_conversation_mutation_allowed(session)
     from agent.context_compressor import history_before_user_originated_turn, retryable_user_text, user_originated_turn_view
 
     history = _history_without_ephemeral_scaffolding(session.get("history", []))
@@ -472,8 +463,6 @@ def _persist_session_cwd_and_schedule_git_meta(session: dict, cwd: str, *, db=No
 
 
 def _set_session_cwd(session: dict, cwd: str) -> str:
-    if session.get("_conversation_binding"):
-        raise ValueError("conversation working directory belongs to its generation")
     from hermes_constants import translate_cwd_for_wsl_backend
     cwd = translate_cwd_for_wsl_backend(str(cwd))
     resolved = os.path.abspath(os.path.expanduser(cwd))

@@ -68,7 +68,6 @@ import { useEmojiCompletions } from './hooks/use-emoji-completions'
 import { useComposerMicroActions } from './hooks/use-micro-actions'
 import { useSlashCompletions } from './hooks/use-slash-completions'
 import { useSessionStatusPresence } from './hooks/use-status-presence'
-import { ComposerContent, ComposerInputSurface, ComposerSurface } from './input-surface'
 import { shouldConvertPasteToAttachment } from './large-paste'
 import { ActionBadges } from './micro-actions'
 import { chipTypedPathOnSpace, pathifyRefs } from './path-refs'
@@ -152,10 +151,7 @@ export function ChatBar({
   // exact pass-through, so surfaces without contributions are byte-identical.
   const onSubmit = useCallback<ChatBarProps['onSubmit']>(
     async (value, options) => {
-      if (platformHistoryOwner(sessionId) !== null) {
-        return false
-      }
-
+      if (platformHistoryOwner(sessionId) !== null) {return false}
       // Bare stop phrase typed while the voice conversation is live: end the
       // conversation (mic off, pill dismissed) instead of sending "stop" to
       // the agent. Spoken transcripts are already stop-checked inside
@@ -1114,12 +1110,14 @@ export function ChatBar({
 
   const input = (
     <div className={cn('relative', stacked ? 'w-full' : 'min-w-(--composer-input-inline-min-width) flex-1')}>
-      <ComposerInputSurface
+      <div
         aria-disabled={inputDisabled ? true : undefined}
         aria-label={t.composer.message}
         autoCapitalize="off"
         autoCorrect="off"
         className={cn(
+          'min-h-[1.625rem] min-h-(--composer-input-min-height) max-h-(--composer-input-max-height) cursor-text overflow-y-auto whitespace-pre-wrap break-words [overflow-wrap:anywhere] bg-transparent pb-1 pr-1 pt-1 leading-normal text-foreground outline-none disabled:cursor-not-allowed',
+          '**:data-ref-text:cursor-default',
           stacked && 'pl-3',
           stacked ? 'w-full' : 'min-w-(--composer-input-inline-min-width) flex-1',
           // Inside the native Wayland HUD drag region: a drag region swallows
@@ -1130,7 +1128,6 @@ export function ChatBar({
         contentEditable={!inputDisabled}
         data-placeholder={placeholder}
         data-slot={RICH_INPUT_SLOT}
-        kind="rich"
         onBeforeInput={handleEditorBeforeInput}
         onBlur={() => {
           // A composition never survives focus loss (Chromium commits the
@@ -1375,10 +1372,29 @@ export function ChatBar({
             )}
             <div className="relative w-full rounded-[inherit]">
               {hudMode && busy && <span aria-hidden className="arc-border arc-composer" />}
-              <ComposerSurface
-                className={cn(COMPOSER_DROP_FADE_CLASS, dragActive && COMPOSER_DROP_ACTIVE_CLASS)}
+              <div
+                className={cn(
+                  // grid-cols-[minmax(0,1fr)]: the implicit `auto` column sized
+                  // itself to its items' min-content, so a status row whose
+                  // content out-measured a narrow pane silently widened the
+                  // track past the surface — and every `w-full` child (the fade,
+                  // the input/controls row) laid out against that phantom width
+                  // and got clipped by overflow-hidden, send button first.
+                  'group/composer-surface relative z-4 isolate grid grid-cols-[minmax(0,1fr)] grid-rows-[auto_1fr] overflow-hidden rounded-[inherit] border border-[color-mix(in_srgb,var(--dt-composer-ring)_calc(18%*var(--composer-ring-strength)),var(--dt-input))]',
+                  COMPOSER_DROP_FADE_CLASS,
+                  dragActive && COMPOSER_DROP_ACTIVE_CLASS
+                )}
+                data-slot="composer-surface"
                 ref={composerSurfaceRef}
               >
+                <div
+                  aria-hidden
+                  className={cn(
+                    'pointer-events-none absolute inset-0 -z-10 rounded-[inherit]',
+                    composerFill,
+                    composerSurfaceGlass
+                  )}
+                />
                 {!botChat && !guidedChat && (
                   <CodingStatusRow
                     onBranchOff={handleBranchOff}
@@ -1393,12 +1409,14 @@ export function ChatBar({
                     repoPath={cwd}
                   />
                 )}
-                <ComposerContent
-                  className={
+                <div
+                  className={cn(
+                    'relative z-1 flex min-h-0 w-full flex-col gap-(--composer-row-gap) overflow-hidden rounded-[inherit] px-(--composer-surface-pad-x) py-(--composer-surface-pad-y) transition-opacity duration-200 ease-out',
                     scrolledUp
                       ? 'opacity-30 group-hover/composer:opacity-100 group-focus-within/composer-surface:opacity-100'
                       : 'opacity-100'
-                  }
+                  )}
+                  data-slot="composer-fade"
                 >
                   {/* Contribution seams: banners above, a row below, inline
                     additions beside the "+" menu and before the controls.
@@ -1460,8 +1478,8 @@ export function ChatBar({
                     </div>
                   </div>
                   <ContribSlot area={COMPOSER_AREAS.bottom} />
-                </ComposerContent>
-              </ComposerSurface>
+                </div>
+              </div>
             </div>
           </ComposerPrimitive.Root>
           {/* Underside: chrome-free strip BELOW the composer. Outside the root

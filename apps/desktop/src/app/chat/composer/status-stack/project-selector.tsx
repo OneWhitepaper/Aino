@@ -1,5 +1,5 @@
 import { useStore } from '@nanostores/react'
-import { type ComponentProps, useState } from 'react'
+import { useState } from 'react'
 
 import { useSessionView } from '@/app/chat/session-view'
 import { Button } from '@/components/ui/button'
@@ -66,7 +66,16 @@ export function ComposerProjectSelector({ cwd, label }: ComposerProjectSelectorP
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <ProjectSelectorTrigger disabled={opening || bindingProject} label={label} />
+        <Button
+          aria-label={label || t.statusStack.coding.selectProject}
+          className="min-w-0 max-w-full"
+          disabled={opening || bindingProject}
+          size="inline"
+          variant="ghost"
+        >
+          <span className="max-w-56 truncate text-xs font-normal">{label || t.statusStack.coding.selectProject}</span>
+          <Codicon name="chevron-down" size="0.75rem" />
+        </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="max-w-72" side="top">
         {cwd && (
@@ -145,16 +154,5 @@ export function ComposerProjectSelector({ cwd, label }: ComposerProjectSelectorP
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
-  )
-}
-
-export function ProjectSelectorTrigger({ label, ...props }: ComponentProps<typeof Button> & { label?: string | null }) {
-  const { t } = useI18n()
-
-  return (
-    <Button {...props} className="min-w-0 max-w-full" size="inline" variant="ghost">
-      <span className="max-w-56 truncate text-xs font-normal">{label || t.statusStack.coding.selectProject}</span>
-      <Codicon name="chevron-down" size="0.75rem" />
-    </Button>
   )
 }

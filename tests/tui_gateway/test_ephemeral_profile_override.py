@@ -27,6 +27,9 @@ import pytest
 from tui_gateway import server as srv
 
 
+PROFILE_HOME = "/home/user/.hermes/profiles/work"
+
+
 class _InlineThread:
     """Drop-in for ``threading.Thread`` that runs the target synchronously.
 
@@ -44,12 +47,10 @@ class _InlineThread:
 
 
 @pytest.fixture
-def fake_session(tmp_path):
+def fake_session():
     """A minimal session carrying a non-default ``profile_home``."""
-    profile_home = tmp_path / "profiles" / "work"
-    profile_home.mkdir(parents=True)
     agent = MagicMock()
-    return {"agent": agent, "session_key": "sess_k", "profile_home": str(profile_home)}
+    return {"agent": agent, "session_key": "sess_k", "profile_home": PROFILE_HOME}
 
 
 @pytest.fixture
@@ -95,7 +96,7 @@ class TestBackgroundProfileOverride:
         """prompt.background binds profile_home for the ephemeral turn and restores it."""
         _run("prompt.background", {"text": "hi", "session_id": "ui1"}, fake_session)
 
-        override_calls["set"].assert_called_once_with(fake_session["profile_home"])
+        override_calls["set"].assert_called_once_with(PROFILE_HOME)
         override_calls["reset"].assert_called_once_with("TOK")
         override_calls["agent"].run_conversation.assert_called_once()
 
@@ -113,7 +114,7 @@ class TestBackgroundProfileOverride:
         override_calls["agent"].run_conversation.side_effect = RuntimeError("boom")
         _run("prompt.background", {"text": "hi", "session_id": "ui1"}, fake_session)
 
-        override_calls["set"].assert_called_once_with(fake_session["profile_home"])
+        override_calls["set"].assert_called_once_with(PROFILE_HOME)
         override_calls["reset"].assert_called_once_with("TOK")
 
 
@@ -126,7 +127,7 @@ class TestPreviewRestartProfileOverride:
             fake_session,
         )
 
-        override_calls["set"].assert_called_once_with(fake_session["profile_home"])
+        override_calls["set"].assert_called_once_with(PROFILE_HOME)
         override_calls["reset"].assert_called_once_with("TOK")
         override_calls["agent"].run_conversation.assert_called_once()
 

@@ -62,7 +62,6 @@ import { readKey, writeKey } from '@/lib/storage'
 import { TRANSCRIPT_DIRECTIVE_AREA, type TranscriptDirectiveContribution } from '@/lib/transcript-directives'
 import { setYoloEnabled } from '@/lib/yolo-session'
 import { pruneComposerPopoutZones } from '@/store/composer-popout'
-import { $filesPaneAvailable } from '@/store/files-pane'
 import {
   $fileBrowserOpen,
   $panesFlipped,
@@ -81,6 +80,7 @@ import { $selectedStoredSessionId, $sessions, $yoloActive, sessionMatchesStoredI
 import { watchSessionPins } from '@/store/session-pin-sync'
 import { $botChatScopes } from '@/store/session-states'
 import { watchUnreadWriteGuard } from '@/store/session-unread-remote'
+import { $toolWorkspaceCwd } from '@/store/tool-session'
 import { isAuxiliaryWindow, isBrowserWindow, isHudWindow } from '@/store/windows'
 
 import { BrowserPopoutShell } from '../chat/browser-popout-shell'
@@ -593,6 +593,7 @@ bindTreeSideVisibility('right', $fileBrowserOpen, setFileBrowserOpen)
 // collapse and the chat absorbs the width; picking a project brings them
 // back. The terminal is NOT workspace-gated: unlike the old shell (where it
 // rode the rail's row and vanished with it), its zone stands on its own.
+const $hasWorkspace = computed($toolWorkspaceCwd, cwd => Boolean(cwd))
 
 // The tree pane's own presence tracks ⌘J directly, not just the column's
 // collapse — otherwise a pane revealed into that shared column would drag the
@@ -606,7 +607,7 @@ bindTreeSideVisibility('right', $fileBrowserOpen, setFileBrowserOpen)
 // is about.
 bindPaneVisibility(
   'files',
-  computed([$filesPaneAvailable, $fileBrowserOpen], (workspace, open) => workspace && open),
+  computed([$hasWorkspace, $fileBrowserOpen], (workspace, open) => workspace && open),
   () => setFileBrowserOpen(false),
   () => setFileBrowserOpen(true)
 )

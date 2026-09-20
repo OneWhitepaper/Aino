@@ -562,7 +562,7 @@ async def pty_ws(ws: WebSocket) -> None:
 async def gateway_ws(ws: WebSocket) -> None:
     if not await _close_unless_sidecar_allowed(ws):
         return
-    from tui_gateway.ws import handle_ws, _INSTALL_OWNER_AUTHORITY
+    from tui_gateway.ws import handle_ws
 
     # The authenticated identity (ticket / internal credential) stamped by
     # _ws_auth_reason becomes the identity authority for privileged RPCs
@@ -571,7 +571,6 @@ async def gateway_ws(ws: WebSocket) -> None:
         ws,
         auth_identity=getattr(ws, "_hermes_auth_identity", None),
         subprotocol=getattr(ws, "_hermes_ws_subprotocol", None),
-        install_owner_authority=_INSTALL_OWNER_AUTHORITY if getattr(ws, "_hermes_auth_identity", None) is None else None,
     )
 
 

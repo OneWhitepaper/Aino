@@ -120,46 +120,6 @@ def test_capabilities_and_invitation_advertise_scoped_roomlink(home, monkeypatch
     )
 
 
-def test_peer_invitation_rejects_conversation_before_issuing_grant(home, monkeypatch):
-    from gateway import hosted_room_peer, hosted_rooms
-    from gateway.hosted_room_conversation_store import ConversationStore
-    from gateway.hosted_room_conversation_types import ParticipantRef
-
-    db = hosted_rooms.default_db_path()
-    store = ConversationStore(db)
-    store.create("conversation-1", "Novel", ParticipantRef(
-        "general", _server_authority(), "default", "Aino", True,
-    ), None)
-    issued_for = []
-    issue = hosted_room_peer.issue_room_grant
-
-    def record_issue(*args, **kwargs):
-        issued_for.append(kwargs["room_id"])
-        return issue(*args, **kwargs)
-
-    monkeypatch.setattr(hosted_room_peer, "issue_room_grant", record_issue)
-    params = {
-        "room_id": "conversation-1", "home_install_id": "remote-home",
-        "authority_gateway_id": "remote-home", "authority_epoch": 1,
-        "member_id": "peer", "profile": "default",
-    }
-    rejected = srv._methods["groups.peer.invite"](2, params)
-    assert rejected["error"]["code"] == 4120
-    assert issued_for == []
-    assert not hosted_rooms.peer_room_is_reserved(
-        db, room_id="conversation-1", target_profile="default",
-    )
-
-    invitation = _result(srv._methods["groups.peer.invite"](
-        3, {**params, "room_id": "prospective-discussion"},
-    ))
-    assert invitation["grant"]
-    assert issued_for == ["prospective-discussion"]
-    assert hosted_rooms.peer_room_is_reserved(
-        db, room_id="prospective-discussion", target_profile="default",
-    )
-
-
 def test_capabilities_disable_roomlink_when_run_replay_is_not_durable(
     home, monkeypatch
 ):

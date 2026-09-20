@@ -1,5 +1,4 @@
 import { useStore } from '@nanostores/react'
-import { atom } from 'nanostores'
 import { type KeyboardEvent as ReactKeyboardEvent, useCallback, useEffect, useRef, useState } from 'react'
 import { useMemo } from 'react'
 import { type NodeApi, type NodeRendererProps, type RowRendererProps, Tree, type TreeApi } from 'react-arborist'
@@ -18,7 +17,6 @@ import { FileEntryContextMenu, InlineRenameInput, isRenameShortcut } from '../fi
 import { getFileTreeDndManager } from './dnd-manager'
 import type { TreeNode } from './use-project-tree'
 
-const NO_CHANGE = atom<RepoChangeKind | undefined>(undefined)
 const ROW_HEIGHT = 28
 const INDENT = 14
 /** Row inset plus the tree gutter aligns root icons with the section label. */
@@ -38,8 +36,6 @@ function withTreeInset(paddingLeft: number | string | undefined): string {
 
 interface ProjectTreeProps {
   collapseNonce: number
-  /** Browse and preview through supplied callbacks without ambient workspace actions. */
-  scopedReadOnly?: boolean
   cwd: string
   data: TreeNode[]
   onActivateFile: (path: string) => void
@@ -52,7 +48,6 @@ interface ProjectTreeProps {
 
 export function ProjectTree({
   collapseNonce,
-  scopedReadOnly = false,
   cwd,
   data,
   onActivateFile,
@@ -140,17 +135,15 @@ export function ProjectTree({
 
   useEffect(
     () =>
-      scopedReadOnly
-        ? undefined
-        : $revealInTreeRequest.subscribe(path => {
-            if (!path) {
-              return
-            }
+      $revealInTreeRequest.subscribe(path => {
+        if (!path) {
+          return
+        }
 
-            $revealInTreeRequest.set(null)
-            void revealNode(path)
-          }),
-    [revealNode, scopedReadOnly]
+        $revealInTreeRequest.set(null)
+        void revealNode(path)
+      }),
+    [revealNode]
   )
 
   const handleActivate = useCallback(
@@ -158,11 +151,11 @@ export function ProjectTree({
       // arborist fires onActivate on click/dblclick/Enter — independent of the
       // row's own handlers. Suppress it for the row being renamed so the
       // context-menu "Rename" (and its fall-through) can't open the preview.
-      if (node.data && !node.data.isDirectory && (scopedReadOnly || $renamingPath.get() !== node.data.id)) {
+      if (node.data && !node.data.isDirectory && $renamingPath.get() !== node.data.id) {
         onPreviewFile?.(node.data.id)
       }
     },
-    [onPreviewFile, scopedReadOnly]
+    [onPreviewFile]
   )
 
   // F2 / Enter on the selected row begins an inline rename. Capture-phase so it
@@ -188,7 +181,7 @@ export function ProjectTree({
     <div
       className="min-h-0 flex-1 overflow-hidden"
       data-project-tree=""
-      onKeyDownCapture={scopedReadOnly ? undefined : handleRenameShortcut}
+      onKeyDownCapture={handleRenameShortcut}
       ref={containerRef}
     >
       {size.height > 0 && size.width > 0 ? (
@@ -219,7 +212,6 @@ export function ProjectTree({
               onAttachFolder={onActivateFolder}
               onPreviewFile={onPreviewFile}
               relativeTo={cwd}
-              scopedReadOnly={scopedReadOnly}
             />
           )}
         </Tree>
@@ -275,18 +267,16 @@ function ProjectTreeRow({
   onAttachFolder,
   onPreviewFile,
   relativeTo,
-  scopedReadOnly = false,
   style
 }: NodeRendererProps<TreeNode> & {
   onAttachFile: (path: string) => void
   onAttachFolder: (path: string) => void
   onPreviewFile?: (path: string) => void
   relativeTo?: null | string
-  scopedReadOnly?: boolean
 }) {
   const renamingPath = useStore($renamingPath)
   const path = node.data?.id ?? ''
-  const changeStore = useMemo(() => (scopedReadOnly ? NO_CHANGE : repoChangeKindForPath(path)), [path, scopedReadOnly])
+  const changeStore = useMemo(() => repoChangeKindForPath(path), [path])
   const changeKind: RepoChangeKind | undefined = useStore(changeStore)
 
   markRightPanePerf('project-tree-row-render', path)
@@ -298,7 +288,7 @@ function ProjectTreeRow({
   const isFolder = node.data.isDirectory
   const isPlaceholder = Boolean(node.data.placeholder)
   const isErrorPlaceholder = node.data.placeholder === 'error'
-  const editing = !scopedReadOnly && !isPlaceholder && renamingPath === node.data.id
+  const editing = !isPlaceholder && renamingPath === node.data.id
 
   const row = (
     <div
@@ -309,18 +299,18 @@ function ProjectTreeRow({
         node.isSelected && 'bg-(--aino-surface-active)',
         isPlaceholder && 'pointer-events-none italic text-muted-foreground/70'
       )}
-      draggable={!scopedReadOnly && !isPlaceholder && !editing}
+      draggable={!isPlaceholder && !editing}
       onClick={event => {
         event.stopPropagation()
 
         // Read the rename atom LIVE (not the render closure): the fall-through
         // click from a context-menu close can fire before the editing re-render
         // commits, so a stale closure would still select/activate and yank focus.
-        if (isPlaceholder || (!scopedReadOnly && $renamingPath.get() === node.data.id)) {
+        if (isPlaceholder || $renamingPath.get() === node.data.id) {
           return
         }
 
-        if (event.shiftKey && !scopedReadOnly) {
+        if (event.shiftKey) {
           ;(isFolder ? onAttachFolder : onAttachFile)(node.data.id)
 
           return
@@ -335,12 +325,12 @@ function ProjectTreeRow({
       onDoubleClick={event => {
         event.stopPropagation()
 
-        if (!isFolder && !isPlaceholder && (scopedReadOnly || $renamingPath.get() !== node.data.id)) {
+        if (!isFolder && !isPlaceholder && $renamingPath.get() !== node.data.id) {
           onPreviewFile?.(node.data.id)
         }
       }}
       onDragStart={event => {
-        if (scopedReadOnly || isPlaceholder || $renamingPath.get() === node.data.id) {
+        if (isPlaceholder || $renamingPath.get() === node.data.id) {
           event.preventDefault()
 
           return
@@ -352,7 +342,7 @@ function ProjectTreeRow({
         event.dataTransfer.setData('application/x-hermes-paths', payload)
         event.dataTransfer.setData('text/plain', node.data.id)
       }}
-      ref={scopedReadOnly ? undefined : dragHandle}
+      ref={dragHandle}
       style={{
         ...style,
         paddingLeft: withTreeInset(style.paddingLeft)
@@ -386,7 +376,7 @@ function ProjectTreeRow({
     </div>
   )
 
-  if (isPlaceholder || scopedReadOnly) {
+  if (isPlaceholder) {
     return row
   }
 

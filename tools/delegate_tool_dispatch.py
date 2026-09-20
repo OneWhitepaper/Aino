@@ -363,31 +363,12 @@ def _dispatch_unit(unit: _Batch, unit_id: Optional[str], slot_key: Optional[str]
         for c in child_agents:
             _signal_child_stop(c, "Async delegation cancelled")
 
-    def _run():
-        owner = unit.origin_owner_session_record
-        if isinstance(owner, dict) and owner.get('_conversation_binding'):
-            from tui_gateway.conversation_notifications import conversation_delegation_dispatch_allowed
-            if not conversation_delegation_dispatch_allowed(owner, unit_id):
-                results = []
-                for i, _task, child in unit.children:
-                    _signal_child_stop(child, "Conversation origin cancelled")
-                    entry = _fabricated_entry(i, "interrupted", "Conversation origin cancelled", child)
-                    results.append(entry)
-                    with _quiet("Cancelled child cleanup failed", exc_info=True):
-                        child.close()
-                    if i < len(unit.live_writers) and unit.live_writers[i] is not None:
-                        unit.live_writers[i].finalize(entry)
-                from tools.delegation_live_log import update_manifest_statuses
-                update_manifest_statuses(unit.live_deleg_id, results)
-                return {"results": results}
-        return _execute_and_aggregate(unit, honor_parent_interrupt=False)
-
     return dispatch_async_delegation_batch(
         # Call-wide goals: completion formatting indexes them by task_index.
         goals=[t["goal"] for t in unit.task_list], context=unit.context,
         toolsets=None,  # metadata for the completion block only; subagents inherit the parent's toolsets
         role=unit.top_role, model=unit.creds["model"],
-        runner=_run,
+        runner=lambda: _execute_and_aggregate(unit, honor_parent_interrupt=False),
         interrupt_fn=_interrupt, delegation_id=unit_id, slot_key=slot_key,
         task_indexes=[i for (i, _, _) in unit.children] if len(unit.children) < len(unit.task_list) else None,
         progress_fn=lambda: _batch_progress_token(child_agents), **routing,
@@ -426,29 +407,15 @@ def _dispatch_background(batch: _Batch) -> str:
         # cache/delegation/live/<id>/; several units suffix it (-1, -2, ...) and the call keeps the bare id.
         unit_id = batch.live_deleg_id if len(units) == 1 else (f"{batch.live_deleg_id}-{k + 1}" if batch.live_deleg_id else None)
         unit.unit_id = unit_id = unit_id or _new_delegation_id()  # fixed before the runner can start
-        # Persist the exact unit origin before any worker can emit a completion.
-        owner = batch.origin_owner_session_record
-        managed = isinstance(owner, dict) and owner.get('_conversation_binding')
-        if managed:
-            from tui_gateway.conversation_notifications import capture_conversation_delegation, reject_conversation_delegation
-            capture_conversation_delegation(owner, unit_id)
         # The worker can start before admission returns. Detach only this unit:
         # unsubmitted units must still receive parent stops while a fallback runs.
         for _, _, child in unit.children:
             _detach_child(parent_agent, child)
-        try:
-            dispatch = _dispatch_unit(unit, unit_id, slot_key, routing)
-        except Exception:
-            if managed:
-                reject_conversation_delegation(owner, unit_id)
-            _restore_parent_cancellation(unit)
-            raise
+        dispatch = _dispatch_unit(unit, unit_id, slot_key, routing)
         if dispatch.get("status") == "dispatched":
             slot_key = slot_key or dispatch["delegation_id"]
             dispatched.append((unit, dispatch["delegation_id"]))
             continue
-        if managed:
-            reject_conversation_delegation(owner, unit_id)
         _restore_parent_cancellation(unit)
         if not dispatched:
             logger.info(

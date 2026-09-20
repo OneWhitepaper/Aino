@@ -556,257 +556,6 @@ export interface ProjectFacts {
   verifyCommands: string[]
   contextFiles: string[]
 }
-export interface ConversationAdoptParams {
-  source_profile: string
-  lineage_id: string
-  conversation_id: string
-  input_id: string
-}
-export interface ConversationAdoptResult {
-  migration: MigrationReceipt
-}
-export interface MigrationReceipt {
-  migration_id: string
-  conversation_id: string
-  source_profile: string
-  source_lineage_id: string
-  source_cutoff_row_id: number
-  status: 'preparing' | 'importing' | 'complete' | 'failed'
-  source_session_ids?: string[]
-}
-export interface ConversationPrepareParams {
-  conversation_id: string
-  reasoning_effort?: string | null
-  fast?: boolean | null
-  participant_id: string
-  expected_revision?: number | null
-  expected_generation?: number
-  model_source?: 'aino' | 'byok' | null
-  model_id?: string | null
-}
-export interface ConversationPrepareResult {
-  session_id: string
-  stored_session_id: string
-  profile: string
-  session_generation: number
-  model_status: string
-  model_config: Record<string, unknown>
-  previous_revision: number
-  conversation_revision: number
-}
-/** Client→server method params / server→client request params. Unknown keys are rejected. */
-export type Params = Record<string, never>
-export interface ConversationCapabilities {
-  scoped_commands?: boolean
-  supported_read_commands?: string[]
-  max_attachment_bytes?: number | null
-  max_attachments?: number | null
-  protocol_version: number
-  enabled: boolean
-  reason?: string | null
-  supported_execution_environments: string[]
-}
-export interface ConversationCatalogResult {
-  participants: ConversationCatalogEntry[]
-}
-export interface ConversationCatalogEntry {
-  participant: ConversationParticipantRef
-  available: boolean
-  reason?: string | null
-}
-export interface ConversationParticipantRef {
-  participant_id: string
-  install_id: string
-  profile: string
-  display_name: string
-  is_general?: boolean
-}
-export interface ConversationCreateParams {
-  auto_title?: boolean
-  conversation_id: string
-  title: string
-  general_participant_id: string
-  project_ref?: ConversationProjectRef | null
-}
-export interface ConversationProjectRef {
-  install_id: string
-  registration_profile: string
-  project_id: string
-  cwd: string
-  execution_environment_id: string
-}
-export interface ConversationResult {
-  conversation: ConversationRecord
-}
-export interface ConversationRecord {
-  branch?: ConversationBranchReceipt | null
-  migration?: MigrationReceipt | null
-  conversation_id: string
-  title: string
-  general: ConversationParticipantRef
-  project: ConversationProjectRef | null
-  revision: number
-  archived: boolean
-}
-export interface ConversationBranchReceipt {
-  operation_id: string
-  conversation_id: string
-  source_conversation_id: string
-  source_event_id: string
-  source_revision: number
-  source_cutoff_seq: number
-  kind: 'branch' | 'edit'
-  draft?: ConversationHistoryDraft | null
-  draft_pending: boolean
-  draft_cancelled?: boolean
-}
-export interface ConversationHistoryDraft {
-  input_id: string
-  turn_id: string
-  participant_id: string
-  text: string
-  attachment_ids: string[]
-  source_event_id: string
-}
-export interface ConversationListParams {
-  cursor?: string | null
-  limit?: number
-  project_ref?: ConversationProjectRef | null
-  include_archived?: boolean
-}
-export interface ConversationListResult {
-  conversations: ConversationRecord[]
-  cursor: string | null
-  has_more: boolean
-}
-export interface ConversationParams {
-  conversation_id: string
-}
-export interface ConversationGetResult {
-  conversation: ConversationRecord
-  migration?: MigrationReceipt | null
-  participants: ConversationParticipantBinding[]
-  active_turn: ConversationTurn | null
-  pending_delegations: ConversationDelegation[]
-}
-export interface ConversationParticipantBinding {
-  conversation_id: string
-  participant: ConversationParticipantRef
-  session_generation: number
-  lineage_id: string | null
-}
-export interface ConversationTurn {
-  turn_id: string
-  input_id: string
-  participant_id: string
-  session_generation: number
-  task_id: string
-  execution_generation: number
-  status: ConversationRunStatus
-  runtime_id?: string | null
-}
-export type ConversationRunStatus = 'queued' | 'running' | 'stopping' | 'settled' | 'failed' | 'cancelled' | 'indeterminate' | 'deferred'
-export interface ConversationDelegation {
-  delegation_id: string
-  origin_turn_id: string
-  participant_id: string
-  session_generation: number
-  status: string
-}
-export interface ConversationSendParams {
-  conversation_id: string
-  turn_id: string
-  input_id: string
-  participant_id: string
-  text: string
-  attachment_ids?: string[]
-  command_token?: string | null
-  surface?: 'voice-live' | null
-  voice_context?: string | null
-  expected_revision: number
-}
-export interface ConversationAdmissionResult {
-  admission: ConversationAdmission
-}
-export interface ConversationAdmission {
-  conversation_id: string
-  turn_id: string
-  input_id: string
-  event_id: string
-  seq: number
-  participant_id: string
-  idempotent: boolean
-}
-export interface ConversationEventsParams {
-  conversation_id: string
-  after_seq?: number
-  limit?: number
-}
-export interface ConversationEventsResult {
-  events: ConversationEvent[]
-  cursor: number
-  has_more: boolean
-}
-export interface ConversationEvent {
-  provenance?: ConversationEventProvenance | null
-  room_id: string
-  seq: number
-  event_id: string
-  kind: string
-  actor: ConversationActor
-  authority_epoch: number
-  payload: Record<string, unknown>
-  created_at: number
-  idempotent?: boolean
-}
-export interface ConversationEventProvenance {
-  conversation_id: string
-  event_id: string
-  seq: number
-  payload_sha256: string
-}
-export interface ConversationActor {
-  kind: string
-  id: string
-  display_name?: string | null
-}
-export interface ConversationStopParams {
-  conversation_id: string
-  turn_id: string
-  execution_generation: number
-  include_delegations?: boolean
-}
-export interface ConversationStopResult {
-  status: ConversationStopStatus
-}
-export type ConversationStopStatus = 'requested' | 'confirmed' | 'not_found'
-export interface ConversationRetryParams {
-  conversation_id: string
-  turn_id: string
-  input_id: string
-  expected_generation: number
-}
-export interface ConversationRefreshParams {
-  conversation_id: string
-  reasoning_effort?: string | null
-  fast?: boolean | null
-  participant_id: string
-  expected_generation: number
-  model_source?: 'aino' | 'byok' | null
-  model_id?: string | null
-}
-export interface ConversationRefreshResult {
-  binding: ConversationParticipantBinding
-  preparation: ConversationModelPreparation
-}
-export interface ConversationModelPreparation {
-  session_id: string
-  stored_session_id: string
-  profile: string
-  session_generation: number
-  model_status: string
-  model_config: Record<string, unknown>
-}
 /** ``key`` selects one getter from ``_CONFIG_GETTERS``; ``cwd`` feeds the ``project`` getter, ``session_id`` lets ``reasoning`` / ``fast`` answer with the session's live pin. */
 export interface ConfigGetParams {
   profile?: string | null
@@ -1245,6 +994,444 @@ export interface VerificationEvidenceRow {
   output_summary?: string | null
   [key: string]: unknown
 }
+export interface GroupsCapabilitiesParams {
+  profile?: string | null
+}
+export interface GroupsCapabilitiesResult {
+  protocol_version: number
+  driver: boolean
+  persistent_process: boolean
+  authority_gateway_id: string
+  room_link: RoomLinkStatus
+  features: string[]
+  methods: string[]
+  max_log_limit: number
+}
+/** ``enabled`` with ``profile``/``catalog``/``endpoint``, or disabled with a ``reason``. */
+export interface RoomLinkStatus {
+  enabled: boolean
+  profile?: string | null
+  catalog?: RoomLinkCatalog | null
+  endpoint?: RoomLinkEndpoint | null
+  reason?: string | null
+}
+/** ``gateway/hosted_room_peer.py::GatewayRoomCatalog.as_mapping``. */
+export interface RoomLinkCatalog {
+  installation_id: string
+  protocol_versions: number[]
+  link_modes: string[]
+  persistent_process: boolean
+  text: boolean
+  attachments: boolean
+  execution_policy: RoomExecutionPolicy
+  catalog_digest: string
+  endpoint?: RoomLinkEndpoint | null
+}
+/** ``gateway/hosted_room_execution_policy.py::execution_policy_mapping``. */
+export interface RoomExecutionPolicy {
+  version: number
+  target_profile: string
+  enabled_toolsets: string[]
+  approval_mode: string
+  max_iterations: number
+  policy_digest: string
+}
+/** ``GatewayRoomCatalog.endpoint_mapping``: ``url``/``transport_security`` when available, ``reason`` when not. */
+export interface RoomLinkEndpoint {
+  available: boolean
+  url?: string | null
+  transport_security?: string | null
+  reason?: string | null
+}
+export interface GroupsListParams {
+  profile?: string | null
+  include_disbanded?: boolean | null
+  limit?: number | null
+  offset?: number | null
+}
+export interface GroupsListResult {
+  rooms: Room[]
+  next_offset?: number | null
+}
+/** ``gateway/hosted_rooms.py::_room_from_row`` plus the branch-only keys ``create`` (legacy adoption), ``state`` (``authority_claim``) and ``rename`` (``event``) add. */
+export interface Room {
+  room_id: string
+  name: string
+  members: RoomMember[]
+  authority_gateway_id: string
+  authority_epoch: number
+  revision: number
+  created_at: number
+  updated_at: number
+  idempotent?: boolean
+  disbanded_at?: number | null
+  latest_seq?: number | null
+  adopted?: boolean | null
+  claim_event?: RoomEvent | null
+  authority_claim?: RoomEvent | null
+  event?: RoomEvent | null
+}
+/** One roster row (``hosted_room_discussion.validate_roster``); legacy rooms may carry pre-normalisation rows, so the set stays open. */
+export interface RoomMember {
+  member_id?: string | null
+  profile?: string | null
+  handle?: string | null
+  display_name?: string | null
+  target?: Record<string, unknown> | null
+  [key: string]: unknown
+}
+/** ``gateway/hosted_rooms.py::_event_from_row``. */
+export interface RoomEvent {
+  room_id: string
+  seq: number
+  event_id: string
+  kind: string
+  actor: RoomActor
+  authority_epoch?: number | null
+  payload: Record<string, unknown>
+  created_at: number
+  idempotent?: boolean
+}
+export interface RoomActor {
+  kind: string
+  id: string
+}
+export interface GroupsCreateParams {
+  profile?: string | null
+  room_id: string
+  name: string
+  members: RoomMemberInput[]
+  authority_gateway_id?: string | null
+}
+/** A roster row as the client proposes it; ``validate_roster`` owns the exact rules. */
+export interface RoomMemberInput {
+  member_id?: string | null
+  profile?: string | null
+  handle?: string | null
+  display_name?: string | null
+  target?: Record<string, unknown> | null
+  [key: string]: unknown
+}
+export interface GroupsCreateResult {
+  room: Room
+}
+export interface GroupsStateParams {
+  profile?: string | null
+  room_id: string
+  include_disbanded?: boolean | null
+}
+export interface GroupsStateResult {
+  room: Room
+  driver_status?: RoomDriverStatus | null
+}
+/** ``HostedRoomService.status(room_id)``; ``pending_actions`` rows are ``{kind: retry, task_id}`` or the driver's approval action (``kind: approval`` + run/session/approval context). */
+export interface RoomDriverStatus {
+  running: boolean
+  working: boolean
+  blocked: boolean
+  counts: Record<string, number>
+  pending_actions: Record<string, unknown>[]
+  peer_routes: PeerRouteStatus[]
+}
+export interface PeerRouteStatus {
+  room_id: string
+  member_id: string
+  status: string
+}
+export interface GroupsSendParams {
+  profile?: string | null
+  room_id: string
+  event_id?: string | null
+  payload: Record<string, unknown>
+}
+export interface GroupsSendResult {
+  event: RoomEvent
+  client_event_id?: string | null
+  accepted?: boolean
+  driver_started?: boolean
+}
+export interface GroupsRenameParams {
+  profile?: string | null
+  room_id: string
+  event_id: string
+  name: string
+}
+export interface GroupsRenameResult {
+  room: Room
+}
+export interface GroupsLogParams {
+  profile?: string | null
+  room_id: string
+  since_seq?: number | null
+  limit?: number | null
+  include_disbanded?: boolean | null
+}
+/** ``gateway/hosted_rooms.py::read_events`` page — also the ``page`` ``groups.replicate`` ingests. */
+export interface GroupsLogResult {
+  events: RoomEvent[]
+  cursor: number
+  latest_seq: number
+  has_more: boolean
+  authority: RoomAuthority
+}
+export interface RoomAuthority {
+  gateway_id: string
+  epoch: number
+}
+export interface GroupsDisbandParams {
+  profile?: string | null
+  room_id: string
+  cancel_id?: string | null
+}
+export interface GroupsDisbandResult {
+  tombstone: RoomTombstone
+}
+export interface RoomTombstone {
+  room_id: string
+  disbanded_at: number
+  idempotent: boolean
+  history_expired?: boolean | null
+  event?: RoomEvent | null
+}
+export interface GroupsStopParams {
+  profile?: string | null
+  room_id: string
+  cancel_id?: string | null
+}
+export interface GroupsStopResult {
+  cancelled: number
+}
+export interface GroupsApproveParams {
+  profile?: string | null
+  room_id: string
+  member_id: string
+  task_id: string
+  execution_generation: number
+  choice: ApprovalChoice
+  request_id: string
+}
+export type ApprovalChoice = 'once' | 'session' | 'always' | 'deny'
+/** ``result`` is the local ``approval.respond`` answer or the peer's run-action receipt. */
+export interface GroupsApproveResult {
+  approved?: boolean
+  result: Record<string, unknown>
+}
+export interface GroupsRetryParams {
+  profile?: string | null
+  room_id: string
+  task_id: string
+}
+export interface GroupsRetryResult {
+  retried?: boolean
+  task: RoomTaskReceipt
+}
+export interface RoomTaskReceipt {
+  room_id: string
+  task_id: string
+  thread_id: string
+  turn_id: string
+  status: string
+  execution_generation: number
+  cancel_generation: number
+}
+export interface GroupsReplicateParams {
+  profile?: string | null
+  room_id: string
+  room_name: string
+  members: RoomMemberInput[]
+  page: Record<string, unknown>
+}
+export interface GroupsReplicateResult {
+  room_id: string
+  stored_seq: number
+  ingested: number
+  authority: RoomAuthority
+  caught_up: boolean
+}
+export interface GroupsReplicaStateParams {
+  profile?: string | null
+  room_id: string
+}
+export interface GroupsReplicaStateResult {
+  room_id: string
+  name: string
+  members: RoomMember[]
+  authority: RoomAuthority
+  last_seq: number
+  latest_seq: number
+  event_bytes: number
+  created_at: number
+  updated_at: number
+}
+export interface GroupsPromoteParams {
+  profile?: string | null
+  room_id: string
+  confirm?: boolean | null
+  reason?: string | null
+}
+export interface GroupsPromoteResult {
+  room_id: string
+  authority_gateway_id: string
+  authority_epoch: number
+  previous_gateway_id: string
+  previous_epoch: number
+  claim_seq: number
+  latest_seq: number
+}
+export interface GroupsDemoteParams {
+  profile?: string | null
+  room_id: string
+  observed_gateway_id: string
+  observed_epoch: number
+}
+export interface GroupsDemoteResult {
+  room_id: string
+  authority_gateway_id: string
+  authority_epoch: number
+  idempotent: boolean
+}
+export interface GroupsPeerInviteParams {
+  profile?: string | null
+  room_id?: string | null
+  home_install_id?: string | null
+  authority_gateway_id?: string | null
+  authority_epoch?: number | null
+  member_id?: string | null
+  grant_id?: string | null
+  ttl_seconds?: number | null
+}
+export interface GroupsPeerInviteResult {
+  grant: string
+  target_profile: string
+  catalog: RoomLinkCatalog
+  endpoint: RoomLinkEndpoint
+}
+export interface GroupsPeerRevokeParams {
+  profile?: string | null
+  grant: string
+}
+export interface GroupsPeerRevokeResult {
+  revoked?: boolean
+}
+export interface GroupsPeerRegisterParams {
+  profile?: string | null
+  room_id: string
+  member_id: string
+  target_url: string
+  target_profile: string
+  grant: string
+  catalog: Record<string, unknown>
+  cancellation_scope_id?: string | null
+  trace_id?: string | null
+}
+export interface GroupsPeerRegisterResult {
+  registered?: boolean
+  mode: string
+  transport_security: string
+  target_install_id: string
+  target_profile: string
+}
+export interface BotRelayRosterSyncParams {
+  profile?: string | null
+  agents?: RelayAgentRow[] | null
+}
+/** A roster row the Desktop pushes (``tools/bot_relay.py::_normalize_roster_row``); invalid rows are dropped server-side, so the shape stays open. */
+export interface RelayAgentRow {
+  profile?: string | null
+  handle?: string | null
+  connection_id?: string | null
+  connection_label?: string | null
+  title?: string | null
+  description?: string | null
+  online?: boolean | null
+  [key: string]: unknown
+}
+export interface BotRelayRosterSyncResult {
+  count: number
+}
+export interface BotRelayOutboxDrainParams {
+  profile?: string | null
+}
+export interface BotRelayOutboxDrainResult {
+  envelopes: RelayEnvelope[]
+}
+/** ``tools/bot_relay.py::enqueue_envelope``. */
+export interface RelayEnvelope {
+  id: string
+  created_at: number
+  from_profile: string
+  from_handle: string
+  target_connection: string
+  target_profile: string
+  target_handle: string
+  message: string
+  [key: string]: unknown
+}
+/** ``profile`` here is the TARGET profile on this gateway (also what the desktop route wrapper adds). */
+export interface BotRelayDeliverParams {
+  profile: string
+  message: string
+  from_profile?: string | null
+  from_handle?: string | null
+  from_connection?: string | null
+}
+export interface BotRelayDeliverResult {
+  reply: string
+}
+export interface BotRelayReplyParams {
+  profile?: string | null
+  id: string
+  reply?: string | null
+  error?: string | null
+  reason?: string | null
+}
+export interface OkResult {
+  ok?: boolean
+}
+export interface BrowserControllerRegisterParams {
+  session_id: string
+  controller_id: string
+  browser_profile_id: string
+  capabilities?: string[] | null
+  protocol_version?: unknown | null
+  principal_id?: string | null
+}
+export interface BrowserControllerRegisterResult {
+  scope: ControllerScope
+}
+export interface ControllerScope {
+  principal_id: string
+  profile_id: string
+  session_id: string
+  controller_id: string
+  browser_profile_id: string
+  transport_family: string
+  capabilities: string[]
+}
+export interface BrowserControllerResultParams {
+  session_id: string
+  command_id: string
+  ok?: unknown | null
+  result?: unknown | null
+  error?: unknown | null
+}
+export interface BrowserControllerResultResult {
+  accepted: boolean
+}
+/** Every controller call names the session the controller is attached to. */
+export interface BrowserControllerParams {
+  session_id: string
+}
+export interface BrowserControllerDetachResult {
+  detached?: boolean
+}
+export type PingParams = Record<string, never>
+export interface PingResult {
+  pong: boolean
+}
+export interface GatewayCapabilitiesResult {
+  per_session_exclusive_submit: boolean
+}
 /** ``word`` is the token under the cursor (``@`` prefix = context reference); ``cwd`` / ``session_id`` pick the directory the listing resolves against. */
 export interface CompletePathParams {
   profile?: string | null
@@ -1263,7 +1450,6 @@ export interface CompletionItem {
   kind?: string | null
 }
 export interface CompleteSlashParams {
-  profile?: string | null
   text?: string | null
 }
 /** ``replace_from`` is the column the accepted item replaces from. */
@@ -1652,6 +1838,667 @@ export interface SubagentTailResult {
   text?: string
   truncated?: boolean
 }
+/** ``methods_projects._projects_payload``: every project (archived included) + the active id. */
+export interface ProjectsPayload {
+  projects: ProjectInfo[]
+  active_id?: string | null
+}
+/** ``hermes_cli/projects_db.py::Project.to_dict`` — one stored project with its folders. */
+export interface ProjectInfo {
+  id: string
+  slug: string
+  name: string
+  description?: string | null
+  icon?: string | null
+  color?: string | null
+  board_slug?: string | null
+  primary_path?: string | null
+  archived?: boolean
+  created_at: number
+  folders?: ProjectFolder[]
+}
+/** ``hermes_cli/projects_db.py::ProjectFolder.to_dict``. */
+export interface ProjectFolder {
+  path: string
+  label?: string | null
+  is_primary?: boolean
+  added_at?: number | null
+}
+/** Any method addressed at one stored project (``5062`` when the id resolves to nothing). */
+export interface ProjectIdParams {
+  profile?: string | null
+  id: string
+}
+export interface ProjectResult {
+  project: ProjectInfo
+}
+/** ``use`` also activates the new project. */
+export interface ProjectsCreateParams {
+  profile?: string | null
+  name: string
+  folders?: string[] | null
+  slug?: string | null
+  primary_path?: string | null
+  description?: string | null
+  icon?: string | null
+  color?: string | null
+  board_slug?: string | null
+  use?: boolean
+}
+export interface OptionalProjectResult {
+  project?: ProjectInfo | null
+}
+/** Absent keys are left untouched; ``''`` clears ``color`` / ``icon``. */
+export interface ProjectsUpdateParams {
+  profile?: string | null
+  id: string
+  name?: string | null
+  description?: string | null
+  icon?: string | null
+  color?: string | null
+  board_slug?: string | null
+}
+export interface ProjectsAddFolderParams {
+  profile?: string | null
+  id: string
+  path: string
+  label?: string | null
+  is_primary?: boolean
+}
+export interface ProjectFolderParams {
+  profile?: string | null
+  id: string
+  path: string
+}
+export interface ProjectsArchiveParams {
+  profile?: string | null
+  id: string
+  restore?: boolean
+}
+/** No ``id`` (or null) clears the active project. */
+export interface ProjectsSetActiveParams {
+  profile?: string | null
+  id?: string | null
+}
+export interface ActiveIdResult {
+  active_id?: string | null
+}
+/** Absent ``cwd`` resolves the gateway's default completion cwd. */
+export interface ProjectsForCwdParams {
+  profile?: string | null
+  cwd?: string | null
+}
+export interface ProjectsForCwdResult {
+  project?: ProjectInfo | null
+  cwd: string
+  branch?: string
+}
+/** ``scan`` asks the host to walk the policy roots itself (remote-gateway desktop). */
+export interface ProjectsDiscoverReposParams {
+  profile?: string | null
+  scan?: boolean
+}
+export interface ProjectsDiscoverReposResult {
+  repos: DiscoveredRepo[]
+  discovery_policy?: RepoDiscoveryPolicy | null
+}
+/** ``methods_projects._discover_repos_payload`` row: a git root with session totals. */
+export interface DiscoveredRepo {
+  root: string
+  label?: string
+  sessions?: number
+  last_active?: number
+}
+/** ``methods_projects._repo_discovery_policy`` — the effective ``desktop.repo_scan_*`` config. */
+export interface RepoDiscoveryPolicy {
+  enabled: boolean
+  roots: string[]
+  exclude_paths: string[]
+}
+/** Repos as ``{root, label}`` objects or bare root strings; entries without a root are skipped. */
+export interface ProjectsRecordReposParams {
+  profile?: string | null
+  repos?: (RecordRepoItem | string)[] | null
+  discovery_policy?: RepoDiscoveryPolicyParams | null
+}
+export interface RecordRepoItem {
+  root: string
+  label?: string | null
+}
+/** The policy the desktop scanned under (short or ``repo_scan_*`` long keys both accepted). */
+export interface RepoDiscoveryPolicyParams {
+  enabled?: boolean | null
+  roots?: string[] | null
+  exclude_paths?: string[] | null
+  repo_scan_enabled?: boolean | null
+  repo_scan_roots?: string[] | null
+  repo_scan_exclude_paths?: string[] | null
+}
+export interface ProjectsRecordReposResult {
+  repos: DiscoveredRepo[]
+  discovery_policy?: RepoDiscoveryPolicy | null
+  accepted: boolean
+}
+export interface ProjectsTreeParams {
+  profile?: string | null
+  preview_limit?: number | null
+  session_limit?: number | null
+}
+export interface ProjectsTreeResult {
+  projects: ProjectTreeNode[]
+  active_id?: string | null
+  scoped_session_ids?: string[]
+}
+/** ``project_tree._project_node`` — explicit, auto (git root) or the synthetic Home bucket. */
+export interface ProjectTreeNode {
+  id: string
+  label: string
+  path?: string | null
+  color?: string | null
+  icon?: string | null
+  isAuto?: boolean
+  isNoProject?: boolean
+  sessionCount?: number
+  lastActive?: number
+  totalTokens?: number
+  totalCostUsd?: number
+  repos?: ProjectTreeRepo[]
+  previewSessions?: ProjectTreeSession[]
+  sessionIdentities?: ProjectTreeSessionIdentity[]
+}
+export interface ProjectTreeRepo {
+  id: string
+  label: string
+  path?: string | null
+  groups?: ProjectTreeLane[]
+  sessionCount?: number
+}
+/** One branch / worktree / kanban lane inside a repo; ``sessions`` is empty unless hydrated. */
+export interface ProjectTreeLane {
+  id: string
+  label: string
+  path?: string | null
+  isMain?: boolean
+  isKanban?: boolean
+  sessions?: ProjectTreeSession[]
+}
+/** ``methods_projects._project_tree_row`` + ``project_tree.stamp_profile``: the minimal row the sidebar renders, stamped with the profile it belongs to. */
+export interface ProjectTreeSession {
+  id: string
+  title?: string | null
+  preview?: string | null
+  source?: string | null
+  model?: string | null
+  started_at?: number | null
+  ended_at?: number | null
+  last_active?: number | null
+  message_count?: number
+  tool_call_count?: number
+  input_tokens?: number
+  output_tokens?: number
+  is_active?: boolean
+  cwd?: string | null
+  git_branch?: string | null
+  git_repo_root?: string | null
+  parent_session_id?: string | null
+  pinned?: boolean | null
+  unread?: boolean | null
+  archived?: boolean | null
+  actual_cost_usd?: number | null
+  estimated_cost_usd?: number | null
+  handoff_platform?: string | null
+  handoff_state?: string | null
+  _lineage_root_id?: string | null
+  _lineage_ids?: string[] | null
+  profile?: string | null
+  [key: string]: unknown
+}
+/** Complete project membership, independent of preview limits or lane hydration. */
+export interface ProjectTreeSessionIdentity {
+  id: string
+  _lineage_root_id?: string | null
+  profile: string
+}
+export interface ProjectsProjectSessionsParams {
+  profile?: string | null
+  project_id: string
+  session_limit?: number | null
+}
+export interface ProjectsProjectSessionsResult {
+  project?: ProjectTreeNode | null
+}
+/** ``knownRevision``: the spritesheet revision the caller already holds (send-once bytes). */
+export interface PetInfoParams {
+  profile?: string | null
+  knownRevision?: string | null
+}
+/** ``server._pet_sprite_payload`` behind ``enabled``; every sprite field is absent when the pet display is off, ``spritesheetBase64`` is elided when ``spritesheetUnchanged``. */
+export interface PetInfoResult {
+  enabled: boolean
+  slug?: string | null
+  displayName?: string | null
+  mime?: string | null
+  spritesheetBase64?: string | null
+  spritesheetRevision?: string | null
+  spritesheetUnchanged?: boolean | null
+  frameW?: number | null
+  frameH?: number | null
+  framesPerState?: number | null
+  framesByState?: Record<string, number> | null
+  framesByRow?: Record<string, number> | null
+  loopMs?: number | null
+  scale?: number | null
+  stateRows?: string[] | null
+  [key: string]: unknown
+}
+export interface PetInfoMetaResult {
+  enabled: boolean
+  slug?: string | null
+  displayName?: string | null
+  scale?: number | null
+  spritesheetRevision?: string | null
+}
+/** ``graphics`` opts into the kitty payload when the TTY speaks it; ``cols`` overrides the width. */
+export interface PetCellsParams {
+  profile?: string | null
+  state?: string | null
+  cols?: number | null
+  graphics?: boolean
+}
+/** Unicode: ``frames`` is frame → row → cell ``[tr,tg,tb,ta, br,bg,bb,ba]``; kitty (``graphics`` set): ``frames`` are transmit escapes and ``placeholder`` the text grid. */
+export interface PetCellsResult {
+  enabled: boolean
+  slug?: string | null
+  displayName?: string | null
+  state?: string | null
+  cols?: number | null
+  frameMs?: number | null
+  frames?: number[][][][] | string[] | null
+  scale?: number | null
+  graphics?: string | null
+  imageId?: number | null
+  color?: string | null
+  rows?: number | null
+  placeholder?: string[] | null
+}
+export interface PetGalleryParams {
+  profile?: string | null
+  localOnly?: boolean
+}
+export interface PetGalleryResult {
+  enabled: boolean
+  active?: string
+  pets?: PetGalleryEntry[]
+}
+export interface PetGalleryEntry {
+  slug: string
+  displayName: string
+  installed: boolean
+  spritesheetUrl?: string
+  curated?: boolean | null
+  generated?: boolean
+}
+export interface PetSlugParams {
+  profile?: string | null
+  slug: string
+}
+export interface PetSlugResult {
+  ok: boolean
+  slug: string
+  displayName?: string | null
+}
+export interface PetRenameParams {
+  profile?: string | null
+  slug: string
+  name: string
+}
+export interface PetExportResult {
+  ok: boolean
+  filename: string
+  zipBase64: string
+}
+/** ``url``: spritesheet source for a not-yet-installed pet. */
+export interface PetThumbParams {
+  profile?: string | null
+  slug: string
+  url?: string | null
+}
+export interface PetThumbResult {
+  ok: boolean
+  slug: string
+  dataUri?: string | null
+}
+export interface PetScaleParams {
+  profile?: string | null
+  scale?: unknown
+}
+export interface PetScaleResult {
+  ok: boolean
+  scale: number
+}
+/** ``text`` is normally a string; the relay / hosted paths may hand a structured (parts list) payload, and the busy path renders it. Truncation (rewind / edit / regenerate) needs explicit consent: ``confirm_truncate`` plus one durable target (``truncate_before_row_id`` preferred, ``truncate_before_message_id``, or the legacy ``truncate_before_user_ordinal``). */
+export interface PromptSubmitParams {
+  session_id: string
+  profile?: string | null
+  text?: unknown
+  display_kind?: string | null
+  interrupted?: boolean | null
+  queued?: boolean | null
+  surface?: string | null
+  voice_context?: string | null
+  truncate_before_user_ordinal?: number | null
+  truncate_before_row_id?: number | null
+  truncate_before_message_id?: string | null
+  confirm_truncate?: boolean | null
+  confirm_empty_truncate?: boolean | null
+  rebind_survivor_row_ids?: number[] | null
+}
+/** ``status`` is absent only on the typed-stop-phrase reply (``voice_stopped``). After a truncation the survivor row ids let the client rebind its cached ``rowId``s (``None`` map entries: drop the cached id). ``turn_isolation`` marks a compute-host dispatch. */
+export interface PromptSubmitResult {
+  status?: PromptSubmitStatus | null
+  voice_stopped?: boolean | null
+  survivor_user_row_ids?: (number | null)[] | null
+  survivor_row_id_map?: Record<string, number | null> | null
+  turn_isolation?: boolean | null
+}
+export type PromptSubmitStatus = 'streaming' | 'queued' | 'steered' | 'redirected'
+export interface ClipboardPasteParams {
+  session_id: string
+  profile?: string | null
+}
+/** ``methods_prompt.py::_attached_image_result``: the image is queued for the next turn. */
+export interface AttachedImageResult {
+  name?: string | null
+  width?: number | null
+  height?: number | null
+  token_estimate?: number | null
+  attached: boolean
+  path?: string | null
+  count?: number | null
+  remainder?: string | null
+  text?: string | null
+  bytes?: number | null
+  message?: string | null
+}
+export interface ImageAttachParams {
+  session_id: string
+  profile?: string | null
+  path: string
+}
+/** ``content_base64`` (or the ``data`` alias) carries the bytes; ``filename`` / ``ext`` only hint the extension — magic bytes decide. */
+export interface ImageAttachBytesParams {
+  session_id: string
+  profile?: string | null
+  content_base64?: string | null
+  data?: string | null
+  filename?: string | null
+  ext?: string | null
+}
+/** Host ``path`` or base64 ``content_base64`` / ``data``; ``first_page`` / ``last_page`` bound the render (per-call page cap enforced server-side). */
+export interface PdfAttachParams {
+  session_id: string
+  profile?: string | null
+  path?: string | null
+  content_base64?: string | null
+  data?: string | null
+  filename?: string | null
+  first_page?: number | null
+  last_page?: number | null
+}
+export interface PdfAttachResult {
+  attached: boolean
+  filename: string
+  pages_attached: number
+  pages: PdfPage[]
+  count: number
+  text: string
+}
+export interface PdfPage {
+  name?: string | null
+  width?: number | null
+  height?: number | null
+  token_estimate?: number | null
+  path: string
+  page: number
+}
+/** ``path`` when the file is gateway-visible, else ``data_url`` carries the bytes; ``name`` labels an uploaded file. */
+export interface FileAttachParams {
+  session_id: string
+  profile?: string | null
+  path?: string | null
+  data_url?: string | null
+  name?: string | null
+}
+export interface FileAttachResult {
+  attached: boolean
+  name: string
+  path: string
+  ref_path: string
+  ref_text: string
+  uploaded: boolean
+}
+export interface ImageDetachParams {
+  session_id: string
+  profile?: string | null
+  path: string
+}
+export interface ImageDetachResult {
+  detached: boolean
+  count: number
+}
+export interface InputDetectDropParams {
+  session_id: string
+  profile?: string | null
+  text?: string | null
+}
+/** ``matched: false`` alone when the text is not a drop; an image drop is queued immediately (``is_image`` + ``count``), a file drop only yields the ``text`` to insert. */
+export interface InputDetectDropResult {
+  name?: string | null
+  width?: number | null
+  height?: number | null
+  token_estimate?: number | null
+  matched: boolean
+  is_image?: boolean | null
+  path?: string | null
+  count?: number | null
+  text?: string | null
+}
+export interface SideAgentParams {
+  session_id: string
+  profile?: string | null
+  text: string
+}
+/** The side agent runs detached; its answer lands on the parent session as an event carrying this ``task_id``. */
+export interface TaskIdResult {
+  task_id: string
+}
+export interface PreviewRestartParams {
+  session_id: string
+  profile?: string | null
+  url: string
+  cwd?: string | null
+  context?: string | null
+}
+export interface ClarifyLockParams {
+  request_id: string
+  question_id: string
+  answer?: unknown
+  profile?: string | null
+}
+/** ``remaining`` lists the qids still unanswered; the lock that empties it resolves the request. ``expired``: the wait already ended (timeout / cancel) — not an error. */
+export interface ClarifyLockResult {
+  status: ClarifyLockStatus
+  remaining?: string[] | null
+}
+export type ClarifyLockStatus = 'ok' | 'expired'
+export interface RequestAnswerParams {
+  id: string
+  result: Record<string, unknown>
+  profile?: string | null
+}
+export interface RequestAnswerResult {
+  status: ClarifyLockStatus
+}
+export interface ApprovalPendingParams {
+  session_id: string
+  profile?: string | null
+}
+export interface ApprovalPendingResult {
+  approvals: PendingApproval[]
+}
+/** One unresolved ``tools/approval.py`` gateway queue entry as ``server._approval_request_payload`` renders it (command redacted; ``choices`` precomputed). The key set is owned by the approval tool. */
+export interface PendingApproval {
+  request_id?: string | null
+  command?: string | null
+  description?: string | null
+  pattern_key?: string | null
+  pattern_keys?: string[] | null
+  allow_permanent?: boolean | null
+  allow_session?: boolean | null
+  smart_denied?: boolean | null
+  choices?: string[] | null
+  tool_name?: string | null
+  [key: string]: unknown
+}
+export interface ApprovalReceivedParams {
+  session_id: string
+  profile?: string | null
+  request_id: string
+}
+export interface ApprovalReceivedResult {
+  acknowledged: boolean
+}
+/** ``choice`` is one of the offered ``approval`` choices (once / session / always / deny); ``all`` resolves every pending approval, ``request_id`` a specific one, neither the oldest. */
+export interface ApprovalRespondParams {
+  session_id: string
+  profile?: string | null
+  choice?: string | null
+  all?: boolean | null
+  request_id?: string | null
+}
+export interface ApprovalRespondResult {
+  resolved: number
+}
+export interface VoiceToggleParams {
+  action?: VoiceToggleAction
+  profile?: string | null
+}
+export type VoiceToggleAction = 'status' | 'on' | 'off' | 'tts'
+/** ``methods_voice.py::_voice_status_payload`` (+ the requirements probe on ``status``, the spoken stop hint on ``on``). */
+export interface VoiceToggleResult {
+  enabled: boolean
+  record_key: string
+  tts: boolean
+  stop_hint?: string | null
+  available?: boolean | null
+  audio_available?: boolean | null
+  stt_available?: boolean | null
+  details?: string | null
+}
+export interface VoiceRecordParams {
+  action?: VoiceRecordAction
+  session_id?: string | null
+  profile?: string | null
+}
+export type VoiceRecordAction = 'start' | 'stop'
+export interface VoiceRecordResult {
+  status: VoiceRecordStatus
+  reason?: string | null
+}
+export type VoiceRecordStatus = 'recording' | 'stopped' | 'busy'
+export interface VoiceTtsParams {
+  text: string
+  profile?: string | null
+}
+export interface VoiceTtsResult {
+  status: string
+}
+/** ``surface`` names the caller ("tui" | "gui"); ``persist`` is the explicit gesture that also flips ``wake_word.enabled`` on; ``client_capture`` asks for PCM streamed via wake.feed. */
+export interface WakeStartParams {
+  surface?: string | null
+  persist?: boolean | null
+  client_capture?: boolean | null
+  session_id?: string | null
+  profile?: string | null
+}
+/** ``started: false`` carries ``reason`` (unavailable / disabled / disabled_for_surface / owned); ``sample_rate`` / ``frame_length`` describe the PCM frames the armed detector expects. */
+export interface WakeStartResult {
+  started: boolean
+  reason?: string | null
+  hint?: string | null
+  phrase?: string | null
+  provider?: string | null
+  owner_surface?: string | null
+  enabled_persisted?: boolean | null
+  capture?: string | null
+  sample_rate?: number | null
+  frame_length?: number | null
+}
+export interface WakeStopParams {
+  persist?: boolean | null
+  profile?: string | null
+}
+export interface WakeStopResult {
+  reason?: string | null
+  stopped: boolean
+  disabled_persisted: boolean
+}
+export interface WakeControlParams {
+  profile?: string | null
+}
+export interface WakePauseResult {
+  reason?: string | null
+  paused: boolean
+}
+export interface WakeResumeResult {
+  reason?: string | null
+  resumed: boolean
+}
+export interface WakeStatusParams {
+  surface?: string | null
+  client_capture?: boolean | null
+  profile?: string | null
+}
+/** ``enabled`` is config truth; ``listening`` is this caller's armed detector; ``audio_silent`` means armed but deaf (see ``hint``). */
+export interface WakeStatusResult {
+  listening: boolean
+  owned_by_caller: boolean
+  owner_surface?: string | null
+  phrase: string
+  provider: string
+  configured_surface: string
+  input_device: WakeInputDevice
+  available: boolean
+  hint: string
+  enabled: boolean
+  audio_silent: boolean
+  capture: string
+  local_input_available: boolean
+  sample_rate: number
+  frame_length: number
+}
+/** ``tools/wake_word.py::_describe_input_device`` — PortAudio diagnostics for the configured mic. */
+export interface WakeInputDevice {
+  selector?: number | string | null
+  name?: string | null
+  error?: string | null
+  max_input_channels?: number | null
+  default_samplerate?: number | null
+  hostapi_index?: number | null
+  hostapi?: string | null
+  [key: string]: unknown
+}
+/** ``pcm`` (or the ``pcm_b64`` alias): base64 int16 mono little-endian, 16 kHz only. */
+export interface WakeFeedParams {
+  pcm?: string | null
+  pcm_b64?: string | null
+  sample_rate?: number | null
+  profile?: string | null
+}
+export interface WakeFeedResult {
+  reason?: string | null
+  fed: boolean
+}
 export interface SessionCreateParams {
   profile?: string | null
   cols?: number | null
@@ -1747,20 +2594,6 @@ export interface InflightTurn {
 }
 export interface QueuedPrompt {
   user: string
-}
-/** One unresolved ``tools/approval.py`` gateway queue entry as ``server._approval_request_payload`` renders it (command redacted; ``choices`` precomputed). The key set is owned by the approval tool. */
-export interface PendingApproval {
-  request_id?: string | null
-  command?: string | null
-  description?: string | null
-  pattern_key?: string | null
-  pattern_keys?: string[] | null
-  allow_permanent?: boolean | null
-  allow_session?: boolean | null
-  smart_denied?: boolean | null
-  choices?: string[] | null
-  tool_name?: string | null
-  [key: string]: unknown
 }
 /** One unanswered server→client request (``server_requests.Request.snapshot``); the reconnecting client re-delivers it to its request handlers. */
 export interface OpenRequestEntry {
@@ -2189,1325 +3022,6 @@ export interface LlmOneshotParams {
 }
 export interface LlmOneshotResult {
   text: string
-}
-export interface ConversationRuntimeSnapshotParams {
-  conversation_id: string
-  participant_id: string
-  session_generation: number
-}
-export interface ConversationRuntimeSnapshotResult {
-  model_snapshot?: ConversationModelSnapshot | null
-  available: boolean
-  runtime_id: string | null
-  subagents: SubagentSnapshot[]
-  open_requests: OpenRequestEntry[]
-  activity: ConversationActivityCoordinates | null
-  background_activities: ConversationActivityCoordinates[]
-}
-export interface ConversationModelSnapshot {
-  capabilities?: ConversationOptionCapabilities | null
-  reasoning_effort?: string | null
-  fast?: boolean
-  model: string
-  provider: string | null
-  model_source: string | null
-  model_id: string | null
-}
-export interface ConversationOptionCapabilities {
-  reasoning?: boolean | null
-  fast?: boolean | null
-  can_disable_reasoning?: boolean | null
-}
-export interface ConversationActivityCoordinates {
-  conversation_id: string
-  turn_id: string
-  participant_id: string
-  session_generation: number
-  task_id: string
-  execution_generation: number
-  runtime_id: string
-}
-export interface ConversationArchiveParams {
-  conversation_id: string
-  expected_revision: number
-}
-export interface ConversationRenameParams {
-  conversation_id: string
-  expected_revision: number
-  title: string
-}
-export interface ConversationExportParams {
-  conversation_id: string
-  cursor?: ConversationExportCursor | null
-}
-export interface ConversationExportCursor {
-  revision: number
-  cutoff: number
-  phase: 'events' | 'content'
-  after_seq: number
-  content_index: number
-  offset_bytes: number
-}
-export interface ConversationExportResult {
-  filename: string | null
-  chunk: string
-  cursor: ConversationExportCursor | null
-}
-export interface ConversationCommandParams {
-  conversation_id: string
-  participant_id: string
-  expected_generation: number
-  expected_revision: number
-  command: string
-}
-export type ConversationCommandResult = ConversationCommandNotice | ConversationCommandSend
-export interface ConversationCommandNotice {
-  type: 'notice'
-  scope: 'private'
-  output: string
-  conversation_id: string
-  participant_id: string
-  session_generation: number
-  conversation_revision: number
-  runtime_id: string
-}
-export interface ConversationCommandSend {
-  type: 'send'
-  command_token: string
-  display: string
-  conversation_id: string
-  participant_id: string
-  session_generation: number
-  conversation_revision: number
-  runtime_id: string
-}
-export interface ConversationAttachParams {
-  conversation_id: string
-  filename: string
-  mime_type: string
-  data_base64: string
-}
-export interface ConversationAttachResult {
-  attachment: ConversationAttachment
-}
-export interface ConversationAttachment {
-  id: string
-  filename: string
-  content_ref: ConversationContentRef
-}
-export interface ConversationContentRef {
-  id: string
-  sha256: string
-  size_bytes: number
-  mime_type: string
-}
-export interface ConversationContentParams {
-  conversation_id: string
-  content_id: string
-  offset_bytes?: number
-  limit_bytes?: number
-}
-export interface ConversationContentResult {
-  data_base64: string
-  next_offset: number
-  has_more: boolean
-  sha256: string
-}
-export interface ConversationSetProjectParams {
-  conversation_id: string
-  project_ref: ConversationProjectRef | null
-  expected_revision: number
-}
-export interface ConversationSetProjectResult {
-  conversation: ConversationRecord
-  participants: ConversationParticipantBinding[]
-}
-export interface ConversationBranchParams {
-  conversation_id: string
-  source_event_id: string
-  expected_revision: number
-  target_conversation_id: string
-  operation_id: string
-  edit_text?: string | null
-}
-export interface ConversationBranchResult {
-  conversation: ConversationRecord
-  branch: ConversationBranchReceipt
-}
-export interface ConversationRegenerateParams {
-  conversation_id: string
-  source_event_id: string
-  expected_revision: number
-  input_id: string
-  turn_id: string
-}
-export interface ConversationRegenerateResult {
-  admission: ConversationAdmission
-  regenerates_event_id: string
-}
-export interface ConversationReactParams {
-  conversation_id: string
-  event_id: string
-  operation_id: string
-  emoji?: string | null
-  expected_reaction_revision: number
-}
-export interface ConversationReactResult {
-  reaction: ConversationReactionState
-}
-export interface ConversationReactionState {
-  event_id: string
-  revision: number
-  reactions: ConversationReaction[]
-}
-export interface ConversationReaction {
-  emoji: string
-  author: string
-  at: number
-}
-export interface ConversationReactionsParams {
-  conversation_id: string
-  event_ids: string[]
-}
-export interface ConversationReactionsResult {
-  reactions: ConversationReactionState[]
-}
-export interface ConversationCancelDraftParams {
-  conversation_id: string
-  input_id: string
-  operation_id: string
-  expected_revision: number
-}
-export interface ConversationCancelDraftResult {
-  conversation: ConversationRecord
-}
-export interface GroupsCapabilitiesParams {
-  profile?: string | null
-}
-export interface GroupsCapabilitiesResult {
-  protocol_version: number
-  driver: boolean
-  persistent_process: boolean
-  authority_gateway_id: string
-  room_link: RoomLinkStatus
-  features: string[]
-  methods: string[]
-  max_log_limit: number
-}
-/** ``enabled`` with ``profile``/``catalog``/``endpoint``, or disabled with a ``reason``. */
-export interface RoomLinkStatus {
-  enabled: boolean
-  profile?: string | null
-  catalog?: RoomLinkCatalog | null
-  endpoint?: RoomLinkEndpoint | null
-  reason?: string | null
-}
-/** ``gateway/hosted_room_peer.py::GatewayRoomCatalog.as_mapping``. */
-export interface RoomLinkCatalog {
-  installation_id: string
-  protocol_versions: number[]
-  link_modes: string[]
-  persistent_process: boolean
-  text: boolean
-  attachments: boolean
-  execution_policy: RoomExecutionPolicy
-  catalog_digest: string
-  endpoint?: RoomLinkEndpoint | null
-}
-/** ``gateway/hosted_room_execution_policy.py::execution_policy_mapping``. */
-export interface RoomExecutionPolicy {
-  version: number
-  target_profile: string
-  enabled_toolsets: string[]
-  approval_mode: string
-  max_iterations: number
-  policy_digest: string
-}
-/** ``GatewayRoomCatalog.endpoint_mapping``: ``url``/``transport_security`` when available, ``reason`` when not. */
-export interface RoomLinkEndpoint {
-  available: boolean
-  url?: string | null
-  transport_security?: string | null
-  reason?: string | null
-}
-export interface GroupsListParams {
-  profile?: string | null
-  include_disbanded?: boolean | null
-  limit?: number | null
-  offset?: number | null
-}
-export interface GroupsListResult {
-  rooms: Room[]
-  next_offset?: number | null
-}
-/** ``gateway/hosted_rooms.py::_room_from_row`` plus the branch-only keys ``create`` (legacy adoption), ``state`` (``authority_claim``) and ``rename`` (``event``) add. */
-export interface Room {
-  room_id: string
-  purpose: string
-  name: string
-  members: RoomMember[]
-  authority_gateway_id: string
-  authority_epoch: number
-  revision: number
-  created_at: number
-  updated_at: number
-  idempotent?: boolean
-  disbanded_at?: number | null
-  latest_seq?: number | null
-  adopted?: boolean | null
-  claim_event?: RoomEvent | null
-  authority_claim?: RoomEvent | null
-  event?: RoomEvent | null
-}
-/** One roster row (``hosted_room_discussion.validate_roster``); legacy rooms may carry pre-normalisation rows, so the set stays open. */
-export interface RoomMember {
-  member_id?: string | null
-  profile?: string | null
-  handle?: string | null
-  display_name?: string | null
-  target?: Record<string, unknown> | null
-  [key: string]: unknown
-}
-/** ``gateway/hosted_rooms.py::_event_from_row``. */
-export interface RoomEvent {
-  room_id: string
-  seq: number
-  event_id: string
-  kind: string
-  actor: RoomActor
-  authority_epoch?: number | null
-  payload: Record<string, unknown>
-  created_at: number
-  idempotent?: boolean
-}
-export interface RoomActor {
-  kind: string
-  id: string
-}
-export interface GroupsCreateParams {
-  profile?: string | null
-  room_id: string
-  name: string
-  members: RoomMemberInput[]
-  authority_gateway_id?: string | null
-}
-/** A roster row as the client proposes it; ``validate_roster`` owns the exact rules. */
-export interface RoomMemberInput {
-  member_id?: string | null
-  profile?: string | null
-  handle?: string | null
-  display_name?: string | null
-  target?: Record<string, unknown> | null
-  [key: string]: unknown
-}
-export interface GroupsCreateResult {
-  room: Room
-}
-export interface GroupsStateParams {
-  profile?: string | null
-  room_id: string
-  include_disbanded?: boolean | null
-}
-export interface GroupsStateResult {
-  room: Room
-  driver_status?: RoomDriverStatus | null
-}
-/** ``HostedRoomService.status(room_id)``; ``pending_actions`` rows are ``{kind: retry, task_id}`` or the driver's approval action (``kind: approval`` + run/session/approval context). */
-export interface RoomDriverStatus {
-  running: boolean
-  working: boolean
-  blocked: boolean
-  counts: Record<string, number>
-  pending_actions: Record<string, unknown>[]
-  peer_routes: PeerRouteStatus[]
-}
-export interface PeerRouteStatus {
-  room_id: string
-  member_id: string
-  status: string
-}
-export interface GroupsSendParams {
-  profile?: string | null
-  room_id: string
-  event_id?: string | null
-  payload: Record<string, unknown>
-}
-export interface GroupsSendResult {
-  event: RoomEvent
-  client_event_id?: string | null
-  accepted?: boolean
-  driver_started?: boolean
-}
-export interface GroupsRenameParams {
-  profile?: string | null
-  room_id: string
-  event_id: string
-  name: string
-}
-export interface GroupsRenameResult {
-  room: Room
-}
-export interface GroupsLogParams {
-  profile?: string | null
-  room_id: string
-  since_seq?: number | null
-  limit?: number | null
-  include_disbanded?: boolean | null
-}
-/** ``gateway/hosted_rooms.py::read_events`` page — also the ``page`` ``groups.replicate`` ingests. */
-export interface GroupsLogResult {
-  events: RoomEvent[]
-  cursor: number
-  latest_seq: number
-  has_more: boolean
-  authority: RoomAuthority
-}
-export interface RoomAuthority {
-  gateway_id: string
-  epoch: number
-}
-export interface GroupsDisbandParams {
-  profile?: string | null
-  room_id: string
-  cancel_id?: string | null
-}
-export interface GroupsDisbandResult {
-  tombstone: RoomTombstone
-}
-export interface RoomTombstone {
-  room_id: string
-  disbanded_at: number
-  idempotent: boolean
-  history_expired?: boolean | null
-  event?: RoomEvent | null
-}
-export interface GroupsStopParams {
-  profile?: string | null
-  room_id: string
-  cancel_id?: string | null
-}
-export interface GroupsStopResult {
-  cancelled: number
-}
-export interface GroupsApproveParams {
-  profile?: string | null
-  room_id: string
-  member_id: string
-  task_id: string
-  execution_generation: number
-  choice: ApprovalChoice
-  request_id: string
-}
-export type ApprovalChoice = 'once' | 'session' | 'always' | 'deny'
-/** ``result`` is the local ``approval.respond`` answer or the peer's run-action receipt. */
-export interface GroupsApproveResult {
-  approved?: boolean
-  result: Record<string, unknown>
-}
-export interface GroupsRetryParams {
-  profile?: string | null
-  room_id: string
-  task_id: string
-}
-export interface GroupsRetryResult {
-  retried?: boolean
-  task: RoomTaskReceipt
-}
-export interface RoomTaskReceipt {
-  room_id: string
-  task_id: string
-  thread_id: string
-  turn_id: string
-  status: string
-  execution_generation: number
-  cancel_generation: number
-}
-export interface GroupsReplicateParams {
-  profile?: string | null
-  room_id: string
-  room_name: string
-  members: RoomMemberInput[]
-  page: Record<string, unknown>
-}
-export interface GroupsReplicateResult {
-  room_id: string
-  stored_seq: number
-  ingested: number
-  authority: RoomAuthority
-  caught_up: boolean
-}
-export interface GroupsReplicaStateParams {
-  profile?: string | null
-  room_id: string
-}
-export interface GroupsReplicaStateResult {
-  room_id: string
-  name: string
-  members: RoomMember[]
-  authority: RoomAuthority
-  last_seq: number
-  latest_seq: number
-  event_bytes: number
-  created_at: number
-  updated_at: number
-}
-export interface GroupsPromoteParams {
-  profile?: string | null
-  room_id: string
-  confirm?: boolean | null
-  reason?: string | null
-}
-export interface GroupsPromoteResult {
-  room_id: string
-  authority_gateway_id: string
-  authority_epoch: number
-  previous_gateway_id: string
-  previous_epoch: number
-  claim_seq: number
-  latest_seq: number
-}
-export interface GroupsDemoteParams {
-  profile?: string | null
-  room_id: string
-  observed_gateway_id: string
-  observed_epoch: number
-}
-export interface GroupsDemoteResult {
-  room_id: string
-  authority_gateway_id: string
-  authority_epoch: number
-  idempotent: boolean
-}
-export interface GroupsPeerInviteParams {
-  profile?: string | null
-  room_id?: string | null
-  home_install_id?: string | null
-  authority_gateway_id?: string | null
-  authority_epoch?: number | null
-  member_id?: string | null
-  grant_id?: string | null
-  ttl_seconds?: number | null
-}
-export interface GroupsPeerInviteResult {
-  grant: string
-  target_profile: string
-  catalog: RoomLinkCatalog
-  endpoint: RoomLinkEndpoint
-}
-export interface GroupsPeerRevokeParams {
-  profile?: string | null
-  grant: string
-}
-export interface GroupsPeerRevokeResult {
-  revoked?: boolean
-}
-export interface GroupsPeerRegisterParams {
-  profile?: string | null
-  room_id: string
-  member_id: string
-  target_url: string
-  target_profile: string
-  grant: string
-  catalog: Record<string, unknown>
-  cancellation_scope_id?: string | null
-  trace_id?: string | null
-}
-export interface GroupsPeerRegisterResult {
-  registered?: boolean
-  mode: string
-  transport_security: string
-  target_install_id: string
-  target_profile: string
-}
-export interface BotRelayRosterSyncParams {
-  profile?: string | null
-  agents?: RelayAgentRow[] | null
-}
-/** A roster row the Desktop pushes (``tools/bot_relay.py::_normalize_roster_row``); invalid rows are dropped server-side, so the shape stays open. */
-export interface RelayAgentRow {
-  profile?: string | null
-  handle?: string | null
-  connection_id?: string | null
-  connection_label?: string | null
-  title?: string | null
-  description?: string | null
-  online?: boolean | null
-  [key: string]: unknown
-}
-export interface BotRelayRosterSyncResult {
-  count: number
-}
-export interface BotRelayOutboxDrainParams {
-  profile?: string | null
-}
-export interface BotRelayOutboxDrainResult {
-  envelopes: RelayEnvelope[]
-}
-/** ``tools/bot_relay.py::enqueue_envelope``. */
-export interface RelayEnvelope {
-  id: string
-  created_at: number
-  from_profile: string
-  from_handle: string
-  target_connection: string
-  target_profile: string
-  target_handle: string
-  message: string
-  [key: string]: unknown
-}
-/** ``profile`` here is the TARGET profile on this gateway (also what the desktop route wrapper adds). */
-export interface BotRelayDeliverParams {
-  profile: string
-  message: string
-  from_profile?: string | null
-  from_handle?: string | null
-  from_connection?: string | null
-}
-export interface BotRelayDeliverResult {
-  reply: string
-}
-export interface BotRelayReplyParams {
-  profile?: string | null
-  id: string
-  reply?: string | null
-  error?: string | null
-  reason?: string | null
-}
-export interface OkResult {
-  ok?: boolean
-}
-export interface BrowserControllerRegisterParams {
-  session_id: string
-  controller_id: string
-  browser_profile_id: string
-  capabilities?: string[] | null
-  protocol_version?: unknown | null
-  principal_id?: string | null
-}
-export interface BrowserControllerRegisterResult {
-  scope: ControllerScope
-}
-export interface ControllerScope {
-  principal_id: string
-  profile_id: string
-  session_id: string
-  controller_id: string
-  browser_profile_id: string
-  transport_family: string
-  capabilities: string[]
-}
-export interface BrowserControllerResultParams {
-  session_id: string
-  command_id: string
-  ok?: unknown | null
-  result?: unknown | null
-  error?: unknown | null
-}
-export interface BrowserControllerResultResult {
-  accepted: boolean
-}
-/** Every controller call names the session the controller is attached to. */
-export interface BrowserControllerParams {
-  session_id: string
-}
-export interface BrowserControllerDetachResult {
-  detached?: boolean
-}
-export type PingParams = Record<string, never>
-export interface PingResult {
-  pong: boolean
-}
-export interface GatewayCapabilitiesResult {
-  per_session_exclusive_submit: boolean
-}
-/** ``methods_projects._projects_payload``: every project (archived included) + the active id. */
-export interface ProjectsPayload {
-  projects: ProjectInfo[]
-  active_id?: string | null
-}
-/** ``hermes_cli/projects_db.py::Project.to_dict`` — one stored project with its folders. */
-export interface ProjectInfo {
-  id: string
-  slug: string
-  name: string
-  description?: string | null
-  icon?: string | null
-  color?: string | null
-  board_slug?: string | null
-  primary_path?: string | null
-  archived?: boolean
-  created_at: number
-  folders?: ProjectFolder[]
-}
-/** ``hermes_cli/projects_db.py::ProjectFolder.to_dict``. */
-export interface ProjectFolder {
-  path: string
-  label?: string | null
-  is_primary?: boolean
-  added_at?: number | null
-}
-/** Any method addressed at one stored project (``5062`` when the id resolves to nothing). */
-export interface ProjectIdParams {
-  profile?: string | null
-  id: string
-}
-export interface ProjectResult {
-  project: ProjectInfo
-}
-/** ``use`` also activates the new project. */
-export interface ProjectsCreateParams {
-  profile?: string | null
-  name: string
-  folders?: string[] | null
-  slug?: string | null
-  primary_path?: string | null
-  description?: string | null
-  icon?: string | null
-  color?: string | null
-  board_slug?: string | null
-  use?: boolean
-}
-export interface OptionalProjectResult {
-  project?: ProjectInfo | null
-}
-/** Absent keys are left untouched; ``''`` clears ``color`` / ``icon``. */
-export interface ProjectsUpdateParams {
-  profile?: string | null
-  id: string
-  name?: string | null
-  description?: string | null
-  icon?: string | null
-  color?: string | null
-  board_slug?: string | null
-}
-export interface ProjectsAddFolderParams {
-  profile?: string | null
-  id: string
-  path: string
-  label?: string | null
-  is_primary?: boolean
-}
-export interface ProjectFolderParams {
-  profile?: string | null
-  id: string
-  path: string
-}
-export interface ProjectsArchiveParams {
-  profile?: string | null
-  id: string
-  restore?: boolean
-}
-/** No ``id`` (or null) clears the active project. */
-export interface ProjectsSetActiveParams {
-  profile?: string | null
-  id?: string | null
-}
-export interface ActiveIdResult {
-  active_id?: string | null
-}
-/** Absent ``cwd`` resolves the gateway's default completion cwd. */
-export interface ProjectsForCwdParams {
-  profile?: string | null
-  cwd?: string | null
-}
-export interface ProjectsForCwdResult {
-  project?: ProjectInfo | null
-  cwd: string
-  branch?: string
-}
-/** ``scan`` asks the host to walk the policy roots itself (remote-gateway desktop). */
-export interface ProjectsDiscoverReposParams {
-  profile?: string | null
-  scan?: boolean
-}
-export interface ProjectsDiscoverReposResult {
-  repos: DiscoveredRepo[]
-  discovery_policy?: RepoDiscoveryPolicy | null
-}
-/** ``methods_projects._discover_repos_payload`` row: a git root with session totals. */
-export interface DiscoveredRepo {
-  root: string
-  label?: string
-  sessions?: number
-  last_active?: number
-}
-/** ``methods_projects._repo_discovery_policy`` — the effective ``desktop.repo_scan_*`` config. */
-export interface RepoDiscoveryPolicy {
-  enabled: boolean
-  roots: string[]
-  exclude_paths: string[]
-}
-/** Repos as ``{root, label}`` objects or bare root strings; entries without a root are skipped. */
-export interface ProjectsRecordReposParams {
-  profile?: string | null
-  repos?: (RecordRepoItem | string)[] | null
-  discovery_policy?: RepoDiscoveryPolicyParams | null
-}
-export interface RecordRepoItem {
-  root: string
-  label?: string | null
-}
-/** The policy the desktop scanned under (short or ``repo_scan_*`` long keys both accepted). */
-export interface RepoDiscoveryPolicyParams {
-  enabled?: boolean | null
-  roots?: string[] | null
-  exclude_paths?: string[] | null
-  repo_scan_enabled?: boolean | null
-  repo_scan_roots?: string[] | null
-  repo_scan_exclude_paths?: string[] | null
-}
-export interface ProjectsRecordReposResult {
-  repos: DiscoveredRepo[]
-  discovery_policy?: RepoDiscoveryPolicy | null
-  accepted: boolean
-}
-export interface ProjectsTreeParams {
-  profile?: string | null
-  preview_limit?: number | null
-  session_limit?: number | null
-}
-export interface ProjectsTreeResult {
-  projects: ProjectTreeNode[]
-  active_id?: string | null
-  scoped_session_ids?: string[]
-}
-/** ``project_tree._project_node`` — explicit, auto (git root) or the synthetic Home bucket. */
-export interface ProjectTreeNode {
-  id: string
-  label: string
-  path?: string | null
-  color?: string | null
-  icon?: string | null
-  isAuto?: boolean
-  isNoProject?: boolean
-  sessionCount?: number
-  lastActive?: number
-  totalTokens?: number
-  totalCostUsd?: number
-  repos?: ProjectTreeRepo[]
-  previewSessions?: ProjectTreeSession[]
-  sessionIdentities?: ProjectTreeSessionIdentity[]
-}
-export interface ProjectTreeRepo {
-  id: string
-  label: string
-  path?: string | null
-  groups?: ProjectTreeLane[]
-  sessionCount?: number
-}
-/** One branch / worktree / kanban lane inside a repo; ``sessions`` is empty unless hydrated. */
-export interface ProjectTreeLane {
-  id: string
-  label: string
-  path?: string | null
-  isMain?: boolean
-  isKanban?: boolean
-  sessions?: ProjectTreeSession[]
-}
-/** ``methods_projects._project_tree_row`` + ``project_tree.stamp_profile``: the minimal row the sidebar renders, stamped with the profile it belongs to. */
-export interface ProjectTreeSession {
-  id: string
-  title?: string | null
-  preview?: string | null
-  source?: string | null
-  model?: string | null
-  started_at?: number | null
-  ended_at?: number | null
-  last_active?: number | null
-  message_count?: number
-  tool_call_count?: number
-  input_tokens?: number
-  output_tokens?: number
-  is_active?: boolean
-  cwd?: string | null
-  git_branch?: string | null
-  git_repo_root?: string | null
-  parent_session_id?: string | null
-  pinned?: boolean | null
-  unread?: boolean | null
-  archived?: boolean | null
-  actual_cost_usd?: number | null
-  estimated_cost_usd?: number | null
-  handoff_platform?: string | null
-  handoff_state?: string | null
-  _lineage_root_id?: string | null
-  _lineage_ids?: string[] | null
-  profile?: string | null
-  [key: string]: unknown
-}
-/** Complete project membership, independent of preview limits or lane hydration. */
-export interface ProjectTreeSessionIdentity {
-  id: string
-  _lineage_root_id?: string | null
-  profile: string
-}
-export interface ProjectsProjectSessionsParams {
-  profile?: string | null
-  project_id: string
-  session_limit?: number | null
-}
-export interface ProjectsProjectSessionsResult {
-  project?: ProjectTreeNode | null
-}
-/** ``knownRevision``: the spritesheet revision the caller already holds (send-once bytes). */
-export interface PetInfoParams {
-  profile?: string | null
-  knownRevision?: string | null
-}
-/** ``server._pet_sprite_payload`` behind ``enabled``; every sprite field is absent when the pet display is off, ``spritesheetBase64`` is elided when ``spritesheetUnchanged``. */
-export interface PetInfoResult {
-  enabled: boolean
-  slug?: string | null
-  displayName?: string | null
-  mime?: string | null
-  spritesheetBase64?: string | null
-  spritesheetRevision?: string | null
-  spritesheetUnchanged?: boolean | null
-  frameW?: number | null
-  frameH?: number | null
-  framesPerState?: number | null
-  framesByState?: Record<string, number> | null
-  framesByRow?: Record<string, number> | null
-  loopMs?: number | null
-  scale?: number | null
-  stateRows?: string[] | null
-  [key: string]: unknown
-}
-export interface PetInfoMetaResult {
-  enabled: boolean
-  slug?: string | null
-  displayName?: string | null
-  scale?: number | null
-  spritesheetRevision?: string | null
-}
-/** ``graphics`` opts into the kitty payload when the TTY speaks it; ``cols`` overrides the width. */
-export interface PetCellsParams {
-  profile?: string | null
-  state?: string | null
-  cols?: number | null
-  graphics?: boolean
-}
-/** Unicode: ``frames`` is frame → row → cell ``[tr,tg,tb,ta, br,bg,bb,ba]``; kitty (``graphics`` set): ``frames`` are transmit escapes and ``placeholder`` the text grid. */
-export interface PetCellsResult {
-  enabled: boolean
-  slug?: string | null
-  displayName?: string | null
-  state?: string | null
-  cols?: number | null
-  frameMs?: number | null
-  frames?: number[][][][] | string[] | null
-  scale?: number | null
-  graphics?: string | null
-  imageId?: number | null
-  color?: string | null
-  rows?: number | null
-  placeholder?: string[] | null
-}
-export interface PetGalleryParams {
-  profile?: string | null
-  localOnly?: boolean
-}
-export interface PetGalleryResult {
-  enabled: boolean
-  active?: string
-  pets?: PetGalleryEntry[]
-}
-export interface PetGalleryEntry {
-  slug: string
-  displayName: string
-  installed: boolean
-  spritesheetUrl?: string
-  curated?: boolean | null
-  generated?: boolean
-}
-export interface PetSlugParams {
-  profile?: string | null
-  slug: string
-}
-export interface PetSlugResult {
-  ok: boolean
-  slug: string
-  displayName?: string | null
-}
-export interface PetRenameParams {
-  profile?: string | null
-  slug: string
-  name: string
-}
-export interface PetExportResult {
-  ok: boolean
-  filename: string
-  zipBase64: string
-}
-/** ``url``: spritesheet source for a not-yet-installed pet. */
-export interface PetThumbParams {
-  profile?: string | null
-  slug: string
-  url?: string | null
-}
-export interface PetThumbResult {
-  ok: boolean
-  slug: string
-  dataUri?: string | null
-}
-export interface PetScaleParams {
-  profile?: string | null
-  scale?: unknown
-}
-export interface PetScaleResult {
-  ok: boolean
-  scale: number
-}
-export interface SharedProjectsResult {
-  projects: SharedProject[]
-  available_environments: string[]
-  unavailable_sources: SharedProjectUnavailableSource[]
-}
-export interface SharedProject {
-  id: string
-  install_id: string
-  environment_id: string
-  canonical_path: string
-  name: string
-  sources: ConversationProjectRef[]
-}
-export interface SharedProjectUnavailableSource {
-  registration_profile: string
-  project_id: string
-  reason: string
-}
-export interface SharedProjectRegisterParams {
-  registration_profile: string
-  name: string
-  canonical_path: string
-  environment_id?: string
-}
-export interface SharedProjectResult {
-  project: SharedProject
-}
-export interface SharedProjectResolveParams {
-  shared_project_id: string
-}
-export interface SharedProjectUpdateParams {
-  shared_project_id: string
-  source: ConversationProjectRef
-  name: string
-}
-export interface SharedProjectMutationResult {
-  project: SharedProject | null
-}
-export interface SharedProjectMutationParams {
-  shared_project_id: string
-  source: ConversationProjectRef
-}
-/** ``text`` is normally a string; the relay / hosted paths may hand a structured (parts list) payload, and the busy path renders it. Truncation (rewind / edit / regenerate) needs explicit consent: ``confirm_truncate`` plus one durable target (``truncate_before_row_id`` preferred, ``truncate_before_message_id``, or the legacy ``truncate_before_user_ordinal``). */
-export interface PromptSubmitParams {
-  session_id: string
-  profile?: string | null
-  text?: unknown
-  display_kind?: string | null
-  interrupted?: boolean | null
-  queued?: boolean | null
-  surface?: string | null
-  voice_context?: string | null
-  truncate_before_user_ordinal?: number | null
-  truncate_before_row_id?: number | null
-  truncate_before_message_id?: string | null
-  confirm_truncate?: boolean | null
-  confirm_empty_truncate?: boolean | null
-  rebind_survivor_row_ids?: number[] | null
-}
-/** ``status`` is absent only on the typed-stop-phrase reply (``voice_stopped``). After a truncation the survivor row ids let the client rebind its cached ``rowId``s (``None`` map entries: drop the cached id). ``turn_isolation`` marks a compute-host dispatch. */
-export interface PromptSubmitResult {
-  status?: PromptSubmitStatus | null
-  voice_stopped?: boolean | null
-  survivor_user_row_ids?: (number | null)[] | null
-  survivor_row_id_map?: Record<string, number | null> | null
-  turn_isolation?: boolean | null
-}
-export type PromptSubmitStatus = 'streaming' | 'queued' | 'steered' | 'redirected'
-export interface ClipboardPasteParams {
-  session_id: string
-  profile?: string | null
-}
-/** ``methods_prompt.py::_attached_image_result``: the image is queued for the next turn. */
-export interface AttachedImageResult {
-  name?: string | null
-  width?: number | null
-  height?: number | null
-  token_estimate?: number | null
-  attached: boolean
-  path?: string | null
-  count?: number | null
-  remainder?: string | null
-  text?: string | null
-  bytes?: number | null
-  message?: string | null
-}
-export interface ImageAttachParams {
-  session_id: string
-  profile?: string | null
-  path: string
-}
-/** ``content_base64`` (or the ``data`` alias) carries the bytes; ``filename`` / ``ext`` only hint the extension — magic bytes decide. */
-export interface ImageAttachBytesParams {
-  session_id: string
-  profile?: string | null
-  content_base64?: string | null
-  data?: string | null
-  filename?: string | null
-  ext?: string | null
-}
-/** Host ``path`` or base64 ``content_base64`` / ``data``; ``first_page`` / ``last_page`` bound the render (per-call page cap enforced server-side). */
-export interface PdfAttachParams {
-  session_id: string
-  profile?: string | null
-  path?: string | null
-  content_base64?: string | null
-  data?: string | null
-  filename?: string | null
-  first_page?: number | null
-  last_page?: number | null
-}
-export interface PdfAttachResult {
-  attached: boolean
-  filename: string
-  pages_attached: number
-  pages: PdfPage[]
-  count: number
-  text: string
-}
-export interface PdfPage {
-  name?: string | null
-  width?: number | null
-  height?: number | null
-  token_estimate?: number | null
-  path: string
-  page: number
-}
-/** ``path`` when the file is gateway-visible, else ``data_url`` carries the bytes; ``name`` labels an uploaded file. */
-export interface FileAttachParams {
-  session_id: string
-  profile?: string | null
-  path?: string | null
-  data_url?: string | null
-  name?: string | null
-}
-export interface FileAttachResult {
-  attached: boolean
-  name: string
-  path: string
-  ref_path: string
-  ref_text: string
-  uploaded: boolean
-}
-export interface ImageDetachParams {
-  session_id: string
-  profile?: string | null
-  path: string
-}
-export interface ImageDetachResult {
-  detached: boolean
-  count: number
-}
-export interface InputDetectDropParams {
-  session_id: string
-  profile?: string | null
-  text?: string | null
-}
-/** ``matched: false`` alone when the text is not a drop; an image drop is queued immediately (``is_image`` + ``count``), a file drop only yields the ``text`` to insert. */
-export interface InputDetectDropResult {
-  name?: string | null
-  width?: number | null
-  height?: number | null
-  token_estimate?: number | null
-  matched: boolean
-  is_image?: boolean | null
-  path?: string | null
-  count?: number | null
-  text?: string | null
-}
-export interface SideAgentParams {
-  session_id: string
-  profile?: string | null
-  text: string
-}
-/** The side agent runs detached; its answer lands on the parent session as an event carrying this ``task_id``. */
-export interface TaskIdResult {
-  task_id: string
-}
-export interface PreviewRestartParams {
-  session_id: string
-  profile?: string | null
-  url: string
-  cwd?: string | null
-  context?: string | null
-}
-export interface ClarifyLockParams {
-  request_id: string
-  question_id: string
-  answer?: unknown
-  profile?: string | null
-}
-/** ``remaining`` lists the qids still unanswered; the lock that empties it resolves the request. ``expired``: the wait already ended (timeout / cancel) — not an error. */
-export interface ClarifyLockResult {
-  status: ClarifyLockStatus
-  remaining?: string[] | null
-}
-export type ClarifyLockStatus = 'ok' | 'expired'
-export interface RequestAnswerParams {
-  id: string
-  result: Record<string, unknown>
-  profile?: string | null
-}
-export interface RequestAnswerResult {
-  status: ClarifyLockStatus
-}
-export interface ApprovalPendingParams {
-  session_id: string
-  profile?: string | null
-}
-export interface ApprovalPendingResult {
-  approvals: PendingApproval[]
-}
-export interface ApprovalReceivedParams {
-  session_id: string
-  profile?: string | null
-  request_id: string
-}
-export interface ApprovalReceivedResult {
-  acknowledged: boolean
-}
-/** ``choice`` is one of the offered ``approval`` choices (once / session / always / deny); ``all`` resolves every pending approval, ``request_id`` a specific one, neither the oldest. */
-export interface ApprovalRespondParams {
-  session_id: string
-  profile?: string | null
-  choice?: string | null
-  all?: boolean | null
-  request_id?: string | null
-}
-export interface ApprovalRespondResult {
-  resolved: number
-}
-export interface VoiceToggleParams {
-  action?: VoiceToggleAction
-  profile?: string | null
-}
-export type VoiceToggleAction = 'status' | 'on' | 'off' | 'tts'
-/** ``methods_voice.py::_voice_status_payload`` (+ the requirements probe on ``status``, the spoken stop hint on ``on``). */
-export interface VoiceToggleResult {
-  enabled: boolean
-  record_key: string
-  tts: boolean
-  stop_hint?: string | null
-  available?: boolean | null
-  audio_available?: boolean | null
-  stt_available?: boolean | null
-  details?: string | null
-}
-export interface VoiceRecordParams {
-  action?: VoiceRecordAction
-  session_id?: string | null
-  profile?: string | null
-}
-export type VoiceRecordAction = 'start' | 'stop'
-export interface VoiceRecordResult {
-  status: VoiceRecordStatus
-  reason?: string | null
-}
-export type VoiceRecordStatus = 'recording' | 'stopped' | 'busy'
-export interface VoiceTtsParams {
-  text: string
-  profile?: string | null
-}
-export interface VoiceTtsResult {
-  status: string
-}
-/** ``surface`` names the caller ("tui" | "gui"); ``persist`` is the explicit gesture that also flips ``wake_word.enabled`` on; ``client_capture`` asks for PCM streamed via wake.feed. */
-export interface WakeStartParams {
-  surface?: string | null
-  persist?: boolean | null
-  client_capture?: boolean | null
-  session_id?: string | null
-  profile?: string | null
-}
-/** ``started: false`` carries ``reason`` (unavailable / disabled / disabled_for_surface / owned); ``sample_rate`` / ``frame_length`` describe the PCM frames the armed detector expects. */
-export interface WakeStartResult {
-  started: boolean
-  reason?: string | null
-  hint?: string | null
-  phrase?: string | null
-  provider?: string | null
-  owner_surface?: string | null
-  enabled_persisted?: boolean | null
-  capture?: string | null
-  sample_rate?: number | null
-  frame_length?: number | null
-}
-export interface WakeStopParams {
-  persist?: boolean | null
-  profile?: string | null
-}
-export interface WakeStopResult {
-  reason?: string | null
-  stopped: boolean
-  disabled_persisted: boolean
-}
-export interface WakeControlParams {
-  profile?: string | null
-}
-export interface WakePauseResult {
-  reason?: string | null
-  paused: boolean
-}
-export interface WakeResumeResult {
-  reason?: string | null
-  resumed: boolean
-}
-export interface WakeStatusParams {
-  surface?: string | null
-  client_capture?: boolean | null
-  profile?: string | null
-}
-/** ``enabled`` is config truth; ``listening`` is this caller's armed detector; ``audio_silent`` means armed but deaf (see ``hint``). */
-export interface WakeStatusResult {
-  listening: boolean
-  owned_by_caller: boolean
-  owner_surface?: string | null
-  phrase: string
-  provider: string
-  configured_surface: string
-  input_device: WakeInputDevice
-  available: boolean
-  hint: string
-  enabled: boolean
-  audio_silent: boolean
-  capture: string
-  local_input_available: boolean
-  sample_rate: number
-  frame_length: number
-}
-/** ``tools/wake_word.py::_describe_input_device`` — PortAudio diagnostics for the configured mic. */
-export interface WakeInputDevice {
-  selector?: number | string | null
-  name?: string | null
-  error?: string | null
-  max_input_channels?: number | null
-  default_samplerate?: number | null
-  hostapi_index?: number | null
-  hostapi?: string | null
-  [key: string]: unknown
-}
-/** ``pcm`` (or the ``pcm_b64`` alias): base64 int16 mono little-endian, 16 kHz only. */
-export interface WakeFeedParams {
-  pcm?: string | null
-  pcm_b64?: string | null
-  sample_rate?: number | null
-  profile?: string | null
-}
-export interface WakeFeedResult {
-  reason?: string | null
-  fed: boolean
 }
 export interface SystemBatteryParams {
   profile?: string | null
@@ -4222,7 +3736,6 @@ export interface AgentPluginRow {
 /** Single question: ``question`` / ``choices`` (/ ``multi_select``); batch: ``questions``. ``answers`` rides only on a reconnect replay (locks the server already accepted). */
 export interface ClarifyRequestParams {
   session_id: string
-  conversation?: ConversationActivityCoordinates | null
   question?: string | null
   choices?: string[] | null
   multi_select?: boolean | null
@@ -4243,7 +3756,6 @@ export interface ClarifyResult {
 /** ``tui_gateway/server.py::_approval_request_payload`` — the command is redacted server-side. */
 export interface ApprovalRequestParams {
   session_id: string
-  conversation?: ConversationActivityCoordinates | null
   request_id: string
   command?: string
   description?: string
@@ -4261,7 +3773,6 @@ export interface ApprovalResult {
 }
 export interface EmptyRequestParams {
   session_id: string
-  conversation?: ConversationActivityCoordinates | null
 }
 /** The answer to any one-string prompt (sudo, secret, vault prompts, desktop bridges, mcp.setup): ``''`` means skipped / declined. */
 export interface ValueResult {
@@ -4269,46 +3780,39 @@ export interface ValueResult {
 }
 export interface SecretRequestParams {
   session_id: string
-  conversation?: ConversationActivityCoordinates | null
   env_var: string
   prompt: string
   metadata?: Record<string, unknown> | null
 }
 export interface VaultUnlockRequestParams {
   session_id: string
-  conversation?: ConversationActivityCoordinates | null
   backend: string
   display_name: string
 }
 export interface VaultSaveLoginRequestParams {
   session_id: string
-  conversation?: ConversationActivityCoordinates | null
   origin: string
   site: string
 }
 export interface VaultCodeRequestParams {
   session_id: string
-  conversation?: ConversationActivityCoordinates | null
   site?: string | null
   hint?: string | null
 }
 export interface McpSetupRequestParams {
   session_id: string
-  conversation?: ConversationActivityCoordinates | null
   server?: string | null
   action?: string | null
   reason?: string | null
 }
 export interface ReadRangeRequestParams {
   session_id: string
-  conversation?: ConversationActivityCoordinates | null
   start?: number | null
   count?: number | null
 }
 /** ``tools/drive_preview_tool.py`` and ``tools/annotate_preview_tool.py`` field sets. */
 export interface PreviewActRequestParams {
   session_id: string
-  conversation?: ConversationActivityCoordinates | null
   action: string
   ref?: string | null
   selector?: string | null
@@ -4323,7 +3827,6 @@ export interface PreviewActRequestParams {
 /** ``tools/tour_tool.py`` field set. */
 export interface TourRequestParams {
   session_id: string
-  conversation?: ConversationActivityCoordinates | null
   action: string
   surface?: string | null
   selector?: string | null
@@ -4804,56 +4307,6 @@ export interface RpcMethods {
   'connectors.connect': { params: ConnectorsConnectParams; result: ConnectorsConnectResult }
   /** Connector catalog + connection state for one owned session (``available=False`` when the toolset is off). */
   'connectors.list': { params: ConnectorsListParams; result: ConnectorsListResult }
-  /** Adopt owned quiescent legacy public history with a permanent source execution fence. */
-  'conversations.adopt': { params: ConversationAdoptParams; result: ConversationAdoptResult }
-  /** Archive an owned idle conversation without deleting any public history. */
-  'conversations.archive': { params: ConversationArchiveParams; result: ConversationResult }
-  /** Upload immutable conversation-owned bytes without admitting a user input. */
-  'conversations.attach': { params: ConversationAttachParams; result: ConversationAttachResult }
-  /** Snapshot owned idle public history into a new conversation; edits return a durable unsent draft for normal preparation and sending. */
-  'conversations.branch': { params: ConversationBranchParams; result: ConversationBranchResult }
-  /** Cancel the exact unsent edited draft with owner and revision checks; copied public history remains immutable. */
-  'conversations.cancel_draft': { params: ConversationCancelDraftParams; result: ConversationCancelDraftResult }
-  /** Report verified ordinary-conversation topology and rollout availability. */
-  'conversations.capabilities': { params: Params; result: ConversationCapabilities }
-  /** Read a private notice from the selected owned participant generation without admitting a turn. */
-  'conversations.command': { params: ConversationCommandParams; result: ConversationCommandResult }
-  /** Read an authorized byte page of content owned by this conversation. */
-  'conversations.content': { params: ConversationContentParams; result: ConversationContentResult }
-  /** Create one public conversation with a fixed general assistant identity. */
-  'conversations.create': { params: ConversationCreateParams; result: ConversationResult }
-  /** Replay a page of durable public conversation events. */
-  'conversations.events': { params: ConversationEventsParams; result: ConversationEventsResult }
-  /** Download bounded segments of an owned public JSON package with full referenced content and attachments. */
-  'conversations.export': { params: ConversationExportParams; result: ConversationExportResult }
-  /** Read public conversation identity, participants and outstanding work. */
-  'conversations.get': { params: ConversationParams; result: ConversationGetResult }
-  /** List ordinary conversations independently from the selected Profile. */
-  'conversations.list': { params: ConversationListParams; result: ConversationListResult }
-  /** List gateway-resolved participant identities and execution availability. */
-  'conversations.participants': { params: Params; result: ConversationCatalogResult }
-  /** Prepare the exact participant session for ordinary authenticated model binding before sending. */
-  'conversations.prepare': { params: ConversationPrepareParams; result: ConversationPrepareResult }
-  /** Set or clear the owner reaction on one public event without rewriting its bytes. */
-  'conversations.react': { params: ConversationReactParams; result: ConversationReactResult }
-  /** Read owner-scoped reaction metadata for exact public event identities. */
-  'conversations.reactions': { params: ConversationReactionsParams; result: ConversationReactionsResult }
-  /** Explicitly start a new participant generation from current Profile configuration. */
-  'conversations.refresh': { params: ConversationRefreshParams; result: ConversationRefreshResult }
-  /** Intentionally admit a new answer attempt related to a settled public result; this never retries uncertain work. */
-  'conversations.regenerate': { params: ConversationRegenerateParams; result: ConversationRegenerateResult }
-  /** Set an owned conversation title with revision and manual-title authority. */
-  'conversations.rename': { params: ConversationRenameParams; result: ConversationResult }
-  /** Reconcile an admitted input; uncertain execution is never blindly replayed. */
-  'conversations.retry': { params: ConversationRetryParams; result: ConversationAdmissionResult }
-  /** Reattach an existing participant generation and replay its exact live child/request ownership. */
-  'conversations.runtime_snapshot': { params: ConversationRuntimeSnapshotParams; result: ConversationRuntimeSnapshotResult }
-  /** Admit one immutable user input for the selected participant. */
-  'conversations.send': { params: ConversationSendParams; result: ConversationAdmissionResult }
-  /** Change the project and explicitly advance idle participant generations without altering public history. */
-  'conversations.set_project': { params: ConversationSetProjectParams; result: ConversationSetProjectResult }
-  /** Stop the exact execution generation and optionally its owned delegations. */
-  'conversations.stop': { params: ConversationStopParams; result: ConversationStopResult }
   /** List/add/remove/pause/resume cron jobs in the (optionally profile-scoped) cron store. */
   'cron.manage': { params: CronManageParams; result: CronManageResult }
   /** Block/unblock NEW spawns globally (active children keep running); returns the new state. */
@@ -5056,16 +4509,6 @@ export interface RpcMethods {
   'projects.set_active': { params: ProjectsSetActiveParams; result: ActiveIdResult }
   /** Make one attached folder the project's primary path. */
   'projects.set_primary': { params: ProjectFolderParams; result: ProjectResult }
-  /** Delete only the explicitly identified source registration; project files are untouched. */
-  'projects.shared.delete': { params: SharedProjectMutationParams; result: SharedProjectMutationResult }
-  /** List shared project identities with exact available Profile registration sources. */
-  'projects.shared.list': { params: Params; result: SharedProjectsResult }
-  /** Create or reuse an explicit local Profile project registration and index its shared identity. */
-  'projects.shared.register': { params: SharedProjectRegisterParams; result: SharedProjectResult }
-  /** Resolve a shared identity to current available registration sources. */
-  'projects.shared.resolve': { params: SharedProjectResolveParams; result: SharedProjectResult }
-  /** Rename only the explicitly identified source registration. */
-  'projects.shared.update': { params: SharedProjectUpdateParams; result: SharedProjectMutationResult }
   /** Project → repo → lane overview with counts and a few preview sessions per project. */
   'projects.tree': { params: ProjectsTreeParams; result: ProjectsTreeResult }
   /** Patch a project's display fields; answers the refreshed project. */
@@ -5276,31 +4719,6 @@ export const RPC_METHODS = [
   'config.show',
   'connectors.connect',
   'connectors.list',
-  'conversations.adopt',
-  'conversations.archive',
-  'conversations.attach',
-  'conversations.branch',
-  'conversations.cancel_draft',
-  'conversations.capabilities',
-  'conversations.command',
-  'conversations.content',
-  'conversations.create',
-  'conversations.events',
-  'conversations.export',
-  'conversations.get',
-  'conversations.list',
-  'conversations.participants',
-  'conversations.prepare',
-  'conversations.react',
-  'conversations.reactions',
-  'conversations.refresh',
-  'conversations.regenerate',
-  'conversations.rename',
-  'conversations.retry',
-  'conversations.runtime_snapshot',
-  'conversations.send',
-  'conversations.set_project',
-  'conversations.stop',
   'cron.manage',
   'delegation.pause',
   'delegation.status',
@@ -5402,11 +4820,6 @@ export const RPC_METHODS = [
   'projects.remove_folder',
   'projects.set_active',
   'projects.set_primary',
-  'projects.shared.delete',
-  'projects.shared.list',
-  'projects.shared.register',
-  'projects.shared.resolve',
-  'projects.shared.update',
   'projects.tree',
   'projects.update',
   'prompt.background',

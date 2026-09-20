@@ -16,9 +16,9 @@ const SLASH_COMPLETIONS_KEY = 'slash-completions'
 const SLASH_COMPLETIONS_TTL_MS = 60 * 60_000
 
 /** Serve a `/` completion response from cache, fetching only when stale. */
-export function cachedSlashCompletion<T>(key: string, fetcher: () => Promise<T>, scope?: string): Promise<T> {
+export function cachedSlashCompletion<T>(key: string, fetcher: () => Promise<T>): Promise<T> {
   return queryClient.fetchQuery({
-    queryKey: scope ? [SLASH_COMPLETIONS_KEY, scope, key] : [SLASH_COMPLETIONS_KEY, key],
+    queryKey: [SLASH_COMPLETIONS_KEY, key],
     queryFn: fetcher,
     gcTime: SLASH_COMPLETIONS_TTL_MS,
     staleTime: SLASH_COMPLETIONS_TTL_MS,
@@ -31,8 +31,8 @@ export function cachedSlashCompletion<T>(key: string, fetcher: () => Promise<T>,
 }
 
 /** True when `cachedSlashCompletion(key)` will resolve without a round trip. */
-export function hasCachedSlashCompletion(key: string, scope?: string): boolean {
-  const state = queryClient.getQueryState(scope ? [SLASH_COMPLETIONS_KEY, scope, key] : [SLASH_COMPLETIONS_KEY, key])
+export function hasCachedSlashCompletion(key: string): boolean {
+  const state = queryClient.getQueryState([SLASH_COMPLETIONS_KEY, key])
 
   return state?.data !== undefined && Date.now() - state.dataUpdatedAt < SLASH_COMPLETIONS_TTL_MS
 }
@@ -43,10 +43,8 @@ export function hasCachedSlashCompletion(key: string, scope?: string): boolean {
  * usage map, which refines the ordering of a typed query but is not worth
  * delaying that query for.
  */
-export function peekCachedSlashCompletion<T>(key: string, scope?: string): T | undefined {
-  return hasCachedSlashCompletion(key, scope)
-    ? queryClient.getQueryData<T>(scope ? [SLASH_COMPLETIONS_KEY, scope, key] : [SLASH_COMPLETIONS_KEY, key])
-    : undefined
+export function peekCachedSlashCompletion<T>(key: string): T | undefined {
+  return hasCachedSlashCompletion(key) ? queryClient.getQueryData<T>([SLASH_COMPLETIONS_KEY, key]) : undefined
 }
 
 // `@` path completions are a directory listing, which unlike the command

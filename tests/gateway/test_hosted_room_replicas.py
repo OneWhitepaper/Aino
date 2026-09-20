@@ -60,41 +60,6 @@ def test_ingest_page_persists_events_and_lineage(tmp_path):
     assert state["members"] == MEMBERS
 
 
-@pytest.mark.parametrize("purpose", [None, "discussion"])
-@pytest.mark.parametrize("kind,actor", [
-    ("conversation.input", USER),
-    ("conversation.response", {"kind": "participant", "id": "writer"}),
-    ("message.member", {"kind": "participant", "id": "writer"}),
-])
-def test_discussion_replication_rejects_conversation_events_before_promotion(
-    tmp_path, monkeypatch, purpose, kind, actor,
-):
-    page = _seed_room(_authority_db(tmp_path), n_events=1)
-    rdb = _replica_db(tmp_path)
-    replicas.ingest_page(
-        rdb, room_id="room-1", room_name="Field Room", members=MEMBERS, page=page,
-    )
-    foreign_page = {
-        **page,
-        "events": [{**page["events"][0], "seq": 2, "event_id": "foreign",
-                    "kind": kind, "actor": actor}],
-        "latest_seq": 2,
-    }
-    if purpose is not None:
-        foreign_page["purpose"] = purpose
-    with pytest.raises(replicas.ReplicaError, match="discussion"):
-        replicas.ingest_page(
-            rdb, room_id="room-1", room_name="Field Room", members=MEMBERS, page=foreign_page,
-        )
-
-    assert replicas.replica_state(rdb, room_id="room-1")["last_seq"] == 1
-    monkeypatch.setattr(replicas, "local_authority_gateway_id", lambda: AUTH_B)
-    replicas.promote_replica(rdb, room_id="room-1")
-    promoted = rooms.read_events(rdb, room_id="room-1")["events"]
-    assert promoted[0] == page["events"][0]
-    assert [event["kind"] for event in promoted] == ["message.user", "authority.claimed"]
-
-
 def test_ingest_page_is_idempotent(tmp_path):
     page = _seed_room(_authority_db(tmp_path))
     rdb = _replica_db(tmp_path)

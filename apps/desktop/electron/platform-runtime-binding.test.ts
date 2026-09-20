@@ -223,25 +223,19 @@ async function rig(options: { delayLeaseAt?: number; delayLogout?: boolean; remo
 
   expect(await auth.initialize()).toMatchObject({ phase: 'signed_in' })
 
-  const resolvedRoutes: Array<{ connection: string; profile: string }> = []
-
   const controller = createPlatformRuntimeBindingController({
     auth,
     origin,
     deviceId: () => 'fixture-device',
     confirmRemote: async () => options.allow === true,
-    resolveConnection: async (connection, profile) => {
-      resolvedRoutes.push({ connection, profile })
-
-      return {
-        fingerprint: 'fixture-route',
-        host: 'fixture-host',
-        remote: options.remote === true,
-        profile: 'default',
-        isCurrent: () => valid,
-        open: () => openPlatformGateway(origin.replace('http:', 'ws:') + '/api/ws?token=fixture-gateway')
-      }
-    }
+    resolveConnection: async () => ({
+      fingerprint: 'fixture-route',
+      host: 'fixture-host',
+      remote: options.remote === true,
+      profile: 'default',
+      isCurrent: () => valid,
+      open: () => openPlatformGateway(origin.replace('http:', 'ws:') + '/api/ws?token=fixture-gateway')
+    })
   })
 
   cleanup.push(() => controller.dispose())
@@ -267,7 +261,6 @@ async function rig(options: { delayLeaseAt?: number; delayLogout?: boolean; remo
     input,
     credentials,
     received,
-    resolvedRoutes,
     leaseReady,
     logoutReady,
     releaseLease: () => releaseLease(),
@@ -279,24 +272,6 @@ async function rig(options: { delayLeaseAt?: number; delayLogout?: boolean; remo
     secret
   }
 }
-
-it('keeps the gateway connection fixed while authorizing and renewing a participant Profile', async () => {
-  const f = await rig()
-  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
-  const input = { ...f.input, session_profile: 'writer' }
-  expect((await f.controller.bind(input, f.window)).ok).toBe(true)
-  expect(f.resolvedRoutes).toEqual([{ connection: input.connection_id, profile: 'default' }])
-  expect(
-    f.received
-      .filter(row => row.method === 'session.claim_managed_model' || row.method === 'session.bind_managed_model')
-      .every(row => row.profile === 'writer')
-  ).toBe(true)
-  await vi.advanceTimersByTimeAsync(20 * 60_000)
-  await vi.waitFor(() => expect(f.received.some(row => row.method === 'session.renew_managed_model')).toBe(true))
-  expect(f.received.find(row => row.method === 'session.renew_managed_model')?.profile).toBe('writer')
-  expect(f.resolvedRoutes).toHaveLength(1)
-  f.controller.clear(input, f.window)
-})
 
 it('renews on the retained controller socket without a renderer ticket and stops after clear', async () => {
   const f = await rig()
@@ -388,7 +363,10 @@ it('revokes active and pending gateway authority before a remote logout resolves
   expect((await f.controller.bind(f.input, f.window)).ok).toBe(true)
   expect(f.binding()).toMatchObject({ session_id: f.input.session_id })
 
-  const pending = f.controller.bind({ ...f.input, expected_account_revision: f.auth.snapshot().revision }, f.window)
+  const pending = f.controller.bind(
+    { ...f.input, expected_account_revision: f.auth.snapshot().revision },
+    f.window
+  )
 
   await f.leaseReady
 
@@ -427,16 +405,9 @@ it('keeps model IPC restricted to the registered main frame and strips extra ren
   const invoke = handlers.get('aino:platform-models:bind')!
   expect(await invoke({ ...event, senderFrame: {} }, f.input)).toMatchObject({ ok: false })
   expect(f.credentials).toHaveLength(0)
-
-  const result = await invoke(event, {
-    ...f.input,
-    session_profile: 'writer',
-    api_key: 'renderer-fake-key',
-    owner: { user_id: 'foreign' }
-  })
-
+  const result = await invoke(event, { ...f.input, api_key: 'renderer-fake-key', owner: { user_id: 'foreign' } })
   expect(result.ok).toBe(true)
-  expect(f.binding()).toMatchObject({ owner: { user_id: '17' }, api_key: f.secret, profile: 'writer' })
+  expect(f.binding()).toMatchObject({ owner: { user_id: '17' }, api_key: f.secret })
   expect(JSON.stringify(result)).not.toContain(f.secret)
   ipc.unregisterWindow(f.window)
   expect(await invoke(event, f.input)).toMatchObject({ ok: false })

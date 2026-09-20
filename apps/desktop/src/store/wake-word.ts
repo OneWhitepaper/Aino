@@ -37,34 +37,16 @@ const INITIAL_WAKE_WORD_STATE: WakeWordState = {
 export const $wakeWord = atom<WakeWordState>(INITIAL_WAKE_WORD_STATE)
 
 /** Active client mic stream for remote wake (capture: client). */
-interface WakeControllerState {
-  state: ReturnType<typeof atom<WakeWordState>>
-  capture: ClientWakeCaptureHandle | null
-  captureEpoch: number
-  disposed: boolean
-}
-
-const defaultController: WakeControllerState = {
-  state: $wakeWord,
-  capture: null,
-  captureEpoch: 0,
-  disposed: false
-}
+let clientCapture: ClientWakeCaptureHandle | null = null
 
 /** Stop client-side PCM capture (also called on wake.detected before voice). */
-export function stopClientCapture(controller = defaultController): void {
-  controller.captureEpoch++
-  controller.capture?.stop()
-  controller.capture = null
+export function stopClientCapture(): void {
+  clientCapture?.stop()
+  clientCapture = null
 }
 
-async function maybeStartClientCapture(
-  result: WakeStartResponse | null | undefined,
-  request: WakeRequester,
-  controller: WakeControllerState
-): Promise<void> {
-  stopClientCapture(controller)
-  const epoch = controller.captureEpoch
+async function maybeStartClientCapture(result: WakeStartResponse | null | undefined): Promise<void> {
+  stopClientCapture()
 
   if (!result?.started) {
     return
@@ -77,30 +59,13 @@ async function maybeStartClientCapture(
   }
 
   try {
-    const capture = await startClientWakeCapture({
+    clientCapture = await startClientWakeCapture({
       frameLength: result.frame_length,
-      request: async <T>(method: string, params?: Record<string, unknown>) => {
-        if (controller.disposed || controller.captureEpoch !== epoch) {
-          throw new WakeOperationCancelled()
-        }
-
-        return request<T>(method, params)
-      }
+      request: gatewayRequester
     })
-
-    if (controller.disposed || controller.captureEpoch !== epoch) {
-      capture.stop()
-
-      return
-    }
-
-    controller.capture = capture
   } catch (error) {
-    if (controller.disposed || error instanceof WakeOperationCancelled) {
-      return
-    }
-    const current = controller.state.get()
-    controller.state.set({
+    const current = $wakeWord.get()
+    $wakeWord.set({
       ...current,
       listening: false,
       notice: localizedWakeCaptureErrorNow(error),
@@ -109,7 +74,7 @@ async function maybeStartClientCapture(
 
     // Best-effort: release server lease if client mic failed.
     try {
-      await request('wake.stop', {})
+      await gatewayRequester('wake.stop', {})
     } catch {
       // ignore
     }
@@ -211,17 +176,14 @@ const noticeFrom = (result: { hint?: string; reason?: string | null } | null | u
 }
 
 /** Sync the atom from a `wake.status` payload (mount / gateway-ready). */
-export function applyWakeStatus(status: WakeStatusResponse | null | undefined, controller = defaultController): void {
-  if (controller.disposed) {
-    return
-  }
-  const current = controller.state.get()
+export function applyWakeStatus(status: WakeStatusResponse | null | undefined): void {
+  const current = $wakeWord.get()
   const listening = Boolean(status?.listening)
   // "Armed but deaf" keeps its input-device hint visible in the tooltip even
   // though the toggle shows listening.
   const silent = Boolean(status?.audio_silent)
 
-  controller.state.set({
+  $wakeWord.set({
     ...current,
     available: Boolean(status?.available),
     enabled: Boolean(status?.enabled),
@@ -233,18 +195,11 @@ export function applyWakeStatus(status: WakeStatusResponse | null | undefined, c
 
 /** Sync the atom from a `wake.start` response. A `{started:false, reason}`
  *  refusal keeps the toggle off and surfaces the reason as the tooltip. */
-export function applyWakeStartResult(
-  result: WakeStartResponse | null | undefined,
-  request: WakeRequester = gatewayRequester,
-  controller = defaultController
-): void {
-  if (controller.disposed) {
-    return
-  }
-  const current = controller.state.get()
+export function applyWakeStartResult(result: WakeStartResponse | null | undefined): void {
+  const current = $wakeWord.get()
 
   if (result?.started) {
-    controller.state.set({
+    $wakeWord.set({
       ...current,
       available: true,
       enabled: true,
@@ -253,14 +208,14 @@ export function applyWakeStartResult(
       pending: false,
       phrase: result.phrase?.trim() || current.phrase
     })
-    void maybeStartClientCapture(result, request, controller)
+    void maybeStartClientCapture(result)
 
     return
   }
 
-  stopClientCapture(controller)
+  stopClientCapture()
 
-  controller.state.set({
+  $wakeWord.set({
     ...current,
     // The backend probes requirements on start; an explicit "unavailable"
     // refusal means the feature can't run here right now. Keep `enabled`
@@ -275,14 +230,11 @@ export function applyWakeStartResult(
 
 /** Sync the atom from a `wake.stop` response. `{stopped:false, reason:'not_owner'}`
  *  still means WE are not listening, so the toggle lands on off either way. */
-export function applyWakeStopResult(result: WakeStopResponse | null | undefined, controller = defaultController): void {
-  if (controller.disposed) {
-    return
-  }
-  const current = controller.state.get()
+export function applyWakeStopResult(result: WakeStopResponse | null | undefined): void {
+  const current = $wakeWord.get()
 
-  stopClientCapture(controller)
-  controller.state.set({
+  stopClientCapture()
+  $wakeWord.set({
     ...current,
     enabled: result?.disabled_persisted ? false : current.enabled,
     listening: false,
@@ -298,21 +250,14 @@ export function applyWakeStopResult(result: WakeStopResponse | null | undefined,
  * Best-effort: a gateway without the wake.* methods leaves the atom at its
  * hidden default.
  */
-export async function armWakeWord(
-  request: WakeRequester = gatewayRequester,
-  controller = defaultController
-): Promise<void> {
-  if (controller.disposed) {
-    return
-  }
-
+export async function armWakeWord(request: WakeRequester = gatewayRequester): Promise<void> {
   try {
     const status = await request<WakeStatusResponse>('wake.status', {
       client_capture: true,
       surface: 'gui'
     })
 
-    applyWakeStatus(status, controller)
+    applyWakeStatus(status)
 
     if (!status?.available || status.listening) {
       // Armed already (e.g. another surface/restart) — reattach feeder if client.
@@ -320,15 +265,11 @@ export async function armWakeWord(
         const mode = (status.capture || '').toLowerCase()
 
         if (mode === 'client' || mode === 'remote' || mode === 'external') {
-          void maybeStartClientCapture(
-            {
-              started: true,
-              capture: 'client',
-              frame_length: status.frame_length ?? 1280
-            },
-            request,
-            controller
-          )
+          void maybeStartClientCapture({
+            started: true,
+            capture: 'client',
+            frame_length: status.frame_length ?? 1280
+          })
         }
       }
 
@@ -340,27 +281,21 @@ export async function armWakeWord(
       client_capture: true
     })
 
-    applyWakeStartResult(result, request, controller)
+    applyWakeStartResult(result)
   } catch {
     // Older backends / transient failures — keep whatever we last knew.
   }
 }
 
 /** The composer button's click handler: stop when listening, start otherwise. */
-export async function toggleWakeWord(
-  request: WakeRequester = gatewayRequester,
-  controller = defaultController
-): Promise<void> {
-  if (controller.disposed) {
-    return
-  }
-  const state = controller.state.get()
+export async function toggleWakeWord(request: WakeRequester = gatewayRequester): Promise<void> {
+  const state = $wakeWord.get()
 
   if (state.pending) {
     return
   }
 
-  controller.state.set({
+  $wakeWord.set({
     ...state,
     // First arm may lazy-install the detection engine — say so instead of
     // freezing a silent disabled button for the duration.
@@ -370,7 +305,7 @@ export async function toggleWakeWord(
 
   try {
     if (state.listening) {
-      applyWakeStopResult(await request<WakeStopResponse>('wake.stop', { persist: true }), controller)
+      applyWakeStopResult(await request<WakeStopResponse>('wake.stop', { persist: true }))
     } else {
       // persist: true — a deliberate click is consent, so the backend flips
       // wake_word.enabled in config.yaml (on/off) and the choice sticks for
@@ -380,18 +315,13 @@ export async function toggleWakeWord(
           persist: true,
           surface: 'gui',
           client_capture: true
-        }),
-        request,
-        controller
+        })
       )
     }
   } catch (error) {
-    if (controller.disposed || error instanceof WakeOperationCancelled) {
-      return
-    }
-    const current = controller.state.get()
+    const current = $wakeWord.get()
 
-    controller.state.set({
+    $wakeWord.set({
       ...current,
       notice: error instanceof Error ? error.message : String(error),
       pending: false
@@ -411,14 +341,7 @@ const sleep = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, m
  * of spaced retries to ride out mic-release latency. Never passes `persist` —
  * this is a passive path and must not flip config.
  */
-export async function resumeWakeAfterVoice(
-  request: WakeRequester = gatewayRequester,
-  controller = defaultController
-): Promise<void> {
-  if (controller.disposed) {
-    return
-  }
-
+export async function resumeWakeAfterVoice(request: WakeRequester = gatewayRequester): Promise<void> {
   try {
     await request('wake.resume', {})
   } catch {
@@ -433,7 +356,7 @@ export async function resumeWakeAfterVoice(
         surface: 'gui'
       })
 
-      applyWakeStatus(status, controller)
+      applyWakeStatus(status)
 
       // Config says off (or the feature can't run) — off is the correct rest
       // state. A user /wake off during the voice turn stays respected.
@@ -447,15 +370,11 @@ export async function resumeWakeAfterVoice(
         const mode = (status.capture || '').toLowerCase()
 
         if (mode === 'client' || mode === 'remote' || mode === 'external') {
-          void maybeStartClientCapture(
-            {
-              started: true,
-              capture: 'client',
-              frame_length: status.frame_length ?? 1280
-            },
-            request,
-            controller
-          )
+          void maybeStartClientCapture({
+            started: true,
+            capture: 'client',
+            frame_length: status.frame_length ?? 1280
+          })
         }
 
         return
@@ -466,7 +385,7 @@ export async function resumeWakeAfterVoice(
         client_capture: true
       })
 
-      applyWakeStartResult(started, request, controller)
+      applyWakeStartResult(started)
 
       if (started?.started) {
         return
@@ -476,10 +395,7 @@ export async function resumeWakeAfterVoice(
       if (started?.reason === 'owned') {
         return
       }
-    } catch (error) {
-      if (controller.disposed || error instanceof WakeOperationCancelled) {
-        return
-      }
+    } catch {
       // Transient (mic still releasing) — fall through to the next attempt.
     }
 
@@ -489,101 +405,6 @@ export async function resumeWakeAfterVoice(
 
 /** Test-only reset. */
 export function resetWakeWordState(): void {
-  const controller = defaultController
-  stopClientCapture(controller)
-  controller.state.set(INITIAL_WAKE_WORD_STATE)
-}
-
-class WakeOperationCancelled extends Error {}
-
-// A new foreground owner must wait until the old owner's last start and stop
-// settle; both can name the same backend microphone lease after a Profile swap.
-let wakeHandoff: Promise<void> = Promise.resolve()
-
-export function createWakeWordController(request: WakeRequester) {
-  const controller: WakeControllerState = {
-    state: atom<WakeWordState>({ ...INITIAL_WAKE_WORD_STATE }),
-    capture: null,
-    captureEpoch: 0,
-    disposed: false
-  }
-
-  const operations = new Set<Promise<void>>()
-  let operationEpoch = 0
-  let disposal: Promise<void> | undefined
-
-  const run = (action: (owned: WakeRequester) => Promise<void>): Promise<void> => {
-    if (controller.disposed) {
-      return Promise.resolve()
-    }
-    const epoch = ++operationEpoch
-
-    const owned: WakeRequester = async <T>(method: string, params?: Record<string, unknown>) => {
-      if (controller.disposed || epoch !== operationEpoch) {
-        throw new WakeOperationCancelled()
-      }
-      const result = await request<T>(method, params)
-
-      if (controller.disposed || epoch !== operationEpoch) {
-        throw new WakeOperationCancelled()
-      }
-
-      return result
-    }
-
-    const barrier = Promise.allSettled([wakeHandoff, ...operations])
-
-    const operation = barrier
-      .then(() => action(owned))
-      .catch(error => {
-        if (!(error instanceof WakeOperationCancelled)) {
-          throw error
-        }
-      })
-
-    operations.add(operation)
-    void operation.then(
-      () => operations.delete(operation),
-      () => operations.delete(operation)
-    )
-
-    return operation
-  }
-
-  return {
-    state: controller.state,
-    $wakeWord: controller.state,
-    arm: () => run(owned => armWakeWord(owned, controller)),
-    toggle: () =>
-      controller.state.get().pending ? Promise.resolve() : run(owned => toggleWakeWord(owned, controller)),
-    resume: () => run(owned => resumeWakeAfterVoice(owned, controller)),
-    pause: () => {
-      stopClientCapture(controller)
-
-      return run(async owned => {
-        await owned('wake.pause', {})
-        controller.state.set({ ...controller.state.get(), listening: false, pending: false })
-      })
-    },
-    stopCapture: () => stopClientCapture(controller),
-    dispose: (): Promise<void> => {
-      if (disposal) {
-        return disposal
-      }
-      controller.disposed = true
-      operationEpoch++
-      stopClientCapture(controller)
-      controller.state.set({ ...controller.state.get(), listening: false, pending: false })
-      disposal = Promise.allSettled([wakeHandoff, ...operations]).then(async () => {
-        try {
-          await request('wake.stop', {})
-        } catch {
-          /* Disconnected owner cannot retain a live client feeder. */
-        }
-      })
-      wakeHandoff = disposal
-
-      return disposal
-    }
-  }
+  stopClientCapture()
+  $wakeWord.set(INITIAL_WAKE_WORD_STATE)
 }

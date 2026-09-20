@@ -3,8 +3,6 @@ per-model usage rows, and billing-route columns. Writer thread state lives on th
 
 from __future__ import annotations
 
-from agent.conversation_maintenance import managed_session_call
-
 import atexit
 import contextlib
 import logging
@@ -84,7 +82,6 @@ _MODEL_USAGE_FIELDS = frozenset((
 class SessionUsageMixin:
     """Coalesced token writer, per-model usage rows, billing route."""
 
-    @managed_session_call
     def update_session_billing_route(
         self, session_id: str, *, provider: str, base_url: str, billing_mode: Optional[str] = None,
     ) -> None:
@@ -275,7 +272,6 @@ class SessionUsageMixin:
         with contextlib.suppress(Exception):  # never fatal at interpreter shutdown
             self._stop_token_writer()
 
-    @managed_session_call
     def update_token_counts(
         self, session_id: str, input_tokens: int=0, output_tokens: int=0, model: str=None, cache_read_tokens: int=0,
         cache_write_tokens: int=0, reasoning_tokens: int=0, estimated_cost_usd: Optional[float]=None,
@@ -365,7 +361,6 @@ class SessionUsageMixin:
             billing_mode or sess.get("billing_mode") or "", task or "", api_call_count or 0, *counts,
             float(estimated_cost_usd or 0.0), float(actual_cost_usd or 0.0), cost_status, cost_source, now, now))
 
-    @managed_session_call
     def record_auxiliary_usage(
         self, session_id: str, task: str, *, model: Optional[str]=None, billing_provider: Optional[str]=None,
         billing_base_url: Optional[str]=None, input_tokens: int=0, output_tokens: int=0, cache_read_tokens: int=0,

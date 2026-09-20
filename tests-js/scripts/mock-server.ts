@@ -31,12 +31,6 @@ import { pathToFileURL } from 'node:url'
 export const MOCK_REPLY = 'Hello from the mock inference server! The full boot chain is working.'
 
 export interface MockServerOptions {
-  /** Model catalog exposed by this fixture for actual picker/refresh tests. */
-  modelIds?: string[]
-  /** Fixture-owned terminal command for exercising the real human approval path. */
-  approvalCommand?: { marker: string; command: string }
-  /** A bounded fixture-specific answer for full-content persistence/rendering tests. */
-  replyForPrompt?: { marker: string; text: string }
   /** Pause the matching stream after its first token for session-switch E2E coverage. */
   holdFirstStreamForPrompt?: string
 /** Pause the first completion whose request JSON contains this text. */
@@ -438,18 +432,20 @@ export function startMockServer(options: MockServerOptions = {}): Promise<MockSe
         return
       }
 
-      // GET /v1/models — expose the fixture catalog.
+      // GET /v1/models — return a single fake model.
       if (req.method === 'GET' && req.url === '/v1/models') {
         res.writeHead(200, { 'Content-Type': 'application/json' })
         res.end(
           JSON.stringify({
             object: 'list',
-            data: (options.modelIds ?? ['mock-model']).map(id => ({
-              id,
-              object: 'model',
-              created: 0,
-              owned_by: 'mock',
-            })),
+            data: [
+              {
+                id: 'mock-model',
+                object: 'model',
+                created: 0,
+                owned_by: 'mock',
+              },
+            ],
           }),
         )
 
@@ -499,16 +495,6 @@ export function startMockServer(options: MockServerOptions = {}): Promise<MockSe
           const messages: any[] = Array.isArray(parsed.messages) ? parsed.messages : []
           const lastUserMsg = [...messages].reverse().find(m => m?.role === 'user')
           const userText = typeof lastUserMsg?.content === 'string' ? lastUserMsg.content : ''
-
-          if (options.approvalCommand && userText.includes(options.approvalCommand.marker)
-            && !messages.some(message => message?.role === 'tool')) {
-            const turn: ScriptedTurn = { text: 'The writer is waiting for approval.', toolCalls: [
-              { name: 'terminal', args: { command: options.approvalCommand.command } }
-            ] }
-            if (stream) streamScriptedTurn(res, model, turn)
-            else nonStreamingScriptedTurn(res, model, turn)
-            return
-          }
 
           if (userText) {
             _receivedUserTexts.push(userText)
@@ -663,16 +649,13 @@ export function startMockServer(options: MockServerOptions = {}): Promise<MockSe
             return
           }
 
-          const reply = options.replyForPrompt && userText.includes(options.replyForPrompt.marker)
-            ? options.replyForPrompt.text : MOCK_REPLY
-
           if (stream) {
             const holdThisStream = Boolean(
               options.holdFirstStreamForPrompt && typeof lastUserMessage?.content === 'string' &&
                 lastUserMessage.content.includes(options.holdFirstStreamForPrompt),
             )
 
-            streamTextResponse(res, model, reply, holdThisStream || holdThisCompletion ? () => {
+            streamTextResponse(res, model, MOCK_REPLY, holdThisStream || holdThisCompletion ? () => {
               if (holdThisCompletion) {
                 heldCompletionCount++
               }
@@ -685,9 +668,9 @@ export function startMockServer(options: MockServerOptions = {}): Promise<MockSe
             if (holdThisCompletion) {
               heldCompletionCount++
               resolveHeldStreamStarted?.()
-              void heldStreamReleased.then(() => nonStreamingTextResponse(res, model, reply))
+              void heldStreamReleased.then(() => nonStreamingTextResponse(res, model, MOCK_REPLY))
             } else {
-              nonStreamingTextResponse(res, model, reply)
+              nonStreamingTextResponse(res, model, MOCK_REPLY)
             }
           }
         })

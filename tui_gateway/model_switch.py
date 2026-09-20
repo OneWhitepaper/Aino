@@ -209,8 +209,6 @@ def _apply_model_switch(
     sid: str, session: dict, raw_input: str, *, confirm_expensive_model: bool = False,
     pin_session_override: bool = True, parsed_flags: Any | None = None,
     persist_override: bool | None = None) -> dict:
-    from .session_conversation_binding import require_conversation_mutation_allowed
-    require_conversation_mutation_allowed(session)
     from hermes_cli.model_switch import switch_model
     model_input, explicit_provider, one_turn, persist_global, reasoning_effort = _switch_request(
         raw_input, parsed_flags, persist_override)

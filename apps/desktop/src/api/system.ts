@@ -184,9 +184,9 @@ export function transcribeAudio(dataUrl: string, mimeType?: string): Promise<Aud
   })
 }
 
-export function speakText(text: string, scope?: ProfileScope): Promise<AudioSpeakResponse> {
+export function speakText(text: string): Promise<AudioSpeakResponse> {
   return hermesApi<AudioSpeakResponse>({
-    ...capabilityScoped(scope),
+    ...profileScoped(),
     path: '/api/audio/speak',
     method: 'POST',
     body: { text },
@@ -207,9 +207,9 @@ export const AUDIO_TTS_LEASE_REQUEST_TIMEOUT_MS = 180_000
  * (`active: true`) or release it once no surface needs it (`active: false`).
  * `lease` names the toggle — `desktop:read-aloud`, `desktop:conversation`.
  */
-export function setTtsLease(lease: string, active: boolean, scope?: ProfileScope): Promise<AudioTtsLeaseResponse> {
+export function setTtsLease(lease: string, active: boolean): Promise<AudioTtsLeaseResponse> {
   return hermesApi<AudioTtsLeaseResponse>({
-    ...capabilityScoped(scope),
+    ...profileScoped(),
     path: '/api/audio/tts-lease',
     method: 'POST',
     body: { active, lease },

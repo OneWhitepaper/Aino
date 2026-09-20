@@ -9,8 +9,6 @@ sessions reuse ``Group: <room_id>`` so a local-to-hosted migration keeps one tra
 
 from __future__ import annotations
 
-from gateway.hosted_room_conversation_maintenance import managed_runtime_call
-
 import threading
 import time
 import uuid
@@ -201,8 +199,7 @@ class HostedRoomRuntime:
                 "last_error": self._last_error, "cycles": self._cycles}
 
     # ------------------------------------------------------------------ public ops
-    def cancel(self, identity: state.TaskIdentity, *, cancel_id: str,
-               expected_execution_generation: int | None = None) -> dict[str, Any]:
+    def cancel(self, identity: state.TaskIdentity, *, cancel_id: str) -> dict[str, Any]:
         """Persist a stop intent, then commit cancellation after acknowledgement.
 
         The worker transitions tasks concurrently, so the status read is only a routing
@@ -210,8 +207,6 @@ class HostedRoomRuntime:
         """
         for _ in range(_CANCEL_ROUTE_RETRIES):
             before = state.get_task(self.db_path, identity)
-            if expected_execution_generation is not None and before["execution_generation"] != expected_execution_generation:
-                raise state.StaleTaskError("execution generation changed before cancellation")
             if before["status"] == "cancelled":
                 return before
             if before["status"] in state.TERMINAL_STATUSES:
@@ -221,9 +216,7 @@ class HostedRoomRuntime:
             try:
                 result = (state.cancel_task if direct else state.begin_task_cancel)(
                     self.db_path, identity, cancel_id=cancel_id,
-                    expected_cancel_generation=before["cancel_generation"], clock=self.clock,
-                    **({"expected_execution_generation": expected_execution_generation}
-                       if expected_execution_generation is not None else {}))
+                    expected_cancel_generation=before["cancel_generation"], clock=self.clock)
             except (state.InvalidTaskTransitionError, state.StaleTaskError):
                 continue  # lost the race with the worker (settled or re-queued); re-route
             if not direct:
@@ -502,7 +495,6 @@ class HostedRoomRuntime:
             if should_wake:
                 self.wakeup()
 
-    @managed_runtime_call
     def _process_room(self, binding: HostedRoomBinding) -> None:
         if self.prepare_room is not None:
             self.prepare_room(binding)
@@ -512,15 +504,6 @@ class HostedRoomRuntime:
             if self._tasks(binding, "running") and self.clock() < deferred_until:
                 return
             self._ambiguous_rooms.pop(binding.room_id, None)
-        queued = self._tasks(binding, "queued")
-        recovering = any(self._tasks(binding, status) for status in ("running", "stopping", "indeterminate"))
-        if not recovering:
-            # Shared Profile gateways see every room, but only the process with
-            # the live participant can execute it. Never reserve its queue while
-            # idle or waiting for an owner connected to another process.
-            if not queued or not self._route_available(queued[0], binding):
-                self._release_room_lease(binding.room_id)
-                return
         lease = self._ensure_lease(binding)
         if (lease.room_id, lease.lease_generation) not in self._recovered_leases:
             state.recover_room(self.db_path, lease, clock=self.clock)
@@ -531,10 +514,10 @@ class HostedRoomRuntime:
         if self._reconcile_indeterminate(binding, lease):
             return
         for task in self._tasks(binding, "queued"):
-            if self._stop.is_set():
-                return
-            if not self._route_available(task, binding):
-                self._release_room_lease(binding.room_id)
+            retry = self._unavailable_route_retries.get(
+                (task["identity"].room_id, _member_id(task)))
+            if self._stop.is_set() or (
+                    retry is not None and self.clock() < retry["next_attempt_at"]):
                 return
             lease = self._renew_lease_if_needed(lease)
             attempt = state.start_task(
@@ -544,28 +527,6 @@ class HostedRoomRuntime:
             current = state.get_task(self.db_path, task["identity"])
             if current["status"] not in state.TERMINAL_STATUSES:
                 return
-
-    def _route_available(self, task, binding) -> bool:
-        retry = self._unavailable_route_retries.get((task['identity'].room_id, _member_id(task)))
-        if retry is not None and self.clock() < retry['next_attempt_at']:
-            return False
-        check = getattr(self._transport_for(binding, task), 'check_available', None)
-        if callable(check):
-            try:
-                check()
-            except Exception as exc:
-                self._defer_unavailable_route(task)
-                self._record_error(f"participant unavailable before task admission: {exc}")
-                return False
-        return True
-
-    def _release_room_lease(self, room_id: str) -> None:
-        with self._status_lock:
-            lease = self._leases.get(room_id)
-        if lease is not None:
-            with suppress(state.StaleLeaseError):
-                state.release_lease(self.db_path, lease, clock=self.clock)
-            self._drop_lease(room_id)
 
     def _defer_unavailable_route(self, task: Mapping[str, Any]) -> float:
         key = (task["identity"].room_id, _member_id(task))
@@ -629,15 +590,11 @@ class HostedRoomRuntime:
                 # exception at that boundary is ambiguous, never a proven failure.
                 submit_attempted, session_id = True, _session_id(session)
                 deadline_monotonic = time.monotonic() + self.turn_timeout_seconds
-                terminal_callback = lambda receipt: self._on_terminal(binding, attempt, receipt)
-                submit_attempt = getattr(transport, "submit_attempt", None)
-                if callable(submit_attempt):
-                    submit_attempt(attempt=attempt, prompt=task["payload"]["prompt"], on_terminal=terminal_callback)
-                else:
-                    transport.submit(
-                        **_session_kw(profile, session_id), prompt=task["payload"]["prompt"],
-                        task=attempt.identity, execution_generation=attempt.execution_generation,
-                        on_terminal=terminal_callback, member_id=_member_id(task))
+                transport.submit(
+                    **_session_kw(profile, session_id), prompt=task["payload"]["prompt"],
+                    task=attempt.identity, execution_generation=attempt.execution_generation,
+                    on_terminal=lambda receipt: self._on_terminal(binding, attempt, receipt),
+                    member_id=_member_id(task))
                 self._unavailable_route_retries.pop(
                     (task["identity"].room_id, _member_id(task)), None)
                 receipt = self._wait_for_terminal(
@@ -678,16 +635,11 @@ class HostedRoomRuntime:
         self._drop_lease(binding.room_id)
         self._ambiguous_rooms[binding.room_id] = attempt.lease.expires_at
 
-    @managed_runtime_call
     def _on_terminal(
         self, binding: HostedRoomBinding, attempt: state.TaskAttempt, receipt: Mapping[str, Any]
     ) -> None:
         """Durably commit one in-process terminal receipt for ``attempt``."""
         status = receipt.get("status")
-        if status == "reconciliation_required":
-            self._mark_ambiguous(binding, attempt)
-            self.wakeup()
-            return
         if status == "cancelled":
             self.wakeup()
             return
@@ -696,13 +648,6 @@ class HostedRoomRuntime:
             settlement_id=receipt.get("settlement_id")
             or f"reply:{attempt.identity.task_id}:{attempt.execution_generation}",
             result=_bounded_terminal_result(receipt))
-        if "content_ref" in receipt:
-            from gateway import hosted_rooms
-            from gateway.hosted_room_conversation_content import ConversationContentStore
-            hosted_rooms.room_state(self.db_path, room_id=binding.room_id, purpose="conversation")
-            reference = ConversationContentStore(self.db_path).validate_reference(
-                binding.room_id, receipt["content_ref"], text=True)
-            terminal.result["content_ref"] = asdict(reference)
         try:
             self._publish(
                 binding,
@@ -731,8 +676,6 @@ class HostedRoomRuntime:
     ) -> _TerminalReceipt | None:
         lease = attempt.lease
         while not self._stop.is_set():
-            if binding.room_id in self._ambiguous_rooms:
-                return None
             task = state.get_task(self.db_path, attempt.identity)
             if task["status"] in state.TERMINAL_STATUSES:
                 return None
@@ -995,7 +938,7 @@ def _bounded_terminal_result(receipt: Mapping[str, Any]) -> dict[str, Any]:
     return {
         "message_id": receipt.get("message_id"), "text": text,
         **({"error": error} if error else {}),
-        **({"truncated": True} if truncated or error_truncated or receipt.get("truncated") else {})}
+        **({"truncated": True} if truncated or error_truncated else {})}
 
 
 def _find_terminal_receipt(

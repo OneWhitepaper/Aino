@@ -51,30 +51,6 @@ interface AuxTaskCopy {
 }
 
 interface UpstreamTranslations {
-  sharedProjects: {
-    project: string
-    noProject: string
-    unavailable: string
-    open: string
-    register: string
-    source: string
-    choose: string
-    name: string
-    directory: string
-    create: string
-    error: string
-    retry: string
-    confirm: string
-    generation: string
-    apply: string
-    cancel: string
-    unsupported: string
-    loading: string
-    opened: string
-    empty: string
-    close: string
-  }
-
   connectors: {
     title: string
     connect: string
@@ -2678,15 +2654,6 @@ interface UpstreamTranslations {
   }
 
   profiles: {
-    allProjects: string
-    projectSourceRequired: string
-    adoptConversation: string
-    adoptFailed: string
-    newConversationFailed: string
-    openConversationFailed: string
-    hubTitle: string
-    projectAgentHelp: string
-    hubUnavailable: string
     close: string
     workspaceDesc: string
     currentBadge: string
@@ -3190,53 +3157,6 @@ interface UpstreamTranslations {
   }
 
   composer: {
-    conversation: {
-      commandDraftChanged: string
-      attachmentTooLarge: string
-      attachmentLimitUnavailable: string
-      attachmentCountExceeded: string
-
-      privateNotice: string
-      refreshConfiguration: string
-      refreshExplanation: string
-      configurationRefreshed: string
-      configurationBusy: string
-
-      contentLoading: string
-      contentInvalid: string
-      downloadAttachment: string
-      uploading: string
-      fileReadFailed: string
-
-      mcpDeferred: string
-      generation: string
-      runtimeChanged: string
-      childUnavailable: string
-      clarifyExpired: string
-
-      title: string
-      create: string
-      loading: string
-      unavailable: string
-      refresh: string
-      history: string
-      mention: string
-      textOnly: string
-      modelUnavailable: string
-      subagent: string
-      stopAll: string
-      reconcile: string
-      allowOnce: string
-      deny: string
-      answer: string
-      requestUnsupported: string
-    }
-    expertSelector: {
-      choose: string
-      clear: string
-      nextReply: string
-      unavailable: string
-    }
     message: string
     automaticModel: string
     wakingProfile: (profile: string) => string

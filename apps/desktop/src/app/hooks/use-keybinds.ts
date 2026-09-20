@@ -71,13 +71,13 @@ import { handleWindowPaste } from '../chat/composer/paste-to-focus'
 import { openSession } from '../open-session'
 import {
   $workspaceIsPage,
-  AGENT_HUB_CONFIGURATION_ROUTE,
   AGENTS_ROUTE,
   ARTIFACTS_ROUTE,
   CRON_ROUTE,
   MESSAGING_ROUTE,
   navigateToWorkspacePage,
   NEW_CHAT_ROUTE,
+  PROFILES_ROUTE,
   sessionRoute,
   SETTINGS_ROUTE,
   SKILLS_ROUTE
@@ -207,7 +207,7 @@ export function useKeybinds(deps: KeybindRuntimeDeps): void {
     },
     'nav.commandCenter': deps.toggleCommandCenter,
     'nav.settings': () => navigate(SETTINGS_ROUTE),
-    'nav.profiles': () => navigateToWorkspacePage(navigate, AGENT_HUB_CONFIGURATION_ROUTE),
+    'nav.profiles': () => navigateToWorkspacePage(navigate, PROFILES_ROUTE),
     'nav.skills': () => navigateToWorkspacePage(navigate, SKILLS_ROUTE),
     'nav.messaging': () => navigateToWorkspacePage(navigate, MESSAGING_ROUTE),
     'nav.artifacts': () => navigateToWorkspacePage(navigate, ARTIFACTS_ROUTE),

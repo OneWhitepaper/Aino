@@ -16,11 +16,6 @@ hermes --tui
 TypeScript owns the screen. Python owns sessions, tools, model calls, and slash-command logic.
 Never move agent behaviour into the renderer.
 
-Session runtime model resolution, stored overrides, and agent construction live in
-`session_runtime_config.py`; creation, durable seeding, and Profile-owned resume paths live
-in `session_creation.py`. Their functions use the existing `bind_module` registration
-onto server globals, preserving scoped runtime state and the production patch seams.
-
 ## Transport
 
 Newline-delimited JSON-RPC over stdio, peer-to-peer: client→server method calls, server→client

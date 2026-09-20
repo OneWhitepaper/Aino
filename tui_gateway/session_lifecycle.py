@@ -211,9 +211,6 @@ def _finalize_session(session: dict | None, end_reason: str = "tui_close") -> No
     Ctrl-C, terminal close, SIGHUP) loses nothing."""
     if not session or session.get("_finalized"):
         return
-    if session.get("_conversation_binding"):
-        from tui_gateway.conversation_notifications import finalize_conversation_background
-        finalize_conversation_background(session)
     session["_finalized"] = True
     _lock_vault_managers(session)
     if (history_ready := session.get("resume_history_ready")) is not None and not history_ready.is_set():
@@ -449,10 +446,6 @@ def _session_has_active_delegations(sid: str, session: dict | None = None) -> bo
             session = _sessions.get(sid)
     if not session:
         return False
-    if session.get("_conversation_binding"):
-        from tui_gateway.conversation_notifications import conversation_has_pending_background
-        if conversation_has_pending_background(session):
-            return True
     own_sid = _lifecycle_own_sid(session, sid)
     owned_session_key = session_key = str(session.get("session_key") or "")
     session_id = getattr(session.get("agent"), "session_id", None) or session_key

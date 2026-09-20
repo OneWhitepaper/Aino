@@ -1,8 +1,6 @@
 """Retention pruning, stale-session archiving and VACUUM policy mixin for SessionDB."""
 
 from __future__ import annotations
-from hermes_state_conversation_retention import protected_session_ids
-
 
 import logging
 import time
@@ -97,8 +95,6 @@ class SessionMaintenanceMixin:
                       SELECT 1 FROM messages WHERE messages.session_id = sessions.id
                   )
             """, (cutoff,)).fetchall()]
-            protected = protected_session_ids(conn)
-            ids = [sid for sid in ids if sid not in protected]
             for chunk in _id_chunks(ids):
                 conn.execute(f"DELETE FROM sessions WHERE id IN ({_placeholders(chunk)})", chunk)
             if ids:
@@ -168,7 +164,7 @@ class SessionMaintenanceMixin:
         def _do(conn):
             rows = conn.execute(f"SELECT id FROM sessions WHERE ended_at IS NULL{scope_sql}",
                                 scope_params).fetchall()
-            excluded = {str(x) for x in exclude_ids if x} | protected_session_ids(conn)
+            excluded = {str(x) for x in exclude_ids if x}
             victims = [sid for sid in (str(row["id"]) for row in rows)
                        if sid not in excluded and not self._write_guards_reject(conn, sid)]
             if not victims:
@@ -264,7 +260,9 @@ class SessionMaintenanceMixin:
               AND {_sql_session_last_active("s")} < ?
             ORDER BY s.started_at ASC
             """, (cutoff,))
-        return sum(bool(self._set_lineage_column('archived', row[0], 1, exclude_managed=True)) for row in rows)
+        for row in rows:
+            self.set_session_archived(row[0], True)
+        return len(rows)
 
     def prune_sessions(self, older_than_days: Optional[float] = 90, source: str = None,
                        sessions_dir: Optional[Path] = None, exclude_active_write_guards: bool = False,
@@ -280,7 +278,6 @@ class SessionMaintenanceMixin:
         def _do(conn):
             cursor = conn.execute(f"SELECT s.id FROM sessions s WHERE {where}", where_params)
             session_ids = {row["id"] for row in cursor.fetchall()}
-            session_ids -= protected_session_ids(conn)
             if exclude_active_write_guards:
                 session_ids -= {sid for sid in session_ids
                                 if self._write_guards_reject(conn, sid, allow_closed_compression_parent=True)}

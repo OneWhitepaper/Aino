@@ -11,8 +11,6 @@ import { triggerHaptic } from '@/lib/haptics'
 import { notifyError } from '@/store/notifications'
 import { $voiceLiveStatus, selectedVoiceChatMode, setVoiceChatMode } from '@/store/voice-live'
 
-import { useOwnedVoice } from './owned-voice-context'
-
 /**
  * Which engine the next voice conversation mounts: the chained
  * speech-to-text → Hermes → speech loop, or GPT-Live delegating to Hermes.
@@ -27,9 +25,7 @@ import { useOwnedVoice } from './owned-voice-context'
 export function VoiceEngineRows({ disabled }: { disabled: boolean }) {
   const { t } = useI18n()
   const c = t.composer
-  const owned = useOwnedVoice()
-  const ambientStatus = useStore($voiceLiveStatus)
-  const status = owned ? owned.status : ambientStatus
+  const status = useStore($voiceLiveStatus)
 
   if (status === null) {
     return null
@@ -47,8 +43,7 @@ export function VoiceEngineRows({ disabled }: { disabled: boolean }) {
           }
 
           triggerHaptic('open')
-          const change = owned ? owned.setMode(value) : setVoiceChatMode(value)
-          void change.catch(error => notifyError(error, c.voiceEngineChangeFailed))
+          setVoiceChatMode(value).catch(error => notifyError(error, c.voiceEngineChangeFailed))
         }}
         value={selectedVoiceChatMode(status)}
       >
@@ -73,9 +68,7 @@ export function VoiceEngineRows({ disabled }: { disabled: boolean }) {
 /** Short engine name for tooltips, or null until the backend has answered. */
 export function useVoiceEngineName(): null | string {
   const { t } = useI18n()
-  const owned = useOwnedVoice()
-  const ambientStatus = useStore($voiceLiveStatus)
-  const status = owned ? owned.status : ambientStatus
+  const status = useStore($voiceLiveStatus)
 
   if (status === null) {
     return null

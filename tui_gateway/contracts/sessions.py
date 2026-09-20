@@ -68,7 +68,7 @@ class LiveSessionStatus(WireEnum):
 
 
 class LiveSessionSnapshot(Result):
-    """Union of ``server._live_session_payload``, ``session_creation._resume_response`` and the
+    """Union of ``server._live_session_payload``, ``methods_session._resume_response`` and the
     live-unpersisted resume path; keys only some paths produce are optional."""
 
     session_id: str

@@ -15,32 +15,19 @@ import type { SessionInfo } from '@/types/hermes'
  * would let a later resume fall back to a same-named local profile
  * ("session not found" on turn two). `local` is never stamped — a bare local
  * row already routes correctly and a `local` tag would only pin it against
- * the fail-closed owner resolution for no benefit. An explicitly captured
- * registry read passes explicitOwner so local remains an exact owner too.
+ * the fail-closed owner resolution for no benefit.
  */
 export function stampRowsWithOwningConnection(
   sessions: SessionInfo[],
-  connectionId: null | string | undefined,
-  explicitOwner = false
+  connectionId: null | string | undefined
 ): SessionInfo[] {
   const owner = String(connectionId ?? '').trim()
 
-  if (!owner || (owner === 'local' && !explicitOwner)) {
+  if (!owner || owner === 'local') {
     return sessions
   }
 
   return sessions.map(session => (session.connection_id?.trim() ? session : { ...session, connection_id: owner }))
-}
-
-/** Legacy untagged rows belong to the local source, never a remote twin. */
-export function sameSessionRowOwner(
-  left: Pick<SessionInfo, 'connection_id' | 'profile'>,
-  right: Pick<SessionInfo, 'connection_id' | 'profile'>
-): boolean {
-  return (
-    (left.connection_id?.trim() || 'local') === (right.connection_id?.trim() || 'local') &&
-    (left.profile?.trim() || 'default') === (right.profile?.trim() || 'default')
-  )
 }
 
 /** A durable backfill target: which backend store to stamp, expressed in the

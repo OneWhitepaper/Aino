@@ -15,8 +15,6 @@ import { setSessionProviderWait } from '@/store/provider-wait'
 import { isSessionGone } from '@/store/session-gone-latch'
 import { setSessionDraftingTool } from '@/store/tool-drafting'
 
-import { handleConversationGatewayEvent } from '../conversation-events'
-
 import { handleDesktopBridgeEvent } from './desktop-bridge'
 import { handleInputRequestEvent } from './input-requests'
 import { handleLifecycleEvent } from './lifecycle'
@@ -134,10 +132,6 @@ export function useGatewayEventHandler(deps: GatewayEventDeps) {
 
   return useCallback(
     (event: GatewayEvent) => {
-      if (handleConversationGatewayEvent(event)) {
-        return
-      }
-
       const payload = event.payload as GatewayEventPayload | undefined
 
       // "From the active profile" must mean "from the active SOURCE": every

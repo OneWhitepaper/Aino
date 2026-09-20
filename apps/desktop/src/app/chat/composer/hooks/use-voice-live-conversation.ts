@@ -6,8 +6,6 @@ import { type LiveHistoryMessage, type LiveTranscriptFragment, VoiceLiveSession 
 import { isVoiceStopCommand } from '@/lib/voice-stop-word'
 import { notify, notifyError } from '@/store/notifications'
 
-import { useOwnedVoice } from '../owned-voice-context'
-
 import type { ConversationStatus } from './use-voice-conversation'
 
 /** How long an accepted delegation may sit before the gateway shows the turn running. */
@@ -90,7 +88,6 @@ export function useVoiceLiveConversation({
   activeToolLabel,
   beforeMicOpen
 }: VoiceLiveConversationOptions) {
-  const owned = useOwnedVoice()
   const { t } = useI18n()
   const voiceCopy = t.notifications.voice
   const [status, setStatus] = useState<ConversationStatus>('idle')
@@ -237,14 +234,14 @@ export function useVoiceLiveConversation({
           const utterance = userUtteranceRef.current
           userUtteranceRef.current = ''
 
-          if (sessionRef.current === session && isVoiceStopCommand(utterance, owned?.stopPhrases)) {
+          if (sessionRef.current === session && isVoiceStopCommand(utterance)) {
             void end()
             latest.current.onStopWord?.()
           }
         }, UTTERANCE_SETTLE_MS)
       },
       onClosed: (reason, usageSeconds) => {
-        if (sessionRef.current !== session || (owned && !owned.isCurrent())) {
+        if (sessionRef.current !== session) {
           return
         }
 
@@ -262,14 +259,14 @@ export function useVoiceLiveConversation({
         }
       },
       onDelegation: (delegationId, context) => {
-        if (sessionRef.current !== session || (owned && !owned.isCurrent())) {
+        if (sessionRef.current !== session) {
           return
         }
 
         const { context: voiceContext, prompt } = delegationPrompt(context)
 
         // A spoken stop command ends the conversation instead of becoming a turn.
-        if (prompt && isVoiceStopCommand(prompt, owned?.stopPhrases)) {
+        if (prompt && isVoiceStopCommand(prompt)) {
           void end()
           latest.current.onStopWord?.()
 
@@ -313,7 +310,7 @@ export function useVoiceLiveConversation({
     setStatus('thinking')
 
     try {
-      await session.start(latest.current.seedHistory(), owned?.scope)
+      await session.start(latest.current.seedHistory())
 
       if (sessionRef.current !== session || startEpochRef.current !== epoch) {
         session.close()

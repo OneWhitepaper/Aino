@@ -74,10 +74,6 @@ class HostedRoomService:
         self._pending_actions: dict[tuple[str, str], dict[str, Any]] = {}
         self.policy_checkpoint = HostedRoomPolicyCheckpoint(self.db_path)
         self.rpc = HostedRoomServerRPC(server)
-        from tui_gateway.conversation_service import ConversationService
-        self.conversations = ConversationService(server, db_path=self.db_path)
-        self.conversations.hosted = self
-        self._purpose_strategies = {"discussion": self, "conversation": self.conversations}
         self._link_load_error = None
         self._peer_route_status: dict[tuple[str, str], str] = {}
         self.peer_routes: dict[tuple[str, str], PeerMemberRoute] = {}
@@ -93,7 +89,7 @@ class HostedRoomService:
             if client is not None:
                 self.peer_clients[key] = client
         self.runtime = HostedRoomRuntime(
-            db_path=self.db_path, rooms=self._runtime_bindings, rpc=self.rpc,
+            db_path=self.db_path, rooms=self.bindings, rpc=self.rpc,
             transport_resolver=self._resolve_member_transport, turn_lock=self._turn_lock,
             prepare_room=self.prepare_room, publish_terminal=self.publish_terminal,
             pending_action=self._set_pending_action,
@@ -145,9 +141,6 @@ class HostedRoomService:
             HostedRoomBinding(str(room["room_id"]), *_authority(room))
             for room in hosted_rooms.list_rooms(self.db_path)
             if str(room["authority_gateway_id"]) == local_gateway_id)
-
-    def _runtime_bindings(self):
-        return self.bindings() + self.conversations.bindings()
 
     def _room(self, room_id: str) -> dict[str, Any]:
         return hosted_rooms.room_state(self.db_path, room_id=room_id)
@@ -236,9 +229,6 @@ class HostedRoomService:
         return len(routes)
 
     def _resolve_member_transport(self, binding: HostedRoomBinding, task: Mapping[str, Any]):
-        strategy = self._purpose_strategy(binding.room_id)
-        if strategy is not self:
-            return strategy.transport(binding, task)
         payload = task.get("payload", {})
         member_id = str(payload.get("target_member_id") or payload.get("target_profile") or "")
         key = (binding.room_id, member_id)
@@ -414,18 +404,7 @@ class HostedRoomService:
                 "discussion_event_id": decision.discussion_event_id},
             authority_gateway_id=gateway_id, authority_epoch=epoch)
 
-    def _purpose_strategy(self, room_id):
-        with hosted_rooms._transaction(self.db_path) as conn:
-            row = conn.execute("SELECT purpose FROM hosted_rooms WHERE room_id=?", (room_id,)).fetchone()
-        if row is None or row[0] not in self._purpose_strategies:
-            raise hosted_rooms.RoomNotFoundError("unsupported room purpose")
-        return self._purpose_strategies[row[0]]
-
     def prepare_room(self, binding: HostedRoomBinding) -> None:
-        strategy = self._purpose_strategy(binding.room_id)
-        if strategy is not self:
-            strategy.prepare_room(binding)
-            return
         with self._policy_lock:
             room = self._room(binding.room_id)
             snapshot = self._policy_snapshot(room)  # sync() side effect feeds the publish below
@@ -453,11 +432,7 @@ class HostedRoomService:
                 self._append_room_status(room, decision)
 
     def publish_terminal(self, binding: HostedRoomBinding, _task: Mapping[str, Any]) -> None:
-        strategy = self._purpose_strategy(binding.room_id)
-        if strategy is not self:
-            strategy.publish_terminal(binding, _task)
-        else:
-            self.prepare_room(binding)
+        self.prepare_room(binding)
         self.runtime.wakeup()
 
     def create_room(self, *, room_id: str, name: str, members: Any) -> dict[str, Any]:

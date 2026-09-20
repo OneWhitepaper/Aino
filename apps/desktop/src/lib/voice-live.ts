@@ -1,4 +1,4 @@
-import { capabilityScoped, type ProfileScope } from '@/api/client'
+import { profileScoped } from '@/api/client'
 import { hermesApi } from '@/hermes'
 
 /**
@@ -78,10 +78,10 @@ const APPEND_CHAR_LIMIT = 1_400
 const CONTEXT_WINDOW_MS = 5 * 60_000
 const CONTEXT_MAX_FRAGMENTS = 80
 
-export async function fetchVoiceLiveStatus(scope?: ProfileScope): Promise<null | VoiceLiveStatus> {
+export async function fetchVoiceLiveStatus(): Promise<null | VoiceLiveStatus> {
   try {
     const response = await hermesApi<{ ok: boolean } & VoiceLiveStatus>({
-      ...capabilityScoped(scope),
+      ...profileScoped(),
       path: '/api/audio/voice-live/status'
     })
 
@@ -268,19 +268,15 @@ export class VoiceLiveSession {
     return this.transcript.filter(fragment => fragment.endMs >= floor).slice(-CONTEXT_MAX_FRAGMENTS)
   }
 
-  async start(history: LiveHistoryMessage[], scope?: ProfileScope): Promise<void> {
-    if (this.peer || this.finalized) {
+  async start(history: LiveHistoryMessage[]): Promise<void> {
+    if (this.peer) {
       throw new Error('GPT-Live session already started')
     }
 
-    const requestScope = capabilityScoped(scope)
     const connection = new RTCPeerConnection()
     this.peer = connection
 
     connection.addEventListener('track', event => {
-      if (this.finalized) {
-        return
-      }
       const stream = new MediaStream([event.track])
       this.audio.srcObject = stream
       void this.audio.play().catch(() => undefined)
@@ -292,17 +288,9 @@ export class VoiceLiveSession {
       }
     })
 
-    const microphone = await navigator.mediaDevices.getUserMedia({
+    this.microphone = await navigator.mediaDevices.getUserMedia({
       audio: { autoGainControl: true, echoCancellation: true, noiseSuppression: true }
     })
-
-    if (this.finalized) {
-      microphone.getTracks().forEach(track => track.stop())
-
-      return
-    }
-
-    this.microphone = microphone
 
     for (const track of this.microphone.getAudioTracks()) {
       connection.addTrack(track, this.microphone)
@@ -319,20 +307,8 @@ export class VoiceLiveSession {
     })
 
     const offer = await connection.createOffer()
-
-    if (this.finalized) {
-      return
-    }
     await connection.setLocalDescription(offer)
-
-    if (this.finalized) {
-      return
-    }
     await waitForIceGathering(connection)
-
-    if (this.finalized) {
-      return
-    }
 
     const sdp = connection.localDescription?.sdp
 
@@ -345,16 +321,12 @@ export class VoiceLiveSession {
       session?: { id: string }
       transport?: { sdp: string; type: string }
     }>({
-      ...requestScope,
+      ...profileScoped(),
       body: { history, sdp },
       method: 'POST',
       path: '/api/audio/voice-live/session',
       timeoutMs: 45_000
     })
-
-    if (this.finalized) {
-      return
-    }
 
     if (!response?.ok || !response.transport?.sdp) {
       throw new Error('GPT-Live session creation failed')

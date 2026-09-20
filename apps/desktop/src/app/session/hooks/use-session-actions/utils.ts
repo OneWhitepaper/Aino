@@ -6,7 +6,6 @@ import { normalizePersonalityValue } from '@/lib/chat-runtime'
 import { embeddedImageUrls, textWithoutEmbeddedImages } from '@/lib/embedded-images'
 import { parseErrorSurface } from '@/lib/error-surface'
 import { platformModelStatePatch } from '@/lib/platform-session-model'
-import { sameSessionRowOwner } from '@/lib/session-owner-stamp'
 import { isMessagingSource, normalizeSessionSource } from '@/lib/session-source'
 import { turnMetricsEquivalent } from '@/lib/turn-metrics'
 import { reconcileApprovalModeForProfile } from '@/store/approval-mode'
@@ -1292,9 +1291,9 @@ export function upsertOptimisticSession(
   // A real row supersedes any unlisted-draft stub for the same id (first send
   // on a ⌘T tab lists it); drop the stub so the atom stays bounded. The
   // lookup shadow-filter covers any path that lists without passing here.
-  setUnlistedSessionOwnerRows(prev => prev.filter(s => s.id !== id || !sameSessionRowOwner(s, session)))
+  setUnlistedSessionOwnerRows(prev => (prev.some(s => s.id === id) ? prev.filter(s => s.id !== id) : prev))
 
-  setSessions(prev => [session, ...prev.filter(s => s.id !== id || !sameSessionRowOwner(s, session))])
+  setSessions(prev => [session, ...prev.filter(s => s.id !== id)])
 }
 
 /**
@@ -1312,7 +1311,7 @@ export function upsertUnlistedSessionOwner(
 ) {
   const stub = buildOptimisticSession(created, id, null, null, null, undefined, owner)
   setSessionOwnerHintForStub(id, owner)
-  setUnlistedSessionOwnerRows(prev => [stub, ...prev.filter(s => s.id !== id || !sameSessionRowOwner(s, stub))])
+  setUnlistedSessionOwnerRows(prev => [stub, ...prev.filter(s => s.id !== id)])
 }
 
 function setSessionOwnerHintForStub(id: string, owner?: null | SessionProfileRoute): void {
@@ -1430,7 +1429,7 @@ export function restoreListedSession(session: SessionInfo, slice?: ListedSession
 
   const prepend = (prev: SessionInfo[]) => [
     session,
-    ...prev.filter(existing => !sameSessionRowOwner(existing, session) || !sessionMatchesStoredId(existing, session.id))
+    ...prev.filter(existing => !sessionMatchesStoredId(existing, session.id))
   ]
 
   if (target === 'messaging') {
@@ -1454,10 +1453,6 @@ function upsertResolvedSession(session: SessionInfo, storedSessionId: string) {
   setSessions(prev => [
     session,
     ...prev.filter(existing => {
-      if (!sameSessionRowOwner(existing, session)) {
-        return true
-      }
-
       if (sessionMatchesStoredId(existing, storedSessionId)) {
         return false
       }
@@ -1484,18 +1479,13 @@ function projectTreeSessions(): SessionInfo[] {
 // "Best" means self-describing: the same conversation can appear both as an
 // ownerless legacy Recents copy and as a profile-stamped project-tree row, and
 // picking the ownerless one throws away the only routing information we have.
-export function cachedSessionRow(storedSessionId: string, ownerRoute?: SessionProfileRoute): SessionInfo | undefined {
+export function cachedSessionRow(storedSessionId: string): SessionInfo | undefined {
   const candidates = [
     ...$sessions.get(),
     ...$cronSessions.get(),
     ...$messagingSessions.get(),
     ...projectTreeSessions()
-  ].filter(
-    session =>
-      sessionMatchesStoredId(session, storedSessionId) &&
-      (!ownerRoute ||
-        sameSessionRowOwner(session, { connection_id: ownerRoute.connectionId, profile: ownerRoute.profile }))
-  )
+  ].filter(session => sessionMatchesStoredId(session, storedSessionId))
 
   return (
     candidates.find(session => session.connection_id?.trim()) ??
@@ -1508,7 +1498,7 @@ export async function resolveStoredSession(
   storedSessionId: string,
   ownerRoute?: SessionProfileRoute
 ): Promise<SessionInfo | undefined> {
-  const cached = cachedSessionRow(storedSessionId, ownerRoute)
+  const cached = cachedSessionRow(storedSessionId)
 
   if (ownerRoute) {
     const scope = {
@@ -1655,16 +1645,7 @@ export async function resolveSessionOwner(storedSessionId: null | string): Promi
 type SessionRuntimeStatePatch = Partial<
   Pick<
     ClientSessionState,
-    | 'branch'
-    | 'cwd'
-    | 'fast'
-    | 'model'
-    | 'personality'
-    | 'provider'
-    | 'reasoningEffort'
-    | 'serviceTier'
-    | 'yolo'
-    | 'platformModel'
+    'branch' | 'cwd' | 'fast' | 'model' | 'personality' | 'provider' | 'reasoningEffort' | 'serviceTier' | 'yolo' | 'platformModel'
   >
 >
 
@@ -1687,9 +1668,7 @@ interface ApplyRuntimeInfoOptions {
 /** Mirror a session's runtime state into the composer atoms the MAIN pane
  *  renders from. Foreground sessions only — see ApplyRuntimeInfoOptions. */
 function publishRuntimeToComposer(state: SessionRuntimeStatePatch): void {
-  if (state.platformModel) {
-    setCurrentPlatformOwner(state.platformModel.ownerUserId, state.platformModel.platformOrigin || '')
-  }
+  if (state.platformModel) {setCurrentPlatformOwner(state.platformModel.ownerUserId, state.platformModel.platformOrigin || '')}
 
   if (state.model !== undefined) {
     setCurrentModel(state.model)

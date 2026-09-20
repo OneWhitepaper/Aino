@@ -52,7 +52,6 @@ class Room(Result):
     adoption), ``state`` (``authority_claim``) and ``rename`` (``event``) add."""
 
     room_id: str
-    purpose: str
     name: str
     members: list[RoomMember]
     authority_gateway_id: str

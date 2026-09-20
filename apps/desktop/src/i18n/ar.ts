@@ -1,29 +1,6 @@
 import { defineLocale } from './define-locale'
 
 export const ar = defineLocale({
-  sharedProjects: {
-    project: 'المشروع',
-    noProject: 'بلا مشروع',
-    unavailable: 'غير متاح',
-    open: 'فتح المجلد في هذه النافذة',
-    register: 'إضافة مشروع',
-    source: 'حفظ المشروع لدى',
-    choose: 'اختر خبيرًا',
-    name: 'اسم المشروع',
-    directory: 'مسار المجلد على هذا الاتصال',
-    create: 'إضافة مجلد المشروع',
-    error: 'المشاريع المشتركة غير متاحة',
-    retry: 'إعادة المحاولة',
-    confirm: 'تغيير مشروع المحادثة',
-    generation: 'سيستخدم جميع الخبراء هذا المجلد للرسائل القادمة. تحتفظ الرسائل السابقة بسياقها الأصلي.',
-    apply: 'تطبيق تغيير المشروع',
-    cancel: 'إلغاء',
-    unsupported: 'لا يمكن تصفح بيئة هذا المشروع',
-    loading: 'جارٍ تحميل المجلد…',
-    opened: 'مجلدات المشاريع المفتوحة',
-    empty: 'لا توجد مجلدات مفتوحة في هذه النافذة.',
-    close: 'إغلاق المجلد'
-  },
   sessionImport: {
     title: 'المتابعة من تطبيق آخر',
     subtitle: 'انقل محادثة إلى Hermes وتابع من حيث توقفت.',
@@ -1673,15 +1650,6 @@ export const ar = defineLocale({
     platformIntro: {}
   },
   profiles: {
-    allProjects: 'كل المشاريع',
-    projectSourceRequired: 'افتح المشروع من مصدره المحدد قبل بدء المحادثة.',
-    adoptConversation: 'المتابعة كمحادثة',
-    adoptFailed: 'أعد المحاولة بعد انتهاء العمل الحالي.',
-    newConversationFailed: 'تعذر بدء المحادثة. أعد المحاولة.',
-    openConversationFailed: 'تعذر فتح المحادثة. أعد المحاولة.',
-    hubTitle: 'مركز الوكلاء',
-    projectAgentHelp: 'تنظم المشاريع المواد والمهام؛ ويحدد الوكلاء من يتولى هذه الجولة.',
-    hubUnavailable: 'مركز الوكلاء غير متاح. فعّل إضافة Agent Hub في الإعدادات.',
     close: 'إغلاق',
     workspaceDesc: 'تحتفظ كل مساحة عمل بإعدادات وكيل مستقل ومهاراته وذاكرته ومحادثاته.',
     currentBadge: 'مساحة العمل الحالية',
@@ -1993,7 +1961,7 @@ export const ar = defineLocale({
     },
     nav: {
       'new-session': 'جلسة جديدة',
-      profiles: 'مركز الوكلاء',
+      profiles: 'مساحات العمل',
       skills: 'المهارات',
       messaging: 'المراسلة',
       artifacts: 'العناصر',
@@ -2148,55 +2116,6 @@ export const ar = defineLocale({
     }
   },
   composer: {
-    conversation: {
-      commandDraftChanged: 'تغيّرت المسودة أثناء معالجة الأمر. أرسل المسودة الحالية مجددًا.',
-      attachmentTooLarge: 'يتجاوز الملف حد الرفع على الخادم. اختر ملفًا أصغر.',
-      attachmentLimitUnavailable: 'لا يعلن الخادم حدود الرفع. حدّثه أولًا.',
-      attachmentCountExceeded: 'المرفقات كثيرة جدًا. أزل ملفًا ثم أعد المحاولة.',
-
-      privateNotice: 'إشعار خاص',
-      refreshConfiguration: 'تحديث إعدادات الخبير',
-      refreshExplanation:
-        'يستخدم الرد التالي إعدادات الخبير المحفوظة. يبقى السجل والمشروع كما هما. انتظر انتهاء العمل الجاري؛ لا تُطبّق الإعدادات المكتوبة في الأمر.',
-      configurationRefreshed: 'حُدّثت إعدادات الخبير للرد التالي.',
-      configurationBusy: 'أنهِ العمل الجاري أو تحقق من الإرسال المعلق قبل تغيير الإعدادات.',
-
-      contentLoading: 'جارٍ تحميل الإجابة الكاملة…',
-      contentInvalid: 'فشل التحقق من المحتوى. أعد تحميل المحتوى الأصلي.',
-      downloadAttachment: 'تنزيل المرفق',
-      uploading: 'جارٍ الرفع…',
-      fileReadFailed: 'تعذرت قراءة الملف',
-
-      mcpDeferred:
-        'ستُستخدم الأدوات الجديدة بعد تحديث إعدادات هذا الخبير أو بدء محادثة جديدة. تحتفظ هذه الجولة بأدواتها الحالية.',
-      generation: 'إصدار الإعدادات',
-      runtimeChanged: 'تغيّر التنفيذ؛ حدّث قبل الرد',
-      childUnavailable: 'الوكيل الفرعي لم يعد متاحًا',
-      clarifyExpired: 'انتهت صلاحية طلب التوضيح',
-
-      title: 'محادثة',
-      create: 'إنشاء محادثة',
-      loading: 'جارٍ تحميل المحادثة…',
-      unavailable: 'المحادثات غير متاحة على هذا الخادم.',
-      refresh: 'تحديث',
-      history: 'سجل المحادثة',
-      mention: 'اختيار المجيب عبر @',
-      textOnly: 'تظهر أوامر القراءة كإشعارات خاصة. ينفذ الخبير المختار المهارات المدعومة وتُرفض الأوامر الأخرى.',
-      modelUnavailable: 'معلومات النموذج غير متاحة',
-      subagent: 'وكيل فرعي',
-      stopAll: 'إيقاف الوكلاء الفرعيين أيضًا',
-      reconcile: 'التحقق من الإرسال',
-      allowOnce: 'السماح مرة واحدة',
-      deny: 'رفض',
-      answer: 'إجابة',
-      requestUnsupported: 'نوع الإجابة المطلوب غير مدعوم هنا بعد.'
-    },
-    expertSelector: {
-      choose: 'اختيار المجيب',
-      clear: 'إلغاء اختيار الخبير',
-      nextReply: 'من سيرد بعد ذلك',
-      unavailable: 'الخبير المحدد غير متاح'
-    },
     message: 'الرسالة',
     wakingProfile: profile => `جار إيقاظ ${profile}`,
     placeholderStarting: 'جار بدء Hermes...',

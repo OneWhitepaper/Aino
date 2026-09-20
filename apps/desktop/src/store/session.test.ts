@@ -15,7 +15,6 @@ vi.mock('@/hermes', () => ({
   setSessionUnreadRemote: (id: string, unread: boolean, profile?: null | string) => setUnreadRemote(id, unread, profile)
 }))
 
-import { spliceRegistrySessionRows } from '../../electron/profile-session-routing'
 import { deferred } from '../test/deferred'
 import { makeSessionInfo } from '../test/session-info'
 
@@ -157,9 +156,7 @@ describe('composer model persistence scope', () => {
     expect($currentPlatformOwner.get()).toBe('user-1')
     expect($currentPlatformOrigin.get()).toBe('http://127.0.0.1:7001')
     expect($currentModelSource.get()).toBe('manual')
-    expect(window.localStorage.getItem('hermes.desktop.composer.model.registry.local.default')).toBe(
-      'fixture-tool-model'
-    )
+    expect(window.localStorage.getItem('hermes.desktop.composer.model.registry.local.default')).toBe('fixture-tool-model')
   })
 
   it('does not migrate a legacy local non-default profile selection into registry default', () => {
@@ -479,36 +476,6 @@ describe('shouldMigrateComposerScope', () => {
 })
 
 describe('mergeSessionPage', () => {
-  it('keeps restored source twins separate through registry splice, metadata merge and resume ownership', () => {
-    const previous = [
-      session({
-        connection_id: 'remote',
-        id: 'twin',
-        profile: 'writer',
-        title: 'Remote private title',
-        last_active: 90
-      })
-    ]
-
-    const incoming = [session({ connection_id: 'local', id: 'twin', profile: 'writer', title: null, last_active: 10 })]
-    spliceRegistrySessionRows(
-      incoming,
-      [session({ connection_id: 'remote', id: 'twin', profile: 'writer', title: null, last_active: 20 })],
-      {}
-    )
-    const merged = mergeSessionPage(previous, incoming, ['twin'])
-    expect(merged).toHaveLength(2)
-    expect(merged[0]).toMatchObject({ title: null, last_active: 10 })
-    expect(merged[1]).toMatchObject({ title: 'Remote private title', last_active: 90 })
-    expect(merged.map(sessionOwnerRouteFromRow)).toEqual([
-      { connectionId: 'local', profile: 'writer', targetProfile: 'writer' },
-      { connectionId: 'remote', profile: 'writer', targetProfile: 'writer' }
-    ])
-    expect(
-      mergeSessionPage(previous, [session({ id: 'twin', profile: 'writer', title: null, last_active: 1 })], [])[0]
-    ).toMatchObject({ title: null, last_active: 1 })
-  })
-
   it('carries the owning connection onto a row that comes back untagged (local registry source)', () => {
     // A `local` registry source's rows are served by the primary aggregate as
     // plain local rows: the unified-list splice tags only non-local sources.

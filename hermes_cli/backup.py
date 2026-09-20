@@ -92,8 +92,7 @@ _SQLITE_SIDECAR_SUFFIXES = (".db-wal", ".db-shm", ".db-journal")
 _EXCLUDED_SUFFIXES = (".pyc", ".pyo", *_SQLITE_SIDECAR_SUFFIXES)
 
 # File names to skip (runtime state that's meaningless on another machine)
-_EXCLUDED_NAMES = {".backup.lock", "gateway.pid", "cron.pid", ".conversation-maintenance.lock",
-                   ".conversation-restore.json"}
+_EXCLUDED_NAMES = {".backup.lock", "gateway.pid", "cron.pid"}
 
 # The desktop updater's pre-flight drops ``state.db.pre-update-emergency-<ts>.bak`` at the root
 # — a backup artifact like ``backups/``. Prefix-matched because the name carries a timestamp;
@@ -103,7 +102,6 @@ _EXCLUDED_NAMES = {".backup.lock", "gateway.pid", "cron.pid", ".conversation-mai
 # torn-restore hazard the sidecar exclusion below exists to prevent, and the capture is an
 # operator-recovery artifact that must move as a unit (manifest + image + WAL), never partially.
 _EXCLUDED_PREFIXES = (
-    ".conversation-restore-",
     "state.db.pre-update-emergency-",
     f"state.db{RETIRED_GENERATION_DIR_SUFFIX}",
 )
@@ -114,8 +112,7 @@ _EXCLUDED_PREFIXES = (
 # disconnected from the Nous portal); PID/lock/registry files reference source PIDs. Mirrors
 # ``container_boot._STALE_RUNTIME_FILES``; import filters too because older backups predate the
 # backup-side exclusions.
-_IMPORT_SKIP_NAMES = {"gateway_state.json", "gateway.pid", "cron.pid", "gateway.lock", "processes.json",
-                      ".conversation-maintenance.lock", ".conversation-restore.json"}
+_IMPORT_SKIP_NAMES = {"gateway_state.json", "gateway.pid", "cron.pid", "gateway.lock", "processes.json"}
 
 # zipfile.open() drops Unix mode bits on extract; restore tightens these to 0600.
 # vault.key / vault.json.enc: the local credential vault (agent/vault_store.py)
@@ -700,14 +697,12 @@ def _run_backup_locked(args, hermes_root: Path) -> None:
         print(f"  {i}/{file_count} files ...")
         logger.info("backup phase=archive status=progress completed=%d total=%d", i, file_count)
 
-    from hermes_cli.conversation_backup_archive import staged_recovery, without_recovery_files, write_recovery_zip
-    with staged_recovery(hermes_root) as recovery, _atomic_output_path(out_path) as archive_path, zipfile.ZipFile(
+    with _atomic_output_path(out_path) as archive_path, zipfile.ZipFile(
             archive_path, "w", zipfile.ZIP_DEFLATED, compresslevel=6) as zf:
         total_bytes = _write_zip_entries(
-            zf, without_recovery_files(files_to_add, hermes_root, recovery), out_path, on_progress=_progress, track_bytes=True,
+            zf, files_to_add, out_path, on_progress=_progress, track_bytes=True,
             on_db_failure=lambda rel: errors.append(f"{rel}: SQLite safe copy failed"),
             on_error=lambda rel, exc: errors.append(f"{rel}: {exc}"))
-        total_bytes += write_recovery_zip(zf, recovery)
         # External memory-provider state never includes ``.db`` files in practice, so a
         # straight zf.write is fine.
         for abs_path, arcname in external_to_add:
@@ -898,12 +893,10 @@ def _import_members(
     ``db_shrunk`` holds ``(rel, live_counts, imported_counts)`` for every session database the
     import replaced with one holding fewer rows — allowed, but never silent (#100960).
     """
-    from hermes_cli.conversation_backup_archive import RECOVERY_DIRECTORY, restore_zip_recovery
-    recovered = restore_zip_recovery(zf, members, prefix, hermes_root)
     errors: list[str] = []
     skipped_runtime: list[str] = []
     db_shrunk: list[tuple[str, tuple[int, int], tuple[int, int]]] = []
-    restored, restored_external = len(recovered), 0
+    restored = restored_external = 0
     home_dir = Path.home().resolve()
     new_file_mode = default_new_file_mode()  # once: every member is published via mkstemp (0600)
     for member in members:
@@ -917,8 +910,6 @@ def _import_members(
             tighten = target.suffix in {".json", ".env", ".conf"} or target.name in _SECRET_FILE_NAMES
         else:
             rel = member[len(prefix):] if prefix and member.startswith(prefix) else member
-            if rel.startswith(RECOVERY_DIRECTORY + "/") or rel in recovered:
-                continue
             if rel and Path(rel).name in _IMPORT_SKIP_NAMES:  # see ``_IMPORT_SKIP_NAMES``
                 skipped_runtime.append(rel)
                 continue
@@ -1233,14 +1224,7 @@ def _create_quick_snapshot_locked(
         os.chmod(root, 0o700)
     staging_dir.mkdir(mode=0o700, exist_ok=False)
     logger.info("quick snapshot phase=copy status=started id=%s", snap_id)
-    from hermes_cli.conversation_backup_archive import stage_quick_recovery
-    try:
-        recovery_files = stage_quick_recovery(home, staging_dir)
-        manifest, failed_dbs, oversized_skipped = _copy_quick_snapshot_files(home, staging_dir, max_file_size)
-        manifest.update(recovery_files)
-    except BaseException:
-        shutil.rmtree(staging_dir, ignore_errors=True)
-        raise
+    manifest, failed_dbs, oversized_skipped = _copy_quick_snapshot_files(home, staging_dir, max_file_size)
     if failed_dbs:
         # Surface on stdout: a log-and-continue made a missing state.db backup look like a
         # successful pre-update snapshot (#68474).
@@ -1326,12 +1310,8 @@ def restore_quick_snapshot(snapshot_id: str, hermes_home: Optional[Path] = None)
     with open(manifest_path, encoding="utf-8") as f:
         meta = json.load(f)
     snap_res, home_res = snap_dir.resolve(), home.resolve()
-    from hermes_cli.conversation_backup_archive import RECOVERY_DIRECTORY, restore_quick_recovery
-    recovered = restore_quick_recovery(snap_dir, home)
-    restored = len(recovered)
+    restored = 0
     for rel in meta.get("files", {}):
-        if rel.startswith(RECOVERY_DIRECTORY + "/") or (home / rel).resolve() in recovered:
-            continue
         src = snap_dir / rel
         dst = home / rel
         if not (_is_within(src, snap_res) and _is_within(dst, home_res)):
@@ -1620,7 +1600,6 @@ def _write_full_zip_backup(out_path: Path, hermes_root: Path) -> Optional[Path]:
 
 
 def _write_full_zip_backup_locked(out_path: Path, hermes_root: Path) -> Optional[Path]:
-    from hermes_cli.conversation_backup import ConversationBackupError
     scan_started = time.monotonic()
     logger.info("automatic backup phase=scan status=started")
     try:
@@ -1639,16 +1618,14 @@ def _write_full_zip_backup_locked(out_path: Path, hermes_root: Path) -> Optional
 
     archive_started = time.monotonic()
     try:
-        from hermes_cli.conversation_backup_archive import staged_recovery, without_recovery_files, write_recovery_zip
-        with staged_recovery(hermes_root) as recovery, _atomic_output_path(out_path) as archive_path, zipfile.ZipFile(
+        with _atomic_output_path(out_path) as archive_path, zipfile.ZipFile(
                 archive_path, "w", zipfile.ZIP_DEFLATED, compresslevel=6) as zf:
             _write_zip_entries(
-                zf, without_recovery_files(files_to_add, hermes_root, recovery), out_path, on_db_failure=_db_failure, track_bytes=False,
+                zf, files_to_add, out_path, on_db_failure=_db_failure, track_bytes=False,
                 on_error=lambda rel, exc: logger.debug("Skipping %s in zip backup: %s", rel, exc),
                 on_progress=lambda i: logger.info(
                     "automatic backup phase=archive status=progress completed=%d total=%d", i, len(files_to_add)))
-            write_recovery_zip(zf, recovery)
-    except (OSError, _SQLiteSnapshotError, ConversationBackupError) as exc:
+    except (OSError, _SQLiteSnapshotError) as exc:
         # The hidden partial is already gone; ``out_path`` may be a previous valid backup: keep it.
         logger.warning("Full-zip backup: zip write failed: %s", exc)
         return None

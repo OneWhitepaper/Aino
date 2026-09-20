@@ -5,8 +5,6 @@ refresher thread and liveness watchdog (``agent.turn_facade_lease``), relay/acco
 balanced start/finish marks. Extracted from ``run_agent.py``; every method resolves through ``AIAgent``'s
 MRO unchanged.
 """
-
-from agent.conversation_maintenance import managed_agent_call
 import logging
 import uuid
 from contextlib import suppress
@@ -21,7 +19,6 @@ logger = logging.getLogger("run_agent")
 class TurnFacadeMixin:
     """run_conversation()/chat() (see module docstring)."""
 
-    @managed_agent_call
     def run_conversation(
         self, user_message: Any, system_message: str=None,
         conversation_history: List[Dict[str, Any]]=None, task_id: str=None,

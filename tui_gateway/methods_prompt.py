@@ -190,15 +190,9 @@ def _typed_stop_phrase_response(rid, text):
 _HOSTED_TASK_FIELDS = {"room_id", "task_id", "thread_id", "turn_id", "execution_generation", "member_id"}
 
 
-def _hosted_submit_error(rid, session, hosted_task, hosted_terminal_callback, conversation_proof=None):
+def _hosted_submit_error(rid, session, hosted_task, hosted_terminal_callback):
     """Validate the hosted-room turn proof carried by an internal submit."""
-    if session.get("_conversation_binding"):
-        from .session_conversation_binding import require_conversation_submission, ConversationStorageUnavailable
-        try:
-            conversation_image_paths = require_conversation_submission(session, conversation_proof)
-        except RuntimeError as exc:
-            return _err(rid, 4120, str(exc))
-    elif session.get("source") != "bot_room":
+    if session.get("source") != "bot_room":
         return _err(rid, 4120, "hosted room turns require a bot_room session")
     valid = (
         isinstance(hosted_task, dict) and callable(hosted_terminal_callback)
@@ -206,13 +200,6 @@ def _hosted_submit_error(rid, session, hosted_task, hosted_terminal_callback, co
         and all(isinstance(hosted_task.get(f), str) and hosted_task[f]
                 for f in _HOSTED_TASK_FIELDS - {"execution_generation"})
         and isinstance(hosted_task.get("execution_generation"), int))
-    if valid and session.get("_conversation_binding"):
-        attempt = conversation_proof.attempt
-        valid = hosted_task == {
-            "room_id": attempt.identity.room_id, "task_id": attempt.identity.task_id,
-            "thread_id": attempt.identity.thread_id, "turn_id": attempt.identity.turn_id,
-            "execution_generation": attempt.execution_generation,
-            "member_id": session["_conversation_binding"]["participant_id"]}
     return None if valid else _err(rid, 4120, "invalid hosted room turn proof")
 
 
@@ -484,7 +471,7 @@ def _persist_session_row_for_submit(rid, session):
     return error
 
 
-def _run_after_agent_ready(rid, sid, session, text, display_kind, hosted_terminal_callback, turn_author=None, image_paths=None):
+def _run_after_agent_ready(rid, sid, session, text, display_kind, hosted_terminal_callback, turn_author=None):
     """Turn thread body: patient wait for a deferred build (a slow build must not eat the
     accepted in-flight message), then run."""
     # The wait delivers the prompt when the still-running build completes, honors a cancel promptly, notices
@@ -514,7 +501,7 @@ def _run_after_agent_ready(rid, sid, session, text, display_kind, hosted_termina
             return
     _run_prompt_submit(
         rid, sid, session, text, display_kind=display_kind,
-        terminal_callback=hosted_terminal_callback, turn_author=turn_author, image_paths=image_paths)
+        terminal_callback=hosted_terminal_callback, turn_author=turn_author)
 
 
 _TRUNCATION_PARAMS = (
@@ -585,23 +572,14 @@ def _(rid, params: dict) -> dict:
     if raw_author is not None and not isinstance(raw_author, DeliveryAuthor):
         return _err(rid, 4124, "turn author is stamped by the gateway, never by a client")
     turn_author = raw_author.author if raw_author is not None else None
-    from .session_conversation_binding import require_conversation_submission, ConversationStorageUnavailable
-    conversation_proof = params.get("_conversation_proof")
-    try:
-        conversation_image_paths = require_conversation_submission(session, conversation_proof)
-    except ConversationStorageUnavailable as exc:
-        return _err(rid, 5072, str(exc))
-    except RuntimeError as exc:
-        return _err(rid, 4120, str(exc), data={"conversation_id": exc.conversation_id} if hasattr(exc, "conversation_id") else None)
     hosted_task = params.get("_hosted_task")
     from .managed_session import submit_refusal
     if reason := submit_refusal(sid, session):
         return _err(rid, 4410, "Platform model credentials required", {"reason": reason})
     hosted_terminal_callback = params.get("_hosted_terminal_callback")
-    internal_hosted_submit = (hosted_task is not None or hosted_terminal_callback is not None
-                              or bool(session.get("_conversation_binding")))
+    internal_hosted_submit = hosted_task is not None or hosted_terminal_callback is not None
     err = (
-        _hosted_submit_error(rid, session, hosted_task, hosted_terminal_callback, conversation_proof)
+        _hosted_submit_error(rid, session, hosted_task, hosted_terminal_callback)
         if internal_hosted_submit else _legacy_group_fence_error(rid, session, params))
     if err is not None:
         return err
@@ -687,7 +665,7 @@ def _(rid, params: dict) -> dict:
         _start_agent_build(sid, session)
     run_thread = threading.Thread(
         target=lambda: _run_after_agent_ready(
-            rid, sid, session, text, display_kind, hosted_terminal_callback, turn_author, conversation_image_paths),
+            rid, sid, session, text, display_kind, hosted_terminal_callback, turn_author),
         daemon=True)
     # Handle lets session.interrupt tell a live turn from a stuck `running` flag.
     session["_run_thread"] = run_thread
@@ -709,8 +687,6 @@ def _(rid, params: dict) -> dict:
     session, err = _sess_building(params, rid)
     if err:
         return err
-    if session.get('_conversation_binding'):
-        return _err(rid, 4120, 'Use conversations.attach for conversation-owned attachments')
     try:
         from hermes_cli.clipboard import has_clipboard_image, save_clipboard_image
     except Exception as e:
@@ -735,8 +711,6 @@ def _(rid, params: dict) -> dict:
     session, err = _sess_building(params, rid)
     if err:
         return err
-    if session.get('_conversation_binding'):
-        return _err(rid, 4120, 'Use conversations.attach for conversation-owned attachments')
     raw = str(params.get("path", "") or "").strip()
     if not raw:
         return _err(rid, 4015, "path required")
@@ -767,8 +741,6 @@ def _(rid, params: dict) -> dict:
     session, err = _sess_building(params, rid)
     if err:
         return err
-    if session.get('_conversation_binding'):
-        return _err(rid, 4120, 'Use conversations.attach for conversation-owned attachments')
     raw_b64 = str(params.get("content_base64") or params.get("data") or "").strip()
     if not raw_b64:
         return _err(rid, 4015, "content_base64 required")
@@ -850,8 +822,6 @@ def _(rid, params: dict) -> dict:
     session, err = _sess_building(params, rid)
     if err:
         return err
-    if session.get('_conversation_binding'):
-        return _err(rid, 4120, 'Use conversations.attach for conversation-owned attachments')
     if shutil.which("pdftoppm") is None:
         return _err(rid, 5028, "pdftoppm not installed (poppler-utils package required)")
     raw_path = str(params.get("path", "") or "").strip()
@@ -907,8 +877,6 @@ def _(rid, params: dict) -> dict:
     session, err = _sess_building(params, rid)
     if err:
         return err
-    if session.get('_conversation_binding'):
-        return _err(rid, 4120, 'Use conversations.attach for conversation-owned attachments')
     raw, data_url, name = (
         str(params.get(k, "") or "").strip() for k in ("path", "data_url", "name"))
     if not raw and not data_url:
@@ -930,8 +898,6 @@ def _(rid, params: dict) -> dict:
     session, err = _sess_building(params, rid)
     if err:
         return err
-    if session.get('_conversation_binding'):
-        return _err(rid, 4120, 'Use conversations.attach for conversation-owned attachments')
     raw = str(params.get("path", "") or "").strip()
     if not raw:
         return _err(rid, 4015, "path required")
@@ -947,8 +913,6 @@ def _(rid, params: dict) -> dict:
     session, err = _sess_nowait(params, rid)
     if err:
         return err
-    if session.get('_conversation_binding'):
-        return _err(rid, 4120, 'Use conversations.attach for conversation-owned attachments')
     try:
         from cli import _detect_file_drop
         dropped = _detect_file_drop(str(params.get("text", "") or ""))
@@ -981,19 +945,6 @@ def _spawn_side_agent(
     """Run ``body()`` on a daemon thread under the session's profile home (the ContextVar
     doesn't propagate across threads) and cwd; its text — or ``error: <exc>`` — lands on
     ``parent`` as ``event`` with ``task_id`` (+ ``extra``).  Replies ``{task_id}``."""
-    from .session_conversation_binding import legacy_migration_refusal
-    if refusal := legacy_migration_refusal(rid, session):
-        return refusal
-    activity_key = session.get('session_key')
-    if activity_key:
-        from hermes_state_migration import SessionMigratedError
-        with _session_db(session) as db:
-            if db is None:
-                return _err(rid, 4120, 'Source session database is unavailable')
-            try:
-                db.begin_migration_activity(activity_key, task_id)
-            except SessionMigratedError as exc:
-                return _err(rid, 4120, str(exc), data={'conversation_id': exc.conversation_id})
     extra = extra or {}
 
     def run():
@@ -1013,26 +964,11 @@ def _spawn_side_agent(
         except Exception as e:
             _emit(event, parent, {"task_id": task_id, **extra, "text": f"error: {e}"})
         finally:
-            try:
-                if cleanup is not None:
-                    cleanup()
-            finally:
-                try:
-                    if activity_key:
-                        with _session_db(session) as db:
-                            if db is not None:
-                                db.end_migration_activity(task_id)
-                finally:
-                    _clear_session_context(session_tokens)
+            if cleanup is not None:
+                cleanup()
+            _clear_session_context(session_tokens)
 
-    try:
-        threading.Thread(target=run, daemon=True).start()
-    except BaseException:
-        if activity_key:
-            with _session_db(session) as db:
-                if db is not None:
-                    db.end_migration_activity(task_id)
-        raise
+    threading.Thread(target=run, daemon=True).start()
     return _ok(rid, {"task_id": task_id})
 
 

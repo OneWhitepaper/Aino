@@ -266,9 +266,6 @@ def _on_tool_complete(sid: str, tool_call_id: str, name: str, args: dict, result
         payload["result"] = json.loads(result)
     except Exception:
         payload["result"] = result
-    if session and session.get("_conversation_binding"):
-        from tui_gateway.conversation_notifications import capture_conversation_tool_result
-        capture_conversation_tool_result(session, name, payload["result"], args)
     summary = _tool_summary(name, result, duration_s)
     if summary:
         payload["summary"] = summary

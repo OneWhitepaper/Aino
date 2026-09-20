@@ -45,18 +45,6 @@ describe('fetchVoiceClientConfig', () => {
     vi.restoreAllMocks()
   })
 
-  it('keeps explicit expert credentials separate from ambient and other source credentials', async () => {
-    const api = mockDesktopApi({ ok: true, stt: directStt, tts: relay })
-    setApiRequestConnection('ambient')
-    setApiRequestProfile('ambient')
-    await fetchVoiceClientConfig({ connectionId: 'owner', profile: 'writer' })
-    await fetchVoiceClientConfig({ connectionId: 'other', profile: 'writer' })
-    expect(api.mock.calls.map(([request]) => request)).toEqual([
-      { connectionId: 'owner', profile: 'writer', path: '/api/audio/voice-config' },
-      { connectionId: 'other', profile: 'writer', path: '/api/audio/voice-config' }
-    ])
-  })
-
   it('fetches from /api/audio/voice-config with the ambient scope and caches per scope', async () => {
     const api = mockDesktopApi({ ok: true, stt: directStt, tts: relay })
     setApiRequestConnection('gw-remote')

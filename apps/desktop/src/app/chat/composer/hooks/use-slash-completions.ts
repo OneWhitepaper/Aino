@@ -54,15 +54,11 @@ function commandText(value: string): string {
 const SESSION_INLINE_LIMIT = 7
 
 /** Live `/` completions backed by the gateway's `complete.slash` RPC. */
-export function useSlashCompletions(options: {
-  gateway: Pick<HermesGateway, 'request'> | null
-  cacheScope?: string
-  allowSessionNavigation?: boolean
-}): {
+export function useSlashCompletions(options: { gateway: HermesGateway | null }): {
   adapter: Unstable_TriggerAdapter
   loading: boolean
 } {
-  const { gateway, cacheScope, allowSessionNavigation = true } = options
+  const { gateway } = options
   const { t } = useI18n()
   const commandDescriptions = t.composer.commandDescs
   const browseAllSessions = t.composer.browseAllSessions
@@ -75,14 +71,14 @@ export function useSlashCompletions(options: {
       return
     }
 
-    void cachedSlashCompletion('catalog', () => gateway.request<CommandsCatalogLike>('commands.catalog'), cacheScope)
+    void cachedSlashCompletion('catalog', () => gateway.request<CommandsCatalogLike>('commands.catalog'))
       .then(catalog => {
         filterDesktopCommandsCatalog(catalog, commandDescriptions)
       })
       .catch(() => {
         // Next keystroke retries; don't block the composer on a warm-up miss.
       })
-  }, [gateway, epoch, cacheScope])
+  }, [gateway, epoch])
 
   const fetcher = useCallback(
     async (query: string): Promise<CompletionPayload> => {
@@ -103,9 +99,6 @@ export function useSlashCompletions(options: {
       const sessionArg = /^\/(?:resume|sessions|switch)\s+(.*)$/is.exec(text)
 
       if (sessionArg) {
-        if (!allowSessionNavigation) {
-          return { items: [], query }
-        }
         const needle = normalize(sessionArg[1])
 
         const matches = (
@@ -145,11 +138,7 @@ export function useSlashCompletions(options: {
       try {
         if (!query) {
           const catalog = filterDesktopCommandsCatalog(
-            await cachedSlashCompletion(
-              'catalog',
-              () => gateway.request<CommandsCatalogLike>('commands.catalog'),
-              cacheScope
-            ),
+            await cachedSlashCompletion('catalog', () => gateway.request<CommandsCatalogLike>('commands.catalog')),
             commandDescriptions
           )
 
@@ -190,10 +179,8 @@ export function useSlashCompletions(options: {
           return { items, query }
         }
 
-        const result = await cachedSlashCompletion(
-          `slash:${text.toLowerCase()}`,
-          () => gateway.request<{ items?: CompletionEntry[]; replace_from?: number }>('complete.slash', { text }),
-          cacheScope
+        const result = await cachedSlashCompletion(`slash:${text.toLowerCase()}`, () =>
+          gateway.request<{ items?: CompletionEntry[]; replace_from?: number }>('complete.slash', { text })
         )
 
         // Arg-completion items (replace_from > 1) carry just the arg stub —
@@ -251,7 +238,7 @@ export function useSlashCompletions(options: {
         return { items: [], query }
       }
     },
-    [browseAllSessions, commandDescriptions, gateway, cacheScope, allowSessionNavigation]
+    [browseAllSessions, commandDescriptions, gateway]
   )
 
   const toItem = useCallback((entry: CompletionEntry, index: number): Unstable_TriggerItem => {
@@ -285,18 +272,15 @@ export function useSlashCompletions(options: {
   // Mirrors the fetcher's branching: `/skin` and the `/resume` arg stage are
   // answered from client-side state, so they never wait on the network; every
   // other query is served from the completion cache when it's still warm.
-  const isCached = useCallback(
-    (query: string) => {
-      const text = `/${query}`
+  const isCached = useCallback((query: string) => {
+    const text = `/${query}`
 
-      if (/^\/skin(?:\s|$)/i.test(text) || /^\/(?:resume|sessions|switch)\s+/is.test(text)) {
-        return true
-      }
+    if (/^\/skin(?:\s|$)/i.test(text) || /^\/(?:resume|sessions|switch)\s+/is.test(text)) {
+      return true
+    }
 
-      return hasCachedSlashCompletion(query ? `slash:${text.toLowerCase()}` : 'catalog', cacheScope)
-    },
-    [cacheScope]
-  )
+    return hasCachedSlashCompletion(query ? `slash:${text.toLowerCase()}` : 'catalog')
+  }, [])
 
   return useLiveCompletionAdapter({ enabled, epoch, fetcher, isCached, toItem })
 }

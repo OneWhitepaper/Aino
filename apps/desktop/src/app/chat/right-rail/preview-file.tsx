@@ -35,12 +35,6 @@ import { createMemoizedMathPlugin } from '@/lib/katex-memo'
 import { isComposerChord } from '@/lib/keybinds/chords'
 import { shikiLanguageForFilename } from '@/lib/markdown-code'
 import { normalizeFilePreviewMath } from '@/lib/markdown-preprocess'
-import {
-  type PreviewFilesystemSource,
-  readScopedPreviewDataUrl,
-  readScopedPreviewText,
-  writeScopedPreviewText
-} from '@/lib/scoped-preview-files'
 import { cn } from '@/lib/utils'
 import type { PreviewTarget } from '@/store/preview'
 import { setPreviewDirty } from '@/store/preview-edit'
@@ -668,15 +662,7 @@ export function SourceView({ filePath, language, text }: { filePath?: string; la
 
 export type PreviewViewMode = 'diff' | 'rendered' | 'source'
 
-export function LocalFilePreview({
-  reloadKey,
-  target,
-  filesystemSource
-}: {
-  reloadKey: number
-  target: PreviewTarget
-  filesystemSource?: PreviewFilesystemSource
-}) {
+export function LocalFilePreview({ reloadKey, target }: { reloadKey: number; target: PreviewTarget }) {
   const { t } = useI18n()
   const [state, setState] = useState<LocalPreviewState>({ loading: true })
   const [forcePreview, setForcePreview] = useState(false)
@@ -704,7 +690,7 @@ export function LocalFilePreview({
   const readViewRef = useRef<HTMLDivElement>(null)
   const hoverRef = useRef(false)
   const connection = useStore($connection)
-  const fsCacheKey = filesystemSource ? JSON.stringify(filesystemSource) : desktopFsCacheKey(connection)
+  const fsCacheKey = desktopFsCacheKey(connection)
   const filePath = filePathForTarget(target)
   const isImage = target.previewKind === 'image'
   const isPdf = target.previewKind === 'pdf'
@@ -750,11 +736,7 @@ export function LocalFilePreview({
         if (isImage || isPdf) {
           // Prefer bytes the caller already handed us (a pasted/dropped
           // screenshot) over re-reading a path that may be transient/unreadable.
-          const dataUrl =
-            target.dataUrl ||
-            (await (filesystemSource
-              ? readScopedPreviewDataUrl(filesystemSource, filePath)
-              : readDesktopFileDataUrl(filePath)))
+          const dataUrl = target.dataUrl || (await readDesktopFileDataUrl(filePath))
 
           if (active) {
             setState({ dataUrl, loading: false })
@@ -763,9 +745,7 @@ export function LocalFilePreview({
           return
         }
 
-        const result = await (filesystemSource
-          ? readScopedPreviewText(filesystemSource, filePath)
-          : readTextPreview(filePath))
+        const result = await readTextPreview(filePath)
 
         if (active) {
           const shouldBlock = !forcePreview && (result.binary || (result.byteSize ?? 0) > TEXT_PREVIEW_MAX_BYTES)
@@ -782,7 +762,7 @@ export function LocalFilePreview({
           // Best-effort: fetch the file's working-tree-vs-HEAD diff so the
           // preview can offer a DIFF view when there are uncommitted changes.
           // Empty (clean file / not a repo / remote) just hides the option.
-          if (!shouldBlock && !filesystemSource) {
+          if (!shouldBlock) {
             try {
               const root = await desktopGitRoot(filePath)
               const diff = root ? await desktopFileDiff(root, filePath) : ''
@@ -821,9 +801,7 @@ export function LocalFilePreview({
     reloadKey,
     selfReload,
     target.dataUrl,
-    target.language,
-    filesystemSource?.connectionId,
-    filesystemSource?.profile
+    target.language
   ])
 
   useEffect(() => {
@@ -956,9 +934,7 @@ export function LocalFilePreview({
       // choice. `force` is the user picking "overwrite" from that banner.
       if (!force) {
         try {
-          const current = await (filesystemSource
-            ? readScopedPreviewText(filesystemSource, filePath)
-            : readTextPreview(filePath))
+          const current = await readTextPreview(filePath)
 
           if (!current.binary && (current.text ?? '') !== baselineRef.current) {
             setConflict(true)
@@ -971,9 +947,7 @@ export function LocalFilePreview({
         }
       }
 
-      await (filesystemSource
-        ? writeScopedPreviewText(filesystemSource, filePath, draftRef.current)
-        : writeDesktopFileText(filePath, draftRef.current))
+      await writeDesktopFileText(filePath, draftRef.current)
       baselineRef.current = draftRef.current
       setDirty(false)
       setConflict(false)
@@ -1169,7 +1143,7 @@ export function LocalFilePreview({
             />
           ) : (
             <SourceView
-              filePath={filesystemSource ? undefined : filePath}
+              filePath={filePath}
               language={shikiLanguageForFilename(filePath) || state.language || 'text'}
               text={state.text}
             />

@@ -10,12 +10,11 @@ import { cn } from '@/lib/utils'
 import { $hudMode, closeHud, resetHudLayout } from '@/store/hud'
 import { $wakeWord, toggleWakeWord } from '@/store/wake-word'
 
-import { ACTIVE_ICON_BTN, GHOST_ICON_BTN } from './control-classes'
+import { ACTIVE_ICON_BTN, GHOST_ICON_BTN, PRIMARY_ICON_BTN } from './control-classes'
 import type { ConversationStatus } from './hooks/use-voice-conversation'
 import { ModelPill } from './model-pill'
 import { ReasoningPill } from './reasoning-pill'
 import { StartVoiceButton } from './start-voice-button'
-import { ComposerSubmitButton } from './submit-button'
 import type { ChatBarState, VoiceStatus } from './types'
 import { VoiceMenu } from './voice-menu'
 
@@ -153,7 +152,28 @@ export function ComposerControls({
       {showVoicePrimary ? (
         <StartVoiceButton disabled={disabled} label={c.startVoice} onStart={conversation.onStart} />
       ) : (
-        <ComposerSubmitButton disabled={disabled || !canSubmit} showStop={showStop} />
+        <Tip
+          label={
+            showStop ? (
+              <TipKeybindLabel actionId="composer.send" text={c.stop} />
+            ) : (
+              <TipKeybindLabel actionId="composer.send" text={c.send} />
+            )
+          }
+        >
+          <Button
+            aria-label={showStop ? c.stop : c.send}
+            className={PRIMARY_ICON_BTN}
+            disabled={disabled || !canSubmit}
+            type="submit"
+          >
+            {showStop ? (
+              <span className="block size-2.5 rounded-[0.1875rem] bg-current" />
+            ) : (
+              <Codicon name="arrow-up" size="0.875rem" />
+            )}
+          </Button>
+        </Tip>
       )}
       {/* The way out of HUD mode, riding the controls row rather than floating
           above the bar. The old chip lived in a 26px transparent strip reserved
@@ -200,7 +220,7 @@ function HudWindowButtons() {
   )
 }
 
-export function ConversationPill({
+function ConversationPill({
   disabled,
   level,
   muted,
@@ -355,7 +375,7 @@ function WakeWordButton({ disabled, pausedForVoice = false }: { disabled: boolea
   )
 }
 
-export function DictationButton({
+function DictationButton({
   disabled,
   state,
   status,

@@ -43,9 +43,6 @@ class ServerRequest:
         self.sid = sid
         self.method = method
         self.params = dict(params)
-        from tui_gateway.conversation_activity import current_conversation_activity
-        if origin := current_conversation_activity(sid):
-            self.params["conversation"] = origin
         self.event = threading.Event()
         self.result: dict | None = None
         self.answered = False
@@ -76,22 +73,15 @@ _open: dict[str, ServerRequest] = {}
 # fixtures that patch ``sys.modules`` around the server import.
 _write: Callable[[dict], Any] = lambda frame: None  # noqa: E731
 _emit: Callable[[str, str, dict], Any] = lambda event, sid, payload: None  # noqa: E731
-_authorize_response: Callable[[ServerRequest], bool] = lambda req: True  # noqa: E731
 
 
-def bind_sinks(write_json: Callable[[dict], Any], emit: Callable[[str, str, dict], Any],
-               authorize_response: Callable[[ServerRequest], bool] | None = None) -> None:
-    global _write, _emit, _authorize_response
+def bind_sinks(write_json: Callable[[dict], Any], emit: Callable[[str, str, dict], Any]) -> None:
+    global _write, _emit
     _write, _emit = write_json, emit
-    if authorize_response is not None:
-        _authorize_response = authorize_response
 
 
 def _emit_cancel(req: ServerRequest, reason: str) -> None:
-    from tui_gateway.conversation_activity import ConversationActivity, conversation_activity_scope
-    origin = req.params.get("conversation")
-    with conversation_activity_scope(ConversationActivity(**origin) if origin else None):
-        _emit("request.cancel", req.sid, {"id": req.id, "method": req.method, "reason": reason})
+    _emit("request.cancel", req.sid, {"id": req.id, "method": req.method, "reason": reason})
 
 
 def _register(req: ServerRequest) -> None:
@@ -157,7 +147,7 @@ def resolve_response(frame: dict) -> bool:
         return False
     with _lock:
         req = _open.get(rid)
-        if req is None or not _authorize_response(req):
+        if req is None:
             return False
         if req.on_result is not None:
             _open.pop(rid, None)
@@ -188,7 +178,7 @@ def lock_answer(request_id: str, question_id: str, answer: str) -> list[str] | N
     batch has that id (expired or foreign); ``ValueError`` for an unknown question id."""
     with _lock:
         req = _open.get(request_id)
-        if req is None or req.qids is None or not _authorize_response(req):
+        if req is None or req.qids is None:
             return None
         if question_id not in req.qids:
             raise ValueError(f"unknown question_id {question_id!r}")

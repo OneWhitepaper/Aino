@@ -20,7 +20,6 @@ export function sameCronSignature(a: SessionInfo[], b: SessionInfo[]): boolean {
       session.title === other.title &&
       session.source === other.source &&
       session.profile === other.profile &&
-      session.connection_id === other.connection_id &&
       session.preview === other.preview &&
       session.message_count === other.message_count &&
       session.last_active === other.last_active &&

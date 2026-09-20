@@ -325,13 +325,11 @@ def _after_complete_turn(sid: str, session: dict, st: _TurnRun, raw: Any) -> Non
     """Hooks for a ``complete`` turn: /loop tick evaluation, pending title, voice fallback."""
     try:
         from hermes_cli.loops import LoopManager
-        from tui_gateway.conversation_notifications import conversation_loop_completion_allowed
         loop_sid_key = session.get("session_key") or ""
         if loop_sid_key:
             loop_mgr = LoopManager(session_id=loop_sid_key)
             loop_state = loop_mgr.state
-            if (loop_state is not None and loop_state.awaiting_response
-                    and conversation_loop_completion_allowed(session, loop_state)):
+            if loop_state is not None and loop_state.awaiting_response:
                 loop_decision = loop_mgr.complete_tick(raw if isinstance(raw, str) else "")
                 if loop_msg := loop_decision.get("message") or "":
                     _emit("status.update", sid, {"kind": "loop", "text": loop_msg})
@@ -354,7 +352,7 @@ def _after_complete_turn(sid: str, session: dict, st: _TurnRun, raw: Any) -> Non
     # everything otherwise); barge-aware.
     if st.tts_queue is None and isinstance(raw, str) and raw.strip() and _voice_tts_enabled():
         try:
-            threading.Thread(target=contextvars.copy_context().run, args=(_speak_text_with_barge, raw), daemon=True).start()
+            threading.Thread(target=_speak_text_with_barge, args=(raw,), daemon=True).start()
         except ImportError:
             logger.warning("voice TTS skipped: hermes_cli.voice unavailable")
         except Exception as e:
@@ -574,10 +572,7 @@ def _invoke_agent(
         "session.title", sid, {"session_id": _k, "title": t})
     _usage_stop, _usage_thread = _start_usage_ticker(sid, agent)
     try:
-        from tui_gateway.conversation_transport import conversation_input_scope
-        from tui_gateway import server as gateway_server
-        with conversation_input_scope(gateway_server, session, agent):
-            st.result = agent.run_conversation(run_message, **st.run_kwargs)
+        st.result = agent.run_conversation(run_message, **st.run_kwargs)
     finally:
         # Stop AND join before anything emits: a tick surviving past message.complete would
         # roll the client's usage back to a stale snapshot (unbounded join: same worst case).
@@ -729,10 +724,8 @@ def _recover_turn_exception(sid: str, session: dict, st: _TurnRun, e: BaseExcept
     if st.terminal_callback is not None and not st.receipt_attempted:
         st.receipt_attempted = True
         try:
-            from agent.conversation_input import ConversationInputRecoveryRequired
-            status = "reconciliation_required" if isinstance(e, ConversationInputRecoveryRequired) else "failed"
-            st.terminal_callback({"status": status, "text": "", "error": str(e)})
-            st.receipt_committed = status != "reconciliation_required"
+            st.terminal_callback({"status": "failed", "text": "", "error": str(e)})
+            st.receipt_committed = True
         except Exception:
             logger.exception("hosted room terminal receipt commit failed")
     try:
@@ -847,12 +840,7 @@ def _run_prompt_submit(
         "kind=%s chars=%s images=%d",
         sid, session.get("session_key") or "", getattr(agent, "session_id", "") or "",
         display_kind or "user", len(text) if isinstance(text, str) else "-", len(images))
-    from tui_gateway.conversation_activity import capture_conversation_activity, conversation_activity_scope
-    import contextvars
-    # Copy now: asynchronous delegates may still emit after this session starts its next turn.
-    with conversation_activity_scope(capture_conversation_activity(sid, session), session.get("_conversation_attempt")):
-        activity_context = contextvars.copy_context()
-        _emit("message.start", sid)
+    _emit("message.start", sid)
 
     def run():
         # RPC-dispatcher ContextVars do not follow onto this thread: rebind the transport
@@ -923,7 +911,7 @@ def _run_prompt_submit(
             session.pop("_auto_continue_scheduled", None)
             _emit_settled_session_info(sid, session, st.agent)
         _run_post_turn_followups(rid, sid, session, st.result, goal_followup)
-    run_thread = threading.Thread(target=lambda: activity_context.run(run), daemon=True)
+    run_thread = threading.Thread(target=run, daemon=True)
     # The handle is resolved BEFORE _sessions_lock: a profile session opens its own SessionDB through the
     # state registry, and _sessions_lock gates every create/close/prompt on this backend.
     with _routing_provenance_db(session) as routing_db, _sessions_lock:

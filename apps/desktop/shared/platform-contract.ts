@@ -150,8 +150,6 @@ export interface PlatformModelsBridge {
 export interface BindPlatformModelInput {
   connection_id: string
   profile: string
-  /** Profile owning the session when it differs from the gateway process route. */
-  session_profile?: string
   session_id: string
   model_id: string
   expected_account_revision: number

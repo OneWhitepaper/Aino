@@ -417,18 +417,6 @@ CREATE TABLE IF NOT EXISTS messages (
     display_order INTEGER
 );
 
-CREATE TABLE IF NOT EXISTS conversation_input_receipts (
-    input_id TEXT PRIMARY KEY,
-    input_digest TEXT NOT NULL,
-    message_digest TEXT NOT NULL,
-    conversation_id TEXT NOT NULL,
-    participant_id TEXT NOT NULL,
-    session_generation INTEGER NOT NULL,
-    session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
-    message_row_id INTEGER NOT NULL UNIQUE REFERENCES messages(id) ON DELETE CASCADE,
-    accepted_at REAL NOT NULL
-);
-
 CREATE TABLE IF NOT EXISTS session_model_usage (
     session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
     model TEXT NOT NULL,
@@ -512,9 +500,7 @@ CREATE TABLE IF NOT EXISTS gateway_heartbeats (
     started_at REAL NOT NULL,
     last_heartbeat REAL NOT NULL,
     profile TEXT NOT NULL DEFAULT '',
-    host TEXT NOT NULL DEFAULT '',
-    process_started_at REAL,
-    capabilities_json TEXT NOT NULL DEFAULT '{}'
+    host TEXT NOT NULL DEFAULT ''
 );
 
 CREATE TABLE IF NOT EXISTS compression_locks (

@@ -4,8 +4,6 @@ Mixin bound onto ``SessionDB`` via the MRO; built on its ``_read_ctx`` /
 ``_execute_write`` / ``_write_sql`` / ``_read_all`` primitives."""
 
 from __future__ import annotations
-from hermes_state_conversation_retention import protected_session_ids
-
 
 import json
 import logging
@@ -320,19 +318,18 @@ class SessionGatewayMixin:
         lives only inside ``entry_json``, so matching is done in Python over all scopes."""
         if not session_ids:
             return 0
-        def write(conn):
-            eligible = session_ids - protected_session_ids(conn)
-            doomed = []
-            for row in conn.execute("SELECT scope,session_key,entry_json FROM gateway_routing"):
-                try:
-                    entry = json.loads(row['entry_json'] or '{}')
-                except ValueError:
-                    continue
-                if isinstance(entry, dict) and entry.get('session_id') in eligible:
-                    doomed.append((row['scope'], row['session_key']))
-            conn.executemany('DELETE FROM gateway_routing WHERE scope=? AND session_key=?', doomed)
-            return len(doomed)
-        return self._execute_write(write)
+        doomed: List[Tuple[str, str]] = []
+        for row in self._read_all("SELECT scope, session_key, entry_json FROM gateway_routing"):
+            try:
+                entry = json.loads(row["entry_json"] or "{}")
+            except Exception:
+                continue
+            if isinstance(entry, dict) and entry.get("session_id") in session_ids:
+                doomed.append((row["scope"], row["session_key"]))
+        if not doomed:
+            return 0
+        self._write_sql("DELETE FROM gateway_routing WHERE scope = ? AND session_key = ?", doomed, many=True)
+        return len(doomed)
 
     def prune_never_active_keyed_sessions(
         self, *, older_than_days: float, sessions_dir: Optional[Path] = None) -> Tuple[int, int]:
@@ -573,8 +570,7 @@ class SessionGatewayMixin:
 
     def register_backend_heartbeat(
         self, *, backend_id: str, pid: int, started_at: float, last_heartbeat: Optional[float] = None,
-        profile: str = "", host: str = "", process_started_at: Optional[float] = None,
-        capabilities: Optional[dict] = None) -> None:
+        profile: str = "", host: str = "") -> None:
         """Upsert this backend's liveness row. ``backend_id`` MUST be stable for the process
         lifetime (e.g. ``f"{profile}@{host}:{pid}"``) so a respawn cannot inherit a dead
         predecessor's heartbeat; ``started_at`` is when THIS process started, so a backend
@@ -583,13 +579,11 @@ class SessionGatewayMixin:
             return
         ts = time.time() if last_heartbeat is None else float(last_heartbeat)
         self._write_sql(
-            "INSERT INTO gateway_heartbeats (backend_id, pid, started_at, last_heartbeat, profile, host, process_started_at, capabilities_json)"
-            " VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(backend_id) DO UPDATE SET pid = excluded.pid,"
+            "INSERT INTO gateway_heartbeats (backend_id, pid, started_at, last_heartbeat, profile, host)"
+            " VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(backend_id) DO UPDATE SET pid = excluded.pid,"
             " started_at = excluded.started_at, last_heartbeat = excluded.last_heartbeat,"
-            " profile = excluded.profile, host = excluded.host, process_started_at = excluded.process_started_at,"
-            " capabilities_json = excluded.capabilities_json",
-            (str(backend_id), int(pid), float(started_at), ts, str(profile), str(host),
-             process_started_at, json.dumps(capabilities or {}, sort_keys=True)))
+            " profile = excluded.profile, host = excluded.host",
+            (str(backend_id), int(pid), float(started_at), ts, str(profile), str(host)))
 
     def clear_backend_heartbeat(self, backend_id: str) -> bool:
         """Remove this backend's heartbeat row (from ``atexit``); True if removed. A crashed

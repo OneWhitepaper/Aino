@@ -1,5 +1,5 @@
-import { capabilityScoped, type ProfileScope } from '@/api/client'
-import { getApiRequestConnection, hermesApi } from '@/hermes'
+import { profileScoped } from '@/api/client'
+import { getApiRequestConnection, getApiRequestProfile, hermesApi } from '@/hermes'
 
 /**
  * Client-direct voice: call the active profile's STT/TTS providers straight
@@ -61,10 +61,8 @@ const CONFIG_TTL_MS = 60_000
 let cached: { key: string; at: number; config: VoiceClientConfig } | null = null
 let inflight: { key: string; promise: Promise<null | VoiceClientConfig> } | null = null
 
-function scopeKey(scope?: ProfileScope): string {
-  const captured = capabilityScoped(scope)
-
-  return JSON.stringify([captured.connectionId ?? getApiRequestConnection() ?? 'local', captured.profile ?? 'default'])
+function scopeKey(): string {
+  return `${getApiRequestConnection() ?? 'local'}::${getApiRequestProfile() ?? 'default'}`
 }
 
 /** Drop cached credentials (used by tests; scope changes rotate the key). */
@@ -73,8 +71,8 @@ export function clearVoiceClientConfigCache(): void {
   inflight = null
 }
 
-export async function fetchVoiceClientConfig(scope?: ProfileScope): Promise<null | VoiceClientConfig> {
-  const key = scopeKey(scope)
+export async function fetchVoiceClientConfig(): Promise<null | VoiceClientConfig> {
+  const key = scopeKey()
 
   if (cached && cached.key === key && Date.now() - cached.at < CONFIG_TTL_MS) {
     return cached.config
@@ -90,7 +88,7 @@ export async function fetchVoiceClientConfig(scope?: ProfileScope): Promise<null
       // profile — the same routing every relay audio call uses, so the
       // config comes from the backend the user is actually talking to.
       const response = await hermesApi<{ ok: boolean } & VoiceClientConfig>({
-        ...capabilityScoped(scope),
+        ...profileScoped(),
         path: '/api/audio/voice-config'
       })
 
@@ -274,8 +272,8 @@ export async function transcribeAudioClientDirect(audio: Blob): Promise<null | s
 // ---------------------------------------------------------------------------
 
 /** Resolve the profile's TTS config when it is client-callable, else null. */
-export async function directTtsConfig(scope?: ProfileScope): Promise<DirectTtsConfig | null> {
-  const config = await fetchVoiceClientConfig(scope)
+export async function directTtsConfig(): Promise<DirectTtsConfig | null> {
+  const config = await fetchVoiceClientConfig()
 
   return config?.tts && config.tts.mode === 'direct' ? config.tts : null
 }

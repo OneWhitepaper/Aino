@@ -926,20 +926,6 @@ DEFAULT_CONFIG = {
         },
     },
 
-    "conversations": {
-        # Capabilities still require a supported General runtime and compatible owners.
-        # Disabling creation preserves existing conversation history and running work.
-        "enabled": True,
-        "storage": {
-            "max_active_conversations": 2000,
-            "max_events_per_conversation": 100000,
-            "max_total_bytes": 1024**3,
-            "max_conversation_bytes": 256 * 1024**2,
-            "max_content_bytes": 16 * 1024**2,
-            "min_free_disk_bytes": 16 * 1024**2,
-        },
-    },
-
     "dashboard": {
         # Visual theme: "default" | "midnight" | "ember" | "mono" | "cyberpunk" | "rose"
         "theme": "default",

@@ -33,13 +33,6 @@ import {
   sessionVaultSaveLoginRequest,
   sessionVaultUnlockRequest
 } from '@/store/prompts'
-import type {
-  SecretRequest,
-  SudoRequest,
-  VaultCodeRequest,
-  VaultSaveLoginRequest,
-  VaultUnlockRequest
-} from '@/store/prompts'
 import { respondToServerRequest } from '@/store/server-requests'
 
 // Renders the modal mid-turn prompts the gateway raises and waits on: sudo
@@ -55,47 +48,12 @@ import { respondToServerRequest } from '@/store/server-requests'
 // fire a second `*.respond` alongside onOpenChange (double-send) or block the
 // backdrop-dismiss path.
 
-interface PromptSurfaceProps<Request> {
-  request: Request | null
-  onRespond: (value: string) => void | Promise<void>
-  onAnswered: () => void
-  connected?: boolean
-  owned?: boolean
-}
-
 function SudoDialog({ sessionId }: { sessionId: string | null }) {
+  const { t } = useI18n()
+  const copy = t.prompts
   const $request = useMemo(() => sessionSudoRequest(sessionId), [sessionId])
   const request = useStore($request)
   const gateway = useStore($gateway)
-
-  return (
-    <SudoPromptSurface
-      connected={Boolean(gateway)}
-      key={request?.requestId}
-      onAnswered={() => {
-        if (request) {
-          clearSudoRequest(request.sessionId, request.requestId)
-        }
-      }}
-      onRespond={value => {
-        if (request) {
-          respondToServerRequest(request.requestId, { value })
-        }
-      }}
-      request={request}
-    />
-  )
-}
-
-export function SudoPromptSurface({
-  request,
-  onRespond,
-  onAnswered,
-  connected = true,
-  owned = false
-}: PromptSurfaceProps<SudoRequest>) {
-  const { t } = useI18n()
-  const copy = t.prompts
   const [password, setPassword] = useState('')
   const [submitting, setSubmitting] = useState(false)
 
@@ -110,7 +68,7 @@ export function SudoPromptSurface({
         return
       }
 
-      if (!connected) {
+      if (!gateway) {
         notifyError(new Error(copy.gatewayDisconnected), copy.sudoSendFailed)
 
         return
@@ -119,21 +77,21 @@ export function SudoPromptSurface({
       setSubmitting(true)
 
       try {
-        await onRespond(value)
+        respondToServerRequest(request.requestId, { value })
         triggerHaptic('submit')
-        onAnswered()
+        clearSudoRequest(request.sessionId, request.requestId)
       } catch (error) {
-        if (!owned && isMissingPendingPromptRequest(error, 'password')) {
-          onAnswered()
+        if (isMissingPendingPromptRequest(error, 'password')) {
+          clearSudoRequest(request.sessionId, request.requestId)
 
           return
         }
 
-        notifyError(owned ? new Error(copy.sudoSendFailed) : error, copy.sudoSendFailed)
+        notifyError(error, copy.sudoSendFailed)
         setSubmitting(false)
       }
     },
-    [copy.gatewayDisconnected, copy.sudoSendFailed, connected, onAnswered, onRespond, owned, request]
+    [copy.gatewayDisconnected, copy.sudoSendFailed, gateway, request]
   )
 
   // Cancel → empty password. The backend treats an empty sudo response as a
@@ -191,38 +149,11 @@ export function SudoPromptSurface({
 }
 
 function SecretDialog({ sessionId }: { sessionId: string | null }) {
+  const { t } = useI18n()
+  const copy = t.prompts
   const $request = useMemo(() => sessionSecretRequest(sessionId), [sessionId])
   const request = useStore($request)
   const gateway = useStore($gateway)
-
-  return (
-    <SecretPromptSurface
-      connected={Boolean(gateway)}
-      key={request?.requestId}
-      onAnswered={() => {
-        if (request) {
-          clearSecretRequest(request.sessionId, request.requestId)
-        }
-      }}
-      onRespond={value => {
-        if (request) {
-          respondToServerRequest(request.requestId, { value })
-        }
-      }}
-      request={request}
-    />
-  )
-}
-
-export function SecretPromptSurface({
-  request,
-  onRespond,
-  onAnswered,
-  connected = true,
-  owned = false
-}: PromptSurfaceProps<SecretRequest>) {
-  const { t } = useI18n()
-  const copy = t.prompts
   const [value, setValue] = useState('')
   const [submitting, setSubmitting] = useState(false)
 
@@ -237,7 +168,7 @@ export function SecretPromptSurface({
         return
       }
 
-      if (!connected) {
+      if (!gateway) {
         notifyError(new Error(copy.gatewayDisconnected), copy.secretSendFailed)
 
         return
@@ -246,21 +177,21 @@ export function SecretPromptSurface({
       setSubmitting(true)
 
       try {
-        await onRespond(secret)
+        respondToServerRequest(request.requestId, { value: secret })
         triggerHaptic('submit')
-        onAnswered()
+        clearSecretRequest(request.sessionId, request.requestId)
       } catch (error) {
-        if (!owned && isMissingPendingPromptRequest(error, 'value')) {
-          onAnswered()
+        if (isMissingPendingPromptRequest(error, 'value')) {
+          clearSecretRequest(request.sessionId, request.requestId)
 
           return
         }
 
-        notifyError(owned ? new Error(copy.secretSendFailed) : error, copy.secretSendFailed)
+        notifyError(error, copy.secretSendFailed)
         setSubmitting(false)
       }
     },
-    [copy.gatewayDisconnected, copy.secretSendFailed, connected, onAnswered, onRespond, owned, request]
+    [copy.gatewayDisconnected, copy.secretSendFailed, gateway, request]
   )
 
   const onOpenChange = useCallback(
@@ -319,38 +250,11 @@ export function SecretPromptSurface({
  *  Mirrors SecretDialog's contract: closing without submitting answers "" (keep locked); a late
  *  answer after expiry is tolerated by the backend. The value only lives in this component. */
 function VaultUnlockDialog({ sessionId }: { sessionId: string | null }) {
+  const { t } = useI18n()
+  const copy = t.prompts
   const $request = useMemo(() => sessionVaultUnlockRequest(sessionId), [sessionId])
   const request = useStore($request)
   const gateway = useStore($gateway)
-
-  return (
-    <VaultUnlockPromptSurface
-      connected={Boolean(gateway)}
-      key={request?.requestId}
-      onAnswered={() => {
-        if (request) {
-          clearVaultUnlockRequest(request.sessionId, request.requestId)
-        }
-      }}
-      onRespond={value => {
-        if (request) {
-          respondToServerRequest(request.requestId, { value })
-        }
-      }}
-      request={request}
-    />
-  )
-}
-
-export function VaultUnlockPromptSurface({
-  request,
-  onRespond,
-  onAnswered,
-  connected = true,
-  owned = false
-}: PromptSurfaceProps<VaultUnlockRequest>) {
-  const { t } = useI18n()
-  const copy = t.prompts
   const [value, setValue] = useState('')
   const [submitting, setSubmitting] = useState(false)
 
@@ -365,7 +269,7 @@ export function VaultUnlockPromptSurface({
         return
       }
 
-      if (!connected) {
+      if (!gateway) {
         notifyError(new Error(copy.gatewayDisconnected), copy.vaultUnlockSendFailed)
 
         return
@@ -376,23 +280,23 @@ export function VaultUnlockPromptSurface({
       try {
         // The response frame goes back over the socket the request arrived on — the
         // backend that raised the prompt, never whatever gateway is foreground.
-        await onRespond(password)
+        respondToServerRequest(request.requestId, { value: password })
         triggerHaptic('submit')
-        onAnswered()
+        clearVaultUnlockRequest(request.sessionId, request.requestId)
       } catch (error) {
-        if (!owned && isMissingPendingPromptRequest(error, 'password')) {
-          onAnswered()
+        if (isMissingPendingPromptRequest(error, 'password')) {
+          clearVaultUnlockRequest(request.sessionId, request.requestId)
 
           return
         }
 
-        notifyError(owned ? new Error(copy.vaultUnlockSendFailed) : error, copy.vaultUnlockSendFailed)
+        notifyError(error, copy.vaultUnlockSendFailed)
         setSubmitting(false)
       } finally {
         setValue('')
       }
     },
-    [copy.gatewayDisconnected, copy.vaultUnlockSendFailed, connected, onAnswered, onRespond, owned, request]
+    [copy.gatewayDisconnected, copy.vaultUnlockSendFailed, gateway, request]
   )
 
   if (!request) {
@@ -441,38 +345,11 @@ export function VaultUnlockPromptSurface({
  *  Identifier is plain, password masked; the pair goes to `vault.save_login.respond` as JSON and
  *  the backend stores it encrypted and fills the page. Closing answers "" (don't save). */
 function VaultSaveLoginDialog({ sessionId }: { sessionId: string | null }) {
+  const { t } = useI18n()
+  const copy = t.prompts
   const $request = useMemo(() => sessionVaultSaveLoginRequest(sessionId), [sessionId])
   const request = useStore($request)
   const gateway = useStore($gateway)
-
-  return (
-    <VaultSaveLoginPromptSurface
-      connected={Boolean(gateway)}
-      key={request?.requestId}
-      onAnswered={() => {
-        if (request) {
-          clearVaultSaveLoginRequest(request.sessionId, request.requestId)
-        }
-      }}
-      onRespond={value => {
-        if (request) {
-          respondToServerRequest(request.requestId, { value })
-        }
-      }}
-      request={request}
-    />
-  )
-}
-
-export function VaultSaveLoginPromptSurface({
-  request,
-  onRespond,
-  onAnswered,
-  connected = true,
-  owned = false
-}: PromptSurfaceProps<VaultSaveLoginRequest>) {
-  const { t } = useI18n()
-  const copy = t.prompts
   const [identifier, setIdentifier] = useState('')
   const [password, setPassword] = useState('')
   const [submitting, setSubmitting] = useState(false)
@@ -489,7 +366,7 @@ export function VaultSaveLoginPromptSurface({
         return
       }
 
-      if (!connected) {
+      if (!gateway) {
         notifyError(new Error(copy.gatewayDisconnected), copy.vaultSaveSendFailed)
 
         return
@@ -498,24 +375,24 @@ export function VaultSaveLoginPromptSurface({
       setSubmitting(true)
 
       try {
-        await onRespond(login)
+        respondToServerRequest(request.requestId, { value: login })
         triggerHaptic('submit')
-        onAnswered()
+        clearVaultSaveLoginRequest(request.sessionId, request.requestId)
       } catch (error) {
-        if (!owned && isMissingPendingPromptRequest(error, 'login')) {
-          onAnswered()
+        if (isMissingPendingPromptRequest(error, 'login')) {
+          clearVaultSaveLoginRequest(request.sessionId, request.requestId)
 
           return
         }
 
-        notifyError(owned ? new Error(copy.vaultSaveSendFailed) : error, copy.vaultSaveSendFailed)
+        notifyError(error, copy.vaultSaveSendFailed)
         setSubmitting(false)
       } finally {
         setIdentifier('')
         setPassword('')
       }
     },
-    [copy.gatewayDisconnected, copy.vaultSaveSendFailed, connected, onAnswered, onRespond, owned, request]
+    [copy.gatewayDisconnected, copy.vaultSaveSendFailed, gateway, request]
   )
 
   if (!request) {
@@ -582,38 +459,11 @@ export function VaultSaveLoginPromptSurface({
  *  is shown as typed (a 6-digit code is not worth masking and typos must be visible) and goes to the
  *  page over the vault socket; the model never sees it. Closing answers "" (skip). */
 function VaultCodeDialog({ sessionId }: { sessionId: string | null }) {
+  const { t } = useI18n()
+  const copy = t.prompts
   const $request = useMemo(() => sessionVaultCodeRequest(sessionId), [sessionId])
   const request = useStore($request)
   const gateway = useStore($gateway)
-
-  return (
-    <VaultCodePromptSurface
-      connected={Boolean(gateway)}
-      key={request?.requestId}
-      onAnswered={() => {
-        if (request) {
-          clearVaultCodeRequest(request.sessionId, request.requestId)
-        }
-      }}
-      onRespond={value => {
-        if (request) {
-          respondToServerRequest(request.requestId, { value })
-        }
-      }}
-      request={request}
-    />
-  )
-}
-
-export function VaultCodePromptSurface({
-  request,
-  onRespond,
-  onAnswered,
-  connected = true,
-  owned = false
-}: PromptSurfaceProps<VaultCodeRequest>) {
-  const { t } = useI18n()
-  const copy = t.prompts
   const [code, setCode] = useState('')
   const [submitting, setSubmitting] = useState(false)
 
@@ -628,7 +478,7 @@ export function VaultCodePromptSurface({
         return
       }
 
-      if (!connected) {
+      if (!gateway) {
         notifyError(new Error(copy.gatewayDisconnected), copy.vaultCodeSendFailed)
 
         return
@@ -637,23 +487,23 @@ export function VaultCodePromptSurface({
       setSubmitting(true)
 
       try {
-        await onRespond(value)
+        respondToServerRequest(request.requestId, { value })
         triggerHaptic('submit')
-        onAnswered()
+        clearVaultCodeRequest(request.sessionId, request.requestId)
       } catch (error) {
-        if (!owned && isMissingPendingPromptRequest(error, 'code')) {
-          onAnswered()
+        if (isMissingPendingPromptRequest(error, 'code')) {
+          clearVaultCodeRequest(request.sessionId, request.requestId)
 
           return
         }
 
-        notifyError(owned ? new Error(copy.vaultCodeSendFailed) : error, copy.vaultCodeSendFailed)
+        notifyError(error, copy.vaultCodeSendFailed)
         setSubmitting(false)
       } finally {
         setCode('')
       }
     },
-    [copy.gatewayDisconnected, copy.vaultCodeSendFailed, connected, onAnswered, onRespond, owned, request]
+    [copy.gatewayDisconnected, copy.vaultCodeSendFailed, gateway, request]
   )
 
   if (!request) {

@@ -3,29 +3,6 @@ import { defineFieldCopy } from '@/app/settings/field-copy'
 import { defineLocale } from './define-locale'
 
 export const zhHant = defineLocale({
-  sharedProjects: {
-    project: '專案',
-    noProject: '無專案',
-    unavailable: '無法使用',
-    open: '在此視窗開啟資料夾',
-    register: '新增專案',
-    source: '將專案儲存於',
-    choose: '選擇專家',
-    name: '專案名稱',
-    directory: '此連線上的資料夾路徑',
-    create: '新增專案資料夾',
-    error: '共用專案無法使用',
-    retry: '重試',
-    confirm: '變更對話專案',
-    generation: '所有專家將在後續訊息中使用此資料夾。歷史訊息保留原始上下文。',
-    apply: '套用專案變更',
-    cancel: '取消',
-    unsupported: '無法瀏覽此專案環境',
-    loading: '正在載入資料夾…',
-    opened: '已開啟的專案資料夾',
-    empty: '此視窗尚未開啟資料夾。',
-    close: '關閉資料夾'
-  },
   platformRechargeErrors: {
     conflict: '較早的請求已建立訂單。請關閉此視窗，在訂單歷史中開啟原訂單，勿重複付款。',
     account: '登入狀態已變更，請重新登入原帳戶後恢復訂單。',
@@ -2269,15 +2246,6 @@ export const zhHant = defineLocale({
   },
 
   profiles: {
-    allProjects: '所有專案',
-    projectSourceRequired: '請先從明確來源開啟專案，再新增對話。',
-    adoptConversation: '接入一般對話',
-    adoptFailed: '暫時無法接入。請在目前工作完成後重試。',
-    newConversationFailed: '無法新增對話，請重試。',
-    openConversationFailed: '無法開啟對話，請重試。',
-    hubTitle: '智慧體中心',
-    projectAgentHelp: '專案整理資料與任務；智慧體決定本輪由誰處理。',
-    hubUnavailable: '智慧體中心暫不可用。請在設定中啟用 Agent Hub 外掛。',
     close: '關閉設定檔',
     workspaceDesc: '每個工作區保存一位智慧體的獨立設定、技能、記憶與對話。',
     currentBadge: '目前工作區',
@@ -2617,7 +2585,7 @@ export const zhHant = defineLocale({
     },
     nav: {
       'new-session': '新工作階段',
-      profiles: '智慧體中心',
+      profiles: '工作區',
       skills: '技能與工具',
       messaging: '訊息平台',
       artifacts: '成品',
@@ -2780,54 +2748,6 @@ export const zhHant = defineLocale({
   },
 
   composer: {
-    conversation: {
-      commandDraftChanged: '解析指令時草稿發生變化，請重新提交目前草稿。',
-      attachmentTooLarge: '檔案超出此後端的上傳限制，請選擇較小檔案。',
-      attachmentLimitUnavailable: '此後端未提供上傳限制，請先更新後端。',
-      attachmentCountExceeded: '單則訊息的附件過多，請移除檔案後重試。',
-
-      privateNotice: '私人提示',
-      refreshConfiguration: '重新整理專家設定',
-      refreshExplanation:
-        '下一次回覆將使用此專家已儲存的設定，共享記錄和專案保持不變。請先等待目前工作結束；此操作不會套用斜線指令中輸入的設定。',
-      configurationRefreshed: '專家設定已重新整理，下一次回覆將使用更新後的設定。',
-      configurationBusy: '請先結束目前工作或核實待定傳送，再變更設定。',
-
-      contentLoading: '正在載入完整回答…',
-      contentInvalid: '內容驗證失敗，請重試載入原始內容。',
-      downloadAttachment: '下載附件',
-      uploading: '正在上傳…',
-      fileReadFailed: '無法讀取檔案',
-
-      mcpDeferred: '新工具將在你重新整理此專家設定或開啟新對話後使用，本輪保留目前工具。',
-      generation: '設定版本',
-      runtimeChanged: '對話執行已變更，請重新整理後再操作',
-      childUnavailable: '子代理已不可用',
-      clarifyExpired: '澄清請求已過期',
-
-      title: '對話',
-      create: '建立對話',
-      loading: '正在載入對話…',
-      unavailable: '此後端暫不支援此類對話。',
-      refresh: '重新整理',
-      history: '對話記錄',
-      mention: '透過 @ 選擇回覆者',
-      textOnly: '讀取指令僅顯示私人提示。支援的技能和技能包由所選專家執行；其他斜線指令將被拒絕。',
-      modelUnavailable: '模型資訊暫不可用',
-      subagent: '子代理',
-      stopAll: '停止並包括子代理',
-      reconcile: '核實傳送結果',
-      allowOnce: '允許一次',
-      deny: '拒絕',
-      answer: '回答',
-      requestUnsupported: '此處暫不支援此請求所需的回答類型。'
-    },
-    expertSelector: {
-      choose: '選擇回覆者',
-      clear: '取消專家選擇',
-      nextReply: '下一次由誰回覆',
-      unavailable: '所選專家暫不可用'
-    },
     message: '訊息',
     automaticModel: '自動',
     wakingProfile: profile => `正在喚醒 ${profile}…`,

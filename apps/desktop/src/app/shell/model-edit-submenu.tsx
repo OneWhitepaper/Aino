@@ -71,8 +71,6 @@ interface ModelEditSubmenuProps {
   /** This row's effective reasoning effort (live for the active model, else its
    *  preset) — the submenu shows and edits from this, never the raw session. */
   effort: string
-  /** Frozen managed snapshots may have no confirmed effective value. */
-  effortKnown?: boolean
   /** How fast mode is offered for this model (param toggle vs. variant swap). */
   fastControl: FastControl
   /** Whether this row's model is the active one. */
@@ -111,7 +109,6 @@ export function ModelOptionsContent({
   canDisableReasoning,
   defaultEffort,
   effort,
-  effortKnown = true,
   fastControl,
   isActive,
   onSelectModel,
@@ -121,9 +118,9 @@ export function ModelOptionsContent({
   const { t } = useI18n()
   const copy = t.shell.modelOptions
 
-  const effortValue = effortKnown ? resolveReasoningEffort(effort, defaultEffort) : ''
+  const effortValue = resolveReasoningEffort(effort, defaultEffort)
   const thinkingOn = isThinkingEnabled(effort, defaultEffort)
-  const showThinkingToggle = reasoning && effortKnown && canDisableReasoning !== false
+  const showThinkingToggle = reasoning && canDisableReasoning !== false
 
   const setFast = (enabled: boolean) => {
     if (fastControl.kind === 'variant') {

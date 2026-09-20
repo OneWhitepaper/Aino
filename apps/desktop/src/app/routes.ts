@@ -6,7 +6,6 @@ import { registry } from '@/contrib/registry'
 
 type NavigateLike = (to: string, options?: { replace?: boolean }) => void
 
-export const CONVERSATION_ROUTE_PREFIX = '/conversations/'
 export const SESSION_ROUTE_PREFIX = '/'
 export const NEW_CHAT_ROUTE = '/'
 export const SETTINGS_ROUTE = '/settings'
@@ -18,7 +17,6 @@ export const WEBHOOKS_ROUTE = '/webhooks'
 export const ARTIFACTS_ROUTE = '/artifacts'
 export const CRON_ROUTE = '/cron'
 export const PROFILES_ROUTE = '/profiles'
-export const AGENT_HUB_CONFIGURATION_ROUTE = '/agent-hub/configuration'
 export const AGENTS_ROUTE = '/agents'
 export const STARMAP_ROUTE = '/starmap'
 
@@ -27,7 +25,6 @@ export type AppView =
   | 'agents'
   | 'artifacts'
   | 'chat'
-  | 'conversation'
   | 'command-center'
   | 'cron'
   // A contributed (plugin) full page at its own route — NOT chat. Without this
@@ -77,11 +74,7 @@ export const APP_ROUTES = [
   { id: 'starmap', path: STARMAP_ROUTE, view: 'starmap' }
 ] as const satisfies readonly AppRoute[]
 
-const APP_VIEW_BY_PATH = new Map<string, AppView>([
-  ...APP_ROUTES.map(route => [route.path, route.view] as [string, AppView]),
-  [AGENT_HUB_CONFIGURATION_ROUTE, 'profiles']
-])
-
+const APP_VIEW_BY_PATH = new Map<string, AppView>(APP_ROUTES.map(route => [route.path, route.view]))
 const RESERVED_PATHS: ReadonlySet<string> = new Set(APP_ROUTES.map(route => route.path))
 
 // ── Contributed routes — the `routes` registry area ─────────────────────────
@@ -205,49 +198,11 @@ export function routeSessionId(pathname: string): string | null {
  * passes through unchanged.
  */
 export function primaryRouteSelectedSessionId(pathname: string, storeSelectedSessionId: string | null): string | null {
-  if (isNewChatRoute(pathname) || routePathname(pathname).startsWith(CONVERSATION_ROUTE_PREFIX)) {
+  if (isNewChatRoute(pathname)) {
     return null
   }
 
   return routeSessionId(pathname) ?? storeSelectedSessionId
-}
-
-export function routeConversationId(pathname: string): string | null {
-  const path = routePathname(pathname)
-
-  if (!path.startsWith(CONVERSATION_ROUTE_PREFIX)) {
-    return null
-  }
-
-  const id = path.slice(CONVERSATION_ROUTE_PREFIX.length)
-
-  if (!id || id.includes('/')) {
-    return null
-  }
-
-  try {
-    return decodeURIComponent(id)
-  } catch {
-    return null
-  }
-}
-
-export function conversationRoute(
-  conversationId: string,
-  owner?: { connectionId: string; installId?: string }
-): string {
-  const path = `${CONVERSATION_ROUTE_PREFIX}${encodeURIComponent(conversationId)}`
-
-  if (!owner) {
-    return path
-  }
-  const query = new URLSearchParams({ connection: owner.connectionId })
-
-  if (owner.installId) {
-    query.set('installation', owner.installId)
-  }
-
-  return `${path}?${query}`
 }
 
 export function sessionRoute(sessionId: string): string {
@@ -256,10 +211,6 @@ export function sessionRoute(sessionId: string): string {
 
 export function appViewForPath(pathname: string): AppView {
   const path = routePathname(pathname)
-
-  if (routeConversationId(path)) {
-    return 'conversation'
-  }
 
   if (isNewChatRoute(path) || routeSessionId(path)) {
     return 'chat'

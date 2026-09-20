@@ -243,15 +243,6 @@ def admit_durable_turn_lease(
     admission = TurnLeaseAdmission(conversation_history=conversation_history)
     if db is None or not session_id:
         return admission
-    from hermes_state_migration import SessionMigratedError
-    if callable(getattr(type(db), 'assert_session_not_migrated', None)):
-        try:
-            db.assert_session_not_migrated(session_id)
-        except SessionMigratedError as exc:
-            admission.early_result = {'messages': list(conversation_history or []), 'api_calls': 0,
-                'completed': False, 'failed': True, 'error': 'session_migrated',
-                'conversation_id': exc.conversation_id, 'final_response': str(exc)}
-            return admission
     # A fresh session id has no durable transcript to race over, and callers may supply an
     # in-memory seed before the row exists — reloading would erase it. Check the concrete type:
     # MagicMock-style shims accept any attribute without the protocol.

@@ -1,8 +1,6 @@
 """Durable transcript persistence for ``AIAgent`` (mixin; MRO-resolved from ``run_agent``): SQLite flush
 with intrinsic ``_DB_PERSISTED_MARKER`` dedup, ephemeral-scaffolding filtering, explicit
 trajectory export."""
-
-from agent.conversation_maintenance import managed_agent_call
 import hashlib
 
 import logging
@@ -211,28 +209,17 @@ def _db_flush_collect(agent, messages: List[Dict], conversation_history: Optiona
     return batch_rows, batch_msgs
 
 
-@managed_agent_call
 def _db_flush_write(agent, batch_rows: List[Dict[str, Any]], batch_msgs: List[Dict]) -> None:
     """One transaction for the turn's new rows: on failure nothing lands and no markers are stamped."""
     if not batch_rows:
         return
-    from agent.conversation_input import current_conversation_input
-    admission = current_conversation_input(agent)
-    managed_kwargs = {}
-    if admission is not None and admission.receipt is None:
-        indices = [index for index, message in enumerate(batch_msgs) if message is admission.message]
-        if len(indices) != 1:
-            raise RuntimeError("managed input missing from authoritative flush")
-        managed_kwargs = {"conversation_input": admission.identity, "input_message_index": indices[0]}
-    result = agent._session_db.append_messages_batch(
-        session_id=agent.session_id, messages=batch_rows, **managed_kwargs,
+    agent._session_db.append_messages_batch(
+        session_id=agent.session_id, messages=batch_rows,
         compression_lock_holder=getattr(agent, "_active_compression_lock_holder", None),
         turn_lease_holder=getattr(agent, "_active_session_turn_lease_holder", None),
         turn_lease_ttl_seconds=getattr(agent, "_active_session_turn_lease_ttl_seconds", 300.0) or 300.0,
     )
     sync_flushed_message_markers(batch_msgs, batch_rows)
-    if managed_kwargs:
-        admission.receipt = result
 
 
 def _db_flush_adopt_compression_tip(agent) -> bool:
@@ -305,7 +292,6 @@ class SessionPersistenceMixin:
         if platform_id is not None:  # load-bearing for restart drain-window recovery dedup (has_platform_message_id)
             msg["platform_message_id"] = platform_id
 
-    @managed_agent_call
     def _persist_session(self, messages: List[Dict], conversation_history: List[Dict] = None):
         """Save to SQLite on any exit path. Trailing empty-response scaffolding is dropped from
         the live list; the persist override is applied to the DB row only.
@@ -318,10 +304,7 @@ class SessionPersistenceMixin:
         with _persist_lock(self):
             self._drop_trailing_empty_response_scaffolding(messages)
             self._session_messages = messages
-            flushed = self._flush_messages_to_session_db(messages, conversation_history)
-            from agent.conversation_input import current_conversation_input
-            if current_conversation_input(self) is not None and flushed is not True:
-                raise RuntimeError("managed conversation input persistence failed")
+            self._flush_messages_to_session_db(messages, conversation_history)
             # Drain async token-accounting deltas at every persist point; cheap no-op when nothing queued.
             if self._session_db is not None:
                 self._session_db.flush_token_counts()
@@ -351,7 +334,6 @@ class SessionPersistenceMixin:
 
     _repair_message_sequence = _forward("agent.agent_runtime_helpers", "repair_message_sequence")
 
-    @managed_agent_call
     def _flush_messages_to_session_db(self, messages: List[Dict], conversation_history: Optional[List[Dict]] = None):
         """Serialize direct and turn-boundary session flushes per agent."""
         with _persist_lock(self):
@@ -391,9 +373,6 @@ class SessionPersistenceMixin:
         except Exception as e:
             if _db_flush_failed(self, e, batch_rows, _adoption_budget):
                 return self._flush_messages_to_session_db_unlocked(messages, conversation_history, _adoption_budget=0)
-            from agent.conversation_input import current_conversation_input
-            if current_conversation_input(self) is not None:
-                raise
             return False
 
     def _get_messages_up_to_last_assistant(self, messages: List[Dict]) -> List[Dict]:

@@ -7,7 +7,6 @@ import { type FC, useEffect, useRef } from 'react'
 
 import type { SessionInfo } from '@/hermes'
 import { useI18n } from '@/i18n'
-import { sidebarSessionIdentity } from '@/lib/session-branch-tree'
 import { type SidebarListRow } from '@/lib/session-date-groups'
 import { sessionBucketLabel } from '@/lib/time'
 import { cn } from '@/lib/utils'
@@ -26,7 +25,6 @@ interface SessionRowCommonProps {
   unread: boolean
   onArchive: () => void
   onBranch?: () => void
-  onAdopt?: () => void
   onDelete: () => void
   onPin: () => void
   onToggleUnread: () => void
@@ -50,7 +48,6 @@ export interface VirtualSessionListProps {
   }
   rows: SidebarListRow[]
   onArchiveSession: (sessionId: string) => void
-  onAdoptSession?: (session: SessionInfo) => void
   onBranchSession?: (sessionId: string, profile?: string) => void
   onDeleteSession: (sessionId: string) => void
   onResumeSession: (sessionId: string, session?: SessionInfo) => void
@@ -77,7 +74,6 @@ export const VirtualSessionList: FC<VirtualSessionListProps> = ({
   rows: listRows,
   onArchiveSession,
   onBranchSession,
-  onAdoptSession,
   onDeleteSession,
   onResumeSession,
   onTogglePin,
@@ -105,7 +101,7 @@ export const VirtualSessionList: FC<VirtualSessionListProps> = ({
     getItemKey: index => {
       const row = listRows[index]
 
-      return row ? (row.kind === 'divider' ? row.key : sidebarSessionIdentity(row.entry.session)) : index
+      return row ? (row.kind === 'divider' ? row.key : row.entry.session.id) : index
     },
     getScrollElement: () => scrollerRef.current,
     // jsdom-friendly default; the real rect takes over on first observe.
@@ -168,7 +164,6 @@ export const VirtualSessionList: FC<VirtualSessionListProps> = ({
       isPinned: pinned,
       isSelected: session.id === activeSessionId,
       onArchive: () => onArchiveSession(session.id),
-      onAdopt: onAdoptSession && session.connection_id ? () => onAdoptSession(session) : undefined,
       onBranch: onBranchSession ? () => onBranchSession(session.id, session.profile) : undefined,
       onDelete: () => onDeleteSession(session.id),
       onPin: () => onTogglePin(sessionPinId(session)),
@@ -181,7 +176,7 @@ export const VirtualSessionList: FC<VirtualSessionListProps> = ({
 
     // Key by (profile, id): twins with the same stored id in two profiles are
     // distinct rows (#92454) — a bare-id key misattributes rendered state.
-    const rowKey = sidebarSessionIdentity(session)
+    const rowKey = `${session.profile ?? ''}::${session.id}`
 
     return reorderable ? (
       <div data-index={virtualItem.index} key={rowKey} ref={virtualizer.measureElement} style={itemStyle}>

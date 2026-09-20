@@ -43,7 +43,6 @@ class PromptSubmitParams(SessionParams):
     rebind_survivor_row_ids: list[int] | None = None
     # In-process only: injected by the hosted-room / bot-relay handlers, never accepted from a
     # client (a client dict for ``_turn_author`` answers 4124). Excluded from the rendered wire.
-    conversation_proof: JsonValue | None = Field(default=None, exclude=True, alias="_conversation_proof")
     hosted_task: JsonValue | None = Field(default=None, exclude=True, alias="_hosted_task")
     turn_author: JsonValue | None = Field(default=None, exclude=True, alias="_turn_author")
     hosted_terminal_callback: JsonValue | None = Field(

@@ -1,5 +1,3 @@
-import { useStore } from '@nanostores/react'
-import { type ComponentProps, lazy, memo, type ReactNode, Suspense, useMemo } from 'react'
 /**
  * Wiring surfaces — each pane is its own memoized component. Every surface
  * reads the reactive state it renders from at the leaf (its own atom
@@ -8,6 +6,9 @@ import { type ComponentProps, lazy, memo, type ReactNode, Suspense, useMemo } fr
  * wiring-controller tick) never re-renders another. This is what keeps the
  * layout tree's zones independently rendered — the whole point of the shell.
  */
+
+import { useStore } from '@nanostores/react'
+import { type ComponentProps, lazy, memo, type ReactNode, Suspense, useMemo } from 'react'
 import { Navigate, Route, Routes, useParams } from 'react-router'
 
 import { ContribBoundary, ContribRender } from '@/contrib/react/boundary'
@@ -17,9 +18,7 @@ import { $activeGatewayProfile } from '@/store/profile'
 import { $gatewayState } from '@/store/session'
 
 import { ChatView } from '../chat'
-import { OrdinaryHome } from '../chat/ordinary-home'
 import { ChatSidebar } from '../chat/sidebar'
-import { ProfileConfigurationRedirect } from '../profiles/agent-hub-configuration'
 import { TerminalPaneChrome } from '../right-sidebar/terminal/chrome'
 import { contributedRoutes, NEW_CHAT_ROUTE, ROUTES_AREA, sessionRoute } from '../routes'
 import { ModelMenuPanel } from '../shell/model-menu-panel'
@@ -32,17 +31,10 @@ import type { SidebarActions, WiringActions } from './types'
 // Same lazy-view split as DesktopController — pages load on demand. The
 // full-page views the workspace route table mounts live here; modal overlays
 // (agents/command-center/…) are the controller's and stay in wiring.tsx.
-const ConversationRoute = lazy(async () => ({
-  default: (await import('../chat/conversation-route')).ConversationRoute
-}))
-
 const ArtifactsView = lazy(async () => ({ default: (await import('../artifacts')).ArtifactsView }))
 const MessagingView = lazy(async () => ({ default: (await import('../messaging')).MessagingView }))
 const SkillsView = lazy(async () => ({ default: (await import('../skills')).SkillsView }))
-
-const AgentHubConfiguration = lazy(async () => ({
-  default: (await import('../profiles/agent-hub-configuration')).AgentHubConfiguration
-}))
+const ProfilesView = lazy(async () => ({ default: (await import('../profiles')).ProfilesView }))
 
 export function LegacySessionRedirect() {
   const { sessionId } = useParams()
@@ -144,8 +136,7 @@ export const ChatRoutesSurface = memo(function ChatRoutesSurface({
 
   return (
     <Routes>
-      <Route element={<OrdinaryHome legacy={chatView} />} index />
-      <Route element={page(<ConversationRoute />)} path="conversations/:conversationId" />
+      <Route element={chatView} index />
       <Route element={chatView} path=":sessionId" />
       <Route element={page(<SkillsView setStatusbarItemGroup={setStatusbarItemGroup} />)} path="skills" />
       <Route element={page(<MessagingView setStatusbarItemGroup={setStatusbarItemGroup} />)} path="messaging" />
@@ -153,8 +144,7 @@ export const ChatRoutesSurface = memo(function ChatRoutesSurface({
       <Route element={null} path="agents" />
       <Route element={null} path="command-center" />
       <Route element={null} path="cron" />
-      <Route element={<ProfileConfigurationRedirect />} path="profiles" />
-      <Route element={page(<AgentHubConfiguration />)} path="agent-hub/configuration" />
+      <Route element={page(<ProfilesView />)} path="profiles" />
       <Route element={null} path="settings" />
       <Route element={null} path="starmap" />
       <Route element={null} path="webhooks" />

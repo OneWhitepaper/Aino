@@ -2,10 +2,6 @@
 flags (end/reopen/archive/pin/hide/read), model_config patching, listing and
 counting, delete cascades, and the auto-archive sweep."""
 
-from agent.conversation_maintenance import managed_session_call
-
-from hermes_state_conversation_retention import protected_session_ids
-
 import json
 import logging
 import re
@@ -368,19 +364,16 @@ class SessionSessionsMixin:
         # Transcript-critical: a failed row creation aborts the turn.
         self._execute_write(_do, patience_s=self._TRANSCRIPT_WRITE_PATIENCE_S)
 
-    @managed_session_call
     def create_session(self, session_id: str, source: str, **kwargs) -> str:
         """Create (upsert) a session record. Returns the session_id."""
         self._insert_session_row(session_id, source, **kwargs)
         return session_id
 
-    @managed_session_call
     def ensure_session(self, session_id: str, source: str = "unknown", model: str = None, **kwargs) -> str:
         """Ensure a session row exists (upsert). Accepts optional kwargs."""
         self._insert_session_row(session_id, source, model=model, **kwargs)
         return session_id
 
-    @managed_session_call
     def set_expiry_finalized(self, session_id: str, finalized: bool = True) -> None:
         """Mirror ``SessionEntry.expiry_finalized`` so it survives a lost sessions.json.
 
@@ -437,7 +430,6 @@ class SessionSessionsMixin:
         "  AND COALESCE({alias}source, '') != 'tool'\n"
     )
 
-    @managed_session_call
     def end_session(self, session_id: str, end_reason: str) -> None:
         """Mark a session ended; the first end_reason wins (a compression split must keep
         ``'compression'`` even if a stale end_session() lands later); reopen_session() to re-end."""
@@ -454,7 +446,6 @@ class SessionSessionsMixin:
             self._bump_conversation_generation(conn, session_id, reason)
         return changed
 
-    @managed_session_call
     def reopen_session(self, session_id: str) -> None:
         """Clear ended_at/end_reason so a session can be resumed; first stamp markerless legacy reset
         children that depend on the parent's mutable end_reason (WHERE shared with the listing predicate
@@ -472,7 +463,6 @@ class SessionSessionsMixin:
             )
         self._execute_write(_do)
 
-    @managed_session_call
     def promote_to_session_reset(self, session_id: str, reason: str = "session_reset") -> bool:
         """Durably mark an intentional reset boundary on live rows or rows with a *recoverable* accidental
         end_reason (explicit boundaries are preserved): an ``agent_close`` row left recoverable would be
@@ -496,7 +486,6 @@ class SessionSessionsMixin:
         except Exception:
             return False
 
-    @managed_session_call
     def update_session_cwd(
         self, session_id: str, cwd: str, git_branch: Optional[str] = None,
         git_repo_root: Optional[str] = None, replace_git_meta: bool = False,
@@ -530,7 +519,6 @@ class SessionSessionsMixin:
             return None if row is None else int(row[0])
         return self._execute_write(_do)
 
-    @managed_session_call
     def publish_session_git_metadata(
         self, session_id: str, cwd: str, generation: int, git_branch: Optional[str] = None,
         git_repo_root: Optional[str] = None,
@@ -561,7 +549,6 @@ class SessionSessionsMixin:
                 pairs, many=True,
             )
 
-    @managed_session_call
     def touch_session_activity(
         self, session_id: str, ts: Optional[float] = None, *, description: Optional[str] = None,
         provenance: Optional[ActivityProvenance] = None,
@@ -590,7 +577,6 @@ class SessionSessionsMixin:
     # Observation-only write: never let it ride the full routine write-patience budget (#76354 review S1).
     # Under contention a heartbeat that waits ~20s would delay the response-critical path it is merely
     # observing; give up after a sub-second budget instead (the next due window retries naturally).
-    @managed_session_call
     def clear_session_activity_labels(self, session_id: str) -> None:
         """Clear activity labels after a turn (``last_activity_at`` is kept so idle / watchdog clocks stay
         continuous). A no-op clear skips the write transaction.
@@ -618,7 +604,6 @@ class SessionSessionsMixin:
             ("", ActivityProvenance.UNKNOWN.value, session_id), patience_s=self._ACTIVITY_WRITE_PATIENCE_S,
         )
 
-    @managed_session_call
     def update_session_meta(
         self, session_id: str, model_config_json: str, model: Optional[str] = None,
     ) -> None:
@@ -629,7 +614,6 @@ class SessionSessionsMixin:
             (model_config_json, model, session_id),
         )
 
-    @managed_session_call
     def update_system_prompt(self, session_id: str, system_prompt: Optional[str]) -> None:
         """Store the full assembled system prompt snapshot."""
         def _do(conn):
@@ -640,14 +624,12 @@ class SessionSessionsMixin:
             self._delete_unreferenced_system_prompts(conn)
         self._execute_write(_do)
 
-    @managed_session_call
     def update_session_tool_names(self, session_id: str, tool_names: Optional[List[str]]) -> None:
         """Persist the resolved ``tools[]`` name order so a rebuilt AIAgent can't fork the cached tool
         prefix on a flipped check_fn verdict; ``None`` clears."""
         payload = json.dumps(list(tool_names)) if tool_names is not None else None
         self._write_sql("UPDATE sessions SET tool_names = ? WHERE id = ?", (payload, session_id))
 
-    @managed_session_call
     def update_session_model(self, session_id: str, model: str, provider: Optional[str] = None) -> None:
         """Set the model after a mid-session /model switch (unconditionally), null system_prompt so
         stale Model:/Provider: footers rebuild, and drop any Browser runtime lock (lineage markers
@@ -707,7 +689,6 @@ class SessionSessionsMixin:
                 config[key] = value
         return json.dumps(config) if config else None
 
-    @managed_session_call
     def patch_session_model_config(self, session_id: str, patch: Dict[str, Any]) -> None:
         """Merge ``patch`` into model_config atomically (``None`` removes a key);
         no-op when the row or patch is empty."""
@@ -715,13 +696,11 @@ class SessionSessionsMixin:
             return
         self._write_model_config_patch(session_id, patch)
 
-    @managed_session_call
     def get_session_model_config_value(self, session_id: str, key: str, default: Any = None) -> Any:
         """Read one key out of a session's model_config JSON (tolerant parse)."""
         session = self.get_session(session_id) or {}
         return _parse_model_config(session.get("model_config")).get(key, default)
 
-    @managed_session_call
     def update_session_runtime_lock(
         self, session_id: str, *, model: Optional[str] = None, provider: Optional[str] = None,
         model_options: Optional[Dict[str, Any]] = None, route_source: Optional[str] = None,
@@ -744,7 +723,6 @@ class SessionSessionsMixin:
             lambda merged: (merged, model, session_id),
         )
 
-    @managed_session_call
     def set_session_yolo(self, session_id: str, enabled: bool) -> None:
         """Persist the per-session YOLO flag so ``/yolo`` survives ``--resume``; no-op without a row."""
         if not session_id:
@@ -766,7 +744,6 @@ class SessionSessionsMixin:
         )
         return self._session_row_dict(row) if row else None
 
-    @managed_session_call
     def get_recent_session_model_route(self, session_id: str) -> Optional[Dict[str, Any]]:
         """Most recently used main-loop model route as one coherent per-call tuple
         (``session_model_usage`` keeps model+provider together; ``sessions`` mixes route changes).
@@ -819,57 +796,42 @@ class SessionSessionsMixin:
             (stamp,),
         ) or 0)
 
-    def _set_lineage_column(self, column: str, session_id: str, value: Any, *, exclude_managed: bool = False) -> bool:
+    def _set_lineage_column(self, column: str, session_id: str, value: Any) -> bool:
         """Set one ``sessions`` column across a whole compression lineage: Desktop projects roots
         forward to their tip, so updating only the tip would let the root resurrect it on refresh."""
-        def write(conn):
-            if (column == "hidden" and not value) or (column == "pinned" and value):
-                row = conn.execute("SELECT model_config FROM sessions WHERE id=?", (session_id,)).fetchone()
-                if row:
-                    try:
-                        config = json.loads(row["model_config"] or "{}")
-                    except (TypeError, ValueError):
-                        config = {}
-                    if isinstance(config, dict) and isinstance(config.get("conversation_binding"), dict):
-                        raise ValueError("conversation participant sessions remain private; use the conversation view")
-            if exclude_managed and session_id in protected_session_ids(conn):
-                return False
-            conn.execute(
-                f"""
-                WITH RECURSIVE
-                  ancestors(id) AS (
-                    SELECT ?
-                    UNION
-                    SELECT parent.id
-                    FROM ancestors a
-                    JOIN sessions child ON child.id = a.id
-                    JOIN sessions parent ON parent.id = child.parent_session_id
-                    WHERE parent.end_reason = 'compression'
-                  ),
-                  descendants(id) AS (
-                    SELECT ?
-                    UNION
-                    SELECT child.id
-                    FROM descendants d
-                    JOIN sessions parent ON parent.id = d.id
-                    JOIN sessions child ON child.parent_session_id = parent.id
-                    WHERE parent.end_reason = 'compression'
-                  ),
-                  lineage(id) AS (
-                    SELECT id FROM ancestors
-                    UNION
-                    SELECT id FROM descendants
-                  )
-                UPDATE sessions
-                SET {column} = ?
-                WHERE id IN (SELECT id FROM lineage)
-                """,
-                (session_id, session_id, value),
-            )
-            return conn.execute("SELECT changes()").fetchone()[0] > 0
-        return self._execute_write(write)
+        return self._write_rowcount(
+            f"""
+            WITH RECURSIVE
+              ancestors(id) AS (
+                SELECT ?
+                UNION
+                SELECT parent.id
+                FROM ancestors a
+                JOIN sessions child ON child.id = a.id
+                JOIN sessions parent ON parent.id = child.parent_session_id
+                WHERE parent.end_reason = 'compression'
+              ),
+              descendants(id) AS (
+                SELECT ?
+                UNION
+                SELECT child.id
+                FROM descendants d
+                JOIN sessions parent ON parent.id = d.id
+                JOIN sessions child ON child.parent_session_id = parent.id
+                WHERE parent.end_reason = 'compression'
+              ),
+              lineage(id) AS (
+                SELECT id FROM ancestors
+                UNION
+                SELECT id FROM descendants
+              )
+            UPDATE sessions
+            SET {column} = ?
+            WHERE id IN (SELECT id FROM lineage)
+            """,
+            (session_id, session_id, value),
+        ) > 0
 
-    @managed_session_call
     def set_session_archived(self, session_id: str, archived: bool) -> bool:
         """Soft-hide (or unhide) a session and its compression lineage; messages are kept."""
         return self._set_lineage_column("archived", session_id, int(archived))
@@ -878,7 +840,6 @@ class SessionSessionsMixin:
     # the recovery/promotion SQL so literals cannot drift).
     RECOVERABLE_END_REASONS = _RECOVERABLE_END_REASONS
 
-    @managed_session_call
     def unarchive_recoverable_session(self, session_id: str) -> bool:
         """Un-archive a session archived by a recoverable accident (ws_orphan_reap, agent_close);
         deliberate archives are left alone. True when un-archived.
@@ -918,7 +879,6 @@ class SessionSessionsMixin:
         )
         return True
 
-    @managed_session_call
     def set_session_pinned(self, session_id: str, pinned: bool) -> bool:
         """Pin/unpin a session and its compression lineage (pins are exempt from the auto_archive sweep).
         Pinning also clears ``hidden``: a pin means "keep this visible", and a hidden+pinned row is
@@ -936,12 +896,10 @@ class SessionSessionsMixin:
                 self._set_lineage_column("hidden", session_id, 0)
         return result
 
-    @managed_session_call
     def set_session_hidden(self, session_id: str, hidden: bool) -> bool:
         """Hide/unhide a session and its compression lineage from the default listing; still resumable."""
         return self._set_lineage_column("hidden", session_id, int(hidden))
 
-    @managed_session_call
     def set_session_read(self, session_id: str, read: bool = True) -> bool:
         """Mark read/unread across the compression lineage. ``last_read_at`` is a watermark: unread when
         activity postdates it (no write on the message path). NULL = never tracked = read; 0 = unread."""
@@ -1360,7 +1318,6 @@ class SessionSessionsMixin:
             )
         return statuses
 
-    @managed_session_call
     def assert_export_safe(self, session_id: str, max_messages: Optional[int] = None) -> int:
         """Active row count of this segment, or raise SessionExportTooLargeError (the LIMITed subquery
         stops once the bound is exceeded). ``None`` resolves ``sessions.max_export_messages``; 0 disables
@@ -1495,7 +1452,6 @@ class SessionSessionsMixin:
             except OSError:
                 pass
 
-    @managed_session_call
     def get_session_delete_targets(self, session_id: str) -> List[str]:
         """Rows :meth:`delete_session` would remove: the session, then its recursive delegate children
         (branch/compression children are orphaned, not deleted)."""
@@ -1518,8 +1474,6 @@ class SessionSessionsMixin:
         removed_ids: List[str] = []
         expected_ids = set(expected_delete_ids) if expected_delete_ids is not None else None
         def _do(conn):
-            if session_id in protected_session_ids(conn):
-                return False
             if conn.execute("SELECT 1 FROM sessions WHERE id = ? LIMIT 1", (session_id,)).fetchone() is None:
                 return False
             if expected_ids is not None and expected_ids != {
@@ -1540,13 +1494,10 @@ class SessionSessionsMixin:
             self._remove_session_files(sessions_dir, sid)
         return bool(deleted)
 
-    @managed_session_call
     def delete_session_if_empty(self, session_id: str, sessions_dir: Optional[Path] = None) -> bool:
         """Delete *session_id* only if it has no messages, no title and no children; check and delete
         share one transaction so a concurrent flush can't be lost."""
         def _do(conn):
-            if session_id in protected_session_ids(conn, allow_empty_draft=session_id, db_path=self.db_path):
-                return False
             cursor = conn.execute(
                 """
                 DELETE FROM sessions
@@ -1581,8 +1532,6 @@ class SessionSessionsMixin:
             existing = [row["id"] for chunk in _id_chunks(unique_ids) for row in conn.execute(
                 f"SELECT id FROM sessions WHERE id IN ({_session_ids_placeholders(chunk)})", chunk,
             ).fetchall()]
-            protected = protected_session_ids(conn)
-            existing = [sid for sid in existing if sid not in protected]
             if not existing:
                 return 0
             removed_ids.extend(_delete_delegate_children(conn, existing))
@@ -1612,10 +1561,7 @@ class SessionSessionsMixin:
 
     def count_empty_sessions(self) -> int:
         """Count of empty, ended, non-archived sessions; ended_at guards a fresh session's first message."""
-        with self._read_ctx() as conn:
-            protected = protected_session_ids(conn)
-            return sum(row[0] not in protected for row in conn.execute(
-                f"SELECT id FROM sessions WHERE {self._EMPTY_SESSION_WHERE}"))
+        return self._read_one(f"SELECT COUNT(*) FROM sessions WHERE {self._EMPTY_SESSION_WHERE}")[0]
 
     def delete_empty_sessions(self, sessions_dir: Optional[Path] = None) -> int:
         """Delete every empty, ended, non-archived session in one transaction, orphaning (not cascading)
@@ -1625,7 +1571,6 @@ class SessionSessionsMixin:
             session_ids = {row["id"] for row in conn.execute(
                 f"SELECT id FROM sessions WHERE {self._EMPTY_SESSION_WHERE}"
             ).fetchall()}
-            session_ids -= protected_session_ids(conn)
             if not session_ids:
                 return 0
             for chunk in _id_chunks(session_ids):

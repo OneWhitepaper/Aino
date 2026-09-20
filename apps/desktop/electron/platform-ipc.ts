@@ -10,12 +10,7 @@ import type { PlatformAuth } from './platform-auth'
 import { PlatformClientError } from './platform-client'
 import { parsePlatformDeviceId } from './platform-device-contract'
 import { openPlatformCheckout } from './platform-payment'
-import {
-  parsePaymentQuoteInput,
-  parsePlatformCreateOrderInput,
-  parsePlatformOrderId,
-  parsePlatformOrderQuery
-} from './platform-payment-contract'
+import { parsePaymentQuoteInput, parsePlatformCreateOrderInput, parsePlatformOrderId, parsePlatformOrderQuery } from './platform-payment-contract'
 import type { PlatformRuntimeBindingController } from './platform-runtime-binding'
 import { parsePlatformUsageQuery } from './platform-usage-contract'
 
@@ -238,12 +233,10 @@ export function registerPlatformIpc({
 
       return auth.submitStepUp({
         totp_code: field(value, 'totp_code', 64),
-        ...(value.expected_user_id !== undefined || value.expected_generation !== undefined
-          ? {
-              expected_user_id: field(value, 'expected_user_id', 128),
-              expected_generation: value.expected_generation as number
-            }
-          : {})
+        ...(value.expected_user_id !== undefined || value.expected_generation !== undefined ? {
+          expected_user_id: field(value, 'expected_user_id', 128),
+          expected_generation: value.expected_generation as number
+        } : {})
       })
     },
     'bind-phone': (event, input) => {
@@ -274,22 +267,17 @@ export function registerPlatformIpc({
   }
 
   const deviceMethods = {
-    list: (source: Record<string, unknown>) =>
-      auth.listDevices({
-        expected_user_id: field(source, 'expected_user_id', 128),
-        expected_generation: source.expected_generation as number
-      }),
+    list: (source: Record<string, unknown>) => auth.listDevices({
+      expected_user_id: field(source, 'expected_user_id', 128), expected_generation: source.expected_generation as number
+    }),
     revoke: async (source: Record<string, unknown>) => {
       const id = parsePlatformDeviceId(source.device_id)
 
       const result = await auth.revokeDevice(id, {
-        expected_user_id: field(source, 'expected_user_id', 128),
-        expected_generation: source.expected_generation as number
+        expected_user_id: field(source, 'expected_user_id', 128), expected_generation: source.expected_generation as number
       })
 
-      if (currentDeviceId?.().toLowerCase() === id) {
-        bindingController?.invalidateConnections()
-      }
+      if (currentDeviceId?.().toLowerCase() === id) { bindingController?.invalidateConnections() }
 
       return result
     }
@@ -320,16 +308,9 @@ export function registerPlatformIpc({
     'list-orders': (source, owner) => auth.listOrders(parsePlatformOrderQuery(source), owner),
     'cancel-order': (source, owner) => auth.cancelOrder(parsePlatformOrderId(field(source, 'order_id', 19)), owner),
     'open-checkout': (source, owner) => {
-      if (!openPaymentBrowser) {
-        throw new PlatformClientError('checkout_unavailable')
-      }
+      if (!openPaymentBrowser) { throw new PlatformClientError('checkout_unavailable') }
 
-      return openPlatformCheckout({
-        auth,
-        orderId: parsePlatformOrderId(field(source, 'order_id', 19)),
-        owner,
-        openBrowser: openPaymentBrowser
-      })
+      return openPlatformCheckout({ auth, orderId: parsePlatformOrderId(field(source, 'order_id', 19)), owner, openBrowser: openPaymentBrowser })
     }
   }
 
@@ -363,10 +344,7 @@ export function registerPlatformIpc({
       authorize(event)
       const source = record(input)
 
-      return {
-        ok: true,
-        value: await auth.listUsage(parsePlatformUsageQuery(source), field(source, 'expected_user_id', 128))
-      }
+      return { ok: true, value: await auth.listUsage(parsePlatformUsageQuery(source), field(source, 'expected_user_id', 128)) }
     } catch (error) {
       return { ok: false, error: safeIpcError(error) }
     }
@@ -390,7 +368,6 @@ export function registerPlatformIpc({
         const bindInput = {
           connection_id: boundedString(value, 'connection_id', 256),
           profile: boundedString(value, 'profile', 256),
-          ...(value.session_profile === undefined ? {} : { session_profile: field(value, 'session_profile', 256) }),
           session_id: field(value, 'session_id', 256),
           model_id: field(value, 'model_id', 256),
           session_ticket: field(value, 'session_ticket', 256),

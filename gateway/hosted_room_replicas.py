@@ -17,8 +17,7 @@ from typing import Any, Iterator
 
 from gateway.hosted_rooms import (
     MAX_ACTOR_ID_CHARS, HostedRoomError, RoomConflictError, _actor_json, _connect, _payload_json, _room_id,
-    _CONVERSATION_EVENT_KINDS, _transaction, _validate_identifier, _validate_members, _validate_room_name,
-    local_authority_gateway_id)
+    _transaction, _validate_identifier, _validate_members, _validate_room_name, local_authority_gateway_id)
 from gateway.hosted_rooms_common import DbPath, bounded_int, clock, utf8_len
 
 MAX_REPLICA_ROOMS = 256
@@ -88,9 +87,6 @@ def _event_bytes(event: dict[str, Any]) -> int:
 def _validate_page(page: Any) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     if not isinstance(page, dict):
         raise ReplicaError("page must be an object")
-    purpose = page.get("purpose", "discussion")
-    if purpose != "discussion":
-        raise ReplicaError("groups replication only accepts discussion rooms")
     events, authority = page.get("events"), page.get("authority")
     if not isinstance(events, list):
         raise ReplicaError("page.events must be a list")
@@ -112,8 +108,6 @@ def _validate_page(page: Any) -> tuple[list[dict[str, Any]], dict[str, Any]]:
                 raise ReplicaError(f"event.{field} must be a non-empty string")
         if not isinstance(event.get("actor"), dict):
             raise ReplicaError("event.actor must be an object")
-        if event["kind"] in _CONVERSATION_EVENT_KINDS or event["actor"].get("kind") == "participant":
-            raise ReplicaError("groups replication only accepts discussion events and actors")
         if "payload" not in event:
             raise ReplicaError("event.payload is required")
     return events, {"gateway_id": gateway_id, "epoch": epoch}
@@ -231,9 +225,9 @@ def promote_replica(
             "previous_gateway_id": previous_gateway, "authority_gateway_id": local_gateway,
             "authority_epoch": target_epoch, "promoted_from_replica": True, "reason": reason})
         conn.execute("""INSERT INTO hosted_rooms
-               (room_id, purpose, name, members_json, authority_gateway_id, authority_epoch, next_seq, event_bytes,
+               (room_id, name, members_json, authority_gateway_id, authority_epoch, next_seq, event_bytes,
                 revision, created_at, updated_at, disbanded_at)
-               VALUES (?, 'discussion', ?, ?, ?, ?, ?, ?, 1, ?, ?, NULL)""",
+               VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?, NULL)""",
             (
                 room_id, replica["name"], replica["members_json"], local_gateway, target_epoch, claim_seq + 1,
                 int(replica["event_bytes"]) + utf8_len(*claim), now, now))
@@ -266,12 +260,10 @@ def demote_room(
     now = clock(now)
     local_gateway = local_authority_gateway_id()
     with _transaction(db_path, immediate=True) as conn:
-        row = conn.execute("""SELECT purpose, authority_gateway_id, authority_epoch, next_seq
+        row = conn.execute("""SELECT authority_gateway_id, authority_epoch, next_seq
                  FROM hosted_rooms WHERE room_id=? AND disbanded_at IS NULL""", (room_id,)).fetchone()
         if row is None:
             raise ReplicaError("room not found in the local authoritative store")
-        if row["purpose"] != "discussion":
-            raise ReplicaError("groups replication only accepts discussion rooms")
         current_gateway, current_epoch = str(row["authority_gateway_id"]), int(row["authority_epoch"])
         if current_gateway == observed_gateway_id and current_epoch == observed_epoch:
             return {

@@ -57,16 +57,6 @@ it('requests the ticket on the session owner route before calling the native bin
     10_000
   )
   expect(bind).toHaveBeenCalledWith({ ...input, session_ticket: 'single-use-ticket' })
-  const participant = { ...input, profile: 'default', session_profile: 'writer' }
-  expect((await bindPlatformModel(participant, account)).ok).toBe(true)
-  expect(requestGatewayForAgent).toHaveBeenLastCalledWith(
-    'local',
-    'default',
-    'session.managed_model_ticket',
-    { session_id: input.session_id, model_id: input.model_id, owner, profile: 'writer' },
-    10_000
-  )
-  expect(bind).toHaveBeenLastCalledWith({ ...participant, session_ticket: 'single-use-ticket' })
   bind.mockClear()
   expect((await bindPlatformModel({ ...input, expected_account_revision: 6 }, account)).ok).toBe(false)
   vi.mocked(requestGatewayForAgent).mockRejectedValue(new Error('raw remote error'))
@@ -208,16 +198,12 @@ it.each([
 
   const bridge: PlatformModelsBridge = {
     owner: async () => {
-      if (stage === 'owner') {
-        throw failure
-      }
+      if (stage === 'owner') {throw failure}
 
       return { platform_origin: 'http://127.0.0.1:1234', user_id: '17' }
     },
     bind: async () => {
-      if (stage === 'bind') {
-        throw failure
-      }
+      if (stage === 'bind') {throw failure}
 
       return { ok: true, ready: true, model_id: 'fixture', billing_source: 'aino', expires_at: 'later' }
     },
@@ -227,9 +213,7 @@ it.each([
 
   Object.defineProperty(window, 'hermesDesktop', { configurable: true, value: { platformModels: bridge } })
   vi.mocked(requestGatewayForAgent).mockImplementation(async () => {
-    if (stage === 'ticket') {
-      throw failure
-    }
+    if (stage === 'ticket') {throw failure}
 
     return { managed_model_binding: 1, session_ticket: 'ticket' }
   })

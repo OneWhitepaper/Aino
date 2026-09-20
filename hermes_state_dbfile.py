@@ -170,8 +170,8 @@ def _fd_is_truly_unlinked(fd_path: str, watched_path: str) -> bool:
     return _identity_is_truly_unlinked((fd_stat.st_dev, fd_stat.st_ino), watched_path)
 
 
-def _iter_proc_fd_targets(*, include_write_access=False):
-    """Yield fd targets; opt in to a final write-access boolean (None means unknown)."""
+def _iter_proc_fd_targets():
+    """Yield ``(pid, readlink target, fd path)`` for every readable ``/proc/<pid>/fd`` entry."""
     for pid_str in os.listdir("/proc"):
         if not pid_str.isdigit():
             continue
@@ -183,21 +183,7 @@ def _iter_proc_fd_targets(*, include_write_access=False):
         for fd in fds:
             with contextlib.suppress(OSError):
                 fd_path = f"{fd_dir}/{fd}"
-                row = (int(pid_str), os.readlink(fd_path), fd_path)
-                if include_write_access:
-                    writable = None
-                    try:
-                        with open(f'/proc/{pid_str}/fdinfo/{fd}', encoding='ascii') as info:
-                            for line in info:
-                                if line.startswith('flags:'):
-                                    access = int(line.split(':',1)[1].strip(), 8) & os.O_ACCMODE
-                                    if access in (os.O_RDONLY, os.O_WRONLY, os.O_RDWR):
-                                        writable = access != os.O_RDONLY
-                                    break
-                    except (OSError, ValueError, UnicodeError):
-                        pass  # A named descriptor with unavailable access metadata remains a possible writer.
-                    row += (writable,)
-                yield row
+                yield int(pid_str), os.readlink(fd_path), fd_path
 
 
 # ── macOS fd enumeration (libproc) ──────────────────────────────────────────────────────────────
@@ -263,10 +249,9 @@ def _darwin_all_pids(lib) -> List[int]:
         size *= 2
 
 
-def _iter_darwin_fd_targets(*, include_write_access=False):
+def _iter_darwin_fd_targets():
     """Yield ``(pid, fd, last pathname, (st_dev, st_ino))`` for every vnode fd libproc reports.
 
-    Opt in to a final write-access boolean; unknown flags remain None.
     The pathname and the identity both stay readable after the path is unlinked, which is what
     makes an orphaned WAL generation visible at all on macOS.  Processes that cannot be inspected
     (gone, or not ours) and descriptors that are not vnodes are skipped silently."""
@@ -295,14 +280,7 @@ def _iter_darwin_fd_targets(*, include_write_access=False):
             identity = (struct.unpack_from("<I", raw, _DARWIN_FD_DEV_OFFSET)[0],
                         struct.unpack_from("<Q", raw, _DARWIN_FD_INO_OFFSET)[0])
             target = raw[_DARWIN_FD_PATH_OFFSET:].split(b"\x00", 1)[0].decode("utf-8", "replace")
-            row = (pid, fd, target, identity)
-            if include_write_access:
-                # vnode_fdinfowithpath begins with proc_fileinfo.fi_openflags.
-                # These are kernel FREAD/FWRITE bits, not userspace O_RDONLY/O_RDWR.
-                flags = struct.unpack_from('<I', raw, 0)[0]
-                writable = True if flags & 2 else (False if flags & 1 else None)
-                row += (writable,)
-            yield row
+            yield pid, fd, target, identity
 
 
 def _iter_darwin_sidecar_holders(db_path) -> List[Tuple[int, str]]:

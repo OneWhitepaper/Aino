@@ -124,7 +124,6 @@ def list_bundles() -> List[Dict[str, Any]]:
 
 def build_bundle_invocation_message(
     cmd_key: str, user_instruction: str = "", task_id: str | None = None, platform: str | None = None,
-    *, bundle_info: Dict[str, Any] | None = None,
 ) -> Optional[Tuple[str, List[str], List[str]]]:
     """Build the user message for a bundle invocation: ``(message,
     loaded_skill_names, missing_skill_names)`` or ``None`` if the bundle wasn't
@@ -139,7 +138,7 @@ def build_bundle_invocation_message(
     *None*, the platform resolves from session env vars and the global disabled list still applies. Mirrors
     the stacked-skill gate in gateway dispatch (#58888).
     """
-    info = bundle_info if bundle_info is not None else get_skill_bundles().get(cmd_key)
+    info = get_skill_bundles().get(cmd_key)
     if not info:
         return None
     # Late import keeps skill_bundles cheap to import (no tools/* at import time).
