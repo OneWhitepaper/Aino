@@ -2,6 +2,7 @@ import './intro-reveal.css'
 
 import type { Ref } from 'react'
 
+import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 
 import { BrandClose } from './scenes/brand'
@@ -39,9 +40,9 @@ export function IntroRevealSurface() {
       role="dialog"
       tabIndex={-1}
     >
-      {/* The film stays dark regardless of the desktop beneath it. */}
+      {/* The presentation follows the desktop's remembered appearance. */}
       <div
-        className="absolute inset-0 bg-black/82"
+        className="absolute inset-0 bg-(--ui-bg-chrome)/95"
         style={{ opacity: faded && !leaving ? 1 : 0, transition: `opacity 900ms ${EASE}` }}
       />
 
@@ -51,7 +52,7 @@ export function IntroRevealSurface() {
         ref={glowRef}
         style={{
           background:
-            'radial-gradient(ellipse 46% 44% at 50% 22%, rgba(255,255,255,0.16), rgba(255,255,255,0.045) 48%, transparent 72%)',
+            'radial-gradient(ellipse 46% 44% at 50% 22%, var(--ui-bg-elevated), transparent 72%)',
           transform: 'translate(-50%, -30%) scale(0.9)'
         }}
       />
@@ -70,9 +71,9 @@ export function IntroRevealSurface() {
       </div>
 
       <div
-        className="pointer-events-none absolute inset-x-0 bottom-[13vh] text-center text-[1.02rem] tracking-[0.34em] text-white/60 uppercase"
+        className="pointer-events-none absolute inset-x-0 bottom-[13vh] text-center text-[length:var(--aino-text-body)] tracking-[0.34em] text-(--ui-text-secondary) uppercase"
         style={{
-          fontFamily: "'Collapse', sans-serif",
+          fontFamily: 'var(--dt-font-sans)',
           opacity: everywhere && !brand ? 1 : 0,
           transform: everywhere && !brand ? 'translateY(0)' : 'translateY(12px)',
           transition: `opacity 620ms ${EASE} 180ms, transform 620ms ${EASE} 180ms`
@@ -83,14 +84,15 @@ export function IntroRevealSurface() {
 
       <BrandClose ref={brandRef} />
 
-      <button
-        className="absolute bottom-6 right-7 text-[0.72rem] uppercase tracking-[0.24em] text-white/40 transition-colors hover:text-white/80"
+      <Button
+        className="absolute bottom-6 right-7"
         onClick={skip}
-        style={{ fontFamily: "'Collapse', sans-serif" }}
+        style={{ fontFamily: 'var(--dt-font-sans)' }}
         type="button"
+        variant="ghost"
       >
         {SKIP}
-      </button>
+      </Button>
     </div>
   )
 }
@@ -110,10 +112,10 @@ function HeroChat({ frame, viewportRef }: HeroChatProps) {
 
   return (
     <div
-      className="relative w-[46vw] min-w-[560px] max-w-[1350px] rounded-xl p-7"
+      className="relative w-[46vw] min-w-[560px] max-w-[1350px] rounded-(--aino-radius-panel) p-7"
       style={{
-        background: 'rgba(10, 11, 14, 0.88)',
-        border: '1px solid rgba(255,255,255,0.09)',
+        background: 'var(--ui-bg-elevated)',
+        border: '1px solid var(--stroke-nous)',
         boxShadow: NOUS_SHADOW,
         animation: 'intro-hover-a 8.4s ease-in-out infinite alternate',
         transform: everywhere ? 'rotateX(4deg) translateZ(-60px) scale(0.86)' : 'rotateX(1.6deg) scale(1)',
@@ -126,7 +128,7 @@ function HeroChat({ frame, viewportRef }: HeroChatProps) {
 
       <div className="flex min-h-[3.9rem] justify-end">
         <div
-          className="max-w-[80%] px-1 py-3.5 text-right text-[1.02rem] leading-7 text-white/92"
+          className="max-w-[80%] px-1 py-3.5 text-right text-[length:var(--aino-text-body)] leading-7 text-(--ui-text-primary)"
           style={{
             opacity: sent ? 1 : 0,
             transform: sent ? 'translateY(0) scale(1)' : 'translateY(10px) scale(0.97)',
@@ -145,11 +147,11 @@ function HeroChat({ frame, viewportRef }: HeroChatProps) {
 
           return (
             <div
-              className="flex items-center gap-3 rounded-lg px-4 py-3"
+              className="flex items-center gap-3 rounded-(--aino-radius-control) px-4 py-3"
               key={row.label}
               style={{
-                background: 'rgba(255,255,255,0.045)',
-                border: '1px solid rgba(255,255,255,0.06)',
+                background: 'var(--ui-bg-quaternary)',
+                border: '1px solid var(--stroke-nous)',
                 opacity: shown ? 1 : 0,
                 transform: shown ? 'translateY(0)' : 'translateY(6px)',
                 transition: `opacity 520ms ${EASE}, transform 520ms ${EASE}`,
@@ -157,20 +159,20 @@ function HeroChat({ frame, viewportRef }: HeroChatProps) {
               }}
             >
               <span
-                className={cn('w-4 text-center font-mono text-[0.95rem]', !done && 'text-white/55')}
-                style={{ color: done ? BLUE : undefined, fontFamily: "'JetBrains Mono', monospace" }}
+                className={cn('w-4 text-center font-mono text-[length:var(--aino-text-title)]', !done && 'text-(--ui-text-secondary)')}
+                style={{ color: done ? BLUE : undefined, fontFamily: 'var(--dt-font-mono)' }}
               >
                 {done ? '✓' : SPINNER[frame.tick % SPINNER.length]}
               </span>
               <span
-                className="text-[0.66rem] font-bold uppercase tracking-[0.18em] text-white/55"
-                style={{ fontFamily: "'Collapse', sans-serif" }}
+                className="text-[length:var(--aino-text-caption)] font-bold uppercase tracking-[0.18em] text-(--ui-text-secondary)"
+                style={{ fontFamily: 'var(--dt-font-sans)' }}
               >
                 {row.label}
               </span>
               <span
-                className="ml-auto grid text-[0.8rem] text-white/50"
-                style={{ fontFamily: "'JetBrains Mono', monospace" }}
+                className="ml-auto grid text-[length:var(--aino-text-ui)] text-(--ui-text-secondary)"
+                style={{ fontFamily: 'var(--dt-font-mono)' }}
               >
                 {/* Stacking keeps the running/done crossfade in place. */}
                 <span
@@ -193,10 +195,10 @@ function HeroChat({ frame, viewportRef }: HeroChatProps) {
 
       <div className="mt-5 min-h-[6.5rem]">
         <div
-          className="max-w-[88%] rounded-xl rounded-bl-md px-5 py-3.5 text-[1.02rem] leading-7 text-white/88"
+          className="max-w-[88%] rounded-(--aino-radius-control) px-5 py-3.5 text-[length:var(--aino-text-body)] leading-7 text-(--ui-text-primary)"
           style={{
-            background: 'rgba(255,255,255,0.055)',
-            border: '1px solid rgba(255,255,255,0.07)',
+            background: 'var(--ui-bg-quaternary)',
+            border: '1px solid var(--stroke-nous)',
             opacity: replying ? 1 : 0,
             transform: replying ? 'translateY(0)' : 'translateY(6px)',
             transition: `opacity 500ms ${EASE}, transform 500ms ${EASE}`,
@@ -215,16 +217,16 @@ function HeroChat({ frame, viewportRef }: HeroChatProps) {
 
       <div className="mt-5">
         <div
-          className="rounded-2xl px-3 py-2.5"
+          className="rounded-(--aino-radius-panel) px-3 py-2.5"
           style={{
-            background: 'color-mix(in srgb, #16171b 78%, transparent)',
+            background: 'var(--ui-bg-quaternary)',
             backdropFilter: 'blur(12px) saturate(1.12)',
-            border: '1px solid rgba(255,255,255,0.12)'
+            border: '1px solid var(--stroke-nous)'
           }}
         >
-          <div className="min-h-[2rem] px-1.5 pt-0.5 text-[1.02rem] leading-7 text-white/90">
+          <div className="min-h-[2rem] px-1.5 pt-0.5 text-[length:var(--aino-text-body)] leading-7 text-(--ui-text-primary)">
             {sent || typedText.length === 0 ? (
-              <span className="text-white/28">Ask anything. Build anything.</span>
+              <span className="text-(--ui-text-tertiary)">Ask anything. Build anything.</span>
             ) : (
               typedText
             )}
@@ -236,7 +238,7 @@ function HeroChat({ frame, viewportRef }: HeroChatProps) {
             ) : null}
           </div>
           <div className="mt-1.5 flex items-center gap-1.5">
-            <span className="grid size-6 place-items-center rounded-full text-white/45">
+            <span className="grid size-6 place-items-center rounded-full text-(--ui-text-tertiary)">
               <svg
                 fill="none"
                 height="13"
@@ -249,7 +251,7 @@ function HeroChat({ frame, viewportRef }: HeroChatProps) {
                 <path d="M8 3.5v9M3.5 8h9" />
               </svg>
             </span>
-            <span className="ml-auto grid size-6 place-items-center rounded-full text-white/45">
+            <span className="ml-auto grid size-6 place-items-center rounded-full text-(--ui-text-tertiary)">
               <svg
                 fill="none"
                 height="13"
@@ -267,8 +269,9 @@ function HeroChat({ frame, viewportRef }: HeroChatProps) {
             <span
               className="grid size-[1.65rem] shrink-0 place-items-center rounded-full"
               style={{
-                background: sent ? 'rgba(255,255,255,0.3)' : 'rgba(255,255,255,0.92)',
-                color: '#0a0b0e',
+                background: 'var(--aino-action-bg)',
+                opacity: sent ? 0.5 : 1,
+                color: 'var(--aino-action-fg)',
                 transform: !sent && frame.typed >= INTRO_PROMPT.length ? 'scale(1.08)' : 'scale(1)',
                 transition: `transform 300ms ${EASE}, background 400ms ${EASE}`
               }}
@@ -301,10 +304,10 @@ function ViewportNode({ frame, viewportRef }: HeroChatProps) {
   return (
     <>
       <div
-        className="absolute -left-64 -top-20 w-52 rounded-xl"
+        className="absolute -left-64 -top-20 w-52 rounded-(--aino-radius-panel)"
         style={{
-          background: 'rgba(10, 11, 14, 0.88)',
-          border: '1px solid rgba(255,255,255,0.09)',
+          background: 'var(--ui-bg-elevated)',
+          border: '1px solid var(--stroke-nous)',
           boxShadow: NOUS_SHADOW,
           animation: 'intro-hover-b 6.8s ease-in-out infinite alternate',
           opacity: sent && !everywhere ? 1 : 0,
@@ -319,8 +322,8 @@ function ViewportNode({ frame, viewportRef }: HeroChatProps) {
         }}
       >
         <div
-          className="flex items-center justify-between px-3 pt-2.5 text-[0.5rem] uppercase tracking-[0.2em] text-white/30"
-          style={{ fontFamily: "'Collapse', sans-serif" }}
+          className="flex items-center justify-between px-3 pt-2.5 text-[length:var(--aino-text-caption)] uppercase tracking-[0.2em] text-(--ui-text-tertiary)"
+          style={{ fontFamily: 'var(--dt-font-sans)' }}
         >
           <span className="flex items-center gap-1.5">
             <span
@@ -330,15 +333,15 @@ function ViewportNode({ frame, viewportRef }: HeroChatProps) {
             viewport
           </span>
           <span
-            className="text-[0.6rem] normal-case tracking-normal"
-            style={{ color: BLUE_DIM, fontFamily: "'JetBrains Mono', monospace" }}
+            className="text-[length:var(--aino-text-caption)] normal-case tracking-normal"
+            style={{ color: BLUE_DIM, fontFamily: 'var(--dt-font-mono)' }}
           >
             {decoded(viewport.mode, viewport.at, frame.tick, 300)}
           </span>
         </div>
-        <canvas className="block h-40 w-full" ref={viewportRef} />
+        <canvas className="block h-40 w-full rounded-b-(--aino-radius-panel) bg-[#0a0b0e]" ref={viewportRef} />
 
-        <span className="absolute -right-[5px] top-1/2 size-2.5 -translate-y-1/2 rounded-full border border-black/55 bg-[#0a0b0e]" />
+        <span className="absolute -right-[5px] top-1/2 size-2.5 -translate-y-1/2 rounded-full border border-(--ui-stroke-primary) bg-(--ui-bg-elevated)" />
       </div>
 
       <svg
@@ -351,7 +354,7 @@ function ViewportNode({ frame, viewportRef }: HeroChatProps) {
           d="M 0 15 C 21 15, 27 44, 48 44"
           fill="none"
           pathLength={1}
-          stroke="rgba(0,0,0,0.55)"
+          stroke="var(--ui-stroke-primary)"
           strokeDasharray="1"
           strokeDashoffset={sent ? 0 : 1}
           strokeWidth="1.5"
@@ -360,9 +363,9 @@ function ViewportNode({ frame, viewportRef }: HeroChatProps) {
       </svg>
 
       <span
-        className="absolute -left-[5px] top-[40px] size-2.5 rounded-full border bg-[#0a0b0e]"
+        className="absolute -left-[5px] top-[40px] size-2.5 rounded-full border bg-(--ui-bg-elevated)"
         style={{
-          borderColor: 'rgba(0,0,0,0.55)',
+          borderColor: 'var(--ui-stroke-primary)',
           opacity: everywhere ? 0 : sent ? 1 : 0,
           transition: `opacity 380ms ${EASE}, border-color 380ms ${EASE}`
         }}

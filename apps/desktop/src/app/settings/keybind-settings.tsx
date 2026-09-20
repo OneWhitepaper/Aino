@@ -104,7 +104,7 @@ export function KeybindSettings() {
           </p>
         </div>
         <button
-          className="flex shrink-0 items-center gap-1 rounded-md text-[0.72rem] text-muted-foreground hover:text-foreground"
+          className="flex shrink-0 items-center gap-1 rounded-(--aino-radius-control) text-[0.72rem] text-muted-foreground hover:text-foreground"
           onClick={resetAllBindings}
           type="button"
         >
@@ -244,7 +244,7 @@ function KeybindRow({ action }: { action: KeybindActionMeta }) {
         <Tip label={k.reset}>
           <button
             aria-label={k.reset}
-            className="grid size-6 shrink-0 place-items-center rounded-md text-muted-foreground/70 opacity-0 transition-all hover:bg-(--ui-control-active-background) hover:text-foreground group-hover:opacity-100"
+            className="grid size-6 shrink-0 place-items-center rounded-(--aino-radius-control) text-muted-foreground/70 opacity-0 transition-all hover:bg-(--ui-control-active-background) hover:text-foreground group-hover:opacity-100"
             onClick={() => resetBinding(action.id)}
             type="button"
           >

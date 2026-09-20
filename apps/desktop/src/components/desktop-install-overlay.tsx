@@ -408,7 +408,7 @@ export function DesktopInstallOverlay({ enabled = true }: DesktopInstallOverlayP
   if (state.setupChoice) {
     return (
       <div className="fixed inset-0 z-(--z-setup) flex items-center justify-center bg-background/90 p-4 backdrop-blur-md">
-        <div className="w-full max-w-2xl rounded-xl border border-(--stroke-nous) bg-card p-8 shadow-nous">
+        <div className="w-full max-w-2xl rounded-(--aino-radius-panel) border border-(--stroke-nous) bg-(--ui-bg-elevated) p-8 shadow-nous">
           <div className="flex items-start gap-4">
             <BrandMark className="size-11 shrink-0" />
             <div className="min-w-0">
@@ -419,7 +419,7 @@ export function DesktopInstallOverlay({ enabled = true }: DesktopInstallOverlayP
 
           <div className="mt-6 grid gap-3 sm:grid-cols-2">
             <button
-              className="rounded-lg border border-(--ui-stroke-tertiary) bg-(--ui-bg-quinary) p-4 text-left transition hover:bg-(--chrome-action-hover)"
+              className="rounded-(--aino-radius-control) border border-(--ui-stroke-tertiary) bg-(--ui-bg-quinary) p-4 text-left transition hover:bg-(--chrome-action-hover)"
               onClick={() => setRemoteOpen(true)}
               type="button"
             >
@@ -431,7 +431,7 @@ export function DesktopInstallOverlay({ enabled = true }: DesktopInstallOverlayP
             </button>
 
             <button
-              className="rounded-lg border border-(--ui-stroke-tertiary) bg-(--ui-bg-quinary) p-4 text-left transition hover:bg-(--chrome-action-hover) disabled:cursor-wait disabled:opacity-60"
+              className="rounded-(--aino-radius-control) border border-(--ui-stroke-tertiary) bg-(--ui-bg-quinary) p-4 text-left transition hover:bg-(--chrome-action-hover) disabled:cursor-wait disabled:opacity-60"
               disabled={localStarting}
               onClick={async () => {
                 setLocalStart({ root: activeRoot, starting: true, error: null })
@@ -488,7 +488,7 @@ export function DesktopInstallOverlay({ enabled = true }: DesktopInstallOverlayP
 
     return (
       <div className="fixed inset-0 z-(--z-setup) flex items-center justify-center bg-background/90 backdrop-blur-md">
-        <div className="w-full max-w-xl rounded-xl border border-(--stroke-nous) bg-card p-8 shadow-nous">
+        <div className="w-full max-w-xl rounded-(--aino-radius-panel) border border-(--stroke-nous) bg-(--ui-bg-elevated) p-8 shadow-nous">
           <h2 className="text-xl font-semibold tracking-tight">{copy.oneTimeTitle}</h2>
           <p className="mt-2 text-sm text-muted-foreground">{copy.unsupportedDesc(platformLabel)}</p>
 
@@ -557,7 +557,7 @@ export function DesktopInstallOverlay({ enabled = true }: DesktopInstallOverlayP
 
   return (
     <div className="fixed inset-0 z-(--z-setup) flex items-center justify-center bg-background/90 backdrop-blur-md p-4">
-      <div className="flex w-full max-w-2xl max-h-[90vh] flex-col rounded-xl border border-(--stroke-nous) bg-card shadow-nous">
+      <div className="flex w-full max-w-2xl max-h-[90vh] flex-col rounded-(--aino-radius-panel) border border-(--stroke-nous) bg-(--ui-bg-elevated) shadow-nous">
         {/* Header -- always visible, never scrolls */}
         <div className="flex flex-shrink-0 items-start gap-4 p-8 pb-4">
           {!failed && <BrandMark className="size-11 shrink-0" />}
@@ -650,7 +650,7 @@ export function DesktopInstallOverlay({ enabled = true }: DesktopInstallOverlayP
 
         {/* Active footer: let the user actually cancel a running install. */}
         {state.active && !failed && (
-          <div className="flex-shrink-0 bg-card p-4">
+          <div className="flex-shrink-0 bg-(--ui-bg-elevated) p-4">
             <div className="flex items-center justify-end">
               <Button
                 disabled={cancelling}
@@ -675,7 +675,7 @@ export function DesktopInstallOverlay({ enabled = true }: DesktopInstallOverlayP
 
         {/* Footer -- always visible, never scrolls; only renders on failure */}
         {failed && (
-          <div className="flex-shrink-0 bg-card p-4">
+          <div className="flex-shrink-0 bg-(--ui-bg-elevated) p-4">
             <div className="flex items-center justify-between gap-2">
               <span className="text-xs text-muted-foreground">
                 {copy.transcriptSaved}{' '}

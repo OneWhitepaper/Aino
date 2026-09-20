@@ -349,7 +349,7 @@ export function BootFailureOverlay() {
         // glass. Contract: `[data-glass-opaque]` in styles.css.
         data-glass-opaque=""
       >
-        <div className="flex max-h-[86vh] w-full max-w-[46rem] flex-col overflow-hidden rounded-xl border border-(--stroke-nous) bg-(--ui-chat-bubble-background) shadow-nous">
+        <div className="flex max-h-[86vh] w-full max-w-[46rem] flex-col overflow-hidden rounded-(--aino-radius-panel) border border-(--stroke-nous) bg-(--ui-bg-elevated) shadow-nous">
           {/* Subtle back affordance (projects/overlay idiom): muted → foreground
               on hover, no divider. */}
           <button
@@ -377,21 +377,21 @@ export function BootFailureOverlay() {
       // glass. Contract: `[data-glass-opaque]` in styles.css.
       data-glass-opaque=""
     >
-      <div className="w-full max-w-[40rem] overflow-hidden rounded-xl border border-(--stroke-nous) bg-(--ui-chat-bubble-background) shadow-nous">
+      <div className="w-full max-w-[40rem] overflow-hidden rounded-(--aino-radius-panel) border border-(--stroke-nous) bg-(--ui-bg-elevated) shadow-nous">
         <div className="flex items-start gap-3 px-5 py-4">
           <ErrorIcon className="mt-0.5" size="1.25rem" />
           <div>
-            <h2 className="text-[0.9375rem] font-semibold tracking-tight">
+            <h2 className="text-[length:var(--aino-text-title)] font-semibold tracking-tight">
               {remoteReauth ? copy.remoteTitle : cloudDown ? copy.cloudDownTitle : copy.title}
             </h2>
-            <p className="mt-1 text-[0.8125rem] leading-5 text-(--ui-text-tertiary)">
+            <p className="mt-1 text-[length:var(--aino-text-ui)] leading-5 text-(--ui-text-tertiary)">
               {remoteReauth ? copy.remoteDescription : cloudDown ? copy.cloudDownDescription : copy.description}
             </p>
           </div>
         </div>
 
         <div className="grid gap-4 p-5 pt-0">
-          <div className="rounded-2xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-xs text-destructive">
+          <div className="rounded-(--aino-radius-control) border border-destructive/30 bg-destructive/10 px-4 py-3 text-xs text-destructive">
             {localizedBootFailureError(t, sshFailureMessage(connectionConfig, boot.error, t.settings.gateway))}
           </div>
 

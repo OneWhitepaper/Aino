@@ -154,7 +154,7 @@ function AttachmentPill({ attachment, onRemove }: { attachment: ComposerAttachme
             aria-busy={isUploading || undefined}
             aria-label={canPreview ? c.previewLabel(attachment.label) : attachment.label}
             className={cn(
-              'flex max-w-56 items-center gap-2 rounded-2xl border bg-background/50 px-2 py-1.5 text-left shadow-[inset_0_1px_0_rgba(255,255,255,0.18)] transition-colors disabled:cursor-default',
+              'flex max-w-56 items-center gap-2 rounded-(--aino-radius-control) border bg-(--ui-bg-quaternary) px-2 py-1.5 text-left transition-colors disabled:cursor-default',
               hasUploadError
                 ? 'border-destructive/45 hover:border-destructive/60'
                 : 'border-border/60 hover:border-primary/35 hover:bg-accent/45'
@@ -186,13 +186,13 @@ function AttachmentPill({ attachment, onRemove }: { attachment: ComposerAttachme
               )}
             </span>
             <span className="min-w-0">
-              <span className="block truncate text-[0.72rem] font-medium leading-4 text-foreground/90">
+              <span className="block truncate text-[length:var(--aino-text-caption)] font-medium leading-4 text-foreground/90">
                 {attachment.label}
               </span>
               {detail && (
                 <span
                   className={cn(
-                    'block truncate text-[0.62rem] leading-3.5',
+                    'block truncate text-[length:var(--aino-text-caption)] leading-3.5',
                     hasUploadError ? 'text-destructive/80' : 'text-muted-foreground/65'
                   )}
                 >

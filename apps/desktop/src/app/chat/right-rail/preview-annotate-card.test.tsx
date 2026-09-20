@@ -34,7 +34,7 @@ describe('placeAnnotateCard', () => {
 })
 
 describe('PreviewAnnotateCard', () => {
-  it('shows a dark comment pill with a send control and no microphone', () => {
+  it('inherits host appearance while keeping comment editing, save and cancel available', () => {
     const onSave = vi.fn()
     const onCancel = vi.fn()
     const onChange = vi.fn()
@@ -54,13 +54,17 @@ describe('PreviewAnnotateCard', () => {
       />
     )
 
-    const card = rendered.container.querySelector('[data-annotate-card="true"]') as HTMLElement
-    expect(card.style.background.replace(/\s/g, '').toLowerCase()).toMatch(/#2a2a2a|rgb\(42,42,42\)/)
-    expect(rendered.getByPlaceholderText('Add a comment...')).toBeTruthy()
+    const input = rendered.getByPlaceholderText('Add a comment...') as HTMLInputElement
+    expect(input.style.colorScheme).toBe('')
+    expect(input.ownerDocument.activeElement).toBe(input)
     expect(rendered.container.querySelector('.codicon-mic')).toBeNull()
     expect(rendered.container.querySelector('.codicon-unmute')).toBeNull()
 
     fireEvent.click(rendered.getByRole('button', { name: 'Save' }))
     expect(onSave).toHaveBeenCalledOnce()
+    fireEvent.change(input, { target: { value: 'Use a clearer heading' } })
+    expect(onChange).toHaveBeenCalledWith('Use a clearer heading')
+    fireEvent.keyDown(input, { key: 'Escape' })
+    expect(onCancel).toHaveBeenCalledOnce()
   })
 })

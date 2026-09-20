@@ -390,7 +390,7 @@ export function DesktopOnboardingOverlay({
           'relative w-full max-w-[45rem] transition-all duration-500 ease-out',
           bare
             ? ''
-            : 'overflow-hidden rounded-xl border border-(--stroke-nous) bg-(--ui-chat-bubble-background) shadow-nous',
+            : 'overflow-hidden rounded-(--aino-radius-panel) border border-(--stroke-nous) bg-(--ui-bg-elevated) shadow-nous',
           // Bare confirm screen orchestrates its own per-element exit; the
           // carded states use the simple lift/blur dissolve.
           leaving && !bare
@@ -457,7 +457,7 @@ function FreeTierReadyPanel({
         )}
       >
         <div className="flex items-center gap-2">
-          <span className="font-mono text-[0.625rem] uppercase tracking-[0.2em] text-muted-foreground">
+          <span className="text-[length:var(--aino-text-caption)] uppercase tracking-[0.2em] text-muted-foreground">
             {t.onboarding.defaultModel}
           </span>
           <Badge size="xs" variant="success">
@@ -465,7 +465,7 @@ function FreeTierReadyPanel({
           </Badge>
         </div>
         <p className="font-mono text-base">{FREE_TIER_MODEL}</p>
-        <p className="font-mono text-xs text-muted-foreground">{copy.readyCaption}</p>
+        <p className="text-xs text-muted-foreground">{copy.readyCaption}</p>
       </div>
 
       <div
@@ -498,7 +498,7 @@ function FreeTierReadyPanel({
 // upstream), so it never shows the generic "no provider configured" noise.
 function ReasonNotice({ reason }: { reason: string }) {
   return (
-    <div className="rounded-2xl border border-(--ui-stroke-tertiary) bg-(--ui-bg-tertiary)/40 px-4 py-3 text-sm text-muted-foreground">
+    <div className="rounded-(--aino-radius-control) border border-(--ui-stroke-tertiary) bg-(--ui-bg-tertiary)/40 px-4 py-3 text-sm text-muted-foreground">
       {reason}
     </div>
   )
@@ -534,9 +534,9 @@ function Header() {
   const { t } = useI18n()
 
   return (
-    <div className="bg-(--ui-chat-bubble-background) px-5 pt-5 pb-1">
-      <h2 className="text-[0.9375rem] font-semibold tracking-tight">{t.onboarding.headerTitle}</h2>
-      <p className="mt-1 max-w-xl text-[0.8125rem] leading-5 text-(--ui-text-tertiary)">{t.onboarding.headerDesc}</p>
+    <div className="bg-(--ui-bg-elevated) px-5 pt-5 pb-1">
+      <h2 className="text-[length:var(--aino-text-title)] font-semibold tracking-tight">{t.onboarding.headerTitle}</h2>
+      <p className="mt-1 max-w-xl text-[length:var(--aino-text-ui)] leading-5 text-(--ui-text-tertiary)">{t.onboarding.headerDesc}</p>
     </div>
   )
 }
@@ -795,7 +795,7 @@ export function ApiKeyForm({
         {options.map(o => (
           <button
             className={cn(
-              'rounded-2xl border bg-background/60 p-3 text-left transition hover:bg-accent/50',
+              'rounded-(--aino-radius-control) border bg-background/60 p-3 text-left transition hover:bg-accent/50',
               option.envKey === o.envKey ? 'border-primary ring-2 ring-primary/20' : 'border-transparent'
             )}
             key={o.envKey}

@@ -14,10 +14,10 @@ interface SideAgentsProps {
 export function SideAgents({ active, side, tick }: SideAgentsProps) {
   const sideCard = (title: string, line1: string, line2: string, offset: string, delayMs = 0, tilt = 0) => (
     <div
-      className="w-full rounded-xl p-5"
+      className="w-full rounded-(--aino-radius-panel) p-5"
       style={{
-        background: 'rgba(12, 13, 16, 0.82)',
-        border: '1px solid rgba(255,255,255,0.09)',
+        background: 'var(--ui-bg-elevated)',
+        border: '1px solid var(--stroke-nous)',
         boxShadow: NOUS_SHADOW,
         opacity: active ? 1 : 0,
         transform: active
@@ -28,8 +28,8 @@ export function SideAgents({ active, side, tick }: SideAgentsProps) {
       }}
     >
       <div
-        className="mb-3 flex items-center gap-2 text-[0.72rem] uppercase tracking-[0.18em] text-white/50"
-        style={{ fontFamily: "'Collapse', sans-serif" }}
+        className="mb-3 flex items-center gap-2 text-[length:var(--aino-text-caption)] uppercase tracking-[0.18em] text-(--ui-text-secondary)"
+        style={{ fontFamily: 'var(--dt-font-sans)' }}
       >
         <span
           className="inline-block size-1.5 rounded-full"
@@ -37,10 +37,10 @@ export function SideAgents({ active, side, tick }: SideAgentsProps) {
         />
         {title}
       </div>
-      <div className="text-[0.95rem] leading-6 text-white/85">{line1}</div>
+      <div className="text-[length:var(--aino-text-title)] leading-6 text-(--ui-text-primary)">{line1}</div>
       <div
-        className="mt-1 text-[0.85rem] leading-6"
-        style={{ color: BLUE_FAINT, fontFamily: "'JetBrains Mono', monospace" }}
+        className="mt-1 text-[length:var(--aino-text-body)] leading-6"
+        style={{ color: BLUE_FAINT, fontFamily: 'var(--dt-font-mono)' }}
       >
         {active ? decoded(line2, EVERYWHERE_T + delayMs + 500, tick, 700) : line2}
       </div>

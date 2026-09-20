@@ -1134,7 +1134,7 @@ export function GatewaySettings({ embedded = false }: { embedded?: boolean } = {
       )}
 
       {state.envOverride ? (
-        <div className="mb-5 flex items-start gap-2 rounded-xl border border-destructive/30 bg-destructive/10 px-3 py-2.5 text-[length:var(--conversation-caption-font-size)] text-destructive">
+        <div className="mb-5 flex items-start gap-2 rounded-(--aino-radius-control) border border-destructive/30 bg-destructive/10 px-3 py-2.5 text-[length:var(--conversation-caption-font-size)] text-destructive">
           <AlertCircle className="mt-0.5 size-4 shrink-0" />
           <div>
             <div className="font-medium">{g.envOverrideTitle}</div>
@@ -1325,7 +1325,7 @@ export function GatewaySettings({ embedded = false }: { embedded?: boolean } = {
 
                       return (
                         <div
-                          className={cn('rounded-md px-2', connected && 'bg-primary/5 ring-1 ring-primary/25')}
+                          className={cn('rounded-(--aino-radius-row) px-2', connected && 'bg-(--ui-row-active-background)')}
                           key={agent.id}
                         >
                           <ListRow
@@ -1456,7 +1456,7 @@ export function GatewaySettings({ embedded = false }: { embedded?: boolean } = {
               {/* The saved token is on disk in plain text (no OS keyring). Same
                   banner idiom as envOverride so it reads as a real warning. */}
               {state.remoteTokenPlainText ? (
-                <div className="mt-2 flex items-start gap-2 rounded-xl border border-destructive/30 bg-destructive/10 px-3 py-2.5 text-[length:var(--conversation-caption-font-size)] text-destructive">
+                <div className="mt-2 flex items-start gap-2 rounded-(--aino-radius-control) border border-destructive/30 bg-destructive/10 px-3 py-2.5 text-[length:var(--conversation-caption-font-size)] text-destructive">
                   <AlertCircle className="mt-0.5 size-4 shrink-0" />
                   <div>
                     <div className="font-medium">{g.plainTextStoredTitle}</div>

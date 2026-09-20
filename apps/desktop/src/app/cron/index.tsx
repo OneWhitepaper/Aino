@@ -950,7 +950,7 @@ function CronJobRuns({
         <div className="flex flex-col gap-px">
           {runs.map(run => (
             <button
-              className="row-hover flex items-center justify-between gap-3 rounded-md px-2 py-1 text-left text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+              className="row-hover flex items-center justify-between gap-3 rounded-(--aino-radius-control) px-2 py-1 text-left text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
               key={run.id}
               onClick={() => onOpenSession?.(run.id)}
               type="button"
@@ -1006,7 +1006,7 @@ export function DeliverCheckboxes({
   return (
     <div
       aria-labelledby={`${id}-label`}
-      className="grid gap-2 rounded-md border border-input px-3 py-2.5"
+      className="grid gap-2 rounded-(--aino-radius-control) border border-input px-3 py-2.5"
       id={id}
       role="group"
     >
@@ -1077,6 +1077,7 @@ function CronEditorDialog({
 
   const blueprint =
     templateChoice === CUSTOM_TEMPLATE ? null : (blueprintList.find(item => item.key === templateChoice) ?? null)
+
   const blueprintCopy = blueprint ? localizedBlueprintCopy(blueprint, t) : null
 
   const isBlueprint = blueprint !== null
@@ -1231,7 +1232,7 @@ function CronEditorDialog({
         {!isEdit && blueprintList.length > 0 && (
           <Field htmlFor="cron-template" label={c.blueprints.startFrom}>
             <Select onValueChange={setTemplateChoice} value={templateChoice}>
-              <SelectTrigger className="h-9 rounded-md" id="cron-template">
+              <SelectTrigger id="cron-template">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -1282,7 +1283,7 @@ function CronEditorDialog({
             })}
 
             {error && (
-              <div className="flex items-start gap-2 rounded-md bg-destructive/10 px-3 py-2 text-xs text-destructive">
+              <div className="flex items-start gap-2 rounded-(--aino-radius-control) bg-destructive/10 px-3 py-2 text-xs text-destructive">
                 <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
                 <span>{error}</span>
               </div>
@@ -1328,7 +1329,7 @@ function CronEditorDialog({
             <div className="grid items-start gap-4 sm:grid-cols-2">
               <Field htmlFor="cron-frequency" label={c.frequencyLabel}>
                 <Select onValueChange={handleSchedulePresetChange} value={schedulePreset}>
-                  <SelectTrigger className="h-9 rounded-md" id="cron-frequency">
+                  <SelectTrigger id="cron-frequency">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -1355,7 +1356,7 @@ function CronEditorDialog({
             {!scriptOnlyJob && (
               <Field htmlFor="cron-model" label={c.modelLabel} optional optionalLabel={c.optional}>
                 <Select onValueChange={setModelChoice} value={modelChoice}>
-                  <SelectTrigger className="h-9 rounded-md" id="cron-model">
+                  <SelectTrigger id="cron-model">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -1396,7 +1397,7 @@ function CronEditorDialog({
                 <FieldHint>{c.customHint}</FieldHint>
               </Field>
             ) : (
-              <div className="rounded-md bg-(--ui-bg-quinary) px-3 py-2">
+              <div className="rounded-(--aino-radius-control) bg-(--ui-bg-quinary) px-3 py-2">
                 <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
                   <span className="font-medium text-foreground">{scheduleHint}</span>
                   <span className="font-mono text-muted-foreground">{schedule}</span>
@@ -1405,7 +1406,7 @@ function CronEditorDialog({
             )}
 
             {error && (
-              <div className="flex items-start gap-2 rounded-md bg-destructive/10 px-3 py-2 text-xs text-destructive">
+              <div className="flex items-start gap-2 rounded-(--aino-radius-control) bg-destructive/10 px-3 py-2 text-xs text-destructive">
                 <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
                 <span>{error}</span>
               </div>

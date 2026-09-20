@@ -186,10 +186,16 @@ Brightness remains per profile and follows peer windows; CLI/TUI skins, typograp
 zoom and native Glass keep their independent settings. Stored theme assets are not
 deleted when upgrading.
 
-Gatewayless auxiliary renderers (Quick Entry, pet overlay, wake indicator) mount
+Gatewayless auxiliary renderers (Quick Entry, pet overlay, wake indicator, intro reveal) mount
 `ThemeProvider auxiliary`. This presentation-only mode follows the remembered
 active profile and peer appearance storage events, but never publishes gateway
 profile authority or Electron native-theme ownership.
+
+The browser annotation card is host chrome and follows the shared panel, text,
+and action roles. Selection outlines and markers drawn inside guest pages keep
+their explicit review colors because those documents do not load the desktop theme.
+Intro reveal shares this chrome and the saved UI typography; its animated canvas
+retains its own media colors.
 
 The approved v2 light palette is a `#fcfcfc` canvas, `#f3f3f4` sidebar,
 `#ffffff` paper, and `#f8f9fa` field/header fill. Primary, secondary and supporting

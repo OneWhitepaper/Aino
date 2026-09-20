@@ -1,14 +1,10 @@
 import { useEffect, useRef } from 'react'
 
+import { Button } from '@/components/ui/button'
+import { CARD_SURFACE_CLASS } from '@/components/ui/card-surface'
 import { Codicon } from '@/components/ui/codicon'
-import {
-  ANNOTATE_CARD_HEIGHT,
-  ANNOTATE_CARD_WIDTH,
-  ANNOTATE_MARKER_SIZE,
-  ANNOTATE_PILL_BG,
-  ANNOTATE_PILL_FG,
-  ANNOTATE_PILL_SEND
-} from '@/lib/preview-annotate'
+import { ANNOTATE_CARD_HEIGHT, ANNOTATE_CARD_WIDTH, ANNOTATE_MARKER_SIZE } from '@/lib/preview-annotate'
+import { cn } from '@/lib/utils'
 
 const PAD = 12
 const GAP = 8
@@ -74,7 +70,10 @@ export function PreviewAnnotateCard({
   return (
     <form
       aria-label={title}
-      className="absolute z-20 flex h-11 w-[min(17.5rem,calc(100%-1.5rem))] items-center gap-1 rounded-full pl-4 pr-1 shadow-nous"
+      className={cn(
+        CARD_SURFACE_CLASS,
+        'absolute z-20 flex h-11 w-[min(17.5rem,calc(100%-1.5rem))] items-center gap-1 pl-4 pr-1'
+      )}
       data-annotate-card="true"
       data-annotate-number={number}
       onSubmit={event => {
@@ -82,9 +81,6 @@ export function PreviewAnnotateCard({
         onSave()
       }}
       style={{
-        background: ANNOTATE_PILL_BG,
-        boxShadow: '0 10px 28px rgba(0, 0, 0, 0.32), 0 0 0 1px rgba(255, 255, 255, 0.08)',
-        color: ANNOTATE_PILL_FG,
         left,
         top
       }}
@@ -92,7 +88,7 @@ export function PreviewAnnotateCard({
       <input
         aria-label={placeholder}
         autoComplete="off"
-        className="min-w-0 flex-1 bg-transparent text-[0.8125rem] leading-5 outline-none placeholder:text-white/45"
+        className="min-w-0 flex-1 bg-transparent text-[length:var(--aino-text-ui)] leading-5 outline-none placeholder:text-(--ui-text-tertiary)"
         onChange={event => onChange(event.target.value)}
         onKeyDown={event => {
           if (event.key === 'Escape') {
@@ -103,17 +99,16 @@ export function PreviewAnnotateCard({
         placeholder={placeholder}
         ref={field}
         spellCheck
-        style={{ caretColor: ANNOTATE_PILL_FG, color: ANNOTATE_PILL_FG, colorScheme: 'dark' }}
         value={note}
       />
-      <button
+      <Button
         aria-label={saveLabel}
-        className="grid size-8 shrink-0 place-items-center rounded-full text-white/85 hover:text-white"
-        style={{ background: ANNOTATE_PILL_SEND }}
+        className="rounded-full"
+        size="icon-sm"
         type="submit"
       >
         <Codicon name="arrow-up" size="0.875rem" />
-      </button>
+      </Button>
     </form>
   )
 }

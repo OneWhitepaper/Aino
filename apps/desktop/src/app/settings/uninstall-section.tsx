@@ -119,7 +119,7 @@ export function UninstallSection() {
     <div className="mx-auto mt-8 w-full max-w-2xl">
       <SectionHeading icon={AlertTriangle} title={u.dangerZone} />
 
-      <div className="rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-3">
+      <div className="rounded-(--aino-radius-control) border border-destructive/30 bg-destructive/5 px-4 py-3">
         {loading ? (
           <div className="flex items-center gap-2 py-2 text-sm text-muted-foreground">
             <Loader2 className="size-3.5 animate-spin" />

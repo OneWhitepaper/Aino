@@ -150,6 +150,7 @@ export function EditProfileDialog({ bot, open, onClose }: EditProfileDialogProps
           confirmLabel: t.common.confirm,
           modelSwitchFailed: t.desktop.modelSwitchFailed
         })
+
         const failed = Object.entries(res?.applied || {}).filter(([, ok]) => !ok)
 
         if (failed.length) {
@@ -245,7 +246,7 @@ export function EditProfileDialog({ bot, open, onClose }: EditProfileDialogProps
             {b.bot.advancedHint}
           </Button>
           {advanced ? (
-            <div className="rounded-md border border-(--ui-stroke-secondary) p-3">
+            <div>
               <AdvancedProfileConfig bot={bot} setState={setAdv} state={adv} />
             </div>
           ) : null}

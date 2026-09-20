@@ -39,9 +39,7 @@ function DialogOverlay({ className, ...props }: React.ComponentProps<typeof Dial
 type DialogBannerTone = 'error' | 'warn' | 'info'
 
 // Tinted, edge-to-edge bottom banner per tone. Error/warn keep their semantic
-// destructive/primary tokens; info derives from the dialog's own bubble
-// background so it reads as part of the themed dialog — lifted 30% toward white
-// in light mode, deepened 20% toward black in dark mode.
+// destructive/warning tokens; info uses the shared soft control fill.
 const DIALOG_BANNER_TONES: Record<DialogBannerTone, string> = {
   error: 'bg-destructive/12 text-destructive',
   warn: 'bg-(--ui-bg-quaternary) text-(--ui-yellow)',
@@ -121,7 +119,7 @@ function DialogContent({
   ) : null
 
   // With a banner, the border can't live on the scroll/clip box (it would draw a
-  // line around the banner too). The white body keeps its own bottom radius and
+  // line around the banner too). The paper body keeps its own bottom radius and
   // sits over the tinted footer; the outer shell only clips the banner to the
   // dialog's rounded bottom edge.
   if (banner) {
@@ -159,9 +157,9 @@ function DialogContent({
             </div>
             <div
               className={cn(
-                // Overlap by one corner radius so the white bottom lobes read clearly
+                // Overlap by one corner radius so the paper bottom corners read clearly
                 // over the tint instead of meeting it on a straight seam.
-                'relative z-0 -mt-[var(--aino-radius-panel)] overflow-hidden rounded-b-(--aino-radius-panel) px-4 pb-2.5 pt-[calc(var(--aino-radius-panel)+0.625rem)] text-center text-[length:var(--conversation-tool-font-size)] leading-relaxed shadow-[inset_0_7px_7px_-4px_rgb(0_0_0/0.28)]',
+                'relative z-0 -mt-[var(--aino-radius-panel)] overflow-hidden rounded-b-(--aino-radius-panel) px-4 pb-2.5 pt-[calc(var(--aino-radius-panel)+0.625rem)] text-center text-[length:var(--conversation-tool-font-size)] leading-relaxed',
                 DIALOG_BANNER_TONES[bannerTone]
               )}
               data-slot="dialog-banner"
@@ -253,7 +251,7 @@ function DialogTitle({
   return (
     <DialogPrimitive.Title
       className={cn(
-        'text-[0.9375rem] font-semibold tracking-tight text-foreground',
+        'text-[length:var(--aino-text-title)] font-semibold tracking-tight text-foreground',
         Icon && 'flex items-center gap-2',
         className
       )}
