@@ -1450,7 +1450,8 @@ class _CodexCompletionsAdapter:
         guard = _CodexStreamGuard(self._client, total_timeout)
         try:
             guard.start()
-            from agent.codex_runtime import _bypass_sdk_request_transform, _consume_codex_event_stream
+            from agent.codex_runtime import _bypass_sdk_request_transform
+            from agent.auxiliary_responses import consume_auxiliary_responses, normalize_auxiliary_response
             # Keep bulk wire payload out of the SDK's GIL-holding request transform.
             stream_kwargs = _bypass_sdk_request_transform({**resp_kwargs, "stream": True})
             event_stream = self._client.responses.create(**stream_kwargs)
@@ -1465,14 +1466,13 @@ class _CodexCompletionsAdapter:
                 if hasattr(event_stream, "output"):
                     final = event_stream
                 else:
-                    final = _consume_codex_event_stream(
+                    final = consume_auxiliary_responses(
                         event_stream, model=str(resp_kwargs.get("model") or model), on_event=guard.on_event
                     )
             finally:
                 guard.release_stream(event_stream)
             if final is None:
                 raise RuntimeError("Codex auxiliary Responses stream did not return a final response")
-            from agent.auxiliary_responses import normalize_auxiliary_response
             response = normalize_auxiliary_response(final, model)
         except Exception as exc:
             if guard.timed_out.is_set():

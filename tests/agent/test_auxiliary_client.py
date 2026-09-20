@@ -3764,16 +3764,9 @@ class TestCodexAuxiliaryAdapterNullOutputRecovery:
         original_consume = codex_runtime._consume_codex_event_stream
 
         def _consume_returning_none_output(*args, **kwargs):
-            return SimpleNamespace(
-                output=None,  # the defensive guard target
-                output_text="",
-                usage=None,
-                status="completed",
-                id="r",
-                model=kwargs.get("model"),
-                incomplete_details=None,
-                error=None,
-            )
+            final = original_consume(*args, **kwargs)
+            final.output = None  # the compatibility shim's sole difference
+            return final
 
         codex_runtime._consume_codex_event_stream = _consume_returning_none_output
         try:
