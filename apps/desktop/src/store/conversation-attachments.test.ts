@@ -40,11 +40,12 @@ it('freezes upload ownership before reading files and merges attachment into the
   draft()
   let resolve!: (result: unknown) => void
 
-  const rpc = vi.spyOn(gateway, 'requestGatewayForAgent').mockImplementation(
-    (_host, _profile, method) => method === 'conversations.capabilities' ? Promise.resolve({ max_attachment_bytes: 1024, max_attachments: 128 }) :
-      new Promise(done => {
-        resolve = done
-      })
+  const rpc = vi.spyOn(gateway, 'requestGatewayForAgent').mockImplementation((_host, _profile, method) =>
+    method === 'conversations.capabilities'
+      ? Promise.resolve({ max_attachment_bytes: 1024, max_attachments: 128 })
+      : new Promise(done => {
+          resolve = done
+        })
   )
 
   const mutableOwner = { ...owner }
@@ -81,11 +82,12 @@ it('retains failed attachment and text for retry and never reattaches a removed 
   expect(item).toMatchObject({ status: 'error', error: 'Upload unavailable' })
   expect($conversationDrafts.get()[key]).toMatchObject({ text: 'Keep this text', attachmentIds: [] })
   let resolve!: (result: unknown) => void
-  rpc.mockImplementation(
-    (_host, _profile, method) => method === 'conversations.capabilities' ? Promise.resolve({ max_attachment_bytes: 1024, max_attachments: 128 }) :
-      new Promise(done => {
-        resolve = done
-      })
+  rpc.mockImplementation((_host, _profile, method) =>
+    method === 'conversations.capabilities'
+      ? Promise.resolve({ max_attachment_bytes: 1024, max_attachments: 128 })
+      : new Promise(done => {
+          resolve = done
+        })
   )
   const pending = uploadConversationAttachment(owner, file, item.localId)
   await waitFor(() => expect(rpc.mock.calls.some(call => call[2] === 'conversations.attach')).toBe(true))

@@ -19,6 +19,7 @@ import { cn } from '@/lib/utils'
 import { $wakeWord, toggleWakeWord } from '@/store/wake-word'
 
 import { ACTIVE_ICON_BTN, GHOST_ICON_BTN } from './control-classes'
+import { useOwnedVoice } from './owned-voice-context'
 import type { ChatBarState, VoiceStatus } from './types'
 import { VoiceEngineRows } from './voice-engine-rows'
 
@@ -63,7 +64,9 @@ export function VoiceMenu({
 }: VoiceMenuProps) {
   const { t } = useI18n()
   const c = t.composer
-  const wake = useStore($wakeWord)
+  const owned = useOwnedVoice()
+  const ambientWake = useStore($wakeWord)
+  const wake = owned ? owned.wake : ambientWake
 
   const phrase = wake.phrase || 'hey hermes'
   const dictating = includeDictation && (state.voice.active || voiceStatus !== 'idle')
@@ -161,7 +164,7 @@ export function VoiceMenu({
           onSelect={event => {
             event.preventDefault()
             triggerHaptic(wakeListening ? 'close' : 'open')
-            void toggleWakeWord()
+            void (owned ? owned.toggleWake() : toggleWakeWord())
           }}
         >
           {wakeListening ? <Ear className={iconSize.sm} /> : <EarOff className={iconSize.sm} />}

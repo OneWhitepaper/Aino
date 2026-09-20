@@ -41,6 +41,7 @@ import {
 } from '@/store/gateway-managed-capability'
 import { $pinnedSessionIds } from '@/store/layout'
 import { $notifications, clearNotifications } from '@/store/notifications'
+import { $openProjectsByProfile, rememberOpenProject } from '@/store/open-projects'
 import { platformModelCatalog } from '@/store/platform-models'
 import {
   $activeGatewayProfile,
@@ -878,13 +879,21 @@ describe('createBackendSessionForSend profile routing', () => {
     const clear = vi.fn()
 
     const requestGateway = vi.fn(async (method: string) => {
-      if (method === 'session.create') {return create.promise as never}
+      if (method === 'session.create') {
+        return create.promise as never
+      }
 
-      if (method === 'session.close') {return {} as never}
+      if (method === 'session.close') {
+        return {} as never
+      }
 
-      if (method === 'session.managed_model_ticket') {throw new Error('must not mint a ticket for the newer authority')}
+      if (method === 'session.managed_model_ticket') {
+        throw new Error('must not mint a ticket for the newer authority')
+      }
 
-      if (method === 'prompt.submit') {throw new Error('must not submit after authority changes')}
+      if (method === 'prompt.submit') {
+        throw new Error('must not submit after authority changes')
+      }
       throw new Error(`unexpected request: ${method}`)
     })
 
@@ -982,6 +991,7 @@ describe('createBackendSessionForSend profile routing', () => {
     $newChatRoute.set(null)
     $activeGatewayProfile.set('default')
     $activeSessionId.set(null)
+    $openProjectsByProfile.set({})
     $projectScope.set(ALL_PROJECTS)
     $projectTree.set([])
     $currentCwd.set('')
@@ -1201,7 +1211,7 @@ describe('createBackendSessionForSend profile routing', () => {
 
     const accountBridge: PlatformAccountBridge = {
       status: vi.fn(async () => snapshot),
-      capabilities: vi.fn(async () => ({} as never)),
+      capabilities: vi.fn(async () => ({}) as never),
       retry: async () => snapshot,
       requestPhoneCode: vi.fn(),
       verifyPhoneCode: vi.fn(),
@@ -1220,7 +1230,12 @@ describe('createBackendSessionForSend profile routing', () => {
       if (method === 'session.create') {
         return {
           session_id: RUNTIME_SESSION_ID,
-          info: { model_source: 'aino', model_id: 'catalog-a', provider: 'aino', model_status: 'awaiting_managed_credentials' }
+          info: {
+            model_source: 'aino',
+            model_id: 'catalog-a',
+            provider: 'aino',
+            model_status: 'awaiting_managed_credentials'
+          }
         } as never
       }
 
@@ -1270,7 +1285,10 @@ describe('createBackendSessionForSend profile routing', () => {
     expect(bind).toHaveBeenCalledOnce()
     expect(bind).toHaveBeenCalledWith(expect.objectContaining({ expected_account_revision: 4 }))
     expect(accountBridge.status).toHaveBeenCalledTimes(2)
-    expect(requestGateway.mock.calls.map(([method]) => method)).toEqual(['session.create', 'session.managed_model_ticket'])
+    expect(requestGateway.mock.calls.map(([method]) => method)).toEqual([
+      'session.create',
+      'session.managed_model_ticket'
+    ])
   })
 
   it('rejects a missed different-owner publication before a default-sourced fresh tile creates', async () => {
@@ -1293,7 +1311,7 @@ describe('createBackendSessionForSend profile routing', () => {
 
     const accountBridge: PlatformAccountBridge = {
       status: vi.fn(async () => snapshot),
-      capabilities: vi.fn(async () => ({} as never)),
+      capabilities: vi.fn(async () => ({}) as never),
       retry: async () => snapshot,
       requestPhoneCode: vi.fn(),
       verifyPhoneCode: vi.fn(),
@@ -1350,12 +1368,23 @@ describe('createBackendSessionForSend profile routing', () => {
       const fixture = await prepareDeferredManagedCreate()
       const close = deferred<object>()
       const events: string[] = []
-      const release = vi.fn(() => { events.push('release') })
+      const release = vi.fn(() => {
+        events.push('release')
+      })
       vi.mocked(retainGatewayForAgent).mockResolvedValueOnce(release)
       $activeGatewayProfile.set('work')
       $newChatProfile.set('work')
-      recordGatewayReadyCapability({ profile: 'work' }, { type: 'gateway.ready', payload: { managed_model_binding: 1 } })
-      fixture.bind.mockResolvedValue({ ok: true, ready: true, model_id: 'catalog-a', billing_source: 'aino', expires_at: 'later' })
+      recordGatewayReadyCapability(
+        { profile: 'work' },
+        { type: 'gateway.ready', payload: { managed_model_binding: 1 } }
+      )
+      fixture.bind.mockResolvedValue({
+        ok: true,
+        ready: true,
+        model_id: 'catalog-a',
+        billing_source: 'aino',
+        expires_at: 'later'
+      })
       vi.mocked(requestGatewayForAgent).mockImplementation(async (connectionId, profile, method, params) => {
         expect({ connectionId, profile }).toEqual({ connectionId: null, profile: 'work' })
 
@@ -1376,7 +1405,9 @@ describe('createBackendSessionForSend profile routing', () => {
 
         throw new Error(`unexpected ${method}`)
       })
-      const generic = vi.fn(async () => { throw new Error('Unpublished runtime has no generic owner') })
+      const generic = vi.fn(async () => {
+        throw new Error('Unpublished runtime has no generic owner')
+      })
       let routeToken = 'draft'
       const selectedRef = { current: null as string | null }
       let handle: HarnessHandle | null = null
@@ -1390,11 +1421,14 @@ describe('createBackendSessionForSend profile routing', () => {
       )
       await waitFor(() => expect(handle).not.toBeNull())
 
-      const pending = reason === 'navigation'
-        ? handle!.createBackendSessionForSend()
-        : handle!.openNewSessionTile('center', { listed: false })
+      const pending =
+        reason === 'navigation'
+          ? handle!.createBackendSessionForSend()
+          : handle!.openNewSessionTile('center', { listed: false })
 
-      await waitFor(() => expect(requestGatewayForAgent).toHaveBeenCalledWith(null, 'work', 'session.create', expect.anything()))
+      await waitFor(() =>
+        expect(requestGatewayForAgent).toHaveBeenCalledWith(null, 'work', 'session.create', expect.anything())
+      )
 
       if (reason === 'navigation') {
         routeToken = 'other'
@@ -1431,11 +1465,19 @@ describe('createBackendSessionForSend profile routing', () => {
     deferredCreate.switchToNewerAuthority()
     deferredCreate.create.resolve({
       session_id: 'created-under-a',
-      info: { model_source: 'aino', model_id: 'catalog-a', provider: 'aino', model_status: 'awaiting_managed_credentials' }
+      info: {
+        model_source: 'aino',
+        model_id: 'catalog-a',
+        provider: 'aino',
+        model_status: 'awaiting_managed_credentials'
+      }
     })
 
     await expect(pending).resolves.toBe(false)
-    expect(deferredCreate.requestGateway.mock.calls.map(([method]) => method)).toEqual(['session.create', 'session.close'])
+    expect(deferredCreate.requestGateway.mock.calls.map(([method]) => method)).toEqual([
+      'session.create',
+      'session.close'
+    ])
     expect(deferredCreate.bind).not.toHaveBeenCalled()
     expect(deferredCreate.clear).toHaveBeenCalledOnce()
   })
@@ -1455,11 +1497,19 @@ describe('createBackendSessionForSend profile routing', () => {
     deferredCreate.create.resolve({
       session_id: 'tile-created-under-a',
       stored_session_id: 'stored-tile-created-under-a',
-      info: { model_source: 'aino', model_id: 'catalog-a', provider: 'aino', model_status: 'awaiting_managed_credentials' }
+      info: {
+        model_source: 'aino',
+        model_id: 'catalog-a',
+        provider: 'aino',
+        model_status: 'awaiting_managed_credentials'
+      }
     })
 
     await expect(pending).resolves.toBeUndefined()
-    expect(deferredCreate.requestGateway.mock.calls.map(([method]) => method)).toEqual(['session.create', 'session.close'])
+    expect(deferredCreate.requestGateway.mock.calls.map(([method]) => method)).toEqual([
+      'session.create',
+      'session.close'
+    ])
     expect(deferredCreate.bind).not.toHaveBeenCalled()
     expect(deferredCreate.clear).toHaveBeenCalledOnce()
   })
@@ -1581,9 +1631,7 @@ describe('createBackendSessionForSend profile routing', () => {
           owner: async () => ({ platform_origin: 'http://127.0.0.1:1234', user_id: 'user-a' }),
           bind,
           clear: vi.fn(),
-          list: async () => [
-            { ...platformModel(), capabilities: { ...platformModel().capabilities, reasoning: true } }
-          ]
+          list: async () => [{ ...platformModel(), capabilities: { ...platformModel().capabilities, reasoning: true } }]
         }
       }
     })
@@ -1681,7 +1729,7 @@ describe('createBackendSessionForSend profile routing', () => {
     setCurrentPlatformOwner('user-a')
     setCurrentModelSource('manual')
     recordGatewayReadyCapability(route, { type: 'gateway.ready', payload: {} })
-    const ambientRequest = vi.fn(async (_method: string) => ({} as never))
+    const ambientRequest = vi.fn(async (_method: string) => ({}) as never)
     let submitText: null | ((text: string) => Promise<boolean>) = null
     render(<FirstSendHarness onReady={value => (submitText = value)} requestGateway={ambientRequest} />)
     await waitFor(() => expect(submitText).not.toBeNull())
@@ -1716,7 +1764,7 @@ describe('createBackendSessionForSend profile routing', () => {
       type: 'gateway.ready',
       payload: { managed_model_binding: 1 }
     })
-    const ambientRequest = vi.fn(async (_method: string) => ({} as never))
+    const ambientRequest = vi.fn(async (_method: string) => ({}) as never)
     let submitText: null | ((text: string) => Promise<boolean>) = null
     render(<FirstSendHarness onReady={value => (submitText = value)} requestGateway={ambientRequest} />)
     await waitFor(() => expect(submitText).not.toBeNull())
@@ -2111,6 +2159,7 @@ describe('createBackendSessionForSend profile routing', () => {
           sessionCount: 0
         }
       ])
+      rememberOpenProject({ id: 'p_app', path: '/repo/app' })
       $projectScope.set('p_app')
       $currentCwd.set('')
     })

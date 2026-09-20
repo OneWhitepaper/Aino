@@ -68,7 +68,7 @@ function stripAddress(text: string): string {
  * to Hermes). Returns false for anything that merely contains "stop" as part of
  * a longer, substantive request.
  */
-export function isVoiceStopCommand(transcript: string): boolean {
+export function isVoiceStopCommand(transcript: string, phrases: readonly string[] = STOP_PHRASES): boolean {
   if (!transcript) {
     return false
   }
@@ -85,7 +85,7 @@ export function isVoiceStopCommand(transcript: string): boolean {
   const candidates = new Set([normalized, stripAddress(normalized)])
 
   for (const candidate of candidates) {
-    if (STOP_PHRASES.includes(candidate)) {
+    if (phrases.some(phrase => normalize(phrase) === candidate)) {
       return true
     }
   }

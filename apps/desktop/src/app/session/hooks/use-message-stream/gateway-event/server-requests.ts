@@ -1,4 +1,3 @@
-import { handleConversationServerRequest, isForegroundConversationRequest } from '../conversation-events'
 import { readActivePreview } from '@/app/chat/right-rail/preview-reader'
 import { readActiveTerminal } from '@/app/right-sidebar/terminal/buffer'
 import { pendingClarifyToolPayload } from '@/app/session/hooks/use-session-actions/restore-pending-clarify'
@@ -21,6 +20,8 @@ import {
 import { rememberServerRequest } from '@/store/server-requests'
 import { requestScrollToBottom } from '@/store/thread-scroll'
 import { $toursEnabled } from '@/store/tours'
+
+import { handleConversationServerRequest, isForegroundConversationRequest } from '../conversation-events'
 
 import type { GatewayEventDeps } from './types'
 
@@ -183,7 +184,9 @@ const approval: Handler = ctx => {
   void receiveApprovalRequest(null, {
     // false only when a tirith warning forbids it; backend omits the field otherwise.
     allowPermanent: p.allow_permanent !== false,
-    choices: Array.isArray(p.choices) ? p.choices.filter((choice): choice is string => typeof choice === 'string') : undefined,
+    choices: Array.isArray(p.choices)
+      ? p.choices.filter((choice): choice is string => typeof choice === 'string')
+      : undefined,
     command,
     description,
     // The approval queue's own id — `approval.pending` / `approval.received` / `approval.respond` key on it.
@@ -280,7 +283,11 @@ const mcpSetup: Handler = ctx => {
   setMcpSetupRequest({ action, reason, requestId: request.id, server, sessionId: sessionId || null })
 
   if (sessionId) {
-    deps.upsertToolCall(sessionId, { args: { action, reason, server }, name: 'setup_mcp', tool_id: request.id }, 'running')
+    deps.upsertToolCall(
+      sessionId,
+      { args: { action, reason, server }, name: 'setup_mcp', tool_id: request.id },
+      'running'
+    )
   }
 
   markNeedsInput(ctx)
@@ -421,7 +428,9 @@ export function handleServerRequest(
   deps: ServerRequestContext['deps'],
   activeSessionId: null | string
 ): boolean {
-  if (handleConversationServerRequest(request)) return true
+  if (handleConversationServerRequest(request)) {
+    return true
+  }
   const handler = SERVER_REQUEST_HANDLERS[request.method]
 
   if (!handler) {
@@ -430,7 +439,14 @@ export function handleServerRequest(
 
   const sessionId = str(request.params.session_id)
 
-  handler({ deps, request, sessionId, isActiveSession: request.params.conversation ? isForegroundConversationRequest(request) : Boolean(sessionId) && sessionId === activeSessionId })
+  handler({
+    deps,
+    request,
+    sessionId,
+    isActiveSession: request.params.conversation
+      ? isForegroundConversationRequest(request)
+      : Boolean(sessionId) && sessionId === activeSessionId
+  })
 
   return true
 }

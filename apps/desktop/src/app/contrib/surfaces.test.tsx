@@ -39,6 +39,8 @@ vi.mock('../chat', () => ({
     </>
   )
 }))
+vi.mock('../chat/ordinary-home', () => ({ OrdinaryHome: () => null }))
+vi.mock('../profiles/agent-hub-configuration', () => ({ ProfileConfigurationRedirect: () => null }))
 vi.mock('../chat/sidebar', () => ({ ChatSidebar: () => null }))
 vi.mock('../right-sidebar/terminal/chrome', () => ({ TerminalPaneChrome: () => null }))
 vi.mock('../shell/hooks/use-status-snapshot', () => ({ useStatusSnapshot: () => ({}) }))
@@ -77,7 +79,7 @@ describe('ChatRoutesSurface', () => {
     const actions = { getGateway: () => $gateway.get() } as unknown as WiringActions
 
     render(
-      <MemoryRouter>
+      <MemoryRouter initialEntries={['/legacy-session']}>
         <ChatRoutesSurface actions={actions} />
       </MemoryRouter>
     )
@@ -98,7 +100,7 @@ describe('ChatRoutesSurface', () => {
     const actions = { getGateway: () => $gateway.get() } as unknown as WiringActions
 
     render(
-      <MemoryRouter>
+      <MemoryRouter initialEntries={['/legacy-session']}>
         <ChatRoutesSurface actions={actions} />
       </MemoryRouter>
     )

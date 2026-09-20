@@ -1,11 +1,24 @@
 import fs from 'node:fs'
 import path from 'node:path'
+import { DatabaseSync } from 'node:sqlite'
 import type { Page } from '@playwright/test'
 
-import { BATCH_CLARIFY_TRIGGER, BLOCKING_CLARIFY_QUESTION, BLOCKING_CLARIFY_TRIGGER, MOCK_REPLY, SIDEBAR_TEXTS, startMockServer } from '../../../tests-js/scripts/mock-server'
 import {
-  buildAppEnv, createSandbox, launchDesktop, type MockBackendFixture,
-  waitForAppReady, writeEnvFile, writeMockProviderConfig
+  BATCH_CLARIFY_TRIGGER,
+  BLOCKING_CLARIFY_QUESTION,
+  BLOCKING_CLARIFY_TRIGGER,
+  MOCK_REPLY,
+  SIDEBAR_TEXTS,
+  startMockServer
+} from '../../../tests-js/scripts/mock-server'
+import {
+  buildAppEnv,
+  createSandbox,
+  launchDesktop,
+  type MockBackendFixture,
+  waitForAppReady,
+  writeEnvFile,
+  writeMockProviderConfig
 } from './fixtures'
 import { expect, test } from './test'
 
@@ -21,8 +34,10 @@ const evidenceDirectory = '/tmp/aino-ui-restoration-evidence'
 
 async function openConversation(page: Page) {
   const previous = page.url()
-  await page.evaluate(() => { window.location.hash = '/conversations/new' })
-  await expect(page).toHaveURL(/#\/conversations\/[a-f0-9-]+$/)
+  await page.evaluate(() => {
+    window.location.hash = '/conversations/new'
+  })
+  await expect(page).toHaveURL(/#\/conversations\/[a-f0-9-]+(?:\?|$)/)
   await expect(page).not.toHaveURL(previous)
   const surface = page.locator('main[data-conversation-id]')
   await expect(surface).toBeVisible()
@@ -33,17 +48,26 @@ test.afterAll(async () => {
   await fixture?.cleanup()
 })
 
+test.beforeEach(() => {
+  rendererErrors.length = 0
+})
+
 test.afterEach(async ({}, testInfo) => {
   if (fixture && testInfo.status !== testInfo.expectedStatus) {
     for (const profile of ['default', 'writer', 'reviewer', 'approver']) {
-      const home = profile === 'default' ? fixture.sandbox.hermesHome : path.join(fixture.sandbox.hermesHome, 'profiles', profile)
+      const home =
+        profile === 'default' ? fixture.sandbox.hermesHome : path.join(fixture.sandbox.hermesHome, 'profiles', profile)
       for (const name of ['gui.log', 'errors.log', 'desktop.log', 'agent.log']) {
         const log = path.join(home, 'logs', name)
         if (fs.existsSync(log)) await testInfo.attach(`${profile}-${name}`, { path: log, contentType: 'text/plain' })
       }
     }
-    await testInfo.attach('model-requests', { body: JSON.stringify(fixture.mock.receivedPrompts), contentType: 'application/json' })
+    await testInfo.attach('model-requests', {
+      body: JSON.stringify(fixture.mock.receivedPrompts),
+      contentType: 'application/json'
+    })
   }
+  expect(rendererErrors).toEqual([])
 })
 
 test.beforeAll(async () => {
@@ -57,26 +81,45 @@ test.beforeAll(async () => {
     replyForPrompt: { marker: LONG_TRIGGER, text: LONG_ANSWER },
     approvalCommand: { marker: APPROVAL_TRIGGER, command: `rm -r ${quotedApprovalDirectory}` }
   })
-  const extra = 'conversations:\n  enabled: true\ndesktop:\n  repo_scan_enabled: false\naccount:\n  dev_mode: true\ncompression:\n  enabled: false'
+  const extra =
+    'model_overrides:\n  custom:mock:\n    mock-model:\n      supports_reasoning: true\ndesktop:\n  repo_scan_enabled: false\naccount:\n  dev_mode: true\ncompression:\n  enabled: false'
 
   for (const profile of ['default', 'writer', 'reviewer', 'approver']) {
     const home = profile === 'default' ? sandbox.hermesHome : path.join(sandbox.hermesHome, 'profiles', profile)
     fs.mkdirSync(home, { recursive: true })
-    writeMockProviderConfig(home, mock.url, '  language: en', extra + (profile === 'approver' ? '\napprovals:\n  mode: manual' : ''))
+    writeMockProviderConfig(
+      home,
+      mock.url,
+      '  language: en',
+      extra + (profile === 'approver' ? '\napprovals:\n  mode: manual' : '')
+    )
     const configFile = path.join(home, 'config.yaml')
-    fs.writeFileSync(configFile, fs.readFileSync(configFile, 'utf8').replace('      mock-model: {}', '      mock-model: {}\n      mock-alternate: {}'))
+    fs.writeFileSync(
+      configFile,
+      fs
+        .readFileSync(configFile, 'utf8')
+        .replace('      mock-model: {}', '      mock-model: {}\n      mock-alternate: {}') +
+        `\nstt:\n  provider: acceptance-voice\n  providers:\n    acceptance-voice:\n      type: command\n      command: 'echo Voice transcript from ${profile}'\n      format: txt\n`
+    )
     writeEnvFile(home)
     fs.writeFileSync(path.join(home, 'SOUL.md'), `You are the ${profile} test participant.\n`)
     const skill = path.join(home, 'skills', 'shared-command')
     fs.mkdirSync(skill, { recursive: true })
-    fs.writeFileSync(path.join(skill, 'SKILL.md'), `---\nname: shared-command\ndescription: Profile-specific test method\n---\nPRIVATE-${profile}-SKILL-BODY\n`)
+    fs.writeFileSync(
+      path.join(skill, 'SKILL.md'),
+      `---\nname: shared-command\ndescription: Profile-specific test method\n---\nPRIVATE-${profile}-SKILL-BODY\n`
+    )
   }
 
-  const { app, page } = await launchDesktop(buildAppEnv(sandbox, { HOME: sandbox.root }))
+  const { app, page } = await launchDesktop(buildAppEnv(sandbox, { HOME: sandbox.root }), { fakeMedia: true })
   page.on('pageerror', error => rendererErrors.push(error.message))
   await page.emulateMedia({ reducedMotion: 'reduce' })
   fixture = {
-    app, page, mock, mockUrl: mock.url, sandbox,
+    app,
+    page,
+    mock,
+    mockUrl: mock.url,
+    sandbox,
     cleanup: async () => {
       await app.close()
       await mock.close()
@@ -84,8 +127,12 @@ test.beforeAll(async () => {
     }
   }
 
-  expect(await page.evaluate(() => (window as unknown as { hermesDesktop: { accountAdapter: string } }).hermesDesktop?.accountAdapter),
-    'Build the source-app Electron bundle with --dev for this explicit development-account test').toBe('legacy-development')
+  expect(
+    await page.evaluate(
+      () => (window as unknown as { hermesDesktop: { accountAdapter: string } }).hermesDesktop?.accountAdapter
+    ),
+    'Build the source-app Electron bundle with --dev for this explicit development-account test'
+  ).toBe('legacy-development')
 
   const agreement = page.getByRole('checkbox', { name: 'Agree to the user agreement and privacy policy', exact: true })
   await expect(agreement).toBeVisible({ timeout: 30_000 })
@@ -98,6 +145,18 @@ test.beforeAll(async () => {
   await expect(page.locator('.aino-home-layout')).toBeVisible()
   fs.mkdirSync(evidenceDirectory, { recursive: true })
   await page.screenshot({ path: path.join(evidenceDirectory, 'original-ordinary-chat-home.png') })
+})
+
+test('initial ordinary home and the existing new-session shortcut use the supported conversation flow', async () => {
+  const { page } = fixture!
+  const surface = page.locator('main[data-conversation-id]')
+  await expect(surface).toBeVisible()
+  const initialId = await surface.getAttribute('data-conversation-id')
+  await page.getByRole('textbox', { name: 'Message', exact: true }).focus()
+  await page.keyboard.press('ControlOrMeta+n')
+  await expect(surface).not.toHaveAttribute('data-conversation-id', initialId!)
+  await expect(surface.locator('.aino-home-title')).toBeVisible()
+  await expect(surface.getByRole('button', { name: 'Choose responder', exact: true })).toHaveText('Aino')
 })
 
 test('one visible conversation preserves authors and context through G-A-B-G-A and reload', async ({}, testInfo) => {
@@ -127,7 +186,7 @@ test('one visible conversation preserves authors and context through G-A-B-G-A a
     expect(author).toBeTruthy()
     authors.push(author!)
     await expect(page).toHaveURL(route)
-    await expect(composer).toHaveValue('')
+    await expect(composer).toHaveText('')
   }
 
   expect(authors[0]).toBe(authors[3])
@@ -195,14 +254,18 @@ test('an uploaded file survives responder changes and a long answer survives rel
   const surface = page.locator('main[data-conversation-id]')
   const fileText = 'Shared attachment evidence: the red kite is beside the river.'
   await surface.locator('input[type=file]').setInputFiles({
-    name: 'shared-notes.txt', mimeType: 'text/plain', buffer: Buffer.from(fileText)
+    name: 'shared-notes.txt',
+    mimeType: 'text/plain',
+    buffer: Buffer.from(fileText)
   })
   const send = surface.getByRole('button', { name: 'Send', exact: true })
   await expect(send).toBeEnabled()
   await send.click()
   const answers = surface.locator('article').filter({ hasText: MOCK_REPLY })
   await expect(answers).toHaveCount(1, { timeout: 60_000 })
-  await expect(surface.locator('article').getByRole('button', { name: 'Download attachment: shared-notes.txt', exact: true })).toBeVisible()
+  await expect(
+    surface.locator('article').getByRole('button', { name: 'Download attachment: shared-notes.txt', exact: true })
+  ).toBeVisible()
   await surface.getByRole('button', { name: 'Choose responder', exact: true }).click()
   await page.getByRole('menuitemradio', { name: /^writer\b/ }).click()
   const input = surface.getByRole('textbox', { name: 'Message', exact: true })
@@ -243,7 +306,7 @@ test('stop targets the running expert while preserving the next expert and draft
   await stop.click()
   await expect(stop).toHaveCount(0, { timeout: 30_000 })
   await expect(choose).toHaveText('reviewer')
-  await expect(input).toHaveValue('Keep this unsent reviewer draft.')
+  await expect(input).toHaveText('Keep this unsent reviewer draft.')
   await expect(surface.getByRole('button', { name: 'Send', exact: true })).toBeEnabled()
   await expect(surface.locator('article').first()).toContainText(BLOCKING_CLARIFY_TRIGGER)
 })
@@ -254,7 +317,7 @@ test('private commands and skills target the selected expert and configuration r
   await openConversation(page)
   const surface = page.locator('main[data-conversation-id]')
   await expect(surface).toBeVisible()
-  await expect(page).toHaveURL(/#\/conversations\/[a-f0-9-]+$/)
+  await expect(page).toHaveURL(/#\/conversations\/[a-f0-9-]+(?:\?|$)/)
   const route = page.url()
   const choose = surface.getByRole('button', { name: 'Choose responder', exact: true })
   const input = surface.getByRole('textbox', { name: 'Message', exact: true })
@@ -294,7 +357,9 @@ test('private commands and skills target the selected expert and configuration r
   await expect(send).toBeEnabled()
   await send.click()
   await expect(answers).toHaveCount(3, { timeout: 60_000 })
-  const reviewerInputs = mock.receivedPrompts.slice(reviewerStart).filter(text => text.includes('<current_user_request'))
+  const reviewerInputs = mock.receivedPrompts
+    .slice(reviewerStart)
+    .filter(text => text.includes('<current_user_request'))
   expect(reviewerInputs).toHaveLength(1)
   expect(reviewerInputs[0]).toContain('/shared-command review the public discussion')
   expect(reviewerInputs[0]).not.toContain('PRIVATE-writer-SKILL-BODY')
@@ -307,10 +372,13 @@ test('private commands and skills target the selected expert and configuration r
     fs.writeFileSync(soul, 'You are the explicitly refreshed writer test participant.\n')
     await input.fill('Keep this writer draft during configuration refresh.')
     await surface.getByRole('button', { name: 'Refresh expert configuration', exact: true }).click()
-    await page.locator('[data-slot=popover-content]').getByRole('button', { name: 'Refresh expert configuration', exact: true }).click()
+    await page
+      .locator('[data-slot=popover-content]')
+      .getByRole('button', { name: 'Refresh expert configuration', exact: true })
+      .click()
     await page.getByRole('dialog').getByRole('button', { name: 'Apply', exact: true }).click()
     await expect(notice).toContainText('Expert configuration refreshed for the next reply.', { timeout: 30_000 })
-    await expect(input).toHaveValue('Keep this writer draft during configuration refresh.')
+    await expect(input).toHaveText('Keep this writer draft during configuration refresh.')
     await expect(page).toHaveURL(route)
     await expect(answers).toHaveCount(3)
     await expect(send).toBeEnabled()
@@ -350,7 +418,7 @@ test('terminal approval remains with its original expert while the next expert a
   await expect(answer.locator('strong')).toHaveText('approver')
   expect(fs.existsSync(approvalDirectory)).toBe(false)
   await expect(choose).toHaveText('reviewer')
-  await expect(input).toHaveValue('Keep the reviewer draft while the approver finishes.')
+  await expect(input).toHaveText('Keep the reviewer draft while the approver finishes.')
   await page.screenshot({ path: testInfo.outputPath('multi-agent-original-expert-approval.png') })
 })
 
@@ -367,7 +435,11 @@ test('shared projects preserve source and expert selection and show only explici
   await surface.getByRole('button', { name: 'Select project', exact: true }).click()
   const project = page.getByRole('combobox', { name: 'Conversation project source', exact: true })
   await expect(project).toBeEnabled({ timeout: 30_000 })
-  for (const [profile, name, directory] of [['writer', 'Novel', novel], ['reviewer', 'Novel', novel], ['default', 'Media', media]]) {
+  for (const [profile, name, directory] of [
+    ['writer', 'Novel', novel],
+    ['reviewer', 'Novel', novel],
+    ['default', 'Media', media]
+  ]) {
     await page.getByRole('button', { name: 'Add project', exact: true }).click()
     await page.getByRole('combobox', { name: 'Project registration source', exact: true }).selectOption(profile)
     await page.getByRole('textbox', { name: 'Project name', exact: true }).fill(name)
@@ -377,7 +449,9 @@ test('shared projects preserve source and expert selection and show only explici
     await expect(project).toBeEnabled()
   }
   await expect(project).toHaveValue('')
-  const selectedSource = await project.getByRole('option', { name: 'Novel · writer · local', exact: true }).getAttribute('value')
+  const selectedSource = await project
+    .getByRole('option', { name: 'Novel · writer · local', exact: true })
+    .getAttribute('value')
   await project.selectOption({ label: 'Novel · writer · local' })
   await page.getByRole('dialog').getByRole('button', { name: 'Apply project change', exact: true }).click()
   await surface.getByRole('button', { name: 'novel-project', exact: true }).click()
@@ -415,12 +489,15 @@ test('shared projects preserve source and expert selection and show only explici
   await expect(project.locator('option:checked')).toHaveText('Media · default · local')
   await page.keyboard.press('Escape')
   await expect(choose).toHaveText('reviewer')
-  await expect(input).toHaveValue('Keep this reviewer draft while changing to the media project.')
+  await expect(input).toHaveText('Keep this reviewer draft while changing to the media project.')
   await expect(answers).toHaveCount(1)
   await surface.getByRole('button', { name: 'media-project', exact: true }).click()
   await page.getByRole('dialog').getByRole('button', { name: 'Open folder in this window', exact: true }).click()
   await page.keyboard.press('Escape')
-  await tree.getByRole('region', { name: 'Novel', exact: true }).getByRole('button', { name: 'Close folder', exact: true }).click()
+  await tree
+    .getByRole('region', { name: 'Novel', exact: true })
+    .getByRole('button', { name: 'Close folder', exact: true })
+    .click()
   await expect(tree.getByText('novel-notes.txt', { exact: true })).toHaveCount(0)
   await tree.getByRole('treeitem', { name: 'media-notes.txt', exact: true }).dblclick()
   await expect(tree).toContainText('Media preview belongs to its own project folder.')
@@ -440,17 +517,35 @@ test('shared projects preserve source and expert selection and show only explici
 
 test('ordinary and multi-agent chats share the designed home and responsive composer', async ({}, testInfo) => {
   test.setTimeout(150_000)
-  const { page, app } = fixture!
+  const { page, app, sandbox, mock } = fixture!
   const originalSize = await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].getSize())
   await page.locator('[data-tour="sidebar-nav-new-session"]').click()
-  await expect(page.locator('.aino-home-layout')).toBeVisible()
-  const originalComposer = page.locator('[data-slot="composer-surface"]:visible')
-  await expect(originalComposer.locator('[data-tour="model-pill"]')).toContainText('Mock Model')
-  await page.screenshot({ path: path.join(evidenceDirectory, 'original-ordinary-chat-home.png') })
-  await originalComposer.getByRole('textbox', { name: 'Message', exact: true }).fill('Original ordinary chat layout reference.')
-  await originalComposer.getByRole('button', { name: 'Send', exact: true }).click()
-  await expect(page.getByText(MOCK_REPLY, { exact: true })).toBeVisible({ timeout: 60_000 })
-  await page.screenshot({ path: path.join(evidenceDirectory, 'original-ordinary-chat-sent.png') })
+  await expect(page.locator('main[data-conversation-id]')).toBeVisible()
+  // A confirmed disabled capability must retain the original ordinary flow.
+  const configFile = path.join(sandbox.hermesHome, 'config.yaml')
+  const enabledConfig = fs.readFileSync(configFile, 'utf8')
+  try {
+    fs.writeFileSync(configFile, enabledConfig + '\nconversations:\n  enabled: false\n')
+    await page.locator('[data-tour="sidebar-nav-new-session"]').click()
+    await expect(page.locator('.aino-home-layout')).toBeVisible()
+    const originalComposer = page.locator('[data-slot="composer-surface"]:visible')
+    await expect(originalComposer.locator('[data-tour="model-pill"]')).toContainText('Mock Model')
+    await page.screenshot({ path: path.join(evidenceDirectory, 'original-ordinary-chat-home.png') })
+    const promptStart = mock.receivedPrompts.length
+    await originalComposer
+      .getByRole('textbox', { name: 'Message', exact: true })
+      .fill('Original ordinary chat layout reference.')
+    await originalComposer.getByRole('button', { name: 'Send', exact: true }).click()
+    await expect
+      .poll(() =>
+        mock.receivedPrompts.slice(promptStart).some(text => text.includes('Original ordinary chat layout reference.'))
+      )
+      .toBe(true)
+    await expect(page.getByText(MOCK_REPLY, { exact: true })).toBeVisible({ timeout: 60_000 })
+    await page.screenshot({ path: path.join(evidenceDirectory, 'original-ordinary-chat-sent.png') })
+  } finally {
+    fs.writeFileSync(configFile, enabledConfig)
+  }
 
   const surface = await openConversation(page)
   const composer = surface.locator('[data-slot="composer-surface"]')
@@ -461,7 +556,7 @@ test('ordinary and multi-agent chats share the designed home and responsive comp
   await expect(composer.getByRole('button', { name: 'Choose responder', exact: true })).toBeVisible()
   await expect(send).toBeDisabled()
   await surface.getByRole('button', { name: 'Review code', exact: true }).click()
-  await expect(input).not.toHaveValue('')
+  await expect(input).not.toHaveText('')
   await input.fill('')
   await page.screenshot({ path: path.join(evidenceDirectory, 'restored-multi-agent-home.png') })
 
@@ -477,7 +572,10 @@ test('ordinary and multi-agent chats share the designed home and responsive comp
     expect(await subtitle.evaluate(el => el.scrollWidth - el.clientWidth)).toBeLessThanOrEqual(1)
     await page.screenshot({ path: path.join(evidenceDirectory, 'restored-multi-agent-narrow.png') })
   } finally {
-    await app.evaluate(({ BrowserWindow }, size) => BrowserWindow.getAllWindows()[0].setSize(size[0], size[1], false), originalSize)
+    await app.evaluate(
+      ({ BrowserWindow }, size) => BrowserWindow.getAllWindows()[0].setSize(size[0], size[1], false),
+      originalSize
+    )
   }
   await input.fill('Check the restored conversation interface.')
   await composer.getByRole('button', { name: 'Open model picker', exact: true }).click()
@@ -486,9 +584,14 @@ test('ordinary and multi-agent chats share the designed home and responsive comp
   await expect(page.getByRole('menuitem', { name: /mock.*alternate/i })).toBeVisible()
   await modelSearch.press('Enter')
   await page.getByRole('dialog').getByRole('button', { name: 'Confirm', exact: true }).click()
-  await expect(surface.locator('[data-private-conversation-notice]')).toContainText('Expert configuration refreshed for the next reply.')
-  await surface.locator('[data-private-conversation-notice]').getByRole('button', { name: 'Close', exact: true }).click()
-  await expect(input).toHaveValue('Check the restored conversation interface.')
+  await expect(surface.locator('[data-private-conversation-notice]')).toContainText(
+    'Expert configuration refreshed for the next reply.'
+  )
+  await surface
+    .locator('[data-private-conversation-notice]')
+    .getByRole('button', { name: 'Close', exact: true })
+    .click()
+  await expect(input).toHaveText('Check the restored conversation interface.')
   await send.click()
   await expect(surface.locator('article').filter({ hasText: MOCK_REPLY })).toHaveCount(1, { timeout: 60_000 })
   await expect(surface.locator('article').filter({ hasText: MOCK_REPLY })).toContainText('mock-alternate')
@@ -498,5 +601,280 @@ test('ordinary and multi-agent chats share the designed home and responsive comp
   await expect(send).toBeDisabled()
   expect(rendererErrors).toEqual([])
   await page.screenshot({ path: path.join(evidenceDirectory, 'restored-multi-agent-sent.png') })
-  await testInfo.attach('restored home', { path: path.join(evidenceDirectory, 'restored-multi-agent-home.png'), contentType: 'image/png' })
+  await testInfo.attach('restored home', {
+    path: path.join(evidenceDirectory, 'restored-multi-agent-home.png'),
+    contentType: 'image/png'
+  })
+})
+
+test('original history controls preserve the source while editing, branching, regenerating and reacting', async ({}, testInfo) => {
+  test.setTimeout(180_000)
+  const { page } = fixture!
+  const surface = await openConversation(page)
+  await surface.getByRole('textbox', { name: 'Message', exact: true }).fill('Original immutable public input')
+  await surface.getByRole('button', { name: 'Send', exact: true }).click()
+  const answers = surface.locator('article').filter({ hasText: MOCK_REPLY })
+  await expect(answers).toHaveCount(1, { timeout: 60_000 })
+  const sourceRoute = page.url()
+  const originalIds = await surface
+    .locator('article')
+    .evaluateAll(rows => rows.map(row => row.getAttribute('data-event-id')))
+  await answers.first().getByRole('button', { name: 'React', exact: true }).click()
+  await page.getByRole('button', { name: '👍', exact: true }).click()
+  await expect(answers.first().locator('[data-reacted="true"]')).toHaveText('👍')
+  await answers.first().getByRole('button', { name: 'Refresh', exact: true }).click()
+  await expect(answers).toHaveCount(2, { timeout: 60_000 })
+  expect(
+    (await surface.locator('article').evaluateAll(rows => rows.map(row => row.getAttribute('data-event-id')))).slice(
+      0,
+      2
+    )
+  ).toEqual(originalIds)
+  await answers.last().getByRole('button', { name: 'Branch in new chat', exact: true }).click()
+  await expect(page).not.toHaveURL(sourceRoute)
+  await expect(answers).toHaveCount(2)
+  const branchRoute = page.url()
+  await surface
+    .locator('article')
+    .filter({ hasText: 'Original immutable public input' })
+    .first()
+    .getByRole('button', { name: 'Edit message', exact: true })
+    .click()
+  await surface.getByRole('textbox', { name: 'Edit message', exact: true }).fill('Edited input in its own branch')
+  await surface.getByRole('button', { name: 'Send edited message', exact: true }).click()
+  await expect(page).not.toHaveURL(branchRoute)
+  await expect(surface).toContainText('Edited input in its own branch')
+  await expect(answers).toHaveCount(1, { timeout: 60_000 })
+  await expect(surface).not.toContainText('Original immutable public input')
+  await page.goto(sourceRoute)
+  await expect(answers).toHaveCount(2)
+  await expect(surface).toContainText('Original immutable public input')
+  await expect(surface).not.toContainText('Edited input in its own branch')
+  await expect(answers.first().locator('[data-reacted="true"]')).toHaveText('👍')
+  await page.screenshot({ path: testInfo.outputPath('original-history-controls.png') })
+  expect(rendererErrors).toEqual([])
+})
+
+test('original metadata menu renames and archives a conversation while archived public history stays readable', async ({}, testInfo) => {
+  test.setTimeout(120_000)
+  const { page } = fixture!
+  const surface = await openConversation(page)
+  const sidebar = page.locator('[data-aino-sidebar]')
+  const prompt = 'Automatic title from the first public input'
+  await surface.getByRole('textbox', { name: 'Message', exact: true }).fill(prompt)
+  await surface.getByRole('button', { name: 'Send', exact: true }).click()
+  await expect(surface.locator('article').filter({ hasText: MOCK_REPLY })).toHaveCount(1, { timeout: 60_000 })
+  const route = page.url()
+  const activeRow = sidebar.locator('[aria-current="page"]').filter({ hasText: prompt })
+  await expect(activeRow).toBeVisible()
+  await activeRow.locator('..').getByRole('button', { name: 'Session actions', exact: true }).click()
+  await page.getByRole('menuitem', { name: 'Rename…', exact: true }).click()
+  const dialog = page.getByRole('dialog', { name: 'Rename session', exact: true })
+  await dialog.getByRole('textbox').fill('Reviewed conversation title')
+  await dialog.getByRole('button', { name: 'Save', exact: true }).click()
+  await expect(dialog).not.toBeVisible()
+  const renamed = sidebar.locator('[aria-current="page"]').filter({ hasText: 'Reviewed conversation title' })
+  await expect(renamed).toBeVisible()
+  const exportedPath = path.join(fixture!.sandbox.root, 'exported-public-conversation.json')
+  await fixture!.app.evaluate(({ session }, destination) => {
+    session.defaultSession.once('will-download', (_event, item) => item.setSavePath(destination))
+  }, exportedPath)
+  await renamed.locator('..').getByRole('button', { name: 'Session actions', exact: true }).click()
+  await page.getByRole('menuitem', { name: 'Export', exact: true }).click()
+  await expect.poll(() => fs.existsSync(exportedPath)).toBe(true)
+  await expect
+    .poll(() => {
+      try {
+        return JSON.parse(fs.readFileSync(exportedPath, 'utf8')).title
+      } catch {
+        return null
+      }
+    })
+    .toBe('Reviewed conversation title')
+  const exported = JSON.parse(fs.readFileSync(exportedPath, 'utf8'))
+  expect(exported.format).toBe('aino-public-conversation-v1')
+  expect(exported.events.filter((event: { kind: string }) => event.kind === 'conversation.response')).toHaveLength(1)
+  expect(JSON.stringify(exported)).toContain(MOCK_REPLY)
+  await renamed.locator('..').getByRole('button', { name: 'Session actions', exact: true }).click()
+  await page.getByRole('menuitem', { name: 'Archive', exact: true }).click()
+  await expect(sidebar.getByText('Reviewed conversation title', { exact: true })).not.toBeVisible()
+  await page.reload()
+  await expect(page).toHaveURL(route)
+  await expect(surface).toContainText(prompt)
+  await expect(surface.locator('article').filter({ hasText: MOCK_REPLY })).toHaveCount(1)
+  await expect(surface.getByRole('button', { name: 'Send', exact: true })).toBeDisabled()
+  await page.screenshot({ path: testInfo.outputPath('archived-public-history.png') })
+  expect(rendererErrors).toEqual([])
+})
+
+test('original dictation records through the chosen Profile and cancels when the expert changes', async ({}, testInfo) => {
+  test.setTimeout(120_000)
+  const { page } = fixture!
+  const surface = await openConversation(page)
+  await surface.getByRole('button', { name: 'Choose responder', exact: true }).click()
+  await page.getByRole('menuitemradio', { name: /^writer\b/ }).click()
+  await surface.getByRole('button', { name: 'Voice dictation', exact: true }).click()
+  await expect(surface.getByRole('button', { name: 'Stop dictation', exact: true })).toBeVisible()
+  // The real MediaRecorder needs a non-empty capture before the scoped relay accepts it.
+  const started = await page.evaluate(() => performance.now())
+  await expect.poll(() => page.evaluate(() => performance.now())).toBeGreaterThan(started + 1200)
+  await surface.getByRole('button', { name: 'Stop dictation', exact: true }).click()
+  await page.keyboard.press('Escape')
+  const composer = surface.getByRole('textbox', { name: 'Message', exact: true })
+  await expect(composer).toHaveText('Voice transcript from writer', { timeout: 30_000 })
+  await surface.getByRole('button', { name: 'Send', exact: true }).click()
+  await expect(surface.locator('article').filter({ hasText: MOCK_REPLY })).toHaveCount(1, { timeout: 60_000 })
+  await surface.getByRole('button', { name: 'Voice dictation', exact: true }).click()
+  await expect(surface.getByRole('button', { name: 'Stop dictation', exact: true })).toBeVisible()
+  await page.keyboard.press('Escape')
+  await surface.getByRole('button', { name: 'Choose responder', exact: true }).click()
+  await page.getByRole('menuitemradio', { name: /^reviewer\b/ }).click()
+  await expect(composer).toHaveText('')
+  await expect(surface.getByRole('button', { name: 'Voice dictation', exact: true })).toBeVisible()
+  await page.keyboard.press('Escape')
+  await page.screenshot({ path: testInfo.outputPath('owned-dictation.png') })
+  expect(rendererErrors).toEqual([])
+})
+
+test('original reasoning control refreshes only the selected agent and preserves earlier model metadata', async ({}, testInfo) => {
+  test.setTimeout(120_000)
+  const { page, sandbox } = fixture!
+  const surface = await openConversation(page)
+  const send = async (text: string) => {
+    await surface.getByRole('textbox', { name: 'Message', exact: true }).fill(text)
+    await surface.getByRole('button', { name: 'Send', exact: true }).click()
+  }
+  await send('Before reasoning change')
+  const answers = surface.locator('article').filter({ hasText: MOCK_REPLY })
+  await expect(answers).toHaveCount(1, { timeout: 60_000 })
+  const readModel = () => {
+    const db = new DatabaseSync(path.join(sandbox.hermesHome, 'shared-state.db'), { readOnly: true })
+    try {
+      const id = new URL(page.url().split('#')[1], 'https://example.test').pathname.split('/').at(-1)
+      return db
+        .prepare(
+          'SELECT session_generation, model_snapshot FROM hosted_room_conversation_runtimes WHERE conversation_id=? ORDER BY session_generation'
+        )
+        .all(id!)
+    } finally {
+      db.close()
+    }
+  }
+  const before = readModel()
+  await surface.getByTestId('reasoning-pill').click()
+  await page.getByRole('menuitemradio', { name: 'Low', exact: true }).click()
+  await page.getByRole('dialog').getByRole('button', { name: 'Confirm', exact: true }).click()
+  await expect(surface.getByTestId('reasoning-pill')).toContainText('Low')
+  await send('After reasoning change')
+  await expect(answers).toHaveCount(2, { timeout: 60_000 })
+  const after = readModel()
+  expect(after.slice(0, before.length)).toEqual(before)
+  expect(after.length).toBeGreaterThan(before.length)
+  expect(JSON.parse(String(after.at(-1)!.model_snapshot)).reasoning_config.effort).toBe('low')
+  await page.screenshot({ path: testInfo.outputPath('owned-reasoning-control.png') })
+})
+
+test('the original inline skill chip preserves prose, undo and the selected expert when sending', async ({}, testInfo) => {
+  test.setTimeout(120_000)
+  const { page, mock } = fixture!
+  const surface = await openConversation(page)
+  await surface.getByRole('button', { name: 'Choose responder', exact: true }).click()
+  await page.getByRole('menuitemradio', { name: /^writer\b/ }).click()
+  const input = surface.getByRole('textbox', { name: 'Message', exact: true })
+  await input.fill('Please use /sha')
+  await input.press('End')
+  await expect(page.locator('[data-slot="composer-completion-drawer"]')).toContainText('shared-command', {
+    timeout: 30_000
+  })
+  await input.press('Tab')
+  const chip = input.locator('[data-ref-text="/shared-command"]')
+  await expect(chip).toHaveCount(1)
+  await input.press('ControlOrMeta+z')
+  await expect(chip).toHaveCount(0)
+  await expect(input).toContainText('Please use /sha')
+  await input.press('ControlOrMeta+Shift+z')
+  await expect(chip).toHaveCount(1)
+  await input.press('End')
+  await page.keyboard.insertText('to draft the summary.')
+  await expect(input).toContainText('Please use')
+  await expect(input).toContainText('to draft the summary.')
+  await page.screenshot({ path: testInfo.outputPath('owned-inline-skill-chip.png') })
+  const start = mock.receivedPrompts.length
+  await surface.getByRole('button', { name: 'Send', exact: true }).click()
+  await expect(surface.locator('article').filter({ hasText: MOCK_REPLY })).toHaveCount(1, { timeout: 60_000 })
+  const requests = mock.receivedPrompts.slice(start).filter(text => text.includes('<current_user_request'))
+  expect(requests).toHaveLength(1)
+  expect(requests[0]).toContain('Please use /shared-command to draft the summary.')
+  await expect(surface.locator('article').filter({ hasText: MOCK_REPLY }).locator('strong')).toHaveText('writer')
+  await expect(input).toHaveText('')
+})
+
+test('an unsupported General execution environment retains the original ordinary chat', async () => {
+  const { page, sandbox } = fixture!
+  const configFile = path.join(sandbox.hermesHome, 'config.yaml')
+  const original = fs.readFileSync(configFile, 'utf8')
+  try {
+    fs.writeFileSync(configFile, original + '\nterminal:\n  backend: docker\n')
+    await page.locator('[data-tour="sidebar-nav-new-session"]').click()
+    await expect(page.locator('.aino-home-layout')).toBeVisible()
+    await expect(page.locator('[data-slot="composer-surface"]:visible [data-tour="model-pill"]')).toBeVisible()
+    await expect(page.locator('main[data-conversation-id]')).toHaveCount(0)
+  } finally {
+    fs.writeFileSync(configFile, original)
+  }
+})
+
+test('a backend without conversation RPCs retains the original new chat and can send a real turn', async ({}, testInfo) => {
+  test.setTimeout(120_000)
+  const { page, mock, sandbox } = fixture!
+  // Start on an ordinary draft, as an older installation would. Reopening a
+  // managed-only ID against an old binary is deliberately not a downgrade path.
+  const configFile = path.join(sandbox.hermesHome, 'config.yaml')
+  const originalConfig = fs.readFileSync(configFile, 'utf8')
+  try {
+    fs.writeFileSync(configFile, originalConfig + '\nconversations:\n  enabled: false\n')
+    await page.locator('[data-tour="sidebar-nav-new-session"]').click()
+    await expect(page.locator('[data-slot="composer-surface"]:visible [data-tour="model-pill"]')).toBeVisible()
+  } finally {
+    fs.writeFileSync(configFile, originalConfig)
+  }
+  let rejectedCapabilities = 0
+  // Simulate only the old protocol's missing method; all legacy traffic still
+  // reaches the real authenticated backend and deterministic inference server.
+  await page.routeWebSocket(/.*/, socket => {
+    const backend = socket.connectToServer()
+    socket.onMessage(message => {
+      const request = JSON.parse(String(message)) as { id?: string | number; method?: string }
+      if (request.method?.startsWith('conversations.')) {
+        if (request.method === 'conversations.capabilities') rejectedCapabilities++
+        socket.send(
+          JSON.stringify({ jsonrpc: '2.0', id: request.id, error: { code: -32601, message: 'Method not found' } })
+        )
+      } else {
+        backend.send(message)
+      }
+    })
+  })
+  await page.reload()
+  await waitForAppReady(fixture!, 60_000)
+  await page.locator('[data-tour="sidebar-nav-new-session"]').click({ timeout: 60_000 })
+  const composer = page.locator('[data-slot="composer-surface"]:visible')
+  await expect(composer.locator('[data-tour="model-pill"]')).toBeVisible({ timeout: 30_000 })
+  expect(rejectedCapabilities).toBeGreaterThan(0)
+  await expect(page.locator('main[data-conversation-id]')).toHaveCount(0)
+  const promptStart = mock.receivedPrompts.length
+  await composer
+    .getByRole('textbox', { name: 'Message', exact: true })
+    .fill('Continue using an older ordinary-chat backend.')
+  await composer.getByRole('button', { name: 'Send', exact: true }).click()
+  await expect
+    .poll(() =>
+      mock.receivedPrompts
+        .slice(promptStart)
+        .some(text => text.includes('Continue using an older ordinary-chat backend.'))
+    )
+    .toBe(true)
+  await expect(page.getByText(MOCK_REPLY, { exact: true })).toBeVisible({ timeout: 60_000 })
+  await expect(page.locator('vite-error-overlay')).toHaveCount(0)
+  await page.screenshot({ path: testInfo.outputPath('old-protocol-ordinary-chat.png') })
 })

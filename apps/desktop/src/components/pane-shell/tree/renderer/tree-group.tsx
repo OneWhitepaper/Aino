@@ -505,7 +505,7 @@ export function TreeGroup({
       style={
         wcOverlap
           ? { paddingTop: wcOverlap.y + wcOverlap.height }
-            : panelTopEdge && verticalCollapse
+          : panelTopEdge && verticalCollapse
             ? { paddingTop: TITLEBAR_HEIGHT }
             : undefined
       }

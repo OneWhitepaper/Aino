@@ -10,6 +10,7 @@ import { useStore } from '@nanostores/react'
 import { type ComponentProps, type FC, type ReactNode, useCallback, useMemo, useState } from 'react'
 import { useInRouterContext, useNavigate } from 'react-router'
 
+import type { ProfileScope } from '@/api/client'
 import { useSessionView } from '@/app/chat/session-view'
 import { SETTINGS_ROUTE } from '@/app/routes'
 import { ChangedFilesCard } from '@/components/assistant-ui/thread/changed-files-card'
@@ -33,7 +34,6 @@ import { type ErrorSurface, formatErrorDiagnostics, isOAuthReauthSurface } from 
 import { triggerHaptic } from '@/lib/haptics'
 import {
   AudioLines,
-  GitForkIcon,
   KeyRound,
   Loader2Icon,
   RefreshCwIcon,
@@ -56,6 +56,7 @@ import { requestSendDiagnostics } from '@/store/send-diagnostics'
 import { $connection, $currentModel, setModelPickerOpen } from '@/store/session'
 import { $voicePlayback } from '@/store/voice-playback'
 
+import { MessageActionButtons } from './message-action-buttons'
 import { ReplyMetrics } from './reply-metrics'
 
 // Stable empty identity for the settled-parts selector — a fresh [] per render
@@ -702,24 +703,12 @@ const AssistantActionBar: FC<MessageActionProps> = ({ messageId, getMessageText,
         }
         data-slot="aui_msg-actions"
       >
-        {onBranchInNewChat && (
-          <TooltipIconButton
-            onClick={() => {
-              triggerHaptic('selection')
-              onBranchInNewChat(messageId)
-            }}
-            tooltip={copy.branchNewChat}
-          >
-            <GitForkIcon className="size-3.5" />
-          </TooltipIconButton>
-        )}
-        <CopyButton appearance="icon" buttonSize="icon" label={copy.copy} text={getMessageText} />
-        <ReadAloudButton getText={getMessageText} messageId={messageId} />
-        <ActionBarPrimitive.Reload asChild>
-          <TooltipIconButton onClick={() => triggerHaptic('submit')} tooltip={copy.refresh}>
-            <RefreshCwIcon className="size-3.5" />
-          </TooltipIconButton>
-        </ActionBarPrimitive.Reload>
+        <MessageActionButtons
+          getMessageText={getMessageText}
+          onBranch={onBranchInNewChat ? () => onBranchInNewChat(messageId) : undefined}
+          readAloud={<ReadAloudButton getText={getMessageText} messageId={messageId} />}
+          reloadWrapper={button => <ActionBarPrimitive.Reload asChild>{button}</ActionBarPrimitive.Reload>}
+        />
       </ActionBarPrimitive.Root>
       {/* ONE slot, Slack-style: the picker trigger and the landed reaction are
           the same element, so reacting never shifts layout. Empty → ☺, hidden
@@ -762,11 +751,35 @@ const AssistantActionBar: FC<MessageActionProps> = ({ messageId, getMessageText,
 }
 
 const ReadAloudButton: FC<{ getText: () => string; messageId: string }> = ({ getText, messageId }) => {
-  const { t } = useI18n()
-  const copy = t.assistant.thread
-  const voicePlayback = useStore($voicePlayback)
   const view = useSessionView()
   const sessionId = useStore(view.$runtimeId)
+
+  return (
+    <ReadAloudButtonSurface
+      getText={getText}
+      messageId={messageId}
+      onSpoken={() => markAssistantIdSpoken(sessionId, view.$messages.get(), messageId)}
+    />
+  )
+}
+
+export interface ReadAloudButtonSurfaceProps {
+  getText: () => string | Promise<string>
+  messageId: string
+  scope?: ProfileScope
+  onSpoken?: () => void
+  isCurrent?: () => boolean
+}
+
+export const ReadAloudButtonSurface: FC<ReadAloudButtonSurfaceProps> = ({
+  getText,
+  messageId,
+  scope,
+  onSpoken,
+  isCurrent
+}) => {
+  const copy = useI18n().t.assistant.thread
+  const voicePlayback = useStore($voicePlayback)
 
   const readAloudStatus =
     voicePlayback.source === 'read-aloud' && voicePlayback.messageId === messageId ? voicePlayback.status : 'idle'
@@ -778,19 +791,19 @@ const ReadAloudButton: FC<{ getText: () => string; messageId: string }> = ({ get
   const tooltip = isPreparing ? copy.preparingAudio : isSpeaking ? copy.stopReading : copy.readAloud
 
   const read = useCallback(async () => {
-    const text = getText()
+    const text = await getText()
 
-    if (!text || $voicePlayback.get().status !== 'idle') {
+    if ((isCurrent && !isCurrent()) || !text || $voicePlayback.get().status !== 'idle') {
       return
     }
 
     try {
-      await playSpeechText(text, { messageId, source: 'read-aloud' })
-      markAssistantIdSpoken(sessionId, view.$messages.get(), messageId)
+      await playSpeechText(text, { messageId, source: 'read-aloud', ...(scope ? { scope } : {}) })
+      onSpoken?.()
     } catch (error) {
       notifyError(error, copy.readAloudFailed)
     }
-  }, [copy.readAloudFailed, getText, messageId, sessionId, view.$messages])
+  }, [copy.readAloudFailed, getText, messageId, scope, onSpoken, isCurrent])
 
   return (
     <TooltipIconButton

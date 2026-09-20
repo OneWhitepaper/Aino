@@ -2,6 +2,7 @@ const platformProps = vi.hoisted(() => vi.fn())
 vi.mock('@/components/platform-model-list', () => ({
   PlatformModelList: (props: unknown) => {
     platformProps(props)
+
     return <div>Platform catalog</div>
   }
 }))
@@ -26,24 +27,25 @@ it('reads selected expert configuration through the captured coordinator without
           ? { model: 'writer-model', provider: 'writer-provider', providers: [] }
           : { value: 'manual' }) as never
     )
+
   const owner = { connectionId: 'captured', installId: 'installation', conversationId: 'conversation' }
   const refresh = vi.fn()
   render(
     <>
       <ConversationModelMenu
+        disabled={false}
+        generation={2}
+        onRefresh={refresh}
         owner={owner}
         participantId="writer"
         profile="writer"
-        generation={2}
-        disabled={false}
-        onRefresh={refresh}
       />
       <ConversationApprovalMode
+        disabled={false}
+        onRefresh={refresh}
         owner={owner}
         participantId="writer"
         profile="writer"
-        disabled={false}
-        onRefresh={refresh}
       />
     </>
   )
@@ -56,6 +58,7 @@ it('reads selected expert configuration through the captured coordinator without
   })
   expect(request.mock.calls.every(call => call[1] === 'default')).toBe(true)
   expect(refresh).not.toHaveBeenCalled()
+  expect(screen.queryByTestId('reasoning-pill')).toBeNull()
 })
 
 it('restores platform model identity independently from its underlying provider and model', async () => {
@@ -69,13 +72,13 @@ it('restores platform model identity independently from its underlying provider 
   const owner = { connectionId: 'captured', installId: 'installation', conversationId: 'conversation' }
   render(
     <ConversationModelMenu
+      disabled={false}
+      generation={2}
+      model={{ model: 'gpt-underlying', provider: 'openai', model_source: 'aino', model_id: 'platform-choice' }}
+      onRefresh={vi.fn()}
       owner={owner}
       participantId="writer"
       profile="writer"
-      generation={2}
-      disabled={false}
-      model={{ model: 'gpt-underlying', provider: 'openai', model_source: 'aino', model_id: 'platform-choice' }}
-      onRefresh={vi.fn()}
     />
   )
   fireEvent.pointerDown(screen.getByRole('button', { name: /model/i }), { button: 0, ctrlKey: false })
@@ -87,3 +90,51 @@ it('restores platform model identity independently from its underlying provider 
   expect(screen.getByText('platform-next')).toBeTruthy()
   window.hermesDesktop = original
 })
+
+it.each([
+  { index: 0, selection: { reasoning_effort: 'none' } },
+  { index: 1, selection: { fast: false } }
+])(
+  'uses original option controls and confirms a captured generation update: $selection',
+  async ({ index, selection }) => {
+    vi.spyOn(gateway, 'requestGatewayForAgent').mockResolvedValue({ providers: [] } as never)
+    const refresh = vi.fn(async () => {})
+    const owner = { connectionId: 'captured', installId: 'installation', conversationId: 'conversation' }
+
+    const view = (generation: number) => (
+      <ConversationModelMenu
+        disabled={false}
+        generation={generation}
+        model={{
+          model: 'underlying',
+          provider: 'openai',
+          model_source: 'aino',
+          model_id: 'owned-choice',
+          reasoning_effort: 'high',
+          fast: true,
+          capabilities: { reasoning: true, fast: true, can_disable_reasoning: true }
+        }}
+        onRefresh={refresh}
+        owner={owner}
+        participantId="writer"
+        profile="writer"
+      />
+    )
+
+    const { rerender } = render(view(4))
+    fireEvent.pointerDown(screen.getByTestId('reasoning-pill'), { button: 0, pointerType: 'mouse' })
+    fireEvent.click((await screen.findAllByRole('switch'))[index])
+    expect(refresh).not.toHaveBeenCalled()
+    await screen.findByRole('dialog')
+    expect(screen.queryByRole('menu')).toBeNull()
+    rerender(view(5))
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm' }))
+    await waitFor(() =>
+      expect(refresh).toHaveBeenCalledWith('writer', 4, {
+        model_source: 'aino',
+        model_id: 'owned-choice',
+        ...selection
+      })
+    )
+  }
+)

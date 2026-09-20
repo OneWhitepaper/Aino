@@ -1,3 +1,4 @@
+import { capabilityScoped, type ProfileScope } from '@/api/client'
 import { setTtsLease } from '@/hermes'
 
 // The desktop's speech-output toggles — "Read replies aloud" and voice
@@ -30,41 +31,47 @@ const inFlight = new Map<string, Promise<void>>()
  * ever acquired) is also skipped — releasing a lease we never held would only
  * churn the backend on app start.
  */
-export function syncTtsLease(lease: string, active: boolean): Promise<void> {
-  const last = sent.get(lease)
+export function syncTtsLease(lease: string, active: boolean, scope?: ProfileScope): Promise<void> {
+  const owner = capabilityScoped(scope)
+  const key = scope === undefined ? lease : JSON.stringify([owner.connectionId, owner.profile, lease])
+  const last = sent.get(key)
 
   if (last === active || (last === undefined && !active)) {
-    return inFlight.get(lease) ?? Promise.resolve()
+    return inFlight.get(key) ?? Promise.resolve()
   }
 
-  sent.set(lease, active)
+  sent.set(key, active)
 
-  const previous = inFlight.get(lease) ?? Promise.resolve()
+  const previous = inFlight.get(key) ?? Promise.resolve()
 
   const next = previous
     .then(async () => {
       // Latest intent wins: if the toggle flipped again while we were queued,
       // the newer call sends its own state and this one has nothing to say.
-      if (sent.get(lease) !== active) {
+      if (sent.get(key) !== active) {
         return
       }
 
-      await setTtsLease(lease, active)
+      if (scope === undefined) {
+        await setTtsLease(lease, active)
+      } else {
+        await setTtsLease(lease, active, owner)
+      }
     })
     .catch(() => {
       // Backend not up yet / older backend without the endpoint / warm-up
       // failure: forget what we "sent" so the next flip retries honestly.
-      if (sent.get(lease) === active) {
-        sent.delete(lease)
+      if (sent.get(key) === active) {
+        sent.delete(key)
       }
     })
     .finally(() => {
-      if (inFlight.get(lease) === next) {
-        inFlight.delete(lease)
+      if (inFlight.get(key) === next) {
+        inFlight.delete(key)
       }
     })
 
-  inFlight.set(lease, next)
+  inFlight.set(key, next)
 
   return next
 }

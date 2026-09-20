@@ -14,6 +14,8 @@ import { isVoiceStopCommand } from '@/lib/voice-stop-word'
 import { notify, notifyError } from '@/store/notifications'
 import { $voicePlayback } from '@/store/voice-playback'
 
+import { useOwnedVoice } from '../owned-voice-context'
+
 import { useMicRecorder } from './use-mic-recorder'
 
 export type ConversationStatus = 'idle' | 'listening' | 'transcribing' | 'thinking' | 'speaking'
@@ -57,6 +59,7 @@ export function useVoiceConversation({
   consumePendingResponse,
   beforeMicOpen
 }: VoiceConversationOptions) {
+  const owned = useOwnedVoice()
   const { t } = useI18n()
   const voiceCopy = t.notifications.voice
   const { handle, level } = useMicRecorder(voiceCopy)
@@ -161,6 +164,10 @@ export function useVoiceConversation({
         try {
           const transcript = (await onTranscribeAudio(result.audio)).trim()
 
+          if (owned && !owned.isCurrent()) {
+            return
+          }
+
           if (!transcript) {
             if (enabledRef.current) {
               pendingStartRef.current = true
@@ -175,7 +182,7 @@ export function useVoiceConversation({
           // conversation instead of being submitted as a turn. Only whole-
           // utterance stop commands match, so "stop the container" still goes
           // through as a real request.
-          if (isVoiceStopCommand(transcript)) {
+          if (isVoiceStopCommand(transcript, owned?.stopPhrases)) {
             dropSpeechSession()
             setStatus('idle')
             onStopWordRef.current?.()
@@ -326,6 +333,10 @@ export function useVoiceConversation({
       try {
         const transcript = (await onTranscribeAudio(audio)).trim()
 
+        if (owned && !owned.isCurrent()) {
+          return
+        }
+
         if (!transcript) {
           resumeListening()
 
@@ -335,7 +346,7 @@ export function useVoiceConversation({
         // A spoken stop command while barging means "stop everything" — the
         // turn/playback was already cut at trip time; now end the conversation
         // instead of submitting "stop" as a new prompt.
-        if (isVoiceStopCommand(transcript)) {
+        if (isVoiceStopCommand(transcript, owned?.stopPhrases)) {
           dropSpeechSession()
           setStatus('idle')
           onStopWordRef.current?.()
@@ -459,7 +470,11 @@ export function useVoiceConversation({
         // this is a safety net for read-aloud-style entries into the loop.
         ensureBargeMonitor()
 
-        const playback = playSpeechText(response.text, { source: 'voice-conversation' })
+        const playback = playSpeechText(response.text, {
+          source: 'voice-conversation',
+          ...(owned ? { scope: owned.playbackScope(response.id) } : {})
+        })
+
         // playSpeechText performs its normal cleanup synchronously before
         // returning. Capture the sequence after that internal increment so
         // only a later, external stop suppresses the next listen cycle.
@@ -500,7 +515,10 @@ export function useVoiceConversation({
       ensureBargeMonitor()
 
       void (async () => {
-        const session = await startSpeechStream({ source: 'voice-conversation' })
+        const session = await startSpeechStream({
+          source: 'voice-conversation',
+          ...(owned ? { scope: owned.playbackScope(responseId) } : {})
+        })
 
         // The session may resolve after the loop moved on (barge, disable).
         if (responseIdRef.current !== responseId) {
@@ -663,7 +681,7 @@ export function useVoiceConversation({
   // conversation ends. Gated by voice.thinking_sound + the shared sound mute.
   useEffect(() => {
     if (enabled && !muted && status === 'thinking') {
-      startThinkingSound()
+      startThinkingSound(owned?.thinkingSound)
 
       return stopThinkingSound
     }
@@ -671,7 +689,7 @@ export function useVoiceConversation({
     stopThinkingSound()
 
     return undefined
-  }, [enabled, muted, status])
+  }, [enabled, muted, status, owned?.thinkingSound])
 
   // Drive the loop: when a voice-submitted reply appears, open a live speech
   // session (which feeds itself from then on). Otherwise start listening when

@@ -14,6 +14,7 @@ const source = {
   project_id: 'source',
   cwd: '/book'
 }
+
 const project = {
   id: 'shared',
   install_id: 'host',
@@ -22,6 +23,7 @@ const project = {
   name: 'Book',
   sources: [source]
 }
+
 beforeEach(() => {
   vi.stubGlobal('ResizeObserver', undefined)
   vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({
@@ -47,13 +49,20 @@ afterEach(() => {
 
 it('reads no registered roots until explicitly opened, then previews the file on its captured source', async () => {
   const request = vi.spyOn(api, 'hermesApi').mockImplementation(async request => {
-    if (request.path === '/api/fs/list?path=%2Fbook')
+    if (request.path === '/api/fs/list?path=%2Fbook') {
       return { entries: [{ path: '/book/chapters', name: 'chapters', isDirectory: true }] } as never
-    if (request.path === '/api/fs/list?path=%2Fbook%2Fchapters')
+    }
+
+    if (request.path === '/api/fs/list?path=%2Fbook%2Fchapters') {
       return { entries: [{ path: '/book/chapter.txt', name: 'chapter.txt', isDirectory: false }] } as never
-    if (request.path.startsWith('/api/fs/read-text?')) return { text: 'Captured project text', byteSize: 21 } as never
+    }
+
+    if (request.path.startsWith('/api/fs/read-text?')) {
+      return { text: 'Captured project text', byteSize: 21 } as never
+    }
     throw new Error('Unexpected filesystem call')
   })
+
   render(<SharedProjectTree owner={{ connectionId: 'captured', installId: 'host', conversationId: 'chat' }} />)
   expect(request).not.toHaveBeenCalled()
   sharedProjectWindow.open({ connectionId: 'captured', project, source })
@@ -83,12 +92,17 @@ it('reads no registered roots until explicitly opened, then previews the file on
 
 it('unmounts the old source preview when the same shared folder is opened through another source', async () => {
   const request = vi.spyOn(api, 'hermesApi').mockImplementation(async request => {
-    if (request.path.startsWith('/api/fs/list?'))
+    if (request.path.startsWith('/api/fs/list?')) {
       return { entries: [{ path: '/book/chapter.txt', name: 'chapter.txt', isDirectory: false }] } as never
-    if (request.path.startsWith('/api/fs/read-text?'))
+    }
+
+    if (request.path.startsWith('/api/fs/read-text?')) {
       return { text: `${request.profile} preview`, byteSize: 20 } as never
+    }
+
     throw new Error('Unexpected filesystem call')
   })
+
   sharedProjectWindow.open({ connectionId: 'captured', project, source })
   render(<SharedProjectTree owner={{ connectionId: 'captured', installId: 'host', conversationId: 'chat' }} />)
   fireEvent.doubleClick(await screen.findByText('chapter.txt'))

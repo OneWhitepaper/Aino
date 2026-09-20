@@ -7,6 +7,7 @@ export interface OpenSharedProject {
   source: ConversationProjectRef
 }
 const storageKey = 'hermes.desktop.window.sharedProjects'
+
 export function sharedOpenKey(entry: OpenSharedProject): string {
   return JSON.stringify([entry.connectionId, entry.project.install_id, entry.project.environment_id, entry.project.id])
 }
@@ -14,8 +15,10 @@ export function sharedOpenKey(entry: OpenSharedProject): string {
 /** sessionStorage belongs to this renderer window and survives its reload, never another window's writes. */
 export function createSharedProjectWindow(storage: Pick<Storage, 'getItem' | 'setItem'>) {
   let initial: OpenSharedProject[] = []
+
   try {
     const parsed: unknown = JSON.parse(storage.getItem(storageKey) || '[]')
+
     if (Array.isArray(parsed)) {
       initial = parsed.filter((row): row is OpenSharedProject =>
         Boolean(
@@ -43,11 +46,14 @@ export function createSharedProjectWindow(storage: Pick<Storage, 'getItem' | 'se
   } catch {
     /* Invalid saved presentation state is discarded. */
   }
+
   const opened = atom(initial)
+
   const save = (rows: OpenSharedProject[]) => {
     storage.setItem(storageKey, JSON.stringify(rows))
     opened.set(rows)
   }
+
   return {
     opened,
     open(entry: OpenSharedProject) {
@@ -58,4 +64,5 @@ export function createSharedProjectWindow(storage: Pick<Storage, 'getItem' | 'se
     }
   }
 }
+
 export const sharedProjectWindow = createSharedProjectWindow(window.sessionStorage)

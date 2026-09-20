@@ -1,5 +1,3 @@
-import { UrlDialog } from './url-dialog'
-import { useComposerUrlDialog } from './hooks/use-composer-url-dialog'
 import { useStore } from '@nanostores/react'
 import { computed } from 'nanostores'
 import { useEffect, useMemo, useRef } from 'react'
@@ -13,9 +11,12 @@ import {
   uploadConversationAttachment
 } from '@/store/conversation-attachments'
 import { type ConversationOwner, conversationOwnerKey } from '@/store/conversation-owner'
+import { $conversationDrafts } from '@/store/conversations'
+
 import { AttachmentList } from './attachments'
 import { ContextMenu } from './context-menu'
-import { $conversationDrafts } from '@/store/conversations'
+import { useComposerUrlDialog } from './hooks/use-composer-url-dialog'
+import { UrlDialog } from './url-dialog'
 
 export function ConversationAttachments({
   owner,
@@ -65,23 +66,23 @@ export function ConversationAttachments({
             type="file"
           />
           <ContextMenu
+            includeProviders={false}
+            onInsertText={text => onInsertText?.(text)}
+            onOpenUrlDialog={url.openUrlDialog}
+            onPickFiles={() => input.current?.click()}
+            onPickImages={() => input.current?.click()}
             state={{
               tools: { enabled: !disabled, label: t.composer.attach },
               model: { model: '', provider: '', canSwitch: false },
               voice: { active: false, enabled: false }
             }}
-            onPickFiles={() => input.current?.click()}
-            onPickImages={() => input.current?.click()}
-            onInsertText={text => onInsertText?.(text)}
-            onOpenUrlDialog={url.openUrlDialog}
-            includeProviders={false}
           />
           <UrlDialog
-            open={url.urlOpen}
             inputRef={url.urlInputRef}
             onChange={url.setUrlValue}
             onOpenChange={url.setUrlOpen}
             onSubmit={url.submitUrl}
+            open={url.urlOpen}
             value={url.urlValue}
           />
         </>
@@ -105,10 +106,10 @@ export function ConversationAttachments({
               <div key={item.localId}>
                 <span role="alert">{item.error}</span>
                 <Button
-                  size="sm"
-                  variant="ghost"
-                  type="button"
                   onClick={() => void uploadConversationAttachment(owner, item.file, item.localId)}
+                  size="sm"
+                  type="button"
+                  variant="ghost"
                 >
                   {t.composer.conversation.refresh}
                 </Button>

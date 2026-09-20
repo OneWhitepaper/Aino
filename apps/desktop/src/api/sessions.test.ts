@@ -11,8 +11,14 @@ vi.mock('./client', () => ({
 
 const client = await import('./client')
 
-const { deleteSession, setSessionArchived, setSessionPinnedRemote, setSessionUnreadRemote, listSidebarSessions } =
-  await import('./sessions')
+const {
+  deleteSession,
+  setSessionArchived,
+  setSessionPinnedRemote,
+  setSessionUnreadRemote,
+  listSidebarSessions,
+  listAllSourceProfileSessions
+} = await import('./sessions')
 
 const hermesApi = vi.mocked(client.hermesApi)
 
@@ -173,4 +179,28 @@ describe('listSidebarSessions remote ownership', () => {
 
     expect(result.recents.sessions[0]).toMatchObject({ connection_id: 'prometheus', id: 'remote-session' })
   })
+})
+
+it('reads restored source twins from each registered owner and identifies failed sources independently', async () => {
+  vi.mocked(client.capabilityScoped).mockImplementation(scope => scope as { connectionId: string; profile: string })
+  hermesApi.mockImplementation(async request => {
+    if (request.connectionId === 'offline') {
+      throw new Error('Disconnected')
+    }
+
+    return {
+      sessions: [{ id: 'same', profile: 'writer', title: request.connectionId, last_active: 10 }],
+      total: 1
+    } as never
+  })
+  const result = await listAllSourceProfileSessions(['local', 'remote', 'offline'], 40, { excludeSources: ['cron'] })
+  expect(result.sessions.map(row => [row.connection_id, row.profile, row.id])).toEqual([
+    ['local', 'writer', 'same'],
+    ['remote', 'writer', 'same']
+  ])
+  expect(result.failed_connections).toEqual(['offline'])
+  expect(hermesApi.mock.calls.map(([request]) => request.connectionId)).toEqual(['local', 'remote', 'offline'])
+  expect(
+    hermesApi.mock.calls.every(([request]) => request.profile === 'default' && request.path.includes('profile=all'))
+  ).toBe(true)
 })

@@ -1,5 +1,5 @@
-import { atom } from 'nanostores'
 import { useStore } from '@nanostores/react'
+import { atom } from 'nanostores'
 import { type KeyboardEvent as ReactKeyboardEvent, useCallback, useEffect, useRef, useState } from 'react'
 import { useMemo } from 'react'
 import { type NodeApi, type NodeRendererProps, type RowRendererProps, Tree, type TreeApi } from 'react-arborist'

@@ -82,9 +82,9 @@ it('preserves replayed batch locks and sequentially locks only new answers over 
 
   const view = setup('clarify', params)
   expect(screen.getByText('old')).toBeTruthy()
-  fireEvent.click(screen.getByRole('button', { name: 'prod' }))
-  fireEvent.click(screen.getByRole('button', { name: 'stage' }))
-  fireEvent.click(screen.getByRole('button', { name: 'Send' }))
+  fireEvent.click(screen.getByRole('button', { name: /prod$/ }))
+  fireEvent.click(screen.getByRole('button', { name: /stage$/ }))
+  fireEvent.click(screen.getByRole('button', { name: 'Confirm and continue' }))
   await waitFor(() => expect(refresh).toHaveBeenCalled())
   expect(rpc).toHaveBeenCalledExactlyOnceWith('request-owner', 'default', 'clarify.lock', {
     request_id: 'request',
@@ -94,20 +94,20 @@ it('preserves replayed batch locks and sequentially locks only new answers over 
   expect(respond).not.toHaveBeenCalled()
   view.unmount()
   setup('clarify', params)
-  fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Skip' }))
   expect(respond).toHaveBeenCalledWith('request', {})
 })
 it('keeps vault login credentials in the form, emits canonical JSON, and lets users decline without credentials', () => {
   const view = setup('vault.save_login', { site: 'Example', origin: 'https://example.com' })
   fireEvent.change(screen.getByRole('textbox', { name: 'Email or username' }), { target: { value: 'reader' } })
-  fireEvent.change(screen.getByLabelText('Answer'), { target: { value: 'private-password' } })
+  fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'private-password' } })
   expect(screen.queryByText('private-password')).toBeNull()
-  fireEvent.click(screen.getByRole('button', { name: 'Send' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Save & sign in' }))
   expect(respond).toHaveBeenCalledWith('request', {
     value: JSON.stringify({ identifier: 'reader', password: 'private-password' })
   })
   view.unmount()
   setup('vault.code', { site: 'Example' })
-  fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Skip' }))
   expect(respond).toHaveBeenLastCalledWith('request', { value: '' })
 })

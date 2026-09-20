@@ -1,5 +1,6 @@
 import { resolveGatewayWsUrl } from '@hermes/shared'
 
+import { capabilityScoped, type ProfileScope } from '@/api/client'
 import { getApiRequestConnection, getApiRequestProfile, speakText } from '@/hermes'
 import {
   cutSentences,
@@ -74,6 +75,7 @@ function currentState(
 export interface VoicePlaybackOptions {
   messageId?: string | null
   source: VoicePlaybackSource
+  scope?: ProfileScope
 }
 
 export function stopVoicePlayback() {
@@ -105,7 +107,7 @@ export function stopVoicePlayback() {
 
 /** Exported for tests: the (connection, profile) routing contract below is
  *  exactly what broke in the desktop-remote voice report — keep it pinned. */
-export async function resolveSpeakStreamUrl(): Promise<null | string> {
+export async function resolveSpeakStreamUrl(scope?: ProfileScope): Promise<null | string> {
   const desktop = window.hermesDesktop
 
   if (!desktop?.getConnection) {
@@ -123,8 +125,17 @@ export async function resolveSpeakStreamUrl(): Promise<null | string> {
     // replies would synthesize with the local (often unconfigured) TTS
     // instead of the profile the user is actually talking to (#90051-adjacent
     // desktop-remote voice report, Aug 2026).
-    const profile = getApiRequestProfile()
-    const connectionId = getApiRequestConnection()
+    const captured = capabilityScoped(scope)
+    const profile = scope === undefined ? getApiRequestProfile() : captured.profile || 'default'
+    const connectionId = scope === undefined ? getApiRequestConnection() : captured.connectionId
+    const explicit = typeof scope === 'object' && scope !== null
+    // Owned conversations resolve configuration on their coordinator; selecting
+    // an expert must not spawn a second Profile backend just to synthesize audio.
+    const gatewayProfile = explicit ? 'default' : profile
+
+    if (explicit && (!connectionId || !desktop.getConnectionFor || !desktop.getGatewayWsUrlFor)) {
+      return null
+    }
 
     // Both awaits below are IPC round-trips into the main process with no
     // timeout of their own (#93454) — a wedged main-process round-trip
@@ -134,7 +145,7 @@ export async function resolveSpeakStreamUrl(): Promise<null | string> {
     const conn =
       connectionId && desktop.getConnectionFor
         ? await withTimeout(
-            desktop.getConnectionFor({ connectionId, profile }),
+            desktop.getConnectionFor({ connectionId, profile: gatewayProfile }),
             RECONNECT_ATTEMPT_TIMEOUT_MS,
             `Timed out connecting to profile "${profile}"`
           )
@@ -146,7 +157,7 @@ export async function resolveSpeakStreamUrl(): Promise<null | string> {
 
     const wsDeps =
       connectionId && desktop.getGatewayWsUrlFor
-        ? { getGatewayWsUrl: () => desktop.getGatewayWsUrlFor!({ connectionId, profile }) }
+        ? { getGatewayWsUrl: () => desktop.getGatewayWsUrlFor!({ connectionId, profile: gatewayProfile }) }
         : connectionId
           ? {}
           : desktop
@@ -170,7 +181,7 @@ export async function resolveSpeakStreamUrl(): Promise<null | string> {
     // already carry the BACKEND-namespace profile (sharedRemote scoping, SSH
     // remoteProfile aliasing) — never overwrite it with the desktop-side
     // routing alias.
-    if (profile && !url.searchParams.has('profile')) {
+    if (profile && (explicit || !url.searchParams.has('profile'))) {
       url.searchParams.set('profile', profile)
     }
 
@@ -522,16 +533,21 @@ function openSpeechStream(wsUrl: string, options: VoicePlaybackOptions): SpeechS
  * `playSpeechText`).
  */
 export async function startSpeechStream(options: VoicePlaybackOptions): Promise<null | SpeechStreamSession> {
-  const direct = await directTtsConfig().catch(() => null)
+  stopVoicePlayback()
+  const requestedSequence = sequence
+  const direct = await directTtsConfig(options.scope).catch(() => null)
+
+  if (sequence !== requestedSequence) {
+    return null
+  }
 
   if (direct) {
-    stopVoicePlayback()
     setVoicePlaybackState(currentState('preparing', options))
 
     const session = openClientDirectSpeechSession(direct, options)
 
     void session.done.then(outcome => {
-      if (outcome === 'done') {
+      if (outcome === 'done' && sequence === requestedSequence) {
         setVoicePlaybackState(currentState('idle'))
       }
     })
@@ -539,19 +555,18 @@ export async function startSpeechStream(options: VoicePlaybackOptions): Promise<
     return session
   }
 
-  const wsUrl = await resolveSpeakStreamUrl()
+  const wsUrl = await resolveSpeakStreamUrl(options.scope)
 
-  if (!wsUrl) {
+  if (!wsUrl || sequence !== requestedSequence) {
     return null
   }
 
-  stopVoicePlayback()
   setVoicePlaybackState(currentState('preparing', options))
 
   const session = openSpeechStream(wsUrl, options)
 
   void session.done.then(outcome => {
-    if (outcome === 'done') {
+    if (outcome === 'done' && sequence === requestedSequence) {
       setVoicePlaybackState(currentState('idle'))
     }
   })
@@ -573,7 +588,7 @@ async function playSpeechDataUrl(
   options: VoicePlaybackOptions,
   isCurrent: () => boolean
 ): Promise<boolean> {
-  const response = await speakText(speakableText)
+  const response = await speakText(speakableText, options.scope)
 
   if (!isCurrent()) {
     return false
@@ -669,7 +684,7 @@ export async function playSpeechText(text: string, options: VoicePlaybackOptions
   try {
     // Ladder: client-direct synthesis (profile's own TTS, no gateway audio
     // hop) → streaming WS relay → POST data-URL fallback.
-    const direct = await directTtsConfig().catch(() => null)
+    const direct = await directTtsConfig(options.scope).catch(() => null)
 
     if (direct && isCurrent()) {
       const session = openClientDirectSpeechSession(direct, options)
@@ -693,7 +708,7 @@ export async function playSpeechText(text: string, options: VoicePlaybackOptions
       return false
     }
 
-    const streamUrl = await resolveSpeakStreamUrl()
+    const streamUrl = await resolveSpeakStreamUrl(options.scope)
 
     if (streamUrl && isCurrent()) {
       const outcome = await playSpeechStream(streamUrl, speakableText, options)

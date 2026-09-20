@@ -108,14 +108,21 @@ const isMac = typeof navigator !== 'undefined' && /Mac|iP(hone|ad|od)/.test(navi
 const ApprovalBar: FC<{ request: ApprovalRequest; surface: 'floating' | 'inline' }> = ({ request, surface }) => {
   const { t } = useI18n()
   const gateway = useStore($gateway)
+
   const respond = async (choice: ApprovalChoice) => {
-    if (!sessionApprovalRequest(request.sessionId).get()) return
-    if (!gateway) throw new Error(t.assistant.approval.gatewayDisconnected)
+    if (!sessionApprovalRequest(request.sessionId).get()) {
+      return
+    }
+
+    if (!gateway) {
+      throw new Error(t.assistant.approval.gatewayDisconnected)
+    }
     await answerApproval(gateway, request, choice)
     clearApprovalRequest(request.sessionId, request.requestId)
     void replayPendingApproval(gateway, request.sessionId).catch(() => undefined)
   }
-  return <ApprovalBarSurface request={request} surface={surface} onRespond={respond} />
+
+  return <ApprovalBarSurface onRespond={respond} request={request} surface={surface} />
 }
 
 /** Original approval controls, with all transport authority supplied by the owner. */
@@ -140,10 +147,14 @@ export function ApprovalBarSurface({
   const allowAlways = choices ? choices.includes('always') : allowPermanent
   const hasMoreOptions = allowSession || allowAlways
   const hasCommand = request.command.trim().length > 0
+
   const respond = useCallback(
     async (choice: ApprovalChoice) => {
-      if (busy) return
+      if (busy) {
+        return
+      }
       setSubmitting(choice)
+
       try {
         await onRespond(choice)
         triggerHaptic(choice === 'deny' ? 'cancel' : 'submit')

@@ -8,6 +8,11 @@ const session = (id: string, title: string | null, extra: Partial<SessionInfo> =
   ({ id, title, ...extra }) as SessionInfo
 
 describe('sameCronSignature', () => {
+  it('publishes a changed owner even when the source twins have identical content', () => {
+    const row = session('same', 'Title')
+    expect(sameCronSignature([row], [{ ...row, connection_id: 'local' }])).toBe(false)
+    expect(sameCronSignature([{ ...row, connection_id: 'remote' }], [{ ...row, connection_id: 'local' }])).toBe(false)
+  })
   it('is false when the lengths differ', () => {
     expect(sameCronSignature([session('a', 't')], [])).toBe(false)
   })

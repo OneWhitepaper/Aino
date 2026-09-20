@@ -547,21 +547,20 @@ export function mergeSessionPage(
 ): SessionInfo[] {
   const keep = keepIds instanceof Set ? keepIds : new Set(keepIds)
 
-  // Rows are identified by (profile, id), never bare id: two profiles can
-  // hold sessions with the SAME stored id (restored backups, copied
-  // state.dbs, cross-profile imports — #92454). Keyed by bare id, the twins
-  // collapse into one sidebar row whose title/preview carry can stitch one
-  // profile's content onto the other profile's route — the user clicks a row
-  // previewing profile A and the resume dials profile B. Same-profile rows
-  // (including untagged ones, which normalize together) keep the exact
-  // carry behavior below.
-  // (Local normalize: importing @/store/profile here would be circular —
-  // same '' → 'default' rule as normalizeProfileKey.)
+  // A stored id is unique only within a connection and profile. Restored or
+  // copied databases can contain twins; title/activity carry must keep their
+  // provenance just as strictly as the eventual resume route.
   const profileKeyOf = (session: SessionInfo) => (session.profile ?? '').trim() || 'default'
-  const identity = (session: SessionInfo) => `${profileKeyOf(session)}::${session.id}`
+
+  const identity = (session: SessionInfo) =>
+    JSON.stringify([session.connection_id?.trim() || null, profileKeyOf(session), session.id])
 
   const lineageIdentity = (session: SessionInfo) =>
-    `${profileKeyOf(session)}::${session._lineage_root_id ?? session.id}`
+    JSON.stringify([
+      session.connection_id?.trim() || null,
+      profileKeyOf(session),
+      session._lineage_root_id ?? session.id
+    ])
 
   // Carry a known title onto a row that arrives title-less, so a freshly
   // submitted session (e.g. a branch draft) holds its placeholder instead of
@@ -574,7 +573,15 @@ export function mergeSessionPage(
   const prevByLineage = new Map(previous.map(session => [lineageIdentity(session), session]))
 
   const merged = incoming.map(session => {
-    const prev = prevById.get(identity(session)) ?? prevByLineage.get(lineageIdentity(session))
+    // The primary local aggregate historically omits its local tag. Carry only
+    // that known alias; an untagged row must never borrow a remote twin's state.
+    const localAlias = !session.connection_id?.trim() ? { ...session, connection_id: 'local' } : null
+
+    const prev =
+      prevById.get(identity(session)) ??
+      prevByLineage.get(lineageIdentity(session)) ??
+      (localAlias ? (prevById.get(identity(localAlias)) ?? prevByLineage.get(lineageIdentity(localAlias))) : undefined)
+
     // User-send stamps last_active before the DB flushes the user row
     // (last_active = MAX(messages.timestamp)). Keep the fresher of the two.
     const last_active = Math.max(prev?.last_active ?? 0, session.last_active ?? 0)
@@ -604,7 +611,7 @@ export function mergeSessionPage(
   // id (old #4 → new #5), the incoming page carries the new tip but the
   // previous list still holds the old one.  Without lineage-level dedup both
   // rows survive as separate sidebar entries (fixes #43483). Lineage keys are
-  // profile-qualified for the same reason as identity above — a twin id in
+  // source-qualified for the same reason as identity above — a twin id in
   // another profile is a DIFFERENT session and must survive the dedupe.
   const incomingLineageKeys = new Set(merged.map(lineageIdentity))
 
@@ -1235,9 +1242,7 @@ function rescopeComposerSelection(nextScope: string | null, preserveLegacyLocalS
   // bridge after boot may have already painted that same local backend from the
   // legacy bare scope. This promotion preserves the user's existing intent.
   const preserveSelection =
-    preserveLegacyLocalSelection &&
-    composerSelectionScope === '' &&
-    nextScope === LOCAL_DEFAULT_REGISTRY_COMPOSER_SCOPE
+    preserveLegacyLocalSelection && composerSelectionScope === '' && nextScope === LOCAL_DEFAULT_REGISTRY_COMPOSER_SCOPE
 
   const previous = preserveSelection
     ? {
@@ -1306,7 +1311,6 @@ export const setConnection = (next: Updater<HermesConnection | null>) => {
   if (mode) {
     setApiRequestLocalMode(mode === 'local')
   }
-
 }
 
 export const setGatewayState = (next: Updater<ConnectionState>) => updateAtom($gatewayState, next)

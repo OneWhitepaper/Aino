@@ -116,7 +116,9 @@ it('reports a real installation error rather than a false success and permits de
 
 it('surfaces an expired request after async failure without rejecting the detached click handler', async () => {
   vi.spyOn(hermes, 'setMcpServerEnabled').mockRejectedValue(new Error('Enable failed'))
-  respond.mockImplementation(() => { throw new Error('Request expired') })
+  respond.mockImplementation(() => {
+    throw new Error('Request expired')
+  })
   setup()
   fireEvent.click(screen.getByRole('button', { name: 'Enable' }))
   expect(await screen.findByRole('alert')).toHaveProperty('textContent', 'Request expired')

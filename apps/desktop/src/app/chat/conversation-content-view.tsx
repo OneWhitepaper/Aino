@@ -48,7 +48,7 @@ function ReferencedAnswer({ owner, reference }: { owner: ConversationOwner; refe
     return <p role="status">{t.composer.conversation.contentLoading}</p>
   }
 
-  return <MarkdownTextContent text={text} isRunning={false} previewOnly disableArtifacts />
+  return <MarkdownTextContent disableArtifacts isRunning={false} previewOnly text={text} />
 }
 
 function PublicAttachment({ owner, attachment }: { owner: ConversationOwner; attachment: ConversationAttachment }) {
@@ -115,10 +115,10 @@ export function ConversationContentView({ owner, event }: { owner: ConversationO
           <UserMessageText text={payload.text} />
         ) : (
           <MarkdownTextContent
-            text={payload.text}
+            disableArtifacts
             isRunning={payload.status === 'streaming'}
             previewOnly
-            disableArtifacts
+            text={payload.text}
           />
         ))
       )}

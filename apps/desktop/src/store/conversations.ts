@@ -22,6 +22,8 @@ export interface FrozenConversationSend {
   turnId: string
   draftVersion: string
   commandToken?: string
+  surface?: 'voice-live'
+  voiceContext?: string
   sourceText?: string
 }
 
@@ -61,6 +63,14 @@ export function setConversationDraft(
     current.text === draft.text &&
     current.attachmentIds.length === draft.attachmentIds.length &&
     current.attachmentIds.every((value, index) => value === draft.attachmentIds[index])
+
+  if (
+    unchangedInput &&
+    current.selectedParticipantId === draft.selectedParticipantId &&
+    current.revision === draft.revision
+  ) {
+    return current
+  }
 
   const next = {
     ...draft,

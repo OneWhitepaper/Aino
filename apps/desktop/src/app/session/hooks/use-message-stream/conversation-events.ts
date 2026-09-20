@@ -4,14 +4,14 @@ import { type ConversationOwner, conversationOwnerKey } from '@/store/conversati
 import {
   $conversationRuntime,
   $foregroundConversationOwner,
-  type ConversationRuntime,
   conversationActivityKey,
   conversationReconcilers,
+  type ConversationRuntime,
   conversationRuntime,
   updateConversationRuntime
 } from '@/store/conversation-runtime'
-import type { ScopedServerRequest } from '@/store/gateway'
 import { acceptConversationSend } from '@/store/conversations'
+import type { ScopedServerRequest } from '@/store/gateway'
 
 function isFinalFor(event: ConversationEvent, coordinates: ConversationActivityCoordinates): boolean {
   return (
@@ -84,6 +84,7 @@ export function mergeConversationEvents(owner: ConversationOwner, incoming: read
 export function handleConversationGatewayEvent(event: GatewayEvent): boolean {
   if (event.type === 'request.cancel') {
     const id = (event.payload as { id?: string } | undefined)?.id
+
     const state =
       id &&
       Object.values($conversationRuntime.get()).find(
@@ -92,13 +93,16 @@ export function handleConversationGatewayEvent(event: GatewayEvent): boolean {
           (candidate.pendingRequests[id]?.coordinates.runtime_id ??
             pendingReplies.get(conversationOwnerKey(candidate.owner))?.get(id)?.params.session_id) === event.session_id
       )
+
     if (state && id) {
       pendingReplies.get(conversationOwnerKey(state.owner))?.delete(id)
       const { [id]: _cancelled, ...pendingRequests } = state.pendingRequests
       updateConversationRuntime(state.owner, { pendingRequests })
+
       return true
     }
   }
+
   const coordinates = event.conversation
 
   if (!coordinates) {
@@ -150,6 +154,7 @@ export function handleConversationGatewayEvent(event: GatewayEvent): boolean {
 
 // Keep replies on the delivering socket, keyed by the complete conversation owner.
 const pendingReplies = new Map<string, Map<string, ScopedServerRequest>>()
+
 const INPUT_METHODS = new Set([
   'approval',
   'clarify',
@@ -168,8 +173,10 @@ function ownsRequestCoordinates(state: ConversationRuntime, coordinates: Convers
       item.participant.participant_id === coordinates.participant_id &&
       item.session_generation === coordinates.session_generation
   )
+
   const runtime = state.runtimes[coordinates.participant_id]
   const known = state.runtimeOwners[coordinates.runtime_id]
+
   if (
     !binding ||
     state.owner.conversationId !== coordinates.conversation_id ||
@@ -178,9 +185,12 @@ function ownsRequestCoordinates(state: ConversationRuntime, coordinates: Convers
         known.sessionGeneration === coordinates.session_generation) ||
       runtime?.runtime_id === coordinates.runtime_id
     )
-  )
+  ) {
     return false
+  }
+
   const active = state.snapshot?.active_turn
+
   const exactActive =
     active &&
     active.runtime_id === coordinates.runtime_id &&
@@ -189,44 +199,61 @@ function ownsRequestCoordinates(state: ConversationRuntime, coordinates: Convers
     active.turn_id === coordinates.turn_id &&
     active.task_id === coordinates.task_id &&
     active.execution_generation === coordinates.execution_generation
+
   const exactBackground = runtime?.background_activities.some(
     item => conversationActivityKey(item) === conversationActivityKey(coordinates)
   )
+
   return Boolean(exactActive || exactBackground)
 }
 
 export function conversationRequestOwner(request: ScopedServerRequest): ConversationRuntime | undefined {
   const coordinates = request.params.conversation as ConversationActivityCoordinates | undefined
-  if (!coordinates || request.params.session_id !== coordinates.runtime_id) return undefined
+
+  if (!coordinates || request.params.session_id !== coordinates.runtime_id) {
+    return undefined
+  }
+
   const candidates = Object.values($conversationRuntime.get()).filter(
     state => state.owner.connectionId === request.connectionId && ownsRequestCoordinates(state, coordinates)
   )
+
   return candidates.length === 1 ? candidates[0] : undefined
 }
 
 export function isForegroundConversationRequest(request: ScopedServerRequest): boolean {
   const state = conversationRequestOwner(request)
   const foreground = $foregroundConversationOwner.get()
+
   return Boolean(state && foreground && conversationOwnerKey(state.owner) === conversationOwnerKey(foreground))
 }
 
 export function handleConversationServerRequest(request: ScopedServerRequest): boolean {
   const coordinates = request.params.conversation as ConversationActivityCoordinates | undefined
-  if (!coordinates || !INPUT_METHODS.has(request.method)) return false
+
+  if (!coordinates || !INPUT_METHODS.has(request.method)) {
+    return false
+  }
+
   // Snapshot replies replay requests before the runtime snapshot is published. Keep
   // the socket privately until reconciliation establishes its complete owner.
   const candidate = Object.values($conversationRuntime.get()).find(
     state =>
       state.owner.connectionId === request.connectionId && state.owner.conversationId === coordinates.conversation_id
   )
+
   if (candidate) {
     const key = conversationOwnerKey(candidate.owner)
     const replies = pendingReplies.get(key) ?? new Map<string, ScopedServerRequest>()
     replies.set(request.id, { ...request, params: { ...request.params, conversation: { ...coordinates } } })
     pendingReplies.set(key, replies)
   }
+
   const state = conversationRequestOwner(request)
-  if (!state) return true
+
+  if (!state) {
+    return true
+  }
   updateConversationRuntime(state.owner, {
     pendingRequests: {
       ...state.pendingRequests,
@@ -238,6 +265,7 @@ export function handleConversationServerRequest(request: ScopedServerRequest): b
       }
     }
   })
+
   return true
 }
 
@@ -249,9 +277,11 @@ export function respondConversationRequest(
   const key = conversationOwnerKey(owner)
   const request = pendingReplies.get(key)?.get(requestId)
   const state = conversationRuntime(owner)
+
   if (!request || !state.pendingRequests[requestId] || conversationRequestOwner(request)?.owner !== state.owner) {
     throw new Error('Conversation request is no longer available; reload the conversation')
   }
+
   request.respond(result)
   pendingReplies.get(key)?.delete(requestId)
   const { [requestId]: _answered, ...pendingRequests } = state.pendingRequests
@@ -266,10 +296,15 @@ export function reconcileConversationRequests(
   const state = conversationRuntime(owner)
   const pendingRequests = { ...state.pendingRequests }
   const replies = pendingReplies.get(conversationOwnerKey(owner))
+
   for (const [id, request] of replies ?? []) {
     const coordinates = request.params.conversation as ConversationActivityCoordinates
-    if (coordinates.participant_id === participantId && !openIds.includes(id)) replies?.delete(id)
+
+    if (coordinates.participant_id === participantId && !openIds.includes(id)) {
+      replies?.delete(id)
+    }
   }
+
   for (const [id, request] of Object.entries(pendingRequests)) {
     if (
       request.coordinates.participant_id === participantId &&
@@ -279,9 +314,14 @@ export function reconcileConversationRequests(
       replies?.delete(id)
     }
   }
+
   updateConversationRuntime(owner, { pendingRequests })
+
   for (const id of openIds) {
     const replay = replies?.get(id)
-    if (replay) handleConversationServerRequest(replay)
+
+    if (replay) {
+      handleConversationServerRequest(replay)
+    }
   }
 }

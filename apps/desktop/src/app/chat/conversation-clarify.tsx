@@ -1,6 +1,6 @@
-import { OwnedClarifyRequest } from '@/components/assistant-ui/clarify-tool'
 import { useState } from 'react'
 
+import { OwnedClarifyRequest } from '@/components/assistant-ui/clarify-tool'
 import { useI18n } from '@/i18n'
 import { normalizeChoices, normalizeQuestions } from '@/store/clarify'
 import type { ConversationOwner } from '@/store/conversation-owner'
@@ -19,6 +19,7 @@ export interface ConversationRequestProps {
 export function ConversationClarify({ owner, request, respond, refresh }: ConversationRequestProps) {
   const { t } = useI18n()
   const [accepted, setAccepted] = useState<Record<string, string>>({})
+
   return (
     <OwnedClarifyRequest
       request={{
@@ -35,13 +36,17 @@ export function ConversationClarify({ owner, request, respond, refresh }: Conver
         cancel: () => respond(request.id, {}),
         lock: async (questionId, answer) => {
           requireConversationRuntime(owner, request.coordinates)
+
           const result = await requestGatewayForAgent<{ status: string }>(
             owner.connectionId,
             'default',
             'clarify.lock',
             { request_id: request.id, question_id: questionId, answer }
           )
-          if (result.status !== 'ok') throw new Error(t.composer.conversation.clarifyExpired)
+
+          if (result.status !== 'ok') {
+            throw new Error(t.composer.conversation.clarifyExpired)
+          }
           setAccepted(current => ({ ...current, [questionId]: answer }))
           await refresh()
         }

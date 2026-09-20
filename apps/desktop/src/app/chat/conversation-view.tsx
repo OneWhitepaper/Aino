@@ -1,35 +1,39 @@
-import { Loader } from '@/components/ui/loader'
-import { Contribute } from '@/contrib/react/contribute'
-import { PaneTabLabel } from '@/components/ui/pane-tab'
-import { Intro } from '@/components/chat/intro'
-import { Backdrop } from '@/components/Backdrop'
-import { ThreadContent } from '@/components/assistant-ui/thread/list'
-import { HumanMessageContainer, USER_BUBBLE_BASE_CLASS } from '@/components/assistant-ui/thread/user-message'
-import { AssistantMessageContent } from '@/components/assistant-ui/thread/assistant-message'
-import { $conversationDrafts, setConversationDraft } from '@/store/conversations'
 import type { ConversationCatalogEntry } from '@hermes/shared/gateway-events'
 import { useStore } from '@nanostores/react'
 import { computed } from 'nanostores'
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 
+import { AssistantMessageContent } from '@/components/assistant-ui/thread/assistant-message'
+import { ThreadContent } from '@/components/assistant-ui/thread/list'
+import { HumanMessageContainer, USER_BUBBLE_BASE_CLASS } from '@/components/assistant-ui/thread/user-message'
+import { Backdrop } from '@/components/Backdrop'
+import { Intro } from '@/components/chat/intro'
 import { Button } from '@/components/ui/button'
+import { Loader } from '@/components/ui/loader'
+import { PaneTabLabel } from '@/components/ui/pane-tab'
+import { Contribute } from '@/contrib/react/contribute'
 import { useI18n } from '@/i18n'
 import { type ConversationOwner, conversationOwnerKey } from '@/store/conversation-owner'
 import { $conversationRuntime, $foregroundConversationOwner, conversationRuntime } from '@/store/conversation-runtime'
+import { $conversationDrafts, setConversationDraft } from '@/store/conversations'
 
 import { ConversationComposer } from './composer/conversation-composer'
 import type { ParticipantOption } from './composer/expert-selection'
 import { createConversationActions } from './conversation-actions'
 import { ConversationActivity } from './conversation-activity'
 import { ConversationConfiguration } from './conversation-configuration'
-import { ConversationProject } from './conversation-project'
 import { ConversationContentView } from './conversation-content-view'
+import { ConversationEditedDraft } from './conversation-edited-draft'
+import { ConversationMessageActions } from './conversation-message-actions'
+import { ConversationProject } from './conversation-project'
+import { useConversationReactions } from './use-conversation-reactions'
 
 export interface ConversationViewProps {
   owner: ConversationOwner
+  onOpenConversation?: (owner: ConversationOwner) => void
 }
 
-export function ConversationView({ owner }: ConversationViewProps) {
+export function ConversationView({ owner, onOpenConversation }: ConversationViewProps) {
   const { t } = useI18n()
   const copy = t.composer.conversation
   const key = conversationOwnerKey(owner)
@@ -39,6 +43,12 @@ export function ConversationView({ owner }: ConversationViewProps) {
     useMemo(() => computed($conversationRuntime, rows => rows[key] ?? conversationRuntime(owner)), [key, owner])
   )
 
+  const reactionIds = runtime.events
+    .filter(event => event.kind === 'conversation.input' || event.kind === 'conversation.response')
+    .map(event => event.event_id)
+
+  const reactions = useConversationReactions(owner, reactionIds)
+  const pendingEdit = runtime.snapshot?.conversation.branch?.draft_pending ? runtime.snapshot.conversation.branch : null
   const scrollRef = useRef<HTMLDivElement>(null)
   const follow = useRef(true)
   useLayoutEffect(() => {
@@ -127,13 +137,14 @@ export function ConversationView({ owner }: ConversationViewProps) {
   const home =
     Boolean(runtime.snapshot) &&
     !runtime.events.some(event => event.kind === 'conversation.input' || event.kind === 'conversation.response')
+
   return (
     <main
       className="relative isolate flex h-full min-h-0 min-w-0 flex-col overflow-hidden bg-(--ui-chat-surface-background)"
       data-chat-surface=""
-      data-home-layout={home ? '' : undefined}
-      data-conversation-layout={!home ? '' : undefined}
       data-conversation-id={owner.conversationId}
+      data-conversation-layout={!home ? '' : undefined}
+      data-home-layout={home ? '' : undefined}
     >
       {!home && runtime.snapshot && (
         <Contribute area="titleBar.left" id={`conversation-header:${key}`} order={-100}>
@@ -163,7 +174,10 @@ export function ConversationView({ owner }: ConversationViewProps) {
               home
               onInsertPrompt={text => {
                 const draft = $conversationDrafts.get()[key]
-                if (draft) setConversationDraft(owner, { ...draft, text })
+
+                if (draft) {
+                  setConversationDraft(owner, { ...draft, text })
+                }
               }}
               onPickFiles={() => {
                 const root = scrollRef.current?.closest('main')
@@ -221,6 +235,20 @@ export function ConversationView({ owner }: ConversationViewProps) {
                       <ConversationContentView event={event} owner={owner} />
                     </AssistantMessageContent>
                   )}
+                  <ConversationMessageActions
+                    disabled={
+                      runtime.busy ||
+                      runtime.submitting ||
+                      Boolean(runtime.uncertainSend || runtime.uncertainHistory) ||
+                      Boolean(pendingEdit) ||
+                      Boolean(runtime.snapshot?.conversation.archived)
+                    }
+                    event={event}
+                    onOpen={onOpenConversation}
+                    onReact={reactions.react}
+                    owner={owner}
+                    reaction={reactions.states[event.event_id]}
+                  />
                   {typeof payload.status === 'string' && payload.status !== 'settled' && (
                     <p className="text-xs">{payload.status}</p>
                   )}
@@ -247,43 +275,66 @@ export function ConversationView({ owner }: ConversationViewProps) {
               )}
             </div>
           )}
+          {reactions.error && (
+            <Button onClick={reactions.retry} variant="ghost">
+              {t.common.retry}
+            </Button>
+          )}
           {(runtime.error || catalogError) && <p role="alert">{runtime.error || catalogError}</p>}
-          {runtime.uncertainSend && <Button onClick={() => run(() => actions.retry())}>{copy.reconcile}</Button>}
+          {(runtime.uncertainSend || runtime.uncertainHistory) && (
+            <Button onClick={() => run(() => actions.retry())}>{copy.reconcile}</Button>
+          )}
         </ThreadContent>
       </div>
-      <ConversationComposer
-        onRefresh={actions.refresh}
-        home={home}
-        project={
-          runtime.snapshot && (
-            <ConversationProject
+      {pendingEdit?.draft ? (
+        <ConversationEditedDraft
+          branch={pendingEdit}
+          busy={runtime.busy || runtime.submitting}
+          owner={owner}
+          revision={runtime.snapshot!.conversation.revision}
+          uncertain={Boolean(runtime.uncertainSend)}
+        />
+      ) : (
+        <ConversationComposer
+          busy={runtime.busy}
+          configuration={
+            <ConversationConfiguration onRefresh={actions.refresh} owner={owner} participants={participants} />
+          }
+          home={home}
+          notices={
+            <ConversationConfiguration
+              noticesOnly
+              onRefresh={actions.refresh}
               owner={owner}
-              record={runtime.snapshot.conversation}
-              profiles={(catalog ?? []).map(entry => entry.participant.profile)}
-              disabled={runtime.busy || runtime.submitting || Boolean(runtime.uncertainSend)}
-              load={actions.load}
+              participants={participants}
             />
-          )
-        }
-        notices={
-          <ConversationConfiguration
-            noticesOnly
-            onRefresh={actions.refresh}
-            owner={owner}
-            participants={participants}
-          />
-        }
-        configuration={
-          <ConversationConfiguration onRefresh={actions.refresh} owner={owner} participants={participants} />
-        }
-        onStop={active ? () => run(() => actions.stop(active)) : undefined}
-        busy={runtime.busy}
-        onSubmit={() => run(actions.submit)}
-        owner={owner}
-        participants={participants}
-        submitting={runtime.submitting}
-        unavailable={catalog === null || !runtime.snapshot || Boolean(runtime.uncertainSend) || Boolean(catalogError)}
-      />
+          }
+          onRefresh={actions.refresh}
+          onStop={active ? () => run(() => actions.stop(active)) : undefined}
+          onSubmit={() => run(actions.submit)}
+          owner={owner}
+          participants={participants}
+          project={
+            runtime.snapshot && (
+              <ConversationProject
+                disabled={runtime.busy || runtime.submitting || Boolean(runtime.uncertainSend)}
+                load={actions.load}
+                owner={owner}
+                profiles={(catalog ?? []).map(entry => entry.participant.profile)}
+                record={runtime.snapshot.conversation}
+              />
+            )
+          }
+          submitting={runtime.submitting}
+          unavailable={
+            catalog === null ||
+            !runtime.snapshot ||
+            runtime.snapshot.conversation.archived ||
+            Boolean(runtime.uncertainSend || runtime.uncertainHistory) ||
+            Boolean(catalogError)
+          }
+        />
+      )}
     </main>
   )
 }

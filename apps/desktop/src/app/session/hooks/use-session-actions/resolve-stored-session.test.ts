@@ -7,7 +7,13 @@ import { $projectTree } from '@/store/projects'
 import { $cronSessions, $messagingSessions, $sessions } from '@/store/session'
 import type { SessionInfo } from '@/types/hermes'
 
-import { cachedSessionRow, resolveSessionProfile, resolveStoredSession } from './utils'
+import {
+  cachedSessionRow,
+  resolveSessionProfile,
+  resolveStoredSession,
+  restoreListedSession,
+  upsertOptimisticSession
+} from './utils'
 
 vi.mock('@/hermes', async importActual => ({
   ...(await importActual<typeof HermesModule>()),
@@ -38,6 +44,42 @@ describe('resolveStoredSession profile ownership', () => {
     $projectTree.set([])
     $profiles.set([])
     $activeGatewayProfile.set('default')
+  })
+
+  it('resolves one source without replacing another source or Profile with the same lineage', async () => {
+    const remote = session({
+      id: 'tip',
+      _lineage_root_id: 'root',
+      profile: 'writer',
+      connection_id: 'homelab',
+      title: 'Remote'
+    })
+    const otherProfile = session({ id: 'tip', _lineage_root_id: 'root', profile: 'reviewer', connection_id: 'local' })
+    const localOld = session({ id: 'old', _lineage_root_id: 'root', profile: 'writer', connection_id: 'local' })
+    $sessions.set([remote, otherProfile, localOld])
+    mockGetSession.mockResolvedValueOnce(session({ id: 'tip', _lineage_root_id: 'root', title: 'Local' }))
+    const owner = { connectionId: 'local', profile: 'writer' }
+
+    const local = await resolveStoredSession('tip', owner)
+
+    expect(local).toMatchObject({ title: 'Local', connection_id: 'local', profile: 'writer' })
+    expect($sessions.get()).toEqual([local, remote, otherProfile])
+    expect(await resolveStoredSession('tip', { connectionId: 'homelab', profile: 'writer' })).toBe(remote)
+    expect(mockGetSession).toHaveBeenCalledTimes(1)
+  })
+
+  it('optimistic publication and rollback preserve same-ID foreign rows', () => {
+    const remote = session({ id: 's1', profile: 'writer', connection_id: 'homelab', title: 'Remote' })
+    const otherProfile = session({ id: 's1', profile: 'reviewer', connection_id: 'local' })
+    $sessions.set([remote, otherProfile])
+    upsertOptimisticSession({ session_id: 'runtime' }, 's1', 'Local', null, null, undefined, {
+      connectionId: 'local',
+      profile: 'writer'
+    })
+    expect($sessions.get().slice(1)).toEqual([remote, otherProfile])
+    const restored = { ...$sessions.get()[0], title: 'Restored' }
+    restoreListedSession(restored)
+    expect($sessions.get()).toEqual([restored, remote, otherProfile])
   })
 
   it('returns a cached row that carries an owning profile', async () => {

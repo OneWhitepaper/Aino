@@ -2,7 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { setApiRequestConnection, setApiRequestProfile } from '@/hermes'
 
-import { resolveSpeakStreamUrl } from './voice-playback'
+import * as voiceConfig from './voice-client-direct'
+import { resolveSpeakStreamUrl, startSpeechStream, stopVoicePlayback } from './voice-playback'
 
 // The speak-stream WebSocket must dial the ACTIVE (connection, profile)
 // backend — the same one chat and every REST audio call use. Before this
@@ -42,6 +43,49 @@ describe('resolveSpeakStreamUrl', () => {
     setApiRequestProfile(null)
     Reflect.deleteProperty(window, 'hermesDesktop')
     vi.useRealTimers()
+    vi.restoreAllMocks()
+  })
+
+  it('pins owned playback to its coordinator and Profile despite an ambient switch, and discards cancelled setup', async () => {
+    setApiRequestConnection('unrelated')
+    setApiRequestProfile('unrelated')
+    getGatewayWsUrlFor.mockResolvedValue({
+      ok: true,
+      wsUrl: 'wss://gateway.example/api/ws?ticket=fresh&profile=default'
+    })
+    const scope = { connectionId: 'owned', profile: 'writer' }
+    const url = await resolveSpeakStreamUrl(scope)
+    expect(getConnectionFor).toHaveBeenCalledWith({ connectionId: 'owned', profile: 'default' })
+    expect(getGatewayWsUrlFor).toHaveBeenCalledWith({ connectionId: 'owned', profile: 'default' })
+    expect(new URL(url!).searchParams.get('profile')).toBe('writer')
+    let finish!: (value: null) => void
+    vi.spyOn(voiceConfig, 'directTtsConfig').mockReturnValue(
+      new Promise(resolve => {
+        finish = resolve
+      })
+    )
+    getConnectionFor.mockClear()
+    const pending = startSpeechStream({ scope, source: 'read-aloud', messageId: 'owned-event' })
+    stopVoicePlayback()
+    finish(null)
+    expect(await pending).toBeNull()
+    expect(getConnectionFor).not.toHaveBeenCalled()
+  })
+
+  it('newer streaming setup supersedes an earlier source before either asynchronous configuration resolves', async () => {
+    const pending: Array<(value: null) => void> = []
+    vi.spyOn(voiceConfig, 'directTtsConfig').mockImplementation(() => new Promise(resolve => pending.push(resolve)))
+    // No configured transport: this assertion tests which source may even dial.
+    getConnectionFor.mockResolvedValue(null)
+    const first = startSpeechStream({ scope: { connectionId: 'first', profile: 'writer' }, source: 'read-aloud' })
+    const second = startSpeechStream({ scope: { connectionId: 'second', profile: 'reviewer' }, source: 'read-aloud' })
+    pending[0](null)
+    await first
+    expect(getConnectionFor).not.toHaveBeenCalled()
+    pending[1](null)
+    await second
+    expect(getConnectionFor).toHaveBeenCalledWith({ connectionId: 'second', profile: 'default' })
+    stopVoicePlayback()
   })
 
   it('resolves through the registry (connection, profile) bridges when a registry connection is active', async () => {

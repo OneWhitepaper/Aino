@@ -14,9 +14,15 @@ export async function changeConversationProject(
   request = requestGatewayForAgent
 ) {
   const state = conversationRuntime(owner)
-  if (state.busy || state.submitting || state.uncertainSend)
+
+  if (state.busy || state.submitting || state.uncertainSend) {
     throw new Error('Wait for conversation work to finish before changing project')
-  if (project && project.install_id !== owner.installId) throw new Error('Project belongs to another installation')
+  }
+
+  if (project && project.install_id !== owner.installId) {
+    throw new Error('Project belongs to another installation')
+  }
+
   const result = await request<{ conversation: ConversationRecord }>(
     owner.connectionId,
     'default',
@@ -27,8 +33,12 @@ export async function changeConversationProject(
       expected_revision: revision
     }
   )
+
   cacheConversation(owner, result.conversation)
   const draft = $conversationDrafts.get()[conversationOwnerKey(owner)]
-  if (draft) setConversationDraft(owner, { ...draft, revision: result.conversation.revision })
+
+  if (draft) {
+    setConversationDraft(owner, { ...draft, revision: result.conversation.revision })
+  }
   await load()
 }

@@ -93,8 +93,10 @@ function AttachmentPill({
 
     if (onPreview) {
       await onPreview(attachment)
+
       return
     }
+
     if (attachment.kind === 'image') {
       try {
         let source = lightboxSrc || ''

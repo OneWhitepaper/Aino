@@ -1,4 +1,3 @@
-import { handleConversationGatewayEvent } from '../conversation-events'
 import { type GatewayEvent, registryBackendScopeKey } from '@hermes/shared'
 import { useCallback, useEffect, useRef } from 'react'
 
@@ -15,6 +14,8 @@ import { replayPendingApproval } from '@/store/prompts'
 import { setSessionProviderWait } from '@/store/provider-wait'
 import { isSessionGone } from '@/store/session-gone-latch'
 import { setSessionDraftingTool } from '@/store/tool-drafting'
+
+import { handleConversationGatewayEvent } from '../conversation-events'
 
 import { handleDesktopBridgeEvent } from './desktop-bridge'
 import { handleInputRequestEvent } from './input-requests'
@@ -136,6 +137,7 @@ export function useGatewayEventHandler(deps: GatewayEventDeps) {
       if (handleConversationGatewayEvent(event)) {
         return
       }
+
       const payload = event.payload as GatewayEventPayload | undefined
 
       // "From the active profile" must mean "from the active SOURCE": every

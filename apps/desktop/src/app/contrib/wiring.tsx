@@ -1,13 +1,4 @@
-/**
- * Real-featureset wiring for the contrib (layout tree) root — the minimal
- * subset of DesktopController's hook chain that makes the REAL surfaces work:
- * gateway boot -> sessions list -> click-to-resume -> live transcript ->
- * composer send, plus the real terminal.
- *
- * The wired nodes (sidebar / chat routes / terminal) are exposed through
- * context; registered panes render `<WiredPane part="…"/>` to consume them.
- */
-
+import type { ConversationCatalogResult } from '@hermes/shared/gateway-events'
 import { useStore } from '@nanostores/react'
 import { useQueryClient } from '@tanstack/react-query'
 import { type CSSProperties, lazy, type ReactNode, Suspense, useCallback, useEffect, useMemo, useRef } from 'react'
@@ -21,6 +12,15 @@ import { BootFailureOverlay } from '@/components/boot-failure-overlay'
 import { ConfirmHost } from '@/components/confirm-host'
 import { DesktopInstallOverlay } from '@/components/desktop-install-overlay'
 import { FindBar } from '@/components/find-bar'
+/**
+ * Real-featureset wiring for the contrib (layout tree) root — the minimal
+ * subset of DesktopController's hook chain that makes the REAL surfaces work:
+ * gateway boot -> sessions list -> click-to-resume -> live transcript ->
+ * composer send, plus the real terminal.
+ *
+ * The wired nodes (sidebar / chat routes / terminal) are exposed through
+ * context; registered panes render `<WiredPane part="…"/>` to consume them.
+ */
 import { FreeTierSignInDialog } from '@/components/free-tier/sign-in-dialog'
 import { GatewayConnectingOverlay } from '@/components/gateway-connecting-overlay'
 import { IntroRevealGate } from '@/components/intro-reveal'
@@ -40,6 +40,7 @@ import { SendDiagnosticsHost } from '@/components/send-diagnostics-dialog'
 import { TipHost } from '@/components/tips'
 import { emitGatewayEvent } from '@/contrib/events'
 import { getLatestSessionMessages } from '@/hermes'
+import { translateNow } from '@/i18n'
 import { type ChatMessage, chatMessageText, preserveLocalAssistantErrors, toChatMessages } from '@/lib/chat-messages'
 import { isMessagingSource } from '@/lib/session-source'
 import { latestSessionTodos } from '@/lib/todos'
@@ -49,12 +50,17 @@ import { $billingSettingsRequest } from '@/store/billing-block'
 import { $desktopBoot } from '@/store/boot'
 import { requestVoiceConversationStart } from '@/store/composer'
 import { $activeConnectionId } from '@/store/connections'
+import { conversationOwnerKey } from '@/store/conversation-owner'
+import { consumeConversationWake } from '@/store/conversation-voice-target'
+import { $conversationDrafts, setConversationDraft } from '@/store/conversations'
 import { $cronReviewRequest, setCronFocusJobId } from '@/store/cron'
+import { requestGatewayForAgent } from '@/store/gateway'
 import { $activeGatewayConnectionId, requestGatewayForProfile } from '@/store/gateway'
-import { $pinnedSessionIds, pinSession, restoreWorktree, unpinSession } from '@/store/layout'
+import { $pinnedSessionIds, pinSession, unpinSession } from '@/store/layout'
 import { notifyError } from '@/store/notifications'
 import { $poolLimitsSettingsRequest } from '@/store/pool-limits'
 import { $previewTarget } from '@/store/preview'
+import { $newChatConnectionId, $newChatProfile, $newChatRoute } from '@/store/profile'
 import {
   $activeGatewayProfile,
   $freshSessionRequest,
@@ -65,7 +71,8 @@ import {
   normalizeProfileKey,
   refreshActiveProfile
 } from '@/store/profile'
-import { $newProjectSessionRequest, $startWorkSessionRequest, followActiveSessionCwd } from '@/store/projects'
+import { $newProjectSessionRequest, $startWorkSessionRequest } from '@/store/projects'
+import { getSessionOwnerHint } from '@/store/session'
 import {
   $activeSessionId,
   $connection,
@@ -89,6 +96,7 @@ import {
   setBusy,
   setMessages
 } from '@/store/session'
+import { sharedOpenKey, sharedProjectWindow } from '@/store/shared-project-windows'
 import { $titlebarAppActionsSide, titlebarAppActionsClusterCounts } from '@/store/titlebar-app-actions'
 import { clearSessionTodos, setSessionTodos, todosForHydration } from '@/store/todos'
 import { armWakeWord, stopClientCapture } from '@/store/wake-word'
@@ -96,7 +104,10 @@ import { isAuxiliaryWindow, isBrowserWindow, isHudWindow } from '@/store/windows
 
 import { closeWorkspaceTab } from '../chat/close-tab'
 import { requestComposerInsert } from '../chat/composer/focus'
+import { createConversationActions } from '../chat/conversation-actions'
+import { resolveLegacyMigration } from '../chat/conversation-migration'
 import { useComposerActions } from '../chat/hooks/use-composer-actions'
+import { $ordinaryHomeReady, ordinaryNewKind } from '../chat/ordinary-new'
 import { CommandPalette } from '../command-palette'
 import { triggerAndRefreshCronJobs } from '../cron/cron-actions'
 import { useGatewayBoot } from '../gateway/hooks/use-gateway-boot'
@@ -106,7 +117,7 @@ import { useKeybinds } from '../hooks/use-keybinds'
 import { useHudHandoff } from '../hud/handoff'
 import { ModelPickerOverlay } from '../model-picker-overlay'
 import { ModelVisibilityOverlay } from '../model-visibility-overlay'
-import { mainChatOccupied, openSession } from '../open-session'
+import { openSession } from '../open-session'
 import { PetGenerateOverlay } from '../pet-generate/pet-generate-overlay'
 import { ProfileCreateDialogHost } from '../profiles/create-profile-dialog-host'
 import { FileActionDialogs } from '../right-sidebar/file-actions'
@@ -115,6 +126,7 @@ import { resetProjectTreeState } from '../right-sidebar/files/use-project-tree'
 import { ReviewRevertDialog } from '../right-sidebar/review/revert-dialog'
 import { PersistentTerminal } from '../right-sidebar/terminal/persistent'
 import { closeAllTerminals } from '../right-sidebar/terminal/terminals'
+import { conversationRoute } from '../routes'
 import {
   CRON_ROUTE,
   navigateToWorkspacePage,
@@ -138,7 +150,6 @@ import { useRouteResume } from '../session/hooks/use-route-resume'
 import { useSessionActions } from '../session/hooks/use-session-actions'
 import { useSessionListActions } from '../session/hooks/use-session-list-actions'
 import { useSessionStateCache } from '../session/hooks/use-session-state-cache'
-import { startWorkspaceSession } from '../session/workspace-session-target'
 import { PluginInstallModal } from '../settings/plugin-install-modal'
 import { useOverlayRouting } from '../shell/hooks/use-overlay-routing'
 import { useWindowControlsOverlayWidth } from '../shell/hooks/use-window-controls-overlay-width'
@@ -268,7 +279,42 @@ export function ContribWiring({ children }: { children: ReactNode }) {
   const profileScope = useStore($profileScope)
   const boot = useStore($desktopBoot)
 
+  const ordinaryNavigationIntent = useRef(0)
   const routedSessionId = routeSessionId(location.pathname)
+  useEffect(() => {
+    if (!routedSessionId) {
+      return
+    }
+    const exact = getSessionOwnerHint(routedSessionId)
+    const candidates = sessions.filter(row => row.id === routedSessionId || row._lineage_ids?.includes(routedSessionId))
+    const source = exact || (candidates.length === 1 ? sessionOwnerRouteFromRow(candidates[0]) : null)
+
+    if (!source) {
+      return
+    }
+    let cancelled = false
+    const intent = ordinaryNavigationIntent.current
+    void resolveLegacyMigration(source, routedSessionId, candidates.length === 1 ? candidates[0] : undefined, error => {
+      if (!cancelled) {
+        notifyError(error, translateNow('profiles.openConversationFailed'))
+      }
+    })
+      .then(owner => {
+        if (!cancelled && owner && intent === ordinaryNavigationIntent.current) {
+          navigate(conversationRoute(owner.conversationId, owner), { replace: true })
+        }
+      })
+      .catch(error => {
+        if (!cancelled) {
+          notifyError(error, translateNow('profiles.openConversationFailed'))
+        }
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [routedSessionId, sessions, navigate])
+
   const routedSessionIdRef = useRef(routedSessionId)
 
   routedSessionIdRef.current = routedSessionId
@@ -606,38 +652,110 @@ export function ContribWiring({ children }: { children: ReactNode }) {
     resetProjectTreeState()
   }, [gatewayScope, refreshCurrentModel, refreshHermesConfig])
 
-  // New session anchored to a workspace. Seeds cwd + branch from the clicked
-  // workspace; an explicit worktree path also drills the sidebar into that
-  // project so the new lane is visible.
-  //
-  // `openTab` is the sidebar "+" behavior: once a chat is loaded, stack a new
-  // tab instead of replacing it (see mainChatOccupied). The composer's
-  // "branch off into a new worktree" flow keeps the fresh-draft path — it
-  // prefills the MAIN composer right after, so it has to own that surface.
-  const startSessionInWorkspace = useCallback(
-    (path: null | string, options?: { openTab?: boolean }) => {
-      setWorkspaceScope('sessions')
+  const startOrdinaryConversation = useCallback(
+    async (path: string | null = null, prefill?: string) => {
+      const connectionId = $activeGatewayConnectionId.get()
 
-      if (options?.openTab && mainChatOccupied(activeSessionIdRef.current, $selectedStoredSessionId.get())) {
-        void openNewSessionTile('center', { cwd: path, listed: false })
-
+      if (!connectionId) {
         return
       }
+      const intent = ++ordinaryNavigationIntent.current
+      const requestedRoute = routeTokenRef.current
 
-      startWorkspaceSession({
-        activeSessionIdRef,
-        followActiveSessionCwd,
-        onExplicitWorkspace: restoreWorktree,
-        path,
-        requestGateway,
-        startFreshSessionDraft
-      })
+      // A registration is part of this creation intent, even if the project window changes while loading.
+      const matches = path
+        ? sharedProjectWindow.opened
+            .get()
+            .filter(entry => entry.connectionId === connectionId && entry.project.canonical_path === path)
+        : []
+
+      const project =
+        matches.length === 1
+          ? { ...matches[0], project: { ...matches[0].project }, source: { ...matches[0].source } }
+          : null
+
+      try {
+        const kind = await ordinaryNewKind(connectionId)
+
+        if (intent !== ordinaryNavigationIntent.current || routeTokenRef.current !== requestedRoute) {
+          return
+        }
+
+        if (kind === 'conversation') {
+          setWorkspaceScope('sessions')
+          let target = conversationRoute('new', { connectionId })
+
+          if (path) {
+            if (!project) {
+              throw new Error(translateNow('profiles.projectSourceRequired'))
+            }
+            target += `&project=${encodeURIComponent(sharedOpenKey(project))}`
+          }
+
+          if (prefill) {
+            const catalog = await requestGatewayForAgent<ConversationCatalogResult>(
+              connectionId,
+              'default',
+              'conversations.participants',
+              {}
+            )
+
+            if (intent !== ordinaryNavigationIntent.current || routeTokenRef.current !== requestedRoute) {
+              return
+            }
+            const general = catalog.participants.find(entry => entry.available && entry.participant.is_general)
+
+            if (!general) {
+              throw new Error(translateNow('profiles.newConversationFailed'))
+            }
+            const id = crypto.randomUUID()
+            const owner = { connectionId, installId: general.participant.install_id, conversationId: id }
+            await createConversationActions(owner).create({
+              title: translateNow('composer.conversation.title'),
+              auto_title: true,
+              general_participant_id: general.participant.participant_id,
+              ...(project ? { project_ref: project.source } : {})
+            })
+            const draft = $conversationDrafts.get()[conversationOwnerKey(owner)]
+
+            if (draft) {
+              setConversationDraft(owner, { ...draft, text: prefill })
+            }
+
+            if (intent === ordinaryNavigationIntent.current && routeTokenRef.current === requestedRoute) {
+              navigate(conversationRoute(id, owner))
+            }
+
+            return
+          }
+
+          navigate(target, project ? { state: { projectSelection: project } } : undefined)
+        } else {
+          $newChatRoute.set({ connectionId, profile: 'default' })
+          $newChatProfile.set('default')
+          $newChatConnectionId.set(connectionId)
+          setWorkspaceScope('sessions')
+          startFreshSessionDraft({ workspaceTarget: path })
+
+          if (prefill) {
+            requestComposerInsert(prefill, { target: 'main' })
+          }
+        }
+      } catch (error) {
+        notifyError(error, translateNow('profiles.newConversationFailed'))
+      }
     },
-    [activeSessionIdRef, openNewSessionTile, requestGateway, startFreshSessionDraft]
+    [navigate, startFreshSessionDraft]
   )
 
-  // Composer "branch off into a new worktree": open a fresh session anchored
-  // to the just-created tree, then prefill the task that kicked it off.
+  // Ordinary workspace entry points share source-pinned capability routing.
+  const startSessionInWorkspace = useCallback(
+    (path: null | string, _options?: { openTab?: boolean }) => {
+      void startOrdinaryConversation(path)
+    },
+    [startOrdinaryConversation]
+  )
+
   const startWorkSessionRequest = useStore($startWorkSessionRequest)
   const lastStartWorkTokenRef = useRef(startWorkSessionRequest?.token ?? 0)
 
@@ -648,12 +766,8 @@ export function ContribWiring({ children }: { children: ReactNode }) {
     }
 
     lastStartWorkTokenRef.current = startWorkSessionRequest.token
-    startSessionInWorkspace(startWorkSessionRequest.path, { openTab: startWorkSessionRequest.openTab })
-
-    if (startWorkSessionRequest.draft) {
-      requestComposerInsert(startWorkSessionRequest.draft, { target: 'main' })
-    }
-  }, [startSessionInWorkspace, startWorkSessionRequest])
+    void startOrdinaryConversation(startWorkSessionRequest.path, startWorkSessionRequest.draft)
+  }, [startOrdinaryConversation, startWorkSessionRequest])
 
   const runCreatePinnedTo = useCallback(async <T,>(profile: string, create: () => Promise<T>): Promise<T> => {
     handoffCreateProfileRef.current = profile
@@ -867,6 +981,14 @@ export function ContribWiring({ children }: { children: ReactNode }) {
     startFreshSessionDraft
   })
 
+  useEffect(() => {
+    $ordinaryHomeReady.set(initialNavigationReady)
+
+    return () => {
+      $ordinaryHomeReady.set(false)
+    }
+  }, [initialNavigationReady])
+
   // Plugins hear the stream FIRST (isolated fan-out in contrib/events), then
   // the app dispatches as before — a plugin listener can't affect app flow.
   const handleGatewayEventWithPlugins = useCallback(
@@ -874,6 +996,9 @@ export function ContribWiring({ children }: { children: ReactNode }) {
       emitGatewayEvent(event)
 
       if (event.type === 'wake.detected') {
+        if (consumeConversationWake(event)) {
+          return
+        }
         const payload = event.payload as { profile?: null | string; start_new_session?: boolean } | undefined
 
         // Free the Mac mic so voice conversation can open getUserMedia.
@@ -1036,7 +1161,7 @@ export function ContribWiring({ children }: { children: ReactNode }) {
   useKeybinds({
     archiveSelectedSession,
     openNewSessionTab,
-    startFreshSession: startFreshSessionDraft,
+    startFreshSession: () => void startOrdinaryConversation(),
     toggleCommandCenter,
     toggleSelectedPin
   })
@@ -1123,15 +1248,34 @@ export function ContribWiring({ children }: { children: ReactNode }) {
     // click switch to the Mac backend and fail with "session not found".
     onResumeSession: (sessionId, session) => {
       const ownerRoute = sessionOwnerRouteFromRow(session)
+      const intent = ++ordinaryNavigationIntent.current
+      const requestedRoute = routeTokenRef.current
+      void (async () => {
+        if (ownerRoute) {
+          const migrated = await resolveLegacyMigration(ownerRoute, sessionId, session, error => {
+            if (intent === ordinaryNavigationIntent.current && routeTokenRef.current === requestedRoute) {
+              notifyError(error, translateNow('profiles.openConversationFailed'))
+            }
+          })
 
-      if (ownerRoute) {
-        requestSessionResume(sessionId, ownerRoute)
-      } else {
-        forgetSessionOwnerHintsForSession(sessionId)
-        requestSessionResume(sessionId)
-      }
+          if (intent !== ordinaryNavigationIntent.current || routeTokenRef.current !== requestedRoute) {
+            return
+          }
 
-      openSession(sessionId, navigate)
+          if (migrated) {
+            navigate(conversationRoute(migrated.conversationId, migrated))
+
+            return
+          }
+
+          requestSessionResume(sessionId, ownerRoute)
+        } else {
+          forgetSessionOwnerHintsForSession(sessionId)
+          requestSessionResume(sessionId)
+        }
+
+        openSession(sessionId, navigate)
+      })().catch(error => notifyError(error, translateNow('profiles.openConversationFailed')))
     },
     onRetryResume: sessionId => void resumeSession(sessionId, true),
     onSteer: steerPrompt,

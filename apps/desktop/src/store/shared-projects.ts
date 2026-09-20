@@ -16,6 +16,7 @@ export function projectSourceKey(source: ConversationProjectRef): string {
 export function sharedProjects(connectionId: string, request = requestGatewayForAgent) {
   const rpc = <T>(method: string, params: Record<string, unknown>) =>
     request<T>(connectionId, 'default', method, params)
+
   return {
     list: () => rpc<SharedProjectsResult>('projects.shared.list', {}),
     resolve: (id: string) => rpc<{ project: SharedProject }>('projects.shared.resolve', { shared_project_id: id }),

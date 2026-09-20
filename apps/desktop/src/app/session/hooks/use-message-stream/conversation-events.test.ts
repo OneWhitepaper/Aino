@@ -114,7 +114,9 @@ it('isolates pending replies by owner, replays onto the latest socket and retire
     display_name: 'Writer',
     is_general: false
   }
+
   const other = { ...owner, connectionId: 'other' }
+
   for (const target of [owner, other]) {
     updateConversationRuntime(target, {
       runtimeOwners: { runtime: { participantId: 'writer', sessionGeneration: 1 } },
@@ -133,9 +135,11 @@ it('isolates pending replies by owner, replays onto the latest socket and retire
       }
     })
   }
+
   const original = vi.fn()
   const replay = vi.fn()
   const unrelated = vi.fn()
+
   const request = {
     id: 'shared-id',
     method: 'approval',
@@ -145,6 +149,7 @@ it('isolates pending replies by owner, replays onto the latest socket and retire
     respond: original,
     fail: vi.fn()
   }
+
   handleConversationServerRequest({
     ...request,
     params: { session_id: 'foreign', conversation: { ...coordinates, runtime_id: 'foreign' } }

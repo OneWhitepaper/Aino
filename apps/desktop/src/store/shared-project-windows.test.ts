@@ -10,6 +10,7 @@ const source = {
   project_id: 'source',
   cwd: '/book'
 }
+
 const project = {
   id: 'shared',
   install_id: 'host',
@@ -18,8 +19,10 @@ const project = {
   name: 'Book',
   sources: [source]
 }
+
 function storage() {
   const data = new Map<string, string>()
+
   return {
     getItem: (key: string) => data.get(key) ?? null,
     setItem: (key: string, value: string) => {

@@ -282,7 +282,7 @@ export async function fetchRegistrySessionRows(
 }
 
 /** Splice registry-gateway rows into an already-merged unified list: dedupe by
- *  session id (a v1 remote-override splice may already carry a row), keep the
+ *  exact source/Profile/session (an untagged legacy source remains distinct), keep the
  *  recency sort, and extend the per-profile totals so truncation flags stay
  *  honest. Mutates and returns `merged`/`profileTotals` the way the v1 splice
  *  does. */
@@ -291,11 +291,24 @@ export function spliceRegistrySessionRows(
   registryRows: unknown[],
   profileTotals: Record<string, number>
 ): { added: number } {
-  const seen = new Set(merged.map(sessionId).filter((id): id is string => id !== null))
+  const identity = (row: unknown) => {
+    const id = sessionId(row)
+
+    if (!id || !row || typeof row !== 'object') {
+      return null
+    }
+    const source = row as Record<string, unknown>
+    const connection = typeof source.connection_id === 'string' ? source.connection_id.trim() || null : null
+    const profile = typeof source.profile === 'string' ? source.profile.trim() || 'default' : 'default'
+
+    return JSON.stringify([connection, profile, id])
+  }
+
+  const seen = new Set(merged.map(identity).filter((id): id is string => id !== null))
   let added = 0
 
   for (const row of registryRows) {
-    const id = sessionId(row)
+    const id = identity(row)
 
     if (id && seen.has(id)) {
       continue

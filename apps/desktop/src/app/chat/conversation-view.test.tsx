@@ -3,6 +3,8 @@ import type { ConversationEvent } from '@hermes/shared/gateway-events'
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
 
+import { composerPlainText } from './composer/rich-editor'
+
 vi.stubGlobal(
   'ResizeObserver',
   class {
@@ -149,8 +151,8 @@ it('keeps one attributed history through G → A → B → clear → G → A, wi
       freezeConversationSend($conversationDrafts.get()[key], { inputId: 'input', turnId: 'turn' }).participantId
     )
   })
-  fireEvent.change(screen.getByRole('textbox', { name: 'Message' }), {
-    target: { value: 'Email user@B.example and literal @B' }
+  fireEvent.input(screen.getByRole('textbox', { name: 'Message' }), {
+    target: { textContent: 'Email user@B.example and literal @B' }
   })
   fireEvent.click(screen.getByRole('button', { name: 'Send' }))
   fireEvent.keyDown(screen.getByRole('button', { name: 'Choose responder' }), { key: 'ArrowDown' })
@@ -215,7 +217,7 @@ it('selection while A runs edits only the next draft, preserves live tools/child
     })
   )
   await pick('B')
-  fireEvent.change(screen.getByRole('textbox', { name: 'Message' }), { target: { value: 'Next question' } })
+  fireEvent.input(screen.getByRole('textbox', { name: 'Message' }), { target: { textContent: 'Next question' } })
   expect(screen.queryByRole('button', { name: 'Send' })).toBeNull()
   expect($conversationRuntime.get()[key].snapshot?.active_turn?.participant_id).toBe('A')
   expect($conversationDrafts.get()[key].selectedParticipantId).toBe('B')
@@ -237,12 +239,12 @@ it('keeps a deferred catalog loading state distinct from an unavailable expert o
       resolve = done
     })
   )
-  fireEvent.change(screen.getByRole('textbox', { name: 'Message' }), { target: { value: 'Retained draft' } })
+  fireEvent.input(screen.getByRole('textbox', { name: 'Message' }), { target: { textContent: 'Retained draft' } })
   expect(screen.queryByRole('alert')).toBeNull()
   expect((screen.getByRole('button', { name: 'Send' }) as HTMLButtonElement).disabled).toBe(true)
   await act(async () => resolve({ participants: [] }))
   expect(await screen.findByRole('alert')).toHaveProperty('textContent', 'Selected expert unavailable')
-  expect((screen.getByRole('textbox', { name: 'Message' }) as HTMLTextAreaElement).value).toBe('Retained draft')
+  expect(composerPlainText(screen.getByRole('textbox', { name: 'Message' }))).toBe('Retained draft')
 })
 
 it('renders private command notices outside the shared log and confirms configuration refresh for the captured expert', async () => {
@@ -276,8 +278,11 @@ it('renders private command notices outside the shared log and confirms configur
 
 it('resizes the original input on programmatic draft updates and clears its height after acknowledgement', async () => {
   setup()
-  const input = screen.getByRole('textbox', { name: 'Message' }) as HTMLTextAreaElement
-  Object.defineProperty(input, 'scrollHeight', { configurable: true, get: () => (input.value.length > 30 ? 120 : 28) })
+  const input = screen.getByRole('textbox', { name: 'Message' }) as HTMLDivElement
+  Object.defineProperty(input, 'scrollHeight', {
+    configurable: true,
+    get: () => (composerPlainText(input).length > 30 ? 120 : 28)
+  })
   act(() =>
     setConversationDraft(owner, {
       ...$conversationDrafts.get()[key],

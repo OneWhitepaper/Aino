@@ -31,6 +31,7 @@ import {
 } from './bot-state'
 import { isCanonicalChatOnScreen, openBotCanonicalChat } from './canonical-chat'
 import { BotChatEmpty } from './chat-empty'
+import { AgentHubConfiguration } from './configuration'
 import { bindProfileSync, RoutinesPane } from './cron'
 import {
   $botMeta,
@@ -405,6 +406,7 @@ export default {
     // the meta/room storage hydrates above have landed; idempotent after that.
     // (Feature-guarded: bare vm test harnesses have no setTimeout global.)
     startHideSweepScheduler(ctx)
+    ctx.register({ id: 'configuration', area: 'agentHub.configuration', render: () => <AgentHubConfiguration /> })
     ctx.register({
       id: 'pane',
       area: 'panes',

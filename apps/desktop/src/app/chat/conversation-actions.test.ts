@@ -189,7 +189,9 @@ it('preserves failed drafts and keeps a requested stop busy until authoritative 
   await expect(s.actions.send({ inputId: 'input', turnId: 'turn' })).rejects.toThrow('revision changed')
   expect($conversationRuntime.get()[conversationOwnerKey(owner)].uncertainSend).toBeUndefined()
   expect($conversationDrafts.get()[conversationOwnerKey(owner)].text).toBe('Original')
-  s.request.mockResolvedValueOnce({ ...prepared, previous_revision: 5 }).mockRejectedValueOnce(Error('socket closed before ACK'))
+  s.request
+    .mockResolvedValueOnce({ ...prepared, previous_revision: 5 })
+    .mockRejectedValueOnce(Error('socket closed before ACK'))
   await expect(s.actions.send({ inputId: 'input', turnId: 'turn' })).rejects.toThrow('socket closed')
   expect($conversationRuntime.get()[conversationOwnerKey(owner)].uncertainSend?.inputId).toBe('input')
   await s.actions.retry()
@@ -234,4 +236,77 @@ it('coalesces owner reloads and rejects foreign participant snapshots before pub
   expect($conversationRuntime.get()[conversationOwnerKey(owner)].snapshot?.participants[0].participant.install_id).toBe(
     'host'
   )
+})
+
+it('restores an unsent edited branch into the canonical draft and preserves its frozen identities across preparation failure', async () => {
+  const s = setup()
+  const original = s.request.getMockImplementation()!
+  s.request.mockImplementation(async (...args) =>
+    args[2] === 'conversations.get'
+      ? {
+          ...state,
+          conversation: {
+            ...record,
+            branch: {
+              operation_id: 'branch-op',
+              conversation_id: 'public',
+              source_conversation_id: 'source',
+              source_event_id: 'old-input',
+              source_revision: 1,
+              source_cutoff_seq: 1,
+              kind: 'edit',
+              draft_pending: true,
+              draft: {
+                input_id: 'input',
+                turn_id: 'turn',
+                participant_id: 'writer',
+                text: 'Edited original',
+                attachment_ids: [],
+                source_event_id: 'old-input'
+              }
+            }
+          }
+        }
+      : original(...args)
+  )
+  $conversationDrafts.set({})
+  await s.actions.load()
+  expect($conversationDrafts.get()[conversationOwnerKey(owner)]).toMatchObject({
+    text: 'Edited original',
+    selectedParticipantId: 'writer'
+  })
+  s.bind.mockRejectedValueOnce(new Error('Credential expired'))
+  await expect(s.actions.submit()).rejects.toThrow('Credential expired')
+  expect(s.request.mock.calls.some(call => call[2] === 'conversations.send')).toBe(false)
+  s.request.mockResolvedValueOnce({ ...prepared, previous_revision: 5 })
+  await s.actions.submit()
+  expect(s.request).toHaveBeenCalledWith(
+    'remote',
+    'default',
+    'conversations.send',
+    expect.objectContaining({ input_id: 'input', turn_id: 'turn', text: 'Edited original', participant_id: 'writer' }),
+    undefined
+  )
+})
+
+it('keeps GPT-Live context private to the frozen canonical send and its ambiguous retry', async () => {
+  const s = setup()
+  await s.actions.load()
+  s.request.mockResolvedValueOnce(prepared).mockRejectedValueOnce(new Error('Lost voice send acknowledgement'))
+  await expect(s.actions.submit({ surface: 'voice-live', voice_context: 'Private spoken context' })).rejects.toThrow(
+    'Lost voice'
+  )
+  const frozen = $conversationRuntime.get()[conversationOwnerKey(owner)].uncertainSend!
+  expect(frozen).toMatchObject({ surface: 'voice-live', voiceContext: 'Private spoken context', text: 'Original' })
+  s.request.mockResolvedValueOnce({ admission: { ...admission, input_id: frozen.inputId, turn_id: frozen.turnId } })
+  await s.actions.retry()
+  const sends = s.request.mock.calls.filter(call => call[2] === 'conversations.send')
+  expect(sends.at(-1)).toEqual(sends.at(-2))
+  expect(sends.at(-1)).toEqual([
+    'remote',
+    'default',
+    'conversations.send',
+    expect.objectContaining({ text: 'Original', surface: 'voice-live', voice_context: 'Private spoken context' }),
+    undefined
+  ])
 })

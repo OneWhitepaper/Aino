@@ -2269,6 +2269,15 @@ export const zhHant = defineLocale({
   },
 
   profiles: {
+    allProjects: '所有專案',
+    projectSourceRequired: '請先從明確來源開啟專案，再新增對話。',
+    adoptConversation: '接入一般對話',
+    adoptFailed: '暫時無法接入。請在目前工作完成後重試。',
+    newConversationFailed: '無法新增對話，請重試。',
+    openConversationFailed: '無法開啟對話，請重試。',
+    hubTitle: '智慧體中心',
+    projectAgentHelp: '專案整理資料與任務；智慧體決定本輪由誰處理。',
+    hubUnavailable: '智慧體中心暫不可用。請在設定中啟用 Agent Hub 外掛。',
     close: '關閉設定檔',
     workspaceDesc: '每個工作區保存一位智慧體的獨立設定、技能、記憶與對話。',
     currentBadge: '目前工作區',
@@ -2608,7 +2617,7 @@ export const zhHant = defineLocale({
     },
     nav: {
       'new-session': '新工作階段',
-      profiles: '工作區',
+      profiles: '智慧體中心',
       skills: '技能與工具',
       messaging: '訊息平台',
       artifacts: '成品',
@@ -2772,16 +2781,17 @@ export const zhHant = defineLocale({
 
   composer: {
     conversation: {
-      commandDraftChanged: "解析指令時草稿發生變化，請重新提交目前草稿。",
-      attachmentTooLarge: "檔案超出此後端的上傳限制，請選擇較小檔案。",
-      attachmentLimitUnavailable: "此後端未提供上傳限制，請先更新後端。",
-      attachmentCountExceeded: "單則訊息的附件過多，請移除檔案後重試。",
+      commandDraftChanged: '解析指令時草稿發生變化，請重新提交目前草稿。',
+      attachmentTooLarge: '檔案超出此後端的上傳限制，請選擇較小檔案。',
+      attachmentLimitUnavailable: '此後端未提供上傳限制，請先更新後端。',
+      attachmentCountExceeded: '單則訊息的附件過多，請移除檔案後重試。',
 
-      privateNotice: "私人提示",
-      refreshConfiguration: "重新整理專家設定",
-      refreshExplanation: "下一次回覆將使用此專家已儲存的設定，共享記錄和專案保持不變。請先等待目前工作結束；此操作不會套用斜線指令中輸入的設定。",
-      configurationRefreshed: "專家設定已重新整理，下一次回覆將使用更新後的設定。",
-      configurationBusy: "請先結束目前工作或核實待定傳送，再變更設定。",
+      privateNotice: '私人提示',
+      refreshConfiguration: '重新整理專家設定',
+      refreshExplanation:
+        '下一次回覆將使用此專家已儲存的設定，共享記錄和專案保持不變。請先等待目前工作結束；此操作不會套用斜線指令中輸入的設定。',
+      configurationRefreshed: '專家設定已重新整理，下一次回覆將使用更新後的設定。',
+      configurationBusy: '請先結束目前工作或核實待定傳送，再變更設定。',
 
       contentLoading: '正在載入完整回答…',
       contentInvalid: '內容驗證失敗，請重試載入原始內容。',
@@ -2802,7 +2812,7 @@ export const zhHant = defineLocale({
       refresh: '重新整理',
       history: '對話記錄',
       mention: '透過 @ 選擇回覆者',
-      textOnly: "讀取指令僅顯示私人提示。支援的技能和技能包由所選專家執行；其他斜線指令將被拒絕。",
+      textOnly: '讀取指令僅顯示私人提示。支援的技能和技能包由所選專家執行；其他斜線指令將被拒絕。',
       modelUnavailable: '模型資訊暫不可用',
       subagent: '子代理',
       stopAll: '停止並包括子代理',
@@ -2810,13 +2820,13 @@ export const zhHant = defineLocale({
       allowOnce: '允許一次',
       deny: '拒絕',
       answer: '回答',
-      requestUnsupported: '此處暫不支援此請求所需的回答類型。',
+      requestUnsupported: '此處暫不支援此請求所需的回答類型。'
     },
     expertSelector: {
       choose: '選擇回覆者',
       clear: '取消專家選擇',
       nextReply: '下一次由誰回覆',
-      unavailable: '所選專家暫不可用',
+      unavailable: '所選專家暫不可用'
     },
     message: '訊息',
     automaticModel: '自動',

@@ -8,6 +8,8 @@ import type { VoiceActivityState, VoiceStatus } from '../types'
 import { useMicRecorder } from './use-mic-recorder'
 
 interface VoiceRecorderOptions {
+  scopeKey?: string
+  isCurrent?: () => boolean
   maxRecordingSeconds: number
   onTranscribeAudio?: (audio: Blob) => Promise<string>
   focusInput: () => void
@@ -15,6 +17,8 @@ interface VoiceRecorderOptions {
 }
 
 export function useVoiceRecorder({
+  scopeKey,
+  isCurrent,
   maxRecordingSeconds,
   onTranscribeAudio,
   focusInput,
@@ -25,6 +29,7 @@ export function useVoiceRecorder({
   const { handle, level, recording } = useMicRecorder(voiceCopy)
   const [voiceStatus, setVoiceStatus] = useState<VoiceStatus>('idle')
   const [elapsedSeconds, setElapsedSeconds] = useState(0)
+  const epochRef = useRef(0)
   const startedAtRef = useRef(0)
   const intervalRef = useRef<number | null>(null)
   const timeoutRef = useRef<number | null>(null)
@@ -41,7 +46,17 @@ export function useVoiceRecorder({
     }
   }
 
-  useEffect(() => () => clearTimers(), [])
+  // eslint-disable-next-line no-restricted-syntax -- invalidate asynchronous capture when its owner changes
+  useEffect(() => {
+    epochRef.current += 1
+    setVoiceStatus('idle')
+
+    return () => {
+      epochRef.current += 1
+      clearTimers()
+      handle.cancel()
+    }
+  }, [scopeKey])
 
   const stop = async () => {
     clearTimers()
@@ -64,6 +79,10 @@ export function useVoiceRecorder({
     try {
       const transcript = (await onTranscribeAudio(result.audio)).trim()
 
+      if (isCurrent && !isCurrent()) {
+        return
+      }
+
       if (!transcript) {
         notify({ kind: 'warning', title: voiceCopy.noSpeechDetected, message: voiceCopy.tryRecordingAgain })
       } else {
@@ -72,8 +91,10 @@ export function useVoiceRecorder({
     } catch (error) {
       notifyError(error, voiceCopy.transcriptionFailed)
     } finally {
-      setVoiceStatus('idle')
-      focusInput()
+      if (!isCurrent || isCurrent()) {
+        setVoiceStatus('idle')
+        focusInput()
+      }
     }
   }
 
@@ -84,8 +105,14 @@ export function useVoiceRecorder({
       return
     }
 
+    const epoch = ++epochRef.current
+
     try {
       await handle.start({ onError: error => notifyError(error, voiceCopy.recordingFailed) })
+
+      if (epoch !== epochRef.current || (isCurrent && !isCurrent())) {
+        return
+      }
       startedAtRef.current = Date.now()
       setElapsedSeconds(0)
       setVoiceStatus('recording')

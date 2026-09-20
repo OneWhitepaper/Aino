@@ -54,8 +54,9 @@ export function createConversationActions(
   const { retain, releaseIdle, scheduleReconcile, failed, load } = createConversationSync(owner, rpc, deps.retain)
 
   function send(
-    ids: { inputId: string; turnId: string } = { inputId: crypto.randomUUID(), turnId: crypto.randomUUID() },
-    resolvedCommand?: ResolvedConversationCommandSend
+    ids?: { inputId: string; turnId: string },
+    resolvedCommand?: ResolvedConversationCommandSend,
+    voice?: { surface: 'voice-live'; voice_context: string }
   ) {
     const pending = submissions.get(key)
 
@@ -69,8 +70,18 @@ export function createConversationActions(
       return Promise.reject(new Error('Conversation draft is unavailable'))
     }
 
+    const branch = conversationRuntime(owner).snapshot?.conversation.branch
+    const edited = branch?.draft_pending ? branch.draft : null
+
+    const sendIds =
+      ids ??
+      (edited
+        ? { inputId: edited.input_id, turnId: edited.turn_id }
+        : { inputId: crypto.randomUUID(), turnId: crypto.randomUUID() })
+
     const frozen = Object.freeze({
-      ...freezeConversationSend(draft, ids),
+      ...freezeConversationSend(draft, sendIds),
+      ...(voice ? { surface: voice.surface, voiceContext: voice.voice_context } : {}),
       ...(resolvedCommand
         ? {
             text: resolvedCommand.result.display,
@@ -83,7 +94,7 @@ export function createConversationActions(
     const execute = async () => {
       const current = conversationRuntime(owner)
 
-      if (current.busy || current.uncertainSend || current.submitting) {
+      if (current.busy || current.uncertainSend || current.uncertainHistory || current.submitting) {
         throw new Error('Conversation is busy or awaiting send reconciliation')
       }
 
@@ -158,6 +169,7 @@ export function createConversationActions(
           input_id: frozen.inputId,
           turn_id: frozen.turnId,
           text: frozen.text,
+          ...(frozen.surface ? { surface: frozen.surface, voice_context: frozen.voiceContext } : {}),
           ...(frozen.commandToken ? { command_token: frozen.commandToken } : {}),
           attachment_ids: [...frozen.attachmentIds],
           expected_revision: prepared.conversation_revision
@@ -227,7 +239,14 @@ export function createConversationActions(
     }
   }
 
-  const recovery = createConversationRecoveryActions(owner, { rpc, load, retain, releaseIdle, failed, scheduleReconcile })
+  const recovery = createConversationRecoveryActions(owner, {
+    rpc,
+    load,
+    retain,
+    releaseIdle,
+    failed,
+    scheduleReconcile
+  })
 
   const configuration = createConversationConfigurationActions(owner, {
     rpc,
@@ -239,14 +258,14 @@ export function createConversationActions(
       bindConversationParticipant(owner, participant, prepared, deps.bind, request)
   })
 
-  const submit = async () => {
+  const submit = async (voice?: { surface: 'voice-live'; voice_context: string }) => {
     if (!$conversationDrafts.get()[key]?.text.trimStart().startsWith('/')) {
-      return send()
+      return send(undefined, undefined, voice)
     }
 
     const resolved = await configuration.command()
 
-    return resolved ? send(undefined, resolved) : undefined
+    return resolved ? send(undefined, resolved, voice) : undefined
   }
 
   const participants = () => rpc('conversations.participants', {})

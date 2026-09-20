@@ -3453,6 +3453,15 @@ export const zh = defineLocale({
   },
 
   profiles: {
+    allProjects: '所有项目',
+    projectSourceRequired: '请先从明确来源打开项目，再新建会话。',
+    adoptConversation: '接入普通会话',
+    adoptFailed: '暂时无法接入。请在当前工作完成后重试。',
+    newConversationFailed: '无法新建会话，请重试。',
+    openConversationFailed: '无法打开会话，请重试。',
+    hubTitle: '智能体中心',
+    projectAgentHelp: '项目整理资料与任务；智能体决定本轮由谁处理。',
+    hubUnavailable: '智能体中心暂不可用。请在设置中启用 Agent Hub 插件。',
     close: '关闭工作区',
     workspaceDesc: '每个工作区保存一位智能体的独立配置、技能、记忆和会话。',
     currentBadge: '当前工作区',
@@ -3964,7 +3973,7 @@ export const zh = defineLocale({
     },
     nav: {
       'new-session': '新建会话',
-      profiles: '工作区',
+      profiles: '智能体中心',
       skills: '技能与工具',
       messaging: '消息平台',
       artifacts: '产物',
@@ -4245,16 +4254,17 @@ export const zh = defineLocale({
 
   composer: {
     conversation: {
-      commandDraftChanged: "解析命令时草稿发生变化，请重新提交当前草稿。",
-      attachmentTooLarge: "文件超出此后端的上传限制，请选择较小文件。",
-      attachmentLimitUnavailable: "此后端未提供上传限制，请先更新后端。",
-      attachmentCountExceeded: "单条消息的附件过多，请移除文件后重试。",
+      commandDraftChanged: '解析命令时草稿发生变化，请重新提交当前草稿。',
+      attachmentTooLarge: '文件超出此后端的上传限制，请选择较小文件。',
+      attachmentLimitUnavailable: '此后端未提供上传限制，请先更新后端。',
+      attachmentCountExceeded: '单条消息的附件过多，请移除文件后重试。',
 
-      privateNotice: "私有提示",
-      refreshConfiguration: "刷新专家配置",
-      refreshExplanation: "下一次回复将使用此专家已保存的配置，共享历史和项目保持不变。请先等待当前工作结束；此操作不会应用斜杠命令中输入的设置。",
-      configurationRefreshed: "专家配置已刷新，下一次回复将使用更新后的配置。",
-      configurationBusy: "请先结束当前工作或核实待定发送，再更改配置。",
+      privateNotice: '私有提示',
+      refreshConfiguration: '刷新专家配置',
+      refreshExplanation:
+        '下一次回复将使用此专家已保存的配置，共享历史和项目保持不变。请先等待当前工作结束；此操作不会应用斜杠命令中输入的设置。',
+      configurationRefreshed: '专家配置已刷新，下一次回复将使用更新后的配置。',
+      configurationBusy: '请先结束当前工作或核实待定发送，再更改配置。',
 
       contentLoading: '正在加载完整回答…',
       contentInvalid: '内容校验失败，请重试加载原始内容。',
@@ -4275,7 +4285,7 @@ export const zh = defineLocale({
       refresh: '刷新',
       history: '会话记录',
       mention: '通过 @ 选择回复者',
-      textOnly: "读取命令仅显示私有提示。支持的技能和技能包由所选专家执行；其他斜杠命令将被拒绝。",
+      textOnly: '读取命令仅显示私有提示。支持的技能和技能包由所选专家执行；其他斜杠命令将被拒绝。',
       modelUnavailable: '模型信息暂不可用',
       subagent: '子代理',
       stopAll: '停止并包括子代理',
@@ -4283,13 +4293,13 @@ export const zh = defineLocale({
       allowOnce: '允许一次',
       deny: '拒绝',
       answer: '回答',
-      requestUnsupported: '此处暂不支持此请求所需的回答类型。',
+      requestUnsupported: '此处暂不支持此请求所需的回答类型。'
     },
     expertSelector: {
       choose: '选择回复者',
       clear: '取消专家选择',
       nextReply: '下一次由谁回复',
-      unavailable: '所选专家暂不可用',
+      unavailable: '所选专家暂不可用'
     },
     message: '消息',
     automaticModel: '自动',

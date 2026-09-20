@@ -107,7 +107,10 @@ interface SessionActions {
   /** Toggle the persisted read-state watermark for this row. */
   onToggleUnread?: () => void
   onBranch?: () => void
+  onAdopt?: () => void
   onArchive?: () => void
+  /** Managed history supplies its own authority; only shared metadata verbs are shown. */
+  metadata?: { rename: (title: string) => Promise<void>; export?: () => void; disabled?: boolean }
   onDelete?: () => void
   /** Close this surface (a tile tab) — omitted where nothing closes (sidebar
    *  rows, the main tab). */
@@ -191,7 +194,9 @@ function useSessionActions({
   onPin,
   onToggleUnread,
   onBranch,
+  onAdopt,
   onArchive,
+  metadata,
   onDelete,
   onClose,
   onHideTabBar,
@@ -285,7 +290,7 @@ function useSessionActions({
   // IDENTITY — name/mark/reference the session.
   const identityItems: ActionItemSpec[] = [
     spec({
-      disabled: !sessionId,
+      disabled: !sessionId || metadata?.disabled,
       icon: 'edit',
       label: r.rename,
       onSelect: () => {
@@ -336,6 +341,7 @@ function useSessionActions({
 
   // WORK — derive/extract from the session.
   const workItems: ActionItemSpec[] = [
+    ...(onAdopt ? [spec({ icon: 'comment-discussion', label: t.profiles.adoptConversation, onSelect: onAdopt })] : []),
     spec({
       disabled: !onBranch,
       // Fork glyph to match the inline message action's GitFork icon
@@ -354,7 +360,12 @@ function useSessionActions({
       label: r.export,
       onSelect: () => {
         triggerHaptic('selection')
-        void exportSession(sessionId, { profile, title })
+
+        if (metadata?.export) {
+          metadata.export()
+        } else {
+          void exportSession(sessionId, { profile, title })
+        }
       }
     })
   ]
@@ -460,70 +471,79 @@ function useSessionActions({
     }
   ]
 
-  const renderItems = (kit: MenuKit) => (
-    <>
-      {openItems.map(item => renderActionItem(kit, item))}
-      {openItems.length > 0 && <kit.Separator />}
-      {identityItems.map(item => renderActionItem(kit, item))}
-      <kit.Sub>
-        <kit.SubTrigger disabled={!sessionId}>
-          <Codicon name="symbol-color" size="0.875rem" />
-          <span>{t.sidebar.projects.menuAppearance}</span>
-        </kit.SubTrigger>
-        <kit.SubContent className="p-2">
-          <SessionColorSwatches sessionId={sessionId} />
-        </kit.SubContent>
-      </kit.Sub>
-      <CopyButton
-        appearance={kit.copyAppearance}
-        disabled={!sessionId}
-        errorMessage={r.copyIdFailed}
-        iconClassName="size-3.5 text-current"
-        key={r.copyId}
-        label={r.copyId}
-        onCopyError={err => notifyError(err, r.copyIdFailed)}
-        text={sessionId}
-      />
-      <kit.Separator />
-      {workItems.map(item => renderActionItem(kit, item))}
-      <kit.Sub>
-        <kit.SubTrigger disabled={!sessionId}>
-          <Codicon name="folder" size="0.875rem" />
-          <span>{t.sidebar.projects.moveToProject}</span>
-        </kit.SubTrigger>
-        <kit.SubContent>
-          <MoveToProjectItems kit={kit} profile={profile} sessionId={sessionId} />
-        </kit.SubContent>
-      </kit.Sub>
-      {tabItems.length > 0 && (
-        <>
-          <kit.Separator />
-          {tabItems.map(item => renderActionItem(kit, item))}
-        </>
-      )}
-      <kit.Separator />
-      {dangerItems.map(item => renderActionItem(kit, item))}
-      {onHideTabBar && (
-        <>
-          <kit.Separator />
-          {renderActionItem(kit, {
-            disabled: false,
-            icon: 'eye-closed',
-            label: r.hideTabBar,
-            onSelect: () => {
-              triggerHaptic('selection')
-              onHideTabBar()
-            }
-          })}
-        </>
-      )}
-    </>
-  )
+  const renderItems = (kit: MenuKit) =>
+    metadata ? (
+      <>
+        {renderActionItem(kit, identityItems[0])}
+        {metadata.export && renderActionItem(kit, workItems[workItems.length - 1])}
+        <kit.Separator />
+        {renderActionItem(kit, { ...dangerItems[0], disabled: !onArchive || metadata.disabled })}
+      </>
+    ) : (
+      <>
+        {openItems.map(item => renderActionItem(kit, item))}
+        {openItems.length > 0 && <kit.Separator />}
+        {identityItems.map(item => renderActionItem(kit, item))}
+        <kit.Sub>
+          <kit.SubTrigger disabled={!sessionId}>
+            <Codicon name="symbol-color" size="0.875rem" />
+            <span>{t.sidebar.projects.menuAppearance}</span>
+          </kit.SubTrigger>
+          <kit.SubContent className="p-2">
+            <SessionColorSwatches sessionId={sessionId} />
+          </kit.SubContent>
+        </kit.Sub>
+        <CopyButton
+          appearance={kit.copyAppearance}
+          disabled={!sessionId}
+          errorMessage={r.copyIdFailed}
+          iconClassName="size-3.5 text-current"
+          key={r.copyId}
+          label={r.copyId}
+          onCopyError={err => notifyError(err, r.copyIdFailed)}
+          text={sessionId}
+        />
+        <kit.Separator />
+        {workItems.map(item => renderActionItem(kit, item))}
+        <kit.Sub>
+          <kit.SubTrigger disabled={!sessionId}>
+            <Codicon name="folder" size="0.875rem" />
+            <span>{t.sidebar.projects.moveToProject}</span>
+          </kit.SubTrigger>
+          <kit.SubContent>
+            <MoveToProjectItems kit={kit} profile={profile} sessionId={sessionId} />
+          </kit.SubContent>
+        </kit.Sub>
+        {tabItems.length > 0 && (
+          <>
+            <kit.Separator />
+            {tabItems.map(item => renderActionItem(kit, item))}
+          </>
+        )}
+        <kit.Separator />
+        {dangerItems.map(item => renderActionItem(kit, item))}
+        {onHideTabBar && (
+          <>
+            <kit.Separator />
+            {renderActionItem(kit, {
+              disabled: false,
+              icon: 'eye-closed',
+              label: r.hideTabBar,
+              onSelect: () => {
+                triggerHaptic('selection')
+                onHideTabBar()
+              }
+            })}
+          </>
+        )}
+      </>
+    )
 
   const renameDialog = (
     <RenameSessionDialog
       currentTitle={title}
       onOpenChange={setRenameOpen}
+      onRename={metadata?.rename}
       open={renameOpen}
       profile={profile}
       sessionId={sessionId}
@@ -636,6 +656,7 @@ export function SessionContextMenu({ children, ...actions }: SessionContextMenuP
 }
 
 interface RenameSessionDialogProps {
+  onRename?: (title: string) => Promise<void>
   open: boolean
   onOpenChange: (open: boolean) => void
   sessionId: string
@@ -643,7 +664,14 @@ interface RenameSessionDialogProps {
   profile?: string
 }
 
-function RenameSessionDialog({ open, onOpenChange, sessionId, currentTitle, profile }: RenameSessionDialogProps) {
+function RenameSessionDialog({
+  open,
+  onOpenChange,
+  sessionId,
+  currentTitle,
+  profile,
+  onRename
+}: RenameSessionDialogProps) {
   const { t } = useI18n()
   const r = t.sidebar.row
   const [value, setValue] = useState(currentTitle)
@@ -679,9 +707,14 @@ function RenameSessionDialog({ open, onOpenChange, sessionId, currentTitle, prof
     setSubmitting(true)
 
     try {
-      const result = await renameSessionPreferringRpc(sessionId, next, profile)
-      const finalTitle = result.title || next || ''
-      setSessions(prev => prev.map(s => (s.id === sessionId ? { ...s, title: finalTitle || null } : s)))
+      if (onRename) {
+        await onRename(next)
+      } else {
+        const result = await renameSessionPreferringRpc(sessionId, next, profile)
+        const finalTitle = result.title || next || ''
+        setSessions(prev => prev.map(s => (s.id === sessionId ? { ...s, title: finalTitle || null } : s)))
+      }
+
       notify({ durationMs: 2_000, kind: 'success', message: r.renamed })
       onOpenChange(false)
     } catch (err) {

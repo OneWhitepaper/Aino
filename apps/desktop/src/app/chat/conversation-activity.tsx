@@ -1,6 +1,6 @@
-import { ToolEntrySurface } from '@/components/assistant-ui/tool/fallback'
 import { MarkdownTextContent } from '@/components/assistant-ui/markdown-text'
 import { AssistantMessageContent } from '@/components/assistant-ui/thread/assistant-message'
+import { ToolEntrySurface } from '@/components/assistant-ui/tool/fallback'
 import { conversationOwnerKey } from '@/store/conversation-owner'
 import type { ConversationOwner } from '@/store/conversation-owner'
 import type { ConversationRuntime } from '@/store/conversation-runtime'
@@ -26,14 +26,17 @@ export function ConversationActivity({ runtime, participantName, respond, owner,
             <div className="whitespace-pre-wrap">
               <strong>{participantName(activity.coordinates.participant_id)}</strong>
               <AssistantMessageContent>
-                <MarkdownTextContent text={activity.text} isRunning previewOnly disableArtifacts />
+                <MarkdownTextContent disableArtifacts isRunning previewOnly text={activity.text} />
               </AssistantMessageContent>
             </div>
           )}
           {activity.events
             .filter((event, index, events) => {
-              if (event.type !== 'tool.start' && event.type !== 'tool.complete') return false
+              if (event.type !== 'tool.start' && event.type !== 'tool.complete') {
+                return false
+              }
               const id = (event.payload as { tool_id?: string }).tool_id
+
               return (
                 !id ||
                 !events
@@ -52,13 +55,13 @@ export function ConversationActivity({ runtime, participantName, respond, owner,
                 args?: unknown
                 is_error?: boolean
               }
+
               return (
                 <div
-                  key={`${event.seq ?? index}:${event.type}`}
                   aria-label={`${participantName(activity.coordinates.participant_id)} · ${payload?.name}`}
+                  key={`${event.seq ?? index}:${event.type}`}
                 >
                   <ToolEntrySurface
-                    scoped
                     messageId={`${conversationOwnerKey(owner)}:${key}:${event.seq ?? index}`}
                     messageRunning={event.type === 'tool.start' && !activity.finalEventId}
                     part={{
@@ -70,6 +73,7 @@ export function ConversationActivity({ runtime, participantName, respond, owner,
                         event.type === 'tool.complete' ? (payload.result_text ?? payload.summary ?? '') : undefined,
                       isError: payload.is_error
                     }}
+                    scoped
                   />
                 </div>
               )

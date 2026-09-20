@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
-import { MemoryRouter } from 'react-router'
+import { MemoryRouter, useLocation, useNavigate } from 'react-router'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { AccountContext } from '@/app/account/account-context'
@@ -36,6 +36,24 @@ import { type AppView, ROUTES_AREA, SIDEBAR_NAV_AREA } from '../../routes'
 
 import { ChatSidebar } from './index'
 
+const adoption = vi.hoisted(() => vi.fn())
+vi.mock('../conversation-migration', async importOriginal => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  adoptLegacyConversation: adoption
+}))
+
+function NavigationProbe() {
+  const navigate = useNavigate()
+  const location = useLocation()
+
+  return (
+    <>
+      <button onClick={() => navigate('/settings')}>Navigate elsewhere</button>
+      <output data-testid="route">{location.pathname}</output>
+    </>
+  )
+}
+
 const noop = () => {}
 
 const noopAsync = async () => {}
@@ -67,6 +85,7 @@ const sessionRows = [
 const renderSidebar = (pathname: string, currentView: AppView, onNewSessionInWorkspace = noop, onNavigate = noop) =>
   render(
     <MemoryRouter initialEntries={[pathname]}>
+      <NavigationProbe />
       <AccountContext.Provider value={accountActions}>
         <SidebarProvider>
           <ChatSidebar
@@ -192,7 +211,7 @@ describe('ChatSidebar navigation activity', () => {
     })
 
     for (const [pathname, currentView, label] of [
-      ['/profiles', 'profiles', 'Workspaces'],
+      ['/agent-hub/configuration', 'profiles', 'Agent Hub'],
       ['/skills', 'skills', 'Capabilities'],
       ['/messaging', 'messaging', 'Messaging'],
       ['/artifacts', 'artifacts', 'Artifacts'],
@@ -338,6 +357,31 @@ describe('ChatSidebar navigation activity', () => {
     fireEvent.click(container.querySelector('[data-tour="sidebar-nav-new-session"]')!)
     expect(start).toHaveBeenCalledWith(null, { openTab: false })
     expect($projectScope.get()).toBe(ALL_PROJECTS)
+  })
+
+  it('keeps newer navigation when an adoption completes in the background', async () => {
+    let finish!: (owner: { connectionId: string; installId: string; conversationId: string }) => void
+    adoption.mockReturnValue(
+      new Promise(resolve => {
+        finish = resolve
+      })
+    )
+    $sessions.set([
+      makeSessionInfo({
+        id: 'legacy',
+        connection_id: 'local',
+        profile: 'default',
+        source: 'desktop',
+        title: 'Adopt me'
+      })
+    ])
+    renderSidebar('/', 'chat')
+    fireEvent.contextMenu(screen.getByText('Adopt me'))
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Continue as conversation' }))
+    expect(adoption).toHaveBeenCalled()
+    fireEvent.click(screen.getByRole('button', { name: 'Navigate elsewhere' }))
+    await act(async () => finish({ connectionId: 'local', installId: 'host', conversationId: 'public' }))
+    expect(screen.getByTestId('route').textContent).toBe('/settings')
   })
 
   it('opens session import from the recent section menu', () => {

@@ -21,6 +21,8 @@ export interface ResolvedConversationCommandSend {
 export interface ConversationModelSelection {
   model_source: 'aino' | 'byok'
   model_id?: string
+  reasoning_effort?: string
+  fast?: boolean
 }
 
 interface ConfigurationDependencies {
@@ -38,7 +40,14 @@ export function createConversationConfigurationActions(owner: ConversationOwner,
   function start() {
     const current = conversationRuntime(owner)
 
-    if (!current.snapshot || current.busy || current.submitting || current.uncertainSend || deps.hasSubmission()) {
+    if (
+      !current.snapshot ||
+      current.busy ||
+      current.submitting ||
+      current.uncertainSend ||
+      current.uncertainHistory ||
+      deps.hasSubmission()
+    ) {
       throw new Error(translateNow('composer.conversation.configurationBusy'))
     }
 

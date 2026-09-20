@@ -140,12 +140,11 @@ one-off at the call site.
   not open projects. Closing a project removes it from this list, preserving
   its registration, files and conversations; its unpinned chats return to Recent.
   Project menus own folder membership and the primary folder. Removing a project
-  or folder registration never deletes files or conversation history. Profile
-  management lives in Sidebar → Workspaces. Selecting a row only previews its
-  configuration; switching is an explicit action. The page reuses profile
-  creation, cloning, rename/delete and SOUL editing,
-  with profile-scoped model and capability controls. All profiles is a browse
-  scope, and opening a folder resolves to the active writable profile.
+  or folder registration never deletes files or conversation history. Expert configuration lives in Sidebar → Agent Hub. The stable
+  `/agent-hub/configuration` destination reuses the Hub's source-owned editors;
+  `/profiles` redirects there without opening a chat or activating an expert.
+  Runtime/profile switches remain explicit advanced controls. Projects organize
+  materials and tasks; agents decide who handles this turn.
 - **Sidebar identity is the signed-in account.** Its circular avatar and name
   open Settings → My account. Use the account display name, falling back to its
   login identifier; workspace/profile selection must not change this identity.
@@ -654,3 +653,21 @@ The detailed state contract lives in the scoped
 - [ ] `cursor-pointer`, focus ring, and `Esc`-to-close behave?
 - [ ] Touched a primitive, token, or variant? Its named-contract entry in this
       file is updated in the same change.
+
+### Unified ordinary history
+
+Recent combines public conversations and unmigrated ordinary sessions. Each row
+retains its kind and full source identity; conversation IDs never stand in for
+legacy session IDs. Completed migration bindings suppress their old source rows.
+Canonical Bot Chat, group plumbing, messaging, cron and subagent history keep
+their existing doors and visibility rules. Conversation rows do not claim legacy
+pinning, unread, search-content or timestamp metadata absent from their contract.
+The shared-project filter uses the explicitly opened B1 project source and does
+not follow the selected responder. Unmigrated sessions without that exact shared
+project reference remain accessible in All projects and the existing project tree.
+
+Ordinary New checks the captured default coordinator's capabilities. A confirmed
+missing method or disabled feature uses a default-owned legacy draft; transient
+failure offers retry. A project create requires its uniquely selected opened source.
+Already-created conversations remain readable when creation is disabled. Split,
+Bot side-chat, voice and wake flows keep their existing session contracts.

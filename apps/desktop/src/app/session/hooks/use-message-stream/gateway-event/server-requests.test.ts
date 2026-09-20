@@ -16,6 +16,7 @@ const deps = {} as ServerRequestContext['deps']
 function deliver(method: string, params: Record<string, unknown>, activeSessionId: null | string) {
   const respond = vi.fn()
   const fail = vi.fn()
+
   const handled = handleServerRequest(
     { fail, id: 'srq-1', method, params, profile: 'default', respond },
     deps,
@@ -76,6 +77,7 @@ it.each(['preview.act', 'tour'])(
   'routes %s through the foreground conversation runtime while preserving background isolation',
   async method => {
     const owner = { connectionId: 'remote', installId: 'host', conversationId: 'public' }
+
     const participant = {
       participant_id: 'writer',
       install_id: 'host',
@@ -83,6 +85,7 @@ it.each(['preview.act', 'tour'])(
       display_name: 'Writer',
       is_general: false
     }
+
     const coordinates = {
       conversation_id: 'public',
       participant_id: 'writer',
@@ -92,6 +95,7 @@ it.each(['preview.act', 'tour'])(
       task_id: 'task',
       execution_generation: 2
     }
+
     $conversationRuntime.set({})
     $foregroundConversationOwner.set(owner)
     updateConversationRuntime(owner, {
@@ -111,6 +115,7 @@ it.each(['preview.act', 'tour'])(
       }
     })
     const respond = vi.fn()
+
     const request = {
       id: 'conversation-action',
       connectionId: 'remote',
@@ -120,6 +125,7 @@ it.each(['preview.act', 'tour'])(
       respond,
       fail: vi.fn()
     }
+
     expect(handleServerRequest(request, deps, null)).toBe(true)
     await vi.waitFor(() => expect(respond).toHaveBeenCalledOnce())
     expect(JSON.parse(respond.mock.calls[0][0].value).success).toBe(method === 'tour')

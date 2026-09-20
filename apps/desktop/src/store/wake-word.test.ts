@@ -1,6 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { setRuntimeI18nLocale } from '@/i18n'
+import { type ClientWakeCaptureHandle, startClientWakeCapture, type WakeFeedRequester } from '@/lib/wake-client-capture'
+
+vi.mock('@/lib/wake-client-capture', () => ({ startClientWakeCapture: vi.fn() }))
 
 import {
   $wakeWord,
@@ -8,6 +11,7 @@ import {
   applyWakeStatus,
   applyWakeStopResult,
   armWakeWord,
+  createWakeWordController,
   resetWakeWordState,
   resumeWakeAfterVoice,
   toggleWakeWord,
@@ -407,5 +411,101 @@ describe('resumeWakeAfterVoice (post-voice reconcile)', () => {
     await resumeWakeAfterVoice(request)
 
     expect($wakeWord.get()).toMatchObject({ available: false, listening: false })
+  })
+})
+
+describe('owned wake controller', () => {
+  it('keeps status, microphone frames and cleanup on the captured source', async () => {
+    const stop = vi.fn()
+    let feed: WakeFeedRequester | undefined
+    vi.mocked(startClientWakeCapture).mockImplementation(async options => {
+      feed = options.request
+
+      return { stop, active: true }
+    })
+
+    const request = requester(method =>
+      method === 'wake.status'
+        ? { available: true, enabled: true, listening: false }
+        : { started: true, capture: 'client', frame_length: 1280 }
+    )
+
+    const controller = createWakeWordController(request)
+    await controller.arm()
+    await vi.waitFor(() => expect(feed).toBeDefined())
+    await feed!('wake.feed', { pcm: 'owned' })
+    expect(request).toHaveBeenCalledWith('wake.feed', { pcm: 'owned' })
+    expect(controller.state.get().listening).toBe(true)
+    expect($wakeWord.get().listening).toBe(false)
+    await controller.dispose()
+    expect(stop).toHaveBeenCalledOnce()
+    expect(request).toHaveBeenLastCalledWith('wake.stop', {})
+    await expect(feed!('wake.feed', {})).rejects.toBeInstanceOf(Error)
+  })
+
+  it('stops late microphone permission and waits for old start cleanup before a new owner arms', async () => {
+    const stop = vi.fn()
+    let releaseMic!: (value: ClientWakeCaptureHandle) => void
+    vi.mocked(startClientWakeCapture).mockImplementation(
+      () =>
+        new Promise(resolve => {
+          releaseMic = resolve
+        })
+    )
+    const events: string[] = []
+    let releaseStop!: () => void
+
+    const oldRequest = requester(method => {
+      events.push(`old:${method}`)
+
+      if (method === 'wake.status') {
+        return { available: true, listening: false }
+      }
+
+      if (method === 'wake.stop') {
+        return new Promise<void>(resolve => {
+          releaseStop = resolve
+        })
+      }
+
+      return { started: true, capture: 'client' }
+    })
+
+    const old = createWakeWordController(oldRequest)
+    await old.arm()
+    const disposed = old.dispose()
+    await vi.waitFor(() => expect(releaseStop).toBeDefined())
+
+    const middle = createWakeWordController(
+      requester(method => {
+        events.push(`middle:${method}`)
+
+        return { stopped: true }
+      })
+    )
+
+    const middleDisposed = middle.dispose()
+
+    const next = createWakeWordController(
+      requester(method => {
+        events.push(`next:${method}`)
+
+        return { available: false }
+      })
+    )
+
+    const arming = next.arm()
+    await Promise.resolve()
+    expect(events.some(event => event.startsWith('next:'))).toBe(false)
+    releaseMic({ stop, active: true })
+    await vi.waitFor(() => expect(stop).toHaveBeenCalledOnce())
+    releaseStop()
+    await disposed
+    await middleDisposed
+    await arming
+    expect(events.indexOf('next:wake.status')).toBeGreaterThan(events.indexOf('middle:wake.stop'))
+    expect(events.indexOf('middle:wake.stop')).toBeGreaterThan(events.indexOf('old:wake.stop'))
+    expect(old.state.get().listening).toBe(false)
+    await next.dispose()
   })
 })

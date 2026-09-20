@@ -8,6 +8,7 @@ import { platformAccountActions } from '@/api/platform'
 import { createSessionRpcDispatcher } from '@/app/contrib/session-rpc-dispatcher'
 import type { HermesApiRequest } from '@/global'
 import { getSession } from '@/hermes'
+import { stampRowsWithOwningConnection } from '@/lib/session-owner-stamp'
 import {
   activeGateway,
   activeGatewayConnectionId,
@@ -140,7 +141,11 @@ function answer(socket: MockGateway, method: string, params: Record<string, unkn
 
     runtimeOwner = socket
 
-    return { info: params.model_source === 'aino' ? { model_source: 'aino', model_id: params.model_id, provider: 'aino' } : {}, session_id: mintedRuntimeId, stored_session_id: mintedStoredId }
+    return {
+      info: params.model_source === 'aino' ? { model_source: 'aino', model_id: params.model_id, provider: 'aino' } : {},
+      session_id: mintedRuntimeId,
+      stored_session_id: mintedStoredId
+    }
   }
 
   if (sessionScoped(params) && socket !== runtimeOwner) {
@@ -663,7 +668,7 @@ describe('profile rail: a fresh Omar chat keeps its exact registry owner across 
     expect($newChatConnectionId.get()).toBe(SOURCE_ID)
   })
 
-  it('turn two still rides conn:homelab::omar after the transient hint is evicted AND a refresh returned the row untagged', async () => {
+  it('turn two keeps the captured source after hint eviction and an untagged backend response', async () => {
     const { ambientRequest, handle, omarSocket, primary } = await bootProfileRailOmar('newSessionInProfile')
 
     await expect(handle.submitText('first prompt')).resolves.toBe(true)
@@ -684,9 +689,9 @@ describe('profile rail: a fresh Omar chat keeps its exact registry owner across 
     }
 
     delete untagged.connection_id
-    setSessions(prev => mergeSessionPage(prev, [untagged], []))
+    setSessions(prev => mergeSessionPage(prev, stampRowsWithOwningConnection([untagged], SOURCE_ID, true), []))
 
-    // The row still names the exact owner: the refresh carried the tag.
+    // The API boundary stamps its captured source; merging never guesses a remote owner from a twin ID.
     expect($sessions.get().find(session => sessionMatchesStoredId(session, STORED_ID))).toMatchObject({
       connection_id: SOURCE_ID,
       profile: 'omar'
@@ -766,15 +771,25 @@ describe('profile rail: a fresh Omar chat keeps its exact registry owner across 
       Object.assign(desktop, {
         platformAccount: bridge,
         platformModels: {
-          list: async () => [platformModel()], owner: async () => owner,
-          bind: vi.fn(async () => ({ ok: true, ready: true, model_id: 'catalog-a', billing_source: 'aino', expires_at: 'later' })),
+          list: async () => [platformModel()],
+          owner: async () => owner,
+          bind: vi.fn(async () => ({
+            ok: true,
+            ready: true,
+            model_id: 'catalog-a',
+            billing_source: 'aino',
+            expires_at: 'later'
+          })),
           clear: vi.fn()
         }
       })
       $profiles.set([{ name: 'default' }, { name: 'omar' }] as never)
       await platformAccountActions(bridge as never).refresh()
       await platformModelCatalog().load()
-      recordGatewayReadyCapability({ profile: 'omar' }, { type: 'gateway.ready', payload: { managed_model_binding: 1 } })
+      recordGatewayReadyCapability(
+        { profile: 'omar' },
+        { type: 'gateway.ready', payload: { managed_model_binding: 1 } }
+      )
       setCurrentModel('catalog-a')
       setCurrentProvider('aino')
       setCurrentPlatformOwner(owner.user_id, owner.platform_origin)
@@ -800,7 +815,9 @@ describe('profile rail: a fresh Omar chat keeps its exact registry owner across 
     await expect(handle!.submitText('second prompt')).resolves.toBe(true)
 
     if (managed) {
-      expect(desktop.platformModels!.bind).toHaveBeenCalledWith(expect.objectContaining({ connection_id: '', profile: 'omar' }))
+      expect(desktop.platformModels!.bind).toHaveBeenCalledWith(
+        expect.objectContaining({ connection_id: '', profile: 'omar' })
+      )
       expect(calls(v1Socket!).filter(method => method === 'session.managed_model_ticket').length).toBeGreaterThan(0)
     } else {
       expect(desktop.api).toHaveBeenCalledExactlyOnceWith(

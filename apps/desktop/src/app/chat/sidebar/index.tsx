@@ -3,7 +3,7 @@ import { sortableKeyboardCoordinates } from '@dnd-kit/sortable'
 import { useStore } from '@nanostores/react'
 import type * as React from 'react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useLocation } from 'react-router'
+import { useLocation, useNavigate } from 'react-router'
 
 import { PlatformAvatar } from '@/app/messaging/platform-icon'
 import navArtifactsIcon from '@/assets/aino-home/nav-artifacts.svg'
@@ -15,6 +15,13 @@ import { AinoDesignIcon } from '@/components/aino-design-icon'
 import { Button } from '@/components/ui/button'
 import { Codicon } from '@/components/ui/codicon'
 import { ContextMenu, ContextMenuContent, ContextMenuTrigger } from '@/components/ui/context-menu'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuTrigger
+} from '@/components/ui/dropdown-menu'
 import { GlyphSpinner } from '@/components/ui/glyph-spinner'
 import { SearchField } from '@/components/ui/search-field'
 import {
@@ -130,18 +137,21 @@ import {
 import { $sessionDotStateById, sessionStatusBucket } from '@/store/session-dot-state'
 import { $unconfirmedPinWrites } from '@/store/session-pin-sync'
 import { $removedSessionIds } from '@/store/session-removal'
+import { sessionOwnerRouteFromRow } from '@/store/session-request-router'
 import { $focusedSessionIsTile, $focusedStoredSessionId, $workingSessionIds } from '@/store/session-states'
 import { ackAllSessionsRead } from '@/store/session-unread'
 import { markSessionUnread } from '@/store/session-unread-remote'
+import { sharedOpenKey, sharedProjectWindow } from '@/store/shared-project-windows'
 import { $archivedSessions, loadArchivedSessions } from '@/store/sidebar-archive'
 import { $sidebarSessionRankIds } from '@/store/sidebar-sort'
 
+import { conversationRoute, routeConversationId } from '../../routes'
 import {
+  AGENT_HUB_CONFIGURATION_ROUTE,
   type AppView,
   ARTIFACTS_ROUTE,
   CRON_ROUTE,
   MESSAGING_ROUTE,
-  PROFILES_ROUTE,
   SESSION_IMPORT_ROUTE,
   SETTINGS_ROUTE,
   SIDEBAR_NAV_AREA,
@@ -149,9 +159,17 @@ import {
   SKILLS_ROUTE
 } from '../../routes'
 import type { SidebarNavItem } from '../../types'
+import { adoptLegacyConversation } from '../conversation-migration'
 import { type NewSessionSplitHandler, startNewSessionDrag } from '../new-session-drag'
 
 import { SidebarSectionAddButton } from './chrome'
+import {
+  conversationForLegacy,
+  ConversationList,
+  conversationMatchesProject,
+  legacyOrdinaryRow,
+  openOrdinaryRow
+} from './conversation-list'
 import { SidebarCronJobsSection } from './cron-jobs-section'
 import { SidebarFilterMenu } from './filter-menu'
 import { useGatewaySessionGroups } from './gateway-group-model'
@@ -186,6 +204,7 @@ import { SidebarIdentityFooter, SidebarLoadErrorState, SidebarSessionSkeletons }
 import { buildSessionByAnyId, resolvePinnedSessions } from './session-index'
 import { SidebarSessionsSection, VIRTUALIZE_THRESHOLD } from './sessions-section'
 import { CONTEXT_SPLIT_KIT, SplitSubmenu } from './split-submenu'
+import { useConversationList } from './use-conversation-list'
 import { useEnteredProjectSessions } from './use-entered-project-sessions'
 
 // Non-session groups (messaging platforms) stay compact: show a few rows up
@@ -211,7 +230,7 @@ const SIDEBAR_NAV: SidebarNavItem[] = [
     id: 'profiles',
     label: '',
     icon: props => <Codicon name="organization" {...props} />,
-    route: PROFILES_ROUTE,
+    route: AGENT_HUB_CONFIGURATION_ROUTE,
     keybindActionId: 'nav.profiles'
   },
   {
@@ -355,7 +374,14 @@ export function ChatSidebar({
 }: ChatSidebarProps) {
   const { t } = useI18n()
   const s = t.sidebar
-  const { pathname } = useLocation()
+  const { pathname, search, key: navigationKey } = useLocation()
+  const adoptionNavigationRef = useRef({ navigationKey, intent: 0 })
+
+  if (adoptionNavigationRef.current.navigationKey !== navigationKey) {
+    adoptionNavigationRef.current = { navigationKey, intent: adoptionNavigationRef.current.intent + 1 }
+  }
+
+  const navigateConversation = useNavigate()
   // Contributed nav rows (plugins pairing a page with a sidebar entry) render
   // below the built-ins with the same chrome; active = at their route.
   const navContributions = useContributions(SIDEBAR_NAV_AREA)
@@ -521,21 +547,37 @@ export function ChatSidebar({
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
   )
 
-  // Profile scope = the "workspace switcher" context. Concrete scope shows only
-  // that profile's sessions (clean rows, no per-row tags); ALL fans every
-  // profile in. Grouped rendering stays gated on `showAllProfiles` (multi-profile
-  // + ALL) so a single-profile user is never stranded in a grouped view with no
-  // rail — but the *data* still has to fan in when the persisted scope is ALL
-  // (Grouping → Profile). Filtering that pool against the `__all__` sentinel
-  // matches nothing and empties recents + pins.
-  // Archived rows are excluded from the sessions query, so Archived is a view of
-  // its own set rather than a filter over this one — a flat list of archived
-  // rows, no project tree, no date or status dividers.
+  // Ordinary history spans experts. The independent cron/messaging sections
+  // continue to honor advanced runtime scope below.
+  const conversationList = useConversationList(showArchived)
+  const sharedProjects = useStore(sharedProjectWindow.opened)
+  const [historyProjectKey, setHistoryProjectKey] = useState('')
+  const historyProject = sharedProjects.find(entry => sharedOpenKey(entry) === historyProjectKey) ?? null
+  const visibleConversations = conversationList.rows.filter(row => conversationMatchesProject(row, historyProject))
+
+  const openHistorySession = useCallback(
+    (id: string, session?: SessionInfo) => {
+      const row = session && (conversationForLegacy(conversationList.mappings, session) || legacyOrdinaryRow(session))
+
+      if (!row) {
+        onResumeSession(id, session)
+
+        return
+      }
+
+      openOrdinaryRow(row, {
+        conversation: owner => navigateConversation(conversationRoute(owner.conversationId, owner)),
+        legacy: captured => onResumeSession(captured.id, captured)
+      })
+    },
+    [conversationList.mappings, navigateConversation, onResumeSession]
+  )
+
   const scopedSessions = useMemo(() => {
     const pool = showArchived ? archivedSessions : sessions
 
-    return filterSessionsByProfileScope(pool, profileScope)
-  }, [sessions, archivedSessions, showArchived, profileScope])
+    return pool.filter(session => !conversationForLegacy(conversationList.mappings, session))
+  }, [sessions, archivedSessions, showArchived, conversationList.mappings])
 
   // One predicate for the status/project filters, so the flat list and the
   // project lanes narrow by the same rule. A project lane holds rows the loaded
@@ -1309,15 +1351,11 @@ export function ChatSidebar({
   // flag — otherwise a huge default profile keeps "Load more" stuck on while
   // you browse a small one. The backend reports whether its page was capped
   // rather than an exact count, so no COUNT(*) runs per refresh.
-  const loadedSessionCount = showAllProfiles ? sessions.length : scopedSessions.length
+  const loadedSessionCount = scopedSessions.length
 
   // The archived view is its own (single, capped) query — paging the live
   // sessions list from under it would just fold un-archived rows back in.
-  const hasMoreSessions =
-    !showArchived &&
-    (showAllProfiles
-      ? Object.values(sessionProfilesTruncated).some(Boolean)
-      : Boolean(sessionProfilesTruncated[profileScope]))
+  const hasMoreSessions = !showArchived && Object.values(sessionProfilesTruncated).some(Boolean)
 
   const displayRecentsCountRef = useRef(0)
   const loadedRecentsCountRef = useRef(0)
@@ -1796,7 +1834,7 @@ export function ChatSidebar({
             contentClassName={cn('flex min-h-0 flex-col gap-px pb-1.75', recentsVirtualizes && 'h-80', SCROLL_Y)}
             dndSensors={dndSensors}
             emptyState={
-              showSessionSkeletons ? (
+              conversationList.rows.length ? null : showSessionSkeletons ? (
                 <SidebarSessionSkeletons />
               ) : (
                 <div className="px-2 py-2 text-xs text-(--ui-text-tertiary)">
@@ -1847,22 +1885,76 @@ export function ChatSidebar({
               </div>
             }
             label={showArchived ? t.ui.actions.labels.archived : s.recent}
+            leadingContent={
+              <>
+                {sharedProjects.length > 0 && (
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button size="sm" variant="ghost">
+                        {historyProject?.project.name || t.profiles.allProjects}
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent>
+                      <DropdownMenuRadioGroup onValueChange={setHistoryProjectKey} value={historyProjectKey}>
+                        <DropdownMenuRadioItem value="">{t.profiles.allProjects}</DropdownMenuRadioItem>
+                        {sharedProjects.map(entry => (
+                          <DropdownMenuRadioItem key={sharedOpenKey(entry)} value={sharedOpenKey(entry)}>
+                            {entry.project.name} · {entry.connectionId}
+                          </DropdownMenuRadioItem>
+                        ))}
+                      </DropdownMenuRadioGroup>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                )}
+                {conversationList.error && <SidebarLoadErrorState onRetry={conversationList.retry} />}
+                <ConversationList
+                  onOpen={owner => navigateConversation(conversationRoute(owner.conversationId, owner))}
+                  onRefresh={conversationList.retry}
+                  rows={visibleConversations}
+                  selected={(() => {
+                    const query = new URLSearchParams(search)
+                    const id = routeConversationId(pathname)
+                    const connectionId = query.get('connection')
+                    const installId = query.get('installation')
+
+                    return id && connectionId && installId ? { conversationId: id, connectionId, installId } : null
+                  })()}
+                />
+              </>
+            }
             manualOrderIds={agentOrderManual ? agentOrderIds : sortOrderIds}
+            onAdoptSession={session => {
+              const source = sessionOwnerRouteFromRow(session)
+
+              if (!source) {
+                return
+              }
+              const intent = ++adoptionNavigationRef.current.intent
+              void adoptLegacyConversation(source, session.id)
+                .then(owner => {
+                  conversationList.retry()
+
+                  if (intent === adoptionNavigationRef.current.intent) {
+                    navigateConversation(conversationRoute(owner.conversationId, owner))
+                  }
+                })
+                .catch(error => notifyError(error, t.profiles.adoptFailed))
+            }}
             onArchiveSession={onArchiveSession}
             onBranchSession={onBranchSession}
             onDeleteSession={onDeleteSession}
             onNewSessionInWorkspace={onNewSessionInWorkspace}
             onNewSessionSplit={onNewSessionSplit}
             onReorderSessions={showAllProfiles ? undefined : reorderSessions}
-            onResumeSession={onResumeSession}
+            onResumeSession={openHistorySession}
             onToggle={() => setSidebarRecentsOpen(!agentsOpen)}
             onTogglePin={pinSession}
             onToggleUnread={toggleUnread}
             open={agentsOpen}
             pinned={false}
             rootClassName="shrink-0 p-0"
-            sessions={displayAgentSessions}
-            showProfileTags={showAllProfiles}
+            sessions={historyProject ? [] : displayAgentSessions}
+            showProfileTags={true}
             sortable={!showAllProfiles && displayAgentSessions.length > 1}
           />
 

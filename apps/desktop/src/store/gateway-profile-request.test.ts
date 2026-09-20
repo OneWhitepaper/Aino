@@ -618,11 +618,13 @@ describe('attached shared-remote group turns (#96493)', () => {
     await ensureGatewayForProfile('voter')
     await requestGatewayForAgent('homelab', 'default', 'conversations.get', { conversation_id: 'public' })
     await requestGatewayForAgent('homelab', 'default', 'session.managed_model_ticket', {
-      session_id: 'writer-runtime', profile: 'writer'
+      session_id: 'writer-runtime',
+      profile: 'writer'
     })
     expect(primary.request).toHaveBeenCalledWith('conversations.get', { conversation_id: 'public' })
     expect(primary.request).toHaveBeenCalledWith('session.managed_model_ticket', {
-      session_id: 'writer-runtime', profile: 'writer'
+      session_id: 'writer-runtime',
+      profile: 'writer'
     })
     expect(secondaryGateways).toHaveLength(0)
   })

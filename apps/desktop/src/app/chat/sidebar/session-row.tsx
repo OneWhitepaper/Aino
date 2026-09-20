@@ -61,6 +61,7 @@ interface SidebarSessionRowProps extends React.ComponentProps<'div'> {
   unread: boolean
   onArchive: () => void
   onBranch?: () => void
+  onAdopt?: () => void
   onDelete: () => void
   onPin: () => void
   /** Toggle the persisted read-state watermark. */
@@ -128,6 +129,7 @@ function SidebarSessionRowImpl({
   unread,
   onArchive,
   onBranch,
+  onAdopt,
   onDelete,
   onPin,
   onToggleUnread,
@@ -312,6 +314,7 @@ function SidebarSessionRowImpl({
         </span>
       ))}
       <SessionActionsMenu
+        onAdopt={onAdopt}
         onArchive={onArchive}
         onBranch={onBranch}
         onDelete={onDelete}
@@ -341,6 +344,7 @@ function SidebarSessionRowImpl({
 
   return (
     <SessionContextMenu
+      onAdopt={onAdopt}
       onArchive={onArchive}
       onBranch={onBranch}
       onDelete={onDelete}

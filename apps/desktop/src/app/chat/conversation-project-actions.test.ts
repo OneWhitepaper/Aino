@@ -10,6 +10,7 @@ import { changeConversationProject } from './conversation-project-actions'
 it('keeps project through A/B selection and keeps expert/text through exact-source generation transition', async () => {
   const owner = { connectionId: 'remote', installId: 'host', conversationId: 'book' }
   const key = conversationOwnerKey(owner)
+
   const project = {
     install_id: 'host',
     registration_profile: 'writer',
@@ -17,6 +18,7 @@ it('keeps project through A/B selection and keeps expert/text through exact-sour
     cwd: '/book',
     execution_environment_id: 'local'
   }
+
   const general = {
     participant_id: 'general',
     install_id: 'host',
@@ -24,6 +26,7 @@ it('keeps project through A/B selection and keeps expert/text through exact-sour
     display_name: 'General',
     is_general: true
   }
+
   const record = { conversation_id: 'book', title: 'Book', general, project, revision: 4, archived: false }
   $conversationRuntime.set({})
   $conversationRecords.set({ [key]: record })
@@ -38,9 +41,11 @@ it('keeps project through A/B selection and keeps expert/text through exact-sour
   selectConversationExpert({ owner, participants }, 'B')
   expect($conversationRecords.get()[key].project).toEqual(project)
   const next = { ...project, registration_profile: 'reviewer', project_id: 'other', cwd: '/other' }
+
   const request = vi
     .fn()
     .mockResolvedValue({ conversation: { ...record, project: next, revision: 5 }, participants: [] })
+
   const load = vi.fn().mockResolvedValue(undefined)
   await changeConversationProject(owner, next, 4, load, request)
   expect(request).toHaveBeenCalledWith('remote', 'default', 'conversations.set_project', {

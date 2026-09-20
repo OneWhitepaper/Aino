@@ -66,7 +66,7 @@ export function ComposerProjectSelector({ cwd, label }: ComposerProjectSelectorP
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <ProjectSelectorTrigger label={label} disabled={opening || bindingProject} />
+        <ProjectSelectorTrigger disabled={opening || bindingProject} label={label} />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="max-w-72" side="top">
         {cwd && (
@@ -150,6 +150,7 @@ export function ComposerProjectSelector({ cwd, label }: ComposerProjectSelectorP
 
 export function ProjectSelectorTrigger({ label, ...props }: ComponentProps<typeof Button> & { label?: string | null }) {
   const { t } = useI18n()
+
   return (
     <Button {...props} className="min-w-0 max-w-full" size="inline" variant="ghost">
       <span className="max-w-56 truncate text-xs font-normal">{label || t.statusStack.coding.selectProject}</span>

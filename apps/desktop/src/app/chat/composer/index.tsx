@@ -68,7 +68,7 @@ import { useEmojiCompletions } from './hooks/use-emoji-completions'
 import { useComposerMicroActions } from './hooks/use-micro-actions'
 import { useSlashCompletions } from './hooks/use-slash-completions'
 import { useSessionStatusPresence } from './hooks/use-status-presence'
-import { ComposerInputSurface, ComposerSurface, ComposerContent } from './input-surface'
+import { ComposerContent, ComposerInputSurface, ComposerSurface } from './input-surface'
 import { shouldConvertPasteToAttachment } from './large-paste'
 import { ActionBadges } from './micro-actions'
 import { chipTypedPathOnSpace, pathifyRefs } from './path-refs'
@@ -155,6 +155,7 @@ export function ChatBar({
       if (platformHistoryOwner(sessionId) !== null) {
         return false
       }
+
       // Bare stop phrase typed while the voice conversation is live: end the
       // conversation (mic off, pill dismissed) instead of sending "stop" to
       // the agent. Spoken transcripts are already stop-checked inside

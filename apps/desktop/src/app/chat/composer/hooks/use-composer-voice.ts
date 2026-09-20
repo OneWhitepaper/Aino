@@ -10,6 +10,7 @@ import { toLiveHistory } from '@/lib/voice-live'
 import { clearWakeIndicator, syncWakeIndicatorWithVoice } from '@/lib/wake-indicator'
 import { $voiceConversationStartRequest, takeVoiceConversationStart } from '@/store/composer'
 import { resetBrowseState } from '@/store/composer-input-history'
+import { $conversationVoiceTarget } from '@/store/conversation-voice-target'
 import { $gateway } from '@/store/gateway'
 import { notify, notifyError } from '@/store/notifications'
 import { $voiceLiveStatus, refreshVoiceLiveStatus, selectedVoiceChatMode } from '@/store/voice-live'
@@ -18,6 +19,7 @@ import { resumeWakeAfterVoice } from '@/store/wake-word'
 
 import type { ComposerTarget } from '../focus'
 import { onComposerVoiceToggleRequest } from '../focus'
+import { useOwnedVoice } from '../owned-voice-context'
 import { useComposerScope } from '../scope'
 import type { ChatBarProps } from '../types'
 
@@ -63,9 +65,11 @@ export function useComposerVoice({
   sessionId,
   target
 }: UseComposerVoiceArgs) {
+  const owned = useOwnedVoice()
   const { t } = useI18n()
   // A tile's composer speaks ITS transcript, not the primary chat's.
-  const { $messages } = useComposerScope()
+  const composerScope = useComposerScope()
+  const $messages = owned?.$messages ?? composerScope.$messages
   const [voiceConversationActive, setVoiceConversationActive] = useState(false)
   // Engine selection is latched at conversation START (a Settings change
   // applies to the next conversation, never mid-call).
@@ -76,12 +80,16 @@ export function useComposerVoice({
 
   // eslint-disable-next-line no-restricted-syntax -- session-id adopt token, not an atom mirror
   useEffect(() => {
-    adoptSpokenReplySession(previousSessionIdRef.current, sessionId)
+    if (!owned) {
+      adoptSpokenReplySession(previousSessionIdRef.current, sessionId)
+    }
     previousSessionIdRef.current = sessionId
   }, [sessionId])
 
   const { dictate, voiceActivityState, voiceStatus } = useVoiceRecorder({
     focusInput,
+    isCurrent: owned?.isCurrent,
+    scopeKey: owned?.key,
     maxRecordingSeconds,
     onTranscript: insertText,
     onTranscribeAudio
@@ -131,7 +139,7 @@ export function useComposerVoice({
   }
 
   const submitVoiceTurn = async (text: string) => {
-    if (busy) {
+    if (busy || (owned && !owned.isCurrent())) {
       return
     }
 
@@ -144,6 +152,9 @@ export function useComposerVoice({
   /** A GPT-Live delegation → Hermes turn. The bubble and the persisted row are
    *  what the user said; the transcript window rides the model input only. */
   const submitLiveDelegation = async (text: string, voiceContext: string) => {
+    if (owned && !owned.isCurrent()) {
+      return
+    }
     triggerHaptic('submit')
     resetBrowseState(sessionId)
     clearDraft()
@@ -212,13 +223,27 @@ export function useComposerVoice({
   })
 
   const conversation = liveEngineActive ? liveConversation : chainedConversation
+  useEffect(() => {
+    if (!owned) {
+      return
+    }
+    setVoiceConversationActive(false)
+
+    return () => {
+      void chainedConversation.end()
+      void liveConversation.end()
+    }
+  }, [owned?.key])
 
   /** Turn the conversation on with the engine `voice.voice_chat_mode` selects,
    *  decided in the same state batch so the other engine never sees a frame of
    *  `enabled`. gpt-live selected but not startable (no OpenAI key on the
    *  gateway) falls back to chained with a notice rather than a dead button. */
   const activateConversation = useCallback(() => {
-    const status = $voiceLiveStatus.get()
+    if (owned && !owned.isCurrent()) {
+      return
+    }
+    const status = owned ? owned.status : $voiceLiveStatus.get()
     let live = false
 
     if (selectedVoiceChatMode(status) === 'gpt-live') {
@@ -235,14 +260,14 @@ export function useComposerVoice({
 
     setLiveEngineActive(live)
     setVoiceConversationActive(true)
-  }, [t])
+  }, [t, owned])
 
   useEffect(() => {
     if (!voiceConversationActive) {
       // Prefetch so the first press picks the right engine without a round trip.
-      void refreshVoiceLiveStatus().catch(() => undefined)
+      void (owned ? owned.refreshStatus() : refreshVoiceLiveStatus()).catch(() => undefined)
     }
-  }, [voiceConversationActive])
+  }, [voiceConversationActive, owned?.key])
 
   // eslint-disable-next-line no-restricted-syntax -- ownership token used only by unmount cleanup
   useEffect(() => {
@@ -286,7 +311,13 @@ export function useComposerVoice({
   )
 
   useEffect(() => {
-    if (target === 'main' && !disabled && takeVoiceConversationStart(voiceStartRequest) && !voiceConversationActive) {
+    if (
+      !owned &&
+      target === 'main' &&
+      !disabled &&
+      takeVoiceConversationStart(voiceStartRequest) &&
+      !voiceConversationActive
+    ) {
       activateConversation()
     }
   }, [activateConversation, disabled, target, voiceConversationActive, voiceStartRequest])
@@ -301,8 +332,8 @@ export function useComposerVoice({
     // Reconcile, don't just resume: the wake word is a persistent setting, so
     // ending a voice chat must re-arm the listener whenever config says
     // enabled — including when the raw resume loses the mic-release race.
-    void resumeWakeAfterVoice()
-  }, [])
+    void (owned ? owned.resumeWake() : resumeWakeAfterVoice())
+  }, [owned?.key])
 
   // The ref is a request token (did WE issue wake.pause?), not an atom mirror —
   // it guards resumeWakeIfPaused from resuming a detector another surface owns.
@@ -311,7 +342,11 @@ export function useComposerVoice({
 
     const barrier = (async () => {
       try {
-        await $gateway.get()?.request('wake.pause', {})
+        if (owned) {
+          await owned.pauseWake()
+        } else {
+          await $gateway.get()?.request('wake.pause', {})
+        }
       } catch {
         // No wake listener / older backend — nothing held the mic.
       }
@@ -320,7 +355,7 @@ export function useComposerVoice({
     wakePauseBarrierRef.current = barrier
 
     return barrier
-  }, [])
+  }, [owned?.key])
 
   useEffect(() => {
     if (voiceConversationActive) {
@@ -338,7 +373,7 @@ export function useComposerVoice({
       return
     }
 
-    const phrase = $voiceStopPhrase.get()
+    const phrase = owned ? owned.stopPhrase : $voiceStopPhrase.get()
 
     if (phrase) {
       notify({
@@ -358,10 +393,18 @@ export function useComposerVoice({
   // lease, and the backend unloads resident local models once no surface holds
   // one. Fire-and-forget — the toggle never waits on or fails from this.
   useEffect(() => {
-    void syncTtsLease(CONVERSATION_LEASE, voiceConversationActive && !liveEngineActive)
-  }, [liveEngineActive, voiceConversationActive])
+    void syncTtsLease(
+      owned ? `${CONVERSATION_LEASE}:${owned.key}` : CONVERSATION_LEASE,
+      voiceConversationActive && !liveEngineActive,
+      owned?.scope
+    )
+  }, [liveEngineActive, voiceConversationActive, owned?.key])
 
-  useEffect(() => () => void syncTtsLease(CONVERSATION_LEASE, false), [])
+  useEffect(
+    () => () =>
+      void syncTtsLease(owned ? `${CONVERSATION_LEASE}:${owned.key}` : CONVERSATION_LEASE, false, owned?.scope),
+    [owned?.key]
+  )
 
   // "Read replies aloud" is the same signal, held for as long as the toggle is
   // on (it mirrors voice.auto_tts, so this also warms at startup when the
@@ -369,12 +412,43 @@ export function useComposerVoice({
   const autoSpeakReplies = useStore($autoSpeakReplies)
 
   useEffect(() => {
-    void syncTtsLease(READ_ALOUD_LEASE, autoSpeakReplies)
-  }, [autoSpeakReplies])
+    void syncTtsLease(owned ? `${READ_ALOUD_LEASE}:${owned.key}` : READ_ALOUD_LEASE, autoSpeakReplies, owned?.scope)
+
+    return owned
+      ? () => {
+          void syncTtsLease(`${READ_ALOUD_LEASE}:${owned.key}`, false, owned.scope)
+        }
+      : undefined
+  }, [autoSpeakReplies, owned?.key])
 
   // Explicit start/end for the on-screen conversation controls (the hotkey uses
   // the gated toggle above).
   const startConversation = activateConversation
+
+  useEffect(() => {
+    if (!owned || typeof owned.scope !== 'object' || !owned.scope?.connectionId || !owned.scope.profile) {
+      return
+    }
+
+    const registration = {
+      key: owned.key,
+      connectionId: owned.scope.connectionId,
+      profile: owned.scope.profile,
+      isCurrent: () => owned.isCurrent() && !disabled,
+      stopCapture: () => {
+        void owned.pauseWake()
+      },
+      start: activateConversation
+    }
+
+    $conversationVoiceTarget.set(registration)
+
+    return () => {
+      if ($conversationVoiceTarget.get() === registration) {
+        $conversationVoiceTarget.set(null)
+      }
+    }
+  }, [owned, disabled, activateConversation])
 
   const endConversation = useCallback(() => {
     setVoiceConversationActive(false)

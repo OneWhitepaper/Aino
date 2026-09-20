@@ -206,6 +206,7 @@ export function createPlatformRuntimeBindingController(options: {
 
         slot.pending = binding
         const owner = { platform_origin: options.origin, user_id: account }
+
         const params = {
           session_id: input.session_id,
           profile: input.session_profile ?? target.profile,

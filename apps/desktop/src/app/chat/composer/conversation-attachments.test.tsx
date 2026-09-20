@@ -17,6 +17,7 @@ import { ConversationComposer } from './conversation-composer'
 
 const owner = { connectionId: 'host', installId: 'install', conversationId: 'conversation' }
 const key = conversationOwnerKey(owner)
+
 const general = {
   participant_id: 'G',
   install_id: 'install',
@@ -24,10 +25,12 @@ const general = {
   display_name: 'General',
   is_general: true
 }
+
 const options = [
   { id: 'G', displayName: 'General', sourceLabel: 'default', isGeneral: true },
   { id: 'A', displayName: 'Expert A', sourceLabel: 'writer', isGeneral: false }
 ]
+
 afterEach(() => {
   cleanup()
   $conversationAttachments.set({})
@@ -66,8 +69,8 @@ it('keeps attachments through responder selection, permits attachment-only send 
   render(
     <I18nProvider configClient={null} initialLocale="en">
       <ConversationComposer
-        onRefresh={vi.fn()}
         busy={false}
+        onRefresh={vi.fn()}
         onSubmit={submit}
         owner={owner}
         participants={options}

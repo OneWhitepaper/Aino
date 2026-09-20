@@ -1,6 +1,6 @@
 import { afterEach, expect, it } from 'vitest'
 
-import { bindPaneVisibility, $hiddenTreePanes } from '@/components/pane-shell/tree/store'
+import { $hiddenTreePanes, bindPaneVisibility } from '@/components/pane-shell/tree/store'
 
 import { $foregroundConversationOwner } from './conversation-runtime'
 import { $filesPaneAvailable } from './files-pane'

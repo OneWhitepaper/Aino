@@ -83,17 +83,19 @@ afterEach(() => {
 
 describe('single-session header', () => {
   it('honors a page header veto instead of exposing the previous session title and menu', () => {
-    const register = (headerVeto: boolean) => registry.register({
-      area: 'panes',
-      data: {
-        placement: 'main',
-        headerVeto,
-        headerMenu: () => <button>Previous session actions</button>
-      },
-      id: 'workspace',
-      render: () => null,
-      title: 'Previous session'
-    })
+    const register = (headerVeto: boolean) =>
+      registry.register({
+        area: 'panes',
+        data: {
+          placement: 'main',
+          headerVeto,
+          headerMenu: () => <button>Previous session actions</button>
+        },
+        id: 'workspace',
+        render: () => null,
+        title: 'Previous session'
+      })
+
     disposers.push(register(true))
     render(
       <WindowTitlebarContext.Provider value>
@@ -103,7 +105,9 @@ describe('single-session header', () => {
     )
     expect(globalThis.document.querySelector('[data-window-session-title]')).toBeNull()
     expect(container!.textContent).not.toContain('Previous session actions')
-    act(() => { disposers.push(register(false)) })
+    act(() => {
+      disposers.push(register(false))
+    })
     expect(globalThis.document.querySelector('[data-current-session-title]')?.textContent).toBe('Previous session')
     expect(container!.textContent).toContain('Previous session actions')
   })

@@ -1,4 +1,3 @@
-import { $filesPaneAvailable } from '@/store/files-pane'
 import { useStore } from '@nanostores/react'
 import { atom, computed } from 'nanostores'
 import type { CSSProperties, ReactElement, PointerEvent as ReactPointerEvent } from 'react'
@@ -63,6 +62,7 @@ import { readKey, writeKey } from '@/lib/storage'
 import { TRANSCRIPT_DIRECTIVE_AREA, type TranscriptDirectiveContribution } from '@/lib/transcript-directives'
 import { setYoloEnabled } from '@/lib/yolo-session'
 import { pruneComposerPopoutZones } from '@/store/composer-popout'
+import { $filesPaneAvailable } from '@/store/files-pane'
 import {
   $fileBrowserOpen,
   $panesFlipped,

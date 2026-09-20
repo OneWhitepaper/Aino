@@ -222,7 +222,9 @@ it('filters the menu view without narrowing the shared catalog and skips unsuppo
       { slug: 'other', name: 'Other provider', models: ['other-model'] }
     ]
   }
+
   const request = vi.fn().mockResolvedValue(catalog)
+
   const controller: ModelMenuController = {
     current: { effort: '', fast: false, model: '', provider: '' },
     select: vi.fn(),
@@ -230,23 +232,26 @@ it('filters the menu view without narrowing the shared catalog and skips unsuppo
     presetFor: () => ({}),
     setOptions: vi.fn()
   }
+
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+
   const menu = (providerFilter?: string) => (
     <QueryClientProvider client={client}>
       <DropdownMenu open>
         <DropdownMenuContent>
           <ModelCatalogMenu
             controller={controller}
-            request={request}
+            optionsEditable={false}
             ownerConnectionId="captured"
             profile="writer"
-            optionsEditable={false}
             providerFilter={providerFilter}
+            request={request}
           />
         </DropdownMenuContent>
       </DropdownMenu>
     </QueryClientProvider>
   )
+
   const view = render(menu('writer'))
   fireEvent.click(await screen.findByText('Writer Model'))
   await waitFor(() => expect(controller.select).toHaveBeenCalledWith('writer-model', 'writer'))

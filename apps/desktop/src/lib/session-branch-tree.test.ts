@@ -68,3 +68,21 @@ describe('flattenSessionsWithBranches', () => {
     ])
   })
 })
+
+it('keeps same-id source twins and nests branches only under their own source', () => {
+  const left = session('same', { connection_id: 'left', profile: 'writer', last_active: 10 })
+  const right = session('same', { connection_id: 'right', profile: 'writer', last_active: 9 })
+
+  const child = session('child', {
+    connection_id: 'right',
+    profile: 'writer',
+    parent_session_id: 'same',
+    last_active: 8
+  })
+
+  expect(flattenSessionsWithBranches([left, right, child])).toEqual([
+    { session: left },
+    { session: right },
+    { session: child, branchStem: '└─ ' }
+  ])
+})

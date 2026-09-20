@@ -41,7 +41,9 @@ beforeAll(async () => {
     ])
   )
   await import('./controller')
-}, 30_000)
+  // The real controller graph is compiled on first import; full-suite CPU contention
+  // must not turn this registration test into an import-speed assertion.
+}, 90_000)
 
 describe('terminal workspace integration', () => {
   it('docks below the chat without taking height from navigation or the right panes', () => {

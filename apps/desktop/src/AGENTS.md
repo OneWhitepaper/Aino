@@ -55,6 +55,32 @@ user-activated extensions. If you tighten `desktop-slash-commands.ts`, keep
 `isDesktopSlashExtensionCommand` flowing into both paths. Test: from `apps/desktop`,
 `npx vitest run src/lib/desktop-slash-commands.test.ts` (workspace deps install at the repo root).
 
+## Ordinary conversation navigation and ownership
+
+Ordinary Home, New and workspace/prefill entry points use the existing conversation capability
+resolver (`app/chat/ordinary-new.ts`). Positive supported capability selects the managed conversation
+route. Only a precise missing-method response or confirmed disabled/unsupported capability selects
+the legacy session path; transport errors expose retry, never a silent write fallback. Initial Home
+waits for last-session restoration and preserves explicit Profile/source intent, typed or attached
+drafts, and an existing selected runtime.
+
+Conversation ownership is the exact connection/install/conversation identity. Expert selection names
+the **next** responder; it does not retarget the running turn, its approvals, children, Stop, token
+accounting, or response playback. Original UI presentation is reused with owned actions; never bridge
+managed submit/history actions to ambient legacy session controllers. Private participant runtimes
+stay hidden; public transcript, reactions, referenced content and export come from conversation RPCs.
+
+Workspace creation captures the full project source (including registration Profile and execution
+environment) before asynchronous discovery. Carry that captured source through route handoff and
+idempotent retries; do not resolve it again from a mutable current path. Leaving a route before
+creation cancels pending discovery. Shared project identity does not erase the selected source's
+registration identity.
+
+Legacy ordinary history is discoverable and adopted through its exact owning source. Same-ID rows
+on different connections/Profiles remain distinct. Existing managed history and public export remain
+readable when creation is disabled. These ordinary-chat rules do not redefine canonical Bot Chat,
+platform messaging, or dedicated tab/split ownership; the Bot registry contract below remains binding.
+
 ## Bot Mode (`src/plugins/hermes-bots/`) — one bot = ONE canonical forever-chat, identified by NAME
 
 Each bot is a Hermes **profile** with a persistent identity. This invariant regressed repeatedly,

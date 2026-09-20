@@ -339,7 +339,7 @@ export function ModelCatalogMenu({
         return
       }
 
-      if (optionsEditable)
+      if (optionsEditable) {
         controller.applyPreset(
           {
             effort: (caps?.reasoning ?? true) ? (preset.effort ?? defaultEffort) : undefined,
@@ -347,6 +347,8 @@ export function ModelCatalogMenu({
           },
           { model: family.id, provider: provider.slug }
         )
+      }
+
       closeMenu()
     } catch (error) {
       notifyError(error, t.desktop.modelSwitchFailed)

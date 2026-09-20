@@ -10,7 +10,7 @@ import { SidebarGroup, SidebarGroupContent } from '@/components/ui/sidebar'
 import type { HermesGitWorktree } from '@/global'
 import type { SessionInfo } from '@/hermes'
 import { useI18n } from '@/i18n'
-import { flattenSessionsWithBranches } from '@/lib/session-branch-tree'
+import { flattenSessionsWithBranches, sidebarSessionIdentity } from '@/lib/session-branch-tree'
 import {
   groupEntriesByRecency,
   groupEntriesByStatus,
@@ -117,6 +117,7 @@ interface SidebarSessionsSectionProps {
   onResumeSession: (sessionId: string, session?: SessionInfo) => void
   onDeleteSession: (sessionId: string) => void
   onArchiveSession: (sessionId: string) => void
+  onAdoptSession?: (session: SessionInfo) => void
   onBranchSession?: (sessionId: string, profile?: string) => void
   onTogglePin: (sessionId: string) => void
   onToggleUnread: (sessionId: string) => void
@@ -130,6 +131,7 @@ interface SidebarSessionsSectionProps {
   forceEmptyState?: boolean
   headerAction?: React.ReactNode
   footer?: React.ReactNode
+  leadingContent?: React.ReactNode
   groups?: SidebarSessionGroup[]
   tree?: SidebarWorkspaceTree[]
   // Project overview: when present, render a drill-in list of project rows
@@ -199,6 +201,7 @@ export function SidebarSessionsSection({
   onDeleteSession,
   onArchiveSession,
   onBranchSession,
+  onAdoptSession,
   onTogglePin,
   onToggleUnread,
   onNewSessionInWorkspace,
@@ -210,6 +213,7 @@ export function SidebarSessionsSection({
   forceEmptyState = false,
   headerAction,
   footer,
+  leadingContent,
   groups,
   projectOverview,
   projectOverviewPreviews,
@@ -278,6 +282,7 @@ export function SidebarSessionsSection({
         isPinned: pinned,
         isSelected: session.id === activeSessionId,
         onArchive: () => onArchiveSession(session.id),
+        onAdopt: onAdoptSession && session.connection_id ? () => onAdoptSession(session) : undefined,
         onBranch: onBranchSession ? () => onBranchSession(session.id, session.profile) : undefined,
         onDelete: () => onDeleteSession(session.id),
         onPin: () => onTogglePin(sessionPinId(session)),
@@ -293,9 +298,9 @@ export function SidebarSessionsSection({
       // are distinct rows (#92454) — a bare-id key makes React misattribute
       // one twin's rendered state to the other.
       return draggable && !branchStem ? (
-        <SortableSidebarSessionRow key={`${session.profile ?? ''}::${session.id}`} {...rowProps} />
+        <SortableSidebarSessionRow key={sidebarSessionIdentity(session)} {...rowProps} />
       ) : (
-        <SidebarSessionRow key={`${session.profile ?? ''}::${session.id}`} {...rowProps} />
+        <SidebarSessionRow key={sidebarSessionIdentity(session)} {...rowProps} />
       )
     },
     [
@@ -303,6 +308,7 @@ export function SidebarSessionsSection({
       card,
       onArchiveSession,
       onBranchSession,
+      onAdoptSession,
       onDeleteSession,
       onResumeSession,
       onTogglePin,
@@ -576,6 +582,7 @@ export function SidebarSessionsSection({
         className={contentClassName}
         dividerAction={dividerAction}
         dividerToggle={dividerToggle}
+        onAdoptSession={onAdoptSession}
         onArchiveSession={onArchiveSession}
         onBranchSession={onBranchSession}
         onDeleteSession={onDeleteSession}
@@ -636,6 +643,7 @@ export function SidebarSessionsSection({
       />
       {sectionOpen && (
         <SidebarGroupContent className={resolvedContentClassName} data-sidebar-section-content="">
+          {leadingContent}
           {inner}
           {footer}
         </SidebarGroupContent>

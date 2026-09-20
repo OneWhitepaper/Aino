@@ -57,7 +57,7 @@ export function createConversationSync(
   function releaseIdle() {
     const current = conversationRuntime(owner)
 
-    if (!current.busy && !current.submitting && !current.uncertainSend) {
+    if (!current.busy && !current.submitting && !current.uncertainSend && !current.uncertainHistory) {
       leases.get(key)?.()
       leases.delete(key)
       clearTimeout(polls.get(key))
@@ -68,7 +68,11 @@ export function createConversationSync(
   function scheduleReconcile() {
     const state = conversationRuntime(owner)
 
-    if ((!state.busy && !state.uncertainSend) || polls.has(key) || consecutiveFailures >= 3) {
+    if (
+      (!state.busy && !state.uncertainSend && !state.uncertainHistory) ||
+      polls.has(key) ||
+      consecutiveFailures >= 3
+    ) {
       return
     }
 
@@ -116,12 +120,15 @@ export function createConversationSync(
   async function readSnapshot() {
     await retain()
     const snapshot = await rpc('conversations.get', { conversation_id: owner.conversationId })
+
     for (const binding of snapshot.participants) {
       participantSessionOwner(owner, binding.participant)
+
       if (binding.conversation_id !== owner.conversationId) {
         throw new Error('Participant binding belongs to another conversation')
       }
     }
+
     cacheConversation(owner, snapshot.conversation)
     const previous = conversationRuntime(owner).snapshot
 
@@ -132,22 +139,36 @@ export function createConversationSync(
     updateConversationRuntime(owner, {
       snapshot,
       busy: conversationIsBusy(snapshot),
-      error: conversationRuntime(owner).uncertainSend ? conversationRuntime(owner).error : null
+      error:
+        conversationRuntime(owner).uncertainSend || conversationRuntime(owner).uncertainHistory
+          ? conversationRuntime(owner).error
+          : null
     })
     const draft = $conversationDrafts.get()[key]
+    const edited = snapshot.conversation.branch?.draft_pending ? snapshot.conversation.branch.draft : null
     setConversationDraft(
       owner,
       draft
         ? { ...draft, revision: Math.max(draft.revision, snapshot.conversation.revision) }
         : {
             conversationId: owner.conversationId,
-            selectedParticipantId: snapshot.conversation.general.participant_id,
-            text: '',
-            attachmentIds: [],
+            selectedParticipantId: edited?.participant_id ?? snapshot.conversation.general.participant_id,
+            text: edited?.text ?? '',
+            attachmentIds: edited?.attachment_ids ?? [],
             revision: snapshot.conversation.revision
           }
     )
     await readEvents()
+    updateConversationRuntime(owner, { historyLoaded: true })
+    const pendingHistory = conversationRuntime(owner).uncertainHistory
+
+    if (
+      pendingHistory &&
+      conversationRuntime(owner).events.some(event => event.payload.input_id === pendingHistory.input_id)
+    ) {
+      updateConversationRuntime(owner, { uncertainHistory: undefined })
+    }
+
     const runtimes: ReturnType<typeof conversationRuntime>['runtimes'] = {}
 
     for (const binding of snapshot.participants) {
@@ -200,12 +221,15 @@ export function createConversationSync(
 
   function load(): Promise<ConversationGetResult> {
     const pending = loads.get(key)
+
     if (pending) {
       return pending
     }
+
     const loading = readSnapshot()
       .then(snapshot => {
         consecutiveFailures = 0
+
         return snapshot
       })
       .catch(error => {
@@ -220,6 +244,7 @@ export function createConversationSync(
       })
 
     loads.set(key, loading)
+
     return loading
   }
 

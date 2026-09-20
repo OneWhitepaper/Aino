@@ -45,8 +45,8 @@ export function isThinkingSoundActive(): boolean {
 }
 
 /** Start the repeating thinking blips (idempotent). Best-effort, never throws. */
-export function startThinkingSound(): void {
-  if (timer !== null || !$thinkingSoundEnabled.get()) {
+export function startThinkingSound(enabled = $thinkingSoundEnabled.get()): void {
+  if (timer !== null || !enabled) {
     return
   }
 

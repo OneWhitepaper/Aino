@@ -80,6 +80,8 @@ vi.mock('@/store/profile', async () => {
 
   return {
     $activeGatewayProfile: atom('remote-worker'),
+    $profileScope: atom('all'),
+    ALL_PROFILES: 'all',
     $gatewaySwapTarget: atom(null),
     $hydrationSyncProfile: atom(null),
     $profiles: profiles,

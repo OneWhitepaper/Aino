@@ -200,7 +200,7 @@ function HudWindowButtons() {
   )
 }
 
-function ConversationPill({
+export function ConversationPill({
   disabled,
   level,
   muted,

@@ -389,7 +389,7 @@ test('registry sources: a dead gateway contributes nothing instead of breaking t
   )
 })
 
-test('splice: registry rows dedupe by id and extend per-profile totals', () => {
+test('splice: registry rows dedupe by exact source identity and extend per-profile totals', () => {
   const merged: unknown[] = [
     { id: 'local-1', profile: 'default', last_active: 100 },
     { id: 'dupe', profile: 'work', last_active: 90 }
@@ -401,20 +401,21 @@ test('splice: registry rows dedupe by id and extend per-profile totals', () => {
     merged,
     [
       { id: 'dupe', profile: 'work', connection_id: 'gw-1', last_active: 95 },
+      { id: 'dupe', profile: 'work', connection_id: 'gw-1', last_active: 96 },
       { id: 'remote-1', profile: 'hermes-claude', connection_id: 'gw-1', last_active: 120 },
       { id: 'remote-2', connection_id: 'gw-1', last_active: 110 }
     ],
     totals
   )
 
-  assert.equal(added, 2)
+  assert.equal(added, 3)
   assert.deepEqual(
     merged.map(row => (row as any).id),
-    ['local-1', 'dupe', 'remote-1', 'remote-2']
+    ['local-1', 'dupe', 'dupe', 'remote-1', 'remote-2']
   )
   assert.equal(totals['hermes-claude'], 1)
   assert.equal(totals.default, 2) // untagged registry row counts under default
-  assert.equal(totals.work, 1) // deduped row does not double-count
+  assert.equal(totals.work, 2) // source twins count separately, exact duplicates do not
 })
 
 test('finds the remote owner profile for a hint-less session read (#85834)', async () => {

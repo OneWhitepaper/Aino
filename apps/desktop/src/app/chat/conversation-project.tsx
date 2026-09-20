@@ -18,13 +18,15 @@ interface ConversationProjectProps {
   disabled: boolean
   load: () => Promise<unknown>
 }
+
 export function ConversationProject({ owner, record, profiles, disabled, load }: ConversationProjectProps) {
   const copy = useI18n().t.sharedProjects
   const [open, setOpen] = useState(false)
   const [pending, setPending] = useState<{ source: ConversationProjectRef | null; revision: number } | null>(null)
+
   return (
     <>
-      <Dialog open={open} onOpenChange={setOpen}>
+      <Dialog onOpenChange={setOpen} open={open}>
         <DialogTrigger asChild>
           <ProjectSelectorTrigger
             disabled={disabled}
@@ -37,32 +39,34 @@ export function ConversationProject({ owner, record, profiles, disabled, load }:
           </DialogHeader>
           <ConversationProjectSelector
             connectionId={owner.connectionId}
-            installId={owner.installId}
-            value={record.project}
-            profiles={profiles}
             disabled={disabled}
+            installId={owner.installId}
             onChange={source => {
               if ((source && projectSourceKey(source)) !== (record.project && projectSourceKey(record.project))) {
                 setOpen(false)
                 setPending({ source, revision: record.revision })
               }
             }}
+            profiles={profiles}
+            value={record.project}
           />
         </DialogContent>
       </Dialog>
       <ConfirmDialog
-        open={Boolean(pending)}
-        onClose={() => setPending(null)}
-        title={copy.confirm}
+        confirmLabel={copy.apply}
         description={
           <>
             {pending?.source?.cwd ?? copy.noProject}. {copy.generation}
           </>
         }
-        confirmLabel={copy.apply}
+        onClose={() => setPending(null)}
         onConfirm={async () => {
-          if (pending) await changeConversationProject(owner, pending.source, pending.revision, load)
+          if (pending) {
+            await changeConversationProject(owner, pending.source, pending.revision, load)
+          }
         }}
+        open={Boolean(pending)}
+        title={copy.confirm}
       />
     </>
   )

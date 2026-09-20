@@ -1,11 +1,11 @@
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { Codicon } from '@/components/ui/codicon'
-import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { useStore } from '@nanostores/react'
 import { computed } from 'nanostores'
 import { useMemo, useState } from 'react'
 
 import { Button } from '@/components/ui/button'
+import { Codicon } from '@/components/ui/codicon'
+import { ConfirmDialog } from '@/components/ui/confirm-dialog'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { useI18n } from '@/i18n'
 import { $conversationPrivateNotices, dismissConversationPrivateNotice } from '@/store/conversation-notices'
 import { type ConversationOwner, conversationOwnerKey } from '@/store/conversation-owner'
@@ -81,11 +81,11 @@ export function ConversationConfiguration({
               {copy.privateNotice} · {notice.displayName}
             </strong>
             <Button
+              aria-label={t.common.close}
               onClick={() => dismissConversationPrivateNotice(owner)}
               size="icon-xs"
               type="button"
               variant="ghost"
-              aria-label={t.common.close}
             >
               <Codicon name="close" />
             </Button>
@@ -108,7 +108,7 @@ export function ConversationConfiguration({
               <Codicon name="ellipsis" />
             </Button>
           </PopoverTrigger>
-          <PopoverContent side="top" align="end">
+          <PopoverContent align="end" side="top">
             <Button
               disabled={blocked || !selected || Boolean(selected.unavailableReason)}
               onClick={() => selected && askRefresh(selected.id)}
@@ -122,12 +122,12 @@ export function ConversationConfiguration({
         </Popover>
       )}
       <ConfirmDialog
-        open={Boolean(confirmation)}
-        onClose={() => setConfirmation(null)}
-        title={confirmation?.displayName}
-        description={copy.refreshExplanation}
         confirmLabel={t.common.apply}
+        description={copy.refreshExplanation}
+        onClose={() => setConfirmation(null)}
         onConfirm={applyRefresh}
+        open={Boolean(confirmation)}
+        title={confirmation?.displayName}
       />
     </>
   )

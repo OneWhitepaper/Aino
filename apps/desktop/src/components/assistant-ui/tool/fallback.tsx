@@ -354,7 +354,8 @@ function toolEntryDisclosureId(messageId: string, part: ToolPart): string {
 function ToolEntry({ part }: ToolEntryProps) {
   const messageId = useAuiState(s => s.message.id)
   const messageRunning = useAuiState(selectMessageRunning)
-  return <ToolEntrySurface part={part} messageId={messageId} messageRunning={messageRunning} />
+
+  return <ToolEntrySurface messageId={messageId} messageRunning={messageRunning} part={part} />
 }
 
 /** Original tool renderer; scoped callers disable legacy session side effects. */
@@ -891,6 +892,7 @@ interface ToolRunState {
 // when a call arrives or one finishes; cache on exactly that.
 function useToolRun(startIndex: number, endIndex: number, copy: ToolRunCopy): ToolRunState {
   const { locale } = useI18n()
+
   const cache = useRef<null | {
     copy: ToolRunCopy
     signature: string

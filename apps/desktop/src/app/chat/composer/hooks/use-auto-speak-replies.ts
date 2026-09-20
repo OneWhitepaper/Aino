@@ -7,6 +7,7 @@ import { notifyError } from '@/store/notifications'
 import { $voicePlayback } from '@/store/voice-playback'
 import { $autoSpeakReplies } from '@/store/voice-prefs'
 
+import { useOwnedVoice } from '../owned-voice-context'
 import { useComposerScope } from '../scope'
 
 interface AutoSpeakReply {
@@ -40,10 +41,12 @@ export function useAutoSpeakReplies({
   pendingReply,
   sessionId
 }: UseAutoSpeakReplies) {
+  const owned = useOwnedVoice()
   const enabled = useStore($autoSpeakReplies)
   // Wake on THIS composer's transcript: a tile subscribed to the primary's
   // would never fire on its own replies (and would fire on someone else's).
-  const { $messages } = useComposerScope()
+  const composerScope = useComposerScope()
+  const $messages = owned?.$messages ?? composerScope.$messages
   const latest = useRef({ conversationActive, failureLabel, markSpoken, pendingReply })
   latest.current = { conversationActive, failureLabel, markSpoken, pendingReply }
 
@@ -73,13 +76,17 @@ export function useAutoSpeakReplies({
       // Only one window voices a given reply when the same chat is open in
       // several (reply.id is the shared backend message id). markSpoken already
       // ran in every window, so peers just stay quiet.
-      void ownsAmbientCue(`speak:${reply.id}`).then(owns => {
-        if (owns) {
-          void playSpeechText(reply.text, { messageId: reply.id, source: 'read-aloud' }).catch(error =>
-            notifyError(error, failureLabel)
-          )
-        }
-      })
+      void ownsAmbientCue(`speak:${reply.id}`)
+        .then(owns => {
+          if (owns && (!owned || owned.isCurrent())) {
+            void playSpeechText(reply.text, {
+              messageId: reply.id,
+              source: 'read-aloud',
+              scope: owned ? owned.playbackScope(reply.id) : undefined
+            }).catch(error => notifyError(error, failureLabel))
+          }
+        })
+        .catch(error => notifyError(error, failureLabel))
     }
 
     // Re-check on a reply completing ($messages) and on the prior clip ending

@@ -1,9 +1,3 @@
-import {
-  type PreviewFilesystemSource,
-  readScopedPreviewText,
-  readScopedPreviewDataUrl,
-  writeScopedPreviewText
-} from '@/lib/scoped-preview-files'
 import { useStore } from '@nanostores/react'
 import type * as React from 'react'
 import type {
@@ -41,6 +35,12 @@ import { createMemoizedMathPlugin } from '@/lib/katex-memo'
 import { isComposerChord } from '@/lib/keybinds/chords'
 import { shikiLanguageForFilename } from '@/lib/markdown-code'
 import { normalizeFilePreviewMath } from '@/lib/markdown-preprocess'
+import {
+  type PreviewFilesystemSource,
+  readScopedPreviewDataUrl,
+  readScopedPreviewText,
+  writeScopedPreviewText
+} from '@/lib/scoped-preview-files'
 import { cn } from '@/lib/utils'
 import type { PreviewTarget } from '@/store/preview'
 import { setPreviewDirty } from '@/store/preview-edit'

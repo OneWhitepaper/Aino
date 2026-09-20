@@ -3,6 +3,7 @@ import { Suspense } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { SessionInfo, SidebarSessionsResponse } from '@/hermes'
+import { $connectionsRegistry } from '@/store/connection-registry-state'
 import { $cronJobs, setCronJobs } from '@/store/cron'
 import {
   beginGatewaySwitch,
@@ -72,6 +73,7 @@ const sidebar = (
 
 const listSidebarSessions = vi.fn()
 const listAllProfileSessions = vi.fn()
+const listAllSourceProfileSessions = vi.fn()
 const getCronJobs = vi.fn()
 const gatewayScope = vi.hoisted(() => ({ epoch: 0 }))
 
@@ -85,6 +87,7 @@ interface Deferred<T> {
 vi.mock('@/hermes', async importOriginal => ({
   ...(await importOriginal<Record<string, unknown>>()),
   getCronJobs: (...args: unknown[]) => getCronJobs(...args),
+  listAllSourceProfileSessions: (...args: unknown[]) => listAllSourceProfileSessions(...args),
   listAllProfileSessions: (...args: unknown[]) => listAllProfileSessions(...args),
   listSidebarSessions: (...args: unknown[]) => listSidebarSessions(...args)
 }))
@@ -104,6 +107,8 @@ vi.mock('@/store/session-removal', async importActual => ({
 }))
 
 beforeEach(() => {
+  $connectionsRegistry.set(null)
+  listAllSourceProfileSessions.mockReset()
   gatewayScope.epoch = 0
   getCronJobs.mockReset()
   getCronJobs.mockResolvedValue([])
@@ -134,6 +139,64 @@ afterEach(() => {
 })
 
 describe('refreshSessions identity + loading hygiene', () => {
+  it('refreshes newly registered sources and retains only the failed source history', async () => {
+    const old = row('same', { connection_id: 'remote', profile: 'writer', title: 'Remote history' })
+    setSessions([old])
+    listSidebarSessions.mockResolvedValue(sidebar({ sessions: [] }))
+    listAllSourceProfileSessions.mockResolvedValue({
+      sessions: [row('same', { connection_id: 'local', profile: 'writer', title: 'Local history' })],
+      total: 1,
+      failed_connections: ['remote']
+    })
+    renderHook(() => useSessionListActions({ profileScope: 'default' }))
+    await act(async () => {
+      $connectionsRegistry.set({ connections: [{ id: 'local' }, { id: 'remote' }] } as never)
+    })
+    expect(listAllSourceProfileSessions).toHaveBeenCalledWith(
+      ['local', 'remote'],
+      expect.any(Number),
+      expect.anything()
+    )
+    expect(
+      $sessions
+        .get()
+        .map(row => [row.connection_id, row.title])
+        .sort()
+    ).toEqual([
+      ['local', 'Local history'],
+      ['remote', 'Remote history']
+    ])
+    // The early primary aggregate has the known untagged local alias.
+    setSessions([row('early-local', { profile: 'writer', title: 'Early local' })])
+    listAllSourceProfileSessions.mockResolvedValue({ sessions: [old], total: 1, failed_connections: ['local'] })
+    await act(async () => {
+      $connectionsRegistry.set({ connections: [{ id: 'local' }, { id: 'remote' }] } as never)
+    })
+    expect(
+      $sessions
+        .get()
+        .map(row => row.title)
+        .sort()
+    ).toEqual(['Early local', 'Remote history'])
+  })
+
+  it('retains ordinary history on its read failure while publishing scoped sections and refreshing cron jobs', async () => {
+    const previous = [row('ordinary')]
+    setSessions(previous)
+    listAllProfileSessions.mockRejectedValue(new Error('ordinary unavailable'))
+    listSidebarSessions.mockResolvedValue(
+      sidebar({ sessions: [] }, [row('cron', { source: 'cron' })], [row('message', { source: 'telegram' })])
+    )
+    const { result } = renderHook(() => useSessionListActions({ profileScope: 'writer' }))
+    await act(async () => {
+      await expect(result.current.refreshSessions()).rejects.toThrow('ordinary unavailable')
+    })
+    expect($sessions.get()).toBe(previous)
+    expect($cronSessions.get().map(row => row.id)).toEqual(['cron'])
+    expect($messagingSessions.get().map(row => row.id)).toEqual(['message'])
+    expect(getCronJobs).toHaveBeenCalled()
+  })
+
   it('keeps the previous $sessions array when the refresh is content-identical', async () => {
     const rows = [row('a'), row('b')]
     listSidebarSessions.mockResolvedValue(sidebar({ sessions: rows }))
@@ -442,12 +505,13 @@ describe('refreshSessions identity + loading hygiene', () => {
 })
 
 describe('refreshSessions batches slices into one request', () => {
-  it('makes a single sidebar call and distributes recents / cron / messaging', async () => {
+  it('aggregates ordinary profiles while preserving scoped cron and messaging slices', async () => {
     const recents = [row('a'), row('b')]
     const cron = [row('c1', { source: 'cron', title: 'nightly' })]
     const messaging = [row('m1', { source: 'telegram', title: 'tg chat' })]
 
     listSidebarSessions.mockResolvedValue(sidebar({ sessions: recents }, cron, messaging))
+    listAllProfileSessions.mockResolvedValueOnce({ sessions: [...recents, row('writer-chat', { profile: 'writer' })] })
 
     const { result } = renderHook(() => useSessionListActions({ profileScope: 'default' }))
 
@@ -455,12 +519,14 @@ describe('refreshSessions batches slices into one request', () => {
       await result.current.refreshSessions()
     })
 
-    // One batched call, not three separate listAllProfileSessions reads.
+    // Ordinary history is global; the existing batch retains nonordinary scope.
     expect(listSidebarSessions).toHaveBeenCalledTimes(1)
-    expect(listAllProfileSessions).not.toHaveBeenCalled()
+    expect(listAllProfileSessions).toHaveBeenCalledWith(expect.any(Number), 1, 'exclude', 'recent', 'all', {
+      excludeSources: expect.arrayContaining(['cron', 'subagent', 'tool', 'telegram'])
+    })
 
     // Each slice landed in its own store.
-    expect($sessions.get().map(s => s.id)).toEqual(['a', 'b'])
+    expect($sessions.get().map(s => s.id)).toEqual(['a', 'b', 'writer-chat'])
     expect($cronSessions.get().map(s => s.id)).toEqual(['c1'])
     expect($messagingSessions.get().map(s => s.id)).toEqual(['m1'])
   })

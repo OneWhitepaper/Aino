@@ -2,6 +2,7 @@ import type {
   ConversationActivityCoordinates,
   ConversationEvent,
   ConversationGetResult,
+  ConversationRegenerateParams,
   ConversationRuntimeSnapshotResult,
   GatewayEvent,
   OpenRequestEntry
@@ -23,9 +24,11 @@ export interface ConversationRuntime {
   owner: ConversationOwner
   snapshot?: ConversationGetResult
   events: ConversationEvent[]
+  historyLoaded?: boolean
   cursor: number
   activities: Record<string, ConversationActivity>
   uncertainSend?: FrozenConversationSend
+  uncertainHistory?: ConversationRegenerateParams
   runtimeOwners: Record<string, { participantId: string; sessionGeneration: number }>
   runtimes: Record<string, ConversationRuntimeSnapshotResult>
   pendingRequests: Record<string, OpenRequestEntry & { coordinates: ConversationActivityCoordinates }>

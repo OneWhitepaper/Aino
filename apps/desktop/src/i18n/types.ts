@@ -2678,6 +2678,15 @@ interface UpstreamTranslations {
   }
 
   profiles: {
+    allProjects: string
+    projectSourceRequired: string
+    adoptConversation: string
+    adoptFailed: string
+    newConversationFailed: string
+    openConversationFailed: string
+    hubTitle: string
+    projectAgentHelp: string
+    hubUnavailable: string
     close: string
     workspaceDesc: string
     currentBadge: string

@@ -1,3 +1,4 @@
+import { JsonRpcGatewayError } from '@hermes/shared'
 import type { ConversationTurn } from '@hermes/shared/gateway-events'
 
 import type { ConversationOwner } from '@/store/conversation-owner'
@@ -15,7 +16,10 @@ interface RecoveryDependencies {
   scheduleReconcile: () => void
 }
 
-export function createConversationRecoveryActions(owner: ConversationOwner, { rpc, load, retain, releaseIdle, failed, scheduleReconcile }: RecoveryDependencies) {
+export function createConversationRecoveryActions(
+  owner: ConversationOwner,
+  { rpc, load, retain, releaseIdle, failed, scheduleReconcile }: RecoveryDependencies
+) {
   async function stop(turn: ConversationTurn, includeDelegations = false) {
     try {
       const captured = { ...turn }
@@ -57,6 +61,31 @@ export function createConversationRecoveryActions(owner: ConversationOwner, { rp
   async function retry(turn?: ConversationTurn) {
     try {
       await retain()
+      const history = conversationRuntime(owner).uncertainHistory
+
+      if (!turn && history) {
+        const result = await rpc('conversations.regenerate', history).catch(error => {
+          if (error instanceof JsonRpcGatewayError && [4000, 4120, 4121].includes(error.code ?? 0)) {
+            updateConversationRuntime(owner, { uncertainHistory: undefined })
+          }
+
+          throw error
+        })
+
+        if (
+          result.admission.conversation_id !== owner.conversationId ||
+          result.admission.input_id !== history.input_id ||
+          result.admission.turn_id !== history.turn_id
+        ) {
+          throw new Error('Regeneration reconciliation belongs to another input')
+        }
+
+        updateConversationRuntime(owner, { uncertainHistory: undefined })
+        await load()
+
+        return result
+      }
+
       const frozen = conversationRuntime(owner).uncertainSend
 
       if (!turn && !frozen) {
@@ -76,6 +105,7 @@ export function createConversationRecoveryActions(owner: ConversationOwner, { rp
             input_id: frozen!.inputId,
             participant_id: frozen!.participantId,
             text: frozen!.text,
+            ...(frozen!.surface ? { surface: frozen!.surface, voice_context: frozen!.voiceContext } : {}),
             ...(frozen!.commandToken ? { command_token: frozen!.commandToken } : {}),
             attachment_ids: [...frozen!.attachmentIds],
             expected_revision: frozen!.expectedRevision

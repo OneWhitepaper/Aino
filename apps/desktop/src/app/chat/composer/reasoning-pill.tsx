@@ -1,6 +1,6 @@
 import { DEFAULT_REASONING_EFFORT } from '@hermes/shared'
 import { useStore } from '@nanostores/react'
-import { useState } from 'react'
+import { type ReactNode, useState } from 'react'
 
 import { useSessionView } from '@/app/chat/session-view'
 import { ModelMenuCloseContext } from '@/app/shell/model-menu-panel'
@@ -31,17 +31,32 @@ const PILL = cn(
  * Reads THIS surface's SessionView (primary or tile), like the model pill.
  */
 export function ReasoningPill({ disabled, model }: { disabled: boolean; model: ChatBarState['model'] }) {
-  const copy = useI18n().t.shell.modelOptions
   const view = useSessionView()
   const reasoningEffort = useStore(view.$reasoningEffort)
   const defaultEffort = useStore($defaultReasoningEffort)
-  const [open, setOpen] = useState(false)
 
   if (!model.reasoningMenuContent || model.supportsReasoning === false) {
     return null
   }
 
-  const label = reasoningEffortLabel(reasoningEffort || defaultEffort || DEFAULT_REASONING_EFFORT)
+  return (
+    <ReasoningPillSurface disabled={disabled} effort={reasoningEffort || defaultEffort || DEFAULT_REASONING_EFFORT}>
+      {model.reasoningMenuContent}
+    </ReasoningPillSurface>
+  )
+}
+
+export interface ReasoningPillSurfaceProps {
+  disabled: boolean
+  effort: string
+  children: ReactNode
+}
+
+/** The owning surface supplies both the effective value and option authority. */
+export function ReasoningPillSurface({ disabled, effort, children }: ReasoningPillSurfaceProps) {
+  const copy = useI18n().t.shell.modelOptions
+  const [open, setOpen] = useState(false)
+  const label = reasoningEffortLabel(effort) || copy.effort
   const title = `${copy.effort}: ${label}`
 
   // Closing the menu ends its claim on the keyboard: Radix restores focus to
@@ -73,9 +88,7 @@ export function ReasoningPill({ disabled, model }: { disabled: boolean; model: C
         </DropdownMenuTrigger>
       </Tip>
       <DropdownMenuContent align="end" className="w-52 p-0" side="top" sideOffset={8}>
-        <ModelMenuCloseContext.Provider value={() => setMenuOpen(false)}>
-          {model.reasoningMenuContent}
-        </ModelMenuCloseContext.Provider>
+        <ModelMenuCloseContext.Provider value={() => setMenuOpen(false)}>{children}</ModelMenuCloseContext.Provider>
       </DropdownMenuContent>
     </DropdownMenu>
   )

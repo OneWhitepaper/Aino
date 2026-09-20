@@ -189,9 +189,9 @@ it('propagates managed selection through refresh and keeps the draft when fresh 
   const { actions, request, bind } = setup()
   await actions.load()
   bind.mockRejectedValueOnce(new Error('Fresh ticket rejected'))
-  await expect(actions.refresh('A', 1, { model_source: 'aino', model_id: 'chosen-model' })).rejects.toThrow(
-    'Fresh ticket rejected'
-  )
+  await expect(
+    actions.refresh('A', 1, { model_source: 'aino', model_id: 'chosen-model', reasoning_effort: 'none', fast: false })
+  ).rejects.toThrow('Fresh ticket rejected')
   expect(request).toHaveBeenCalledWith(
     'owner-host',
     'default',
@@ -201,7 +201,9 @@ it('propagates managed selection through refresh and keeps the draft when fresh 
       participant_id: 'A',
       expected_generation: 1,
       model_source: 'aino',
-      model_id: 'chosen-model'
+      model_id: 'chosen-model',
+      reasoning_effort: 'none',
+      fast: false
     },
     undefined
   )
@@ -225,6 +227,7 @@ it('propagates model selection through first preparation before binding an unbou
     if (args[2] === 'conversations.participants') {
       return { participants: [{ participant, available: true }] }
     }
+
     return original(...args)
   })
   await actions.refresh('A', 1, { model_source: 'aino', model_id: 'first-model' })

@@ -224,6 +224,7 @@ async function rig(options: { delayLeaseAt?: number; delayLogout?: boolean; remo
   expect(await auth.initialize()).toMatchObject({ phase: 'signed_in' })
 
   const resolvedRoutes: Array<{ connection: string; profile: string }> = []
+
   const controller = createPlatformRuntimeBindingController({
     auth,
     origin,
@@ -231,6 +232,7 @@ async function rig(options: { delayLeaseAt?: number; delayLogout?: boolean; remo
     confirmRemote: async () => options.allow === true,
     resolveConnection: async (connection, profile) => {
       resolvedRoutes.push({ connection, profile })
+
       return {
         fingerprint: 'fixture-route',
         host: 'fixture-host',
@@ -425,12 +427,14 @@ it('keeps model IPC restricted to the registered main frame and strips extra ren
   const invoke = handlers.get('aino:platform-models:bind')!
   expect(await invoke({ ...event, senderFrame: {} }, f.input)).toMatchObject({ ok: false })
   expect(f.credentials).toHaveLength(0)
+
   const result = await invoke(event, {
     ...f.input,
     session_profile: 'writer',
     api_key: 'renderer-fake-key',
     owner: { user_id: 'foreign' }
   })
+
   expect(result.ok).toBe(true)
   expect(f.binding()).toMatchObject({ owner: { user_id: '17' }, api_key: f.secret, profile: 'writer' })
   expect(JSON.stringify(result)).not.toContain(f.secret)

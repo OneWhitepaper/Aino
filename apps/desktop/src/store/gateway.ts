@@ -1107,7 +1107,10 @@ export async function requestGatewayForAgent<T>(
 
   if (await isAttachedSharedRemote(connectionId, key)) {
     return requestOnPrimaryGateway<T>(
-      method, method.startsWith('conversations.') ? params : { profile: key, ...params }, timeoutMs, signal
+      method,
+      method.startsWith('conversations.') ? params : { profile: key, ...params },
+      timeoutMs,
+      signal
     )
   }
 

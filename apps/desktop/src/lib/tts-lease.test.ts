@@ -1,9 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const setTtsLease = vi.fn(async (_lease: string, _active: boolean) => ({ ok: true }))
+const setTtsLease = vi.fn(
+  async (_lease: string, _active: boolean, _scope?: { connectionId?: string; profile?: string }) => ({ ok: true })
+)
 
 vi.mock('@/hermes', () => ({
-  setTtsLease: (lease: string, active: boolean) => setTtsLease(lease, active)
+  setTtsLease: (...args: Parameters<typeof setTtsLease>) => setTtsLease(...args)
 }))
 
 import { CONVERSATION_LEASE, READ_ALOUD_LEASE, resetTtsLeasesForTests, syncTtsLease } from './tts-lease'
@@ -17,6 +19,19 @@ describe('syncTtsLease', () => {
 
   afterEach(() => {
     resetTtsLeasesForTests()
+  })
+
+  it('keeps identical lease names independent across captured sources', async () => {
+    const one = { connectionId: 'local', profile: 'writer' }
+    const two = { connectionId: 'remote', profile: 'writer' }
+    await syncTtsLease(CONVERSATION_LEASE, true, one)
+    await syncTtsLease(CONVERSATION_LEASE, true, two)
+    await syncTtsLease(CONVERSATION_LEASE, false, one)
+    expect(setTtsLease.mock.calls).toEqual([
+      [CONVERSATION_LEASE, true, one],
+      [CONVERSATION_LEASE, true, two],
+      [CONVERSATION_LEASE, false, one]
+    ])
   })
 
   it('acquires on the first on and releases on off', async () => {

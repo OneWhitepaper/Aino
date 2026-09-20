@@ -3,6 +3,7 @@ import { afterEach, expect, it, vi } from 'vitest'
 
 import { $conversationRuntime } from '@/store/conversation-runtime'
 import * as gateway from '@/store/gateway'
+
 import { ConversationClarify } from './conversation-clarify'
 
 vi.mock('./conversation-runtime-controls', () => ({ requireConversationRuntime: vi.fn() }))
@@ -13,6 +14,7 @@ afterEach(() => {
 })
 it('uses the original batch choices while preserving replay locks and sequential owner requests', async () => {
   const owner = { connectionId: 'captured', installId: 'installation', conversationId: 'conversation' }
+
   const request = {
     id: 'request',
     method: 'clarify',
@@ -33,14 +35,15 @@ it('uses the original batch choices while preserving replay locks and sequential
       answers: { one: 'Alpha' }
     }
   }
+
   const rpc = vi.spyOn(gateway, 'requestGatewayForAgent').mockResolvedValue({ status: 'ok' } as never)
   const respond = vi.fn()
   render(
     <ConversationClarify
       owner={owner}
+      refresh={vi.fn().mockResolvedValue(undefined)}
       request={request}
       respond={respond}
-      refresh={vi.fn().mockResolvedValue(undefined)}
     />
   )
   fireEvent.click(await screen.findByRole('button', { name: /Gamma/ }))
@@ -59,6 +62,7 @@ it('keeps a failed owned cancellation available for retry', async () => {
   render(
     <ConversationClarify
       owner={{ connectionId: 'captured', installId: 'installation', conversationId: 'conversation' }}
+      refresh={vi.fn().mockResolvedValue(undefined)}
       request={{
         id: 'cancel-request',
         method: 'clarify',
@@ -74,7 +78,6 @@ it('keeps a failed owned cancellation available for retry', async () => {
         params: { questions: [{ qid: 'one', question: 'Choose a drink', choices: ['Tea', 'Coffee'] }] }
       }}
       respond={respond}
-      refresh={vi.fn().mockResolvedValue(undefined)}
     />
   )
   fireEvent.click(await screen.findByRole('button', { name: /^Skip/ }))

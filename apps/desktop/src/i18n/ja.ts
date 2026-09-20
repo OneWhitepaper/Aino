@@ -2278,6 +2278,15 @@ export const ja = defineLocale({
   },
 
   profiles: {
+    allProjects: 'すべてのプロジェクト',
+    projectSourceRequired: '会話を始める前に、対象の接続からプロジェクトを開いてください。',
+    adoptConversation: '会話として続ける',
+    adoptFailed: '現在の作業が終了してから再試行してください。',
+    newConversationFailed: '会話を開始できません。再試行してください。',
+    openConversationFailed: '会話を開けません。再試行してください。',
+    hubTitle: 'Agent Hub',
+    projectAgentHelp: 'プロジェクトで資料とタスクを整理し、エージェントで今回の担当を選びます。',
+    hubUnavailable: 'Agent Hub を利用できません。設定で Agent Hub プラグインを有効にしてください。',
     close: 'プロファイルを閉じる',
     workspaceDesc: '各ワークスペースには、エージェント独自の設定、スキル、メモリ、会話が保存されます。',
     currentBadge: '現在のワークスペース',
@@ -2624,7 +2633,7 @@ export const ja = defineLocale({
     },
     nav: {
       'new-session': '新しいセッション',
-      profiles: 'ワークスペース',
+      profiles: 'Agent Hub',
       skills: 'スキルとツール',
       messaging: 'メッセージング',
       artifacts: 'アーティファクト',
@@ -2794,16 +2803,17 @@ export const ja = defineLocale({
 
   composer: {
     conversation: {
-      commandDraftChanged: "コマンドの解決中に下書きが変わりました。現在の下書きを再送信してください。",
-      attachmentTooLarge: "ファイルがアップロード上限を超えています。小さいファイルを選んでください。",
-      attachmentLimitUnavailable: "バックエンドがアップロード制限を通知しません。先に更新してください。",
-      attachmentCountExceeded: "添付ファイルが多すぎます。削除して再試行してください。",
+      commandDraftChanged: 'コマンドの解決中に下書きが変わりました。現在の下書きを再送信してください。',
+      attachmentTooLarge: 'ファイルがアップロード上限を超えています。小さいファイルを選んでください。',
+      attachmentLimitUnavailable: 'バックエンドがアップロード制限を通知しません。先に更新してください。',
+      attachmentCountExceeded: '添付ファイルが多すぎます。削除して再試行してください。',
 
-      privateNotice: "非公開の通知",
-      refreshConfiguration: "エキスパートの設定を更新",
-      refreshExplanation: "次の応答から保存済みの設定を使います。共有履歴とプロジェクトは維持されます。進行中の作業が完了してから実行してください。コマンドに入力した設定は適用されません。",
-      configurationRefreshed: "設定を更新しました。次の応答から更新済みの設定を使います。",
-      configurationBusy: "設定の変更前に、進行中の作業や保留中の送信を確認してください。",
+      privateNotice: '非公開の通知',
+      refreshConfiguration: 'エキスパートの設定を更新',
+      refreshExplanation:
+        '次の応答から保存済みの設定を使います。共有履歴とプロジェクトは維持されます。進行中の作業が完了してから実行してください。コマンドに入力した設定は適用されません。',
+      configurationRefreshed: '設定を更新しました。次の応答から更新済みの設定を使います。',
+      configurationBusy: '設定の変更前に、進行中の作業や保留中の送信を確認してください。',
 
       contentLoading: '回答全体を読み込み中…',
       contentInvalid: '内容の検証に失敗しました。再読み込みしてください。',
@@ -2811,7 +2821,8 @@ export const ja = defineLocale({
       uploading: 'アップロード中…',
       fileReadFailed: 'ファイルを読み込めません',
 
-      mcpDeferred: '新しいツールは、このエキスパートの設定を更新するか、新しい会話を開始すると使えます。この応答では現在のツールを維持します。',
+      mcpDeferred:
+        '新しいツールは、このエキスパートの設定を更新するか、新しい会話を開始すると使えます。この応答では現在のツールを維持します。',
       generation: '設定バージョン',
       runtimeChanged: '実行が変更されました。更新してから操作してください',
       childUnavailable: 'サブエージェントを利用できません',
@@ -2824,7 +2835,8 @@ export const ja = defineLocale({
       refresh: '更新',
       history: '会話履歴',
       mention: '@ で応答者を選択',
-      textOnly: "読み取りコマンドは非公開の通知になります。対応するスキルは選択中のエキスパートが実行し、その他のコマンドは拒否されます。",
+      textOnly:
+        '読み取りコマンドは非公開の通知になります。対応するスキルは選択中のエキスパートが実行し、その他のコマンドは拒否されます。',
       modelUnavailable: 'モデル情報なし',
       subagent: 'サブエージェント',
       stopAll: 'サブエージェントも停止',
@@ -2832,13 +2844,13 @@ export const ja = defineLocale({
       allowOnce: '今回のみ許可',
       deny: '拒否',
       answer: '回答',
-      requestUnsupported: 'このリクエストの回答形式はまだ対応していません。',
+      requestUnsupported: 'このリクエストの回答形式はまだ対応していません。'
     },
     expertSelector: {
       choose: '返信する相手を選ぶ',
       clear: '専門家の選択を解除',
       nextReply: '次に返信する相手',
-      unavailable: '選択した専門家は利用できません',
+      unavailable: '選択した専門家は利用できません'
     },
     message: 'メッセージ',
     automaticModel: '自動',
