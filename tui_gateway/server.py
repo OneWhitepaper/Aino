@@ -600,7 +600,9 @@ def write_json(obj: dict) -> bool:
     (2) the context-bound transport (:func:`dispatch`); (3) module stdio (tests monkey-patch ``_real_stdout``).
     Every event frame gets a per-session monotonic ``seq`` + replay-ring entry so ``session.events.since`` can resume."""
     from tui_gateway.event_replay import _stamp_event
+    from tui_gateway.conversation_activity import attach_conversation_activity
     from tui_gateway.hosted_room_member_activity import project_room_member_activity
+    attach_conversation_activity(obj)
     _stamp_event(obj)
     params = obj.get("params")
     if obj.get("method") == "event" or (isinstance(obj.get("id"), str) and "method" in obj):
@@ -625,8 +627,11 @@ def _emit(event: str, sid: str, payload: dict | None = None) -> bool:
 
 
 from tui_gateway import server_requests as _server_requests  # noqa: E402
+from tui_gateway.conversation_activity import authorize_conversation_response  # noqa: E402
 
-_server_requests.bind_sinks(lambda frame: write_json(frame), lambda event, sid, payload: _emit(event, sid, payload))
+_server_requests.bind_sinks(
+    lambda frame: write_json(frame), lambda event, sid, payload: _emit(event, sid, payload),
+    lambda request: authorize_conversation_response(request, sys.modules[__name__]))
 
 
 # Live WS peer transports (maintained by tui_gateway.ws): the only route for session-less background
@@ -1014,6 +1019,8 @@ def _attach_built_agent(current: dict, agent) -> None:
     if _title_hint := str(current.get("pending_title") or "").strip():
         agent._session_title_hint = _title_hint
     current["agent"] = agent
+    from .session_conversation_binding import prepare_conversation_agent
+    prepare_conversation_agent(sys.modules[__name__], current, agent)
     _session_todo_state(current)
     # Baseline for the per-turn config sync (profile home override still active).
     current["config_model_seen"] = _config_model_target()
@@ -1958,6 +1965,8 @@ def _schedule_mcp_late_refresh(sid: str, agent) -> None:
             session = _sessions.get(sid)
             if session is None or session.get("agent") is not agent:
                 return  # closed/reset while we waited
+            if session.get("_conversation_binding"):
+                return  # Capability snapshots are generation-owned, including before turn one.
             if int(getattr(agent, "_user_turn_count", 0) or 0) > 0 or int(getattr(agent, "_api_call_count", 0) or 0) > 0:
                 return  # conversation started: a rebuild would invalidate the cached prompt prefix
             try:
@@ -2119,7 +2128,7 @@ def _schedule_agent_build(sid: str, delay: float = 0.05) -> None:
     """Pre-warm a deferred session's agent off the response path (session.create + cold resume; _sess() also builds on demand)."""
 
     def _run():
-        if (session := _sessions.get(sid)) is not None:
+        if (session := _sessions.get(sid)) is not None and not session.get("_conversation_binding"):
             _start_agent_build(sid, session)
     timer = threading.Timer(delay, _run)
     timer.daemon = True
@@ -2625,35 +2634,8 @@ def _read_spawn_tree_index(session_dir) -> list[dict]:
 _GOAL_COMPRESSION_RECOVERY_ATTEMPTS = "_goal_compression_recovery_attempts"
 _GOAL_COMPRESSION_RECOVERY_LIMIT = 1
 
-# Captured at import time: tests monkeypatch threading.Thread with a synchronous stub, and the ticker only
-# exits once `stop` is set AFTER run_conversation returns — inline it would spin forever.
+# Captured before tests replace threading.Thread; session_usage runs through this server binding.
 _RealThread = threading.Thread
-
-
-def _start_usage_ticker(sid: str, agent, interval: float = 1.0) -> tuple[threading.Event, threading.Thread]:
-    """Push live ``session.usage`` snapshots every ``interval`` s while a turn runs. The caller must set the
-    Event AND join the thread before ``message.complete``: a late tick would roll the final usage back."""
-    stop = threading.Event()
-    # Dedup baseline sampled BEFORE the thread starts (the client has the turn-start values); a late-scheduled
-    # thread would otherwise absorb the first counter growth and never emit it.
-    baseline: dict | None = None
-    with contextlib.suppress(Exception):
-        baseline = _get_usage(agent)
-
-    def _loop() -> None:
-        last = baseline
-        while not stop.wait(interval):
-            with contextlib.suppress(Exception):
-                usage = _get_usage(agent)
-                if usage == last:
-                    continue  # counters frozen (one long API call in flight): don't re-render the status bar
-                last = usage
-                if stop.is_set():
-                    break  # turn ended while snapshotting; message.complete carries the authoritative usage
-                _emit("session.usage", sid, {"usage": usage})
-    thread = _RealThread(target=_loop, daemon=True)
-    thread.start()
-    return stop, thread
 
 
 # ── Methods: tools & system ──────────────────────────────────────────
@@ -2803,6 +2785,7 @@ from .mcp_rpc_helpers import summarize_server as _mcp_summarize_server  # noqa: 
 # over exists; register() rebinds them onto this namespace.
 from . import (  # noqa: E402
     session_runtime_config as _session_runtime_config, session_creation as _session_creation,
+    session_usage as _session_usage,
     methods_voice as _methods_voice, methods_browser as _methods_browser, methods_slash as _methods_slash,
     methods_complete_helpers as _methods_complete_helpers, session_auto_continue as _session_auto_continue,
     agent_callbacks as _agent_callbacks, session_history as _session_history,
@@ -2813,6 +2796,7 @@ from . import (  # noqa: E402
     session_lifecycle as _session_lifecycle, session_reaper as _session_reaper,
     session_transports as _session_transports,
     methods_browser_control as _methods_browser_control, methods_bot_relay as _methods_bot_relay,
+    methods_conversations as _methods_conversations, conversation_commands as _conversation_commands,
     methods_complete as _methods_complete, methods_config as _methods_config,
     methods_config_set as _methods_config_set, methods_images as _methods_images,
     methods_profiles as _methods_profiles, methods_prompt as _methods_prompt, methods_session as _methods_session,
@@ -2824,14 +2808,14 @@ from . import (  # noqa: E402
     methods_managed_model as _methods_managed_model)
 
 for _m in (
-    _session_runtime_config, _session_creation,
+    _session_runtime_config, _session_creation, _session_usage,
     _session_transports, _session_reaper, _session_lifecycle, _session_workdir, _compute_host_bridge, _model_switch,
     _session_compression, _change_watcher, _tool_progress, _session_notifications,
     _prompt_attachments, _session_history, _agent_callbacks, _session_auto_continue,
     _methods_complete_helpers, _methods_slash, _methods_voice, _methods_browser,
     _methods_browser_control, _methods_session, _methods_prompt, _methods_config,
     _methods_config_set, _methods_complete, _methods_tools, _methods_profiles, _methods_images,
-    _methods_bot_relay, _prompt_turn, _billing_view, _methods_projects, _methods_session_foreign,
+    _methods_bot_relay, _methods_conversations, _conversation_commands, _prompt_turn, _billing_view, _methods_projects, _methods_session_foreign,
     _methods_session_control, _methods_subagents, _methods_vault, _methods_free_tier, _methods_connectors,
     _methods_account, _methods_managed_model):
     _m.register(sys.modules[__name__])

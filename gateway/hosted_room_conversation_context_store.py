@@ -43,13 +43,20 @@ def _history(conn, conversation_id: str, cutoff: int | None = None) -> tuple[Pub
         (conversation_id, cutoff, cutoff))
     result = []
     for row in rows:
-        if row["kind"] not in {"conversation.input", "conversation.response"}:
+        if row["kind"] not in {"conversation.input", "conversation.response", "conversation.continuation"}:
             continue
         actor, payload = json.loads(row["actor_json"]), json.loads(row["payload_json"])
+        text = payload["text"]
+        if "content_ref" in payload:
+            from gateway.hosted_room_conversation_content import read_owned_locked, validate_reference_locked
+            validate_reference_locked(conn, conversation_id, payload["content_ref"], text=True)
+            text = read_owned_locked(conn, conversation_id, payload["content_ref"]["id"]).decode("utf-8")
+        if payload.get("content_status") == "unsupported":
+            text = ""
         result.append(PublicMessage(
             event_id=row["event_id"], seq=row["seq"], author_id=actor["id"],
             author_label=payload.get("author_display_name_at_time", actor.get("display_name", actor["id"])),
-            text=payload["text"], reply_to_event_id=payload.get("reply_to_event_id"),
+            text=text, reply_to_event_id=payload.get("reply_to_event_id"),
         ))
     return tuple(result)
 
@@ -109,24 +116,27 @@ class ConversationContextStoreMixin:
                              binding.session_generation)
 
     def prepare_input(self, binding: ParticipantBinding, input_id: str, envelope: TurnEnvelope) -> TurnEnvelope:
+        with hosted_rooms._transaction(self.db_path, immediate=True) as conn:
+            return self._prepare_input_locked(conn, binding, input_id, envelope)
+
+    def _prepare_input_locked(self, conn, binding: ParticipantBinding, input_id: str, envelope: TurnEnvelope) -> TurnEnvelope:
         encoded = json.dumps(asdict(envelope), sort_keys=True)
         identity = (binding.participant.participant_id, binding.session_generation, binding.lineage_id, encoded)
-        with hosted_rooms._transaction(self.db_path, immediate=True) as conn:
-            self._get_locked(conn, binding.conversation_id)
-            admitted = conn.execute("""SELECT participant_id, seq FROM hosted_room_conversation_inputs
-                WHERE conversation_id=? AND input_id=?""", (binding.conversation_id, input_id)).fetchone()
-            if (admitted is None or admitted["participant_id"] != identity[0]
-                    or envelope.through_seq >= admitted["seq"]):
-                raise hosted_rooms.RoomConflictError("prepared context does not belong to this admitted input")
-            existing = conn.execute("""SELECT participant_id, session_generation, lineage_id, envelope_json
-                FROM hosted_conversation_prepared_inputs WHERE conversation_id=? AND input_id=?""",
-                (binding.conversation_id, input_id)).fetchone()
-            if existing is not None:
-                if tuple(existing) != identity:
-                    raise hosted_rooms.RoomConflictError("admitted input context is already frozen")
-                return envelope
-            conn.execute("""INSERT INTO hosted_conversation_prepared_inputs VALUES (?, ?, ?, ?, ?, ?)""",
-                         (binding.conversation_id, input_id, *identity))
+        self._get_locked(conn, binding.conversation_id)
+        admitted = conn.execute("""SELECT participant_id, seq FROM hosted_room_conversation_inputs
+            WHERE conversation_id=? AND input_id=?""", (binding.conversation_id, input_id)).fetchone()
+        if (admitted is None or admitted["participant_id"] != identity[0]
+                or envelope.through_seq >= admitted["seq"]):
+            raise hosted_rooms.RoomConflictError("prepared context does not belong to this admitted input")
+        existing = conn.execute("""SELECT participant_id, session_generation, lineage_id, envelope_json
+            FROM hosted_conversation_prepared_inputs WHERE conversation_id=? AND input_id=?""",
+            (binding.conversation_id, input_id)).fetchone()
+        if existing is not None:
+            if tuple(existing) != identity:
+                raise hosted_rooms.RoomConflictError("admitted input context is already frozen")
+            return envelope
+        conn.execute("""INSERT INTO hosted_conversation_prepared_inputs VALUES (?, ?, ?, ?, ?, ?)""",
+                     (binding.conversation_id, input_id, *identity))
         return envelope
 
     def prepared_input(self, conversation_id: str, input_id: str) -> TurnEnvelope | None:

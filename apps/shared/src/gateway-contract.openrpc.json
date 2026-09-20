@@ -655,6 +655,276 @@
       }
     },
     {
+      "name": "conversations.attach",
+      "summary": "Upload immutable conversation-owned bytes without admitting a user input.",
+      "params": [
+        {
+          "name": "params",
+          "schema": {
+            "$ref": "#/components/schemas/ConversationAttachParams"
+          }
+        }
+      ],
+      "result": {
+        "name": "result",
+        "schema": {
+          "$ref": "#/components/schemas/ConversationAttachResult"
+        }
+      }
+    },
+    {
+      "name": "conversations.capabilities",
+      "summary": "Report verified ordinary-conversation topology and rollout availability.",
+      "params": [
+        {
+          "name": "params",
+          "schema": {
+            "$ref": "#/components/schemas/Params"
+          }
+        }
+      ],
+      "result": {
+        "name": "result",
+        "schema": {
+          "$ref": "#/components/schemas/ConversationCapabilities"
+        }
+      }
+    },
+    {
+      "name": "conversations.command",
+      "summary": "Read a private notice from the selected owned participant generation without admitting a turn.",
+      "params": [
+        {
+          "name": "params",
+          "schema": {
+            "$ref": "#/components/schemas/ConversationCommandParams"
+          }
+        }
+      ],
+      "result": {
+        "name": "result",
+        "schema": {
+          "$ref": "#/components/schemas/ConversationCommandResult"
+        }
+      }
+    },
+    {
+      "name": "conversations.content",
+      "summary": "Read an authorized byte page of content owned by this conversation.",
+      "params": [
+        {
+          "name": "params",
+          "schema": {
+            "$ref": "#/components/schemas/ConversationContentParams"
+          }
+        }
+      ],
+      "result": {
+        "name": "result",
+        "schema": {
+          "$ref": "#/components/schemas/ConversationContentResult"
+        }
+      }
+    },
+    {
+      "name": "conversations.create",
+      "summary": "Create one public conversation with a fixed general assistant identity.",
+      "params": [
+        {
+          "name": "params",
+          "schema": {
+            "$ref": "#/components/schemas/ConversationCreateParams"
+          }
+        }
+      ],
+      "result": {
+        "name": "result",
+        "schema": {
+          "$ref": "#/components/schemas/ConversationResult"
+        }
+      }
+    },
+    {
+      "name": "conversations.events",
+      "summary": "Replay a page of durable public conversation events.",
+      "params": [
+        {
+          "name": "params",
+          "schema": {
+            "$ref": "#/components/schemas/ConversationEventsParams"
+          }
+        }
+      ],
+      "result": {
+        "name": "result",
+        "schema": {
+          "$ref": "#/components/schemas/ConversationEventsResult"
+        }
+      }
+    },
+    {
+      "name": "conversations.get",
+      "summary": "Read public conversation identity, participants and outstanding work.",
+      "params": [
+        {
+          "name": "params",
+          "schema": {
+            "$ref": "#/components/schemas/ConversationParams"
+          }
+        }
+      ],
+      "result": {
+        "name": "result",
+        "schema": {
+          "$ref": "#/components/schemas/ConversationGetResult"
+        }
+      }
+    },
+    {
+      "name": "conversations.list",
+      "summary": "List ordinary conversations independently from the selected Profile.",
+      "params": [
+        {
+          "name": "params",
+          "schema": {
+            "$ref": "#/components/schemas/ConversationListParams"
+          }
+        }
+      ],
+      "result": {
+        "name": "result",
+        "schema": {
+          "$ref": "#/components/schemas/ConversationListResult"
+        }
+      }
+    },
+    {
+      "name": "conversations.participants",
+      "summary": "List gateway-resolved participant identities and execution availability.",
+      "params": [
+        {
+          "name": "params",
+          "schema": {
+            "$ref": "#/components/schemas/Params"
+          }
+        }
+      ],
+      "result": {
+        "name": "result",
+        "schema": {
+          "$ref": "#/components/schemas/ConversationCatalogResult"
+        }
+      }
+    },
+    {
+      "name": "conversations.prepare",
+      "summary": "Prepare the exact participant session for ordinary authenticated model binding before sending.",
+      "params": [
+        {
+          "name": "params",
+          "schema": {
+            "$ref": "#/components/schemas/ConversationPrepareParams"
+          }
+        }
+      ],
+      "result": {
+        "name": "result",
+        "schema": {
+          "$ref": "#/components/schemas/ConversationPrepareResult"
+        }
+      }
+    },
+    {
+      "name": "conversations.refresh",
+      "summary": "Explicitly start a new participant generation from current Profile configuration.",
+      "params": [
+        {
+          "name": "params",
+          "schema": {
+            "$ref": "#/components/schemas/ConversationRefreshParams"
+          }
+        }
+      ],
+      "result": {
+        "name": "result",
+        "schema": {
+          "$ref": "#/components/schemas/ConversationRefreshResult"
+        }
+      }
+    },
+    {
+      "name": "conversations.retry",
+      "summary": "Reconcile an admitted input; uncertain execution is never blindly replayed.",
+      "params": [
+        {
+          "name": "params",
+          "schema": {
+            "$ref": "#/components/schemas/ConversationRetryParams"
+          }
+        }
+      ],
+      "result": {
+        "name": "result",
+        "schema": {
+          "$ref": "#/components/schemas/ConversationAdmissionResult"
+        }
+      }
+    },
+    {
+      "name": "conversations.runtime_snapshot",
+      "summary": "Reattach an existing participant generation and replay its exact live child/request ownership.",
+      "params": [
+        {
+          "name": "params",
+          "schema": {
+            "$ref": "#/components/schemas/ConversationRuntimeSnapshotParams"
+          }
+        }
+      ],
+      "result": {
+        "name": "result",
+        "schema": {
+          "$ref": "#/components/schemas/ConversationRuntimeSnapshotResult"
+        }
+      }
+    },
+    {
+      "name": "conversations.send",
+      "summary": "Admit one immutable user input for the selected participant.",
+      "params": [
+        {
+          "name": "params",
+          "schema": {
+            "$ref": "#/components/schemas/ConversationSendParams"
+          }
+        }
+      ],
+      "result": {
+        "name": "result",
+        "schema": {
+          "$ref": "#/components/schemas/ConversationAdmissionResult"
+        }
+      }
+    },
+    {
+      "name": "conversations.stop",
+      "summary": "Stop the exact execution generation and optionally its owned delegations.",
+      "params": [
+        {
+          "name": "params",
+          "schema": {
+            "$ref": "#/components/schemas/ConversationStopParams"
+          }
+        }
+      ],
+      "result": {
+        "name": "result",
+        "schema": {
+          "$ref": "#/components/schemas/ConversationStopResult"
+        }
+      }
+    },
+    {
       "name": "cron.manage",
       "summary": "List/add/remove/pause/resume cron jobs in the (optionally profile-scoped) cron store.",
       "params": [
@@ -4733,6 +5003,17 @@
             "title": "Session Id",
             "type": "string"
           },
+          "conversation": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ConversationActivityCoordinates"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
           "request_id": {
             "title": "Request Id",
             "type": "string"
@@ -7474,6 +7755,17 @@
             "title": "Session Id",
             "type": "string"
           },
+          "conversation": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ConversationActivityCoordinates"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
           "question": {
             "anyOf": [
               {
@@ -9152,6 +9444,1613 @@
         "title": "ControllerScope",
         "type": "object"
       },
+      "ConversationActivityCoordinates": {
+        "additionalProperties": false,
+        "properties": {
+          "conversation_id": {
+            "title": "Conversation Id",
+            "type": "string"
+          },
+          "turn_id": {
+            "title": "Turn Id",
+            "type": "string"
+          },
+          "participant_id": {
+            "title": "Participant Id",
+            "type": "string"
+          },
+          "session_generation": {
+            "title": "Session Generation",
+            "type": "integer"
+          },
+          "task_id": {
+            "title": "Task Id",
+            "type": "string"
+          },
+          "execution_generation": {
+            "title": "Execution Generation",
+            "type": "integer"
+          },
+          "runtime_id": {
+            "title": "Runtime Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "conversation_id",
+          "turn_id",
+          "participant_id",
+          "session_generation",
+          "task_id",
+          "execution_generation",
+          "runtime_id"
+        ],
+        "title": "ConversationActivityCoordinates",
+        "type": "object"
+      },
+      "ConversationActor": {
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "display_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Display Name"
+          }
+        },
+        "required": [
+          "kind",
+          "id"
+        ],
+        "title": "ConversationActor",
+        "type": "object"
+      },
+      "ConversationAdmission": {
+        "additionalProperties": false,
+        "properties": {
+          "conversation_id": {
+            "title": "Conversation Id",
+            "type": "string"
+          },
+          "turn_id": {
+            "title": "Turn Id",
+            "type": "string"
+          },
+          "input_id": {
+            "title": "Input Id",
+            "type": "string"
+          },
+          "event_id": {
+            "title": "Event Id",
+            "type": "string"
+          },
+          "seq": {
+            "title": "Seq",
+            "type": "integer"
+          },
+          "participant_id": {
+            "title": "Participant Id",
+            "type": "string"
+          },
+          "idempotent": {
+            "title": "Idempotent",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "conversation_id",
+          "turn_id",
+          "input_id",
+          "event_id",
+          "seq",
+          "participant_id",
+          "idempotent"
+        ],
+        "title": "ConversationAdmission",
+        "type": "object"
+      },
+      "ConversationAdmissionResult": {
+        "additionalProperties": false,
+        "properties": {
+          "admission": {
+            "$ref": "#/components/schemas/ConversationAdmission"
+          }
+        },
+        "required": [
+          "admission"
+        ],
+        "title": "ConversationAdmissionResult",
+        "type": "object"
+      },
+      "ConversationAttachParams": {
+        "additionalProperties": false,
+        "properties": {
+          "conversation_id": {
+            "title": "Conversation Id",
+            "type": "string"
+          },
+          "filename": {
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Filename",
+            "type": "string"
+          },
+          "mime_type": {
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Mime Type",
+            "type": "string"
+          },
+          "data_base64": {
+            "title": "Data Base64",
+            "type": "string"
+          }
+        },
+        "required": [
+          "conversation_id",
+          "filename",
+          "mime_type",
+          "data_base64"
+        ],
+        "title": "ConversationAttachParams",
+        "type": "object"
+      },
+      "ConversationAttachResult": {
+        "additionalProperties": false,
+        "properties": {
+          "attachment": {
+            "$ref": "#/components/schemas/ConversationAttachment"
+          }
+        },
+        "required": [
+          "attachment"
+        ],
+        "title": "ConversationAttachResult",
+        "type": "object"
+      },
+      "ConversationAttachment": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "filename": {
+            "title": "Filename",
+            "type": "string"
+          },
+          "content_ref": {
+            "$ref": "#/components/schemas/ConversationContentRef"
+          }
+        },
+        "required": [
+          "id",
+          "filename",
+          "content_ref"
+        ],
+        "title": "ConversationAttachment",
+        "type": "object"
+      },
+      "ConversationCapabilities": {
+        "additionalProperties": false,
+        "properties": {
+          "max_attachment_bytes": {
+            "anyOf": [
+              {
+                "minimum": 1,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Max Attachment Bytes"
+          },
+          "max_attachments": {
+            "anyOf": [
+              {
+                "minimum": 1,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Max Attachments"
+          },
+          "protocol_version": {
+            "title": "Protocol Version",
+            "type": "integer"
+          },
+          "enabled": {
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Reason"
+          },
+          "supported_execution_environments": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Supported Execution Environments",
+            "type": "array"
+          }
+        },
+        "required": [
+          "protocol_version",
+          "enabled",
+          "supported_execution_environments"
+        ],
+        "title": "ConversationCapabilities",
+        "type": "object"
+      },
+      "ConversationCatalogEntry": {
+        "additionalProperties": false,
+        "properties": {
+          "participant": {
+            "$ref": "#/components/schemas/ConversationParticipantRef"
+          },
+          "available": {
+            "title": "Available",
+            "type": "boolean"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Reason"
+          }
+        },
+        "required": [
+          "participant",
+          "available"
+        ],
+        "title": "ConversationCatalogEntry",
+        "type": "object"
+      },
+      "ConversationCatalogResult": {
+        "additionalProperties": false,
+        "properties": {
+          "participants": {
+            "items": {
+              "$ref": "#/components/schemas/ConversationCatalogEntry"
+            },
+            "title": "Participants",
+            "type": "array"
+          }
+        },
+        "required": [
+          "participants"
+        ],
+        "title": "ConversationCatalogResult",
+        "type": "object"
+      },
+      "ConversationCommandNotice": {
+        "additionalProperties": false,
+        "properties": {
+          "type": {
+            "const": "notice",
+            "title": "Type",
+            "type": "string"
+          },
+          "scope": {
+            "const": "private",
+            "title": "Scope",
+            "type": "string"
+          },
+          "output": {
+            "title": "Output",
+            "type": "string"
+          },
+          "conversation_id": {
+            "title": "Conversation Id",
+            "type": "string"
+          },
+          "participant_id": {
+            "title": "Participant Id",
+            "type": "string"
+          },
+          "session_generation": {
+            "title": "Session Generation",
+            "type": "integer"
+          },
+          "conversation_revision": {
+            "title": "Conversation Revision",
+            "type": "integer"
+          },
+          "runtime_id": {
+            "title": "Runtime Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "scope",
+          "output",
+          "conversation_id",
+          "participant_id",
+          "session_generation",
+          "conversation_revision",
+          "runtime_id"
+        ],
+        "title": "ConversationCommandNotice",
+        "type": "object"
+      },
+      "ConversationCommandParams": {
+        "additionalProperties": false,
+        "properties": {
+          "conversation_id": {
+            "title": "Conversation Id",
+            "type": "string"
+          },
+          "participant_id": {
+            "title": "Participant Id",
+            "type": "string"
+          },
+          "expected_generation": {
+            "minimum": 1,
+            "title": "Expected Generation",
+            "type": "integer"
+          },
+          "expected_revision": {
+            "minimum": 1,
+            "title": "Expected Revision",
+            "type": "integer"
+          },
+          "command": {
+            "maxLength": 4096,
+            "minLength": 1,
+            "title": "Command",
+            "type": "string"
+          }
+        },
+        "required": [
+          "conversation_id",
+          "participant_id",
+          "expected_generation",
+          "expected_revision",
+          "command"
+        ],
+        "title": "ConversationCommandParams",
+        "type": "object"
+      },
+      "ConversationCommandResult": {
+        "discriminator": {
+          "mapping": {
+            "notice": "#/components/schemas/ConversationCommandNotice",
+            "send": "#/components/schemas/ConversationCommandSend"
+          },
+          "propertyName": "type"
+        },
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/ConversationCommandNotice"
+          },
+          {
+            "$ref": "#/components/schemas/ConversationCommandSend"
+          }
+        ],
+        "title": "ConversationCommandResult"
+      },
+      "ConversationCommandSend": {
+        "additionalProperties": false,
+        "properties": {
+          "type": {
+            "const": "send",
+            "title": "Type",
+            "type": "string"
+          },
+          "command_token": {
+            "title": "Command Token",
+            "type": "string"
+          },
+          "display": {
+            "title": "Display",
+            "type": "string"
+          },
+          "conversation_id": {
+            "title": "Conversation Id",
+            "type": "string"
+          },
+          "participant_id": {
+            "title": "Participant Id",
+            "type": "string"
+          },
+          "session_generation": {
+            "title": "Session Generation",
+            "type": "integer"
+          },
+          "conversation_revision": {
+            "title": "Conversation Revision",
+            "type": "integer"
+          },
+          "runtime_id": {
+            "title": "Runtime Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "command_token",
+          "display",
+          "conversation_id",
+          "participant_id",
+          "session_generation",
+          "conversation_revision",
+          "runtime_id"
+        ],
+        "title": "ConversationCommandSend",
+        "type": "object"
+      },
+      "ConversationContentParams": {
+        "additionalProperties": false,
+        "properties": {
+          "conversation_id": {
+            "title": "Conversation Id",
+            "type": "string"
+          },
+          "content_id": {
+            "title": "Content Id",
+            "type": "string"
+          },
+          "offset_bytes": {
+            "default": 0,
+            "minimum": 0,
+            "title": "Offset Bytes",
+            "type": "integer"
+          },
+          "limit_bytes": {
+            "default": 65536,
+            "maximum": 262144,
+            "minimum": 1,
+            "title": "Limit Bytes",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "conversation_id",
+          "content_id"
+        ],
+        "title": "ConversationContentParams",
+        "type": "object"
+      },
+      "ConversationContentRef": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "sha256": {
+            "title": "Sha256",
+            "type": "string"
+          },
+          "size_bytes": {
+            "title": "Size Bytes",
+            "type": "integer"
+          },
+          "mime_type": {
+            "title": "Mime Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "sha256",
+          "size_bytes",
+          "mime_type"
+        ],
+        "title": "ConversationContentRef",
+        "type": "object"
+      },
+      "ConversationContentResult": {
+        "additionalProperties": false,
+        "properties": {
+          "data_base64": {
+            "title": "Data Base64",
+            "type": "string"
+          },
+          "next_offset": {
+            "title": "Next Offset",
+            "type": "integer"
+          },
+          "has_more": {
+            "title": "Has More",
+            "type": "boolean"
+          },
+          "sha256": {
+            "title": "Sha256",
+            "type": "string"
+          }
+        },
+        "required": [
+          "data_base64",
+          "next_offset",
+          "has_more",
+          "sha256"
+        ],
+        "title": "ConversationContentResult",
+        "type": "object"
+      },
+      "ConversationCreateParams": {
+        "additionalProperties": false,
+        "properties": {
+          "conversation_id": {
+            "title": "Conversation Id",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "general_participant_id": {
+            "title": "General Participant Id",
+            "type": "string"
+          },
+          "project_ref": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ConversationProjectRef"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          }
+        },
+        "required": [
+          "conversation_id",
+          "title",
+          "general_participant_id"
+        ],
+        "title": "ConversationCreateParams",
+        "type": "object"
+      },
+      "ConversationDelegation": {
+        "additionalProperties": false,
+        "properties": {
+          "delegation_id": {
+            "title": "Delegation Id",
+            "type": "string"
+          },
+          "origin_turn_id": {
+            "title": "Origin Turn Id",
+            "type": "string"
+          },
+          "participant_id": {
+            "title": "Participant Id",
+            "type": "string"
+          },
+          "session_generation": {
+            "title": "Session Generation",
+            "type": "integer"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "delegation_id",
+          "origin_turn_id",
+          "participant_id",
+          "session_generation",
+          "status"
+        ],
+        "title": "ConversationDelegation",
+        "type": "object"
+      },
+      "ConversationEvent": {
+        "additionalProperties": false,
+        "properties": {
+          "room_id": {
+            "title": "Room Id",
+            "type": "string"
+          },
+          "seq": {
+            "title": "Seq",
+            "type": "integer"
+          },
+          "event_id": {
+            "title": "Event Id",
+            "type": "string"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "actor": {
+            "$ref": "#/components/schemas/ConversationActor"
+          },
+          "authority_epoch": {
+            "title": "Authority Epoch",
+            "type": "integer"
+          },
+          "payload": {
+            "additionalProperties": true,
+            "title": "Payload",
+            "type": "object"
+          },
+          "created_at": {
+            "title": "Created At",
+            "type": "number"
+          },
+          "idempotent": {
+            "default": false,
+            "title": "Idempotent",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "room_id",
+          "seq",
+          "event_id",
+          "kind",
+          "actor",
+          "authority_epoch",
+          "payload",
+          "created_at"
+        ],
+        "title": "ConversationEvent",
+        "type": "object"
+      },
+      "ConversationEventsParams": {
+        "additionalProperties": false,
+        "properties": {
+          "conversation_id": {
+            "title": "Conversation Id",
+            "type": "string"
+          },
+          "after_seq": {
+            "default": 0,
+            "minimum": 0,
+            "title": "After Seq",
+            "type": "integer"
+          },
+          "limit": {
+            "default": 100,
+            "maximum": 200,
+            "minimum": 1,
+            "title": "Limit",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "conversation_id"
+        ],
+        "title": "ConversationEventsParams",
+        "type": "object"
+      },
+      "ConversationEventsResult": {
+        "additionalProperties": false,
+        "properties": {
+          "events": {
+            "items": {
+              "$ref": "#/components/schemas/ConversationEvent"
+            },
+            "title": "Events",
+            "type": "array"
+          },
+          "cursor": {
+            "title": "Cursor",
+            "type": "integer"
+          },
+          "has_more": {
+            "title": "Has More",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "events",
+          "cursor",
+          "has_more"
+        ],
+        "title": "ConversationEventsResult",
+        "type": "object"
+      },
+      "ConversationGetResult": {
+        "additionalProperties": false,
+        "properties": {
+          "conversation": {
+            "$ref": "#/components/schemas/ConversationRecord"
+          },
+          "participants": {
+            "items": {
+              "$ref": "#/components/schemas/ConversationParticipantBinding"
+            },
+            "title": "Participants",
+            "type": "array"
+          },
+          "active_turn": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ConversationTurn"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "pending_delegations": {
+            "items": {
+              "$ref": "#/components/schemas/ConversationDelegation"
+            },
+            "title": "Pending Delegations",
+            "type": "array"
+          }
+        },
+        "required": [
+          "conversation",
+          "participants",
+          "active_turn",
+          "pending_delegations"
+        ],
+        "title": "ConversationGetResult",
+        "type": "object"
+      },
+      "ConversationListParams": {
+        "additionalProperties": false,
+        "properties": {
+          "cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Cursor"
+          },
+          "limit": {
+            "default": 100,
+            "maximum": 200,
+            "minimum": 1,
+            "title": "Limit",
+            "type": "integer"
+          },
+          "project_ref": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ConversationProjectRef"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "include_archived": {
+            "default": false,
+            "title": "Include Archived",
+            "type": "boolean"
+          }
+        },
+        "title": "ConversationListParams",
+        "type": "object"
+      },
+      "ConversationListResult": {
+        "additionalProperties": false,
+        "properties": {
+          "conversations": {
+            "items": {
+              "$ref": "#/components/schemas/ConversationRecord"
+            },
+            "title": "Conversations",
+            "type": "array"
+          },
+          "cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cursor"
+          },
+          "has_more": {
+            "title": "Has More",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "conversations",
+          "cursor",
+          "has_more"
+        ],
+        "title": "ConversationListResult",
+        "type": "object"
+      },
+      "ConversationModelPreparation": {
+        "additionalProperties": false,
+        "properties": {
+          "session_id": {
+            "title": "Session Id",
+            "type": "string"
+          },
+          "stored_session_id": {
+            "title": "Stored Session Id",
+            "type": "string"
+          },
+          "profile": {
+            "title": "Profile",
+            "type": "string"
+          },
+          "session_generation": {
+            "title": "Session Generation",
+            "type": "integer"
+          },
+          "model_status": {
+            "title": "Model Status",
+            "type": "string"
+          },
+          "model_config": {
+            "additionalProperties": true,
+            "title": "Model Config",
+            "type": "object"
+          }
+        },
+        "required": [
+          "session_id",
+          "stored_session_id",
+          "profile",
+          "session_generation",
+          "model_status",
+          "model_config"
+        ],
+        "title": "ConversationModelPreparation",
+        "type": "object"
+      },
+      "ConversationModelSnapshot": {
+        "additionalProperties": false,
+        "properties": {
+          "model": {
+            "title": "Model",
+            "type": "string"
+          },
+          "provider": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provider"
+          },
+          "model_source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model Source"
+          },
+          "model_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model Id"
+          }
+        },
+        "required": [
+          "model",
+          "provider",
+          "model_source",
+          "model_id"
+        ],
+        "title": "ConversationModelSnapshot",
+        "type": "object"
+      },
+      "ConversationParams": {
+        "additionalProperties": false,
+        "properties": {
+          "conversation_id": {
+            "title": "Conversation Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "conversation_id"
+        ],
+        "title": "ConversationParams",
+        "type": "object"
+      },
+      "ConversationParticipantBinding": {
+        "additionalProperties": false,
+        "properties": {
+          "conversation_id": {
+            "title": "Conversation Id",
+            "type": "string"
+          },
+          "participant": {
+            "$ref": "#/components/schemas/ConversationParticipantRef"
+          },
+          "session_generation": {
+            "title": "Session Generation",
+            "type": "integer"
+          },
+          "lineage_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lineage Id"
+          }
+        },
+        "required": [
+          "conversation_id",
+          "participant",
+          "session_generation",
+          "lineage_id"
+        ],
+        "title": "ConversationParticipantBinding",
+        "type": "object"
+      },
+      "ConversationParticipantRef": {
+        "additionalProperties": false,
+        "properties": {
+          "participant_id": {
+            "title": "Participant Id",
+            "type": "string"
+          },
+          "install_id": {
+            "title": "Install Id",
+            "type": "string"
+          },
+          "profile": {
+            "title": "Profile",
+            "type": "string"
+          },
+          "display_name": {
+            "title": "Display Name",
+            "type": "string"
+          },
+          "is_general": {
+            "default": false,
+            "title": "Is General",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "participant_id",
+          "install_id",
+          "profile",
+          "display_name"
+        ],
+        "title": "ConversationParticipantRef",
+        "type": "object"
+      },
+      "ConversationPrepareParams": {
+        "additionalProperties": false,
+        "properties": {
+          "conversation_id": {
+            "title": "Conversation Id",
+            "type": "string"
+          },
+          "participant_id": {
+            "title": "Participant Id",
+            "type": "string"
+          },
+          "expected_revision": {
+            "anyOf": [
+              {
+                "minimum": 1,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Expected Revision"
+          },
+          "expected_generation": {
+            "default": 1,
+            "minimum": 1,
+            "title": "Expected Generation",
+            "type": "integer"
+          },
+          "model_source": {
+            "anyOf": [
+              {
+                "enum": [
+                  "aino",
+                  "byok"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Model Source"
+          },
+          "model_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Model Id"
+          }
+        },
+        "required": [
+          "conversation_id",
+          "participant_id"
+        ],
+        "title": "ConversationPrepareParams",
+        "type": "object"
+      },
+      "ConversationPrepareResult": {
+        "additionalProperties": false,
+        "properties": {
+          "session_id": {
+            "title": "Session Id",
+            "type": "string"
+          },
+          "stored_session_id": {
+            "title": "Stored Session Id",
+            "type": "string"
+          },
+          "profile": {
+            "title": "Profile",
+            "type": "string"
+          },
+          "session_generation": {
+            "title": "Session Generation",
+            "type": "integer"
+          },
+          "model_status": {
+            "title": "Model Status",
+            "type": "string"
+          },
+          "model_config": {
+            "additionalProperties": true,
+            "title": "Model Config",
+            "type": "object"
+          },
+          "previous_revision": {
+            "title": "Previous Revision",
+            "type": "integer"
+          },
+          "conversation_revision": {
+            "title": "Conversation Revision",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "session_id",
+          "stored_session_id",
+          "profile",
+          "session_generation",
+          "model_status",
+          "model_config",
+          "previous_revision",
+          "conversation_revision"
+        ],
+        "title": "ConversationPrepareResult",
+        "type": "object"
+      },
+      "ConversationProjectRef": {
+        "additionalProperties": false,
+        "properties": {
+          "install_id": {
+            "title": "Install Id",
+            "type": "string"
+          },
+          "registration_profile": {
+            "title": "Registration Profile",
+            "type": "string"
+          },
+          "project_id": {
+            "title": "Project Id",
+            "type": "string"
+          },
+          "cwd": {
+            "title": "Cwd",
+            "type": "string"
+          },
+          "execution_environment_id": {
+            "title": "Execution Environment Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "install_id",
+          "registration_profile",
+          "project_id",
+          "cwd",
+          "execution_environment_id"
+        ],
+        "title": "ConversationProjectRef",
+        "type": "object"
+      },
+      "ConversationRecord": {
+        "additionalProperties": false,
+        "properties": {
+          "conversation_id": {
+            "title": "Conversation Id",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "general": {
+            "$ref": "#/components/schemas/ConversationParticipantRef"
+          },
+          "project": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ConversationProjectRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "revision": {
+            "title": "Revision",
+            "type": "integer"
+          },
+          "archived": {
+            "title": "Archived",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "conversation_id",
+          "title",
+          "general",
+          "project",
+          "revision",
+          "archived"
+        ],
+        "title": "ConversationRecord",
+        "type": "object"
+      },
+      "ConversationRefreshParams": {
+        "additionalProperties": false,
+        "properties": {
+          "conversation_id": {
+            "title": "Conversation Id",
+            "type": "string"
+          },
+          "participant_id": {
+            "title": "Participant Id",
+            "type": "string"
+          },
+          "expected_generation": {
+            "minimum": 1,
+            "title": "Expected Generation",
+            "type": "integer"
+          },
+          "model_source": {
+            "anyOf": [
+              {
+                "enum": [
+                  "aino",
+                  "byok"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Model Source"
+          },
+          "model_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Model Id"
+          }
+        },
+        "required": [
+          "conversation_id",
+          "participant_id",
+          "expected_generation"
+        ],
+        "title": "ConversationRefreshParams",
+        "type": "object"
+      },
+      "ConversationRefreshResult": {
+        "additionalProperties": false,
+        "properties": {
+          "binding": {
+            "$ref": "#/components/schemas/ConversationParticipantBinding"
+          },
+          "preparation": {
+            "$ref": "#/components/schemas/ConversationModelPreparation"
+          }
+        },
+        "required": [
+          "binding",
+          "preparation"
+        ],
+        "title": "ConversationRefreshResult",
+        "type": "object"
+      },
+      "ConversationResult": {
+        "additionalProperties": false,
+        "properties": {
+          "conversation": {
+            "$ref": "#/components/schemas/ConversationRecord"
+          }
+        },
+        "required": [
+          "conversation"
+        ],
+        "title": "ConversationResult",
+        "type": "object"
+      },
+      "ConversationRetryParams": {
+        "additionalProperties": false,
+        "properties": {
+          "conversation_id": {
+            "title": "Conversation Id",
+            "type": "string"
+          },
+          "turn_id": {
+            "title": "Turn Id",
+            "type": "string"
+          },
+          "input_id": {
+            "title": "Input Id",
+            "type": "string"
+          },
+          "expected_generation": {
+            "title": "Expected Generation",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "conversation_id",
+          "turn_id",
+          "input_id",
+          "expected_generation"
+        ],
+        "title": "ConversationRetryParams",
+        "type": "object"
+      },
+      "ConversationRunStatus": {
+        "enum": [
+          "queued",
+          "running",
+          "stopping",
+          "settled",
+          "failed",
+          "cancelled",
+          "indeterminate",
+          "deferred"
+        ],
+        "title": "ConversationRunStatus",
+        "type": "string"
+      },
+      "ConversationRuntimeSnapshotParams": {
+        "additionalProperties": false,
+        "properties": {
+          "conversation_id": {
+            "title": "Conversation Id",
+            "type": "string"
+          },
+          "participant_id": {
+            "title": "Participant Id",
+            "type": "string"
+          },
+          "session_generation": {
+            "minimum": 1,
+            "title": "Session Generation",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "conversation_id",
+          "participant_id",
+          "session_generation"
+        ],
+        "title": "ConversationRuntimeSnapshotParams",
+        "type": "object"
+      },
+      "ConversationRuntimeSnapshotResult": {
+        "additionalProperties": false,
+        "properties": {
+          "model_snapshot": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ConversationModelSnapshot"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "available": {
+            "title": "Available",
+            "type": "boolean"
+          },
+          "runtime_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Runtime Id"
+          },
+          "subagents": {
+            "items": {
+              "$ref": "#/components/schemas/SubagentSnapshot"
+            },
+            "title": "Subagents",
+            "type": "array"
+          },
+          "open_requests": {
+            "items": {
+              "$ref": "#/components/schemas/OpenRequestEntry"
+            },
+            "title": "Open Requests",
+            "type": "array"
+          },
+          "activity": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ConversationActivityCoordinates"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "background_activities": {
+            "items": {
+              "$ref": "#/components/schemas/ConversationActivityCoordinates"
+            },
+            "title": "Background Activities",
+            "type": "array"
+          }
+        },
+        "required": [
+          "available",
+          "runtime_id",
+          "subagents",
+          "open_requests",
+          "activity",
+          "background_activities"
+        ],
+        "title": "ConversationRuntimeSnapshotResult",
+        "type": "object"
+      },
+      "ConversationSendParams": {
+        "additionalProperties": false,
+        "properties": {
+          "conversation_id": {
+            "title": "Conversation Id",
+            "type": "string"
+          },
+          "turn_id": {
+            "title": "Turn Id",
+            "type": "string"
+          },
+          "input_id": {
+            "title": "Input Id",
+            "type": "string"
+          },
+          "participant_id": {
+            "title": "Participant Id",
+            "type": "string"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          },
+          "attachment_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Attachment Ids",
+            "type": "array"
+          },
+          "command_token": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Command Token"
+          },
+          "expected_revision": {
+            "title": "Expected Revision",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "conversation_id",
+          "turn_id",
+          "input_id",
+          "participant_id",
+          "text",
+          "expected_revision"
+        ],
+        "title": "ConversationSendParams",
+        "type": "object"
+      },
+      "ConversationStopParams": {
+        "additionalProperties": false,
+        "properties": {
+          "conversation_id": {
+            "title": "Conversation Id",
+            "type": "string"
+          },
+          "turn_id": {
+            "title": "Turn Id",
+            "type": "string"
+          },
+          "execution_generation": {
+            "title": "Execution Generation",
+            "type": "integer"
+          },
+          "include_delegations": {
+            "default": false,
+            "title": "Include Delegations",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "conversation_id",
+          "turn_id",
+          "execution_generation"
+        ],
+        "title": "ConversationStopParams",
+        "type": "object"
+      },
+      "ConversationStopResult": {
+        "additionalProperties": false,
+        "properties": {
+          "status": {
+            "$ref": "#/components/schemas/ConversationStopStatus"
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "title": "ConversationStopResult",
+        "type": "object"
+      },
+      "ConversationStopStatus": {
+        "enum": [
+          "requested",
+          "confirmed",
+          "not_found"
+        ],
+        "title": "ConversationStopStatus",
+        "type": "string"
+      },
+      "ConversationTurn": {
+        "additionalProperties": false,
+        "properties": {
+          "turn_id": {
+            "title": "Turn Id",
+            "type": "string"
+          },
+          "input_id": {
+            "title": "Input Id",
+            "type": "string"
+          },
+          "participant_id": {
+            "title": "Participant Id",
+            "type": "string"
+          },
+          "session_generation": {
+            "title": "Session Generation",
+            "type": "integer"
+          },
+          "task_id": {
+            "title": "Task Id",
+            "type": "string"
+          },
+          "execution_generation": {
+            "title": "Execution Generation",
+            "type": "integer"
+          },
+          "status": {
+            "$ref": "#/components/schemas/ConversationRunStatus"
+          },
+          "runtime_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Runtime Id"
+          }
+        },
+        "required": [
+          "turn_id",
+          "input_id",
+          "participant_id",
+          "session_generation",
+          "task_id",
+          "execution_generation",
+          "status"
+        ],
+        "title": "ConversationTurn",
+        "type": "object"
+      },
       "CorrectionStatus": {
         "enum": [
           "queued",
@@ -10295,6 +12194,17 @@
           "session_id": {
             "title": "Session Id",
             "type": "string"
+          },
+          "conversation": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ConversationActivityCoordinates"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
           }
         },
         "required": [
@@ -14798,6 +16708,17 @@
             "title": "Session Id",
             "type": "string"
           },
+          "conversation": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ConversationActivityCoordinates"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
           "server": {
             "anyOf": [
               {
@@ -16169,6 +18090,13 @@
           "pane"
         ],
         "title": "PaneRevealPayload",
+        "type": "object"
+      },
+      "Params": {
+        "additionalProperties": false,
+        "description": "Client\u2192server method params / server\u2192client request params. Unknown keys are rejected.",
+        "properties": {},
+        "title": "Params",
         "type": "object"
       },
       "PasteCollapseParams": {
@@ -18492,6 +20420,17 @@
           "session_id": {
             "title": "Session Id",
             "type": "string"
+          },
+          "conversation": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ConversationActivityCoordinates"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
           },
           "action": {
             "title": "Action",
@@ -22292,6 +24231,17 @@
             "title": "Session Id",
             "type": "string"
           },
+          "conversation": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ConversationActivityCoordinates"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
           "start": {
             "anyOf": [
               {
@@ -23994,6 +25944,17 @@
           "session_id": {
             "title": "Session Id",
             "type": "string"
+          },
+          "conversation": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ConversationActivityCoordinates"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
           },
           "env_var": {
             "title": "Env Var",
@@ -31350,6 +33311,17 @@
             "title": "Session Id",
             "type": "string"
           },
+          "conversation": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ConversationActivityCoordinates"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
           "action": {
             "title": "Action",
             "type": "string"
@@ -32340,6 +34312,17 @@
             "title": "Session Id",
             "type": "string"
           },
+          "conversation": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ConversationActivityCoordinates"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
           "site": {
             "anyOf": [
               {
@@ -32572,6 +34555,17 @@
             "title": "Session Id",
             "type": "string"
           },
+          "conversation": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ConversationActivityCoordinates"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
           "origin": {
             "title": "Origin",
             "type": "string"
@@ -32754,6 +34748,17 @@
           "session_id": {
             "title": "Session Id",
             "type": "string"
+          },
+          "conversation": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ConversationActivityCoordinates"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
           },
           "backend": {
             "title": "Backend",

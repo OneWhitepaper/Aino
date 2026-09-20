@@ -477,6 +477,20 @@ _CONFIG_SETTERS = {
 def _(rid, params: dict) -> dict:
     key, value = params.get("key", ""), params.get("value", "")
     session = _sessions.get(params.get("session_id", ""))
+    from .session_conversation_binding import conversation_metadata, require_conversation_mutation_allowed
+    if session and conversation_metadata(session) and key in {"model", "reasoning", "fast", "personality"}:
+        display_only = ((key == "fast" and _word(value) == "status") or
+                        (key == "reasoning" and any(_word(value) in words
+                         for words, *_ in _REASONING_DISPLAY_WORDS)))
+        if not display_only:
+            if _word(params.get("scope")) == "global" and key != "model":
+                # Profile defaults apply to the next generation; never rewrite this runtime or history.
+                session = None
+            else:
+                try:
+                    require_conversation_mutation_allowed(session)
+                except RuntimeError as exc:
+                    return _err(rid, 4120, str(exc))
     handler = _CONFIG_SETTERS.get(key)
     if handler is None and key.startswith("details_mode."):
         handler = _set_details_section

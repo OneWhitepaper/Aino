@@ -229,6 +229,8 @@ def _create_session(rid, params: dict) -> dict:
             "slash_worker": None, "tool_progress_mode": _load_tool_progress_mode(), "tool_started_at": {},
             "transport": current_transport() or _stdio_transport,
             "auth_user_id": _transport_auth_user_id(current_transport())}
+        from .session_conversation_binding import attach_pending_conversation
+        attach_pending_conversation(_sessions[sid])
         _register_session_cwd(_sessions[sid])
     # No DB row here (drafts left "Untitled" litter): created on the first prompt — except seeded sessions.
     # NOTE: we intentionally do NOT persist a DB row here. Every TUI/desktop launch (and every "New agent" /
@@ -286,6 +288,8 @@ class _Resume:
     def mint(self, prompts: bool = True) -> tuple:
         """``(runtime sid, source, cwd)`` for the live record this resume registers (+ gateway prompts on)."""
         ids = _new_runtime_ids(self.params)
+        if _parse_model_config((self.found or {}).get("model_config"), quiet=True).get("conversation_binding"):
+            ids = (ids[0], str(self.found["source"]))
         if prompts:
             _enable_gateway_prompts()
         return *ids, self.profile_resume_cwd or _default_session_cwd()
@@ -296,10 +300,14 @@ class _Resume:
         if overrides is not None:
             extra.update(model_override=overrides.get("model_override"), resume_runtime_overrides=overrides or None)
             extra["managed_model_params"] = overrides.get("managed_model_params")
-        return _deferred_session_record(
+        record = _deferred_session_record(
             self.target, cols=self.cols, cwd=cwd, history=history, lease=None, source=source,
             close_on_disconnect=_flag(self.params, "close_on_disconnect"),
             profile_home=self.profile_home, explicit_cwd=bool(self.profile_resume_cwd), **extra)
+        from . import server
+        from .session_conversation_binding import restore_conversation_session
+        restore_conversation_session(server, record, self.found)
+        return record
 
     def claim(self, sid: str, record: dict) -> dict | None:
         """Register ``record`` live under the resume lock, or reuse a concurrent winner's session."""
@@ -387,6 +395,8 @@ def _resume_adopt_stranded(ctx: _Resume) -> None:
         donor_row = default_db.get_session(ctx.target) if default_db is not None else None
         if not donor_row or donor_row.get("archived"):
             return
+        if _parse_model_config(donor_row.get("model_config"), quiet=True).get("conversation_binding"):
+            return  # Conversation ownership never migrates between Profile databases.
         adoption = ctx.db.adopt_session_lineage_from(default_db, donor_row["id"])
         if adoption.get("adopted"):
             logger.info("adopted stranded session %s (lineage of %s segment(s)) from default store into profile %s",
@@ -431,7 +441,8 @@ def _resume_follow_tip(ctx: _Resume) -> None:
     tip = ctx.target
     with contextlib.suppress(Exception):
         from tools.bot_mode_probe import BOT_CHAT_TITLE
-        if (ctx.found.get("title") or "").strip() == BOT_CHAT_TITLE:
+        if (_parse_model_config(ctx.found.get("model_config"), quiet=True).get("conversation_binding")
+                or (ctx.found.get("title") or "").strip() == BOT_CHAT_TITLE):
             tip = ctx.db.get_compression_tip(ctx.target) or ctx.target
         else:
             tip = ctx.db.resolve_resume_session_id(ctx.target)
@@ -470,6 +481,9 @@ def _resume_reuse_live_locked(ctx: _Resume, sid: str, session: dict) -> dict:
     """Reuse with _session_resume_lock already held (including the eager double-check)."""
     if (refusal := _reattach_refusal(ctx.rid, sid, session)) is not None:
         return refusal
+    from . import server
+    from .session_conversation_binding import restore_conversation_session
+    restore_conversation_session(server, session, ctx.found)
     _cancel_ws_orphan_reap(sid)  # unconditionally: the fast path must never race the reap Timer
     payload = _live_session_payload(sid, session, cols=ctx.cols, touch=True, omit_messages=ctx.omit_messages,
                                     transport=current_transport() or _stdio_transport)
@@ -578,10 +592,16 @@ def _resume_eager(ctx: _Resume) -> dict:
             # Profile db so turns persist to the right state.db; stored runtime identity so switching chats does
             # not inherit another chat's global model.
             stored_runtime_overrides = _stored_session_runtime_overrides(ctx.found)
+            conversation = _parse_model_config(ctx.found.get("model_config"), quiet=True).get("conversation_binding")
+            resume_auth_user_id = _transport_auth_user_id(current_transport())
+            if conversation:
+                bound_record = ctx.record(source, ctx.profile_resume_cwd, history, stored_runtime_overrides)
+                resume_auth_user_id = bound_record["auth_user_id"]
+                stored_runtime_overrides["context_cwd"] = ctx.profile_resume_cwd
             agent = _make_agent_in_context(
                 sid, ctx.target, session_db=ctx.db, platform_override=source,
                 context_cwd_is_launch_artifact=(source in _LAUNCH_CWD_NOT_A_WORKSPACE and not ctx.profile_resume_cwd),
-                auth_user_id=_transport_auth_user_id(current_transport()), **stored_runtime_overrides)
+                auth_user_id=resume_auth_user_id, **stored_runtime_overrides)
         except Exception as e:
             return _err(ctx.rid, 5000, f"resume failed: {e}")
     with _session_resume_lock:
@@ -593,7 +613,8 @@ def _resume_eager(ctx: _Resume) -> dict:
         try:
             with _profile_build_scope(ctx.profile_home):
                 _init_session(sid, ctx.target, agent, history, cols=ctx.cols, cwd=ctx.profile_resume_cwd,
-                              session_db=ctx.db, source=source, explicit_cwd=bool(ctx.profile_resume_cwd))
+                              session_db=ctx.db, source=source, profile_home=ctx.profile_home,
+                              explicit_cwd=bool(ctx.profile_resume_cwd))
                 # Ownership TRANSFER: the agent holds the handle for life (AIAgent.close() releases it). The
                 # owns_db drop is UNCONDITIONAL — the session is registered against the handle, so the finally
                 # must not close it even if the transfer was refused (a leak beats "closed database" every
@@ -608,6 +629,9 @@ def _resume_eager(ctx: _Resume) -> dict:
                 if ctx.profile_home is not None:
                     session["profile_home"] = str(ctx.profile_home)
                 session.update(display_history_prefix=display_history_prefix, active_session_lease=None)
+                from . import server
+                from .session_conversation_binding import restore_conversation_session
+                restore_conversation_session(server, session, ctx.found)
         except Exception as e:
             # _init_session registers _sessions[sid] BEFORE its first db read; left in place the fast path
             # would serve that dead session forever.

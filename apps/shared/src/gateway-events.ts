@@ -12,7 +12,7 @@
  * This module adds only what the wire does not carry: the client-local synthetic events the TUI
  * transport publishes into the same handler stream, and the `GatewayEvent` envelope.
  */
-import type { BackendGatewayEventMap } from './gateway-contract.generated.js'
+import type { BackendGatewayEventMap, ConversationActivityCoordinates } from './gateway-contract.generated.js'
 
 export * from './gateway-contract.generated.js'
 
@@ -34,6 +34,8 @@ export type GatewayEventName = keyof GatewayEventMap
 
 /** One `event` notification's `params`. */
 export interface GatewayEvent<K extends GatewayEventName = GatewayEventName> {
+  /** Original public conversation turn, retained by asynchronous child callbacks. */
+  conversation?: ConversationActivityCoordinates
   /** Registry connection whose socket delivered the event (renderer-side tag;
    * absent for the local/legacy primary path). */
   connectionId?: string

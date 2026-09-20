@@ -23,6 +23,9 @@ def _deferred_build_agent_kwargs(current: dict, session_db) -> dict:
     # Managed model params from session.create or resume
     if managed := current.get("managed_model_params"):
         kw["managed_model_params"] = managed
+        resume = current.get("resume_runtime_overrides") or {}
+        kw.update({key: resume[key] for key in ("reasoning_config_override", "service_tier_override")
+                   if key in resume})
         kw.update({k: v for k, v in (("reasoning_config_override", current.get("create_reasoning_override")),
                                     ("service_tier_override", current.get("create_service_tier_override")))
                    if v is not None})
@@ -126,7 +129,12 @@ def _stored_session_runtime_overrides(row: dict | None) -> dict:
     model_config = _parse_model_config(row.get("model_config"), quiet=True)
     from .managed_session import managed_metadata
     if managed := managed_metadata(model_config):
-        return {"managed_model_params": managed}
+        overrides = {"managed_model_params": managed}
+        if isinstance(model_config.get("reasoning_config"), dict):
+            overrides["reasoning_config_override"] = model_config["reasoning_config"]
+        if tier := model_config.get("service_tier"):
+            overrides["service_tier_override"] = "" if tier == "normal" else tier
+        return overrides
     _row_title = str(row.get("title") or "").strip()
     if (model_config.get("room_plumbing") or (row.get("hidden") and _row_title.startswith("Group:"))
             or model_config.get("follow_profile_config") or _row_title == "Bot Chat"):
@@ -179,9 +187,11 @@ def _runtime_model_config(agent, existing: dict | None = None) -> dict:
     from .managed_session import managed_metadata
     if managed := managed_metadata(getattr(agent, "_managed_model_metadata", None)):
         return {**{k: v for k, v in config.items() if k in (
-            "_branched_from", "_delegate_from", "room_plumbing", "follow_profile_config",
+            "_branched_from", "_delegate_from", "room_plumbing", "follow_profile_config", "conversation_binding",
             "max_iterations", "reasoning_config", "max_tokens", "yolo_mode", "service_tier")},
-            **managed, "provider": "aino"}
+            **managed, "provider": "aino",
+            **({"reasoning_config": agent.reasoning_config} if hasattr(agent, "reasoning_config") else {}),
+            **({"service_tier": agent.service_tier or "normal"} if hasattr(agent, "service_tier") else {})}
     for key in ("model_source", "platform_owner", "model_id"):
         config.pop(key, None)
     attr = lambda k: str(getattr(agent, k, "") or "").strip()

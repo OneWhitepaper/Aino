@@ -212,6 +212,18 @@ def _maybe_fire_tui_heartbeat_tick(sid: str, session: dict) -> None:
     if not (sid_key := session.get("session_key") or ""):
         return
     mgr = HeartbeatManager(session_id=sid_key)
+    if session.get("_conversation_binding"):
+        if mgr.is_active() and mgr.state.is_due():
+            from tui_gateway.conversation_notifications import route_conversation_notification
+            prompt = mgr.due_prompt()
+            if prompt:
+                try:
+                    route_conversation_notification(sid, session, {"type": "heartbeat",
+                        "event_id": f"heartbeat:{sid_key}:{mgr.state.created_at}:{mgr.state.fire_count}"}, prompt)
+                except Exception:
+                    mgr.abandon_fire()
+                    raise
+        return
     if not mgr.is_active() or not mgr.state.is_due() or not _notif_claim_turn(session):
         return  # not due, or busy — the tick coalesces to the next idle poll
     if not (prompt := mgr.due_prompt()):
@@ -240,6 +252,28 @@ def _maybe_fire_tui_loop_tick(sid: str, session: dict) -> None:
     if not (sid_key := session.get("session_key") or ""):
         return
     mgr = LoopManager(session_id=sid_key)
+    if session.get("_conversation_binding"):
+        if mgr.is_due() and not goal_blocks_loop_tick(sid_key):
+            from tui_gateway.conversation_notifications import route_conversation_notification
+            wakeup = mgr.fire_tick()
+            if wakeup:
+                try:
+                    event = {"type": "loop", "event_id": f"loop:{sid_key}:{mgr.state.created_at}:{mgr.state.ticks_fired}"}
+                    if wakeup.lstrip().startswith("/"):
+                        parts = wakeup.lstrip()[1:].split(None, 1)
+                        response = _methods["command.dispatch"]("__conversation_loop__", {
+                            "name": parts[0], "arg": parts[1] if len(parts) > 1 else "", "session_id": sid})
+                        payload = (response or {}).get("result") or {}
+                        if payload.get("type") == "send" and payload.get("message"):
+                            route_conversation_notification(sid, session, event, payload["message"])
+                        else:
+                            mgr.complete_tick("")
+                    else:
+                        route_conversation_notification(sid, session, event, wakeup)
+                except Exception:
+                    mgr.abandon_tick()
+                    raise
+        return
     if not mgr.is_due() or goal_blocks_loop_tick(sid_key) or not _notif_claim_turn(session):
         return  # busy — stays due, next poll retries
     if not (wakeup := mgr.fire_tick()):
@@ -312,7 +346,7 @@ def _kb_board_key(_kb, board_meta) -> tuple[str, str]:
         return slug, f"slug:{slug}"
 
 
-def _kb_poll_board(_kb, slug: str, session_key: str) -> list:
+def _kb_poll_board(_kb, slug: str, session_key: str, managed_session=None) -> list:
     """Claim + format this session's unseen events on one board. One poller per live session: the board is not opened
     writable unless it has a subscription owned by this exact session (a failed read-only probe — locked/corrupt DB —
     falls through so delivery is preserved)."""
@@ -336,6 +370,27 @@ def _kb_poll_board(_kb, slug: str, session_key: str) -> list:
                 continue
             sub_ident = dict(task_id=sub["task_id"], platform=sub["platform"], chat_id=sub["chat_id"],
                              thread_id=sub.get("thread_id") or "")
+            if managed_session is not None:
+                # Persist into the shared conversation queue before consuming the board cursor.
+                # A crash between databases repeats the same event ID and is harmless.
+                from tui_gateway.conversation_notifications import route_conversation_notification, update_conversation_resource_state
+                _old = _kbn._notify_cursor(conn, **sub_ident)
+                _new, events = _kbn.unseen_events_for_sub(conn, kinds=_KANBAN_NOTIFY_KINDS, **sub_ident)
+                task = _kb.get_task(conn, sub["task_id"])
+                for ev in events:
+                    if text := _format_kanban_event_text(sub, task, ev, slug):
+                        event_id = f"kanban:{_kb.kanban_db_path(slug).resolve()}:{sub['task_id']}:{ev.id}"
+                        route_conversation_notification("", managed_session,
+                            {"type": "kanban", "event_id": event_id,
+                             "origin_id": f"kanban:{_kb.kanban_db_path(slug).resolve()}:{sub['task_id']}",
+                             "terminal": getattr(task, "status", "") in ("done", "archived")}, text)
+                if events:
+                    update_conversation_resource_state(managed_session,
+                        f"kanban:{_kb.kanban_db_path(slug).resolve()}:{sub['task_id']}",
+                        pending=getattr(task, "status", "") not in ("done", "archived"))
+                    with _kb.write_txn(conn):
+                        _kbn._cas_cursor(conn, _kbn._sub_key(**sub_ident), _new, _old)
+                continue
             _old, _new, events = _kbn.claim_unseen_events_for_sub(conn, kinds=_KANBAN_NOTIFY_KINDS, **sub_ident)
             if not events:
                 continue
@@ -374,6 +429,8 @@ def _collect_kanban_notifications(session: dict) -> list:
     unique = {}
     for slug, resolved in (_kb_board_key(_kb, board_meta) for board_meta in boards):
         unique.setdefault(resolved, slug)
+    if session.get("_conversation_binding"):
+        return [t for slug in unique.values() for t in _kb_poll_board(_kb, slug, session_key, session)]
     return [t for slug in unique.values() for t in _kb_poll_board(_kb, slug, session_key)]
 
 
@@ -398,7 +455,11 @@ def _notif_poll_kanban(sid: str, session: dict) -> None:
 
 
 def _notif_dispatch_event(sid: str, session: dict, evt: dict, text: str) -> None:
-    """Run the claimed (running=True) agent turn for one notification event."""
+    """Run an ordinary claimed turn, or durably admit a managed notification."""
+    if session.get("_conversation_binding"):
+        from tui_gateway.conversation_notifications import route_conversation_notification
+        route_conversation_notification(sid, session, evt, text)
+        return
     from tools.async_delegation import claim_event_delivery, complete_event_delivery, release_event_delivery
     if (claim := claim_event_delivery(evt, "tui-poller")) is None:
         return
@@ -452,6 +513,16 @@ def _notif_handle_event(sid, session, evt, emitted, registry, fmt, deferred, com
                         else process_completion_display_text([evt]) if evt_type == "completion" else text)
         _emit("status.update", sid, {"kind": "process", "text": display_text})
         emitted.add(dedup_key)
+    if session.get("_conversation_binding"):
+        from tui_gateway.conversation_notifications import route_conversation_notification
+        try:
+            route_conversation_notification(sid, session, evt, text)
+        except Exception as exc:
+            _notif_log_failure("conversation notification admission failed", exc)
+            (deferred.append if deferred is not None else queue.put)(evt)
+            if deferred is None:
+                time.sleep(0.25)
+        return True
     if evt_type == "completion" and completions is not None:
         completions.append((evt, text))
         return True
@@ -470,6 +541,14 @@ def _notif_dispatch_completions(sid, session, notifications, registry, deferred)
     from tools.async_delegation import claim_event_delivery, complete_event_delivery, release_event_delivery
 
     if not notifications:
+        return
+    if session.get("_conversation_binding"):
+        from tui_gateway.conversation_notifications import route_conversation_notification
+        for event, text in notifications:
+            try:
+                route_conversation_notification(sid, session, event, text)
+            except Exception:
+                (deferred.append if deferred is not None else registry.completion_queue.put)(event)
         return
     if not _notif_claim_turn(session):
         for event, _text in notifications:

@@ -478,9 +478,10 @@ def resolve_slash_key(command: str, table: Dict[str, Any]) -> Optional[str]:
 
 def build_skill_invocation_message(
     cmd_key: str, user_instruction: str = "", task_id: str | None = None, runtime_note: str = "",
+    *, skill_info: Dict[str, Any] | None = None,
 ) -> Optional[str]:
     """Build the user message for a skill slash command, or None if not found."""
-    skill_info = get_skill_commands().get(cmd_key)
+    skill_info = skill_info if skill_info is not None else get_skill_commands().get(cmd_key)
     loaded = _load_skill_payload(skill_info["skill_dir"], task_id=task_id) if skill_info else None
     if not loaded:
         return None

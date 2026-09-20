@@ -75,9 +75,9 @@ def _profile_build_scope(profile_home):
     return _session_profile_runtime_scope({"profile_home": str(profile_home) if profile_home else None})
 
 
-def _make_agent_in_context(sid: str, key: str, **kwargs):
+def _make_agent_in_context(sid: str, key: str, *, context_cwd: str | None = None, **kwargs):
     """``_make_agent`` with the session context bound for the build and cleared after."""
-    tokens = _set_session_context(key)
+    tokens = _set_session_context(key, **({"cwd": context_cwd} if context_cwd else {}))
     try:
         return _make_agent(sid, key, session_id=key, **kwargs)
     finally:
@@ -1610,7 +1610,7 @@ def _(rid, params: dict) -> dict:
     if (err := _sess_nowait(params, rid)[1]) is not None:
         return err
     owner_id = _str_param(params, "session_id")
-    transport, owner = _current_session_steer_authority(owner_id)
+    transport, owner = _current_subagent_write_authority(owner_id)
     queued = transport is not None and owner is not None and steer_subagent(
         subagent_id, text, owner_session_id=owner_id, owner_transport=transport, owner_session_record=owner)
     return _ok(rid, {"status": "queued" if queued else "rejected", "subagent_id": subagent_id, "text": text})

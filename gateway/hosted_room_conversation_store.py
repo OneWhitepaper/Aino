@@ -10,6 +10,8 @@ from pathlib import Path
 from typing import Any
 
 from gateway import hosted_rooms
+from gateway.hosted_room_conversation_admission import ConversationAdmissionMixin
+from gateway.hosted_room_conversation_owners import initialize_owner_schema, require_owner_locked
 from gateway.hosted_room_conversation_context_store import ConversationContextStoreMixin, initialize_context_schema
 from gateway.hosted_room_conversation_types import (
     Admission, ConversationRecord, EventPage, ParticipantBinding, ParticipantRef, ProjectRef, TurnSubmission)
@@ -140,10 +142,12 @@ def _record_from_rows(room: sqlite3.Row, metadata: sqlite3.Row, general: sqlite3
         conversation_id=str(room["room_id"]), title=str(room["name"]),
         general=_participant_from_row(general),
         project=ProjectRef(**project_data) if project_data is not None else None,
-        revision=int(room["revision"]), archived=metadata["archived_at"] is not None)
+        # Hosted metadata and event sequence advance independently; the public view covers both.
+        revision=int(room["revision"]) + int(room["next_seq"]) - 1,
+        archived=metadata["archived_at"] is not None)
 
 
-class ConversationStore(ConversationContextStoreMixin):
+class ConversationStore(ConversationAdmissionMixin, ConversationContextStoreMixin):
     """Persist ordinary conversation metadata beside the shared Hosted event log."""
 
     def __init__(self, db_path: Path) -> None:
@@ -151,10 +155,11 @@ class ConversationStore(ConversationContextStoreMixin):
         with hosted_rooms._transaction(self.db_path, immediate=True) as conn:
             _initialize_schema(conn)
             initialize_context_schema(conn)
+            initialize_owner_schema(conn)
 
     def create(
         self, conversation_id: str, title: str, general: ParticipantRef,
-        project: ProjectRef | None,
+        project: ProjectRef | None, *, owner_key: str | None = None,
     ) -> ConversationRecord:
         conversation_id = hosted_rooms._room_id(conversation_id)
         title = hosted_rooms._validate_room_name(title)
@@ -164,6 +169,10 @@ class ConversationStore(ConversationContextStoreMixin):
         authority_gateway_id = hosted_rooms.local_authority_gateway_id()
         now = hosted_rooms._now(None)
         with hosted_rooms._transaction(self.db_path, immediate=True) as conn:
+            existing = conn.execute("SELECT 1 FROM hosted_room_conversations WHERE conversation_id=?",
+                                    (conversation_id,)).fetchone()
+            if owner_key is not None and existing is not None:
+                require_owner_locked(conn, conversation_id, owner_key)
             hosted_rooms._create_room_locked(
                 conn, room_id=conversation_id, purpose=_PURPOSE, name=title,
                 normalized_members=[], members_json="[]",
@@ -197,6 +206,8 @@ class ConversationStore(ConversationContextStoreMixin):
                 ):
                     raise hosted_rooms.RoomConflictError(
                         "conversation_id already exists with different metadata")
+            if owner_key is not None and existing is None:
+                conn.execute("INSERT INTO hosted_conversation_owners VALUES (?,?)", (conversation_id, owner_key))
             return self._get_locked(conn, conversation_id)
 
     def _get_locked(self, conn: sqlite3.Connection, conversation_id: str) -> ConversationRecord:
@@ -220,12 +231,15 @@ class ConversationStore(ConversationContextStoreMixin):
             return self._get_locked(conn, conversation_id)
 
     def bind_participant(
-        self, conversation_id: str, participant: ParticipantRef,
+        self, conversation_id: str, participant: ParticipantRef, *, expected_revision: int | None = None,
     ) -> ParticipantBinding:
         conversation_id = hosted_rooms._room_id(conversation_id)
         participant = _participant(participant)
         with hosted_rooms._transaction(self.db_path, immediate=True) as conn:
             record = self._get_locked(conn, conversation_id)
+            if expected_revision is not None and (
+                    type(expected_revision) is not int or expected_revision != record.revision):
+                raise hosted_rooms.RoomConflictError("conversation changed while preparing the participant")
             if participant.is_general and participant.participant_id != record.general.participant_id:
                 raise hosted_rooms.RoomConflictError("conversation already has a general participant")
             row = conn.execute(
@@ -256,14 +270,18 @@ class ConversationStore(ConversationContextStoreMixin):
             return _binding_from_row(row)
 
     def append_input(self, conversation_id: str, submission: TurnSubmission) -> Admission:
+        with hosted_rooms._transaction(self.db_path, immediate=True) as conn:
+            return self._append_input_locked(conn, conversation_id, submission)
+
+    def _append_input_locked(self, conn, conversation_id: str, submission: TurnSubmission, *, command_resolution=None) -> Admission:
         conversation_id = hosted_rooms._room_id(conversation_id)
         if not isinstance(submission, TurnSubmission):
             raise hosted_rooms.HostedRoomError("submission must be a TurnSubmission")
         turn_id = hosted_rooms._event_id(submission.turn_id)
         input_id = hosted_rooms._event_id(submission.input_id)
         participant_id = hosted_rooms._actor_id(submission.participant_id, "participant_id")
-        if not isinstance(submission.text, str) or not submission.text.strip():
-            raise hosted_rooms.HostedRoomError("text must be a non-empty string")
+        if not isinstance(submission.text, str) or (not submission.text.strip() and not submission.attachment_ids):
+            raise hosted_rooms.HostedRoomError("a text string or attachments are required")
         if not isinstance(submission.attachment_ids, tuple) or len(submission.attachment_ids) > _MAX_ATTACHMENTS:
             raise hosted_rooms.HostedRoomError("attachment_ids must be a bounded tuple")
         attachment_ids = tuple(
@@ -272,65 +290,76 @@ class ConversationStore(ConversationContextStoreMixin):
             for item in submission.attachment_ids)
         attachment_ids_json = hosted_rooms._canonical_json(
             list(attachment_ids), label="attachment_ids", max_bytes=64 * 1024)
-        with hosted_rooms._transaction(self.db_path, immediate=True) as conn:
-            record = self._get_locked(conn, conversation_id)
-            if record.archived:
-                raise hosted_rooms.RoomConflictError("conversation is archived")
-            rows = conn.execute(
-                """SELECT * FROM hosted_room_conversation_inputs
-                   WHERE conversation_id=? AND (input_id=? OR turn_id=?)""",
-                (conversation_id, input_id, turn_id)).fetchall()
-            if rows:
-                row = rows[0]
-                immutable = (
-                    str(row["turn_id"]), str(row["input_id"]), str(row["participant_id"]),
-                    str(row["text"]), str(row["attachment_ids_json"]))
-                if immutable != (
-                    turn_id, input_id, participant_id, submission.text, attachment_ids_json):
-                    raise hosted_rooms.RoomConflictError(
-                        "input_id or turn_id already exists with different content or recipient")
-                return _admission_from_row(row, idempotent=True)
-            binding = conn.execute(
-                """SELECT * FROM hosted_room_conversation_participants
-                   WHERE conversation_id=? AND participant_id=?""",
-                (conversation_id, participant_id)).fetchone()
-            if binding is None:
-                raise hosted_rooms.RoomNotFoundError("conversation participant not found")
-            event_id = f"conversation-input:{hashlib.sha256(input_id.encode('utf-8')).hexdigest()}"
-            actor = {"kind": "user", "id": _AUTHOR_ID, "display_name": _AUTHOR_DISPLAY_NAME}
-            normalized_actor, actor_json = hosted_rooms._validate_actor(actor, kind="conversation.input")
-            payload = {
-                "turn_id": turn_id, "input_id": input_id, "text": submission.text,
-                "attachment_ids": list(attachment_ids), "target_participant_id": participant_id,
-                "target_display_name_at_time": str(binding["display_name"]),
-                "author_display_name_at_time": _AUTHOR_DISPLAY_NAME}
-            room = conn.execute(
-                "SELECT authority_gateway_id, authority_epoch FROM hosted_rooms WHERE room_id=?",
-                (conversation_id,)).fetchone()
-            if room is None:  # pragma: no cover - _get_locked already proves it
-                raise hosted_rooms.RoomNotFoundError("conversation not found")
-            event = hosted_rooms._append_event_locked(
-                conn, room_id=conversation_id, purpose=_PURPOSE, event_id=event_id,
-                kind="conversation.input", normalized_actor=normalized_actor, actor_json=actor_json,
-                payload_json=hosted_rooms._payload_json(payload),
-                authority_gateway_id=str(room["authority_gateway_id"]),
-                authority_epoch=int(room["authority_epoch"]), now=hosted_rooms._now(None))
-            conn.execute(
-                """INSERT INTO hosted_room_conversation_inputs(
-                       conversation_id, turn_id, input_id, event_id, participant_id, text,
-                       attachment_ids_json, author_id, author_display_name,
-                       target_display_name, seq
-                   ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                (conversation_id, turn_id, input_id, event_id, participant_id, submission.text,
-                 attachment_ids_json, _AUTHOR_ID, _AUTHOR_DISPLAY_NAME,
-                 str(binding["display_name"]), int(event["seq"])))
-            row = conn.execute(
-                """SELECT * FROM hosted_room_conversation_inputs
-                   WHERE conversation_id=? AND input_id=?""",
-                (conversation_id, input_id)).fetchone()
-            if row is None:  # pragma: no cover - guarded by the insert
-                raise RuntimeError("conversation input could not be reloaded")
-            return _admission_from_row(row, idempotent=False)
+        record = self._get_locked(conn, conversation_id)
+        if record.archived:
+            raise hosted_rooms.RoomConflictError("conversation is archived")
+        rows = conn.execute(
+            """SELECT * FROM hosted_room_conversation_inputs
+               WHERE conversation_id=? AND (input_id=? OR turn_id=?)""",
+            (conversation_id, input_id, turn_id)).fetchall()
+        if rows:
+            row = rows[0]
+            immutable = (
+                str(row["turn_id"]), str(row["input_id"]), str(row["participant_id"]),
+                str(row["text"]), str(row["attachment_ids_json"]))
+            if immutable != (
+                turn_id, input_id, participant_id, submission.text, attachment_ids_json):
+                raise hosted_rooms.RoomConflictError(
+                    "input_id or turn_id already exists with different content or recipient")
+            from .hosted_room_conversation_commands import validate_command_replay_locked
+            validate_command_replay_locked(conn, conversation_id, input_id, command_resolution)
+            return _admission_from_row(row, idempotent=True)
+        binding = conn.execute(
+            """SELECT * FROM hosted_room_conversation_participants
+               WHERE conversation_id=? AND participant_id=?""",
+            (conversation_id, participant_id)).fetchone()
+        if binding is None:
+            raise hosted_rooms.RoomNotFoundError("conversation participant not found")
+        event_id = f"conversation-input:{hashlib.sha256(input_id.encode('utf-8')).hexdigest()}"
+        actor = {"kind": "user", "id": _AUTHOR_ID, "display_name": _AUTHOR_DISPLAY_NAME}
+        normalized_actor, actor_json = hosted_rooms._validate_actor(actor, kind="conversation.input")
+        payload = {
+            "turn_id": turn_id, "input_id": input_id, "text": submission.text,
+            "attachment_ids": list(attachment_ids), "target_participant_id": participant_id,
+            "target_display_name_at_time": str(binding["display_name"]),
+            "author_display_name_at_time": _AUTHOR_DISPLAY_NAME}
+        if attachment_ids and conn.execute("SELECT 1 FROM sqlite_master WHERE name='hosted_conversation_attachments'").fetchone():
+            payload['attachments'] = []
+            for item in attachment_ids:
+                row = conn.execute('''SELECT a.filename, c.id, c.sha256, c.size_bytes, c.mime_type
+                    FROM hosted_conversation_attachments a JOIN hosted_conversation_content c ON c.id=a.content_id
+                    WHERE a.conversation_id=? AND a.attachment_id=?''', (conversation_id, item)).fetchone()
+                if row is None:
+                    raise hosted_rooms.HostedRoomError('attachment does not belong to this conversation')
+                payload['attachments'].append({'id': item, 'filename': row['filename'], 'content_ref': {
+                    key: row[key] for key in ('id', 'sha256', 'size_bytes', 'mime_type')}})
+        room = conn.execute(
+            "SELECT authority_gateway_id, authority_epoch FROM hosted_rooms WHERE room_id=?",
+            (conversation_id,)).fetchone()
+        if room is None:  # pragma: no cover - _get_locked already proves it
+            raise hosted_rooms.RoomNotFoundError("conversation not found")
+        event = hosted_rooms._append_event_locked(
+            conn, room_id=conversation_id, purpose=_PURPOSE, event_id=event_id,
+            kind="conversation.input", normalized_actor=normalized_actor, actor_json=actor_json,
+            payload_json=hosted_rooms._payload_json(payload),
+            authority_gateway_id=str(room["authority_gateway_id"]),
+            authority_epoch=int(room["authority_epoch"]), now=hosted_rooms._now(None))
+        conn.execute(
+            """INSERT INTO hosted_room_conversation_inputs(
+                   conversation_id, turn_id, input_id, event_id, participant_id, text,
+                   attachment_ids_json, author_id, author_display_name,
+                   target_display_name, seq
+               ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (conversation_id, turn_id, input_id, event_id, participant_id, submission.text,
+             attachment_ids_json, _AUTHOR_ID, _AUTHOR_DISPLAY_NAME,
+             str(binding["display_name"]), int(event["seq"])))
+        row = conn.execute(
+            """SELECT * FROM hosted_room_conversation_inputs
+               WHERE conversation_id=? AND input_id=?""",
+            (conversation_id, input_id)).fetchone()
+        if row is None:  # pragma: no cover - guarded by the insert
+            raise RuntimeError("conversation input could not be reloaded")
+        return _admission_from_row(row, idempotent=False)
 
     def events(
         self, conversation_id: str, after_seq: int = 0, limit: int = 100,

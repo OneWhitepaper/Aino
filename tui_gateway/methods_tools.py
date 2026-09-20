@@ -303,7 +303,10 @@ def _(rid, params: dict) -> dict:
         reload can't tear the registry down mid-refresh."""
         with _sessions_lock:
             live = [(sid, sess) for sid, sess in _sessions.items() if sess.get("agent") is not None]
+        from .session_conversation_binding import conversation_metadata
         for sid, sess in live:
+            if conversation_metadata(sess):
+                continue  # A conversation's tool schema belongs to its generation, including coalesced reloads.
             agent = sess["agent"]
             try:  # enabled_override re-resolves toolsets so a server enabled in config this session is picked up
                 with _session_profile_runtime_scope(sess):
@@ -825,6 +828,8 @@ def _(rid, params: dict) -> dict:
     name, arg = _resolve_name(params.get("name", "").lstrip("/")), params.get("arg", "")
     session = _sessions.get(params.get("session_id", ""))
 
+    if session and session.get("_conversation_binding"):
+        return _err(rid, 4120, "Send commands through the conversation or explicitly refresh its participant")
     # Stage order is load-bearing: quick > plugin > bundle > skill > built-in.
     stages = (_dispatch_quick, _dispatch_plugin, _dispatch_bundle, _dispatch_skill, _SLASH_BUILTINS.get(name))
     for stage in filter(None, stages):
@@ -850,6 +855,19 @@ def _(rid, params: dict) -> dict:
     base = (parts[0] if parts else "").lower()
     arg = parts[1] if len(parts) > 1 else ""
     sid = params.get("session_id", "")
+    if session.get("_conversation_binding"):
+        from tui_gateway.conversation_commands import read_command_output
+        from tui_gateway.conversation_authority import require_conversation_owner
+        from gateway.hosted_room_conversation_owners import ConversationOwnershipError
+        try:
+            require_conversation_owner(sys.modules[__name__], _conversation_db_path,
+                                       session["_conversation_binding"]["conversation_id"])
+        except ConversationOwnershipError as exc:
+            return _err(rid, 4120, str(exc))
+        output = read_command_output(sys.modules[__name__], sid, session, base, arg)
+        if output is not None:
+            return _ok(rid, {"output": output or "(no output)"})
+        return _err(rid, 4120, "Send commands through the conversation or explicitly refresh its participant")
     live_output = _live_slash_command_output(sid, session, base, arg)
     if live_output is not None:
         return _ok(rid, {"output": live_output or "(no output)"})
@@ -1029,6 +1047,8 @@ def _(rid, params: dict) -> dict:
 
 
 def _configure_session_tools(rid, params: dict, sid: str, session) -> dict:
+    if session and session.get("_conversation_binding"):
+        return _err(rid, 4120, "Explicitly refresh the conversation participant to change its tool configuration")
     action = str(params.get("action", "") or "").strip().lower()
     targets = [str(name).strip() for name in params.get("names", []) or [] if str(name).strip()]
     if action not in {"disable", "enable"}:

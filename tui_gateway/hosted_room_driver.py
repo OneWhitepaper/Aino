@@ -199,7 +199,8 @@ class HostedRoomRuntime:
                 "last_error": self._last_error, "cycles": self._cycles}
 
     # ------------------------------------------------------------------ public ops
-    def cancel(self, identity: state.TaskIdentity, *, cancel_id: str) -> dict[str, Any]:
+    def cancel(self, identity: state.TaskIdentity, *, cancel_id: str,
+               expected_execution_generation: int | None = None) -> dict[str, Any]:
         """Persist a stop intent, then commit cancellation after acknowledgement.
 
         The worker transitions tasks concurrently, so the status read is only a routing
@@ -207,6 +208,8 @@ class HostedRoomRuntime:
         """
         for _ in range(_CANCEL_ROUTE_RETRIES):
             before = state.get_task(self.db_path, identity)
+            if expected_execution_generation is not None and before["execution_generation"] != expected_execution_generation:
+                raise state.StaleTaskError("execution generation changed before cancellation")
             if before["status"] == "cancelled":
                 return before
             if before["status"] in state.TERMINAL_STATUSES:
@@ -216,7 +219,9 @@ class HostedRoomRuntime:
             try:
                 result = (state.cancel_task if direct else state.begin_task_cancel)(
                     self.db_path, identity, cancel_id=cancel_id,
-                    expected_cancel_generation=before["cancel_generation"], clock=self.clock)
+                    expected_cancel_generation=before["cancel_generation"], clock=self.clock,
+                    **({"expected_execution_generation": expected_execution_generation}
+                       if expected_execution_generation is not None else {}))
             except (state.InvalidTaskTransitionError, state.StaleTaskError):
                 continue  # lost the race with the worker (settled or re-queued); re-route
             if not direct:
@@ -519,6 +524,14 @@ class HostedRoomRuntime:
             if self._stop.is_set() or (
                     retry is not None and self.clock() < retry["next_attempt_at"]):
                 return
+            check_available = getattr(self._transport_for(binding, task), "check_available", None)
+            if callable(check_available):
+                try:
+                    check_available()
+                except Exception as exc:
+                    self._defer_unavailable_route(task)
+                    self._record_error(f"participant unavailable before task admission: {exc}")
+                    return
             lease = self._renew_lease_if_needed(lease)
             attempt = state.start_task(
                 self.db_path, task["identity"], lease,
@@ -590,11 +603,15 @@ class HostedRoomRuntime:
                 # exception at that boundary is ambiguous, never a proven failure.
                 submit_attempted, session_id = True, _session_id(session)
                 deadline_monotonic = time.monotonic() + self.turn_timeout_seconds
-                transport.submit(
-                    **_session_kw(profile, session_id), prompt=task["payload"]["prompt"],
-                    task=attempt.identity, execution_generation=attempt.execution_generation,
-                    on_terminal=lambda receipt: self._on_terminal(binding, attempt, receipt),
-                    member_id=_member_id(task))
+                terminal_callback = lambda receipt: self._on_terminal(binding, attempt, receipt)
+                submit_attempt = getattr(transport, "submit_attempt", None)
+                if callable(submit_attempt):
+                    submit_attempt(attempt=attempt, prompt=task["payload"]["prompt"], on_terminal=terminal_callback)
+                else:
+                    transport.submit(
+                        **_session_kw(profile, session_id), prompt=task["payload"]["prompt"],
+                        task=attempt.identity, execution_generation=attempt.execution_generation,
+                        on_terminal=terminal_callback, member_id=_member_id(task))
                 self._unavailable_route_retries.pop(
                     (task["identity"].room_id, _member_id(task)), None)
                 receipt = self._wait_for_terminal(
@@ -640,6 +657,10 @@ class HostedRoomRuntime:
     ) -> None:
         """Durably commit one in-process terminal receipt for ``attempt``."""
         status = receipt.get("status")
+        if status == "reconciliation_required":
+            self._mark_ambiguous(binding, attempt)
+            self.wakeup()
+            return
         if status == "cancelled":
             self.wakeup()
             return
@@ -648,6 +669,13 @@ class HostedRoomRuntime:
             settlement_id=receipt.get("settlement_id")
             or f"reply:{attempt.identity.task_id}:{attempt.execution_generation}",
             result=_bounded_terminal_result(receipt))
+        if "content_ref" in receipt:
+            from gateway import hosted_rooms
+            from gateway.hosted_room_conversation_content import ConversationContentStore
+            hosted_rooms.room_state(self.db_path, room_id=binding.room_id, purpose="conversation")
+            reference = ConversationContentStore(self.db_path).validate_reference(
+                binding.room_id, receipt["content_ref"], text=True)
+            terminal.result["content_ref"] = asdict(reference)
         try:
             self._publish(
                 binding,
@@ -676,6 +704,8 @@ class HostedRoomRuntime:
     ) -> _TerminalReceipt | None:
         lease = attempt.lease
         while not self._stop.is_set():
+            if binding.room_id in self._ambiguous_rooms:
+                return None
             task = state.get_task(self.db_path, attempt.identity)
             if task["status"] in state.TERMINAL_STATUSES:
                 return None
@@ -938,7 +968,7 @@ def _bounded_terminal_result(receipt: Mapping[str, Any]) -> dict[str, Any]:
     return {
         "message_id": receipt.get("message_id"), "text": text,
         **({"error": error} if error else {}),
-        **({"truncated": True} if truncated or error_truncated else {})}
+        **({"truncated": True} if truncated or error_truncated or receipt.get("truncated") else {})}
 
 
 def _find_terminal_receipt(

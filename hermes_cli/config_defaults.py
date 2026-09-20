@@ -926,6 +926,18 @@ DEFAULT_CONFIG = {
         },
     },
 
+    "conversations": {
+        # Enable ordinary multi-agent conversations after testing this gateway.
+        # Disabling creation preserves existing conversation history and running work.
+        "enabled": False,
+        "storage": {
+            "max_total_bytes": 1024**3,
+            "max_conversation_bytes": 256 * 1024**2,
+            "max_content_bytes": 16 * 1024**2,
+            "min_free_disk_bytes": 16 * 1024**2,
+        },
+    },
+
     "dashboard": {
         # Visual theme: "default" | "midnight" | "ember" | "mono" | "cyberpunk" | "rose"
         "theme": "default",

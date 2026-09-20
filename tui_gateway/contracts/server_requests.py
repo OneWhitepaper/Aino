@@ -10,6 +10,7 @@ from __future__ import annotations
 from pydantic import Field
 
 from .base import JsonValue, Params, Payload, Result, WireEnum
+from .conversation_activity import ConversationActivityCoordinates
 from .registry import event, server_request
 
 
@@ -17,6 +18,7 @@ class ServerRequestParams(Params):
     """Every request frame's params start with the session the question belongs to."""
 
     session_id: str
+    conversation: ConversationActivityCoordinates | None = None
 
 
 class ValueResult(Result):

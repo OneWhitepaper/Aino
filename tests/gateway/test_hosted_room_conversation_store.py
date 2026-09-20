@@ -22,6 +22,23 @@ def identities(monkeypatch):
     )
 
 
+def test_preparing_participant_does_not_overwrite_a_concurrent_conversation_revision(tmp_path, identities):
+    general, writer = identities
+    store = ConversationStore(tmp_path / 'shared-state.db')
+    created = store.create('c1', 'Novel', general, None)
+    other_window = ConversationStore(store.db_path)
+    other_window.append_input('c1', TurnSubmission('another-turn', 'another-input', general.participant_id, 'New request'))
+    with pytest.raises(hosted_rooms.RoomConflictError):
+        store.bind_participant('c1', writer, expected_revision=created.revision)
+    assert [row.participant for row in store.participants('c1')] == [general]
+    revision = store.get('c1').revision
+    store.bind_participant('c1', writer, expected_revision=revision)
+    assert store.get('c1').revision == revision + 1
+    # Even an idempotent bind cannot disguise the caller's stale public view.
+    with pytest.raises(hosted_rooms.RoomConflictError):
+        store.bind_participant('c1', writer, expected_revision=revision)
+
+
 def test_input_retry_is_immutable_and_preserves_public_authorship(tmp_path, identities):
     db = tmp_path / "shared-state.db"
     general, writer = identities

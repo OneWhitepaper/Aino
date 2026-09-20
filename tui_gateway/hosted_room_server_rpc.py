@@ -83,6 +83,23 @@ class HostedRoomServerRPC:
             exc.not_admitted = True
             raise
 
+    def submit_conversation(self, *, runtime, attempt: state.TaskAttempt, prompt: str, image_paths=(),
+                            on_terminal: Callable[[Mapping[str, Any]], None]) -> Mapping[str, Any]:
+        from .session_conversation_binding import issue_conversation_submission
+        task = attempt.identity
+        try:
+            with issue_conversation_submission(self.server, runtime, attempt=attempt, image_paths=image_paths) as proof:
+                return self._call("prompt.submit", {
+                    "profile": runtime.profile, "session_id": runtime.runtime_id,
+                    "text": prompt, "source": runtime.source, "_conversation_proof": proof,
+                    "_hosted_task": {
+                        "room_id": task.room_id, "task_id": task.task_id, "thread_id": task.thread_id,
+                        "turn_id": task.turn_id, "execution_generation": attempt.execution_generation,
+                        "member_id": runtime.participant_id}, "_hosted_terminal_callback": on_terminal})
+        except HostedRoomSessionError as exc:
+            exc.not_admitted = True
+            raise
+
     def history(self, *, profile: str, session_id: str, source: str) -> Sequence[Mapping[str, Any]]:
         del source
         result = self._call("session.history", {"profile": profile, "session_id": session_id})

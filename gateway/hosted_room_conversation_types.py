@@ -3,7 +3,11 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from gateway.hosted_room_driver import TaskIdentity
+    from gateway.hosted_room_conversation_context import TurnEnvelope
 
 
 @dataclass(frozen=True)
@@ -67,3 +71,11 @@ class EventPage:
     events: tuple[dict[str, Any], ...]
     cursor: int
     has_more: bool
+
+
+@dataclass(frozen=True)
+class ConversationTurnPlan:
+    identity: TaskIdentity
+    payload: dict[str, Any]
+    binding: ParticipantBinding
+    envelope: TurnEnvelope
