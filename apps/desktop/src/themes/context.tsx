@@ -316,7 +316,7 @@ if (typeof window !== 'undefined') {
 
   // Gatewayless presentation windows must not contend with the main/HUD
   // renderer for Electron's process-wide nativeTheme preference.
-  const auxiliaryWindow = ['overlay', 'quick', 'wake'].includes(
+  const auxiliaryWindow = ['overlay', 'quick', 'wake', 'intro'].includes(
     new URLSearchParams(window.location.search).get('win') ?? ''
   )
 
