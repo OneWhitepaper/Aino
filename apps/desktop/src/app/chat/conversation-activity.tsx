@@ -1,4 +1,7 @@
-import { useI18n } from '@/i18n'
+import { ToolEntrySurface } from '@/components/assistant-ui/tool/fallback'
+import { MarkdownTextContent } from '@/components/assistant-ui/markdown-text'
+import { AssistantMessageContent } from '@/components/assistant-ui/thread/assistant-message'
+import { conversationOwnerKey } from '@/store/conversation-owner'
 import type { ConversationOwner } from '@/store/conversation-owner'
 import type { ConversationRuntime } from '@/store/conversation-runtime'
 
@@ -15,8 +18,6 @@ interface ConversationActivityProps {
 }
 
 export function ConversationActivity({ runtime, participantName, respond, owner, refresh }: ConversationActivityProps) {
-  const { t } = useI18n()
-
   return (
     <div className="space-y-3">
       {Object.entries(runtime.activities).map(([key, activity]) => (
@@ -24,22 +25,53 @@ export function ConversationActivity({ runtime, participantName, respond, owner,
           {!activity.finalEventId && activity.text && (
             <div className="whitespace-pre-wrap">
               <strong>{participantName(activity.coordinates.participant_id)}</strong>
-              <p>{activity.text}</p>
+              <AssistantMessageContent>
+                <MarkdownTextContent text={activity.text} isRunning previewOnly disableArtifacts />
+              </AssistantMessageContent>
             </div>
           )}
           {activity.events
-            .filter(event => event.type === 'tool.start' || event.type === 'tool.complete')
-            .map((event, index) => {
-              const payload = event.payload as { name?: string; summary?: string; result_text?: string }
-
+            .filter((event, index, events) => {
+              if (event.type !== 'tool.start' && event.type !== 'tool.complete') return false
+              const id = (event.payload as { tool_id?: string }).tool_id
               return (
-                <details key={`${event.seq ?? index}:${event.type}`}>
-                  <summary>
-                    {participantName(activity.coordinates.participant_id)} · {payload?.name} ·{' '}
-                    {event.type === 'tool.start' ? t.desktop.activity.running : t.desktop.activity.completed}
-                  </summary>
-                  <pre className="whitespace-pre-wrap break-words">{payload?.summary || payload?.result_text}</pre>
-                </details>
+                !id ||
+                !events
+                  .slice(index + 1)
+                  .some(
+                    later => later.type === 'tool.complete' && (later.payload as { tool_id?: string }).tool_id === id
+                  )
+              )
+            })
+            .map((event, index) => {
+              const payload = event.payload as {
+                name?: string
+                tool_id?: string
+                summary?: string
+                result_text?: string
+                args?: unknown
+                is_error?: boolean
+              }
+              return (
+                <div
+                  key={`${event.seq ?? index}:${event.type}`}
+                  aria-label={`${participantName(activity.coordinates.participant_id)} · ${payload?.name}`}
+                >
+                  <ToolEntrySurface
+                    scoped
+                    messageId={`${conversationOwnerKey(owner)}:${key}:${event.seq ?? index}`}
+                    messageRunning={event.type === 'tool.start' && !activity.finalEventId}
+                    part={{
+                      type: 'tool-call',
+                      toolName: payload.name ?? 'tool',
+                      toolCallId: payload.tool_id,
+                      args: payload.args,
+                      result:
+                        event.type === 'tool.complete' ? (payload.result_text ?? payload.summary ?? '') : undefined,
+                      isError: payload.is_error
+                    }}
+                  />
+                </div>
               )
             })}
         </section>

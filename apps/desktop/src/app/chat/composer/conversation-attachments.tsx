@@ -1,10 +1,11 @@
+import { UrlDialog } from './url-dialog'
+import { useComposerUrlDialog } from './hooks/use-composer-url-dialog'
 import { useStore } from '@nanostores/react'
 import { computed } from 'nanostores'
 import { useEffect, useMemo, useRef } from 'react'
 
 import { Button } from '@/components/ui/button'
 import { useI18n } from '@/i18n'
-import { FileText, Loader2, Plus, X } from '@/lib/icons'
 import {
   $conversationAttachments,
   $conversationUploadErrors,
@@ -12,12 +13,25 @@ import {
   uploadConversationAttachment
 } from '@/store/conversation-attachments'
 import { type ConversationOwner, conversationOwnerKey } from '@/store/conversation-owner'
+import { AttachmentList } from './attachments'
+import { ContextMenu } from './context-menu'
 import { $conversationDrafts } from '@/store/conversations'
 
-export function ConversationAttachments({ owner, disabled }: { owner: ConversationOwner; disabled: boolean }) {
+export function ConversationAttachments({
+  owner,
+  disabled,
+  onInsertText,
+  presentation = 'all'
+}: {
+  owner: ConversationOwner
+  disabled: boolean
+  onInsertText?: (text: string) => void
+  presentation?: 'all' | 'controls' | 'list'
+}) {
   const { t } = useI18n()
   const key = conversationOwnerKey(owner)
   const input = useRef<HTMLInputElement>(null)
+  const url = useComposerUrlDialog({ insertText: text => onInsertText?.(text), onAddUrl: text => onInsertText?.(text) })
   const items = useStore(useMemo(() => computed($conversationAttachments, rows => rows[key]), [key]))
   const error = useStore(useMemo(() => computed($conversationUploadErrors, rows => rows[key]), [key]))
   const draft = useStore(useMemo(() => computed($conversationDrafts, rows => rows[key]), [key]))
@@ -30,70 +44,78 @@ export function ConversationAttachments({ owner, disabled }: { owner: Conversati
   }, [items, draft?.attachmentIds, owner])
 
   return (
-    <div className="space-y-2">
+    <div className="contents">
       {error && <p role="alert">{error}</p>}
-      <input
-        aria-label={t.composer.attach}
-        className="hidden"
-        disabled={disabled}
-        multiple
-        onChange={event => {
-          const files = Array.from(event.target.files ?? [])
-          event.target.value = ''
+      {presentation !== 'list' && (
+        <>
+          <input
+            aria-label={t.composer.attach}
+            className="hidden"
+            disabled={disabled}
+            multiple
+            onChange={event => {
+              const files = Array.from(event.target.files ?? [])
+              event.target.value = ''
 
-          for (const file of files) {
-            void uploadConversationAttachment(owner, file)
-          }
-        }}
-        ref={input}
-        type="file"
-      />
-      <Button
-        aria-label={t.composer.attach}
-        disabled={disabled}
-        onClick={() => input.current?.click()}
-        size="sm"
-        type="button"
-        variant="ghost"
-      >
-        <Plus />
-        {t.composer.attach}
-      </Button>
-      <div className="flex flex-wrap gap-2" data-slot="composer-attachments">
-        {(items ?? []).map(item => (
-          <div className="flex items-center gap-1 rounded-md border px-2 py-1 text-sm" key={item.localId}>
-            {item.status === 'uploading' ? (
-              <Loader2 className="size-3 animate-spin" />
-            ) : (
-              <FileText className="size-3" />
-            )}
-            <span>{item.attachment?.filename ?? item.file.name}</span>
-            {item.status === 'uploading' && <span role="status">{t.composer.conversation.uploading}</span>}
-            {item.status === 'error' && (
-              <>
+              for (const file of files) {
+                void uploadConversationAttachment(owner, file)
+              }
+            }}
+            ref={input}
+            type="file"
+          />
+          <ContextMenu
+            state={{
+              tools: { enabled: !disabled, label: t.composer.attach },
+              model: { model: '', provider: '', canSwitch: false },
+              voice: { active: false, enabled: false }
+            }}
+            onPickFiles={() => input.current?.click()}
+            onPickImages={() => input.current?.click()}
+            onInsertText={text => onInsertText?.(text)}
+            onOpenUrlDialog={url.openUrlDialog}
+            includeProviders={false}
+          />
+          <UrlDialog
+            open={url.urlOpen}
+            inputRef={url.urlInputRef}
+            onChange={url.setUrlValue}
+            onOpenChange={url.setUrlOpen}
+            onSubmit={url.submitUrl}
+            value={url.urlValue}
+          />
+        </>
+      )}
+      {presentation !== 'controls' && (
+        <>
+          <AttachmentList
+            attachments={(items ?? []).map(item => ({
+              id: item.localId,
+              kind: 'file',
+              label: item.attachment?.filename ?? item.file.name,
+              detail: item.error,
+              uploadState: item.status === 'ready' ? undefined : item.status
+            }))}
+            onPreview={null}
+            onRemove={id => removeConversationAttachment(owner, id)}
+          />
+          {(items ?? [])
+            .filter(item => item.status === 'error')
+            .map(item => (
+              <div key={item.localId}>
                 <span role="alert">{item.error}</span>
                 <Button
-                  onClick={() => void uploadConversationAttachment(owner, item.file, item.localId)}
                   size="sm"
-                  type="button"
                   variant="ghost"
+                  type="button"
+                  onClick={() => void uploadConversationAttachment(owner, item.file, item.localId)}
                 >
                   {t.composer.conversation.refresh}
                 </Button>
-              </>
-            )}
-            <Button
-              aria-label={t.composer.removeAttachment(item.file.name)}
-              onClick={() => removeConversationAttachment(owner, item.localId)}
-              size="icon-xs"
-              type="button"
-              variant="ghost"
-            >
-              <X />
-            </Button>
-          </div>
-        ))}
-      </div>
+              </div>
+            ))}
+        </>
+      )}
     </div>
   )
 }

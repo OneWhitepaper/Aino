@@ -1,3 +1,6 @@
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import { Codicon } from '@/components/ui/codicon'
+import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { useStore } from '@nanostores/react'
 import { computed } from 'nanostores'
 import { useMemo, useState } from 'react'
@@ -12,6 +15,7 @@ import { $conversationDrafts } from '@/store/conversations'
 import type { ParticipantOption } from './composer/expert-selection'
 
 interface ConversationConfigurationProps {
+  noticesOnly?: boolean
   owner: ConversationOwner
   participants: ParticipantOption[]
   onRefresh: (participantId: string, generation: number) => Promise<unknown>
@@ -22,7 +26,12 @@ interface RefreshSelection {
   generation: number
 }
 
-export function ConversationConfiguration({ owner, participants, onRefresh }: ConversationConfigurationProps) {
+export function ConversationConfiguration({
+  owner,
+  participants,
+  onRefresh,
+  noticesOnly = false
+}: ConversationConfigurationProps) {
   const { t } = useI18n()
   const copy = t.composer.conversation
   const key = conversationOwnerKey(owner)
@@ -60,15 +69,25 @@ export function ConversationConfiguration({ owner, participants, onRefresh }: Co
   }
 
   return (
-    <aside aria-label={copy.privateNotice} className="max-h-72 shrink-0 space-y-2 overflow-y-auto border-t px-4 py-2">
-      {notice && (
-        <section className="space-y-2 rounded-md border p-3" data-private-conversation-notice>
+    <>
+      {noticesOnly && notice && (
+        <aside
+          aria-label={copy.privateNotice}
+          className="mb-3 max-h-72 w-full overflow-y-auto rounded-2xl bg-(--ui-chat-surface-background) p-4 shadow-nous"
+          data-private-conversation-notice
+        >
           <div className="flex items-center justify-between gap-2">
             <strong>
               {copy.privateNotice} · {notice.displayName}
             </strong>
-            <Button onClick={() => dismissConversationPrivateNotice(owner)} size="sm" type="button" variant="ghost">
-              {t.common.close}
+            <Button
+              onClick={() => dismissConversationPrivateNotice(owner)}
+              size="icon-xs"
+              type="button"
+              variant="ghost"
+              aria-label={t.common.close}
+            >
+              <Codicon name="close" />
             </Button>
           </div>
           {notice.command && <code>{notice.command}</code>}
@@ -76,49 +95,40 @@ export function ConversationConfiguration({ owner, participants, onRefresh }: Co
             {notice.output}
           </pre>
           {notice.refreshRequired && (
-            <>
-              <p>{copy.refreshExplanation}</p>
-              <Button
-                disabled={blocked}
-                onClick={() => askRefresh(notice.participantId)}
-                type="button"
-                variant="outline"
-              >
-                {copy.refreshConfiguration}
-              </Button>
-            </>
+            <Button disabled={blocked} onClick={() => askRefresh(notice.participantId)} type="button" variant="ghost">
+              {copy.refreshConfiguration}
+            </Button>
           )}
-        </section>
+        </aside>
       )}
-      {confirmation ? (
-        <div aria-label={copy.refreshConfiguration} className="space-y-2" role="group">
-          <strong>{confirmation.displayName}</strong>
-          <p className="text-sm">{copy.refreshExplanation}</p>
-          <div className="flex gap-2">
-            <Button disabled={blocked} onClick={() => void applyRefresh()} type="button">
-              {t.common.apply}
+      {!noticesOnly && (
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button aria-label={copy.refreshConfiguration} size="icon-xs" type="button" variant="ghost">
+              <Codicon name="ellipsis" />
             </Button>
+          </PopoverTrigger>
+          <PopoverContent side="top" align="end">
             <Button
-              disabled={runtime?.submitting}
-              onClick={() => setConfirmation(null)}
+              disabled={blocked || !selected || Boolean(selected.unavailableReason)}
+              onClick={() => selected && askRefresh(selected.id)}
+              size="sm"
               type="button"
-              variant="outline"
+              variant="ghost"
             >
-              {t.common.cancel}
+              {copy.refreshConfiguration}
             </Button>
-          </div>
-        </div>
-      ) : (
-        <Button
-          disabled={blocked || !selected || Boolean(selected.unavailableReason)}
-          onClick={() => selected && askRefresh(selected.id)}
-          size="sm"
-          type="button"
-          variant="ghost"
-        >
-          {copy.refreshConfiguration}
-        </Button>
+          </PopoverContent>
+        </Popover>
       )}
-    </aside>
+      <ConfirmDialog
+        open={Boolean(confirmation)}
+        onClose={() => setConfirmation(null)}
+        title={confirmation?.displayName}
+        description={copy.refreshExplanation}
+        confirmLabel={t.common.apply}
+        onConfirm={applyRefresh}
+      />
+    </>
   )
 }

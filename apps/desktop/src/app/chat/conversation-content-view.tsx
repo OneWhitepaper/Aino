@@ -1,7 +1,8 @@
 import type { ConversationAttachment, ConversationContentRef, ConversationEvent } from '@hermes/shared/gateway-events'
 import { useEffect, useState } from 'react'
 
-import { CompactMarkdown } from '@/components/chat/compact-markdown'
+import { MarkdownTextContent } from '@/components/assistant-ui/markdown-text'
+import { UserMessageText } from '@/components/assistant-ui/thread/user-message-text'
 import { Button } from '@/components/ui/button'
 import { useI18n } from '@/i18n'
 import { type ConversationOwner, conversationOwnerKey } from '@/store/conversation-owner'
@@ -47,7 +48,7 @@ function ReferencedAnswer({ owner, reference }: { owner: ConversationOwner; refe
     return <p role="status">{t.composer.conversation.contentLoading}</p>
   }
 
-  return <CompactMarkdown text={text} />
+  return <MarkdownTextContent text={text} isRunning={false} previewOnly disableArtifacts />
 }
 
 function PublicAttachment({ owner, attachment }: { owner: ConversationOwner; attachment: ConversationAttachment }) {
@@ -109,7 +110,17 @@ export function ConversationContentView({ owner, event }: { owner: ConversationO
           <p role="alert">{t.composer.conversation.contentInvalid}</p>
         )
       ) : (
-        typeof payload.text === 'string' && <CompactMarkdown text={payload.text} />
+        typeof payload.text === 'string' &&
+        (event.kind === 'conversation.input' ? (
+          <UserMessageText text={payload.text} />
+        ) : (
+          <MarkdownTextContent
+            text={payload.text}
+            isRunning={payload.status === 'streaming'}
+            previewOnly
+            disableArtifacts
+          />
+        ))
       )}
       {attachments.length > 0 && (
         <div className="flex flex-wrap gap-2">

@@ -1,3 +1,12 @@
+import { Loader } from '@/components/ui/loader'
+import { Contribute } from '@/contrib/react/contribute'
+import { PaneTabLabel } from '@/components/ui/pane-tab'
+import { Intro } from '@/components/chat/intro'
+import { Backdrop } from '@/components/Backdrop'
+import { ThreadContent } from '@/components/assistant-ui/thread/list'
+import { HumanMessageContainer, USER_BUBBLE_BASE_CLASS } from '@/components/assistant-ui/thread/user-message'
+import { AssistantMessageContent } from '@/components/assistant-ui/thread/assistant-message'
+import { $conversationDrafts, setConversationDraft } from '@/store/conversations'
 import type { ConversationCatalogEntry } from '@hermes/shared/gateway-events'
 import { useStore } from '@nanostores/react'
 import { computed } from 'nanostores'
@@ -13,6 +22,7 @@ import type { ParticipantOption } from './composer/expert-selection'
 import { createConversationActions } from './conversation-actions'
 import { ConversationActivity } from './conversation-activity'
 import { ConversationConfiguration } from './conversation-configuration'
+import { ConversationProject } from './conversation-project'
 import { ConversationContentView } from './conversation-content-view'
 
 export interface ConversationViewProps {
@@ -114,20 +124,32 @@ export function ConversationView({ owner }: ConversationViewProps) {
     void action().catch(() => {})
   }
 
+  const home =
+    Boolean(runtime.snapshot) &&
+    !runtime.events.some(event => event.kind === 'conversation.input' || event.kind === 'conversation.response')
   return (
     <main
-      className="flex h-full min-h-0 flex-col bg-(--ui-chat-surface-background)"
+      className="relative isolate flex h-full min-h-0 min-w-0 flex-col overflow-hidden bg-(--ui-chat-surface-background)"
+      data-chat-surface=""
+      data-home-layout={home ? '' : undefined}
+      data-conversation-layout={!home ? '' : undefined}
       data-conversation-id={owner.conversationId}
     >
-      <header className="flex items-center justify-between border-b px-5 py-3">
-        <h1>{runtime.snapshot?.conversation.title ?? copy.title}</h1>
-        <Button onClick={() => run(actions.load)} variant="ghost">
-          {copy.refresh}
-        </Button>
-      </header>
+      {!home && runtime.snapshot && (
+        <Contribute area="titleBar.left" id={`conversation-header:${key}`} order={-100}>
+          <PaneTabLabel
+            className="normal-case text-sm tracking-normal"
+            overflowLabel={runtime.snapshot.conversation.title}
+          >
+            {runtime.snapshot.conversation.title}
+          </PaneTabLabel>
+        </Contribute>
+      )}
+      <Backdrop />
       <div
         aria-label={copy.history}
-        className="min-h-0 flex-1 space-y-5 overflow-y-auto px-5 py-4"
+        className="relative min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain"
+        data-slot="aui_thread-viewport"
         onScroll={event => {
           const element = event.currentTarget
           follow.current = element.scrollHeight - element.scrollTop - element.clientHeight < 80
@@ -135,84 +157,126 @@ export function ConversationView({ owner }: ConversationViewProps) {
         ref={scrollRef}
         role="log"
       >
-        {!runtime.snapshot && !runtime.error && <p role="status">{copy.loading}</p>}
-        {runtime.events
-          .filter(event => event.kind === 'conversation.input' || event.kind === 'conversation.response')
-          .map(event => {
-            const payload = event.payload
+        <ThreadContent className={home ? 'h-full' : 'pb-8'}>
+          {home && (
+            <Intro
+              home
+              onInsertPrompt={text => {
+                const draft = $conversationDrafts.get()[key]
+                if (draft) setConversationDraft(owner, { ...draft, text })
+              }}
+              onPickFiles={() => {
+                const root = scrollRef.current?.closest('main')
+                root?.querySelector<HTMLInputElement>('input[type="file"]')?.click()
+              }}
+            />
+          )}
+          {!runtime.snapshot && !runtime.error && <Loader label={copy.loading} />}
+          {runtime.events
+            .filter(event => event.kind === 'conversation.input' || event.kind === 'conversation.response')
+            .map(event => {
+              const payload = event.payload
 
-            const author =
-              typeof payload.author_display_name_at_time === 'string'
-                ? payload.author_display_name_at_time
-                : event.actor.display_name || event.actor.id
+              const author =
+                typeof payload.author_display_name_at_time === 'string'
+                  ? payload.author_display_name_at_time
+                  : event.actor.display_name || event.actor.id
 
-            const model = payload.model_snapshot as
-              { model?: string; provider?: string; model_source?: string } | null | undefined
+              const model = payload.model_snapshot as
+                { model?: string; provider?: string; model_source?: string } | null | undefined
 
-            const target =
-              typeof payload.target_display_name_at_time === 'string'
-                ? payload.target_display_name_at_time
-                : typeof payload.target_participant_id === 'string'
-                  ? name(payload.target_participant_id)
-                  : null
+              const target =
+                typeof payload.target_display_name_at_time === 'string'
+                  ? payload.target_display_name_at_time
+                  : typeof payload.target_participant_id === 'string'
+                    ? name(payload.target_participant_id)
+                    : null
 
-            return (
-              <article
-                className="space-y-1"
-                data-author-id={event.actor.id}
-                data-event-id={event.event_id}
-                key={event.event_id}
-              >
-                <div className="flex flex-wrap gap-2 text-sm">
-                  <strong title={event.actor.id}>{author}</strong>
-                  {target && <span>→ {target}</span>}
-                  {event.kind === 'conversation.response' && (
-                    <span className="text-(--ui-text-tertiary)">
-                      {model?.model
-                        ? [model.model, model.provider, model.model_source].filter(Boolean).join(' · ')
-                        : copy.modelUnavailable}
-                    </span>
+              return (
+                <article
+                  className="pb-(--conversation-turn-gap)"
+                  data-author-id={event.actor.id}
+                  data-event-id={event.event_id}
+                  key={event.event_id}
+                >
+                  <div className="flex flex-wrap gap-2 text-sm">
+                    <strong title={event.actor.id}>{author}</strong>
+                    {target && <span>→ {target}</span>}
+                    {event.kind === 'conversation.response' && (
+                      <span className="text-(--ui-text-tertiary)">
+                        {model?.model
+                          ? [model.model, model.provider, model.model_source].filter(Boolean).join(' · ')
+                          : copy.modelUnavailable}
+                      </span>
+                    )}
+                  </div>
+                  {event.kind === 'conversation.input' ? (
+                    <HumanMessageContainer messageId={event.event_id}>
+                      <div className={USER_BUBBLE_BASE_CLASS}>
+                        <ConversationContentView event={event} owner={owner} />
+                      </div>
+                    </HumanMessageContainer>
+                  ) : (
+                    <AssistantMessageContent>
+                      <ConversationContentView event={event} owner={owner} />
+                    </AssistantMessageContent>
                   )}
-                </div>
-                <ConversationContentView event={event} owner={owner} />
-                {typeof payload.status === 'string' && payload.status !== 'settled' && (
-                  <p className="text-xs">{payload.status}</p>
-                )}
-                {typeof payload.error === 'string' && <p role="alert">{payload.error}</p>}
-              </article>
-            )
-          })}
-        <ConversationActivity
-          owner={owner}
-          participantName={name}
-          refresh={actions.load}
-          respond={actions.respond}
-          runtime={runtime}
-        />
-        {active && (
-          <div className="flex items-center gap-3" role="status">
-            <span title={active.runtime_id ?? undefined}>
-              {name(active.participant_id)} · {active.status} · {copy.generation} {active.session_generation}
-            </span>
-            <Button
-              disabled={active.status === 'stopping'}
-              onClick={() => run(() => actions.stop(active))}
-              variant="outline"
-            >
-              {t.composer.stop}
-            </Button>
-            {runtime.snapshot!.pending_delegations.length > 0 && (
-              <Button onClick={() => run(() => actions.stop(active, true))} variant="outline">
-                {copy.stopAll}
-              </Button>
-            )}
-          </div>
-        )}
-        {(runtime.error || catalogError) && <p role="alert">{runtime.error || catalogError}</p>}
-        {runtime.uncertainSend && <Button onClick={() => run(() => actions.retry())}>{copy.reconcile}</Button>}
+                  {typeof payload.status === 'string' && payload.status !== 'settled' && (
+                    <p className="text-xs">{payload.status}</p>
+                  )}
+                  {typeof payload.error === 'string' && <p role="alert">{payload.error}</p>}
+                </article>
+              )
+            })}
+          <ConversationActivity
+            owner={owner}
+            participantName={name}
+            refresh={actions.load}
+            respond={actions.respond}
+            runtime={runtime}
+          />
+          {active && (
+            <div className="flex items-center gap-3" role="status">
+              <span title={active.runtime_id ?? undefined}>
+                {name(active.participant_id)} · {active.status}
+              </span>
+              {runtime.snapshot!.pending_delegations.length > 0 && (
+                <Button onClick={() => run(() => actions.stop(active, true))} variant="outline">
+                  {copy.stopAll}
+                </Button>
+              )}
+            </div>
+          )}
+          {(runtime.error || catalogError) && <p role="alert">{runtime.error || catalogError}</p>}
+          {runtime.uncertainSend && <Button onClick={() => run(() => actions.retry())}>{copy.reconcile}</Button>}
+        </ThreadContent>
       </div>
-      <ConversationConfiguration onRefresh={actions.refresh} owner={owner} participants={participants} />
       <ConversationComposer
+        onRefresh={actions.refresh}
+        home={home}
+        project={
+          runtime.snapshot && (
+            <ConversationProject
+              owner={owner}
+              record={runtime.snapshot.conversation}
+              profiles={(catalog ?? []).map(entry => entry.participant.profile)}
+              disabled={runtime.busy || runtime.submitting || Boolean(runtime.uncertainSend)}
+              load={actions.load}
+            />
+          )
+        }
+        notices={
+          <ConversationConfiguration
+            noticesOnly
+            onRefresh={actions.refresh}
+            owner={owner}
+            participants={participants}
+          />
+        }
+        configuration={
+          <ConversationConfiguration onRefresh={actions.refresh} owner={owner} participants={participants} />
+        }
+        onStop={active ? () => run(() => actions.stop(active)) : undefined}
         busy={runtime.busy}
         onSubmit={() => run(actions.submit)}
         owner={owner}

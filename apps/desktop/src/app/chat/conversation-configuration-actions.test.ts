@@ -54,7 +54,7 @@ function setup() {
     pending_delegations: []
   })
 
-  const request = vi.fn(async (_host, _profile, method, params) => {
+  const request = vi.fn(async (_host, _profile, method, params): Promise<unknown> => {
     if (method === 'conversations.get') {
       return state()
     }
@@ -182,5 +182,67 @@ it('retains drafts on unsupported commands and credential failure, refreshes onl
   updateConversationRuntime(owner, { busy: true })
   await expect(actions.refresh('A', 3)).rejects.toThrow('Finish current work')
   expect(request).toHaveBeenCalledTimes(count)
+  expect($conversationDrafts.get()[key].text).toBe('/prompt')
+})
+
+it('propagates managed selection through refresh and keeps the draft when fresh binding fails', async () => {
+  const { actions, request, bind } = setup()
+  await actions.load()
+  bind.mockRejectedValueOnce(new Error('Fresh ticket rejected'))
+  await expect(actions.refresh('A', 1, { model_source: 'aino', model_id: 'chosen-model' })).rejects.toThrow(
+    'Fresh ticket rejected'
+  )
+  expect(request).toHaveBeenCalledWith(
+    'owner-host',
+    'default',
+    'conversations.refresh',
+    {
+      conversation_id: owner.conversationId,
+      participant_id: 'A',
+      expected_generation: 1,
+      model_source: 'aino',
+      model_id: 'chosen-model'
+    },
+    undefined
+  )
+  expect(bind).toHaveBeenCalledOnce()
+  expect($conversationDrafts.get()[key]).toMatchObject({
+    text: '/prompt',
+    selectedParticipantId: 'A',
+    attachmentIds: []
+  })
+  expect($conversationRuntime.get()[key].snapshot?.participants[0].session_generation).toBe(2)
+  expect($conversationRuntime.get()[key].submitting).toBe(false)
+})
+
+it('propagates model selection through first preparation before binding an unbound participant', async () => {
+  const { actions, request, bind } = setup()
+  await actions.load()
+  const current = $conversationRuntime.get()[key].snapshot!
+  updateConversationRuntime(owner, { snapshot: { ...current, participants: [] } })
+  const original = request.getMockImplementation()!
+  request.mockImplementation(async (...args) => {
+    if (args[2] === 'conversations.participants') {
+      return { participants: [{ participant, available: true }] }
+    }
+    return original(...args)
+  })
+  await actions.refresh('A', 1, { model_source: 'aino', model_id: 'first-model' })
+  expect(request).toHaveBeenCalledWith(
+    'owner-host',
+    'default',
+    'conversations.prepare',
+    {
+      conversation_id: owner.conversationId,
+      participant_id: 'A',
+      expected_generation: 1,
+      expected_revision: 4,
+      model_source: 'aino',
+      model_id: 'first-model'
+    },
+    undefined
+  )
+  expect(bind).toHaveBeenCalledOnce()
+  expect(request.mock.calls.some(call => call[2] === 'conversations.refresh')).toBe(false)
   expect($conversationDrafts.get()[key].text).toBe('/prompt')
 })

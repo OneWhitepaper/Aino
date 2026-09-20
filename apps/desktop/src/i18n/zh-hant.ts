@@ -3,6 +3,29 @@ import { defineFieldCopy } from '@/app/settings/field-copy'
 import { defineLocale } from './define-locale'
 
 export const zhHant = defineLocale({
+  sharedProjects: {
+    project: '專案',
+    noProject: '無專案',
+    unavailable: '無法使用',
+    open: '在此視窗開啟資料夾',
+    register: '新增專案',
+    source: '將專案儲存於',
+    choose: '選擇專家',
+    name: '專案名稱',
+    directory: '此連線上的資料夾路徑',
+    create: '新增專案資料夾',
+    error: '共用專案無法使用',
+    retry: '重試',
+    confirm: '變更對話專案',
+    generation: '所有專家將在後續訊息中使用此資料夾。歷史訊息保留原始上下文。',
+    apply: '套用專案變更',
+    cancel: '取消',
+    unsupported: '無法瀏覽此專案環境',
+    loading: '正在載入資料夾…',
+    opened: '已開啟的專案資料夾',
+    empty: '此視窗尚未開啟資料夾。',
+    close: '關閉資料夾'
+  },
   platformRechargeErrors: {
     conflict: '較早的請求已建立訂單。請關閉此視窗，在訂單歷史中開啟原訂單，勿重複付款。',
     account: '登入狀態已變更，請重新登入原帳戶後恢復訂單。',

@@ -26,6 +26,7 @@ const SNIPPET_KEYS = ['codeReview', 'implementationPlan', 'explainThis']
 
 export function ContextMenu({
   state,
+  includeProviders = true,
   onInsertText,
   onOpenUrlDialog,
   onPasteClipboardImage,
@@ -96,7 +97,7 @@ export function ContextMenu({
           </ContextMenuItem>
 
           {attachmentProviders.length > 0 && <DropdownMenuSeparator />}
-          {attachmentProviders.map(provider => (
+          {(includeProviders ? attachmentProviders : []).map(provider => (
             <DropdownMenuItem
               className="text-[length:var(--conversation-tool-font-size)] focus:bg-(--ui-bg-tertiary)"
               key={provider.key}
@@ -186,6 +187,7 @@ interface ContextMenuItemProps {
 }
 
 interface ContextMenuProps {
+  includeProviders?: boolean
   onInsertText: (text: string) => void
   onOpenUrlDialog: () => void
   onPasteClipboardImage?: (opts?: { silent?: boolean }) => Promise<boolean> | void

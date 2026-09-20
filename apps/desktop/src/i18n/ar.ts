@@ -1,6 +1,29 @@
 import { defineLocale } from './define-locale'
 
 export const ar = defineLocale({
+  sharedProjects: {
+    project: 'المشروع',
+    noProject: 'بلا مشروع',
+    unavailable: 'غير متاح',
+    open: 'فتح المجلد في هذه النافذة',
+    register: 'إضافة مشروع',
+    source: 'حفظ المشروع لدى',
+    choose: 'اختر خبيرًا',
+    name: 'اسم المشروع',
+    directory: 'مسار المجلد على هذا الاتصال',
+    create: 'إضافة مجلد المشروع',
+    error: 'المشاريع المشتركة غير متاحة',
+    retry: 'إعادة المحاولة',
+    confirm: 'تغيير مشروع المحادثة',
+    generation: 'سيستخدم جميع الخبراء هذا المجلد للرسائل القادمة. تحتفظ الرسائل السابقة بسياقها الأصلي.',
+    apply: 'تطبيق تغيير المشروع',
+    cancel: 'إلغاء',
+    unsupported: 'لا يمكن تصفح بيئة هذا المشروع',
+    loading: 'جارٍ تحميل المجلد…',
+    opened: 'مجلدات المشاريع المفتوحة',
+    empty: 'لا توجد مجلدات مفتوحة في هذه النافذة.',
+    close: 'إغلاق المجلد'
+  },
   sessionImport: {
     title: 'المتابعة من تطبيق آخر',
     subtitle: 'انقل محادثة إلى Hermes وتابع من حيث توقفت.',

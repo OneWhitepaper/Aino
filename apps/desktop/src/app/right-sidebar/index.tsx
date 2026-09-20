@@ -14,6 +14,8 @@ import { normalizeOrLocalPreviewTarget } from '@/lib/local-preview'
 import { cn } from '@/lib/utils'
 import { notifyError } from '@/store/notifications'
 import { openPreview } from '@/store/preview'
+import { $foregroundConversationOwner } from '@/store/conversation-runtime'
+import { SharedProjectTree } from './files/shared-project-tree'
 import { $toolSession, $toolWorkspaceCwd, toolSessionIsCurrent } from '@/store/tool-session'
 
 import { SidebarPanelLabel } from '../shell/sidebar-label'
@@ -27,6 +29,12 @@ interface RightSidebarPaneProps {
 }
 
 export function RightSidebarPane({ onActivateFile, onActivateFolder }: RightSidebarPaneProps = {}) {
+  const conversationOwner = useStore($foregroundConversationOwner)
+  if (conversationOwner) return <SharedProjectTree owner={conversationOwner} />
+  return <SessionRightSidebarPane onActivateFile={onActivateFile} onActivateFolder={onActivateFolder} />
+}
+
+function SessionRightSidebarPane({ onActivateFile, onActivateFolder }: RightSidebarPaneProps) {
   const { t } = useI18n()
   const r = t.rightSidebar
   const session = useStore($toolSession)

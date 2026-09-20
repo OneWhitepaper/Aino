@@ -397,12 +397,9 @@ export function TreeGroup({
   // the default main zone) auto-hides its strip, and that must not take the
   // single session title with it.
   const hideSessionTabStrip = !isEmpty && !verticalCollapse && !editMode && sessionOnlyZone
-  const singleSessionHeader = hideSessionTabStrip
-  const titleInWindowBar = hasWindowTitlebar && singleSessionHeader && shown.includes('workspace') && !node.minimized
-  // Chrome of the pane the single-title header names — its headerMenu kebab
-  // sits beside the title (the IIFE below re-derives the same chrome for the
-  // title's own lead/label/wrap hooks).
   const activeChrome = paneChrome(paneFor(activeId))
+  const singleSessionHeader = hideSessionTabStrip && !activeChrome.headerVeto
+  const titleInWindowBar = hasWindowTitlebar && singleSessionHeader && shown.includes('workspace') && !node.minimized
 
   // Keep the activated tab — and, on the last one, the trailing "+" — inside
   // the strip's scroll window. Opening a tab past the right edge otherwise

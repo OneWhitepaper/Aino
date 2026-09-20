@@ -1061,11 +1061,7 @@ const ThreadMessageListInner: FC<ThreadMessageListProps> = ({
             {emptyPlaceholder}
           </div>
         ) : (
-          <div
-            className={cn('mx-auto flex w-full max-w-(--composer-width) min-w-0 flex-col px-6', threadContentTopPad)}
-            data-slot="aui_thread-content"
-            ref={contentRef as React.RefCallback<HTMLDivElement>}
-          >
+          <ThreadContent className={threadContentTopPad} ref={contentRef as React.RefCallback<HTMLDivElement>}>
             {(hiddenCount > 0 || olderAvailable) && (
               <button
                 className="mx-auto mb-(--conversation-turn-gap) rounded-full border border-border/65 bg-(--composer-fill) px-3 py-1 text-xs text-muted-foreground hover:text-foreground"
@@ -1085,7 +1081,7 @@ const ThreadMessageListInner: FC<ThreadMessageListProps> = ({
                 style={{ height: 'var(--thread-last-message-clearance)' }}
               />
             )}
-          </div>
+          </ThreadContent>
         )}
       </div>
     </div>
@@ -1093,3 +1089,16 @@ const ThreadMessageListInner: FC<ThreadMessageListProps> = ({
 }
 
 export const ThreadMessageList = memo(ThreadMessageListInner)
+
+/** Transcript column used by both runtime and durable conversation event lists. */
+export function ThreadContent({ children, className, ...props }: ComponentProps<'div'>) {
+  return (
+    <div
+      {...props}
+      className={cn('mx-auto flex w-full max-w-(--composer-width) min-w-0 flex-col px-6', className)}
+      data-slot="aui_thread-content"
+    >
+      {children}
+    </div>
+  )
+}

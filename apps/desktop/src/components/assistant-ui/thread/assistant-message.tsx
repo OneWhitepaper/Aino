@@ -7,7 +7,7 @@ import {
   useMessageRuntime
 } from '@assistant-ui/react'
 import { useStore } from '@nanostores/react'
-import { type FC, type ReactNode, useCallback, useMemo, useState } from 'react'
+import { type ComponentProps, type FC, type ReactNode, useCallback, useMemo, useState } from 'react'
 import { useInRouterContext, useNavigate } from 'react-router'
 
 import { useSessionView } from '@/app/chat/session-view'
@@ -240,10 +240,7 @@ const AssistantMessageBody: FC<AssistantMessageProps & { collapsedNotice?: null 
     >
       {collapsedNotice ?? (
         <>
-          <div
-            className="wrap-anywhere min-w-0 max-w-full overflow-hidden text-pretty text-[length:var(--conversation-text-font-size)] leading-(--dt-line-height) text-foreground"
-            data-slot="aui_assistant-message-content"
-          >
+          <AssistantMessageContent>
             {/* Todos render in the composer status stack now, not inline. */}
             {MESSAGE_PARTS}
             <AssistantStatusSlot />
@@ -272,7 +269,7 @@ const AssistantMessageBody: FC<AssistantMessageProps & { collapsedNotice?: null 
                 <ErrorRecoveryActions />
               </ErrorPrimitive.Root>
             </MessagePrimitive.Error>
-          </div>
+          </AssistantMessageContent>
           <MessageTimelineTimestamp className="px-(--message-text-indent) pt-0.5" suppressIfDuplicatePart />
           {hasVisibleText && !isInterim && (
             <AssistantFooter
@@ -835,6 +832,22 @@ const AssistantFooter: FC<MessageActionProps & { durationS?: number; metrics?: T
       </BranchPickerPrimitive.Root>
       <ReplyMetrics durationS={durationS} metrics={metrics} />
       <AssistantActionBar {...props} />
+    </div>
+  )
+}
+
+/** Canonical assistant text geometry, shared by runtime and durable conversation messages. */
+export function AssistantMessageContent({ children, className, ...props }: ComponentProps<'div'>) {
+  return (
+    <div
+      {...props}
+      className={cn(
+        'wrap-anywhere min-w-0 max-w-full overflow-hidden text-pretty text-[length:var(--conversation-text-font-size)] leading-(--dt-line-height) text-foreground',
+        className
+      )}
+      data-slot="aui_assistant-message-content"
+    >
+      {children}
     </div>
   )
 }

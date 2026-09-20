@@ -3,6 +3,29 @@ import { defineFieldCopy } from '@/app/settings/field-copy'
 import { defineLocale } from './define-locale'
 
 export const ja = defineLocale({
+  sharedProjects: {
+    project: 'プロジェクト',
+    noProject: 'プロジェクトなし',
+    unavailable: '利用不可',
+    open: 'このウィンドウでフォルダーを開く',
+    register: 'プロジェクトを追加',
+    source: '保存先の専門家',
+    choose: '専門家を選択',
+    name: 'プロジェクト名',
+    directory: 'この接続上のフォルダーパス',
+    create: 'プロジェクトフォルダーを追加',
+    error: '共有プロジェクトを利用できません',
+    retry: '再試行',
+    confirm: '会話のプロジェクトを変更',
+    generation: '今後のメッセージでは全専門家がこのフォルダーを使用します。過去のメッセージの文脈は保持されます。',
+    apply: 'プロジェクト変更を適用',
+    cancel: 'キャンセル',
+    unsupported: 'このプロジェクト環境は参照できません',
+    loading: 'フォルダーを読み込み中…',
+    opened: '開いているプロジェクトフォルダー',
+    empty: 'このウィンドウではフォルダーを開いていません。',
+    close: 'フォルダーを閉じる'
+  },
   platformRechargeErrors: {
     conflict:
       '以前のリクエストで注文が作成されています。この画面を閉じ、注文履歴から元の注文を開いてください。再度支払わないでください。',

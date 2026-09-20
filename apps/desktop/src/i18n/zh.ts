@@ -20,6 +20,29 @@ const accountErrors: Record<string, string> = {
 }
 
 export const zh = defineLocale({
+  sharedProjects: {
+    project: '项目',
+    noProject: '无项目',
+    unavailable: '不可用',
+    open: '在此窗口打开文件夹',
+    register: '添加项目',
+    source: '将项目保存在',
+    choose: '选择专家',
+    name: '项目名称',
+    directory: '此连接上的文件夹路径',
+    create: '添加项目文件夹',
+    error: '共享项目不可用',
+    retry: '重试',
+    confirm: '更改对话项目',
+    generation: '所有专家将在后续消息中使用此文件夹。历史消息保留其原始上下文。',
+    apply: '应用项目更改',
+    cancel: '取消',
+    unsupported: '无法浏览此项目环境',
+    loading: '正在加载文件夹…',
+    opened: '已打开的项目文件夹',
+    empty: '此窗口尚未打开文件夹。',
+    close: '关闭文件夹'
+  },
   connectors: {
     title: '连接你的应用',
     connect: '连接',

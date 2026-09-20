@@ -17,10 +17,12 @@ import { openPreview } from '@/store/preview'
 
 export function AttachmentList({
   attachments,
-  onRemove
+  onRemove,
+  onPreview
 }: {
   attachments: ComposerAttachment[]
   onRemove?: (id: string) => void
+  onPreview?: ((attachment: ComposerAttachment) => Promise<void> | void) | null
 }) {
   return (
     <div className="flex max-w-full flex-wrap gap-1.5 px-1 pt-1" data-slot="composer-attachments">
@@ -28,6 +30,7 @@ export function AttachmentList({
         <AttachmentPill
           attachment={attachment}
           key={attachment.occurrenceId ? `occ:${attachment.occurrenceId}` : attachment.id}
+          onPreview={onPreview}
           onRemove={onRemove}
         />
       ))}
@@ -35,7 +38,15 @@ export function AttachmentList({
   )
 }
 
-function AttachmentPill({ attachment, onRemove }: { attachment: ComposerAttachment; onRemove?: (id: string) => void }) {
+function AttachmentPill({
+  attachment,
+  onRemove,
+  onPreview
+}: {
+  attachment: ComposerAttachment
+  onRemove?: (id: string) => void
+  onPreview?: ((attachment: ComposerAttachment) => Promise<void> | void) | null
+}) {
   const { t } = useI18n()
   const c = t.composer
 
@@ -57,7 +68,11 @@ function AttachmentPill({ attachment, onRemove }: { attachment: ComposerAttachme
   // A review card's detail is its resolved-comment JSON, not a previewable
   // path — clicking it should do nothing rather than toast a bogus failure.
   const canPreview =
-    attachment.kind !== 'folder' && attachment.kind !== 'terminal' && attachment.kind !== 'review' && !isUploading
+    onPreview !== null &&
+    attachment.kind !== 'folder' &&
+    attachment.kind !== 'terminal' &&
+    attachment.kind !== 'review' &&
+    !isUploading
 
   const detail =
     attachment.kind !== 'review' && attachment.detail && attachment.detail !== attachment.label
@@ -76,6 +91,10 @@ function AttachmentPill({ attachment, onRemove }: { attachment: ComposerAttachme
       return
     }
 
+    if (onPreview) {
+      await onPreview(attachment)
+      return
+    }
     if (attachment.kind === 'image') {
       try {
         let source = lightboxSrc || ''

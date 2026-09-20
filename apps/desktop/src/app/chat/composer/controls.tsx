@@ -355,7 +355,7 @@ function WakeWordButton({ disabled, pausedForVoice = false }: { disabled: boolea
   )
 }
 
-function DictationButton({
+export function DictationButton({
   disabled,
   state,
   status,

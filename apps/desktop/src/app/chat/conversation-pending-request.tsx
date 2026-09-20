@@ -1,3 +1,4 @@
+import { ApprovalBarSurface } from '@/components/assistant-ui/tool/approval'
 import { useState } from 'react'
 
 import { Button } from '@/components/ui/button'
@@ -8,6 +9,21 @@ import { ConversationClarify, type ConversationRequestProps } from './conversati
 import { ConversationMcpSetup } from './conversation-mcp-setup'
 
 export function ConversationPendingRequest(props: ConversationRequestProps) {
+  if (props.request.method === 'approval')
+    return (
+      <ApprovalBarSurface
+        request={{
+          command: String(props.request.params.command ?? ''),
+          description: String(props.request.params.description ?? ''),
+          choices: Array.isArray(props.request.params.choices)
+            ? props.request.params.choices.map(String)
+            : ['once', 'deny'],
+          allowPermanent: props.request.params.allow_permanent === true
+        }}
+        onRespond={choice => props.respond(props.request.id, { choice })}
+      />
+    )
+
   if (props.request.method === 'clarify') {
     return <ConversationClarify {...props} />
   }
@@ -37,7 +53,6 @@ function CredentialOrApproval({ request, respond }: ConversationRequestProps) {
     }
   }
 
-  const approval = request.method === 'approval'
   const saveLogin = request.method === 'vault.save_login'
   const code = request.method === 'vault.code'
 
@@ -55,53 +70,42 @@ function CredentialOrApproval({ request, respond }: ConversationRequestProps) {
 
   return (
     <section className="space-y-2 rounded-lg border p-3">
-      <strong>{approval ? t.prompts.dangerousCommand : titles[request.method]}</strong>
+      <strong>{titles[request.method]}</strong>
       {typeof prompt === 'string' && <p className="whitespace-pre-wrap break-words">{prompt}</p>}
       {typeof params.env_var === 'string' && <p>{params.env_var}</p>}
       {typeof params.origin === 'string' && <p>{params.origin}</p>}
       {typeof params.hint === 'string' && <p>{params.hint}</p>}
-      {approval ? (
+      <form
+        className="space-y-2"
+        onSubmit={event => {
+          event.preventDefault()
+          answer({ value: saveLogin ? JSON.stringify({ identifier: identifier.trim(), password: value }) : value })
+        }}
+      >
+        {saveLogin && (
+          <Input
+            aria-label={t.prompts.vaultSaveIdentifierLabel}
+            autoComplete="username"
+            onChange={event => setIdentifier(event.target.value)}
+            value={identifier}
+          />
+        )}
+        <Input
+          aria-label={code ? t.prompts.vaultCodeLabel : copy.answer}
+          autoComplete={code ? 'one-time-code' : 'off'}
+          onChange={event => setValue(event.target.value)}
+          type={code ? 'text' : 'password'}
+          value={value}
+        />
         <div className="flex gap-2">
-          {(!Array.isArray(params.choices) || params.choices.includes('once')) && (
-            <Button onClick={() => answer({ choice: 'once' })}>{copy.allowOnce}</Button>
-          )}
-          <Button onClick={() => answer({ choice: 'deny' })} variant="outline">
-            {copy.deny}
+          <Button disabled={!value || (saveLogin && !identifier.trim())} type="submit">
+            {t.composer.send}
+          </Button>
+          <Button onClick={() => answer({ value: '' })} type="button" variant="outline">
+            {t.common.cancel}
           </Button>
         </div>
-      ) : (
-        <form
-          className="space-y-2"
-          onSubmit={event => {
-            event.preventDefault()
-            answer({ value: saveLogin ? JSON.stringify({ identifier: identifier.trim(), password: value }) : value })
-          }}
-        >
-          {saveLogin && (
-            <Input
-              aria-label={t.prompts.vaultSaveIdentifierLabel}
-              autoComplete="username"
-              onChange={event => setIdentifier(event.target.value)}
-              value={identifier}
-            />
-          )}
-          <Input
-            aria-label={code ? t.prompts.vaultCodeLabel : copy.answer}
-            autoComplete={code ? 'one-time-code' : 'off'}
-            onChange={event => setValue(event.target.value)}
-            type={code ? 'text' : 'password'}
-            value={value}
-          />
-          <div className="flex gap-2">
-            <Button disabled={!value || (saveLogin && !identifier.trim())} type="submit">
-              {t.composer.send}
-            </Button>
-            <Button onClick={() => answer({ value: '' })} type="button" variant="outline">
-              {t.common.cancel}
-            </Button>
-          </div>
-        </form>
-      )}
+      </form>
       {error && <p role="alert">{error}</p>}
     </section>
   )

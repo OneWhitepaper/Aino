@@ -20,6 +20,29 @@ const accountErrors: Record<string, string> = {
 }
 
 export const en: Translations = {
+  sharedProjects: {
+    project: 'Project',
+    noProject: 'No project',
+    unavailable: 'unavailable',
+    open: 'Open folder in this window',
+    register: 'Add project',
+    source: 'Save project under',
+    choose: 'Choose expert',
+    name: 'Project name',
+    directory: 'Folder path on this connection',
+    create: 'Add project folder',
+    error: 'Shared projects unavailable',
+    retry: 'Retry',
+    confirm: 'Change conversation project',
+    generation: 'All experts will use this folder for future messages. Earlier messages keep their original context.',
+    apply: 'Apply project change',
+    cancel: 'Cancel',
+    unsupported: 'This project environment cannot be browsed',
+    loading: 'Loading folder…',
+    opened: 'Opened project folders',
+    empty: 'No folders opened in this window.',
+    close: 'Close folder'
+  },
   platformRechargeErrors: {
     conflict:
       'An earlier request already created an order. Close this window and open the original order in order history. Do not pay again.',

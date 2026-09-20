@@ -68,7 +68,7 @@ import { useEmojiCompletions } from './hooks/use-emoji-completions'
 import { useComposerMicroActions } from './hooks/use-micro-actions'
 import { useSlashCompletions } from './hooks/use-slash-completions'
 import { useSessionStatusPresence } from './hooks/use-status-presence'
-import { ComposerInputSurface } from './input-surface'
+import { ComposerInputSurface, ComposerSurface, ComposerContent } from './input-surface'
 import { shouldConvertPasteToAttachment } from './large-paste'
 import { ActionBadges } from './micro-actions'
 import { chipTypedPathOnSpace, pathifyRefs } from './path-refs'
@@ -152,7 +152,9 @@ export function ChatBar({
   // exact pass-through, so surfaces without contributions are byte-identical.
   const onSubmit = useCallback<ChatBarProps['onSubmit']>(
     async (value, options) => {
-      if (platformHistoryOwner(sessionId) !== null) {return false}
+      if (platformHistoryOwner(sessionId) !== null) {
+        return false
+      }
       // Bare stop phrase typed while the voice conversation is live: end the
       // conversation (mic off, pill dismissed) instead of sending "stop" to
       // the agent. Spoken transcripts are already stop-checked inside
@@ -1372,29 +1374,10 @@ export function ChatBar({
             )}
             <div className="relative w-full rounded-[inherit]">
               {hudMode && busy && <span aria-hidden className="arc-border arc-composer" />}
-              <div
-                className={cn(
-                  // grid-cols-[minmax(0,1fr)]: the implicit `auto` column sized
-                  // itself to its items' min-content, so a status row whose
-                  // content out-measured a narrow pane silently widened the
-                  // track past the surface — and every `w-full` child (the fade,
-                  // the input/controls row) laid out against that phantom width
-                  // and got clipped by overflow-hidden, send button first.
-                  'group/composer-surface relative z-4 isolate grid grid-cols-[minmax(0,1fr)] grid-rows-[auto_1fr] overflow-hidden rounded-[inherit] border border-[color-mix(in_srgb,var(--dt-composer-ring)_calc(18%*var(--composer-ring-strength)),var(--dt-input))]',
-                  COMPOSER_DROP_FADE_CLASS,
-                  dragActive && COMPOSER_DROP_ACTIVE_CLASS
-                )}
-                data-slot="composer-surface"
+              <ComposerSurface
+                className={cn(COMPOSER_DROP_FADE_CLASS, dragActive && COMPOSER_DROP_ACTIVE_CLASS)}
                 ref={composerSurfaceRef}
               >
-                <div
-                  aria-hidden
-                  className={cn(
-                    'pointer-events-none absolute inset-0 -z-10 rounded-[inherit]',
-                    composerFill,
-                    composerSurfaceGlass
-                  )}
-                />
                 {!botChat && !guidedChat && (
                   <CodingStatusRow
                     onBranchOff={handleBranchOff}
@@ -1409,14 +1392,12 @@ export function ChatBar({
                     repoPath={cwd}
                   />
                 )}
-                <div
-                  className={cn(
-                    'relative z-1 flex min-h-0 w-full flex-col gap-(--composer-row-gap) overflow-hidden rounded-[inherit] px-(--composer-surface-pad-x) py-(--composer-surface-pad-y) transition-opacity duration-200 ease-out',
+                <ComposerContent
+                  className={
                     scrolledUp
                       ? 'opacity-30 group-hover/composer:opacity-100 group-focus-within/composer-surface:opacity-100'
                       : 'opacity-100'
-                  )}
-                  data-slot="composer-fade"
+                  }
                 >
                   {/* Contribution seams: banners above, a row below, inline
                     additions beside the "+" menu and before the controls.
@@ -1478,8 +1459,8 @@ export function ChatBar({
                     </div>
                   </div>
                   <ContribSlot area={COMPOSER_AREAS.bottom} />
-                </div>
-              </div>
+                </ComposerContent>
+              </ComposerSurface>
             </div>
           </ComposerPrimitive.Root>
           {/* Underside: chrome-free strip BELOW the composer. Outside the root

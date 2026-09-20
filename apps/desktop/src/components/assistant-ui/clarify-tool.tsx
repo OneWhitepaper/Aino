@@ -404,11 +404,13 @@ function ClarifyToolPending(props: ToolCallMessagePartProps) {
 function ClarifyToolSinglePending({
   fromArgs,
   onAnswered,
-  request
+  request,
+  onRespond
 }: {
   fromArgs: ClarifyArgs
   onAnswered: () => void
   request: ClarifyRequest | null
+  onRespond?: (answer: string) => Promise<void> | void
 }) {
   const { t } = useI18n()
   const copy = t.assistant.clarify
@@ -468,7 +470,7 @@ function ClarifyToolSinglePending({
         return
       }
 
-      if (!gateway) {
+      if (!gateway && !onRespond) {
         notifyError(new Error(copy.gatewayDisconnected), copy.sendFailed)
 
         return
@@ -479,17 +481,18 @@ function ClarifyToolSinglePending({
       try {
         // The response frame goes back over the socket the request arrived on —
         // the owner backend by construction (#91684's class cannot recur).
-        respondToServerRequest(matchingRequest.requestId, { answer })
+        if (onRespond) await onRespond(answer)
+        else respondToServerRequest(matchingRequest.requestId, { answer })
         triggerHaptic('submit')
         onAnswered()
-        clearClarifyRequest(matchingRequest.requestId, matchingRequest.sessionId)
+        if (!onRespond) clearClarifyRequest(matchingRequest.requestId, matchingRequest.sessionId)
         // tool.complete lands next → ClarifyToolSettled.
       } catch (error) {
         notifyError(error, copy.sendFailed)
         setSubmitting(false)
       }
     },
-    [copy.gatewayDisconnected, copy.notReady, copy.sendFailed, gateway, matchingRequest, onAnswered, ready]
+    [copy.gatewayDisconnected, copy.notReady, copy.sendFailed, gateway, matchingRequest, onAnswered, ready, onRespond]
   )
 
   const trimmedDraft = draft.trim()
@@ -904,6 +907,7 @@ function BatchQuestionBlock({
             <Textarea
               className={CLARIFY_TEXTAREA_CLASS}
               disabled={disabled}
+              aria-label={question.question}
               onChange={event => onDraft(event.target.value)}
               placeholder={copy.other}
               rows={1}
@@ -916,6 +920,7 @@ function BatchQuestionBlock({
         <Textarea
           className={CLARIFY_TEXTAREA_CLASS}
           disabled={disabled}
+          aria-label={question.question}
           onChange={event => onDraft(event.target.value)}
           placeholder={copy.placeholder}
           rows={1}
@@ -936,7 +941,15 @@ const emptyStage = { choices: [] as string[], draft: '' }
  * back-to-back and completes the batch. Staged answers stay editable up to
  * that moment. The per-question wire protocol is unchanged (the TUI/CLI
  * still lock incrementally); this card just batches its locks at the end. */
-function ClarifyToolBatchPending({ onAnswered, request }: { onAnswered: () => void; request: ClarifyRequest | null }) {
+function ClarifyToolBatchPending({
+  onAnswered,
+  request,
+  transport
+}: {
+  onAnswered: () => void
+  request: ClarifyRequest | null
+  transport?: ClarifyTransport
+}) {
   const { t } = useI18n()
   const copy = t.assistant.clarify
   const gateway = useStore($gateway)
@@ -1015,7 +1028,7 @@ function ClarifyToolBatchPending({ onAnswered, request }: { onAnswered: () => vo
   const allStaged = answeredCount === questions.length
 
   const confirmAll = useCallback(async () => {
-    if (!request || !gateway) {
+    if (!request || (!gateway && !transport)) {
       notifyError(new Error(request ? copy.gatewayDisconnected : copy.notReady), copy.sendFailed)
 
       return
@@ -1032,29 +1045,32 @@ function ClarifyToolBatchPending({ onAnswered, request }: { onAnswered: () => vo
       for (const question of questions) {
         const answer = stagedAnswer(question)
 
-        await requestForOwnedSession<{ remaining?: string[]; status?: string }>(
-          request.sessionId,
-          gateway.request.bind(gateway) as typeof gateway.request,
-          'clarify.lock',
-          {
-            answer: answer ?? '',
-            question_id: question.qid,
-            request_id: request.requestId
-          }
-        )
+        if (request.lockedAnswers?.[question.qid] !== undefined) continue
+        if (transport) await transport.lock(question.qid, answer ?? '')
+        else
+          await requestForOwnedSession<{ remaining?: string[]; status?: string }>(
+            request.sessionId,
+            gateway!.request.bind(gateway!) as NonNullable<typeof gateway>['request'],
+            'clarify.lock',
+            {
+              answer: answer ?? '',
+              question_id: question.qid,
+              request_id: request.requestId
+            }
+          )
       }
 
-      forgetServerRequest(request.requestId)
+      if (!transport) forgetServerRequest(request.requestId)
 
       triggerHaptic('submit')
       onAnswered()
       // tool.complete lands next → ClarifyToolBatchSettled.
-      clearClarifyRequest(request.requestId, request.sessionId)
+      if (!transport) clearClarifyRequest(request.requestId, request.sessionId)
     } catch (error) {
       notifyError(error, copy.sendFailed)
       setSubmitting(false)
     }
-  }, [copy, gateway, onAnswered, questions, request, stagedAnswer])
+  }, [copy, gateway, onAnswered, questions, request, stagedAnswer, transport])
 
   const toggleChoice = useCallback((question: ClarifyQuestion, choice: string) => {
     setStaged(current => {
@@ -1079,12 +1095,23 @@ function ClarifyToolBatchPending({ onAnswered, request }: { onAnswered: () => vo
       return
     }
 
+    // Retain the owned request until cancellation succeeds so it can be retried.
+    if (transport) {
+      setSubmitting(true)
+      try {
+        await transport.cancel()
+        onAnswered()
+      } catch (error) {
+        notifyError(error, copy.sendFailed)
+        setSubmitting(false)
+      }
+      return
+    }
+
     onAnswered()
     clearClarifyRequest(request.requestId, request.sessionId)
-
-    // A response with no `answers` is the cancel-all (the plain Esc path).
     respondToServerRequest(request.requestId, {})
-  }, [gateway, onAnswered, request])
+  }, [copy.sendFailed, onAnswered, request, transport])
 
   const handleSubmit = useCallback(
     (event: FormEvent<HTMLFormElement>) => {
@@ -1121,9 +1148,9 @@ function ClarifyToolBatchPending({ onAnswered, request }: { onAnswered: () => vo
         </div>
         {questions.map(question => (
           <BatchQuestionBlock
-            disabled={submitting}
+            disabled={submitting || request?.lockedAnswers?.[question.qid] !== undefined}
             key={question.qid}
-            locked={false}
+            locked={request?.lockedAnswers?.[question.qid] !== undefined}
             onDraft={value => draftFor(question, value)}
             onToggle={choice => toggleChoice(question, choice)}
             question={question}
@@ -1150,5 +1177,27 @@ function ClarifyToolBatchPending({ onAnswered, request }: { onAnswered: () => vo
         </Button>
       </div>
     </form>
+  )
+}
+
+export interface ClarifyTransport {
+  answer: (answer: string) => Promise<void> | void
+  lock: (questionId: string, answer: string) => Promise<void>
+  cancel: () => Promise<void> | void
+}
+
+/** Reuses the ordinary interactive forms with owner-bound answer/lock transport. */
+export function OwnedClarifyRequest({ request, transport }: { request: ClarifyRequest; transport: ClarifyTransport }) {
+  const [answered, setAnswered] = useState(false)
+  if (answered) return null
+  if (request.questions?.length)
+    return <ClarifyToolBatchPending request={request} transport={transport} onAnswered={() => setAnswered(true)} />
+  return (
+    <ClarifyToolSinglePending
+      request={request}
+      fromArgs={{ question: request.question, choices: request.choices, multiSelect: request.multiSelect }}
+      onRespond={transport.answer}
+      onAnswered={() => setAnswered(true)}
+    />
   )
 }

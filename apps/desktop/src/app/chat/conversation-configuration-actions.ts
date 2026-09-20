@@ -18,6 +18,11 @@ export interface ResolvedConversationCommandSend {
   draft: ConversationDraft
 }
 
+export interface ConversationModelSelection {
+  model_source: 'aino' | 'byok'
+  model_id?: string
+}
+
 interface ConfigurationDependencies {
   rpc: ConversationRequest
   retain: () => Promise<void>
@@ -194,7 +199,7 @@ export function createConversationConfigurationActions(owner: ConversationOwner,
     }
   }
 
-  async function refresh(participantId: string, expectedGeneration: number) {
+  async function refresh(participantId: string, expectedGeneration: number, selection?: ConversationModelSelection) {
     let selected: ConversationParticipantRef | undefined
     let started = false
 
@@ -220,13 +225,15 @@ export function createConversationConfigurationActions(owner: ConversationOwner,
           conversation_id: owner.conversationId,
           participant_id: participantId,
           expected_generation: 1,
-          expected_revision: current.snapshot!.conversation.revision
+          expected_revision: current.snapshot!.conversation.revision,
+          ...selection
         })
       } else {
         const result = await deps.rpc('conversations.refresh', {
           conversation_id: owner.conversationId,
           participant_id: participantId,
-          expected_generation: expectedGeneration
+          expected_generation: expectedGeneration,
+          ...selection
         })
 
         if (

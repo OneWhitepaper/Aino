@@ -1,6 +1,7 @@
+import { Loader } from '@/components/ui/loader'
 import type { ConversationCapabilities, ConversationCatalogEntry } from '@hermes/shared/gateway-events'
 import { useStore } from '@nanostores/react'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router'
 
 import { Button } from '@/components/ui/button'
@@ -23,10 +24,15 @@ export function ConversationRoute() {
   const [attempt, setAttempt] = useState(0)
   const [catalog, setCatalog] = useState<ConversationCatalogEntry[] | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [creating, setCreating] = useState(false)
+  const creations = useRef(new Map<string, Promise<string>>())
+  const creationIds = useRef(new Map<string, string>())
 
   useEffect(() => {
     let disposed = false
+    if (conversationId !== 'new') {
+      creations.current.clear()
+      creationIds.current.clear()
+    }
     setCatalog(null)
     setError(null)
 
@@ -53,6 +59,29 @@ export function ConversationRoute() {
         {}
       )
 
+      if (conversationId === 'new') {
+        const general = result.participants.find(entry => entry.participant.is_general && entry.available)
+        if (!general) throw new Error(copy.unavailable)
+        const sourceKey = JSON.stringify([connectionId, general.participant.install_id])
+        let creating = creations.current.get(sourceKey)
+        if (!creating) {
+          const id = creationIds.current.get(sourceKey) ?? crypto.randomUUID()
+          creationIds.current.set(sourceKey, id)
+          const next = { connectionId, installId: general.participant.install_id, conversationId: id }
+          creating = createConversationActions(next)
+            .create({ title: copy.title, general_participant_id: general.participant.participant_id })
+            .then(() => next.conversationId)
+            .catch(error => {
+              creations.current.delete(sourceKey)
+              throw error
+            })
+          creations.current.set(sourceKey, creating)
+        }
+        const createdId = await creating
+        if (!disposed && $activeGatewayConnectionId.get() === connectionId)
+          navigate(conversationRoute(createdId), { replace: true })
+        return
+      }
       if (!disposed) {
         setCatalog(result.participants)
         setLoadedConnection(connectionId)
@@ -81,8 +110,8 @@ export function ConversationRoute() {
 
   if (!catalog || !connectionId || loadedConnection !== connectionId) {
     return (
-      <div className="p-6" role="status">
-        {copy.loading}
+      <div className="grid h-full place-items-center">
+        <Loader label={copy.loading} />
       </div>
     )
   }
@@ -97,36 +126,5 @@ export function ConversationRoute() {
 
   const owner = { connectionId, installId: general.participant.install_id, conversationId }
 
-  if (conversationId !== 'new') {
-    return <ConversationView key={JSON.stringify(owner)} owner={owner} />
-  }
-
-  const create = async () => {
-    setCreating(true)
-
-    try {
-      const next = { ...owner, conversationId: crypto.randomUUID() }
-      await createConversationActions(next).create({
-        title: copy.title,
-        general_participant_id: general.participant.participant_id
-      })
-
-      if ($activeGatewayConnectionId.get() === next.connectionId) {
-        navigate(conversationRoute(next.conversationId))
-      }
-    } catch (reason) {
-      setError(String(reason instanceof Error ? reason.message : reason))
-    } finally {
-      setCreating(false)
-    }
-  }
-
-  return (
-    <div className="grid h-full place-content-center gap-4 p-6">
-      <h1>{copy.title}</h1>
-      <Button disabled={creating || !general.available} onClick={() => void create()}>
-        {copy.create}
-      </Button>
-    </div>
-  )
+  return <ConversationView key={JSON.stringify(owner)} owner={owner} />
 }

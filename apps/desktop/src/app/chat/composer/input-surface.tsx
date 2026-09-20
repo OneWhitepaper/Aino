@@ -1,5 +1,6 @@
 import type { ComponentProps } from 'react'
 
+import { composerFill, composerSurfaceGlass } from '@/components/chat/composer-dock'
 import { useI18n } from '@/i18n'
 import { cn } from '@/lib/utils'
 
@@ -45,5 +46,44 @@ export function ComposerInputSurface(props: RichInputProps | PlainInputProps) {
       {...inputProps}
       className={cn(INPUT_CLASS, 'w-full resize-none', className)}
     />
+  )
+}
+
+/** Shared visible shell extracted from ChatBar; controllers keep their own submit and owner state. */
+export function ComposerSurface({ children, className, ...props }: ComponentProps<'div'>) {
+  return (
+    <div
+      {...props}
+      className={cn(
+        'group/composer-surface relative z-4 isolate grid grid-cols-[minmax(0,1fr)] grid-rows-[auto_1fr] overflow-hidden rounded-[inherit] border border-[color-mix(in_srgb,var(--dt-composer-ring)_calc(18%*var(--composer-ring-strength)),var(--dt-input))]',
+        className
+      )}
+      data-slot="composer-surface"
+    >
+      <div
+        aria-hidden
+        className={cn(
+          'pointer-events-none absolute inset-0 -z-10 rounded-[inherit]',
+          composerFill,
+          composerSurfaceGlass
+        )}
+      />
+      {children}
+    </div>
+  )
+}
+
+export function ComposerContent({ children, className, ...props }: ComponentProps<'div'>) {
+  return (
+    <div
+      {...props}
+      className={cn(
+        'relative z-1 flex min-h-0 w-full flex-col gap-(--composer-row-gap) overflow-hidden rounded-[inherit] px-(--composer-surface-pad-x) py-(--composer-surface-pad-y) transition-opacity duration-200 ease-out',
+        className
+      )}
+      data-slot="composer-fade"
+    >
+      {children}
+    </div>
   )
 }

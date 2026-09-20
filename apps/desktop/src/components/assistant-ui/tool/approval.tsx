@@ -107,57 +107,52 @@ const isMac = typeof navigator !== 'undefined' && /Mac|iP(hone|ad|od)/.test(navi
 
 const ApprovalBar: FC<{ request: ApprovalRequest; surface: 'floating' | 'inline' }> = ({ request, surface }) => {
   const { t } = useI18n()
-  const copy = t.assistant.approval
   const gateway = useStore($gateway)
+  const respond = async (choice: ApprovalChoice) => {
+    if (!sessionApprovalRequest(request.sessionId).get()) return
+    if (!gateway) throw new Error(t.assistant.approval.gatewayDisconnected)
+    await answerApproval(gateway, request, choice)
+    clearApprovalRequest(request.sessionId, request.requestId)
+    void replayPendingApproval(gateway, request.sessionId).catch(() => undefined)
+  }
+  return <ApprovalBarSurface request={request} surface={surface} onRespond={respond} />
+}
+
+/** Original approval controls, with all transport authority supplied by the owner. */
+export function ApprovalBarSurface({
+  request,
+  surface = 'inline',
+  onRespond
+}: {
+  request: Pick<ApprovalRequest, 'command' | 'description' | 'choices' | 'allowPermanent' | 'smartDenied'>
+  surface?: 'floating' | 'inline'
+  onRespond: (choice: ApprovalChoice) => Promise<void> | void
+}) {
+  const { t } = useI18n()
+  const copy = t.assistant.approval
   const [submitting, setSubmitting] = useState<ApprovalChoice | null>(null)
-  // "Always allow" persists the pattern to ~/.hermes/config.yaml permanently, so
-  // it goes through a confirm step rather than firing straight from the menu.
   const [confirmAlways, setConfirmAlways] = useState(false)
-  // The pending tool row only shows a single truncated line of the command, and
-  // a pending row can't be expanded (no result yet), so the full command was
-  // previously only reachable via the "Always allow" modal. Let the user reveal
-  // it inline instead — "expand, Run" (2 clicks) rather than the modal dance.
   const [showCommand, setShowCommand] = useState(false)
   const busy = submitting !== null
-  // false when the backend won't honor a permanent allow (tirith warning) → hide "Always allow".
   const allowPermanent = request.allowPermanent !== false
   const choices = request.choices ?? (request.smartDenied ? ['once', 'deny'] : undefined)
   const allowSession = choices ? choices.includes('session') : true
   const allowAlways = choices ? choices.includes('always') : allowPermanent
   const hasMoreOptions = allowSession || allowAlways
   const hasCommand = request.command.trim().length > 0
-
   const respond = useCallback(
     async (choice: ApprovalChoice) => {
-      // Another bar (or the keyboard path) may have already resolved this
-      // approval; the map is the single source of truth, so bail if this
-      // session's request is gone.
-      if (busy || !sessionApprovalRequest(request.sessionId).get()) {
-        return
-      }
-
-      if (!gateway) {
-        notifyError(new Error(copy.gatewayDisconnected), copy.sendFailed)
-
-        return
-      }
-
+      if (busy) return
       setSubmitting(choice)
-
       try {
-        // Live prompt: the response frame rides the socket the request came on
-        // (the owner backend by construction). Restored prompt: queue-level
-        // `approval.respond`, owner-routed (#91684 client half).
-        await answerApproval(gateway, request, choice)
+        await onRespond(choice)
         triggerHaptic(choice === 'deny' ? 'cancel' : 'submit')
-        clearApprovalRequest(request.sessionId, request.requestId)
-        void replayPendingApproval(gateway, request.sessionId).catch(() => undefined)
       } catch (error) {
         notifyError(error, copy.sendFailed)
         setSubmitting(null)
       }
     },
-    [busy, copy.gatewayDisconnected, copy.sendFailed, gateway, request]
+    [busy, copy.sendFailed, onRespond]
   )
 
   // ⌘/Ctrl+Enter → Run, Esc → Reject.

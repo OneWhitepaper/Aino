@@ -94,6 +94,10 @@ export interface ModelMenuController {
 }
 
 interface ModelCatalogMenuProps {
+  /** Restrict this view without changing the shared server catalog cache. */
+  providerFilter?: string
+  /** Surfaces without option mutation authority expose model choice only. */
+  optionsEditable?: boolean
   disabled?: boolean
   controller: ModelMenuController
   /** Rows appended under the catalog (Refresh Models, Edit Models, …). */
@@ -130,6 +134,8 @@ interface ProviderGroup {
  */
 export function ModelCatalogMenu({
   disabled = false,
+  providerFilter,
+  optionsEditable = true,
   controller,
   footer,
   gateway,
@@ -264,12 +270,13 @@ export function ModelCatalogMenu({
     () =>
       providers?.filter(
         provider =>
+          (!providerFilter || catalogProviderMatches(provider, providerFilter)) &&
           provider.slug.toLowerCase() !== 'moa' &&
           // Strict --local gate: staged local models exist on disk, but
           // without the flag the GUI doesn't offer them.
           (localModelsEnabled || provider.slug !== LOCAL_PROVIDER_SLUG)
       ) ?? [],
-    [providers, localModelsEnabled]
+    [providers, localModelsEnabled, providerFilter]
   )
 
   const current = controller.current
@@ -332,13 +339,14 @@ export function ModelCatalogMenu({
         return
       }
 
-      controller.applyPreset(
-        {
-          effort: (caps?.reasoning ?? true) ? (preset.effort ?? defaultEffort) : undefined,
-          fast: (caps?.fast ?? false) ? (preset.fast ?? false) : undefined
-        },
-        { model: family.id, provider: provider.slug }
-      )
+      if (optionsEditable)
+        controller.applyPreset(
+          {
+            effort: (caps?.reasoning ?? true) ? (preset.effort ?? defaultEffort) : undefined,
+            fast: (caps?.fast ?? false) ? (preset.fast ?? false) : undefined
+          },
+          { model: family.id, provider: provider.slug }
+        )
       closeMenu()
     } catch (error) {
       notifyError(error, t.desktop.modelSwitchFailed)
@@ -580,12 +588,14 @@ export function ModelCatalogMenu({
                       effFast
                     )
 
-                    const meta = [
-                      fastControl.kind !== 'none' && fastControl.on ? copy.fast : null,
-                      (caps?.reasoning ?? true) ? reasoningEffortLabel(effEffort || defaultEffort) : null
-                    ]
-                      .filter(Boolean)
-                      .join(' ')
+                    const meta = optionsEditable
+                      ? [
+                          fastControl.kind !== 'none' && fastControl.on ? copy.fast : null,
+                          (caps?.reasoning ?? true) ? reasoningEffortLabel(effEffort || defaultEffort) : null
+                        ]
+                          .filter(Boolean)
+                          .join(' ')
+                      : ''
 
                     // Clicking the row commits the model and closes; the edit
                     // submenu (reasoning/fast) is reached by HOVER, so you can
@@ -647,7 +657,7 @@ export function ModelCatalogMenu({
                           canDisableReasoning={caps?.can_disable_reasoning ?? undefined}
                           defaultEffort={defaultEffort}
                           effort={effEffort}
-                          fastControl={fastControl}
+                          fastControl={optionsEditable ? fastControl : { kind: 'none' }}
                           isActive={isCurrent}
                           model={family.id}
                           onSelectModel={nextModel => controller.select(nextModel, group.provider.slug)}
@@ -659,7 +669,7 @@ export function ModelCatalogMenu({
                             })
                           }
                           provider={group.provider.slug}
-                          reasoning={caps?.reasoning ?? true}
+                          reasoning={optionsEditable && (caps?.reasoning ?? true)}
                         />
                       </DropdownMenuSub>
                     )

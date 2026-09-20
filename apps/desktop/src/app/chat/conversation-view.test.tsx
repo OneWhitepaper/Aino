@@ -3,6 +3,15 @@ import type { ConversationEvent } from '@hermes/shared/gateway-events'
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
 
+vi.stubGlobal(
+  'ResizeObserver',
+  class {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  }
+)
+
 import { I18nProvider } from '@/i18n'
 import { conversationOwnerKey } from '@/store/conversation-owner'
 import { $conversationRuntime, updateConversationRuntime } from '@/store/conversation-runtime'
@@ -78,6 +87,10 @@ const publicReply = (id: string, text: string, seq: number): ConversationEvent =
 })
 
 function setup(catalogPromise?: Promise<unknown>) {
+  Element.prototype.animate = vi.fn(() => ({
+    cancel: vi.fn(),
+    finished: Promise.resolve()
+  })) as unknown as typeof Element.prototype.animate
   actions.participants.mockResolvedValue(
     catalogPromise ?? {
       participants: catalog.map(participant => ({ participant, available: true }))
@@ -203,13 +216,13 @@ it('selection while A runs edits only the next draft, preserves live tools/child
   )
   await pick('B')
   fireEvent.change(screen.getByRole('textbox', { name: 'Message' }), { target: { value: 'Next question' } })
-  expect((screen.getByRole('button', { name: 'Send' }) as HTMLButtonElement).disabled).toBe(true)
+  expect(screen.queryByRole('button', { name: 'Send' })).toBeNull()
   expect($conversationRuntime.get()[key].snapshot?.active_turn?.participant_id).toBe('A')
   expect($conversationDrafts.get()[key].selectedParticipantId).toBe('B')
   expect(screen.getByText('A is working')).toBeTruthy()
   expect(screen.getByText('Check references')).toBeTruthy()
-  expect(screen.getByText(/Expert A · terminal/)).toBeTruthy()
-  fireEvent.click(screen.getByRole('button', { name: 'Allow once' }))
+  expect(screen.getByLabelText('Expert A · terminal')).toBeTruthy()
+  fireEvent.click(screen.getByRole('button', { name: /^Run(?!ning)/ }))
   expect(actions.respond).toHaveBeenCalledWith('approval', { choice: 'once' })
   actions.stop.mockResolvedValue({ status: 'requested' })
   fireEvent.click(screen.getAllByRole('button', { name: 'Stop' }).at(-1)!)
@@ -252,10 +265,26 @@ it('renders private command notices outside the shared log and confirms configur
   expect(screen.getByText('Private SOUL text').closest('[role="log"]')).toBeNull()
   expect(screen.getByRole('log').textContent).toContain('Earlier public answer')
   fireEvent.click(screen.getByRole('button', { name: 'Refresh expert configuration' }))
+  fireEvent.click(screen.getAllByRole('button', { name: 'Refresh expert configuration' }).at(-1)!)
   act(() => setConversationDraft(owner, { ...$conversationDrafts.get()[key], selectedParticipantId: 'B' }))
   fireEvent.click(screen.getByRole('button', { name: 'Apply' }))
   await waitFor(() => expect(actions.refresh).toHaveBeenCalledWith('A', 1))
   expect($conversationDrafts.get()[key].text).toBe('Keep this next reply')
   expect(actions.submit).not.toHaveBeenCalled()
   $conversationPrivateNotices.set({})
+})
+
+it('resizes the original input on programmatic draft updates and clears its height after acknowledgement', async () => {
+  setup()
+  const input = screen.getByRole('textbox', { name: 'Message' }) as HTMLTextAreaElement
+  Object.defineProperty(input, 'scrollHeight', { configurable: true, get: () => (input.value.length > 30 ? 120 : 28) })
+  act(() =>
+    setConversationDraft(owner, {
+      ...$conversationDrafts.get()[key],
+      text: 'A multiline draft that needs more room than one compact row.'
+    })
+  )
+  await waitFor(() => expect(input.style.height).toBe('120px'))
+  act(() => setConversationDraft(owner, { ...$conversationDrafts.get()[key], text: '' }))
+  await waitFor(() => expect(input.style.height).toBe('28px'))
 })

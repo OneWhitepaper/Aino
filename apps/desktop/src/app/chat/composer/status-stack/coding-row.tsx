@@ -1,5 +1,5 @@
 import { useStore } from '@nanostores/react'
-import { memo, useEffect } from 'react'
+import { memo, type ReactNode, useEffect } from 'react'
 
 import { PrTag } from '@/app/chat/pr-tag'
 import { StatusRow } from '@/components/chat/status-row'
@@ -122,12 +122,9 @@ export const CodingStatusRow = memo(function CodingStatusRow({
 
   if (!projectName || !status) {
     return (
-      <StatusRow
-        className="coding-status-bar min-h-7 rounded-t-[inherit] rounded-b-none border-b border-(--ui-stroke-tertiary) px-3.5 py-1.5 hover:bg-transparent"
-        leading={<Codicon className="text-(--ui-text-secondary)" name="folder" size="0.875rem" />}
-      >
+      <ProjectContextRow>
         <ComposerProjectSelector cwd={resolvedRepoPath} label={projectName} />
-      </StatusRow>
+      </ProjectContextRow>
     )
   }
 
@@ -357,3 +354,15 @@ export const CodingStatusRow = memo(function CodingStatusRow({
     </>
   )
 })
+
+/** The same compact folder header in every chat composer. */
+export function ProjectContextRow({ children }: { children: ReactNode }) {
+  return (
+    <StatusRow
+      className="coding-status-bar min-h-7 rounded-t-[inherit] rounded-b-none border-b border-(--ui-stroke-tertiary) px-3.5 py-1.5 hover:bg-transparent"
+      leading={<Codicon className="text-(--ui-text-secondary)" name="folder" size="0.875rem" />}
+    >
+      {children}
+    </StatusRow>
+  )
+}

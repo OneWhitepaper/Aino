@@ -1,5 +1,5 @@
 import { useStore } from '@nanostores/react'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { type ComponentProps, useCallback, useEffect, useRef, useState } from 'react'
 
 import { useSessionView } from '@/app/chat/session-view'
 import { useTourMarker } from '@/app/chat/tour-marker'
@@ -187,15 +187,15 @@ export function ModelPill({
   const baseTitle = modelDefaultUnavailable
     ? copy.openModelPicker
     : currentProvider
-    ? copy.modelTitle(currentProvider, currentModel || copy.modelNone)
-    : copy.switchModel
+      ? copy.modelTitle(currentProvider, currentModel || copy.modelNone)
+      : copy.switchModel
 
   const title = pinnedOverride ? `${baseTitle} — ${copy.modelPinned}` : baseTitle
 
   if (!model.modelMenuContent) {
     return (
       <Tip label={pinnedOverride ? `${copy.openModelPicker} — ${copy.modelPinned}` : copy.openModelPicker} side="top">
-        <Button
+        <ModelPillButton
           aria-label={copy.openModelPicker}
           className={pillClass}
           data-tour={tourMarker}
@@ -205,7 +205,7 @@ export function ModelPill({
           variant="ghost"
         >
           {label}
-        </Button>
+        </ModelPillButton>
       </Tip>
     )
   }
@@ -214,7 +214,7 @@ export function ModelPill({
     <DropdownMenu onOpenChange={setMenuOpen} open={menuState.open}>
       <Tip label={title} side="top">
         <DropdownMenuTrigger asChild>
-          <Button
+          <ModelPillButton
             aria-label={title}
             className={pillClass}
             data-tour={tourMarker}
@@ -223,7 +223,7 @@ export function ModelPill({
             variant="ghost"
           >
             {label}
-          </Button>
+          </ModelPillButton>
         </DropdownMenuTrigger>
       </Tip>
       <DropdownMenuContent
@@ -236,7 +236,9 @@ export function ModelPill({
             restoreSelection.current = null
           }
         }}
-        onInteractOutside={() => { restoreSelection.current = null }}
+        onInteractOutside={() => {
+          restoreSelection.current = null
+        }}
         side="top"
         sideOffset={8}
       >
@@ -254,4 +256,8 @@ export function ModelPill({
       </DropdownMenuContent>
     </DropdownMenu>
   )
+}
+
+export function ModelPillButton({ className, ...props }: ComponentProps<typeof Button>) {
+  return <Button {...props} className={cn(PILL, className)} type="button" variant="ghost" />
 }

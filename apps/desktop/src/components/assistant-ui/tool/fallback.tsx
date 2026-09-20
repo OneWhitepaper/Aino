@@ -352,11 +352,21 @@ function toolEntryDisclosureId(messageId: string, part: ToolPart): string {
 }
 
 function ToolEntry({ part }: ToolEntryProps) {
+  const messageId = useAuiState(s => s.message.id)
+  const messageRunning = useAuiState(selectMessageRunning)
+  return <ToolEntrySurface part={part} messageId={messageId} messageRunning={messageRunning} />
+}
+
+/** Original tool renderer; scoped callers disable legacy session side effects. */
+export function ToolEntrySurface({
+  part,
+  messageId,
+  messageRunning,
+  scoped = false
+}: ToolEntryProps & { messageId: string; messageRunning: boolean; scoped?: boolean }) {
   const { t } = useI18n()
   const copy = t.assistant.tool
   const statusCopy = t.statusStack
-  const messageId = useAuiState(s => s.message.id)
-  const messageRunning = useAuiState(selectMessageRunning)
   const embedded = useContext(ToolEmbedContext)
   const runDisclosureId = useContext(ToolRunDisclosureContext)
   const toolViewMode = useStore($toolViewMode)
@@ -387,7 +397,7 @@ function ToolEntry({ part }: ToolEntryProps) {
   const isPending = messageRunning && result === undefined && completedAt === undefined
   // Subscribe to this tool's diff only, so a live patch for one tool doesn't
   // re-render every mounted tool row (the factory caches a per-id atom).
-  const sideDiff = useStore($toolInlineDiff(toolCallId ?? ''))
+  const sideDiff = useStore($toolInlineDiff(scoped ? `scoped:${messageId}:${toolCallId ?? ''}` : (toolCallId ?? '')))
   const inlineDiff = stripInlineDiffChrome(sideDiff) || inlineDiffFromResult(toolResultRecord(stablePart))
   const isFileEdit = isFileEditTool(toolName)
   const defaultOpen = Boolean(inlineDiff)
@@ -423,7 +433,7 @@ function ToolEntry({ part }: ToolEntryProps) {
   const { $cwd: $sessionCwd, $runtimeId: $sessionRuntimeId } = useSessionView()
 
   useEffect(() => {
-    if (isPending || !previewTarget || !isPreviewableTarget(previewTarget)) {
+    if (scoped || isPending || !previewTarget || !isPreviewableTarget(previewTarget)) {
       return
     }
 
@@ -435,7 +445,7 @@ function ToolEntry({ part }: ToolEntryProps) {
     if (sessionId) {
       recordPreviewArtifact(sessionId, previewTarget, $sessionCwd.get() || '', generatedPreview)
     }
-  }, [$sessionCwd, $sessionRuntimeId, generatedPreview, isPending, previewTarget])
+  }, [$sessionCwd, $sessionRuntimeId, generatedPreview, isPending, previewTarget, scoped])
 
   const detailSections = useMemo(() => {
     if (!view.detail) {
@@ -625,7 +635,7 @@ function ToolEntry({ part }: ToolEntryProps) {
           </span>
         </DisclosureRow>
       </div>
-      {isPending && <PendingToolApproval part={part} />}
+      {isPending && !scoped && <PendingToolApproval part={part} />}
       {open && (
         <div className="relative grid w-full min-w-0 max-w-full gap-1.5 overflow-hidden p-1.5">
           {copyAction.text && (
@@ -643,7 +653,7 @@ function ToolEntry({ part }: ToolEntryProps) {
           {part.toolName === 'terminal' && toolViewMode !== 'technical' && (
             <TerminalTranscript command={view.terminalCommand} exitCode={view.terminalExitCode} />
           )}
-          {view.imageUrl && (
+          {view.imageUrl && !scoped && (
             <div className="max-w-72 overflow-hidden rounded-[0.25rem] border border-(--ui-stroke-tertiary)">
               <ZoomableImage alt={copy.outputAlt} className="h-auto w-full object-cover" src={view.imageUrl} />
             </div>
@@ -661,7 +671,11 @@ function ToolEntry({ part }: ToolEntryProps) {
             </div>
           )}
           {view.inlineDiff && (
-            <FileDiffPanel className="-mt-1.5" diff={view.inlineDiff} path={isFileEdit ? view.subtitle : undefined} />
+            <FileDiffPanel
+              className="-mt-1.5"
+              diff={view.inlineDiff}
+              path={!scoped && isFileEdit ? view.subtitle : undefined}
+            />
           )}
           {showDetail &&
             toolViewMode !== 'technical' &&

@@ -23,6 +23,7 @@ import type { ChatBarState, VoiceStatus } from './types'
 import { VoiceEngineRows } from './voice-engine-rows'
 
 export interface VoiceMenuProps {
+  liveFeatures?: boolean
   autoSpeak: boolean
   disabled: boolean
   /** Narrow composers include dictation here; wider ones keep its button inline. */
@@ -51,6 +52,7 @@ export interface VoiceMenuProps {
  */
 export function VoiceMenu({
   autoSpeak,
+  liveFeatures = true,
   disabled,
   includeDictation = true,
   state,
@@ -109,7 +111,7 @@ export function VoiceMenu({
       <DropdownMenuContent align="end" className="min-w-52">
         <DropdownMenuItem
           className={dropdownMenuRow}
-          disabled={disabled}
+          disabled={disabled || !liveFeatures}
           onSelect={() => {
             triggerHaptic('open')
             onStartConversation()
@@ -119,7 +121,7 @@ export function VoiceMenu({
           {c.startVoice}
         </DropdownMenuItem>
         <DropdownMenuSeparator />
-        <VoiceEngineRows disabled={disabled} />
+        <VoiceEngineRows disabled={disabled || !liveFeatures} />
         <DropdownMenuSeparator />
         {/* Checkbox items, because all three are toggles the user is reading
             the CURRENT state of — the reason they were pressed-state buttons
@@ -142,7 +144,7 @@ export function VoiceMenu({
         <DropdownMenuCheckboxItem
           checked={autoSpeak}
           className={dropdownMenuRow}
-          disabled={disabled}
+          disabled={disabled || !liveFeatures}
           onSelect={event => {
             event.preventDefault()
             triggerHaptic(autoSpeak ? 'close' : 'open')
@@ -155,7 +157,7 @@ export function VoiceMenu({
         <DropdownMenuCheckboxItem
           checked={wakeListening}
           className={dropdownMenuRow}
-          disabled={disabled || wake.pending}
+          disabled={disabled || !liveFeatures || wake.pending}
           onSelect={event => {
             event.preventDefault()
             triggerHaptic(wakeListening ? 'close' : 'open')
