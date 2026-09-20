@@ -130,7 +130,7 @@ function TooltipContent({ className, sideOffset = 6, children, variant = 'defaul
         {variant === 'card' ? (
           children
         ) : (
-          <span className="box-decoration-clone inline bg-foreground px-1.5 py-1 text-[11px] font-bold leading-normal text-background [font-family:Arial,sans-serif] [&>*]:!inline">
+          <span className="box-decoration-clone inline bg-foreground px-1.5 py-1 font-sans text-[length:var(--aino-text-caption)] font-medium leading-normal text-background [&>*]:!inline">
             {children}
           </span>
         )}

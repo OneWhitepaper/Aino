@@ -14,9 +14,13 @@ import {
   setSidebarOrdering,
   setSidebarShowAllSessions,
   setSidebarWidth,
+  CHAT_SIDEBAR_PANE_ID,
+  SIDEBAR_DEFAULT_WIDTH,
+  SIDEBAR_MIN_WIDTH,
   toggleSidebarRowMeta,
   toggleSidebarStatusFilter
 } from './layout'
+import { setPaneWidthOverride } from './panes'
 import { $showAllProfiles } from './profile'
 
 beforeEach(() => {
@@ -34,10 +38,21 @@ describe('the sidebar as it ships', () => {
     expect($sidebarRecentGrouping.get()).toBe('profile')
   })
 
-  it('keeps the sessions rail at the 245px Aino baseline when resized below its minimum', () => {
+  it('clamps the sessions rail to its supported minimum', () => {
     setSidebarWidth(0)
 
-    expect($sidebarWidth.get()).toBe(245)
+    expect($sidebarWidth.get()).toBe(SIDEBAR_MIN_WIDTH)
+  })
+
+  it('uses the default only without a saved width and preserves narrower saved layouts', () => {
+    setPaneWidthOverride(CHAT_SIDEBAR_PANE_ID, undefined)
+    expect($sidebarWidth.get()).toBe(SIDEBAR_DEFAULT_WIDTH)
+
+    const savedWidth = (SIDEBAR_MIN_WIDTH + SIDEBAR_DEFAULT_WIDTH) / 2
+    setPaneWidthOverride(CHAT_SIDEBAR_PANE_ID, savedWidth)
+    expect($sidebarWidth.get()).toBe(savedWidth)
+    setSidebarWidth(savedWidth)
+    expect($sidebarWidth.get()).toBe(savedWidth)
   })
 
   it('remembers expanded project previews across grouping changes and clears them on reset', () => {

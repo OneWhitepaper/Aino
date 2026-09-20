@@ -1,9 +1,9 @@
 /* Shared by every renderer, including body portals and transparent windows.
    Palette seeds still belong to ThemeProvider; these are the Aino UI roles. */
 :root {
-  --aino-radius-control: 0.5rem;
+  --aino-radius-control: 0.625rem;
   --aino-radius-row: 0.625rem;
-  --aino-radius-panel: 1rem;
+  --aino-radius-panel: 1.25rem;
   --aino-text-caption: 0.75rem;
   --aino-text-ui: 0.8125rem;
   --aino-text-body: 0.875rem;
@@ -32,15 +32,15 @@
   --aino-surface-bg: var(--ui-chat-surface-background);
   --aino-surface-rail: var(--ui-sidebar-surface-background);
   --aino-navigation-rail: var(--ui-sidebar-surface-background);
-  --aino-navigation-edge: var(--ui-stroke-secondary);
-  --aino-surface-stroke: var(--ui-stroke-secondary);
+  --aino-navigation-edge: var(--ui-stroke-tertiary);
+  --aino-surface-stroke: var(--ui-stroke-tertiary);
   --aino-surface-hover: var(--ui-row-hover-background);
   --aino-surface-active: var(--ui-row-active-background);
   --aino-surface-control: var(--ui-bg-quaternary);
   --aino-surface-ink: var(--ui-text-primary);
   --aino-surface-muted: var(--ui-text-secondary);
-  --aino-action-bg: #2b2f32;
-  --aino-action-fg: #fff;
+  --aino-action-bg: var(--ui-text-primary);
+  --aino-action-fg: var(--ui-bg-elevated);
   --aino-action-hover: color-mix(in srgb, var(--aino-action-bg) 88%, var(--ui-bg-editor));
   --aino-scrim: rgb(0 0 0 / 12%);
   --aino-focus-ring: 0 0 0 2px color-mix(in srgb, var(--ui-accent) 16%, transparent);
@@ -52,15 +52,53 @@
   --aino-scrim: rgb(0 0 0 / 32%);
 }
 
-/* Aino's fixed light canvas matches the approved conversation.
-   Glass still controls the surface aliases. */
-:root:not(.dark):not([data-hermes-theme]),
-:root[data-hermes-theme='mono']:not(.dark) {
-  --ui-bg-chrome: #fff;
-  --ui-bg-sidebar: #f7f7f7;
-  --ui-bg-editor: #fafafa;
+/* The approved v2 light palette is derived UI presentation, below the fixed
+   ThemeProvider seeds. Glass continues to own the *-surface-background aliases. */
+:root:not(.dark) {
+  --ui-base: #303236;
+  --ui-bg-chrome: #fcfcfc;
+  --ui-bg-sidebar: #f3f3f4;
+  --ui-bg-editor: #f8f9fa;
+  --ui-bg-input: var(--ui-bg-editor);
   --ui-bg-elevated: #fff;
-  --ui-chat-bubble-background: #f3f4f6;
+  --ui-text-primary: var(--ui-base);
+  --ui-text-secondary: #61666d;
+  --ui-text-tertiary: #858a92;
+  --ui-text-quaternary: color-mix(in srgb, var(--ui-text-tertiary) 72%, var(--ui-bg-elevated));
+  --ui-stroke-primary: #e1e4e8;
+  --ui-stroke-secondary: var(--ui-stroke-primary);
+  --ui-stroke-tertiary: #e7e8ea;
+  --ui-stroke-quaternary: color-mix(in srgb, var(--ui-stroke-tertiary) 60%, transparent);
+  --ui-row-active-background: #e5e6e8;
+  --ui-row-hover-background: color-mix(in srgb, var(--ui-row-active-background) 55%, transparent);
+  --ui-bg-tertiary: color-mix(in srgb, var(--ui-row-active-background) 65%, var(--ui-bg-sidebar));
+  --ui-bg-quaternary: var(--ui-bg-editor);
+  --ui-chat-bubble-background: var(--ui-bg-sidebar);
+}
+
+/* Landing and navigation consume the same roles as portals and page chrome. */
+:root {
+  --aino-landing-accent: var(--ui-text-primary);
+  --aino-landing-control: var(--ui-bg-quaternary);
+  --aino-landing-composer-stroke: var(--ui-stroke-secondary);
+  --aino-landing-icon: var(--ui-text-secondary);
+  --aino-landing-muted: var(--ui-text-tertiary);
+  --aino-landing-model-stroke: var(--ui-stroke-secondary);
+  --aino-landing-nav-text: var(--ui-text-secondary);
+  --aino-landing-placeholder: var(--ui-text-tertiary);
+  --aino-landing-primary: var(--ui-text-primary);
+  --aino-landing-secondary: var(--ui-text-secondary);
+  --aino-landing-session-active: var(--ui-row-active-background);
+  --aino-landing-sidebar: var(--ui-sidebar-surface-background);
+  --aino-landing-edge: var(--ui-stroke-tertiary);
+  --aino-landing-stroke: var(--ui-stroke-tertiary);
+  --aino-landing-switch: var(--ui-bg-tertiary);
+  --aino-landing-surface: var(--ui-chat-surface-background);
+  --aino-landing-title: var(--ui-text-primary);
+  --aino-landing-workspace: var(--ui-bg-quaternary);
+  --shadow-aino-landing-composer: var(--shadow-nous);
+  --aino-landing-font: var(--dt-font-sans);
+  --aino-band-row2: 2.75rem;
 }
 
 /* One rail-tone layer over the native material, not another field tint on
@@ -71,24 +109,6 @@
     var(--ui-base) calc(var(--translucency-glass-keep, 100%) * 0.06),
     transparent
   );
-}
-
-/* Palette selection, including imported themes, affects chat and the rest of
-   the desktop together instead of leaving the light chat hardcoded white. */
-:root[data-hermes-theme]:not([data-hermes-theme='nous']):not(.dark) {
-  --aino-landing-accent: var(--theme-primary);
-  --aino-landing-control: var(--ui-bg-quaternary);
-  --aino-landing-surface: var(--ui-chat-surface-background);
-  --aino-landing-sidebar: var(--ui-sidebar-surface-background);
-  --aino-landing-primary: var(--ui-text-primary);
-  --aino-landing-secondary: var(--ui-text-secondary);
-  --aino-landing-muted: var(--ui-text-tertiary);
-  --aino-landing-title: var(--ui-text-primary);
-  --aino-landing-stroke: var(--ui-stroke-tertiary);
-  --aino-landing-edge: var(--ui-stroke-secondary);
-  --aino-landing-composer-stroke: var(--ui-stroke-secondary);
-  --aino-action-bg: var(--ui-text-primary);
-  --aino-action-fg: var(--ui-bg-chrome);
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
@@ -133,7 +153,7 @@
 
 [data-aino-page-header] [data-tour='page-tabs'] [data-tour^='tab-'] {
   border: 0 !important;
-  border-radius: 0.5rem;
+  border-radius: var(--aino-radius-control);
   color: var(--ui-text-tertiary);
   text-decoration: none;
 }
@@ -144,9 +164,9 @@
 }
 
 [data-aino-page-header] [data-tour='page-tabs'] [data-tour^='tab-'][data-active='true'] {
-  background: transparent !important;
+  background: var(--aino-surface-active) !important;
   color: var(--aino-surface-ink);
-  box-shadow: inset 0 -2px 0 var(--ui-accent);
+  box-shadow: none;
   font-weight: 600;
 }
 
@@ -163,6 +183,8 @@
 }
 
 [data-aino-sidebar] [data-sidebar='menu-button'] {
+  min-height: 2.5625rem;
+  font-size: var(--aino-text-body);
   border: 0 !important;
   border-radius: var(--aino-radius-control) !important;
   box-shadow: none !important;
@@ -205,7 +227,7 @@
   min-height: 2rem;
   height: 2rem;
   border-color: transparent !important;
-  border-radius: 0.625rem !important;
+  border-radius: var(--aino-radius-row) !important;
   color: var(--aino-surface-muted);
   padding-inline: 0.625rem;
 }
@@ -258,7 +280,7 @@
 }
 
 [data-aino-master-detail] :is([data-aino-cap-row], [data-panel-row], [data-aino-active='true']) {
-  border-radius: 0.625rem !important;
+  border-radius: var(--aino-radius-row) !important;
 }
 
 [data-aino-master-detail] :is([data-aino-cap-row], [data-panel-row], [data-aino-active='true']):hover {
@@ -308,7 +330,7 @@
 
 [data-aino-overlay-card] [data-aino-overlay-nav] [data-tour^='nav-'] {
   border-color: transparent !important;
-  border-radius: 0.625rem !important;
+  border-radius: var(--aino-radius-row) !important;
   color: var(--ui-text-secondary);
 }
 

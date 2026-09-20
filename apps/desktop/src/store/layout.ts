@@ -17,7 +17,9 @@ import { $showAllProfiles, setShowAllProfiles } from './profile'
 import type { PullRequestBucket } from './pull-requests'
 import type { SessionStatusBucket } from './session-dot-state'
 
-export const SIDEBAR_DEFAULT_WIDTH = 245
+export const SIDEBAR_DEFAULT_WIDTH = 264
+// Preserve existing narrow user layouts when the default grows.
+export const SIDEBAR_MIN_WIDTH = 245
 export const SIDEBAR_MAX_WIDTH = 360
 // Open at the same width as the sessions sidebar so the two rails match, but
 // allow shrinking well below that (~30% under the old 14rem floor) for users who
@@ -520,7 +522,7 @@ export function restoreWorktree(id: string): void {
 }
 
 export function setSidebarWidth(width: number) {
-  const bounded = Math.min(SIDEBAR_MAX_WIDTH, Math.max(SIDEBAR_DEFAULT_WIDTH, width))
+  const bounded = Math.min(SIDEBAR_MAX_WIDTH, Math.max(SIDEBAR_MIN_WIDTH, width))
   setPaneWidthOverride(CHAT_SIDEBAR_PANE_ID, bounded)
 }
 

@@ -72,7 +72,8 @@ import {
   setFileBrowserOpen,
   setSidebarOpen,
   SIDEBAR_DEFAULT_WIDTH,
-  SIDEBAR_MAX_WIDTH
+  SIDEBAR_MAX_WIDTH,
+  SIDEBAR_MIN_WIDTH
 } from '@/store/layout'
 import { runExportProfileFlow, runImportProfileFlow } from '@/store/profile-share'
 import { $reviewOpen, $reviewRepoCwd, closeReview, restoreReview, REVIEW_PANE_ID } from '@/store/review'
@@ -182,7 +183,7 @@ registry.registerMany([
       hideOnly: true,
       tabLead: () => <AinoDesignIcon className="size-3.5" src={tabSessionsIcon} />,
       width: `${SIDEBAR_DEFAULT_WIDTH}px`,
-      minWidth: `${SIDEBAR_DEFAULT_WIDTH}px`,
+      minWidth: `${SIDEBAR_MIN_WIDTH}px`,
       maxWidth: `${SIDEBAR_MAX_WIDTH}px`
     },
     render: () => <WiredPane part="sidebar" />

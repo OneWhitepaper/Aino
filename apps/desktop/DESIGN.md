@@ -191,9 +191,14 @@ Gatewayless auxiliary renderers (Quick Entry, pet overlay, wake indicator) mount
 active profile and peer appearance storage events, but never publishes gateway
 profile authority or Electron native-theme ownership.
 
-The default light canvas is white, rails and fields are soft gray, actions are
-graphite, and accent is reserved for links, focus and active navigation. Semantic
-error/success/warning, syntax and diff colors retain their meaning. Use the normal
+The approved v2 light palette is a `#fcfcfc` canvas, `#f3f3f4` sidebar,
+`#ffffff` paper, and `#f8f9fa` field/header fill. Primary, secondary and supporting
+ink are `#303236`, `#61666d` and `#858a92`; seams use `#e7e8ea`, control outlines
+use `#e1e4e8`, and selection uses `#e5e6e8`. These values live in the derived
+`--ui-*` roles, not ThemeProvider's inline seeds. Landing and sidebar colors alias
+those same roles, so dark appearance and native Glass follow the existing surface
+resolution. Actions are graphite; links and focus retain their semantic accent.
+Semantic error/success/warning, syntax and diff colors retain their meaning. Use the normal
 UI font for labels; reserve monospace for code, commands, paths and numeric data.
 
 Floating panels (base `Dialog`, route overlays, boot/install/update surfaces,
@@ -204,13 +209,14 @@ shadow-nous           /* downward-weighted, layered contact→ambient falloff */
 border-(--stroke-nous) /* currentColor hairline, theme-adaptive */
 ```
 
-Both are CSS vars in `src/styles.css` — tune in one place, everything inherits.
+`--shadow-nous` lives in `src/styles.css`; `--stroke-nous` is the shared semantic
+hairline in `src/styles/aino-theme.css`. Tune those tokens and every peer inherits.
 Don't add per-overlay `shadow-[…]` or `border-(--ui-stroke-secondary)`
 one-offs; if elevation needs to change, change the token.
 
-Menus and popovers use their own shared `shadow-md` +
-`--ui-stroke-secondary` primitive treatment. Drag affordances may use tokenized
-dashed targets and local blur. These are semantic surface classes, not licenses
+Menus, selects, dialogs, sheets and popovers share the same `shadow-nous` +
+`--stroke-nous` treatment and 20px panel radius (sheets round their exposed edge).
+Drag affordances may use tokenized dashed targets and local blur. These are semantic surface classes, not licenses
 for call-site shadow or border inventions.
 
 `PopoverContent variant="card"` provides a 320px floating card with 20px corners,
@@ -241,10 +247,10 @@ renderer and Electron's first window paint.
 | `--chrome-action-hover` | hover fill for quiet controls |
 | `--theme-primary`, `--ui-accent` | brand/accent |
 | `--aino-action-bg / -fg / -hover` | graphite primary action and contrast-safe inverse; shared by button, switch and checkbox |
-| `--aino-radius-control / -row / -panel` | 8px controls, 10px selection rows, 16px floating panels |
+| `--aino-radius-control / -row / -panel` | 10px controls and selected rows, 20px floating panels |
 | `--aino-text-caption / -ui / -body / -title` | 12 / 13 / 14 / 15px type roles; page-specific headings can step up |
 | `--aino-surface-*`, `--aino-scrim`, `--aino-focus-ring` | shared paper, rail, strokes, state fills, backdrop and input focus |
-| `--aino-landing-*`, `--shadow-aino-landing-composer` | Figma-authored Aino home/sidebar palette and composer elevation; light values mirror the approved frame, dark values fall back to theme tokens |
+| `--aino-landing-*`, `--shadow-aino-landing-composer` | home/sidebar aliases of the shared semantic roles and `shadow-nous`; no independent light or dark palette |
 
 Never hardcode `border-gray-*`, `bg-white`, `text-black`, etc. The white tile in
 `BrandMark` is the one sanctioned literal (the mark needs a fixed backdrop).
@@ -276,7 +282,8 @@ other detail) is not already on screen — toolbar / titlebar / statusbar icons,
 
 `Tip variant="card"` is a rounded, theme-aware paper surface for multi-line
 informational previews, such as context usage. It keeps the standard hover
-delay and never takes focus; ordinary tooltips retain their inline treatment.
+delay and never takes focus; ordinary tooltips retain their inverse inline
+treatment with the shared system-sans caption type role.
 
 Do **not** tip:
 
@@ -309,9 +316,9 @@ context-dependent (e.g. "Show" / "Hide"). Never hardcode combos; always use
 `useKeybindHint` or `TipKeybindLabel`.
 
 Notes:
-- Text buttons use the shared 8px control radius and padding + line-height (no
-  fixed heights). Boxless text/link actions have no radius; compact icon buttons
-  retain 4px corners. Primary actions use `--aino-action-*`, not the link accent.
+- Text and icon buttons use the shared 10px control radius; text sizes use padding
+  + line-height (no fixed heights). Boxless text/link actions have no radius.
+  Primary actions use `--aino-action-*`, not the link accent.
 - SVGs inherit `size-3.5` (`size-3` at `xs`). Don't re-set icon size.
 - Polymorph with `asChild` when the button must render as a link/Slot.
 
@@ -324,7 +331,7 @@ Sizes: `default`, `xs`, `overlay` (titlebar glyph counts).
 ## Form controls
 
 - **`controlVariants`** (`src/components/ui/control.ts`) is the shared shape for
-  `Input` / `Textarea` / `SelectTrigger`: 8px corners, 13px normal UI text and
+  `Input` / `Textarea` / `SelectTrigger`: 10px corners, 13px normal UI text and
   padding-driven size. New text-entry controls compose it. Fields have neutral
   fill/hairlines, accent-only focus and a semantic invalid state; grouped fields
   inherit the same font size as bare controls. No page-specific control overrides.
@@ -333,13 +340,16 @@ Sizes: `default`, `xs`, `overlay` (titlebar glyph counts).
   Empty lists hide their search field.
 - **`SegmentedControl`** — the choice control for small mutually-exclusive sets
   (color mode, tool-call display, usage period). Replaces radio piles and
-  pill rows.
+  pill rows. The neutral track and active paper option share the control radius,
+  with the same keyboard focus outline as buttons. Menu selection rows use the
+  10px row radius; normal route tabs use a soft neutral selection fill.
 - **`Switch`** (`size="xs"`) — bare, with `aria-label`. No bordered text wrapper.
 
 ## Layout
 
-- **Navigation rail:** a quiet gray rail continues into its portion of the
-  native titlebar, with one continuous hairline at the content boundary.
+- **Navigation rail:** new layouts open at 264px. Existing saved widths remain
+  authoritative, and the supported 245px minimum is unchanged. A quiet gray rail
+  continues into its portion of the native titlebar, with one continuous hairline at the content boundary.
   The tree sash owns the divider and its resize target; panes do not add
   edge borders or shadows. Titlebar-local geometry follows resizing, hiding
   and side swaps without per-frame root style invalidation. Glass retains
@@ -446,6 +456,17 @@ so glass and message-bubble transparency do not reveal scrolling text.
   voice menu and send controls do not fork by home/conversation layout. A
   default model remains visible by name, and projects have one entry at the
   top of the input instead of a second fixed workspace button below it.
+  The v2 home order is title and subtitle → project selector above the input →
+  composer controls → the four existing quick tasks. The centered composition
+  caps at 916px; the composer uses 22px corners, and quick tasks use 15px corners.
+  The reserved slot and actual composer share one height, and the editor scrolls
+  above its controls for long drafts. Task columns respond to the available chat
+  pane width, and short windows use a more compact composer and spacing. The serif `AINO AGENT` heading is the only serif UI treatment.
+  No decorative logo appears above it, and no duplicate app identity is added
+  above the sidebar's titlebar → Sessions/Agent Hub switch → navigation ordering.
+  Existing routes, section order, dynamic account/model/copy and action paths stay
+  unchanged. Avatars, radios and send controls remain circular; compact checkboxes
+  retain their intentional small square geometry.
   Home subtitles reuse the existing locale/personality copy pool and fresh-chat
   seed, staying stable on ordinary rerenders without a model request. They wrap
   to the available chat width, including narrow panes in wide windows. Locales
@@ -542,7 +563,8 @@ so glass and message-bubble transparency do not reveal scrolling text.
   group.
 - **`BrandMark`** (`src/components/brand-mark.tsx`) is the Aino brand glyph — a
   small vector mark, softly rounded and identical in light/dark. Use it for
-  hero/brand moments; don't reintroduce decorative star/sparkle icons.
+  explicit brand moments outside the home headline and sidebar top; those two
+  surfaces have no decorative app glyph. Do not reintroduce star/sparkle icons.
 
 ## Motion
 

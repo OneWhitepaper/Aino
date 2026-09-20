@@ -47,12 +47,12 @@ const buttonVariants = cva(
         // Status-stack headers, table footers — 12px text actions beside a label.
         micro:
           "h-auto gap-0.5 px-1 py-0 text-xs leading-4 font-normal has-[>svg]:px-0.5 [&_svg:not([class*='size-'])]:size-3",
-        icon: 'size-9 rounded-[4px]',
-        'icon-xs': "size-6 rounded-[4px] [&_svg:not([class*='size-'])]:size-3",
-        'icon-sm': 'size-8 rounded-[4px]',
-        'icon-lg': 'size-10 rounded-[4px]',
+        icon: 'size-9 rounded-(--aino-radius-control)',
+        'icon-xs': "size-6 rounded-(--aino-radius-control) [&_svg:not([class*='size-'])]:size-3",
+        'icon-sm': 'size-8 rounded-(--aino-radius-control)',
+        'icon-lg': 'size-10 rounded-(--aino-radius-control)',
         'icon-titlebar':
-          'titlebar-icon-button h-(--titlebar-control-height) w-(--titlebar-control-size) rounded-[4px] [&_svg:not([class*="size-"])]:size-(--titlebar-icon-size)'
+          'titlebar-icon-button h-(--titlebar-control-height) w-(--titlebar-control-size) rounded-(--aino-radius-control) [&_svg:not([class*="size-"])]:size-(--titlebar-icon-size)'
       }
     },
     compoundVariants: [

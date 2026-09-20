@@ -20,8 +20,8 @@ describe('SheetContent close button', () => {
     const close = screen.getByRole('button', { name: /close|关闭/i })
 
     expect(close.getAttribute('data-slot')).toBe('button')
-    expect(close.className).toContain('size-8')
-    expect(close.className).toContain('rounded-[4px]')
+    expect(close.getAttribute('data-size')).toBe('icon-sm')
+    expect(close.getAttribute('data-variant')).toBe('ghost')
 
     fireEvent.click(close)
     expect(onOpenChange).toHaveBeenCalledWith(false)
