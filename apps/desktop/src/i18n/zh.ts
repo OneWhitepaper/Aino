@@ -2319,6 +2319,7 @@ export const zh = defineLocale({
       vram: label => `${label} 显存`,
       ram: label => `${label} 内存`,
       unifiedMemory: '统一内存',
+      storage: (total, available) => `模型存储卷：总容量 ${total}，可用 ${available}`,
       modelsTitle: '模型',
       recommended: '推荐',
       recommendedReason: {
@@ -5595,6 +5596,9 @@ export const zh = defineLocale({
       noActiveSession: '没有活跃会话',
       gatewayNotConnected: '网关未连接',
       steered: '已引导',
+      modelChanged: '模型已更改。',
+      modelChangedTo: model => `模型已更改为 ${model}。`,
+      modelChangedFrom: (previousModel, model) => `模型已从 ${previousModel} 更改为 ${model}。`,
       dismissError: '关闭错误',
       errorLayers: {
         auth: '认证错误',

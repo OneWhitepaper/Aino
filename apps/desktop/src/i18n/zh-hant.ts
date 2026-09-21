@@ -1578,6 +1578,7 @@ export const zhHant = defineLocale({
       vram: label => `${label} 顯示記憶體`,
       ram: label => `${label} 記憶體`,
       unifiedMemory: '統一記憶體',
+      storage: (total, available) => `模型儲存卷：總容量 ${total}，可用 ${available}`,
       modelsTitle: '模型',
       recommended: '推薦',
       recommendedReason: {
@@ -3673,6 +3674,9 @@ export const zhHant = defineLocale({
 
   assistant: {
     thread: {
+      modelChanged: '模型已變更。',
+      modelChangedTo: model => `模型已變更為 ${model}。`,
+      modelChangedFrom: (previousModel, model) => `模型已從 ${previousModel} 變更為 ${model}。`,
       loadingSession: '正在載入工作階段',
       showEarlier: '顯示較早的訊息',
       loadingResponse: 'Hermes 正在載入回覆',

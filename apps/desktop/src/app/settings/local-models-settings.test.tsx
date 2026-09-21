@@ -250,6 +250,25 @@ describe('LocalModelsSettings', () => {
     expect(screen.getByText(/256\.0 GB RAM/)).toBeTruthy()
   })
 
+  it('shows one unified memory pool and separate storage capacity', async () => {
+    mocked.getLocalHardware.mockResolvedValue({
+      ...BASE_HARDWARE,
+      uma: true,
+      gpu_name: 'Apple M5 Pro',
+      vram_total_bytes: 24 * 2 ** 30,
+      ram_total_bytes: 24 * 2 ** 30,
+      storage_path: '/models',
+      storage_total_bytes: 994_600_000_000,
+      storage_available_bytes: 333_000_000_000
+    })
+    await renderFullPane()
+
+    expect(await screen.findByText('Apple M5 Pro')).toBeTruthy()
+    expect(screen.getByText('24.0 GB Unified memory')).toBeTruthy()
+    expect(screen.queryByText(/24\.0 GB (GPU memory|RAM)/)).toBeNull()
+    expect(screen.getByText('Model storage volume: 994.6 GB total, 333.0 GB available')).toBeTruthy()
+  })
+
   it('tracks a download job to completion and refreshes', async () => {
     mocked.getLocalModelsStatus.mockResolvedValue({
       ...BASE_STATUS,

@@ -1,9 +1,10 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { MemoryRouter } from 'react-router'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { createPlatformAccountActions } from '@/api/platform'
 import { AccountContext } from '@/app/account/account-context'
-import { SidebarIdentityFooter } from '@/app/chat/sidebar/section-states'
+import { SidebarIdentityFooter } from '@/app/shell/sidebar-identity-footer'
 import { I18nProvider } from '@/i18n'
 
 import type { PlatformAccountBridge, PlatformAccountSnapshot } from '../../../shared/platform-contract'
@@ -62,7 +63,9 @@ function renderAccount(overrides: Partial<PlatformAccountBridge> = {}, current =
     <I18nProvider configClient={null} initialLocale="en">
       <AccountContext.Provider value={actions}>
         <AccountSettings />
-        <SidebarIdentityFooter onOpenAccount={() => {}} onOpenSettings={() => {}} settingsLabel="Settings" />
+        <MemoryRouter>
+          <SidebarIdentityFooter />
+        </MemoryRouter>
       </AccountContext.Provider>
     </I18nProvider>
   )

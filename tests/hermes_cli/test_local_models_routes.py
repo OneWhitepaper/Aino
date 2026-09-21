@@ -8,6 +8,8 @@ from __future__ import annotations
 
 import io
 import json
+import shutil
+import subprocess
 import time
 from pathlib import Path
 
@@ -143,6 +145,41 @@ def test_hardware_plain_facts(client):
     assert data["vram_total_bytes"] >= 0
     # GPU fields are None-able (non-NVIDIA machines) but must exist.
     assert "gpu_name" in data and "gpu_util_percent" in data and "vram_used_bytes" in data
+
+
+def test_hardware_reports_models_filesystem_without_creating_models_dir(client, tmp_path):
+    """Storage facts come from the filesystem that will hold models even before setup creates it."""
+    from hermes_cli.local_runtime import bootstrap
+
+    models = bootstrap.models_dir()
+    assert not models.exists()
+    expected = shutil.disk_usage(tmp_path)
+
+    data = client.get("/api/local-models/hardware").json()
+
+    assert not models.exists()
+    assert data["storage_path"] == str(models)
+    assert data["storage_total_bytes"] == expected.total
+    assert isinstance(data["storage_available_bytes"], int)
+    assert 0 <= data["storage_available_bytes"] <= data["storage_total_bytes"]
+
+
+@pytest.mark.macos_only
+def test_hardware_names_apple_silicon_without_mislabeling_intel(client):
+    """The hardware route identifies an Apple SoC, including under Rosetta, while an Intel
+    Mac keeps the non-NVIDIA GPU name unknown instead of presenting its CPU as a GPU."""
+    brand = subprocess.run(
+        ["/usr/sbin/sysctl", "-n", "machdep.cpu.brand_string"],
+        capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=5,
+        check=True,
+    ).stdout.strip()
+
+    data = client.get("/api/local-models/hardware").json()
+
+    if brand.startswith("Apple "):
+        assert data["gpu_name"] == brand
+    else:
+        assert data["gpu_name"] != brand
 
 
 # ── catalog ──────────────────────────────────────────────────

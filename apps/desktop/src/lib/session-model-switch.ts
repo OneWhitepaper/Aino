@@ -223,7 +223,11 @@ export async function switchSessionModel(options: SwitchOptions): Promise<boolea
 
   const targetSupportsReasoning =
     selection.provider !== 'aino' ||
-    Boolean(platformModelCatalog().state.get().models.find(model => model.id === selection.model)?.capabilities.reasoning)
+    Boolean(
+      platformModelCatalog()
+        .state.get()
+        .models.find(model => model.id === selection.model)?.capabilities.reasoning
+    )
 
   const paintTarget = () => paint(selection.model, selection.provider, targetPlatform)
   let accepted = false
@@ -275,13 +279,14 @@ export async function switchSessionModel(options: SwitchOptions): Promise<boolea
   }
 
   const reconcile = async () => {
-    const { session_info: info, providers } = await request<
-      ModelOptionsResult & { session_info?: SessionRuntimeInfo }
-    >('model.options', {
-      session_id: sessionId,
-      profile,
-      include_session_info: true
-    })
+    const { session_info: info, providers } = await request<ModelOptionsResult & { session_info?: SessionRuntimeInfo }>(
+      'model.options',
+      {
+        session_id: sessionId,
+        profile,
+        include_session_info: true
+      }
+    )
 
     if (!current()) {
       return false
@@ -299,7 +304,10 @@ export async function switchSessionModel(options: SwitchOptions): Promise<boolea
       ? {
           ...patch.platformModel,
           ownerUserId: patch.platformModel.ownerUserId || targetPlatform?.ownerUserId || previous.owner,
-          platformOrigin: patch.platformModel.platformOrigin || targetPlatform?.platformOrigin || previous.platformModel?.platformOrigin
+          platformOrigin:
+            patch.platformModel.platformOrigin ||
+            targetPlatform?.platformOrigin ||
+            previous.platformModel?.platformOrigin
         }
       : null
 
@@ -406,7 +414,10 @@ export async function switchSessionModel(options: SwitchOptions): Promise<boolea
         ...(selection.provider === 'aino'
           ? { value: selection.model, model_source: 'aino' }
           : { value: `${selection.model} --provider ${selection.provider}${scope}` }),
-        ...(confirmed ? { confirm_expensive_model: true } : {})
+        // A catalog click is the user's session-switch intent. Managed models
+        // only use this flag for the redundant history confirmation; custom
+        // providers still surface their pricing/data-use selection guards.
+        ...(selection.provider === 'aino' || confirmed ? { confirm_expensive_model: true } : {})
       })
 
       if (!result?.confirm_required && !result?.deferred) {

@@ -501,6 +501,19 @@ def _nvidia_smi_facts() -> dict:
     return dict(gpu_name=name, gpu_util_percent=int(util), vram_used_bytes=int(used_mib) << 20)
 
 
+def _storage_facts(path: Path) -> dict:
+    """Capacity of the filesystem that will hold ``path``, without creating the target."""
+    existing = path
+    while not existing.exists() and existing != existing.parent:
+        existing = existing.parent
+    usage = _quiet(lambda: shutil.disk_usage(existing), None)
+    return {
+        "storage_path": str(path),
+        "storage_total_bytes": usage.total if usage is not None else None,
+        "storage_available_bytes": usage.free if usage is not None else None,
+    }
+
+
 @router.get("/api/local-models/hardware")
 def local_models_hardware():
     """The budget as plain facts, polled by the pane and statusbar. Sync def: shells out to nvidia-smi — threadpool."""
@@ -512,6 +525,9 @@ def local_models_hardware():
         "gpu_name": None, "gpu_util_percent": None, "vram_used_bytes": None,
     }
     out.update(_quiet(_nvidia_smi_facts, {}))
+    if out["gpu_name"] is None:
+        out["gpu_name"] = hardware.apple_silicon_name()
+    out.update(_storage_facts(bootstrap.models_dir()))
     return out
 
 

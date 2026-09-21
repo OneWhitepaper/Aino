@@ -2093,6 +2093,7 @@ export const en: Translations = {
       vram: label => `${label} GPU memory`,
       ram: label => `${label} RAM`,
       unifiedMemory: 'Unified memory',
+      storage: (total, available) => `Model storage volume: ${total} total, ${available} available`,
       modelsTitle: 'Models',
       recommended: 'Recommended',
       /* The Recommended badge's tooltip, keyed by the resolver branch that
@@ -5274,6 +5275,9 @@ export const en: Translations = {
       noActiveSession: 'No active session',
       gatewayNotConnected: 'Gateway not connected',
       steered: 'steered',
+      modelChanged: 'Model changed.',
+      modelChangedTo: model => `Model changed to ${model}.`,
+      modelChangedFrom: (previousModel, model) => `Model changed from ${previousModel} to ${model}.`,
       dismissError: 'Dismiss error',
       errorLayers: {
         auth: 'Authentication error',

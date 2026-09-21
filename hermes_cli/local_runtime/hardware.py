@@ -9,6 +9,7 @@ stripped PATH — gateway and service sessions don't inherit the interactive env
 from __future__ import annotations
 
 from contextlib import suppress
+from functools import lru_cache
 import logging
 import os
 import re
@@ -59,6 +60,18 @@ def _stdout(*argv: str) -> str:
     return subprocess.run(
         list(argv), capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=5
     ).stdout
+
+
+@lru_cache(maxsize=1)
+def apple_silicon_name() -> str | None:
+    """Apple SoC name from the host kernel, including when Python runs under Rosetta."""
+    if sys.platform != "darwin":
+        return None
+    with suppress(OSError, subprocess.TimeoutExpired):
+        brand = _stdout("/usr/sbin/sysctl", "-n", "machdep.cpu.brand_string").strip()
+        if brand.startswith("Apple "):
+            return brand
+    return None
 
 
 def _ram_bytes() -> tuple[int, int]:

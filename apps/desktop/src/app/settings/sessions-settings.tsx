@@ -22,7 +22,15 @@ import { untombstoneSessions } from '@/store/session-removal'
 import { forgetSessionUnread } from '@/store/session-unread'
 import type { HermesConfigRecord, SessionInfo } from '@/types/hermes'
 
-import { EmptyState, ListRow, SectionHeading, SettingsContent, SettingsSkeleton, ToggleRow } from './primitives'
+import {
+  EmptyState,
+  ListRow,
+  SectionHeading,
+  SettingsContent,
+  SettingsGroup,
+  SettingsSkeleton,
+  ToggleRow
+} from './primitives'
 import { useDeepLinkHighlight } from './use-deep-link-highlight'
 
 const DEFAULT_AUTO_ARCHIVE_DAYS = 3
@@ -133,13 +141,18 @@ export function SessionsSettings() {
       {sessions.length === 0 ? (
         <EmptyState description={s.emptyArchivedDesc} title={s.emptyArchivedTitle} />
       ) : (
-        <div className="grid gap-1">
+        <SettingsGroup>
           {sessions.map(session => {
             const label = pathLeaf(session.cwd)
             const busy = busyId === session.id
 
             return (
-              <div className="scroll-mt-6 rounded-lg" id={`archived-session-${session.id}`} key={session.id}>
+              <div
+                className="scroll-mt-6 rounded-lg"
+                data-settings-row=""
+                id={`archived-session-${session.id}`}
+                key={session.id}
+              >
                 <ListRow
                   action={
                     <div className="flex items-center gap-1.5">
@@ -175,7 +188,7 @@ export function SessionsSettings() {
               </div>
             )
           })}
-        </div>
+        </SettingsGroup>
       )}
     </SettingsContent>
   )
@@ -254,7 +267,7 @@ function AutoArchiveSetting() {
   }
 
   return (
-    <div className="mb-6">
+    <SettingsGroup className="mb-6">
       <ToggleRow
         checked={enabled}
         description={s.autoArchiveDesc}
@@ -285,7 +298,7 @@ function AutoArchiveSetting() {
           title={s.autoArchiveDaysLabel}
         />
       )}
-    </div>
+    </SettingsGroup>
   )
 }
 
@@ -382,23 +395,25 @@ function DefaultProjectDirSetting() {
       <p className="mb-2 text-[length:var(--conversation-caption-font-size)] text-(--ui-text-tertiary)">
         {s.defaultDirDesc}
       </p>
-      <ListRow
-        action={
-          <div className="flex items-center gap-3">
-            <Button disabled={busy} onClick={() => void choose()} size="sm" type="button" variant="textStrong">
-              <FolderOpen className="size-3.5" />
-              <span>{dir ? s.change : s.choose}</span>
-            </Button>
-            {dir && (
-              <Button disabled={busy} onClick={() => void clear()} size="sm" type="button" variant="text">
-                {s.clear}
+      <SettingsGroup>
+        <ListRow
+          action={
+            <div className="flex items-center gap-3">
+              <Button disabled={busy} onClick={() => void choose()} size="sm" type="button" variant="textStrong">
+                <FolderOpen className="size-3.5" />
+                <span>{dir ? s.change : s.choose}</span>
               </Button>
-            )}
-          </div>
-        }
-        description={dir || s.defaultsTo(fallback || '~')}
-        title={dir ? dir : s.notSet}
-      />
+              {dir && (
+                <Button disabled={busy} onClick={() => void clear()} size="sm" type="button" variant="text">
+                  {s.clear}
+                </Button>
+              )}
+            </div>
+          }
+          description={dir || s.defaultsTo(fallback || '~')}
+          title={dir ? dir : s.notSet}
+        />
+      </SettingsGroup>
     </div>
   )
 }

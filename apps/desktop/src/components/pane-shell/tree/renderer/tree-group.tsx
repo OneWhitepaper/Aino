@@ -36,6 +36,7 @@ import {
   PaneTabStrip
 } from '@/components/ui/pane-tab'
 import { ContribBoundary, ContribRender } from '@/contrib/react/boundary'
+import { Slot } from '@/contrib/react/slot'
 import { useContributions } from '@/contrib/react/use-contributions'
 import { useI18n } from '@/i18n'
 import { localizedPaneTitle } from '@/i18n/contributions'
@@ -934,6 +935,8 @@ export function TreeGroup({
           )}
         </div>
       )}
+
+      {!node.minimized && node.panes.includes('sessions') && <Slot area="navigation.footer" />}
 
       {/* Edit-mode veil: the BODY is a drag handle for the active pane. It
           starts below the header so tabs/headers stay directly interactive

@@ -1693,7 +1693,10 @@ def _is_pivot_marker(entry: Any) -> bool:
     return _is_model_switch_marker(entry) or (isinstance(entry, dict) and entry.get("display_kind") == "personality_switch")
 
 
-def _append_model_switch_marker(session: dict | None, *, model: str, provider: str) -> None:
+def _append_model_switch_marker(
+    session: dict | None, *, model: str, provider: str,
+    previous_model: str = "", previous_provider: str = "",
+) -> None:
     """Record a real system-history pivot after a live model switch. Only the newest marker is kept (each
     switch strips prior ones, so N switches leave one marker, not N re-sent every API call; self-healing
     across resumes because the next switch collapses whatever a reload brought back).
@@ -1709,7 +1712,16 @@ def _append_model_switch_marker(session: dict | None, *, model: str, provider: s
         "metadata when answering questions about what model/provider is active.]")
     # A user message, not system: strict OpenAI-compatible providers (vLLM, Qwen) reject non-leading system messages.
     # See #48338.
-    entry = {"role": "user", "content": marker, "display_kind": "model_switch"}
+    metadata = {"model": model, "provider": provider, "previous_model": previous_model,
+                "previous_provider": previous_provider}
+    timestamp = time.time()
+    entry = {
+        "role": "user",
+        "content": marker,
+        "display_kind": "model_switch",
+        "display_metadata": metadata,
+        "timestamp": timestamp,
+    }
     with session.get("history_lock") or contextlib.nullcontext():
         history = session.setdefault("history", [])
         history[:] = [h for h in history if not _is_model_switch_marker(h)]
@@ -1722,7 +1734,14 @@ def _append_model_switch_marker(session: dict | None, *, model: str, provider: s
             _ensure_session_db_row(session)
         with (contextlib.nullcontext(db) if db is not None else _session_db(session)) as db:
             if db is not None:
-                db.append_message(session_id=session_key, role="user", content=marker, display_kind="model_switch")
+                db.append_message(
+                    session_id=session_key,
+                    role="user",
+                    content=marker,
+                    display_kind="model_switch",
+                    display_metadata=metadata,
+                    timestamp=timestamp,
+                )
     except Exception:
         logger.debug("failed to persist model switch marker", exc_info=True)
 

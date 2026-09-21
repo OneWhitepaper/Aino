@@ -40,7 +40,7 @@ import { useOnProfileSwitch } from '../hooks/use-on-profile-switch'
 import { CONTROL_TEXT } from './constants'
 import { getNested, setNested } from './helpers'
 import { PlatformModelSettings } from './platform-model-settings'
-import { ListRow, Pill, SectionHeading } from './primitives'
+import { ListRow, Pill, SectionHeading, SettingsGroup } from './primitives'
 import { useDeepLinkHighlight } from './use-deep-link-highlight'
 
 // Skeleton mirror of the Model settings DOM so the page keeps its shape while
@@ -1029,7 +1029,7 @@ export function ModelSettings({ onMainModelChanged, scopeProfile }: ModelSetting
             />
           </div>
         )}
-        <div className="grid gap-1">
+        <SettingsGroup>
           {AUX_TASKS.map(meta => {
             const copy = m.tasks[meta.key] ?? { label: meta.key, hint: meta.key }
             const current = auxiliary?.tasks.find(entry => entry.task === meta.key)
@@ -1037,7 +1037,7 @@ export function ModelSettings({ onMainModelChanged, scopeProfile }: ModelSetting
             const isEditing = editingAuxTask === meta.key
 
             return (
-              <div className="scroll-mt-6 rounded-lg" id={`aux-task-${meta.key}`} key={meta.key}>
+              <div className="scroll-mt-6" data-settings-row="" id={`aux-task-${meta.key}`} key={meta.key}>
                 <ListRow
                   action={
                     !isEditing && (
@@ -1163,7 +1163,7 @@ export function ModelSettings({ onMainModelChanged, scopeProfile }: ModelSetting
               </div>
             )
           })}
-        </div>
+        </SettingsGroup>
       </section>
       {moa && currentMoaPreset && (
         <section>
@@ -1264,7 +1264,7 @@ export function ModelSettings({ onMainModelChanged, scopeProfile }: ModelSetting
           <div className="mb-2 text-xs text-muted-foreground">
             {m.moa.defaultLabel}: <span className="font-mono">{moa.default_preset}</span>
           </div>
-          <div className="grid gap-1">
+          <SettingsGroup>
             {currentMoaPreset.reference_models.map((slot, index) => (
               <ListRow
                 action={
@@ -1435,7 +1435,7 @@ export function ModelSettings({ onMainModelChanged, scopeProfile }: ModelSetting
               }
               title={m.moa.aggregator}
             />
-          </div>
+          </SettingsGroup>
         </section>
       )}
     </div>

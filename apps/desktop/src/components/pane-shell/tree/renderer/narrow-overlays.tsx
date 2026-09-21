@@ -12,6 +12,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { $chatOnboardingSolo } from '@/components/onboarding-chat/assembly'
 import { PaneTab, PaneTabLabel, PaneTabStrip } from '@/components/ui/pane-tab'
 import { ContribBoundary, ContribRender } from '@/contrib/react/boundary'
+import { Slot } from '@/contrib/react/slot'
 import { useContributions } from '@/contrib/react/use-contributions'
 import { registry } from '@/contrib/registry'
 import type { Contribution } from '@/contrib/types'
@@ -202,9 +203,12 @@ export function NarrowOverlays() {
               ))}
             </PaneTabStrip>
           )}
-          <ContribBoundary id={revealed.id}>
-            {revealed.render && <ContribRender render={revealed.render} />}
-          </ContribBoundary>
+          <div className="relative min-h-0 min-w-0 flex-1 overflow-auto">
+            <ContribBoundary id={revealed.id}>
+              {revealed.render && <ContribRender render={revealed.render} />}
+            </ContribBoundary>
+          </div>
+          {tree && findGroupOfPane(tree, revealed.id)?.panes.includes('sessions') && <Slot area="navigation.footer" />}
         </div>
       )}
     </>

@@ -57,6 +57,40 @@ def test_repair_merges_consecutive_user_messages():
     assert messages[0]["content"] == "first\n\nsecond"
 
 
+def test_repair_keeps_model_switch_pivot_separate_from_current_prompt():
+    """The live repair must retain a persisted pivot's boundary.
+
+    The request-local sanitizer below still merges this pair for strict providers;
+    mutating the live carrier would make the current-turn reanchor fall back to an
+    older user row and overwrite its durable content.
+    """
+    agent = _bare_agent()
+    messages = [
+        {"role": "user", "content": "model changed", "display_kind": "model_switch"},
+        {"role": "user", "content": "current prompt"},
+    ]
+
+    repairs = AIAgent._repair_message_sequence(agent, messages)
+
+    assert repairs == 0
+    assert [message["content"] for message in messages] == ["model changed", "current prompt"]
+
+
+def test_api_sanitizer_merges_model_switch_pivot_on_a_copy():
+    from agent.agent_runtime_helpers import drop_thinking_only_and_merge_users
+
+    source = [
+        {"role": "user", "content": "model changed", "display_kind": "model_switch"},
+        {"role": "user", "content": "current prompt"},
+    ]
+
+    wire = drop_thinking_only_and_merge_users(source)
+
+    assert len(wire) == 1
+    assert wire[0]["content"] == "model changed\n\ncurrent prompt"
+    assert len(source) == 2
+
+
 def test_repair_preserves_user_content_when_one_side_empty():
     agent = _bare_agent()
     messages = [

@@ -60,7 +60,9 @@ export function SystemResourcesSettings() {
 
   useViewedInterval(
     () => {
-      if (!isFetching) {void refetch()}
+      if (!isFetching) {
+        void refetch()
+      }
     },
     5000,
     !error
@@ -94,23 +96,27 @@ export function SystemResourcesSettings() {
       ) : hardware ? (
         <div className="grid max-w-xl min-w-0 gap-6 text-[0.8125rem]" data-slot="system-resources-panel">
           <MeterRow
-            label={copy.ram}
+            label={hardware.uma ? t.settings.localModels.unifiedMemory : copy.ram}
             percent={ramPercent}
             value={`${formatHardwareBytes(ramUsed)} / ${formatHardwareBytes(hardware.ram_total_bytes || null)}`}
           />
           {hardware.gpu_name && <p className="break-words text-foreground">{hardware.gpu_name}</p>}
           {(hardware.gpu_name || hardware.vram_total_bytes > 0) && (
             <>
-              <MeterRow
-                label={copy.gpuUtilization}
-                percent={hardware.gpu_util_percent ?? null}
-                value={hardware.gpu_util_percent == null ? '\u2014' : `${hardware.gpu_util_percent}%`}
-              />
-              <MeterRow
-                label={copy.gpuMemory}
-                percent={vramPercent}
-                value={`${formatHardwareBytes(hardware.vram_used_bytes)} / ${formatHardwareBytes(hardware.vram_total_bytes)}`}
-              />
+              {(!hardware.uma || hardware.gpu_util_percent != null) && (
+                <MeterRow
+                  label={copy.gpuUtilization}
+                  percent={hardware.gpu_util_percent ?? null}
+                  value={hardware.gpu_util_percent == null ? '\u2014' : `${hardware.gpu_util_percent}%`}
+                />
+              )}
+              {(!hardware.uma || hardware.vram_used_bytes != null) && (
+                <MeterRow
+                  label={copy.gpuMemory}
+                  percent={vramPercent}
+                  value={`${formatHardwareBytes(hardware.vram_used_bytes)} / ${formatHardwareBytes(hardware.vram_total_bytes)}`}
+                />
+              )}
             </>
           )}
           {hardware.uma && <p className="text-xs text-muted-foreground">{copy.unifiedNote}</p>}

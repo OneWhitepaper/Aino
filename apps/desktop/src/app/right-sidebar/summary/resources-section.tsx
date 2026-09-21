@@ -93,7 +93,7 @@ export function ResourcesSection() {
     <SummarySection icon={Cpu} title={copy.title}>
       <div className="grid gap-2.5">
         <Meter
-          label={copy.ram}
+          label={hardware.uma ? t.settings.localModels.unifiedMemory : copy.ram}
           percent={meters.ramPercent}
           value={`${formatHardwareBytes(ramUsed)} / ${formatHardwareBytes(hardware.ram_total_bytes)}`}
         />
@@ -102,13 +102,14 @@ export function ResourcesSection() {
             {hardwareLabel(hardware)}
           </p>
         )}
-        {(hardware.gpu_name || hardware.vram_total_bytes > 0) && (
-          <Meter
-            label={copy.gpu}
-            percent={meters.vramPercent}
-            value={`${formatHardwareBytes(hardware.vram_used_bytes)} / ${formatHardwareBytes(hardware.vram_total_bytes)}`}
-          />
-        )}
+        {(hardware.gpu_name || hardware.vram_total_bytes > 0) &&
+          (!hardware.uma || hardware.vram_used_bytes != null) && (
+            <Meter
+              label={copy.gpu}
+              percent={meters.vramPercent}
+              value={`${formatHardwareBytes(hardware.vram_used_bytes)} / ${formatHardwareBytes(hardware.vram_total_bytes)}`}
+            />
+          )}
       </div>
     </SummarySection>
   )

@@ -2,6 +2,7 @@ import './account-login.css'
 
 import { useEffect, useState } from 'react'
 
+import accountLogo from '@/assets/aino-account/logo.png'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -186,6 +187,7 @@ export function AccountLoginCard({
       <div aria-hidden="true" className="aino-account-chrome" />
       <div className="aino-account-body">
         <p className="aino-account-brand">AINO</p>
+        <img alt="" className="aino-account-mark" height={96} src={accountLogo} width={96} />
         {step === 'phone' && (
           <form
             className="aino-account-form"

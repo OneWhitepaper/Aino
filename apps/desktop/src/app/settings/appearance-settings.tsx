@@ -56,7 +56,7 @@ import { setHermesConfigCache, useHermesConfigRecord } from '../hooks/use-config
 import { MODE_OPTIONS } from './constants'
 import { setNested } from './helpers'
 import { PetSettings } from './pet-settings'
-import { ListRow, SectionHeading, SettingsContent, ToggleRow } from './primitives'
+import { ListRow, SectionHeading, SettingsContent, SettingsGroup, ToggleRow } from './primitives'
 import { APPEARANCE_SETTING_IDS } from './settings-search'
 import { TerminalFontSetting } from './terminal-font-setting'
 import { useDeepLinkHighlight } from './use-deep-link-highlight'
@@ -286,7 +286,7 @@ export function AppearanceSettings() {
       <div>
         <SectionHeading icon={Palette} title={a.title} />
 
-        <div className="mt-2">
+        <SettingsGroup className="mt-2">
           <ListRow
             action={<LanguageSwitcher />}
             description={isSavingLocale ? t.language.saving : t.language.description}
@@ -674,7 +674,7 @@ export function AppearanceSettings() {
             id={appearanceSettingElementId(APPEARANCE_SETTING_IDS.embeds)}
             title={a.embedsTitle}
           />
-        </div>
+        </SettingsGroup>
       </div>
 
       <div className="mt-6">

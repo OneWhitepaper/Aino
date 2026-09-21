@@ -4,7 +4,7 @@ import { type BillingBlock } from '@hermes/shared'
 import type { ErrorSurface } from '@/lib/error-surface'
 import type { ToolResultMetadata } from '@/lib/tool-result-metadata'
 import type { TurnMetrics } from '@/lib/turn-metrics'
-import type { MessageReaction, SessionMessage, UsageStats } from '@/types/hermes'
+import type { MessageReaction, ModelSwitchDisplayMetadata, SessionMessage, UsageStats } from '@/types/hermes'
 
 export interface TimelinePartMetadata {
   toolResultMetadata?: ToolResultMetadata
@@ -23,6 +23,8 @@ export type ChatMessage = {
   parts: ChatMessagePart[]
   /** Result body only; the system text remains the compact completion label. */
   asyncResult?: string
+  /** Backend-authored model transition, separate from model-facing context. */
+  modelSwitch?: ModelSwitchDisplayMetadata
   timestamp?: number
   completedAt?: number
   pending?: boolean

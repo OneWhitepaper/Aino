@@ -30,6 +30,10 @@ const PILL_VARIANT = {
   destructive: 'destructive'
 } as const
 
+export function SettingsGroup({ className, ...props }: ComponentProps<'div'>) {
+  return <div className={cn('@container/settings-group min-w-0', className)} data-settings-group="" {...props} />
+}
+
 // Rest props spread through to the Badge's DOM node — REQUIRED for Radix
 // `asChild` composition (wrapping a Pill in `Tip` clones it with the hover
 // handlers and ref as props; swallowing them left every tooltip on a Pill
@@ -149,11 +153,12 @@ export function ListRow({
     // Container-queried, not viewport-queried: the label/control split keys on
     // the row's own pane width, so a narrow detail column (messaging, split
     // views) stacks instead of squishing the label against minmax(15rem,…).
-    <div className={cn('@container', className)} data-tour={dataTour} id={id}>
+    <div className={cn('@container', className)} data-settings-row="" data-tour={dataTour} id={id}>
       <div
         className={cn(
           'grid gap-3 py-3',
-          !wide && '@2xl:grid-cols-[minmax(0,1fr)_minmax(15rem,22rem)] @2xl:items-center'
+          !wide &&
+            '@2xl:grid-cols-[minmax(0,1fr)_minmax(15rem,22rem)] @2xl:items-center @xl/settings-group:grid-cols-[minmax(0,1fr)_minmax(15rem,22rem)] @xl/settings-group:items-center'
         )}
       >
         <div className="min-w-0">
@@ -166,7 +171,11 @@ export function ListRow({
           {hint && <div className="mt-1 block font-mono text-[0.68rem] text-muted-foreground/45">{hint}</div>}
           {below}
         </div>
-        {action && <div className={cn('min-w-0', !wide && '@2xl:justify-self-end')}>{action}</div>}
+        {action && (
+          <div className={cn('min-w-0', !wide && '@2xl:justify-self-end @xl/settings-group:justify-self-end')}>
+            {action}
+          </div>
+        )}
       </div>
     </div>
   )
@@ -218,18 +227,21 @@ export function SectionHeadingSkeleton() {
 
 export function ListRowSkeleton({ wide = false }: { wide?: boolean }) {
   return (
-    <div className="@container">
+    <div className="@container" data-settings-row="">
       <div
         className={cn(
           'grid gap-3 py-3',
-          !wide && '@2xl:grid-cols-[minmax(0,1fr)_minmax(15rem,22rem)] @2xl:items-center'
+          !wide &&
+            '@2xl:grid-cols-[minmax(0,1fr)_minmax(15rem,22rem)] @2xl:items-center @xl/settings-group:grid-cols-[minmax(0,1fr)_minmax(15rem,22rem)] @xl/settings-group:items-center'
         )}
       >
         <div className="min-w-0 space-y-1.5">
           <Skeleton className="h-3.5 w-40 max-w-full" />
           <Skeleton className="h-3 w-64 max-w-full" />
         </div>
-        {!wide && <Skeleton className="h-8 w-full @2xl:w-72 @2xl:justify-self-end" />}
+        {!wide && (
+          <Skeleton className="h-8 w-full @2xl:w-72 @2xl:justify-self-end @xl/settings-group:w-72 @xl/settings-group:justify-self-end" />
+        )}
       </div>
     </div>
   )
@@ -251,11 +263,11 @@ export function SettingsSkeleton({
       {sections.map((section, i) => (
         <section className={cn(i > 0 && 'mt-6')} key={i}>
           {section.heading && <SectionHeadingSkeleton />}
-          <div className="grid gap-1">
+          <SettingsGroup>
             {Array.from({ length: section.rows }, (_, r) => (
               <ListRowSkeleton key={r} />
             ))}
-          </div>
+          </SettingsGroup>
         </section>
       ))}
     </SettingsContent>

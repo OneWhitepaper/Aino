@@ -207,7 +207,7 @@
   color: var(--aino-surface-muted);
 }
 
-[data-aino-sidebar] [data-slot='sidebar-identity-footer'] {
+[data-slot='sidebar-identity-footer'] {
   border-top-color: var(--aino-surface-stroke) !important;
 }
 
@@ -253,6 +253,17 @@
 [data-aino-settings] [data-settings-profile-controls],
 [data-aino-settings] [data-settings-profile-controls] + * {
   border-color: var(--aino-surface-stroke) !important;
+}
+
+/* Settings groups keep labels, values and controls on readable, ruled rows. */
+[data-settings-group] {
+  border: 1px solid var(--ui-stroke-secondary);
+  border-radius: 0.5rem;
+  padding-inline: 1rem;
+}
+
+[data-settings-group] > [data-settings-row] ~ [data-settings-row] {
+  border-top: 1px solid var(--ui-stroke-tertiary);
 }
 
 /* Master/detail pages: the list reads as a calm rail and the inspector as the

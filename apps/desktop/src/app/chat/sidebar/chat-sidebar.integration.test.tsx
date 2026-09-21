@@ -3,12 +3,10 @@ import { act, cleanup, fireEvent, render, screen, within } from '@testing-librar
 import { MemoryRouter } from 'react-router'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { AccountContext } from '@/app/account/account-context'
 import { group, split } from '@/components/pane-shell/tree/model'
 import { $layoutTree, noteActiveTreeGroup } from '@/components/pane-shell/tree/store'
 import { SidebarProvider } from '@/components/ui/sidebar'
 import { registry } from '@/contrib/registry'
-import { type AccountAdapter, createAccountActions } from '@/store/account'
 import {
   $pinnedSessionIds,
   $sidebarPinsOpen,
@@ -40,25 +38,6 @@ const noop = () => {}
 
 const noopAsync = async () => {}
 
-const unavailableAccount = async () => {
-  throw new Error('Sidebar account display must not request account services')
-}
-
-const accountActions = createAccountActions({
-  kind: 'platform',
-  fixedCodeHint: false,
-  status: unavailableAccount,
-  capabilities: unavailableAccount,
-  retry: unavailableAccount,
-  requestPhoneCode: unavailableAccount,
-  verifyPhoneCode: unavailableAccount,
-  loginExisting: unavailableAccount,
-  completeSecondFactor: unavailableAccount,
-  updateProfile: unavailableAccount,
-  logout: unavailableAccount,
-  onChanged: () => () => {}
-} as AccountAdapter)
-
 const sessionRows = [
   makeSessionInfo({ id: 'tile-one', last_active: 2, profile: 'default', started_at: 1, title: 'Tile one' }),
   makeSessionInfo({ id: 'tile-two', last_active: 2, profile: 'default', started_at: 1, title: 'Tile two' })
@@ -67,23 +46,21 @@ const sessionRows = [
 const renderSidebar = (pathname: string, currentView: AppView, onNewSessionInWorkspace = noop, onNavigate = noop) =>
   render(
     <MemoryRouter initialEntries={[pathname]}>
-      <AccountContext.Provider value={accountActions}>
-        <SidebarProvider>
-          <ChatSidebar
-            currentView={currentView}
-            onArchiveSession={noop}
-            onBranchSession={noop}
-            onDeleteSession={noop}
-            onLoadMoreSessions={noop}
-            onManageCronJob={noop}
-            onNavigate={onNavigate}
-            onNewSessionInWorkspace={onNewSessionInWorkspace}
-            onNewSessionSplit={noop}
-            onResumeSession={noop}
-            onTriggerCronJob={noopAsync}
-          />
-        </SidebarProvider>
-      </AccountContext.Provider>
+      <SidebarProvider>
+        <ChatSidebar
+          currentView={currentView}
+          onArchiveSession={noop}
+          onBranchSession={noop}
+          onDeleteSession={noop}
+          onLoadMoreSessions={noop}
+          onManageCronJob={noop}
+          onNavigate={onNavigate}
+          onNewSessionInWorkspace={onNewSessionInWorkspace}
+          onNewSessionSplit={noop}
+          onResumeSession={noop}
+          onTriggerCronJob={noopAsync}
+        />
+      </SidebarProvider>
     </MemoryRouter>
   )
 
@@ -113,11 +90,6 @@ describe('ChatSidebar navigation activity', () => {
   let disposeContributions: () => void
 
   beforeEach(() => {
-    accountActions.state.set({
-      ...accountActions.state.get(),
-      authenticated: true,
-      account: { id: 'account-one', display_name: 'Test User', phone_masked: '', email: 'user@example.test' }
-    })
     $pinnedSessionIds.set([])
     $sidebarPinsOpen.set(true)
     $sidebarRecentsOpen.set(true)
@@ -348,27 +320,5 @@ describe('ChatSidebar navigation activity', () => {
     fireEvent.pointerDown(screen.getByRole('button', { name: 'Session options' }), { button: 0, ctrlKey: false })
     fireEvent.click(screen.getByRole('menuitem', { name: 'Import session' }))
     expect(onNavigate).toHaveBeenCalledWith(expect.objectContaining({ route: '/session-import' }))
-  })
-
-  it('shows the signed-in account and opens its details from the sidebar', () => {
-    const onNavigate = vi.fn()
-    const { container } = renderSidebar('/', 'chat', noop, onNavigate)
-    const footer = within(container.querySelector('[data-slot="sidebar-identity-footer"]') as HTMLElement)
-
-    expect(footer.getByText('Test User')).toBeTruthy()
-    expect(footer.queryByText('default')).toBeNull()
-    fireEvent.click(footer.getByRole('button', { name: 'My account · Test User' }))
-    expect(onNavigate).toHaveBeenLastCalledWith(expect.objectContaining({ route: '/settings?tab=account' }))
-
-    act(() => {
-      accountActions.state.set({
-        ...accountActions.state.get(),
-        account: { id: 'account-two', display_name: '', phone_masked: '', email: 'second@example.test' }
-      })
-    })
-    expect(footer.queryByText('Test User')).toBeNull()
-    expect(footer.getByText('second@example.test')).toBeTruthy()
-    fireEvent.click(footer.getByRole('button', { name: 'Open settings' }))
-    expect(onNavigate).toHaveBeenLastCalledWith(expect.objectContaining({ route: '/settings' }))
   })
 })

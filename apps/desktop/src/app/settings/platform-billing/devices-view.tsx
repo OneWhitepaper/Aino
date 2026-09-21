@@ -13,7 +13,7 @@ import type {
   PlatformDevice,
   PlatformDevicesBridge
 } from '../../../../shared/platform-contract'
-import { SettingsSection } from '../primitives'
+import { SettingsGroup, SettingsSection } from '../primitives'
 
 export interface PlatformDevicesProps {
   scope: PlatformBillingScope
@@ -254,35 +254,37 @@ function DeviceList({ scope, bridge, accountBridge }: PlatformDevicesProps & { b
         </form>
       )}
       {devices?.length === 0 && <p className="text-sm text-muted-foreground">{copy.empty}</p>}
-      <ul className="m-0 list-none space-y-4 p-0">
-        {devices?.map(device => (
-          <li className="min-w-0" key={device.device_id}>
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <span className="min-w-0 text-sm [overflow-wrap:anywhere]">{device.device_id}</span>
-              <div className="flex shrink-0 items-center gap-3">
-                <span className="text-xs text-muted-foreground">{device.revoked ? copy.revoked : copy.active}</span>
-                <Button
-                  disabled={device.revoked || busy || loading || !!stepUp}
-                  onClick={() => {
-                    setSelected(device.device_id)
-                    setError(null)
-                  }}
-                  size="sm"
-                  variant="ghost"
-                >
-                  {copy.revoke}
-                </Button>
+      {devices && devices.length > 0 && (
+        <SettingsGroup role="list">
+          {devices.map(device => (
+            <div className="min-w-0 py-3" data-settings-row="" key={device.device_id} role="listitem">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <span className="min-w-0 text-sm [overflow-wrap:anywhere]">{device.device_id}</span>
+                <div className="flex shrink-0 items-center gap-3">
+                  <span className="text-xs text-muted-foreground">{device.revoked ? copy.revoked : copy.active}</span>
+                  <Button
+                    disabled={device.revoked || busy || loading || !!stepUp}
+                    onClick={() => {
+                      setSelected(device.device_id)
+                      setError(null)
+                    }}
+                    size="sm"
+                    variant="ghost"
+                  >
+                    {copy.revoke}
+                  </Button>
+                </div>
               </div>
+              <p className="mt-1 text-xs text-muted-foreground [overflow-wrap:anywhere]">
+                {copy.lastUsed}: {new Date(device.last_used_at).toLocaleString(locale)}
+              </p>
+              <p className="mt-1 text-xs text-muted-foreground [overflow-wrap:anywhere]">
+                {copy.expires}: {new Date(device.expires_at).toLocaleString(locale)}
+              </p>
             </div>
-            <p className="mt-1 text-xs text-muted-foreground [overflow-wrap:anywhere]">
-              {copy.lastUsed}: {new Date(device.last_used_at).toLocaleString(locale)}
-            </p>
-            <p className="mt-1 text-xs text-muted-foreground [overflow-wrap:anywhere]">
-              {copy.expires}: {new Date(device.expires_at).toLocaleString(locale)}
-            </p>
-          </li>
-        ))}
-      </ul>
+          ))}
+        </SettingsGroup>
+      )}
       {selected && (
         <ConfirmDialog
           confirmLabel={copy.revoke}

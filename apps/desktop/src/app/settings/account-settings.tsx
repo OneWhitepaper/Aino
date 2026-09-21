@@ -9,7 +9,7 @@ import { Users } from '@/lib/icons'
 import { useAccountActions } from '../account/account-context'
 
 import { PlatformWallet } from './platform-billing/wallet-view'
-import { ListRow, SectionHeading, SettingsContent } from './primitives'
+import { ListRow, SectionHeading, SettingsContent, SettingsGroup } from './primitives'
 
 export function AccountSettings() {
   const { t } = useI18n()
@@ -52,81 +52,85 @@ export function AccountSettings() {
             </Button>
           </div>
         )}
-        <ListRow
-          action={
-            editing ? (
-              <form
-                className="grid min-w-0 gap-2"
-                onSubmit={event => {
-                  event.preventDefault()
-                  void saveName()
-                }}
-              >
-                <Input
-                  aria-describedby={hintId}
-                  aria-label={copy.displayNameLabel}
-                  autoFocus
-                  disabled={state.loading}
-                  onChange={event => setNameDraft(event.target.value)}
-                  value={nameDraft}
-                />
-                <p className="text-xs text-(--ui-text-secondary)" id={hintId}>
-                  {copy.displayNameHint}
-                </p>
-                <div className="flex justify-end gap-2">
+        <SettingsGroup>
+          <ListRow
+            action={
+              editing ? (
+                <form
+                  className="grid min-w-0 gap-2"
+                  onSubmit={event => {
+                    event.preventDefault()
+                    void saveName()
+                  }}
+                >
+                  <Input
+                    aria-describedby={hintId}
+                    aria-label={copy.displayNameLabel}
+                    autoFocus
+                    disabled={state.loading}
+                    onChange={event => setNameDraft(event.target.value)}
+                    value={nameDraft}
+                  />
+                  <p className="text-xs text-(--ui-text-secondary)" id={hintId}>
+                    {copy.displayNameHint}
+                  </p>
+                  <div className="flex justify-end gap-2">
+                    <Button
+                      disabled={state.loading}
+                      onClick={() => setEditing(false)}
+                      size="sm"
+                      type="button"
+                      variant="ghost"
+                    >
+                      {t.common.cancel}
+                    </Button>
+                    <Button
+                      disabled={state.loading || !validName || trimmedName === account?.display_name}
+                      size="sm"
+                      type="submit"
+                    >
+                      {state.loading ? t.common.saving : t.common.save}
+                    </Button>
+                  </div>
+                </form>
+              ) : (
+                <div className="flex min-w-0 items-center gap-3">
+                  <span className="min-w-0 break-words">{account?.display_name}</span>
                   <Button
                     disabled={state.loading}
-                    onClick={() => setEditing(false)}
+                    onClick={() => {
+                      setNameDraft(account?.display_name ?? '')
+                      setSaved(false)
+                      setEditing(true)
+                    }}
                     size="sm"
-                    type="button"
                     variant="ghost"
                   >
-                    {t.common.cancel}
-                  </Button>
-                  <Button
-                    disabled={state.loading || !validName || trimmedName === account?.display_name}
-                    size="sm"
-                    type="submit"
-                  >
-                    {state.loading ? t.common.saving : t.common.save}
+                    {copy.editDisplayName}
                   </Button>
                 </div>
-              </form>
-            ) : (
-              <div className="flex min-w-0 items-center gap-3">
-                <span className="min-w-0 break-words">{account?.display_name}</span>
-                <Button
-                  disabled={state.loading}
-                  onClick={() => {
-                    setNameDraft(account?.display_name ?? '')
-                    setSaved(false)
-                    setEditing(true)
-                  }}
-                  size="sm"
-                  variant="ghost"
-                >
-                  {copy.editDisplayName}
-                </Button>
-              </div>
-            )
-          }
-          title={copy.displayNameLabel}
-        />
-        {saved && (
-          <p className="text-sm text-(--ui-text-secondary)" role="status">
-            {copy.displayNameSaved}
-          </p>
-        )}
-        {account?.phone_masked && (
-          <ListRow action={<span className="break-all">{account.phone_masked}</span>} title={copy.phoneMaskedLabel} />
-        )}
-        {account?.email && (
-          <ListRow action={<span className="break-all">{account.email}</span>} title={copy.emailVerifiedLabel} />
-        )}
-        <ListRow
-          action={<span className="break-all font-mono text-xs">{account?.id}</span>}
-          title={copy.accountIdLabel}
-        />
+              )
+            }
+            below={
+              saved ? (
+                <p className="mt-2 text-sm text-(--ui-text-secondary)" role="status">
+                  {copy.displayNameSaved}
+                </p>
+              ) : undefined
+            }
+            title={copy.displayNameLabel}
+          />
+          {account?.phone_masked && (
+            <ListRow action={<span className="break-all">{account.phone_masked}</span>} title={copy.phoneMaskedLabel} />
+          )}
+          {account?.email && (
+            <ListRow action={<span className="break-all">{account.email}</span>} title={copy.emailVerifiedLabel} />
+          )}
+          <ListRow
+            action={<span className="break-all font-mono text-xs">{account?.id}</span>}
+            title={copy.accountIdLabel}
+          />
+        </SettingsGroup>
         <PlatformWallet />
         <div className="mt-6">
           <Button disabled={state.loading} onClick={() => void actions.logout()} variant="outline">

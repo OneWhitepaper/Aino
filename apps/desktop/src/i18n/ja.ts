@@ -1556,6 +1556,7 @@ export const ja = defineLocale({
       vram: label => `GPU メモリ ${label}`,
       ram: label => `RAM ${label}`,
       unifiedMemory: 'ユニファイドメモリ',
+      storage: (total, available) => `モデル保存ボリューム：合計 ${total}、空き ${available}`,
       modelsTitle: 'モデル',
       recommended: 'おすすめ',
       recommendedReason: {
@@ -3721,6 +3722,9 @@ export const ja = defineLocale({
 
   assistant: {
     thread: {
+      modelChanged: 'モデルを変更しました。',
+      modelChangedTo: model => `モデルを ${model} に変更しました。`,
+      modelChangedFrom: (previousModel, model) => `モデルを ${previousModel} から ${model} に変更しました。`,
       loadingSession: 'セッションを読み込み中',
       showEarlier: '以前のメッセージを表示',
       loadingResponse: 'Hermes が応答を読み込み中',

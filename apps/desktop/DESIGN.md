@@ -24,7 +24,8 @@ one-off at the call site.
 
 ## Principles
 
-1. **Flat, not boxed.** No card-in-card, no divider borders inside a panel.
+1. **Flat, not boxed.** No card-in-card. Settings forms use outlined groups and
+   fine row dividers to keep labels aligned with their values and controls.
    Group with whitespace and a single hairline, never nested rounded boxes.
 2. **Borderless elevation for floating panels.** Overlays float on
    `shadow-nous` + a `--stroke-nous` hairline, not thick framed boxes. In-panel
@@ -149,6 +150,8 @@ one-off at the call site.
 - **Sidebar identity is the signed-in account.** Its circular avatar and name
   open Settings → My account. Use the account display name, falling back to its
   login identifier; workspace/profile selection must not change this identity.
+  The navigation shell owns this footer, so Sessions and Agent Hub keep the same
+  account and settings entry, including in the narrow-window sidebar overlay.
   My account edits the nickname through the account backend. The sidebar follows
   the confirmed account state; a failed save keeps the prior name and editable draft.
 - **Conversation navigation has three sections:** Pinned appears only when it
@@ -196,6 +199,17 @@ and action roles. Selection outlines and markers drawn inside guest pages keep
 their explicit review colors because those documents do not load the desktop theme.
 Intro reveal shares this chrome and the saved UI typography; its animated canvas
 retains its own media colors.
+
+Settings uses `SettingsGroup` from `app/settings/primitives.tsx` for related
+form rows: a single neutral one-pixel outline, 8px corners, no shadow, and
+16px horizontal insets. Keep section titles outside the outline. `ListRow`
+owns `data-settings-row`; custom row wrappers use the same marker when they
+include an inline editor. Only sibling rows inside a group receive dividers,
+so descriptions, status messages and expanded controls stay with their row.
+Do not add another group around already framed tools or lists. Grouped rows
+use a 36rem content-width breakpoint for the label/control split, accounting
+for the added insets; narrower groups stack. Use shared stroke tokens in
+both brightness modes, without flattening native Glass surfaces.
 
 The approved v2 light palette is a `#fcfcfc` canvas, `#f3f3f4` sidebar,
 `#ffffff` paper, and `#f8f9fa` field/header fill. Primary, secondary and supporting
@@ -571,6 +585,10 @@ so glass and message-bubble transparency do not reveal scrolling text.
   small vector mark, softly rounded and identical in light/dark. Use it for
   explicit brand moments outside the home headline and sidebar top; those two
   surfaces have no decorative app glyph. Do not reintroduce star/sparkle icons.
+- Account sign-in retains its existing `assets/aino-account/logo.png` artwork
+  and compact, centered layout with pill-shaped fields and actions. The home
+  and sidebar glyph removal does not apply to sign-in; its scoped CSS shares
+  the app's color tokens without replacing that approved layout.
 
 ## Motion
 

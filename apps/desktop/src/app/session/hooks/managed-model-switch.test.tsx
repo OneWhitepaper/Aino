@@ -99,10 +99,7 @@ beforeEach(async () => {
   })
   await platformAccountActions(window.hermesDesktop.platformAccount).refresh()
   await platformModelCatalog().load()
-  recordGatewayReadyCapability(
-    { profile: 'default' },
-    { type: 'gateway.ready', payload: { managed_model_binding: 1 } }
-  )
+  recordGatewayReadyCapability({ profile: 'default' }, { type: 'gateway.ready', payload: { managed_model_binding: 1 } })
   recordGatewayReadyCapability(
     { connectionId: 'connection-b', profile: 'profile-b' },
     { type: 'gateway.ready', payload: { managed_model_binding: 1 } }
@@ -111,6 +108,10 @@ beforeEach(async () => {
     if (method === 'config.set') {
       if (params.key === 'reasoning') {
         return {}
+      }
+
+      if (params.model_source === 'aino' && !params.confirm_expensive_model) {
+        return { confirm_required: true, confirm_message: 'Switch the model for this conversation?' }
       }
 
       backend =
@@ -435,7 +436,9 @@ it('offers outstanding native cleanup after a lost reverse-switch acknowledgemen
   expect(nativeBindingRetained).toBe(true)
   await act(() => notices.notify.mock.calls.at(-1)?.[0]?.action.onClick())
   expect(nativeBindingRetained).toBe(false)
-  expect(request.mock.calls.filter(([method, params]) => method === 'config.set' && params.key === 'model')).toHaveLength(1)
+  expect(
+    request.mock.calls.filter(([method, params]) => method === 'config.set' && params.key === 'model')
+  ).toHaveLength(1)
   expect(request.mock.calls.some(([method]) => method === 'prompt.submit')).toBe(false)
 })
 
@@ -452,6 +455,32 @@ afterEach(() => {
 function controls() {
   return renderHook(() => useModelControls({ queryClient: new QueryClient(), requestGateway: request as never })).result
 }
+
+it.each(['dropdown', 'dialog'] as const)('applies a managed model with one selection from the %s', async picker => {
+  const client = new QueryClient()
+  const close = vi.fn()
+
+  render(
+    <QueryClientProvider client={client}>
+      {picker === 'dropdown' ? <PickerHarness client={client} close={close} /> : <FullPickerHarness client={client} />}
+    </QueryClientProvider>
+  )
+
+  fireEvent.click(screen.getByRole('button', { name: 'Aino models' }))
+  fireEvent.click((await screen.findAllByRole('option', { name: /Fixture Model/i }))[0])
+
+  await waitFor(() => expect($sessionStates.get()['runtime-a'].platformModel?.status).toBe('ready'))
+  expect([$currentProvider.get(), $currentModel.get()]).toEqual(['aino', 'catalog-a'])
+  expect(
+    request.mock.calls.filter(([method, params]) => method === 'config.set' && params.key === 'model')
+  ).toHaveLength(1)
+  expect(notices.notify).not.toHaveBeenCalled()
+  expect(notices.notifyError).not.toHaveBeenCalled()
+
+  if (picker === 'dropdown') {
+    expect(close).toHaveBeenCalledOnce()
+  }
+})
 
 it('reconciles staged binding failure and retries authorization without replaying config or a prompt', async () => {
   bind.mockResolvedValueOnce({ ok: false, error: { code: 'gateway_binding_failed' } })
@@ -470,7 +499,9 @@ it('reconciles staged binding failure and retries authorization without replayin
   expect(retry).toBeDefined()
   await act(() => retry.onClick())
   expect($sessionStates.get()['runtime-a'].platformModel?.status).toBe('ready')
-  expect(request.mock.calls.filter(([method, params]) => method === 'config.set' && params.key === 'model')).toHaveLength(1)
+  expect(
+    request.mock.calls.filter(([method, params]) => method === 'config.set' && params.key === 'model')
+  ).toHaveLength(1)
   expect(request.mock.calls.some(([method]) => method === 'prompt.submit')).toBe(false)
 })
 

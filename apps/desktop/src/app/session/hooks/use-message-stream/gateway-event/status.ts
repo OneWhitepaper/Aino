@@ -50,6 +50,12 @@ export function handleStatusEvent(ctx: GatewayEventContext): boolean {
       if (isActiveEvent && state && !state.busy && !state.awaitingResponse && !state.streamId) {
         void hydrateFromStoredSession(3, state.storedSessionId, sessionId)
       }
+    } else if (sessionId && payload?.kind === 'model_switch') {
+      const state = sessionStateByRuntimeIdRef.current.get(sessionId)
+
+      if (isActiveEvent && state && !state.busy && !state.awaitingResponse && !state.streamId) {
+        void hydrateFromStoredSession(3, state.storedSessionId, sessionId)
+      }
     } else if (sessionId && payload?.kind === 'process') {
       // The gateway's notification poller announces background process
       // completions / watch matches here — re-sync the status stack.

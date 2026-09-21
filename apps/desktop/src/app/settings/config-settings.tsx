@@ -47,7 +47,7 @@ import { MemoryConnect } from './memory/connect'
 import { ProviderConfigPanel } from './memory/provider-config-panel'
 import { ModelSettings, ModelSettingsSkeleton } from './model-settings'
 import { PoolLimitsSetting } from './pool-limits-setting'
-import { EmptyState, ListRow, SettingsContent, SettingsSkeleton, ToggleRow } from './primitives'
+import { EmptyState, ListRow, SettingsContent, SettingsGroup, SettingsSkeleton, ToggleRow } from './primitives'
 import { SettingsProfileScope } from './profile-scope'
 import { QuickEntrySettings } from './quick-entry-settings'
 
@@ -390,37 +390,35 @@ function ConfigSettingsInner({
           <ModelSettings onMainModelChanged={onMainModelChanged} scopeProfile={scopeProfile} />
         </div>
       )}
-      {/* Device-local desktop prefs (not config.yaml) — they live here since
+      {(visibleFields.length > 0 || activeSectionId === 'advanced' || activeSectionId === 'chat') && (
+        <SettingsGroup>
+          {/* Device-local desktop prefs (not config.yaml) — they live here since
           keeping the machine awake and the global Quick Entry chord are both
           power-user, this-computer-only knobs. */}
-      {activeSectionId === 'advanced' && (
-        <>
-          <ToggleRow
-            checked={keepAwake}
-            description={c.keepAwakeDesc}
-            label={c.keepAwakeTitle}
-            onChange={setKeepAwake}
-          />
-          <ToggleRow
-            checked={disableF12}
-            description={c.disableF12Desc}
-            label={c.disableF12Title}
-            onChange={setDisableF12}
-          />
-          <PoolLimitsSetting />
-          <QuickEntrySettings />
-        </>
-      )}
-      {/* Device-local attach/preview byte cap (main-process IPC guard). Chat is
+          {activeSectionId === 'advanced' && (
+            <>
+              <ToggleRow
+                checked={keepAwake}
+                description={c.keepAwakeDesc}
+                label={c.keepAwakeTitle}
+                onChange={setKeepAwake}
+              />
+              <ToggleRow
+                checked={disableF12}
+                description={c.disableF12Desc}
+                label={c.disableF12Title}
+                onChange={setDisableF12}
+              />
+              <PoolLimitsSetting />
+              <QuickEntrySettings />
+            </>
+          )}
+          {/* Device-local attach/preview byte cap (main-process IPC guard). Chat is
           where image-attachment behavior already lives, so this sits above the
           schema fields for that section. */}
-      {activeSectionId === 'chat' ? <AttachmentSizeSetting /> : null}
-      {visibleFields.length === 0 && activeSectionId !== 'chat' ? (
-        <EmptyState description={c.emptyDesc} title={c.emptyTitle} />
-      ) : visibleFields.length === 0 ? null : (
-        <div className="grid gap-1">
+          {activeSectionId === 'chat' ? <AttachmentSizeSetting /> : null}
           {visibleFields.map(([key, field]) => (
-            <div className="scroll-mt-6 rounded-lg" id={`setting-field-${key}`} key={key}>
+            <div className="scroll-mt-6" data-settings-row="" id={`setting-field-${key}`} key={key}>
               <ConfigField
                 descriptionExtra={
                   key === 'memory.provider' && isExternalMemoryProvider(getNested(config, key)) ? (
@@ -447,7 +445,10 @@ function ConfigSettingsInner({
               ) : null}
             </div>
           ))}
-        </div>
+        </SettingsGroup>
+      )}
+      {visibleFields.length === 0 && activeSectionId !== 'chat' && (
+        <EmptyState description={c.emptyDesc} title={c.emptyTitle} />
       )}
       <input
         accept=".json,application/json"

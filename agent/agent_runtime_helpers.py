@@ -534,9 +534,11 @@ def _merge_consecutive_users(messages: List[Dict]) -> Tuple[List[Dict], int]:
             # A summary carrier followed by a new user row is a deliberate durable shape after
             # retry/rewind; never mutate the persisted carrier (sanitizers merge copies later).
             and split_user_originated_turn(prev)[0] is None
-            # A /steer row that ended the previous run is already persisted; merging the next
-            # prompt into it would rewrite it in place and re-break replay parity.
-            and prev.get("display_kind") != STEER_DISPLAY_KIND
+            # Persisted steering/pivot rows keep their identity. Merging the next
+            # human prompt into a pivot makes it synthetic and reanchors the persist
+            # override to an older user row. The API-copy sanitizer still merges
+            # these adjacent rows for providers requiring strict alternation.
+            and prev.get("display_kind") not in {STEER_DISPLAY_KIND, "model_switch", "personality_switch"}
             # Only merge plain-text content; leave multimodal (list) content alone.
             and isinstance(prev.get("content", ""), str) and isinstance(msg.get("content", ""), str)
         ):

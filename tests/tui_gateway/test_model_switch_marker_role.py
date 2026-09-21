@@ -16,6 +16,27 @@ from unittest.mock import MagicMock
 from tui_gateway.server import _append_model_switch_marker
 
 
+def test_model_switch_display_metadata_survives_persistence(tmp_path) -> None:
+    from hermes_state import SessionDB
+
+    db = SessionDB(tmp_path / "state.db")
+    db.create_session("model-display", source="desktop", model="before")
+    session = {"session_key": "model-display", "history": [], "agent": SimpleNamespace(_session_db=db)}
+    try:
+        _append_model_switch_marker(
+            session, model="after", provider="aino", previous_model="before", previous_provider="openai")
+        durable = db.get_messages_as_conversation("model-display")
+        warm_message = session["history"][0]
+        stored_message = durable[0]
+        assert stored_message["display_metadata"] == warm_message["display_metadata"] == {
+            "model": "after", "provider": "aino", "previous_model": "before", "previous_provider": "openai"}
+        assert stored_message["timestamp"] == warm_message["timestamp"]
+        assert "before" not in durable[0]["content"]
+        assert durable[0]["role"] == "user"
+    finally:
+        db.close()
+
+
 class TestAppendModelSwitchMarkerRole:
     """Verify the marker uses role='user', not role='system'."""
 

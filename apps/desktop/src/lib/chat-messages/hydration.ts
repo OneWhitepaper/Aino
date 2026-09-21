@@ -3,7 +3,7 @@ import { skillInvocationText } from '@hermes/shared'
 import { extractImageRefs } from '@/lib/embedded-images'
 import { dedupeGeneratedImageEchoesInParts } from '@/lib/generated-images'
 import { parseTurnMetrics } from '@/lib/turn-metrics'
-import type { MessageReaction, SessionMessage } from '@/types/hermes'
+import type { MessageReaction, ModelSwitchDisplayMetadata, SessionMessage } from '@/types/hermes'
 
 import { assistantTextPart, chatMessageText, dedupeRepeatedTextInParts, reasoningPart, textPart } from './parts'
 import {
@@ -152,6 +152,21 @@ function timelineDisplayText(metadata: SessionMessage['display_metadata']): stri
   const text = parseDisplayMetadata(metadata)?.display_text
 
   return typeof text === 'string' && text.trim() ? text : undefined
+}
+
+function modelSwitchMetadata(metadata: SessionMessage['display_metadata']): ModelSwitchDisplayMetadata {
+  const parsed = parseDisplayMetadata(metadata)
+  const result: ModelSwitchDisplayMetadata = {}
+
+  for (const key of ['model', 'provider', 'previous_model', 'previous_provider'] as const) {
+    const value = parsed?.[key]
+
+    if (typeof value === 'string' && value.trim()) {
+      result[key] = value.trim()
+    }
+  }
+
+  return result
 }
 
 function messageReactions(metadata: SessionMessage['display_metadata']): MessageReaction[] {
@@ -442,6 +457,9 @@ export function toChatMessages(messages: SessionMessage[]): ChatMessage[] {
       parts,
       ...(message.display_kind === 'async_delegation_complete' || message.display_kind === 'process_complete'
         ? { asyncResult: asyncResultBody(displayContentForMessage(message.role, message.content || content)) }
+        : {}),
+      ...(message.display_kind === 'model_switch'
+        ? { modelSwitch: modelSwitchMetadata(message.display_metadata) }
         : {}),
       timestamp: earliestTimestamp(message.timestamp, ...parts.map(part => part.timestamp)),
       ...(rowId !== undefined ? { rowId } : {}),

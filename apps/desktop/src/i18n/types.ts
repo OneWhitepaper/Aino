@@ -1698,6 +1698,7 @@ interface UpstreamTranslations {
       vram: (label: string) => string
       ram: (label: string) => string
       unifiedMemory: string
+      storage: (total: string, available: string) => string
       modelsTitle: string
       recommended: string
       /** Recommended-badge tooltip by resolver branch; unknown keys (newer
@@ -4308,6 +4309,9 @@ interface UpstreamTranslations {
       noActiveSession: string
       gatewayNotConnected: string
       steered: string
+      modelChanged: string
+      modelChangedTo: (model: string) => string
+      modelChangedFrom: (previousModel: string, model: string) => string
       dismissError: string
       /** Layer titles for the structured error card (agent/error_surface.py).
        *  `generic` is the fallback when the backend sent no descriptor. */

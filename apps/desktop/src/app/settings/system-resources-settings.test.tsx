@@ -72,3 +72,23 @@ it('offers retry after a failed resource request without a permanent spinner', a
   fireEvent.click(retry)
   expect(await screen.findByText('4.0 GB / 8.0 GB')).toBeTruthy()
 })
+
+it('reports shared memory once when separate GPU counters are unavailable', async () => {
+  vi.mocked(getLocalHardware).mockResolvedValue({
+    ram_total_bytes: 24 * 2 ** 30,
+    ram_available_bytes: 8 * 2 ** 30,
+    gpu_name: 'Apple M5 Pro',
+    gpu_util_percent: null,
+    vram_used_bytes: null,
+    vram_total_bytes: 24 * 2 ** 30,
+    vram_usable_bytes: 6 * 2 ** 30,
+    vram_label: '24 GB',
+    uma: true
+  })
+  mount()
+
+  expect(await screen.findByText('Apple M5 Pro')).toBeTruthy()
+  expect(screen.getByRole('meter', { name: 'Unified memory' })).toBeTruthy()
+  expect(screen.getByText('16.0 GB / 24.0 GB')).toBeTruthy()
+  expect(screen.queryByText('\u2014 / 24.0 GB')).toBeNull()
+})

@@ -31,7 +31,6 @@ import { Contribute } from '@/contrib/react/contribute'
 import { useContributions } from '@/contrib/react/use-contributions'
 import { searchSessions, type SessionInfo, type SessionSearchResult } from '@/hermes'
 import { useI18n } from '@/i18n'
-import { Settings2 } from '@/lib/icons'
 import { comboTokens } from '@/lib/keybinds/combo'
 import { sessionMatchesSearch } from '@/lib/session-search'
 import { normalizeSessionSource, sessionSourceLabel } from '@/lib/session-source'
@@ -143,7 +142,6 @@ import {
   MESSAGING_ROUTE,
   PROFILES_ROUTE,
   SESSION_IMPORT_ROUTE,
-  SETTINGS_ROUTE,
   SIDEBAR_NAV_AREA,
   type SidebarNavContribution,
   SKILLS_ROUTE
@@ -182,7 +180,7 @@ import {
 import { useWorkspaceNodeOpen } from './projects/model'
 import { WorktreeDialog } from './projects/worktree-dialog'
 import { recentSessionsOutsideProjects } from './recent-sessions'
-import { SidebarIdentityFooter, SidebarLoadErrorState, SidebarSessionSkeletons } from './section-states'
+import { SidebarLoadErrorState, SidebarSessionSkeletons } from './section-states'
 import { buildSessionByAnyId, resolvePinnedSessions } from './session-index'
 import { SidebarSessionsSection, VIRTUALIZE_THRESHOLD } from './sessions-section'
 import { CONTEXT_SPLIT_KIT, SplitSubmenu } from './split-submenu'
@@ -1923,25 +1921,6 @@ export function ChatSidebar({
           )}
         </div>
       </SidebarContent>
-      <SidebarIdentityFooter
-        onOpenAccount={() =>
-          onNavigate({
-            id: 'settings',
-            icon: Settings2,
-            label: t.settings.account.title,
-            route: `${SETTINGS_ROUTE}?tab=account`
-          })
-        }
-        onOpenSettings={() =>
-          onNavigate({
-            id: 'settings',
-            icon: Settings2,
-            label: t.titlebar.openSettings,
-            route: SETTINGS_ROUTE
-          })
-        }
-        settingsLabel={t.titlebar.openSettings}
-      />
       <ProjectDialog />
       {/* One mount for the whole app. The header of WorktreeDialog tells why. */}
       <WorktreeDialog />

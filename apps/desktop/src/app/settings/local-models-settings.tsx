@@ -71,6 +71,14 @@ function gbLabel(bytes: number | null | undefined): string {
   return `${(bytes / (1 << 30)).toFixed(1)} GB`
 }
 
+function storageLabel(bytes: number | null | undefined): string {
+  if (bytes == null) {
+    return '\u2014'
+  }
+
+  return bytes >= 1e12 ? `${(bytes / 1e12).toFixed(2)} TB` : `${(bytes / 1e9).toFixed(1)} GB`
+}
+
 // Catalog display order: what runs well leads. Resident (all on GPU)
 // first, then spilled (works, slower), then doesn't-fit; catalog order
 // (recommended first) holds within each band.
@@ -534,17 +542,34 @@ export function LocalModelsSettings() {
               </span>
             )}
 
-            <span className="inline-flex items-center gap-1.5">
-              <Cpu className="size-3.5" />
-              {copy.vram(gbLabel(hardware.vram_total_bytes))}
-            </span>
-
-            <span className="inline-flex items-center gap-1.5">
-              <Package className="size-3.5" />
-              {copy.ram(gbLabel(hardware.ram_total_bytes))}
-            </span>
-
-            {hardware.uma && <Pill>{copy.unifiedMemory}</Pill>}
+            {hardware.uma ? (
+              <span className="inline-flex items-center gap-1.5">
+                <Package className="size-3.5" />
+                {gbLabel(hardware.vram_total_bytes)} {copy.unifiedMemory}
+              </span>
+            ) : (
+              <>
+                <span className="inline-flex items-center gap-1.5">
+                  <Cpu className="size-3.5" />
+                  {copy.vram(gbLabel(hardware.vram_total_bytes))}
+                </span>
+                <span className="inline-flex items-center gap-1.5">
+                  <Package className="size-3.5" />
+                  {copy.ram(gbLabel(hardware.ram_total_bytes))}
+                </span>
+              </>
+            )}
+            {hardware.storage_total_bytes != null && (
+              <Tip label={hardware.storage_path}>
+                <span className="inline-flex items-center gap-1.5">
+                  <FolderOpen className="size-3.5 shrink-0" />
+                  {copy.storage(
+                    storageLabel(hardware.storage_total_bytes),
+                    storageLabel(hardware.storage_available_bytes)
+                  )}
+                </span>
+              </Tip>
+            )}
           </div>
         ) : (
           <p className="py-1 text-[length:var(--conversation-caption-font-size)] text-muted-foreground">

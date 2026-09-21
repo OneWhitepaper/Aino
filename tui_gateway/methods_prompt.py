@@ -5,6 +5,7 @@ method_ctx.bind_module), so they reference server.py globals bare.
 """
 
 import contextlib
+import copy
 
 from .method_ctx import HandlerRegistry, bind_module
 
@@ -120,6 +121,34 @@ def _resolve_truncate_row_id(session: dict, history: list, target_row_id: int):
             history[mem_user_indices[db_ord]], db_history[db_idx]):
         return None
     return db_ord, mem_user_indices[db_ord]
+
+
+def _restore_repaired_truncation_boundaries(session: dict, history: list, target_row_id: int):
+    """Recover physical user rows only when their repaired replay equals the live transcript.
+
+    Provider alternation repair can merge a model-switch marker with the next user
+    prompt, or an interrupted prompt with its follow-up. The merged row retains the
+    first row's identity/type, so later real prompts cease to be addressable in the
+    replay view even though their original rows are still active in SQLite.
+    """
+    durable = _load_durable_truncation_history(session, repair_alternation=False)
+    if not durable or len(durable) <= len(history) or _find_user_turn_by_row_id(durable, target_row_id) is None:
+        return
+    from agent.agent_runtime_helpers import repair_message_sequence
+    from hermes_state_rewind import _comparison_content
+
+    replay = copy.deepcopy(durable)
+    if not repair_message_sequence(None, replay) or len(replay) != len(history):
+        return
+    # A rewind may discard data: prove the complete replay, including tool results
+    # and assistant content, rather than guessing from matching prompt text.
+    if all(
+        _mem_db_pair_agrees(live, stored)
+        and _comparison_content(live) == _comparison_content(stored)
+        and all(live.get(key) == stored.get(key) for key in ("tool_calls", "tool_call_id", "display_kind"))
+        for live, stored in zip(history, replay)
+    ):
+        history[:] = durable
 
 
 def _coerce_truncate_int(rid, value, param_name="truncate_before_user_ordinal"):
@@ -292,6 +321,8 @@ def _resolve_truncation_ordinal(rid, sid, session, params, history):
     if target_row_id is not None or truncate_message_id is not None:
         if target_row_id is not None:
             param_name, target_repr = "truncate_before_row_id", target_row_id
+            _restore_repaired_truncation_boundaries(session, history, target_row_id)
+            user_indices = _history_user_indices(history)
             found_match = _resolve_truncate_row_id(session, history, target_row_id)
             not_found = "target row_id %d not found for session %s (in-memory + durable)"
         else:

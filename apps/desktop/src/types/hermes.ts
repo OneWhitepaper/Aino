@@ -543,8 +543,15 @@ export interface SessionInfo {
   connection_id?: string
 }
 
+export interface ModelSwitchDisplayMetadata {
+  model?: string
+  provider?: string
+  previous_model?: string
+  previous_provider?: string
+}
+
 export type TimelineDisplayMetadata =
-  | { model: string; provider?: string }
+  | ModelSwitchDisplayMetadata
   | {
       delegation_id: string
       task_count: number
@@ -1300,6 +1307,9 @@ export interface LocalHardware {
   gpu_name: string | null
   gpu_util_percent: number | null
   vram_used_bytes: number | null
+  storage_path?: string
+  storage_total_bytes?: number | null
+  storage_available_bytes?: number | null
 }
 
 export interface LocalCatalogModel {

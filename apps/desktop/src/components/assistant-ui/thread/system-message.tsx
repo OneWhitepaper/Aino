@@ -10,6 +10,7 @@ import { ToolIcon } from '@/components/ui/tool-icon'
 import { useI18n } from '@/i18n'
 import { LinkifiedText } from '@/lib/external-link'
 import { cn } from '@/lib/utils'
+import type { ModelSwitchDisplayMetadata } from '@/types/hermes'
 
 const SLASH_STATUS_RE = /^slash:(?<command>\/[^\n]+)\n(?<output>[\s\S]*)$/
 const STEER_NOTE_RE = /^steer:(?<text>[\s\S]+)$/
@@ -19,10 +20,37 @@ export const SystemMessage: FC = () => {
   const { t } = useI18n()
   const text = useAuiState(s => messageContentText(s.message.content))
   const asyncResult = useAuiState(s => s.message.metadata.custom?.asyncResult)
+  const modelSwitch = useAuiState(s => s.message.metadata.custom?.modelSwitch) as ModelSwitchDisplayMetadata | undefined
   const [reportOpen, setReportOpen] = useState(false)
 
   if (!text) {
     return null
+  }
+
+  if (modelSwitch) {
+    const { model, previous_model: previousModel } = modelSwitch
+    const label = model
+      ? previousModel
+        ? t.assistant.thread.modelChangedFrom(previousModel, model)
+        : t.assistant.thread.modelChangedTo(model)
+      : t.assistant.thread.modelChanged
+
+    return (
+      <MessagePrimitive.Root
+        className="flex w-full min-w-0 items-center gap-3 self-center py-2 text-xs leading-5 text-muted-foreground"
+        data-role="system"
+        data-slot="aui_system-message-root"
+      >
+        <span aria-hidden="true" className="h-px min-w-4 flex-1 bg-(--ui-stroke-tertiary)" />
+        <span className="flex min-w-0 max-w-[85%] items-center gap-2">
+          <Codicon className="shrink-0" name="package" size="0.875rem" />
+          <span className="min-w-0 wrap-anywhere">
+            {label} <MessageTimelineTimestamp className="ml-1.5" />
+          </span>
+        </span>
+        <span aria-hidden="true" className="h-px min-w-4 flex-1 bg-(--ui-stroke-tertiary)" />
+      </MessagePrimitive.Root>
+    )
   }
 
   if (typeof asyncResult === 'string' && asyncResult) {

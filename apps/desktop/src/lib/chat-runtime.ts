@@ -424,6 +424,7 @@ export function toRuntimeMessage(message: ChatMessage): ThreadMessage {
       metadata: {
         custom: {
           ...timelineMeta,
+          ...(message.modelSwitch ? { modelSwitch: message.modelSwitch } : {}),
           ...(message.asyncResult ? { asyncResult: message.asyncResult } : {})
         }
       }

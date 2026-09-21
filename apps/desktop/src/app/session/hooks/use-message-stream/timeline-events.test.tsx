@@ -2,6 +2,8 @@ import type { GatewayEventName } from '@hermes/shared'
 import { act, cleanup } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { createClientSessionState } from '@/lib/chat-runtime'
+
 import { type MessageStreamHarness, renderMessageStream } from './test-harness'
 
 const SID = 'timeline-session'
@@ -73,6 +75,23 @@ describe('live transcript timeline events', () => {
 
     expect(system?.timestamp).toBe(401.625)
     expect(system?.parts[0].timestamp).toBe(401.625)
+  })
+
+  it.each([false, true])('refreshes an applied model switch without replacing a running turn (busy=%s)', busy => {
+    cleanup()
+    const hydrateFromStoredSession = vi.fn(async () => undefined)
+    stream = renderMessageStream(SID, {
+      hydrateFromStoredSession,
+      states: new Map([[SID, { ...createClientSessionState(), storedSessionId: 'stored-model-switch', busy }]])
+    })
+
+    event('status.update', 450, { kind: 'model_switch', text: '' })
+
+    if (busy) {
+      expect(hydrateFromStoredSession).not.toHaveBeenCalled()
+    } else {
+      expect(hydrateFromStoredSession).toHaveBeenCalledWith(3, 'stored-model-switch', SID)
+    }
   })
 
   it('uses session.info time when it is the only stop boundary', () => {

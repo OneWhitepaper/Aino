@@ -31,7 +31,7 @@ import {
   resetBinding
 } from '@/store/keybinds'
 
-import { SettingsContent } from './primitives'
+import { SettingsContent, SettingsGroup } from './primitives'
 
 export function KeybindSettings() {
   const { t } = useI18n()
@@ -124,10 +124,10 @@ export function KeybindSettings() {
       </div>
 
       {isSearching ? (
-        <div className="px-2 py-1.5">
-          {filteredActions?.length === 0 && filteredReadonly?.length === 0 ? (
-            <p className="px-2.5 py-4 text-center text-[0.82rem] text-muted-foreground">—</p>
-          ) : (
+        filteredActions?.length === 0 && filteredReadonly?.length === 0 ? (
+          <p className="px-2.5 py-4 text-center text-[0.82rem] text-muted-foreground">—</p>
+        ) : (
+          <SettingsGroup>
             <>
               {filteredActions?.map(action => (
                 <KeybindRow action={action} key={action.id} />
@@ -136,10 +136,10 @@ export function KeybindSettings() {
                 <ReadonlyRow key={shortcut.id} shortcut={shortcut} />
               ))}
             </>
-          )}
-        </div>
+          </SettingsGroup>
+        )
       ) : (
-        <div className="px-2 py-1.5">
+        <div>
           {KEYBIND_CATEGORIES.map(category => {
             const actions = actionList.filter(
               action => action.category === category && action.id !== KEYBIND_PANEL_ACTION
@@ -160,8 +160,16 @@ export function KeybindSettings() {
                   onToggle={() => toggleCategory(category)}
                   open={sectionOpen}
                 />
-                {sectionOpen && actions.map(action => <KeybindRow action={action} key={action.id} />)}
-                {sectionOpen && readonly.map(shortcut => <ReadonlyRow key={shortcut.id} shortcut={shortcut} />)}
+                {sectionOpen && (
+                  <SettingsGroup>
+                    {actions.map(action => (
+                      <KeybindRow action={action} key={action.id} />
+                    ))}
+                    {readonly.map(shortcut => (
+                      <ReadonlyRow key={shortcut.id} shortcut={shortcut} />
+                    ))}
+                  </SettingsGroup>
+                )}
               </section>
             )
           })}
@@ -209,7 +217,10 @@ function KeybindRow({ action }: { action: KeybindActionMeta }) {
     .find(Boolean)
 
   return (
-    <div className="group flex items-center gap-2.5 rounded-lg px-2.5 py-1 transition-colors hover:bg-(--chrome-action-hover)">
+    <div
+      className="group flex items-center gap-2.5 rounded-lg px-2.5 py-1 transition-colors hover:bg-(--chrome-action-hover)"
+      data-settings-row=""
+    >
       <span className="min-w-0 flex-1 truncate text-[0.82rem] text-foreground/90">{label}</span>
 
       {conflict && (
@@ -264,7 +275,7 @@ function ReadonlyRow({ shortcut }: { shortcut: KeybindReadonly }) {
   const label = k.actions[shortcut.id] ?? shortcut.id
 
   return (
-    <div className="flex items-center gap-2.5 rounded-lg px-2.5 py-1">
+    <div className="flex items-center gap-2.5 rounded-lg px-2.5 py-1" data-settings-row="">
       <span className="min-w-0 flex-1 truncate text-[0.82rem] text-foreground/75">{label}</span>
       <div className="flex shrink-0 items-center gap-1">
         {shortcut.keys.map(key => (

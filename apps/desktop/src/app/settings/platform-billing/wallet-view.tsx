@@ -5,7 +5,7 @@ import { Loader } from '@/components/ui/loader'
 import { useI18n } from '@/i18n'
 import { CreditCard, RefreshCw } from '@/lib/icons'
 
-import { ListRow, SettingsSection } from '../primitives'
+import { ListRow, SettingsGroup, SettingsSection } from '../primitives'
 
 import { BillingHistory } from './billing-history'
 import { PlatformDevices } from './devices-view'
@@ -44,20 +44,22 @@ export function PlatformWallet() {
         )}
         {wallet && (
           <>
-            <div className="py-3">
-              <p className="text-xs text-muted-foreground">{copy.available}</p>
-              <p className="mt-1 text-2xl font-medium tabular-nums [overflow-wrap:anywhere]">
-                {formatUsageAmount(wallet.available_balance)} {wallet.currency}
-              </p>
-            </div>
-            <ListRow
-              action={
-                <span className="tabular-nums [overflow-wrap:anywhere]">
-                  {formatUsageAmount(wallet.frozen_balance)} {wallet.currency}
-                </span>
-              }
-              title={copy.frozen}
-            />
+            <SettingsGroup>
+              <div className="py-3" data-settings-row="">
+                <p className="text-xs text-muted-foreground">{copy.available}</p>
+                <p className="mt-1 text-2xl font-medium tabular-nums [overflow-wrap:anywhere]">
+                  {formatUsageAmount(wallet.available_balance)} {wallet.currency}
+                </p>
+              </div>
+              <ListRow
+                action={
+                  <span className="tabular-nums [overflow-wrap:anywhere]">
+                    {formatUsageAmount(wallet.frozen_balance)} {wallet.currency}
+                  </span>
+                }
+                title={copy.frozen}
+              />
+            </SettingsGroup>
             {!wallet.payment_enabled && <p className="mt-2 text-xs text-muted-foreground">{copy.paymentDisabled}</p>}
             {scope && (
               <div className="mt-4">
@@ -84,9 +86,9 @@ export function PlatformWallet() {
           {wallet.active_subscriptions.length === 0 ? (
             <p className="text-sm text-muted-foreground">{copy.noSubscriptions}</p>
           ) : (
-            <ul className="m-0 list-none space-y-4 p-0">
+            <SettingsGroup role="list">
               {wallet.active_subscriptions.map(subscription => (
-                <li className="min-w-0" key={subscription.id}>
+                <div className="min-w-0 py-3" data-settings-row="" key={subscription.id} role="listitem">
                   <div className="flex flex-wrap items-baseline justify-between gap-2 text-sm">
                     <span className="min-w-0 [overflow-wrap:anywhere]">{subscription.name}</span>
                     <span className="tabular-nums [overflow-wrap:anywhere]">
@@ -98,9 +100,9 @@ export function PlatformWallet() {
                   <p className="mt-1 text-xs text-muted-foreground">
                     {copy.expires}: {new Date(subscription.expires_at).toLocaleDateString(locale)}
                   </p>
-                </li>
+                </div>
               ))}
-            </ul>
+            </SettingsGroup>
           )}
         </SettingsSection>
       )}

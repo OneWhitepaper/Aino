@@ -192,7 +192,7 @@ def _history_to_messages(history: list[dict]) -> list[dict]:
         if role not in _HISTORY_ROLES or m.get("display_kind") == "hidden":
             continue
         content_text = _coerce_message_text(m.get("content"))
-        if _is_display_hidden_marker(role, content_text):
+        if _is_display_hidden_marker(role, content_text) and m.get("display_kind") != "model_switch":
             continue
         if role == "assistant" and m.get("tool_calls"):
             for tc in m["tool_calls"]:
