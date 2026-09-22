@@ -167,6 +167,8 @@ export interface PlatformCaptchaBridge {
 export interface PlatformUsageQuery {
   page: number
   page_size: number
+  model?: string
+  timezone?: string
   session_id?: string
   desktop_turn_id?: string
   desktop_call_id?: string
@@ -187,6 +189,10 @@ export interface PlatformUsageRow {
   currency: 'USD'
   settlement_status: 'pending' | 'settled' | 'not_charged' | 'unknown'
   created_at: string
+  input_tokens?: number | null
+  output_tokens?: number | null
+  cache_creation_tokens?: number | null
+  cache_read_tokens?: number | null
 }
 
 export interface PlatformUsagePage {
@@ -194,6 +200,7 @@ export interface PlatformUsagePage {
   page: number
   page_size: number
   total: number
+  supported_desktop_purposes?: string[]
 }
 
 export interface PlatformBillingBridge {

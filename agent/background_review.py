@@ -920,9 +920,13 @@ def build_cache_parity_fork(
     replay a digest). The caller owns registration, whitelisting, running, usage attribution and
     teardown."""
     from run_agent import AIAgent  # local: avoids a circular import at load
+    from agent.auxiliary_billing_scope import ManagedCredential
     # Inherit the parent's live runtime: AIAgent.__init__'s env auto-resolution fails for
     # OAuth-only providers, session-scoped creds and credential pools.
     _rt = _resolve_review_runtime(agent, task_cfg)
+    key = _rt.get("api_key")
+    if isinstance(key, ManagedCredential):
+        _rt["api_key"] = key.for_task(write_origin)
     _routed = bool(_rt.get("routed"))
     # A configured effort is dropped on the same-model path (cache parity) — say so once, visible,
     # instead of leaving the set-but-ignored key invisible (#104116). Routed forks honor it

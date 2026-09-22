@@ -444,10 +444,30 @@ export function ContribWiring({ children }: { children: ReactNode }) {
       }
 
       const storedProfile = $sessions.get().find(session => sessionMatchesStoredId(session, storedSessionId))?.profile
+      const messagesBeforeRead = sessionStateByRuntimeIdRef.current.get(runtimeSessionId)?.messages
+
+      const canApplyHistory = () => {
+        const state = sessionStateByRuntimeIdRef.current.get(runtimeSessionId)
+
+        return (
+          state && state.messages === messagesBeforeRead && !state.busy && !state.awaitingResponse && !state.streamId
+        )
+      }
 
       for (let index = 0; index < Math.max(1, attempts); index += 1) {
+        if (!canApplyHistory()) {
+          return
+        }
+
         try {
           const latest = await getLatestSessionMessages(storedSessionId, storedProfile)
+
+          // A live notice or a new turn can land while the previous turn's
+          // history read is in flight. That older snapshot must not replace it.
+          if (!canApplyHistory()) {
+            return
+          }
+
           const messages = toChatMessages(latest.messages)
           updateSessionState(
             runtimeSessionId,
@@ -481,7 +501,7 @@ export function ContribWiring({ children }: { children: ReactNode }) {
         }
       }
     },
-    [activeSessionIdRef, selectedStoredSessionIdRef, updateSessionState]
+    [activeSessionIdRef, selectedStoredSessionIdRef, sessionStateByRuntimeIdRef, updateSessionState]
   )
 
   // Refresh any active transcript changed by another process. Signature-gated

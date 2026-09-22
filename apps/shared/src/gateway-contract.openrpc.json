@@ -3229,6 +3229,24 @@
       }
     },
     {
+      "name": "session.summary",
+      "summary": "Generate or reuse a cited summary using the calling transport's live session authority.",
+      "params": [
+        {
+          "name": "params",
+          "schema": {
+            "$ref": "#/components/schemas/SessionSummaryParams"
+          }
+        }
+      ],
+      "result": {
+        "name": "result",
+        "schema": {
+          "$ref": "#/components/schemas/SessionSummaryResult"
+        }
+      }
+    },
+    {
       "name": "session.title",
       "summary": "Read or set a live session's title; a title set before the row exists is queued.",
       "params": [
@@ -27207,6 +27225,65 @@
         "title": "SessionSaveResult",
         "type": "object"
       },
+      "SessionSemanticSummary": {
+        "additionalProperties": false,
+        "properties": {
+          "objective": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SessionSummaryPoint"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "completed": {
+            "items": {
+              "$ref": "#/components/schemas/SessionSummaryPoint"
+            },
+            "title": "Completed",
+            "type": "array"
+          },
+          "conclusions": {
+            "items": {
+              "$ref": "#/components/schemas/SessionSummaryPoint"
+            },
+            "title": "Conclusions",
+            "type": "array"
+          },
+          "open_questions": {
+            "items": {
+              "$ref": "#/components/schemas/SessionSummaryPoint"
+            },
+            "title": "Open Questions",
+            "type": "array"
+          },
+          "updated_at": {
+            "title": "Updated At",
+            "type": "number"
+          },
+          "source_revision": {
+            "title": "Source Revision",
+            "type": "string"
+          },
+          "source_message_count": {
+            "title": "Source Message Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "objective",
+          "completed",
+          "conclusions",
+          "open_questions",
+          "updated_at",
+          "source_revision",
+          "source_message_count"
+        ],
+        "title": "SessionSemanticSummary",
+        "type": "object"
+      },
       "SessionSetHiddenParams": {
         "additionalProperties": false,
         "description": "``session_id`` is a live runtime id first, else a stored id / key / title.",
@@ -27296,6 +27373,122 @@
           "output"
         ],
         "title": "SessionStatusResult",
+        "type": "object"
+      },
+      "SessionSummaryParams": {
+        "additionalProperties": false,
+        "properties": {
+          "session_id": {
+            "title": "Session Id",
+            "type": "string"
+          },
+          "language": {
+            "default": "zh",
+            "enum": [
+              "zh",
+              "en",
+              "zh-hant",
+              "ja"
+            ],
+            "title": "Language",
+            "type": "string"
+          },
+          "retry": {
+            "default": false,
+            "title": "Retry",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "session_id"
+        ],
+        "title": "SessionSummaryParams",
+        "type": "object"
+      },
+      "SessionSummaryPoint": {
+        "additionalProperties": false,
+        "properties": {
+          "text": {
+            "title": "Text",
+            "type": "string"
+          },
+          "message_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Message Ids",
+            "type": "array"
+          }
+        },
+        "required": [
+          "text",
+          "message_ids"
+        ],
+        "title": "SessionSummaryPoint",
+        "type": "object"
+      },
+      "SessionSummaryResult": {
+        "additionalProperties": false,
+        "properties": {
+          "summary": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SessionSemanticSummary"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "eligible": {
+            "title": "Eligible",
+            "type": "boolean"
+          },
+          "stale": {
+            "title": "Stale",
+            "type": "boolean"
+          },
+          "source_revision": {
+            "title": "Source Revision",
+            "type": "string"
+          },
+          "busy": {
+            "title": "Busy",
+            "type": "boolean"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Error"
+          },
+          "error_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Error Code"
+          }
+        },
+        "required": [
+          "summary",
+          "eligible",
+          "stale",
+          "source_revision",
+          "busy"
+        ],
+        "title": "SessionSummaryResult",
         "type": "object"
       },
       "SessionTitleParams": {
@@ -29175,6 +29368,17 @@
           "text": {
             "title": "Text",
             "type": "string"
+          },
+          "history_entry": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TranscriptMessage"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
           }
         },
         "required": [

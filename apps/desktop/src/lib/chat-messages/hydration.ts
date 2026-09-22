@@ -250,10 +250,12 @@ export function toChatMessages(messages: SessionMessage[]): ChatMessage[] {
   const result: ChatMessage[] = []
   let pendingToolParts: ChatMessagePart[] = []
   let pendingToolTimestamp: number | undefined
+  let pendingRowIds: number[] = []
   let activeAssistantIndex: null | number = null
 
   const clearPendingTools = () => {
     pendingToolParts = []
+    pendingRowIds = []
     pendingToolTimestamp = undefined
   }
 
@@ -276,6 +278,7 @@ export function toChatMessages(messages: SessionMessage[]): ChatMessage[] {
       return false
     }
 
+    active.sourceRowIds = [...(active.sourceRowIds ?? []), ...pendingRowIds]
     active.parts = [...active.parts, ...parts]
     active.timestamp = earliestTimestamp(active.timestamp, timestamp, ...parts.map(part => part.timestamp))
 
@@ -292,6 +295,7 @@ export function toChatMessages(messages: SessionMessage[]): ChatMessage[] {
         id: `${pendingToolTimestamp || Date.now()}-${index}-tools`,
         role: 'assistant',
         parts: pendingToolParts,
+        sourceRowIds: pendingRowIds,
         timestamp: pendingToolTimestamp
       })
       activeAssistantIndex = result.length - 1
@@ -301,11 +305,18 @@ export function toChatMessages(messages: SessionMessage[]): ChatMessage[] {
   }
 
   messages.forEach((message, index) => {
+    // Gateway resume names the durable row id `row_id`; the REST transcript
+    // prefetch ships the same messages.id as a numeric `id`. Either one lets
+    // reactions address this exact row later.
+    const rowId = message.row_id ?? (typeof message.id === 'number' ? message.id : undefined)
+    const rowIds = rowId === undefined ? [] : [rowId]
+
     if (message.role === 'tool') {
       const updatedPendingToolParts = applyStoredToolResultToParts(pendingToolParts, message)
 
       if (updatedPendingToolParts) {
         pendingToolParts = updatedPendingToolParts
+        pendingRowIds.push(...rowIds)
 
         return
       }
@@ -314,6 +325,7 @@ export function toChatMessages(messages: SessionMessage[]): ChatMessage[] {
         return
       }
 
+      pendingRowIds.push(...rowIds)
       pendingToolParts = [...pendingToolParts, storedToolMessagePart(message, index)]
       pendingToolTimestamp ??= message.timestamp
 
@@ -398,6 +410,7 @@ export function toChatMessages(messages: SessionMessage[]): ChatMessage[] {
       message.role === 'assistant' && parts.length > 0 && parts.every(part => part.type === 'tool-call')
 
     if (isToolOnlyAssistant) {
+      pendingRowIds.push(...rowIds)
       pendingToolParts = [...pendingToolParts, ...parts]
       pendingToolTimestamp ??= message.timestamp
 
@@ -413,6 +426,7 @@ export function toChatMessages(messages: SessionMessage[]): ChatMessage[] {
       if (pendingToolParts.length) {
         if (!appendPartsToActiveAssistant(pendingToolParts, message.timestamp ?? pendingToolTimestamp)) {
           parts.unshift(...pendingToolParts)
+          rowIds.push(...pendingRowIds)
         }
 
         clearPendingTools()
@@ -432,6 +446,7 @@ export function toChatMessages(messages: SessionMessage[]): ChatMessage[] {
           activeAssistant.durationS = turnMetrics.duration_s
         }
 
+        activeAssistant.sourceRowIds = [...(activeAssistant.sourceRowIds ?? []), ...rowIds]
         activeAssistant.parts = [...activeAssistant.parts, ...parts]
         activeAssistant.timestamp = earliestTimestamp(
           activeAssistant.timestamp,
@@ -446,11 +461,6 @@ export function toChatMessages(messages: SessionMessage[]): ChatMessage[] {
     }
 
     const reactions = messageReactions(message.display_metadata)
-    // Gateway resume names the durable row id `row_id`; the REST transcript
-    // prefetch ships the same messages.id as a numeric `id`. Either one lets
-    // reactions address this exact row later.
-    const rowId = message.row_id ?? (typeof message.id === 'number' ? message.id : undefined)
-
     result.push({
       id: `${message.timestamp || Date.now()}-${index}-${displayRole}`,
       role: displayRole,
@@ -463,6 +473,7 @@ export function toChatMessages(messages: SessionMessage[]): ChatMessage[] {
         : {}),
       timestamp: earliestTimestamp(message.timestamp, ...parts.map(part => part.timestamp)),
       ...(rowId !== undefined ? { rowId } : {}),
+      ...(rowIds.length ? { sourceRowIds: rowIds } : {}),
       ...(turnMetrics ? { turnMetrics, durationS: turnMetrics.duration_s } : {}),
       ...(reactions.length ? { reactions } : {}),
       ...(extractedAttachmentRefs ? { attachmentRefs: extractedAttachmentRefs } : {})

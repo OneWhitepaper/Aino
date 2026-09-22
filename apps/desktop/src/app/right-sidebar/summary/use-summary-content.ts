@@ -60,6 +60,9 @@ export function useSummaryContent(session: ReturnType<typeof useSummarySession>)
     outputs,
     sources,
     loading: hasHistory && query.isPending,
+    historyReady: hasHistory && query.isSuccess && !query.isPlaceholderData,
+    historyUpdatedAt: query.dataUpdatedAt,
+    refreshing: query.isFetching,
     error: hasHistory ? query.error : null,
     refetch: query.refetch
   }

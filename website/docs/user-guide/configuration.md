@@ -1330,6 +1330,17 @@ If you do not want Hermes to auto-generate titles after the first exchange, set
 `auxiliary.title_generation.enabled: false`. Manual titles still work through
 `/title` and `hermes sessions rename`.
 
+The desktop session inspector uses `auxiliary.session_summary` for a separate,
+cited summary of the visible conversation. It shares the auxiliary provider/model
+settings and usage accounting, but never rewrites messages or compresses the chat.
+Generation runs through the owning live session: `auto` follows its current model
+(including a temporary model switch or Aino lease), while an explicit auxiliary
+provider keeps its own billing. Summaries are cached by profile, session, language,
+and transcript revision; short greetings do not invoke a model. Failed attempts
+are retained for that revision and retried only through the explicit retry action. Long histories are summarized in chunks, with a
+100-second generation budget and a 240,000-character input limit. Histories above
+that limit show an explicit limit error instead of silently dropping messages.
+
 ### Stream-only endpoints
 
 Some OpenAI-compatible endpoints reject non-streaming chat requests outright (e.g. Tencent Copilot returns HTTP 400 `"Non-stream chat request is currently not supported"`). Interactive chat already streams, but auxiliary tasks (title generation, compression, vision) use non-streaming calls and would fail on every attempt. Hermes always treats `copilot.tencent.com` as stream-only; for any other such endpoint, list a URL substring under `auxiliary.stream_only_base_urls`:

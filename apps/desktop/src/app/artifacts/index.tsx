@@ -31,6 +31,7 @@ import {
 } from '@/lib/external-link'
 import { FileImage, FileText, FolderOpen, Link2 } from '@/lib/icons'
 import { downloadGatewayMediaFile, isArtifactFilePath, isRemoteGateway } from '@/lib/media'
+import { paginationItems } from '@/lib/pagination'
 import { normalize } from '@/lib/text'
 import { fmtDayTime } from '@/lib/time'
 import { cn } from '@/lib/utils'
@@ -63,32 +64,6 @@ function pageRangeLabel(total: number, page: number, pageSize: number, a: Transl
   const end = Math.min(total, page * pageSize)
 
   return a.rangeOf(start, end, total)
-}
-
-function paginationItems(page: number, pageCount: number): Array<number | 'ellipsis'> {
-  if (pageCount <= 7) {
-    return Array.from({ length: pageCount }, (_, index) => index + 1)
-  }
-
-  const pages: Array<number | 'ellipsis'> = [1]
-  const start = Math.max(2, page - 1)
-  const end = Math.min(pageCount - 1, page + 1)
-
-  if (start > 2) {
-    pages.push('ellipsis')
-  }
-
-  for (let nextPage = start; nextPage <= end; nextPage += 1) {
-    pages.push(nextPage)
-  }
-
-  if (end < pageCount - 1) {
-    pages.push('ellipsis')
-  }
-
-  pages.push(pageCount)
-
-  return pages
 }
 
 type CellCtx = {

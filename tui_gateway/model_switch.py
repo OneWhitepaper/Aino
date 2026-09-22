@@ -198,11 +198,18 @@ def _commit_agent_switch(sid: str, session: dict, agent, result, current_model: 
     _restart_slash_worker(sid, session)
     _persist_live_session_runtime(session)
     _persist_live_session_system_prompt(session)
-    _append_model_switch_marker(
+    marker = _append_model_switch_marker(
         session, model=result.new_model, provider=result.target_provider,
         previous_model=current_model, previous_provider=previous_provider)
     _emit_session_info(sid, session)
-    _emit("status.update", sid, {"kind": "model_switch", "text": ""})
+    history_entry = None
+    if marker is not None:
+        history_entry = {"role": marker.get("role", "user"), "text": "model changed",
+                         "timestamp": marker.get("timestamp"), "display_kind": "model_switch",
+                         "display_metadata": marker.get("display_metadata")}
+        if marker.get("_row_id") is not None:
+            history_entry["row_id"] = marker["_row_id"]
+    _emit("status.update", sid, {"kind": "model_switch", "text": "", "history_entry": history_entry})
     if snapshot is not None:
         session["one_turn_model_restore"] = snapshot
     else:

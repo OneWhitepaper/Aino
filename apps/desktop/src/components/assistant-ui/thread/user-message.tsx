@@ -30,10 +30,12 @@ export function hasTextSelection(): boolean {
 export function HumanMessageContainer({
   attachments,
   children,
-  messageId
+  messageId,
+  durableRowId
 }: {
   attachments?: ReactNode
   children: ReactNode
+  durableRowId?: number
   messageId?: string
 }) {
   return (
@@ -44,6 +46,7 @@ export function HumanMessageContainer({
     <>
       <div
         className="group/user-message -mx-4 flex w-[calc(100%+2rem)] min-w-0 max-w-none flex-col items-stretch gap-0 self-end overflow-visible px-4 pb-(--conversation-turn-gap) pt-1"
+        data-durable-row-id={durableRowId}
         data-message-id={messageId}
         data-role="user"
         data-slot="aui_user-message-root"
@@ -274,6 +277,7 @@ export const UserMessage: FC<{
   const { t } = useI18n()
   const copy = t.assistant.thread
   const messageId = useAuiState(s => s.message.id)
+  const durableRowId = useAuiState(s => (s.message.metadata?.custom as { rowId?: number } | undefined)?.rowId)
   const content = useAuiState(s => s.message.content)
   const messageText = messageContentText(content)
   const threadRunning = useAuiState(s => s.thread.isRunning)
@@ -455,6 +459,7 @@ export const UserMessage: FC<{
             </div>
           ) : null
         }
+        durableRowId={durableRowId}
         messageId={messageId}
       >
         <ActionBarPrimitive.Root className="relative w-full max-w-full" data-slot="aui_user-bubble-actions">

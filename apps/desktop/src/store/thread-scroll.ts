@@ -87,6 +87,43 @@ export const requestScrollToBottom = (sessionId: string | null = null) => {
   handlers.get(sessionId)?.forEach(handler => handler())
 }
 
+export interface RevealThreadMessageRequest {
+  rowId: number
+  root: HTMLElement
+  isCurrent: () => boolean
+}
+
+type RevealMessageHandler = (request: RevealThreadMessageRequest) => Promise<boolean>
+const revealHandlers = new Map<string | null, Set<RevealMessageHandler>>()
+
+export function onRevealThreadMessageRequest(handler: RevealMessageHandler, sessionId: string | null = null) {
+  const scoped = revealHandlers.get(sessionId) ?? new Set<RevealMessageHandler>()
+  scoped.add(handler)
+  revealHandlers.set(sessionId, scoped)
+
+  return () => {
+    scoped.delete(handler)
+
+    if (!scoped.size) {
+      revealHandlers.delete(sessionId)
+    }
+  }
+}
+
+export async function requestRevealThreadMessage(request: RevealThreadMessageRequest, sessionId: string | null = null) {
+  for (const handler of revealHandlers.get(sessionId) ?? []) {
+    if (!request.isCurrent()) {
+      return false
+    }
+
+    if (await handler(request)) {
+      return true
+    }
+  }
+
+  return false
+}
+
 // Inline edit can grow a user bubble. Fire on pointerdown so the viewport
 // escapes stick-to-bottom before focus/layout; close clears the edit flag when
 // the inline composer unmounts.

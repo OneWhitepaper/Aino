@@ -138,7 +138,12 @@ export const en: Translations = {
       compression: 'Context compression',
       vision: 'Image understanding',
       delegation: 'Subtask',
-      other_auxiliary: 'Other auxiliary call'
+      session_summary: 'Session summary',
+      approval: 'Action approval assessment',
+      mcp: 'MCP model request',
+      tts_audio_tags: 'Speech expression annotation',
+      side_question: 'Side question',
+      other_auxiliary: 'Auxiliary call (unclassified)'
     }
   },
   platformWallet: {
@@ -202,7 +207,40 @@ export const en: Translations = {
     open: 'Open order',
     error: 'Could not load records',
     retry: 'Retry',
-    qrCode: 'Payment QR code'
+    qrCode: 'Payment QR code',
+    filters: 'Filter usage records',
+    startDate: 'Start date',
+    endDate: 'End date',
+    model: 'Model',
+    modelPlaceholder: 'Exact model name',
+    purpose: 'Purpose',
+    allPurposes: 'All purposes',
+    search: 'Search',
+    reset: 'Reset',
+    invalidDateRange: 'The start date must be on or before the end date.',
+    timezone: zone => `Local time zone: ${zone}`,
+    totalRecords: count => `${count} records`,
+    pageSize: 'Records per page',
+    goToPage: page => `Go to page ${page}`,
+    jumpToPage: 'Go to page',
+    jump: 'Go',
+    noMatches: 'No matching usage records',
+    columns: { time: 'Call time', model: 'Model', purpose: 'Purpose', cost: 'Cost (USD)', status: 'Settlement status' },
+    details: 'View details',
+    hideDetails: 'Hide details',
+    copyField: label => `Copy ${label}`,
+    requestId: 'Request ID',
+    sessionId: 'Session ID',
+    turnId: 'Turn ID',
+    callId: 'Call ID',
+    inputTokens: 'Input tokens',
+    outputTokens: 'Output tokens',
+    cacheReadTokens: 'Cache read tokens',
+    cacheWriteTokens: 'Cache write tokens',
+    unknown: 'Not recorded',
+    unknownPurpose: 'Purpose not recorded',
+    unclassifiedHelp:
+      'Historical records and calls without a specific purpose remain unclassified; their purpose cannot be reliably reconstructed.'
   },
   platformModels: {
     switchBusy: 'Wait for this chat to finish before switching to or from an Aino model.',
@@ -765,6 +803,37 @@ export const en: Translations = {
     aria: 'Session summary',
     title: 'Session summary',
     close: 'Close summary',
+    overview: {
+      title: 'Conversation overview',
+      objective: 'Current objective',
+      completed: 'Completed',
+      conclusions: 'Key findings',
+      openQuestions: 'Unresolved items',
+      empty: 'This conversation has no task plan or outputs yet.',
+      resourcesAvailable: 'Plans and outputs update as the task progresses.',
+      pending: 'The summary updates after the turn ends.',
+      updating: 'Updating the conversation summary…',
+      stale: 'New activity, awaiting update',
+      failed: 'The summary could not be updated. Existing content is still available.',
+      viewRequest: 'View pending request',
+      sourceUnavailable:
+        'The original message is unavailable. It may have been undone, or the conversation has changed.',
+      tooLong:
+        'This conversation is too long to summarize in full. Plans, outputs and the original conversation remain available.',
+      refresh: 'Update conversation summary',
+      source: index => `View original message ${index}`,
+      updated: time => `Updated ${time}`,
+      status: {
+        background: 'Background work is still running',
+        draft: 'Ready to start',
+        idle: 'Turn ended',
+        interrupted: 'Turn interrupted',
+        'needs-input': 'Waiting for you',
+        stalled: 'Still working, no recent update',
+        unread: 'Turn ended',
+        working: 'Working'
+      }
+    },
     environment: {
       title: 'Environment',
       project: 'Project',
@@ -2067,6 +2136,10 @@ export const en: Translations = {
         approval: { label: 'Approval', hint: 'Smart auto-approve' },
         mcp: { label: 'MCP', hint: 'MCP tool routing' },
         title_generation: { label: 'Title gen', hint: 'Session titles' },
+        session_summary: {
+          label: 'Conversation summary',
+          hint: 'Goals, findings and unresolved items in the summary panel'
+        },
         review: { label: 'Review', hint: '/review reviewer subagent' },
         triage_specifier: { label: 'Triage specifier', hint: 'Kanban spec fleshing' },
         kanban_decomposer: { label: 'Kanban decomposer', hint: 'Task decomposition' },

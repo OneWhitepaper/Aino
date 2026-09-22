@@ -154,7 +154,7 @@ _DETAIL_MODES = frozenset({"hidden", "collapsed", "expanded"})
 # interrupts); voice.*/wake.* = SYNCHRONOUS faster-whisper install (300s); session.workspace.move =
 # git subprocess probes on an arbitrary (maybe slow) mount.
 _LONG_HANDLERS = frozenset({
-    "session.foreign.list", "session.foreign.preview", "session.foreign.import",
+    "session.foreign.list", "session.foreign.preview", "session.foreign.import", "session.summary",
     "billing.state", "subscription.state", "subscription.preview", "subscription.change",
     "subscription.resume", "subscription.upgrade", "usage.bars", "session.usage", "billing.step_up",
     "browser.manage", "cli.exec", "complete.path", "complete.slash", "llm.oneshot", "model.options",
@@ -1696,7 +1696,7 @@ def _is_pivot_marker(entry: Any) -> bool:
 def _append_model_switch_marker(
     session: dict | None, *, model: str, provider: str,
     previous_model: str = "", previous_provider: str = "",
-) -> None:
+) -> dict | None:
     """Record a real system-history pivot after a live model switch. Only the newest marker is kept (each
     switch strips prior ones, so N switches leave one marker, not N re-sent every API call; self-healing
     across resumes because the next switch collapses whatever a reload brought back).
@@ -1705,7 +1705,7 @@ def _append_model_switch_marker(
     """
     session_key = str((session or {}).get("session_key") or "").strip()
     if not session_key:
-        return
+        return None
     provider_part = f" via provider {provider}" if provider else ""
     marker = (
         f"{_MODEL_SWITCH_MARKER_PREFIX}{model}{provider_part}. From this point forward, use this runtime "
@@ -1727,6 +1727,7 @@ def _append_model_switch_marker(
         history[:] = [h for h in history if not _is_model_switch_marker(h)]
         history.append(entry)
         session["history_version"] = int(session.get("history_version", 0)) + 1
+    row_id = None
     try:
         agent = session.get("agent")
         db = getattr(agent, "_session_db", None) if agent is not None else None
@@ -1734,7 +1735,7 @@ def _append_model_switch_marker(
             _ensure_session_db_row(session)
         with (contextlib.nullcontext(db) if db is not None else _session_db(session)) as db:
             if db is not None:
-                db.append_message(
+                row_id = db.append_message(
                     session_id=session_key,
                     role="user",
                     content=marker,
@@ -1744,6 +1745,9 @@ def _append_model_switch_marker(
                 )
     except Exception:
         logger.debug("failed to persist model switch marker", exc_info=True)
+    if row_id is not None:
+        entry["_row_id"] = row_id
+    return entry
 
 
 def _write_config_key(key_path: str, value):
@@ -3326,7 +3330,7 @@ from . import (  # noqa: E402
     methods_session_control as _methods_session_control, methods_subagents as _methods_subagents,
     methods_vault as _methods_vault, methods_free_tier as _methods_free_tier,
     methods_connectors as _methods_connectors, methods_account as _methods_account,
-    methods_managed_model as _methods_managed_model)
+    methods_managed_model as _methods_managed_model, methods_session_summary as _methods_session_summary)
 
 for _m in (
     _session_transports, _session_reaper, _session_lifecycle, _session_workdir, _compute_host_bridge, _model_switch,
@@ -3337,6 +3341,6 @@ for _m in (
     _methods_config_set, _methods_complete, _methods_tools, _methods_profiles, _methods_images,
     _methods_bot_relay, _prompt_turn, _billing_view, _methods_projects, _methods_session_foreign,
     _methods_session_control, _methods_subagents, _methods_vault, _methods_free_tier, _methods_connectors,
-    _methods_account, _methods_managed_model):
+    _methods_account, _methods_managed_model, _methods_session_summary):
     _m.register(sys.modules[__name__])
 del _m

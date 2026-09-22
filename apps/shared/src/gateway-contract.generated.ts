@@ -3023,6 +3023,33 @@ export interface LlmOneshotParams {
 export interface LlmOneshotResult {
   text: string
 }
+export interface SessionSummaryParams {
+  session_id: string
+  language?: 'zh' | 'en' | 'zh-hant' | 'ja'
+  retry?: boolean
+}
+export interface SessionSummaryResult {
+  summary: SessionSemanticSummary | null
+  eligible: boolean
+  stale: boolean
+  source_revision: string
+  busy: boolean
+  error?: string | null
+  error_code?: string | null
+}
+export interface SessionSemanticSummary {
+  objective: SessionSummaryPoint | null
+  completed: SessionSummaryPoint[]
+  conclusions: SessionSummaryPoint[]
+  open_questions: SessionSummaryPoint[]
+  updated_at: number
+  source_revision: string
+  source_message_count: number
+}
+export interface SessionSummaryPoint {
+  text: string
+  message_ids: number[]
+}
 export interface SystemBatteryParams {
   profile?: string | null
 }
@@ -3966,6 +3993,7 @@ export interface ReplyBillingCall {
 export interface StatusUpdatePayload {
   kind: string
   text: string
+  history_entry?: TranscriptMessage | null
 }
 /** ``server._start_usage_ticker``. */
 export interface SessionUsagePayload {
@@ -4588,6 +4616,8 @@ export interface RpcMethods {
   'session.status': { params: SessionStatusParams; result: SessionStatusResult }
   /** Inject text into the next tool result without interrupting the turn. */
   'session.steer': { params: SessionCorrectionParams; result: SessionCorrectionResult }
+  /** Generate or reuse a cited summary using the calling transport's live session authority. */
+  'session.summary': { params: SessionSummaryParams; result: SessionSummaryResult }
   /** Read or set a live session's title; a title set before the row exists is queued. */
   'session.title': { params: SessionTitleParams; result: SessionTitleResult }
   /** Drop the last user turn (and everything after it) from an idle session. */
@@ -4862,6 +4892,7 @@ export const RPC_METHODS = [
   'session.set_hidden',
   'session.status',
   'session.steer',
+  'session.summary',
   'session.title',
   'session.undo',
   'session.usage',

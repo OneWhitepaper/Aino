@@ -158,6 +158,7 @@ export async function reconcileTileTranscripts({
       : undefined
 
     const signatureKey = tileTranscriptSignatureKey(tile)
+    const messagesBeforeRead = $sessionStates.get()[runtimeSessionId]?.messages
 
     try {
       // Passive: a hidden tile's refresh must never cold-start its owner
@@ -167,6 +168,7 @@ export async function reconcileTileTranscripts({
       if (
         requestId !== requestSequenceRef.current ||
         tileRuntimeOwnsLiveState(runtimeSessionId) ||
+        $sessionStates.get()[runtimeSessionId]?.messages !== messagesBeforeRead ||
         !tileStillPresent()
       ) {
         // Tile closed or superseded mid-read — discard AND prune its
@@ -228,6 +230,7 @@ export async function reconcileActiveTranscript({
 
   const requestId = requestSequenceRef.current + 1
   requestSequenceRef.current = requestId
+  const messagesBeforeRead = $sessionStates.get()[runtimeSessionId]?.messages
 
   try {
     const profileScope: ProfileScope = stored.ownerRoute
@@ -242,6 +245,7 @@ export async function reconcileActiveTranscript({
     if (
       requestId !== requestSequenceRef.current ||
       busyRef.current ||
+      $sessionStates.get()[runtimeSessionId]?.messages !== messagesBeforeRead ||
       selectedStoredSessionIdRef.current !== storedSessionId ||
       activeSessionIdRef.current !== runtimeSessionId
     ) {

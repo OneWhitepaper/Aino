@@ -727,7 +727,12 @@ export function applyStoredToolResult(messages: ChatMessage[], toolMessage: Sess
       result: parseStoredToolResult(content),
       isError: false
     } as ChatMessagePart
-    messages[i] = { ...message, parts }
+    const rowId = toolMessage.row_id ?? (typeof toolMessage.id === 'number' ? toolMessage.id : undefined)
+    messages[i] = {
+      ...message,
+      parts,
+      ...(rowId === undefined ? {} : { sourceRowIds: [...(message.sourceRowIds ?? []), rowId] })
+    }
 
     return true
   }

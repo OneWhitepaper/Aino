@@ -1,5 +1,5 @@
 import { translateNow } from '@/i18n'
-import { textPart } from '@/lib/chat-messages'
+import { textPart, toChatMessages } from '@/lib/chat-messages'
 import { coerceGatewayText } from '@/lib/chat-runtime'
 import { isProviderSetupErrorMessage } from '@/lib/provider-setup-errors'
 import { type AgentNoticePayload, clearAgentNotice, nativeNoticeInput, showAgentNotice } from '@/store/agent-notices'
@@ -14,6 +14,7 @@ import { flashPetActivity, setPetActivity } from '@/store/pet'
 import { clearAllPrompts } from '@/store/prompts'
 import { setTurnStartedAt } from '@/store/session'
 import { clearActiveSessionTodos } from '@/store/todos'
+import type { SessionMessage } from '@/types/hermes'
 
 import type { GatewayEventContext } from './types'
 
@@ -51,10 +52,58 @@ export function handleStatusEvent(ctx: GatewayEventContext): boolean {
         void hydrateFromStoredSession(3, state.storedSessionId, sessionId)
       }
     } else if (sessionId && payload?.kind === 'model_switch') {
-      const state = sessionStateByRuntimeIdRef.current.get(sessionId)
+      const entry = payload.history_entry
 
-      if (isActiveEvent && state && !state.busy && !state.awaitingResponse && !state.streamId) {
-        void hydrateFromStoredSession(3, state.storedSessionId, sessionId)
+      if (entry?.display_kind === 'model_switch') {
+        // The applied switch is already authoritative. Reuse history's
+        // renderer without waiting for a REST fetch or replacing a live turn.
+        const [notice] = toChatMessages([{
+          role: 'user',
+          content: '',
+          display_kind: entry.display_kind,
+          display_metadata: entry.display_metadata as SessionMessage['display_metadata'],
+          row_id: entry.row_id ?? undefined,
+          timestamp: entry.timestamp ?? occurredAt
+        }])
+
+        flushQueuedDeltas(sessionId)
+        updateSessionState(sessionId, state => {
+          if (state.messages.some(message => message.modelSwitch && (
+            notice.rowId !== undefined && message.rowId !== undefined
+              ? notice.rowId === message.rowId
+              : notice.timestamp === message.timestamp
+          ))) {
+            return state
+          }
+
+          // Deferred switches apply before the next prompt backend-side, but
+          // after its optimistic user row. Prefer durable order, then that
+          // pre-response boundary; host clocks need not agree. A switch at
+          // turn-end (e.g. restoring /model --once) stays after the reply.
+          const persisted = state.messages.findIndex(message =>
+            notice.rowId !== undefined && message.rowId !== undefined && message.rowId > notice.rowId
+          )
+
+          const pending = state.awaitingResponse && !state.sawAssistantPayload
+            ? state.messages.findLastIndex(message => message.role === 'user' && !message.hidden && message.rowId === undefined)
+            : -1
+
+          const newer = state.messages.findIndex(message =>
+            message.timestamp !== undefined && message.timestamp > notice.timestamp!
+          )
+
+          const index = [persisted, pending, newer].find(index => index >= 0) ?? state.messages.length
+
+          return { ...state, messages: [...state.messages.slice(0, index), notice, ...state.messages.slice(index)] }
+        })
+      } else {
+        // Older backends announce only the kind; their record still needs
+        // the idle history refresh used before structured notices shipped.
+        const state = sessionStateByRuntimeIdRef.current.get(sessionId)
+
+        if (isActiveEvent && state && !state.busy && !state.awaitingResponse && !state.streamId) {
+          void hydrateFromStoredSession(3, state.storedSessionId, sessionId)
+        }
       }
     } else if (sessionId && payload?.kind === 'process') {
       // The gateway's notification poller announces background process

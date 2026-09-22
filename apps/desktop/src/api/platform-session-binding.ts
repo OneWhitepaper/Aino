@@ -141,7 +141,7 @@ export async function preparePlatformSessionRequest(
   params: Record<string, unknown>,
   request: Request
 ): Promise<void> {
-  if (method !== 'prompt.submit' || typeof params.session_id !== 'string') {return}
+  if (!['prompt.submit', 'session.summary'].includes(method) || typeof params.session_id !== 'string') {return}
   const state = $sessionStates.get()[params.session_id]
 
   if (state?.provider !== 'aino') {return}

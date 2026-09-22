@@ -22,8 +22,9 @@ class BillingScope:
 
 billing_scope: ContextVar[BillingScope | None] = ContextVar("billing_scope", default=None)
 _CREDENTIAL_UNSET = object()
+_DETAILED_TASKS = frozenset({"session_summary", "approval", "mcp", "tts_audio_tags", "side_question"})
 _PURPOSES = {"title_generation": "title", "compression": "compression", "vision": "vision",
-             "delegation": "delegation", "chat": "chat"}
+             "delegation": "delegation", "chat": "chat", **{task: task for task in _DETAILED_TASKS}}
 
 
 @dataclass(frozen=True, eq=False)
@@ -68,11 +69,17 @@ class ManagedCredential:
         # Resolve again at dispatch: SDK retries and redirected requests are separate attempts.
         request.headers["Authorization"] = "Bearer " + self()
         request.headers.pop("x-api-key", None)
+        # Keep the original purpose enum compatible with servers predating task detail.
+        request.headers.pop("X-Aino-Task", None)
+        purpose = scope.purpose
+        if purpose in _DETAILED_TASKS:
+            request.headers["X-Aino-Task"] = purpose
+            purpose = "other_auxiliary"
         call_id = str(uuid4())
         request.headers.update({"X-Aino-Session-Id": scope.session_id,
                                 "X-Aino-Turn-Id": scope.turn_id,
                                 "X-Aino-Call-Id": call_id,
-                                "X-Aino-Purpose": scope.purpose})
+                                "X-Aino-Purpose": purpose})
         scope.calls.record(call_id, scope.purpose)
 
 

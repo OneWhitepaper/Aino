@@ -13,6 +13,7 @@ import threading
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
+from tui_gateway import server
 from tui_gateway.server import _append_model_switch_marker
 
 
@@ -33,6 +34,37 @@ def test_model_switch_display_metadata_survives_persistence(tmp_path) -> None:
         assert stored_message["timestamp"] == warm_message["timestamp"]
         assert "before" not in durable[0]["content"]
         assert durable[0]["role"] == "user"
+    finally:
+        db.close()
+
+
+def test_committed_switch_event_matches_durable_marker(tmp_path, monkeypatch) -> None:
+    from hermes_state import SessionDB
+
+    db = SessionDB(tmp_path / "state.db")
+    db.create_session("model-event", source="desktop", model="before")
+    agent = SimpleNamespace(
+        _session_db=db, model="after", provider="aino", _managed_model_metadata=None,
+        switch_model=lambda **_kwargs: None)
+    session = {"session_key": "model-event", "history": [], "agent": agent}
+    emitted = []
+    monkeypatch.setattr(server, "_restart_slash_worker", lambda *_args: None)
+    monkeypatch.setattr(server, "_persist_live_session_runtime", lambda *_args: None)
+    monkeypatch.setattr(server, "_persist_live_session_system_prompt", lambda *_args: None)
+    monkeypatch.setattr(server, "_emit_session_info", lambda *_args: None)
+    monkeypatch.setattr(server, "_emit", lambda event, sid, payload: emitted.append((event, sid, payload)))
+    result = SimpleNamespace(new_model="after", target_provider="aino", api_key="", base_url="",
+                             api_mode="", runtime_capabilities=None, managed_metadata=None)
+    try:
+        server._commit_agent_switch("ui", session, agent, result, "before", None)
+        stored = db.get_messages_as_conversation("model-event", include_row_ids=True)[0]
+        payload = emitted[-1][2]
+        entry = payload["history_entry"]
+        assert payload["kind"] == "model_switch"
+        assert entry["text"] == "model changed"
+        assert entry["row_id"] == stored["_row_id"]
+        assert entry["timestamp"] == stored["timestamp"]
+        assert entry["display_metadata"] == stored["display_metadata"]
     finally:
         db.close()
 

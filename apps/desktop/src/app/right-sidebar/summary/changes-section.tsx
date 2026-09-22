@@ -102,16 +102,7 @@ export function ChangesSection({ embedded = false, session }: { embedded?: boole
   }
 
   if (!changesQuery.data.isRepo) {
-    return (
-      <SummarySection
-        embedded={embedded}
-        emptyMessage={t.summary.git.noRepository}
-        icon={Code}
-        onRetry={() => void changesQuery.refetch()}
-        state="empty"
-        title={copy.title}
-      />
-    )
+    return null
   }
 
   const files = changesQuery.data.files
@@ -122,7 +113,6 @@ export function ChangesSection({ embedded = false, session }: { embedded?: boole
         embedded={embedded}
         emptyMessage={copy.noChanges}
         icon={Code}
-        onRetry={() => void changesQuery.refetch()}
         state="empty"
         title={copy.title}
       />

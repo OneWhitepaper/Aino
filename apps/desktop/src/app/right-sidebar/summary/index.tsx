@@ -7,6 +7,7 @@ import { AgentsSection } from './agents-section'
 import { BackgroundSection } from './background-section'
 import { EnvironmentSection } from './environment-section'
 import { OutputsSection } from './outputs-section'
+import { OverviewSection } from './overview-section'
 import { PlanSection } from './plan-section'
 import { SourcesSection } from './sources-section'
 import { useSummaryContent } from './use-summary-content'
@@ -34,7 +35,7 @@ export function SummaryPane() {
         data-summary-session={session.storedId ?? 'none'}
         key={`${session.scope.connectionId}:${session.scope.profile}:${session.storedId}`}
       >
-        <EnvironmentSection session={session} />
+        <OverviewSection content={content} session={session} />
         <OutputsSection
           error={content.error}
           items={content.outputs}
@@ -47,6 +48,7 @@ export function SummaryPane() {
         <AgentsSection history={content.delegations} session={session} />
         <BackgroundSection session={session} />
         <SourcesSection items={content.sources} session={session} />
+        <EnvironmentSection session={session} />
       </div>
     </aside>
   )

@@ -2,6 +2,8 @@ import { useStore } from '@nanostores/react'
 import { memo, useEffect } from 'react'
 
 import { PrTag } from '@/app/chat/pr-tag'
+import { useSessionView } from '@/app/chat/session-view'
+import { cachedSessionRow } from '@/app/session/hooks/use-session-actions/utils'
 import { StatusRow } from '@/components/chat/status-row'
 import {
   type ActionItemSpec,
@@ -17,10 +19,12 @@ import { DiffCount } from '@/components/ui/diff-count'
 import type { HermesGitBranch } from '@/global'
 import { useI18n } from '@/i18n'
 import { displayPath } from '@/lib/display-path'
+import { useStoresSelector } from '@/lib/use-session-slice'
 import { openWorktreeDialog, registerRepoStatusCwd, repoStatusForCwd, repoWorktreesForCwd } from '@/store/coding-status'
 import { notifyError } from '@/store/notifications'
 import { $projectTree, projectIdForCwd } from '@/store/projects'
 import { $pullRequestsByBranch, branchPrKey, refreshPullRequests } from '@/store/pull-requests'
+import { $cronSessions, $messagingSessions, $sessions } from '@/store/session'
 
 import { ComposerProjectSelector } from './project-selector'
 import { ComposerWorkMode } from './work-mode'
@@ -68,9 +72,24 @@ export const CodingStatusRow = memo(function CodingStatusRow({
   const s = t.statusStack.coding
   const p = t.sidebar.projects
   const fileMenu = t.fileMenu
+  const view = useSessionView()
+
+  const storedCwd = useStoresSelector(
+    [$sessions, $cronSessions, $messagingSessions, $projectTree, view.$storedId],
+    () => {
+      const storedId = view.$storedId.get()
+
+      return storedId ? cachedSessionRow(storedId)?.cwd?.trim() || undefined : undefined
+    }
+  )
+
   const projectTree = useStore($projectTree)
-  const projectId = projectIdForCwd(repoPath || '', projectTree)
+  // A restored transcript can arrive before its runtime cwd. Its saved project
+  // still owns the menu, but must not activate Git actions against a stale cwd.
+  const projectCwd = repoPath?.trim() || storedCwd
+  const projectId = projectIdForCwd(projectCwd || '', projectTree)
   const projectName = projectTree.find(project => project.id === projectId && !project.isNoProject)?.label
+  const menuCwd = projectName ? projectCwd : undefined
   const resolvedRepoPath = projectName ? repoPath?.trim() || undefined : undefined
   // This surface's OWN worktree, always — never the primary's. The row used to
   // fall back to the global `$repoStatus` for a blank repoPath, which painted
@@ -120,13 +139,13 @@ export const CodingStatusRow = memo(function CodingStatusRow({
     void openWorktreeDialog({ base, repoPath: resolvedRepoPath })
   }
 
-  if (!projectName || !status) {
+  if (!resolvedRepoPath || !status) {
     return (
       <StatusRow
         className="coding-status-bar min-h-7 rounded-t-[inherit] rounded-b-none border-b border-(--ui-stroke-tertiary) px-3.5 py-1.5 hover:bg-transparent"
         leading={<Codicon className="text-(--ui-text-secondary)" name="folder" size="0.875rem" />}
       >
-        <ComposerProjectSelector cwd={resolvedRepoPath} label={projectName} />
+        <ComposerProjectSelector cwd={menuCwd} label={projectName} />
       </StatusRow>
     )
   }

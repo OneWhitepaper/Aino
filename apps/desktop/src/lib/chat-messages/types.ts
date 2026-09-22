@@ -1,5 +1,5 @@
 import type { ThreadMessageLike } from '@assistant-ui/react'
-import { type BillingBlock } from '@hermes/shared'
+import { type BillingBlock, type StatusUpdatePayload } from '@hermes/shared'
 
 import type { ErrorSurface } from '@/lib/error-surface'
 import type { ToolResultMetadata } from '@/lib/tool-result-metadata'
@@ -48,6 +48,8 @@ export type ChatMessage = {
   attachmentRefs?: string[]
   /** Durable backend `messages.id`. Absent until the row is persisted. */
   rowId?: number
+  /** Persisted rows folded into this visible assistant message. */
+  sourceRowIds?: number[]
   /** Emoji reactions on this message — one per author (see MessageReaction). */
   reactions?: MessageReaction[]
 }
@@ -143,6 +145,8 @@ export type GatewayEventPayload = {
   count?: number
   // status.update (kind=process → background process completion/watch-match)
   kind?: string
+  /** Applied model switch, projected by the backend for immediate display. */
+  history_entry?: StatusUpdatePayload['history_entry']
   // pane.reveal (agent focusing a desktop pane via the focus_pane tool)
   pane?: string
   // layout.apply (agent applying a layout preset via the apply_layout tool)

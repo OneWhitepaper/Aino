@@ -19,7 +19,7 @@ from pydantic import Field
 
 from .base import JsonValue, Payload, WireEnum
 from .aino_platform import ReplyBilling, TurnMetrics
-from .common import MessageReaction, SessionLiveInfo, SubagentStatus, Usage
+from .common import MessageReaction, SessionLiveInfo, SubagentStatus, TranscriptMessage, Usage
 from .config_free_tier_control import SessionControlSnapshot
 from .registry import event
 
@@ -192,6 +192,7 @@ class StatusUpdatePayload(Payload):
 
     kind: str
     text: str
+    history_entry: TranscriptMessage | None = None
 
 
 event("status.update", StatusUpdatePayload, doc="Transient status line (kind: status, lifecycle, compacting, goal, loop, heartbeat, process, …).")

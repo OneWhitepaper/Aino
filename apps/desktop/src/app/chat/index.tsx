@@ -311,20 +311,20 @@ function ChatRuntimeBoundary({
   const tailState = storedId && transcriptTailStates ? transcriptTailState(storedId, tailProfile) : undefined
   const restBackfillAvailable = Boolean(tailState?.possiblyTruncated)
 
-  const expandWindow = useCallback(() => {
+  const expandWindow = useCallback(async () => {
     // The store window still holds older messages: growing pages is enough.
     // Otherwise the whole in-memory transcript is already materialized — if
     // the REST tail hydration was truncated, fetch the next older page and
     // PREPEND it to the session store before growing, so the grown window has
-    // something older to show. Fire-and-forget: the prepend lands through the
-    // session-state write path and re-renders this boundary.
+    // something older to show. Citation navigation awaits this same request
+    // before advancing to the next page.
     if (
       !windowStateRef.current.get(runtimeIdRef.current ?? '')?.state.window.windowed &&
       runtimeId &&
       storedId &&
       transcriptBackfillAvailable(storedId, tailProfile)
     ) {
-      void backfillOlderTranscriptPage({
+      const applied = await backfillOlderTranscriptPage({
         storedSessionId: storedId,
         profile: tailProfile,
         // Stale-response guard: a session switch remounts/re-keys this view;
@@ -339,9 +339,19 @@ function ChatRuntimeBoundary({
           })
         }
       })
+
+      if (!applied) {
+        return false
+      }
+    }
+
+    if (view.$runtimeId.get() !== runtimeId || view.$storedId.get() !== storedId) {
+      return false
     }
 
     setWindowPages(pages => pages + 1)
+
+    return true
   }, [runtimeId, storedId, tailProfile, view])
 
   const olderAvailable = windowed || restBackfillAvailable
@@ -623,6 +633,7 @@ const ChatViewContent = memo(function ChatViewContent({
   )
 
   const catalog = platformModelCatalog()
+
   const platformReasoning = useStoresSelector(
     [
       $sessionStates,
@@ -636,6 +647,7 @@ const ChatViewContent = memo(function ChatViewContent({
       if (currentProvider !== 'aino') {
         return false
       }
+
       const state = activeSessionId ? $sessionStates.get()[activeSessionId] : undefined
       const owner = state ? (state.platformModel?.ownerUserId ?? '') : $currentPlatformOwner.get()
       const origin = state ? state.platformModel?.platformOrigin : $currentPlatformOrigin.get()
@@ -643,6 +655,7 @@ const ChatViewContent = memo(function ChatViewContent({
       return Boolean(verifiedPlatformModel(currentModel, owner, origin)?.capabilities.reasoning)
     }
   )
+
   const supportsReasoning =
     currentProvider === 'aino'
       ? platformReasoning

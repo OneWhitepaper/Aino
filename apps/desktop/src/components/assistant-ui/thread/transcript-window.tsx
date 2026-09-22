@@ -4,7 +4,7 @@ export interface TranscriptWindowValue {
   /** Store holds older messages the runtime window has not materialized. */
   olderAvailable: boolean
   /** Pull one more page of older messages out of the session store. */
-  expandWindow: () => void
+  expandWindow: () => void | Promise<boolean>
 }
 
 const TranscriptWindowContext = createContext<TranscriptWindowValue>({

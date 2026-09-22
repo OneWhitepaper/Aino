@@ -4,7 +4,8 @@ import { Button } from '@/components/ui/button'
 import { Loader } from '@/components/ui/loader'
 import { SegmentedControl } from '@/components/ui/segmented-control'
 import { useI18n } from '@/i18n'
-import { ChevronLeft, ChevronRight, RefreshCw } from '@/lib/icons'
+import { RefreshCw } from '@/lib/icons'
+import { LEGACY_USAGE_PURPOSES } from '@/lib/turn-billing'
 
 import type {
   PlatformBillingBridge,
@@ -13,6 +14,8 @@ import type {
   PlatformUsagePage
 } from '../../../../shared/platform-contract'
 
+import { HistoryPagination } from './history-pagination'
+import { type UsageFilters, UsageFiltersForm } from './usage-filters'
 import { formatUsageAmount, UsageView } from './usage-view'
 
 interface BillingHistoryProps {
@@ -27,7 +30,17 @@ export function BillingHistory({ bridge, scope, onOpenOrder }: BillingHistoryPro
   const [mode, setMode] = useState<'orders' | 'usage'>('orders')
   const [expanded, setExpanded] = useState(false)
   const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState(20)
+  const [filters, setFilters] = useState<UsageFilters>({})
+
+  const [purposes, setPurposes] = useState<{ scopeKey: string; values: readonly string[] }>({
+    scopeKey: '',
+    values: LEGACY_USAGE_PURPOSES
+  })
+
   const [retry, setRetry] = useState(0)
+  const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone
+  const scopeKey = JSON.stringify([scope.origin, scope.user_id, scope.generation])
 
   const [result, setResult] = useState<{
     key: string
@@ -35,7 +48,7 @@ export function BillingHistory({ bridge, scope, onOpenOrder }: BillingHistoryPro
     error: boolean
   }>({ key: '', data: null, error: false })
 
-  const key = JSON.stringify([scope.origin, scope.user_id, scope.generation, mode, page, retry])
+  const key = JSON.stringify([scopeKey, mode, page, pageSize, filters, timezone, retry])
   const origin = scope.origin
   const owner = scope.user_id
   const generation = scope.generation
@@ -46,15 +59,23 @@ export function BillingHistory({ bridge, scope, onOpenOrder }: BillingHistoryPro
     }
 
     let alive = true
+    let request = 0
 
     const load = async () => {
       if (document.visibilityState === 'hidden') {
         return
       }
 
+      const currentRequest = ++request
+
       try {
-        const query = { expected_user_id: owner, page, page_size: 20 }
-        const data = mode === 'orders' ? await bridge.listOrders(query) : await bridge.listUsage(query)
+        const query = { expected_user_id: owner, page, page_size: pageSize }
+
+        const data =
+          mode === 'orders'
+            ? await bridge.listOrders(query)
+            : await bridge.listUsage({ ...query, ...filters, timezone })
+
         const current = await bridge.scope({ expected_user_id: owner })
 
         if (
@@ -62,16 +83,31 @@ export function BillingHistory({ bridge, scope, onOpenOrder }: BillingHistoryPro
           current.user_id !== owner ||
           current.generation !== generation ||
           data.page !== page ||
-          data.page_size !== 20
+          data.page_size !== pageSize
         ) {
           throw new Error('scope_or_page_changed')
         }
 
-        if (alive) {
+        if (alive && currentRequest === request) {
+          if (mode === 'usage') {
+            setPurposes({
+              scopeKey,
+              values: (data as PlatformUsagePage).supported_desktop_purposes ?? LEGACY_USAGE_PURPOSES
+            })
+          }
+
+          const lastPage = Math.max(1, Math.ceil(data.total / pageSize))
+
+          if (page > lastPage) {
+            setPage(lastPage)
+
+            return
+          }
+
           setResult({ key, data, error: false })
         }
       } catch {
-        if (alive) {
+        if (alive && currentRequest === request) {
           setResult({ key, data: null, error: true })
         }
       }
@@ -91,7 +127,7 @@ export function BillingHistory({ bridge, scope, onOpenOrder }: BillingHistoryPro
       alive = false
       document.removeEventListener('visibilitychange', visible)
     }
-  }, [bridge, expanded, generation, key, mode, origin, owner, page])
+  }, [bridge, expanded, generation, key, mode, origin, owner, page, pageSize, filters, timezone, scopeKey])
 
   const data = result.key === key ? result.data : null
   const error = result.key === key && result.error
@@ -112,6 +148,19 @@ export function BillingHistory({ bridge, scope, onOpenOrder }: BillingHistoryPro
       />
       {expanded && (
         <div className="mt-4 min-w-0">
+          {mode === 'usage' && (
+            <UsageFiltersForm
+              initialFilters={filters}
+              key={scopeKey}
+              onApply={next => {
+                setFilters(next)
+                setPage(1)
+                setRetry(value => value + 1)
+              }}
+              purposes={purposes.scopeKey === scopeKey ? purposes.values : LEGACY_USAGE_PURPOSES}
+              timezone={timezone}
+            />
+          )}
           {error ? (
             <div className="flex flex-wrap items-center gap-3 text-sm" role="alert">
               <span>{copy.error}</span>
@@ -125,7 +174,11 @@ export function BillingHistory({ bridge, scope, onOpenOrder }: BillingHistoryPro
           ) : (
             <>
               {mode === 'usage' ? (
-                <UsageView rows={(data as PlatformUsagePage).items} />
+                data.items.length === 0 && Object.keys(filters).length > 0 ? (
+                  <p className="text-sm text-muted-foreground">{copy.noMatches}</p>
+                ) : (
+                  <UsageView rows={(data as PlatformUsagePage).items} variant="table" />
+                )
               ) : data.items.length === 0 ? (
                 <p className="text-sm text-muted-foreground">{copy.empty}</p>
               ) : (
@@ -152,27 +205,16 @@ export function BillingHistory({ bridge, scope, onOpenOrder }: BillingHistoryPro
                   ))}
                 </ul>
               )}
-              <div className="mt-4 flex items-center justify-end gap-2">
-                <Button
-                  aria-label={copy.previous}
-                  disabled={page <= 1}
-                  onClick={() => setPage(value => value - 1)}
-                  size="icon-sm"
-                  variant="ghost"
-                >
-                  <ChevronLeft />
-                </Button>
-                <span className="text-xs tabular-nums">{page}</span>
-                <Button
-                  aria-label={copy.next}
-                  disabled={page * 20 >= data.total}
-                  onClick={() => setPage(value => value + 1)}
-                  size="icon-sm"
-                  variant="ghost"
-                >
-                  <ChevronRight />
-                </Button>
-              </div>
+              <HistoryPagination
+                onPage={setPage}
+                onPageSize={size => {
+                  setPageSize(size)
+                  setPage(1)
+                }}
+                page={page}
+                pageSize={pageSize}
+                total={data.total}
+              />
             </>
           )}
         </div>

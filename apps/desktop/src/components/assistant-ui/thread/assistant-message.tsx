@@ -187,6 +187,12 @@ const AssistantMessageBody: FC<AssistantMessageProps & { collapsedNotice?: null 
   onDismissError
 }) => {
   const messageId = useAuiState(s => s.message.id)
+
+  const sourceRowIds = useAuiState(s =>
+    (s.message.metadata?.custom as { sourceRowIds?: number[] } | undefined)?.sourceRowIds?.join(' ')
+  )
+
+  const durableRowId = useAuiState(s => (s.message.metadata?.custom as { rowId?: number } | undefined)?.rowId)
   const messageRuntime = useMessageRuntime()
   const { t } = useI18n()
 
@@ -230,8 +236,10 @@ const AssistantMessageBody: FC<AssistantMessageProps & { collapsedNotice?: null 
         'group flex w-full min-w-0 max-w-full flex-col gap-0 self-start overflow-hidden',
         collapsedNotice && 'pb-(--conversation-turn-gap)'
       )}
+      data-durable-row-id={durableRowId}
       data-role="assistant"
       data-slot="aui_assistant-message-root"
+      data-source-row-ids={sourceRowIds}
       // Collapsed inter-agent rows never carried the tapback listener; keeping
       // that exact truth table means gating it on the notice rather than on
       // whether the hook returned a handler.

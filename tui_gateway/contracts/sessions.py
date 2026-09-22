@@ -5,6 +5,8 @@ listing/browsing stored rows, spawn-tree snapshots, event replay and the statele
 
 from __future__ import annotations
 
+from typing import Literal
+
 from pydantic import Field
 
 from .base import JsonValue, Params, Result, WireEnum
@@ -672,3 +674,41 @@ class LlmOneshotResult(Result):
 
 method("llm.oneshot", params=LlmOneshotParams, result=LlmOneshotResult,
        doc="Stateless one-shot LLM completion (titles, ideas) on the session's or the task backend.")
+
+
+# ── independent semantic summary ─────────────────────────────────────────────────────────────
+
+
+class SessionSummaryParams(Params):
+    session_id: str
+    language: Literal["zh", "en", "zh-hant", "ja"] = "zh"
+    retry: bool = False
+
+
+class SessionSummaryPoint(Result):
+    text: str
+    message_ids: list[int]
+
+
+class SessionSemanticSummary(Result):
+    objective: SessionSummaryPoint | None
+    completed: list[SessionSummaryPoint]
+    conclusions: list[SessionSummaryPoint]
+    open_questions: list[SessionSummaryPoint]
+    updated_at: float
+    source_revision: str
+    source_message_count: int
+
+
+class SessionSummaryResult(Result):
+    summary: SessionSemanticSummary | None
+    eligible: bool
+    stale: bool
+    source_revision: str
+    busy: bool
+    error: str | None = None
+    error_code: str | None = None
+
+
+method("session.summary", params=SessionSummaryParams, result=SessionSummaryResult,
+       doc="Generate or reuse a cited summary using the calling transport's live session authority.")

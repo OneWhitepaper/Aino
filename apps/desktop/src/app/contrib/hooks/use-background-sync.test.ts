@@ -1,6 +1,7 @@
 import { act, cleanup, renderHook, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { toChatMessages } from '@/lib/chat-messages'
 import { createClientSessionState } from '@/lib/chat-runtime'
 import { sessionMessagesSignature } from '@/lib/session-signatures'
 import { $changeEventsAvailable, notifySessionsChanged, resetLiveSync } from '@/store/live-sync'
@@ -361,6 +362,63 @@ describe('active transcript refresh', () => {
     await reconcile
 
     expect(updateSessionState).not.toHaveBeenCalled()
+  })
+
+  it('keeps a live tile notice ahead of an older read but accepts the next authoritative transcript', async () => {
+    const runtimeId = 'runtime-notice-tile'
+    const storedId = 'stored-notice-tile'
+    let state = createClientSessionState(storedId)
+    let resolveRead: (value: unknown) => void = () => undefined
+    const tiles = [{ runtimeId, storedSessionId: storedId }]
+    $sessionTiles.set(tiles)
+    publishSessionState(runtimeId, state)
+    vi.mocked(getLatestSessionMessages).mockReturnValueOnce(
+      new Promise(resolve => {
+        resolveRead = resolve
+      }) as never
+    )
+
+    const updateSessionState = vi.fn((_sessionId: string, updater: (current: typeof state) => typeof state) => {
+      state = updater(state)
+      publishSessionState(runtimeId, state)
+
+      return state
+    })
+
+    const deps = {
+      tiles,
+      requestSequenceRef: { current: 0 },
+      signatureRef: { current: new Map<string, string>() },
+      updateSessionState
+    }
+
+    const request = reconcileTileTranscriptsForTest(deps)
+
+    const messages = toChatMessages([
+      {
+        role: 'user',
+        content: '',
+        timestamp: 3,
+        row_id: 3,
+        display_kind: 'model_switch',
+        display_metadata: { model: 'new-model' }
+      }
+    ])
+
+    state = { ...state, messages }
+    publishSessionState(runtimeId, state)
+    resolveRead(transcript('older tile answer', storedId))
+    await request
+
+    expect(state.messages).toBe(messages)
+    expect(updateSessionState).not.toHaveBeenCalled()
+
+    // A later rewind/compaction can legitimately remove the notice.
+    vi.mocked(getLatestSessionMessages).mockResolvedValue(transcript('older tile answer', storedId) as never)
+    await reconcileTileTranscriptsForTest(deps)
+
+    expect(updateSessionState).toHaveBeenCalledTimes(1)
+    expect(state.messages.some(message => message.modelSwitch)).toBe(false)
   })
 
   it('isolates tile transcript reads by connection and profile while preserving the legacy local path', async () => {
@@ -766,6 +824,46 @@ describe('reconcileActiveTranscript', () => {
     await request
 
     expect(fixture.updateSessionState).not.toHaveBeenCalled()
+  })
+
+  it('keeps a live foreground notice ahead of an older read but accepts the next authoritative transcript', async () => {
+    const fixture = makeRefresh()
+    $activeSessionId.set(ACTIVE_RUNTIME_ID)
+    publishSessionState(ACTIVE_RUNTIME_ID, fixture.state)
+    let resolveRead: (value: unknown) => void = () => undefined
+    vi.mocked(getLatestSessionMessages).mockReturnValueOnce(
+      new Promise(resolve => {
+        resolveRead = resolve
+      }) as never
+    )
+
+    const request = fixture.refresh()
+
+    const messages = toChatMessages([
+      {
+        role: 'user',
+        content: '',
+        timestamp: 3,
+        row_id: 3,
+        display_kind: 'model_switch',
+        display_metadata: { model: 'new-model' }
+      }
+    ])
+
+    const nextState = { ...fixture.state, messages }
+    fixture.states.set(ACTIVE_RUNTIME_ID, nextState)
+    publishSessionState(ACTIVE_RUNTIME_ID, nextState)
+    resolveRead(transcript('older answer'))
+    await request
+
+    expect(fixture.states.get(ACTIVE_RUNTIME_ID)?.messages).toBe(messages)
+    expect(fixture.updateSessionState).not.toHaveBeenCalled()
+
+    vi.mocked(getLatestSessionMessages).mockResolvedValue(transcript('older answer') as never)
+    await fixture.refresh()
+
+    expect(fixture.updateSessionState).toHaveBeenCalledTimes(1)
+    expect(fixture.states.get(ACTIVE_RUNTIME_ID)?.messages.some(message => message.modelSwitch)).toBe(false)
   })
 })
 

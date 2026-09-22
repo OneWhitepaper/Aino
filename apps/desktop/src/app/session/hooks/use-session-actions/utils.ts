@@ -171,6 +171,7 @@ const COMPARED_FIELDS = [
   'branchGroupId',
   'interim',
   'reactions',
+  'sourceRowIds',
   'timestamp',
   'completedAt',
   // Turn wall-clock duration — stamps the visible "⏱ 38s" badge, so a change
@@ -290,6 +291,7 @@ export function chatMessagesEquivalent(a: ChatMessage, b: ChatMessage): boolean 
     // Interim gates the action footer, so flipping it must repaint (e.g. a
     // previewed final settling onto a sealed interim bubble restores the bar).
     (a.interim ?? false) !== (b.interim ?? false) ||
+    (a.sourceRowIds ?? []).join(',') !== (b.sourceRowIds ?? []).join(',') ||
     !chatReactionsEquivalent(a.reactions, b.reactions)
   ) {
     return false
@@ -429,6 +431,10 @@ export function reconcileResumeMessages(nextMessages: ChatMessage[], previousMes
       preserved = { ...preserved, rowId: previous.rowId }
     }
 
+    if (sameTurn && preserved.sourceRowIds === undefined && previous.sourceRowIds?.length) {
+      preserved = { ...preserved, sourceRowIds: [...previous.sourceRowIds] }
+    }
+
     if (sameTurn && preserved.reactions === undefined && previous.reactions?.length) {
       preserved = { ...preserved, reactions: [...previous.reactions] }
     }
@@ -522,6 +528,10 @@ const withAuthoritativeTurnState = (local: ChatMessage, authoritative: ChatMessa
 
   if (local.rowId === undefined && authoritative.rowId !== undefined) {
     merged.rowId = authoritative.rowId
+  }
+
+  if (authoritative.sourceRowIds?.length) {
+    merged.sourceRowIds = [...authoritative.sourceRowIds]
   }
 
   if (local.reactions === undefined && authoritative.reactions?.length) {

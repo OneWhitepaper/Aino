@@ -19,6 +19,7 @@ import { makeSessionInfo } from '@/test/session-info'
 import { ReviewRevertDialog } from '../review/revert-dialog'
 
 import { ChangesSection as ScopedChangesSection } from './changes-section'
+import { EnvironmentSection } from './environment-section'
 import { GitSection as ScopedGitSection } from './git-section'
 import { SourcesSection } from './sources-section'
 import { type SummarySession, useSummarySession } from './use-summary-session'
@@ -49,6 +50,10 @@ function ChangesSection() {
 
 function GitSection() {
   return <ScopedGitSection session={useSummarySession()} />
+}
+
+function Environment() {
+  return <EnvironmentSection session={useSummarySession()} />
 }
 
 function renderWithQuery(children: ReactNode) {
@@ -120,6 +125,17 @@ afterEach(() => {
 })
 
 describe('Summary Git scope', () => {
+  it('defers Git reads until the environment details are expanded', async () => {
+    const { git } = stubGit()
+    renderWithQuery(<Environment />)
+
+    expect(screen.getByText('Summary project')).toBeTruthy()
+    expect(git.repoStatus).not.toHaveBeenCalled()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Details' }))
+    await waitFor(() => expect(git.repoStatus).toHaveBeenCalled())
+  })
+
   it('never reads or mutates the foreground repository for a project owned by another connection', async () => {
     const { git, review } = stubGit({ list: async () => ({ base: null, files: [file('local-only.ts')] }) })
     $sessions.set([makeSessionInfo({ id: 'summary-session', profile: 'default', connection_id: 'remote-a' })])
@@ -243,13 +259,13 @@ describe('Summary Git scope', () => {
     expect(await screen.findByText('recovered.ts')).toBeTruthy()
   })
 
-  it('keeps an empty changes read refreshable', async () => {
+  it('shows a neutral empty changes state without a retry action', async () => {
     const { review } = stubGit()
     renderWithQuery(<ChangesSection />)
 
     expect(await screen.findByText('No uncommitted changes')).toBeTruthy()
-    fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
-    await waitFor(() => expect(review.list).toHaveBeenCalledTimes(2))
+    expect(screen.queryByRole('button', { name: 'Retry' })).toBeNull()
+    expect(review.list).toHaveBeenCalledOnce()
   })
 
   it('pushes the selected session repo rather than Review pinned cwd', async () => {
@@ -345,6 +361,7 @@ describe('Summary revert confirmation', () => {
       </>
     )
 
+    fireEvent.click(screen.getByRole('button', { name: 'Details' }))
     fireEvent.click(await screen.findByRole('button', { name: 'View all (1)' }))
     fireEvent.click(screen.getByRole('button', { name: 'Revert file: danger.ts' }))
     expect(screen.getByRole('dialog', { name: 'Revert' })).toBeTruthy()

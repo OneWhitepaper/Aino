@@ -81,14 +81,22 @@ describe('SummaryPane', () => {
     expect(screen.queryByRole('heading', { name: '环境信息' })).toBeNull()
     expect(screen.queryByRole('heading', { name: '来源' })).toBeNull()
 
-    const api = vi.fn(async () => ({
-      session_id: 'summary-a',
-      messages: [
-        { role: 'user', content: 'Read @file:/work/reference.md' },
-        { role: 'tool', tool_name: 'document_export', content: JSON.stringify({ output_path: '/work/report.pdf' }) },
-        { role: 'assistant', content: '[Report](/work/report.pdf)' }
-      ]
-    }))
+    const api = vi.fn(async (request: { path: string }) =>
+      request.path.includes('/summary?')
+        ? { summary: null, eligible: false, stale: false, source_revision: 'short' }
+        : {
+            session_id: 'summary-a',
+            messages: [
+              { role: 'user', content: 'Read @file:/work/reference.md' },
+              {
+                role: 'tool',
+                tool_name: 'document_export',
+                content: JSON.stringify({ output_path: '/work/report.pdf' })
+              },
+              { role: 'assistant', content: '[Report](/work/report.pdf)' }
+            ]
+          }
+    )
 
     ;(window as unknown as { hermesDesktop: unknown }).hermesDesktop = { api }
     const state = createClientSessionState('summary-a')
@@ -138,7 +146,7 @@ describe('SummaryPane', () => {
         }
       })
     )
-    expect(api).toHaveBeenCalledTimes(1)
+    expect(api.mock.calls.filter(([request]) => request.path.includes('/messages?'))).toHaveLength(1)
     expect(transcriptReads).toBe(0)
   })
 
@@ -150,12 +158,14 @@ describe('SummaryPane', () => {
     })
 
     const api = vi.fn((request: { path: string }) =>
-      request.path.includes('summary-a')
-        ? oldResponse
-        : Promise.resolve({
-            session_id: 'summary-b',
-            messages: [{ role: 'assistant', content: '[New report](/work/new.pdf)' }]
-          })
+      request.path.includes('/summary?')
+        ? Promise.resolve({ summary: null, eligible: false, stale: false, source_revision: 'short' })
+        : request.path.includes('summary-a')
+          ? oldResponse
+          : Promise.resolve({
+              session_id: 'summary-b',
+              messages: [{ role: 'assistant', content: '[New report](/work/new.pdf)' }]
+            })
     )
 
     ;(window as unknown as { hermesDesktop: unknown }).hermesDesktop = { api }
@@ -195,7 +205,7 @@ describe('SummaryPane', () => {
 
     expect(screen.queryByText('old.pdf')).toBeNull()
     expect(screen.queryByText('Old preview')).toBeNull()
-    expect(api).toHaveBeenLastCalledWith(
+    expect(api).toHaveBeenCalledWith(
       expect.objectContaining({
         connectionId: 'local',
         profile: 'work',

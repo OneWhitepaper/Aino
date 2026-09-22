@@ -42,6 +42,7 @@ import { MessageRenderBoundary } from '../message-render-boundary'
 
 import { resolveShowEarlierAction, shouldAutoShowEarlier, useTranscriptWindow } from './transcript-window'
 import { useMessagesBelow } from './use-messages-below'
+import { useRevealMessage } from './use-reveal-message'
 import { useStickyPromptClip } from './use-sticky-prompt-clip'
 
 type ThreadMessageComponents = ComponentProps<typeof ThreadPrimitive.MessageByIndex>['components']
@@ -934,22 +935,39 @@ const ThreadMessageListInner: FC<ThreadMessageListProps> = ({
   // won't fight this manual restore. Spend the already-materialized DOM page
   // first; only when that is exhausted pull more messages out of the session
   // store (#55191).
-  const showEarlier = useCallback(() => {
+  const showEarlier = useCallback(async () => {
     const action = resolveShowEarlierAction(hiddenCount, olderAvailable)
 
     if (!action) {
-      return
+      return false
     }
 
     anchorBeforePrepend()
+
     // Both paths grow the DOM budget by one pane page. Windowed rows are older
     // than the current page, so expand-without-grow paints nothing.
+    if (action === 'window' && (await expandWindow()) === false) {
+      return false
+    }
+
     setRenderBudget(budget => budget + paneBudget)
 
-    if (action === 'window') {
-      expandWindow()
-    }
+    return true
   }, [anchorBeforePrepend, expandWindow, hiddenCount, olderAvailable, paneBudget])
+
+  useRevealMessage({
+    sessionId,
+    sessionKey,
+    visible: paneVisible,
+    scrollRef,
+    revision: `${renderBudget}:${hiddenCount}:${olderAvailable}:${structuralSignature}`,
+    showEarlier,
+    prepareScroll: () => {
+      cancelRestoreRef.current?.()
+      restoreFromBottomRef.current = null
+      stopScroll()
+    }
+  })
 
   // Scroll/wheel at the top edge pages older turns through the same showEarlier
   // path as the button. Wheel is required because browsers emit no `scroll`

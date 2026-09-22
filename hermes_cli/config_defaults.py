@@ -724,6 +724,7 @@ DEFAULT_CONFIG = {
             "reasoning_effort": "",
             "language": "",
         },
+        "session_summary": _aux(60),  # independent, cited desktop session summaries
         "memory_query_rewrite": _aux(8, reasoning_effort=False),
         "tts_audio_tags": _aux(30),
         # Kanban: triage_specifier expands a Triage one-liner into a spec (cheap model OK);

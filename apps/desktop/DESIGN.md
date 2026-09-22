@@ -76,14 +76,19 @@ one-off at the call site.
   the card, it stacks beneath the workspace. The compact rail fits its content,
   capped at 40% of the workspace height so the composer remains usable. Opening and closing use
   a 200ms slide/resize transition, disabled under reduced motion. Its contents follow the selected
-  conversation: ordinary chat starts with a small Outputs affordance; real
+  conversation: an overview leads with the live turn state (turn ended never
+  means task completed), followed by outputs, plans and execution details.
+  Ordinary chat has a small neutral empty state and an Outputs affordance; real
   artifacts, sources, plans, subagents and background processes add their groups
   only when present. Inputs (attachments, links, loaded skills and external
   services) are separate from generated outputs. Resource lists start compact
   and expand in the card; images reuse the existing media resolver and files
   open through the existing preview path. The create affordance inserts an
   editable prompt into the composer, never sends one.
-  Project chats add environment, repository changes and Git actions. Changes
+  Project chats add a final, collapsed environment group. Repository reads and
+  Git actions mount only when its details are expanded. A non-Git directory is
+  a valid project: it has no Git warning or retry. A clean repository is an empty
+  result, not a failed request. Changes
   cover the whole working tree, including manual edits, and retain Review's
   staging/revert confirmation paths; commit and PR open the existing Review
   workflow. When the selected conversation's owner differs from the foreground
@@ -112,8 +117,19 @@ one-off at the call site.
   [artifacts viewer](https://developers.openai.com/codex/artifacts-viewer),
   [repository review scopes](https://developers.openai.com/codex/code-review?surface=app)
   and [chat environments](https://developers.openai.com/codex/environments/git-worktrees).
-  Summary aggregates Aino's existing data; it does not introduce another model
-  summarization request or modify conversation context.
+  Summary reuses Aino's existing resource and activity data. For longer conversations,
+  the overview also reads an independently persisted, language-scoped semantic
+  summary of goals, completed work, findings and unresolved items. Generation runs
+  only while the panel is open and the turn is idle, through the owning session's
+  authenticated runtime and existing auxiliary model/billing path. The backend
+  validates citations against visible durable history, including compacted rows,
+  and refuses to publish a result if the conversation changed during generation.
+  Identical revisions reuse the cached result; failed revisions require explicit
+  retry. Short greetings do not invoke a model. Updates show their timestamp and
+  stale state, and citation actions reveal the original message in its own pane.
+  The summary never rewrites chat messages, system prompts or model context, and
+  never triggers context compression. A configured independent summary model is
+  available through the existing auxiliary-model settings.
 - **Terminal is a bottom workspace.** The default docks it beneath chat while
   navigation and the file/review rails remain full-height. The titlebar toggle,
   palette and shortcut share pane visibility; hiding releases the panel's space
@@ -140,6 +156,10 @@ one-off at the call site.
   remembered per connection and profile. Discovery and saved registrations do
   not open projects. Closing a project removes it from this list, preserving
   its registration, files and conversations; its unpinned chats return to Recent.
+  Project rows place More and New session icons after the name, in both the
+  overview and entered project. Reveal them on row hover or keyboard focus;
+  the entered project has no separate New session row. The compose icon reuses
+  the main navigation artwork and the existing project-scoped creation action.
   Project menus own folder membership and the primary folder. Removing a project
   or folder registration never deletes files or conversation history. Profile
   management lives in Sidebar → Workspaces. Selecting a row only previews its
@@ -210,6 +230,17 @@ Do not add another group around already framed tools or lists. Grouped rows
 use a 36rem content-width breakpoint for the label/control split, accounting
 for the added insets; narrower groups stack. Use shared stroke tokens in
 both brightness modes, without flattening native Glass surfaces.
+
+My account's usage history queries the full ledger by date range, model and
+call purpose. Dates use the displayed local timezone. Bordered rows show exact
+request time, model, purpose, authoritative decimal cost and settlement status;
+expanded details reuse the copy control for correlation IDs and distinguish
+unreported token counts from zero. Numbered pagination, total count, page size
+and direct page entry reuse the existing pagination primitives. Applying filters
+resets to the first page; stale account/query responses never replace current
+results. Chat reply receipts retain their compact layout. Purpose filters follow
+the server's advertised supported values; old servers retain the legacy set.
+Historical auxiliary calls without finer attribution stay visibly unclassified.
 
 The approved v2 light palette is a `#fcfcfc` canvas, `#f3f3f4` sidebar,
 `#ffffff` paper, and `#f8f9fa` field/header fill. Primary, secondary and supporting
@@ -505,9 +536,14 @@ so glass and message-bubble transparency do not reveal scrolling text.
   chats offer Select project. An unsent draft keeps its text and attachments when
   selecting, opening, or creating a project from the composer. Locally created
   empty tabs use the same rule; cold historical sessions are not empty drafts.
-  Once sent, the menu explicitly starts a separate project chat and never changes
-  the original conversation's cwd. Delayed pickers cannot retarget a different
-  draft, profile, or source. Change totals still open the current workspace's review
+  Once sent in a project, the menu offers only that conversation's directory
+  actions and a new chat in the same directory; it never lists unrelated projects
+  or global create/open-project actions. Projectless chats retain project selection,
+  which starts a separate chat after sending and never changes the original cwd.
+  Restored chats may use their saved directory for the menu while runtime cwd is
+  unavailable; Git status and actions still require a live cwd. Directory actions
+  require the conversation to belong to the current source. Delayed pickers cannot
+  retarget a different draft, profile, or source. Change totals still open the current workspace's review
   pane, and projects without git retain their project entry. The project menu
   owns directory details and Copy path / Reveal in file manager / Reveal in sidebar;
   it uses that composer's directory, never an incidental global backend cwd.

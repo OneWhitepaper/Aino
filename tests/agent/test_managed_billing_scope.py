@@ -39,6 +39,67 @@ def test_managed_auxiliary_inherits_exact_live_runtime(managed_gateway, task, pr
     headers = {k.lower(): v for k, v in f.request_headers[-1].items()}
     UUID(headers["x-aino-session-id"])
     assert headers["x-aino-purpose"] == {"title_generation": "title", "compression": "compression"}[task]
+    assert "x-aino-task" not in headers
+
+
+def test_auxiliary_receipts_preserve_detail_with_legacy_compatible_purpose(managed_gateway):
+    from agent.auxiliary_client import call_llm
+    from agent.auxiliary_billing_scope import BillingScope, billing_scope
+
+    f = managed_gateway
+    sid = f.create()["session_id"]
+    f.bind(sid, vision=True)
+    model, runtime = runtime_for_session(sid)
+    cases = [(task, "other_auxiliary", task) for task in (
+        "session_summary", "approval", "mcp", "tts_audio_tags", "side_question")]
+    cases += [("chat", "chat", None), ("title_generation", "title", None),
+              ("compression", "compression", None), ("vision", "vision", None),
+              ("delegation", "delegation", None), ("unknown-task", "other_auxiliary", None)]
+    scope = BillingScope("aino", "user-one", runtime["api_key"].session_id, str(uuid4()), "chat")
+    token = billing_scope.set(scope)
+    try:
+        for task, purpose, detail in cases:
+            response = call_llm(task=task, main_runtime={**runtime, "model": model},
+                               messages=[{"role": "user", "content": "fixture"}], timeout=3,
+                               extra_headers={"X-Aino-Task": "stale-task"})
+            assert response.choices[0].message.content
+            headers = {k.lower(): v for k, v in f.request_headers[-1].items()}
+            # Older servers accept the six original purposes and ignore the new header.
+            assert headers["x-aino-purpose"] == purpose
+            assert headers.get("x-aino-task") == detail
+            assert scope.calls.snapshot()["calls"][-1] == {
+                "call_id": headers["x-aino-call-id"], "purpose": detail or purpose}
+    finally:
+        billing_scope.reset(token)
+
+
+def test_side_question_fork_is_correlated_without_changing_parent_runtime(managed_gateway):
+    from agent.auxiliary_billing_scope import BillingScope, billing_scope
+    from agent.side_question import _answer_via_fork
+    from tui_gateway import server as srv
+
+    f = managed_gateway
+    sid = f.create()["session_id"]
+    f.bind(sid)
+    f.submit(sid, "Read the fixture file")
+    session = srv._sessions[sid]
+    parent = session["agent"]
+    credential = parent.api_key
+    scope = BillingScope("aino", credential.user_id, credential.session_id, str(uuid4()), "chat")
+    token = billing_scope.set(scope)
+    start = len(f.request_headers)
+    try:
+        assert _answer_via_fork(parent, "What did you read?", session["history"])
+    finally:
+        billing_scope.reset(token)
+    assert parent.api_key is credential and credential.scope is None
+    assert len(f.request_headers) > start
+    for raw_headers in f.request_headers[start:]:
+        headers = {k.lower(): v for k, v in raw_headers.items()}
+        assert headers["x-aino-purpose"] == "other_auxiliary"
+        assert headers["x-aino-task"] == "side_question"
+        assert headers["x-aino-turn-id"] == scope.turn_id
+        assert {"call_id": headers["x-aino-call-id"], "purpose": "side_question"} in scope.calls.snapshot()["calls"]
 
 
 @pytest.mark.parametrize("status", [401, 402])

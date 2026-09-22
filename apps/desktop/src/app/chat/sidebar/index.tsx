@@ -178,6 +178,7 @@ import {
   useRepoWorktreeMap
 } from './projects'
 import { useWorkspaceNodeOpen } from './projects/model'
+import { WorkspaceAddButton } from './projects/workspace-header'
 import { WorktreeDialog } from './projects/worktree-dialog'
 import { recentSessionsOutsideProjects } from './recent-sessions'
 import { SidebarLoadErrorState, SidebarSessionSkeletons } from './section-states'
@@ -1763,17 +1764,12 @@ export function ChatSidebar({
                         project={enteredProject}
                         scoped
                       />
+                      <WorkspaceAddButton
+                        icon={<AinoDesignIcon className="size-3.5" src={navNewSessionIcon} />}
+                        label={s.newSessionIn(enteredProject.label)}
+                        onClick={() => onNewSessionInWorkspace(projectTreeCwd(enteredProject))}
+                      />
                     </div>
-                    <Button
-                      aria-label={s.newSessionIn(enteredProject.label)}
-                      className="self-start"
-                      onClick={() => onNewSessionInWorkspace(projectTreeCwd(enteredProject))}
-                      size="sm"
-                      variant="ghost"
-                    >
-                      <Codicon name="add" size="0.875rem" />
-                      {s.nav['new-session']}
-                    </Button>
                   </>
                 ) : undefined
               }

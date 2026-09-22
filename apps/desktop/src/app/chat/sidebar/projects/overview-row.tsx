@@ -3,6 +3,8 @@ import type * as React from 'react'
 import { useRef } from 'react'
 
 import { type NewSessionSplitHandler, startNewSessionDrag } from '@/app/chat/new-session-drag'
+import navNewSessionIcon from '@/assets/aino-home/nav-new-session.svg'
+import { AinoDesignIcon } from '@/components/aino-design-icon'
 import { Codicon } from '@/components/ui/codicon'
 import { Tip } from '@/components/ui/tooltip'
 import type { SessionInfo } from '@/hermes'
@@ -153,6 +155,7 @@ export function ProjectOverviewRow({
           {!project.isNoProject && <ProjectMenu anchorRef={rowRef} isActive={isActive} project={project} />}
           {onNewSession && (
             <WorkspaceAddButton
+              icon={<AinoDesignIcon className="size-3.5" src={navNewSessionIcon} />}
               label={s.newSessionIn(project.label)}
               onClick={() => onNewSession(project.path)}
               onPointerDown={

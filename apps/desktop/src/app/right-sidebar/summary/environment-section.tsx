@@ -62,7 +62,6 @@ export function EnvironmentSection({ session }: { session: SummarySession }) {
   return (
     <SummarySection title={copy.title}>
       <div className="grid gap-1.5">
-        <ChangesSection embedded session={session} />
         <div className="flex min-w-0 items-center gap-2">
           <Codicon
             className="shrink-0 text-(--ui-text-tertiary)"
@@ -78,7 +77,6 @@ export function EnvironmentSection({ session }: { session: SummarySession }) {
         <p className="truncate text-[length:var(--aino-text-caption)] text-(--ui-text-tertiary)" title={state.cwd}>
           {formatSummaryPath(state.cwd)}
         </p>
-        <GitSection embedded session={session} />
         <Button
           aria-expanded={expanded}
           className="mt-2 justify-start"
@@ -97,11 +95,17 @@ export function EnvironmentSection({ session }: { session: SummarySession }) {
               <>
                 <SummaryValue label={copy.model} value={model || t.shell.statusbar.noModel} />
                 <SummaryValue label={copy.provider} value={provider || t.shell.statusbar.modelNone} />
-                <SummaryValue label={copy.branch} value={branch || t.summary.state.noData} />
+                {branch && <SummaryValue label={copy.branch} value={branch} />}
                 <SummaryValue label={copy.connection} value={connectionLabel(gatewayState, t.shell.statusbar)} />
               </>
             )}
           </div>
+        )}
+        {expanded && (
+          <>
+            <GitSection embedded session={session} />
+            <ChangesSection embedded session={session} />
+          </>
         )}
       </div>
     </SummarySection>

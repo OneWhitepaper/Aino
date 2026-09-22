@@ -62,6 +62,9 @@ describe('platform client', () => {
       const url = new URL(req.url!, 'http://localhost')
       expect(url.pathname).toBe('/api/v1/usage')
       expect(url.searchParams.get('desktop_turn_id')).toBe(turn)
+      expect(url.searchParams.get('model')).toBe('fixture-model')
+      expect(url.searchParams.get('timezone')).toBe('Asia/Shanghai')
+      expect(url.searchParams.get('start_date')).toBe('2026-09-16')
       expect(url.searchParams.has('user_id')).toBe(false)
       expect(req.headers.authorization).toBe('Bearer fixture-access')
       res.setHeader('content-type', 'application/json')
@@ -69,16 +72,17 @@ describe('platform client', () => {
         id: 42, request_id: 'server-request', model: 'fixture-model', session_id: null, desktop_turn_id: turn,
         desktop_call_id: 'cbec3bce-4de2-4fbe-a6ee-5ab3e7d990cb', desktop_purpose: 'chat',
         actual_cost_decimal: '0.00000001', actual_cost: 999, settlement_status: 'settled', currency: 'USD',
-        created_at: '2026-09-16T00:00:00Z', api_key: { key: 'fixture-secret' }
+        created_at: '2026-09-16T00:00:00Z', input_tokens: 125, output_tokens: 20, cache_read_tokens: 60, api_key: { key: 'fixture-secret' }
       }] } }))
     })
 
     const client = createPlatformClient({ origin, allowInsecureLoopback: true })
-    const page = await client.listUsage('fixture-access', { page: 1, page_size: 50, desktop_turn_id: turn })
+    const page = await client.listUsage('fixture-access', { page: 1, page_size: 50, desktop_turn_id: turn, model: 'fixture-model', timezone: 'Asia/Shanghai', start_date: '2026-09-16' })
     expect(page.items[0].actual_cost_decimal).toBe('0.00000001')
     expect(page.items[0]).not.toHaveProperty('api_key')
     expect(page.items[0]).not.toHaveProperty('actual_cost')
     expect(page.items[0].id).toBe('42')
+    expect(page.items[0]).toMatchObject({ input_tokens: 125, output_tokens: 20, cache_read_tokens: 60, cache_creation_tokens: null })
   })
   it('uses the B2 credential route and connection/device scope', async () => {
     let observed: unknown

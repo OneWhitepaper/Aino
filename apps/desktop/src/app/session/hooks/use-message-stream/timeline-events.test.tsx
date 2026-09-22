@@ -2,6 +2,7 @@ import type { GatewayEventName } from '@hermes/shared'
 import { act, cleanup } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { textPart, toChatMessages } from '@/lib/chat-messages'
 import { createClientSessionState } from '@/lib/chat-runtime'
 
 import { type MessageStreamHarness, renderMessageStream } from './test-harness'
@@ -92,6 +93,95 @@ describe('live transcript timeline events', () => {
     } else {
       expect(hydrateFromStoredSession).toHaveBeenCalledWith(3, 'stored-model-switch', SID)
     }
+  })
+
+  it('shows an applied switch immediately and keeps it before a prompt sent while the event was arriving', () => {
+    cleanup()
+    const hydrateFromStoredSession = vi.fn(async () => undefined)
+
+    const historyEntry = {
+      role: 'user' as const,
+      content: '',
+      text: 'model changed',
+      display_kind: 'model_switch',
+      display_metadata: { previous_model: 'model-before', model: 'model-after' },
+      row_id: 12,
+      timestamp: 450
+    }
+
+    const previous = { id: 'old-answer', role: 'assistant' as const, parts: [textPart('Ready.')], timestamp: 449 }
+    stream = renderMessageStream(SID, {
+      hydrateFromStoredSession,
+      states: new Map([[SID, createClientSessionState('stored-model-switch', [previous])]])
+    })
+
+    event('status.update', 450, { kind: 'model_switch', text: '', history_entry: historyEntry })
+
+    const notice = stream.state().messages.find(message => message.modelSwitch)
+    expect(notice).toMatchObject({ role: 'system', rowId: 12, timestamp: 450, modelSwitch: historyEntry.display_metadata })
+    expect(hydrateFromStoredSession).not.toHaveBeenCalled()
+
+    // The same notification can arrive after an optimistic send, or replay
+    // after stored history already supplied its durable row.
+    // Deferred switches apply after the optimistic prompt was created.
+    const prompt = { id: 'new-prompt', role: 'user' as const, parts: [textPart('Continue.')], timestamp: 449.5 }
+    stream.states.set(SID, {
+      ...stream.state(),
+      messages: [previous, prompt],
+      busy: true,
+      awaitingResponse: true
+    })
+    event('status.update', 450, { kind: 'model_switch', text: '', history_entry: historyEntry })
+    expect(stream.state().messages.map(message => message.role)).toEqual(['assistant', 'system', 'user'])
+    expect(stream.state().awaitingResponse).toBe(true)
+    event('message.start', 451)
+    event('message.delta', 452, { text: 'Working.' })
+    event('status.update', 453, { kind: 'model_switch', text: '', history_entry: historyEntry })
+
+    expect(stream.state().messages.map(message => message.role)).toEqual(['assistant', 'system', 'user', 'assistant'])
+    expect(stream.text()).toBe('Working.')
+    expect(stream.state().busy).toBe(true)
+    expect(stream.state().awaitingResponse).toBe(false)
+    expect(stream.state().streamId).toBeTruthy()
+
+    const messages = stream.state().messages
+    event('status.update', 454, { kind: 'model_switch', text: '', history_entry: historyEntry })
+    expect(stream.state().messages).toBe(messages)
+
+    event('status.update', 455, {
+      kind: 'model_switch', text: '',
+      history_entry: { ...historyEntry, row_id: 13, timestamp: 455, display_metadata: { model: 'restored-model' } }
+    })
+    expect(stream.state().messages.at(-1)?.modelSwitch?.model).toBe('restored-model')
+
+    const persisted = toChatMessages([historyEntry])
+    stream.states.set(SID, { ...stream.state(), messages: [previous, ...persisted, prompt] })
+    event('status.update', 455, { kind: 'model_switch', text: '', history_entry: historyEntry })
+    expect(stream.state().messages.filter(message => message.modelSwitch)).toHaveLength(1)
+  })
+
+  it('records background model switches only in their owning session', () => {
+    event('message.start', 500)
+    event('message.delta', 501, { text: 'Foreground reply.' })
+    const foreground = stream.state()
+
+    act(() => stream.handleEvent({
+      type: 'status.update',
+      session_id: 'background-session',
+      payload: {
+        kind: 'model_switch',
+        text: '',
+        history_entry: {
+          role: 'user', text: 'model changed', display_kind: 'model_switch',
+          timestamp: 502, row_id: 22,
+          display_metadata: { previous_model: 'background-before', model: 'background-after' }
+        }
+      }
+    }))
+
+    expect(stream.state()).toBe(foreground)
+    expect(stream.state('background-session').messages).toHaveLength(1)
+    expect(stream.state('background-session').messages[0].modelSwitch?.model).toBe('background-after')
   })
 
   it('uses session.info time when it is the only stop boundary', () => {

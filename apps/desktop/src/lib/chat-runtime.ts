@@ -394,6 +394,7 @@ export function toRuntimeMessage(message: ChatMessage): ThreadMessage {
   // established channel for per-message extras (attachmentRefs below).
   const reactionMeta = {
     ...(message.rowId !== undefined ? { rowId: message.rowId } : {}),
+    ...(message.sourceRowIds?.length ? { sourceRowIds: message.sourceRowIds } : {}),
     ...(message.reactions?.length ? { reactions: message.reactions } : {})
   }
 

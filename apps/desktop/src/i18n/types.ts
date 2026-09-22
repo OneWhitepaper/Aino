@@ -137,8 +137,56 @@ interface UpstreamTranslations {
       compression: string
       vision: string
       delegation: string
+      session_summary: string
+      approval: string
+      mcp: string
+      tts_audio_tags: string
+      side_question: string
       other_auxiliary: string
     }
+  }
+  platformBillingHistory: {
+    orders: string
+    usage: string
+    empty: string
+    previous: string
+    next: string
+    open: string
+    error: string
+    retry: string
+    qrCode: string
+    filters: string
+    startDate: string
+    endDate: string
+    model: string
+    modelPlaceholder: string
+    purpose: string
+    allPurposes: string
+    search: string
+    reset: string
+    invalidDateRange: string
+    timezone: (zone: string) => string
+    totalRecords: (count: number) => string
+    pageSize: string
+    goToPage: (page: number) => string
+    jumpToPage: string
+    jump: string
+    noMatches: string
+    columns: { time: string; model: string; purpose: string; cost: string; status: string }
+    details: string
+    hideDetails: string
+    copyField: (label: string) => string
+    requestId: string
+    sessionId: string
+    turnId: string
+    callId: string
+    inputTokens: string
+    outputTokens: string
+    cacheReadTokens: string
+    cacheWriteTokens: string
+    unknown: string
+    unknownPurpose: string
+    unclassifiedHelp: string
   }
   platformModels: {
     switchBusy: string
@@ -656,6 +704,29 @@ interface UpstreamTranslations {
     aria: string
     title: string
     close: string
+    overview: {
+      title: string
+      objective: string
+      completed: string
+      conclusions: string
+      openQuestions: string
+      empty: string
+      resourcesAvailable: string
+      pending: string
+      updating: string
+      stale: string
+      failed: string
+      viewRequest: string
+      sourceUnavailable: string
+      tooLong: string
+      refresh: string
+      source: (index: number) => string
+      updated: (time: string) => string
+      status: Record<
+        'background' | 'draft' | 'idle' | 'interrupted' | 'needs-input' | 'stalled' | 'unread' | 'working',
+        string
+      >
+    }
     environment: {
       title: string
       local: string

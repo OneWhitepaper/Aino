@@ -27,6 +27,7 @@ export function PlanSection({ history, session }: { history: TodoItem[]; session
   const tree = todoTree(todos)
   const completed = todos.filter(todo => todo.status === 'completed').length
   const total = todos.filter(todo => todo.status !== 'cancelled').length
+  const currentStep = todos.find(todo => todo.status === 'in_progress')
 
   if (!todos.length && !goal) {
     return null
@@ -49,6 +50,25 @@ export function PlanSection({ history, session }: { history: TodoItem[]; session
             <span className="flex-1 text-left">{t.summary.plan.progress(completed, total)}</span>
             <Codicon name={expanded ? 'chevron-down' : 'chevron-right'} />
           </Button>
+          {currentStep && (
+            <div className="mt-1 grid gap-0.5">
+              {!live.length && (
+                <span className="text-[length:var(--aino-text-caption)] text-(--ui-text-tertiary)">
+                  {t.summary.plan.recorded}
+                </span>
+              )}
+              <div className="flex min-w-0 items-start gap-2 text-[length:var(--aino-text-caption)]">
+                <Codicon
+                  aria-hidden={false}
+                  aria-label={t.summary.plan.status.in_progress}
+                  className="mt-0.5 shrink-0 text-(--ui-text-tertiary)"
+                  name={TODO_ICONS.in_progress}
+                  role="img"
+                />
+                <span className="min-w-0 break-words">{currentStep.content}</span>
+              </div>
+            </div>
+          )}
           {expanded && (
             <div className="mt-2 grid gap-2">
               {!live.length && (
