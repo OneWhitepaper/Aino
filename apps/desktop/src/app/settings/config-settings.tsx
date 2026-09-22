@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input'
 import { getElevenLabsVoices, getHermesConfigSchema, saveHermesConfig } from '@/hermes'
 import { useI18n } from '@/i18n'
 import { triggerHaptic } from '@/lib/haptics'
+import { Settings2 } from '@/lib/icons'
 import { isSubmitEnter } from '@/lib/ime'
 import { confirm } from '@/store/confirm'
 import {
@@ -33,7 +34,7 @@ import { useOnProfileSwitch } from '../hooks/use-on-profile-switch'
 import { PanelEmpty } from '../overlays/panel'
 
 import { ConfigField } from './config-field'
-import { configSubpageForField } from './config-subpages'
+import { CONFIG_SUBPAGES, configSubpageForField } from './config-subpages'
 import {
   clearsEnabledToolsets,
   diffConfig,
@@ -48,9 +49,18 @@ import { MemoryConnect } from './memory/connect'
 import { ProviderConfigPanel } from './memory/provider-config-panel'
 import { ModelSettings, ModelSettingsSkeleton } from './model-settings'
 import { PoolLimitsSetting } from './pool-limits-setting'
-import { EmptyState, ListRow, SettingsContent, SettingsGroup, SettingsSkeleton, ToggleRow } from './primitives'
+import {
+  EmptyState,
+  ListRow,
+  SectionHeading,
+  SettingsContent,
+  SettingsGroup,
+  SettingsSkeleton,
+  ToggleRow
+} from './primitives'
 import { SettingsProfileScope } from './profile-scope'
 import { QuickEntrySettings } from './quick-entry-settings'
+import { settingsSubpageIcon } from './subpages'
 
 export function ConfigSettings({
   activeSectionId,
@@ -303,7 +313,9 @@ function ConfigSettingsInner({
   const targetField = searchParams.get('field')
 
   useEffect(() => {
-    if (!targetField || !config || !schema) {
+    // Model fields mount inside the asynchronously loaded model controller,
+    // which owns their highlight once its content is ready.
+    if (!targetField || !config || !schema || (activeSectionId === 'model' && subpage === undefined)) {
       return
     }
 
@@ -359,27 +371,6 @@ function ConfigSettingsInner({
     e.target.value = ''
   }
 
-  // Keep the model controller and pending MoA saves at a stable position when
-  // selecting siblings or returning to the first page through the parent.
-  const renderPage = (children: ReactNode) => (
-    <SettingsContent>
-      <SettingsProfileScope className="mb-5" />
-      {activeSectionId === 'model' && (
-        <div className={showModelSettings ? 'mb-6' : undefined}>
-          <ModelSettings onMainModelChanged={onMainModelChanged} scopeProfile={scopeProfile} subpage={subpage} />
-        </div>
-      )}
-      {children}
-      <input
-        accept=".json,application/json"
-        className="hidden"
-        onChange={handleImport}
-        ref={importInputRef}
-        type="file"
-      />
-    </SettingsContent>
-  )
-
   if (!config || !schema) {
     // A failed config/schema fetch must surface a retry, not spin forever.
     if ((configLoadFailed && !config) || (schemaFailed && !schema)) {
@@ -422,74 +413,125 @@ function ConfigSettingsInner({
 
   const visibleFields = activeSectionId === 'voice' ? fields.filter(([key]) => voiceFieldVisible(key, config)) : fields
 
-  const showEmptyState =
-    visibleFields.length === 0 &&
-    (subpage === undefined
-      ? activeSectionId !== 'chat'
-      : !showModelSettings && !showDesktopSettings && !showAttachments)
+  const renderFieldGroup = (entries: [string, ConfigFieldSchema][], extra?: ReactNode) => (
+    <SettingsGroup>
+      {extra}
+      {entries.map(([key, field]) => (
+        <div className="scroll-mt-6" data-settings-row="" id={`setting-field-${key}`} key={key}>
+          <ConfigField
+            descriptionExtra={
+              key === 'memory.provider' && isExternalMemoryProvider(getNested(config, key)) ? (
+                <MemoryConnect profile={scopeProfile} provider={String(getNested(config, key))} />
+              ) : undefined
+            }
+            enumOptions={
+              key === 'tts.elevenlabs.voice_id'
+                ? enumOptionsFor(key, getNested(config, key), config, elevenLabsVoiceOptions ?? undefined)
+                : enumOptionsFor(key, getNested(config, key), config)
+            }
+            onChange={value => updateConfig(setNested(config, key, value))}
+            optionLabels={key === 'tts.elevenlabs.voice_id' ? elevenLabsVoiceLabels : undefined}
+            schema={field}
+            schemaKey={key}
+            value={getNested(config, key)}
+          />
+          {key === 'memory.provider' && isExternalMemoryProvider(getNested(config, key)) ? (
+            <ProviderConfigPanel
+              key={String(getNested(config, key))}
+              profile={scopeProfile}
+              provider={String(getNested(config, key))}
+            />
+          ) : null}
+        </div>
+      ))}
+    </SettingsGroup>
+  )
 
-  return renderPage(
-    <>
-      {/* Device-local desktop prefs (not config.yaml) — they live here since
-          keeping the machine awake and the global Quick Entry chord are both
-          power-user, this-computer-only knobs. */}
-      {showDesktopSettings && (
-        <>
-          <ToggleRow
-            checked={keepAwake}
-            description={c.keepAwakeDesc}
-            label={c.keepAwakeTitle}
-            onChange={setKeepAwake}
+  // Reuse the subpage categories as sections within one scrollable page.
+  const groupedFields = new Map<string, [string, ConfigFieldSchema][]>()
+
+  for (const entry of visibleFields) {
+    const id = configSubpageForField(activeSectionId, entry[0]) ?? '__other__'
+    const entries = groupedFields.get(id) ?? []
+    entries.push(entry)
+    groupedFields.set(id, entries)
+  }
+
+  const extraControls: Record<string, ReactNode> = {}
+
+  if (showDesktopSettings) {
+    extraControls.desktop = (
+      <>
+        <ToggleRow checked={keepAwake} description={c.keepAwakeDesc} label={c.keepAwakeTitle} onChange={setKeepAwake} />
+        <ToggleRow
+          checked={disableF12}
+          description={c.disableF12Desc}
+          label={c.disableF12Title}
+          onChange={setDisableF12}
+        />
+        <PoolLimitsSetting />
+        <QuickEntrySettings />
+      </>
+    )
+  }
+
+  if (showAttachments) {
+    extraControls.attachments = <AttachmentSizeSetting />
+  }
+
+  const inlineModelFields = activeSectionId === 'model' && subpage === undefined
+  const groupContent = new Map<string, ReactNode>()
+
+  for (const group of CONFIG_SUBPAGES[activeSectionId] ?? []) {
+    const entries = groupedFields.get(group.id) ?? []
+    const extra = extraControls[group.id]
+
+    if (entries.length === 0 && !extra) {
+      continue
+    }
+
+    groupContent.set(
+      group.id,
+      <section className="mb-6 scroll-mt-6" id={`setting-section-${group.id}`} key={group.id}>
+        {subpage === undefined && !(inlineModelFields && group.id === 'main') && (
+          <SectionHeading icon={settingsSubpageIcon(group, Settings2)} title={t.settings.subpages[group.labelKey]} />
+        )}
+        {renderFieldGroup(entries, extra)}
+      </section>
+    )
+  }
+
+  // Curated fields added before their category metadata still remain editable.
+  const ungroupedFields = groupedFields.get('__other__') ?? []
+  const showEmptyState = visibleFields.length === 0 && !showModelSettings && !showDesktopSettings && !showAttachments
+
+  return (
+    <SettingsContent>
+      <SettingsProfileScope className="mb-5" />
+      {activeSectionId === 'model' && (
+        <div className={showModelSettings ? 'mb-6' : undefined}>
+          <ModelSettings
+            fallbackSettings={inlineModelFields ? groupContent.get('fallbacks') : undefined}
+            mainSettings={inlineModelFields ? groupContent.get('main') : undefined}
+            onMainModelChanged={onMainModelChanged}
+            scopeProfile={scopeProfile}
+            subpage={subpage}
           />
-          <ToggleRow
-            checked={disableF12}
-            description={c.disableF12Desc}
-            label={c.disableF12Title}
-            onChange={setDisableF12}
-          />
-          <PoolLimitsSetting />
-          <QuickEntrySettings />
-        </>
+        </div>
       )}
-      {/* Device-local attach/preview byte cap (main-process IPC guard). Chat is
-          where image-attachment behavior already lives, so this sits above the
-          schema fields for that section. */}
-      {showAttachments ? <AttachmentSizeSetting /> : null}
-      {showEmptyState ? (
-        <EmptyState description={c.emptyDesc} title={c.emptyTitle} />
-      ) : visibleFields.length === 0 ? null : (
-        <SettingsGroup>
-          {visibleFields.map(([key, field]) => (
-            <div className="scroll-mt-6" data-settings-row="" id={`setting-field-${key}`} key={key}>
-              <ConfigField
-                descriptionExtra={
-                  key === 'memory.provider' && isExternalMemoryProvider(getNested(config, key)) ? (
-                    <MemoryConnect profile={scopeProfile} provider={String(getNested(config, key))} />
-                  ) : undefined
-                }
-                enumOptions={
-                  key === 'tts.elevenlabs.voice_id'
-                    ? enumOptionsFor(key, getNested(config, key), config, elevenLabsVoiceOptions ?? undefined)
-                    : enumOptionsFor(key, getNested(config, key), config)
-                }
-                onChange={value => updateConfig(setNested(config, key, value))}
-                optionLabels={key === 'tts.elevenlabs.voice_id' ? elevenLabsVoiceLabels : undefined}
-                schema={field}
-                schemaKey={key}
-                value={getNested(config, key)}
-              />
-              {key === 'memory.provider' && isExternalMemoryProvider(getNested(config, key)) ? (
-                <ProviderConfigPanel
-                  key={String(getNested(config, key))}
-                  profile={scopeProfile}
-                  provider={String(getNested(config, key))}
-                />
-              ) : null}
-            </div>
-          ))}
-        </SettingsGroup>
+      {[...groupContent].map(([id, content]) =>
+        inlineModelFields && (id === 'main' || id === 'fallbacks') ? null : content
       )}
-    </>
+      {ungroupedFields.length > 0 && renderFieldGroup(ungroupedFields)}
+      {showEmptyState && <EmptyState description={c.emptyDesc} title={c.emptyTitle} />}
+      <input
+        accept=".json,application/json"
+        className="hidden"
+        onChange={handleImport}
+        ref={importInputRef}
+        type="file"
+      />
+    </SettingsContent>
   )
 }
 

@@ -1,6 +1,6 @@
 import type { ModelOptionProvider } from '@hermes/shared'
 import { DEFAULT_REASONING_EFFORT, isReasoningEffort, REASONING_EFFORT_VALUES } from '@hermes/shared'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -27,7 +27,7 @@ import type {
 } from '@/hermes'
 import { useI18n } from '@/i18n'
 import { isCodeSkewRestartRequired } from '@/lib/code-skew-error'
-import { AlertTriangle, Cpu, Loader2 } from '@/lib/icons'
+import { AlertTriangle, Box, Cpu, Loader2 } from '@/lib/icons'
 import { isSubmitEnter } from '@/lib/ime'
 import { cn } from '@/lib/utils'
 import { setMainModelAssignment } from '@/store/model-assignment'
@@ -38,6 +38,7 @@ import { hermesConfigCacheWriter, invalidateHermesConfig, useHermesConfigRecord 
 import { useOnProfileSwitch } from '../hooks/use-on-profile-switch'
 import { PanelEmpty } from '../overlays/panel'
 
+import { configSubpageForField } from './config-subpages'
 import { CONTROL_TEXT } from './constants'
 import { getNested, setNested } from './helpers'
 import { PlatformModelSettings } from './platform-model-settings'
@@ -229,6 +230,9 @@ function StaleAuxWarning({ applying, onReset, slots, taskLabel }: StaleAuxWarnin
 }
 
 interface ModelSettingsProps {
+  /** Schema-backed controls share the existing model controller and page. */
+  mainSettings?: ReactNode
+  fallbackSettings?: ReactNode
   /** Visibility only: changing pages must not reset drafts or cancel autosave. */
   subpage?: string
   /** Notified after the main model is applied, so live UI stores can sync. */
@@ -240,7 +244,13 @@ interface ModelSettingsProps {
   scopeProfile?: string
 }
 
-export function ModelSettings({ onMainModelChanged, scopeProfile, subpage }: ModelSettingsProps) {
+export function ModelSettings({
+  onMainModelChanged,
+  scopeProfile,
+  subpage,
+  mainSettings,
+  fallbackSettings
+}: ModelSettingsProps) {
   const { t } = useI18n()
   const m = t.settings.model
   const showMain = subpage === undefined || subpage === 'main'
@@ -285,6 +295,13 @@ export function ModelSettings({ onMainModelChanged, scopeProfile, subpage }: Mod
     elementId: task => `aux-task-${task}`,
     param: 'aux',
     ready: task => showAuxiliary && !loading && AUX_TASKS.some(meta => meta.key === task)
+  })
+
+  useDeepLinkHighlight({
+    elementId: field => `setting-field-${field}`,
+    param: 'field',
+    ready: field =>
+      !loading && Boolean(configSubpageForField('model', field) === 'main' ? mainSettings : fallbackSettings)
   })
 
   // Every profile-scoped async here captures this and bails before writing back,
@@ -898,6 +915,7 @@ export function ModelSettings({ onMainModelChanged, scopeProfile, subpage }: Mod
       {!showMain && errorNotice}
       {showMain && (
         <section>
+          {subpage === undefined && <SectionHeading icon={Box} title={t.settings.subpages.modelMain} />}
           <p className="mb-3 text-xs text-muted-foreground">{m.appliesDesc}</p>
           <div className="flex flex-wrap items-center gap-2">
             <Select onValueChange={setSelectedProvider} value={selectedProvider}>
@@ -1022,8 +1040,10 @@ export function ModelSettings({ onMainModelChanged, scopeProfile, subpage }: Mod
               />
             </div>
           )}
+          {mainSettings && <div className="mt-4">{mainSettings}</div>}
         </section>
       )}
+      {fallbackSettings}
 
       {showAuxiliary && (
         <section>

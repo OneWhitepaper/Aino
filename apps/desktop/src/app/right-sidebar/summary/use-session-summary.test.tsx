@@ -1,4 +1,7 @@
-import type { SessionSummaryResult as SessionSummaryResponse, SessionSemanticSummary as SessionSummarySnapshot } from '@hermes/shared'
+import type {
+  SessionSummaryResult as SessionSummaryResponse,
+  SessionSemanticSummary as SessionSummarySnapshot
+} from '@hermes/shared'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { act, cleanup, renderHook, waitFor } from '@testing-library/react'
 import type { ReactNode } from 'react'
@@ -54,7 +57,8 @@ describe('useSessionSummary', () => {
       summary: request.method === 'POST' ? snapshot(revision) : null,
       eligible,
       stale: request.method !== 'POST',
-      source_revision: revision, busy: false
+      source_revision: revision,
+      busy: false
     }))
 
     ;(window as unknown as { hermesDesktop: unknown }).hermesDesktop = { api }
@@ -64,8 +68,8 @@ describe('useSessionSummary', () => {
       { wrapper: wrapper(), initialProps: { busy: true, epoch: 1 } }
     )
 
-    await act(async () => {})
-    expect(api).not.toHaveBeenCalled()
+    await waitFor(() => expect(api).toHaveBeenCalledTimes(1))
+    expect(api.mock.calls.filter(([request]) => request.method === 'POST')).toHaveLength(0)
     rerender({ busy: false, epoch: 1 })
     await waitFor(() => expect(result.current.summary?.source_revision).toBe('r1'))
     expect(api.mock.calls.filter(([request]) => request.method === 'POST')).toHaveLength(1)
@@ -79,7 +83,7 @@ describe('useSessionSummary', () => {
     )
 
     rerender({ busy: false, epoch: 2 })
-    await waitFor(() => expect(api.mock.calls.filter(([request]) => !request.method)).toHaveLength(2))
+    await waitFor(() => expect(api.mock.calls.filter(([request]) => !request.method)).toHaveLength(3))
     expect(api.mock.calls.filter(([request]) => request.method === 'POST')).toHaveLength(1)
     revision = 'r2'
     rerender({ busy: false, epoch: 3 })
@@ -92,6 +96,93 @@ describe('useSessionSummary', () => {
     await waitFor(() => expect(result.current.eligible).toBe(false))
     expect(result.current.summary).toBeNull()
     expect(api.mock.calls.filter(([request]) => request.method === 'POST')).toHaveLength(2)
+  })
+
+  it('reads cached summaries during a turn and resumes a deferred update without losing the last result', async () => {
+    let busy = true
+    let posts = 0
+    let saved = snapshot('previous')
+    let pendingRead: Promise<SessionSummaryResponse> | undefined
+
+    const api = vi.fn(async (request: HermesApiRequest): Promise<SessionSummaryResponse> => {
+      if (!request.method && pendingRead) {
+        return pendingRead
+      }
+
+      if (request.method === 'POST') {
+        posts += 1
+
+        if (posts === 1) {
+          // Another turn started after the generation request was admitted.
+          return { summary: saved, eligible: true, stale: true, busy: true, source_revision: 'r1' }
+        }
+
+        saved = snapshot('r1', 'Updated result')
+      }
+
+      return {
+        summary: saved,
+        eligible: true,
+        stale: saved.source_revision !== 'r1',
+        busy,
+        source_revision: 'r1'
+      }
+    })
+
+    ;(window as unknown as { hermesDesktop: unknown }).hermesDesktop = { api }
+
+    const { result, rerender } = renderHook(
+      ({ ready, epoch }) =>
+        useSessionSummary(
+          { ...session, busy },
+          { historyReady: ready, refreshing: !ready, historyUpdatedAt: epoch },
+          'zh'
+        ),
+      { wrapper: wrapper(), initialProps: { ready: false, epoch: 0 } }
+    )
+
+    await waitFor(() => expect(result.current.summary?.source_revision).toBe('previous'))
+    expect(posts).toBe(0)
+    expect(result.current.canRefresh).toBe(false)
+
+    busy = false
+    // Generation uses the server's validated source, even while the separate
+    // resource-history download has not completed.
+    rerender({ ready: false, epoch: 1 })
+    await waitFor(() => expect(posts).toBe(1))
+    await waitFor(() => expect(result.current.backendBusy).toBe(true))
+    expect(posts).toBe(1)
+    expect(result.current.error).toBeFalsy()
+    expect(result.current.summary?.source_revision).toBe('previous')
+
+    busy = true
+    rerender({ ready: true, epoch: 2 })
+    await waitFor(() => expect(result.current.loading).toBe(false))
+    busy = false
+    rerender({ ready: true, epoch: 3 })
+    await waitFor(() => expect(result.current.summary?.objective?.text).toBe('Updated result'))
+    expect(posts).toBe(2)
+    expect(result.current.stale).toBe(false)
+
+    let finishRead!: (value: SessionSummaryResponse) => void
+    pendingRead = new Promise(resolve => {
+      finishRead = resolve
+    })
+    busy = true
+    rerender({ ready: false, epoch: 4 })
+    expect(result.current.summary?.objective?.text).toBe('Updated result')
+    expect(result.current.stale).toBe(true)
+    await act(async () =>
+      finishRead({
+        summary: saved,
+        eligible: true,
+        stale: true,
+        busy: true,
+        source_revision: 'r2'
+      })
+    )
+    expect(result.current.summary?.objective?.text).toBe('Updated result')
+    expect(posts).toBe(2)
   })
 
   it('isolates late generation by owner and keeps an explicitly stale snapshot when an update fails', async () => {
@@ -107,7 +198,13 @@ describe('useSessionSummary', () => {
       if (request.connectionId === 'local') {
         return request.method === 'POST'
           ? pending
-          : Promise.resolve({ summary: null, eligible: true, stale: true, busy: false, source_revision: 'same-revision' })
+          : Promise.resolve({
+              summary: null,
+              eligible: true,
+              stale: true,
+              busy: false,
+              source_revision: 'same-revision'
+            })
       }
 
       if (request.method === 'POST') {
@@ -118,7 +215,8 @@ describe('useSessionSummary', () => {
         summary: snapshot(fails ? 'previous' : 'same-revision', 'Remote result'),
         eligible: true,
         stale: fails || failedRevision,
-        source_revision: 'same-revision', busy: false,
+        source_revision: 'same-revision',
+        busy: false,
         ...(failedRevision ? { error: 'Generation failed' } : {})
       })
     })
@@ -140,7 +238,8 @@ describe('useSessionSummary', () => {
         summary: snapshot('same-revision', 'Wrong local result'),
         eligible: true,
         stale: false,
-        source_revision: 'same-revision', busy: false
+        source_revision: 'same-revision',
+        busy: false
       })
     )
     expect(result.current.summary?.objective?.text).toBe('Remote result')
@@ -154,11 +253,17 @@ describe('useSessionSummary', () => {
     )
 
     fails = false
-    await act(async () => { await result.current.refresh() })
+    await act(async () => {
+      await result.current.refresh()
+    })
     await waitFor(() => expect(result.current.error).toBeFalsy())
     expect(result.current.stale).toBe(false)
-    expect(api).toHaveBeenLastCalledWith(expect.objectContaining({
-      connectionId: 'remote', method: 'POST', body: { profile: 'work', language: 'zh', retry: true }
-    }))
+    expect(api).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        connectionId: 'remote',
+        method: 'POST',
+        body: { profile: 'work', language: 'zh', retry: true }
+      })
+    )
   })
 })

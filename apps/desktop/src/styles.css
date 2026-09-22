@@ -2562,10 +2562,6 @@ body:not(:has([data-settings-workspace])):has([data-chat-surface][data-conversat
   color: var(--ui-text-secondary);
 }
 
-[data-chat-surface][data-conversation-layout] [data-slot='aui_user-bubble'][data-has-corner-action] {
-  padding-right: 2.25rem;
-}
-
 [data-chat-surface][data-conversation-layout] .composer-human-message {
   border: 0;
   border-radius: 1rem;

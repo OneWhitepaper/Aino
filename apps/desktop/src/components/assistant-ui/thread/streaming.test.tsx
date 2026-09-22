@@ -9,6 +9,7 @@ import { act, fireEvent, render, screen, waitFor, within } from '@testing-librar
 import { useEffect, useState } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { en } from '@/i18n/en'
 import { $reasoningCollapsedByDefault, setShowReasoningFromConfig } from '@/store/reasoning-disclosure'
 
 import { stubThreadEnvironment, stubThreadViewportSize, ThreadRuntime } from '../test-utils'
@@ -545,7 +546,7 @@ describe('assistant-ui streaming renderer', () => {
 
     const { container } = render(<StreamingHarness onControls={registerControls} />)
 
-    expect(screen.getByRole('status', { name: 'Aino is loading a response' })).toBeTruthy()
+    expect(screen.getByRole('status', { name: en.assistant.thread.thinking })).toBeTruthy()
 
     await waitFor(() => {
       expect(container.textContent).toContain('first chunk')

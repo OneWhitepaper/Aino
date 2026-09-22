@@ -847,7 +847,11 @@ export const en: Translations = {
       pending: 'The summary updates after the turn ends.',
       updating: 'Updating the conversation summary…',
       stale: 'New activity, awaiting update',
-      failed: 'The summary could not be updated. Existing content is still available.',
+      coverage: {
+        excerpted: 'Based on excerpts of the conversation and tool output.',
+        recent: 'Based on recent content and the original objective.'
+      },
+      failed: 'The summary could not be updated. Please retry.',
       viewRequest: 'View pending request',
       sourceUnavailable:
         'The original message is unavailable. It may have been undone, or the conversation has changed.',

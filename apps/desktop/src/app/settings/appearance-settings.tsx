@@ -1,5 +1,5 @@
 import { useStore } from '@nanostores/react'
-import { useEffect } from 'react'
+import { type ReactNode, useEffect } from 'react'
 
 import { LanguageSwitcher } from '@/components/language-switcher'
 import { Button } from '@/components/ui/button'
@@ -54,13 +54,14 @@ import { useTheme } from '@/themes/context'
 
 import { setHermesConfigCache, useHermesConfigRecord } from '../hooks/use-config-record'
 
-import { appearanceSubpageForSetting, type AppearanceSubpageId } from './appearance-subpages'
+import { APPEARANCE_SUBPAGES, appearanceSubpageForSetting, type AppearanceSubpageId } from './appearance-subpages'
 import { ChatFontSetting } from './chat-font-setting'
 import { MODE_OPTIONS } from './constants'
 import { setNested } from './helpers'
 import { PetSettings } from './pet-settings'
 import { ListRow, SectionHeading, SettingsContent, SettingsGroup, ToggleRow } from './primitives'
 import { APPEARANCE_SETTING_IDS } from './settings-search'
+import { settingsSubpageIcon } from './subpages'
 import { TerminalFontSetting } from './terminal-font-setting'
 import { useDeepLinkHighlight } from './use-deep-link-highlight'
 
@@ -295,498 +296,478 @@ export function AppearanceSettings({ subpage }: AppearanceSettingsProps = {}) {
 
   const matchedScalePreset = matchUiScalePreset(zoomPercent)
 
-  return (
-    <SettingsContent>
-      <div>
-        {subpage === undefined && (
-          <>
-            <SectionHeading icon={Palette} title={a.title} />
-            <p className="max-w-2xl text-[length:var(--conversation-caption-font-size)] leading-(--conversation-caption-line-height) text-(--ui-text-tertiary)">
-              {a.intro}
-            </p>
-          </>
-        )}
+  const sectionContent: Record<AppearanceSubpageId, ReactNode> = {
+    general: (
+      <>
+        <ListRow
+          action={<LanguageSwitcher />}
+          description={isSavingLocale ? t.language.saving : t.language.description}
+          id={appearanceSettingElementId(APPEARANCE_SETTING_IDS.language)}
+          title={t.language.label}
+        />
 
-        <SettingsGroup className={subpage === undefined ? 'mt-2' : undefined}>
-          {show('general') && (
-            <ListRow
-              action={<LanguageSwitcher />}
-              description={isSavingLocale ? t.language.saving : t.language.description}
-              id={appearanceSettingElementId(APPEARANCE_SETTING_IDS.language)}
-              title={t.language.label}
+        <ListRow
+          action={
+            <SegmentedControl
+              onChange={id => {
+                triggerHaptic('selection')
+                setIntroSplash(id === 'on')
+              }}
+              options={[
+                { id: 'off', label: t.common.off },
+                { id: 'on', label: t.common.on }
+              ]}
+              value={introSplash ? 'on' : 'off'}
             />
-          )}
+          }
+          description={a.introSplashDesc}
+          id={appearanceSettingElementId(APPEARANCE_SETTING_IDS.introSplash)}
+          title={a.introSplashTitle}
+        />
 
-          {show('theme') && (
-            <ListRow
-              action={
-                <SegmentedControl
-                  onChange={id => {
-                    triggerHaptic('crisp')
-                    setMode(id)
-                  }}
-                  options={modeOptions}
-                  value={mode}
-                />
-              }
-              description={a.colorModeDesc}
-              id={appearanceSettingElementId(APPEARANCE_SETTING_IDS.theme)}
-              title={a.colorMode}
-            />
-          )}
+        <ResumeLastSessionSetting />
 
-          {show('typography') && (
-            <>
-              <ListRow
-                action={
-                  <SegmentedControl
-                    onChange={id => {
-                      triggerHaptic('selection')
-                      setZoomPercent(Number(id))
-                    }}
-                    options={uiScaleOptions}
-                    value={matchedScalePreset ?? ('' as UiScalePreset)}
-                  />
-                }
-                description={a.uiScaleDesc(zoomPercent)}
-                id={appearanceSettingElementId(APPEARANCE_SETTING_IDS.uiScale)}
-                title={a.uiScaleTitle}
+        <ListRow
+          action={
+            <div className="flex flex-col items-end gap-1.5">
+              <SegmentedControl
+                onChange={id => {
+                  triggerHaptic('selection')
+                  setTipsEnabled(id === 'on')
+                }}
+                options={[
+                  { id: 'off', label: t.common.off },
+                  { id: 'on', label: t.common.on }
+                ]}
+                value={tipsEnabled ? 'on' : 'off'}
               />
-
-              <div id={appearanceSettingElementId('desktop.font_family')}>
-                <ChatFontSetting />
-              </div>
-
-              <div id={appearanceSettingElementId('terminal.font_family')}>
-                <TerminalFontSetting />
-              </div>
-            </>
-          )}
-
-          {show('window-layout') && (
-            <ListRow
-              action={
-                <SegmentedControl
-                  onChange={id => {
+              {/* A tip shows once (✕ or timer), so this is the only way to a
+                  second lap. It appears once there is something to bring back. */}
+              {spentTips > 0 && (
+                <Button
+                  onClick={() => {
                     triggerHaptic('selection')
-                    setSessionListDensity(id)
+                    resetTips()
                   }}
-                  options={sessionDensityOptions}
-                  value={sessionListDensity}
-                />
-              }
-              description={a.sessionDensityDesc}
-              title={a.sessionDensityTitle}
-            />
-          )}
-
-          {show('window-layout') && (
-            <ListRow
-              action={
-                <SegmentedControl
-                  onChange={id => {
-                    triggerHaptic('selection')
-                    setTabStripDefault(id)
-                  }}
-                  options={tabStripOptions}
-                  value={tabStripDefault}
-                />
-              }
-              description={a.tabStripDesc}
-              title={a.tabStripTitle}
-            />
-          )}
-
-          {show('window-layout') && (
-            <ListRow
-              action={
-                <SegmentedControl
-                  onChange={id => {
-                    triggerHaptic('selection')
-                    setTitlebarAppActionsSide(id)
-                  }}
-                  options={appActionsOptions}
-                  value={titlebarAppActionsSide}
-                />
-              }
-              description={a.appActionsDesc}
-              id={appearanceSettingElementId(APPEARANCE_SETTING_IDS.appActions)}
-              title={a.appActionsTitle}
-            />
-          )}
-
-          {/* Linux has neither half of this setting (see TRANSLUCENCY_SUPPORTED),
-              so the row is absent there rather than offering a dead lever. */}
-          {show('window-layout') && TRANSLUCENCY_SUPPORTED && (
-            <ListRow
-              action={
-                <div
-                  className="flex items-center gap-3"
-                  // Arms the peek for the overlay this row lives in — the
-                  // ghosting rules in styles.css scope to it, so no other
-                  // overlay pays for an opacity transition it never uses.
-                  data-translucency-peek-scope=""
+                  size="inline"
+                  variant="text"
                 >
-                  {GLASS_SUPPORTED && (
-                    <SegmentedControl
-                      onChange={pickTranslucency(setTranslucencyMode)}
-                      options={[
-                        { id: 'clear' as const, label: a.translucencyModeClear },
-                        { id: 'glass' as const, label: a.translucencyModeGlass }
-                      ]}
-                      value={translucency.mode}
-                    />
-                  )}
-                  {/* Clear has one lever and it belongs beside the mode. Glass
-                      has four controls, so they move into the labelled panel
-                      below rather than crowding this line with an unlabelled
-                      slider that means something different. */}
-                  {!glassMode && (
+                  {a.tipsReset(spentTips)}
+                </Button>
+              )}
+            </div>
+          }
+          description={a.tipsDesc}
+          title={a.tipsTitle}
+        />
+
+        <ListRow
+          action={
+            <SegmentedControl
+              onChange={id => {
+                triggerHaptic('selection')
+                setToursEnabled(id === 'on')
+              }}
+              options={[
+                { id: 'off', label: t.common.off },
+                { id: 'on', label: t.common.on }
+              ]}
+              value={toursEnabled ? 'on' : 'off'}
+            />
+          }
+          description={a.toursDesc}
+          title={a.toursTitle}
+        />
+      </>
+    ),
+    theme: (
+      <ListRow
+        action={
+          <SegmentedControl
+            onChange={id => {
+              triggerHaptic('crisp')
+              setMode(id)
+            }}
+            options={modeOptions}
+            value={mode}
+          />
+        }
+        description={a.colorModeDesc}
+        id={appearanceSettingElementId(APPEARANCE_SETTING_IDS.theme)}
+        title={a.colorMode}
+      />
+    ),
+    typography: (
+      <>
+        <ListRow
+          action={
+            <SegmentedControl
+              onChange={id => {
+                triggerHaptic('selection')
+                setZoomPercent(Number(id))
+              }}
+              options={uiScaleOptions}
+              value={matchedScalePreset ?? ('' as UiScalePreset)}
+            />
+          }
+          description={a.uiScaleDesc(zoomPercent)}
+          id={appearanceSettingElementId(APPEARANCE_SETTING_IDS.uiScale)}
+          title={a.uiScaleTitle}
+        />
+
+        <div id={appearanceSettingElementId('desktop.font_family')}>
+          <ChatFontSetting />
+        </div>
+
+        <div id={appearanceSettingElementId('terminal.font_family')}>
+          <TerminalFontSetting />
+        </div>
+      </>
+    ),
+    'window-layout': (
+      <>
+        <ListRow
+          action={
+            <SegmentedControl
+              onChange={id => {
+                triggerHaptic('selection')
+                setSessionListDensity(id)
+              }}
+              options={sessionDensityOptions}
+              value={sessionListDensity}
+            />
+          }
+          description={a.sessionDensityDesc}
+          title={a.sessionDensityTitle}
+        />
+
+        <ListRow
+          action={
+            <SegmentedControl
+              onChange={id => {
+                triggerHaptic('selection')
+                setTabStripDefault(id)
+              }}
+              options={tabStripOptions}
+              value={tabStripDefault}
+            />
+          }
+          description={a.tabStripDesc}
+          title={a.tabStripTitle}
+        />
+
+        <ListRow
+          action={
+            <SegmentedControl
+              onChange={id => {
+                triggerHaptic('selection')
+                setTitlebarAppActionsSide(id)
+              }}
+              options={appActionsOptions}
+              value={titlebarAppActionsSide}
+            />
+          }
+          description={a.appActionsDesc}
+          id={appearanceSettingElementId(APPEARANCE_SETTING_IDS.appActions)}
+          title={a.appActionsTitle}
+        />
+
+        {/* Linux does not support translucency controls. */}
+        {TRANSLUCENCY_SUPPORTED && (
+          <ListRow
+            action={
+              <div
+                className="flex items-center gap-3"
+                // Arms the peek for the overlay this row lives in — the
+                // ghosting rules in styles.css scope to it, so no other
+                // overlay pays for an opacity transition it never uses.
+                data-translucency-peek-scope=""
+              >
+                {GLASS_SUPPORTED && (
+                  <SegmentedControl
+                    onChange={pickTranslucency(setTranslucencyMode)}
+                    options={[
+                      { id: 'clear' as const, label: a.translucencyModeClear },
+                      { id: 'glass' as const, label: a.translucencyModeGlass }
+                    ]}
+                    value={translucency.mode}
+                  />
+                )}
+                {/* Clear has one lever and it belongs beside the mode. Glass
+                    has four controls, so they move into the labelled panel
+                    below rather than crowding this line with an unlabelled
+                    slider that means something different. */}
+                {!glassMode && (
+                  <TranslucencySlider
+                    label={a.translucencyTitle}
+                    onChange={setTranslucency}
+                    value={translucency.intensity}
+                  />
+                )}
+              </div>
+            }
+            below={
+              glassMode ? (
+                <div className="mt-3 flex flex-col gap-2.5" data-translucency-peek-scope="">
+                  <GlassRow label={a.translucencyTintTitle}>
                     <TranslucencySlider
-                      label={a.translucencyTitle}
+                      label={a.translucencyTintTitle}
                       onChange={setTranslucency}
                       value={translucency.intensity}
                     />
-                  )}
+                  </GlassRow>
+                  <GlassRow label={a.translucencyFadeTitle}>
+                    <TranslucencySlider
+                      label={a.translucencyFadeTitle}
+                      onChange={setTranslucencyFade}
+                      value={translucency.fade}
+                    />
+                  </GlassRow>
+                  <GlassRow label={a.translucencyFrostTitle}>
+                    <SegmentedControl
+                      onChange={pickTranslucency(setTranslucencyMaterial)}
+                      // Windows renders four rungs as three backdrops, so it
+                      // is offered three; a frost saved on a Mac highlights
+                      // the rung that renders the same backdrop here.
+                      options={glassMaterialsFor(GLASS_IS_WINDOWS).map(material => ({
+                        id: material,
+                        label: a.translucencyFrost[material]
+                      }))}
+                      value={glassMaterialForPicker(translucency.material, GLASS_IS_WINDOWS)}
+                    />
+                  </GlassRow>
+                  <GlassRow label={a.translucencyScopeTitle}>
+                    <SegmentedControl
+                      onChange={pickTranslucency(setTranslucencyScope)}
+                      options={GLASS_SCOPES.map(scope => ({
+                        id: scope,
+                        label: a.translucencyScope[scope]
+                      }))}
+                      value={translucency.scope}
+                    />
+                  </GlassRow>
                 </div>
-              }
-              below={
-                glassMode ? (
-                  <div className="mt-3 flex flex-col gap-2.5" data-translucency-peek-scope="">
-                    <GlassRow label={a.translucencyTintTitle}>
-                      <TranslucencySlider
-                        label={a.translucencyTintTitle}
-                        onChange={setTranslucency}
-                        value={translucency.intensity}
-                      />
-                    </GlassRow>
-                    <GlassRow label={a.translucencyFadeTitle}>
-                      <TranslucencySlider
-                        label={a.translucencyFadeTitle}
-                        onChange={setTranslucencyFade}
-                        value={translucency.fade}
-                      />
-                    </GlassRow>
-                    <GlassRow label={a.translucencyFrostTitle}>
-                      <SegmentedControl
-                        onChange={pickTranslucency(setTranslucencyMaterial)}
-                        // Windows renders four rungs as three backdrops, so it
-                        // is offered three; a frost saved on a Mac highlights
-                        // the rung that renders the same backdrop here.
-                        options={glassMaterialsFor(GLASS_IS_WINDOWS).map(material => ({
-                          id: material,
-                          label: a.translucencyFrost[material]
-                        }))}
-                        value={glassMaterialForPicker(translucency.material, GLASS_IS_WINDOWS)}
-                      />
-                    </GlassRow>
-                    <GlassRow label={a.translucencyScopeTitle}>
-                      <SegmentedControl
-                        onChange={pickTranslucency(setTranslucencyScope)}
-                        options={GLASS_SCOPES.map(scope => ({
-                          id: scope,
-                          label: a.translucencyScope[scope]
-                        }))}
-                        value={translucency.scope}
-                      />
-                    </GlassRow>
-                  </div>
-                ) : undefined
-              }
-              description={glassMode ? a.translucencyGlassDesc : a.translucencyDesc}
-              id={appearanceSettingElementId(APPEARANCE_SETTING_IDS.translucency)}
-              title={a.translucencyTitle}
-            />
-          )}
+              ) : undefined
+            }
+            description={glassMode ? a.translucencyGlassDesc : a.translucencyDesc}
+            id={appearanceSettingElementId(APPEARANCE_SETTING_IDS.translucency)}
+            title={a.translucencyTitle}
+          />
+        )}
 
-          {show('chat-display') && (
-            <ListRow
-              action={
-                // Same peek as the window lever: the bubble being tuned sits
-                // behind this overlay, so the overlay ghosts while the hand is
-                // on the slider.
-                <div className="flex items-center gap-3" data-translucency-peek-scope="">
-                  <TranslucencySlider
-                    label={a.userBubbleTitle}
-                    onChange={setUserBubbleTransparency}
-                    value={userBubbleTransparency}
-                  />
-                </div>
-              }
-              description={a.userBubbleDesc}
-              id={appearanceSettingElementId(APPEARANCE_SETTING_IDS.userBubble)}
-              title={a.userBubbleTitle}
+        <ListRow
+          action={
+            <SegmentedControl
+              onChange={id => {
+                triggerHaptic('selection')
+                setBackdrop(id === 'on')
+              }}
+              options={[
+                { id: 'off', label: t.common.off },
+                { id: 'on', label: t.common.on }
+              ]}
+              value={backdrop ? 'on' : 'off'}
             />
-          )}
+          }
+          description={a.backdropDesc}
+          id={appearanceSettingElementId(APPEARANCE_SETTING_IDS.backdrop)}
+          title={a.backdropTitle}
+        />
 
-          {show('window-layout') && (
-            <ListRow
-              action={
-                <SegmentedControl
-                  onChange={id => {
+        <ToggleRow
+          checked={composerPopoutGesturesEnabled}
+          description={a.composerPopoutDesc}
+          label={a.composerPopoutTitle}
+          onChange={setComposerPopoutGesturesEnabled}
+        />
+      </>
+    ),
+    'chat-display': (
+      <>
+        <ListRow
+          action={
+            // Same peek as the window lever: the bubble being tuned sits
+            // behind this overlay, so the overlay ghosts while the hand is
+            // on the slider.
+            <div className="flex items-center gap-3" data-translucency-peek-scope="">
+              <TranslucencySlider
+                label={a.userBubbleTitle}
+                onChange={setUserBubbleTransparency}
+                value={userBubbleTransparency}
+              />
+            </div>
+          }
+          description={a.userBubbleDesc}
+          id={appearanceSettingElementId(APPEARANCE_SETTING_IDS.userBubble)}
+          title={a.userBubbleTitle}
+        />
+
+        <ListRow
+          action={
+            <SegmentedControl
+              onChange={id => {
+                triggerHaptic('selection')
+                setHideThreadTimeline(id === 'on')
+              }}
+              options={[
+                { id: 'off', label: t.common.off },
+                { id: 'on', label: t.common.on }
+              ]}
+              value={hideThreadTimeline ? 'on' : 'off'}
+            />
+          }
+          description={a.hideThreadTimelineDesc}
+          id={appearanceSettingElementId(APPEARANCE_SETTING_IDS.hideThreadTimeline)}
+          title={a.hideThreadTimelineTitle}
+        />
+
+        <ListRow
+          action={
+            <SegmentedControl
+              onChange={id => {
+                triggerHaptic('selection')
+                setReactionsEnabled(id === 'on')
+              }}
+              options={[
+                { id: 'off', label: t.common.off },
+                { id: 'on', label: t.common.on }
+              ]}
+              value={reactionsEnabled ? 'on' : 'off'}
+            />
+          }
+          description={a.reactionsDesc}
+          title={a.reactionsTitle}
+        />
+
+        <ListRow
+          action={
+            <SegmentedControl
+              onChange={id => {
+                triggerHaptic('selection')
+                setVibeHeartsEnabled(id === 'on')
+              }}
+              options={[
+                { id: 'off', label: t.common.off },
+                { id: 'on', label: t.common.on }
+              ]}
+              value={vibeHeartsEnabled ? 'on' : 'off'}
+            />
+          }
+          description={a.vibeHeartsDesc}
+          title={a.vibeHeartsTitle}
+        />
+
+        <ListRow
+          action={
+            <SegmentedControl
+              onChange={id => {
+                triggerHaptic('selection')
+                setToolViewMode(id)
+              }}
+              options={toolOptions}
+              value={toolViewMode}
+            />
+          }
+          description={a.toolViewDesc}
+          id={appearanceSettingElementId(APPEARANCE_SETTING_IDS.toolView)}
+          title={a.toolViewTitle}
+        />
+
+        <ListRow
+          action={
+            <SegmentedControl
+              onChange={id => {
+                triggerHaptic('selection')
+                setHideCodeDiffs(id === 'on')
+              }}
+              options={[
+                { id: 'off', label: t.common.off },
+                { id: 'on', label: t.common.on }
+              ]}
+              value={hideCodeDiffs ? 'on' : 'off'}
+            />
+          }
+          description={a.hideCodeDiffsDesc}
+          id={appearanceSettingElementId(APPEARANCE_SETTING_IDS.hideCodeDiffs)}
+          title={a.hideCodeDiffsTitle}
+        />
+
+        <ListRow
+          action={
+            <SegmentedControl
+              onChange={id => {
+                triggerHaptic('selection')
+                setReasoningCollapsedByDefault(id === 'on')
+              }}
+              options={[
+                { id: 'off', label: t.common.off },
+                { id: 'on', label: t.common.on }
+              ]}
+              value={reasoningCollapsedByDefault ? 'on' : 'off'}
+            />
+          }
+          description={a.reasoningCollapsedDesc}
+          title={a.reasoningCollapsedTitle}
+        />
+
+        <ListRow
+          action={
+            <div className="flex flex-col items-end gap-1.5">
+              <SegmentedControl
+                onChange={id => {
+                  triggerHaptic('selection')
+                  setEmbedMode(id)
+                }}
+                options={embedOptions}
+                value={embedMode}
+              />
+              {embedAllowed.length > 0 && (
+                <Button
+                  onClick={() => {
                     triggerHaptic('selection')
-                    setBackdrop(id === 'on')
+                    clearEmbedAllowed()
                   }}
-                  options={[
-                    { id: 'off', label: t.common.off },
-                    { id: 'on', label: t.common.on }
-                  ]}
-                  value={backdrop ? 'on' : 'off'}
-                />
-              }
-              description={a.backdropDesc}
-              id={appearanceSettingElementId(APPEARANCE_SETTING_IDS.backdrop)}
-              title={a.backdropTitle}
-            />
-          )}
+                  size="inline"
+                  variant="text"
+                >
+                  {a.embedsReset(embedAllowed.length)}
+                </Button>
+              )}
+            </div>
+          }
+          description={a.embedsDesc}
+          id={appearanceSettingElementId(APPEARANCE_SETTING_IDS.embeds)}
+          title={a.embedsTitle}
+        />
+      </>
+    ),
+    pet: <PetSettings />
+  }
 
-          {show('chat-display') && (
-            <ListRow
-              action={
-                <SegmentedControl
-                  onChange={id => {
-                    triggerHaptic('selection')
-                    setHideThreadTimeline(id === 'on')
-                  }}
-                  options={[
-                    { id: 'off', label: t.common.off },
-                    { id: 'on', label: t.common.on }
-                  ]}
-                  value={hideThreadTimeline ? 'on' : 'off'}
-                />
-              }
-              description={a.hideThreadTimelineDesc}
-              id={appearanceSettingElementId(APPEARANCE_SETTING_IDS.hideThreadTimeline)}
-              title={a.hideThreadTimelineTitle}
-            />
-          )}
-
-          {show('general') && (
-            <ListRow
-              action={
-                <SegmentedControl
-                  onChange={id => {
-                    triggerHaptic('selection')
-                    setIntroSplash(id === 'on')
-                  }}
-                  options={[
-                    { id: 'off', label: t.common.off },
-                    { id: 'on', label: t.common.on }
-                  ]}
-                  value={introSplash ? 'on' : 'off'}
-                />
-              }
-              description={a.introSplashDesc}
-              id={appearanceSettingElementId(APPEARANCE_SETTING_IDS.introSplash)}
-              title={a.introSplashTitle}
-            />
-          )}
-
-          {show('window-layout') && (
-            <ToggleRow
-              checked={composerPopoutGesturesEnabled}
-              description={a.composerPopoutDesc}
-              label={a.composerPopoutTitle}
-              onChange={setComposerPopoutGesturesEnabled}
-            />
-          )}
-
-          {show('general') && <ResumeLastSessionSetting />}
-
-          {show('chat-display') && (
-            <ListRow
-              action={
-                <SegmentedControl
-                  onChange={id => {
-                    triggerHaptic('selection')
-                    setReactionsEnabled(id === 'on')
-                  }}
-                  options={[
-                    { id: 'off', label: t.common.off },
-                    { id: 'on', label: t.common.on }
-                  ]}
-                  value={reactionsEnabled ? 'on' : 'off'}
-                />
-              }
-              description={a.reactionsDesc}
-              title={a.reactionsTitle}
-            />
-          )}
-
-          {show('general') && (
-            <ListRow
-              action={
-                <div className="flex flex-col items-end gap-1.5">
-                  <SegmentedControl
-                    onChange={id => {
-                      triggerHaptic('selection')
-                      setTipsEnabled(id === 'on')
-                    }}
-                    options={[
-                      { id: 'off', label: t.common.off },
-                      { id: 'on', label: t.common.on }
-                    ]}
-                    value={tipsEnabled ? 'on' : 'off'}
-                  />
-                  {/* A tip shows once (✕ or timer), so this is the only way to a
-                      second lap. It appears once there is something to bring back. */}
-                  {spentTips > 0 && (
-                    <Button
-                      onClick={() => {
-                        triggerHaptic('selection')
-                        resetTips()
-                      }}
-                      size="inline"
-                      variant="text"
-                    >
-                      {a.tipsReset(spentTips)}
-                    </Button>
-                  )}
-                </div>
-              }
-              description={a.tipsDesc}
-              title={a.tipsTitle}
-            />
-          )}
-
-          {show('general') && (
-            <ListRow
-              action={
-                <SegmentedControl
-                  onChange={id => {
-                    triggerHaptic('selection')
-                    setToursEnabled(id === 'on')
-                  }}
-                  options={[
-                    { id: 'off', label: t.common.off },
-                    { id: 'on', label: t.common.on }
-                  ]}
-                  value={toursEnabled ? 'on' : 'off'}
-                />
-              }
-              description={a.toursDesc}
-              title={a.toursTitle}
-            />
-          )}
-
-          {show('chat-display') && (
-            <ListRow
-              action={
-                <SegmentedControl
-                  onChange={id => {
-                    triggerHaptic('selection')
-                    setVibeHeartsEnabled(id === 'on')
-                  }}
-                  options={[
-                    { id: 'off', label: t.common.off },
-                    { id: 'on', label: t.common.on }
-                  ]}
-                  value={vibeHeartsEnabled ? 'on' : 'off'}
-                />
-              }
-              description={a.vibeHeartsDesc}
-              title={a.vibeHeartsTitle}
-            />
-          )}
-
-          {show('chat-display') && (
-            <ListRow
-              action={
-                <SegmentedControl
-                  onChange={id => {
-                    triggerHaptic('selection')
-                    setToolViewMode(id)
-                  }}
-                  options={toolOptions}
-                  value={toolViewMode}
-                />
-              }
-              description={a.toolViewDesc}
-              id={appearanceSettingElementId(APPEARANCE_SETTING_IDS.toolView)}
-              title={a.toolViewTitle}
-            />
-          )}
-
-          {show('chat-display') && (
-            <ListRow
-              action={
-                <SegmentedControl
-                  onChange={id => {
-                    triggerHaptic('selection')
-                    setHideCodeDiffs(id === 'on')
-                  }}
-                  options={[
-                    { id: 'off', label: t.common.off },
-                    { id: 'on', label: t.common.on }
-                  ]}
-                  value={hideCodeDiffs ? 'on' : 'off'}
-                />
-              }
-              description={a.hideCodeDiffsDesc}
-              id={appearanceSettingElementId(APPEARANCE_SETTING_IDS.hideCodeDiffs)}
-              title={a.hideCodeDiffsTitle}
-            />
-          )}
-
-          {show('chat-display') && (
-            <ListRow
-              action={
-                <SegmentedControl
-                  onChange={id => {
-                    triggerHaptic('selection')
-                    setReasoningCollapsedByDefault(id === 'on')
-                  }}
-                  options={[
-                    { id: 'off', label: t.common.off },
-                    { id: 'on', label: t.common.on }
-                  ]}
-                  value={reasoningCollapsedByDefault ? 'on' : 'off'}
-                />
-              }
-              description={a.reasoningCollapsedDesc}
-              title={a.reasoningCollapsedTitle}
-            />
-          )}
-
-          {show('chat-display') && (
-            <ListRow
-              action={
-                <div className="flex flex-col items-end gap-1.5">
-                  <SegmentedControl
-                    onChange={id => {
-                      triggerHaptic('selection')
-                      setEmbedMode(id)
-                    }}
-                    options={embedOptions}
-                    value={embedMode}
-                  />
-                  {embedAllowed.length > 0 && (
-                    <Button
-                      onClick={() => {
-                        triggerHaptic('selection')
-                        clearEmbedAllowed()
-                      }}
-                      size="inline"
-                      variant="text"
-                    >
-                      {a.embedsReset(embedAllowed.length)}
-                    </Button>
-                  )}
-                </div>
-              }
-              description={a.embedsDesc}
-              id={appearanceSettingElementId(APPEARANCE_SETTING_IDS.embeds)}
-              title={a.embedsTitle}
-            />
-          )}
-        </SettingsGroup>
-      </div>
-
-      {show('pet') && (
-        <div className={subpage === undefined ? 'mt-6' : undefined} id={appearanceSettingElementId('appearance.pet')}>
-          <PetSettings />
+  return (
+    <SettingsContent>
+      {subpage === undefined && (
+        <div className="mb-6">
+          <SectionHeading icon={Palette} title={a.title} />
+          <p className="max-w-2xl text-[length:var(--conversation-caption-font-size)] leading-(--conversation-caption-line-height) text-(--ui-text-tertiary)">
+            {a.intro}
+          </p>
         </div>
       )}
+      {APPEARANCE_SUBPAGES.filter(page => show(page.id)).map(page => (
+        <section className="mb-6 scroll-mt-6" id={`setting-section-${page.id}`} key={page.id}>
+          {page.id === 'pet' ? (
+            <div id={appearanceSettingElementId('appearance.pet')}>{sectionContent.pet}</div>
+          ) : (
+            <>
+              {subpage === undefined && (
+                <SectionHeading icon={settingsSubpageIcon(page, Palette)} title={t.settings.subpages[page.labelKey]} />
+              )}
+              <SettingsGroup>{sectionContent[page.id]}</SettingsGroup>
+            </>
+          )}
+        </section>
+      ))}
     </SettingsContent>
   )
 }

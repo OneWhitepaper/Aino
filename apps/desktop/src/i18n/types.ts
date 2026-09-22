@@ -751,6 +751,7 @@ interface UpstreamTranslations {
       pending: string
       updating: string
       stale: string
+      coverage: Record<'excerpted' | 'recent', string>
       failed: string
       viewRequest: string
       sourceUnavailable: string

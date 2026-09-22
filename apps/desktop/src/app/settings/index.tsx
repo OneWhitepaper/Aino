@@ -1,6 +1,6 @@
 import { useStore } from '@nanostores/react'
 import { useCallback, useEffect, useMemo, useRef } from 'react'
-import { Navigate, useLocation, useNavigate } from 'react-router'
+import { useLocation, useNavigate } from 'react-router'
 
 import { Button } from '@/components/ui/button'
 import { codiconIcon } from '@/components/ui/codicon'
@@ -48,8 +48,7 @@ import { OverlayMain, OverlayNav, type OverlayNavGroup, OverlaySplitLayout } fro
 import { AboutSettings } from './about-settings'
 import { AccountSettings } from './account-settings'
 import { AppearanceSettings } from './appearance-settings'
-import { BILLING_VIEWS, BillingSettings, type BillingSubView } from './billing'
-import { deriveBillingView, useBillingState, useSubscriptionState } from './billing/use-billing-state'
+import { BillingSettings } from './billing'
 import { ConfigSettings } from './config-settings'
 import { SECTIONS } from './constants'
 import { GatewaySettings } from './gateway-settings'
@@ -57,11 +56,8 @@ import { KeybindSettings } from './keybind-settings'
 import { KEYS_VIEWS, KeysSettings, type KeysView } from './keys-settings'
 import { movedSettingsTabRedirect } from './moved-tabs'
 import { NotificationsSettings } from './notifications-settings'
-import { SettingsBreadcrumbContext } from './primitives'
 import { PROVIDER_VIEWS, ProvidersSettings, type ProviderView } from './providers-settings'
 import { SessionsSettings } from './sessions-settings'
-import { SettingsSubpageHeader } from './subpage-navigation'
-import { resolveSettingsSubpage, settingsSubpageIcon, settingsSubpages } from './subpages'
 import { SystemResourcesSettings } from './system-resources-settings'
 import { SettingsSystemControls } from './system-status-controls'
 import type { SettingsPageProps, SettingsView as SettingsViewId } from './types'
@@ -135,18 +131,9 @@ export function SettingsView({
   }, [navigate, search])
 
   const [activeView] = useRouteEnumParam('tab', SETTINGS_VIEWS, 'account' as SettingsViewId)
-  const params = new URLSearchParams(search)
-  const requestedSubpage = params.get('page')
-  const subpage = resolveSettingsSubpage(activeView, params)
-  const needsSubpageRedirect = Boolean(subpage && subpage !== requestedSubpage)
-  const subpageSearch = new URLSearchParams(search)
 
-  if (subpage) {
-    subpageSearch.set('page', subpage)
-  }
-
-  const openSettingsPage = useCallback(
-    (view: SettingsViewId, page?: string) => {
+  const setActiveView = useCallback(
+    (view: SettingsViewId) => {
       const next = new URLSearchParams(search)
 
       for (const key of [
@@ -167,18 +154,10 @@ export function SettingsView({
       }
 
       next.set('tab', view)
-      const destination = page ?? settingsSubpages(view)[0]?.id
-
-      if (destination) {
-        next.set('page', destination)
-      }
-
       navigate({ hash, pathname, search: `?${next}` }, { replace: true })
     },
     [hash, navigate, pathname, search]
   )
-
-  const setActiveView = useCallback((view: SettingsViewId) => openSettingsPage(view), [openSettingsPage])
 
   // Connections merged into the unified Gateways page: land old
   // `?tab=connections` routes/bookmarks there instead of a dead entry.
@@ -191,11 +170,6 @@ export function SettingsView({
   // sub-view is deep-linkable and survives a refresh.
   const [providerView, setProviderView] = useRouteEnumParam<ProviderView>('pview', PROVIDER_VIEWS, 'accounts')
   const [keysView] = useRouteEnumParam<KeysView>('kview', KEYS_VIEWS, 'tools')
-  const [billingView] = useRouteEnumParam<BillingSubView>('bview', BILLING_VIEWS, 'overview')
-  const billingState = useBillingState()
-  const subscriptionState = useSubscriptionState()
-  const billingPresentation = deriveBillingView(billingState.data, subscriptionState.data)
-  const canViewPlans = billingPresentation.status === 'normal' && Boolean(billingPresentation.plan?.action)
 
   // Jump to a section + its sub-view in one navigate. Two sequential setters
   // would each read the same stale `search` and the second would clobber the
@@ -269,218 +243,164 @@ export function SettingsView({
 
   const navGroups: OverlayNavGroup[] = useMemo(
     () =>
-      (
-        [
-          {
-            active: activeView === 'account',
-            icon: UserCircle,
-            id: 'account',
-            label: t.settings.nav.account,
-            onSelect: () => setActiveView('account')
-          },
-          ...SECTIONS.flatMap(s => {
-            const view = `config:${s.id}` as SettingsViewId
+      [
+        {
+          active: activeView === 'account',
+          icon: UserCircle,
+          id: 'account',
+          label: t.settings.nav.account,
+          onSelect: () => setActiveView('account')
+        },
+        ...SECTIONS.flatMap(s => {
+          const view = `config:${s.id}` as SettingsViewId
 
-            const entry = {
-              active: activeView === view,
-              icon: s.icon,
-              id: view,
-              label: t.settings.sections[s.id] ?? s.label,
-              onSelect: () => setActiveView(view)
-            }
-
-            // Credential Vault lives beside the Browser section: it feeds the
-            // browser's model-blind vault fill, so the two are one mental unit.
-            if (s.id === 'browser') {
-              return [
-                entry,
-                {
-                  active: activeView === 'vault',
-                  icon: ShieldLock,
-                  id: 'vault',
-                  label: t.settings.nav.vault,
-                  onSelect: () => setActiveView('vault')
-                }
-              ]
-            }
-
-            return [entry]
-          }),
-          {
-            active: activeView === 'notifications',
-            icon: Bell,
-            id: 'notifications',
-            label: t.settings.nav.notifications,
-            onSelect: () => setActiveView('notifications')
-          },
-          {
-            active: activeView === 'billing',
-            children: [
-              {
-                active: activeView === 'billing' && (billingView === 'overview' || !canViewPlans),
-                icon: BarChart3,
-                id: 'bview:overview',
-                label: t.settings.subpages.billingOverview,
-                onSelect: () => openSubView('billing', 'bview', 'overview', 'overview')
-              },
-              ...(canViewPlans
-                ? [
-                    {
-                      active: activeView === 'billing' && billingView === 'plans',
-                      icon: BarChart3,
-                      id: 'bview:plans',
-                      label: t.settings.subpages.billingPlans,
-                      onSelect: () => openSubView('billing', 'bview', 'plans', 'overview')
-                    }
-                  ]
-                : [])
-            ],
-            icon: BarChart3,
-            id: 'billing',
-            label: t.settings.nav.billing,
-            onSelect: () => setActiveView('billing')
-          },
-          {
-            active: activeView === 'providers',
-            children: [
-              {
-                active: activeView === 'providers' && providerView === 'accounts',
-                icon: codiconIcon('account'),
-                id: 'pview:accounts',
-                label: t.settings.nav.providerAccounts,
-                onSelect: () => openProviderView('accounts')
-              },
-              {
-                active: activeView === 'providers' && providerView === 'keys',
-                icon: KeyRound,
-                id: 'pview:keys',
-                label: t.settings.nav.providerApiKeys,
-                onSelect: () => openProviderView('keys')
-              },
-              {
-                active: activeView === 'providers' && providerView === 'custom-endpoints',
-                icon: Globe,
-                id: 'pview:custom-endpoints',
-                label: t.settings.nav.providerCustomEndpoints,
-                onSelect: () => openProviderView('custom-endpoints')
-              },
-              // Local models ships behind the --local launch flag: no flag, no
-              // nav entry (the pane itself also refuses to render, so a stale
-              // ?pview=local deep link falls back to accounts-shaped emptiness
-              // rather than a hidden feature).
-              ...($localModelsEnabled.get()
-                ? [
-                    {
-                      active: activeView === 'providers' && providerView === 'local',
-                      icon: Cpu,
-                      id: 'pview:local',
-                      label: t.settings.nav.providerLocalModels,
-                      onSelect: () => openProviderView('local')
-                    }
-                  ]
-                : [])
-            ],
-            gapBefore: true,
-            icon: Zap,
-            id: 'providers',
-            label: t.settings.nav.providers,
-            onSelect: () => setActiveView('providers')
-          },
-          {
-            active: activeView === 'gateway',
-            icon: Globe,
-            id: 'gateway',
-            label: t.settings.nav.gateway,
-            onSelect: () => setActiveView('gateway')
-          },
-          {
-            active: activeView === 'keybinds',
-            icon: Keyboard,
-            id: 'keybinds',
-            label: t.settings.nav.keybinds,
-            onSelect: () => setActiveView('keybinds')
-          },
-          {
-            active: activeView === 'keys',
-            children: [
-              {
-                active: activeView === 'keys' && keysView === 'tools',
-                icon: Wrench,
-                id: 'kview:tools',
-                label: t.settings.nav.keysTools,
-                onSelect: () => openKeysView('tools')
-              },
-              {
-                active: activeView === 'keys' && keysView === 'settings',
-                icon: Settings2,
-                id: 'kview:settings',
-                label: t.settings.nav.keysSettings,
-                onSelect: () => openKeysView('settings')
-              }
-            ],
-            icon: KeyRound,
-            id: 'keys',
-            label: t.settings.nav.apiKeys,
-            onSelect: () => setActiveView('keys')
-          },
-          {
-            active: activeView === 'sessions',
-            icon: Archive,
-            id: 'sessions',
-            label: t.settings.nav.archivedChats,
-            onSelect: () => setActiveView('sessions')
-          },
-          {
-            active: activeView === 'about',
-            gapBefore: true,
-            icon: Info,
-            id: 'about',
-            label: t.settings.nav.about,
-            onSelect: () => setActiveView('about')
-          },
-          {
-            active: activeView === 'resources',
-            icon: Cpu,
-            id: 'resources',
-            label: t.shell.statusbar.systemResources.title,
-            onSelect: () => setActiveView('resources')
+          const entry = {
+            active: activeView === view,
+            icon: s.icon,
+            id: view,
+            label: t.settings.sections[s.id] ?? s.label,
+            onSelect: () => setActiveView(view)
           }
-        ] as OverlayNavGroup[]
-      ).map(group => {
-        const view = group.id as SettingsViewId
-        const children = settingsSubpages(view)
 
-        return children.length
-          ? {
-              ...group,
-              children: children.map(page => ({
-                active: group.active && subpage === page.id,
-                icon: settingsSubpageIcon(page, group.icon),
-                id: `${view}:${page.id}`,
-                label: t.settings.subpages[page.labelKey],
-                onSelect: () => openSettingsPage(view, page.id)
-              }))
+          // Credential Vault lives beside the Browser section: it feeds the
+          // browser's model-blind vault fill, so the two are one mental unit.
+          if (s.id === 'browser') {
+            return [
+              entry,
+              {
+                active: activeView === 'vault',
+                icon: ShieldLock,
+                id: 'vault',
+                label: t.settings.nav.vault,
+                onSelect: () => setActiveView('vault')
+              }
+            ]
+          }
+
+          return [entry]
+        }),
+        {
+          active: activeView === 'notifications',
+          icon: Bell,
+          id: 'notifications',
+          label: t.settings.nav.notifications,
+          onSelect: () => setActiveView('notifications')
+        },
+        {
+          active: activeView === 'billing',
+          icon: BarChart3,
+          id: 'billing',
+          label: t.settings.nav.billing,
+          onSelect: () => setActiveView('billing')
+        },
+        {
+          active: activeView === 'providers',
+          children: [
+            {
+              active: activeView === 'providers' && providerView === 'accounts',
+              icon: codiconIcon('account'),
+              id: 'pview:accounts',
+              label: t.settings.nav.providerAccounts,
+              onSelect: () => openProviderView('accounts')
+            },
+            {
+              active: activeView === 'providers' && providerView === 'keys',
+              icon: KeyRound,
+              id: 'pview:keys',
+              label: t.settings.nav.providerApiKeys,
+              onSelect: () => openProviderView('keys')
+            },
+            {
+              active: activeView === 'providers' && providerView === 'custom-endpoints',
+              icon: Globe,
+              id: 'pview:custom-endpoints',
+              label: t.settings.nav.providerCustomEndpoints,
+              onSelect: () => openProviderView('custom-endpoints')
+            },
+            // Local models ships behind the --local launch flag: no flag, no
+            // nav entry (the pane itself also refuses to render, so a stale
+            // ?pview=local deep link falls back to accounts-shaped emptiness
+            // rather than a hidden feature).
+            ...($localModelsEnabled.get()
+              ? [
+                  {
+                    active: activeView === 'providers' && providerView === 'local',
+                    icon: Cpu,
+                    id: 'pview:local',
+                    label: t.settings.nav.providerLocalModels,
+                    onSelect: () => openProviderView('local')
+                  }
+                ]
+              : [])
+          ],
+          gapBefore: true,
+          icon: Zap,
+          id: 'providers',
+          label: t.settings.nav.providers,
+          onSelect: () => setActiveView('providers')
+        },
+        {
+          active: activeView === 'gateway',
+          icon: Globe,
+          id: 'gateway',
+          label: t.settings.nav.gateway,
+          onSelect: () => setActiveView('gateway')
+        },
+        {
+          active: activeView === 'keybinds',
+          icon: Keyboard,
+          id: 'keybinds',
+          label: t.settings.nav.keybinds,
+          onSelect: () => setActiveView('keybinds')
+        },
+        {
+          active: activeView === 'keys',
+          children: [
+            {
+              active: activeView === 'keys' && keysView === 'tools',
+              icon: Wrench,
+              id: 'kview:tools',
+              label: t.settings.nav.keysTools,
+              onSelect: () => openKeysView('tools')
+            },
+            {
+              active: activeView === 'keys' && keysView === 'settings',
+              icon: Settings2,
+              id: 'kview:settings',
+              label: t.settings.nav.keysSettings,
+              onSelect: () => openKeysView('settings')
             }
-          : group
-      }),
-    [
-      activeView,
-      billingView,
-      canViewPlans,
-      keysView,
-      providerView,
-      subpage,
-      t,
-      setActiveView,
-      openProviderView,
-      openKeysView,
-      openSettingsPage,
-      openSubView
-    ]
+          ],
+          icon: KeyRound,
+          id: 'keys',
+          label: t.settings.nav.apiKeys,
+          onSelect: () => setActiveView('keys')
+        },
+        {
+          active: activeView === 'sessions',
+          icon: Archive,
+          id: 'sessions',
+          label: t.settings.nav.archivedChats,
+          onSelect: () => setActiveView('sessions')
+        },
+        {
+          active: activeView === 'about',
+          gapBefore: true,
+          icon: Info,
+          id: 'about',
+          label: t.settings.nav.about,
+          onSelect: () => setActiveView('about')
+        },
+        {
+          active: activeView === 'resources',
+          icon: Cpu,
+          id: 'resources',
+          label: t.shell.statusbar.systemResources.title,
+          onSelect: () => setActiveView('resources')
+        }
+      ] as OverlayNavGroup[],
+    [activeView, keysView, providerView, t, setActiveView, openProviderView, openKeysView]
   )
-
-  const activeGroup = navGroups.find(group => group.active)
-  const activeChild = activeGroup?.children?.find(child => child.active)
 
   // Type-to-search: printable keystrokes on the Settings surface (outside any
   // field) open the settings-scoped palette, seeded with the character — same
@@ -577,24 +497,23 @@ export function SettingsView({
     activeView === 'account' ? (
       <AccountSettings />
     ) : activeView === 'config:appearance' ? (
-      <AppearanceSettings subpage={subpage} />
+      <AppearanceSettings />
     ) : activeView === 'about' ? (
-      <AboutSettings subpage={subpage} />
+      <AboutSettings />
     ) : activeView === 'resources' ? (
       <SystemResourcesSettings />
     ) : activeView === 'gateway' || activeView === 'connections' ? (
       // 'connections' renders the unified page too so the frame before
       // the alias redirect lands doesn't flash the fallback view.
-      <GatewaySettings subpage={subpage} />
+      <GatewaySettings />
     ) : activeView === 'keybinds' ? (
-      <KeybindSettings subpage={subpage} />
+      <KeybindSettings />
     ) : activeView.startsWith('config:') ? (
       <ConfigSettings
         activeSectionId={activeView.slice('config:'.length)}
         importInputRef={importInputRef}
         onConfigSaved={onConfigSaved}
         onMainModelChanged={onMainModelChanged}
-        subpage={subpage}
       />
     ) : activeView === 'providers' ? (
       <ProvidersSettings
@@ -608,13 +527,13 @@ export function SettingsView({
     ) : activeView === 'keys' ? (
       <KeysSettings view={keysView} />
     ) : activeView === 'notifications' ? (
-      <NotificationsSettings subpage={subpage} />
+      <NotificationsSettings />
     ) : activeView === 'billing' ? (
       <BillingSettings />
     ) : activeView === 'vault' ? (
-      <VaultSettings key={vaultOwnerKey(activeConnectionId, scopeProfile)} subpage={subpage} />
+      <VaultSettings key={vaultOwnerKey(activeConnectionId, scopeProfile)} />
     ) : (
-      <SessionsSettings subpage={subpage} />
+      <SessionsSettings />
     )
 
   return (
@@ -654,14 +573,7 @@ export function SettingsView({
           <OverlayNav footer={navFooter} fullPage groups={navGroups} />
 
           <OverlayMain className="px-0 pb-0" fullPage>
-            <SettingsBreadcrumbContext.Provider value>
-              {activeGroup && <SettingsSubpageHeader child={activeChild} group={activeGroup} />}
-              {needsSubpageRedirect ? (
-                <Navigate replace to={{ hash, pathname, search: `?${subpageSearch}` }} />
-              ) : (
-                activeSettingsContent
-              )}
-            </SettingsBreadcrumbContext.Provider>
+            {activeSettingsContent}
           </OverlayMain>
         </OverlaySplitLayout>
       </div>

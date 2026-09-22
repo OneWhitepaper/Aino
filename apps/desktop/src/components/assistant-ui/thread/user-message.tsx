@@ -249,9 +249,8 @@ const ProcessNotificationNote: FC<{ text: string }> = ({ text }) => {
 }
 
 export const UserMessage: FC<{
-  onCancel?: () => Promise<void> | void
   onRequestRestoreConfirm?: (messageId: string, target: RestoreMessageTarget) => void
-}> = ({ onCancel, onRequestRestoreConfirm }) => {
+}> = ({ onRequestRestoreConfirm }) => {
   const { t } = useI18n()
   const copy = t.assistant.thread
   const messageId = useAuiState(s => s.message.id)
@@ -387,11 +386,9 @@ export const UserMessage: FC<{
 
   const hasBody = messageText.trim().length > 0
   const isLatestUser = messageId === latestUserId
-  const showStop = !readOnly && isLatestUser && threadRunning && Boolean(onCancel)
-  // Restore (re-run this exact prompt) is available everywhere the Stop button
-  // isn't — including mid-stream on older prompts, since the action interrupts
-  // the live turn before rewinding.
-  const showRestore = !readOnly && !showStop && Boolean(onRequestRestoreConfirm) && hasBody
+  // The composer owns stopping the live turn. Keep its latest prompt from
+  // being restored until that turn ends; older prompts can still rewind it.
+  const showRestore = !readOnly && !(isLatestUser && threadRunning) && Boolean(onRequestRestoreConfirm) && hasBody
 
   const requestRestore = () => {
     triggerHaptic('selection')
@@ -500,7 +497,6 @@ export const UserMessage: FC<{
                     <button
                       aria-label={messageText ? `${copy.editMessage}: ${messageText}` : copy.editMessage}
                       className={bubbleClassName}
-                      data-has-corner-action={showStop ? '' : undefined}
                       data-slot="aui_user-bubble"
                       onClick={event => {
                         if (hasTextSelection()) {
@@ -525,45 +521,30 @@ export const UserMessage: FC<{
                     </button>
                   </ActionBarPrimitive.Edit>
                 )}
-                {(showStop || showRestore) && (
+                {showRestore && (
                   <div
                     className="pointer-events-none absolute right-2 bottom-2 z-10 flex items-center justify-center opacity-0 transition-opacity group-hover/user-message:opacity-100 group-focus-within/user-message:opacity-100"
-                    data-action={showStop ? 'stop' : 'restore'}
+                    data-action="restore"
                     data-slot="aui_user-corner-action"
                   >
-                    {showStop ? (
+                    <Tip label={copy.restoreFromHere}>
                       <button
-                        aria-label={copy.stop}
-                        className={cn('pointer-events-auto size-5', USER_ACTION_ICON_BUTTON_CLASS)}
+                        aria-label={copy.restoreCheckpoint}
+                        className={cn('pointer-events-auto size-6', USER_ACTION_ICON_BUTTON_CLASS)}
                         onClick={event => {
                           event.preventDefault()
                           event.stopPropagation()
-                          void onCancel?.()
+                          requestRestore()
+                        }}
+                        onPointerDown={event => {
+                          event.preventDefault()
+                          event.stopPropagation()
                         }}
                         type="button"
                       >
-                        {StopGlyph}
+                        <Codicon name="discard" size="0.875rem" />
                       </button>
-                    ) : (
-                      <Tip label={copy.restoreFromHere}>
-                        <button
-                          aria-label={copy.restoreCheckpoint}
-                          className={cn('pointer-events-auto size-6', USER_ACTION_ICON_BUTTON_CLASS)}
-                          onClick={event => {
-                            event.preventDefault()
-                            event.stopPropagation()
-                            requestRestore()
-                          }}
-                          onPointerDown={event => {
-                            event.preventDefault()
-                            event.stopPropagation()
-                          }}
-                          type="button"
-                        >
-                          <Codicon name="discard" size="0.875rem" />
-                        </button>
-                      </Tip>
-                    )}
+                    </Tip>
                   </div>
                 )}
               </div>

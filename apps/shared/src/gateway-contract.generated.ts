@@ -3151,6 +3151,7 @@ export interface SessionSemanticSummary {
   updated_at: number
   source_revision: string
   source_message_count: number
+  coverage?: 'full' | 'excerpted' | 'recent'
 }
 export interface SessionSummaryPoint {
   text: string

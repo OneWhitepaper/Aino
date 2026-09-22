@@ -11,7 +11,7 @@ def _generate_session_summary_rpc(rid, params):
     from dataclasses import replace
     from uuid import uuid4
     from agent.auxiliary_billing_scope import BillingScope, ManagedCredential, billing_scope
-    from hermes_cli.web_session_summary import summary_for_db
+    from hermes_cli.web_session_summary import SummaryBusy, summary_for_db
     from tui_gateway.managed_model_runtime import ManagedBindingError
     from tui_gateway.managed_session import runtime_for_session, submit_refusal, transport_may_use_session
 
@@ -24,8 +24,12 @@ def _generate_session_summary_rpc(rid, params):
     with _session_profile_runtime_scope(session), _session_db(session) as db:
         if db is None or not session.get("session_key"):
             return _err(rid, 4001, "session history is unavailable")
-        ready = session.get("agent_ready")
-        if session.get("running") or (session.get("agent_build_started") and ready and not ready.is_set()):
+        def should_yield():
+            ready = session.get("agent_ready")
+            return bool(session.get("running") or (
+                session.get("agent_build_started") and ready and not ready.is_set()))
+
+        if should_yield():
             result = summary_for_db(db, session["session_key"], language)
             return _ok(rid, {**result, "busy": True, "error_code": "busy"})
         deferred_inputs = None
@@ -61,8 +65,10 @@ def _generate_session_summary_rpc(rid, params):
 
         def authority_check():
             peer, current = _current_session_steer_authority(sid)
-            if peer is not transport or current is not session or session.get("running"):
+            if peer is not transport or current is not session:
                 raise RuntimeError("session summary authority changed")
+            if should_yield():
+                raise SummaryBusy()
             if not session.get("managed_model_params"):
                 current_agent = session.get("agent")
                 if current_agent is not agent:
@@ -89,7 +95,7 @@ def _generate_session_summary_rpc(rid, params):
         try:
             result = summary_for_db(db, session["session_key"], language, generate=True,
                                     retry=params.get("retry", False), main_runtime=runtime,
-                                    authority_check=authority_check)
+                                    authority_check=authority_check, should_yield=should_yield)
         finally:
             billing_scope.reset(token)
         return _ok(rid, result)

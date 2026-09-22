@@ -41,7 +41,6 @@ interface ThreadProps {
   intro?: IntroProps
   loading?: ThreadLoadingState
   onBranchInNewChat?: (messageId: string) => void
-  onCancel?: () => Promise<void> | void
   onDismissError?: (messageId: string) => void
   onRestoreToMessage?: (messageId: string, target?: RestoreMessageTarget) => Promise<void> | void
   sessionId?: string | null
@@ -63,7 +62,6 @@ export const Thread = memo(function Thread({
   intro,
   loading,
   onBranchInNewChat,
-  onCancel,
   onDismissError,
   onRestoreToMessage,
   sessionId = null,
@@ -76,7 +74,6 @@ export const Thread = memo(function Thread({
 
   if (isHistorical) {
     onBranchInNewChat = undefined
-    onCancel = undefined
     onDismissError = undefined
     onRestoreToMessage = undefined
   }
@@ -111,8 +108,8 @@ export const Thread = memo(function Thread({
   // (e.g. the 15s status-snapshot poll in the desktop controller) and
   // can't be trusted to keep callback identities stable (see #38333), so
   // route the callbacks through a ref instead of listing them as memo
-  // deps. Only their definedness stays a dep — it gates UI (the user
-  // Stop button, the restore-confirm affordance). Assigned during render
+  // deps. Only their definedness stays a dep — it gates UI (branching,
+  // dismissing errors, restoring messages). Assigned during render
   // (the useStoreSelector pattern) so the ref never lags a render.
   //
   // cwd / gateway / sessionId stay OUT of the memo deps for the same
@@ -121,15 +118,14 @@ export const Thread = memo(function Thread({
   // transcript — thousands of renders of a thread that was about to be
   // replaced, all of it before the resume RPC had even been sent. They
   // reach the edit composer through ThreadEditContext instead (see above).
-  const callbacksRef = useRef({ onBranchInNewChat, onCancel, onDismissError, onRestoreToMessage })
-  callbacksRef.current = { onBranchInNewChat, onCancel, onDismissError, onRestoreToMessage }
+  const callbacksRef = useRef({ onBranchInNewChat, onDismissError })
+  callbacksRef.current = { onBranchInNewChat, onDismissError }
 
   // Only changes identity when one of the three values does, so Thread
   // re-renders for unrelated reasons never re-render the composer.
   const editContext = useMemo(() => ({ cwd, gateway, sessionId }), [cwd, gateway, sessionId])
 
   const hasBranchInNewChat = Boolean(onBranchInNewChat)
-  const hasCancel = Boolean(onCancel)
   const hasDismissError = Boolean(onDismissError)
   const hasRestoreToMessage = Boolean(onRestoreToMessage)
 
@@ -150,13 +146,10 @@ export const Thread = memo(function Thread({
         return <UserEditComposer cwd={editCwd} gateway={editGateway} sessionId={editSessionId} />
       },
       UserMessage: () => (
-        <UserMessage
-          onCancel={hasCancel ? () => callbacksRef.current.onCancel?.() : undefined}
-          onRequestRestoreConfirm={hasRestoreToMessage ? requestRestoreConfirm : undefined}
-        />
+        <UserMessage onRequestRestoreConfirm={hasRestoreToMessage ? requestRestoreConfirm : undefined} />
       )
     }),
-    [hasBranchInNewChat, hasCancel, hasDismissError, hasRestoreToMessage, requestRestoreConfirm]
+    [hasBranchInNewChat, hasDismissError, hasRestoreToMessage, requestRestoreConfirm]
   )
 
   // Core's splash belongs to a fresh draft; a session that exists but has

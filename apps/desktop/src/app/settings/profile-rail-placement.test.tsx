@@ -1,6 +1,6 @@
-import { cleanup, render, within } from '@testing-library/react'
+import { cleanup, fireEvent, render, within } from '@testing-library/react'
 import { atom } from 'nanostores'
-import { MemoryRouter } from 'react-router'
+import { MemoryRouter, useLocation } from 'react-router'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import type * as BillingState from './billing/use-billing-state'
@@ -67,6 +67,7 @@ vi.mock('../profiles/rename-profile-dialog', () => ({ RenameProfileDialog: () =>
 vi.mock('../chat/sidebar/profile-remote-override-dialog', () => ({ ProfileRemoteOverrideDialog: () => null }))
 
 vi.mock('./about-settings', () => ({ AboutSettings: () => null }))
+vi.mock('./account-settings', () => ({ AccountSettings: () => <div data-testid="account-settings" /> }))
 vi.mock('./appearance-settings', () => ({ AppearanceSettings: () => null }))
 vi.mock('./billing', () => ({ BILLING_VIEWS: ['overview', 'plans'], BillingSettings: () => null }))
 vi.mock('./billing/use-billing-state', async importOriginal => ({
@@ -74,7 +75,11 @@ vi.mock('./billing/use-billing-state', async importOriginal => ({
   useBillingState: () => ({ data: undefined }),
   useSubscriptionState: () => ({ data: undefined })
 }))
-vi.mock('./config-settings', () => ({ ConfigSettings: () => null }))
+vi.mock('./config-settings', () => ({
+  ConfigSettings: ({ activeSectionId, subpage }: { activeSectionId: string; subpage?: string }) => (
+    <div data-section={activeSectionId} data-subpage={subpage ?? ''} data-testid="config-settings" />
+  )
+}))
 vi.mock('./gateway-settings', () => ({ GatewaySettings: () => null }))
 vi.mock('./keybind-settings', () => ({ KeybindSettings: () => null }))
 vi.mock('./keys-settings', () => ({ KEYS_VIEWS: ['tools', 'settings'], KeysSettings: () => null }))
@@ -82,13 +87,19 @@ vi.mock('./notifications-settings', () => ({ NotificationsSettings: () => null }
 vi.mock('./plugins-settings', () => ({ PluginsSettings: () => null }))
 vi.mock('./providers-settings', () => ({
   PROVIDER_VIEWS: ['accounts', 'keys', 'custom-endpoints'],
-  ProvidersSettings: () => null
+  ProvidersSettings: ({ view }: { view: string }) => <div data-testid="providers-settings">{view}</div>
 }))
 vi.mock('./sessions-settings', () => ({ SessionsSettings: () => null }))
 vi.mock('./system-resources-settings', () => ({ SystemResourcesSettings: () => null }))
 vi.mock('./system-status-controls', () => ({ SettingsSystemControls: () => null }))
 
 afterEach(cleanup)
+
+function LocationProbe() {
+  const { search } = useLocation()
+
+  return <output data-testid="settings-location">{search}</output>
+}
 
 describe('Settings profile controls placement', () => {
   it('keeps workspace management in the main sidebar instead of settings navigation', () => {
@@ -107,5 +118,40 @@ describe('Settings profile controls placement', () => {
 
     expect(settingsNav?.querySelector('[data-slot="profile-rail"]')).toBeNull()
     expect(within(settingsNav).queryByRole('button', { name: 'Manage profiles…' })).toBeNull()
+  })
+
+  it('opens the account by default, uses category pages, and preserves provider subviews', () => {
+    const view = render(
+      <MemoryRouter initialEntries={['/settings']}>
+        <LocationProbe />
+        <SettingsView
+          onClose={vi.fn()}
+          onOpenCommandCenter={vi.fn()}
+          onOpenCommandCenterSection={vi.fn()}
+          requestGateway={vi.fn()}
+        />
+      </MemoryRouter>
+    )
+
+    expect(view.getByTestId('account-settings')).toBeTruthy()
+
+    fireEvent.click(view.container.querySelector('[data-tour="nav-config:model"]')!)
+
+    expect(view.getByTestId('config-settings').getAttribute('data-section')).toBe('model')
+    expect(view.getByTestId('config-settings').getAttribute('data-subpage')).toBe('')
+    expect(new URLSearchParams(view.getByTestId('settings-location').textContent ?? '').has('page')).toBe(false)
+    expect(view.container.querySelector('[data-tour="nav-toggle-config:model"]')).toBeNull()
+    fireEvent.click(view.container.querySelector('[data-tour="nav-providers"]')!)
+
+    expect(view.container.querySelector('[data-tour="nav-providers"]')?.getAttribute('data-active')).toBe('true')
+    expect(view.getByTestId('providers-settings').textContent).toBe('accounts')
+
+    fireEvent.click(view.container.querySelector('[data-tour="nav-pview:custom-endpoints"]')!)
+
+    expect(view.getByTestId('providers-settings').textContent).toBe('custom-endpoints')
+    const params = new URLSearchParams(view.getByTestId('settings-location').textContent ?? '')
+    expect(params.get('pview')).toBe('custom-endpoints')
+    expect(params.has('page')).toBe(false)
+    expect(params.has('field')).toBe(false)
   })
 })

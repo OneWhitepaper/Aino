@@ -3,7 +3,7 @@
 // whose last message completed while the agent kept going. The transcript used
 // to show nothing there, and the seconds went uncounted.
 import { type ThreadMessage } from '@assistant-ui/react'
-import { act, cleanup, render, screen } from '@testing-library/react'
+import { act, cleanup, render } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { __resetElapsedTimerRegistryForTests } from '@/components/chat/activity-timer'
@@ -42,9 +42,7 @@ const Harness = ({ messages }: { messages: ThreadMessage[] }) => (
   </ThreadRuntime>
 )
 
-const timerText = (value: string) => screen.getAllByText((_, node) => node?.textContent === value)
-
-describe('the turn timer covers the gaps, not just the streaming', () => {
+describe('the thinking indicator covers the gaps, not just the streaming', () => {
   beforeEach(() => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date('2026-01-01T00:00:00.000Z'))
@@ -66,10 +64,9 @@ describe('the turn timer covers the gaps, not just the streaming', () => {
     vi.useRealTimers()
   })
 
-  it('times a settled tail bubble while the session is still working', () => {
+  it('names a settled tail gap while the session is still working', () => {
     // The sealed-bubble gap. Nothing is running at message level; the session
-    // is busy, so the transcript owes the user a line and a count — measured
-    // from the last thing the turn produced, not from when the row appeared.
+    // is busy, so the transcript still shows that the agent is thinking.
     const { container } = render(
       <Harness
         messages={[userMessage('u1', 'do the thing'), assistant('a1', [{ type: 'text', text: 'On it.' }], false)]}
@@ -79,10 +76,10 @@ describe('the turn timer covers the gaps, not just the streaming', () => {
     act(() => vi.advanceTimersByTime(7_000))
 
     expect(container.querySelector('[data-slot="aui_turn-activity"]')).not.toBeNull()
-    expect(timerText('7s').length).toBeGreaterThan(0)
+    expect(container.querySelector('[data-slot="aui_turn-activity"]')?.textContent).toBe('Thinking')
   })
 
-  it('times the gap between a finished tool call and the next thing', () => {
+  it('names the gap between a finished tool call and the next thing', () => {
     const { container } = render(
       <Harness messages={[userMessage('u1', 'read it'), assistant('a1', [toolCall('read_file', true)], true)]} />
     )
@@ -90,7 +87,7 @@ describe('the turn timer covers the gaps, not just the streaming', () => {
     act(() => vi.advanceTimersByTime(9_000))
 
     expect(container.querySelector('[data-slot="aui_turn-activity"]')).not.toBeNull()
-    expect(timerText('9s').length).toBeGreaterThan(0)
+    expect(container.querySelector('[data-slot="aui_turn-activity"]')?.textContent).toBe('Thinking')
   })
 
   it('stays silent under a tool call still in flight — that row has its own timer', () => {

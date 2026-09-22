@@ -500,7 +500,11 @@ export const zhHant = defineLocale({
       pending: '本回合結束後更新內容摘要。',
       updating: '正在更新內容摘要…',
       stale: '有新進展，待更新',
-      failed: '暫時無法更新內容摘要，既有內容仍可查看。',
+      coverage: {
+        excerpted: '根據對話與工具輸出的摘錄產生。',
+        recent: '根據近期內容和原始目標產生。'
+      },
+      failed: '暫時無法更新摘要，請重試。',
       viewRequest: '查看待處理問題',
       sourceUnavailable: '無法定位原訊息，它可能已被撤銷，或目前工作階段已切換。',
       tooLong: '工作階段過長，暫時無法完整產生摘要。你仍可查看計畫、產物和原對話。',
@@ -3875,7 +3879,7 @@ export const zhHant = defineLocale({
       loadingResponse: 'Hermes 正在載入回覆',
       resumeWhenBackgroundDone: count =>
         count === 1 ? '背景工作完成後將自動繼續' : `${count} 個背景工作完成後將自動繼續`,
-      thinking: '思考中',
+      thinking: '正在思考',
       thought: '已思考',
       thoughtBriefly: '思考了片刻',
       thoughtFor: duration => `用時 ${duration}`,

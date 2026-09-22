@@ -813,7 +813,11 @@ export const zh = defineLocale({
       pending: '本轮结束后更新内容摘要。',
       updating: '正在更新内容摘要…',
       stale: '有新进展，待更新',
-      failed: '内容摘要暂时无法更新，已有内容仍可查看。',
+      coverage: {
+        excerpted: '基于对话与工具输出的摘录生成。',
+        recent: '基于近期内容和原始目标生成。'
+      },
+      failed: '摘要暂时无法更新，请重试。',
       viewRequest: '查看待处理问题',
       sourceUnavailable: '无法定位原消息，它可能已被撤销，或当前会话已切换。',
       tooLong: '会话过长，暂时无法完整生成摘要。你仍可查看计划、产物和原对话。',
@@ -5814,7 +5818,7 @@ export const zh = defineLocale({
       working: 'Hermes 正在工作',
       resumeWhenBackgroundDone: count =>
         count === 1 ? '后台任务完成后将自动继续' : `${count} 个后台任务完成后将自动继续`,
-      thinking: '思考中',
+      thinking: '正在思考',
       thought: '已思考',
       thoughtBriefly: '思考了片刻',
       thoughtFor: duration => `用时 ${duration}`,

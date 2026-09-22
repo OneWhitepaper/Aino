@@ -1,6 +1,7 @@
 """Summary inference inherits live transport/model authority, not profile credentials."""
 import json
 import threading
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -23,6 +24,7 @@ def summary_rpc(tmp_path, monkeypatch):
     first = db.append_message("stored-summary", "user", "Implement a separate cited session summary. " * 25)
     db.append_message("stored-summary", "assistant", "The history reader is implemented and verified. " * 25)
     requests = []
+    request_hooks = []
 
     class Model(BaseHTTPRequestHandler):
         def log_message(self, *args):
@@ -31,6 +33,8 @@ def summary_rpc(tmp_path, monkeypatch):
         def do_POST(self):
             body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
             requests.append((body, dict(self.headers)))
+            for hook in request_hooks:
+                hook()
             summary = {"objective": {"text": "Implement a cited summary.", "message_ids": [first]},
                        "completed": [], "conclusions": [], "open_questions": []}
             payload = json.dumps({"id": "fixture", "object": "chat.completion", "created": 1,
@@ -85,7 +89,8 @@ def summary_rpc(tmp_path, monkeypatch):
             return next(e for e in transport.events if e.get("id") == rid)
 
     yield SimpleNamespace(db=db, peer=peer, Peer=Peer, session=session, agent=agent, call=call,
-                          requests=requests, config=config, path=tmp_path / "config.yaml", origin=origin)
+                          requests=requests, config=config, path=tmp_path / "config.yaml", origin=origin,
+                          request_hooks=request_hooks)
     get_registry().clear_session("live-summary")
     http.shutdown()
     http.server_close()
@@ -152,3 +157,69 @@ def test_summary_managed_model_uses_authorized_lease_and_billing_headers(summary
     registry.clear_session("live-summary")
     missing = rig.call(language="ja")
     assert missing["error"]["code"] == 4006 and len(rig.requests) == 1
+
+
+@pytest.mark.parametrize("transport_fails", [False, True])
+def test_foreground_turn_supersedes_summary_without_caching_a_failure(summary_rpc, monkeypatch, transport_fails):
+    rig = summary_rpc
+    from hermes_cli import web_session_summary as summaries
+    real_call = summaries._call
+
+    def call_with_racing_transport(*args, **kwargs):
+        result = real_call(*args, **kwargs)
+        if transport_fails:
+            raise RuntimeError("Fixture transport closed during foreground startup")
+        return result
+
+    monkeypatch.setattr(summaries, "_call", call_with_racing_transport)
+
+    def begin_turn():
+        rig.session["running"] = True
+
+    rig.request_hooks.append(begin_turn)
+    busy = rig.call()["result"]
+    assert busy["busy"] and busy["error_code"] == "busy" and busy["summary"] is None
+    cached = summaries.session_summary("stored-summary", language="en")
+    assert not cached.get("error") and not cached.get("error_code")
+    rig.session["running"] = False
+    rig.request_hooks.clear()
+    monkeypatch.setattr(summaries, "_call", real_call)
+    resumed = rig.call()["result"]
+    assert resumed["summary"] and not resumed["stale"] and len(rig.requests) == 2
+
+
+@pytest.mark.parametrize("starting_agent", [False, True])
+def test_foreground_start_releases_summary_host_before_provider_response(summary_rpc, starting_agent):
+    rig = summary_rpc
+    initial = rig.call()["result"]["summary"]
+    rig.db.append_message("stored-summary", "user", "Please verify the completed implementation once more.")
+    waiting = threading.Event()
+    release = threading.Event()
+
+    def hold_response():
+        waiting.set()
+        release.wait(10)
+
+    rig.request_hooks.append(hold_response)
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        request = pool.submit(rig.call)
+        try:
+            assert waiting.wait(3)
+            if starting_agent:
+                rig.session["agent_build_started"] = True
+                rig.session["agent_ready"] = threading.Event()
+            else:
+                rig.session["running"] = True
+            busy = request.result(timeout=3)["result"]
+            assert busy["busy"] and busy["error_code"] == "busy"
+            assert busy["summary"] == initial and not release.is_set()
+            from hermes_cli.web_session_summary import session_summary
+            cached = session_summary("stored-summary", language="en")
+            assert cached["summary"] == initial and not cached.get("error")
+        finally:
+            release.set()
+    rig.session["running"] = False
+    rig.session["agent_build_started"] = False
+    rig.request_hooks.clear()
+    retried = rig.call()["result"]
+    assert retried["summary"] and not retried["stale"] and len(rig.requests) == 3

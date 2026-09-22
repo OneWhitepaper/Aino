@@ -35,10 +35,10 @@ const MESSAGES: ThreadMessage[] = [
 
 function Harness({
   onBranchInNewChat,
-  onCancel
+  onRestoreToMessage
 }: {
   onBranchInNewChat: (messageId: string) => void
-  onCancel: () => void
+  onRestoreToMessage: () => void
 }) {
   const runtime = useExternalStoreRuntime<ThreadMessage>({
     messages: MESSAGES,
@@ -48,7 +48,7 @@ function Harness({
 
   return (
     <AssistantRuntimeProvider runtime={runtime}>
-      <Thread onBranchInNewChat={onBranchInNewChat} onCancel={onCancel} />
+      <Thread onBranchInNewChat={onBranchInNewChat} onRestoreToMessage={onRestoreToMessage} />
     </AssistantRuntimeProvider>
   )
 }
@@ -61,7 +61,7 @@ describe('thread message mount stability', () => {
   // unmounted/remounted every visible message — shiki re-highlighted
   // code blocks and the whole thread visibly jumped.
   it('keeps message DOM nodes mounted when callback props get new identities', async () => {
-    const { rerender } = render(<Harness onBranchInNewChat={() => {}} onCancel={() => {}} />)
+    const { rerender } = render(<Harness onBranchInNewChat={() => {}} onRestoreToMessage={() => {}} />)
 
     await waitFor(() => {
       expect(screen.getByText('stable assistant reply')).toBeTruthy()
@@ -74,7 +74,7 @@ describe('thread message mount stability', () => {
     // Same data, new callback identities — exactly what a parent
     // re-render driven by an unrelated state update produces.
     await act(async () => {
-      rerender(<Harness onBranchInNewChat={() => {}} onCancel={() => {}} />)
+      rerender(<Harness onBranchInNewChat={() => {}} onRestoreToMessage={() => {}} />)
     })
 
     expect(screen.getByText('stable assistant reply')).toBe(assistantBefore)

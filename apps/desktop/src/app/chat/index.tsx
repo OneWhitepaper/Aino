@@ -897,7 +897,6 @@ const ChatViewContent = memo(function ChatViewContent({
             intro={introProps}
             loading={threadLoading}
             onBranchInNewChat={onBranchInNewChat}
-            onCancel={haltRun}
             onDismissError={onDismissError}
             onRestoreToMessage={onRestoreToMessage}
             scrollProfile={modelOptionsProfile || activeGatewayProfile}

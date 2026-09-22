@@ -25,7 +25,7 @@ import {
 } from '@/components/assistant-ui/thread/content'
 import { MESSAGE_PARTS_COMPONENTS } from '@/components/assistant-ui/thread/message-parts'
 import { ReactionPicker } from '@/components/assistant-ui/thread/message-reactions'
-import { ResponseMessageIds } from '@/components/assistant-ui/thread/response-group'
+import { ResponseMessageIds, responseMessageRole } from '@/components/assistant-ui/thread/response-group'
 import { ResponseLoadingIndicator, TurnActivityIndicator } from '@/components/assistant-ui/thread/status'
 import { MessageTimelineTimestamp } from '@/components/assistant-ui/thread/timeline-timestamp'
 import { useMessageReactions, useTapbackDoubleClick } from '@/components/assistant-ui/thread/use-message-reactions'
@@ -840,6 +840,7 @@ const ErrorRecoveryActions: FC = () => {
   }, [])
 
   const recovery = surface && !surface.retryable ? platformRecoveryActionForCode(surface.code) : null
+
   // Reveal a local folder through Electron; `logsRoot` is the profile's
   // HERMES_HOME/logs, and its parent is the Hermes data folder itself (what
   // the user needs to see to free space after a disk-full failure).
@@ -1010,13 +1011,8 @@ const AssistantActionBar: FC<MessageActionProps> = ({ messageId, getMessageText,
     >
       <ActionBarPrimitive.Root
         className={
-          // NOTE: intentionally NOT `hideWhenRunning`. That prop unmounts the
-          // bar while the thread streams, which collapses every completed
-          // assistant message's footer by this bar's height and shifts the
-          // whole conversation when the turn resolves. The bar is already
-          // invisible by default (opacity-0 + pointer-events-none, reveals on
-          // hover), so keeping it mounted reserves stable layout height with
-          // no visual change during streaming.
+          // AssistantFooter owns turn visibility; a thread-wide hide here
+          // would also collapse the footers of earlier completed replies.
           'relative flex flex-row items-center justify-end gap-1.5 py-1.5 opacity-0 pointer-events-none group-hover:pointer-events-auto group-hover:opacity-100 focus-within:pointer-events-auto focus-within:opacity-100'
         }
         data-slot="aui_msg-actions"
@@ -1132,10 +1128,39 @@ const AssistantFooter: FC<MessageActionProps & { durationS?: number; metrics?: T
   metrics,
   ...props
 }) => {
+  const turnRunning = useAuiState(s => {
+    // The runtime projects this view's busy state (and excludes history pages).
+    // A completed text segment can still precede live tools or a provider wait.
+    let running = s.thread.isRunning
+
+    for (let index = s.thread.messages.length - 1; index >= 0; index--) {
+      const message = s.thread.messages[index]!
+
+      if (message.role === 'assistant' && message.status?.type === 'running') {
+        running = true
+      }
+
+      if (message.id === s.message.id) {
+        return running
+      }
+
+      const role = responseMessageRole(message)
+
+      if (role === 'user' || role === 'system') {
+        running = false
+      }
+    }
+
+    return false
+  })
+
   return (
     <div
+      aria-hidden={turnRunning || undefined}
       className="flex min-h-6 flex-col items-end gap-1 pr-(--message-text-indent) pl-(--message-text-indent)"
       data-slot="aui_assistant-footer"
+      inert={turnRunning || undefined}
+      style={turnRunning ? { visibility: 'hidden' } : undefined}
     >
       <BranchPickerPrimitive.Root
         className="inline-flex h-6 items-center gap-1 text-xs text-muted-foreground"

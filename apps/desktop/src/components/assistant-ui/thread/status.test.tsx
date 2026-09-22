@@ -41,9 +41,10 @@ describe('ResponseLoadingIndicator timer', () => {
     vi.useRealTimers()
   })
 
-  it('preserves each running session timer while switching between sessions', () => {
+  it('preserves each named wait timer while switching between sessions', () => {
     $activeSessionId.set('session-a')
     $turnStartedAt.set(Date.now())
+    setSessionProviderWait('session-a', 'Waiting for provider')
     const sessionA = renderIndicator()
 
     act(() => vi.advanceTimersByTime(5_000))
@@ -52,6 +53,7 @@ describe('ResponseLoadingIndicator timer', () => {
 
     $activeSessionId.set('session-b')
     $turnStartedAt.set(Date.now())
+    setSessionProviderWait('session-b', 'Waiting for provider')
     const sessionB = renderIndicator()
 
     act(() => vi.advanceTimersByTime(3_000))
@@ -96,20 +98,19 @@ describe('ResponseLoadingIndicator timer', () => {
     expect(screen.getByRole('status', { name: '正在编辑' })).toBeTruthy()
   })
 
-  it('uses the shared neutral scaffold palette and metadata scale', () => {
+  it('shows the localized thinking label in the existing neutral status row without a timer', () => {
     $activeSessionId.set('session-a')
     $turnStartedAt.set(Date.now())
 
-    const { container } = renderIndicator()
+    const { container } = renderIndicator('zh')
+    act(() => vi.advanceTimersByTime(35_000))
     const status = container.querySelector('[data-slot="aui_response-loading"]')
     const pulse = status?.querySelector('.dither')
-    const timer = Array.from(status?.querySelectorAll('span') ?? []).find(span => span.textContent === '0s')
 
     expect(pulse?.className).toContain('text-(--conversation-scaffold-text)')
     expect(pulse?.className).not.toContain('text-midground')
-    expect(timer?.className).toContain('text-(--conversation-scaffold-meta)')
-    expect(timer?.className).toContain('text-[0.625rem]')
-    expect(timer?.className).not.toContain('text-[0.56rem]')
+    expect(screen.getByRole('status', { name: '正在思考' }).textContent).toBe('正在思考')
+    expect(screen.getByText('正在思考')).toBeTruthy()
   })
 })
 

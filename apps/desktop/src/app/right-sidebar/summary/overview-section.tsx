@@ -155,6 +155,9 @@ export function OverviewSection({ content, session }: OverviewSectionProps) {
             <p className="text-[length:var(--aino-text-caption)] text-(--ui-text-tertiary)">
               {copy.updated(updated)}
               {summary.stale ? ` · ${copy.stale}` : ''}
+              {snapshot.coverage && snapshot.coverage !== 'full' && (
+                <span className="mt-1 block">{copy.coverage[snapshot.coverage]}</span>
+              )}
             </p>
           </>
         ) : (

@@ -1,8 +1,8 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { cleanup, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { atom } from 'nanostores'
 import { createRef } from 'react'
-import { MemoryRouter } from 'react-router'
+import { MemoryRouter, useLocation } from 'react-router'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type * as ConfigApi from '@/api/config'
@@ -67,22 +67,60 @@ afterEach(() => {
   vi.clearAllMocks()
 })
 
-function renderConfigSettings(activeSectionId = 'safety') {
+function LocationProbe() {
+  return <output data-testid="settings-location">{useLocation().search}</output>
+}
+
+function renderConfigSettings(activeSectionId = 'safety', route = '/settings') {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   const importInputRef = createRef<HTMLInputElement>()
 
-  render(
-    <MemoryRouter>
+  const result = render(
+    <MemoryRouter initialEntries={[route]}>
+      <LocationProbe />
       <QueryClientProvider client={client}>
         <ConfigSettings activeSectionId={activeSectionId} importInputRef={importInputRef} />
       </QueryClientProvider>
     </MemoryRouter>
   )
 
-  return { importInputRef }
+  return { importInputRef, ...result }
 }
 
 describe('ConfigSettings autosave', () => {
+  it('shows every group in a category while locating and editing a legacy field link', async () => {
+    const scrollIntoView = vi.fn()
+    Element.prototype.scrollIntoView = scrollIntoView
+    getHermesConfigRecord.mockResolvedValue({
+      memory: { memory_enabled: true },
+      compression: { enabled: true }
+    })
+    getHermesConfigSchema.mockResolvedValue({
+      fields: {
+        'memory.memory_enabled': { type: 'boolean' },
+        'compression.enabled': { type: 'boolean' }
+      }
+    })
+
+    const { container } = renderConfigSettings(
+      'memory',
+      '/settings?tab=config:memory&page=context&field=compression.enabled'
+    )
+
+    expect(await screen.findByText('Persistent memory')).toBeTruthy()
+    expect(screen.getByText('Context & compression')).toBeTruthy()
+    expect(screen.getAllByRole('switch')).toHaveLength(2)
+
+    const target = container.querySelector<HTMLElement>('[id="setting-field-compression.enabled"]')!
+    await waitFor(() => expect(target.ownerDocument.activeElement).toBe(target))
+    expect(scrollIntoView).toHaveBeenCalledWith({ behavior: 'smooth', block: 'center' })
+    expect(new URLSearchParams(screen.getByTestId('settings-location').textContent ?? '').has('field')).toBe(false)
+
+    fireEvent.click(within(target).getByRole('switch'))
+
+    await waitFor(() => expect(saveHermesConfig).toHaveBeenCalledWith({ compression: { enabled: false } }, undefined))
+  })
+
   it('renders and saves the Codex compression auto-raise setting', async () => {
     getHermesConfigRecord.mockResolvedValue({
       compression: { codex_gpt55_autoraise: true }

@@ -121,7 +121,16 @@ one-off at the call site.
   the overview also reads an independently persisted, language-scoped semantic
   summary of goals, completed work, findings and unresolved items. Generation runs
   only while the panel is open and the turn is idle, through the owning session's
-  authenticated runtime and existing auxiliary model/billing path. The backend
+  authenticated runtime and existing auxiliary model/billing path. Each update
+  uses one model call with at most 24,000 serialized evidence characters and
+  requests concise output through the provider-compatible auxiliary route.
+  Long messages and tool outputs use excerpts; conversations
+  that still exceed the budget retain the original request and recent content.
+  The overview labels excerpted or recent coverage beside the update time,
+  without claiming to cover omitted history. A saved summary remains readable
+  while the agent is working. A new turn takes priority over generation;
+  updates superseded by that turn leave the saved summary intact and do not
+  persist a failed revision. The backend
   validates citations against visible durable history, including compacted rows,
   and refuses to publish a result if the conversation changed during generation.
   Identical revisions reuse the cached result; failed revisions require explicit
@@ -560,8 +569,11 @@ so glass and message-bubble transparency do not reveal scrolling text.
   `src/app/chat/composer`; do not fork a second markdown, message, tool-call, or
   approval renderer for one feature.
 - Conversation thinking is a compact disclosure row without a full-width
-  divider. The turn pair owns the user-to-assistant gap. The conversation
-  composer starts compact and grows with its input; dictation stays inline,
+  divider. The turn pair owns the user-to-assistant gap. The reply footer
+  appears only after its turn stops running, including gaps
+  between text and tool calls. Pending footers reserve their layout space but
+  remain hidden and inert; earlier completed replies keep their controls.
+  The conversation composer starts compact and grows with its input; dictation stays inline,
   while spoken replies, wake-word controls and voice conversation share the
   voice menu. Recording/stop state stays visible, and Send keeps its place.
   Home and conversation composers share `--shadow-aino-landing-composer` so

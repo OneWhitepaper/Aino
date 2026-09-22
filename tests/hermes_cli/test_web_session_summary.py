@@ -29,7 +29,9 @@ def test_real_aux_route_caches_accounts_and_isolates_language_and_profile(tmp_pa
     monkeypatch.setenv("HERMES_HOME", str(home))
     monkeypatch.setattr("hermes_state.DEFAULT_DB_PATH", home / "state.db")
     db, first, reply = _conversation(home)
+    tool = db.append_message("task", "tool", "TOOL_START\n" + "large file evidence\n" * 20000 + "TOOL_END")
     requests = []
+    citation_override = []
 
     class Handler(BaseHTTPRequestHandler):
         def log_message(self, *args):
@@ -41,7 +43,7 @@ def test_real_aux_route_caches_accounts_and_isolates_language_and_profile(tmp_pa
             rows = json.loads(request["messages"][-1]["content"])
             response = {"id": "summary", "object": "chat.completion", "created": 1,
                         "model": request["model"], "choices": [{"index": 0, "finish_reason": "stop",
-                        "message": {"role": "assistant", "content": json.dumps(_point(rows[0]["id"]))}}],
+                        "message": {"role": "assistant", "content": json.dumps(_point(citation_override[0] if citation_override else rows[0]["id"]))}}],
                         "usage": {"prompt_tokens": 20, "completion_tokens": 15, "total_tokens": 35}}
             body = json.dumps(response).encode()
             self.send_response(200)
@@ -74,6 +76,14 @@ def test_real_aux_route_caches_accounts_and_isolates_language_and_profile(tmp_pa
             assert len(requests) == 1
             assert results[0] == results[1]
             assert results[0]["summary"]["objective"]["message_ids"] == [first]
+            assert results[0]["summary"]["coverage"] == "excerpted"
+            evidence = json.loads(requests[0]["messages"][-1]["content"])
+            tool_excerpt = next(row for row in evidence if row["id"] == tool)
+            assert tool_excerpt["content"].startswith("TOOL_START")
+            assert tool_excerpt["content"].endswith("TOOL_END") and tool_excerpt["content_excerpted"]
+            assert len(requests[0]["messages"][-1]["content"]) <= 24000
+            assert requests[0]["response_format"] == {"type": "json_object"}
+            assert requests[0]["reasoning_effort"] == "none"
             assert not results[0]["stale"]
             other_language = client.post("/api/sessions/task/summary", json={"language": "ja"}).json()
             assert other_language["summary"] and len(requests) == 2
@@ -91,6 +101,24 @@ def test_real_aux_route_caches_accounts_and_isolates_language_and_profile(tmp_pa
                 assert other_db.get_messages("task")[0]["content"] == before[0]["content"]
             finally:
                 other_db.close()
+            assert client.post("/api/sessions/task/summary", json={"language": "en"}).json() == results[0]
+            assert len(requests) == 3
+            for turn in range(20):
+                db.append_message("task", "user", f"Task revision {turn}: " + "context " * 300)
+                last = db.append_message("task", "assistant", f"Current findings {turn}: " + "evidence " * 300)
+            before_recent = db.get_messages("task", include_inactive=True)
+            recent = client.post("/api/sessions/task/summary", json={"language": "en"}).json()
+            evidence = json.loads(requests[-1]["messages"][-1]["content"])
+            assert len(requests) == 4 and len(requests[-1]["messages"][-1]["content"]) <= 24000
+            assert recent["summary"]["coverage"] == "recent"
+            assert evidence[0]["id"] == first and evidence[-1]["id"] == last
+            assert len(evidence) < len(before_recent)
+            assert db.get_messages("task", include_inactive=True) == before_recent
+            missing = next(row["id"] for row in before_recent if row["id"] not in {item["id"] for item in evidence})
+            citation_override.append(missing)
+            invalid = client.post("/api/sessions/task/summary", json={"language": "zh"}).json()
+            assert invalid["summary"] is None and invalid["error_code"] == "generation_failed"
+            assert len(requests) == 5 and db.get_messages("task", include_inactive=True) == before_recent
     finally:
         server.shutdown()
         server.server_close()
@@ -149,26 +177,6 @@ def test_visibility_revision_failure_and_busy_guards_keep_history_intact(tmp_pat
         assert len(failures) == 1
         raced = summaries.session_summary("task", language="en", generate=True, retry=True)
         assert raced["summary"] == result["summary"] and raced["stale"]
-        # All portions, including the middle of a large row, enter a chunk before synthesis.
-        chunk_calls = []
-        def chunk_model(rows, language, allowed, **kwargs):
-            chunk_calls.append((rows, kwargs.get("merging", False)))
-            return _point(min(allowed))
-
-        monkeypatch.setattr(summaries, "_call", chunk_model)
-        monkeypatch.setattr(summaries, "_CHUNK_CHARS", 128)
-        source = summaries._source(db, "task")
-        summaries._generate(source, "en")
-        assert chunk_calls[-1][1]
-        reconstructed = {}
-        for rows, merging in chunk_calls:
-            if not merging:
-                for row in rows:
-                    reconstructed[row["id"]] = reconstructed.get(row["id"], "") + row["content"]
-        assert reconstructed == {row["id"]: row["content"] for row in source["rows"]}
-        monkeypatch.setattr(summaries, "_MAX_SOURCE_CHARS", 1)
-        limited = summaries.session_summary("task", language="en", generate=True)
-        assert limited["error_code"] == "input_limit" and limited["summary"] == result["summary"]
         db._execute_write(lambda conn: conn.execute("UPDATE messages SET active=0, compacted=0 WHERE id=?", (first,)))
         assert summaries.session_summary("task", language="en")["summary"] is None
         try:

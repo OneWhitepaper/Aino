@@ -250,7 +250,6 @@ export const CenteredThreadSpinner: FC = () => {
 export const ResponseLoadingIndicator: FC = () => {
   const { t } = useI18n()
   const { compacting, drafting, providerWait, turnStartedAt } = useThreadSessionStatus()
-  const elapsed = useElapsedSeconds(true, undefined, turnStartedAt)
   const hint = useStatusHint(
     compacting,
     drafting,
@@ -262,16 +261,21 @@ export const ResponseLoadingIndicator: FC = () => {
   // can't narrate (gateway still initializing, or an auxiliary call — not
   // the main request — triggered the autoload). A real wait frame wins.
   const localLoad = useLocalModelLoad(!hint)
+  const elapsed = useElapsedSeconds(Boolean(hint) || localLoad !== null, undefined, turnStartedAt)
+  const label =
+    hint || (localLoad ? t.assistant.thread.loadingLocalModel(localLoad.model) : t.assistant.thread.thinking)
 
   return (
-    <StatusRow data-slot="aui_response-loading" label={hint || t.assistant.thread.loadingResponse}>
+    <StatusRow data-slot="aui_response-loading" label={label}>
       <StatusPulse aria-hidden="true" className={SCAFFOLD_ACTIVITY_GLYPH_CLASS} kind="opacity" />
       {hint ? (
         <WaitHint hint={hint} />
       ) : localLoad ? (
         <ProgressHint label={t.assistant.thread.loadingLocalModel(localLoad.model)} percent={localLoad.percent} />
-      ) : null}
-      <ActivityTimerText className={SCAFFOLD_META_CLASS} seconds={elapsed} />
+      ) : (
+        <HintText>{t.assistant.thread.thinking}</HintText>
+      )}
+      {(hint || localLoad) && <ActivityTimerText className={SCAFFOLD_META_CLASS} seconds={elapsed} />}
     </StatusRow>
   )
 }
@@ -306,10 +310,9 @@ export const BackgroundResumeNotice: FC = () => {
 // border and Stop button are lit through all of it; the transcript used to be
 // silent for most of it, and those seconds went uncounted.
 //
-// So this row follows the SAME busy signal the composer does, and times every
-// gap from the moment the turn last showed something rather than from its own
-// mount. What it doesn't do is double-narrate: a tool call in flight already
-// carries its own row and timer.
+// This row follows the SAME busy signal the composer does. Generic gaps show
+// "Thinking"; specific waits retain their timer. A tool call in flight already
+// carries its own row and timer, so it must not be narrated twice.
 //
 // Subscribes to the activity signal ITSELF (rather than taking it as a prop)
 // so that per-token updates re-render only this leaf, not the whole
@@ -318,10 +321,8 @@ export const TurnActivityIndicator: FC = () => {
   const { t } = useI18n()
   const activity = useAuiState(s => activitySignature(s.message.content))
 
-  // Timestamp of the last visible progress, held from the moment the quiet
-  // spell qualifies. Holding the timestamp (not a boolean) is what lets the
-  // timer read "quiet for 12s" rather than the age of this component, which is
-  // the whole turn so far.
+  // Keep the last-progress timestamp so a later named wait can measure its
+  // own gap rather than the lifetime of the whole assistant message.
   const [quietSince, setQuietSince] = useState<number | undefined>(undefined)
   const { awaitingInput, busy, compacting, drafting, providerWait, turnStartedAt } = useThreadSessionStatus()
   const hint = useStatusHint(
@@ -368,7 +369,7 @@ export const TurnActivityIndicator: FC = () => {
   // anything else counts from the moment the turn last produced something — the
   // gap's own mark, or the draft's, whichever named the wait first.
   const elapsed = useElapsedSeconds(
-    active,
+    active && (Boolean(hint) || localLoad !== null),
     undefined,
     compacting ? turnStartedAt : (quietSince ?? drafting?.since ?? turnStartedAt)
   )
@@ -377,15 +378,20 @@ export const TurnActivityIndicator: FC = () => {
     return null
   }
 
+  const label =
+    hint || (localLoad ? t.assistant.thread.loadingLocalModel(localLoad.model) : t.assistant.thread.thinking)
+
   return (
-    <StatusRow data-slot="aui_turn-activity" label={hint || t.assistant.thread.working}>
+    <StatusRow data-slot="aui_turn-activity" label={label}>
       <StatusPulse aria-hidden="true" className={SCAFFOLD_ACTIVITY_GLYPH_CLASS} kind="opacity" />
       {hint ? (
         <WaitHint hint={hint} />
       ) : localLoad ? (
         <ProgressHint label={t.assistant.thread.loadingLocalModel(localLoad.model)} percent={localLoad.percent} />
-      ) : null}
-      <ActivityTimerText className={SCAFFOLD_META_CLASS} seconds={elapsed} />
+      ) : (
+        <HintText>{t.assistant.thread.thinking}</HintText>
+      )}
+      {(hint || localLoad) && <ActivityTimerText className={SCAFFOLD_META_CLASS} seconds={elapsed} />}
     </StatusRow>
   )
 }

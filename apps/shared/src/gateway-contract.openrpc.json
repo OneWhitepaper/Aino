@@ -28169,6 +28169,16 @@
           "source_message_count": {
             "title": "Source Message Count",
             "type": "integer"
+          },
+          "coverage": {
+            "default": "full",
+            "enum": [
+              "full",
+              "excerpted",
+              "recent"
+            ],
+            "title": "Coverage",
+            "type": "string"
           }
         },
         "required": [

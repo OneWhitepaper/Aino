@@ -51,8 +51,8 @@ function renderSummary() {
 
 describe('SummaryPane', () => {
   it('treats an unsent runtime as a draft and starts reading history after the first send', async () => {
-    const api = vi.fn(async () => {
-      throw new Error('Session has no persisted messages')
+    const api = vi.fn(async (request: { path: string }) => {
+      throw new Error(`Session has no persisted messages: ${request.path}`)
     })
 
     ;(window as unknown as { hermesDesktop: unknown }).hermesDesktop = { api }
@@ -69,7 +69,7 @@ describe('SummaryPane', () => {
 
     act(() => $sessionStates.set({ 'draft-runtime': { ...state, isUnsentDraft: false } }))
     expect(await screen.findByText('暂时无法读取此会话的历史记录')).toBeTruthy()
-    expect(api).toHaveBeenCalledOnce()
+    expect(api.mock.calls.filter(([request]) => request.path.includes('/messages?'))).toHaveLength(1)
   })
 
   it('keeps ordinary chat compact and only reveals resources belonging to its runtime and durable history', async () => {
@@ -180,7 +180,9 @@ describe('SummaryPane', () => {
       'runtime-a': [{ id: 'old-preview', cwd: '/old', label: 'Old preview', target: '/old/index.html' }]
     })
     renderSummary()
-    await waitFor(() => expect(api).toHaveBeenCalledOnce())
+    await waitFor(() =>
+      expect(api.mock.calls.filter(([request]) => request.path.includes('/messages?'))).toHaveLength(1)
+    )
 
     act(() => {
       $selectedStoredSessionId.set('summary-b')

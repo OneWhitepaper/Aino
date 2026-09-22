@@ -717,6 +717,7 @@ class SessionSemanticSummary(Result):
     updated_at: float
     source_revision: str
     source_message_count: int
+    coverage: Literal["full", "excerpted", "recent"] = "full"
 
 
 class SessionSummaryResult(Result):
