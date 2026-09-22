@@ -30,8 +30,10 @@ vi.mock('@/components/chat/code-editor', () => ({
 }))
 
 vi.mock('./workspace-controls', () => ({ WorkspaceControls: () => null }))
-vi.mock('../skills', () => ({
-  SkillsView: ({ fixedProfile }: { fixedProfile: string }) => <div data-testid="capabilities-scope">{fixedProfile}</div>
+vi.mock('../capabilities', () => ({
+  CapabilitiesView: ({ fixedProfile }: { fixedProfile: string }) => (
+    <div data-testid="capabilities-scope">{fixedProfile}</div>
+  )
 }))
 vi.mock('@/store/settings-scope', () => ({ setSettingsScope: vi.fn() }))
 
@@ -56,14 +58,16 @@ vi.mock('@/store/gateway', () => ({
 const {
   $activeGatewayProfile: activeGateway,
   $profileColors,
-  $profiles
+  $profiles,
+  $showAllProfiles
 } = vi.hoisted(() => {
   const { atom } = require('nanostores') as typeof Nanostores
 
   return {
     $activeGatewayProfile: atom<string>('default'),
     $profileColors: atom<Record<string, string>>({}),
-    $profiles: atom<ProfileInfo[]>([])
+    $profiles: atom<ProfileInfo[]>([]),
+    $showAllProfiles: atom<boolean>(false)
   }
 })
 
@@ -71,6 +75,9 @@ vi.mock('@/store/profile', () => ({
   $activeGatewayProfile: activeGateway,
   $profileColors,
   $profiles,
+  // `session-states` -> `preview` -> `layout` reaches this mock now that the
+  // right rail is scoped per profile; layout.ts derives its grouping from it.
+  $showAllProfiles,
   normalizeProfileKey: (name: null | string | undefined) => (name ?? '').trim() || 'default',
   profileLabel: (profile: { display_name?: string; name: string }) =>
     (profile.display_name ?? '').trim() || profile.name,

@@ -10,7 +10,7 @@
 
 import { ackStoredSessionId, atom, haptic, host, markSessionUnreadFinished } from '@hermes/plugin-sdk'
 
-import { $openBotChat, $selectedBot, rosterWatermarks, saveSelectedRosterBot } from './bot-state'
+import { $openBotChat, $selectedBot, lastToastedPreview, rosterWatermarks, saveSelectedRosterBot } from './bot-state'
 import { CANONICAL_CHAT_TITLE, notifyBotOpenFailure, openBotCanonicalChat, prepareBotSource } from './canonical-chat'
 import { $botMeta, botActivitySession, botRosterKey, botSelectionKey, newBotChat } from './data'
 import { $groupChats, $groupChatWorkspace } from './group-chat'
@@ -66,6 +66,12 @@ export function trackInboundActivity(roster: RosterRow[]) {
     rosterWatermarks.set(key, Math.max(prev, ts))
 
     if (seeding || ts <= prev) {
+      // Seed (or refresh) the last-toasted preview so a fresh mount, or a row
+      // whose activity hasn't advanced, treats current content as already-seen
+      // rather than replaying it — or a busy bridge's unchanged preview — as a
+      // duplicate toast.
+      lastToastedPreview.set(key, (activity?.preview || '').trim())
+
       continue
     }
 
@@ -94,10 +100,21 @@ export function trackInboundActivity(roster: RosterRow[]) {
 
     // Toasts are opt-in: the unread mark is recorded above regardless, but the
     // per-message notification fires only when the user enabled it.
+    const preview = (activity?.preview || '').trim()
+
+    // Content-level dedup, tracked independently of the toast pref so the
+    // memory stays accurate whether or not toasts are on: skip re-surfacing an
+    // identical preview a busy bridge keeps re-pinging (last_active advances
+    // but the visible content is unchanged). Unread marking above is unaffected.
+    if (lastToastedPreview.get(key) === preview) {
+      continue
+    }
+
+    lastToastedPreview.set(key, preview)
+
     if ($activityToasts.get()) {
       const meta = botRosterMeta(bot, $botMeta.get())
       const label = displayName(bot, meta)
-      const preview = (activity?.preview || '').trim()
       const inbound = /^Message from/i.test(preview)
       host.notify({
         kind: 'info',
@@ -266,7 +283,7 @@ export async function openRosterBot(bot: RosterRow): Promise<boolean> {
     if (generation === getBotOpenGeneration()) {
       $openBotChat.set(null)
       restorePreviousGroup()
-      notifyBotOpenFailure(error, bot, botsText().roster.gatewayUnreachable(bot.connectionLabel || 'the gateway'))
+      notifyBotOpenFailure(error, bot, 'reach')
     }
 
     return false
@@ -303,7 +320,7 @@ export async function openRosterBot(bot: RosterRow): Promise<boolean> {
     if (generation === getBotOpenGeneration()) {
       $openBotChat.set(null)
       restorePreviousGroup()
-      notifyBotOpenFailure(error, bot, botsText().bot.chatOpenFailed(displayName(bot, meta)))
+      notifyBotOpenFailure(error, bot, 'open', displayName(bot, meta))
     }
 
     return false

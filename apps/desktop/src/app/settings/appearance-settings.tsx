@@ -17,13 +17,14 @@ import { $reactionsEnabled, setReactionsEnabled } from '@/store/reactions-enable
 import { $reasoningCollapsedByDefault, setReasoningCollapsedByDefault } from '@/store/reasoning-disclosure'
 import { $sessionListDensity, type SessionListDensity, setSessionListDensity } from '@/store/session-list-density'
 import { $tabStripDefault, setTabStripDefault, type TabStripDefault } from '@/store/tabstrip-prefs'
+import { $hideThreadTimeline, setHideThreadTimeline } from '@/store/thread-timeline'
 import { $spentTipCount, $tipsEnabled, resetTips, setTipsEnabled } from '@/store/tips'
 import {
   $titlebarAppActionsSide,
   setTitlebarAppActionsSide,
   type TitlebarAppActionsSide
 } from '@/store/titlebar-app-actions'
-import { $toolViewMode, setToolViewMode } from '@/store/tool-view'
+import { $hideCodeDiffs, $toolViewMode, setHideCodeDiffs, setToolViewMode } from '@/store/tool-view'
 import { $toursEnabled, setToursEnabled } from '@/store/tours'
 import {
   $translucency,
@@ -53,6 +54,8 @@ import { useTheme } from '@/themes/context'
 
 import { setHermesConfigCache, useHermesConfigRecord } from '../hooks/use-config-record'
 
+import { appearanceSubpageForSetting, type AppearanceSubpageId } from './appearance-subpages'
+import { ChatFontSetting } from './chat-font-setting'
 import { MODE_OPTIONS } from './constants'
 import { setNested } from './helpers'
 import { PetSettings } from './pet-settings'
@@ -70,6 +73,7 @@ function ResumeLastSessionSetting() {
   const a = t.settings.appearance
   const configQuery = useHermesConfigRecord()
   const config = configQuery.data
+  const writeScope = configQuery.writeScope
   const checked = (config?.display as { resume_last_session?: unknown } | undefined)?.resume_last_session !== false
 
   const update = (on: boolean) => {
@@ -81,7 +85,7 @@ function ResumeLastSessionSetting() {
     setHermesConfigCache(next)
     // Sparse patch: PUT /api/config deep-merges, and echoing the cached
     // snapshot would overwrite keys other surfaces changed since it loaded.
-    void saveHermesConfig(setNested({}, 'display.resume_last_session', on))
+    void saveHermesConfig(setNested({}, 'display.resume_last_session', on), writeScope)
       .then(result => {
         if (!result.ok) {
           throw new Error(t.settings.config.autosaveFailed)
@@ -110,7 +114,6 @@ function ResumeLastSessionSetting() {
 // presets highlights nothing, and the row description keeps showing the
 // exact current percent.
 const UI_SCALE_PRESETS = ['90', '100', '110', '125', '150', '175'] as const
-const APPEARANCE_SEARCH_TARGETS = new Set<string>(Object.values(APPEARANCE_SETTING_IDS))
 const appearanceSettingElementId = (id: string) => `setting-field-${id}`
 
 type UiScalePreset = (typeof UI_SCALE_PRESETS)[number]
@@ -197,10 +200,16 @@ function GlassRow({ children, label }: GlassRowProps) {
   )
 }
 
-export function AppearanceSettings() {
+interface AppearanceSettingsProps {
+  subpage?: string
+}
+
+export function AppearanceSettings({ subpage }: AppearanceSettingsProps = {}) {
   const { t, isSavingLocale } = useI18n()
   const { mode, setMode } = useTheme()
   const toolViewMode = useStore($toolViewMode)
+  const hideCodeDiffs = useStore($hideCodeDiffs)
+  const hideThreadTimeline = useStore($hideThreadTimeline)
   const reasoningCollapsedByDefault = useStore($reasoningCollapsedByDefault)
   const sessionListDensity = useStore($sessionListDensity)
   const tabStripDefault = useStore($tabStripDefault)
@@ -223,9 +232,9 @@ export function AppearanceSettings() {
 
   // A pointer held on the intensity slider when this workspace closes (Escape
   // mid-drag) never delivers its pointerup here, which would strand the peek
-  // counter above zero and ghost the NEXT Settings workspace. Unmount drops
-  // every outstanding hold.
-  useEffect(() => resetTranslucencyPeek, [])
+  // counter above zero and ghost the NEXT settings overlay. Leaving a subpage
+  // also unmounts its sliders, so drop every outstanding hold on that change.
+  useEffect(() => resetTranslucencyPeek, [subpage])
 
   // Shared by the mode/frost/area pickers: apply the choice, then show it
   // through the overlay it just altered (a pulse, not a hold — see the peek
@@ -241,10 +250,15 @@ export function AppearanceSettings() {
       }
     }
 
+  const show = (id: AppearanceSubpageId) => subpage === undefined || subpage === id
   useDeepLinkHighlight({
     elementId: appearanceSettingElementId,
     param: 'setting',
-    ready: id => APPEARANCE_SEARCH_TARGETS.has(id)
+    ready: id => {
+      const targetSubpage = appearanceSubpageForSetting(id)
+
+      return targetSubpage !== undefined && show(targetSubpage)
+    }
   })
 
   const modeOptions = MODE_OPTIONS.map(({ id, icon }) => ({ icon, id, label: t.settings.modeOptions[id].label }))
@@ -284,99 +298,126 @@ export function AppearanceSettings() {
   return (
     <SettingsContent>
       <div>
-        <SectionHeading icon={Palette} title={a.title} />
+        {subpage === undefined && (
+          <>
+            <SectionHeading icon={Palette} title={a.title} />
+            <p className="max-w-2xl text-[length:var(--conversation-caption-font-size)] leading-(--conversation-caption-line-height) text-(--ui-text-tertiary)">
+              {a.intro}
+            </p>
+          </>
+        )}
 
-        <SettingsGroup className="mt-2">
-          <ListRow
-            action={<LanguageSwitcher />}
-            description={isSavingLocale ? t.language.saving : t.language.description}
-            id={appearanceSettingElementId(APPEARANCE_SETTING_IDS.language)}
-            title={t.language.label}
-          />
+        <SettingsGroup className={subpage === undefined ? 'mt-2' : undefined}>
+          {show('general') && (
+            <ListRow
+              action={<LanguageSwitcher />}
+              description={isSavingLocale ? t.language.saving : t.language.description}
+              id={appearanceSettingElementId(APPEARANCE_SETTING_IDS.language)}
+              title={t.language.label}
+            />
+          )}
 
-          <ListRow
-            action={
-              <SegmentedControl
-                onChange={id => {
-                  triggerHaptic('crisp')
-                  setMode(id)
-                }}
-                options={modeOptions}
-                value={mode}
+          {show('theme') && (
+            <ListRow
+              action={
+                <SegmentedControl
+                  onChange={id => {
+                    triggerHaptic('crisp')
+                    setMode(id)
+                  }}
+                  options={modeOptions}
+                  value={mode}
+                />
+              }
+              description={a.colorModeDesc}
+              id={appearanceSettingElementId(APPEARANCE_SETTING_IDS.theme)}
+              title={a.colorMode}
+            />
+          )}
+
+          {show('typography') && (
+            <>
+              <ListRow
+                action={
+                  <SegmentedControl
+                    onChange={id => {
+                      triggerHaptic('selection')
+                      setZoomPercent(Number(id))
+                    }}
+                    options={uiScaleOptions}
+                    value={matchedScalePreset ?? ('' as UiScalePreset)}
+                  />
+                }
+                description={a.uiScaleDesc(zoomPercent)}
+                id={appearanceSettingElementId(APPEARANCE_SETTING_IDS.uiScale)}
+                title={a.uiScaleTitle}
               />
-            }
-            description={a.colorModeDesc}
-            id={appearanceSettingElementId(APPEARANCE_SETTING_IDS.theme)}
-            title={a.colorMode}
-          />
 
-          <ListRow
-            action={
-              <SegmentedControl
-                onChange={id => {
-                  triggerHaptic('selection')
-                  setZoomPercent(Number(id))
-                }}
-                options={uiScaleOptions}
-                value={matchedScalePreset ?? ('' as UiScalePreset)}
-              />
-            }
-            description={a.uiScaleDesc(zoomPercent)}
-            id={appearanceSettingElementId(APPEARANCE_SETTING_IDS.uiScale)}
-            title={a.uiScaleTitle}
-          />
+              <div id={appearanceSettingElementId('desktop.font_family')}>
+                <ChatFontSetting />
+              </div>
 
-          <TerminalFontSetting />
+              <div id={appearanceSettingElementId('terminal.font_family')}>
+                <TerminalFontSetting />
+              </div>
+            </>
+          )}
 
-          <ListRow
-            action={
-              <SegmentedControl
-                onChange={id => {
-                  triggerHaptic('selection')
-                  setSessionListDensity(id)
-                }}
-                options={sessionDensityOptions}
-                value={sessionListDensity}
-              />
-            }
-            description={a.sessionDensityDesc}
-            title={a.sessionDensityTitle}
-          />
+          {show('window-layout') && (
+            <ListRow
+              action={
+                <SegmentedControl
+                  onChange={id => {
+                    triggerHaptic('selection')
+                    setSessionListDensity(id)
+                  }}
+                  options={sessionDensityOptions}
+                  value={sessionListDensity}
+                />
+              }
+              description={a.sessionDensityDesc}
+              title={a.sessionDensityTitle}
+            />
+          )}
 
-          <ListRow
-            action={
-              <SegmentedControl
-                onChange={id => {
-                  triggerHaptic('selection')
-                  setTabStripDefault(id)
-                }}
-                options={tabStripOptions}
-                value={tabStripDefault}
-              />
-            }
-            description={a.tabStripDesc}
-            title={a.tabStripTitle}
-          />
+          {show('window-layout') && (
+            <ListRow
+              action={
+                <SegmentedControl
+                  onChange={id => {
+                    triggerHaptic('selection')
+                    setTabStripDefault(id)
+                  }}
+                  options={tabStripOptions}
+                  value={tabStripDefault}
+                />
+              }
+              description={a.tabStripDesc}
+              title={a.tabStripTitle}
+            />
+          )}
 
-          <ListRow
-            action={
-              <SegmentedControl
-                onChange={id => {
-                  triggerHaptic('selection')
-                  setTitlebarAppActionsSide(id)
-                }}
-                options={appActionsOptions}
-                value={titlebarAppActionsSide}
-              />
-            }
-            description={a.appActionsDesc}
-            id={appearanceSettingElementId(APPEARANCE_SETTING_IDS.appActions)}
-            title={a.appActionsTitle}
-          />
+          {show('window-layout') && (
+            <ListRow
+              action={
+                <SegmentedControl
+                  onChange={id => {
+                    triggerHaptic('selection')
+                    setTitlebarAppActionsSide(id)
+                  }}
+                  options={appActionsOptions}
+                  value={titlebarAppActionsSide}
+                />
+              }
+              description={a.appActionsDesc}
+              id={appearanceSettingElementId(APPEARANCE_SETTING_IDS.appActions)}
+              title={a.appActionsTitle}
+            />
+          )}
 
           {/* Linux has neither half of this setting (see TRANSLUCENCY_SUPPORTED),
               so the row is absent there rather than offering a dead lever. */}
-          {TRANSLUCENCY_SUPPORTED && (
+          {show('window-layout') && TRANSLUCENCY_SUPPORTED && (
             <ListRow
               action={
                 <div
@@ -458,228 +499,294 @@ export function AppearanceSettings() {
             />
           )}
 
-          <ListRow
-            action={
-              // Same peek as the window lever: the bubble being tuned sits
-              // behind this overlay, so the overlay ghosts while the hand is
-              // on the slider.
-              <div className="flex items-center gap-3" data-translucency-peek-scope="">
-                <TranslucencySlider
-                  label={a.userBubbleTitle}
-                  onChange={setUserBubbleTransparency}
-                  value={userBubbleTransparency}
-                />
-              </div>
-            }
-            description={a.userBubbleDesc}
-            id={appearanceSettingElementId(APPEARANCE_SETTING_IDS.userBubble)}
-            title={a.userBubbleTitle}
-          />
+          {show('chat-display') && (
+            <ListRow
+              action={
+                // Same peek as the window lever: the bubble being tuned sits
+                // behind this overlay, so the overlay ghosts while the hand is
+                // on the slider.
+                <div className="flex items-center gap-3" data-translucency-peek-scope="">
+                  <TranslucencySlider
+                    label={a.userBubbleTitle}
+                    onChange={setUserBubbleTransparency}
+                    value={userBubbleTransparency}
+                  />
+                </div>
+              }
+              description={a.userBubbleDesc}
+              id={appearanceSettingElementId(APPEARANCE_SETTING_IDS.userBubble)}
+              title={a.userBubbleTitle}
+            />
+          )}
 
-          <ListRow
-            action={
-              <SegmentedControl
-                onChange={id => {
-                  triggerHaptic('selection')
-                  setBackdrop(id === 'on')
-                }}
-                options={[
-                  { id: 'off', label: t.common.off },
-                  { id: 'on', label: t.common.on }
-                ]}
-                value={backdrop ? 'on' : 'off'}
-              />
-            }
-            description={a.backdropDesc}
-            id={appearanceSettingElementId(APPEARANCE_SETTING_IDS.backdrop)}
-            title={a.backdropTitle}
-          />
-
-          <ListRow
-            action={
-              <SegmentedControl
-                onChange={id => {
-                  triggerHaptic('selection')
-                  setIntroSplash(id === 'on')
-                }}
-                options={[
-                  { id: 'off', label: t.common.off },
-                  { id: 'on', label: t.common.on }
-                ]}
-                value={introSplash ? 'on' : 'off'}
-              />
-            }
-            description={a.introSplashDesc}
-            id={appearanceSettingElementId(APPEARANCE_SETTING_IDS.introSplash)}
-            title={a.introSplashTitle}
-          />
-
-          <ToggleRow
-            checked={composerPopoutGesturesEnabled}
-            description={a.composerPopoutDesc}
-            label={a.composerPopoutTitle}
-            onChange={setComposerPopoutGesturesEnabled}
-          />
-
-          <ResumeLastSessionSetting />
-
-          <ListRow
-            action={
-              <SegmentedControl
-                onChange={id => {
-                  triggerHaptic('selection')
-                  setReactionsEnabled(id === 'on')
-                }}
-                options={[
-                  { id: 'off', label: t.common.off },
-                  { id: 'on', label: t.common.on }
-                ]}
-                value={reactionsEnabled ? 'on' : 'off'}
-              />
-            }
-            description={a.reactionsDesc}
-            title={a.reactionsTitle}
-          />
-
-          <ListRow
-            action={
-              <div className="flex flex-col items-end gap-1.5">
+          {show('window-layout') && (
+            <ListRow
+              action={
                 <SegmentedControl
                   onChange={id => {
                     triggerHaptic('selection')
-                    setTipsEnabled(id === 'on')
+                    setBackdrop(id === 'on')
                   }}
                   options={[
                     { id: 'off', label: t.common.off },
                     { id: 'on', label: t.common.on }
                   ]}
-                  value={tipsEnabled ? 'on' : 'off'}
+                  value={backdrop ? 'on' : 'off'}
                 />
-                {/* A tip shows once (✕ or timer), so this is the only way to a
-                    second lap. It appears once there is something to bring back. */}
-                {spentTips > 0 && (
-                  <Button
-                    onClick={() => {
-                      triggerHaptic('selection')
-                      resetTips()
-                    }}
-                    size="inline"
-                    variant="text"
-                  >
-                    {a.tipsReset(spentTips)}
-                  </Button>
-                )}
-              </div>
-            }
-            description={a.tipsDesc}
-            title={a.tipsTitle}
-          />
+              }
+              description={a.backdropDesc}
+              id={appearanceSettingElementId(APPEARANCE_SETTING_IDS.backdrop)}
+              title={a.backdropTitle}
+            />
+          )}
 
-          <ListRow
-            action={
-              <SegmentedControl
-                onChange={id => {
-                  triggerHaptic('selection')
-                  setToursEnabled(id === 'on')
-                }}
-                options={[
-                  { id: 'off', label: t.common.off },
-                  { id: 'on', label: t.common.on }
-                ]}
-                value={toursEnabled ? 'on' : 'off'}
-              />
-            }
-            description={a.toursDesc}
-            title={a.toursTitle}
-          />
-
-          <ListRow
-            action={
-              <SegmentedControl
-                onChange={id => {
-                  triggerHaptic('selection')
-                  setVibeHeartsEnabled(id === 'on')
-                }}
-                options={[
-                  { id: 'off', label: t.common.off },
-                  { id: 'on', label: t.common.on }
-                ]}
-                value={vibeHeartsEnabled ? 'on' : 'off'}
-              />
-            }
-            description={a.vibeHeartsDesc}
-            title={a.vibeHeartsTitle}
-          />
-
-          <ListRow
-            action={
-              <SegmentedControl
-                onChange={id => {
-                  triggerHaptic('selection')
-                  setToolViewMode(id)
-                }}
-                options={toolOptions}
-                value={toolViewMode}
-              />
-            }
-            description={a.toolViewDesc}
-            id={appearanceSettingElementId(APPEARANCE_SETTING_IDS.toolView)}
-            title={a.toolViewTitle}
-          />
-
-          <ListRow
-            action={
-              <SegmentedControl
-                onChange={id => {
-                  triggerHaptic('selection')
-                  setReasoningCollapsedByDefault(id === 'on')
-                }}
-                options={[
-                  { id: 'off', label: t.common.off },
-                  { id: 'on', label: t.common.on }
-                ]}
-                value={reasoningCollapsedByDefault ? 'on' : 'off'}
-              />
-            }
-            description={a.reasoningCollapsedDesc}
-            title={a.reasoningCollapsedTitle}
-          />
-
-          <ListRow
-            action={
-              <div className="flex flex-col items-end gap-1.5">
+          {show('chat-display') && (
+            <ListRow
+              action={
                 <SegmentedControl
                   onChange={id => {
                     triggerHaptic('selection')
-                    setEmbedMode(id)
+                    setHideThreadTimeline(id === 'on')
                   }}
-                  options={embedOptions}
-                  value={embedMode}
+                  options={[
+                    { id: 'off', label: t.common.off },
+                    { id: 'on', label: t.common.on }
+                  ]}
+                  value={hideThreadTimeline ? 'on' : 'off'}
                 />
-                {embedAllowed.length > 0 && (
-                  <Button
-                    onClick={() => {
+              }
+              description={a.hideThreadTimelineDesc}
+              id={appearanceSettingElementId(APPEARANCE_SETTING_IDS.hideThreadTimeline)}
+              title={a.hideThreadTimelineTitle}
+            />
+          )}
+
+          {show('general') && (
+            <ListRow
+              action={
+                <SegmentedControl
+                  onChange={id => {
+                    triggerHaptic('selection')
+                    setIntroSplash(id === 'on')
+                  }}
+                  options={[
+                    { id: 'off', label: t.common.off },
+                    { id: 'on', label: t.common.on }
+                  ]}
+                  value={introSplash ? 'on' : 'off'}
+                />
+              }
+              description={a.introSplashDesc}
+              id={appearanceSettingElementId(APPEARANCE_SETTING_IDS.introSplash)}
+              title={a.introSplashTitle}
+            />
+          )}
+
+          {show('window-layout') && (
+            <ToggleRow
+              checked={composerPopoutGesturesEnabled}
+              description={a.composerPopoutDesc}
+              label={a.composerPopoutTitle}
+              onChange={setComposerPopoutGesturesEnabled}
+            />
+          )}
+
+          {show('general') && <ResumeLastSessionSetting />}
+
+          {show('chat-display') && (
+            <ListRow
+              action={
+                <SegmentedControl
+                  onChange={id => {
+                    triggerHaptic('selection')
+                    setReactionsEnabled(id === 'on')
+                  }}
+                  options={[
+                    { id: 'off', label: t.common.off },
+                    { id: 'on', label: t.common.on }
+                  ]}
+                  value={reactionsEnabled ? 'on' : 'off'}
+                />
+              }
+              description={a.reactionsDesc}
+              title={a.reactionsTitle}
+            />
+          )}
+
+          {show('general') && (
+            <ListRow
+              action={
+                <div className="flex flex-col items-end gap-1.5">
+                  <SegmentedControl
+                    onChange={id => {
                       triggerHaptic('selection')
-                      clearEmbedAllowed()
+                      setTipsEnabled(id === 'on')
                     }}
-                    size="inline"
-                    variant="text"
-                  >
-                    {a.embedsReset(embedAllowed.length)}
-                  </Button>
-                )}
-              </div>
-            }
-            description={a.embedsDesc}
-            id={appearanceSettingElementId(APPEARANCE_SETTING_IDS.embeds)}
-            title={a.embedsTitle}
-          />
+                    options={[
+                      { id: 'off', label: t.common.off },
+                      { id: 'on', label: t.common.on }
+                    ]}
+                    value={tipsEnabled ? 'on' : 'off'}
+                  />
+                  {/* A tip shows once (✕ or timer), so this is the only way to a
+                      second lap. It appears once there is something to bring back. */}
+                  {spentTips > 0 && (
+                    <Button
+                      onClick={() => {
+                        triggerHaptic('selection')
+                        resetTips()
+                      }}
+                      size="inline"
+                      variant="text"
+                    >
+                      {a.tipsReset(spentTips)}
+                    </Button>
+                  )}
+                </div>
+              }
+              description={a.tipsDesc}
+              title={a.tipsTitle}
+            />
+          )}
+
+          {show('general') && (
+            <ListRow
+              action={
+                <SegmentedControl
+                  onChange={id => {
+                    triggerHaptic('selection')
+                    setToursEnabled(id === 'on')
+                  }}
+                  options={[
+                    { id: 'off', label: t.common.off },
+                    { id: 'on', label: t.common.on }
+                  ]}
+                  value={toursEnabled ? 'on' : 'off'}
+                />
+              }
+              description={a.toursDesc}
+              title={a.toursTitle}
+            />
+          )}
+
+          {show('chat-display') && (
+            <ListRow
+              action={
+                <SegmentedControl
+                  onChange={id => {
+                    triggerHaptic('selection')
+                    setVibeHeartsEnabled(id === 'on')
+                  }}
+                  options={[
+                    { id: 'off', label: t.common.off },
+                    { id: 'on', label: t.common.on }
+                  ]}
+                  value={vibeHeartsEnabled ? 'on' : 'off'}
+                />
+              }
+              description={a.vibeHeartsDesc}
+              title={a.vibeHeartsTitle}
+            />
+          )}
+
+          {show('chat-display') && (
+            <ListRow
+              action={
+                <SegmentedControl
+                  onChange={id => {
+                    triggerHaptic('selection')
+                    setToolViewMode(id)
+                  }}
+                  options={toolOptions}
+                  value={toolViewMode}
+                />
+              }
+              description={a.toolViewDesc}
+              id={appearanceSettingElementId(APPEARANCE_SETTING_IDS.toolView)}
+              title={a.toolViewTitle}
+            />
+          )}
+
+          {show('chat-display') && (
+            <ListRow
+              action={
+                <SegmentedControl
+                  onChange={id => {
+                    triggerHaptic('selection')
+                    setHideCodeDiffs(id === 'on')
+                  }}
+                  options={[
+                    { id: 'off', label: t.common.off },
+                    { id: 'on', label: t.common.on }
+                  ]}
+                  value={hideCodeDiffs ? 'on' : 'off'}
+                />
+              }
+              description={a.hideCodeDiffsDesc}
+              id={appearanceSettingElementId(APPEARANCE_SETTING_IDS.hideCodeDiffs)}
+              title={a.hideCodeDiffsTitle}
+            />
+          )}
+
+          {show('chat-display') && (
+            <ListRow
+              action={
+                <SegmentedControl
+                  onChange={id => {
+                    triggerHaptic('selection')
+                    setReasoningCollapsedByDefault(id === 'on')
+                  }}
+                  options={[
+                    { id: 'off', label: t.common.off },
+                    { id: 'on', label: t.common.on }
+                  ]}
+                  value={reasoningCollapsedByDefault ? 'on' : 'off'}
+                />
+              }
+              description={a.reasoningCollapsedDesc}
+              title={a.reasoningCollapsedTitle}
+            />
+          )}
+
+          {show('chat-display') && (
+            <ListRow
+              action={
+                <div className="flex flex-col items-end gap-1.5">
+                  <SegmentedControl
+                    onChange={id => {
+                      triggerHaptic('selection')
+                      setEmbedMode(id)
+                    }}
+                    options={embedOptions}
+                    value={embedMode}
+                  />
+                  {embedAllowed.length > 0 && (
+                    <Button
+                      onClick={() => {
+                        triggerHaptic('selection')
+                        clearEmbedAllowed()
+                      }}
+                      size="inline"
+                      variant="text"
+                    >
+                      {a.embedsReset(embedAllowed.length)}
+                    </Button>
+                  )}
+                </div>
+              }
+              description={a.embedsDesc}
+              id={appearanceSettingElementId(APPEARANCE_SETTING_IDS.embeds)}
+              title={a.embedsTitle}
+            />
+          )}
         </SettingsGroup>
       </div>
 
-      <div className="mt-6">
-        <PetSettings />
-      </div>
+      {show('pet') && (
+        <div className={subpage === undefined ? 'mt-6' : undefined} id={appearanceSettingElementId('appearance.pet')}>
+          <PetSettings />
+        </div>
+      )}
     </SettingsContent>
   )
 }

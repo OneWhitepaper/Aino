@@ -1,6 +1,6 @@
 import type { Unstable_TriggerAdapter, Unstable_TriggerItem } from '@assistant-ui/core'
 import { useStore } from '@nanostores/react'
-import { useCallback, useEffect } from 'react'
+import { useCallback, useEffect, useMemo } from 'react'
 
 import type { HermesGateway } from '@/hermes'
 import { useI18n } from '@/i18n'
@@ -54,16 +54,24 @@ function commandText(value: string): string {
 const SESSION_INLINE_LIMIT = 7
 
 /** Live `/` completions backed by the gateway's `complete.slash` RPC. */
-export function useSlashCompletions(options: { gateway: HermesGateway | null }): {
+export function useSlashCompletions(options: {
+  gateway: HermesGateway | null
+  /** Skill completions are per session: project-local skills follow the
+   *  session's repo, so the catalog and each query are fetched and cached per
+   *  session. */
+  sessionId?: string | null
+}): {
   adapter: Unstable_TriggerAdapter
   loading: boolean
 } {
-  const { gateway } = options
+  const { gateway, sessionId } = options
   const { t } = useI18n()
   const commandDescriptions = t.composer.commandDescs
   const browseAllSessions = t.composer.browseAllSessions
   const enabled = Boolean(gateway)
   const epoch = useStore($slashCompletionsEpoch)
+  const sessionParams = useMemo(() => (sessionId ? { session_id: sessionId } : {}), [sessionId])
+  const catalogKey = sessionId ? `catalog:${sessionId}` : 'catalog'
 
   // Warm argument_mode before the first `/` so Space treats /review as text.
   useEffect(() => {
@@ -71,14 +79,16 @@ export function useSlashCompletions(options: { gateway: HermesGateway | null }):
       return
     }
 
-    void cachedSlashCompletion('catalog', () => gateway.request<CommandsCatalogLike>('commands.catalog'))
+    void cachedSlashCompletion(catalogKey, () =>
+      gateway.request<CommandsCatalogLike>('commands.catalog', sessionParams)
+    )
       .then(catalog => {
         filterDesktopCommandsCatalog(catalog, commandDescriptions)
       })
       .catch(() => {
         // Next keystroke retries; don't block the composer on a warm-up miss.
       })
-  }, [gateway, epoch])
+  }, [gateway, epoch, catalogKey, sessionParams])
 
   const fetcher = useCallback(
     async (query: string): Promise<CompletionPayload> => {
@@ -138,7 +148,9 @@ export function useSlashCompletions(options: { gateway: HermesGateway | null }):
       try {
         if (!query) {
           const catalog = filterDesktopCommandsCatalog(
-            await cachedSlashCompletion('catalog', () => gateway.request<CommandsCatalogLike>('commands.catalog')),
+            await cachedSlashCompletion(catalogKey, () =>
+              gateway.request<CommandsCatalogLike>('commands.catalog', sessionParams)
+            ),
             commandDescriptions
           )
 
@@ -179,8 +191,11 @@ export function useSlashCompletions(options: { gateway: HermesGateway | null }):
           return { items, query }
         }
 
-        const result = await cachedSlashCompletion(`slash:${text.toLowerCase()}`, () =>
-          gateway.request<{ items?: CompletionEntry[]; replace_from?: number }>('complete.slash', { text })
+        const result = await cachedSlashCompletion(`slash:${sessionId ?? ''}:${text.toLowerCase()}`, () =>
+          gateway.request<{ items?: CompletionEntry[]; replace_from?: number }>('complete.slash', {
+            text,
+            ...sessionParams
+          })
         )
 
         // Arg-completion items (replace_from > 1) carry just the arg stub —
@@ -238,7 +253,7 @@ export function useSlashCompletions(options: { gateway: HermesGateway | null }):
         return { items: [], query }
       }
     },
-    [browseAllSessions, commandDescriptions, gateway]
+    [browseAllSessions, commandDescriptions, gateway, sessionId, catalogKey, sessionParams]
   )
 
   const toItem = useCallback((entry: CompletionEntry, index: number): Unstable_TriggerItem => {
@@ -272,15 +287,18 @@ export function useSlashCompletions(options: { gateway: HermesGateway | null }):
   // Mirrors the fetcher's branching: `/skin` and the `/resume` arg stage are
   // answered from client-side state, so they never wait on the network; every
   // other query is served from the completion cache when it's still warm.
-  const isCached = useCallback((query: string) => {
-    const text = `/${query}`
+  const isCached = useCallback(
+    (query: string) => {
+      const text = `/${query}`
 
-    if (/^\/skin(?:\s|$)/i.test(text) || /^\/(?:resume|sessions|switch)\s+/is.test(text)) {
-      return true
-    }
+      if (/^\/skin(?:\s|$)/i.test(text) || /^\/(?:resume|sessions|switch)\s+/is.test(text)) {
+        return true
+      }
 
-    return hasCachedSlashCompletion(query ? `slash:${text.toLowerCase()}` : 'catalog')
-  }, [])
+      return hasCachedSlashCompletion(query ? `slash:${sessionId ?? ''}:${text.toLowerCase()}` : catalogKey)
+    },
+    [sessionId, catalogKey]
+  )
 
   return useLiveCompletionAdapter({ enabled, epoch, fetcher, isCached, toItem })
 }

@@ -89,6 +89,13 @@ describe('desktop i18n runtime translator', () => {
     )
   })
 
+  it('translates Russian model and Bot Mode labels', () => {
+    setRuntimeI18nLocale('ru')
+
+    expect(translateNow('settings.model.moaTitle')).toBe('Смесь агентов')
+    expect(translateNow('common.bots')).toBe('Боты')
+  })
+
   it('keeps translated settings field copy addressable from schema keys', () => {
     const field = ['display', 'show_reasoning'].join('.')
 
@@ -180,7 +187,9 @@ describe('desktop i18n runtime translator', () => {
     expect(translateNow('composer.githubSuggestions.doneTip')).toBe('发送消息后，智能体将引导你完成 GitHub 登录')
     expect(translateNow('desktop.emptySlashCommand')).toBe('空斜杠命令')
     expect(translateNow('desktop.slashInvalidResponse')).toBe('command.dispatch 返回无效响应')
-    expect(translateNow('prompts.sudoDesc')).toBe('Aino 需要你的 sudo 密码来运行特权命令。它只会发送给你的本地智能体。')
+    expect(translateNow('prompts.sudoDesc')).toBe(
+      '输入 sudo 密码前，请先检查命令。密码会发送给执行命令的智能体，并在本次会话中缓存。'
+    )
     expect(translateNow('install.fetchingManifest')).toBe('正在获取安装器清单…')
   })
 

@@ -14,7 +14,7 @@ import { releaseTypingFocus } from '@/components/ui/keyboard-first'
 import { Tip } from '@/components/ui/tooltip'
 import { useI18n } from '@/i18n'
 import { ChevronDown } from '@/lib/icons'
-import { formatModelPillLabel } from '@/lib/model-status-label'
+import { formatModelPillLabel, providerDisplayName } from '@/lib/model-status-label'
 import { cn } from '@/lib/utils'
 import { $currentModelSource, $modelDefaultUnavailable, setModelPickerOpen } from '@/store/session'
 
@@ -187,8 +187,8 @@ export function ModelPill({
   const baseTitle = modelDefaultUnavailable
     ? copy.openModelPicker
     : currentProvider
-    ? copy.modelTitle(currentProvider, currentModel || copy.modelNone)
-    : copy.switchModel
+      ? copy.modelTitle(providerDisplayName(currentProvider), currentModel || copy.modelNone)
+      : copy.switchModel
 
   const title = pinnedOverride ? `${baseTitle} — ${copy.modelPinned}` : baseTitle
 
@@ -236,7 +236,9 @@ export function ModelPill({
             restoreSelection.current = null
           }
         }}
-        onInteractOutside={() => { restoreSelection.current = null }}
+        onInteractOutside={() => {
+          restoreSelection.current = null
+        }}
         side="top"
         sideOffset={8}
       >

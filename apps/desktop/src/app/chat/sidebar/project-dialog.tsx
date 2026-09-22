@@ -37,6 +37,7 @@ import {
 } from '@/store/projects'
 
 import { ProjectFoldersDialog } from './projects/project-folders-dialog'
+import { baseName } from './projects/workspace-groups'
 
 // Single dialog mounted once in the sidebar; it renders create / rename /
 // add-folder flows driven by the $projectDialog atom. Folders are chosen via
@@ -170,6 +171,13 @@ export function ProjectDialog() {
       }
 
       setFolders(prev => (prev.includes(dir) ? prev : [...prev, dir]))
+
+      // Picking a folder with no name typed names the project after the folder
+      // (the ⌘O "Open folder…" naming), so one pick + Create is enough. The name
+      // lands in the input, never in a hidden fallback the user cannot see.
+      if (mode === 'create') {
+        setName(prev => prev.trim() || baseName(dir) || prev)
+      }
     } catch (err) {
       notifyError(err, p.createFailed)
     }

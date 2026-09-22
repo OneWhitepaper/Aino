@@ -5,9 +5,17 @@
 // partial locales should use `defineLocale()` so missing desktop-only strings
 // fall back to English while new keys remain type-checked.
 
+import type { ErrorCodeKey } from '@/lib/error-surface'
 import type { TipId } from '@/lib/tips/catalog'
 
 export type Locale = 'en' | 'zh' | 'zh-hant' | 'ja' | 'ar' | 'ru'
+
+/** One error-card entry: a short title and one plain sentence. Either may
+ *  take the failing provider's display name (falls back to "the AI service"). */
+export interface ErrorCardCopy {
+  title: string | ((provider: string) => string)
+  body: string | ((provider: string) => string)
+}
 
 export type ToolTitleKey =
   | 'browser_click'
@@ -60,11 +68,7 @@ interface UpstreamTranslations {
     grant: string
     connected: string
     checking: string
-    waitingSignIn: string
     notConnected: string
-    notAvailable: string
-    startWith: (count: number) => string
-    startWithout: string
     skipped: string
     disabled: string
     failed: string
@@ -72,18 +76,20 @@ interface UpstreamTranslations {
     opening: string
     waiting: string
     timeout: string
-    keepWaiting: string
     refresh: string
-    statusError: string
     connectError: string
+    connectErrorFor: (app: string) => string
     unavailable: string
     ownerMissing: string
     search: string
     empty: string
     disclaimer: string
-    connectTitle: (app: string) => string
-    describe: (app: string) => string
     execution: string
+    setup: (server: string) => string
+    openInBrowser: string
+    setupCancel: string
+    authorizedToolsUnavailable: string
+    required: string
   }
   sessionImport: {
     title: string
@@ -247,6 +253,7 @@ interface UpstreamTranslations {
     connect: string
     connecting: string
     continue: string
+    bots: string
     copied: string
     copy: string
     copyFailed: string
@@ -305,6 +312,8 @@ interface UpstreamTranslations {
     deleteTitle: (name: string) => string
     deleteBody: string
     pathCopied: string
+    revealMissing: string
+    revealUnavailable: string
   }
 
   boot: {
@@ -322,10 +331,16 @@ interface UpstreamTranslations {
       backgroundExited: string
       backgroundExitedDuringStartup: string
       backendStopped: string
+      restartHermes: string
+      openLogs: string
       desktopBootFailed: string
       gatewayConnectionLost: string
       gatewayConnectionLostDetail: string
+      reconnectNow: string
+      connectionSettings: string
       gatewaySignInRequired: string
+      gatewaySignInRequiredDetail: string
+      signInAgain: string
       ipcBridgeUnavailable: string
       backendConnectionTimeout: string
       gatewayRevalidationTimeout: string
@@ -334,9 +349,18 @@ interface UpstreamTranslations {
       gatewayFallbackTimeout: string
       gatewayWsMintTimeout: string
     }
+    causes: {
+      exitedEarly: string
+      timedOut: string
+      permission: string
+      diskFull: string
+      portInUse: string
+      installMissing: string
+    }
     failure: {
       title: string
       description: string
+      details: string
       remoteTitle: string
       remoteDescription: string
       retry: string
@@ -404,6 +428,7 @@ interface UpstreamTranslations {
       elevenLabsNeedsKey: string
       elevenLabsRejectedKey: string
       diskFull: string
+      storageFailure: string
       gatewayAuthFailed: string
       methodNotAllowed: string
       microphonePermission: string
@@ -412,6 +437,13 @@ interface UpstreamTranslations {
       openaiTtsNeedsKey: string
       codeSkewRestartRequired: string
       spawnFailed: string
+      restartHermesFailed: string
+    }
+    actions: {
+      restartHermes: string
+      openKeys: string
+      openGateways: string
+      openMaintenance: string
     }
     voice: {
       configureSpeechToText: string
@@ -433,6 +465,8 @@ interface UpstreamTranslations {
       tryRecordingAgain: string
       unavailable: string
       liveEnded: string
+      liveEndedConnectionLost: string
+      liveEndedClosed: string
       liveError: string
       liveDelegationFailed: string
       liveUnavailable: (reason: string) => string
@@ -441,9 +475,11 @@ interface UpstreamTranslations {
     // bodies (the agent's reply, a command, an error) are passed through raw.
     native: {
       approvalTitle: string
+      approvalTitleNamed: (session: string) => string
       approveAction: string
       rejectAction: string
       inputTitle: string
+      inputTitleNamed: (session: string) => string
       inputBody: string
       turnDoneTitle: string
       turnDoneBody: string
@@ -861,6 +897,7 @@ interface UpstreamTranslations {
   }
 
   settings: {
+    subpages: Record<string, string>
     closeSettings: string
     exportConfig: string
     importConfig: string
@@ -1027,7 +1064,7 @@ interface UpstreamTranslations {
         desktopSuccess: (name: string) => string
         agentFailed: string
         desktopFailed: string
-        missingEnv: (vars: string) => string
+        missingEnv: (name: string, vars: string) => string
       }
     }
     vault: {
@@ -1130,6 +1167,10 @@ interface UpstreamTranslations {
       colorModeDesc: string
       toolViewTitle: string
       toolViewDesc: string
+      hideCodeDiffsTitle: string
+      hideCodeDiffsDesc: string
+      hideThreadTimelineTitle: string
+      hideThreadTimelineDesc: string
       reasoningCollapsedTitle: string
       reasoningCollapsedDesc: string
       uiScaleTitle: string
@@ -1153,6 +1194,12 @@ interface UpstreamTranslations {
       terminalFontPlaceholder: string
       terminalFontPreview: string
       terminalFontReset: string
+      chatFontTitle: string
+      chatFontDesc: string
+      chatFontPlaceholder: string
+      chatFontPreview: string
+      chatFontSample: string
+      chatFontReset: string
       translucencyTitle: string
       translucencyDesc: string
       translucencyGlassDesc: string
@@ -1349,6 +1396,26 @@ interface UpstreamTranslations {
       attachmentSizeLabel: string
       attachmentSizeSaveFailed: string
       showOptions: string
+    }
+    screenshot: {
+      enabledTitle: string
+      enabledDesc: string
+      statusTitle: string
+      checking: string
+      disabled: string
+      starting: string
+      ready: string
+      inputPermission: string
+      screenPermission: string
+      openSettings: string
+      retry: string
+      unavailable: string
+      errorTitle: string
+      loadFailed: string
+      saveFailed: string
+      permissionFailed: string
+      captureFailed: string
+      contextChanged: string
     }
     quickEntry: {
       enabledTitle: string
@@ -1749,7 +1816,10 @@ interface UpstreamTranslations {
       }
       moaTitle: string
       moaPreset: string
+      moaDescription: string
       moaAggregator: string
+      moaAggregatorBilled: string
+      moaReferenceHint: string
       tasks: Record<string, AuxTaskCopy>
     }
     localModels: {
@@ -1801,7 +1871,6 @@ interface UpstreamTranslations {
       updating: string
       upToDateTitle: string
       upToDateDetail: (tag: string, backend: string) => string
-      updateToast: (next: string) => string
       activeDetail: string
       activeNotLoaded: string
       loadedPill: string
@@ -1924,6 +1993,7 @@ interface UpstreamTranslations {
       deleteConfirm: (name: string) => string
       endpointReachable: string
       endpointReachableModels: (count: number) => string
+      endpointReachableTransport: (transport: string, count: number) => string
       endpointValidationFailed: string
     }
     memory: {
@@ -2066,6 +2136,8 @@ interface UpstreamTranslations {
       nousAuthDoneTitle: string
       nousAuthDoneMessage: string
       nousAuthFailed: string
+      nousAuthFailedMessage: string
+      nousAuthTryAgain: string
       noApiKeyRequired: string
       postSetupHint: (step: string) => string
       postSetupInstalledHint: string
@@ -2078,6 +2150,8 @@ interface UpstreamTranslations {
       postSetupCompleteMessage: (step: string) => string
       postSetupErrorTitle: string
       postSetupErrorMessage: (step: string) => string
+      postSetupOpenLogs: string
+      postSetupRunAgain: string
       postSetupFailed: (step: string) => string
       webSearchActive: (backend: string) => string
       webExtractActive: (backend: string) => string
@@ -2109,6 +2183,15 @@ interface UpstreamTranslations {
         selectedMessage: (backend: string) => string
         failedSelect: (backend: string) => string
         needsSetupHint: string
+        needsSetupConfirmTitle: (backend: string) => string
+        needsSetupConfirmDescription: (detail: string) => string
+        needsSetupConfirmDescriptionGeneric: string
+        needsSetupConfirmAction: string
+        unavailableTitle: string
+        unavailableMessage: (backend: string) => string
+        openBackendSettings: string
+        useLocal: string
+        switchedToLocal: string
       }
       browserRealProfile: {
         label: string
@@ -2201,6 +2284,8 @@ interface UpstreamTranslations {
       installAgentHereNoOrigin: string
       desktopHalfPending: string
       desktopHalfPendingTip: string
+      desktopHalfRemote: string
+      desktopHalfRemoteTip: string
       emptyAll: string
       empty: string
       emptyHint: string
@@ -2221,6 +2306,19 @@ interface UpstreamTranslations {
       updateToPin: (sha: string) => string
       updateFailed: (name: string) => string
       updated: (name: string) => string
+      uninstall: string
+      uninstallTip: (name: string, profile: string) => string
+      uninstallConfirmTitle: (name: string) => string
+      uninstallConfirmBody: (name: string, profile: string) => string
+      uninstallFailed: (name: string) => string
+      uninstalled: (name: string) => string
+      uninstallDesktopTip: (name: string) => string
+      uninstallDesktopConfirmBody: (name: string) => string
+      uninstalledDesktop: (name: string) => string
+      deepLinkErrorTitle: string
+      deepLinkCatalogInvalidName: string
+      deepLinkCatalogUnknown: (name: string) => string
+      deepLinkCatalogUnavailable: string
     }
     officialCatalog: string
     officialPill: string
@@ -2263,6 +2361,10 @@ interface UpstreamTranslations {
       uninstallStarted: (name: string) => string
       updateStarted: string
       actionFailed: string
+      installBlockedTitle: (name: string) => string
+      installBlockedMessage: (findings: number, unverified: boolean) => string
+      viewScan: string
+      openLog: string
       actionLog: string
       alreadyInstalled: (name: string) => string
       pickerTitle: string
@@ -2475,7 +2577,7 @@ interface UpstreamTranslations {
     archivedChats: string
     sections: Record<'maintenance' | 'sessions' | 'system' | 'usage', string>
     sectionDescriptions: Record<'maintenance' | 'sessions' | 'system' | 'usage', string>
-    nav: Record<'newChat' | 'settings' | 'skills' | 'messaging' | 'artifacts', { title: string; detail: string }>
+    nav: Record<'newChat' | 'settings' | 'capabilities' | 'messaging' | 'artifacts', { title: string; detail: string }>
     sectionEntries: Record<'sessions' | 'system' | 'usage', { title: string; detail: string }>
     providerNavigate: string
     providerSessions: string
@@ -2635,6 +2737,9 @@ interface UpstreamTranslations {
     restartNow: string
     restarting: string
     restartFailedManual: string
+    restartFailedManualDetail: string
+    restartAgain: string
+    openLogs: string
     telegramQr: {
       title: string
       subtitle: string
@@ -2797,6 +2902,12 @@ interface UpstreamTranslations {
     actions: string
     color: string
     colorFor: string
+    openInNewWindow: string
+    setAsDefault: string
+    defaultProfile: string
+    defaultSet: (name: string) => string
+    defaultDescription: string
+    failedSetDefault: string
     setColor: (color: string) => string
     autoColor: string
     noProfiles: string
@@ -2865,6 +2976,14 @@ interface UpstreamTranslations {
     failedRename: string
   }
 
+  modelAssignment: {
+    saveFailed: string
+    confirmTitle: string
+    confirmDetail: string
+    confirmAction: string
+    declined: string
+  }
+
   cron: {
     close: string
     title: string
@@ -2884,6 +3003,9 @@ interface UpstreamTranslations {
     search: string
     loading: string
     states: Record<string, string>
+    lastRunFailed: string
+    editJob: string
+    runAgain: string
     deliveryLabels: Record<string, string>
     scheduleLabels: Record<string, string>
     scheduleHints: Record<string, string>
@@ -2902,6 +3024,7 @@ interface UpstreamTranslations {
     emptyTitleSearch: string
     last: string
     next: string
+    overdueSince: string
     noRuns: string
     manage: string
     showRuns: string
@@ -3057,6 +3180,7 @@ interface UpstreamTranslations {
       reorder: string
       actions: string
     }
+    profileRail: string
     nav: Record<string, string>
     /** Display names for built-in session sources (platform ids remain stable). */
     sources: Record<string, string>
@@ -3068,6 +3192,10 @@ interface UpstreamTranslations {
     pinned: string
     recent: string
     sessions: string
+    terminal: string
+    files: string
+    review: string
+    logs: string
     cronJobs: string
     groupAriaGrouped: string
     groupAriaUngrouped: string
@@ -3162,6 +3290,7 @@ interface UpstreamTranslations {
       enter: (label: string) => string
       reorder: (label: string) => string
       toggle: (label: string, open: boolean) => string
+      showAllCount: (count: number) => string
       back: string
     }
     newSessionIn: (label: string) => string
@@ -3267,6 +3396,7 @@ interface UpstreamTranslations {
     voiceDictation: string
     speakReplies: string
     stopSpeakingReplies: string
+    wakeWord: (phrase: string) => string
     wakeWordListening: (phrase: string) => string
     wakeWordOff: (phrase: string) => string
     wakeWordPausedVoice: (phrase: string) => string
@@ -3328,6 +3458,8 @@ interface UpstreamTranslations {
     attachments: (count: number) => string
     editingInComposer: string
     editingQueuedInComposer: string
+    restoredDraftNotice: string
+    restoredDraftUndo: string
     queueEdit: string
     queueSendNext: string
     queueSend: string
@@ -3403,6 +3535,8 @@ interface UpstreamTranslations {
   }
 
   statusStack: {
+    hideStack: string
+    showStack: string
     agents: string
     background: (count: number) => string
     goalActive: string
@@ -3572,6 +3706,9 @@ interface UpstreamTranslations {
     notAvailableTitle: string
     unsupportedMessage: string
     connectionRetry: string
+    gitUnusable: string
+    connectionSettings: string
+    openDownloadPage: string
     latestBody: string
     latestBodyBackend: string
     allSetTitle: string
@@ -3686,6 +3823,7 @@ interface UpstreamTranslations {
     remoteUrlPlaceholder: string
     probing: string
     probeError: string
+    probeErrorDetails: string
     identityProvider: string
     authTitle: string
     authNeedsOauth: (provider: string) => string
@@ -3723,6 +3861,7 @@ interface UpstreamTranslations {
     copiedOutput: string
     copyOutput: string
     reloadRetry: string
+    openLogs: string
   }
 
   onboarding: {
@@ -3760,6 +3899,10 @@ interface UpstreamTranslations {
     signInFailed: string
     signInExpired: string
     genericApiKeyDescription: (provider: string) => string
+    signInDidNotFinish: (provider: string) => string
+    tryAgain: string
+    useApiKeyInstead: string
+    errorDetails: string
     pickDifferentProvider: string
     signInWith: (provider: string) => string
     openedBrowser: (provider: string) => string
@@ -3851,8 +3994,30 @@ interface UpstreamTranslations {
     timedOutBody: string
     retiredBody: string
     errorBody: string
+    /** The account service asked for a short wait mid sign-in (a busy account, a rate limit, the ops pause). */
+    busyHeading: string
+    busyBody: (wait: string) => string
+    /** The account service could not be reached or errored mid sign-in. */
+    unreachableBody: string
     alreadySignedInHeading: string
     alreadySignedInBody: string
+    // First-launch set-up failure notice: the free tier could not be created at boot.
+    // One sentence per backend code (`hermes_cli/anon_auth.py::ANON_*`); the copy never says
+    // the free MODEL is off — what is unavailable is using Hermes without signing in.
+    setupFailed: {
+      gateClosed: string
+      paused: string
+      rateLimited: (wait: string) => string
+      unreachable: string
+      serverError: string
+      powRequired: string
+      locked: string
+      generic: string
+      /** The sign-in door, when the account service is reachable: the Nous row sits right below. */
+      signInBelow: string
+      tryAgain: string
+      retrying: string
+    }
   }
 
   modelPicker: {
@@ -3908,6 +4073,8 @@ interface UpstreamTranslations {
       xhigh: string
       max: string
       ultra: string
+      /** The CLI's `/reasoning` clamp note, e.g. "sends Max on this route". */
+      sendsOnRoute: (level: string) => string
       updateFailed: string
       fastFailed: string
     }
@@ -4062,6 +4229,8 @@ interface UpstreamTranslations {
     openFolder: string
     refreshTree: string
     collapseAll: string
+    showIgnored: string
+    hideIgnored: string
     previewUnavailable: string
     couldNotPreview: (path: string) => string
     noProjectTitle: string
@@ -4397,13 +4566,53 @@ interface UpstreamTranslations {
         runtime: string
         streaming: string
       }
+      /** One plain sentence per layer — what happened and what to do — shown
+       *  when the failure code has no dedicated entry in `errorCodes`. */
+      errorLayerBodies: {
+        auth: string
+        billing: string
+        disk: string
+        endpoint: string
+        gateway: string
+        generic: string
+        provider: string
+        runtime: string
+        streaming: string
+      }
+      /** Per failure code (agent/error_classifier.py FailoverReason values plus
+       *  the gateway's site codes): a title and one plain sentence saying what
+       *  happened and what to do. Function entries take the provider label. */
+      errorCodes: Record<ErrorCodeKey, ErrorCardCopy>
+      /** Auth layer, keyed on how the provider is credentialed. The OAuth
+       *  body is `errorOauthExpired` (already translated per locale). */
+      errorAuthKinds: { api_key: ErrorCardCopy; oauth: Pick<ErrorCardCopy, 'title'> }
+      /** Collapsed "Details" line holding the raw provider/gateway text. */
+      errorDetails: string
+      /** Stands in for the provider name when the descriptor carries none. */
+      errorGenericProvider: string
+      /** Global toast title for a mid-turn gateway `error` event. */
+      errorToastTitle: string
       errorRetry: string
+      errorLimitResets: (time: string) => string
+      /** Arms ONE client-side retry of this turn at the 429's `resets_at` (#98852). */
+      errorRetryAtReset: (time: string) => string
+      /** Countdown shown while that retry is armed; `wait` is "12m 03s". */
+      errorRetryScheduled: (time: string, wait: string) => string
+      errorRetryScheduledCancel: string
       /** Escape hatch when Retry would only reproduce SESSION_NOT_OWNED (#106217). */
       errorStartNewSession: string
       errorSwitchProvider: string
+      errorChooseModel: string
+      errorCompressConversation: string
+      errorCompressFailed: string
+      errorOpenHermesFolder: string
+      errorOpenHermesFolderFailed: string
+      errorUpdateApiKey: string
       /** One-click recovery for an expired/revoked OAuth grant: re-runs that
        *  provider's sign-in flow (auth layer, authKind 'oauth'). */
       errorSignInAgain: (provider: string) => string
+      /** Free-tier refusals: opens the free sign-in dialog (signing in is free and lifts the refusal). */
+      errorSignInFreeTier: string
       /** Explains WHY the turn failed for an OAuth 401 — the raw body
        *  ("HTTP 401: User not found.") doesn't say "sign in again". */
       errorOauthExpired: (provider: string) => string
@@ -4444,6 +4653,9 @@ interface UpstreamTranslations {
     approval: {
       gatewayDisconnected: string
       sendFailed: string
+      reconnect: string
+      timedOutSystemLine: string
+      openSafetySettings: string
       run: string
       command: string
       moreOptions: string
@@ -4473,22 +4685,17 @@ interface UpstreamTranslations {
       lateAnswerHint: string
     }
     mcpSetup: {
-      installTitle: (server: string) => string
-      enableTitle: (server: string) => string
-      authorizeTitle: (server: string) => string
+      installTitle: string
+      enableTitle: string
+      authorizeTitle: string
       installAction: string
       enableAction: string
       authorizeAction: string
-      decline: string
-      declined: string
       installed: (server: string) => string
       enabled: (server: string) => string
       authorized: (server: string) => string
       failed: (server: string) => string
-      unanswered: string
       toolCount: (count: number) => string
-      notInCatalog: (server: string) => string
-      catalogSource: string
       envRequired: string
       sendFailed: string
       reloadFailed: string
@@ -4573,6 +4780,7 @@ interface UpstreamTranslations {
       statusDone: string
       /** Over-budget / rejected memory write title — not "Saved to memory". */
       resultUnavailable: string
+      resultInterrupted: string
       memoryWriteNoted: string
       actions: {
         read: string
@@ -4633,10 +4841,12 @@ interface UpstreamTranslations {
   prompts: {
     gatewayDisconnected: string
     dangerousCommand: string
+    reconnect: string
     sudoSendFailed: string
     secretSendFailed: string
     sudoTitle: string
     sudoDesc: string
+    sudoCommandUnavailable: string
     sudoPlaceholder: string
     secretTitle: string
     secretDesc: string
@@ -4828,7 +5038,13 @@ interface UpstreamTranslations {
     cwdChangeFailed: string
     cwdStagedTitle: string
     cwdStagedMessage: string
+    modelSwitchConfirmBody: string
+    modelSwitchConfirmLabel: string
+    modelSwitchConfirmTitle: (model: string) => string
+    modelSwitchConfirmTitleFallback: string
     modelSwitchFailed: string
+    modelSwitchKeepLabel: string
+    modelSwitchStaleNotice: string
     hydrationSyncing: (profile: string) => string
     sessionExported: string
     sessionExportFailed: string
@@ -4871,6 +5087,7 @@ interface UpstreamTranslations {
       systemNote: (platform: string) => string
       failed: (error: string) => string
       timedOut: string
+      startMessaging: string
     }
   }
 
@@ -4880,6 +5097,7 @@ interface UpstreamTranslations {
      *  campaign tips, which live outside the rotation's catalog: they carry
      *  a button, and `action` is its label. */
     items: Record<TipId, { title: string; text: string }> & {
+      'local-runtime-update': { title: string; text: string; action: string }
       'local-setup': { title: string; text: string; action: string }
     }
   }
@@ -4891,6 +5109,8 @@ interface UpstreamTranslations {
     contribFailedToRender: (id: string) => string
     contribFailedToRenderDetail: (id: string, error: string) => string
     logUnavailable: (error: string) => string
+    boundaryDetails: string
+    sendDiagnostics: string
     reloadWindow: string
     openLogs: string
   }

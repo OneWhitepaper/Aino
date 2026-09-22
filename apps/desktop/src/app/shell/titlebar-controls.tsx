@@ -45,6 +45,7 @@ import { appViewForPath, hidesFixedTitlebarClusters, isRouteBlockingSurface } fr
 
 import { SummaryToggle } from './summary-toggle'
 import {
+  TITLEBAR_CHROME_CHANGED_EVENT,
   TITLEBAR_ICON_BADGE_SCALE,
   TITLEBAR_LEFT_ICON_SIZE,
   titlebarButtonClass,
@@ -174,9 +175,8 @@ export function TitlebarControls({ leftTools = [], tools = [] }: TitlebarControl
   // only while that surface is up — so a non-empty area means a page is
   // actively projecting chrome into the band right now.
   const titleBarLeft = useContributions('titleBar.left')
-  const titleBarCenter = useContributions('titleBar.center')
   const titleBarRight = useContributions('titleBar.right')
-  const pageOwnsTitlebar = titleBarLeft.length + titleBarCenter.length + titleBarRight.length > 0
+  const pageOwnsTitlebar = titleBarLeft.length + titleBarRight.length > 0
 
   // POSITIONAL toggles: each button shows/hides everything on its physical
   // side of the main zone (the layout tree collapses the whole side), so they
@@ -295,21 +295,17 @@ export function TitlebarControls({ leftTools = [], tools = [] }: TitlebarControl
 
   const view = appViewForPath(location.pathname)
 
-  // While a route-owned surface (the full-page Settings workspace or a modal
-  // route such as Command Center) owns the window, these fixed control clusters
-  // must stand down so they cannot bleed over the surface. Native traffic lights
-  // and the surface's own navigation remain available.
+  // Route changes can replace measured clusters without resizing the panels.
+  useEffect(() => {
+    window.dispatchEvent(new CustomEvent(TITLEBAR_CHROME_CHANGED_EVENT))
+  }, [location.pathname, pageOwnsTitlebar])
+
+  // Overlays own the window. These clusters are `fixed` at a higher z-index
+  // than the overlay card, so they'd otherwise bleed over it — hide them (and
+  // the nested titleBar slots) and let the overlay's own chrome take over.
   if (isRouteBlockingSurface(view)) {
     return null
   }
-
-  const titlebarSlots = (
-    <>
-      <Slot area="titleBar.left" />
-      <Slot area="titleBar.center" />
-      <Slot area="titleBar.right" />
-    </>
-  )
 
   const leftClusterClass = cn(
     titlebarToolClusterClass,
@@ -325,13 +321,22 @@ export function TitlebarControls({ leftTools = [], tools = [] }: TitlebarControl
   if (hidesFixedTitlebarClusters(view) && pageOwnsTitlebar) {
     const pageTools = [...leftTools, ...tools].filter(tool => !tool.hidden)
 
+    // Both markers are required even when a page contributes to only one side.
     return (
-      <div className={leftClusterClass}>
-        {pageTools.map(tool => (
-          <TitlebarToolButton key={tool.id} navigate={navigate} tool={tool} />
-        ))}
-        {titlebarSlots}
-      </div>
+      <>
+        <div className={leftClusterClass} data-titlebar-cluster="left">
+          {pageTools.map(tool => (
+            <TitlebarToolButton key={tool.id} navigate={navigate} tool={tool} />
+          ))}
+          <Slot area="titleBar.left" />
+        </div>
+        <div
+          className={cn(titlebarToolClusterClass, 'right-(--titlebar-tools-right) top-(--titlebar-controls-top)')}
+          data-titlebar-cluster="right"
+        >
+          <Slot area="titleBar.right" />
+        </div>
+      </>
     )
   }
 
@@ -406,7 +411,7 @@ function TitlebarToolButton({ navigate, tool }: { navigate: ReturnType<typeof us
 
   if (tool.href) {
     return (
-      <Tip label={tooltipLabel}>
+      <Tip label={tooltipLabel} placement="toolbar">
         <Button asChild className={className} size="icon-titlebar" variant="ghost">
           <a
             aria-label={tool.label}
@@ -424,7 +429,7 @@ function TitlebarToolButton({ navigate, tool }: { navigate: ReturnType<typeof us
   }
 
   return (
-    <Tip label={tooltipLabel}>
+    <Tip label={tooltipLabel} placement="toolbar">
       <Button
         aria-label={tool.label}
         aria-pressed={tool.active ?? undefined}

@@ -38,9 +38,9 @@ export function Zoomable({ children, overlay, onCopy, label, className }: Zoomab
       <div className={cn('group/zoomable relative', className)}>
         {/* The whole content is the trigger — click anywhere to open, like an image. */}
         <button
+          aria-label={resolvedLabel}
           className="block w-full cursor-zoom-in text-left"
           onClick={() => setOpen(true)}
-          title={resolvedLabel}
           type="button"
         >
           {children}

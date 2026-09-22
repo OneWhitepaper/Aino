@@ -17,6 +17,7 @@ import { translateNow } from '@/i18n/runtime'
 import {
   branchGroupForUser,
   type ChatMessage,
+  type ChatMessagePart,
   chatMessageText,
   completeOpenTimelineParts,
   textPart
@@ -419,6 +420,31 @@ export function finalizeInterruptedMessages(
     )
 }
 
+const markInterruptedToolCall = (part: ChatMessagePart): ChatMessagePart =>
+  part.type === 'tool-call' && part.completedAt === undefined && part.result === undefined
+    ? { ...part, interrupted: true }
+    : part
+
+/**
+ * Stop/redirect finalize: like `finalizeInterruptedMessages`, but tool calls
+ * still waiting on a result are marked interrupted, so they read as cut short
+ * by the user rather than as a lost result (#116195). A result that still
+ * arrives later takes precedence over the marker.
+ */
+export function finalizeUserInterruptedMessages(
+  messages: ChatMessage[],
+  streamId?: null | string,
+  occurredAt = Date.now() / 1000
+): ChatMessage[] {
+  const marked = messages.map(message =>
+    message.pending || message.id === streamId
+      ? { ...message, parts: message.parts.map(markInterruptedToolCall) }
+      : message
+  )
+
+  return finalizeInterruptedMessages(marked, streamId, occurredAt)
+}
+
 /**
  * Arrival-ordered mid-turn user insert (#73793, #83151).
  *
@@ -436,7 +462,7 @@ export function appendMidTurnUserMessage<
   State extends { interimBoundaryPending: boolean; messages: ChatMessage[]; streamId: null | string }
 >(state: State, message: ChatMessage): State {
   const liveId = state.streamId
-  const sealed = finalizeInterruptedMessages(state.messages, liveId)
+  const sealed = finalizeUserInterruptedMessages(state.messages, liveId)
   const sealedLiveKept = liveId !== null && sealed.some(row => row.id === liveId)
 
   const messages = [

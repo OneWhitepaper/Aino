@@ -29,6 +29,8 @@ export interface RendererLoadErrorDetails {
   errorCode?: number | string | undefined
   /** Human description of the failure, e.g. the renderer bundle is torn. */
   errorDescription?: string
+  /** Page heading; defaults to the load-failure title. A terminated-renderer notice supplies its own. */
+  title?: string
   /** The URL that failed to load, when known. */
   url?: string
   /** Module files index.html declares but that are missing on disk. */
@@ -111,7 +113,7 @@ export function buildRendererLoadErrorPage(details: RendererLoadErrorDetails = {
   const code =
     details.errorCode === undefined || details.errorCode === null ? '' : ` (${escapeHtml(details.errorCode)})`
 
-  const title = escapeHtml(copy.title(appName))
+  const title = escapeHtml(details.title || copy.title(appName))
   const description = escapeHtml(details.errorDescription || copy.defaultDescription)
   const url = details.url ? `<p><code>${escapeHtml(details.url)}</code></p>` : ''
   const repairCommand = details.repairHint ? escapeHtml(details.repairHint) : ''

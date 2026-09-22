@@ -1,8 +1,9 @@
-"""Process-group cleanup must distinguish exited children from denied signals."""
+"""Process-group cleanup preserves drained output and cleans up known descendants."""
 
 import errno
 import os
 import shlex
+import signal
 import sys
 import time
 from types import SimpleNamespace
@@ -62,21 +63,26 @@ def test_native_search_cleans_up_exited_group(tmp_path, monkeypatch, reap_before
         env.cleanup()
 
 
-@pytest.mark.parametrize("probe_denied", [False, True])
-def test_kill_process_group_preserves_denial_while_group_exists(monkeypatch, probe_denied):
-    """A reaped leader does not prove that all its group members have exited."""
-    proc = SimpleNamespace(pid=12345, poll=lambda: 0)
+@pytest.mark.parametrize("shares_caller_group", [False, True])
+def test_kill_process_group_falls_back_to_known_pids(monkeypatch, shares_caller_group):
+    """Denied group signals and the caller's own group require PID-only cleanup."""
+    killed = []
+    proc = SimpleNamespace(pid=12345, poll=lambda: 0, kill=lambda: killed.append(12345))
+    child = SimpleNamespace(pid=12346, is_running=lambda: True, kill=lambda: killed.append(12346))
     denied = PermissionError(errno.EPERM, "signal denied")
+    group_signals = []
 
     def killpg(pgid, sig):
         assert pgid == proc.pid
-        if sig != 0 or probe_denied:
-            raise denied
+        group_signals.append(sig)
+        raise denied
 
-    monkeypatch.setattr(os, "getpgid", lambda pid: pid, raising=False)
+    monkeypatch.setattr(os, "getpgid", lambda pid: proc.pid, raising=False)
+    monkeypatch.setattr(os, "getpgrp", lambda: proc.pid if shares_caller_group else 67890, raising=False)
     monkeypatch.setattr(os, "killpg", killpg, raising=False)
-    monkeypatch.setattr(psutil, "Process", lambda pid: SimpleNamespace(children=lambda recursive: []))
+    monkeypatch.setattr(psutil, "Process", lambda pid: SimpleNamespace(children=lambda recursive: [child]))
 
-    with pytest.raises(PermissionError) as caught:
-        _kill_process_group_posix(proc)
-    assert caught.value is denied
+    _kill_process_group_posix(proc)
+
+    assert killed == [proc.pid, child.pid]
+    assert group_signals == ([] if shares_caller_group else [signal.SIGTERM])

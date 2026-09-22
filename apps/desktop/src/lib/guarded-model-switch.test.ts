@@ -1,12 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
-  dismissNotification: vi.fn(),
+  confirm: vi.fn(async () => false),
   notify: vi.fn(() => 'notification-1'),
   notifyError: vi.fn()
 }))
 
 vi.mock('@/store/notifications', () => mocks)
+vi.mock('@/store/confirm', () => ({ confirm: mocks.confirm }))
 
 import { setRuntimeI18nLocale } from '@/i18n'
 
@@ -15,24 +16,23 @@ import { surfaceModelSwitchConfirm } from './guarded-model-switch'
 describe('guarded model switch copy', () => {
   beforeEach(() => {
     setRuntimeI18nLocale('zh')
-    mocks.notify.mockClear()
+    mocks.confirm.mockClear()
   })
 
   afterEach(() => {
     setRuntimeI18nLocale('en')
   })
 
-  it('localizes the fallback confirmation message for Simplified Chinese', () => {
-    surfaceModelSwitchConfirm({
-      confirmLabel: '确认',
+  it('localizes the fallback confirmation message for Simplified Chinese', async () => {
+    await surfaceModelSwitchConfirm({
       failureMessage: '模型切换失败',
       requestConfirmed: async () => undefined
     })
 
-    expect(mocks.notify).toHaveBeenCalledWith(
+    expect(mocks.confirm).toHaveBeenCalledWith(
       expect.objectContaining({
-        message: '确认切换此模型？',
-        title: '确认'
+        description: '此模型切换需要确认。',
+        title: '切换模型？'
       })
     )
   })

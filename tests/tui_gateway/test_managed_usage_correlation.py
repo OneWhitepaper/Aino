@@ -176,6 +176,9 @@ def test_late_title_updates_original_reply_not_next_identical_reply(managed_gate
                      if e.get("params", {}).get("type") == "message.complete"]
         first = completed[-1]["turn_metrics"]["billing"]
         assert first["calls_complete"] is False
+        # Keep the second turn free of its own title upgrade, which upstream may
+        # retry while the first turn's derived title is still provisional.
+        monkeypatch.setattr(titles, "maybe_auto_title", lambda *args, **kwargs: None)
         f.submit(sid, "Continue")
         release.set()
         assert finished.wait(timeout=10)

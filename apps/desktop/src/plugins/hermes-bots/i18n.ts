@@ -19,9 +19,9 @@
  *  - **Syntax and identifiers**: cron expressions and their examples, React
  *    keys, workspace ids.
  *  - **`'You'`**, the author marker on room-log entries. It is persisted into
- *    the log and compared as a sentinel (`group-activity.ts`), so translating
- *    it in place would break both. Localizing it needs the marker and its
- *    rendering split apart — worth doing, not doable as a rename.
+ *    the log and compared as a sentinel (`group-activity.ts`), so it stays
+ *    English where it is WRITTEN (`group-chat-parts.tsx`, `group-rounds.ts`);
+ *    the places that RENDER the reader's own lines use `group.you` instead.
  *
  * Locales follow kanban: `en` / `ja` / `zh` / `zh-hant`. Arabic falls through
  * the resolution chain (active locale → this plugin's `en` → the key) the
@@ -131,6 +131,27 @@ type BotsMessages = {
     /** Re-opens the forever-chat on purpose. A plain row click only returns to
      *  the tabs already open, so a closed Bot Chat needs an explicit ask. */
     openBotChat: string
+    /** Row context menu: pin/hide toggles, their toasts, and the groups entry. */
+    pinToTop: string
+    unpin: string
+    pinnedToast: (name: string) => string
+    unpinnedToast: (name: string) => string
+    hide: string
+    unhide: string
+    hiddenToast: (name: string) => string
+    unhiddenToast: (name: string) => string
+    groupsMenu: (groups: string) => string
+    manageGroups: string
+    metadataLoadFailed: string
+    loadFailed: string
+    groupsLoadFailed: string
+    thisDevice: string
+    /** Roster badge tooltips per attention class; `attentionFallback` when the class is unknown. */
+    attentionFallback: string
+    attentionProviderAuth: string
+    attentionQuota: string
+    attentionMissingConfig: string
+    attentionBlocked: string
     duplicate: string
     duplicateFailed: string
     duplicateNameExhausted: string
@@ -151,32 +172,29 @@ type BotsMessages = {
     /** Notice shown when /new is rerouted inside a canonical Bot Chat. */
     foreverChatTitle: string
     foreverChatMessage: string
+    /** Bot-open failure toasts (canonical-chat.ts notifyBotOpenFailure). The
+     *  raw RPC/connection error travels in the toast `detail`, never here. */
+    openNeedsUpdateTitle: string
+    openNeedsUpdateMessage: (connectionLabel: string) => string
+    openUnreachableTitle: string
+    openUnreachableMessage: string
+    openChatFailedTitle: (botName: string) => string
+    openChatFailedMessage: string
+    openGateways: string
     /** Stands under the bot's name in a chat it has not spoken in yet. */
     chatEmpty: string
     /** First line of a brand-new bot's forever-chat — see `kickoffText`. */
     kickoff: string
-    pinToTop: string
-    unpin: string
-    hide: string
-    unhide: string
     pinnedNotice: (name: string) => string
     unpinnedNotice: (name: string) => string
     hiddenNotice: (name: string) => string
     unhiddenNotice: (name: string) => string
-    metadataLoadFailed: string
-    loadFailed: string
-    groupsLoadFailed: string
-    manageGroups: string
     groupsLabel: (groups: string) => string
     duplicating: (name: string) => string
     duplicated: (name: string, source: string) => string
     chatOpenFailed: (name: string) => string
     storedSessionOpenUnsupported: string
     registryCheckFailed: (name: string, detail: string) => string
-    attentionProviderAuth: string
-    attentionQuota: string
-    attentionMissingConfig: string
-    attentionBlocked: string
     attentionGeneric: string
     createDescription: string
     descriptionLabel: string
@@ -273,6 +291,14 @@ type BotsMessages = {
     settingsTitle: string
     settingsDesc: string
     nameLabel: string
+    holdDetection: string
+    holdDetectionHint: string
+    compressHistory: string
+    compressHistoryHint: (member: string) => string
+    compressing: (member: string) => string
+    compressDone: (member: string, compressed: number, detail: string) => string
+    compressNothing: (member: string) => string
+    compressFailed: (member: string, error: string) => string
     searchToAdd: string
     searchToAddPlaceholder: string
     removeFromSelection: string
@@ -316,11 +342,16 @@ type BotsMessages = {
     heldMembersStatus: (members: string) => string
     holdReleaseHint: string
     needsYourInput: string
+    noMembersToSend: (group: string) => string
     pictureGenerationFailed: string
     /** User-facing replacement for the agent-loop's `(empty)` sentinel. */
     emptyResponse: string
     nameTaken: (name: string) => string
     memberCount: (count: number) => string
+    /** The reader's own lines in a room: the transcript speaker and the roster preview. */
+    you: string
+    /** How many of a room's members are reachable right now. */
+    availableCount: (available: number, total: number) => string
     settingsHint: (group: string) => string
     settingsLabel: (group: string) => string
     disbandHint: (group: string) => string
@@ -351,7 +382,6 @@ type BotsMessages = {
     asks: (handle: string) => string
     answerTo: (member: string) => string
     openGroupChat: string
-    you: string
     botCount: (count: number) => string
     availability: (available: number, total: number) => string
     noBotsInChat: string
@@ -598,6 +628,25 @@ const en: BotsMessages = {
     descriptionHint: 'Leave blank to generate from the bot’s name and description.',
     newChatWith: 'New chat with this bot',
     openBotChat: 'Open Bot Chat',
+    pinToTop: 'Pin to top',
+    unpin: 'Unpin',
+    pinnedToast: name => `${name} pinned to top`,
+    unpinnedToast: name => `${name} unpinned`,
+    hide: 'Hide',
+    unhide: 'Unhide',
+    hiddenToast: name => `${name} hidden — use the eye button in the Bots header to see hidden bots`,
+    unhiddenToast: name => `${name} is back in the roster`,
+    groupsMenu: groups => `Groups: ${groups}…`,
+    manageGroups: 'Manage groups…',
+    metadataLoadFailed: 'Could not load bot metadata',
+    loadFailed: 'Could not load bot',
+    groupsLoadFailed: 'Could not load bot groups',
+    thisDevice: 'This device',
+    attentionFallback: 'Needs attention',
+    attentionProviderAuth: 'Sign in again for this profile',
+    attentionQuota: 'Quota or balance exhausted',
+    attentionMissingConfig: 'Provider not configured — run hermes model',
+    attentionBlocked: 'Bot is blocked — see its last message',
     duplicate: 'Duplicate',
     duplicateFailed: 'Duplicate failed',
     duplicateNameExhausted: 'No free name is available for the duplicate.',
@@ -618,20 +667,19 @@ const en: BotsMessages = {
     foreverChatTitle: 'This chat never resets',
     foreverChatMessage:
       'Bot chats are one continuous conversation — compacting instead. For a throwaway session with this bot, use Sessions mode.',
+    openNeedsUpdateTitle: 'This bot lives on an older Hermes',
+    openNeedsUpdateMessage: connectionLabel => `Update ${connectionLabel}, then try again.`,
+    openUnreachableTitle: 'Hermes couldn’t reach the computer this bot runs on',
+    openUnreachableMessage: 'Check it is online and try again.',
+    openChatFailedTitle: botName => `Could not open ${botName}’s chat`,
+    openChatFailedMessage: 'Try again.',
+    openGateways: 'Open Gateways',
     chatEmpty: 'Say something to get started.',
     kickoff: 'Hey, tell me about yourself!',
-    pinToTop: 'Pin to top',
-    unpin: 'Unpin',
-    hide: 'Hide',
-    unhide: 'Unhide',
     pinnedNotice: name => `${name} pinned to top`,
     unpinnedNotice: name => `${name} unpinned`,
     hiddenNotice: name => `${name} hidden — use the eye button in the Bots header to see hidden bots`,
     unhiddenNotice: name => `${name} is back in the roster`,
-    metadataLoadFailed: 'Could not load bot metadata',
-    loadFailed: 'Could not load bot',
-    groupsLoadFailed: 'Could not load bot groups',
-    manageGroups: 'Manage groups…',
     groupsLabel: groups => `Groups: ${groups}…`,
     duplicating: name => `Duplicating ${name}…`,
     duplicated: (name, source) => `Created ${name} — full copy of ${source}`,
@@ -639,10 +687,6 @@ const en: BotsMessages = {
     storedSessionOpenUnsupported: 'This desktop version cannot open stored sessions.',
     registryCheckFailed: (name, detail) =>
       `Could not check ${name}'s Bot Chat registry${detail ? ` (${detail})` : ''} — not starting a new chat`,
-    attentionProviderAuth: 'Sign in again for this profile',
-    attentionQuota: 'Quota or balance exhausted',
-    attentionMissingConfig: 'Provider not configured — run hermes model',
-    attentionBlocked: 'Bot is blocked — see its last message',
     attentionGeneric: 'Needs attention',
     createDescription: 'A named teammate with its own memory, skills, and chat. It can message your other agents.',
     descriptionLabel: 'Description',
@@ -742,6 +786,16 @@ const en: BotsMessages = {
     settingsTitle: 'Group settings',
     settingsDesc: 'Rename the group or set a room picture. Members and history are kept.',
     nameLabel: 'Group name',
+    holdDetection: 'Detect stop directives',
+    holdDetectionHint: 'Let room messages put addressed members on hold until they are mentioned again.',
+    compressHistory: 'Compress history',
+    compressHistoryHint: (member: string) =>
+      `Compress ${member}'s hidden room history so the member stops failing with empty replies`,
+    compressing: (member: string) => `Compressing ${member}'s room history…`,
+    compressDone: (member: string, compressed: number, detail: string) =>
+      `Compressed ${compressed} room session${compressed === 1 ? '' : 's'} for ${member}${detail ? ` — ${detail}` : ''}`,
+    compressNothing: (member: string) => `Nothing to compress for ${member} — no room session yet`,
+    compressFailed: (member: string, error: string) => `Could not compress ${member}'s room history: ${error}`,
     searchToAdd: 'Search bots to add',
     searchToAddPlaceholder: 'Search bots to add…',
     removeFromSelection: 'Remove from selection',
@@ -787,11 +841,15 @@ const en: BotsMessages = {
     heldMembersStatus: members => `Paused: ${members}`,
     holdReleaseHint: 'Mention a paused bot or send @all resume to release them.',
     needsYourInput: 'A bot in this group chat needs your input',
+    noMembersToSend: group =>
+      `${group} has no members to send to — add a bot, or reopen the room if members are still loading.`,
     pictureGenerationFailed: 'Group picture generation failed',
     emptyResponse:
       '⚠️ The model returned no response after processing tool results. This can happen with some models — try again or rephrase your question.',
     nameTaken: name => `A group named “${name}” already exists.`,
     memberCount: count => `${count} bots`,
+    you: 'You',
+    availableCount: (available, total) => `${available} of ${total} available`,
     settingsHint: group => `Group settings — rename ${group} or set a room picture`,
     settingsLabel: group => `Group settings for ${group}`,
     disbandHint: group => `Disband the ${group} group chat`,
@@ -821,7 +879,6 @@ const en: BotsMessages = {
     asks: handle => `@${handle} asks:`,
     answerTo: member => `Answer @${member}`,
     openGroupChat: 'Open Group Chat',
-    you: 'You',
     botCount: count => `${count} bots`,
     availability: (available, total) => `${available} of ${total} available`,
     noBotsInChat: 'No bots in this group chat',
@@ -1046,7 +1103,9 @@ const ja: BotsMessages = {
     newSectionEllipsis: '新しいセクション…',
     removeFromSection: 'セクションから外す',
     deleted: (name, count) =>
-      count === 0 ? `「${name}」を削除しました` : `「${name}」を削除しました — ${count} 件のボットを未分類に移動しました`,
+      count === 0
+        ? `「${name}」を削除しました`
+        : `「${name}」を削除しました — ${count} 件のボットを未分類に移動しました`,
     undo: '元に戻す'
   },
   bot: {
@@ -1058,6 +1117,25 @@ const ja: BotsMessages = {
     descriptionHint: '空欄のままにすると、ボットの名前と説明から生成します。',
     newChatWith: 'このボットと新しいチャット',
     openBotChat: 'ボットチャットを開く',
+    pinToTop: '先頭にピン留め',
+    unpin: 'ピン留めを解除',
+    pinnedToast: name => `${name}を先頭にピン留めしました`,
+    unpinnedToast: name => `${name}のピン留めを解除しました`,
+    hide: '非表示',
+    unhide: '再表示',
+    hiddenToast: name => `${name}を非表示にしました — Botsヘッダーの目のボタンで非表示のボットを表示できます`,
+    unhiddenToast: name => `${name}が一覧に戻りました`,
+    groupsMenu: groups => `グループ: ${groups}…`,
+    manageGroups: 'グループを管理…',
+    metadataLoadFailed: 'ボットのメタデータを読み込めませんでした',
+    loadFailed: 'ボットを読み込めませんでした',
+    groupsLoadFailed: 'ボットのグループを読み込めませんでした',
+    thisDevice: 'このデバイス',
+    attentionFallback: '要対応',
+    attentionProviderAuth: 'このプロファイルで再度サインインしてください',
+    attentionQuota: 'クォータまたは残高が不足しています',
+    attentionMissingConfig: 'プロバイダーが未設定です — hermes model を実行してください',
+    attentionBlocked: 'ボットがブロックされています — 最後のメッセージを確認してください',
     duplicate: '複製',
     duplicateFailed: '複製に失敗しました',
     duplicateNameExhausted: '複製に使える名前がありません',
@@ -1078,20 +1156,19 @@ const ja: BotsMessages = {
     foreverChatTitle: 'このチャットはリセットされません',
     foreverChatMessage:
       'ボットチャットは一つの会話として続くため、代わりにコンテキストを圧縮します。このボットとの一時的なセッションには「セッション」モードを使ってください。',
+    openNeedsUpdateTitle: 'このボットは古い Hermes 上で動いています',
+    openNeedsUpdateMessage: connectionLabel => `${connectionLabel} を更新してから、もう一度お試しください。`,
+    openUnreachableTitle: 'このボットが動いているコンピューターに Hermes が接続できませんでした',
+    openUnreachableMessage: 'オンラインか確認して、もう一度お試しください。',
+    openChatFailedTitle: botName => `${botName} のチャットを開けませんでした`,
+    openChatFailedMessage: 'もう一度お試しください。',
+    openGateways: 'ゲートウェイを開く',
     chatEmpty: '何か書いて始めましょう。',
     kickoff: 'こんにちは、自己紹介をしてください！',
-    pinToTop: '上部にピン留め',
-    unpin: 'ピン留めを解除',
-    hide: '非表示',
-    unhide: '再表示',
     pinnedNotice: name => `${name}を上部にピン留めしました`,
     unpinnedNotice: name => `${name}のピン留めを解除しました`,
     hiddenNotice: name => `${name}を非表示にしました — ボットヘッダーの目のボタンで表示できます`,
     unhiddenNotice: name => `${name}を名簿に戻しました`,
-    metadataLoadFailed: 'ボットのメタデータを読み込めませんでした',
-    loadFailed: 'ボットを読み込めませんでした',
-    groupsLoadFailed: 'ボットのグループを読み込めませんでした',
-    manageGroups: 'グループを管理…',
     groupsLabel: groups => `グループ: ${groups}…`,
     duplicating: name => `${name}を複製中…`,
     duplicated: (name, source) => `${name}を作成しました — ${source}の完全なコピー`,
@@ -1099,10 +1176,6 @@ const ja: BotsMessages = {
     storedSessionOpenUnsupported: 'このデスクトップのバージョンでは保存済みセッションを開けません。',
     registryCheckFailed: (name, detail) =>
       `${name}のボットチャットレジストリを確認できませんでした${detail ? `（${detail}）` : ''} — 新しいチャットは開始しません`,
-    attentionProviderAuth: 'このプロファイルにもう一度サインインしてください',
-    attentionQuota: 'クォータまたは残高が不足しています',
-    attentionMissingConfig: 'プロバイダー未設定 — hermes model を実行してください',
-    attentionBlocked: 'ボットがブロックされています — 最新メッセージを確認してください',
     attentionGeneric: '要対応',
     createDescription:
       'メモリ、スキル、チャットを持つ名前付きのチームメイトです。他のエージェントにもメッセージを送れます。',
@@ -1203,6 +1276,16 @@ const ja: BotsMessages = {
     settingsTitle: 'グループ設定',
     settingsDesc: 'グループ名の変更や部屋の画像の設定ができます。メンバーと履歴は保持されます。',
     nameLabel: 'グループ名',
+    holdDetection: '停止指示を検出',
+    holdDetectionHint: 'ルームのメッセージで、再びメンションされるまで対象メンバーを保留にします。',
+    compressHistory: '履歴を圧縮',
+    compressHistoryHint: (member: string) =>
+      `${member} の非表示のルーム履歴を圧縮し、空の応答で失敗しなくなるようにします`,
+    compressing: (member: string) => `${member} のルーム履歴を圧縮中…`,
+    compressDone: (member: string, compressed: number, detail: string) =>
+      `${member} のルームセッション ${compressed} 件を圧縮しました${detail ? ` — ${detail}` : ''}`,
+    compressNothing: (member: string) => `${member} に圧縮する履歴はありません — ルームセッションがまだありません`,
+    compressFailed: (member: string, error: string) => `${member} のルーム履歴を圧縮できませんでした: ${error}`,
     searchToAdd: '追加するボットを検索',
     searchToAddPlaceholder: '追加するボットを検索…',
     removeFromSelection: '選択から外す',
@@ -1248,11 +1331,15 @@ const ja: BotsMessages = {
     heldMembersStatus: members => `一時停止中: ${members}`,
     holdReleaseHint: '一時停止中のボットにメンションするか、@all resume を送信して再開します。',
     needsYourInput: 'このグループチャットのボットが入力を待っています',
+    noMembersToSend: group =>
+      `${group} に送信先のメンバーがいません。ボットを追加するか、メンバーの読み込み中であればルームを開き直してください。`,
     pictureGenerationFailed: 'グループ画像の生成に失敗しました',
     emptyResponse:
       '⚠️ ツール結果の処理後、モデルから応答がありませんでした。一部のモデルで発生することがあります。もう一度試すか、質問を言い換えてください。',
     nameTaken: name => `「${name}」という名前のグループはすでに存在します。`,
     memberCount: count => `ボット${count}体`,
+    you: 'あなた',
+    availableCount: (available, total) => `${total}体中${available}体が利用可能`,
     settingsHint: group => `グループ設定 — ${group}の名前変更やルーム画像の設定`,
     settingsLabel: group => `${group}のグループ設定`,
     disbandHint: group => `${group}グループチャットを解散`,
@@ -1282,7 +1369,6 @@ const ja: BotsMessages = {
     asks: handle => `@${handle}からの質問:`,
     answerTo: member => `@${member}に回答`,
     openGroupChat: 'グループチャットを開く',
-    you: 'あなた',
     botCount: count => `ボット${count}体`,
     availability: (available, total) => `${total}体中${available}体が利用可能`,
     noBotsInChat: 'このグループチャットにボットはいません',
@@ -1517,6 +1603,25 @@ const zh: BotsMessages = {
     descriptionHint: '留空则根据机器人的名称和描述生成。',
     newChatWith: '与此机器人开新聊天',
     openBotChat: '打开机器人聊天',
+    pinToTop: '置顶',
+    unpin: '取消置顶',
+    pinnedToast: name => `已将 ${name} 置顶`,
+    unpinnedToast: name => `已取消置顶 ${name}`,
+    hide: '隐藏',
+    unhide: '取消隐藏',
+    hiddenToast: name => `已隐藏 ${name} — 点击机器人标题栏的眼睛按钮可查看隐藏的机器人`,
+    unhiddenToast: name => `${name} 已回到列表`,
+    groupsMenu: groups => `群聊：${groups}…`,
+    manageGroups: '管理群聊…',
+    metadataLoadFailed: '无法加载机器人元数据',
+    loadFailed: '无法加载机器人',
+    groupsLoadFailed: '无法加载机器人的群聊',
+    thisDevice: '本设备',
+    attentionFallback: '需要处理',
+    attentionProviderAuth: '请为此配置档案重新登录',
+    attentionQuota: '配额或余额已用尽',
+    attentionMissingConfig: '未配置提供商 — 请运行 hermes model',
+    attentionBlocked: '机器人已被阻止 — 请查看其最后一条消息',
     duplicate: '复制',
     duplicateFailed: '复制失败',
     duplicateNameExhausted: '没有可用的复制名称。',
@@ -1537,20 +1642,19 @@ const zh: BotsMessages = {
     foreverChatTitle: '此聊天不会重置',
     foreverChatMessage:
       '机器人聊天会持续保留上下文，因此将改为压缩当前上下文。若要与此机器人开启临时会话，请使用“会话”模式。',
+    openNeedsUpdateTitle: '这个机器人运行在较旧的 Hermes 上',
+    openNeedsUpdateMessage: connectionLabel => `请更新 ${connectionLabel}，然后重试。`,
+    openUnreachableTitle: 'Hermes 无法连接到运行这个机器人的电脑',
+    openUnreachableMessage: '请确认它在线后重试。',
+    openChatFailedTitle: botName => `无法打开 ${botName} 的聊天`,
+    openChatFailedMessage: '请重试。',
+    openGateways: '打开网关',
     chatEmpty: '说点什么开始吧。',
     kickoff: '你好，介绍一下你自己吧！',
-    pinToTop: '置顶',
-    unpin: '取消置顶',
-    hide: '隐藏',
-    unhide: '取消隐藏',
     pinnedNotice: name => `已将 ${name} 置顶`,
     unpinnedNotice: name => `已取消 ${name} 的置顶`,
     hiddenNotice: name => `已隐藏 ${name} — 点击机器人标题栏中的眼睛按钮可查看隐藏项`,
     unhiddenNotice: name => `已将 ${name} 恢复到名单`,
-    metadataLoadFailed: '无法加载机器人元数据',
-    loadFailed: '无法加载机器人',
-    groupsLoadFailed: '无法加载机器人群组',
-    manageGroups: '管理群组…',
     groupsLabel: groups => `群组：${groups}…`,
     duplicating: name => `正在复制 ${name}…`,
     duplicated: (name, source) => `已创建 ${name} — ${source} 的完整副本`,
@@ -1558,10 +1662,6 @@ const zh: BotsMessages = {
     storedSessionOpenUnsupported: '当前桌面版本无法打开已保存的会话。',
     registryCheckFailed: (name, detail) =>
       `无法检查 ${name} 的机器人聊天注册表${detail ? `（${detail}）` : ''} — 不会启动新聊天`,
-    attentionProviderAuth: '请重新登录此工作区',
-    attentionQuota: '配额或余额已用尽',
-    attentionMissingConfig: '提供方未配置 — 请运行 hermes model',
-    attentionBlocked: '机器人已被阻止 — 查看它的最后一条消息',
     attentionGeneric: '需要处理',
     createDescription: '一个拥有独立记忆、技能和聊天的命名队友，也可以向其他智能体发送消息。',
     descriptionLabel: '描述',
@@ -1657,6 +1757,15 @@ const zh: BotsMessages = {
     settingsTitle: '群组设置',
     settingsDesc: '重命名群组或设置房间图片。成员和历史都会保留。',
     nameLabel: '群组名称',
+    holdDetection: '检测停止指令',
+    holdDetectionHint: '允许房间消息将指定成员保持暂停，直到再次提及该成员。',
+    compressHistory: '压缩历史',
+    compressHistoryHint: (member: string) => `压缩 ${member} 隐藏的房间历史，避免该成员因空回复而失败`,
+    compressing: (member: string) => `正在压缩 ${member} 的房间历史…`,
+    compressDone: (member: string, compressed: number, detail: string) =>
+      `已压缩 ${member} 的 ${compressed} 个房间会话${detail ? ` — ${detail}` : ''}`,
+    compressNothing: (member: string) => `${member} 没有可压缩的历史 — 还没有房间会话`,
+    compressFailed: (member: string, error: string) => `无法压缩 ${member} 的房间历史: ${error}`,
     searchToAdd: '搜索要添加的机器人',
     searchToAddPlaceholder: '搜索要添加的机器人…',
     removeFromSelection: '从选择中移除',
@@ -1700,10 +1809,13 @@ const zh: BotsMessages = {
     heldMembersStatus: members => `已暂停：${members}`,
     holdReleaseHint: '提及已暂停的机器人，或发送 @all resume 以恢复它们。',
     needsYourInput: '此群聊中有机器人需要你输入',
+    noMembersToSend: group => `${group} 没有可发送的成员——请添加机器人，如果成员仍在加载，请重新打开该群聊。`,
     pictureGenerationFailed: '群组图片生成失败',
     emptyResponse: '⚠️ 模型处理工具结果后没有返回内容。这可能是某些模型的行为，请重试或改写问题。',
     nameTaken: name => `已存在名为“${name}”的群聊。`,
     memberCount: count => `${count} 个机器人`,
+    you: '你',
+    availableCount: (available, total) => `${total} 个中 ${available} 个可用`,
     settingsHint: group => `群聊设置 — 重命名 ${group} 或设置房间图片`,
     settingsLabel: group => `${group} 的群聊设置`,
     disbandHint: group => `解散 ${group} 群聊`,
@@ -1733,7 +1845,6 @@ const zh: BotsMessages = {
     asks: handle => `@${handle} 的提问：`,
     answerTo: member => `回答 @${member}`,
     openGroupChat: '打开群聊',
-    you: '你',
     botCount: count => `${count} 个机器人`,
     availability: (available, total) => `${total} 个中 ${available} 个可用`,
     noBotsInChat: '此群聊中没有机器人',
@@ -1966,6 +2077,25 @@ const zhHant: BotsMessages = {
     descriptionHint: '留空則依機器人的名稱和描述產生。',
     newChatWith: '與此機器人開新聊天',
     openBotChat: '開啟機器人聊天',
+    pinToTop: '釘選到頂端',
+    unpin: '取消釘選',
+    pinnedToast: name => `已將 ${name} 釘選到頂端`,
+    unpinnedToast: name => `已取消釘選 ${name}`,
+    hide: '隱藏',
+    unhide: '取消隱藏',
+    hiddenToast: name => `已隱藏 ${name} — 點擊機器人標題列的眼睛按鈕可查看隱藏的機器人`,
+    unhiddenToast: name => `${name} 已回到名單`,
+    groupsMenu: groups => `群組：${groups}…`,
+    manageGroups: '管理群組…',
+    metadataLoadFailed: '無法載入機器人中繼資料',
+    loadFailed: '無法載入機器人',
+    groupsLoadFailed: '無法載入機器人的群組',
+    thisDevice: '本裝置',
+    attentionFallback: '需要處理',
+    attentionProviderAuth: '請為此設定檔重新登入',
+    attentionQuota: '配額或餘額已用盡',
+    attentionMissingConfig: '未設定供應商 — 請執行 hermes model',
+    attentionBlocked: '機器人已被封鎖 — 請查看其最後一則訊息',
     duplicate: '複製',
     duplicateFailed: '複製失敗',
     duplicateNameExhausted: '沒有可用的複製名稱。',
@@ -1986,20 +2116,19 @@ const zhHant: BotsMessages = {
     foreverChatTitle: '此聊天不會重設',
     foreverChatMessage:
       '機器人聊天會持續保留上下文，因此將改為壓縮目前上下文。若要與此機器人開啟臨時工作階段，請使用「工作階段」模式。',
+    openNeedsUpdateTitle: '這個機器人運行在較舊的 Hermes 上',
+    openNeedsUpdateMessage: connectionLabel => `請更新 ${connectionLabel}，然後再試一次。`,
+    openUnreachableTitle: 'Hermes 無法連線到運行這個機器人的電腦',
+    openUnreachableMessage: '請確認它在線上後再試一次。',
+    openChatFailedTitle: botName => `無法開啟 ${botName} 的聊天`,
+    openChatFailedMessage: '請再試一次。',
+    openGateways: '開啟閘道',
     chatEmpty: '說點什麼開始吧。',
     kickoff: '你好，介紹一下你自己吧！',
-    pinToTop: '釘選到頂端',
-    unpin: '取消釘選',
-    hide: '隱藏',
-    unhide: '取消隱藏',
     pinnedNotice: name => `已將 ${name} 釘選到頂端`,
     unpinnedNotice: name => `已取消 ${name} 的釘選`,
     hiddenNotice: name => `已隱藏 ${name} — 點擊機器人標題列的眼睛按鈕即可查看`,
     unhiddenNotice: name => `已將 ${name} 放回名單`,
-    metadataLoadFailed: '無法載入機器人中繼資料',
-    loadFailed: '無法載入機器人',
-    groupsLoadFailed: '無法載入機器人群組',
-    manageGroups: '管理群組…',
     groupsLabel: groups => `群組：${groups}…`,
     duplicating: name => `正在複製 ${name}…`,
     duplicated: (name, source) => `已建立 ${name} — ${source} 的完整副本`,
@@ -2007,10 +2136,6 @@ const zhHant: BotsMessages = {
     storedSessionOpenUnsupported: '目前桌面版本無法開啟已儲存的工作階段。',
     registryCheckFailed: (name, detail) =>
       `無法檢查 ${name} 的機器人聊天登錄${detail ? `（${detail}）` : ''} — 不會啟動新聊天`,
-    attentionProviderAuth: '請重新登入此設定檔',
-    attentionQuota: '配額或餘額已用盡',
-    attentionMissingConfig: '提供者尚未設定 — 請執行 hermes model',
-    attentionBlocked: '機器人已遭封鎖 — 查看它的最後一則訊息',
     attentionGeneric: '需要處理',
     createDescription: '一個擁有獨立記憶、技能和聊天的命名隊友，也可以向其他智慧體傳送訊息。',
     descriptionLabel: '描述',
@@ -2106,6 +2231,15 @@ const zhHant: BotsMessages = {
     settingsTitle: '群組設定',
     settingsDesc: '重新命名群組或設定房間圖片。成員和歷史都會保留。',
     nameLabel: '群組名稱',
+    holdDetection: '偵測停止指令',
+    holdDetectionHint: '允許房間訊息暫停指定成員，直到再次提及該成員。',
+    compressHistory: '壓縮歷史',
+    compressHistoryHint: (member: string) => `壓縮 ${member} 隱藏的房間歷史，避免該成員因空回覆而失敗`,
+    compressing: (member: string) => `正在壓縮 ${member} 的房間歷史…`,
+    compressDone: (member: string, compressed: number, detail: string) =>
+      `已壓縮 ${member} 的 ${compressed} 個房間會話${detail ? ` — ${detail}` : ''}`,
+    compressNothing: (member: string) => `${member} 沒有可壓縮的歷史 — 還沒有房間會話`,
+    compressFailed: (member: string, error: string) => `無法壓縮 ${member} 的房間歷史: ${error}`,
     searchToAdd: '搜尋要加入的機器人',
     searchToAddPlaceholder: '搜尋要加入的機器人…',
     removeFromSelection: '從選取中移除',
@@ -2149,10 +2283,13 @@ const zhHant: BotsMessages = {
     heldMembersStatus: members => `已暫停：${members}`,
     holdReleaseHint: '提及已暫停的機器人，或傳送 @all resume 以恢復它們。',
     needsYourInput: '此群組聊天中有機器人需要您的輸入',
+    noMembersToSend: group => `${group} 沒有可傳送的成員——請新增機器人，若成員仍在載入中，請重新開啟該群組聊天。`,
     pictureGenerationFailed: '群組圖片產生失敗',
     emptyResponse: '⚠️ 模型處理工具結果後沒有回傳內容。這可能是某些模型的行為，請再試一次或改寫問題。',
     nameTaken: name => `已存在名為「${name}」的群組聊天。`,
     memberCount: count => `${count} 個機器人`,
+    you: '您',
+    availableCount: (available, total) => `${total} 個中 ${available} 個可用`,
     settingsHint: group => `群組設定 — 重新命名 ${group} 或設定房間圖片`,
     settingsLabel: group => `${group} 的群組設定`,
     disbandHint: group => `解散 ${group} 群組聊天`,
@@ -2182,7 +2319,6 @@ const zhHant: BotsMessages = {
     asks: handle => `@${handle} 的提問：`,
     answerTo: member => `回覆 @${member}`,
     openGroupChat: '開啟群組聊天',
-    you: '你',
     botCount: count => `${count} 個機器人`,
     availability: (available, total) => `${total} 個中 ${available} 個可用`,
     noBotsInChat: '此群組聊天中沒有機器人',

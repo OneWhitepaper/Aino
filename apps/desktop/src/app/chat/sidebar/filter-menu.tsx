@@ -52,7 +52,12 @@ import {
   toggleSidebarRowMeta,
   toggleSidebarStatusFilter
 } from '@/store/layout'
-import { $profiles, $showAllProfiles, normalizeProfileKey } from '@/store/profile'
+import {
+  $profiles,
+  $showAllProfiles,
+  normalizeProfileKey
+} from '@/store/profile'
+import { $profileRailVisible, toggleProfileRailVisible } from '@/store/profile-rail-prefs'
 import { $projectTree } from '@/store/projects'
 import type { PullRequestBucket } from '@/store/pull-requests'
 import { $unreadFinishedSessionIds, markAllSessionsRead } from '@/store/session'
@@ -174,6 +179,7 @@ export function SidebarFilterMenu({
   const ordering = useStore($sidebarOrdering)
   const rowMeta = useStore($sidebarRowMeta)
   const cardRows = useStore($sidebarCardRows)
+  const profileRailVisible = useStore($profileRailVisible)
   const showAllSessions = useStore($sidebarShowAllSessions)
   const statusFilter = useStore($sidebarStatusFilter)
   const projectFilter = useStore($sidebarProjectFilter)
@@ -326,6 +332,15 @@ export function SidebarFilterMenu({
             checked={cardRows}
             onCheck={() => setSidebarCardRows(!cardRows)}
             option={{ icon: 'inbox', id: 'card-rows', label: filterLabels.cardRows }}
+          />
+
+          {/* The colored strip at the sidebar foot. Off, the statusbar grows a
+              profile dropdown beside the gateway switcher, so nobody loses the
+              door — this is for people whose profiles are bots, not workspaces. */}
+          <OptionCheckbox
+            checked={profileRailVisible}
+            onCheck={toggleProfileRailVisible}
+            option={{ icon: 'organization', id: 'profile-rail', label: t.sidebar.profileRail }}
           />
         </DropdownMenuGroup>
 

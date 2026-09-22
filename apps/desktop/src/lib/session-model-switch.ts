@@ -486,8 +486,8 @@ export async function switchSessionModel(options: SwitchOptions): Promise<boolea
 
     if (result?.confirm_required) {
       rollback()
-      surfaceModelSwitchConfirm({
-        confirmLabel: copy.confirm,
+      void surfaceModelSwitchConfirm({
+        model: selection.model,
         confirmMessage: result.confirm_message,
         failureMessage: copy.failed,
         finish,

@@ -144,7 +144,13 @@ it('does not publish a delayed saved default into a different foreground connect
   vi.mocked(getGlobalModelInfo).mockReturnValue(info.promise)
   render(<PlatformModelSettings scopeProfile="default" />)
   fireEvent.click(await screen.findByRole('option', { name: /Fixture Model/ }))
-  await waitFor(() => expect(getGlobalModelInfo).toHaveBeenCalledWith({ connectionId: 'source-a', profile: 'default' }))
+  await waitFor(() =>
+    expect(getGlobalModelInfo).toHaveBeenCalledWith({
+      connectionId: 'source-a',
+      priority: 'foreground',
+      profile: 'default'
+    })
+  )
   setApiRequestConnection('source-b')
   setCurrentProvider('custom:foreign')
   setCurrentModel('foreign')

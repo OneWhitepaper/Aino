@@ -8,15 +8,18 @@ import {
   $sidebarShowAllSessions,
   $sidebarViewCustomized,
   $sidebarWidth,
+  CHAT_SIDEBAR_PANE_ID,
+  cycleSidebarGrouping,
   resetSidebarView,
   setSidebarAgentsGrouped,
   setSidebarGrouping,
   setSidebarOrdering,
   setSidebarShowAllSessions,
   setSidebarWidth,
-  CHAT_SIDEBAR_PANE_ID,
   SIDEBAR_DEFAULT_WIDTH,
+  SIDEBAR_GROUPING_ORDER,
   SIDEBAR_MIN_WIDTH,
+  type SidebarGrouping,
   toggleSidebarRowMeta,
   toggleSidebarStatusFilter
 } from './layout'
@@ -127,5 +130,22 @@ describe('the sidebar as it ships', () => {
 
     expect($showAllProfiles.get()).toBe(true)
     expect($sidebarGrouping.get()).toBe('profile')
+  })
+
+  it('visits every grouping once per lap and comes back to where it started', () => {
+    const start = $sidebarGrouping.get()
+    const visited: SidebarGrouping[] = []
+
+    for (let step = 0; step < SIDEBAR_GROUPING_ORDER.length; step++) {
+      cycleSidebarGrouping()
+      visited.push($sidebarGrouping.get())
+
+      if ($sidebarGrouping.get() === 'profile') {
+        expect($showAllProfiles.get()).toBe(true)
+      }
+    }
+
+    expect(new Set(visited)).toEqual(new Set(SIDEBAR_GROUPING_ORDER))
+    expect($sidebarGrouping.get()).toBe(start)
   })
 })

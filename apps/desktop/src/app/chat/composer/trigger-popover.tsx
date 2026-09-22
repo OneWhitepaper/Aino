@@ -231,6 +231,7 @@ export function ComposerTriggerPopover({
                 collisionPadding={16}
                 delayDuration={400}
                 label={kind === '/' ? description : undefined}
+                placement="row"
                 sideOffset={4}
               >
                 <button

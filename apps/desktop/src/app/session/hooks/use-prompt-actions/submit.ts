@@ -80,7 +80,7 @@ interface SubmitPromptDeps {
   syncAttachmentsForSubmit: (
     sessionId: string,
     attachments: ComposerAttachment[],
-    options?: { updateComposerAttachments?: boolean }
+    options?: { storedSessionId?: null | string; updateComposerAttachments?: boolean }
   ) => Promise<{ attachments: ComposerAttachment[]; sessionId: string }>
   updateSessionState: (
     sessionId: string,
@@ -142,6 +142,10 @@ export function useSubmitPrompt(deps: SubmitPromptDeps) {
       const attachments = (options?.attachments ?? scope.readAttachments()).filter((a): a is ComposerAttachment =>
         Boolean(a)
       )
+
+      const titlePreview = attachments.find(
+        a => typeof a.titlePreview === 'string' && a.titlePreview.trim()
+      )?.titlePreview
 
       const terminalContextBlocks = terminalContextBlocksFromDraft(rawText).join('\n\n')
       const hasImage = attachments.some(a => a.kind === 'image')
@@ -773,6 +777,7 @@ export function useSubmitPrompt(deps: SubmitPromptDeps) {
         // plain text survived sleep/wake but images reported "session not
         // found". The attach path recovers and reports the live id back here.
         const attachResult = await syncAttachmentsForSubmit(sessionId, attachments, {
+          storedSessionId: targetStoredSessionId,
           updateComposerAttachments: usingComposerAttachments
         })
 
@@ -818,7 +823,8 @@ export function useSubmitPrompt(deps: SubmitPromptDeps) {
           // the next turn untouched — without it, losing the settle race
           // (client saw idle, server still unwinding) redirects or interrupts
           // the live turn with text the user explicitly queued.
-          ...(options?.fromQueue && { queued: true })
+          ...(options?.fromQueue && { queued: true }),
+          ...(titlePreview && { title_preview: titlePreview })
         })
 
         // On sleep/wake the gateway's in-memory session may have been cleared

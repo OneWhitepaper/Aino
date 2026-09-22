@@ -8,10 +8,7 @@ import { resolveModelDefault } from '@/lib/model-default'
 import { modelOptionsQueryKey } from '@/lib/model-options'
 import { platformDefaultScope } from '@/lib/platform-model-scope'
 import { switchSessionModel } from '@/lib/session-model-switch'
-import {
-  $gatewayManagedCapabilities,
-  managedModelRouteCapabilityFrom
-} from '@/store/gateway-managed-capability'
+import { $gatewayManagedCapabilities, managedModelRouteCapabilityFrom } from '@/store/gateway-managed-capability'
 import { reconcilePlatformDraftAccount } from '@/store/platform-draft-model'
 import { platformModelCatalog, PlatformSelectionError } from '@/store/platform-models'
 import { $activeGatewayProfile } from '@/store/profile'

@@ -97,7 +97,7 @@ def test_native_codex_usage_does_not_require_standard_loop_timing():
     try:
         start = begin_turn_metrics(agent, session, monotonic=10)
         _record_codex_app_server_usage(agent, SimpleNamespace(token_usage_last={
-            "inputTokens": 100, "cachedInputTokens": 400, "outputTokens": 50,
+            "inputTokens": 500, "cachedInputTokens": 400, "outputTokens": 50,
         }))
         metrics = finish_turn_metrics(agent, session, start, {}, "done", persist=False, monotonic=20)
     finally:

@@ -69,7 +69,6 @@ function SummaryPoints({ label, points, session }: { label: string; points: Summ
                   key={id}
                   onClick={() => void reveal(id)}
                   size="inline"
-                  title={t.summary.overview.source(sourceIndex + 1)}
                   type="button"
                   variant="text"
                 >
@@ -124,7 +123,6 @@ export function OverviewSection({ content, session }: OverviewSectionProps) {
             disabled={!summary.canRefresh}
             onClick={() => void summary.refresh()}
             size="inline"
-            title={copy.refresh}
             type="button"
             variant="text"
           >

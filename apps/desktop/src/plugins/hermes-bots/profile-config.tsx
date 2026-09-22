@@ -34,14 +34,13 @@ import type { RosterRow } from './types'
 // The Partial is the point: both are guarded at every use site because an older
 // build (or a stripped harness namespace) simply doesn't export them.
 const { McpTab, ToolsetConfigPanel }: Partial<Pick<typeof sdk, 'McpTab' | 'ToolsetConfigPanel'>> = sdk
-export const SkillsView = typeof sdk === 'undefined' ? undefined : sdk.SkillsView
-
-// TRUE only on builds whose SkillsView routes `fixedConnection` to the pinned
-// registry connection's backend. Older builds export SkillsView WITHOUT the
+export const CapabilitiesView = typeof sdk === 'undefined' ? undefined : sdk.CapabilitiesView
+// TRUE only on builds whose CapabilitiesView routes `fixedConnection` to the pinned
+// registry connection's backend. Older builds export CapabilitiesView WITHOUT the
 // prop — rendering it for a remote-target draft there would read/write the
 // ACTIVE gateway's skills under the remote bot's name (the wrong machine),
 // so those builds keep the staged checklists for remote targets.
-export const skillsViewRoutesConnections = Boolean(SkillsView && SkillsView.supportsFixedConnection)
+export const capabilitiesViewRoutesConnections = Boolean(CapabilitiesView && CapabilitiesView.supportsFixedConnection)
 
 // ── advanced profile config (skills / toolsets / model / SOUL) ──────────────
 //
@@ -252,7 +251,7 @@ export function AdvancedProfileConfig({ bot, state, setState }: AdvancedProfileC
   // Render THAT instead of the checkbox stand-ins; writes go straight to the
   // bot's backend, so the dirty-section staging below only carries
   // model + SOUL on these builds. Older builds keep the full checklist UI.
-  if (SkillsView && (!botRoute || skillsViewRoutesConnections)) {
+  if (CapabilitiesView && (!botRoute || capabilitiesViewRoutesConnections)) {
     return (
       <div className="grid gap-4">
         <ModelPicker
@@ -272,7 +271,7 @@ export function AdvancedProfileConfig({ bot, state, setState }: AdvancedProfileC
         {labeled(
           b.bot.capabilitiesImmediate,
           <ResizableFrame height={460} minHeight={300}>
-            <SkillsView
+            <CapabilitiesView
               embedded
               fixedProfile={backendProfile}
               {...(botRoute
@@ -301,7 +300,7 @@ export function AdvancedProfileConfig({ bot, state, setState }: AdvancedProfileC
     )
   }
 
-  if (bot?.sourceScoped && botRoute?.mode === 'remote' && !skillsViewRoutesConnections) {
+  if (bot?.sourceScoped && botRoute?.mode === 'remote' && !capabilitiesViewRoutesConnections) {
     return (
       <div className="grid gap-4">
         <ModelPicker
@@ -373,7 +372,7 @@ export function AdvancedProfileConfig({ bot, state, setState }: AdvancedProfileC
             <CheckList columns={2} items={visibleSkills} onToggle={toggleSkill} />
           </div>
           <HubSkillsSection
-            forProfile={backendScope}
+            bot={bot}
             onInstalled={name =>
               setState(prev =>
                 prev.skills.some(s => s.name === name)
@@ -622,11 +621,11 @@ export async function applyAdvancedConfig(
   // on THIS surface too — `confirm_required` means the model section is
   // PENDING the user's confirmation, not failed. Route it through the SAME
   // shared confirm handler the core picker uses (one applier, no forked
-  // confirm logic per surface): the Confirm action resends ONLY the model
+  // confirm logic per surface): a confirmed answer resends ONLY the model
   // section with `confirm_expensive_model: true`.
   if (result?.confirm_required && payload.model && payload.provider) {
     delete merged.model
-    surfaceModelSwitchConfirm({
+    void surfaceModelSwitchConfirm({
       confirmLabel: labels.confirmLabel,
       confirmMessage: result.confirm_message,
       failureMessage: labels.modelSwitchFailed,
@@ -634,6 +633,7 @@ export async function applyAdvancedConfig(
         queryClient.invalidateQueries({
           queryKey: ROSTER_KEY
         }),
+      model: payload.model,
       requestConfirmed: () =>
         requestForBot(bot, 'profiles.configure', {
           name: bot.name,

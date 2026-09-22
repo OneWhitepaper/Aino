@@ -16,7 +16,7 @@ describe('Zoomable', () => {
     )
 
     expect(screen.queryByTestId('overlay')).toBeNull()
-    fireEvent.click(screen.getByTitle('Open diagram'))
+    fireEvent.click(screen.getByRole('button', { name: 'Open diagram' }))
     expect(screen.getByTestId('overlay')).toBeTruthy()
   })
 
@@ -27,7 +27,7 @@ describe('Zoomable', () => {
       </Zoomable>
     )
 
-    fireEvent.click(screen.getByTitle('Open diagram'))
+    fireEvent.click(screen.getByRole('button', { name: 'Open diagram' }))
 
     const dialog = screen.getByRole('dialog')
     const body = dialog.firstElementChild
@@ -53,7 +53,7 @@ describe('Zoomable', () => {
       </I18nProvider>
     )
 
-    fireEvent.click(screen.getByTitle('打开完整视图'))
+    fireEvent.click(screen.getByRole('button', { name: '打开完整视图' }))
 
     expect(screen.getByRole('button', { name: '缩小' })).toBeTruthy()
     expect(screen.getByRole('button', { name: '重置缩放' })).toBeTruthy()

@@ -19,6 +19,7 @@ import { $activeGatewayProfile, normalizeProfileKey } from '@/store/profile'
 import { setAppearance } from '@/store/translucency'
 
 import { $pendingSkinApply } from './backend-sync'
+import { $chatFontFamily, resolveChatFontFamily } from './chat-font'
 import { harmonize, readableInk } from './color'
 import { DEFAULT_SKIN_NAME, DEFAULT_TYPOGRAPHY, monoTheme, nousTheme } from './presets'
 import type { DesktopTheme, DesktopThemeColors } from './types'
@@ -191,7 +192,7 @@ const mixesFor = (isDark: boolean): Record<string, string> => ({
   '--theme-mix-bubble': isDark ? '46%' : '0%'
 })
 
-function applyTheme(theme: DesktopTheme, mode: 'light' | 'dark') {
+function applyTheme(theme: DesktopTheme, mode: 'light' | 'dark', chatFontFamily = $chatFontFamily.get()) {
   if (typeof document === 'undefined') {
     return
   }
@@ -260,7 +261,7 @@ function applyTheme(theme: DesktopTheme, mode: 'light' | 'dark') {
     // `harmonize`); a blue one turns the sidebar's finished dots teal rather
     // than leaving eight emerald spots fighting the theme.
     '--ui-success': harmonize('#10b981', midground, 0.25),
-    '--dt-font-sans': typo.fontSans,
+    '--dt-font-sans': resolveChatFontFamily(chatFontFamily, typo.fontSans),
     '--dt-font-mono': typo.fontMono,
     '--noise-opacity-mul': isDark ? 'calc(0.04 / 0.21)' : 'calc(0.34 / 0.21)'
   }
@@ -433,7 +434,11 @@ export function ThemeProvider({ auxiliary = false, children }: ThemeProviderProp
   // What actually gets painted (matches the `.dark` class applyTheme toggles).
   const renderedMode = useMemo(() => renderedModeFor(paintedTheme.colors, paintedMode), [paintedTheme, paintedMode])
 
-  useEffect(() => applyTheme(paintedTheme, paintedMode), [paintedTheme, paintedMode])
+  // The chat face rides on the theme paint: the config-backed family is layered
+  // in front of the theme's own stack, so an empty value is exactly the theme.
+  const chatFontFamily = useStore($chatFontFamily)
+
+  useEffect(() => applyTheme(paintedTheme, paintedMode, chatFontFamily), [paintedTheme, paintedMode, chatFontFamily])
 
   // Keep the native window appearance pinned to the app theme (vibrancy
   // material, titlebar, new-window pre-paint background).

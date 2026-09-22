@@ -40,21 +40,21 @@ export function ReasoningMenuPanel(props: ModelMenuHostProps) {
 
   return (
     <ModelOptionsContent
-      canDisableReasoning={managed ? undefined : caps?.can_disable_reasoning ?? undefined}
+      canDisableReasoning={managed ? undefined : (caps?.can_disable_reasoning ?? undefined)}
       defaultEffort={defaultEffort}
       effort={controller.current.effort}
-      fastControl={managed ? { kind: 'none' } : resolveFastControl(
-        currentModel || model,
-        providerModels,
-        caps?.fast ?? false,
-        controller.current.fast
-      )}
+      effortWire={controller.current.effortWire}
+      fastControl={
+        managed
+          ? { kind: 'none' }
+          : resolveFastControl(currentModel || model, providerModels, caps?.fast ?? false, controller.current.fast)
+      }
       isActive
       model={model}
       onSelectModel={nextModel => controller.select(nextModel, provider)}
       onSetOptions={patch => controller.setOptions(patch, row)}
       provider={provider}
-      reasoning={managed ? true : caps?.reasoning ?? true}
+      reasoning={managed ? true : (caps?.reasoning ?? true)}
     />
   )
 }

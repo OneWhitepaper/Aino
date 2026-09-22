@@ -15,11 +15,13 @@ interface HandoffNotificationOptions<Window extends HandoffNotificationWindow> {
   logPath: string
   log(message: string): void
   showMessageBox(parent: Window, options: MessageBoxOptions): Promise<unknown>
+  retryUpdate?(): void
+  revealLog?(): void
 }
 
 export function notifyHandoffResult<Window extends HandoffNotificationWindow>(
   result: HandoffResult | null,
-  { window, appName, logPath, log, showMessageBox }: HandoffNotificationOptions<Window>
+  { window, appName, logPath, log, showMessageBox, retryUpdate, revealLog }: HandoffNotificationOptions<Window>
 ): void {
   if (!result) {
     return
@@ -52,7 +54,10 @@ export function notifyHandoffResult<Window extends HandoffNotificationWindow>(
         type: 'error',
         title: `${appName} update did not finish`,
         message: `${appName} update did not finish`,
-        detail: `${result.message}\n\nDetails: ${logPath}`
+        detail: `${result.message}\n\nDetails: ${logPath}`,
+        ...(retryUpdate && revealLog
+          ? { buttons: ['Try again', 'Open log', 'Close'], defaultId: 0, cancelId: 2, noLink: true }
+          : {})
       }
 
   const clearPending = () => {
@@ -68,7 +73,15 @@ export function notifyHandoffResult<Window extends HandoffNotificationWindow>(
     }
 
     try {
-      await showMessageBox(window, notice)
+      const answer = await showMessageBox(window, notice)
+      if (!result.ok && typeof answer === 'object' && answer !== null && 'response' in answer) {
+        if (answer.response === 0) {
+          retryUpdate?.()
+        }
+        if (answer.response === 1) {
+          revealLog?.()
+        }
+      }
     } catch (error) {
       log(`[updates] could not show update result: ${error instanceof Error ? error.message : String(error)}`)
     }

@@ -1,7 +1,7 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { I18nProvider, setRuntimeI18nLocale } from '@/i18n'
+import { I18nProvider, setRuntimeI18nLocale, translateNow } from '@/i18n'
 import { $desktopBoot } from '@/store/boot'
 import { $desktopOnboarding } from '@/store/onboarding'
 
@@ -70,12 +70,32 @@ afterEach(() => {
 })
 
 describe('BootFailureOverlay', () => {
+  it('keeps keyboard focus inside the recovery surface', () => {
+    render(
+      <>
+        <button type="button">Background action</button>
+        <BootFailureOverlay />
+      </>
+    )
+
+    const recoverySurface = screen.getByRole('dialog', { name: translateNow('boot.failure.title') })
+    const retry = screen.getByRole('button', { name: /retry/i })
+    const backgroundAction = screen.getByText(/background action/i)
+
+    retry.focus()
+    backgroundAction.focus()
+
+    expect(recoverySurface.getAttribute('aria-modal')).toBe('true')
+    expect(recoverySurface.contains(globalThis.document.activeElement)).toBe(true)
+  })
+
   it('swaps to the in-place gateway settings view (no route nav) and back', async () => {
     render(<BootFailureOverlay />)
 
     fireEvent.click(screen.getByRole('button', { name: /gateway settings/i }))
     // Recovery actions give way to the embedded panel (behind a Back control).
     expect(await screen.findByRole('button', { name: /back/i })).toBeTruthy()
+    expect(screen.getByRole('dialog', { name: /gateway settings/i }).getAttribute('aria-modal')).toBe('true')
     expect(screen.queryByRole('button', { name: /retry/i })).toBeNull()
 
     fireEvent.click(screen.getByRole('button', { name: /back/i }))
@@ -246,5 +266,21 @@ describe('BootFailureOverlay', () => {
     )
 
     expect(screen.getByText('Aino 后端启动失败：spawn /opt/aino ENOENT')).toBeTruthy()
+  })
+
+  it('keeps a classified localized headline and the original diagnostic under details', () => {
+    const raw = 'Hermes backend failed to start: EACCES\nHermes plugin could not open /opt/aino/state.db'
+    $desktopBoot.set({ ...$desktopBoot.get(), error: raw })
+
+    render(
+      <I18nProvider configClient={null} initialLocale="zh">
+        <BootFailureOverlay />
+      </I18nProvider>
+    )
+
+    expect(screen.getByText(translateNow('boot.causes.permission'))).toBeTruthy()
+    const detail = document.querySelector('details pre')
+    expect(detail?.textContent).toBe(raw)
+    expect(detail?.closest('details')?.open).toBe(false)
   })
 })

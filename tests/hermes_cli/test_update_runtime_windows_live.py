@@ -1,4 +1,4 @@
-"""Real Windows holder policy and directory sharing constraints during venv cutover."""
+"""Real Windows directory holders must not prevent atomic venv config cutover."""
 
 import json
 import site
@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from hermes_cli.managed_uv import _cut_over_candidate, _windows_runtime_self_lock
+from hermes_cli.managed_uv import _cut_over_windows_runtime_config
 from hermes_cli.sqlite_runtime import probe_sqlite_runtime
 from hermes_constants import venv_python_path
 
@@ -22,7 +22,6 @@ from ctypes import wintypes
 import json
 from pathlib import Path
 import sys
-from hermes_cli.managed_uv import _windows_runtime_self_lock
 
 kernel = ctypes.WinDLL("kernel32", use_last_error=True)
 kernel.CreateFileW.argtypes = [
@@ -42,7 +41,6 @@ try:
     print(json.dumps({
         "executable": sys.executable,
         "base_executable": sys._base_executable,
-        "self_lock": _windows_runtime_self_lock(live)[0],
     }), flush=True)
     sys.stdin.read()
 finally:
@@ -51,7 +49,7 @@ finally:
 
 
 @pytest.mark.windows_only
-def test_external_cutover_waits_for_a_real_directory_holder_and_checks_sqlite(tmp_path):
+def test_config_cutover_with_a_real_directory_holder_checks_sqlite(tmp_path):
     root = tmp_path / "checkout"
     live = root / "venv"
     candidate = root / ".hermes-runtime" / "venv-candidate"
@@ -66,6 +64,10 @@ def test_external_cutover_waits_for_a_real_directory_holder_and_checks_sqlite(tm
         )
     info = probe_sqlite_runtime(venv_python_path(candidate))
     assert info is not None
+    current = probe_sqlite_runtime(venv_python_path(live))
+    assert current is not None
+    original_config = (live / "pyvenv.cfg").read_bytes()
+    replacement_config = (candidate / "pyvenv.cfg").read_bytes()
     sentinel = live / "old-generation"
     sentinel.touch()
     holder = subprocess.Popen(
@@ -78,27 +80,21 @@ def test_external_cutover_waits_for_a_real_directory_holder_and_checks_sqlite(tm
         topology = json.loads(line)
         assert Path(topology["executable"]).is_relative_to(live), topology
         assert not Path(topology["base_executable"]).is_relative_to(live), topology
-        assert topology["self_lock"] is True, topology
-        assert _windows_runtime_self_lock(live) == (False, "")
         # Prove the actual Win32 sharing violation before attributing a failed
         # transactional swap to the holder rather than the later SQLite probe.
         with pytest.raises(OSError):
             live.rename(root / "premise-rename")
-        changed, backup, _, detail = _cut_over_candidate(candidate, project_root=root, live=live)
-        assert not changed and backup is None and "park" in detail
+        changed, references_candidate, _, detail = _cut_over_windows_runtime_config(
+            candidate, live=live, current=current, candidate_info=info,
+        )
+        if info.wal_reset_vulnerable:
+            assert not changed and not references_candidate
+            assert "candidate still links vulnerable SQLite" in detail
+            assert (live / "pyvenv.cfg").read_bytes() == original_config
+        else:
+            assert changed and references_candidate, detail
+            assert (live / "pyvenv.cfg").read_bytes() == replacement_config
         assert sentinel.exists() and candidate.exists()
     finally:
         holder.communicate(timeout=15)
     assert holder.returncode == 0
-
-    changed, backup, _, detail = _cut_over_candidate(candidate, project_root=root, live=live)
-    if info.wal_reset_vulnerable:
-        # Some native CI hosts have old SQLite. Releasing the OS lock must
-        # still reach the safety gate and roll back, never bless that runtime.
-        assert not changed and "candidate still links vulnerable SQLite" in detail
-        assert sentinel.exists()
-    else:
-        assert changed, detail
-        assert backup is not None and (backup / sentinel.name).exists()
-        assert not sentinel.exists()
-        assert not candidate.exists()

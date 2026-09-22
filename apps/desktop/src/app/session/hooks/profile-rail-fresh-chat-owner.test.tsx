@@ -6,8 +6,10 @@ import { afterEach, beforeEach, describe, expect, it, type Mock, vi } from 'vite
 
 import { platformAccountActions } from '@/api/platform'
 import { createSessionRpcDispatcher } from '@/app/contrib/session-rpc-dispatcher'
+import { prepareDefaultNewSession } from '@/app/session/new-session-route'
 import type { HermesApiRequest } from '@/global'
 import { getSession } from '@/hermes'
+import { $defaultProfileRoute } from '@/store/default-profile'
 import {
   activeGateway,
   activeGatewayConnectionId,
@@ -24,8 +26,11 @@ import {
   $newChatProfile,
   $newChatRoute,
   $profiles,
+  captureNewChatSource,
   ensureGatewayAgent,
   newSessionInProfile,
+  pinLegacyNewChatProfile,
+  resolveNewChatOwnerRoute,
   selectProfile
 } from '@/store/profile'
 import {
@@ -50,6 +55,7 @@ import {
   setSessions
 } from '@/store/session'
 import { foregroundSessionScopes } from '@/store/session-states'
+import { deferred } from '@/test/deferred'
 import { platformModel, platformSnapshot } from '@/test/platform-model'
 import type { SessionInfo } from '@/types/hermes'
 
@@ -140,7 +146,11 @@ function answer(socket: MockGateway, method: string, params: Record<string, unkn
 
     runtimeOwner = socket
 
-    return { info: params.model_source === 'aino' ? { model_source: 'aino', model_id: params.model_id, provider: 'aino' } : {}, session_id: mintedRuntimeId, stored_session_id: mintedStoredId }
+    return {
+      info: params.model_source === 'aino' ? { model_source: 'aino', model_id: params.model_id, provider: 'aino' } : {},
+      session_id: mintedRuntimeId,
+      stored_session_id: mintedStoredId
+    }
   }
 
   if (sessionScoped(params) && socket !== runtimeOwner) {
@@ -220,13 +230,13 @@ vi.mock('@/hermes', async importOriginal => ({
 function installDesktop(): void {
   ;(window as unknown as { hermesDesktop: unknown }).hermesDesktop = {
     api: vi.fn(async ({ connectionId, profile, path, method = 'GET' }: HermesApiRequest) => {
-      const expectedConnectionId = ownerPort === V1_PORT ? undefined : SOURCE_ID
+      const expectedConnectionId = ownerPort === V1_PORT ? undefined : resolveNewChatOwnerRoute()?.connectionId || SOURCE_ID
 
       if (
         path !== '/api/model/info' ||
         method !== 'GET' ||
         profile !== 'omar' ||
-        connectionId !== expectedConnectionId
+        (connectionId !== expectedConnectionId && !(ownerPort === V1_PORT && connectionId === 'local'))
       ) {
         throw new Error(`Unexpected model default read: ${method} ${path} (${connectionId}::${profile})`)
       }
@@ -285,6 +295,7 @@ function makePrimary(): MockGateway {
 interface HarnessHandle {
   busyRef: { current: boolean }
   bindings: () => { runtimeForStored: null | string; storedForRuntime: null | string }
+  createSession: () => Promise<string | null>
   submitText: (text: string, options?: SubmitTextOptions) => Promise<boolean>
   updateSessionState: (
     sessionId: string,
@@ -380,6 +391,7 @@ function Harness({
         runtimeForStored: cache.runtimeIdByStoredSessionIdRef.current.get(mintedStoredId) ?? null,
         storedForRuntime: cache.sessionStateByRuntimeIdRef.current.get(mintedRuntimeId)?.storedSessionId ?? null
       }),
+      createSession: () => act(async () => sessionActions.createBackendSessionForSend()) as Promise<string | null>,
       submitText: (...args) => act(async () => submitText(...args)) as Promise<boolean>,
       updateSessionState: cache.updateSessionState as HarnessHandle['updateSessionState']
     })
@@ -388,6 +400,7 @@ function Harness({
     cache.sessionStateByRuntimeIdRef,
     cache.updateSessionState,
     onReady,
+    sessionActions.createBackendSessionForSend,
     submitText
   ])
 
@@ -422,7 +435,8 @@ describe('profile rail: a fresh Omar chat keeps its exact registry owner across 
     setAwaitingResponse(false)
     $newChatProfile.set(null)
     $newChatRoute.set(null)
-    $newChatConnectionId.set(null)
+    captureNewChatSource(null)
+    $defaultProfileRoute.set(null)
     _resetSessionOwnerHintsForTests({ storage: true })
   })
 
@@ -435,7 +449,8 @@ describe('profile rail: a fresh Omar chat keeps its exact registry owner across 
     setConnection(null)
     $newChatProfile.set(null)
     $newChatRoute.set(null)
-    $newChatConnectionId.set(null)
+    captureNewChatSource(null)
+    $defaultProfileRoute.set(null)
     $activeGatewayProfile.set('default')
     $profiles.set([])
     clearGatewayManagedCapabilities()
@@ -515,6 +530,98 @@ describe('profile rail: a fresh Omar chat keeps its exact registry owner across 
   }
 
   const calls = (socket: MockGateway) => socket.request.mock.calls.map(call => call[0] as string)
+
+  it('an ordinary profile pick supersedes the legacy default pin on the active registry source', async () => {
+    setPrimaryGateway(makePrimary() as never, 'default')
+    await ensureGatewayAgent(SOURCE_ID, 'default')
+    pinLegacyNewChatProfile('omar')
+    expect(resolveNewChatOwnerRoute()).toBeNull()
+
+    selectProfile('omar')
+    expect(resolveNewChatOwnerRoute()).toEqual({ connectionId: SOURCE_ID, profile: 'omar' })
+    await waitFor(() => expect(activeGatewayProfileKey()).toBe('omar'))
+    expect(activeGatewayConnectionId()).toBe(SOURCE_ID)
+    expect(window.hermesDesktop.getConnection).not.toHaveBeenCalledWith('omar')
+  })
+
+  it.each([
+    { connectionId: null, activeProfile: 'default' },
+    { connectionId: 'local', activeProfile: 'default' },
+    { connectionId: null, activeProfile: 'omar' }
+  ])(
+    'captures the saved $connectionId default before activation from remote $activeProfile',
+    async ({ connectionId, activeProfile }) => {
+      const primary = makePrimary()
+      setPrimaryGateway(primary as never, 'default')
+      await ensureGatewayAgent(SOURCE_ID, activeProfile)
+      ownerPort = connectionId === null ? V1_PORT : OMAR_PORT
+      const activation = deferred<void>()
+      const desktop = window.hermesDesktop!
+      vi.mocked(desktop.getConnectionFor!).mockClear()
+      const getConnection = vi.mocked(desktop.getConnection).getMockImplementation()!
+      const getConnectionFor = vi.mocked(desktop.getConnectionFor!).getMockImplementation()!
+
+      vi.mocked(desktop.getConnection).mockImplementation(async profile => {
+        await activation.promise
+
+        return { ...(await getConnection(profile)), mode: 'remote' }
+      })
+      vi.mocked(desktop.getConnectionFor!).mockImplementation(async route => {
+        await activation.promise
+
+        return getConnectionFor(route)
+      })
+
+      const ambientRequest = vi.fn(async (method: string, params?: Record<string, unknown>) =>
+        (activeGateway() as unknown as MockGateway).request(method, params)
+      )
+
+      let handle: HarnessHandle | null = null
+      render(<Harness ambientRequest={ambientRequest} onReady={h => (handle = h)} />)
+      await waitFor(() => expect(handle).not.toBeNull())
+      $defaultProfileRoute.set({ connectionId, profile: 'omar' })
+      let creating!: Promise<string | null>
+
+      try {
+        act(() => prepareDefaultNewSession())
+        expect(activeGatewayConnectionId()).toBe(SOURCE_ID)
+        expect(resolveNewChatOwnerRoute()).toEqual(connectionId === null ? null : { connectionId, profile: 'omar' })
+        creating = handle!.createSession()
+        expect(runtimeOwner).toBeNull()
+      } finally {
+        activation.resolve()
+      }
+
+      await expect(creating).resolves.toBe(mintedRuntimeId)
+      await expect(handle!.submitText('first prompt')).resolves.toBe(true)
+      await settleTurn(handle!)
+      await expect(handle!.submitText('second prompt')).resolves.toBe(true)
+      const owner = sockets.find(socket => socket.connectUrl?.includes(`:${ownerPort}`))!
+      expect(runtimeOwner).toBe(owner)
+      expect(calls(owner).filter(method => method === 'session.create')).toHaveLength(1)
+      expect(calls(owner).filter(method => method === 'prompt.submit')).toHaveLength(2)
+      expect(desktop.getConnectionFor).not.toHaveBeenCalledWith({ connectionId: SOURCE_ID, profile: 'omar' })
+
+      if (connectionId === null) {
+        expect(desktop.getConnection).toHaveBeenCalledWith('omar')
+        expect(desktop.getConnectionFor).not.toHaveBeenCalledWith({ connectionId: 'local', profile: 'omar' })
+        expect($connection.get()?.mode).toBe('remote')
+        expect(getSessionOwnerHint(mintedStoredId)).toBeUndefined()
+      } else {
+        expect(desktop.getConnectionFor).toHaveBeenCalledWith({ connectionId: 'local', profile: 'omar' })
+        expect(desktop.getConnection).not.toHaveBeenCalledWith('omar')
+        expect(getSessionOwnerHint(mintedStoredId)).toEqual({ connectionId, profile: 'omar' })
+      }
+
+      for (const socket of [primary, ...sockets]) {
+        if (socket !== owner) {
+          expect(
+            socket.request.mock.calls.filter(call => sessionScoped(call[1]) || call[0] === 'session.create')
+          ).toEqual([])
+        }
+      }
+    }
+  )
 
   it('dials homelab::omar when boot published homelab on the active primary gateway', async () => {
     const primary = makePrimary()
@@ -766,15 +873,25 @@ describe('profile rail: a fresh Omar chat keeps its exact registry owner across 
       Object.assign(desktop, {
         platformAccount: bridge,
         platformModels: {
-          list: async () => [platformModel()], owner: async () => owner,
-          bind: vi.fn(async () => ({ ok: true, ready: true, model_id: 'catalog-a', billing_source: 'aino', expires_at: 'later' })),
+          list: async () => [platformModel()],
+          owner: async () => owner,
+          bind: vi.fn(async () => ({
+            ok: true,
+            ready: true,
+            model_id: 'catalog-a',
+            billing_source: 'aino',
+            expires_at: 'later'
+          })),
           clear: vi.fn()
         }
       })
       $profiles.set([{ name: 'default' }, { name: 'omar' }] as never)
       await platformAccountActions(bridge as never).refresh()
       await platformModelCatalog().load()
-      recordGatewayReadyCapability({ profile: 'omar' }, { type: 'gateway.ready', payload: { managed_model_binding: 1 } })
+      recordGatewayReadyCapability(
+        { profile: 'omar' },
+        { type: 'gateway.ready', payload: { managed_model_binding: 1 } }
+      )
       setCurrentModel('catalog-a')
       setCurrentProvider('aino')
       setCurrentPlatformOwner(owner.user_id, owner.platform_origin)
@@ -800,7 +917,9 @@ describe('profile rail: a fresh Omar chat keeps its exact registry owner across 
     await expect(handle!.submitText('second prompt')).resolves.toBe(true)
 
     if (managed) {
-      expect(desktop.platformModels!.bind).toHaveBeenCalledWith(expect.objectContaining({ connection_id: '', profile: 'omar' }))
+      expect(desktop.platformModels!.bind).toHaveBeenCalledWith(
+        expect.objectContaining({ connection_id: '', profile: 'omar' })
+      )
       expect(calls(v1Socket!).filter(method => method === 'session.managed_model_ticket').length).toBeGreaterThan(0)
     } else {
       expect(desktop.api).toHaveBeenCalledExactlyOnceWith(

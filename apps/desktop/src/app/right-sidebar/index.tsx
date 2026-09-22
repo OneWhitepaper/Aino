@@ -43,7 +43,9 @@ export function RightSidebarPane({ onActivateFile, onActivateFolder }: RightSide
     refreshRoot,
     rootError,
     rootLoading,
-    setNodeOpen
+    setNodeOpen,
+    setShowIgnored,
+    showIgnored
   } = useProjectTree(hasWorkspace ? currentCwd : '')
 
   const cwdName =
@@ -100,7 +102,9 @@ export function RightSidebarPane({ onActivateFile, onActivateFolder }: RightSide
         onNodeOpenChange={setNodeOpen}
         onPreviewFile={previewFile}
         onRefresh={() => void refreshRoot()}
+        onToggleShowIgnored={() => setShowIgnored(!showIgnored)}
         openState={openState}
+        showIgnored={showIgnored}
       />
     </aside>
   )
@@ -112,6 +116,8 @@ interface FilesystemTabProps extends FileTreeBodyProps {
   hasWorkspace: boolean
   onCollapseAll: () => void
   onRefresh: () => void
+  onToggleShowIgnored: () => void
+  showIgnored: boolean
 }
 
 function FilesystemTab({
@@ -130,7 +136,9 @@ function FilesystemTab({
   onNodeOpenChange,
   onPreviewFile,
   onRefresh,
-  openState
+  onToggleShowIgnored,
+  openState,
+  showIgnored
 }: FilesystemTabProps) {
   const { t } = useI18n()
   const r = t.rightSidebar
@@ -149,6 +157,17 @@ function FilesystemTab({
             <SidebarPanelLabel tone="neutral">{cwdName}</SidebarPanelLabel>
           </Tip>
         </div>
+        <Tip label={showIgnored ? r.hideIgnored : r.showIgnored}>
+          <Button
+            aria-label={showIgnored ? r.hideIgnored : r.showIgnored}
+            aria-pressed={showIgnored}
+            onClick={onToggleShowIgnored}
+            size="icon-xs"
+            variant="ghost"
+          >
+            <Codicon name={showIgnored ? 'eye' : 'eye-closed'} size="0.8125rem" />
+          </Button>
+        </Tip>
         <Tip label={r.refreshTree}>
           <Button aria-label={r.refreshTree} disabled={loading} onClick={onRefresh} size="icon-xs" variant="ghost">
             <Codicon name="refresh" size="0.875rem" spinning={loading} />

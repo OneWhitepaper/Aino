@@ -47,7 +47,7 @@ import { DeleteProfileDialog } from './delete-profile-dialog'
 import { RenameProfileDialog } from './rename-profile-dialog'
 import { WorkspaceControls } from './workspace-controls'
 
-const SkillsView = lazy(async () => ({ default: (await import('../skills')).SkillsView }))
+const CapabilitiesView = lazy(async () => ({ default: (await import('../capabilities')).CapabilitiesView }))
 
 export function ProfilesView() {
   const connectionId = useStore($activeGatewayConnectionId)
@@ -340,7 +340,7 @@ function ProfileDetail({ current, profile }: { current: boolean; profile: Profil
       {capabilitiesVisited && (
         <div className={section === 'capabilities' ? 'min-h-0 flex-1 overflow-hidden' : 'hidden'}>
           <Suspense fallback={<PageLoader label={p.loading} />}>
-            <SkillsView embedded fixedProfile={profile.name} />
+            <CapabilitiesView embedded fixedProfile={profile.name} />
           </Suspense>
         </div>
       )}

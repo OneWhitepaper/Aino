@@ -37,22 +37,6 @@ def _wait_job(client, job_id: str, timeout: float = 10.0) -> dict:
     raise AssertionError(f"job {job_id} still running after {timeout}s")
 
 
-@pytest.fixture
-def quickstart_target_available(monkeypatch):
-    """Keep target selection deterministic on CI hosts with no usable GPU/RAM budget."""
-    from hermes_cli.local_runtime.catalog import VariantChoice
-
-    monkeypatch.setattr(
-        "hermes_cli.local_runtime.catalog.select_variant",
-        lambda entry, budget: VariantChoice(
-            variant=entry.variants[0], zero_spill=True, reason_key="best-fits"
-        ),
-    )
-    monkeypatch.setattr(
-        "hermes_cli.web_routers.local_models._engine_too_old", lambda min_engine: False
-    )
-
-
 def test_quickstart_unknown_model_404s(client):
     r = client.post("/api/local-models/quickstart", json={"model_id": "no-such"})
     assert r.status_code == 404
@@ -134,7 +118,21 @@ def test_quickstart_refuses_when_nothing_fits(client, monkeypatch):
     assert "Local Models" in r.json()["detail"]
 
 
-def test_quickstart_runs_all_three_legs(client, monkeypatch, tmp_path, quickstart_target_available):
+@pytest.fixture
+def capable_hardware(monkeypatch):
+    """Success-path orchestration tests need a model to fit, independent of host load."""
+    from hermes_cli.local_runtime import hardware
+    from hermes_cli.local_runtime.estimator import HardwareBudget
+
+    gib = 1 << 30
+    budget = HardwareBudget(
+        usable_vram_bytes=64 * gib, total_device_bytes=64 * gib,
+        ram_available_bytes=128 * gib, uma=False,
+    )
+    monkeypatch.setattr(hardware, "probe_budget", lambda **kw: budget)
+
+
+def test_quickstart_runs_all_three_legs(client, capable_hardware, monkeypatch, tmp_path):
     """Fresh machine: install runtime -> download recommended -> activate.
     Each leg is asserted by its observable call, in order."""
     calls: list[str] = []
@@ -195,7 +193,7 @@ def test_quickstart_runs_all_three_legs(client, monkeypatch, tmp_path, quickstar
     assert load_config()["local_runtime"]["enabled"] is True
 
 
-def test_quickstart_skips_satisfied_legs(client, monkeypatch, quickstart_target_available):
+def test_quickstart_skips_satisfied_legs(client, capable_hardware, monkeypatch):
     """Runtime present and model already staged: the response says so and
     the job goes straight to activation."""
     calls: list[str] = []

@@ -1,5 +1,5 @@
 import { useStore } from '@nanostores/react'
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 
 import { Button } from '@/components/ui/button'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
@@ -39,7 +39,7 @@ import { $activeConnectionId, setConnectionsRegistry } from '@/store/connections
 import { refreshFleetRoster } from '@/store/fleet-roster'
 import { notify, notifyError } from '@/store/notifications'
 
-import { EmptyState, ListRow, Pill, SectionHeading, ToggleRow } from './primitives'
+import { EmptyState, ListRow, Pill, SectionHeading, SettingsBreadcrumbContext, ToggleRow } from './primitives'
 
 const KIND_ICONS: Record<DesktopConnectionKind, typeof Globe> = {
   cloud: Cloud,
@@ -58,6 +58,7 @@ interface EditorState {
   token: string
   host: string
   keyPath: string
+  remoteHermesPath: string
   // ssh remote profile, hydrated on edit so the duplicate key matches the
   // main-process one (user@host:port + profile); the editor doesn't expose it.
   remoteProfile: string
@@ -84,6 +85,7 @@ function editorFromConnection(conn: DesktopRegistryConnection): EditorState {
     // would silently resurrect the old values.
     host: conn.host ? `${conn.user ? `${conn.user}@` : ''}${conn.host}${conn.port ? `:${conn.port}` : ''}` : '',
     keyPath: conn.keyPath || '',
+    remoteHermesPath: conn.remoteHermesPath || '',
     remoteProfile: conn.remoteProfile || '',
     headers: (conn.headerNames || []).map(name => ({ name, stored: true, value: '' }))
   }
@@ -99,6 +101,7 @@ function emptyEditor(kind: DesktopConnectionKind): EditorState {
     token: '',
     host: '',
     keyPath: '',
+    remoteHermesPath: '',
     remoteProfile: '',
     headers: []
   }
@@ -237,6 +240,7 @@ function scrollableAncestor(element: HTMLElement): HTMLElement | null {
  * switchover UX is the connection-mode controls above this section.
  */
 export function ConnectionsRegistrySection() {
+  const hasBreadcrumb = useContext(SettingsBreadcrumbContext)
   const { t } = useI18n()
   const s = t.settings.connections
   const activeConnectionId = useStore($activeConnectionId)
@@ -452,6 +456,7 @@ export function ConnectionsRegistrySection() {
           // of truth — never send separate user/port (see editorFromConnection).
           payload.host = editor.host
           payload.keyPath = editor.keyPath || undefined
+          payload.remoteHermesPath = editor.remoteHermesPath.trim()
         }
 
         const result = await bridge.save(payload)
@@ -649,8 +654,8 @@ export function ConnectionsRegistrySection() {
   }
 
   return (
-    <div className="mt-8 border-t border-border/60 pt-6">
-      <SectionHeading icon={Globe} title={s.title} />
+    <div className={hasBreadcrumb ? undefined : 'mt-8 border-t border-border/60 pt-6'}>
+      <SectionHeading icon={Globe} page title={s.title} />
       <p className="mb-1 text-[length:var(--conversation-caption-font-size)] text-(--ui-text-tertiary)">{s.intro}</p>
       {/* Source selection lives in Sessions. Primary is the registry fallback,
           not an immediate workspace switch. */}
@@ -935,19 +940,32 @@ export function ConnectionsRegistrySection() {
           )}
 
           {editor.kind === 'ssh' && (
-            <ListRow
-              action={
-                <Input
-                  onChange={e => {
-                    setDupeError(null)
-                    setEditor({ ...editor, host: e.target.value })
-                  }}
-                  placeholder="user@host:22"
-                  value={editor.host}
-                />
-              }
-              title={s.sshHostTitle}
-            />
+            <>
+              <ListRow
+                action={
+                  <Input
+                    onChange={e => {
+                      setDupeError(null)
+                      setEditor({ ...editor, host: e.target.value })
+                    }}
+                    placeholder="user@host:22"
+                    value={editor.host}
+                  />
+                }
+                title={s.sshHostTitle}
+              />
+              <ListRow
+                action={
+                  <Input
+                    onChange={e => setEditor({ ...editor, remoteHermesPath: e.target.value })}
+                    placeholder={t.settings.gateway.sshHermesPathPlaceholder}
+                    value={editor.remoteHermesPath}
+                  />
+                }
+                description={t.settings.gateway.sshHermesPathDesc}
+                title={t.settings.gateway.sshHermesPathTitle}
+              />
+            </>
           )}
 
           {dupeError ? <p className="text-xs text-destructive">{dupeError}</p> : null}

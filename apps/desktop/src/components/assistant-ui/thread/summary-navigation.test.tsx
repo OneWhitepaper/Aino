@@ -89,17 +89,22 @@ function Harness({ sessionId = 'runtime', visible = true }: { sessionId?: string
     onNew: async () => {}
   })
 
-  const expandWindow = async () => {
+  const expandWindow = async (beforePrepend?: () => void) => {
     if (!selected.windowed && transcriptBackfillAvailable('stored')) {
       const applied = await backfillOlderTranscriptPage({
         storedSessionId: 'stored',
         isCurrent: () => current.current === sessionId,
-        applyOlderPage: page => setMessages(existing => mergeOlderTranscriptPage(existing, page))
+        applyOlderPage: page => {
+          beforePrepend?.()
+          setMessages(existing => mergeOlderTranscriptPage(existing, page))
+        }
       })
 
       if (!applied) {
         return false
       }
+    } else {
+      beforePrepend?.()
     }
 
     setPages(value => value + 1)

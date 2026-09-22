@@ -21,16 +21,18 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { RosterRow } from './types'
 
-const { botConnectionRouteMock, hostMock, persistMock, pluginCtx, requestForBotMock, saveBotMetaMock } = vi.hoisted(() => ({
-  botConnectionRouteMock: vi.fn(),
-  hostMock: { notify: vi.fn(), openSession: vi.fn(), request: vi.fn(), requestProfile: undefined as unknown },
-  persistMock: vi.fn(),
-  // Null unless a test installs one — the plugin ctx is genuinely absent until
-  // register() runs, which is why every read of it carries an English floor.
-  pluginCtx: { current: null as null | { i18n?: { t: (key: string, ...args: unknown[]) => string } } },
-  requestForBotMock: vi.fn(),
-  saveBotMetaMock: vi.fn()
-}))
+const { botConnectionRouteMock, hostMock, persistMock, pluginCtx, requestForBotMock, saveBotMetaMock } = vi.hoisted(
+  () => ({
+    botConnectionRouteMock: vi.fn(),
+    hostMock: { notify: vi.fn(), openSession: vi.fn(), request: vi.fn(), requestProfile: undefined as unknown },
+    persistMock: vi.fn(),
+    // Null unless a test installs one — the plugin ctx is genuinely absent until
+    // register() runs, which is why every read of it carries an English floor.
+    pluginCtx: { current: null as null | { i18n?: { t: (key: string, ...args: unknown[]) => string } } },
+    requestForBotMock: vi.fn(),
+    saveBotMetaMock: vi.fn()
+  })
+)
 
 vi.mock('@hermes/plugin-sdk', () => ({
   BOT_CHAT_SESSION_HYDRATION_TIMEOUT_MS: 15_000,
@@ -240,9 +242,9 @@ describe('the lazy row is materialized before anything else touches it', () => {
     pluginCtx.current = {
       i18n: {
         t: (key: string, ...args: unknown[]) =>
-          key === 'bot.updateGatewayTitle'
+          key === 'bot.openNeedsUpdateTitle'
             ? '更新此网关以使用机器人模式'
-            : key === 'bot.updateGatewayMessage'
+            : key === 'bot.openNeedsUpdateMessage'
               ? `${String(args[0])} 需要更新，然后再重试。`
               : key
       }
@@ -250,13 +252,15 @@ describe('the lazy row is materialized before anything else touches it', () => {
 
     const { notifyBotOpenFailure } = await loadModule()
 
-    notifyBotOpenFailure(new Error('method not found'), { connectionLabel: '远程网关' } as RosterRow, '备用错误')
+    notifyBotOpenFailure(new Error('method not found'), { connectionLabel: '远程网关' } as RosterRow, 'open')
 
-    expect(hostMock.notify).toHaveBeenCalledWith({
-      kind: 'error',
-      title: '更新此网关以使用机器人模式',
-      message: '远程网关 需要更新，然后再重试。'
-    })
+    expect(hostMock.notify).toHaveBeenCalledWith(
+      expect.objectContaining({
+        kind: 'error',
+        title: '更新此网关以使用机器人模式',
+        message: '远程网关 需要更新，然后再重试。'
+      })
+    )
   })
 
   it('falls back to English when an update-required translator returns raw keys', async () => {
@@ -264,13 +268,15 @@ describe('the lazy row is materialized before anything else touches it', () => {
 
     const { notifyBotOpenFailure } = await loadModule()
 
-    notifyBotOpenFailure(new Error('method not found'), { connectionLabel: 'Remote gateway' } as RosterRow, '备用错误')
+    notifyBotOpenFailure(new Error('method not found'), { connectionLabel: 'Remote gateway' } as RosterRow, 'open')
 
-    expect(hostMock.notify).toHaveBeenCalledWith({
-      kind: 'error',
-      title: 'Update this gateway to use Bot Mode',
-      message: 'Update Remote gateway, then try again.'
-    })
+    expect(hostMock.notify).toHaveBeenCalledWith(
+      expect.objectContaining({
+        kind: 'error',
+        title: 'This bot lives on an older Hermes',
+        message: 'Update Remote gateway, then try again.'
+      })
+    )
   })
 
   it('keeps the remote-connection compatibility error readable when the translator returns a raw key', async () => {

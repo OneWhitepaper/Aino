@@ -9,6 +9,7 @@ import { ModelPickerDialog } from '@/components/model-picker'
 import { DropdownMenu, DropdownMenuContent } from '@/components/ui/dropdown-menu'
 import { I18nProvider } from '@/i18n'
 import { modelOptionsQueryKey } from '@/lib/model-options'
+import { $confirmRequest, settleConfirm } from '@/store/confirm'
 import { clearGatewayManagedCapabilities, recordGatewayReadyCapability } from '@/store/gateway-managed-capability'
 import { $modelPresets, modelPresetKey } from '@/store/model-presets'
 import { platformModelCatalog } from '@/store/platform-models'
@@ -443,6 +444,7 @@ it('offers outstanding native cleanup after a lost reverse-switch acknowledgemen
 })
 
 afterEach(() => {
+  settleConfirm(false)
   cleanup()
   $activeSessionId.set(null)
   $sessionStates.set({})
@@ -601,9 +603,9 @@ it('fences stale confirmations and an account transition during accepted config 
   const result = controls()
   await act(async () => expect(await result.current.selectModel({ provider: 'aino', model: 'catalog-a' })).toBe(false))
   expect([$currentProvider.get(), $currentModel.get()]).toEqual(['custom:test', 'byok-old'])
-  const confirm = notices.notify.mock.calls.at(-1)?.[0]?.action
+  expect($confirmRequest.get()).not.toBeNull()
   act(() => broadcast(platformSnapshot('user-b', 2)))
-  await act(() => confirm.onClick())
+  await act(async () => settleConfirm(true))
   expect(request.mock.calls.filter(([method]) => method === 'config.set')).toHaveLength(1)
   expect(bind).not.toHaveBeenCalled()
 
@@ -678,17 +680,17 @@ it('confirms Aino-to-Aino on a secondary tile and keeps its binding/cache on the
       false
     )
   )
-  const confirm = notices.notify.mock.calls.at(-1)?.[0]?.action
+  expect($confirmRequest.get()).not.toBeNull()
   const pending = deferred<{ ok: boolean }>()
   bind.mockReturnValueOnce(pending.promise)
-  const confirming = confirm.onClick()
-  await act(async () => {})
+  await act(async () => settleConfirm(true))
+  await waitFor(() => expect(bind).toHaveBeenCalledOnce())
   $activeGatewayProfile.set('profile-c')
   setCurrentProvider('custom:c')
   setCurrentModel('model-c')
   backend.model_status = 'ready'
   pending.resolve({ ok: true })
-  await act(() => confirming)
+  await waitFor(() => expect($sessionStates.get()['runtime-b'].platformModel?.status).toBe('ready'))
   expect(bind).toHaveBeenCalledWith(
     expect.objectContaining({
       connection_id: 'connection-b',

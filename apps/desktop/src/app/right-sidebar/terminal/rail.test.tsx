@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { I18nProvider } from '@/i18n'
 import { $bindings } from '@/store/keybinds'
+import { stubResizeObserver } from '@/test/jsdom'
 
 import { $terminalTakeover, setTerminalTakeover } from '../store'
 
@@ -11,6 +12,7 @@ import { $activeTerminalId, $terminals } from './terminals'
 
 describe('TerminalRail', () => {
   beforeEach(() => {
+    stubResizeObserver()
     vi.stubGlobal('CSS', { ...globalThis.CSS, escape: (value: string) => value })
     $terminals.set([{ auto: true, cwd: 'C:\\repo', id: 'term-1', kind: 'user', title: 'PowerShell' }])
     $activeTerminalId.set('term-1')
@@ -86,21 +88,21 @@ describe('TerminalRail', () => {
     expect($activeTerminalId.get()).toBe(created?.id)
   })
 
-  it('keeps a hotkey label in inline flow inside the portaled tooltip decoration', async () => {
+  it('keeps the terminal hotkey in a portaled bubble below the horizontal tab strip', async () => {
     const view = render(<TerminalRail />)
 
     fireEvent.pointerMove(screen.getByRole('tab', { name: '1. PowerShell' }), { pointerType: 'mouse' })
     await screen.findByRole('tooltip')
 
     const content = view.container.ownerDocument.querySelector<HTMLElement>('[data-slot="tooltip-content"]')
-    const decoration = content?.firstElementChild
+    const label = content?.querySelector('[data-slot="tooltip-label"]')
 
     expect(content).not.toBeNull()
     expect(view.container.contains(content)).toBe(false)
-    // No flex box under the decoration: its per-line background only wraps
-    // inline flow, so a flex label would hang its overflow dark-on-dark.
-    expect(decoration?.querySelector('.flex, .inline-flex')).toBeNull()
-    expect(decoration?.textContent).toContain('PowerShell')
+    expect(content?.classList.contains('tooltip-bubble')).toBe(true)
+    expect(content?.getAttribute('data-side')).toBe('bottom')
+    expect(label?.textContent).toContain('PowerShell')
+    expect(content?.querySelector('[data-slot="tooltip-arrow"]')).not.toBeNull()
   })
 
   it('⌘-click and middle-click close the tab; a plain click selects it', () => {

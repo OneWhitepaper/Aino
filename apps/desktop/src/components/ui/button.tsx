@@ -27,6 +27,12 @@ const buttonVariants = cva(
         ghost: 'text-(--ui-text-secondary) hover:bg-(--chrome-action-hover) hover:text-(--ui-text-primary)',
         'titlebar-popover':
           'text-(--ui-text-secondary) hover:bg-(--chrome-action-hover) hover:text-(--ui-text-primary) aria-expanded:bg-(--chrome-action-hover) aria-expanded:text-(--ui-text-primary)',
+        grip: 'bg-transparent text-(--ui-text-tertiary) transition-colors hover:text-(--ui-text-secondary) focus-visible:text-(--ui-text-primary)',
+        // A control floating free of any surface (fan-menu discs, detached
+        // chips): the menu/popover treatment — opaque popover fill + the
+        // shared `shadow-md` ring-and-drop. Hover only lifts the glyph; a fill
+        // change on a lone disc reads as a toggle flipping.
+        floating: 'bg-popover text-(--ui-text-secondary) shadow-md hover:text-(--ui-text-primary)',
         link: `rounded-none text-primary underline-offset-4 decoration-current/20 hover:underline ${TEXT_ACTION_ICON}`,
         // Boxless inline-text action (no bg/border). Quiet by default — reads as
         // muted label text, underlines on hover (e.g. "Cancel", "Clear").
@@ -51,6 +57,7 @@ const buttonVariants = cva(
         'icon-xs': "size-6 rounded-(--aino-radius-control) [&_svg:not([class*='size-'])]:size-3",
         'icon-sm': 'size-8 rounded-(--aino-radius-control)',
         'icon-lg': 'size-10 rounded-(--aino-radius-control)',
+        grip: 'h-4 w-12 rounded-full p-0',
         'icon-titlebar':
           'titlebar-icon-button h-(--titlebar-control-height) w-(--titlebar-control-size) rounded-(--aino-radius-control) [&_svg:not([class*="size-"])]:size-(--titlebar-icon-size)'
       }

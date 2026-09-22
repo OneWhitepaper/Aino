@@ -3,6 +3,8 @@ import { atom } from 'nanostores'
 import { MemoryRouter } from 'react-router'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
+import type * as BillingState from './billing/use-billing-state'
+
 import { SettingsView } from './index'
 
 vi.mock('@/hermes', () => ({
@@ -66,7 +68,12 @@ vi.mock('../chat/sidebar/profile-remote-override-dialog', () => ({ ProfileRemote
 
 vi.mock('./about-settings', () => ({ AboutSettings: () => null }))
 vi.mock('./appearance-settings', () => ({ AppearanceSettings: () => null }))
-vi.mock('./billing', () => ({ BillingSettings: () => null }))
+vi.mock('./billing', () => ({ BILLING_VIEWS: ['overview', 'plans'], BillingSettings: () => null }))
+vi.mock('./billing/use-billing-state', async importOriginal => ({
+  ...(await importOriginal<typeof BillingState>()),
+  useBillingState: () => ({ data: undefined }),
+  useSubscriptionState: () => ({ data: undefined })
+}))
 vi.mock('./config-settings', () => ({ ConfigSettings: () => null }))
 vi.mock('./gateway-settings', () => ({ GatewaySettings: () => null }))
 vi.mock('./keybind-settings', () => ({ KeybindSettings: () => null }))

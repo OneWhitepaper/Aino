@@ -126,7 +126,15 @@ export interface HandoffFailResponse {
 }
 
 export type SidebarNavId =
-  'artifacts' | 'command-center' | 'cron' | 'messaging' | 'new-session' | 'profiles' | 'settings' | 'skills'
+  | 'artifacts'
+  | 'command-center'
+  | 'cron'
+  | 'messaging'
+  | 'new-session'
+  | 'profiles'
+  | 'settings'
+  | 'skills'
+  | 'capabilities'
 
 export interface SidebarNavItem {
   /** Built-in view id, or a contributed row's namespaced contribution id. */
@@ -167,6 +175,9 @@ export interface ClientSessionState {
   provider: string
   platformModel?: PlatformSessionModel | null
   reasoningEffort: string
+  /** Gateway-reported wire level for `reasoningEffort`; '' until the backend
+   *  has stamped the current pick (so a clamp is never inferred client-side). */
+  reasoningEffortWire?: string
   serviceTier: string
   fast: boolean
   yolo: boolean

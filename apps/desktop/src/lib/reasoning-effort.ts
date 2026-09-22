@@ -1,4 +1,4 @@
-import { DEFAULT_REASONING_EFFORT, isReasoningEffort } from '@hermes/shared'
+import { DEFAULT_REASONING_EFFORT, isReasoningEffort, type ReasoningEffort } from '@hermes/shared'
 
 import { normalize } from '@/lib/text'
 
@@ -17,10 +17,45 @@ const SHORT_LABELS: Record<string, string> = {
 
 export type ReasoningEffortLabeler = (effort: string) => string
 
-export function reasoningEffortLabel(effort: string, labeler?: ReasoningEffortLabeler): string {
-  const key = normalize(effort)
+/**
+ * A pick the route does not send verbatim: `ultra` is a Hermes-internal step
+ * that every route clamps to its strongest level (`max` on OpenAI-compatible wires), and the
+ * CLI's `/reasoning` says so ("ultra (sends max on this route)"). The wire
+ * level comes from the gateway's `session.info.reasoning_effort_wire`; nothing
+ * is inferred client-side, so an unknown ('' — not yet stamped, or an
+ * optimistic pick) or verbatim wire reads as "no clamp".
+ */
+export function reasoningEffortClamp(
+  effort: string,
+  wire: string | undefined
+): { effort: ReasoningEffort; wire: ReasoningEffort } | null {
+  const picked = normalize(effort)
+  const sent = normalize(wire ?? '')
 
-  return key ? (labeler?.(key) ?? SHORT_LABELS[key] ?? effort) : ''
+  if (!sent || sent === picked || !isReasoningEffort(picked) || !isReasoningEffort(sent)) {
+    return null
+  }
+
+  return { effort: picked, wire: sent }
+}
+
+/** Compact label; a clamped pick shows both ends ("Ultra→Max") so the pill
+ *  never presents a Hermes step as a wire level the route does not have. */
+export function reasoningEffortLabel(
+  effort: string,
+  wireOrLabeler?: string | ReasoningEffortLabeler,
+  labeler?: ReasoningEffortLabeler
+): string {
+  const wire = typeof wireOrLabeler === 'string' ? wireOrLabeler : undefined
+  const localize = typeof wireOrLabeler === 'function' ? wireOrLabeler : labeler
+  const key = normalize(effort)
+  const clamp = reasoningEffortClamp(effort, wire)
+
+  if (clamp) {
+    return `${localize?.(clamp.effort) ?? SHORT_LABELS[clamp.effort]}→${localize?.(clamp.wire) ?? SHORT_LABELS[clamp.wire]}`
+  }
+
+  return key ? (localize?.(key) ?? SHORT_LABELS[key] ?? effort) : ''
 }
 
 /** Thinking is on unless a level explicitly says otherwise; an empty value
