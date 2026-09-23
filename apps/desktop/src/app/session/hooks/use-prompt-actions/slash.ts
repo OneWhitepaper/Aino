@@ -20,9 +20,10 @@ import { isMissingRpcMethod } from '@/lib/gateway-rpc'
 import { applyReasoningSlashResult, reasoningSlashParams } from '@/lib/reasoning-slash'
 import { setSessionYolo } from '@/lib/yolo-session'
 import { openCommandPalettePage } from '@/store/command-palette'
+import { $compactingSessions, setSessionCompacting } from '@/store/compaction'
 import { setComposerDraft } from '@/store/composer'
 import { applyGoalStatusText } from '@/store/goals'
-import { dismissNotification, notify, notifyError } from '@/store/notifications'
+import { notify, notifyError } from '@/store/notifications'
 import { setPetScale } from '@/store/pet-gallery'
 import { $petGenInput, openPetGenerate } from '@/store/pet-generate'
 import {
@@ -129,6 +130,12 @@ interface SlashActionCtx {
   sessionHint?: string
 }
 
+interface SlashOutput {
+  render: (text: string, runtimeSessionId?: string) => void
+  sessionId: string
+  storedSessionId: string | null
+}
+
 interface SlashCommandDeps {
   activeSessionIdRef: MutableRefObject<string | null>
   appendSessionTextMessage: (
@@ -212,9 +219,7 @@ export function useSlashCommand(deps: SlashCommandDeps) {
       // Resolve the target session plus a writer for inline slash output, or
       // notify + return null when none can be created. Folds the ensure / bail /
       // build-renderSlashOutput boilerplate every exec-style handler repeats.
-      const withSlashOutput = async (
-        ctx: SlashActionCtx
-      ): Promise<{ render: (text: string) => void; sessionId: string; storedSessionId: string | null } | null> => {
+      const withSlashOutput = async (ctx: SlashActionCtx): Promise<SlashOutput | null> => {
         // A slash on a fresh draft creates the backend session; seed the
         // sidebar preview with the typed command so the row doesn't sit as
         // "Untitled session" (auto-title only fires after a full exchange,
@@ -240,9 +245,9 @@ export function useSlashCommand(deps: SlashCommandDeps) {
         // Header carries the command token only. The full invocation would
         // duplicate long args — `/goal <prose>` echoed the whole goal in the
         // mono header, then again in the backend notice right under it.
-        const render = (text: string) =>
+        const render = (text: string, runtimeSessionId = sessionId) =>
           appendSessionTextMessage(
-            sessionId,
+            runtimeSessionId,
             'system',
             ctx.recordInput ? slashStatusText(`/${ctx.name}`, text) : text,
             storedSessionId
@@ -254,9 +259,9 @@ export function useSlashCommand(deps: SlashCommandDeps) {
       // `exec` commands (and unknown skill / quick commands the backend owns)
       // run on the gateway and render their text output inline. This is the only
       // path that talks to slash.exec / command.dispatch.
-      async function runExec(ctx: SlashActionCtx): Promise<void> {
+      async function runExec(ctx: SlashActionCtx, boundOutput?: SlashOutput): Promise<void> {
         const { arg, command, name } = ctx
-        const resolved = await withSlashOutput(ctx)
+        const resolved = boundOutput ?? await withSlashOutput(ctx)
 
         if (!resolved) {
           return
@@ -615,24 +620,19 @@ export function useSlashCommand(deps: SlashCommandDeps) {
             return
           }
 
-          const { render: renderSlashOutput, sessionId: initialSessionId, storedSessionId } = resolved
+          const { sessionId: initialSessionId, storedSessionId } = resolved
           let sessionId = initialSessionId
+          const renderSlashOutput = (text: string) => resolved.render(text, sessionId)
           const focusTopic = ctx.arg.trim()
-          const noticeId = `session-compress:${sessionId}`
+          let pending = false
 
-          // Coalesce concurrent compress requests for the same session so a
-          // double-enter doesn't fire two LLM summarise calls.
-          if (compressInFlightRef.current.has(sessionId)) {
+          // Automatic or background compression already owns the phase. A
+          // competing manual request must neither restart nor clear it.
+          if (compressInFlightRef.current.has(sessionId) || $compactingSessions.get()[sessionId]) {
             return
           }
 
           compressInFlightRef.current.add(sessionId)
-          notify({
-            durationMs: 0,
-            id: noticeId,
-            kind: 'info',
-            message: copy.compressing(focusTopic)
-          })
 
           try {
             // Same stale-runtime recovery as prompt.submit: after sleep/wake a
@@ -643,24 +643,30 @@ export function useSlashCommand(deps: SlashCommandDeps) {
             const { result, sessionId: liveSessionId } = await withSessionNotFoundResume(
               sessionId,
               storedSessionId,
-              liveId =>
-                requestGateway<SessionCompressResponse>(
+              liveId => {
+                setSessionCompacting(liveId, true)
+
+                return requestGateway<SessionCompressResponse>(
                   'session.compress',
                   {
                     session_id: liveId,
                     ...(focusTopic ? { focus_topic: focusTopic } : {})
                   },
                   SESSION_COMPRESS_TIMEOUT_MS
-                ),
+                )
+              },
               {
                 requestGateway,
                 onRecovered: recoveredId => {
-                  // Move the in-flight claim onto the live id so the coalesce
-                  // guard releases the right key in `finally`.
-                  compressInFlightRef.current.delete(sessionId)
+                  // Recovery can try a cached id before resuming again. Move
+                  // every binding now, even if the next RPC attempt fails.
+                  const previousSessionId = sessionId
+                  compressInFlightRef.current.delete(previousSessionId)
+                  setSessionCompacting(previousSessionId, false)
+                  sessionId = recoveredId
                   compressInFlightRef.current.add(recoveredId)
 
-                  if (activeSessionIdRef.current === initialSessionId) {
+                  if (activeSessionIdRef.current === previousSessionId) {
                     activeSessionIdRef.current = recoveredId
                     setActiveSessionId(recoveredId)
                   }
@@ -674,8 +680,9 @@ export function useSlashCommand(deps: SlashCommandDeps) {
             // running there; it pushes session.info + a `compacted` status edge
             // when the host finishes. Not an error (#97948).
             if (result?.status === 'pending') {
-              const pendingMessage = result.message || 'compression still running in the background'
-              notify({ durationMs: 8_000, id: noticeId, kind: 'info', message: pendingMessage })
+              // A terminal event may already have cleared the phase before
+              // this response arrives, so retain it without reactivating it.
+              pending = true
 
               return
             }
@@ -724,14 +731,14 @@ export function useSlashCommand(deps: SlashCommandDeps) {
                 // transcript. Errors remain transient: appending an error as a
                 // system message would look like a successful state change.
                 renderSlashOutput(lines.join('\n'))
+              } else {
+                notify({
+                  durationMs: 5_000,
+                  id: `session-compress:${sessionId}`,
+                  kind: 'error',
+                  message: lines.join('\n')
+                })
               }
-
-              notify({
-                durationMs: 5_000,
-                id: noticeId,
-                kind: aborted ? 'error' : 'success',
-                message: lines.join('\n')
-              })
 
               return
             }
@@ -740,7 +747,6 @@ export function useSlashCommand(deps: SlashCommandDeps) {
 
             if (hostOutput) {
               renderSlashOutput(hostOutput)
-              notify({ durationMs: 5_000, id: noticeId, kind: 'success', message: hostOutput })
 
               return
             }
@@ -748,22 +754,14 @@ export function useSlashCommand(deps: SlashCommandDeps) {
             const removed = result?.removed ?? 0
             const message = removed > 0 ? copy.compressedMessages(removed) : copy.nothingToCompress
             renderSlashOutput(message)
-            notify({
-              durationMs: 5_000,
-              id: noticeId,
-              kind: 'success',
-              message
-            })
           } catch (err) {
-            dismissNotification(noticeId)
-
             // Desktop and gateway runtimes update independently. Preserve the
             // historical slash-worker path for an older gateway that has not
             // shipped session.compress yet; it cannot offer the longer RPC
             // timeout, but it must not turn a once-working command into an
             // immediate "method not found" error.
             if (isMissingRpcMethod(err)) {
-              await runExec(ctx)
+              await runExec(ctx, { render: renderSlashOutput, sessionId, storedSessionId })
 
               return
             }
@@ -771,6 +769,10 @@ export function useSlashCommand(deps: SlashCommandDeps) {
             renderSlashOutput(copy.errorLine(err instanceof Error ? err.message : String(err)))
           } finally {
             compressInFlightRef.current.delete(sessionId)
+
+            if (!pending) {
+              setSessionCompacting(sessionId, false)
+            }
           }
         },
         // /reasoning runs the gateway's `config.set key=reasoning` — the Ink

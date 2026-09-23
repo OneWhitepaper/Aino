@@ -1,14 +1,20 @@
 import { translateNow } from '@/i18n'
 import { activeGateway } from '@/store/gateway'
+import { $activeGatewayProfile, $profileScope, ALL_PROFILES, normalizeProfileKey } from '@/store/profile'
 import { $projects, $projectTree, projectProfile, refreshProjectTree } from '@/store/projects'
 import type { ProjectInfo } from '@/types/hermes'
 
 // One dialog owns one profile/project. Capture that owner once so a delayed
 // picker or response cannot write into the next workspace's project cache.
-export function projectFolderActions(id: string) {
+export function projectFolderActions(id: string, ownerProfile?: string) {
   const gateway = activeGateway()
-  const profile = projectProfile()
-  const isCurrent = () => Boolean(profile && activeGateway() === gateway && projectProfile() === profile)
+  const scope = $profileScope.get()
+  const activeProfile = normalizeProfileKey($activeGatewayProfile.get())
+  const profile = scope === ALL_PROFILES ? (ownerProfile ? normalizeProfileKey(ownerProfile) : null) : projectProfile()
+  const isCurrent = () => Boolean(
+    profile && activeGateway() === gateway && $profileScope.get() === scope &&
+    normalizeProfileKey($activeGatewayProfile.get()) === activeProfile
+  )
 
   const request = async (method: 'get' | 'add_folder' | 'set_primary' | 'remove_folder', path?: string) => {
     if (!gateway || !isCurrent()) {
@@ -23,6 +29,14 @@ export function projectFolderActions(id: string) {
 
     if (!isCurrent()) {
       throw new Error(translateNow('sidebar.projects.activeProfileChanged'))
+    }
+
+    if (scope === ALL_PROFILES) {
+      if (method !== 'get') {
+        void refreshProjectTree()
+      }
+
+      return project
     }
 
     const projects = $projects.get()

@@ -49,6 +49,8 @@ export interface SidebarProjectTree {
   id: string
   label: string
   path: null | string
+  // Owner of this header's id/label in the merged all-profiles tree.
+  ownerProfile?: string
   color?: null | string
   icon?: null | string
   archived?: boolean

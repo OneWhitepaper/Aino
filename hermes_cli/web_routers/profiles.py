@@ -564,6 +564,10 @@ def _merge_profile_tree(
     a declared project (``p_<hash>``) folds with another profile's auto entry for the same
     folder. Sessions carry the owning profile; a group header never claims a single owner."""
     for project in projects:
+        # The merged header keeps one project's identity (id, label, appearance).
+        # Keep that identity's owner with it so desktop actions cannot write a
+        # same-id project in whichever profile happens to be active.
+        project["ownerProfile"] = profile
         for identity in project.get("sessionIdentities") or []:
             identity["profile"] = profile
         lane_sessions = (s for r in project.get("repos") or []

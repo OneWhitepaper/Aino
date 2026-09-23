@@ -2,7 +2,7 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 
 import { setShowAllProfiles } from '@/store/profile'
-import { closeProject, deleteProject } from '@/store/projects'
+import { closeProject, deleteProject, openProjectFolders } from '@/store/projects'
 
 import { ProjectContextMenu, ProjectMenu } from './project-menu'
 import type { SidebarProjectTree } from './workspace-groups'
@@ -45,7 +45,8 @@ vi.mock('@/i18n', () => ({
           menuRename: 'Rename',
           menuSetActive: 'Set active',
           noColor: 'No color',
-          reveal: 'Reveal in file manager'
+          reveal: 'Reveal in file manager',
+          unavailableAllProfiles: 'Project settings are read-only in All profiles.'
         }
       }
     }
@@ -82,6 +83,7 @@ const project = {
   id: 'p1',
   isAuto: false,
   label: 'Test D',
+  ownerProfile: 'worker',
   path: '/repo'
 } as unknown as SidebarProjectTree
 
@@ -124,12 +126,27 @@ describe('ProjectMenu', () => {
     expect(screen.queryByRole('dialog')).toBeNull()
   })
 
-  it('does not send mutations for owner-ambiguous projects in the all-workspaces browse scope', () => {
+  it.each(['kebab', 'context'])('keeps project management available in the all-workspaces view ($0)', menu => {
     setShowAllProfiles(true)
-    render(<ProjectMenu isActive={false} project={project} />)
-    openTriggerMenu(screen.getByRole('button', { name: 'Actions' }))
-    expect(screen.getByRole('menuitem', { name: 'Manage folders' }).hasAttribute('data-disabled')).toBe(true)
-    expect(screen.getByRole('menuitem', { name: 'Delete…' }).hasAttribute('data-disabled')).toBe(true)
+
+    if (menu === 'kebab') {
+      render(<ProjectMenu isActive={false} project={project} />)
+      openTriggerMenu(screen.getByRole('button', { name: 'Actions' }))
+    } else {
+      render(
+        <ProjectContextMenu isActive={false} project={project}>
+          <button type="button">Project row</button>
+        </ProjectContextMenu>
+      )
+      fireEvent.contextMenu(screen.getByRole('button', { name: 'Project row' }))
+    }
+
+    expect(screen.queryByText('Project settings are read-only in All profiles.')).toBeNull()
+    expect(screen.getByRole('menuitem', { name: 'Manage folders' }).hasAttribute('data-disabled')).toBe(false)
+    expect(screen.getByRole('menuitem', { name: 'Delete…' }).hasAttribute('data-disabled')).toBe(false)
+
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Manage folders' }))
+    expect(openProjectFolders).toHaveBeenCalledExactlyOnceWith({ id: project.id, name: project.label, profile: 'worker' })
   })
   it('does not wrap the kebab trigger in a Tip', () => {
     render(<ProjectMenu isActive={false} project={project} />)

@@ -1,8 +1,7 @@
 import { atom, computed } from 'nanostores'
 
-// Per-session flag while auto-compaction runs mid-turn. Without it the
-// transcript looks like it reset; per-session so a background chat can't
-// clobber the foreground view.
+// Manual and automatic context compaction share a per-session phase, so a
+// background chat can't clobber the foreground view.
 const keyFor = (sessionId: string | null | undefined): string => sessionId ?? ''
 
 export const $compactingSessions = atom<Record<string, true>>({})

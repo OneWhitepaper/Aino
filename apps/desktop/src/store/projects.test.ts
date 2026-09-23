@@ -832,58 +832,39 @@ describe('project writes while viewing all profiles', () => {
     $activeGatewayProfile.set('default')
   })
 
-  it.each(['default', 'coder'])(
-    'updates appearance in the active %s profile without leaving All profiles',
-    async profile => {
+  it.each(['update', 'add_folder', 'delete'] as const)(
+    'routes %s to the displayed project owner without changing the active profile',
+    async operation => {
       const request = vi.fn().mockResolvedValue({})
       activeGateway.mockReturnValue({ connectionState: 'open', request } as never)
-      $activeGatewayProfile.set(profile)
       setShowAllProfiles(true)
 
-      await expect(updateProject(project.id, { color: '#ff0000' })).resolves.toBeUndefined()
+      if (operation === 'update') {
+        await updateProject(project.id, { color: '#ff0000' }, 'coder')
+      } else if (operation === 'add_folder') {
+        await addProjectFolder(project.id, '/srv/ws/extra', {}, 'coder')
+      } else {
+        await deleteProject(project.id, 'coder')
+      }
 
       expect(request).toHaveBeenCalledWith(
-        'projects.update',
-        expect.objectContaining({ profile, id: project.id, color: '#ff0000' })
+        `projects.${operation}`,
+        expect.objectContaining({ profile: 'coder', id: project.id })
       )
       expect($profileScope.get()).toBe(ALL_PROFILES)
-      expect($projects.get()).toEqual([expect.objectContaining({ id: project.id, color: '#ff0000' })])
+      expect($activeGatewayProfile.get()).toBe('default')
+      expect($projects.get()).toEqual([project])
     }
   )
 
-  it.each(['default', 'coder'])(
-    'adds a folder in the active %s profile without leaving All profiles',
-    async profile => {
-      const request = vi.fn().mockResolvedValue({})
-      activeGateway.mockReturnValue({ connectionState: 'open', request } as never)
-      $activeGatewayProfile.set(profile)
-      setShowAllProfiles(true)
+  it('refuses an ambiguous write without an owner in All profiles', async () => {
+    const request = vi.fn()
+    activeGateway.mockReturnValue({ connectionState: 'open', request } as never)
+    setShowAllProfiles(true)
 
-      await expect(addProjectFolder(project.id, '/srv/ws/extra')).resolves.toBeUndefined()
-
-      expect(request).toHaveBeenCalledWith(
-        'projects.add_folder',
-        expect.objectContaining({ profile, id: project.id, path: '/srv/ws/extra' })
-      )
-      expect($profileScope.get()).toBe(ALL_PROFILES)
-    }
-  )
-
-  it.each(['default', 'coder'])(
-    'deletes a project in the active %s profile without leaving All profiles',
-    async profile => {
-      const request = vi.fn().mockResolvedValue({ active_id: null, projects: [], scoped_session_ids: [] })
-      activeGateway.mockReturnValue({ connectionState: 'open', request } as never)
-      $activeGatewayProfile.set(profile)
-      setShowAllProfiles(true)
-
-      await expect(deleteProject(project.id)).resolves.toBeUndefined()
-
-      expect(request).toHaveBeenCalledWith('projects.delete', expect.objectContaining({ profile, id: project.id }))
-      expect($profileScope.get()).toBe(ALL_PROFILES)
-      expect($projects.get()).toEqual([])
-    }
-  )
+    await expect(deleteProject(project.id)).rejects.toThrow()
+    expect(request).not.toHaveBeenCalled()
+  })
 })
 
 describe('projects RPC capability', () => {

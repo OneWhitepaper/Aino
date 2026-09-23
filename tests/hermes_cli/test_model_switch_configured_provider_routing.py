@@ -50,6 +50,7 @@ def _run_switch(
     validation=_ACCEPTED,
     current_model="old-model",
     current_base_url="",
+    explicit_provider="",
 ):
     """Drive ``switch_model`` with the resolution chain mocked out.
 
@@ -79,6 +80,7 @@ def _run_switch(
             current_provider=current_provider,
             current_model=current_model,
             current_base_url=current_base_url,
+            explicit_provider=explicit_provider,
             user_providers=user_providers or {},
             custom_providers=custom_providers or [],
         )
@@ -140,6 +142,59 @@ def test_compat_projection_of_same_provider_is_not_ambiguous():
         custom_providers=get_compatible_custom_providers({"providers": user_providers}))
     assert result.success is True, result.error_message
     assert result.target_provider == "relay"
+
+
+def test_configured_provider_colliding_with_builtin_keeps_custom_identity():
+    """A ``providers.deepseek`` endpoint must not persist as the built-in
+    ``deepseek`` route, which resolves a different credential after resume."""
+    from hermes_cli.config import get_compatible_custom_providers
+
+    user_providers = {
+        "deepseek": {
+            "name": "DeepSeek custom",
+            "api": "https://api.deepseek.com/v1",
+            "key_env": "HERMES_CUSTOM_DEEPSEEK_API_KEY",
+            "models": ["deepseek-flash"],
+        }
+    }
+    result = _run_switch(
+        raw_input="deepseek-flash",
+        # A live AIAgent resolves every named custom entry to the billing
+        # class ``custom``; the durable entry name is absent at this boundary.
+        current_provider="custom",
+        current_base_url="https://api.deepseek.com/v1",
+        user_providers=user_providers,
+        custom_providers=get_compatible_custom_providers({"providers": user_providers}),
+    )
+
+    assert result.success is True, result.error_message
+    assert result.target_provider == "custom:deepseek"
+
+
+def test_explicit_configured_provider_colliding_with_builtin_keeps_custom_identity():
+    """The Desktop picker supplies an explicit provider, so its route must
+    persist the same unambiguous identity as typed model detection."""
+    from hermes_cli.config import get_compatible_custom_providers
+
+    user_providers = {
+        "deepseek": {
+            "name": "DeepSeek custom",
+            "api": "https://api.deepseek.com/v1",
+            "key_env": "HERMES_CUSTOM_DEEPSEEK_API_KEY",
+            "models": ["deepseek-flash"],
+        }
+    }
+    result = _run_switch(
+        raw_input="deepseek-flash",
+        explicit_provider="deepseek",
+        current_provider="custom",
+        current_base_url="https://api.deepseek.com/v1",
+        user_providers=user_providers,
+        custom_providers=get_compatible_custom_providers({"providers": user_providers}),
+    )
+
+    assert result.success is True, result.error_message
+    assert result.target_provider == "custom:deepseek"
 
 
 def test_distinct_legacy_endpoint_with_same_model_stays_ambiguous():

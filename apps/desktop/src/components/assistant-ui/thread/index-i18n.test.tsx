@@ -47,6 +47,7 @@ vi.mock('@/components/assistant-ui/chat-empty-slot', () => ({ ChatEmptySlot: () 
 vi.mock('@/components/assistant-ui/thread/assistant-message', () => ({ AssistantMessage: () => null }))
 vi.mock('@/components/assistant-ui/thread/status', () => ({
   BackgroundResumeNotice: () => null,
+  ThreadCompactionIndicator: () => null,
   CenteredThreadSpinner: () => null
 }))
 vi.mock('@/components/assistant-ui/thread/system-message', () => ({ SystemMessage: () => null }))

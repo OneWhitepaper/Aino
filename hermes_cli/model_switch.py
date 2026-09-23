@@ -978,6 +978,25 @@ def _current_provider_match(st: "_Switch", cfg_matches: dict[str, str]) -> Optio
                  and current in custom_provider_aliases(str(providers[slug].get("name") or ""), slug)), None)
 
 
+def _durable_configured_provider_identity(slug: str, user_providers: Optional[dict]) -> str:
+    """Keep a configured endpoint distinct from a built-in with the same id.
+
+    ``providers.deepseek`` wins while model-switch resolves the live endpoint, but a persisted bare
+    ``deepseek`` is later interpreted as the built-in route.  Only colliding config keys need the
+    explicit custom namespace; ordinary keys retain their existing public identity.
+    """
+    if not isinstance(user_providers, dict) or slug not in user_providers:
+        return slug
+    try:
+        from hermes_cli.providers import get_provider
+        if get_provider(slug, allow_network=False) is not None:
+            from hermes_cli.providers import custom_provider_slug
+            return custom_provider_slug(slug, slug)
+    except Exception:
+        pass
+    return slug
+
+
 def _resolve_named_custom_model_id(model_name: str, target_provider: str, custom_providers: Optional[list]) -> str:
     """Map a picker-prefixed custom model selection (``prefix/model``) to its configured ID."""
     provider = _clean(target_provider).lower()
@@ -1206,6 +1225,8 @@ def _route_explicit_provider(st: _Switch) -> Optional[ModelSwitchResult]:
         return st.fail(_unknown_provider_message(st.explicit_provider))
 
     st.target_provider, st.provider_label = pdef.id, pdef.name  # label is re-derived in the credential step
+    if pdef.source == "user-config":
+        st.target_provider = _durable_configured_provider_identity(st.target_provider, st.user_providers)
     if st.target_provider == "moa" and not st.new_model:
         st.new_model = _moa_default_preset()
 
@@ -1299,6 +1320,9 @@ def _route_configured_provider(st: _Switch) -> Optional[ModelSwitchResult] | boo
         return False
     current_slug = _current_provider_match(st, cfg_matches)
     if current_slug is not None:
+        durable_identity = _durable_configured_provider_identity(current_slug, st.user_providers)
+        if durable_identity != current_slug:
+            st.target_provider = durable_identity
         st.new_model = cfg_matches[current_slug]
         return True
     match_slugs = sorted(cfg_matches)
@@ -1307,8 +1331,9 @@ def _route_configured_provider(st: _Switch) -> Optional[ModelSwitchResult] | boo
             f"'{st.new_model}' is declared by multiple configured "
             f"providers ({', '.join(match_slugs)}). Re-run with "
             f"--provider <slug> to choose which one to use.")
-    st.target_provider = match_slugs[0]
-    st.new_model = cfg_matches[st.target_provider]
+    matched_slug = match_slugs[0]
+    st.target_provider = _durable_configured_provider_identity(matched_slug, st.user_providers)
+    st.new_model = cfg_matches[matched_slug]
     logger.debug("Configured-provider detection routed '%s' to %s", st.new_model, st.target_provider)
     # providers.<slug> endpoints resolve in the credential block via resolve_user_provider(),
     # which is gated on explicit_provider; custom:* slugs resolve at runtime directly.

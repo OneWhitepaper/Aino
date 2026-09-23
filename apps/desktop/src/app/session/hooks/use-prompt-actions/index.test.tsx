@@ -10,6 +10,7 @@ import { getSession } from '@/hermes'
 import { I18nProvider, setRuntimeI18nLocale } from '@/i18n'
 import { textPart } from '@/lib/chat-messages'
 import { createClientSessionState } from '@/lib/chat-runtime'
+import { $compactingSessions, setSessionCompacting } from '@/store/compaction'
 import { $composerAttachments, $composerDraft, type ComposerAttachment, setComposerDraft } from '@/store/composer'
 import { $queuedPromptsBySession, getQueuedPrompts } from '@/store/composer-queue'
 import { requestGatewayForAgent } from '@/store/gateway'
@@ -872,12 +873,15 @@ describe('usePromptActions /pet', () => {
 
 describe('usePromptActions /compress', () => {
   beforeEach(() => {
+    $compactingSessions.set({})
+    clearNotifications()
     setRuntimeI18nLocale('en')
     setSessions(() => [sessionInfo()])
   })
 
   afterEach(() => {
     cleanup()
+    $compactingSessions.set({})
     setRuntimeI18nLocale('en')
     clearNotifications()
     setCurrentUsage({ calls: 0, input: 0, output: 0, total: 0 })
@@ -1028,9 +1032,7 @@ describe('usePromptActions /compress', () => {
     const computeHostTexts = renderedSeedTexts(seeds)
     expect(computeHostTexts).toEqual(expect.arrayContaining(['compute-host summary', 'compute-host answer']))
     expect(computeHostTexts.some(text => text.includes('Compressed 4 → 2 messages'))).toBe(true)
-    expect($notifications.get()).toEqual(
-      expect.arrayContaining([expect.objectContaining({ message: 'Compressed 4 → 2 messages' })])
-    )
+    expect($notifications.get()).toEqual([])
   })
 
   it('renders an aborted compression as an error, not a success', async () => {
@@ -1066,6 +1068,7 @@ describe('usePromptActions /compress', () => {
         expect.objectContaining({ kind: 'success', message: expect.stringContaining('Compression aborted') })
       ])
     )
+    expect($compactingSessions.get()).toEqual({})
   })
 
   it('renders a would-grow compression refusal without durable success output', async () => {
@@ -1156,6 +1159,7 @@ describe('usePromptActions /compress', () => {
     const texts = renderedSeedTexts(seeds)
     expect(texts.some(text => text.includes('session busy'))).toBe(true)
     expect(texts.some(text => text.includes('not a quick/plugin/skill command'))).toBe(false)
+    expect($compactingSessions.get()).toEqual({})
   })
 
   it('falls back to the slash worker when an older gateway lacks session.compress', async () => {
@@ -1187,6 +1191,7 @@ describe('usePromptActions /compress', () => {
 
     expect(requestGateway).toHaveBeenCalledWith('slash.exec', expect.objectContaining({ command: 'compress' }))
     expect(renderedSeedTexts(seeds).some(text => text.includes('compressed by legacy gateway'))).toBe(true)
+    expect($compactingSessions.get()).toEqual({})
   })
 
   it('does not clobber the foreground transcript when compression resolves after a session switch', async () => {
@@ -1306,7 +1311,17 @@ describe('usePromptActions /compress', () => {
 
     expect(updates).toContainEqual({ sessionId: RUNTIME_SESSION_ID, storedSessionId: 'stored-a' })
   })
-  it('shows a compression progress toast outside the transcript', async () => {
+  it.each([
+    { status: 'compressed', completedBeforeResponse: false, remainsCompacting: false },
+    { status: 'pending', completedBeforeResponse: false, remainsCompacting: true },
+    { status: 'pending', completedBeforeResponse: true, remainsCompacting: false }
+  ])('keeps compression progress session-scoped without toasts ($status, completed=$completedBeforeResponse)', async ({
+    status,
+    completedBeforeResponse,
+    remainsCompacting
+  }) => {
+    const otherSessionId = 'rt-other-compression'
+    setSessionCompacting(otherSessionId, true)
     let resolveCompress: (value: unknown) => void = () => undefined
 
     const compressResult = new Promise(resolve => {
@@ -1326,10 +1341,113 @@ describe('usePromptActions /compress', () => {
       <Harness onReady={h => (handle = h)} refreshSessions={async () => undefined} requestGateway={requestGateway} />
     )
 
-    const submitted = handle!.submitTextRaw('/compress')
-    await waitFor(() => expect($notifications.get().some(item => item.message === 'compressing context...')).toBe(true))
-    resolveCompress({ messages: [{ content: 'compressed transcript', role: 'system' }] })
-    await submitted
+    let submitted: Promise<boolean>
+    act(() => {
+      submitted = handle!.submitTextRaw('/compress')
+    })
+    await waitFor(() => expect($compactingSessions.get()).toEqual({
+      [otherSessionId]: true,
+      [RUNTIME_SESSION_ID]: true
+    }))
+    expect($notifications.get()).toEqual([])
+
+    if (completedBeforeResponse) {
+      act(() => setSessionCompacting(RUNTIME_SESSION_ID, false))
+    }
+
+    await act(async () => {
+      resolveCompress({ status, messages: [{ content: 'compressed transcript', role: 'system' }] })
+      await submitted
+    })
+    expect($compactingSessions.get()).toEqual({
+      [otherSessionId]: true,
+      ...(remainsCompacting ? { [RUNTIME_SESSION_ID]: true } : {})
+    })
+    expect($notifications.get()).toEqual([])
+
+    if (remainsCompacting) {
+      await handle!.submitText('/compress')
+      expect(requestGateway).toHaveBeenCalledTimes(1)
+      expect($compactingSessions.get()[RUNTIME_SESSION_ID]).toBe(true)
+    }
+  })
+
+  it('preserves automatic compaction without issuing a competing manual request', async () => {
+    setSessionCompacting(RUNTIME_SESSION_ID, true)
+    const requestGateway = vi.fn(async () => { throw new Error('session busy') })
+    let handle: HarnessHandle | null = null
+    await actRender(
+      <Harness onReady={h => (handle = h)} refreshSessions={async () => undefined} requestGateway={requestGateway} />
+    )
+
+    await handle!.submitText('/compress')
+
+    expect(requestGateway).not.toHaveBeenCalled()
+    expect($compactingSessions.get()).toEqual({ [RUNTIME_SESSION_ID]: true })
+  })
+
+  it('moves compression progress and output to a recovered runtime and releases it after an error', async () => {
+    const recoveredSessionId = 'rt-compress-recovered'
+    const storedSessionId = 'stored-compress-owner'
+    const activeSessionIdRef = { current: RUNTIME_SESSION_ID }
+    const selectedStoredSessionIdRef = { current: storedSessionId }
+    const updates: Array<{ sessionId: string; storedSessionId: null | string | undefined }> = []
+    const seeds: Record<string, unknown>[] = []
+    let rejectCompress: (reason: unknown) => void = () => undefined
+    const compression = new Promise((_, reject) => { rejectCompress = reject })
+    let recoveredCalls = 0
+
+    const requestGateway = vi.fn(async (method: string, params?: Record<string, unknown>) => {
+      if (method === 'session.resume') {
+        return { session_id: recoveredSessionId } as never
+      }
+
+      if (method === 'session.compress') {
+        if (params?.session_id === RUNTIME_SESSION_ID) {
+          throw new Error('session not found')
+        }
+
+        recoveredCalls += 1
+
+        return (recoveredCalls === 1 ? await compression : { removed: 3 }) as never
+      }
+
+      throw new Error(`unexpected method: ${method}`)
+    })
+
+    let handle: HarnessHandle | null = null
+    await actRender(
+      <Harness
+        activeSessionIdRef={activeSessionIdRef}
+        onReady={h => (handle = h)}
+        onSeedState={state => seeds.push(state)}
+        onUpdateState={(sessionId, storedId) => updates.push({ sessionId, storedSessionId: storedId })}
+        refreshSessions={async () => undefined}
+        requestGateway={requestGateway}
+        selectedStoredSessionIdRef={selectedStoredSessionIdRef}
+      />
+    )
+
+    let submitted: Promise<boolean>
+    act(() => {
+      submitted = handle!.submitTextRaw('/compress')
+    })
+    await waitFor(() => expect($compactingSessions.get()).toEqual({ [recoveredSessionId]: true }))
+    expect(activeSessionIdRef.current).toBe(recoveredSessionId)
+
+    await act(async () => {
+      rejectCompress(new Error('recovered compression failed'))
+      await submitted
+    })
+    expect($compactingSessions.get()).toEqual({})
+    expect(updates).toEqual([{ sessionId: recoveredSessionId, storedSessionId }])
+    expect(renderedSeedTexts(seeds).join('\n')).toContain('recovered compression failed')
+
+    await handle!.submitText('/compress')
+    expect(recoveredCalls).toBe(2)
+    expect($compactingSessions.get()).toEqual({})
+    expect(renderedSeedTexts(seeds).join('\n')).toContain('compressed 3 messages')
+    expect(updates.every(update => update.sessionId === recoveredSessionId)).toBe(true)
   })
 })
 

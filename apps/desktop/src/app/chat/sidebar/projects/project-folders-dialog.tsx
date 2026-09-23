@@ -11,10 +11,10 @@ import { projectFolderActions } from '@/store/project-folders'
 import { $projectDialog, closeProjectDialog, pickProjectFolder } from '@/store/projects'
 import type { ProjectInfo } from '@/types/hermes'
 
-export function ProjectFoldersDialog({ projectId, name }: { projectId: string; name?: string }) {
+export function ProjectFoldersDialog({ projectId, name, ownerProfile }: { projectId: string; name?: string; ownerProfile?: string }) {
   const { t } = useI18n()
   const p = t.sidebar.projects
-  const actions = useMemo(() => projectFolderActions(projectId), [projectId])
+  const actions = useMemo(() => projectFolderActions(projectId, ownerProfile), [projectId, ownerProfile])
   const [project, setProject] = useState<ProjectInfo | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')

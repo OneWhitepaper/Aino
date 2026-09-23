@@ -1567,6 +1567,21 @@ def _stored_session_runtime_overrides(row: dict | None) -> dict:
         provider = billing_provider
     base_url, api_mode, service_tier = field("base_url"), field("api_mode"), field("service_tier")
     reasoning_config = model_config.get("reasoning_config")
+    # Older model switches persisted a configured endpoint whose key collides with a built-in
+    # (``providers.deepseek``) as bare ``deepseek``.  Resume then selected the built-in credential
+    # instead of the endpoint's key_env.  An exact endpoint match plus the same config-key suffix
+    # identifies that legacy row without rewriting unrelated built-in sessions.
+    if provider and base_url and not provider.lower().startswith("custom:"):
+        try:
+            from hermes_cli.runtime_provider import find_custom_provider_identity
+            configured_identity = find_custom_provider_identity(base_url)
+        except Exception:
+            configured_identity = None
+            logger.debug("configured provider collision recovery failed", exc_info=True)
+        if configured_identity and configured_identity.removeprefix("custom:") == provider.lower():
+            logger.info("healed ambiguous session provider %r to %r", provider, configured_identity)
+            provider = configured_identity
+            base_url = ""
     # Heal a stale provider persisted by an older build (renamed/removed custom provider → "Unknown provider"):
     # recover ``custom:<name>`` from the stored base_url, then from the entry serving the model; else drop it.
     if provider and not _is_routable_provider(provider):

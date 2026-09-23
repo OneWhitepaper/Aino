@@ -171,6 +171,47 @@ class TestResumeRoundTrip:
         assert kwargs["base_url"] == MIMO_URL
         assert kwargs["api_key"] == MIMO_KEY
 
+    def test_builtin_named_row_heals_when_endpoint_belongs_to_same_custom_entry(
+        self, monkeypatch
+    ):
+        """Older model switches stored a colliding config key such as
+        ``deepseek`` as though it were the built-in provider.  The exact
+        configured endpoint proves which durable custom identity owns it."""
+        config = {
+            "model": {
+                "default": "deepseek-v4-pro",
+                "provider": "custom:deepseek",
+                "base_url": "https://api.deepseek.com/v1",
+            },
+            "providers": {
+                "deepseek": {
+                    "base_url": "https://api.deepseek.com/v1",
+                    "key_env": "HERMES_CUSTOM_DEEPSEEK_API_KEY",
+                }
+            },
+        }
+        monkeypatch.setattr(rp, "load_config", lambda: config)
+        monkeypatch.setattr(rp, "_get_model_config", lambda: config["model"])
+
+        from tui_gateway.server import _stored_session_runtime_overrides
+
+        row = {
+            "model": "deepseek-flash",
+            "model_config": json.dumps(
+                {
+                    "model": "deepseek-flash",
+                    "provider": "deepseek",
+                    "base_url": "https://api.deepseek.com/v1",
+                    "api_mode": "chat_completions",
+                }
+            ),
+        }
+
+        overrides = _stored_session_runtime_overrides(row)
+
+        assert overrides["provider_override"] == "custom:deepseek"
+        assert overrides["model_override"]["provider"] == "custom:deepseek"
+
 
 # --- Regression: bare "custom" WITHOUT a base_url (GH #44022 / #47714) ------
 #
@@ -994,4 +1035,3 @@ class TestRuntimeModelConfigDropsStaleKeys:
         config = _runtime_model_config(_agent_like(provider="nous"), None)
 
         assert config == {"model": "deepseek/deepseek-v4-flash-0731", "provider": "nous"}
-

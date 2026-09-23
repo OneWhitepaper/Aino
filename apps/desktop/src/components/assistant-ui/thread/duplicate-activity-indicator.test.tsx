@@ -8,10 +8,13 @@ import { act, cleanup, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { __resetElapsedTimerRegistryForTests } from '@/components/chat/activity-timer'
-import { setSessionCompacting } from '@/store/compaction'
+import { $compactingSessions, setSessionCompacting } from '@/store/compaction'
+import { setSessionProviderWait } from '@/store/provider-wait'
 import { $activeSessionId, $turnStartedAt } from '@/store/session'
 
-import { stubThreadEnvironment, stubThreadViewportSize, userMessage } from '../test-utils'
+import { assistantMessage, stubThreadEnvironment, stubThreadViewportSize, userMessage } from '../test-utils'
+
+import { TranscriptWindowProvider } from './transcript-window'
 
 import { Thread } from '.'
 
@@ -83,12 +86,13 @@ describe('TurnActivityIndicator tail gating (#68634)', () => {
     __resetElapsedTimerRegistryForTests()
     $activeSessionId.set(sessionId)
     $turnStartedAt.set(Date.now())
-    setSessionCompacting(sessionId, true)
+    setSessionProviderWait(sessionId, 'Waiting for provider')
   })
 
   afterEach(() => {
     cleanup()
-    setSessionCompacting(sessionId, false)
+    $compactingSessions.set({})
+    setSessionProviderWait(sessionId, '')
     $activeSessionId.set(null)
     $turnStartedAt.set(null)
     __resetElapsedTimerRegistryForTests()
@@ -111,7 +115,7 @@ describe('TurnActivityIndicator tail gating (#68634)', () => {
       vi.advanceTimersByTime(5_000)
     })
 
-    const indicators = screen.getAllByRole('status', { name: 'Summarizing thread' })
+    const indicators = screen.getAllByRole('status', { name: 'Waiting for provider' })
     expect(indicators.length).toBe(1)
 
     const roots = container.querySelectorAll('[data-slot="aui_assistant-message-root"]')
@@ -162,7 +166,7 @@ describe('TurnActivityIndicator tail gating (#68634)', () => {
   // In the production flow, isRunning: true with a trailing queued user prompt
   // makes the runtime append an empty optimistic assistant placeholder after
   // the real running bubble. The placeholder renders ResponseLoadingIndicator.
-  // During compaction, that row carries the same accessible label as the stall
+  // During a provider wait, that row carries the same accessible label as the stall
   // indicator. The real non-tail bubble must remain silent so there is exactly
   // one status row.
   it('still renders the indicator when the runtime appends an optimistic placeholder (isRunning:true)', () => {
@@ -181,7 +185,7 @@ describe('TurnActivityIndicator tail gating (#68634)', () => {
       vi.advanceTimersByTime(5_000)
     })
 
-    const indicators = screen.getAllByRole('status', { name: 'Summarizing thread' })
+    const indicators = screen.getAllByRole('status', { name: 'Waiting for provider' })
     expect(indicators.length).toBe(1)
     // The surviving row belongs to the placeholder, while the real running
     // bubble's stall row stays silent.
@@ -189,10 +193,10 @@ describe('TurnActivityIndicator tail gating (#68634)', () => {
     expect(document.querySelectorAll('[data-slot="aui_turn-activity"]').length).toBe(0)
   })
 
-  // Outside compaction, the placeholder uses the plain loading label and the
+  // Outside a provider wait, the placeholder uses the plain loading label and the
   // real bubble's stall row must remain silent after the stall threshold.
-  it('keeps a single status row for the placeholder outside compaction (isRunning:true)', () => {
-    setSessionCompacting(sessionId, false)
+  it('keeps a single status row for the placeholder outside a provider wait (isRunning:true)', () => {
+    setSessionProviderWait(sessionId, '')
 
     render(
       <Harness
@@ -211,5 +215,51 @@ describe('TurnActivityIndicator tail gating (#68634)', () => {
 
     expect(document.querySelectorAll('[data-slot="aui_response-loading"]').length).toBe(1)
     expect(document.querySelectorAll('[data-slot="aui_turn-activity"]').length).toBe(0)
+  })
+
+  it('shows manual and automatic compression once after all records, and restores activity when it ends', async () => {
+    const idleMessages = [userMessage(), assistantMessage(), systemMessage('notice', 'Session notice')]
+    const { container, rerender } = render(<Harness messages={idleMessages} />)
+    const label = 'Compacting context…'
+
+    act(() => setSessionCompacting(sessionId, true))
+    const status = screen.getByRole('status', { name: label })
+    const content = container.querySelector('[data-slot="aui_thread-content"]')!
+    expect(content.lastElementChild).toBe(status)
+    expect(status.closest('[data-slot="aui_assistant-message-root"]')).toBeNull()
+
+    // Auto-compaction before the first token must not duplicate the placeholder.
+    const activeMessages = [...idleMessages, userMessage('next-user', 'Continue')]
+    await act(async () => rerender(<Harness isRunning messages={activeMessages} />))
+    expect(screen.getAllByRole('status', { name: label })).toHaveLength(1)
+    expect(container.querySelector('[data-slot="aui_response-loading"]')).toBeNull()
+
+    // Nor may a populated assistant row add a second activity line.
+    await act(async () => rerender(
+      <Harness isRunning messages={[...activeMessages, runningAssistantMessage('live', 'Working')]} />
+    ))
+    expect(screen.getAllByRole('status', { name: label })).toHaveLength(1)
+    expect(container.querySelector('[data-slot="aui_turn-activity"]')).toBeNull()
+
+    act(() => setSessionCompacting(sessionId, false))
+    expect(screen.queryByRole('status', { name: label })).toBeNull()
+    expect(screen.getByRole('status', { name: 'Waiting for provider' })).toBeTruthy()
+  })
+
+  it('keeps compression attached to its session and out of historical pages', () => {
+    const messages = [userMessage(), assistantMessage()]
+    act(() => setSessionCompacting('background-session', true))
+    const { rerender } = render(<Harness messages={messages} />)
+    expect(screen.queryByRole('status', { name: 'Compacting context…' })).toBeNull()
+
+    act(() => setSessionCompacting(sessionId, true))
+    expect(screen.getByRole('status', { name: 'Compacting context…' })).toBeTruthy()
+    rerender(
+      <TranscriptWindowProvider value={{ isHistorical: true, olderAvailable: false, expandWindow: () => {} }}>
+        <Harness messages={messages} />
+      </TranscriptWindowProvider>
+    )
+    expect(screen.queryByRole('status', { name: 'Compacting context…' })).toBeNull()
+    expect($compactingSessions.get()['background-session']).toBe(true)
   })
 })

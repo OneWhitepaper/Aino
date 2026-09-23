@@ -77,14 +77,14 @@ describe('ResponseLoadingIndicator timer', () => {
     expect(screen.getByText('⏳ waiting on local-model — 30s with no output yet')).toBeTruthy()
   })
 
-  it('uses Simplified Chinese copy for the compaction status label', () => {
+  it('leaves compaction feedback to the transcript tail', () => {
     $activeSessionId.set('session-a')
     $turnStartedAt.set(Date.now())
     setSessionCompacting('session-a', true)
 
     renderIndicator('zh')
 
-    expect(screen.getByRole('status', { name: '正在总结会话' })).toBeTruthy()
+    expect(screen.queryByRole('status')).toBeNull()
   })
 
   it('uses Simplified Chinese copy while preparing a tool call', () => {

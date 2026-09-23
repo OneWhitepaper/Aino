@@ -398,19 +398,21 @@ function isRetryableProjectTreeReadError(error: unknown): boolean {
 interface ActiveProjectsContext {
   gateway: HermesGateway
   profile: string
+  activeProfile: string
   scope: string
 }
 
 function stillOnProjectsContext(context: ActiveProjectsContext): boolean {
   return (
     activeGateway() === context.gateway &&
-    normalizeProfileKey($activeGatewayProfile.get()) === context.profile &&
+    normalizeProfileKey($activeGatewayProfile.get()) === context.activeProfile &&
     $profileScope.get() === context.scope
   )
 }
 
 async function activeProjectsContext(profile = projectProfile()): Promise<ActiveProjectsContext> {
   const scope = $profileScope.get()
+  const activeProfile = normalizeProfileKey($activeGatewayProfile.get())
 
   if (!profile || profile === ALL_PROFILES) {
     throw new Error(translateNow('sidebar.projects.unavailableAllProfiles'))
@@ -428,13 +430,26 @@ async function activeProjectsContext(profile = projectProfile()): Promise<Active
 
   if (
     gateway !== activeGateway() ||
-    profile !== normalizeProfileKey($activeGatewayProfile.get()) ||
+    (profile !== activeProfile && scope !== ALL_PROFILES) ||
+    activeProfile !== normalizeProfileKey($activeGatewayProfile.get()) ||
     scope !== $profileScope.get()
   ) {
     throw new Error(translateNow('sidebar.projects.activeProfileChanged'))
   }
 
-  return { gateway, profile, scope }
+  return { gateway, profile, activeProfile, scope }
+}
+
+function projectWriteProfile(ownerProfile?: string): string {
+  if ($profileScope.get() === ALL_PROFILES) {
+    if (!ownerProfile) {
+      throw new Error(translateNow('sidebar.projects.unavailableAllProfiles'))
+    }
+
+    return normalizeProfileKey(ownerProfile)
+  }
+
+  return writableProjectProfile()
 }
 
 function applyPayload(payload: ProjectsPayload): void {
@@ -1011,14 +1026,14 @@ function projectInfoToTreeNode(project: ProjectInfo): SidebarProjectTree {
   }
 }
 
-export async function createProject(input: CreateProjectInput): Promise<ProjectInfo | null> {
+export async function createProject(input: CreateProjectInput, ownerProfile?: string): Promise<ProjectInfo | null> {
   if ($projectsRpcAvailable.get() === false) {
     throw projectsStaleBackendError()
   }
 
   // All profiles filters the sidebar, not the owner of a new project.
   // Capture the live route so reconnecting cannot retarget the write.
-  const context = await activeProjectsContext(writableProjectProfile())
+  const context = await activeProjectsContext(ownerProfile ? projectWriteProfile(ownerProfile) : writableProjectProfile())
   let res: { project: ProjectInfo | null }
 
   try {
@@ -1057,6 +1072,12 @@ export async function createProject(input: CreateProjectInput): Promise<ProjectI
   }
 
   markProjectsRpcSuccess()
+
+  if (context.scope === ALL_PROFILES && ownerProfile) {
+    void refreshProjectTree()
+
+    return res.project
+  }
 
   // Not optimistic (the create awaits the RPC first, so there's nothing to roll
   // back): apply the server's row into the cached list + tree at once, so it
@@ -1101,8 +1122,8 @@ export async function createProject(input: CreateProjectInput): Promise<ProjectI
   return created
 }
 
-export async function renameProject(id: string, name: string): Promise<void> {
-  await updateProject(id, { name })
+export async function renameProject(id: string, name: string, ownerProfile?: string): Promise<void> {
+  await updateProject(id, { name }, ownerProfile)
 }
 
 // Patch top-level project fields (name / appearance). Optimistic: the cached
@@ -1110,9 +1131,22 @@ export async function renameProject(id: string, name: string): Promise<void> {
 // lag; only a failed write reconciles from the server.
 export async function updateProject(
   id: string,
-  patch: { name?: string; color?: null | string; icon?: null | string }
+  patch: { name?: string; color?: null | string; icon?: null | string },
+  ownerProfile?: string
 ): Promise<void> {
-  const context = await activeProjectsContext(writableProjectProfile())
+  const context = await activeProjectsContext(projectWriteProfile(ownerProfile))
+  if (context.scope === ALL_PROFILES && ownerProfile) {
+    await gatewayRequestOn(context.gateway, 'projects.update', projectParams({
+      id,
+      ...patch,
+      ...(patch.color === null && { color: '' }),
+      ...(patch.icon === null && { icon: '' })
+    }, context.profile))
+    if (stillOnProjectsContext(context)) {
+      void refreshProjectTree()
+    }
+    return
+  }
   const snap = snapshotProjects()
 
   $projectTree.set(
@@ -1155,11 +1189,11 @@ export async function updateProject(
 // Returns true when an adoption happened, so an incremental picker can close
 // (the node's id changes on adopt, and a second stale write would double-create).
 export async function setProjectAppearance(
-  project: Pick<SidebarProjectTree, 'color' | 'icon' | 'id' | 'isAuto' | 'label' | 'path'>,
+  project: Pick<SidebarProjectTree, 'color' | 'icon' | 'id' | 'isAuto' | 'label' | 'path' | 'ownerProfile'>,
   patch: { color?: null | string; icon?: null | string }
 ): Promise<boolean> {
   if (!project.isAuto) {
-    await updateProject(project.id, patch)
+    await updateProject(project.id, patch, project.ownerProfile)
 
     return false
   }
@@ -1175,7 +1209,7 @@ export async function setProjectAppearance(
     // Carry any already-set look so setting one field doesn't wipe the other.
     color: (patch.color ?? project.color) || undefined,
     icon: (patch.icon ?? project.icon) || undefined
-  })
+  }, project.ownerProfile)
 
   return true
 }
@@ -1183,9 +1217,19 @@ export async function setProjectAppearance(
 export async function addProjectFolder(
   id: string,
   path: string,
-  opts: { label?: string; isPrimary?: boolean } = {}
+  opts: { label?: string; isPrimary?: boolean } = {},
+  ownerProfile?: string
 ): Promise<void> {
-  const context = await activeProjectsContext(writableProjectProfile())
+  const context = await activeProjectsContext(projectWriteProfile(ownerProfile))
+  if (context.scope === ALL_PROFILES && ownerProfile) {
+    await gatewayRequestOn(context.gateway, 'projects.add_folder', projectParams({
+      id, path, label: opts.label, is_primary: opts.isPrimary ?? false
+    }, context.profile))
+    if (stillOnProjectsContext(context)) {
+      void refreshProjectTree()
+    }
+    return
+  }
   const snap = snapshotProjects()
   const trimmed = path.trim()
 
@@ -1243,8 +1287,15 @@ function openSessionBelongsToProject(projectId: string, projects: ProjectInfo[])
 // Optimistic: drop the project from the cached tree + list the instant it's
 // clicked (the entered-scope effect exits if you deleted the project you were
 // inside), reconciling from the server payload. A failed delete restores both.
-export async function deleteProject(id: string): Promise<void> {
-  const context = await activeProjectsContext(writableProjectProfile())
+export async function deleteProject(id: string, ownerProfile?: string): Promise<void> {
+  const context = await activeProjectsContext(projectWriteProfile(ownerProfile))
+  if (context.scope === ALL_PROFILES && ownerProfile) {
+    await gatewayRequestOn(context.gateway, 'projects.delete', projectParams({ id }, context.profile))
+    if (stillOnProjectsContext(context)) {
+      void refreshProjectTree()
+    }
+    return
+  }
   const snap = snapshotProjects()
   // Capture membership BEFORE removal — the project's folders (which determine
   // ownership) are gone once it's dropped from the cache.
@@ -1275,8 +1326,8 @@ export async function deleteProject(id: string): Promise<void> {
   void refreshProjectTree()
 }
 
-export async function setActiveProject(id: null | string): Promise<void> {
-  const context = await activeProjectsContext(writableProjectProfile())
+export async function setActiveProject(id: null | string, ownerProfile?: string): Promise<void> {
+  const context = await activeProjectsContext(projectWriteProfile(ownerProfile))
 
   const res = await gatewayRequestOn<{ active_id: null | string }>(
     context.gateway,
@@ -1284,7 +1335,9 @@ export async function setActiveProject(id: null | string): Promise<void> {
     projectParams({ id }, context.profile)
   )
 
-  $activeProjectId.set(res.active_id ?? null)
+  if (context.scope !== ALL_PROFILES) {
+    $activeProjectId.set(res.active_id ?? null)
+  }
 }
 
 // ── Project management dialog ────────────────────────────────────────────────
@@ -1294,6 +1347,7 @@ export async function setActiveProject(id: null | string): Promise<void> {
 export interface ProjectDialogState {
   mode: 'add-folder' | 'create' | 'rename' | 'manage-folders'
   projectId?: string
+  ownerProfile?: string
   name?: string
   onCreated?: (project: ProjectInfo) => void
   isCurrent?: () => boolean
@@ -1340,26 +1394,28 @@ export function clearNewProjectDropPlacement(): void {
   $newProjectDropPlacement.set(null)
 }
 
-export function openProjectRename(project: { id: string; name: string }): void {
+export function openProjectRename(project: { id: string; name: string; profile?: string }): void {
   $projectDialog.set({
     mode: 'rename',
     name: project.name,
     projectId: project.id,
+    ownerProfile: project.profile,
     isCurrent: captureProjectDialogOwner()
   })
 }
 
-export function openProjectAddFolder(project: { id: string; name: string }): void {
+export function openProjectAddFolder(project: { id: string; name: string; profile?: string }): void {
   $projectDialog.set({
     mode: 'add-folder',
     name: project.name,
     projectId: project.id,
+    ownerProfile: project.profile,
     isCurrent: captureProjectDialogOwner()
   })
 }
 
-export function openProjectFolders(project: { id: string; name: string }): void {
-  $projectDialog.set({ mode: 'manage-folders', name: project.name, projectId: project.id })
+export function openProjectFolders(project: { id: string; name: string; profile?: string }): void {
+  $projectDialog.set({ mode: 'manage-folders', name: project.name, projectId: project.id, ownerProfile: project.profile })
 }
 
 export function closeProjectDialog(): void {

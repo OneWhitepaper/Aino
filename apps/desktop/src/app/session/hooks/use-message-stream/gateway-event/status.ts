@@ -46,7 +46,13 @@ export function handleStatusEvent(ctx: GatewayEventContext): boolean {
     if (sessionId && (payload?.kind === 'compacting' || payload?.kind === 'compressing')) {
       setSessionCompacting(sessionId, true)
       compactedTurnRef.current.add(sessionId)
-    } else if (sessionId && (payload?.kind === 'compacted' || payload?.kind === 'ready')) {
+    } else if (
+      sessionId &&
+      (payload?.kind === 'compacted' ||
+        payload?.kind === 'ready' ||
+        // The one-argument backend _status_update(sid, 'ready') uses generic status.
+        (payload?.kind === 'status' && payload.text === 'ready'))
+    ) {
       reconcileSessionCompacting(sessionId, 'terminal')
       compactedTurnRef.current.delete(sessionId)
 

@@ -162,6 +162,9 @@ class TestCrossProfileProjectTree:
         declared = [project for project in payload["projects"] if not project["isNoProject"]]
         assert [project["path"] for project in declared] == [str(shared)]
         assert declared[0]["sessionCount"] == 2
+        # The merged header's id must travel with the profile that supplied it;
+        # the displayed id is not necessarily owned by the active profile.
+        assert declared[0]["ownerProfile"] in profiles_on_disk
 
     def test_group_totals_add_up_the_sessions_the_group_counts(self, client, profiles_on_disk, tmp_path):
         # A header total is only meaningful if it covers exactly what the header

@@ -27,6 +27,8 @@ import { $currentModel } from '@/store/session'
 import { type DraftingTool, sessionDraftingTool } from '@/store/tool-drafting'
 import type { LocalModelLoadProgress } from '@/types/hermes'
 
+import { useTranscriptWindow } from './transcript-window'
+
 // A status line is scaffolding like any other — "Editing" while the model
 // drafts a call is the same kind of line as "Explored 3 files" once it has run,
 // and reads as one continuous column only if it shares their type and colour.
@@ -190,16 +192,9 @@ function useThreadSessionStatus() {
 const DRAFTING_REVEAL_MS = 200
 
 /**
- * What to call the wait, if it deserves a name. Compaction outranks a draft —
- * it's rarer, slower, and explains a transcript that looks like it reset.
+ * What to call a message-level wait. Compaction has its own transcript-tail row.
  */
-function useStatusHint(
-  compacting: boolean,
-  drafting: DraftingTool | null,
-  providerWait: string,
-  compactionLabel: string,
-  toolCopy: ToolRunCopy
-): string {
+function useStatusHint(drafting: DraftingTool | null, providerWait: string, toolCopy: ToolRunCopy): string {
   const [revealed, setRevealed] = useState(false)
   const name = drafting?.name ?? ''
 
@@ -214,10 +209,6 @@ function useStatusHint(
 
     return () => window.clearTimeout(id)
   }, [name])
-
-  if (compacting) {
-    return compactionLabel
-  }
 
   if (providerWait) {
     return providerWait
@@ -250,20 +241,19 @@ export const CenteredThreadSpinner: FC = () => {
 export const ResponseLoadingIndicator: FC = () => {
   const { t } = useI18n()
   const { compacting, drafting, providerWait, turnStartedAt } = useThreadSessionStatus()
-  const hint = useStatusHint(
-    compacting,
-    drafting,
-    providerWait,
-    t.assistant.thread.summarizing,
-    t.assistant.tool.runSummary
-  )
+  const hint = useStatusHint(drafting, providerWait, t.assistant.tool.runSummary)
   // Renderer-synthesized load bar: covers loads the backend's wait loop
   // can't narrate (gateway still initializing, or an auxiliary call — not
   // the main request — triggered the autoload). A real wait frame wins.
-  const localLoad = useLocalModelLoad(!hint)
-  const elapsed = useElapsedSeconds(Boolean(hint) || localLoad !== null, undefined, turnStartedAt)
+  const localLoad = useLocalModelLoad(!compacting && !hint)
+  const elapsed = useElapsedSeconds(!compacting && (Boolean(hint) || localLoad !== null), undefined, turnStartedAt)
+
   const label =
     hint || (localLoad ? t.assistant.thread.loadingLocalModel(localLoad.model) : t.assistant.thread.thinking)
+
+  if (compacting) {
+    return null
+  }
 
   return (
     <StatusRow data-slot="aui_response-loading" label={label}>
@@ -280,6 +270,29 @@ export const ResponseLoadingIndicator: FC = () => {
   )
 }
 
+/** Manual compaction can run while idle or after a user/system row. Its status
+ * belongs after the transcript, independently of the last assistant's state. */
+export const ThreadCompactionIndicator: FC = () => {
+  const { t } = useI18n()
+  const view = useSessionView()
+  const sessionId = useStore(view.$runtimeId)
+  const compacting = useStore(useMemo(() => sessionCompacting(sessionId), [sessionId]))
+  const { isHistorical } = useTranscriptWindow()
+
+  if (!compacting || isHistorical) {
+    return null
+  }
+
+  const label = t.shell.statusbar.contextUsagePanel.compacting
+
+  return (
+    <StatusRow className="pl-(--message-text-indent)" data-slot="aui_thread-compaction" label={label}>
+      <StatusPulse aria-hidden="true" className={SCAFFOLD_ACTIVITY_GLYPH_CLASS} kind="opacity" />
+      <HintText>{label}</HintText>
+    </StatusRow>
+  )
+}
+
 // The parent is idle while its delegated children work. Name that wait rather
 // than echoing the child's CLI thinking spinner as if this thread were running.
 export const BackgroundResumeNotice: FC = () => {
@@ -287,9 +300,10 @@ export const BackgroundResumeNotice: FC = () => {
   const view = useSessionView()
   const sessionId = useStore(view.$runtimeId)
   const busy = useStore(view.$busy)
+  const compacting = useStore(useMemo(() => sessionCompacting(sessionId), [sessionId]))
   const resume = useStore(useMemo(() => sessionBackgroundResume(sessionId), [sessionId]))
 
-  if (busy || !resume) {
+  if (busy || compacting || !resume) {
     return null
   }
 
@@ -325,13 +339,7 @@ export const TurnActivityIndicator: FC = () => {
   // own gap rather than the lifetime of the whole assistant message.
   const [quietSince, setQuietSince] = useState<number | undefined>(undefined)
   const { awaitingInput, busy, compacting, drafting, providerWait, turnStartedAt } = useThreadSessionStatus()
-  const hint = useStatusHint(
-    compacting,
-    drafting,
-    providerWait,
-    t.assistant.thread.summarizing,
-    t.assistant.tool.runSummary
-  )
+  const hint = useStatusHint(drafting, providerWait, t.assistant.tool.runSummary)
 
   // A tool run at the tail already narrates the wait — its summary counts the
   // calls, its ticker names the current one, and it carries its own timer. A
@@ -344,7 +352,7 @@ export const TurnActivityIndicator: FC = () => {
   const messageRunning = useAuiState(s => s.message.status?.type === 'running')
 
   // Renderer-synthesized load bar (see ResponseLoadingIndicator).
-  const working = busy || messageRunning
+  const working = !compacting && (busy || messageRunning)
   const localLoad = useLocalModelLoad(working && !hint && !toolNarrating)
 
   useEffect(() => {
@@ -365,13 +373,12 @@ export const TurnActivityIndicator: FC = () => {
   const active =
     working && !awaitingInput && !toolNarrating && (Boolean(hint) || localLoad !== null || quietSince !== undefined)
 
-  // Compaction owns the whole turn, so it keeps counting from the turn's start;
-  // anything else counts from the moment the turn last produced something — the
-  // gap's own mark, or the draft's, whichever named the wait first.
+  // Count from the moment the turn last produced something — the gap's own
+  // mark, or the draft's, whichever named the wait first.
   const elapsed = useElapsedSeconds(
     active && (Boolean(hint) || localLoad !== null),
     undefined,
-    compacting ? turnStartedAt : (quietSince ?? drafting?.since ?? turnStartedAt)
+    quietSince ?? drafting?.since ?? turnStartedAt
   )
 
   if (!active) {

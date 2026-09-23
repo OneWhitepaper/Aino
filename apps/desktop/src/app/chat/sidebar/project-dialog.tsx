@@ -165,7 +165,7 @@ export function ProjectDialog() {
       const projectId = state?.projectId
 
       if (mode === 'add-folder' && projectId) {
-        await runSubmit(() => addProjectFolder(projectId, dir))
+        await runSubmit(() => addProjectFolder(projectId, dir, {}, state?.ownerProfile))
 
         return
       }
@@ -189,7 +189,7 @@ export function ProjectDialog() {
 
     if (mode === 'rename' && projectId) {
       if (trimmed) {
-        await runSubmit(() => renameProject(projectId, trimmed))
+        await runSubmit(() => renameProject(projectId, trimmed, state?.ownerProfile))
       }
 
       return
@@ -244,7 +244,7 @@ export function ProjectDialog() {
   }
 
   if (mode === 'manage-folders' && state?.projectId) {
-    return <ProjectFoldersDialog key={state.projectId} name={state.name} projectId={state.projectId} />
+    return <ProjectFoldersDialog key={state.projectId} name={state.name} ownerProfile={state.ownerProfile} projectId={state.projectId} />
   }
 
   const title = mode === 'rename' ? p.renameTitle : mode === 'add-folder' ? p.addFolderTitle : p.createTitle

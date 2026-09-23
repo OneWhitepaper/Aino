@@ -28,6 +28,7 @@ vi.mock('@/components/assistant-ui/thread/timeline', () => ({
 
 vi.mock('@/components/assistant-ui/thread/status', () => ({
   BackgroundResumeNotice: () => null,
+  ThreadCompactionIndicator: () => null,
   CenteredThreadSpinner: () => null
 }))
 

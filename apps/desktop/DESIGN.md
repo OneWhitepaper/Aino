@@ -573,6 +573,13 @@ so glass and message-bubble transparency do not reveal scrolling text.
   appears only after its turn stops running, including gaps
   between text and tool calls. Pending footers reserve their layout space but
   remain hidden and inert; earlier completed replies keep their controls.
+  Manual and automatic context compression share one neutral status row after
+  the latest conversation records, above the composer. It stays visible for
+  idle manual compression and pending background work, follows its own session,
+  and yields to normal activity when compression ends. Message-level thinking
+  indicators stay quiet during compression. Progress and successful manual
+  results do not produce corner toasts; the result uses the existing inline
+  command output. Historical pages do not carry the live compression indicator.
   The conversation composer starts compact and grows with its input; dictation stays inline,
   while spoken replies, wake-word controls and voice conversation share the
   voice menu. Recording/stop state stays visible, and Send keeps its place.
