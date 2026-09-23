@@ -740,30 +740,6 @@ interface UpstreamTranslations {
     aria: string
     title: string
     close: string
-    overview: {
-      title: string
-      objective: string
-      completed: string
-      conclusions: string
-      openQuestions: string
-      empty: string
-      resourcesAvailable: string
-      pending: string
-      updating: string
-      stale: string
-      coverage: Record<'excerpted' | 'recent', string>
-      failed: string
-      viewRequest: string
-      sourceUnavailable: string
-      tooLong: string
-      refresh: string
-      source: (index: number) => string
-      updated: (time: string) => string
-      status: Record<
-        'background' | 'draft' | 'idle' | 'interrupted' | 'needs-input' | 'stalled' | 'unread' | 'working',
-        string
-      >
-    }
     environment: {
       title: string
       local: string
@@ -943,6 +919,13 @@ interface UpstreamTranslations {
       invitationCodeLabel: string
       invitationCodePlaceholder: string
       existingAccount: string
+      registerAccount: string
+      registrationClosed: string
+      phoneAutoRegister: string
+      phoneLoginUnavailable: string
+      existingAccountPhoneHint: string
+      registrationReturnHint: string
+      registrationOpenFailed: string
       emailLabel: string
       emailPlaceholder: string
       passwordLabel: string

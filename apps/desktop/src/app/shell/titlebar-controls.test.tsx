@@ -94,7 +94,7 @@ describe('titlebar summary toggle', () => {
       </I18nProvider>
     )
 
-    const button = screen.getByRole('button', { name: '会话摘要' })
+    const button = screen.getByRole('button', { name: '会话资源' })
     expect(button.getAttribute('aria-pressed')).toBe('false')
     await act(async () => fireEvent.click(button))
     expect($summaryOpen.get()).toBe(true)
@@ -130,14 +130,14 @@ describe('titlebar summary toggle', () => {
 
     const view = render(toolbar)
 
-    await act(async () => fireEvent.click(screen.getByRole('button', { name: '会话摘要' })))
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: '会话资源' })))
     view.unmount()
     render(toolbar)
 
     expect($summaryOpen.get()).toBe(true)
-    expect(screen.getByRole('button', { name: '会话摘要' }).getAttribute('aria-expanded')).toBe('true')
+    expect(screen.getByRole('button', { name: '会话资源' }).getAttribute('aria-expanded')).toBe('true')
 
-    await act(async () => fireEvent.click(screen.getByRole('button', { name: '会话摘要' })))
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: '会话资源' })))
     expect($summaryOpen.get()).toBe(false)
   })
 })

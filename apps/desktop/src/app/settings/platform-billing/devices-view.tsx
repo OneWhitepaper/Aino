@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 
+import { platformBillingQueryKey } from '@/api/platform'
 import { Button } from '@/components/ui/button'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { Input } from '@/components/ui/input'
-import { Loader } from '@/components/ui/loader'
 import { useI18n } from '@/i18n'
 import { Monitor, RefreshCw } from '@/lib/icons'
+import { queryClient } from '@/lib/query-client'
 
 import type {
   PlatformAccountBridge,
@@ -13,7 +14,7 @@ import type {
   PlatformDevice,
   PlatformDevicesBridge
 } from '../../../../shared/platform-contract'
-import { SettingsGroup, SettingsSection } from '../primitives'
+import { ListRowSkeleton, SettingsGroup, SettingsSection } from '../primitives'
 
 export interface PlatformDevicesProps {
   scope: PlatformBillingScope
@@ -53,8 +54,12 @@ function pageVisible() {
 function DeviceList({ scope, bridge, accountBridge }: PlatformDevicesProps & { bridge: PlatformDevicesBridge }) {
   const { t, locale } = useI18n()
   const copy = t.platformDevices
-  const { user_id: user, generation } = scope
-  const [devices, setDevices] = useState<PlatformDevice[] | null>(null)
+  const { user_id: user, generation, origin } = scope
+
+  const [devices, setDevices] = useState<PlatformDevice[] | null>(
+    () => queryClient.getQueryData<PlatformDevice[]>([...platformBillingQueryKey(scope), 'devices']) ?? null
+  )
+
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -76,7 +81,13 @@ function DeviceList({ scope, bridge, accountBridge }: PlatformDevicesProps & { b
     setError(null)
 
     try {
-      const rows = await bridge.list({ expected_user_id: user, expected_generation: generation })
+      const rows = await queryClient.fetchQuery({
+        queryKey: [...platformBillingQueryKey({ origin, user_id: user, generation }), 'devices'],
+        staleTime: 0,
+        retry: false,
+        networkMode: 'always',
+        queryFn: () => bridge.list({ expected_user_id: user, expected_generation: generation })
+      })
 
       if (alive.current && revision === readRevision.current && pageVisible()) {
         setDevices(rows)
@@ -90,7 +101,7 @@ function DeviceList({ scope, bridge, accountBridge }: PlatformDevicesProps & { b
         setLoading(false)
       }
     }
-  }, [bridge, generation, user])
+  }, [bridge, generation, origin, user])
 
   // This ref tracks component lifetime, not a mirrored account or renderer state.
   // eslint-disable-next-line no-restricted-syntax
@@ -130,6 +141,7 @@ function DeviceList({ scope, bridge, accountBridge }: PlatformDevicesProps & { b
       if (alive.current) {
         setSelected(null)
         setRevoked(true)
+        await queryClient.cancelQueries({ queryKey: [...platformBillingQueryKey(scope), 'devices'], exact: true })
         await read()
       }
     } catch (failure) {
@@ -201,7 +213,12 @@ function DeviceList({ scope, bridge, accountBridge }: PlatformDevicesProps & { b
       icon={Monitor}
       title={copy.title}
     >
-      {loading && !devices && <Loader />}
+      {loading && !devices && (
+        <SettingsGroup aria-busy="true" aria-label={t.common.loading} role="status">
+          <ListRowSkeleton />
+          <ListRowSkeleton />
+        </SettingsGroup>
+      )}
       {revoked && (
         <p className="mb-3 text-sm" role="status">
           {copy.success}

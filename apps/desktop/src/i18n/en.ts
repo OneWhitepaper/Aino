@@ -833,44 +833,9 @@ export const en: Translations = {
   },
 
   summary: {
-    aria: 'Session summary',
-    title: 'Session summary',
-    close: 'Close summary',
-    overview: {
-      title: 'Conversation overview',
-      objective: 'Current objective',
-      completed: 'Completed',
-      conclusions: 'Key findings',
-      openQuestions: 'Unresolved items',
-      empty: 'This conversation has no task plan or outputs yet.',
-      resourcesAvailable: 'Plans and outputs update as the task progresses.',
-      pending: 'The summary updates after the turn ends.',
-      updating: 'Updating the conversation summary…',
-      stale: 'New activity, awaiting update',
-      coverage: {
-        excerpted: 'Based on excerpts of the conversation and tool output.',
-        recent: 'Based on recent content and the original objective.'
-      },
-      failed: 'The summary could not be updated. Please retry.',
-      viewRequest: 'View pending request',
-      sourceUnavailable:
-        'The original message is unavailable. It may have been undone, or the conversation has changed.',
-      tooLong:
-        'This conversation is too long to summarize in full. Plans, outputs and the original conversation remain available.',
-      refresh: 'Update conversation summary',
-      source: index => `View original message ${index}`,
-      updated: time => `Updated ${time}`,
-      status: {
-        background: 'Background work is still running',
-        draft: 'Ready to start',
-        idle: 'Turn ended',
-        interrupted: 'Turn interrupted',
-        'needs-input': 'Waiting for you',
-        stalled: 'Still working, no recent update',
-        unread: 'Turn ended',
-        working: 'Working'
-      }
-    },
+    aria: 'Session resources',
+    title: 'Session resources',
+    close: 'Close session resources',
     environment: {
       title: 'Environment',
       project: 'Project',
@@ -1204,6 +1169,14 @@ export const en: Translations = {
       invitationCodeLabel: 'Invitation code',
       invitationCodePlaceholder: 'Invitation code',
       existingAccount: 'Sign in to an existing account',
+      registerAccount: 'Create an account',
+      registrationClosed: 'Registration is currently closed.',
+      phoneAutoRegister: 'Verifying a new phone number automatically creates an account.',
+      phoneLoginUnavailable: 'Phone sign-in is currently unavailable. Use your existing account.',
+      existingAccountPhoneHint: 'Already have a website account? Sign in to it before linking your phone number.',
+      registrationReturnHint:
+        'After registering, sign in with the same email and password. The website and desktop share one account.',
+      registrationOpenFailed: 'Could not open the registration page. Please try again.',
       emailLabel: 'Email',
       emailPlaceholder: 'Email address',
       passwordLabel: 'Password',
@@ -2269,7 +2242,7 @@ export const en: Translations = {
         title_generation: { label: 'Title gen', hint: 'Session titles' },
         session_summary: {
           label: 'Conversation summary',
-          hint: 'Goals, findings and unresolved items in the summary panel'
+          hint: 'On-demand session summaries requested through the API'
         },
         review: { label: 'Review', hint: '/review reviewer subagent' },
         triage_specifier: { label: 'Triage specifier', hint: 'Kanban spec fleshing' },

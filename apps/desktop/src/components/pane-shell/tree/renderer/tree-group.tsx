@@ -324,7 +324,8 @@ export function TreeGroup({
   const sidebarGroup = !node.panes.some(id => id === 'workspace' || paneChrome(paneFor(id)).placement === 'main')
   const tabsBelowControls = panelTopEdge && (sidebarGroup || measuredBelowControls)
   const tabsInTitlebar = panelTopEdge && !tabsBelowControls
-  const pageHeader = paneChrome(active).headerContent
+  const activeChrome = paneChrome(active)
+  const pageHeader = activeChrome.headerContent
 
   // What the strip's "+" makes. The pane you are LOOKING AT answers first (a
   // Browser tab makes another Browser, even stacked into the chat strip), then
@@ -433,13 +434,9 @@ export function TreeGroup({
   // Independent of stripVisible: a workspace-only chat zone (no tiles open —
   // the default main zone) auto-hides its strip, and that must not take the
   // single session title with it.
-  const hideSessionTabStrip = !isEmpty && !verticalCollapse && !editMode && sessionOnlyZone
+  const hideSessionTabStrip = !isEmpty && !verticalCollapse && !editMode && sessionOnlyZone && !activeChrome.headerVeto
   const singleSessionHeader = hideSessionTabStrip
   const titleInWindowBar = hasWindowTitlebar && singleSessionHeader && shown.includes('workspace') && !node.minimized
-  // Chrome of the pane the single-title header names — its headerMenu kebab
-  // sits beside the title (the IIFE below re-derives the same chrome for the
-  // title's own lead/label/wrap hooks).
-  const activeChrome = paneChrome(paneFor(activeId))
 
   // Keep the activated tab — and, on the last one, the trailing "+" — inside
   // the strip's scroll window. Opening a tab past the right edge otherwise

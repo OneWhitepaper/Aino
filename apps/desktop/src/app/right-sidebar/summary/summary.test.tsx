@@ -50,6 +50,23 @@ function renderSummary() {
 }
 
 describe('SummaryPane', () => {
+  it('shows output resources without generating a prose overview', async () => {
+    const api = vi.fn(async (_request: { path: string }) => ({
+      session_id: 'summary-cited',
+      messages: [{ role: 'assistant', content: '[Report](/work/report.pdf)' }]
+    }))
+
+    ;(window as unknown as { hermesDesktop: unknown }).hermesDesktop = { api }
+    $sessions.set([makeSessionInfo({ id: 'summary-cited', profile: 'default', connection_id: 'local' })])
+    $selectedStoredSessionId.set('summary-cited')
+    renderSummary()
+
+    expect(await screen.findByRole('button', { name: '打开来源: report.pdf' })).toBeTruthy()
+    expect(screen.getByRole('heading', { name: '输出内容' })).toBeTruthy()
+    expect(screen.queryByRole('heading', { name: '会话概览' })).toBeNull()
+    expect(api.mock.calls.some(([request]) => request.path.includes('/summary?'))).toBe(false)
+  })
+
   it('treats an unsent runtime as a draft and starts reading history after the first send', async () => {
     const api = vi.fn(async (request: { path: string }) => {
       throw new Error(`Session has no persisted messages: ${request.path}`)
@@ -75,28 +92,24 @@ describe('SummaryPane', () => {
   it('keeps ordinary chat compact and only reveals resources belonging to its runtime and durable history', async () => {
     renderSummary()
 
-    expect(screen.getByRole('complementary', { name: '会话摘要' })).toBeTruthy()
-    expect(screen.getByRole('heading', { name: '会话摘要' })).toBeTruthy()
+    expect(screen.getByRole('complementary', { name: '会话资源' })).toBeTruthy()
+    expect(screen.getByRole('heading', { name: '会话资源' })).toBeTruthy()
     expect(screen.getByRole('button', { name: '创建文件或网页' })).toBeTruthy()
     expect(screen.queryByRole('heading', { name: '环境信息' })).toBeNull()
     expect(screen.queryByRole('heading', { name: '来源' })).toBeNull()
 
-    const api = vi.fn(async (request: { path: string }) =>
-      request.path.includes('/summary?')
-        ? { summary: null, eligible: false, stale: false, source_revision: 'short' }
-        : {
-            session_id: 'summary-a',
-            messages: [
-              { role: 'user', content: 'Read @file:/work/reference.md' },
-              {
-                role: 'tool',
-                tool_name: 'document_export',
-                content: JSON.stringify({ output_path: '/work/report.pdf' })
-              },
-              { role: 'assistant', content: '[Report](/work/report.pdf)' }
-            ]
-          }
-    )
+    const api = vi.fn(async (_request: { path: string }) => ({
+      session_id: 'summary-a',
+      messages: [
+        { role: 'user', content: 'Read @file:/work/reference.md' },
+        {
+          role: 'tool',
+          tool_name: 'document_export',
+          content: JSON.stringify({ output_path: '/work/report.pdf' })
+        },
+        { role: 'assistant', content: '[Report](/work/report.pdf)' }
+      ]
+    }))
 
     ;(window as unknown as { hermesDesktop: unknown }).hermesDesktop = { api }
     const state = createClientSessionState('summary-a')
@@ -158,14 +171,12 @@ describe('SummaryPane', () => {
     })
 
     const api = vi.fn((request: { path: string }) =>
-      request.path.includes('/summary?')
-        ? Promise.resolve({ summary: null, eligible: false, stale: false, source_revision: 'short' })
-        : request.path.includes('summary-a')
-          ? oldResponse
-          : Promise.resolve({
-              session_id: 'summary-b',
-              messages: [{ role: 'assistant', content: '[New report](/work/new.pdf)' }]
-            })
+      request.path.includes('summary-a')
+        ? oldResponse
+        : Promise.resolve({
+            session_id: 'summary-b',
+            messages: [{ role: 'assistant', content: '[New report](/work/new.pdf)' }]
+          })
     )
 
     ;(window as unknown as { hermesDesktop: unknown }).hermesDesktop = { api }

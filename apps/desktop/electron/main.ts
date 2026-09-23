@@ -205,6 +205,7 @@ import {
   terminalScriptExtension,
   tuiResumeArgs
 } from './external-terminal'
+import { createExternalUrlOpener } from './external-url'
 import { type FaviconIo, resolveFavicon } from './favicon'
 import { findGitBash as _findGitBash } from './find-git-bash'
 import {
@@ -2011,83 +2012,7 @@ function loadWindowUrl(win, url, label) {
   win.loadURL(url).catch(error => rememberLog(`${label} failed to load: ${describeCrashReason(error)}`))
 }
 
-function openExternalUrl(rawUrl) {
-  const raw = String(rawUrl || '').trim()
-
-  if (!raw) {
-    return false
-  }
-
-  let parsed
-
-  try {
-    parsed = new URL(raw)
-  } catch {
-    return false
-  }
-
-  // `file://` URLs come from the artifacts panel (the renderer can't open
-  // them itself because Chromium blocks file:// navigation from the app
-  // origin). Hand them to `shell.openPath`, which dispatches to the OS
-  // file association. If the OS can't open it (`error` is a non-empty
-  // string), fall back to revealing the file in the system file manager.
-  if (parsed.protocol === 'file:') {
-    let localPath
-
-    try {
-      localPath = resolveRequestedPathForIpc(parsed.toString(), { purpose: 'Open external file' })
-    } catch {
-      return false
-    }
-
-    void shell
-      .openPath(localPath)
-      .then(error => {
-        if (!error) {
-          return
-        }
-
-        rememberLog(`[file] openPath failed: ${error}; revealing in folder instead`)
-
-        try {
-          shell.showItemInFolder(localPath)
-        } catch (revealError) {
-          rememberLog(`[file] showItemInFolder failed: ${revealError.message}`)
-        }
-      })
-      .catch(error => rememberLog(`[file] openPath rejected: ${error.message}`))
-
-    return true
-  }
-
-  if (!['http:', 'https:', 'mailto:'].includes(parsed.protocol)) {
-    return false
-  }
-
-  const url = parsed.toString()
-
-  if (IS_WSL) {
-    rememberLog(`[link] opening via WSL→Windows: ${url}`)
-
-    const proc = spawn('cmd.exe', ['/c', 'start', '""', url], {
-      detached: true,
-      stdio: 'ignore',
-      windowsHide: true
-    })
-
-    proc.on('error', error => {
-      rememberLog(`[link] cmd.exe start failed: ${error.message}; falling back to xdg-open`)
-      shell.openExternal(url).catch(fallback => rememberLog(`[link] xdg-open failed: ${fallback.message}`))
-    })
-    proc.unref()
-
-    return true
-  }
-
-  shell.openExternal(url).catch(error => rememberLog(`[link] openExternal failed: ${error.message}`))
-
-  return true
-}
+const openExternalUrl = createExternalUrlOpener({ shell, isWsl: IS_WSL, log: rememberLog })
 
 async function openPreviewInBrowser(rawUrl) {
   const raw = String(rawUrl || '').trim()
@@ -13839,7 +13764,7 @@ function wireCommonWindowHandlers(win, { zoom = true }: { zoom?: boolean } = {})
     }
 
     event.preventDefault()
-    openExternalUrl(url)
+    void openExternalUrl(url).catch(error => rememberLog(`[link] openExternal failed: ${describeCrashReason(error)}`))
   })
 }
 
@@ -17950,8 +17875,8 @@ ipcMain.on('hermes:devtools:disable-f12', (_event, on) => {
   }
 })
 
-ipcMain.handle('hermes:openExternal', (_event, url) => {
-  if (!openExternalUrl(url)) {
+ipcMain.handle('hermes:openExternal', async (_event, url) => {
+  if (!(await openExternalUrl(url))) {
     throw new Error('Invalid external URL')
   }
 })

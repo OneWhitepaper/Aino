@@ -236,6 +236,60 @@ describe('standalone Aino account flow', () => {
     expect(platformBridge.status).toHaveBeenCalledOnce()
   })
 
+  it('retries missing capabilities after a connection failure without reporting missing configuration', async () => {
+    const platformBridge = bridge(snapshot('signed_out'))
+    const connectionError = Object.assign(new Error('network_unavailable'), { code: 'network_unavailable' })
+    vi.mocked(platformBridge.capabilities).mockRejectedValueOnce(connectionError).mockRejectedValueOnce(connectionError)
+    const actions = createPlatformAccountActions(platformBridge)
+
+    renderFlow(actions)
+
+    expect((await screen.findByRole('alert')).textContent).toBe('无法连接账户服务，请检查网络后重试。')
+    expect(screen.queryByText('账户服务尚未配置，请配置服务后重试。')).toBeNull()
+
+    await act(async () => {
+      vi.mocked(platformBridge.onChanged).mock.calls[0][0]({ ...snapshot('signed_out'), revision: 2 })
+    })
+
+    expect(screen.getByRole('alert').textContent).toBe('无法连接账户服务，请检查网络后重试。')
+
+    fireEvent.click(screen.getByRole('button', { name: '重试' }))
+
+    await waitFor(() => expect(platformBridge.capabilities).toHaveBeenCalledTimes(2))
+    expect((await screen.findByRole('alert')).textContent).toBe('无法连接账户服务，请检查网络后重试。')
+
+    fireEvent.click(screen.getByRole('button', { name: '重试' }))
+
+    await waitFor(() => expect(platformBridge.capabilities).toHaveBeenCalledTimes(3))
+    await waitFor(() => expect(screen.queryByRole('alert')).toBeNull())
+    expect((screen.getByRole('button', { name: '发送验证码' }) as HTMLButtonElement).disabled).toBe(true)
+    fireEvent.change(screen.getByLabelText('手机号'), { target: { value: '+8613800138000' } })
+    expect((screen.getByRole('button', { name: '发送验证码' }) as HTMLButtonElement).disabled).toBe(false)
+  })
+
+  it('shows loading, not retry, while login options are still pending after an account update', async () => {
+    let finishCapabilities!: (value: PlatformPublicCapabilities) => void
+    const platformBridge = bridge(snapshot('signed_out'))
+    vi.mocked(platformBridge.capabilities).mockImplementation(
+      () => new Promise(resolve => (finishCapabilities = resolve))
+    )
+    const actions = createPlatformAccountActions(platformBridge)
+
+    renderFlow(actions)
+
+    await act(async () => {
+      vi.mocked(platformBridge.onChanged).mock.calls[0][0]({ ...snapshot('signed_out'), revision: 2 })
+    })
+
+    expect(screen.getByRole('status').textContent).toBe('正在连接账户服务…')
+    expect(screen.queryByRole('button', { name: '重试' })).toBeNull()
+
+    await act(async () => finishCapabilities(capabilities))
+
+    expect(screen.queryByRole('status')).toBeNull()
+    expect(screen.queryByRole('button', { name: '重试' })).toBeNull()
+  })
+
   it('keeps an offline authenticated account in the recoverable workspace', async () => {
     const account = { id: '17', display_name: '成员', phone_masked: '+86 138****8000', email: '' }
     const actions = createPlatformAccountActions(bridge(snapshot('offline', account)))

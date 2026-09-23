@@ -82,6 +82,74 @@ afterEach(() => {
 })
 
 describe('single-session header', () => {
+  it('hides the retained conversation title on a full-page route and restores it in chat', () => {
+    const node = group(['workspace'], { id: 'page-route' })
+
+    render(
+      <WindowTitlebarContext.Provider value>
+        <Slot area="titleBar.left" />
+        <TreeGroup node={node} parentAxis="row" />
+      </WindowTitlebarContext.Provider>
+    )
+
+    expect(globalThis.document.querySelector('[data-current-session-title]')?.textContent).toBe('Workspace')
+
+    act(() => {
+      disposers.push(
+        registry.register({
+          area: 'panes',
+          data: {
+            headerMenu: () => <button type="button">Session actions</button>,
+            headerVeto: true,
+            placement: 'main',
+            uncloseable: true
+          },
+          id: 'workspace',
+          render: () => null,
+          title: 'Workspace'
+        })
+      )
+    })
+
+    expect(globalThis.document.querySelector('[data-current-session-title]')).toBeNull()
+    expect(globalThis.document.body.textContent).not.toContain('Session actions')
+
+    act(() => {
+      disposers.push(
+        registry.register({
+          area: 'panes',
+          data: {
+            headerContent: () => <button type="button">Page controls</button>,
+            headerVeto: true,
+            placement: 'main',
+            uncloseable: true
+          },
+          id: 'workspace',
+          render: () => null,
+          title: 'Workspace'
+        })
+      )
+    })
+
+    expect(globalThis.document.querySelector('[data-current-session-title]')).toBeNull()
+    expect(globalThis.document.body.textContent).toContain('Page controls')
+
+    act(() => {
+      disposers.push(
+        registry.register({
+          area: 'panes',
+          data: { placement: 'main', uncloseable: true },
+          id: 'workspace',
+          render: () => null,
+          title: 'Workspace'
+        })
+      )
+    })
+
+    expect(globalThis.document.querySelector('[data-current-session-title]')?.textContent).toBe('Workspace')
+    expect(globalThis.document.body.textContent).not.toContain('Page controls')
+  })
+
   it('hides the primary draft heading until send while retaining draft names in the tab strip', () => {
     $selectedStoredSessionId.set(null)
     disposers.push(

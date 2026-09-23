@@ -409,6 +409,7 @@ export function createPlatformClient({
       return {
         desktop_api_version: numberField(data.desktop_api_version),
         registration_enabled: booleanField(data.registration_enabled),
+        registration_url: `${origin}/register`,
         phone_login_enabled: booleanField(data.phone_login_enabled),
         phone_registration_enabled: booleanField(data.phone_registration_enabled),
         phone_binding_enabled: booleanField(data.phone_binding_enabled),

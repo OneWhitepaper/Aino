@@ -101,15 +101,15 @@ export function createAccountActions(adapter: AccountAdapter) {
     }
 
     snapshot.set(next)
+    const current = state.get()
     state.set({
-      ...state.get(),
+      ...current,
       authenticated: Boolean(next.account && next.phase !== 'signed_out' && next.phase !== 'reauth_required'),
       account: next.account,
       ready: true,
-      loading: false,
       phase: next.phase,
       rememberState: next.remember_state,
-      error: snapshotError(next)
+      error: snapshotError(next) ?? (current.capabilities ? null : current.error)
     })
 
     return true
@@ -143,37 +143,36 @@ export function createAccountActions(adapter: AccountAdapter) {
     applySnapshot(snapshot)
   })
 
+  const load = (status: () => Promise<PlatformAccountSnapshot>) =>
+    run(
+      async () => {
+        const [statusResult, capabilitiesResult] = await Promise.allSettled([status(), adapter.capabilities()])
+
+        if (statusResult.status === 'fulfilled') {
+          applySnapshot(statusResult.value)
+        }
+
+        if (capabilitiesResult.status === 'rejected') {
+          throw capabilitiesResult.reason
+        }
+
+        if (statusResult.status === 'rejected') {
+          throw statusResult.reason
+        }
+
+        return [statusResult.value, capabilitiesResult.value] as const
+      },
+      ([snapshot, capabilities]) => {
+        applySnapshot(snapshot)
+        state.set({ ...state.get(), capabilities, ready: true })
+      }
+    )
+
   return {
     state,
     snapshot,
-    refresh: () =>
-      run(
-        async () => {
-          const [statusResult, capabilitiesResult] = await Promise.allSettled([
-            adapter.status(),
-            adapter.capabilities()
-          ])
-
-          if (statusResult.status === 'fulfilled') {
-            applySnapshot(statusResult.value)
-          }
-
-          if (capabilitiesResult.status === 'rejected') {
-            throw capabilitiesResult.reason
-          }
-
-          if (statusResult.status === 'rejected') {
-            throw statusResult.reason
-          }
-
-          return [statusResult.value, capabilitiesResult.value] as const
-        },
-        ([snapshot, capabilities]) => {
-          applySnapshot(snapshot)
-          state.set({ ...state.get(), capabilities, ready: true })
-        }
-      ),
-    retry: () => run(() => adapter.retry(), applySnapshot),
+    refresh: () => load(() => adapter.status()),
+    retry: () => (state.get().capabilities ? run(() => adapter.retry(), applySnapshot) : load(() => adapter.retry())),
     requestPhoneCode: (phone: string) => run(() => adapter.requestPhoneCode(phone.trim())),
     verifyPhoneCode: (input: PhoneVerifyDTO) =>
       run(

@@ -43,7 +43,7 @@ afterEach(() => {
 describe('summary workspace', () => {
   it('keeps the draft mounted and editable beside a non-modal summary until toggled closed', async () => {
     render(<Workspace />)
-    const toggle = screen.getByRole('button', { name: 'Session summary' })
+    const toggle = screen.getByRole('button', { name: 'Session resources' })
     const ownerDocument = toggle.ownerDocument
     const draft = screen.getByRole('textbox', { name: 'Draft' }) as HTMLTextAreaElement
     const panelId = toggle.getAttribute('aria-controls')!
@@ -71,7 +71,7 @@ describe('summary workspace', () => {
 
   it('refreshes the wired session contents without closing or replacing the summary surface', async () => {
     const view = render(<Workspace />)
-    const toggle = screen.getByRole('button', { name: 'Session summary' })
+    const toggle = screen.getByRole('button', { name: 'Session resources' })
     const ownerDocument = toggle.ownerDocument
     await act(async () => fireEvent.click(toggle))
     const panel = ownerDocument.getElementById(toggle.getAttribute('aria-controls')!)

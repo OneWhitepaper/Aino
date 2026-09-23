@@ -504,42 +504,9 @@ export const ja = defineLocale({
   },
 
   summary: {
-    aria: 'セッション概要',
-    title: 'セッション概要',
-    close: '概要を閉じる',
-    overview: {
-      title: '会話の概要',
-      objective: '現在の目標',
-      completed: '完了した作業',
-      conclusions: '主な結論',
-      openQuestions: '未解決の項目',
-      empty: 'この会話にはまだタスク計画や成果物がありません。',
-      resourcesAvailable: '計画と成果物はタスクの進行に合わせて更新されます。',
-      pending: 'ターン終了後に概要を更新します。',
-      updating: '会話の概要を更新中…',
-      stale: '新しい進展あり、更新待ち',
-      coverage: {
-        excerpted: '会話とツール出力の抜粋に基づく概要です。',
-        recent: '最近の内容と当初の目標に基づく概要です。'
-      },
-      failed: '概要を更新できませんでした。再試行してください。',
-      viewRequest: '対応が必要な項目を表示',
-      sourceUnavailable: '元のメッセージが見つかりません。取り消されたか、別の会話に切り替わった可能性があります。',
-      tooLong: '会話が長すぎるため、全体を要約できません。計画、成果物、元の会話は引き続き確認できます。',
-      refresh: '会話の概要を更新',
-      source: index => `元のメッセージ ${index} を表示`,
-      updated: time => `更新日時: ${time}`,
-      status: {
-        background: 'バックグラウンドで実行中',
-        draft: '開始待ち',
-        idle: 'ターン終了',
-        interrupted: 'ターン中断',
-        'needs-input': 'あなたの対応待ち',
-        stalled: '実行中、しばらく更新がありません',
-        unread: 'ターン終了',
-        working: '実行中'
-      }
-    },
+    aria: 'セッション資料',
+    title: 'セッション資料',
+    close: 'セッション資料を閉じる',
     environment: {
       title: '環境',
       project: 'プロジェクト',
@@ -839,6 +806,15 @@ export const ja = defineLocale({
       invitationCodeLabel: '招待コード',
       invitationCodePlaceholder: '招待コードを入力',
       existingAccount: '既存のアカウントでログイン',
+      registerAccount: 'アカウントを作成',
+      registrationClosed: '新規登録は現在受け付けていません。',
+      phoneAutoRegister: '未登録の電話番号は、認証に成功すると自動で登録されます。',
+      phoneLoginUnavailable: '電話番号でのログインは現在利用できません。既存のアカウントをご利用ください。',
+      existingAccountPhoneHint:
+        'ウェブサイトのアカウントをお持ちの場合は、先にログインして電話番号を連携してください。',
+      registrationReturnHint:
+        '登録後、同じメールアドレスとパスワードでログインしてください。ウェブサイトとデスクトップは同じアカウントを使用します。',
+      registrationOpenFailed: '登録ページを開けませんでした。もう一度お試しください。',
       emailLabel: 'メールアドレス',
       emailPlaceholder: 'メールアドレスを入力',
       passwordLabel: 'パスワード',
@@ -1708,7 +1684,7 @@ export const ja = defineLocale({
         approval: { label: '承認', hint: 'スマート自動承認' },
         mcp: { label: 'MCP', hint: 'MCP ツールルーティング' },
         title_generation: { label: 'タイトル生成', hint: 'セッションタイトル' },
-        session_summary: { label: '会話の概要', hint: '概要パネルの目標、結論、未解決の項目' },
+        session_summary: { label: '会話の概要', hint: 'API から要求するオンデマンドのセッション要約' },
         review: { label: 'レビュー', hint: '/review レビューサブエージェント' },
         triage_specifier: { label: 'トリアージ指定', hint: 'カンバン仕様の具体化' },
         kanban_decomposer: { label: 'カンバン分解', hint: 'タスク分解' },

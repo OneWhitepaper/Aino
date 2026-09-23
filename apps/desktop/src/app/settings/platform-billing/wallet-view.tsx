@@ -1,11 +1,11 @@
 import { useState } from 'react'
 
 import { Button } from '@/components/ui/button'
-import { Loader } from '@/components/ui/loader'
+import { Skeleton } from '@/components/ui/skeleton'
 import { useI18n } from '@/i18n'
-import { CreditCard, RefreshCw } from '@/lib/icons'
+import { CreditCard, Monitor, RefreshCw } from '@/lib/icons'
 
-import { ListRow, SettingsGroup, SettingsSection } from '../primitives'
+import { ListRow, ListRowSkeleton, SettingsGroup, SettingsSection } from '../primitives'
 
 import { BillingHistory } from './billing-history'
 import { PlatformDevices } from './devices-view'
@@ -19,6 +19,7 @@ export function PlatformWallet() {
   const { available, wallet, loading, error, refresh, scope } = useWallet()
   const [recharge, setRecharge] = useState<{ scope: string; orderId?: string } | null>(null)
   const scopeKey = scope ? `${scope.origin}:${scope.user_id}:${scope.generation}` : ''
+  const initialLoading = loading && !wallet
 
   if (!available) {
     return null
@@ -36,7 +37,19 @@ export function PlatformWallet() {
         icon={CreditCard}
         title={copy.title}
       >
-        {loading && !wallet && <Loader />}
+        {initialLoading && (
+          <div aria-busy aria-label={t.common.loading} role="status">
+            <SettingsGroup>
+              <div className="py-3" data-settings-row="">
+                <p className="text-xs text-muted-foreground">{copy.available}</p>
+                <Skeleton className="mt-1 h-8 w-40 max-w-full" />
+              </div>
+              <ListRow action={<Skeleton className="h-5 w-24 max-w-full" />} title={copy.frozen} />
+            </SettingsGroup>
+            <Skeleton className="mt-4 h-8 w-24 max-w-full" />
+            <Skeleton className="mt-3 h-4 w-52 max-w-full" />
+          </div>
+        )}
         {error && (
           <p className="text-sm text-destructive" role="alert">
             {t.settings.account.platformError(error)}
@@ -81,6 +94,13 @@ export function PlatformWallet() {
           </>
         )}
       </SettingsSection>
+      {initialLoading && (
+        <SettingsSection icon={CreditCard} title={copy.subscriptions}>
+          <SettingsGroup aria-busy aria-label={t.common.loading} role="status">
+            <ListRowSkeleton wide />
+          </SettingsGroup>
+        </SettingsSection>
+      )}
       {wallet && (
         <SettingsSection icon={CreditCard} title={copy.subscriptions}>
           {wallet.active_subscriptions.length === 0 ? (
@@ -105,6 +125,22 @@ export function PlatformWallet() {
             </SettingsGroup>
           )}
         </SettingsSection>
+      )}
+      {initialLoading && !scope && window.hermesDesktop?.platformBilling && (
+        <>
+          <div aria-busy aria-label={t.common.loading} className="my-6 flex gap-1" role="status">
+            <Skeleton className="h-8 w-24 max-w-full" />
+            <Skeleton className="h-8 w-24 max-w-full" />
+          </div>
+          {window.hermesDesktop.platformDevices && (
+            <SettingsSection icon={Monitor} title={t.platformDevices.title}>
+              <SettingsGroup aria-busy aria-label={t.common.loading} role="status">
+                <ListRowSkeleton />
+                <ListRowSkeleton />
+              </SettingsGroup>
+            </SettingsSection>
+          )}
+        </>
       )}
       {scope && window.hermesDesktop?.platformBilling && (
         <>

@@ -1421,16 +1421,12 @@ title-only hint (the agent turn still sees only the attachment reference), so a 
 this" plus a large paste is named after the pasted topic. Files you attach yourself are never
 read for titling.
 
-The desktop session inspector uses `auxiliary.session_summary` for a separate,
-cited summary of the visible conversation. It shares the auxiliary provider/model
-settings and usage accounting, but never rewrites messages or compresses the chat.
-Generation runs through the owning live session: `auto` follows its current model
-(including a temporary model switch or Aino lease), while an explicit auxiliary
-provider keeps its own billing. Summaries are cached by profile, session, language,
-and transcript revision; short greetings do not invoke a model. Failed attempts
-are retained for that revision and retried only through the explicit retry action. Long histories are summarized in chunks, with a
-100-second generation budget and a 240,000-character input limit. Histories above
-that limit show an explicit limit error instead of silently dropping messages.
+The desktop session sidebar lists outputs, background processes, sources, and
+other resources extracted from the conversation. Opening it does not generate a
+model-written conversation overview or compress the chat. The
+`auxiliary.session_summary` setting remains available to API clients that
+explicitly request a cited session summary, but is not shown among desktop
+auxiliary tasks.
 
 ### Stream-only endpoints
 

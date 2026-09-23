@@ -1,9 +1,20 @@
 import { JsonRpcGatewayError } from '@hermes/shared'
 
+import { queryClient } from '@/lib/query-client'
 import type { RuntimeReadinessRequester } from '@/lib/runtime-readiness'
 import { type AccountAdapter, createAccountActions } from '@/store/account'
 
-import type { PlatformAccountBridge } from '../../shared/platform-contract'
+import type { PlatformAccountBridge, PlatformBillingScope } from '../../shared/platform-contract'
+
+const billingQueryRoot = ['billing', 'platform'] as const
+
+export function platformBillingQueryKey(scope: PlatformBillingScope) {
+  return [...billingQueryRoot, scope.origin, scope.user_id, scope.generation] as const
+}
+
+export function samePlatformBillingScope(left: PlatformBillingScope, right: PlatformBillingScope) {
+  return left.origin === right.origin && left.user_id === right.user_id && left.generation === right.generation
+}
 
 export function createPlatformAccountActions(bridge: PlatformAccountBridge) {
   const adapter: AccountAdapter = {
@@ -21,7 +32,20 @@ export function createPlatformAccountActions(bridge: PlatformAccountBridge) {
     onChanged: listener => bridge.onChanged(listener)
   }
 
-  return createAccountActions(adapter)
+  const actions = createAccountActions(adapter)
+  // Account actions outlive settings, so sign-out also retires caches while the page is closed.
+  actions.snapshot.listen((next, previous) => {
+    if (
+      !next?.account ||
+      !['signed_in', 'offline'].includes(next.phase) ||
+      next.account.id !== previous?.account?.id ||
+      next.mode !== previous?.mode
+    ) {
+      queryClient.removeQueries({ queryKey: billingQueryRoot })
+    }
+  })
+
+  return actions
 }
 
 let cached: { bridge: PlatformAccountBridge; actions: ReturnType<typeof createPlatformAccountActions> } | null = null

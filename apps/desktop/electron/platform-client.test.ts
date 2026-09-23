@@ -24,6 +24,29 @@ afterEach(async () => {
 })
 
 describe('platform client', () => {
+  it('derives registration from the authenticated service origin, ignoring a public-config redirect', async () => {
+    const origin = await serve((_req, res) => {
+      res.setHeader('content-type', 'application/json')
+      res.end(
+        JSON.stringify({
+          code: 0,
+          message: 'ok',
+          data: {
+            desktop_api_version: 1,
+            phone_code_length: 6,
+            registration_enabled: true,
+            registration_url: 'https://unrelated.example/register'
+          }
+        })
+      )
+    })
+
+    const capabilities = await createPlatformClient({ origin, allowInsecureLoopback: true }).capabilities()
+
+    expect(capabilities.registration_url).toBe(`${origin}/register`)
+    expect(capabilities.registration_enabled).toBe(true)
+  })
+
   it('reads exact wallet balances separately from subscriptions and only configured desktop payment methods', async () => {
     const summary = { currency: 'USD', balance: '1234567890.12345678', available_balance: '1234567890.12345678',
       frozen_balance: '2.00000000', payment_enabled: false, updated_at: '2026-09-16T00:00:00Z',

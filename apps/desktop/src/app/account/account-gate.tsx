@@ -131,17 +131,14 @@ export function AccountFlow({ actions, children, refreshEnabled = true }: Accoun
                 return result
               }}
             />
-            {!state.ready && !state.error && (
+            {!state.capabilities && !state.error && (state.loading || !state.ready) && (
               <p className="text-sm text-(--ui-text-tertiary)" role="status">
                 {copy.loadingStatus}
               </p>
             )}
-            {state.ready && !state.capabilities && (
-              <p className="max-w-sm text-center text-sm text-(--ui-text-tertiary)">{copy.serviceUnavailable}</p>
-            )}
             {windowError && <p className="px-8 pb-4 text-center text-xs text-destructive">{copy.errors.unavailable}</p>}
-            {(state.error || (state.ready && !state.capabilities)) && (
-              <Button disabled={state.loading} onClick={() => void actions.retry()} variant="text">
+            {state.error && !state.capabilities && !state.loading && (
+              <Button onClick={() => void actions.retry()} variant="text">
                 {copy.refresh}
               </Button>
             )}

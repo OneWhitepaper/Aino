@@ -18,6 +18,8 @@ export interface PlatformCaptchaProof {
 export interface PlatformPublicCapabilities {
   desktop_api_version: number
   registration_enabled: boolean
+  /** Website registration URL derived by main from the configured account service. */
+  registration_url?: string
   phone_login_enabled: boolean
   phone_registration_enabled: boolean
   phone_binding_enabled: boolean

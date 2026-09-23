@@ -2,6 +2,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testi
 import { afterEach, expect, it, vi } from 'vitest'
 
 import { I18nProvider } from '@/i18n'
+import { queryClient } from '@/lib/query-client'
 
 import type {
   PlatformAccountBridge,
@@ -14,6 +15,7 @@ import { PlatformDevices } from './devices-view'
 
 afterEach(() => {
   cleanup()
+  queryClient.clear()
   vi.restoreAllMocks()
 })
 

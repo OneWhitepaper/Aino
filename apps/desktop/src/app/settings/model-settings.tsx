@@ -110,9 +110,8 @@ function isProviderReady(p?: ModelOptionProvider): boolean {
   return !!p && (p.authenticated !== false || (p.models?.length ?? 0) > 0)
 }
 
-// Mirrors `_AUX_TASK_SLOTS` in hermes_cli/web_server.py. Friendly labels and
-// hints make the assignments readable; raw task keys (vision, mcp, …) are
-// opaque to most users.
+// Desktop-visible auxiliary tasks. Friendly labels and hints make the
+// assignments readable; raw task keys (vision, mcp, …) are opaque to most users.
 interface AuxTaskMeta {
   key: string
 }
@@ -124,7 +123,6 @@ const AUX_TASKS: readonly AuxTaskMeta[] = [
   { key: 'approval' },
   { key: 'mcp' },
   { key: 'title_generation' },
-  { key: 'session_summary' },
   { key: 'review' },
   // Same three canonical slots the backend serves but the list below used to
   // omit (#97297): triage_specifier, kanban_decomposer, profile_describer.

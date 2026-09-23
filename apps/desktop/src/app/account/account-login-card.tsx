@@ -61,6 +61,9 @@ export function AccountLoginCard({
   const [termsRequired, setTermsRequired] = useState(false)
   const [remember, setRemember] = useState(true)
   const [legalDocument, setLegalDocument] = useState<number | null>(null)
+  const [openingRegistration, setOpeningRegistration] = useState(false)
+  const [registrationOpened, setRegistrationOpened] = useState(false)
+  const [registrationError, setRegistrationError] = useState(false)
 
   const agreementRequired = capabilities?.login_agreement_enabled === true
 
@@ -71,7 +74,16 @@ export function AccountLoginCard({
   )
 
   const phoneEnabled = capabilities?.phone_login_enabled === true
+
+  const phoneRegistrationEnabled =
+    phoneEnabled && capabilities?.registration_enabled && capabilities.phone_registration_enabled
+
   const codeLength = Math.max(1, Math.min(64, capabilities?.phone_code_length ?? 6))
+
+  const changeStep = (nextStep: LoginStep) => {
+    setRegistrationError(false)
+    setStep(nextStep)
+  }
 
   useEffect(() => {
     if (!retryAt) {
@@ -101,6 +113,8 @@ export function AccountLoginCard({
       return
     }
 
+    setRegistrationError(false)
+
     if (agreementRequired && !acceptedTerms) {
       setTermsRequired(true)
 
@@ -118,13 +132,15 @@ export function AccountLoginCard({
     setCode('')
     setRetryAt(Date.now() + result.retry_after * 1000)
     setRetrySeconds(result.retry_after)
-    setStep('code')
+    changeStep('code')
   }
 
   const verifyCode = async () => {
     if (!challenge || code.length !== codeLength || loading) {
       return
     }
+
+    setRegistrationError(false)
 
     const result = await onVerifyPhoneCode({
       phone,
@@ -138,7 +154,7 @@ export function AccountLoginCard({
 
     if (result?.status === 'requires_2fa') {
       setTotpCode('')
-      setStep('totp')
+      changeStep('totp')
     }
   }
 
@@ -147,12 +163,14 @@ export function AccountLoginCard({
       return
     }
 
+    setRegistrationError(false)
+
     const result = await onLoginExisting({ email: email.trim(), password, remember })
     setPassword('')
 
     if (result?.status === 'requires_2fa') {
       setTotpCode('')
-      setStep('totp')
+      changeStep('totp')
     }
   }
 
@@ -163,10 +181,40 @@ export function AccountLoginCard({
       return
     }
 
+    setRegistrationError(false)
+
     await onCompleteSecondFactor(value)
   }
 
-  const errorText = termsRequired ? copy.termsRequired : error ? copy.platformError(error.code, error.retryAfter) : null
+  const openRegistration = async () => {
+    const url = capabilities?.registration_url
+
+    if (!capabilities?.registration_enabled || !url || openingRegistration) {
+      return
+    }
+
+    setOpeningRegistration(true)
+    setRegistrationError(false)
+
+    try {
+      await window.hermesDesktop.openExternal(url)
+      setRegistrationOpened(true)
+      changeStep('existing')
+    } catch {
+      setRegistrationError(true)
+    } finally {
+      setOpeningRegistration(false)
+    }
+  }
+
+  const errorText = termsRequired
+    ? copy.termsRequired
+    : registrationError
+      ? copy.registrationOpenFailed
+      : error
+        ? copy.platformError(error.code, error.retryAfter)
+        : null
+
   const documents = capabilities?.login_agreement_documents ?? []
   const activeDocument = legalDocument === null ? null : documents[legalDocument]
 
@@ -225,6 +273,13 @@ export function AccountLoginCard({
               {loading && <Loader2 className="animate-spin" />}
               {retrySeconds > 0 ? copy.resendIn(retrySeconds) : copy.sendCode}
             </Button>
+            {capabilities && !fixedCodeHint && (
+              <div className="mt-3 space-y-1 text-center text-xs text-(--ui-text-tertiary)">
+                {phoneRegistrationEnabled && <p>{copy.phoneAutoRegister}</p>}
+                {!phoneEnabled && <p>{copy.phoneLoginUnavailable}</p>}
+                {phoneRegistrationEnabled && <p>{copy.existingAccountPhoneHint}</p>}
+              </div>
+            )}
             {agreementRequired && (
               <div className="aino-account-terms">
                 <Checkbox
@@ -257,7 +312,7 @@ export function AccountLoginCard({
             <Button
               className="aino-account-switch"
               disabled={loading}
-              onClick={() => setStep('existing')}
+              onClick={() => changeStep('existing')}
               size="inline"
               type="button"
               variant="text"
@@ -267,7 +322,7 @@ export function AccountLoginCard({
             <Button
               className="aino-account-switch aino-account-switch-compact"
               disabled={loading}
-              onClick={() => setStep('wechat')}
+              onClick={() => changeStep('wechat')}
               size="inline"
               type="button"
               variant="text"
@@ -316,7 +371,7 @@ export function AccountLoginCard({
             <Button
               className="aino-account-back"
               disabled={loading}
-              onClick={() => setStep('phone')}
+              onClick={() => changeStep('phone')}
               size="inline"
               type="button"
               variant="text"
@@ -333,6 +388,11 @@ export function AccountLoginCard({
               void loginExisting()
             }}
           >
+            {registrationOpened && (
+              <p className="mb-4 text-center text-xs text-(--ui-text-tertiary)" role="status">
+                {copy.registrationReturnHint}
+              </p>
+            )}
             <Input
               aria-label={copy.emailLabel}
               autoComplete="username"
@@ -358,7 +418,13 @@ export function AccountLoginCard({
               {copy.continueExisting}
             </Button>
             {rememberControl}
-            <Button className="aino-account-back" onClick={() => setStep('phone')} size="inline" type="button" variant="text">
+            <Button
+              className="aino-account-back"
+              onClick={() => changeStep('phone')}
+              size="inline"
+              type="button"
+              variant="text"
+            >
               {copy.back}
             </Button>
           </form>
@@ -387,7 +453,13 @@ export function AccountLoginCard({
               {loading && <Loader2 className="animate-spin" />}
               {copy.completeSecondFactor}
             </Button>
-            <Button className="aino-account-back" onClick={() => setStep('existing')} size="inline" type="button" variant="text">
+            <Button
+              className="aino-account-back"
+              onClick={() => changeStep('existing')}
+              size="inline"
+              type="button"
+              variant="text"
+            >
               {copy.back}
             </Button>
           </form>
@@ -398,9 +470,28 @@ export function AccountLoginCard({
             <div className="aino-account-wechat-unavailable" role="status">
               {copy.wechatUnavailable}
             </div>
-            <Button className="aino-account-switch" onClick={() => setStep('phone')} size="inline" variant="text">
+            <Button className="aino-account-switch" onClick={() => changeStep('phone')} size="inline" variant="text">
               {copy.switchPhone}
             </Button>
+          </>
+        )}
+        {!fixedCodeHint && capabilities && (step === 'phone' || step === 'existing') && (
+          <>
+            <Button
+              className="aino-account-switch aino-account-switch-compact"
+              disabled={
+                loading || openingRegistration || !capabilities.registration_enabled || !capabilities.registration_url
+              }
+              onClick={() => void openRegistration()}
+              size="inline"
+              type="button"
+              variant="text"
+            >
+              {copy.registerAccount}
+            </Button>
+            {!capabilities.registration_enabled && (
+              <p className="mt-2 text-center text-xs text-(--ui-text-tertiary)">{copy.registrationClosed}</p>
+            )}
           </>
         )}
         {errorText && (
