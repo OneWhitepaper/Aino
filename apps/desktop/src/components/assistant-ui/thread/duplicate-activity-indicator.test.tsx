@@ -235,9 +235,9 @@ describe('TurnActivityIndicator tail gating (#68634)', () => {
     expect(container.querySelector('[data-slot="aui_response-loading"]')).toBeNull()
 
     // Nor may a populated assistant row add a second activity line.
-    await act(async () => rerender(
-      <Harness isRunning messages={[...activeMessages, runningAssistantMessage('live', 'Working')]} />
-    ))
+    await act(async () =>
+      rerender(<Harness isRunning messages={[...activeMessages, runningAssistantMessage('live', 'Working')]} />)
+    )
     expect(screen.getAllByRole('status', { name: label })).toHaveLength(1)
     expect(container.querySelector('[data-slot="aui_turn-activity"]')).toBeNull()
 

@@ -284,20 +284,21 @@ export function createPlatformRuntimeBindingController(options: {
               return
             }
 
-            const renewed = await retained.rpc.request<{ bound?: boolean; model_id?: string; binding_revision?: number }>(
-              'session.renew_managed_model',
-              {
-                ...params,
-                binding_revision: revision,
-                model: next.model.model,
-                api_mode: next.model.api_mode,
-                capabilities: next.model.capabilities,
-                credential_id: next.credential_id,
-                api_key: next.api_key,
-                base_url: next.base_url,
-                expires_at: next.expires_at
-              }
-            )
+            const renewed = await retained.rpc.request<{
+              bound?: boolean
+              model_id?: string
+              binding_revision?: number
+            }>('session.renew_managed_model', {
+              ...params,
+              binding_revision: revision,
+              model: next.model.model,
+              api_mode: next.model.api_mode,
+              capabilities: next.model.capabilities,
+              credential_id: next.credential_id,
+              api_key: next.api_key,
+              base_url: next.base_url,
+              expires_at: next.expires_at
+            })
 
             if (!stillOwned()) {
               return

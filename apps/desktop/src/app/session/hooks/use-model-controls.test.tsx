@@ -43,6 +43,7 @@ vi.mock('@/store/session-states', async importOriginal => {
 
 vi.mock('@/i18n', async importOriginal => {
   const { en } = await import('@/i18n/en')
+
   return {
     ...(await importOriginal<Record<string, unknown>>()),
     useI18n: () => ({ t: en })

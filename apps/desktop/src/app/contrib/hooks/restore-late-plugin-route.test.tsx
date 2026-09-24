@@ -88,6 +88,7 @@ it('restores a remembered plugin page whose route registers after the session li
     data: { path: '/html-gallery' },
     render: () => null
   })
+
   act(() => $diskPluginsScanPending.set(false))
 
   expect(navigate).toHaveBeenCalledWith('/html-gallery', { replace: true })

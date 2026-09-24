@@ -70,19 +70,28 @@ export function useModelMenuController({
   const modelPresets = useStore($modelPresets)
   const defaultEffort = useStore($defaultReasoningEffort) || DEFAULT_REASONING_EFFORT
   const touchesPrimary = view.kind === 'primary'
-  const completionScope = platformDefaultScope(ownerConnectionId ? { connectionId: ownerConnectionId, profile } : profile).key
+  const completionScope = platformDefaultScope(
+    ownerConnectionId ? { connectionId: ownerConnectionId, profile } : profile
+  ).key
   usePlatformModels()
   const catalog = platformModelCatalog()
 
   const activePlatformModel = useStoresSelector(
-    [$sessionStates, $currentPlatformOwner, $currentPlatformOrigin, catalog.state, catalog.account, catalog.owner.state],
+    [
+      $sessionStates,
+      $currentPlatformOwner,
+      $currentPlatformOrigin,
+      catalog.state,
+      catalog.account,
+      catalog.owner.state
+    ],
     () => {
       if (currentProvider !== 'aino') {
         return null
       }
 
       const state = activeSessionId ? $sessionStates.get()[activeSessionId] : undefined
-      const owner = state ? state.platformModel?.ownerUserId ?? '' : $currentPlatformOwner.get()
+      const owner = state ? (state.platformModel?.ownerUserId ?? '') : $currentPlatformOwner.get()
       const origin = state ? state.platformModel?.platformOrigin : $currentPlatformOrigin.get()
 
       return verifiedPlatformModel(currentModel, owner, origin)

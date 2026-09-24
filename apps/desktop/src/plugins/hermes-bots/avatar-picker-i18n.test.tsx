@@ -106,14 +106,7 @@ describe('avatar generation fallback copy', () => {
     const { AvatarPicker } = await import('./avatar-picker')
 
     render(
-      <AvatarPicker
-        color={null}
-        image={null}
-        onColor={vi.fn()}
-        onImage={vi.fn()}
-        onShape={vi.fn()}
-        shape="circle"
-      />
+      <AvatarPicker color={null} image={null} onColor={vi.fn()} onImage={vi.fn()} onShape={vi.fn()} shape="circle" />
     )
 
     fireEvent.click(screen.getByRole('button', { name: '生成' }))

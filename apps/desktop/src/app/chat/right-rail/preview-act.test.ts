@@ -394,9 +394,7 @@ describe('actOnActivePreview (drive_preview tool)', () => {
     )
     cleanups.push(registerPreviewInput(tabId, { focus: vi.fn(), send: vi.fn() }))
 
-    expect((await actOnActivePreview({ kind: 'click', ref: '@e1' })).error).toBe(
-      '指针输入没有到达页面，因此没有点击。'
-    )
+    expect((await actOnActivePreview({ kind: 'click', ref: '@e1' })).error).toBe('指针输入没有到达页面，因此没有点击。')
   })
 
   it('says so when the overlay itself swallowed the click', async () => {

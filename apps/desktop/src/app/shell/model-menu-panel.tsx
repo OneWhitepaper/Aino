@@ -6,7 +6,12 @@ import { useContext, useState } from 'react'
 import { useSessionView } from '@/app/chat/session-view'
 import { PlatformModelList } from '@/components/platform-model-list'
 import { Codicon } from '@/components/ui/codicon'
-import { DropdownMenuItem, dropdownMenuRow, DropdownMenuSub, DropdownMenuSubTrigger } from '@/components/ui/dropdown-menu'
+import {
+  DropdownMenuItem,
+  dropdownMenuRow,
+  DropdownMenuSub,
+  DropdownMenuSubTrigger
+} from '@/components/ui/dropdown-menu'
 import { SegmentedControl } from '@/components/ui/segmented-control'
 import { useI18n } from '@/i18n'
 import { modelOptionsQueryKey, requestModelOptions } from '@/lib/model-options'
@@ -40,8 +45,13 @@ export function ModelMenuPanel(props: ModelMenuHostProps) {
   const awaiting = useStore(view.$awaitingResponse)
   const closeMenu = useContext(ModelMenuCloseContext)
   const managedCapabilities = useStore($gatewayManagedCapabilities)
-  const managedCapability = managedModelRouteCapabilityFrom(managedCapabilities, { connectionId: ownerConnectionId, profile })
-  const [source, setSource] = useState<'aino' | 'custom'>(() => currentProvider && currentProvider !== 'aino' ? 'custom' : 'aino')
+  const managedCapability = managedModelRouteCapabilityFrom(managedCapabilities, {
+    connectionId: ownerConnectionId,
+    profile
+  })
+  const [source, setSource] = useState<'aino' | 'custom'>(() =>
+    currentProvider && currentProvider !== 'aino' ? 'custom' : 'aino'
+  )
   const blocked = managedModelSwitchBlocked(currentProvider, source === 'aino' ? 'aino' : '', busy || awaiting)
 
   // Explicit "Refresh Models": re-fetch the catalog with refresh:true so the
@@ -109,9 +119,7 @@ export function ModelMenuPanel(props: ModelMenuHostProps) {
           />
           {activePlatformModel?.capabilities.reasoning && (
             <DropdownMenuSub>
-              <DropdownMenuSubTrigger className={dropdownMenuRow}>
-                {t.platformModels.reasoning}
-              </DropdownMenuSubTrigger>
+              <DropdownMenuSubTrigger className={dropdownMenuRow}>{t.platformModels.reasoning}</DropdownMenuSubTrigger>
               <ModelEditSubmenu
                 defaultEffort={defaultEffort}
                 effort={currentReasoningEffort}

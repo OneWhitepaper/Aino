@@ -1315,66 +1315,69 @@ describe('usePromptActions /compress', () => {
     { status: 'compressed', completedBeforeResponse: false, remainsCompacting: false },
     { status: 'pending', completedBeforeResponse: false, remainsCompacting: true },
     { status: 'pending', completedBeforeResponse: true, remainsCompacting: false }
-  ])('keeps compression progress session-scoped without toasts ($status, completed=$completedBeforeResponse)', async ({
-    status,
-    completedBeforeResponse,
-    remainsCompacting
-  }) => {
-    const otherSessionId = 'rt-other-compression'
-    setSessionCompacting(otherSessionId, true)
-    let resolveCompress: (value: unknown) => void = () => undefined
+  ])(
+    'keeps compression progress session-scoped without toasts ($status, completed=$completedBeforeResponse)',
+    async ({ status, completedBeforeResponse, remainsCompacting }) => {
+      const otherSessionId = 'rt-other-compression'
+      setSessionCompacting(otherSessionId, true)
+      let resolveCompress: (value: unknown) => void = () => undefined
 
-    const compressResult = new Promise(resolve => {
-      resolveCompress = resolve
-    })
+      const compressResult = new Promise(resolve => {
+        resolveCompress = resolve
+      })
 
-    const requestGateway = vi.fn(async (method: string) => {
-      if (method === 'session.compress') {
-        return (await compressResult) as never
+      const requestGateway = vi.fn(async (method: string) => {
+        if (method === 'session.compress') {
+          return (await compressResult) as never
+        }
+
+        throw new Error(`unexpected method: ${method}`)
+      })
+
+      let handle: HarnessHandle | null = null
+      await actRender(
+        <Harness onReady={h => (handle = h)} refreshSessions={async () => undefined} requestGateway={requestGateway} />
+      )
+
+      let submitted: Promise<boolean>
+      act(() => {
+        submitted = handle!.submitTextRaw('/compress')
+      })
+      await waitFor(() =>
+        expect($compactingSessions.get()).toEqual({
+          [otherSessionId]: true,
+          [RUNTIME_SESSION_ID]: true
+        })
+      )
+      expect($notifications.get()).toEqual([])
+
+      if (completedBeforeResponse) {
+        act(() => setSessionCompacting(RUNTIME_SESSION_ID, false))
       }
 
-      throw new Error(`unexpected method: ${method}`)
-    })
+      await act(async () => {
+        resolveCompress({ status, messages: [{ content: 'compressed transcript', role: 'system' }] })
+        await submitted
+      })
+      expect($compactingSessions.get()).toEqual({
+        [otherSessionId]: true,
+        ...(remainsCompacting ? { [RUNTIME_SESSION_ID]: true } : {})
+      })
+      expect($notifications.get()).toEqual([])
 
-    let handle: HarnessHandle | null = null
-    await actRender(
-      <Harness onReady={h => (handle = h)} refreshSessions={async () => undefined} requestGateway={requestGateway} />
-    )
-
-    let submitted: Promise<boolean>
-    act(() => {
-      submitted = handle!.submitTextRaw('/compress')
-    })
-    await waitFor(() => expect($compactingSessions.get()).toEqual({
-      [otherSessionId]: true,
-      [RUNTIME_SESSION_ID]: true
-    }))
-    expect($notifications.get()).toEqual([])
-
-    if (completedBeforeResponse) {
-      act(() => setSessionCompacting(RUNTIME_SESSION_ID, false))
+      if (remainsCompacting) {
+        await handle!.submitText('/compress')
+        expect(requestGateway).toHaveBeenCalledTimes(1)
+        expect($compactingSessions.get()[RUNTIME_SESSION_ID]).toBe(true)
+      }
     }
-
-    await act(async () => {
-      resolveCompress({ status, messages: [{ content: 'compressed transcript', role: 'system' }] })
-      await submitted
-    })
-    expect($compactingSessions.get()).toEqual({
-      [otherSessionId]: true,
-      ...(remainsCompacting ? { [RUNTIME_SESSION_ID]: true } : {})
-    })
-    expect($notifications.get()).toEqual([])
-
-    if (remainsCompacting) {
-      await handle!.submitText('/compress')
-      expect(requestGateway).toHaveBeenCalledTimes(1)
-      expect($compactingSessions.get()[RUNTIME_SESSION_ID]).toBe(true)
-    }
-  })
+  )
 
   it('preserves automatic compaction without issuing a competing manual request', async () => {
     setSessionCompacting(RUNTIME_SESSION_ID, true)
-    const requestGateway = vi.fn(async () => { throw new Error('session busy') })
+    const requestGateway = vi.fn(async () => {
+      throw new Error('session busy')
+    })
     let handle: HarnessHandle | null = null
     await actRender(
       <Harness onReady={h => (handle = h)} refreshSessions={async () => undefined} requestGateway={requestGateway} />
@@ -1394,7 +1397,9 @@ describe('usePromptActions /compress', () => {
     const updates: Array<{ sessionId: string; storedSessionId: null | string | undefined }> = []
     const seeds: Record<string, unknown>[] = []
     let rejectCompress: (reason: unknown) => void = () => undefined
-    const compression = new Promise((_, reject) => { rejectCompress = reject })
+    const compression = new Promise((_, reject) => {
+      rejectCompress = reject
+    })
     let recoveredCalls = 0
 
     const requestGateway = vi.fn(async (method: string, params?: Record<string, unknown>) => {
@@ -2766,6 +2771,7 @@ describe('usePromptActions submit / queue drain semantics', () => {
     })
 
     expect(accepted).toBe(true)
+
     const calls = requestGateway.mock.calls.map(([method, params]) => [
       method,
       (params as { session_id?: string })?.session_id
@@ -3996,10 +4002,14 @@ describe('platform model attachment capability', () => {
     await installPlatformModel(false)
     $composerDraft.set('keep this draft')
     $composerAttachments.set([image])
-    const requestGateway = vi.fn(async () => ({} as never))
+    const requestGateway = vi.fn(async () => ({}) as never)
     let handle: HarnessHandle | null = null
     await actRender(
-      <Harness onReady={value => (handle = value)} refreshSessions={async () => undefined} requestGateway={requestGateway} />
+      <Harness
+        onReady={value => (handle = value)}
+        refreshSessions={async () => undefined}
+        requestGateway={requestGateway}
+      />
     )
 
     expect(await handle!.submitText('describe it')).toBe(false)
@@ -4026,7 +4036,11 @@ describe('platform model attachment capability', () => {
 
     let handle: HarnessHandle | null = null
     await actRender(
-      <Harness onReady={value => (handle = value)} refreshSessions={async () => undefined} requestGateway={requestGateway} />
+      <Harness
+        onReady={value => (handle = value)}
+        refreshSessions={async () => undefined}
+        requestGateway={requestGateway}
+      />
     )
 
     expect(await handle!.submitText('describe it')).toBe(true)

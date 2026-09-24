@@ -1045,9 +1045,7 @@ export function useGatewayBoot({
       // LAST rung of knownOwnerForSession, so durable stored identity still
       // outranks it — #97511.)
       const ownedEvent =
-        $connection.get()?.sharedPrimary === true
-          ? stampSecondaryProfileOwner(scopedEvent, sourceProfile)
-          : scopedEvent
+        $connection.get()?.sharedPrimary === true ? stampSecondaryProfileOwner(scopedEvent, sourceProfile) : scopedEvent
 
       recordSessionEventScope(ownedEvent)
       callbacksRef.current.handleGatewayEvent(ownedEvent)

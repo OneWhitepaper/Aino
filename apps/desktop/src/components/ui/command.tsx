@@ -25,7 +25,10 @@ interface CommandInputProps extends React.ComponentProps<typeof CommandPrimitive
 
 function CommandInput({ className, right, ...props }: CommandInputProps) {
   return (
-    <div className="flex h-11 items-center gap-2 border-b border-(--ui-stroke-tertiary) px-3" data-slot="command-input-wrapper">
+    <div
+      className="flex h-11 items-center gap-2 border-b border-(--ui-stroke-tertiary) px-3"
+      data-slot="command-input-wrapper"
+    >
       <SearchIcon className="size-4 shrink-0 text-muted-foreground" />
       <CommandPrimitive.Input
         className={cn(

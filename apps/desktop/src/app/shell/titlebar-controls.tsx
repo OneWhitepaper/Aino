@@ -165,7 +165,9 @@ export function TitlebarControls({ leftTools = [], tools = [] }: TitlebarControl
     if (!hapticsMuted) {
       triggerHaptic('tap')
     }
+
     toggleHapticsMuted()
+
     if (hapticsMuted) {
       window.requestAnimationFrame(() => triggerHaptic('success'))
     }

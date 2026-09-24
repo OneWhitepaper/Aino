@@ -457,12 +457,7 @@ export function ZoneEditor() {
         {/* Merge affordance at drag-release point. */}
         {mergeAt && selection.length > 1 && (
           <div className="absolute z-20 flex gap-1" style={{ left: mergeAt.x, top: mergeAt.y }}>
-            <Button
-              onClick={merge}
-              onPointerDown={e => e.stopPropagation()}
-              size="sm"
-              variant="outline"
-            >
+            <Button onClick={merge} onPointerDown={e => e.stopPropagation()} size="sm" variant="outline">
               {t.zones.mergeZones(selection.length)}
             </Button>
           </div>

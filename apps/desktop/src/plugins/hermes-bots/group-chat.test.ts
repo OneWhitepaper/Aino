@@ -247,6 +247,7 @@ describe('speaker labels', () => {
     const data = await import('./data')
 
     const local = { connectionId: 'local', connectionLabel: 'This device', name: 'reviewer', sourceScoped: true }
+
     const spark = {
       connectionId: 'spark',
       connectionLabel: 'Spark',
@@ -282,6 +283,7 @@ describe('speaker labels', () => {
     const data = await import('./data')
 
     const local = { connectionId: 'local', connectionLabel: 'This device', name: 'reviewer', sourceScoped: true }
+
     const spark = {
       connectionId: 'spark',
       connectionLabel: 'Spark',
@@ -289,6 +291,7 @@ describe('speaker labels', () => {
       remoteSource: true,
       sourceScoped: true
     }
+
     data.$lastRoster.set([local, spark])
     data.$botMeta.set({})
 

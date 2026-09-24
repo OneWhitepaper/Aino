@@ -1033,7 +1033,9 @@ export async function createProject(input: CreateProjectInput, ownerProfile?: st
 
   // All profiles filters the sidebar, not the owner of a new project.
   // Capture the live route so reconnecting cannot retarget the write.
-  const context = await activeProjectsContext(ownerProfile ? projectWriteProfile(ownerProfile) : writableProjectProfile())
+  const context = await activeProjectsContext(
+    ownerProfile ? projectWriteProfile(ownerProfile) : writableProjectProfile()
+  )
   let res: { project: ProjectInfo | null }
 
   try {
@@ -1135,18 +1137,29 @@ export async function updateProject(
   ownerProfile?: string
 ): Promise<void> {
   const context = await activeProjectsContext(projectWriteProfile(ownerProfile))
+
   if (context.scope === ALL_PROFILES && ownerProfile) {
-    await gatewayRequestOn(context.gateway, 'projects.update', projectParams({
-      id,
-      ...patch,
-      ...(patch.color === null && { color: '' }),
-      ...(patch.icon === null && { icon: '' })
-    }, context.profile))
+    await gatewayRequestOn(
+      context.gateway,
+      'projects.update',
+      projectParams(
+        {
+          id,
+          ...patch,
+          ...(patch.color === null && { color: '' }),
+          ...(patch.icon === null && { icon: '' })
+        },
+        context.profile
+      )
+    )
+
     if (stillOnProjectsContext(context)) {
       void refreshProjectTree()
     }
+
     return
   }
+
   const snap = snapshotProjects()
 
   $projectTree.set(
@@ -1202,14 +1215,17 @@ export async function setProjectAppearance(
     return false
   }
 
-  await createProject({
-    name: project.label,
-    folders: [project.path],
-    primaryPath: project.path,
-    // Carry any already-set look so setting one field doesn't wipe the other.
-    color: (patch.color ?? project.color) || undefined,
-    icon: (patch.icon ?? project.icon) || undefined
-  }, project.ownerProfile)
+  await createProject(
+    {
+      name: project.label,
+      folders: [project.path],
+      primaryPath: project.path,
+      // Carry any already-set look so setting one field doesn't wipe the other.
+      color: (patch.color ?? project.color) || undefined,
+      icon: (patch.icon ?? project.icon) || undefined
+    },
+    project.ownerProfile
+  )
 
   return true
 }
@@ -1221,15 +1237,29 @@ export async function addProjectFolder(
   ownerProfile?: string
 ): Promise<void> {
   const context = await activeProjectsContext(projectWriteProfile(ownerProfile))
+
   if (context.scope === ALL_PROFILES && ownerProfile) {
-    await gatewayRequestOn(context.gateway, 'projects.add_folder', projectParams({
-      id, path, label: opts.label, is_primary: opts.isPrimary ?? false
-    }, context.profile))
+    await gatewayRequestOn(
+      context.gateway,
+      'projects.add_folder',
+      projectParams(
+        {
+          id,
+          path,
+          label: opts.label,
+          is_primary: opts.isPrimary ?? false
+        },
+        context.profile
+      )
+    )
+
     if (stillOnProjectsContext(context)) {
       void refreshProjectTree()
     }
+
     return
   }
+
   const snap = snapshotProjects()
   const trimmed = path.trim()
 
@@ -1289,13 +1319,17 @@ function openSessionBelongsToProject(projectId: string, projects: ProjectInfo[])
 // inside), reconciling from the server payload. A failed delete restores both.
 export async function deleteProject(id: string, ownerProfile?: string): Promise<void> {
   const context = await activeProjectsContext(projectWriteProfile(ownerProfile))
+
   if (context.scope === ALL_PROFILES && ownerProfile) {
     await gatewayRequestOn(context.gateway, 'projects.delete', projectParams({ id }, context.profile))
+
     if (stillOnProjectsContext(context)) {
       void refreshProjectTree()
     }
+
     return
   }
+
   const snap = snapshotProjects()
   // Capture membership BEFORE removal — the project's folders (which determine
   // ownership) are gone once it's dropped from the cache.
@@ -1415,7 +1449,12 @@ export function openProjectAddFolder(project: { id: string; name: string; profil
 }
 
 export function openProjectFolders(project: { id: string; name: string; profile?: string }): void {
-  $projectDialog.set({ mode: 'manage-folders', name: project.name, projectId: project.id, ownerProfile: project.profile })
+  $projectDialog.set({
+    mode: 'manage-folders',
+    name: project.name,
+    projectId: project.id,
+    ownerProfile: project.profile
+  })
 }
 
 export function closeProjectDialog(): void {

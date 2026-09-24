@@ -124,7 +124,9 @@ describe('TreeGroup', () => {
     it.each([300, 800])('keeps sidebar tabs below the native band at width %s', width => {
       const { strip } = mountCrowdedStrip(width, 'left')
       expect(strip.className).toContain('bottom-0')
-      expect(container!.querySelector<HTMLElement>('[data-panel-header]')!.style.height).toBe(`${TITLEBAR_HEIGHT + 28}px`)
+      expect(container!.querySelector<HTMLElement>('[data-panel-header]')!.style.height).toBe(
+        `${TITLEBAR_HEIGHT + 28}px`
+      )
     })
 
     it.each(['zone', 'default'] as const)('preserves the saved %s hide-tabs preference', source => {

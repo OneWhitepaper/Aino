@@ -221,6 +221,7 @@ test('downloadInstallScript falls back to the GitHub API when raw download fails
       _downloadApi: async (_ref, destPath) => {
         apiAttempts += 1
         fs.writeFileSync(destPath, '#!/bin/sh\necho api fallback\n')
+
         return destPath
       }
     })

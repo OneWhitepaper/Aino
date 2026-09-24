@@ -24,7 +24,13 @@ let handleEvent: (event: GatewayEvent) => void = () => undefined
 
 type RestartPreviewServer = (url: string, context?: string) => Promise<string>
 
-function RestartHarness({ onReady, requestGateway }: { onReady: (restart: RestartPreviewServer) => void; requestGateway: <T = unknown>(method: string, params?: Record<string, unknown>) => Promise<T> }) {
+function RestartHarness({
+  onReady,
+  requestGateway
+}: {
+  onReady: (restart: RestartPreviewServer) => void
+  requestGateway: <T = unknown>(method: string, params?: Record<string, unknown>) => Promise<T>
+}) {
   const routing = usePreviewRouting({
     baseHandleGatewayEvent: vi.fn(),
     currentCwd: '/work',

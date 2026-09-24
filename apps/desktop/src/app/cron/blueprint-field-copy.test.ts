@@ -65,8 +65,24 @@ describe('localized blueprint field copy', () => {
       command: '',
       appUrl: '',
       fields: [
-        { name: 'topic', type: 'text' as const, label: 'Topic', default: 'AI and technology', options: [], optional: false, help: '' },
-        { name: 'time', type: 'time' as const, label: 'What time?', default: '18:00', options: [], optional: false, help: '' }
+        {
+          name: 'topic',
+          type: 'text' as const,
+          label: 'Topic',
+          default: 'AI and technology',
+          options: [],
+          optional: false,
+          help: ''
+        },
+        {
+          name: 'time',
+          type: 'time' as const,
+          label: 'What time?',
+          default: '18:00',
+          options: [],
+          optional: false,
+          help: ''
+        }
       ]
     }
 

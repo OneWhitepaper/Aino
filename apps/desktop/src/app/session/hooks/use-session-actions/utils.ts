@@ -1753,7 +1753,9 @@ interface ApplyRuntimeInfoOptions {
 /** Mirror a session's runtime state into the composer atoms the MAIN pane
  *  renders from. Foreground sessions only — see ApplyRuntimeInfoOptions. */
 function publishRuntimeToComposer(state: SessionRuntimeStatePatch): void {
-  if (state.platformModel) {setCurrentPlatformOwner(state.platformModel.ownerUserId, state.platformModel.platformOrigin || '')}
+  if (state.platformModel) {
+    setCurrentPlatformOwner(state.platformModel.ownerUserId, state.platformModel.platformOrigin || '')
+  }
 
   if (state.model !== undefined) {
     setCurrentModel(state.model)

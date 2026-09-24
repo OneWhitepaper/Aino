@@ -35,9 +35,13 @@ export async function bindSelectedPlatformSession(
   const catalog = platformModelCatalog()
   const account = catalog.account.get()
 
-  if (account?.phase !== 'signed_in' || !account.account) {throw new PlatformSelectionError('not_authenticated')}
+  if (account?.phase !== 'signed_in' || !account.account) {
+    throw new PlatformSelectionError('not_authenticated')
+  }
 
-  if (selection.ownerUserId !== account.account.id) {throw new PlatformSelectionError('platform_account_changed')}
+  if (selection.ownerUserId !== account.account.id) {
+    throw new PlatformSelectionError('platform_account_changed')
+  }
 
   await catalog.owner.load()
   const authoritativeOwner = catalog.owner.state.get().owner
@@ -62,9 +66,13 @@ export async function bindSelectedPlatformSession(
     request
   )
 
-  if (!result.ok) {throw new PlatformSelectionError(result.error.code)}
+  if (!result.ok) {
+    throw new PlatformSelectionError(result.error.code)
+  }
 
-  if (!samePlatformAccount(catalog.account.get(), account)) {throw new PlatformSelectionError('platform_account_changed')}
+  if (!samePlatformAccount(catalog.account.get(), account)) {
+    throw new PlatformSelectionError('platform_account_changed')
+  }
 
   return authoritativeOwner
 }
@@ -76,7 +84,9 @@ export async function createPlatformDraft(
   owner: SessionOwnerScope,
   authority: PlatformDraftAuthority | null
 ): Promise<SessionCreateResponse> {
-  if (params.model_source !== 'aino') {return request('session.create', params)}
+  if (params.model_source !== 'aino') {
+    return request('session.create', params)
+  }
   const catalog = platformModelCatalog()
   const modelId = String(params.model_id || '')
 
@@ -141,11 +151,17 @@ export async function preparePlatformSessionRequest(
   params: Record<string, unknown>,
   request: Request
 ): Promise<void> {
-  if (!['prompt.submit', 'session.summary'].includes(method) || typeof params.session_id !== 'string') {return}
+  if (!['prompt.submit', 'session.summary'].includes(method) || typeof params.session_id !== 'string') {
+    return
+  }
   const state = $sessionStates.get()[params.session_id]
 
-  if (state?.provider !== 'aino') {return}
+  if (state?.provider !== 'aino') {
+    return
+  }
 
-  if (!state.platformModel) {throw new PlatformSelectionError('model_unavailable')}
+  if (!state.platformModel) {
+    throw new PlatformSelectionError('model_unavailable')
+  }
   await bindSelectedPlatformSession(owner, params.session_id, state.platformModel, request, true)
 }

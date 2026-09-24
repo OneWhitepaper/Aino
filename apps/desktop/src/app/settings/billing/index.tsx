@@ -165,6 +165,7 @@ function AccountRow({ billing, row }: { billing?: BillingStateResponse; row: Bil
 function BuyCreditsRow({ billing, row }: { billing: BillingStateResponse; row: BillingAccountRowView }) {
   const { t } = useI18n()
   const copy = t.billing.credits
+
   const presets = useMemo(
     () =>
       billing.charge_presets.map((amount, index) => ({
@@ -326,6 +327,7 @@ function BuyCreditsOutcome({
 function UsageBar({ bar, fallbackLabel }: { bar?: BillingUsageRowView['bar']; fallbackLabel: string }) {
   const { t } = useI18n()
   const copy = t.billing
+
   const resolvedBar = bar ?? {
     label: copy.usage.usageFallback(fallbackLabel),
     state: 'neutral',

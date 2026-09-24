@@ -101,7 +101,8 @@ const plugin: HermesPlugin = {
     },
     ja: {
       name: 'カンバン',
-      description: 'マルチエージェントのタスクボード。ボード画面、サイドバー入口、ステータスバーの進行中件数を提供します。'
+      description:
+        'マルチエージェントのタスクボード。ボード画面、サイドバー入口、ステータスバーの進行中件数を提供します。'
     }
   },
   defaultEnabled: false,

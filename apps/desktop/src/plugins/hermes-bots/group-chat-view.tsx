@@ -882,7 +882,10 @@ export function GroupChatWorkspace({ group, members, onBack, visible = true }: G
           onClick={() => setActivityOpen(prev => !prev)}
           title={activityOpen ? b.group.hideActivity : b.group.showActivity}
         >
-          <Codicon className="shrink-0 text-[length:var(--aino-text-caption)]" name={activityOpen ? 'chevron-down' : 'chevron-right'} />
+          <Codicon
+            className="shrink-0 text-[length:var(--aino-text-caption)]"
+            name={activityOpen ? 'chevron-down' : 'chevron-right'}
+          />
           <span className="shrink-0 font-medium">{b.group.activity}</span>
           {summaryActivity ? (
             <span
@@ -908,7 +911,10 @@ export function GroupChatWorkspace({ group, members, onBack, visible = true }: G
         <div className="grid gap-0.5 px-2.5 pb-1.5" id={`group-activity:${group}`}>
           {activityEvents.length ? (
             [...activityEvents].reverse().map((event, i) => (
-              <div className="flex items-center gap-1.5 text-[length:var(--aino-text-caption)]" key={`${event.at}:${i}`}>
+              <div
+                className="flex items-center gap-1.5 text-[length:var(--aino-text-caption)]"
+                key={`${event.at}:${i}`}
+              >
                 <Codicon
                   className={cn('shrink-0 text-[length:var(--aino-text-caption)]', groupActivityTone(event.kind))}
                   name={GROUP_ACTIVITY_GLYPHS[event.kind] || 'circle-outline'}
@@ -916,7 +922,9 @@ export function GroupChatWorkspace({ group, members, onBack, visible = true }: G
                 <span className={cn('min-w-0 flex-1 truncate', groupActivityTone(event.kind))}>
                   {groupActivityLabel(event, group)}
                 </span>
-                <span className="shrink-0 text-[length:var(--aino-text-caption)] text-(--ui-text-quaternary)">{relativeTime(event.at)}</span>
+                <span className="shrink-0 text-[length:var(--aino-text-caption)] text-(--ui-text-quaternary)">
+                  {relativeTime(event.at)}
+                </span>
                 {event.kind === 'working' ? (
                   <Tip label={b.group.stopHint}>
                     <Button
@@ -933,7 +941,9 @@ export function GroupChatWorkspace({ group, members, onBack, visible = true }: G
               </div>
             ))
           ) : (
-            <div className="px-0.5 pb-0.5 text-[length:var(--aino-text-caption)] text-(--ui-text-quaternary)">{b.group.noActivityYet}</div>
+            <div className="px-0.5 pb-0.5 text-[length:var(--aino-text-caption)] text-(--ui-text-quaternary)">
+              {b.group.noActivityYet}
+            </div>
           )}
         </div>
       ) : null}
@@ -1089,6 +1099,7 @@ export function GroupChatWorkspace({ group, members, onBack, visible = true }: G
 
     const seed = (current: string) =>
       current.includes(`@${tag}`) ? current : `@${tag} ${current}`.replace(/\s+$/, ' ')
+
     const thread = groupThreadOf(entry)
 
     if (replyThread === thread) {
@@ -1181,7 +1192,9 @@ export function GroupChatWorkspace({ group, members, onBack, visible = true }: G
                 </Button>
               </Tip>
             )}
-            <span className="text-[length:var(--aino-text-caption)] text-(--ui-text-quaternary)">{relativeTime(entry.at)}</span>
+            <span className="text-[length:var(--aino-text-caption)] text-(--ui-text-quaternary)">
+              {relativeTime(entry.at)}
+            </span>
             {entry.text.trim() || !isUser ? (
               <div className="ml-auto flex shrink-0 items-center gap-0.5 opacity-0 pointer-events-none group-hover:pointer-events-auto group-hover:opacity-100 focus-within:pointer-events-auto focus-within:opacity-100">
                 {isUser ? null : (
@@ -1366,7 +1379,10 @@ export function GroupChatWorkspace({ group, members, onBack, visible = true }: G
             />
           ))}
           {room.running ? (
-            <div className="px-2 py-1 text-[length:var(--aino-text-caption)] italic text-(--ui-text-quaternary)" key={'working'}>
+            <div
+              className="px-2 py-1 text-[length:var(--aino-text-caption)] italic text-(--ui-text-quaternary)"
+              key={'working'}
+            >
               {roomClarifies.length
                 ? b.group.waitingForAnswer
                 : room.turn

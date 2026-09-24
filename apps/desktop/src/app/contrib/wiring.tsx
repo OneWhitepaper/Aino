@@ -494,6 +494,7 @@ export function ContribWiring({ children }: { children: ReactNode }) {
       const storedProfile = profileScopeForTranscriptSession(
         resolveActiveTranscriptSession(storedSessionId, runtimeSessionId)
       )
+
       const messagesBeforeRead = sessionStateByRuntimeIdRef.current.get(runtimeSessionId)?.messages
 
       const canApplyHistory = () => {
@@ -1400,11 +1401,7 @@ export function ContribWiring({ children }: { children: ReactNode }) {
             requestGateway={requestGateway}
           />
         )}
-        <ModelPickerOverlay
-          gateway={gateway || undefined}
-          onSelect={selectModel}
-          requestGateway={requestGateway}
-        />
+        <ModelPickerOverlay gateway={gateway || undefined} onSelect={selectModel} requestGateway={requestGateway} />
         <SessionPickerOverlay onResume={sessionId => openSessionFromPicker(sessionId, navigate)} />
         <ModelVisibilityOverlay
           gateway={gateway || undefined}

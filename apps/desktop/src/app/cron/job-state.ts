@@ -26,7 +26,13 @@ export function jobTitle(job: CronJob): string {
   const pick = (v: unknown) => (typeof v === 'string' ? v.trim() : '')
   const clip = (v: string) => (v.length > 60 ? `${v.slice(0, 60)}…` : v)
 
-  return pick(job.name) || clip(pick(job.prompt)) || clip(pick(job.script)) || job.id || translateNow('cron.jobFallbackTitle')
+  return (
+    pick(job.name) ||
+    clip(pick(job.prompt)) ||
+    clip(pick(job.script)) ||
+    job.id ||
+    translateNow('cron.jobFallbackTitle')
+  )
 }
 
 // Mirrors hermes_cli/cron.py `_OVERDUE_GRACE_SECONDS`: a busy tick can dispatch a few minutes late.

@@ -299,7 +299,9 @@ function Card({
             {task.title || task.id}
           </span>
           {summary && (
-            <span className="line-clamp-2 text-[length:var(--aino-text-caption)] leading-snug text-(--ui-text-tertiary)">{summary}</span>
+            <span className="line-clamp-2 text-[length:var(--aino-text-caption)] leading-snug text-(--ui-text-tertiary)">
+              {summary}
+            </span>
           )}
           <CardFooter arc={arc} task={task} />
         </div>
@@ -434,7 +436,9 @@ function Column({
           {label}
         </span>
         {column.tasks.length > 0 && (
-          <span className="text-[length:var(--aino-text-caption)] tabular-nums text-(--ui-text-quaternary)">{column.tasks.length}</span>
+          <span className="text-[length:var(--aino-text-caption)] tabular-nums text-(--ui-text-quaternary)">
+            {column.tasks.length}
+          </span>
         )}
       </button>
     )
@@ -443,7 +447,10 @@ function Column({
   return (
     <div
       {...dragHandlers}
-      className={cn('group/col flex h-full w-64 shrink-0 flex-col rounded-(--aino-radius-control) p-2 transition-colors', wash)}
+      className={cn(
+        'group/col flex h-full w-64 shrink-0 flex-col rounded-(--aino-radius-control) p-2 transition-colors',
+        wash
+      )}
     >
       <header className="mb-1.5 flex h-5 items-center gap-1.5 px-1">
         <span className="size-1.5 rounded-full" style={{ backgroundColor: meta.tone }} />
@@ -452,7 +459,9 @@ function Column({
             {label}
           </span>
         </Tip>
-        <span className="text-[length:var(--aino-text-caption)] tabular-nums text-(--ui-text-quaternary)">{column.tasks.length}</span>
+        <span className="text-[length:var(--aino-text-caption)] tabular-nums text-(--ui-text-quaternary)">
+          {column.tasks.length}
+        </span>
         <button
           aria-label={k.collapse(label)}
           className="ml-auto grid size-5 place-items-center rounded-(--aino-radius-control) text-(--ui-text-tertiary) opacity-0 transition-opacity hover:bg-(--chrome-action-hover) hover:text-foreground focus-visible:opacity-100 group-hover/col:opacity-100"

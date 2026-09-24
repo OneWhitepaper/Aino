@@ -366,7 +366,11 @@ export function DesktopOnboardingOverlay({
     return null
   }
 
-  if (platformReady && !onboarding.manual && (onboarding.flow.status === 'idle' || onboarding.flow.status === 'success')) {
+  if (
+    platformReady &&
+    !onboarding.manual &&
+    (onboarding.flow.status === 'idle' || onboarding.flow.status === 'success')
+  ) {
     return null
   }
 
@@ -574,7 +578,9 @@ function Header() {
   return (
     <div className="bg-(--ui-bg-elevated) px-5 pt-5 pb-1">
       <h2 className="text-[length:var(--aino-text-title)] font-semibold tracking-tight">{t.onboarding.headerTitle}</h2>
-      <p className="mt-1 max-w-xl text-[length:var(--aino-text-ui)] leading-5 text-(--ui-text-tertiary)">{t.onboarding.headerDesc}</p>
+      <p className="mt-1 max-w-xl text-[length:var(--aino-text-ui)] leading-5 text-(--ui-text-tertiary)">
+        {t.onboarding.headerDesc}
+      </p>
     </div>
   )
 }
@@ -799,7 +805,8 @@ export function ApiKeyForm({
   // or unusual key can't block the user from continuing.
   const canSave = value.trim().length >= 1
   const optionCopy = t.onboarding.apiKeyOptions[option.id]
-  const optionDescription = optionCopy?.description ?? option.description ?? t.onboarding.genericApiKeyDescription(option.name)
+  const optionDescription =
+    optionCopy?.description ?? option.description ?? t.onboarding.genericApiKeyDescription(option.name)
 
   const submit = async () => {
     if (!canSave || saving) {
@@ -841,7 +848,9 @@ export function ApiKeyForm({
             type="button"
           >
             <div className="flex items-center justify-between gap-2">
-              <span className="text-sm font-medium">{t.onboarding.apiKeyOptions[o.id]?.title ?? o.title ?? o.name}</span>
+              <span className="text-sm font-medium">
+                {t.onboarding.apiKeyOptions[o.id]?.title ?? o.title ?? o.name}
+              </span>
               {isSet?.(o.envKey) ? <Check className="size-3.5 text-muted-foreground" /> : null}
             </div>
             {(t.onboarding.apiKeyOptions[o.id]?.short ?? o.short) ? (

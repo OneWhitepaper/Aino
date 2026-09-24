@@ -85,10 +85,7 @@ function escapeHtml(value: unknown): string {
     .replace(/"/g, '&quot;')
 }
 
-function missingAssetsList(
-  missingAssets: string[] | undefined,
-  copy: NativeLocaleCopy['rendererLoadError']
-): string {
+function missingAssetsList(missingAssets: string[] | undefined, copy: NativeLocaleCopy['rendererLoadError']): string {
   const assets = (missingAssets ?? []).slice(0, 5)
 
   if (assets.length === 0) {

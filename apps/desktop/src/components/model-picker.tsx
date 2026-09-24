@@ -10,10 +10,7 @@ import { currentPickerSelection } from '@/lib/model-status-label'
 import { managedModelSwitchBlocked } from '@/lib/model-switch-policy'
 import { foldIncludes, normalize } from '@/lib/text'
 import { useStoreSelector } from '@/lib/use-session-slice'
-import {
-  $gatewayManagedCapabilities,
-  managedModelRouteCapabilityFrom
-} from '@/store/gateway-managed-capability'
+import { $gatewayManagedCapabilities, managedModelRouteCapabilityFrom } from '@/store/gateway-managed-capability'
 import { $localModelsEnabled } from '@/store/local-models-flag'
 import { $localRuntimeJobs, runningModelDownloads, watchLocalRuntimeJobs } from '@/store/local-runtime-jobs'
 import { notifyError } from '@/store/notifications'
