@@ -490,8 +490,16 @@ _HERMES_BEHAVIORAL_VARS = frozenset({
 })
 
 
+@pytest.fixture(scope="session")
+def _git_proxy_override_config(tmp_path_factory):
+    # Keep harness files outside each test's filesystem under inspection.
+    path = tmp_path_factory.mktemp("git-proxy-override") / "config"
+    path.write_text("[http]\n\tproxy =\n[https]\n\tproxy =\n", encoding="utf-8")
+    return path
+
+
 @pytest.fixture(autouse=True)
-def _hermetic_environment(tmp_path, monkeypatch):
+def _hermetic_environment(tmp_path, monkeypatch, _git_proxy_override_config):
     """Blank out all credential/behavioral env vars so local and CI match.
 
     Also redirects HOME and HERMES_HOME to per-test tempdirs so code that
@@ -522,11 +530,9 @@ def _hermetic_environment(tmp_path, monkeypatch):
     # Windows putenv removes empty values, so VALUE_n="" leaves Git with
     # an incomplete indexed configuration. Keep empty proxy values in a file
     # and pass its non-empty path at the same command configuration scope.
-    git_proxy_config = tmp_path / "git-proxy-override.config"
-    git_proxy_config.write_text("[http]\n\tproxy =\n[https]\n\tproxy =\n", encoding="utf-8")
     monkeypatch.setenv("GIT_CONFIG_COUNT", "1")
     monkeypatch.setenv("GIT_CONFIG_KEY_0", "include.path")
-    monkeypatch.setenv("GIT_CONFIG_VALUE_0", str(git_proxy_config))
+    monkeypatch.setenv("GIT_CONFIG_VALUE_0", str(_git_proxy_override_config))
 
     # 2. Blank behavioral HERMES_* vars that could change test semantics.
     for name in _HERMES_BEHAVIORAL_VARS:

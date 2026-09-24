@@ -8,6 +8,8 @@ import pytest
 
 @pytest.mark.parametrize("omit_empty_values", [False, True])
 def test_git_proxy_isolation_preserves_other_settings(tmp_path, monkeypatch, omit_empty_values):
+    # Harness-owned files must not appear in the directory the test exercises.
+    assert not [path for path in tmp_path.iterdir() if path.is_file()]
     global_config = tmp_path / "global.gitconfig"
     global_config.write_text(
         '[http]\n\tproxy = http://127.0.0.1:1\n'

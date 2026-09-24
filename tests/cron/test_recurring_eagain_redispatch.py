@@ -73,32 +73,23 @@ def wedge_env(tmp_path, monkeypatch):
 
 class TestEAGAINRecurringRedispatches:
     def _make_script_eagain(self, env, monkeypatch):
-        """Make the next subprocess.Popen raise EAGAIN once, then pass.
+        """Make the next script subprocess raise EAGAIN once, then run normally.
 
         The script runner spawns via Popen (polling loop for cancel/timeout),
         so the substrate-failure injection point is the Popen constructor.
         """
         import cron.scheduler as sched_mod
         state = {"n": 0}
-
-        class _OkProc:
-            def __init__(self, argv, **kwargs):
-                self.returncode = 0
-
-            def poll(self):
-                return self.returncode
-
-            def communicate(self, timeout=None):
-                return ("ok\n", "")
-
-            def wait(self, timeout=None):
-                return 0
+        real_popen = sched_mod.subprocess.Popen
+        script = str((env["home"] / "scripts" / "probe.py").resolve())
 
         def fake_popen(argv, **kwargs):
-            state["n"] += 1
-            if state["n"] == 1:
-                raise OSError(11, "Resource temporarily unavailable")
-            return _OkProc(argv, **kwargs)
+            # Background Git/workspace probes must not consume the script's failure.
+            if isinstance(argv, (list, tuple)) and script in argv:
+                state["n"] += 1
+                if state["n"] == 1:
+                    raise OSError(11, "Resource temporarily unavailable")
+            return real_popen(argv, **kwargs)
 
         monkeypatch.setattr(sched_mod.subprocess, "Popen", fake_popen)
         return state

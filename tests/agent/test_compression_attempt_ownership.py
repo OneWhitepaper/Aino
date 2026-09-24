@@ -252,19 +252,14 @@ class TestStaleAttemptEndToEnd:
     ``compress()``, and the stale unwind propagating as a cancellation."""
 
     def _compressor(self):
-        from unittest.mock import patch
-
         from agent.context_compressor import ContextCompressor
 
-        with patch(
-            "agent.context_compressor.get_model_context_length",
-            return_value=100000,
-        ):
-            return ContextCompressor(
-                model="test/model", quiet_mode=True,
-                protect_first_n=2, protect_last_n=2,
-                abort_on_summary_failure=False,
-            )
+        # Resolution is lazy, so the setting must survive construction.
+        return ContextCompressor(
+            model="test/model", quiet_mode=True, config_context_length=100000,
+            protect_first_n=2, protect_last_n=2,
+            abort_on_summary_failure=False,
+        )
 
     def _messages(self, n=12):
         return [
