@@ -70,9 +70,9 @@ def test_gui_install_summary_shape(tmp_path, monkeypatch):
 
 
 
+@pytest.mark.linux_only
 def test_linux_discovery_includes_launcher_entry(tmp_path, monkeypatch):
     """The launcher entry that `hermes desktop` installs is removable."""
-    monkeypatch.setattr(gu.sys, "platform", "linux")
     monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path / "xdg"))
 
     from hermes_cli import linux_desktop_entry as lde
@@ -80,9 +80,9 @@ def test_linux_discovery_includes_launcher_entry(tmp_path, monkeypatch):
     assert lde.desktop_entry_path() in gu.packaged_gui_app_paths()
 
 
-def test_macos_discovery_prefers_aino_and_keeps_hermes_migration_paths(monkeypatch):
+@pytest.mark.macos_only
+def test_macos_discovery_prefers_aino_and_keeps_hermes_migration_paths():
     """Packaged discovery names the new app first but still sees old installs."""
-    monkeypatch.setattr(gu.sys, "platform", "darwin")
     paths = gu.packaged_gui_app_paths()
 
     assert paths[:2] == [Path("/Applications/Aino.app"), Path.home() / "Applications" / "Aino.app"]
@@ -90,17 +90,15 @@ def test_macos_discovery_prefers_aino_and_keeps_hermes_migration_paths(monkeypat
     assert Path.home() / "Applications" / "Hermes.app" in paths
 
 
-def test_userdata_candidates_are_aino_first_with_hermes_compatibility(monkeypatch):
-    monkeypatch.setattr(gu.sys, "platform", "darwin")
-
+def test_userdata_candidates_are_aino_first_with_hermes_compatibility():
     candidates = gu.desktop_userdata_dirs()
 
     assert candidates[0].name == "Aino"
     assert candidates[1].name == "Hermes"
 
 
+@pytest.mark.linux_only
 def test_uninstall_removes_launcher_entry_and_refreshes_cache(tmp_path, monkeypatch):
-    monkeypatch.setattr(gu.sys, "platform", "linux")
     monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path / "xdg"))
 
     from hermes_cli import linux_desktop_entry as lde
@@ -131,8 +129,8 @@ def test_uninstall_removes_launcher_entry_and_refreshes_cache(tmp_path, monkeypa
     assert (hermes_home / "hermes-agent" / "hermes_cli").is_dir()
 
 
+@pytest.mark.linux_only
 def test_uninstall_skips_cache_refresh_when_no_launcher_entry(tmp_path, monkeypatch):
-    monkeypatch.setattr(gu.sys, "platform", "linux")
     monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path / "xdg"))
 
     from hermes_cli import linux_desktop_entry as lde

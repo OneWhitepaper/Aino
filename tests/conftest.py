@@ -519,11 +519,14 @@ def _hermetic_environment(tmp_path, monkeypatch):
     # when the developer has http.proxy/https.proxy in ~/.gitconfig. Preserve
     # every other global Git setting (notably user identity) and override only
     # these two keys for subprocesses spawned by a test.
-    monkeypatch.setenv("GIT_CONFIG_COUNT", "2")
-    monkeypatch.setenv("GIT_CONFIG_KEY_0", "http.proxy")
-    monkeypatch.setenv("GIT_CONFIG_VALUE_0", "")
-    monkeypatch.setenv("GIT_CONFIG_KEY_1", "https.proxy")
-    monkeypatch.setenv("GIT_CONFIG_VALUE_1", "")
+    # Windows putenv removes empty values, so VALUE_n="" leaves Git with
+    # an incomplete indexed configuration. Keep empty proxy values in a file
+    # and pass its non-empty path at the same command configuration scope.
+    git_proxy_config = tmp_path / "git-proxy-override.config"
+    git_proxy_config.write_text("[http]\n\tproxy =\n[https]\n\tproxy =\n", encoding="utf-8")
+    monkeypatch.setenv("GIT_CONFIG_COUNT", "1")
+    monkeypatch.setenv("GIT_CONFIG_KEY_0", "include.path")
+    monkeypatch.setenv("GIT_CONFIG_VALUE_0", str(git_proxy_config))
 
     # 2. Blank behavioral HERMES_* vars that could change test semantics.
     for name in _HERMES_BEHAVIORAL_VARS:
