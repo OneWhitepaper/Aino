@@ -1,5 +1,5 @@
 import { translateNow } from '@/i18n'
-import { firstStringField, normalize } from '@/lib/text'
+import { firstStringField } from '@/lib/text'
 import type { SubagentProgress, SubagentStatus } from '@/store/subagents'
 
 import { numberValue, parseMaybeObject } from './fallback-model'
@@ -11,9 +11,12 @@ import { numberValue, parseMaybeObject } from './fallback-model'
  * all three of those views of the same child.
  */
 export interface DelegateRow {
-  /** Latest relayed activity, oldest → newest. The card tickers the tail. */
+  /** Relayed activity, oldest → newest, revealed when the child row is expanded. */
   activity: string[]
   durationSeconds?: number
+  /** Receipt identities, never inferred from a task's display text. */
+  delegationId?: string
+  subagentId?: string
   goal: string
   id: string
   model?: string
@@ -38,7 +41,9 @@ export function delegateGoals(args: unknown): string[] {
   const tasks = Array.isArray(record.tasks) ? record.tasks : []
 
   if (tasks.length > 0) {
-    return tasks.map((task, index) => field(parseMaybeObject(task), 'goal') || translateNow('assistant.tool.taskNumber', index + 1))
+    return tasks.map(
+      (task, index) => field(parseMaybeObject(task), 'goal') || translateNow('assistant.tool.taskNumber', index + 1)
+    )
   }
 
   const goal = field(record, 'goal')
@@ -80,24 +85,31 @@ function dispatchedGoals(result: unknown): string[] {
  * running; the moment a background dispatch answers, they drop to parked.
  */
 export function delegateRowsFromCall(args: unknown, result: unknown, toolCallId = ''): DelegateRow[] {
+  const record = parseMaybeObject(result)
   const goals = delegateGoals(args)
   const finished = resultRows(result)
   const dispatched = dispatchedGoals(result)
+  const subagentIds = Array.isArray(record.subagent_ids) ? record.subagent_ids : []
+  const delegationId = field(record, 'delegation_id') || undefined
+
   const titles =
     goals.length > 0
       ? goals
       : dispatched.length > 0
         ? dispatched
         : finished.map(() => translateNow('assistant.tool.delegatedTask'))
+
   const idle: DelegateRowStatus = result === undefined ? 'running' : 'dispatched'
 
   return titles.map((goal, index) => {
     const entry = finished[index]
-    const summary = entry ? field(entry, 'summary') : ''
+    const summary = entry ? field(entry, 'summary') || field(entry, 'error') : ''
 
     return {
       activity: summary ? [summary] : [],
       durationSeconds: entry ? (numberValue(entry.duration_seconds) ?? undefined) : undefined,
+      delegationId,
+      subagentId: typeof subagentIds[index] === 'string' && subagentIds[index] ? subagentIds[index] : undefined,
       goal,
       id: `${toolCallId}:${index}`,
       model: entry ? field(entry, 'model') || undefined : undefined,
@@ -108,7 +120,9 @@ export function delegateRowsFromCall(args: unknown, result: unknown, toolCallId 
 
 function fromSubagent(live: SubagentProgress, fallbackId: string, fallbackGoal: string): DelegateRow {
   return {
-    activity: live.stream.map(entry => entry.text).filter(Boolean),
+    activity: live.stream
+      .map(entry => (entry.kind === 'summary' ? live.summary || entry.text : entry.text))
+      .filter(Boolean),
     durationSeconds: live.durationSeconds,
     goal: live.goal || fallbackGoal,
     id: live.id || fallbackId,
@@ -121,16 +135,11 @@ function fromSubagent(live: SubagentProgress, fallbackId: string, fallbackGoal: 
 /**
  * Layer the session's live subagents over the rows a call describes.
  *
- * Three joins, narrowest first. The delegate fallback (used when the gateway
- * relays no native `subagent.*` events) keys its rows off the tool call id, so
- * those match exactly. Native events carry no tool linkage, but they do carry
- * the goal string verbatim from the same arguments this call was built from.
- * Failing both, task order is how the delegate tool numbers its children — but
- * only trust it when the two sides agree on how many there are, or a second
- * delegation in the same turn will claim the first one's workers.
- *
- * Live state wins wherever it exists: a settled result tells you a child
- * finished, but only the store knows what it is doing right now.
+ * A dispatch receipt names its children and batch. Before that receipt, only
+ * the tool-call-keyed fallback is attributable here; native workers remain in
+ * the session's agent list. Goals and task counts are not identities: repeated
+ * delegations may have identical text and shape. A persisted child result is
+ * authoritative over an older live snapshot or synthetic tool completion.
  */
 export function mergeDelegateRows(
   rows: readonly DelegateRow[],
@@ -150,14 +159,32 @@ export function mergeDelegateRows(
   }
 
   const prefix = toolCallId ? `delegate-tool:${toolCallId}:` : ''
-  const byId = rows.map((_row, index) => (prefix ? claim(c => c.id === `${prefix}${index}`) : undefined))
-  const byGoal = rows.map((row, index) => byId[index] ?? claim(c => normalize(c.goal) === normalize(row.goal)))
-  const sameShape = rows.length === live.length
 
   return rows.map((row, index) => {
-    const matched = byGoal[index] ?? (sameShape ? claim(c => c.taskIndex === index) : undefined)
+    const native = row.subagentId
+      ? claim(candidate => candidate.id === row.subagentId)
+      : row.delegationId
+        ? claim(candidate => candidate.delegationId === row.delegationId && candidate.taskIndex === index)
+        : undefined
 
-    return matched ? fromSubagent(matched, row.id, row.goal) : row
+    const matched = native ?? (prefix ? claim(candidate => candidate.id === `${prefix}${index}`) : undefined)
+
+    if (!matched) {
+      return row
+    }
+
+    const merged = { ...row, ...fromSubagent(matched, row.id, row.goal) }
+
+    if (!isDelegateRowLive(row.status) && (row.status !== 'dispatched' || !native)) {
+      return {
+        ...merged,
+        activity: row.activity.length ? row.activity : merged.activity,
+        durationSeconds: row.durationSeconds ?? merged.durationSeconds,
+        status: row.status
+      }
+    }
+
+    return merged
   })
 }
 

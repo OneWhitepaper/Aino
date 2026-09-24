@@ -2,18 +2,90 @@ import type { ThreadMessage } from '@assistant-ui/react'
 import { cleanup, fireEvent, render, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 
+import * as toolPresentation from '@/components/assistant-ui/tool/fallback-model'
 import { toChatMessages } from '@/lib/chat-messages'
 import { toRuntimeMessage } from '@/lib/chat-runtime'
 import type { SessionMessage } from '@/types/hermes'
 
-import { stubThreadEnvironment, ThreadRuntime } from '../test-utils'
+import { assistantMessage, stubThreadEnvironment, ThreadRuntime, userMessage } from '../test-utils'
+
+import { AssistantMessageParts } from './message-parts'
+import { ResponseMessages } from './response-group'
 
 import { Thread } from '.'
 
 beforeEach(stubThreadEnvironment)
 afterEach(() => {
   cleanup()
+  vi.restoreAllMocks()
   vi.unstubAllGlobals()
+})
+
+it('does not rederive historical tool outcomes for streamed tokens but exposes updated failures', async () => {
+  const outcome = vi.spyOn(toolPresentation, 'toolPreviewOutcome')
+
+  const part = {
+    type: 'tool-call' as const,
+    toolCallId: 'completed-read',
+    toolName: 'read_file',
+    args: { path: '/repo/large.txt' },
+    argsText: '{"path":"/repo/large.txt"}',
+    result: JSON.stringify({ content: 'historical result '.repeat(10000) })
+  }
+
+  const history = {
+    ...assistantMessage(),
+    id: 'historical-answer',
+    content: [part, { type: 'text', text: 'Read complete.', displayPhase: 'final' }]
+  } as ThreadMessage
+
+  const components = { AssistantMessage: AssistantMessageParts, UserMessage: () => null }
+  const indices = [1]
+  const prompt = userMessage('historical-prompt', 'Read the file.')
+  const nextPrompt = userMessage('next-prompt', 'Explain it.')
+
+  const frame = (text: string, older = history) => (
+    <ThreadRuntime
+      messages={[
+        prompt,
+        older,
+        nextPrompt,
+        { ...assistantMessage(), id: 'live-answer', content: [{ type: 'text', text }], status: { type: 'running' } }
+      ]}
+    >
+      <ResponseMessages components={components} indices={indices} />
+    </ThreadRuntime>
+  )
+
+  const { container, rerender } = render(frame('one'))
+  const initialDerivations = outcome.mock.calls.length
+  expect(initialDerivations).toBeGreaterThan(0)
+  expect(container.querySelector('[data-slot="aui_response-process-header"]')).not.toBeNull()
+
+  for (const text of ['one two', 'one two three', 'one two three four']) {
+    rerender(frame(text))
+  }
+
+  expect(outcome).toHaveBeenCalledTimes(initialDerivations)
+
+  // GroupedParts also rescans when text in the tool's own message grows,
+  // and assistant-ui supplies fresh status-bearing wrappers for that scan.
+  rerender(
+    frame('one two three four', {
+      ...history,
+      content: [{ ...part }, { type: 'text', text: 'Read complete. More detail.', displayPhase: 'final' }]
+    } as ThreadMessage)
+  )
+  expect(outcome).toHaveBeenCalledTimes(initialDerivations)
+
+  rerender(
+    frame('one two three four', {
+      ...history,
+      content: [{ ...part, isError: true }, history.content[1]]
+    } as ThreadMessage)
+  )
+  await waitFor(() => expect(container.querySelector('[data-slot="aui_response-process-header"]')).toBeNull())
+  expect(outcome.mock.calls.length).toBeGreaterThan(initialDerivations)
 })
 
 it('keeps background continuations in one response with one action bar and the original message identities', async () => {
@@ -79,11 +151,13 @@ it('keeps background continuations in one response with one action bar and the o
     expect(container.querySelectorAll('[data-slot="aui_msg-actions"]')).toHaveLength(1)
 
     unmount()
+
     const reloaded = render(
       <ThreadRuntime messages={messages}>
         <Thread />
       </ThreadRuntime>
     )
+
     expect(reloaded.container.querySelectorAll('[data-slot="aui_msg-actions"]')).toHaveLength(1)
     reloaded.unmount()
   }
@@ -104,6 +178,7 @@ it('ends the response at a real user prompt or unrelated system event', () => {
       <Thread />
     </ThreadRuntime>
   )
+
   expect(container.querySelectorAll('[data-slot="aui_turn-pair"]')).toHaveLength(2)
   expect(container.querySelectorAll('[data-slot="aui_msg-actions"]')).toHaveLength(3)
 })

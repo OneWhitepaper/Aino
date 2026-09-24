@@ -510,21 +510,20 @@ async def get_session_latest_descendant(session_id: str, profile: Optional[str] 
         "changed": bool(path and latest != path[0])}
 
 
-def _project_for_display(messages: list) -> list:
+def _project_for_display(messages: list, *, prior_user_match=None) -> list:
     """Replace compaction summaries with their display-only projection."""
     from agent.compaction_display import project_compaction_message_for_display
     from agent.context_compressor import is_compaction_summary_message
 
     projected_messages = []
     for message in messages:
-        if not is_compaction_summary_message(message):
+        display_view = project_compaction_message_for_display(message, prior_user_match=prior_user_match)
+        if display_view is not None and not is_compaction_summary_message(message):
             projected_messages.append(message)
             continue
-        display_view = project_compaction_message_for_display(message)
         projected = message.copy()
         if display_view is None:
-            if not projected.get("display_kind"):
-                projected["display_kind"] = "hidden"
+            projected["display_kind"] = "hidden"
         else:
             # Keep the physical content for inspection/export compatibility;
             # Desktop consumes this display-only projection. A legacy hidden
@@ -544,6 +543,8 @@ async def get_session_messages(
         raise HTTPException(status_code=400, detail="order must be one of: oldest, latest")
 
     def _read(db):
+        from hermes_state_timeline import prior_user_content_matcher
+
         sid = _resolve_session_id(db, session_id)
         if not sid:
             return None
@@ -553,15 +554,15 @@ async def get_session_messages(
         default_page = limit is None
         latest_page = order == "latest" or (order is None and default_page)
         _limit = 500 if default_page else min(limit, 500)
-        return sid, _limit, db.get_messages(
+        messages = db.get_messages(
             sid, limit=_limit, offset=offset, latest=latest_page,
             include_compacted=include_compacted)
+        return sid, _limit, _project_for_display(messages, prior_user_match=prior_user_content_matcher(db, sid))
 
     result = await asyncio.to_thread(_with_db, profile, _read, read_only=True)
     if result is None:
         raise HTTPException(status_code=404, detail=_NOT_FOUND)
-    sid, _limit, messages = result
-    projected_messages = _project_for_display(messages)
+    sid, _limit, projected_messages = result
     return {
         "session_id": sid,
         # The same stamp list rows carry, so the Desktop keys a page under the
@@ -617,7 +618,7 @@ async def get_session_messages_around(
     limit: int = Query(120, ge=1, le=120),
 ):
     """Bounded display page starting at a timeline prompt; no intervening payloads."""
-    from hermes_state_timeline import get_session_messages_around as read_around
+    from hermes_state_timeline import get_session_messages_around as read_around, prior_user_content_matcher
 
     owner = _serving_profile(profile)
 
@@ -626,10 +627,10 @@ async def get_session_messages_around(
         page = read_around(db, sid, row_id, limit=limit)
         if page is None:
             raise HTTPException(status_code=404, detail="Prompt not found")
+        page["messages"] = _project_for_display(page["messages"], prior_user_match=prior_user_content_matcher(db, sid))
         return {"session_id": sid, "profile": owner, **page}
 
     result = await asyncio.to_thread(_with_db, profile, _read, read_only=True)
-    result["messages"] = _project_for_display(result["messages"])
     return result
 
 

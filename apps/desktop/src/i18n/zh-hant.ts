@@ -3857,7 +3857,8 @@ export const zhHant = defineLocale({
       thought: '已思考',
       thoughtBriefly: '思考了片刻',
       thoughtFor: duration => `用時 ${duration}`,
-      turnDuration: duration => `本輪耗時 ${duration}`,
+      turnDuration: duration => `用時 ${duration}`,
+      processTitle: '執行過程',
       replyMetrics: {
         duration: '耗時',
         tokens: '消耗',
@@ -4047,6 +4048,8 @@ export const zhHant = defineLocale({
       recoveredMany: count => `在 ${count} 個失敗步驟後已復原`,
       failedOne: '1 個步驟失敗',
       failedMany: count => `${count} 個步驟失敗`,
+      shell: 'Shell',
+      statusBackground: '背景執行中',
       statusRunning: '執行中',
       statusError: '錯誤',
       statusRecovered: '已復原',
@@ -4060,12 +4063,20 @@ export const zhHant = defineLocale({
         opened: '已開啟',
         opening: '正在開啟',
         failedToOpen: '開啟失敗',
+        failedToRead: '讀取失敗',
         searched: '已搜尋',
         searching: '正在搜尋',
         ran: '已執行',
         running: '正在執行',
         ranCode: '已執行程式碼',
-        runningCode: '正在撰寫腳本'
+        runningCode: '正在執行程式碼'
+      },
+      runSummary: {
+        run: {
+          count: count => `${count} 個指令`,
+          past: '已執行',
+          present: '正在執行'
+        }
       },
       prefixes: {
         browser: '瀏覽器',
@@ -4075,6 +4086,7 @@ export const zhHant = defineLocale({
         actionCommand: (action, command) => `${action} ${command}`,
         actionQuoted: (action, value) => `${action}「${value}」`,
         actionTarget: (action, target) => `${action} ${target}`,
+        searchInTarget: (query, target, pending) => `${pending ? '正在' : '已在'} ${target} 中搜尋「${query}」`,
         prefixedDone: (prefix, action) => `${prefix}${action}`,
         runningPrefixedTool: (prefix, action) => `正在執行${prefix}${action}`,
         runningTool: action => `正在執行 ${action}`
@@ -4089,7 +4101,7 @@ export const zhHant = defineLocale({
         clarify: { done: '已提問', pending: '正在提問', pendingAction: '正在提問' },
         cronjob: { done: 'Cron 工作', pending: '正在安排 Cron 工作', pendingAction: '正在安排' },
         edit_file: { done: '已編輯檔案', pending: '正在編輯檔案', pendingAction: '正在編輯' },
-        execute_code: { done: '已執行程式碼', pending: '正在撰寫腳本', pendingAction: '正在撰寫腳本' },
+        execute_code: { done: '已執行程式碼', pending: '正在執行程式碼', pendingAction: '正在執行程式碼' },
         image_generate: { done: '已生成圖片', pending: '正在生成圖片', pendingAction: '正在生成' },
         list_files: { done: '已列出檔案', pending: '正在列出檔案', pendingAction: '正在列出' },
         memory: { done: '已儲存至記憶', pending: '正在儲存至記憶', pendingAction: '正在儲存' },

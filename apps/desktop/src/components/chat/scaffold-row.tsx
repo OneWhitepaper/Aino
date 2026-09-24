@@ -12,9 +12,8 @@ import { DisclosureRow } from '@/components/chat/disclosure-row'
  * summary `--ui-text-tertiary`, both under the same opacity — which read as two
  * different kinds of line for what is one kind of thing.
  *
- * The resting fade is the other half and lives in CSS, on the *block* that
- * holds the row rather than on the row: mark it `data-conversation-scaffold`.
- * A surface that skips the mark reads a shade brighter than its neighbours.
+ * Colour owns the hierarchy; keep rows at full opacity so links and expanded
+ * details stay readable without hovering.
  */
 export const SCAFFOLD_LABEL_CLASS =
   'text-[length:var(--conversation-tool-font-size)] leading-(--conversation-line-height) text-(--conversation-scaffold-text)'
@@ -26,11 +25,11 @@ export const SCAFFOLD_META_CLASS = 'shrink-0 text-[0.625rem] tabular-nums text-(
  * scaffold palette as thinking headers and tool activity, rather than the
  * theme accent reserved for interactive navigation. */
 export const SCAFFOLD_ACTIVITY_GLYPH_CLASS =
-  'dither inline-block size-3 rounded-[2px] text-(--conversation-scaffold-text)'
+  'mx-[calc((var(--conversation-glyph-cell)-var(--conversation-activity-size))/2)] inline-block size-(--conversation-activity-size) shrink-0 rounded-full bg-current text-(--conversation-scaffold-icon)'
 
 /** The fixed cell a scaffold line's leading glyph sits in — status dot, tool
  *  icon, spinner. Same box on every line, so the labels share a left edge. */
-export const SCAFFOLD_GLYPH_CLASS = 'grid size-3.5 shrink-0 place-items-center'
+export const SCAFFOLD_GLYPH_CLASS = 'grid size-(--conversation-glyph-cell) shrink-0 place-items-center'
 
 /**
  * One scaffold line. `children` is the label and whatever trails it in flow
@@ -49,7 +48,7 @@ export function ScaffoldRow({
 }) {
   return (
     <DisclosureRow onToggle={onToggle} open={open} trailing={trailing}>
-      <span className="flex min-w-0 items-center gap-1.5">{children}</span>
+      <span className="flex min-w-0 items-center gap-(--conversation-glyph-gap)">{children}</span>
     </DisclosureRow>
   )
 }

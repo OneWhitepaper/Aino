@@ -38,6 +38,25 @@ describe('separateGluedReasoningBlocks', () => {
     expect(separateGluedReasoningBlocks(prose)).toBe(prose)
   })
 
+  it('preserves multiple inline bold spans and their list punctuation', () => {
+    for (const prose of [
+      '**Agent workflow**: **CrewAI**, **AutoGen**, Agno',
+      '- **Agent workflow**: **CrewAI**, **AutoGen**, Agno\n- **Orchestration**: **LangGraph**',
+      '**方案**：**CrewAI**、**AutoGen**，以及 Agno。',
+      'Choose **CrewAI**/**AutoGen** for the workflow.'
+    ]) {
+      expect(separateGluedReasoningBlocks(prose)).toBe(prose)
+    }
+  })
+
+  it('repairs only the glued heading when its body contains inline emphasis', () => {
+    const text = 'Checked the tools.**Comparing frameworks**\n\n**Agent workflow**: **CrewAI**, **AutoGen**'
+    const expected = 'Checked the tools.\n\n**Comparing frameworks**\n\n**Agent workflow**: **CrewAI**, **AutoGen**'
+
+    expect(separateGluedReasoningBlocks(text)).toBe(expected)
+    expect(separateGluedReasoningBlocks(expected)).toBe(expected)
+  })
+
   it('leaves an unclosed emphasis run alone', () => {
     expect(separateGluedReasoningBlocks('weighing options **')).toBe('weighing options **')
   })

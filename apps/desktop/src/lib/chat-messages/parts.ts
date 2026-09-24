@@ -126,8 +126,12 @@ export function mediaTagValues(text: string): string[] {
   return [...text.matchAll(MEDIA_TAG_RE)].map(match => match[1] ?? '')
 }
 
-export function assistantTextPart(text: string, timestamp?: number): ChatMessagePart {
-  return textPart(renderMediaTags(text), timestamp)
+export function assistantTextPart(
+  text: string,
+  timestamp?: number,
+  displayPhase?: ChatMessagePart['displayPhase']
+): ChatMessagePart {
+  return { ...textPart(renderMediaTags(text), timestamp), ...(displayPhase ? { displayPhase } : {}) }
 }
 
 export function chatMessageText(message: ChatMessage): string {
@@ -257,7 +261,8 @@ export function dedupeRepeatedTextInParts(parts: ChatMessagePart[]): ChatMessage
 export function mergeFinalAssistantText(
   parts: ChatMessagePart[],
   finalText: string,
-  fallbackTimestamp?: number
+  fallbackTimestamp?: number,
+  displayPhase?: ChatMessagePart['displayPhase']
 ): ChatMessagePart[] {
   // Empty / whitespace-only completion is not authoritative — keep streamed
   // text, reasoning, and tool parts (#95514).
@@ -277,7 +282,7 @@ export function mergeFinalAssistantText(
   // An authoritative final that is exactly the concatenation of streamed text
   // confirms the content without erasing text↔reasoning activity boundaries.
   if (streamedText && streamedText === dedupeReference) {
-    return parts
+    return displayPhase ? parts.map(part => (part.type === 'text' ? { ...part, displayPhase } : part)) : parts
   }
 
   const previousText = parts.findLast(part => part.type === 'text')
@@ -307,7 +312,7 @@ export function mergeFinalAssistantText(
     return kept
   }
 
-  const finalPart = assistantTextPart(finalText, previousText?.timestamp ?? fallbackTimestamp)
+  const finalPart = assistantTextPart(finalText, previousText?.timestamp ?? fallbackTimestamp, displayPhase)
 
   if (previousText?.completedAt !== undefined) {
     finalPart.completedAt = previousText.completedAt

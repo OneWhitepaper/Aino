@@ -42,7 +42,7 @@ const StatusRow: FC<{ children: ReactNode; label: string } & React.ComponentProp
     aria-label={label}
     aria-live="polite"
     className={cn(
-      'flex min-w-0 max-w-full items-center gap-1.5 self-start leading-(--conversation-line-height)',
+      'flex min-w-0 max-w-full items-center gap-(--conversation-glyph-gap) self-start leading-(--conversation-line-height)',
       'text-(--conversation-scaffold-text)',
       className
     )}

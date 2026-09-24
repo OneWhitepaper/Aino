@@ -4543,9 +4543,12 @@ Write only the summary body. Do not include any preamble or prefix."""
                 "\n\n" + _INFLIGHT_TASK_REPLAY_HEADER + "\n" + task_text,
             )
             carrier[_INFLIGHT_REPLAY_MERGED_KEY] = True
+            carrier["display_metadata"] = {**(carrier.get("display_metadata") or {}), "compaction_replay": True}
             drop_stale_api_content(carrier)
             return compressed
 
+        # Display provenance must survive SessionDB without changing task anchoring.
+        replay["display_metadata"] = {**(replay.get("display_metadata") or {}), "compaction_replay": True}
         compressed.append(replay)
         return compressed
 

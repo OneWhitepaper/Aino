@@ -1,5 +1,4 @@
 import { translateNow } from '@/i18n'
-import { summarizeShellCommand } from '@/lib/summarize-command'
 import { firstStringField } from '@/lib/text'
 import { extractToolErrorMessage } from '@/lib/tool-result-summary'
 
@@ -24,7 +23,7 @@ export function isToolCallPart<T extends { type: string }>(part: T): part is Ext
   return part.type === 'tool-call'
 }
 
-type RunCategory = 'delegate' | 'edit' | 'explore' | 'other' | 'run'
+type RunCategory = 'browser' | 'delegate' | 'edit' | 'explore' | 'other' | 'run'
 
 export interface ToolRunCopy {
   delegate: { count: (count: number) => string; past: string; present: string }
@@ -36,7 +35,7 @@ export interface ToolRunCopy {
 
 // Clause order is fixed so the same run always reads the same way, whichever
 // category happens to be live.
-const CATEGORY_ORDER: readonly RunCategory[] = ['edit', 'explore', 'run', 'delegate', 'other']
+const CATEGORY_ORDER: readonly RunCategory[] = ['edit', 'explore', 'browser', 'run', 'delegate', 'other']
 
 const DEFAULT_COPY: ToolRunCopy = {
   delegate: { count: count => `${count} task${count === 1 ? '' : 's'}`, past: 'Delegated', present: 'Delegating' },
@@ -56,24 +55,22 @@ const EXPLORE_TOOLS = new Set([
   'web_search'
 ])
 
+const EXECUTION_CATEGORIES: Record<string, RunCategory> = {
+  terminal: 'run',
+  execute_code: 'run',
+  delegate_task: 'delegate'
+}
+
 function toolCategory(toolName: string): RunCategory {
   if (isFileEditTool(toolName)) {
     return 'edit'
   }
 
-  if (toolName === 'terminal' || toolName === 'execute_code') {
-    return 'run'
+  if (toolName.startsWith('browser_')) {
+    return 'browser'
   }
 
-  if (toolName === 'delegate_task') {
-    return 'delegate'
-  }
-
-  if (EXPLORE_TOOLS.has(toolName) || toolName.startsWith('browser_')) {
-    return 'explore'
-  }
-
-  return 'other'
+  return EXECUTION_CATEGORIES[toolName] ?? (EXPLORE_TOOLS.has(toolName) ? 'explore' : 'other')
 }
 
 function isPending(tool: ToolCallLike): boolean {
@@ -90,16 +87,24 @@ export function toolPresentVerb(toolName: string, copy: ToolRunCopy = DEFAULT_CO
     return translateNow('assistant.tool.skillActivity.loading')
   }
 
-  return copy[toolCategory(toolName)].present
+  if (toolName === 'execute_code') {
+    return translateNow('assistant.tool.actions.runningCode')
+  }
+
+  const category = toolCategory(toolName)
+
+  return category === 'browser'
+    ? translateNow(
+        'assistant.tool.titleTemplates.actionTarget',
+        copy.other.present,
+        translateNow('assistant.tool.prefixes.browser')
+      )
+    : copy[category].present
 }
 
 /** The thing a tool acted on, as the header should name it. */
 function toolTarget(tool: ToolCallLike): string {
   const args = parseMaybeObject(tool.args)
-
-  if (toolCategory(tool.toolName) === 'run') {
-    return summarizeShellCommand(firstStringField(args, ['command', 'code']))
-  }
 
   const path = firstStringField(args, ['path', 'file', 'filepath'])
 
@@ -109,15 +114,27 @@ function toolTarget(tool: ToolCallLike): string {
 /**
  * One clause per category. A category holding a single thing says what it was
  * ("Edited wiring.tsx"); anything else counts ("explored 3 files"). A settled
- * command is the exception — "ran 5 commands" is the useful reading, and a
- * command line only earns its space while it's the thing you're waiting on.
+ * command is the exception — the summary counts commands; the current command
+ * already has its own ticker line and the complete command stays in its row.
  */
 function clause(category: RunCategory, tools: ToolCallLike[], live: boolean, copy: ToolRunCopy): string {
+  if (category === 'browser') {
+    return translateNow(
+      'assistant.tool.titleTemplates.actionTarget',
+      live ? copy.other.present : copy.other.past,
+      translateNow('assistant.tool.prefixes.browser')
+    )
+  }
+
+  if (tools.length === 1 && tools[0].toolName === 'execute_code') {
+    return translateNow(live ? 'assistant.tool.actions.runningCode' : 'assistant.tool.actions.ranCode')
+  }
+
   const categoryCopy = copy[category]
   const verb = live ? categoryCopy.present : categoryCopy.past
   const target = tools.length === 1 ? toolTarget(tools[0]) : ''
 
-  if (target && (live || category !== 'run')) {
+  if (target && category !== 'run') {
     return `${verb} ${target}`
   }
 
@@ -130,9 +147,8 @@ function lowerFirst(text: string): string {
 
 /**
  * Collapse a run of tool calls into the single grey line that stands in for it
- * — "Explored 3 files, ran 5 commands". While the run is live, the category
- * holding its most recent call speaks in the present tense so the line reads as
- * work in progress rather than work already done.
+ * — "Explored 3 files, ran 5 commands". While the run is live, each category
+ * holding outstanding calls speaks in the present tense.
  *
  * Whether the run is `live` is the caller's to say, not something readable off
  * the calls: a call can be left without a result by a turn that ended or an
@@ -148,12 +164,11 @@ export function summarizeToolRun(
   live: boolean,
   copy: ToolRunCopy = DEFAULT_COPY
 ): string {
-  // Which clause narrates in the present tense: normally the outstanding call,
-  // but sequential calls leave gaps where the run is still going and nothing is
-  // pending. The most recent call covers those, and it's the one the ticker is
-  // showing anyway.
-  const narrating = live ? (tools.find(isPending) ?? tools.at(-1)) : undefined
-  const liveCategory = narrating ? toolCategory(narrating.toolName) : null
+  // Parallel calls may leave several categories outstanding. Finishing a
+  // newer call must not turn an earlier pending category into completed work.
+  const pending = live ? tools.filter(isPending) : []
+  const narrating = pending.length ? pending : live ? tools.slice(-1) : []
+  const liveCategories = new Set(narrating.map(tool => toolCategory(tool.toolName)))
 
   const byCategory = new Map<RunCategory, ToolCallLike[]>()
   const skillClauses: string[] = []
@@ -180,7 +195,7 @@ export function summarizeToolRun(
   const clauses = CATEGORY_ORDER.flatMap(category => {
     const group = byCategory.get(category)
 
-    return group ? [clause(category, group, category === liveCategory, copy)] : []
+    return group ? [clause(category, group, liveCategories.has(category), copy)] : []
   })
 
   const failed = tools.filter(tool => {

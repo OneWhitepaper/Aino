@@ -115,8 +115,12 @@ describe('mergeDelegateRows', () => {
     expect(merged[0]!.model).toBe('gpt-5')
   })
 
-  it('joins native events by goal text and prefers their live state', () => {
-    const rows = delegateRowsFromCall({ tasks: [{ goal: 'Research Cursor' }] }, undefined, 'call-1')
+  it('joins native events by the receipt identity and prefers their live state', () => {
+    const rows = delegateRowsFromCall(
+      { tasks: [{ goal: 'Research Cursor' }] },
+      { status: 'dispatched', subagent_ids: ['sub-1'] },
+      'call-1'
+    )
 
     const merged = mergeDelegateRows(
       rows,
@@ -156,18 +160,38 @@ describe('mergeDelegateRows', () => {
     expect(merged[0]!.model).toBeUndefined()
   })
 
-  it('falls back to task order only when both sides agree on the shape', () => {
-    const rows = delegateRowsFromCall({ tasks: [{ goal: 'A' }, { goal: 'B' }] }, undefined, 'call-3')
+  it('requires receipt identity instead of equal goals or task counts across repeated delegations', () => {
+    const args = { tasks: [{ goal: 'Review' }] }
+    const oldChild = subagent({ id: 'old-child', delegationId: 'old-batch', goal: 'Review', status: 'completed' })
+    const newChild = subagent({ id: 'new-child', delegationId: 'new-batch', goal: 'Review', status: 'running' })
 
-    const merged = mergeDelegateRows(
-      rows,
-      [
-        subagent({ id: 'x', goal: 'renamed A', taskIndex: 0, model: 'm0' }),
-        subagent({ id: 'y', goal: 'renamed B', taskIndex: 1, model: 'm1' })
-      ],
-      'call-3'
+    const historical = delegateRowsFromCall(args, { results: [{ status: 'ok', summary: 'Prior result' }] }, 'old')
+    const pending = delegateRowsFromCall(args, undefined, 'new')
+    expect(mergeDelegateRows(historical, [newChild], 'old')).toEqual(historical)
+    expect(mergeDelegateRows(pending, [oldChild], 'new')).toEqual(pending)
+
+    for (const identity of [{ subagent_ids: [newChild.id] }, { delegation_id: newChild.delegationId }]) {
+      const dispatched = delegateRowsFromCall(args, { status: 'dispatched', ...identity }, 'new')
+      const merged = mergeDelegateRows(dispatched, [oldChild, newChild], 'new')
+      expect(merged[0]).toMatchObject({ id: newChild.id, status: newChild.status })
+    }
+  })
+
+  it('does not treat a tool completion receipt as proof the dispatched child completed', () => {
+    const args = { goal: 'Review' }
+    const fallback = subagent({ id: 'delegate-tool:call-4:0', goal: 'Review', status: 'completed' })
+    const dispatched = delegateRowsFromCall(args, { status: 'dispatched' }, 'call-4')
+    expect(mergeDelegateRows(dispatched, [fallback], 'call-4')[0]?.status).toBe('dispatched')
+
+    const settled = delegateRowsFromCall(
+      args,
+      { results: [{ status: 'error', error: 'Provider unavailable' }] },
+      'call-4'
     )
 
-    expect(merged.map(r => r.model)).toEqual(['m0', 'm1'])
+    expect(mergeDelegateRows(settled, [fallback], 'call-4')[0]).toMatchObject({
+      status: 'failed',
+      activity: ['Provider unavailable']
+    })
   })
 })

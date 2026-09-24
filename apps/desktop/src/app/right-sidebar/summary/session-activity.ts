@@ -91,8 +91,8 @@ export function summaryHistoryActivity(
   return { delegations: [...delegations.values()], todos }
 }
 
-/** Join the current runtime feed to durable calls without counting a child
- * twice. Newest calls claim legacy goal-only events first. */
+/** Join the current runtime feed using the same receipt identities as the
+ * transcript. Unattributed children remain visible as their own entries. */
 export function summaryDelegations(
   history: readonly SummaryDelegation[],
   live: readonly SubagentProgress[]
@@ -102,17 +102,16 @@ export function summaryDelegations(
   const merged = [...history]
     .reverse()
     .map(group => {
-      const matched = live.filter(
-        item =>
-          remaining.has(item) &&
-          (item.id.startsWith(`delegate-tool:${group.id}:`) ||
-            (group.delegationId && item.delegationId === group.delegationId) ||
-            (!item.delegationId && group.rows.some(row => row.goal === item.goal)))
-      )
+      const rows = mergeDelegateRows(group.rows, [...remaining], group.id)
+      const matchedIds = new Set(rows.map(row => row.id))
 
-      matched.forEach(item => remaining.delete(item))
+      for (const item of remaining) {
+        if (matchedIds.has(item.id)) {
+          remaining.delete(item)
+        }
+      }
 
-      return { ...group, rows: mergeDelegateRows(group.rows, matched, group.id) }
+      return { ...group, rows }
     })
     .reverse()
 

@@ -1197,10 +1197,11 @@ describe('mergeFinalAssistantText', () => {
     parts = appendReasoningPart(parts, 'Think.', 2)
     parts = appendAssistantTextPart(parts, 'Last.', 3)
 
-    const result = mergeFinalAssistantText(parts, 'First. Last.', 4)
+    const result = mergeFinalAssistantText(parts, 'First. Last.', 4, 'final')
 
     expect(result.map(part => part.type)).toEqual(['text', 'reasoning', 'text'])
     expect(result.map(part => part.timestamp)).toEqual([1, 2, 3])
+    expect(result.filter(part => part.type === 'text').map(part => part.displayPhase)).toEqual(['final', 'final'])
   })
 
   it('timestamps completion-only text when no streamed text preceded it', () => {

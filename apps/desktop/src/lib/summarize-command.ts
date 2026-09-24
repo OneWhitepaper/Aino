@@ -1,3 +1,5 @@
+import { translateNow } from '@/i18n'
+
 // Adapted from condensed-milk-pi's command dispatcher: split compounds first,
 // strip pipe tails (`| head`, `| tail`, ...), then clean redirects/env prefixes
 // before deciding which segment is meaningful. This is display-only; the full
@@ -212,5 +214,5 @@ export function summarizeShellCommand(raw: string): string {
     return core[0]!
   }
 
-  return `${core[0]} + ${core.length - 1} ${core.length === 2 ? 'command' : 'commands'}`
+  return `${core[0]} + ${translateNow('assistant.tool.runSummary.run.count', core.length - 1)}`
 }

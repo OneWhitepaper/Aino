@@ -3,6 +3,8 @@ import type { GatewayEventPayload } from '@/lib/chat-messages'
 import { normalizePersonalityValue } from '@/lib/chat-runtime'
 import { platformModelStatePatch } from '@/lib/platform-session-model'
 import { isTodoToolName } from '@/lib/todos'
+import { extractToolErrorMessage } from '@/lib/tool-result-summary'
+import type { SubagentStatus } from '@/store/subagents'
 
 import type { ClientSessionState } from '../../../types'
 
@@ -195,6 +197,19 @@ const firstString = (...candidates: unknown[]): string => {
   return ''
 }
 
+const DELEGATE_RESULT_STATUS: Record<string, SubagentStatus> = {
+  '': 'completed',
+  ok: 'completed',
+  success: 'completed',
+  completed: 'completed',
+  dispatched: 'running',
+  running: 'running',
+  queued: 'queued',
+  interrupted: 'interrupted',
+  canceled: 'interrupted',
+  cancelled: 'interrupted'
+}
+
 export function delegateTaskPayloads(
   payload: GatewayEventPayload | undefined,
   phase: 'running' | 'complete',
@@ -208,26 +223,45 @@ export function delegateTaskPayloads(
   const result = parseMaybeRecord(payload.result)
   const rawTasks = Array.isArray(args.tasks) ? args.tasks : []
   const tasks = rawTasks.length ? rawTasks.map(parseMaybeRecord) : [args]
-  const resultStatus = typeof result.status === 'string' ? result.status.toLowerCase() : ''
-  const failedResult = Boolean(payload.error) || ['timeout', 'error', 'failed', 'failure'].includes(resultStatus)
-  const status = phase === 'complete' ? (failedResult ? 'failed' : 'completed') : 'running'
+  const results = Array.isArray(result.results) ? result.results.map(parseMaybeRecord) : []
   const toolId = payload.tool_id || payload.tool_call_id || payload.id || 'delegate_task'
   const progressText = firstString(payload.preview, payload.message, payload.context)
+  const topError = firstString(payload.error) || extractToolErrorMessage(result)
 
-  const eventType =
-    phase === 'complete'
+  return tasks.map((task, index) => {
+    const taskResult =
+      results.find(entry => entry.task_index === index) ??
+      (results[index]?.task_index === undefined ? results[index] : undefined) ??
+      result
+
+    const resultStatus = firstString(taskResult.status).trim().toLowerCase()
+    const error = topError || extractToolErrorMessage(taskResult)
+    let status = DELEGATE_RESULT_STATUS[resultStatus] ?? 'failed'
+
+    if (phase === 'running') {
+      status = 'running'
+    } else if (
+      status !== 'interrupted' &&
+      (payload.error || error || taskResult.success === false || taskResult.ok === false)
+    ) {
+      status = 'failed'
+    }
+
+    // A dispatch receipt leaves the child active, even though its tool call returned.
+    const completed = status !== 'running' && status !== 'queued'
+
+    const eventType = completed
       ? 'subagent.complete'
       : sourceEventType === 'tool.start'
         ? 'subagent.start'
         : 'subagent.progress'
 
-  return tasks.map((task, index) => {
     const goal = firstString(task.goal, args.goal, payload.context) || translateNow('assistant.tool.delegatedTask')
-    const summary = firstString(result.summary, payload.summary, payload.message)
+    const summary = firstString(taskResult.summary, error, payload.summary, payload.message)
 
     return {
       depth: 0,
-      duration_seconds: payload.duration_s,
+      duration_seconds: completed ? (taskResult.duration_seconds ?? payload.duration_s) : undefined,
       goal,
       status,
       subagent_id: `delegate-tool:${toolId}:${index}`,
@@ -240,9 +274,7 @@ export function delegateTaskPayloads(
       toolsets: Array.isArray(task.toolsets) ? task.toolsets : Array.isArray(args.toolsets) ? args.toolsets : [],
       event_type: eventType,
       output_tail:
-        phase === 'complete' && summary
-          ? [{ is_error: Boolean(payload.error), preview: summary, tool: 'delegate_task' }]
-          : undefined
+        completed && summary ? [{ is_error: status === 'failed', preview: summary, tool: 'delegate_task' }] : undefined
     }
   })
 }

@@ -11,6 +11,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { en } from '@/i18n/en'
 import { $reasoningCollapsedByDefault, setShowReasoningFromConfig } from '@/store/reasoning-disclosure'
+import { $toolDisclosureStates } from '@/store/tool-view'
 
 import { stubThreadEnvironment, stubThreadViewportSize, ThreadRuntime } from '../test-utils'
 
@@ -497,6 +498,7 @@ function DismissibleErrorHarness({ onDismissError }: { onDismissError: (messageI
 
 describe('assistant-ui streaming renderer', () => {
   beforeEach(() => {
+    $toolDisclosureStates.set({})
     resizeObservers.clear()
     $reasoningCollapsedByDefault.set(false)
     setShowReasoningFromConfig(undefined)

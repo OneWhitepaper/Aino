@@ -4505,6 +4505,7 @@ interface UpstreamTranslations {
       thoughtBriefly: string
       thoughtFor: (duration: string) => string
       turnDuration: (duration: string) => string
+      processTitle: string
       replyMetrics: {
         duration: string
         tokens: string
@@ -4758,6 +4759,8 @@ interface UpstreamTranslations {
       recoveredMany: (count: number) => string
       failedOne: string
       failedMany: (count: number) => string
+      shell: string
+      statusBackground: string
       statusRunning: string
       statusError: string
       statusRecovered: string
@@ -4772,6 +4775,7 @@ interface UpstreamTranslations {
         opened: string
         opening: string
         failedToOpen: string
+        failedToRead: string
         searched: string
         searching: string
         ran: string
@@ -4814,6 +4818,7 @@ interface UpstreamTranslations {
         actionCommand: (action: string, command: string) => string
         actionQuoted: (action: string, value: string) => string
         actionTarget: (action: string, target: string) => string
+        searchInTarget: (query: string, target: string, pending: boolean) => string
         prefixedDone: (prefix: string, action: string) => string
         runningPrefixedTool: (prefix: string, action: string) => string
         runningTool: (action: string) => string

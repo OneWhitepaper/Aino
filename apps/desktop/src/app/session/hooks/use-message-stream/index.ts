@@ -543,7 +543,7 @@ export function useMessageStream({
         const replaceTextPart = (parts: ChatMessagePart[]) => {
           const visibleText = stripGeneratedImageEchoes(authoritativeText, generatedImageEchoSources(parts)).trim()
 
-          return mergeFinalAssistantText(parts, visibleText, occurredAt)
+          return mergeFinalAssistantText(parts, visibleText, occurredAt, 'commentary')
         }
 
         let nextMessages = state.messages
@@ -569,7 +569,7 @@ export function useMessageStream({
             {
               id: nextStreamMessageId('assistant-interim'),
               role: 'assistant' as const,
-              parts: [{ ...assistantTextPart(authoritativeText, occurredAt), completedAt: occurredAt }],
+              parts: [{ ...assistantTextPart(authoritativeText, occurredAt, 'commentary'), completedAt: occurredAt }],
               timestamp: occurredAt,
               completedAt: occurredAt,
               pending: false,
@@ -641,7 +641,7 @@ export function useMessageStream({
         const replaceTextPart = (parts: ChatMessagePart[]) => {
           const visibleFinalText = stripGeneratedImageEchoes(finalText, generatedImageEchoSources(parts)).trim()
 
-          return mergeFinalAssistantText(parts, visibleFinalText, occurredAt)
+          return mergeFinalAssistantText(parts, visibleFinalText, occurredAt, completionError ? undefined : 'final')
         }
 
         // Settling the final response onto a bubble makes it the turn's real
@@ -675,7 +675,12 @@ export function useMessageStream({
           parts:
             completionError && !keepFailedPartialText
               ? []
-              : [{ ...assistantTextPart(finalText, occurredAt), completedAt: occurredAt }],
+              : [
+                  {
+                    ...assistantTextPart(finalText, occurredAt, completionError ? undefined : 'final'),
+                    completedAt: occurredAt
+                  }
+                ],
           timestamp: occurredAt,
           completedAt: occurredAt,
           branchGroupId: state.pendingBranchGroup ?? undefined,

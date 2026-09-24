@@ -91,12 +91,11 @@ function ApprovalActivity({ floating, visible }: { floating: boolean; visible: b
       .filter(message => message.role === 'assistant')
       .flatMap(message => message.content.filter(isToolCallPart).filter(isApprovalActivity))
 
-    return tools.length
-      ? summarizeToolRun(
-          tools,
-          tools.some(tool => tool.result === undefined)
-        )
-      : ''
+    if (tools.some(tool => tool.result === undefined)) {
+      return t.assistant.approval.jumpToApproval
+    }
+
+    return tools.length ? summarizeToolRun(tools, false, t.assistant.tool.runSummary) : ''
   })
 
   const disclosureIds = useAuiState(state => {

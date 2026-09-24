@@ -66,8 +66,15 @@ describe('#68321 assistant rows whose reply persisted only in codex_message_item
     expect(messages.map(m => m.role)).toEqual(['user', 'assistant', 'user'])
     // The final-answer text is painted as the bubble's reply text...
     expect(chatMessageText(messages[1])).toContain('Here is the full response you saw live.')
-    // ...and commentary / analysis narration (reasoning channel on the backend) is not.
-    expect(chatMessageText(messages[1])).not.toContain('Working through the approach...')
+    // Public progress survives reload, while private analysis never becomes reply text.
+    expect(messages[1].parts.filter(part => part.type === 'text').map(part => part.text)).toEqual([
+      'Working through the approach...',
+      'Here is the full response you saw live.'
+    ])
+    expect(messages[1].parts.filter(part => part.type === 'text').map(part => part.displayPhase)).toEqual([
+      'commentary',
+      'final'
+    ])
     expect(chatMessageText(messages[1])).not.toContain('Scratchpad thoughts.')
   })
 
@@ -89,5 +96,52 @@ describe('#68321 assistant rows whose reply persisted only in codex_message_item
 
     const [assistant] = toChatMessages([row])
     expect(chatMessageText(assistant)).toBe('Canonical persisted reply')
+  })
+
+  it('keeps commentary interim until a final reply follows, including a merged tool turn', () => {
+    const progress: SessionMessage = {
+      role: 'assistant',
+      content: '',
+      reasoning: '正在检查。',
+      codex_message_items: [
+        {
+          type: 'message',
+          role: 'assistant',
+          phase: 'commentary',
+          content: [{ type: 'output_text', text: '正在检查。' }]
+        }
+      ],
+      timestamp: 1
+    }
+
+    const tool: SessionMessage = {
+      role: 'assistant',
+      content: '',
+      tool_calls: [{ id: 'read-1', type: 'function', function: { name: 'read_file', arguments: '{}' } }],
+      timestamp: 2
+    }
+
+    const final: SessionMessage = { role: 'assistant', content: '检查完成。', timestamp: 3 }
+
+    expect(toChatMessages([progress])[0]).toMatchObject({ interim: true })
+    expect(toChatMessages([progress, tool])[0]).toMatchObject({ interim: true })
+    const separate = toChatMessages([progress, final])
+
+    expect(separate[0].interim).toBe(true)
+    expect(separate[1].interim).toBeFalsy()
+    const merged = toChatMessages([progress, tool, final])
+
+    expect(merged).toHaveLength(1)
+    expect(merged[0].interim).toBeFalsy()
+    expect(merged[0].parts.filter(part => part.type === 'text').map(part => part.text)).toEqual([
+      '正在检查。',
+      '检查完成。'
+    ])
+    const regular = toChatMessages([{ ...tool, content: '先检查文件。' }, final])
+
+    expect(regular[0].parts.filter(part => part.type === 'text').map(part => part.displayPhase)).toEqual([
+      'commentary',
+      'final'
+    ])
   })
 })

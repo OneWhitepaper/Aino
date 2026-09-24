@@ -8,6 +8,8 @@ import type { MessageReaction, ModelSwitchDisplayMetadata, SessionMessage, Usage
 
 export interface TimelinePartMetadata {
   toolResultMetadata?: ToolResultMetadata
+  /** Display-only purpose of public assistant text; never model-facing context. */
+  displayPhase?: 'commentary' | 'final'
   /** Unix seconds when this visible activity segment began. Fractional values
    * preserve the millisecond precision available on live gateway events. */
   timestamp?: number

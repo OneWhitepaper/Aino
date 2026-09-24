@@ -28,6 +28,11 @@ export interface ToolTitleAction {
   text: string
 }
 
+export interface ToolTitleTarget {
+  kind: 'command' | 'file'
+  text: string
+}
+
 export interface CountMetric {
   count: number
   noun: string
@@ -57,6 +62,8 @@ export interface ToolView {
   terminalCommand?: string
   /** Terminal-only process exit code, when the backend reported one. */
   terminalExitCode?: number
+  /** A background launch receipt does not establish process completion. */
+  terminalBackground?: boolean
   /** When set, the renderer uses stdout+stderr as separate sections and
    *  ignores the merged `detail`. */
   stdout?: string
@@ -64,6 +71,7 @@ export interface ToolView {
   subtitle: string
   title: string
   titleAction?: ToolTitleAction
+  titleTarget?: ToolTitleTarget
   tone: ToolTone
 }
 

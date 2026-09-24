@@ -5796,7 +5796,8 @@ export const zh = defineLocale({
       thought: '已思考',
       thoughtBriefly: '思考了片刻',
       thoughtFor: duration => `用时 ${duration}`,
-      turnDuration: duration => `本轮耗时 ${duration}`,
+      turnDuration: duration => `用时 ${duration}`,
+      processTitle: '执行过程',
       replyMetrics: {
         duration: '耗时',
         tokens: '消耗',
@@ -6122,6 +6123,8 @@ export const zh = defineLocale({
       recoveredMany: count => `在 ${count} 个失败步骤后已恢复`,
       failedOne: '1 个步骤失败',
       failedMany: count => `${count} 个步骤失败`,
+      shell: 'Shell',
+      statusBackground: '后台运行中',
       statusRunning: '运行中',
       statusError: '错误',
       statusRecovered: '已恢复',
@@ -6135,12 +6138,13 @@ export const zh = defineLocale({
         opened: '已打开',
         opening: '正在打开',
         failedToOpen: '打开失败',
+        failedToRead: '读取失败',
         searched: '已搜索',
         searching: '正在搜索',
         ran: '已运行',
         running: '正在运行',
         ranCode: '已运行代码',
-        runningCode: '正在编写脚本'
+        runningCode: '正在运行代码'
       },
       runSummary: {
         delegate: {
@@ -6177,6 +6181,7 @@ export const zh = defineLocale({
         actionCommand: (action, command) => `${action} ${command}`,
         actionQuoted: (action, value) => `${action}“${value}”`,
         actionTarget: (action, target) => `${action} ${target}`,
+        searchInTarget: (query, target, pending) => `${pending ? '正在' : '已在'} ${target} 中搜索“${query}”`,
         prefixedDone: (prefix, action) => `${prefix}${action}`,
         runningPrefixedTool: (prefix, action) => `正在运行${prefix}${action}`,
         runningTool: action => `正在运行 ${action}`
@@ -6191,7 +6196,7 @@ export const zh = defineLocale({
         clarify: { done: '已提问', pending: '正在提问', pendingAction: '正在提问' },
         cronjob: { done: 'Cron 任务', pending: '正在安排 Cron 任务', pendingAction: '正在安排' },
         edit_file: { done: '已编辑文件', pending: '正在编辑文件', pendingAction: '正在编辑' },
-        execute_code: { done: '已运行代码', pending: '正在编写脚本', pendingAction: '正在编写脚本' },
+        execute_code: { done: '已运行代码', pending: '正在运行代码', pendingAction: '正在运行代码' },
         image_generate: { done: '已生成图片', pending: '正在生成图片', pendingAction: '正在生成' },
         list_files: { done: '已列出文件', pending: '正在列出文件', pendingAction: '正在列出' },
         memory: { done: '已保存到记忆', pending: '正在保存到记忆', pendingAction: '正在保存' },

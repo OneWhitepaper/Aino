@@ -26,13 +26,14 @@ const CONTEXT_REF_RE = /@(file|folder|url|image|tool|terminal):(?:"[^"\n]+"|'[^'
 const DISCORD_TRIGGERING_NOTE_RE =
   /(^|\n)\[Triggering message id: `[^`\n]*` — use as `message_id` for reply\/react\/pin via the discord tools\.\]\n*/
 
-/**
- * Reply text from a Responses-API `codex_message_items` sidecar (#68321), for rows
- * whose `content` persisted empty. `commentary` / `analysis` items are mid-turn
- * narration the backend routes to the reasoning channel
- * (codex_responses_adapter `_OutputScan._message`); the remaining phases are the reply.
- */
-function codexMessageItemText(message: SessionMessage): string {
+interface CodexMessageTexts {
+  commentary: string[]
+  reply: string
+}
+
+/** Preserve public commentary separately from private analysis, as the live stream does. */
+function codexMessageTexts(message: SessionMessage): CodexMessageTexts {
+  const result: CodexMessageTexts = { commentary: [], reply: '' }
   let items = message.codex_message_items
 
   // REST carries SQLite JSON text; RPC history carries the decoded list.
@@ -40,15 +41,13 @@ function codexMessageItemText(message: SessionMessage): string {
     try {
       items = JSON.parse(items)
     } catch {
-      return ''
+      return result
     }
   }
 
   if (!Array.isArray(items)) {
-    return ''
+    return result
   }
-
-  const texts: string[] = []
 
   for (const item of items) {
     if (!item || typeof item !== 'object' || Array.isArray(item)) {
@@ -61,7 +60,9 @@ function codexMessageItemText(message: SessionMessage): string {
       continue
     }
 
-    if (record.phase === 'commentary' || record.phase === 'analysis') {
+    const phase = typeof record.phase === 'string' ? record.phase.trim().toLowerCase() : ''
+
+    if (phase === 'analysis') {
       continue
     }
 
@@ -70,6 +71,8 @@ function codexMessageItemText(message: SessionMessage): string {
     if (!Array.isArray(content)) {
       continue
     }
+
+    const texts: string[] = []
 
     for (const part of content) {
       if (!part || typeof part !== 'object' || Array.isArray(part)) {
@@ -89,9 +92,31 @@ function codexMessageItemText(message: SessionMessage): string {
         texts.push(text)
       }
     }
+
+    const text = texts.join('')
+
+    if (phase === 'commentary') {
+      if (text.trim()) {
+        result.commentary.push(text.trim())
+      }
+    } else {
+      result.reply += text
+    }
   }
 
-  return texts.join('')
+  return result
+}
+
+function reasoningWithoutCommentary(reasoning: string, commentary: string[]): string {
+  // The backend joins phase text into reasoning with blank lines for legacy consumers.
+  // Remove only exact sidecar-backed blocks, never similar wording inside private analysis.
+  let framed = `\n\n${reasoning.trim()}\n\n`
+
+  for (const text of commentary) {
+    framed = framed.replace(`\n\n${text}\n\n`, '\n\n')
+  }
+
+  return framed.trim()
 }
 
 function displayContentForMessage(role: SessionMessage['role'], content: unknown): string {
@@ -389,31 +414,47 @@ export function toChatMessages(messages: SessionMessage[]): ChatMessage[] {
 
     const parts: ChatMessagePart[] = []
 
-    const reasoning =
+    const codexTexts =
+      message.role === 'assistant' && message.display_kind !== 'hidden' ? codexMessageTexts(message) : undefined
+
+    const isCommentaryOnly = Boolean(codexTexts?.commentary.length && !codexTexts.reply && !displayContent)
+
+    const storedReasoning =
       message.reasoning ||
       message.reasoning_content ||
       (typeof message.reasoning_details === 'string' ? message.reasoning_details : '')
+
+    const reasoning = codexTexts?.commentary.length
+      ? reasoningWithoutCommentary(storedReasoning, codexTexts.commentary)
+      : storedReasoning
 
     if (reasoning && message.role === 'assistant') {
       parts.push(reasoningPart(reasoning, message.timestamp))
     }
 
+    for (const text of codexTexts?.commentary ?? []) {
+      parts.push(assistantTextPart(text, message.timestamp, 'commentary'))
+    }
+
     if (displayContent) {
+      const displayPhase =
+        !codexTexts?.reply &&
+        ((Array.isArray(message.tool_calls) && message.tool_calls.length > 0) ||
+          codexTexts?.commentary.some(text => text === displayContent.trim()))
+          ? 'commentary'
+          : 'final'
+
       parts.push(
         displayRole === 'assistant'
-          ? assistantTextPart(displayContent, message.timestamp)
+          ? assistantTextPart(displayContent, message.timestamp, displayPhase)
           : textPart(displayContent, message.timestamp)
       )
     }
 
     // Reply text can live only in the sidecar alongside reasoning or tool parts.
     // Those parts are not a substitute for the answer; canonical content still wins.
-    if (message.role === 'assistant' && message.display_kind !== 'hidden' && !displayContent) {
-      const codexText = codexMessageItemText(message)
-
-      if (codexText) {
-        parts.push(assistantTextPart(codexText, message.timestamp))
-      }
+    if (!displayContent && codexTexts?.reply) {
+      parts.push(assistantTextPart(codexTexts.reply, message.timestamp, 'final'))
     }
 
     if (message.role === 'assistant' && Array.isArray(message.tool_calls)) {
@@ -447,6 +488,7 @@ export function toChatMessages(messages: SessionMessage[]): ChatMessage[] {
       message.role === 'assistant'
         ? parseTurnMetrics(parseDisplayMetadata(message.display_metadata)?.turn_metrics)
         : undefined
+
     let pendingAbsorbedRows = 0
 
     if (message.role === 'assistant') {
@@ -476,6 +518,13 @@ export function toChatMessages(messages: SessionMessage[]): ChatMessage[] {
 
         activeAssistant.sourceRowIds = [...(activeAssistant.sourceRowIds ?? []), ...rowIds]
         activeAssistant.parts = [...activeAssistant.parts, ...parts]
+
+        if (isCommentaryOnly) {
+          activeAssistant.interim = true
+        } else if (activeAssistant.interim && !currentHasToolCall && (displayContent || codexTexts?.reply)) {
+          activeAssistant.interim = false
+        }
+
         activeAssistant.timestamp = earliestTimestamp(
           activeAssistant.timestamp,
           message.timestamp,
@@ -494,6 +543,7 @@ export function toChatMessages(messages: SessionMessage[]): ChatMessage[] {
       id: `${message.timestamp || Date.now()}-${index}-${displayRole}`,
       role: displayRole,
       parts,
+      ...(isCommentaryOnly ? { interim: true } : {}),
       ...(message.display_kind === 'async_delegation_complete' || message.display_kind === 'process_complete'
         ? { asyncResult: asyncResultBody(displayContentForMessage(message.role, message.content || content)) }
         : {}),

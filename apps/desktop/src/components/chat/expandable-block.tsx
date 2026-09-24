@@ -10,9 +10,10 @@ import { cn } from '@/lib/utils'
 interface ExpandableBlockProps {
   children: ReactNode
   className?: string
+  collapsedHeight?: number
 }
 
-export function ExpandableBlock({ children, className }: ExpandableBlockProps) {
+export function ExpandableBlock({ children, className, collapsedHeight = 120 }: ExpandableBlockProps) {
   const { t } = useI18n()
   const innerRef = useRef<HTMLDivElement>(null)
   const [expanded, setExpanded] = useState(false)
@@ -25,9 +26,9 @@ export function ExpandableBlock({ children, className }: ExpandableBlockProps) {
     const el = innerRef.current
 
     if (el) {
-      setOverflowing(el.scrollHeight > 121)
+      setOverflowing(el.scrollHeight > collapsedHeight + 1)
     }
-  }, [])
+  }, [collapsedHeight])
 
   useResizeObserver(measure, innerRef)
 
@@ -38,10 +39,10 @@ export function ExpandableBlock({ children, className }: ExpandableBlockProps) {
           // `scrollbar-overlay` opts out of the app-wide classic thin gutters so
           // this scroller keeps platform overlay bars (no always-on track).
           'scrollbar-overlay overflow-y-auto overflow-x-auto',
-          expanded ? 'max-h-[40dvh]' : 'max-h-[7.5rem]',
           className
         )}
         ref={innerRef}
+        style={{ maxHeight: expanded ? `max(${collapsedHeight}px, 40dvh)` : collapsedHeight }}
       >
         {children}
       </div>

@@ -1,126 +1,86 @@
 'use client'
 
 import { useStore } from '@nanostores/react'
-import { type FC, type ReactNode, useMemo } from 'react'
+import { type FC, useMemo, useState } from 'react'
 
+import { SubagentControls } from '@/app/chat/composer/status-stack/subagent-controls'
 import { useSessionView } from '@/app/chat/session-view'
 import { useElapsedSeconds } from '@/components/chat/activity-timer'
 import { ActivityTimerText } from '@/components/chat/activity-timer-text'
-import { SCAFFOLD_GLYPH_CLASS, SCAFFOLD_LABEL_CLASS, SCAFFOLD_META_CLASS } from '@/components/chat/scaffold-row'
+import {
+  SCAFFOLD_GLYPH_CLASS,
+  SCAFFOLD_LABEL_CLASS,
+  SCAFFOLD_META_CLASS,
+  ScaffoldRow
+} from '@/components/chat/scaffold-row'
+import { Button } from '@/components/ui/button'
 import { Codicon } from '@/components/ui/codicon'
-import { FadeText } from '@/components/ui/fade-text'
-import { GlyphSpinner } from '@/components/ui/glyph-spinner'
 import { useI18n } from '@/i18n'
-import { AlertCircle, CheckCircle2 } from '@/lib/icons'
 import { displayModelName } from '@/lib/model-status-label'
 import { useSessionSlice } from '@/lib/use-session-slice'
 import { cn } from '@/lib/utils'
 import { $subagentsBySession } from '@/store/subagents'
 import { openSessionInNewWindow } from '@/store/windows'
 
-import {
-  type DelegateRow,
-  delegateRowsFromCall,
-  type DelegateRowStatus,
-  isDelegateRowLive,
-  mergeDelegateRows
-} from './delegate-model'
+import { type DelegateRow, delegateRowsFromCall, isDelegateRowLive, mergeDelegateRows } from './delegate-model'
 import { formatDurationSeconds, type ToolPart } from './fallback-model'
-import { ToolRunTicker } from './run-ticker'
 
-// Activity lines kept mounted behind the visible one. Enough for the reel to
-// read as motion, few enough that a chatty child doesn't hold a hundred rows
-// in the DOM per subagent.
-const TICKER_DEPTH = 6
-
-function statusGlyph(status: DelegateRowStatus, label: string): ReactNode {
-  if (isDelegateRowLive(status)) {
-    return (
-      <GlyphSpinner ariaLabel={label} className="size-3.5 text-[0.95rem] text-(--ui-text-tertiary)" spinner="breathe" />
-    )
-  }
-
-  if (status === 'failed' || status === 'interrupted') {
-    return <AlertCircle aria-label={label} className="size-3.5 text-destructive" />
-  }
-
-  if (status === 'dispatched') {
-    // Parked, not watched: the children outlived the turn that spawned them
-    // and nothing in this transcript is streaming their progress. A spinner
-    // here would claim a liveness we can't back up.
-    return <span aria-hidden className="size-1.5 rounded-full bg-(--ui-text-tertiary)" />
-  }
-
-  return <CheckCircle2 aria-label={label} className="size-3.5 text-emerald-600/85 dark:text-emerald-400/85" />
+interface DelegateRowViewProps {
+  row: DelegateRow
+  parentSessionId: string | null
 }
 
-/**
- * One delegated child: who it is on the first line, what it is doing on the
- * second.
- *
- * The title carries the goal and the model running it — the two things that
- * identify a child you didn't dispatch yourself — with the elapsed time
- * trailing while it works. Underneath, a single ticking line of its relayed
- * activity, so a fan-out of five children costs ten lines of transcript
- * whatever they get up to.
- */
-function DelegateRowView({ row }: { row: DelegateRow }) {
+/** One quiet status line per child; its existing activity and controls open on demand. */
+function DelegateRowView({ row, parentSessionId }: DelegateRowViewProps) {
   const { t } = useI18n()
-  const copy = t.assistant.tool
+  const [expanded, setExpanded] = useState(false)
+  const [steerText, setSteerText] = useState('')
   const { sessionId } = row
   const live = isDelegateRowLive(row.status)
   const elapsed = useElapsedSeconds(live, `delegate:${row.id}`)
-  const activity = row.activity.slice(-TICKER_DEPTH)
-
-  const statusLabel = live
-    ? copy.statusRunning
-    : row.status === 'failed' || row.status === 'interrupted'
-      ? copy.statusError
-      : copy.statusDone
-
-  const meta = [
-    row.model ? displayModelName(row.model) : '',
-    !live && row.durationSeconds ? formatDurationSeconds(row.durationSeconds) : ''
-  ].filter(Boolean)
+  const statusLabel = t.summary.agents.status[row.status]
+  const failed = row.status === 'failed' || row.status === 'interrupted'
 
   // Only a child that reported its own session id has somewhere to go.
   const open = sessionId ? () => void openSessionInNewWindow(sessionId, { watch: true }) : undefined
 
   return (
-    <div
-      className="grid min-w-0 max-w-full gap-0.5 rounded-xl border border-(--ui-stroke-tertiary) px-3 py-2"
-      data-conversation-scaffold=""
-    >
-      <div className="flex min-w-0 max-w-full items-center gap-1.5">
-        <span className={SCAFFOLD_GLYPH_CLASS}>{statusGlyph(row.status, statusLabel)}</span>
-        <button
-          className={cn(
-            SCAFFOLD_LABEL_CLASS,
-            'min-w-0 truncate text-left transition-colors',
-            open ? 'hover:text-foreground focus-visible:text-foreground focus-visible:outline-none' : 'cursor-default'
+    <div className="grid min-w-0 max-w-full gap-1" data-conversation-scaffold="" data-delegate-status={row.status}>
+      <ScaffoldRow
+        onToggle={() => setExpanded(value => !value)}
+        open={expanded}
+        trailing={
+          live ? (
+            <ActivityTimerText className={SCAFFOLD_META_CLASS} seconds={elapsed} />
+          ) : row.durationSeconds !== undefined ? (
+            <span className={SCAFFOLD_META_CLASS}>{formatDurationSeconds(row.durationSeconds)}</span>
+          ) : undefined
+        }
+      >
+        <span className={SCAFFOLD_GLYPH_CLASS}>
+          <Codicon name="agent" size="0.75rem" />
+        </span>
+        <span className={cn(SCAFFOLD_LABEL_CLASS, 'min-w-0 truncate')}>{row.goal}</span>
+        <span className={cn(SCAFFOLD_META_CLASS, failed && 'text-destructive')}>{statusLabel}</span>
+      </ScaffoldRow>
+      {expanded && (
+        <div className="grid min-w-0 gap-2 pl-5" data-slot="delegate-detail">
+          <p className={cn(SCAFFOLD_LABEL_CLASS, 'whitespace-pre-wrap break-words')}>{row.goal}</p>
+          {row.model && <span className={SCAFFOLD_META_CLASS}>{displayModelName(row.model)}</span>}
+          {row.activity.map((text, index) => (
+            <p className={cn(SCAFFOLD_LABEL_CLASS, 'whitespace-pre-wrap break-words')} key={`${row.id}:${index}`}>
+              {text}
+            </p>
+          ))}
+          {open && (
+            <Button className="justify-self-start" onClick={open} size="inline" type="button" variant="text">
+              <Codicon name="link-external" />
+              {t.profiles.openInNewWindow}
+            </Button>
           )}
-          disabled={!open}
-          onClick={open}
-          type="button"
-        >
-          {row.goal}
-        </button>
-        {meta.length > 0 && <span className={SCAFFOLD_META_CLASS}>{meta.join(' · ')}</span>}
-        {live && <ActivityTimerText className={cn(SCAFFOLD_META_CLASS, 'ml-auto')} seconds={elapsed} />}
-        <Codicon className="ml-auto shrink-0 text-(--conversation-scaffold-text)" name="agent" size="0.625rem" />
-      </div>
-      {activity.length > 0 && (
-        <div className="min-w-0 max-w-full pl-5">
-          <ToolRunTicker>
-            {activity.map((text, index) => (
-              <FadeText
-                className={cn(SCAFFOLD_LABEL_CLASS, 'text-(--conversation-scaffold-meta)', live && 'shimmer')}
-                key={`${row.id}:${index}`}
-              >
-                {text}
-              </FadeText>
-            ))}
-          </ToolRunTicker>
+          {live && sessionId && parentSessionId && (
+            <SubagentControls sessionId={parentSessionId} setText={setSteerText} subagentId={row.id} text={steerText} />
+          )}
         </div>
       )}
     </div>
@@ -136,9 +96,8 @@ function DelegateRowView({ row }: { row: DelegateRow }) {
  * what the subagent store knows about them, so a delegation reads like the
  * several agents it actually is.
  *
- * A card, never folded into a run summary: the point of the block is the live
- * list, and a ticker cycling one line across five children would show four of
- * them nothing.
+ * Each child retains its own disclosure so a fan-out never hides which worker
+ * is still running or failed behind a rotating shared status.
  */
 export const DelegateTool: FC<Pick<ToolPart, 'args' | 'result' | 'toolCallId'>> = ({ args, result, toolCallId }) => {
   const sessionId = useStore(useSessionView().$runtimeId)
@@ -155,8 +114,8 @@ export const DelegateTool: FC<Pick<ToolPart, 'args' | 'result' | 'toolCallId'>> 
 
   return (
     <div className="grid min-w-0 gap-(--tool-row-gap)" data-delegate-card="" data-slot="tool-block">
-      {rows.map(row => (
-        <DelegateRowView key={row.id} row={row} />
+      {rows.map((row, index) => (
+        <DelegateRowView key={`${toolCallId}:${index}`} parentSessionId={sessionId} row={row} />
       ))}
     </div>
   )

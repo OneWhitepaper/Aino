@@ -10,8 +10,12 @@
 // scan), so a rewrite that drops it would make previews flicker in mid-stream
 // with nothing to catch it.
 import { AssistantRuntimeProvider, type ThreadMessage, useExternalStoreRuntime } from '@assistant-ui/react'
-import { cleanup, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+
+import { toChatMessages } from '@/lib/chat-messages'
+import { toRuntimeMessage } from '@/lib/chat-runtime'
+import { $toolDisclosureStates } from '@/store/tool-view'
 
 import { Thread } from '.'
 
@@ -96,5 +100,63 @@ describe('settled-turn link previews', () => {
     await screen.findByText('Serving now:', { exact: false })
 
     expect(container.querySelector(`[title="${TARGET}"]`)).toBeNull()
+  })
+
+  it('keeps process previews inside the fold and final previews outside before and after reload', () => {
+    const finalTarget = 'https://example.com/final'
+
+    const tool = {
+      type: 'tool-call',
+      toolCallId: 'read-1',
+      toolName: 'read_file',
+      args: {},
+      argsText: '{}',
+      result: { content: 'ok' }
+    }
+
+    for (const finalWithPreview of [false, true]) {
+      const final = finalWithPreview ? `Done. [Preview: final](#preview/${finalTarget})` : 'Done.'
+
+      const live = [
+        user('request', 'Check it.'),
+        {
+          ...assistant('progress', '', false),
+          content: [{ type: 'text', text: WITH_PREVIEW, displayPhase: 'commentary' }],
+          metadata: { custom: { interim: true } }
+        },
+        { ...assistant('final', '', false), content: [tool, { type: 'text', text: final, displayPhase: 'final' }] }
+      ] as ThreadMessage[]
+
+      const history = toChatMessages([
+        { role: 'user', content: 'Check it.', timestamp: 1 },
+        {
+          role: 'assistant',
+          content: WITH_PREVIEW,
+          timestamp: 2,
+          tool_calls: [{ id: 'read-1', function: { name: 'read_file', arguments: '{}' } }]
+        },
+        { role: 'tool', content: '{"content":"ok"}', tool_call_id: 'read-1', timestamp: 3 },
+        { role: 'assistant', content: final, timestamp: 4 }
+      ]).map(toRuntimeMessage)
+
+      for (const messages of [live, history]) {
+        $toolDisclosureStates.set({})
+        const { container, unmount } = render(<Harness messages={messages} />)
+        const processPreview = container.querySelector(`[title="${TARGET}"]`)
+        expect(processPreview).not.toBeNull()
+        expect(processPreview!.closest('[hidden]')).not.toBeNull()
+
+        if (finalWithPreview) {
+          const finalPreview = container.querySelector(`[title="${finalTarget}"]`)
+          expect(finalPreview).not.toBeNull()
+          expect(finalPreview!.closest('[hidden]')).toBeNull()
+        }
+
+        const header = container.querySelector('[data-slot="aui_response-process-header"]') as HTMLElement
+        fireEvent.click(within(header).getByRole('button'))
+        expect(processPreview!.closest('[hidden]')).toBeNull()
+        unmount()
+      }
+    }
   })
 })

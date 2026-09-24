@@ -11,6 +11,7 @@ import {
   prettyJson,
   type ToolPart
 } from './fallback-model'
+import { summarizeToolRun } from './run-summary'
 
 const part = (overrides: Partial<ToolPart>): ToolPart => ({
   args: {},
@@ -89,6 +90,19 @@ describe('buildToolView terminal exit-code status', () => {
 })
 
 describe('buildToolView error confidence', () => {
+  it('does not claim a failed or missing file was read successfully', () => {
+    const args = { path: '/repo/private.ts' }
+    const success = buildToolView(part({ toolName: 'read_file', args, result: { content: 'Read successfully' } }), '')
+
+    for (const error of ['Permission denied reading /repo/private.ts', 'File not found: /repo/private.ts']) {
+      const failed = buildToolView(part({ toolName: 'read_file', args, result: { error } }), '')
+      expect(failed.title).not.toBe(success.title)
+      expect(failed.title).toContain('Failed to read')
+      expect(failed.titleTarget).toEqual(success.titleTarget)
+      expect(failed.detail).toContain(error)
+    }
+  })
+
   it('keeps routine misses and returned diagnostic data out of destructive status', () => {
     const cases: Array<[Partial<ToolPart>, ReturnType<typeof buildToolView>['status']]> = [
       [
@@ -223,6 +237,25 @@ describe('buildToolView browser and command summaries', () => {
 })
 
 describe('buildToolView result counts', () => {
+  it('keeps transport statistics out of result counts while preserving meaningful totals', () => {
+    const result = { stdout: 'ok', stdout_bytes_total: 37009, stderr_bytes_total: 18, input_tokens_total: 200 }
+
+    const code = buildToolView(part({ result, toolName: 'execute_code' }), '')
+    const files = buildToolView(part({ result: { ...result, files_total: 3 }, toolName: 'list_files' }), '')
+
+    const failure = buildToolView(
+      part({ result: { ...result, error: 'execution failed' }, toolName: 'execute_code' }),
+      ''
+    )
+
+    expect(code.countLabel).toBeUndefined()
+    expect(code.stdout).toBe(result.stdout)
+    expect(files.countLabel).toBe('3 files')
+    expect(failure.countLabel).toBeUndefined()
+    expect(failure.status).toBe('error')
+    expect(failure.detail).toContain('execution failed')
+  })
+
   it('localizes known count nouns in Simplified Chinese', () => {
     setRuntimeI18nLocale('zh')
 
@@ -317,6 +350,32 @@ describe('buildToolView web-search query', () => {
   })
 })
 
+describe('buildToolView file-search query', () => {
+  it('distinguishes patterns and search locations in every locale and lifecycle state', () => {
+    for (const locale of ['en', 'zh', 'zh-hant', 'ja'] as const) {
+      setRuntimeI18nLocale(locale)
+
+      for (const result of [undefined, { matches: [] }]) {
+        const searches = [
+          { pattern: 'conversation', path: 'DESIGN.md' },
+          { pattern: 'collapse', path: 'DESIGN.md' },
+          { pattern: 'conversation', path: 'README.md' }
+        ].map(args => ({ args, view: buildToolView(part({ args, result, toolName: 'search_files' }), '') }))
+
+        expect(new Set(searches.map(({ view }) => view.title)).size).toBe(searches.length)
+
+        for (const { args, view } of searches) {
+          expect(view.title).toContain(args.pattern)
+          expect(view.title).toContain(args.path)
+        }
+
+        const pathless = buildToolView(part({ args: { pattern: 'collapse' }, result, toolName: 'search_files' }), '')
+        expect(pathless.title).toContain('collapse')
+      }
+    }
+  })
+})
+
 describe('buildToolView browser_navigate title', () => {
   it('shows failed title when navigate returns success=false', () => {
     const view = buildToolView(
@@ -388,6 +447,29 @@ describe('buildToolView file edit diffs', () => {
 })
 
 describe('buildToolView title actions', () => {
+  it('localizes shell counts without treating Python source as a shell command list', () => {
+    setRuntimeI18nLocale('zh')
+    const source = 'import json\nfor value in range(3):\n    print(json.dumps(value))'
+    const input = part({ args: { code: source }, result: undefined, toolName: 'execute_code' })
+    const code = buildToolView(input, '')
+
+    const terminal = buildToolView(
+      part({ args: { command: 'git status; git diff; git log -1' }, toolName: 'terminal' }),
+      ''
+    )
+
+    expect(terminal.title).toBe('已运行 git status + 2 个命令')
+    expect(code.title).not.toContain('import')
+    expect(code.title).not.toContain('commands')
+    expect(code.title).not.toContain('命令')
+    expect(code.status).toBe('running')
+    expect(code.titleAction?.text).toBe(code.title)
+    expect(input.args).toEqual({ code: source })
+    expect(code.detail).toContain(source)
+    expect(summarizeToolRun([input], true)).toBe(code.title)
+    expect(summarizeToolRun([{ ...input, result: { stdout: 'ok' } }], false)).toBe('已运行代码')
+  })
+
   it('marks the pending action separately from the rest of the title', () => {
     const read = buildToolView(part({ args: { path: '/tmp/demo.txt' }, result: undefined, toolName: 'read_file' }), '')
 
@@ -412,8 +494,9 @@ describe('buildToolView title actions', () => {
     expect(web.titleAction).toEqual({ prefix: '', text: 'Reading', suffix: ' example.com/docs' })
     expect(terminal.title).toBe('Running npm test -- --runInBand')
     expect(terminal.titleAction).toEqual({ prefix: '', text: 'Running', suffix: ' npm test -- --runInBand' })
-    expect(code.title).toBe('Scripting print("hello")')
-    expect(code.titleAction).toEqual({ prefix: '', text: 'Scripting', suffix: ' print("hello")' })
+    expect(terminal.titleTarget).toEqual({ kind: 'command', text: terminal.terminalCommand })
+    expect(code.title).not.toContain('print')
+    expect(code.titleAction).toEqual({ prefix: '', text: code.title, suffix: '' })
   })
 
   it('does not mark completed tool titles as pending actions', () => {
@@ -581,6 +664,8 @@ describe('buildToolView title actions', () => {
 
     expect(read.title).toBe('demo.txt を読み取り中')
     expect(read.titleAction).toEqual({ prefix: 'demo.txt を', text: '読み取り中', suffix: '' })
+    expect(read.titleTarget?.kind).toBe('file')
+    expect(read.titleAction?.prefix).toContain(read.titleTarget?.text)
     expect(web.title).toBe('example.com/docs を読み取り中')
     expect(web.titleAction).toEqual({ prefix: 'example.com/docs を', text: '読み取り中', suffix: '' })
   })

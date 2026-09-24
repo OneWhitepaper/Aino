@@ -187,12 +187,24 @@ _HISTORY_ROLES = frozenset({"user", "assistant", "tool", "system"})
 
 
 def _history_to_messages(history: list[dict]) -> list[dict]:
+    from agent.context_compressor import _content_text_for_contains, is_compaction_summary_message, user_originated_turn_view
+
     messages = []
     tool_call_args = {}
+    prior_users = []
+
+    def prior_user_match(message, content, timestamp):
+        flattened = timestamp is None and isinstance(content, str) and is_compaction_summary_message(message)
+        return any((row.get("content") == content or (
+                       flattened and isinstance(row.get("content"), list)
+                       and _content_text_for_contains(row["content"]).strip() == content
+                   )) and (timestamp is None or row.get("timestamp") == timestamp)
+                   for row in prior_users)
+
     for m in history:
         if not isinstance(m, dict):
             continue
-        m = project_compaction_message_for_display(m)
+        m = project_compaction_message_for_display(m, prior_user_match=prior_user_match)
         if m is None:
             continue
         role = m.get("role")
@@ -203,6 +215,8 @@ def _history_to_messages(history: list[dict]) -> list[dict]:
         if _is_display_hidden_marker(role, content_text) and m.get("display_kind") != "model_switch":
             continue
         if role == "user":
+            if user_originated_turn_view(m) is not None:
+                prior_users.append(m)
             content_text = _DISCORD_TRIGGERING_NOTE_RE.sub(r"\1", content_text)
         if role == "assistant" and m.get("tool_calls"):
             for tc in m["tool_calls"]:

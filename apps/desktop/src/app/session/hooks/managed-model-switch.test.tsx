@@ -12,6 +12,7 @@ import { modelOptionsQueryKey } from '@/lib/model-options'
 import { $confirmRequest, settleConfirm } from '@/store/confirm'
 import { clearGatewayManagedCapabilities, recordGatewayReadyCapability } from '@/store/gateway-managed-capability'
 import { $modelPresets, modelPresetKey } from '@/store/model-presets'
+import type * as Notifications from '@/store/notifications'
 import { platformModelCatalog } from '@/store/platform-models'
 import { $activeGatewayProfile } from '@/store/profile'
 import {
@@ -38,7 +39,10 @@ import { platformModel, platformSnapshot } from '@/test/platform-model'
 import { useModelControls } from './use-model-controls'
 
 const notices = vi.hoisted(() => ({ notify: vi.fn(), notifyError: vi.fn(), dismissNotification: vi.fn() }))
-vi.mock('@/store/notifications', () => notices)
+vi.mock('@/store/notifications', async importOriginal => ({
+  ...(await importOriginal<typeof Notifications>()),
+  ...notices
+}))
 stubMenuDomApis()
 stubResizeObserver()
 
@@ -50,6 +54,7 @@ let broadcast: (snapshot: ReturnType<typeof platformSnapshot>) => void
 
 beforeEach(async () => {
   vi.clearAllMocks()
+  notices.notify.mockImplementation(() => `switch-notice-${notices.notify.mock.calls.length}`)
   $activeGatewayProfile.set('default')
   $activeSessionId.set('runtime-a')
   $busy.set(false)
@@ -506,6 +511,77 @@ it('reconciles staged binding failure and retries authorization without replayin
   ).toHaveLength(1)
   expect(request.mock.calls.some(([method]) => method === 'prompt.submit')).toBe(false)
 })
+
+it('accepts a managed binding whose acknowledgement failed when reconciliation confirms it is ready', async () => {
+  bind.mockImplementationOnce(async () => {
+    backend.model_status = 'ready'
+
+    return { ok: false, error: { code: 'gateway_binding_failed' } }
+  })
+  const result = controls()
+
+  await act(async () => expect(await result.current.selectModel({ provider: 'aino', model: 'catalog-a' })).toBe(true))
+  expect($sessionStates.get()['runtime-a'].platformModel?.status).toBe('ready')
+  expect(notices.notify).not.toHaveBeenCalled()
+  expect(notices.notifyError).not.toHaveBeenCalled()
+})
+
+it.each(['retry', 'snapshot', 'during-recovery'] as const)(
+  'retires stale managed recovery after readiness arrives through %s',
+  async source => {
+    bind.mockResolvedValueOnce({ ok: false, error: { code: 'gateway_binding_failed' } })
+
+    if (source === 'during-recovery') {
+      notices.notify.mockImplementationOnce(() => {
+        queueMicrotask(() => {
+          backend.model_status = 'ready'
+          publishSessionState('runtime-a', {
+            ...$sessionStates.get()['runtime-a'],
+            busy: true,
+            platformModel: { ...$sessionStates.get()['runtime-a'].platformModel!, status: 'ready' }
+          })
+        })
+
+        return 'switch-notice-race'
+      })
+    }
+
+    const result = controls()
+    await act(async () =>
+      expect(await result.current.selectModel({ provider: 'aino', model: 'catalog-a' })).toBe(false)
+    )
+    const recovery = notices.notify.mock.calls.at(-1)![0]
+    const noticeId = notices.notify.mock.results.at(-1)!.value
+    expect(recovery.action).toBeDefined()
+    const bindings = bind.mock.calls.length
+    backend.model_status = 'ready'
+
+    act(() =>
+      publishSessionState('runtime-a', {
+        ...$sessionStates.get()['runtime-a'],
+        busy: true,
+        ...(source === 'snapshot'
+          ? { platformModel: { ...$sessionStates.get()['runtime-a'].platformModel!, status: 'ready' as const } }
+          : {})
+      })
+    )
+
+    if (source !== 'retry') {
+      expect(notices.dismissNotification).toHaveBeenCalledWith(noticeId)
+    }
+
+    await act(() => recovery.action.onClick())
+
+    expect($sessionStates.get()['runtime-a'].platformModel?.status).toBe('ready')
+    expect(notices.dismissNotification).toHaveBeenCalledWith(noticeId)
+    expect(notices.notifyError).not.toHaveBeenCalled()
+    expect(bind).toHaveBeenCalledTimes(bindings)
+    expect(
+      request.mock.calls.filter(([method, params]) => method === 'config.set' && params.key === 'model')
+    ).toHaveLength(1)
+    expect(request.mock.calls.some(([method]) => method === 'prompt.submit')).toBe(false)
+  }
+)
 
 it('clears stale live reasoning through config.set for a non-reasoning Aino selection', async () => {
   $currentReasoningEffort.set('high')

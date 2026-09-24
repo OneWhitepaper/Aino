@@ -23,9 +23,13 @@ import {
   messageContentText,
   pickPrimaryPreviewTarget
 } from '@/components/assistant-ui/thread/content'
-import { MESSAGE_PARTS_COMPONENTS } from '@/components/assistant-ui/thread/message-parts'
+import { AssistantMessageParts } from '@/components/assistant-ui/thread/message-parts'
 import { ReactionPicker } from '@/components/assistant-ui/thread/message-reactions'
-import { ResponseMessageIds, responseMessageRole } from '@/components/assistant-ui/thread/response-group'
+import {
+  ResponseMessageIds,
+  responseMessageRole,
+  ResponseProcessParts
+} from '@/components/assistant-ui/thread/response-group'
 import { ResponseLoadingIndicator, TurnActivityIndicator } from '@/components/assistant-ui/thread/status'
 import { MessageTimelineTimestamp } from '@/components/assistant-ui/thread/timeline-timestamp'
 import { useMessageReactions, useTapbackDoubleClick } from '@/components/assistant-ui/thread/use-message-reactions'
@@ -88,8 +92,8 @@ const EMPTY_PARTS: readonly unknown[] = []
 // whose element identity is unchanged, so a status flip on the message root
 // (pending -> complete and back, N rows per stream flush) can no longer
 // descend into the parts subtree at all. Its props were already the module
-// constant MESSAGE_PARTS_COMPONENTS, so nothing per-message is captured here.
-const MESSAGE_PARTS = <MessagePrimitive.Parts components={MESSAGE_PARTS_COMPONENTS} />
+// stable part renderer, so nothing per-message is captured here.
+const MESSAGE_PARTS = <AssistantMessageParts />
 
 interface MessageActionProps {
   messageId: string
@@ -407,48 +411,54 @@ const AssistantStatusSlot: FC = () => {
 /**
  * PERF leaf: owns the settled-text selector that feeds the link previews.
  *
- * This was the last status-dependent read at the message root, and the most
- * expensive one: the selector flips between '' while running and the full
- * `messageContentText(content)` join once settled, so every running <-> settled
- * transition re-ran the join for the whole message AND re-rendered the root.
- * At stream breadth N that is N joins plus N root re-renders per flip. Reading
- * it here confines both to this leaf, which renders nothing at all in the
- * common case.
- *
- * The streaming-side optimization is unchanged and still the point of the ''
- * branch: preview targets only materialize once the turn completes, so while
- * running the selector returns a stable '' and per-token flushes skip the
- * regex scan and the re-render it would cause.
- *
- * Renders exactly what the root used to render at this position — the same
- * wrapper div with the same classes, or nothing when there are no targets —
- * so the DOM is byte-identical either way. A component boundary adds no node
- * of its own, so unlike StreamingMarker this needs no placement care.
+ * Stable null while streaming avoids preview scans on every delta. History
+ * merges commentary and the answer into one message, so previews retain the
+ * phase of their source text rather than escaping the process fold on reload.
  */
 const AssistantPreviewEmbeds: FC = () => {
-  const completedText = useAuiState(s =>
-    s.message.status?.type === 'running' ? '' : messageContentText(s.message.content)
-  )
+  const completedParts = useAuiState(s => (s.message.status?.type === 'running' ? null : s.message.content))
 
-  const previewTargets = useMemo(() => {
-    if (!completedText || !/(https?:\/\/|file:\/\/)/i.test(completedText)) {
+  const previewGroups = useMemo(() => {
+    if (!completedParts) {
       return []
     }
 
-    return pickPrimaryPreviewTarget(extractPreviewTargets(completedText))
-  }, [completedText])
+    const commentary = completedParts.filter(part => (part as { displayPhase?: string }).displayPhase === 'commentary')
+    const reply = completedParts.filter(part => (part as { displayPhase?: string }).displayPhase !== 'commentary')
+    const hasFinal = reply.some(part => (part as { displayPhase?: string }).displayPhase === 'final')
 
-  if (previewTargets.length === 0) {
-    return null
-  }
+    const targetsFromText = (text: string) =>
+      /(https?:\/\/|file:\/\/)/i.test(text) ? pickPrimaryPreviewTarget(extractPreviewTargets(text)) : []
 
-  return (
-    <div className="mt-3 flex flex-wrap gap-2">
-      {previewTargets.map(target => (
-        <PreviewAttachment key={target} source="explicit-link" target={target} />
-      ))}
-    </div>
-  )
+    const finalTargets = targetsFromText(messageContentText(reply))
+
+    const processTargets = targetsFromText(messageContentText(commentary)).filter(
+      target => !finalTargets.includes(target)
+    )
+
+    return [
+      { phase: 'commentary', targets: processTargets },
+      { phase: hasFinal ? 'final' : 'legacy', targets: finalTargets }
+    ].filter(group => group.targets.length > 0)
+  }, [completedParts])
+
+  return previewGroups.map(({ phase, targets }) => {
+    const previews = (
+      <div className="mt-3 flex flex-wrap gap-2" key={phase}>
+        {targets.map(target => (
+          <PreviewAttachment key={target} source="explicit-link" target={target} />
+        ))}
+      </div>
+    )
+
+    return phase === 'legacy' ? (
+      previews
+    ) : (
+      <ResponseProcessParts final={phase === 'final'} key={phase}>
+        {previews}
+      </ResponseProcessParts>
+    )
+  })
 }
 
 /**

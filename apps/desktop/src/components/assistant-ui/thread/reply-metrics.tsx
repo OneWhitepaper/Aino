@@ -1,4 +1,5 @@
 import { compactNumber } from '@hermes/shared'
+import { useContext } from 'react'
 
 import { formatElapsed } from '@/components/chat/activity-timer'
 import { useI18n } from '@/i18n'
@@ -6,6 +7,7 @@ import { ChevronDown } from '@/lib/icons'
 import type { TurnMetrics } from '@/lib/turn-metrics'
 
 import { ReplyCost } from './reply-cost'
+import { ResponseProcess } from './response-group'
 
 interface ReplyMetricsProps {
   metrics?: TurnMetrics
@@ -14,11 +16,15 @@ interface ReplyMetricsProps {
 
 export function ReplyMetrics({ metrics, durationS }: ReplyMetricsProps) {
   const { t } = useI18n()
+  const process = useContext(ResponseProcess)
   const copy = t.assistant.thread.replyMetrics
   const duration = metrics?.duration_s ?? durationS
+  const durationInProcessHeader = process.enabled && !!process.answerMessageId && durationS !== undefined
 
   const items = [
-    duration !== undefined ? `${copy.duration} ${formatElapsed(Math.round(duration))}` : null,
+    duration !== undefined && !durationInProcessHeader
+      ? `${copy.duration} ${formatElapsed(Math.round(duration))}`
+      : null,
     metrics?.total_tokens !== undefined ? `${copy.tokens} ${compactNumber(metrics.total_tokens)} token` : null,
     metrics?.context_percent !== undefined
       ? `${copy.context} ${metrics.context_estimated ? '~' : ''}${Math.round(metrics.context_percent)}%`
@@ -38,12 +44,13 @@ export function ReplyMetrics({ metrics, durationS }: ReplyMetricsProps) {
       : null
   ].filter((item): item is string => item !== null)
 
-  if (!items.length && !metrics?.billing && !metrics?.non_aino_model_calls) {
+  if (!items.length && !details.length && !metrics?.billing && !metrics?.non_aino_model_calls) {
     return null
   }
 
   const line = (
     <span className="flex min-w-0 flex-wrap gap-x-1.5">
+      {!items.length && details.length > 0 && <span>{copy.details}</span>}
       {items.map((item, index) => (
         <span className="whitespace-nowrap" key={item}>
           {index > 0 ? '\u00b7 ' : ''}
@@ -55,9 +62,7 @@ export function ReplyMetrics({ metrics, durationS }: ReplyMetricsProps) {
 
   const className = 'w-full min-w-0 text-[0.75rem] leading-5 text-muted-foreground tabular-nums'
 
-  const nonAinoModelCalls = metrics?.non_aino_model_calls
-    ? <div>{copy.nonAinoModelCalls}</div>
-    : null
+  const nonAinoModelCalls = metrics?.non_aino_model_calls ? <div>{copy.nonAinoModelCalls}</div> : null
 
   if (!details.length) {
     return (

@@ -6,7 +6,7 @@ import re
 from contextlib import contextmanager
 
 from agent.compaction_display import project_compaction_message_for_display
-from agent.context_compressor import user_originated_turn_view
+from agent.context_compressor import _content_text_for_contains, is_compaction_summary_message, user_originated_turn_view
 
 
 _SYNTHETIC_PROMPT = re.compile(
@@ -17,11 +17,50 @@ _SYNTHETIC_PROMPT = re.compile(
 )
 
 
-def _prompt_preview(db, content, display_kind, summary):
+def prior_user_content_matcher(db, session_id, *, conn=None):
+    """Corroborate rare legacy replay candidates without hydrating transcript payloads."""
+    def multimodal_text(raw):
+        content = db._decode_content(raw)
+        return _content_text_for_contains(content).strip() if isinstance(content, list) else None
+
+    def register(connection):
+        connection.create_function("timeline_multimodal_text", 1, multimodal_text, deterministic=True)
+
+    if conn is not None:
+        register(conn)
+
+    def matches(message, content, timestamp):
+        row_id = message.get("id") or message.get("_row_id")
+        if not isinstance(row_id, int):
+            return False
+        # Only merged replays flatten multimodal parts. Ordinary pasted markers
+        # and standalone copies keep the exact-content/timestamp check.
+        flattened = timestamp is None and isinstance(content, str) and is_compaction_summary_message(message)
+        sql = """SELECT 1 FROM messages WHERE session_id = ? AND role = 'user'
+                 AND (content = ? OR (? AND timeline_multimodal_text(content) = ?))
+                 AND id < ? AND (active = 1 OR compacted = 1)
+                 AND COALESCE(_compressed_summary, 0) = 0
+                 AND COALESCE(display_kind, '') IN ('', 'steer')
+                 AND (? IS NULL OR timestamp = ?) LIMIT 1"""
+        params = (session_id, db._encode_content(content), flattened, db._encode_content(content), row_id, timestamp, timestamp)
+        if conn is not None:
+            row = conn.execute(sql, params).fetchone()
+        else:
+            with db._read_ctx() as read_conn:
+                register(read_conn)
+                row = read_conn.execute(sql, params).fetchone()
+        return row is not None
+    return matches
+
+
+def _prompt_preview(db, content, display_kind, summary, display_metadata, timestamp, *, row_id=None, prior_user_match=None):
     message = project_compaction_message_for_display({
         "role": "user", "content": db._decode_content(content),
         "display_kind": display_kind, "_compressed_summary": bool(summary),
-    })
+        "display_metadata": db._decode_display_metadata(display_metadata),
+        "id": row_id,
+        "timestamp": timestamp,
+    }, prior_user_match=prior_user_match)
     if message is None or user_originated_turn_view(message) is None:
         return ""
     content = message.get("content")
@@ -83,7 +122,7 @@ def _display_rows_sql(conn, session_id, *, users_only=False):
     ), display_rows AS (SELECT id AS row_id, sort_id FROM ranked WHERE preference = 1)"""
 
 
-def _register_functions(db, conn):
+def _register_functions(db, conn, session_id):
     from agent.context_compressor import split_user_originated_turn
 
     def identity_content(content, display_kind):
@@ -91,10 +130,14 @@ def _register_functions(db, conn):
             "role": "user", "content": db._decode_content(content), "display_kind": display_kind})
         return db._encode_content(live.get("content")) if handoff is not None and live is not None else content
 
+    prior_user_match = prior_user_content_matcher(db, session_id, conn=conn)
     conn.create_function("timeline_identity_content", 2, identity_content, deterministic=True)
-    conn.create_function("timeline_preview", 3,
-                         lambda content, kind, summary: _prompt_preview(db, content, kind, summary),
+    conn.create_function("timeline_preview", 6,
+                         lambda content, kind, summary, metadata, row_id, timestamp: _prompt_preview(
+                             db, content, kind, summary, metadata, timestamp,
+                             row_id=row_id, prior_user_match=prior_user_match),
                          deterministic=True)
+    return prior_user_match
 
 
 def get_session_messages_around(db, session_id, row_id, *, limit=120):
@@ -104,13 +147,13 @@ def get_session_messages_around(db, session_id, row_id, *, limit=120):
     the selected bounded page, even when the anchor is deep in a transcript.
     """
     with _snapshot(db) as conn:
-        _register_functions(db, conn)
+        prior_user_match = _register_functions(db, conn, session_id)
         anchor = conn.execute(
-            "SELECT content, display_kind, _compressed_summary FROM messages "
+            "SELECT content, display_kind, _compressed_summary, display_metadata, timestamp FROM messages "
             "WHERE session_id = ? AND id = ? AND role = 'user' AND (active = 1 OR compacted = 1)",
             (session_id, row_id),
         ).fetchone()
-        if anchor is None or not _prompt_preview(db, *anchor):
+        if anchor is None or not _prompt_preview(db, *anchor, row_id=row_id, prior_user_match=prior_user_match):
             return None
         sql = _display_rows_sql(conn, session_id)
         params = {"sid": session_id, "row_id": row_id, "limit": limit}
@@ -140,11 +183,11 @@ def get_session_messages_around(db, session_id, row_id, *, limit=120):
 def get_session_timeline(db, session_id, *, limit=500, after_row_id=0):
     """Chronological prompts. Cursor is the first physical row id of a logical turn."""
     with _snapshot(db) as conn:
-        _register_functions(db, conn)
+        _register_functions(db, conn, session_id)
         sql = _display_rows_sql(conn, session_id, users_only=True) + """,
             prompts AS MATERIALIZED (
                 SELECT row_id, sort_id, m.timestamp,
-                       timeline_preview(m.content, m.display_kind, m._compressed_summary) AS preview
+                       timeline_preview(m.content, m.display_kind, m._compressed_summary, m.display_metadata, m.id, m.timestamp) AS preview
                 FROM display_rows JOIN messages m ON m.id = row_id
             ), eligible AS MATERIALIZED (SELECT * FROM prompts WHERE preview <> '')
         """

@@ -127,6 +127,107 @@ def test_cursor_survives_compaction_between_pages(timeline_store):
     assert empty["pagination"]["has_more"] is False
 
 
+@pytest.mark.parametrize("standalone,multimodal,legacy,kind", [
+    (False, False, False, None), (True, False, False, None),
+    (False, True, False, None), (True, True, False, None),
+    (False, False, True, None), (True, False, True, None),
+    (False, True, True, None), (True, True, True, None), (True, False, False, "steer"),
+])
+def test_compaction_replay_is_model_only_after_storage(timeline_store, standalone, multimodal, legacy, kind):
+    from copy import deepcopy
+    from types import SimpleNamespace
+    from agent.context_compressor import ContextCompressor, SUMMARY_PREFIX, _SUMMARY_END_MARKER
+    from agent.turn_context import build_api_messages
+    from tui_gateway.server import _history_to_messages
+
+    db, client, _ = timeline_store
+    request = [{"type": "text", "text": "Compare the repositories"},
+               {"type": "image_url", "image_url": {"url": "data:unused"}}] if multimodal else "Compare the repositories"
+    original = {"role": "user", "content": request, "timestamp": 123}
+    if kind:
+        original["display_kind"] = kind
+    carrier = {"role": "user", "content": SUMMARY_PREFIX + "findings\n" + _SUMMARY_END_MARKER,
+               "_compressed_summary": True}
+    history = [original, carrier]
+    if standalone:
+        history.append({"role": "assistant", "content": ""})
+    compressor = ContextCompressor(model="test", quiet_mode=True)
+    history = compressor._reappend_inflight_user_task(history, original)
+    if legacy:
+        for message in history[1:]:
+            message.pop("display_metadata", None)
+    else:
+        assert history[-1]["display_metadata"]["compaction_replay"] is True
+    snapshot = deepcopy(history)
+    db.append_messages_batch("timeline-root", deepcopy(history))
+    stored = db.get_messages("timeline-root")
+    wire_before = deepcopy(stored)
+    visible = _history_to_messages(stored)
+    expected_text = "Compare the repositories\ndata:unused" if multimodal else "Compare the repositories"
+    assert [row["text"] for row in visible if row["role"] == "user"] == [expected_text]
+    response = client.get("/api/sessions/timeline-root/messages").json()["messages"]
+    assert [row["content"] for row in response if row["role"] == "user" and row.get("display_kind") != "hidden"] == [request]
+    timeline = client.get("/api/sessions/timeline-root/timeline").json()
+    assert [row["preview"] for row in timeline["entries"]] == ["Compare the repositories"]
+    # The page can omit the original; provenance lookup must not need its tool payloads.
+    tail = client.get("/api/sessions/timeline-root/messages?limit=1&order=latest").json()["messages"]
+    assert tail[-1]["display_kind"] == "hidden"
+    assert stored == wire_before
+    assert history == snapshot
+    # Display metadata is stripped from the outgoing copy, never from the model's task anchor.
+    agent = SimpleNamespace(_current_turn_timestamp=123, ephemeral_system_prompt=None,
+                            _copy_reasoning_content_for_api=lambda *_: None,
+                            _should_sanitize_tool_calls=lambda: False)
+    wire, _ = build_api_messages(agent, history, current_turn_user_idx=None, ext_prefetch_cache=None,
+                                plugin_user_context=None, moa_config=None, active_system_prompt="fixed prefix")
+    assert all("display_metadata" not in row for row in wire)
+    assert wire[-1]["content"] == history[-1]["content"]
+    assert wire[0]["content"] == "fixed prefix"
+    # The model still has the task after another compaction.
+    assert "Compare the repositories" in str(history[-1]["content"])
+    inflight = ContextCompressor._find_inflight_user_task(history)
+    assert inflight is not None
+    next_carrier = {"role": "user", "content": SUMMARY_PREFIX + "new findings\n" + _SUMMARY_END_MARKER,
+                    "_compressed_summary": True}
+    next_history = compressor._reappend_inflight_user_task([next_carrier], inflight)
+    assert "Compare the repositories" in str(ContextCompressor._find_inflight_user_task(next_history)["content"])
+    assert history == snapshot
+
+
+@pytest.mark.parametrize("force_user_leading", [False, True])
+@pytest.mark.parametrize("multimodal", [False, True])
+def test_compaction_projection_preserves_authentic_user_text(timeline_store, force_user_leading, multimodal):
+    from agent.context_compressor import ContextCompressor, SUMMARY_PREFIX, _SUMMARY_END_MARKER, _INFLIGHT_TASK_REPLAY_HEADER
+    from tui_gateway.server import _history_to_messages
+
+    db, client, _ = timeline_store
+    # A person may paste the marker while reporting a bug; text alone is not replay provenance.
+    quoted = _INFLIGHT_TASK_REPLAY_HEADER + "\nWhy did this appear?"
+    live = "Please continue with the second repository"
+    quoted_carrier = {"role": "user", "content": quoted}
+    compressor = ContextCompressor(model="test", quiet_mode=True)
+    compressor._merge_summary_into_tail_row(quoted_carrier, SUMMARY_PREFIX + "summary", "user", force_user_leading)
+    if not force_user_leading:
+        compressor._reappend_inflight_user_task([quoted_carrier], {"role": "user", "content": "Still running"})
+    pasted_old_task = _INFLIGHT_TASK_REPLAY_HEADER + "\nOriginal task"
+    original = [{"type": "text", "text": "Original task"}] if multimodal else "Original task"
+    db.append_messages_batch("timeline-root", [
+        {"role": "user", "content": original, "timestamp": 100},
+        {"role": "user", "content": pasted_old_task, "timestamp": 200},
+        {"role": "user", "content": quoted},
+        {"role": "assistant", "content": "I will check."},
+        quoted_carrier,
+        {"role": "user", "content": SUMMARY_PREFIX + "handoff\n" + _SUMMARY_END_MARKER + "\n" + live,
+         "_compressed_summary": True},
+    ])
+    visible = _history_to_messages(db.get_messages("timeline-root"))
+    assert [row["text"] for row in visible if row["role"] == "user"] == ["Original task", pasted_old_task, quoted, quoted, live]
+    response = client.get("/api/sessions/timeline-root/messages").json()["messages"]
+    assert response[1]["content"] == pasted_old_task
+    assert response[4]["display_content"] == quoted
+    assert response[-1]["display_content"] == live
+
+
 def test_exact_owner_lineage_validation_and_bounded_jump(timeline_store):
     db, client, home = timeline_store
     sid = "timeline-root"

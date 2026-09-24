@@ -569,7 +569,55 @@ so glass and message-bubble transparency do not reveal scrolling text.
   `src/app/chat/composer`; do not fork a second markdown, message, tool-call, or
   approval renderer for one feature.
 - Conversation thinking is a compact disclosure row without a full-width
-  divider. The turn pair owns the user-to-assistant gap. The reply footer
+  divider. Reasoning has its own disclosure and never opens as a side effect
+  of expanding a tool group. Adjacent ordinary tool calls share one summary;
+  reasoning and public progress each end that tool group. Opening a group
+  reveals only its flat, same-column tool rows. Command output opens separately
+  on the individual row. Public updates and findings stay in chronological order
+  between groups; do not derive them from private reasoning or invent them for
+  historical turns without public updates. Adjacent activity rows use compact
+  spacing; public paragraphs retain the larger stage gap. Expanded reasoning is a bounded,
+  scrollable detail at 13px, distinct from the 15px public prose. Its disclosure
+  identity is independent from the removed aggregate activity fold.
+  Expanded terminal details reuse the shared code surface as a bounded Shell
+  panel: original command, non-wrapping output, copy, and a bottom status line.
+  Long output scrolls and expands without stretching the conversation; background
+  launch receipts never imply successful process completion.
+  Activity uses readable medium-grey text at full opacity, with slightly
+  smaller icons and type than prose. File targets retain a fine underline;
+  inline commands use monospace and truncate within the row. Group summaries
+  count commands instead of repeating the current command from the ticker.
+  Completed timing
+  and result counts live in the existing detail disclosure. Public paragraphs
+  use a medium weight and comfortable line height; compact tool rows use
+  regular weight and the shared line-height and glyph columns. At the normal
+  desktop scale, prose and user bubbles are 15px, activity is 14px with a 24px
+  line height, and glyphs are 14px in a 16px cell. Prose uses 1.7 line height;
+  headings scale from the reading size. Mockup screenshot pixels must not be
+  copied into CSS sizes without accounting for capture density. Questions, approvals, failures, file edits, generated outputs and
+  registered tool interfaces retain their own surfaces. The live label follows
+  the actual pending tool; model waits belong to the existing tail status row.
+  While awaiting approval the process reports completed activity only.
+  Completed groups summarize recorded
+  activity without claiming the task is complete. This is a presentation rule,
+  never a rewrite of transcript history or model context.
+  Running responses flow directly through progress paragraphs and activity
+  rows, without a second process heading or divider. After completion, one
+  plain disclosure can fold the response activity; explicit user choices
+  survive subsequent running/completed transitions.
+  The header reports the recorded turn duration, or simply "Activity" when
+  no duration is available. Explicit final text stays outside the collapsed
+  process; progress and tool detail retain their chronological order inside.
+  Display-only phase metadata follows existing live events and history
+  hydration. Explicit previews keep their source phase: process previews fold
+  with the process after a reload, while final previews remain with the answer.
+  Interrupted partial text is never inferred to be a final answer.
+  Errors, input/consent and dedicated result surfaces keep the response open.
+  Delegated agents use compact status disclosures with their existing details
+  and controls available on expansion. Live updates join the dispatch by child,
+  batch or tool-call identity, never by matching goals or task counts. A dispatch
+  receipt does not establish that its background children completed.
+  The turn pair owns the user-to-assistant gap. The reply footer
   appears only after its turn stops running, including gaps
   between text and tool calls. Pending footers reserve their layout space but
   remain hidden and inert; earlier completed replies keep their controls.
@@ -666,6 +714,12 @@ so glass and message-bubble transparency do not reveal scrolling text.
   ambiguous exit-1 results use neutral notices, with details still available.
   Errors described inside returned data are not tool failures. Expanded failures
   show the actual explanation; supporting output keeps its normal text color.
+  A collapsed live run shows the newest pending tool on its own ticker line,
+  even when a later parallel tool finishes or fails first. Clipped rows stay
+  mounted but leave keyboard and screen-reader navigation. Long labels
+  truncate within the available width, keeping the disclosure visible. Collapsing
+  a run after reading a tool's details keeps its header in the ticker window;
+  one click restores those details without losing the saved disclosure choice.
 - Nested transcript scrollers keep their height caps and hand vertical scrolling
   back to the thread at either edge (`overscroll-behavior-y: auto`), even when
   their content fits. Only the outer thread contains vertical overscroll;

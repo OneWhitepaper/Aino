@@ -105,10 +105,9 @@ describe('ResponseLoadingIndicator timer', () => {
     const { container } = renderIndicator('zh')
     act(() => vi.advanceTimersByTime(35_000))
     const status = container.querySelector('[data-slot="aui_response-loading"]')
-    const pulse = status?.querySelector('.dither')
+    const pulse = status?.querySelector('[aria-hidden="true"]')
 
-    expect(pulse?.className).toContain('text-(--conversation-scaffold-text)')
-    expect(pulse?.className).not.toContain('text-midground')
+    expect(pulse).not.toBeNull()
     expect(screen.getByRole('status', { name: '正在思考' }).textContent).toBe('正在思考')
     expect(screen.getByText('正在思考')).toBeTruthy()
   })

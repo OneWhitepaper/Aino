@@ -25,6 +25,16 @@ const zhCopy: ToolRunCopy = {
 // edits and other cards are split out before a run is summarized, so there is
 // no "Edited …" clause to test here — that work shows as its own diff card.
 describe('summarizeToolRun', () => {
+  it('names browser activity without adding browser calls to the explored-file count', () => {
+    const files = [read('a.ts'), read('b.ts')]
+    const browsing = [tool('browser_navigate', {}, {}), tool('browser_snapshot', {}, {})]
+
+    expect(settled([...files, ...browsing])).toContain(settled(files))
+    expect(settled(browsing)).toMatch(/used.*browser/i)
+    expect(settled(browsing)).not.toMatch(/file/i)
+    expect(running([tool('browser_navigate')])).toBe(toolPresentVerb('browser_navigate'))
+  })
+
   it('uses supplied localized copy for summaries and present-tense hints', () => {
     expect(summarizeToolRun([searched('a'), read('b.ts')], false, zhCopy)).toBe('已探索 2 个文件')
     expect(toolPresentVerb('read_file', zhCopy)).toBe('正在探索')
@@ -53,8 +63,26 @@ describe('summarizeToolRun', () => {
     )
   })
 
-  it('names the command that is still running', () => {
-    expect(running([tool('terminal', { command: 'npm run typecheck' })])).toMatch(/^Running /)
+  it('counts running commands without repeating their full command lines', () => {
+    const command = 'npm run typecheck'
+    const summary = running([read('a.ts'), tool('terminal', { command })])
+
+    expect(summary).toBe('Explored a.ts, running 1 command')
+    expect(summary).not.toContain(command)
+  })
+
+  it('keeps every outstanding category live when parallel tools finish out of order', () => {
+    const pendingRead = tool('read_file', { path: 'current.ts' })
+    const pendingCommand = tool('terminal', { command: 'npm run typecheck' })
+    const calls = [pendingRead, pendingCommand, ran('echo finished')]
+
+    expect(running(calls)).toBe('Exploring current.ts, running 2 commands')
+    expect(running([{ ...pendingRead, result: { content: '' } }, ...calls.slice(1)])).toBe(
+      'Explored current.ts, running 2 commands'
+    )
+    expect(running([pendingRead, { ...pendingCommand, result: { exit_code: 0 } }, calls[2]])).toBe(
+      'Exploring current.ts, ran 2 commands'
+    )
   })
 
   // Sequential calls leave a gap where the run is still going but nothing is

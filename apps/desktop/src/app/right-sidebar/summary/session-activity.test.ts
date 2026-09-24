@@ -79,5 +79,11 @@ describe('summary activity history', () => {
     expect(summaryAgentCounts(merged)).toEqual({ completed: 0, failed: 0, running: 1, dispatched: 1 })
     expect(merged.find(group => group.delegationId === 'new')?.rows[0].sessionId).toBe(live.sessionId)
     expect(merged.find(group => group.delegationId === 'old')?.rows[0].status).toBe('dispatched')
+
+    // A legacy event with only matching display text cannot replace either receipt.
+    const legacy = { ...live, id: 'legacy-child', delegationId: undefined }
+    const unattributed = summaryDelegations(history.delegations, [legacy])
+    expect(summaryAgentCounts(unattributed)).toEqual({ completed: 0, failed: 0, running: 1, dispatched: 2 })
+    expect(unattributed.find(group => group.id === legacy.id)?.rows[0].sessionId).toBe(legacy.sessionId)
   })
 })

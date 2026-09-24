@@ -59,6 +59,64 @@ describe('live transcript timeline events', () => {
     expect(assistant?.parts.map(part => part.timestamp)).toEqual([201.125, 202.25, 203.5])
   })
 
+  it.each(['rpc', 'rest'])('restores Responses commentary after tools like the live stream (%s)', transport => {
+    const progress = '正在检查来源。\n\n随后核对调用路径。'
+    const privateAnalysis = 'Private analysis mentioning 正在检查来源。 within a longer sentence.'
+    const final = '来源和调用路径已经确认。'
+    event('message.start', 210)
+    event('reasoning.delta', 211, { text: privateAnalysis })
+    event('message.interim', 212, { already_streamed: false, text: progress })
+    event('tool.start', 213, { args: { path: 'README.md' }, name: 'read_file', tool_id: 'call-progress' })
+    event('tool.complete', 214, { name: 'read_file', result: { content: 'ok' }, tool_id: 'call-progress' })
+    event('message.complete', 215, { text: final })
+
+    const items = [
+      {
+        type: 'message',
+        role: 'assistant',
+        phase: 'analysis',
+        content: [{ type: 'output_text', text: privateAnalysis }]
+      },
+      { type: 'message', role: 'assistant', phase: 'commentary', content: [{ type: 'output_text', text: progress }] }
+    ]
+
+    const rows = [
+      {
+        role: 'assistant' as const,
+        content: '',
+        reasoning: `${privateAnalysis}\n\n${progress}`,
+        codex_message_items: transport === 'rest' ? JSON.stringify(items) : items,
+        tool_calls: [
+          { id: 'call-progress', type: 'function', function: { name: 'read_file', arguments: '{"path":"README.md"}' } }
+        ],
+        timestamp: 211
+      },
+      { role: 'tool' as const, tool_call_id: 'call-progress', content: '{"content":"ok"}', timestamp: 214 },
+      { role: 'assistant' as const, content: final, timestamp: 215 }
+    ]
+
+    const before = JSON.stringify(rows)
+    const restored = toChatMessages(rows)
+    const liveParts = stream.state(SID).messages.flatMap(message => message.parts)
+    const restoredParts = restored.flatMap(message => message.parts)
+
+    expect(restoredParts.filter(part => part.type === 'text').map(part => part.text)).toEqual(
+      liveParts.filter(part => part.type === 'text').map(part => part.text)
+    )
+    expect(liveParts.filter(part => part.type === 'text').map(part => part.displayPhase)).toEqual([
+      'commentary',
+      'final'
+    ])
+    expect(restoredParts.filter(part => part.type === 'text').map(part => part.displayPhase)).toEqual(
+      liveParts.filter(part => part.type === 'text').map(part => part.displayPhase)
+    )
+    expect(restoredParts.filter(part => part.type === 'reasoning').map(part => part.text)).toEqual([privateAnalysis])
+    expect(restoredParts.filter(part => part.type === 'tool-call').map(part => part.toolCallId)).toEqual([
+      'call-progress'
+    ])
+    expect(JSON.stringify(rows)).toBe(before)
+  })
+
   it('uses the gateway event time for an error boundary', () => {
     event('message.start', 300)
     event('error', 301.875, { error: 'provider failed' })
@@ -118,7 +176,12 @@ describe('live transcript timeline events', () => {
     event('status.update', 450, { kind: 'model_switch', text: '', history_entry: historyEntry })
 
     const notice = stream.state().messages.find(message => message.modelSwitch)
-    expect(notice).toMatchObject({ role: 'system', rowId: 12, timestamp: 450, modelSwitch: historyEntry.display_metadata })
+    expect(notice).toMatchObject({
+      role: 'system',
+      rowId: 12,
+      timestamp: 450,
+      modelSwitch: historyEntry.display_metadata
+    })
     expect(hydrateFromStoredSession).not.toHaveBeenCalled()
 
     // The same notification can arrive after an optimistic send, or replay
@@ -149,7 +212,8 @@ describe('live transcript timeline events', () => {
     expect(stream.state().messages).toBe(messages)
 
     event('status.update', 455, {
-      kind: 'model_switch', text: '',
+      kind: 'model_switch',
+      text: '',
       history_entry: { ...historyEntry, row_id: 13, timestamp: 455, display_metadata: { model: 'restored-model' } }
     })
     expect(stream.state().messages.at(-1)?.modelSwitch?.model).toBe('restored-model')
@@ -165,19 +229,24 @@ describe('live transcript timeline events', () => {
     event('message.delta', 501, { text: 'Foreground reply.' })
     const foreground = stream.state()
 
-    act(() => stream.handleEvent({
-      type: 'status.update',
-      session_id: 'background-session',
-      payload: {
-        kind: 'model_switch',
-        text: '',
-        history_entry: {
-          role: 'user', text: 'model changed', display_kind: 'model_switch',
-          timestamp: 502, row_id: 22,
-          display_metadata: { previous_model: 'background-before', model: 'background-after' }
+    act(() =>
+      stream.handleEvent({
+        type: 'status.update',
+        session_id: 'background-session',
+        payload: {
+          kind: 'model_switch',
+          text: '',
+          history_entry: {
+            role: 'user',
+            text: 'model changed',
+            display_kind: 'model_switch',
+            timestamp: 502,
+            row_id: 22,
+            display_metadata: { previous_model: 'background-before', model: 'background-after' }
+          }
         }
-      }
-    }))
+      })
+    )
 
     expect(stream.state()).toBe(foreground)
     expect(stream.state('background-session').messages).toHaveLength(1)

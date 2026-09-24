@@ -1,5 +1,5 @@
 import { type ThreadMessage } from '@assistant-ui/react'
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, assert, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { $displayTimestamps } from '@/store/display-timestamps'
@@ -11,6 +11,8 @@ import { $toolDisclosureStates } from '@/store/tool-view'
 import { stubThreadEnvironment, stubThreadViewportSize, ThreadRuntime } from '../test-utils'
 import { Thread } from '../thread'
 import { formatTimelineRange } from '../thread/timestamp'
+
+import { MAX_TOOL_RENDER_CHARS } from './fallback-model'
 
 // Timeline timestamps render only when `display.timestamps` is enabled.
 $displayTimestamps.set(true)
@@ -467,12 +469,61 @@ describe('transcript fade', () => {
 })
 
 describe('live tool run', () => {
-  it('keeps its rows on screen instead of hiding them behind the summary', async () => {
-    const { container } = render(<GroupHarness message={groupedPendingMessage()} />)
+  it('shows the latest pending call while keeping older ticker rows mounted and inaccessible', async () => {
+    const message = groupedPendingMessage()
+    const { container, rerender } = render(<GroupHarness message={message} />)
+    const rows = () => [...container.querySelectorAll('.tool-ticker__row')]
 
-    await waitFor(() => {
-      expect(container.querySelectorAll('[data-tool-row]').length).toBeGreaterThan(0)
-    })
+    await waitFor(() => expect(rows()).toHaveLength(message.content.length))
+    expect(rows().every(row => row.querySelectorAll('[data-tool-row]').length === 1)).toBe(true)
+    expect(rows()[0]?.textContent).toContain('hosts')
+    expect(rows().at(-1)?.textContent).toContain('rm -rf /tmp/x')
+    expect(rows()[0]?.hasAttribute('inert')).toBe(true)
+    expect(rows()[0]?.getAttribute('aria-hidden')).toBe('true')
+    expect(within(container).queryByRole('button', { name: 'Read hosts' })).toBeNull()
+    const initialRows = rows()
+
+    const next = {
+      ...message,
+      content: [
+        ...message.content,
+        {
+          type: 'tool-call',
+          toolCallId: 'term-next',
+          toolName: 'terminal',
+          args: { command: 'echo newest-command' },
+          argsText: '{}'
+        }
+      ]
+    } as ThreadMessage
+
+    rerender(<GroupHarness message={next} />)
+    await waitFor(() => expect(rows()).toHaveLength(next.content.length))
+    expect(rows().every(row => row.querySelectorAll('[data-tool-row]').length === 1)).toBe(true)
+    expect(rows().at(-1)?.textContent).toContain('newest-command')
+    const reel = container.querySelector('.tool-ticker__reel') as HTMLElement
+    expect(Number(reel.style.getPropertyValue('--tool-ticker-index'))).toBe(rows().length - 1)
+    initialRows.forEach((row, index) => expect(rows()[index]).toBe(row))
+
+    // The newer parallel call finishes first. The older pending call must
+    // become the visible row rather than leaving a completed row in the window.
+    rerender(
+      <GroupHarness
+        message={
+          {
+            ...next,
+            content: [...message.content, { ...next.content[2], result: { output: 'newest-command', exit_code: 0 } }]
+          } as ThreadMessage
+        }
+      />
+    )
+    await waitFor(() => expect(Number(reel.style.getPropertyValue('--tool-ticker-index'))).toBe(1))
+    expect(rows()[1]?.hasAttribute('inert')).toBe(false)
+    expect(rows()[1]?.getAttribute('aria-hidden')).not.toBe('true')
+    expect(rows()[2]?.hasAttribute('inert')).toBe(true)
+    expect(rows()[2]?.getAttribute('aria-hidden')).toBe('true')
+    expect(within(container).queryByRole('button', { name: /Ran echo newest-command/ })).toBeNull()
+    initialRows.forEach((row, index) => expect(rows()[index]).toBe(row))
   })
 
   it('honors explicit disclosure across live updates and completion', async () => {
@@ -484,11 +535,21 @@ describe('live tool run', () => {
     fireEvent.click(toggle())
     expect(toggle().getAttribute('aria-expanded')).toBe('true')
     expect(container.querySelector('[data-tool-ticker]')).toBeNull()
+    const pendingRow = container.querySelectorAll('[data-tool-row]')[1] as HTMLElement
+    fireEvent.click(within(pendingRow).getByRole('button'))
+    expect(within(container).getByRole('region', { name: 'Shell' })).not.toBeNull()
     fireEvent.click(toggle())
-    const row = container.querySelector('[data-tool-ticker] [data-tool-row] button[aria-expanded="false"]')
+    expect(within(container).queryByRole('region', { name: 'Shell' })).toBeNull()
+    expect(container.querySelector('[data-tool-ticker] [data-tool-details]')).toBeNull()
+
+    const row = container.querySelector(
+      '.tool-ticker__row:not([aria-hidden="true"]) [data-tool-row] button[aria-expanded="false"]'
+    )
+
     expect(row).not.toBeNull()
     fireEvent.click(row as Element)
     await waitFor(() => expect(container.querySelector('[data-tool-ticker]')).toBeNull())
+    expect(within(container).getByRole('region', { name: 'Shell' })).not.toBeNull()
 
     const next = {
       ...message,
@@ -512,6 +573,45 @@ describe('live tool run', () => {
     expect(container.querySelectorAll('[data-tool-row]')).toHaveLength(0)
   })
 
+  it.each(['text', 'reasoning'])(
+    'keeps pending work live past a separate failed tool until a real %s continuation',
+    async type => {
+      const message = groupedPendingMessage()
+
+      const parts = [
+        ...message.content,
+        {
+          type: 'tool-call',
+          toolCallId: 'parallel-failure',
+          toolName: 'terminal',
+          args: { command: 'parallel-check' },
+          argsText: '{"command":"parallel-check"}',
+          isError: true,
+          result: { error: 'Parallel check failed', exit_code: 127 }
+        },
+        { type: 'text', text: '  ' }
+      ]
+
+      const { container, rerender } = render(<GroupHarness message={{ ...message, content: parts } as ThreadMessage} />)
+
+      const ticker = container.querySelector('[data-tool-ticker]')
+      expect(ticker).not.toBeNull()
+      expect(ticker?.textContent).toContain('rm -rf /tmp/x')
+      expect(container.querySelector('[data-tool-summary] .shimmer')).not.toBeNull()
+      const failure = within(container).getByLabelText('Error')
+      expect(failure.closest('[inert], [hidden], [data-tool-ticker]')).toBeNull()
+
+      rerender(
+        <GroupHarness
+          message={{ ...message, content: [...parts, { type, text: 'I will explain the failure.' }] } as ThreadMessage}
+        />
+      )
+      await waitFor(() => expect(container.querySelector('[data-tool-ticker]')).toBeNull())
+      expect(container.querySelector('[data-tool-summary] .shimmer')).toBeNull()
+      expect(within(container).getByLabelText('Error').closest('[inert], [hidden]')).toBeNull()
+    }
+  )
+
   it('updates named skill summaries when identifying arguments arrive late', async () => {
     const message = groupedPendingMessage()
     const first = { ...message.content[0], toolName: 'skill_view', args: {}, result: { success: true } }
@@ -527,25 +627,47 @@ describe('live tool run', () => {
     await waitFor(() => expect(summary()).toContain('research-notes'))
   })
 
-  // Liveness used to also require an unresolved call, which is false for the
-  // instant between one sequential call finishing and the next arriving — so a
-  // string of commands settled and re-opened between every one, unmounting the
-  // ticker and dropping its reel back to the first row instead of scrolling.
-  it('stays live in the gap between two sequential calls', async () => {
-    const { container } = render(<GroupHarness message={betweenSequentialCallsMessage()} />)
+  it('rests between sequential calls and resumes live activity when the next call arrives', async () => {
+    const message = betweenSequentialCallsMessage()
+    const { container, rerender } = render(<GroupHarness message={message} />)
 
-    expect(await screen.findByText('Running 2 commands')).toBeTruthy()
-    expect(container.querySelector('[data-tool-ticker]')).not.toBeNull()
+    expect(await screen.findByText('Ran 2 commands')).toBeTruthy()
+    expect(container.querySelector('[data-tool-ticker]')).toBeNull()
+    expect(container.querySelector('[data-tool-summary] .shimmer')).toBeNull()
     expect(container.querySelector('[data-tool-summary] button[aria-expanded]')).not.toBeNull()
+
+    const nextCall = {
+      type: 'tool-call',
+      toolCallId: 'term-next',
+      toolName: 'terminal',
+      args: { command: 'echo charlie' },
+      argsText: '{}'
+    } as const
+
+    rerender(<GroupHarness message={{ ...message, content: [...message.content, nextCall] } as ThreadMessage} />)
+    await waitFor(() => expect(container.querySelector('[data-tool-ticker]')).not.toBeNull())
+    expect(container.querySelector('[data-tool-summary] .shimmer')).not.toBeNull()
+
+    rerender(
+      <GroupHarness
+        message={
+          {
+            ...message,
+            content: [...message.content, { ...nextCall, result: { exit_code: 0, stdout: 'charlie' } }]
+          } as ThreadMessage
+        }
+      />
+    )
+    await waitFor(() => expect(container.querySelector('[data-tool-ticker]')).toBeNull())
   })
 
   // The ticker is a one-line window, so a row opened inside it had its output
   // sliced to that line and then ticked away by the next call. Opening a row
   // is a request to read it: the run gives up the window until it settles.
   it('drops the one-line window when a row inside it is opened', async () => {
-    const { container } = render(<GroupHarness message={betweenSequentialCallsMessage()} />)
+    const { container } = render(<GroupHarness message={groupedPendingMessage()} />)
 
-    await screen.findByText('Running 2 commands')
+    await waitFor(() => expect(container.querySelector('[data-tool-ticker]')).not.toBeNull())
 
     const row = container.querySelector('[data-tool-ticker] [data-tool-row] button[aria-expanded="false"]')
 
@@ -702,7 +824,7 @@ describe('tool error explanations', () => {
         />
       )
 
-      fireEvent.click(await screen.findByText('Read session-view.ts'))
+      fireEvent.click(await screen.findByRole('button', { name: /Failed to read session-view\.ts/ }))
 
       await waitFor(() => expect(container.textContent).toContain(error))
       expect(Boolean(container.querySelector('[data-tool-row] .text-destructive'))).toBe(destructive)
@@ -713,31 +835,142 @@ describe('tool error explanations', () => {
 })
 
 describe('tool lifecycle timestamps', () => {
-  it('shows the precise call and completion times on a settled tool row', async () => {
+  it('keeps a settled row quiet and reveals its precise lifecycle on expansion', async () => {
     const { container } = render(<GroupHarness message={completedOnlyMessage()} />)
 
-    await screen.findByText(/Read/)
+    const toggle = await screen.findByRole('button', { name: 'Read hosts' })
 
-    const timestamps = Array.from(container.querySelectorAll('[data-slot="timeline-timestamp"]')).map(node =>
-      node.textContent?.trim()
-    )
+    expect(container.querySelector('[data-tool-row] [data-slot="timeline-timestamp"]')).toBeNull()
+    fireEvent.click(toggle)
+
+    const timestamps = Array.from(
+      container.querySelectorAll('[data-tool-details] [data-slot="timeline-timestamp"]')
+    ).map(node => node.textContent?.trim())
 
     const startedAt = createdAt.getTime() / 1000 + 10.125
 
     expect(timestamps).toContain(formatTimelineRange(startedAt, createdAt.getTime() / 1000 + 12.875))
   })
 
-  it('shows the full lifecycle range when settled calls are collapsed', async () => {
+  it('keeps the full lifecycle range available inside an expanded settled run', async () => {
     const { container } = render(<GroupHarness message={settledRunMessage()} />)
 
     await waitFor(() => expect(container.querySelector('[data-tool-summary]')).toBeTruthy())
 
-    const timestamps = Array.from(container.querySelectorAll('[data-slot="timeline-timestamp"]')).map(node =>
-      node.textContent?.trim()
-    )
+    expect(container.querySelector('[data-tool-summary] [data-slot="timeline-timestamp"]')).toBeNull()
+    fireEvent.click(await screen.findByRole('button', { name: 'Explored wiring.tsx, ran 1 command' }))
+
+    const timestamps = Array.from(
+      container.querySelectorAll('[data-tool-run-details] [data-slot="timeline-timestamp"]')
+    ).map(node => node.textContent?.trim())
 
     expect(timestamps).toContain(
       formatTimelineRange(createdAt.getTime() / 1000 + 20, createdAt.getTime() / 1000 + 23.5)
     )
+  })
+})
+
+describe('expanded terminal transcript', () => {
+  function terminalMessage(part: Record<string, unknown>, running = false): ThreadMessage {
+    const message = pendingOnlyMessage()
+    assert(message.role === 'assistant')
+    const source = message.content[0]!
+    assert(source.type === 'tool-call')
+    const terminal = { ...source, timestamp: createdAt.getTime() / 1000, ...part }
+
+    return {
+      ...message,
+      content: [terminal],
+      status: running ? { type: 'running' } : { type: 'complete', reason: 'stop' }
+    }
+  }
+
+  it('shows the original command and output once and copies the full transcript beyond the render limit', async () => {
+    const originalNavigator = navigator
+    const writeText = vi.fn().mockResolvedValue(undefined)
+    vi.stubGlobal('navigator', { ...originalNavigator, clipboard: { writeText } })
+
+    try {
+      const command = 'printf "one\\ntwo\\n"; cat /tmp/complete-output.txt'
+      const output = `BEGIN-SHELL-OUTPUT\n${'recorded output\n'.repeat(Math.ceil(MAX_TOOL_RENDER_CHARS / 16) + 100)}END-SHELL-OUTPUT`
+      const stderr = 'Additional diagnostic information.'
+
+      const { container } = render(
+        <GroupHarness
+          message={terminalMessage({
+            args: { command, context: 'Running printf + 1 command' },
+            argsText: JSON.stringify({ command }),
+            result: { stdout: output, stderr, exit_code: 0 }
+          })}
+        />
+      )
+
+      expect(screen.queryByRole('region', { name: 'Shell' })).toBeNull()
+      const toggle = container.querySelector('[data-tool-row] button[aria-expanded]') as HTMLButtonElement
+      fireEvent.click(toggle)
+
+      const panel = await screen.findByRole('region', { name: 'Shell' })
+      expect(panel.textContent?.split(command)).toHaveLength(2)
+      expect(panel.textContent?.split('BEGIN-SHELL-OUTPUT')).toHaveLength(2)
+      expect(panel.textContent?.split(stderr)).toHaveLength(2)
+      expect(container.textContent?.split('BEGIN-SHELL-OUTPUT')).toHaveLength(2)
+      fireEvent.click(within(panel).getByRole('button', { name: 'Copy' }))
+
+      await waitFor(() => expect(writeText).toHaveBeenCalledTimes(1))
+      const copied = writeText.mock.calls[0]![0] as string
+      expect(copied).toContain(command)
+      expect(copied).toContain(output)
+      expect(copied.split(stderr)).toHaveLength(2)
+      expect(copied.split(command)).toHaveLength(2)
+      expect(copied.split('BEGIN-SHELL-OUTPUT')).toHaveLength(2)
+      expect(toggle.getAttribute('aria-expanded')).toBe('true')
+    } finally {
+      vi.stubGlobal('navigator', originalNavigator)
+    }
+  })
+
+  it.each([
+    { name: 'completed', part: { result: { output: 'done', exit_code: 0 } }, label: 'Done', exit: 0 },
+    { name: 'nonzero exit with output', part: { result: { output: 'partial output', exit_code: 7 } }, label: 'exit 7' },
+    {
+      name: 'background launch',
+      part: { result: { output: 'Background process started', session_id: 'proc-one', pid: 42, exit_code: 0 } },
+      label: 'Running in background'
+    },
+    {
+      name: 'yielded background launch',
+      part: {
+        result: { output: 'Still working', status: 'yielded_to_background', session_id: 'proc-two', exit_code: null }
+      },
+      label: 'Running in background'
+    },
+    { name: 'missing result', part: { completedAt: 5 }, label: 'Result unavailable' },
+    { name: 'interrupted', part: { completedAt: 5, interrupted: true }, label: 'Interrupted' },
+    {
+      name: 'real result arriving after interruption',
+      part: { interrupted: true, result: { output: 'done', exit_code: 0 } },
+      label: 'Done',
+      exit: 0
+    },
+    {
+      name: 'explicit failure',
+      part: { isError: true, result: { output: 'partial', error: 'Permission denied', exit_code: 0 } },
+      label: 'Error'
+    },
+    { name: 'pending', part: {}, running: true, label: 'Running' }
+  ])('reports $name without inventing successful completion', async ({ part, running, label, exit }) => {
+    const { container } = render(<GroupHarness message={terminalMessage(part, running)} />)
+    const toggle = container.querySelector('[data-tool-row] button[aria-expanded]') as HTMLButtonElement
+    fireEvent.click(toggle)
+
+    const panel = await screen.findByRole('region', { name: 'Shell' })
+    const status = panel.querySelector('[data-terminal-status]')
+    expect(status?.textContent).toContain(label)
+
+    if (exit === 0) {
+      expect(status?.textContent).toContain('exit 0')
+    } else {
+      expect(status?.textContent).not.toContain('Done')
+    }
   })
 })

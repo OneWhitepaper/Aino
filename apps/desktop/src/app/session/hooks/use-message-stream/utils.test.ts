@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import { setRuntimeI18nLocale } from '@/i18n'
 import type { GatewayEventPayload } from '@/lib/chat-messages'
+import { $subagentsBySession, pruneFinishedSessionSubagents, upsertSubagent } from '@/store/subagents'
 
 import {
   completionErrorText,
@@ -85,6 +86,68 @@ describe('delegateTaskPayloads', () => {
     )
 
     expect(spec).toMatchObject({ event_type: 'subagent.complete', status: 'completed' })
+  })
+
+  it('keeps a background dispatch active until a child completion is actually observed', () => {
+    const sid = 'dispatch-receipt-contract'
+
+    try {
+      const request = { name: 'delegate_task', tool_id: 't-background', args: { goal: 'Review' } }
+      const [start] = delegateTaskPayloads(payload(request), 'running', 'tool.start')
+      upsertSubagent(sid, start, true, 'delegate.running')
+
+      const [receipt] = delegateTaskPayloads(
+        payload({ ...request, duration_s: 1, result: { status: 'dispatched', goals: ['Review'] } }),
+        'complete'
+      )
+
+      expect(receipt).toMatchObject({ event_type: 'subagent.progress', status: 'running' })
+      expect(receipt.duration_seconds).toBeUndefined()
+      upsertSubagent(sid, receipt, true, 'delegate.complete')
+      pruneFinishedSessionSubagents(sid)
+      expect($subagentsBySession.get()[sid]?.[0]?.status).toBe('running')
+
+      upsertSubagent(
+        sid,
+        { subagent_id: receipt.subagent_id, status: 'completed', summary: 'Verified' },
+        false,
+        'subagent.complete'
+      )
+      expect($subagentsBySession.get()[sid]?.[0]?.status).toBe('completed')
+    } finally {
+      $subagentsBySession.set({})
+    }
+  })
+
+  it('preserves top-level failure and each synchronous child result instead of completing the whole batch', () => {
+    const request = { name: 'delegate_task', tool_id: 't-results', args: { goal: 'Review' } }
+
+    const [failure] = delegateTaskPayloads(
+      payload({ ...request, result: { error: 'Provider unavailable' } }),
+      'complete'
+    )
+
+    expect(failure).toMatchObject({ status: 'failed', summary: 'Provider unavailable' })
+
+    const results = delegateTaskPayloads(
+      payload({
+        ...request,
+        args: { tasks: [{ goal: 'First' }, { goal: 'Second' }] },
+        result: {
+          results: [
+            { task_index: 1, status: 'timeout', error: 'Timed out', duration_seconds: 4 },
+            { task_index: 0, status: 'ok', summary: 'Verified', duration_seconds: 2 }
+          ]
+        }
+      }),
+      'complete'
+    )
+
+    expect(results).toMatchObject([
+      { goal: 'First', status: 'completed', summary: 'Verified', duration_seconds: 2 },
+      { goal: 'Second', status: 'failed', summary: 'Timed out', duration_seconds: 4 }
+    ])
+    expect(results[1].output_tail).toEqual([{ is_error: true, preview: 'Timed out', tool: 'delegate_task' }])
   })
 
   it('localizes the unnamed delegation fallback', () => {

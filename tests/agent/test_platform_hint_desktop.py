@@ -20,6 +20,7 @@ import pytest
 from agent.prompt_builder import PLATFORM_HINTS, build_environment_hints
 from agent.system_prompt import (
     _tui_embedded_pane_clarifier,
+    build_system_prompt,
     build_system_prompt_parts,
 )
 
@@ -108,14 +109,40 @@ class TestPlatformHintResolutionInStablePrompt:
     whether the embedded-pane clarifier follows it. The desktop-hint block
     that used to live in ``build_environment_hints()`` is gone."""
 
-    def test_desktop_platform_yields_desktop_hint_no_tui_framing(self, monkeypatch):
-        monkeypatch.setenv("HERMES_DESKTOP", "1")
+    def test_desktop_guidance_follows_session_platform_without_launch_env(self, monkeypatch):
+        monkeypatch.delenv("HERMES_DESKTOP", raising=False)
         monkeypatch.delenv("HERMES_DESKTOP_TERMINAL", raising=False)
-        stable = _stable_prompt(_make_agent(platform="desktop"))
-        assert PLATFORM_HINTS["desktop"] in stable
-        assert "terminal UI" not in stable
-        assert "Runtime surface:" not in stable
-        assert "embedded terminal pane" not in stable
+        desktop = build_system_prompt_parts(_make_agent(platform="desktop", skip_context_files=True))
+        tui = build_system_prompt_parts(_make_agent(platform="tui", skip_context_files=True))
+        assert PLATFORM_HINTS["desktop"] in desktop["stable"]
+        assert PLATFORM_HINTS["desktop"] not in tui["stable"]
+        assert PLATFORM_HINTS["tui"] in tui["stable"]
+
+    def test_hint_update_reaches_new_session_without_rewriting_stored_prompt(self, tmp_path, monkeypatch):
+        from agent.conversation_loop import _restore_or_build_system_prompt
+        from hermes_state import SessionDB
+
+        agent = _make_agent(
+            platform="desktop", skip_context_files=True,
+            session_id="desktop-progress", _use_prompt_caching=False,
+            _emit_diagnostic_status=lambda *_: None,
+        )
+        stored_prompt = build_system_prompt(agent)
+        db = SessionDB(tmp_path / "state.db")
+        try:
+            db.create_session(agent.session_id, source=agent.platform, system_prompt=stored_prompt)
+            next_hint = PLATFORM_HINTS["desktop"] + "\nUpdated surface instructions for the next session."
+            monkeypatch.setitem(PLATFORM_HINTS, "desktop", next_hint)
+            new_prompt = build_system_prompt_parts(_make_agent(platform="desktop", skip_context_files=True))
+            assert next_hint in new_prompt["stable"]
+            assert next_hint not in stored_prompt
+
+            agent._session_db = db
+            _restore_or_build_system_prompt(agent, None, [{"role": "user", "content": "Continue."}])
+            assert agent._cached_system_prompt == stored_prompt
+            assert db.get_session(agent.session_id)["system_prompt"] == stored_prompt
+        finally:
+            db.close()
 
 
     def test_embedded_tui_yields_tui_hint_with_clarifier(self, monkeypatch):

@@ -31,6 +31,7 @@ import type {
   ToolPart,
   ToolStatus,
   ToolTitleAction,
+  ToolTitleTarget,
   ToolTone,
   ToolView
 } from './types'
@@ -197,7 +198,7 @@ const TOOL_META: Record<ToolTitleKey, ToolMetaSpec> = {
     tone: 'agent'
   },
   patch: { icon: 'edit', tone: 'file' },
-  read_file: { icon: 'file', tone: 'file' },
+  read_file: { icon: 'book', tone: 'file' },
   search_files: {
     icon: 'search',
     tone: 'file'
@@ -242,7 +243,7 @@ const PREFIX_META: { icon?: string; labelKey: string; prefix: string; tone: Tool
   { prefix: 'web_', labelKey: 'web', icon: 'globe', tone: 'web' }
 ]
 
-function toolMeta(name: string): ToolMeta {
+export function toolMeta(name: string): ToolMeta {
   if (isToolTitleKey(name)) {
     const meta = TOOL_META[name]
 
@@ -309,6 +310,8 @@ const COUNT_FIELD_KEYS = [
 const COUNT_ARRAY_KEYS = ['results', 'items', 'matches', 'files', 'documents', 'sources', 'rows'] as const
 
 const COUNT_EXCLUDED_KEYS = new Set(['duration_s', 'exit_code', 'status_code'])
+// Transport/accounting quantities describe the tool envelope, not work results.
+const INTERNAL_COUNT_FIELD_RE = /(?:^|_)(?:bytes?|tokens?|duration|latency)(?:_|$)/i
 
 const COUNT_NOUN_BY_FIELD: Partial<Record<(typeof COUNT_FIELD_KEYS)[number], string>> = {
   count: '',
@@ -466,7 +469,7 @@ function countFromRecord(record: Record<string, unknown>, fallbackNoun: string):
   }
 
   for (const [key, value] of Object.entries(record)) {
-    if (COUNT_EXCLUDED_KEYS.has(key)) {
+    if (COUNT_EXCLUDED_KEYS.has(key) || INTERNAL_COUNT_FIELD_RE.test(key)) {
       continue
     }
 
@@ -1128,12 +1131,13 @@ function toolDetailText(
       return [output, lines].filter(Boolean).join('\n')
     }
 
-    // A terminal row with no output already shows its command in the `$`
-    // transcript above; the generic fallback would print the same string a
-    // second time. `execute_code` has no transcript, so it keeps the fallback.
+    // A terminal row already owns its `$` transcript. Code has no such row;
+    // keep its source intact here instead of flattening it into a JSON summary.
     if (part.toolName === 'terminal') {
       return ''
     }
+
+    return firstStringField(argsRecord, ['code']) || fallbackDetailText(argsRecord, resultRecord)
   }
 
   if (part.toolName === 'web_extract') {
@@ -1309,6 +1313,7 @@ export function toolCopyPayload(part: ToolPart, view: ToolView): { label: string
 
 interface ToolTitleParts {
   action?: ToolTitleAction
+  target?: ToolTitleTarget
   title: string
 }
 
@@ -1383,13 +1388,26 @@ function dynamicTitle(
     return titledAction(action, translateNow('assistant.tool.titleTemplates.actionTarget', action, hostnameOf(url)))
   }
 
-  if (part.toolName === 'web_search') {
-    const query = firstStringField(args, ['search_term', 'query']) || contextValue(args)
+  if (part.toolName === 'web_search' || part.toolName === 'search_files') {
+    const query = firstStringField(args, ['pattern', 'search_term', 'query']) || contextValue(args)
+    const location = part.toolName === 'search_files' ? firstStringField(args, ['path']) : ''
 
     const action = verb(
       translateNow('assistant.tool.actions.searching'),
       translateNow('assistant.tool.actions.searched')
     )
+
+    if (query && location) {
+      return titledAction(
+        action,
+        translateNow(
+          'assistant.tool.titleTemplates.searchInTarget',
+          compactPreview(query, 48),
+          compactPreview(location, 80),
+          part.result === undefined
+        )
+      )
+    }
 
     return query
       ? titledAction(
@@ -1401,30 +1419,31 @@ function dynamicTitle(
 
   if (part.toolName === 'read_file') {
     const target = readFileDisplayTarget(args, result)
-    const action = verb(translateNow('assistant.tool.actions.reading'), translateNow('assistant.tool.actions.read'))
+    const failed = toolStatus(part, result) !== 'success' && Boolean(toolErrorText(part, result))
+
+    const action = failed
+      ? translateNow('assistant.tool.actions.failedToRead')
+      : verb(translateNow('assistant.tool.actions.reading'), translateNow('assistant.tool.actions.read'))
 
     return target
-      ? titledAction(action, translateNow('assistant.tool.titleTemplates.actionTarget', action, target))
+      ? {
+          ...titledAction(action, translateNow('assistant.tool.titleTemplates.actionTarget', action, target)),
+          target: { kind: 'file', text: target }
+        }
       : fallback
   }
 
-  if (part.toolName === 'terminal' || part.toolName === 'execute_code') {
+  if (part.toolName === 'terminal') {
     const command = shellCommand(args)
 
     if (command) {
-      const action =
-        part.toolName === 'execute_code'
-          ? verb(translateNow('assistant.tool.actions.runningCode'), translateNow('assistant.tool.actions.ranCode'))
-          : verb(translateNow('assistant.tool.actions.running'), translateNow('assistant.tool.actions.ran'))
+      const action = verb(translateNow('assistant.tool.actions.running'), translateNow('assistant.tool.actions.ran'))
+      const preview = compactPreview(summarizeShellCommand(command), 160)
 
-      return titledAction(
-        action,
-        translateNow(
-          'assistant.tool.titleTemplates.actionCommand',
-          action,
-          compactPreview(summarizeShellCommand(command), 160)
-        )
-      )
+      return {
+        ...titledAction(action, translateNow('assistant.tool.titleTemplates.actionCommand', action, preview)),
+        target: { kind: 'command', text: preview }
+      }
     }
   }
 
@@ -1551,11 +1570,17 @@ export function buildToolView(part: ToolPart, inlineDiff: string): ToolView {
     stderr: hasSplitStreams ? stderrRaw || undefined : undefined,
     terminalCommand,
     terminalExitCode,
+    terminalBackground:
+      part.toolName === 'terminal' &&
+      Boolean(
+        resultRecord.session_id || resultRecord.status === 'yielded_to_background' || resultRecord.status === 'running'
+      ),
     stdout: hasSplitStreams ? stdout || undefined : undefined,
     status,
     subtitle,
     title,
     titleAction: unavailable ? undefined : titleParts.action,
+    titleTarget: unavailable ? undefined : titleParts.target,
     tone: meta.tone
   }
 }

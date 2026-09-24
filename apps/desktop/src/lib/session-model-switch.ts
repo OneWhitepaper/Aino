@@ -10,7 +10,7 @@ import { managedModelSwitchBlocked } from '@/lib/model-switch-policy'
 import { platformDefaultScope } from '@/lib/platform-model-scope'
 import { platformModelStatePatch, type PlatformSessionModel } from '@/lib/platform-session-model'
 import { managedModelRouteCapability } from '@/store/gateway-managed-capability'
-import { notify, notifyError } from '@/store/notifications'
+import { dismissNotification, type NotificationInput, notify, notifyError, readableError } from '@/store/notifications'
 import { platformModelCatalog, PlatformSelectionError, requirePlatformSelection } from '@/store/platform-models'
 import { platformHistoryOwner } from '@/store/platform-session-access'
 import { $activeGatewayProfile } from '@/store/profile'
@@ -36,8 +36,58 @@ import type { SessionRuntimeInfo } from '@/types/hermes'
 
 interface SwitchAttempt {
   pending: boolean
+  clearRecovery?: () => void
 }
 const attempts = new WeakMap<QueryClient, Map<string, SwitchAttempt>>()
+
+/** A recovery belongs to one selection, and expires when its binding is ready. */
+function showSwitchRecovery(
+  attempt: SwitchAttempt,
+  sessionId: string,
+  target: PlatformSessionModel | null,
+  current: () => boolean,
+  notification: NotificationInput
+) {
+  attempt.clearRecovery?.()
+
+  const release = () => {
+    stopState()
+    stopAccount()
+    attempt.clearRecovery = undefined
+  }
+
+  const id = notify({ ...notification, onDismiss: release })
+
+  const clear = () => {
+    release()
+    dismissNotification(id)
+  }
+
+  attempt.clearRecovery = clear
+
+  const check = () => {
+    const state = $sessionStates.get()[sessionId]
+    const binding = state?.platformModel
+
+    if (
+      !current() ||
+      !state ||
+      (target &&
+        state.provider === 'aino' &&
+        state.model === target.modelId &&
+        binding?.status === 'ready' &&
+        binding.modelId === target.modelId &&
+        binding.ownerUserId === target.ownerUserId &&
+        (!target.platformOrigin || binding.platformOrigin === target.platformOrigin))
+    ) {
+      clear()
+    }
+  }
+
+  const stopState = $sessionStates.listen(check)
+  const stopAccount = platformModelCatalog().account.listen(check)
+  check()
+}
 
 interface SwitchOptions {
   selection: ModelSelection
@@ -135,6 +185,7 @@ function captureModelSwitch({ selection, queryClient, profile, connectionId, cac
   }
 
   const attempt: SwitchAttempt = { pending: true }
+  entries.get(key)?.clearRecovery?.()
   entries.set(key, attempt)
   const current = () => entries.get(key) === attempt && accountCurrent()
 
@@ -233,6 +284,7 @@ export async function switchSessionModel(options: SwitchOptions): Promise<boolea
   let accepted = false
   let configRequested = false
   let nativeCompleted = false
+  let recoveryHandled = false
 
   const clearUnsupportedManagedReasoning = async () => {
     if (!targetPlatform || targetSupportsReasoning) {
@@ -311,6 +363,15 @@ export async function switchSessionModel(options: SwitchOptions): Promise<boolea
         }
       : null
 
+    if (
+      targetPlatform &&
+      patch.platformModel?.status === 'ready' &&
+      (patch.platformModel.ownerUserId !== targetPlatform.ownerUserId ||
+        (targetPlatform.platformOrigin && patch.platformModel.platformOrigin !== targetPlatform.platformOrigin))
+    ) {
+      throw new PlatformSelectionError('platform_account_changed')
+    }
+
     paint(patch.model || info.model!, info.provider, platformModel)
 
     return (
@@ -357,42 +418,58 @@ export async function switchSessionModel(options: SwitchOptions): Promise<boolea
     if (!(await reconcile())) {
       throw new Error(copy.recovery)
     }
+
+    attempt.clearRecovery?.()
   }
 
-  const recover = async () => {
+  const recover = async (error: unknown): Promise<boolean> => {
+    recoveryHandled = true
+
     try {
-      await reconcile()
+      if ((await reconcile()) && (targetPlatform || nativeCompleted)) {
+        attempt.clearRecovery?.()
+
+        return true
+      }
     } catch {
       /* Keep the accepted target awaiting explicit recovery when the read is offline. */
     }
 
     if (!current()) {
-      return
+      return false
     }
 
-    notify({
+    showSwitchRecovery(attempt, sessionId!, targetPlatform, current, {
       kind: 'warning',
       message: copy.recovery,
+      detail: readableError(error, copy.failed).message,
       action: {
         label: copy.retry,
         onClick: async () => {
-          if (attempt.pending || !selectionStillCurrent()) {
+          if (!attempt.clearRecovery || attempt.pending || !selectionStillCurrent()) {
             return
           }
 
           attempt.pending = true
 
           try {
-            await authorize()
+            // A send or a late acknowledgement may already have completed the
+            // binding. Read before authorizing, even while that turn is busy.
+            if ((await reconcile()) && (targetPlatform || nativeCompleted)) {
+              attempt.clearRecovery?.()
+            } else {
+              await authorize()
+            }
           } catch (error) {
-            notifyError(error, copy.recovery)
-            await recover()
+            await recover(error)
           } finally {
             attempt.pending = false
           }
         }
       }
     })
+
+    return false
   }
 
   const scope =
@@ -431,8 +508,9 @@ export async function switchSessionModel(options: SwitchOptions): Promise<boolea
           try {
             await authorize()
           } catch (error) {
-            await recover()
-            throw error
+            if (!(await recover(error))) {
+              throw error
+            }
           }
         }
       }
@@ -452,9 +530,13 @@ export async function switchSessionModel(options: SwitchOptions): Promise<boolea
           if (selectionStillCurrent()) {
             accepted = true
 
-            if (!ready || !nativeCompleted) {
-              await recover()
+            if (ready && (targetPlatform || nativeCompleted)) {
+              attempt.clearRecovery?.()
+
+              return {}
             }
+
+            await recover(error)
           }
         } catch {
           // No authoritative response: retain the pre-acceptance rollback.
@@ -520,7 +602,7 @@ export async function switchSessionModel(options: SwitchOptions): Promise<boolea
 
     rollback()
 
-    if (current()) {
+    if (current() && !recoveryHandled) {
       notifyError(error, copy.failed)
     }
 

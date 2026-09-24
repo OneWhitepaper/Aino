@@ -1,4 +1,7 @@
+import { MessagePartComponent } from '@assistant-ui/core/react'
 import {
+  MessagePartPrimitive,
+  MessagePrimitive,
   type ReasoningMessagePartComponent,
   type TextMessagePartProps,
   type ToolCallMessagePartProps,
@@ -7,16 +10,18 @@ import {
   useMessagePartText
 } from '@assistant-ui/react'
 import { useStore } from '@nanostores/react'
-import { type ComponentProps, type FC, type ReactNode, useEffect, useRef, useState } from 'react'
+import { type ComponentProps, type FC, type ReactNode, useEffect, useMemo, useRef, useState } from 'react'
 
 import { ClarifyTool } from '@/components/assistant-ui/clarify-tool'
 import { ConnectorExecution, ConnectorTool } from '@/components/assistant-ui/connector-tool'
 import { MarkdownText, MarkdownTextContent } from '@/components/assistant-ui/markdown-text'
 import { McpSetupTool } from '@/components/assistant-ui/mcp-setup-tool'
 import { AgentDeliveryNotice, deliveryTargetFromCommand } from '@/components/assistant-ui/thread/agent-delivery'
+import { createToolAttentionReader, ResponseProcessParts } from '@/components/assistant-ui/thread/response-group'
 import { TimelineTimestamp } from '@/components/assistant-ui/thread/timeline-timestamp'
 import { DelegateTool } from '@/components/assistant-ui/tool/delegate'
 import { ToolFallback, ToolGroupSlot } from '@/components/assistant-ui/tool/fallback'
+import { type ToolPart, toolPreviewOutcome } from '@/components/assistant-ui/tool/fallback-model'
 import { formatElapsed, useElapsedSeconds, useMeasuredDuration } from '@/components/chat/activity-timer'
 import { ActivityTimerText } from '@/components/chat/activity-timer-text'
 import { GeneratedImage } from '@/components/chat/generated-image-result'
@@ -27,9 +32,11 @@ import { connectorCalls, mcpTargets } from '@/lib/connector-tools'
 import { generatedImageFromResult } from '@/lib/generated-images'
 import { separateGluedReasoningBlocks } from '@/lib/reasoning-blocks'
 import { isTodoToolName } from '@/lib/todos'
+import { isCardTool, isSilentTool } from '@/lib/tool-render-class'
 import { useEnterAnimation } from '@/lib/use-enter-animation'
 import { cn } from '@/lib/utils'
 import { $reasoningCollapsedByDefault, $showReasoning } from '@/store/reasoning-disclosure'
+import { $toolDisclosureOpen, setToolDisclosureOpen } from '@/store/tool-view'
 
 type TimelineToolCallProps = ToolCallMessagePartProps & { completedAt?: number; timestamp?: number }
 
@@ -58,9 +65,7 @@ const ImageGenerateTool: FC<TimelineToolCallProps> = props => {
 }
 
 const DelegateToolPart: FC<TimelineToolCallProps> = props => {
-  // A call that failed outright dispatched nothing — there are no children to
-  // list, only an error. The generic row extracts and expands it properly.
-  if (props.isError || settledWithoutResult(props)) {
+  if (settledWithoutResult(props)) {
     return <ToolFallback {...props} />
   }
 
@@ -72,17 +77,29 @@ const DelegateToolPart: FC<TimelineToolCallProps> = props => {
   )
 }
 
+const COMPACT_NOTICE_TOOLS = new Set(['delegate_task', 'react_to_message', 'terminal'])
+
 const ChainToolFallback: FC<TimelineToolCallProps> = props => {
   // todo parts are hoisted to a dedicated panel above the message content.
   if (isTodoToolName(props.toolName)) {
     return null
   }
 
+  // Stored failures often carry only a result.error, without isError. A
+  // success notice (or silent reaction) must use the same verdict as its row.
+  if (
+    COMPACT_NOTICE_TOOLS.has(props.toolName) &&
+    ((props.isError && props.result === undefined) ||
+      toolPreviewOutcome({ ...props, type: 'tool-call' }).status === 'error')
+  ) {
+    return <ToolFallback {...props} />
+  }
+
   // An inter-agent delivery run through the terminal tool renders as the
   // compact "Messaged X" / "Message from X" notices, not a transcript row
   // (Grok-bots parity; the receiving side already renders notices via
   // AGENT_MESSAGE_RE). Non-delivery terminal calls fall through unchanged.
-  if (props.toolName === 'terminal' && !props.isError && !settledWithoutResult(props)) {
+  if (props.toolName === 'terminal' && !settledWithoutResult(props)) {
     const command = typeof props.args?.command === 'string' ? props.args.command : ''
 
     if (deliveryTargetFromCommand(command)) {
@@ -93,7 +110,7 @@ const ChainToolFallback: FC<TimelineToolCallProps> = props => {
   // A reaction's UI is the emoji landing on the bubble (message.reaction
   // event) — a "React To Message" tool block next to it would be the agent
   // narrating its own tapback. Failures still render so they're debuggable.
-  if (props.toolName === 'react_to_message' && !props.isError) {
+  if (props.toolName === 'react_to_message') {
     return null
   }
 
@@ -161,18 +178,18 @@ const TimelineMarkdownText: FC<TimelineTextPartProps> = ({ completedAt, timestam
 const ThinkingDisclosure: FC<{
   children: ReactNode
   completedAt?: number
+  disclosureId: string
   messageRunning?: boolean
   pending?: boolean
   timestamp?: number
   // Required: the block's duration is remembered against this key, so a
   // component that mounts after the block finished can still report it.
   timerKey: string
-}> = ({ children, completedAt, messageRunning = false, pending = false, timestamp, timerKey }) => {
+}> = ({ children, completedAt, disclosureId, messageRunning = false, pending = false, timestamp, timerKey }) => {
   const { t } = useI18n()
   const reasoningCollapsedByDefault = useStore($reasoningCollapsedByDefault)
-  // `null` = no explicit user toggle yet. Live reasoning remains visible by
-  // default, unless the user opts into the low-jitter collapsed presentation.
-  const [userOpen, setUserOpen] = useState<boolean | null>(null)
+  // Appending tool calls must not change this reasoning block's disclosure choice.
+  const userOpen = useStore($toolDisclosureOpen(disclosureId))
   const elapsed = useElapsedSeconds(pending, timerKey)
   const thoughtFor = useMeasuredDuration(pending, timerKey)
   const scrollRef = useRef<HTMLDivElement | null>(null)
@@ -192,7 +209,7 @@ const ThinkingDisclosure: FC<{
   // live previews entirely, so there is nothing to hold open.
   const showPreview = !reasoningCollapsedByDefault && (pending || sawLivePreview)
   const open = userOpen ?? showPreview
-  const isPreview = userOpen === null && showPreview
+  const isPreview = userOpen === undefined && showPreview
 
   // Three ways a finished block can report itself. With a measured duration it
   // says so, unless the timer's whole seconds round it to "0s" — accurate and
@@ -270,7 +287,7 @@ const ThinkingDisclosure: FC<{
     >
       <div data-slot="aui_thinking-header">
         <ScaffoldRow
-          onToggle={() => setUserOpen(!open)}
+          onToggle={() => setToolDisclosureOpen(disclosureId, !open)}
           open={open}
           trailing={
             <span className="flex shrink-0 items-center gap-1.5">
@@ -287,13 +304,10 @@ const ThinkingDisclosure: FC<{
       {open && (
         <div
           className={cn(
-            // Body sits flush with the "Thinking" header — no left indent —
-            // and inherits the disclosure-level opacity fade defined in
-            // styles.css (~0.67 at rest, 1 on hover/focus). overflow-auto so
-            // the max-h-40 preview is a real scroller, not a clip.
-            // Even a body that fits must hand vertical input to the thread.
+            // Keep long reasoning readable without displacing the whole turn.
+            // At either scroll edge, vertical input returns to the thread.
             'mt-0.5 w-full min-w-0 max-w-full overflow-auto overscroll-x-contain overscroll-y-auto wrap-anywhere pb-1',
-            isPreview && 'max-h-40'
+            isPreview ? 'max-h-40' : 'max-h-80'
           )}
           data-slot="aui_thinking-body"
           ref={scrollRef}
@@ -370,6 +384,7 @@ const ReasoningAccordionGroup: FC<{ children?: ReactNode; endIndex: number; star
     // report the running total as each block's duration.
     <ThinkingDisclosure
       completedAt={completedAt}
+      disclosureId={`reasoning:${messageId}:${startIndex}`}
       messageRunning={messageRunning}
       pending={pending}
       timerKey={`reasoning:${messageId}:${startIndex}`}
@@ -421,3 +436,82 @@ export const MESSAGE_PARTS_COMPONENTS = {
   ToolGroup: ToolGroupSlot,
   tools: { Fallback: ChainToolFallback }
 } as const
+
+type ActivityGroupKey = 'group-reasoning' | 'group-tools' | 'group-response-process' | 'group-response-answer'
+type GroupedPartsProps = ComponentProps<typeof MessagePrimitive.GroupedParts<ActivityGroupKey>>
+
+const groupActivityParts =
+  (toolNeedsAttention: ReturnType<typeof createToolAttentionReader>): GroupedPartsProps['groupBy'] =>
+  (part, context) => {
+    if (part.type === 'reasoning') {
+      return ['group-response-process', 'group-reasoning']
+    }
+
+    if (part.type !== 'tool-call') {
+      return [
+        (part as { displayPhase?: string }).displayPhase === 'final'
+          ? 'group-response-answer'
+          : 'group-response-process'
+      ]
+    }
+
+    // Decisions, deliverables and failures retain their own place in the
+    // transcript. Registered tool UIs also own their visibility and lifecycle.
+    const standalone =
+      isCardTool(part.toolName) ||
+      isSilentTool(part.toolName) ||
+      part.status.type === 'requires-action' ||
+      !!context.toolUIs?.[part.toolName]?.length ||
+      toolNeedsAttention(part as unknown as ToolPart) ||
+      mcpTargets(part.toolName, part.args).length > 0 ||
+      connectorCalls(part.toolName, part.args).length > 0 ||
+      (part.toolName === 'terminal' && !!deliveryTargetFromCommand(String(part.args?.command ?? '')))
+
+    return standalone ? ['group-response-process'] : ['group-response-process', 'group-tools']
+  }
+
+const GROUPED_LEAF_COMPONENTS = {
+  ...MESSAGE_PARTS_COMPONENTS,
+  Image: () => <MessagePartPrimitive.Image />
+}
+
+const renderActivityPart: GroupedPartsProps['children'] = ({ part, children }) => {
+  switch (part.type) {
+    case 'group-response-process':
+      return <ResponseProcessParts>{children}</ResponseProcessParts>
+
+    case 'group-response-answer':
+      return <ResponseProcessParts final>{children}</ResponseProcessParts>
+
+    case 'group-reasoning':
+      return (
+        <ReasoningAccordionGroup endIndex={part.indices.at(-1)!} startIndex={part.indices[0]}>
+          {children}
+        </ReasoningAccordionGroup>
+      )
+
+    case 'group-tools':
+      return (
+        <ToolGroupSlot endIndex={part.indices.at(-1)!} startIndex={part.indices[0]}>
+          {children}
+        </ToolGroupSlot>
+      )
+
+    case 'indicator':
+      return null
+
+    default:
+      return <MessagePartComponent components={GROUPED_LEAF_COMPONENTS} />
+  }
+}
+
+/** Presentation-only grouping: the original parts, public prose and tool UIs remain authoritative. */
+export function AssistantMessageParts() {
+  const groupBy = useMemo(() => groupActivityParts(createToolAttentionReader()), [])
+
+  return (
+    <MessagePrimitive.GroupedParts groupBy={groupBy} indicator="never">
+      {renderActivityPart}
+    </MessagePrimitive.GroupedParts>
+  )
+}

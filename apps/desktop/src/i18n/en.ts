@@ -5543,6 +5543,7 @@ export const en: Translations = {
       thoughtBriefly: 'Thought briefly',
       thoughtFor: duration => `Thought for ${duration}`,
       turnDuration: duration => `This turn took ${duration}`,
+      processTitle: 'Activity',
       replyMetrics: {
         duration: 'Duration',
         tokens: 'Used',
@@ -5924,6 +5925,8 @@ export const en: Translations = {
       recoveredMany: count => `Recovered after ${count} failed steps`,
       failedOne: '1 step failed',
       failedMany: count => `${count} steps failed`,
+      shell: 'Shell',
+      statusBackground: 'Running in background',
       statusRunning: 'Running',
       statusError: 'Error',
       statusRecovered: 'Recovered',
@@ -5937,12 +5940,13 @@ export const en: Translations = {
         opened: 'Opened',
         opening: 'Opening',
         failedToOpen: 'Failed to open',
+        failedToRead: 'Failed to read',
         searched: 'Searched',
         searching: 'Searching',
         ran: 'Ran',
         running: 'Running',
         ranCode: 'Ran code',
-        runningCode: 'Scripting'
+        runningCode: 'Running code'
       },
       runSummary: {
         delegate: {
@@ -5979,6 +5983,7 @@ export const en: Translations = {
         actionCommand: (action, command) => `${action} ${command}`,
         actionQuoted: (action, value) => `${action} “${value}”`,
         actionTarget: (action, target) => `${action} ${target}`,
+        searchInTarget: (query, target, pending) => `${pending ? 'Searching' : 'Searched'} “${query}” in ${target}`,
         prefixedDone: (prefix, action) => `${prefix} ${action}`,
         runningPrefixedTool: (prefix, action) => `Running ${prefix.toLowerCase()} ${action.toLowerCase()}`,
         runningTool: action => `Running ${action.toLowerCase()}`
@@ -6001,7 +6006,7 @@ export const en: Translations = {
         clarify: { done: 'Asked a question', pending: 'Asking a question', pendingAction: 'Asking' },
         cronjob: { done: 'Cron job', pending: 'Scheduling cron job', pendingAction: 'Scheduling' },
         edit_file: { done: 'Edited file', pending: 'Editing file', pendingAction: 'Editing' },
-        execute_code: { done: 'Ran code', pending: 'Scripting', pendingAction: 'Scripting' },
+        execute_code: { done: 'Ran code', pending: 'Running code', pendingAction: 'Running code' },
         image_generate: { done: 'Generated image', pending: 'Generating image', pendingAction: 'Generating' },
         list_files: { done: 'Listed files', pending: 'Listing files', pendingAction: 'Listing' },
         memory: { done: 'Saved to memory', pending: 'Saving to memory', pendingAction: 'Saving' },
