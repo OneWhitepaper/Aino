@@ -52,11 +52,7 @@ import {
   toggleSidebarRowMeta,
   toggleSidebarStatusFilter
 } from '@/store/layout'
-import {
-  $profiles,
-  $showAllProfiles,
-  normalizeProfileKey
-} from '@/store/profile'
+import { $profiles, $showAllProfiles, normalizeProfileKey } from '@/store/profile'
 import { $profileRailVisible, toggleProfileRailVisible } from '@/store/profile-rail-prefs'
 import { $projectTree } from '@/store/projects'
 import type { PullRequestBucket } from '@/store/pull-requests'
@@ -214,6 +210,7 @@ export function SidebarFilterMenu({
     ...localizeFilterOption(option, filterLabels),
     ...(option.id === 'profile' ? { label: t.sidebar.gatewayGroups.grouping } : {})
   }))
+
   const groupingLabel = groupings.find(option => option.id === recentGrouping)?.label
 
   // Two options are conditional: dragging a row is what picks manual, so it

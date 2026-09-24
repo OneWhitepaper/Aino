@@ -53,7 +53,9 @@ function syncRuntimeMetadataToView(state: ClientSessionState) {
   setCurrentModel(state.model ?? '')
   setCurrentProvider(state.provider ?? '')
 
-  if (state.platformModel) {setCurrentPlatformOwner(state.platformModel.ownerUserId, state.platformModel.platformOrigin || '')}
+  if (state.platformModel) {
+    setCurrentPlatformOwner(state.platformModel.ownerUserId, state.platformModel.platformOrigin || '')
+  }
   setCurrentReasoningEffort(state.reasoningEffort ?? '')
   setCurrentReasoningEffortWire(state.reasoningEffortWire ?? '')
   setCurrentServiceTier(state.serviceTier ?? '')

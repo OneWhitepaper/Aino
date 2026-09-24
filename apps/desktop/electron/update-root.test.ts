@@ -67,21 +67,19 @@ test('prefers an explicit source override, then the managed checkout', () => {
 })
 
 test('runtime version parsing reads the canonical Hermes declaration', () => {
-  assert.equal(
-    parseHermesVersion('"""module"""\n__version__ = "0.21.0"\n__release_date__ = "2026.8.31"\n'),
-    '0.21.0'
-  )
-  assert.equal(parseHermesVersion('__version__ = \'0.20.6\'\n'), '0.20.6')
+  assert.equal(parseHermesVersion('"""module"""\n__version__ = "0.21.0"\n__release_date__ = "2026.8.31"\n'), '0.21.0')
+  assert.equal(parseHermesVersion("__version__ = '0.20.6'\n"), '0.20.6')
   assert.equal(parseHermesVersion('# no version here\n'), null)
 })
 
 test('desktop packaging metadata follows the Hermes runtime version', () => {
   const python = process.env.PYTHON ?? 'python3'
-  const runtimeVersion = execFileSync(
-    python,
-    ['-c', 'import hermes_cli; print(hermes_cli.__version__)'],
-    { cwd: REPO_ROOT, encoding: 'utf8' }
-  ).trim()
+
+  const runtimeVersion = execFileSync(python, ['-c', 'import hermes_cli; print(hermes_cli.__version__)'], {
+    cwd: REPO_ROOT,
+    encoding: 'utf8'
+  }).trim()
+
   const desktopPackage = JSON.parse(fs.readFileSync(path.join(REPO_ROOT, 'apps', 'desktop', 'package.json'), 'utf8'))
 
   assert.ok(runtimeVersion, 'hermes_cli must expose __version__ at runtime')

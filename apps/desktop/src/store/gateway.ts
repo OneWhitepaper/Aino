@@ -1367,6 +1367,7 @@ function drainPendingConnectionRedial(entry: Secondary): boolean {
   const wasActive = g.activeKey === entry.scope
   disposeSecondary(entry)
   g.secondaries.delete(entry.scope)
+
   if (wasActive) {
     g.$activeConnectionId.set(activeGatewayConnectionId())
   }

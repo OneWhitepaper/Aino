@@ -156,7 +156,9 @@ describe('composer model persistence scope', () => {
     expect($currentPlatformOwner.get()).toBe('user-1')
     expect($currentPlatformOrigin.get()).toBe('http://127.0.0.1:7001')
     expect($currentModelSource.get()).toBe('manual')
-    expect(window.localStorage.getItem('hermes.desktop.composer.model.registry.local.default')).toBe('fixture-tool-model')
+    expect(window.localStorage.getItem('hermes.desktop.composer.model.registry.local.default')).toBe(
+      'fixture-tool-model'
+    )
   })
 
   it('does not migrate a legacy local non-default profile selection into registry default', () => {

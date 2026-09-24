@@ -117,11 +117,17 @@ async function withRoutedTurnLease<T>(
   try {
     if (window.hermesDesktop?.platformModels) {
       const { preparePlatformSessionRequest } = await import('@/api/platform-session-binding')
-      await preparePlatformSessionRequest(connectionId ? { connectionId, profile } : profile, method, params,
-        (name, payload, timeout) => connectionId
-          ? requestGatewayForAgent(connectionId, profile, name, payload, timeout)
-          : requestGatewayForProfile(profile, name, payload, timeout))
+      await preparePlatformSessionRequest(
+        connectionId ? { connectionId, profile } : profile,
+        method,
+        params,
+        (name, payload, timeout) =>
+          connectionId
+            ? requestGatewayForAgent(connectionId, profile, name, payload, timeout)
+            : requestGatewayForProfile(profile, name, payload, timeout)
+      )
     }
+
     const result = await request()
     resetBackgroundPollingGuardAfterRebind(method, params, result)
 
@@ -146,6 +152,7 @@ async function requestWithRebindGuard<T>(
     const { preparePlatformSessionRequest } = await import('@/api/platform-session-binding')
     await preparePlatformSessionRequest(null, method, params, ambientRequest)
   }
+
   const result = await request()
   resetBackgroundPollingGuardAfterRebind(method, params, result)
 
@@ -219,7 +226,12 @@ export function requestForSessionProfile<T>(
     // for a deadline (the plugin host bridge in contrib/wiring is the only one
     // that does).
     if (signal !== undefined) {
-      return requestWithRebindGuard(method, params, () => ambientRequest<T>(method, params, timeoutMs, signal), ambientRequest)
+      return requestWithRebindGuard(
+        method,
+        params,
+        () => ambientRequest<T>(method, params, timeoutMs, signal),
+        ambientRequest
+      )
     }
 
     if (timeoutMs !== undefined) {

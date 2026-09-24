@@ -247,8 +247,8 @@ describe('ErrorBoundary renderer composition recovery', () => {
     act(() => vi.runOnlyPendingTimers())
 
     expect(screen.getByText('recovered')).toBeTruthy()
-    expect(
-      warnSpy.mock.calls.some(call => String(call[0]).includes('auto-recovering from renderer composition'))
-    ).toBe(true)
+    expect(warnSpy.mock.calls.some(call => String(call[0]).includes('auto-recovering from renderer composition'))).toBe(
+      true
+    )
   })
 })

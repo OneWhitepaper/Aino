@@ -120,6 +120,7 @@ describe('routing', () => {
     const { rounds } = await loadRoom()
 
     const local: GroupMember = { name: 'reviewer' }
+
     const remote: GroupMember = {
       connectionId: 'mini',
       handle: 'reviewer-mini',
@@ -127,6 +128,7 @@ describe('routing', () => {
       remoteSource: true,
       sourceScoped: true
     }
+
     const members = [local, remote]
 
     for (const member of members) {
@@ -274,6 +276,7 @@ describe('routing', () => {
   it('matches self on the gateway install_id when Desktops label the connection differently', async () => {
     const room = await loadRoom({ turn: () => 'Central here.' })
     const { formatGroupChatLine } = await import('./group-round-prompt')
+
     const local: GroupMember = {
       connectionId: 'central',
       connectionLabel: 'Central',
@@ -411,9 +414,11 @@ describe('round lifecycle', () => {
 
   it('does not retry an ambiguous submit from prequeued same-thread or cross-thread sends', async () => {
     let reject!: (error: Error) => void
+
     const held = new Promise<string>((_resolve, fail) => {
       reject = fail
     })
+
     const room = await loadRoom({ turn: ({ n }) => (n === 1 ? held : '(pass)') })
     const members = [MEMBERS[0]]
     const thread = room.rounds.sendToGroupChat('Failure', members, 'first')!
@@ -434,9 +439,11 @@ describe('round lifecycle', () => {
 
   it('attributes a queued drive failure to the thread whose harvest failed', async () => {
     let finish!: (reply: string) => void
+
     const held = new Promise<string>(resolve => {
       finish = resolve
     })
+
     const room = await loadRoom({ turn: () => held })
     const first = room.rounds.sendToGroupChat('Failure', MEMBERS.slice(0, 2), '@research first')!
     await drain(() => room.gateway.calls.length < 1)
@@ -529,9 +536,11 @@ describe('round lifecycle', () => {
 describe('per-member delta', () => {
   it('retained-log trimming cannot acknowledge messages appended during inference', async () => {
     let release!: (reply: string) => void
+
     const held = new Promise<string>(resolve => {
       release = resolve
     })
+
     const room = await loadRoom({ turn: ({ n }) => (n === 1 ? held : '(pass)') })
     const members = [MEMBERS[0]]
     const thread = room.rounds.sendToGroupChat('Trim', members, 'delivered')!
@@ -696,13 +705,14 @@ describe('per-member delta', () => {
 
 describe('threads', () => {
   it('mints a new thread per composer send and lands replies in it', async () => {
-    const room = await loadRoom({ turn: ({ n }) => n === 1 ? 'first reply' : n === 2 ? 'second reply' : '(pass)' })
+    const room = await loadRoom({ turn: ({ n }) => (n === 1 ? 'first reply' : n === 2 ? 'second reply' : '(pass)') })
     const member: GroupMember[] = [{ name: 'research', title: '' }]
     // Sync orders equal-time messages by their stable IDs, independently of
     // send order. Pin that case instead of depending on millisecond timing.
     const clock = vi.spyOn(Date, 'now').mockReturnValue(1_700_000_000_000)
 
-    const ids = vi.spyOn(globalThis.crypto, 'randomUUID')
+    const ids = vi
+      .spyOn(globalThis.crypto, 'randomUUID')
       .mockReturnValueOnce('00000000-0000-4000-8000-000000000004')
       .mockReturnValueOnce('00000000-0000-4000-8000-000000000003')
       .mockReturnValueOnce('00000000-0000-4000-8000-000000000002')

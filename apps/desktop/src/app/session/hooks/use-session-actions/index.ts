@@ -708,11 +708,13 @@ export function useSessionActions({
         const capturedRoute = resolveNewChatOwnerRoute()
         const capturedProfile = $newChatProfile.get() || normalizeProfileKey($activeGatewayProfile.get())
         const legacyProfileIntent = isLegacyNewChatProfile(capturedProfile)
+
         const {
           params: baseParams,
           platformAuthority,
           platformOwner
         } = await desktopSessionCreateParams(cwd, capturedRoute, capturedProfile, legacyProfileIntent)
+
         const params: Record<string, unknown> = {
           ...baseParams,
           ...sessionCreateOverrideParams(createOverrides, seedMessages)
@@ -974,6 +976,7 @@ export function useSessionActions({
           options?.route === null || defaultTarget?.route === null,
           workspaceScope.workspaceMode !== 'bots'
         )
+
         const params = {
           ...prepared.params,
           ...(workspaceScope.workspaceMode === 'bots' ? { hidden: true } : {})

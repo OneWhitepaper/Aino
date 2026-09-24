@@ -51,7 +51,9 @@ contextBridge.exposeInMainWorld('hermesDesktop', {
     owner: async revision => unwrapPlatformAccountIpc(await ipcRenderer.invoke('aino:platform-models:owner', revision)),
     bind: input => ipcRenderer.invoke('aino:platform-models:bind', input),
     list: async () => unwrapPlatformAccountIpc(await ipcRenderer.invoke('aino:platform-models:list')),
-    clear: async input => { unwrapPlatformAccountIpc(await ipcRenderer.invoke('aino:platform-models:clear', input)) }
+    clear: async input => {
+      unwrapPlatformAccountIpc(await ipcRenderer.invoke('aino:platform-models:clear', input))
+    }
   },
   platformDevices: {
     list: async input => unwrapPlatformAccountIpc(await ipcRenderer.invoke('aino:platform-devices:list', input)),
@@ -59,14 +61,20 @@ contextBridge.exposeInMainWorld('hermesDesktop', {
   },
   platformBilling: {
     quote: async input => unwrapPlatformAccountIpc(await ipcRenderer.invoke('aino:platform-billing:quote', input)),
-    createOrder: async input => unwrapPlatformAccountIpc(await ipcRenderer.invoke('aino:platform-billing:create-order', input)),
-    getOrder: async input => unwrapPlatformAccountIpc(await ipcRenderer.invoke('aino:platform-billing:get-order', input)),
-    listOrders: async input => unwrapPlatformAccountIpc(await ipcRenderer.invoke('aino:platform-billing:list-orders', input)),
-    cancelOrder: async input => unwrapPlatformAccountIpc(await ipcRenderer.invoke('aino:platform-billing:cancel-order', input)),
-    openCheckout: async input => unwrapPlatformAccountIpc(await ipcRenderer.invoke('aino:platform-billing:open-checkout', input)),
+    createOrder: async input =>
+      unwrapPlatformAccountIpc(await ipcRenderer.invoke('aino:platform-billing:create-order', input)),
+    getOrder: async input =>
+      unwrapPlatformAccountIpc(await ipcRenderer.invoke('aino:platform-billing:get-order', input)),
+    listOrders: async input =>
+      unwrapPlatformAccountIpc(await ipcRenderer.invoke('aino:platform-billing:list-orders', input)),
+    cancelOrder: async input =>
+      unwrapPlatformAccountIpc(await ipcRenderer.invoke('aino:platform-billing:cancel-order', input)),
+    openCheckout: async input =>
+      unwrapPlatformAccountIpc(await ipcRenderer.invoke('aino:platform-billing:open-checkout', input)),
     scope: async input => unwrapPlatformAccountIpc(await ipcRenderer.invoke('aino:platform-billing:scope', input)),
     summary: async input => unwrapPlatformAccountIpc(await ipcRenderer.invoke('aino:platform-billing:summary', input)),
-    checkoutInfo: async input => unwrapPlatformAccountIpc(await ipcRenderer.invoke('aino:platform-billing:checkout-info', input)),
+    checkoutInfo: async input =>
+      unwrapPlatformAccountIpc(await ipcRenderer.invoke('aino:platform-billing:checkout-info', input)),
     listUsage: async input => unwrapPlatformAccountIpc(await ipcRenderer.invoke('aino:platform-billing:usage', input))
   },
   // Launch-flag fact: the Nous free tier is on for this launch

@@ -72,22 +72,28 @@ export function handleStatusEvent(ctx: GatewayEventContext): boolean {
       if (entry?.display_kind === 'model_switch') {
         // The applied switch is already authoritative. Reuse history's
         // renderer without waiting for a REST fetch or replacing a live turn.
-        const [notice] = toChatMessages([{
-          role: 'user',
-          content: '',
-          display_kind: entry.display_kind,
-          display_metadata: entry.display_metadata as SessionMessage['display_metadata'],
-          row_id: entry.row_id ?? undefined,
-          timestamp: entry.timestamp ?? occurredAt
-        }])
+        const [notice] = toChatMessages([
+          {
+            role: 'user',
+            content: '',
+            display_kind: entry.display_kind,
+            display_metadata: entry.display_metadata as SessionMessage['display_metadata'],
+            row_id: entry.row_id ?? undefined,
+            timestamp: entry.timestamp ?? occurredAt
+          }
+        ])
 
         flushQueuedDeltas(sessionId)
         updateSessionState(sessionId, state => {
-          if (state.messages.some(message => message.modelSwitch && (
-            notice.rowId !== undefined && message.rowId !== undefined
-              ? notice.rowId === message.rowId
-              : notice.timestamp === message.timestamp
-          ))) {
+          if (
+            state.messages.some(
+              message =>
+                message.modelSwitch &&
+                (notice.rowId !== undefined && message.rowId !== undefined
+                  ? notice.rowId === message.rowId
+                  : notice.timestamp === message.timestamp)
+            )
+          ) {
             return state
           }
 
@@ -95,16 +101,19 @@ export function handleStatusEvent(ctx: GatewayEventContext): boolean {
           // after its optimistic user row. Prefer durable order, then that
           // pre-response boundary; host clocks need not agree. A switch at
           // turn-end (e.g. restoring /model --once) stays after the reply.
-          const persisted = state.messages.findIndex(message =>
-            notice.rowId !== undefined && message.rowId !== undefined && message.rowId > notice.rowId
+          const persisted = state.messages.findIndex(
+            message => notice.rowId !== undefined && message.rowId !== undefined && message.rowId > notice.rowId
           )
 
-          const pending = state.awaitingResponse && !state.sawAssistantPayload
-            ? state.messages.findLastIndex(message => message.role === 'user' && !message.hidden && message.rowId === undefined)
-            : -1
+          const pending =
+            state.awaitingResponse && !state.sawAssistantPayload
+              ? state.messages.findLastIndex(
+                  message => message.role === 'user' && !message.hidden && message.rowId === undefined
+                )
+              : -1
 
-          const newer = state.messages.findIndex(message =>
-            message.timestamp !== undefined && message.timestamp > notice.timestamp!
+          const newer = state.messages.findIndex(
+            message => message.timestamp !== undefined && message.timestamp > notice.timestamp!
           )
 
           const index = [persisted, pending, newer].find(index => index >= 0) ?? state.messages.length

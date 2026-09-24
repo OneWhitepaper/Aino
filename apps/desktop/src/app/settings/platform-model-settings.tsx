@@ -6,10 +6,7 @@ import { useI18n } from '@/i18n'
 import { Cpu } from '@/lib/icons'
 import { platformDefaultScope } from '@/lib/platform-model-scope'
 import { $activeConnectionId } from '@/store/connections'
-import {
-  $gatewayManagedCapabilities,
-  managedModelRouteCapabilityFrom
-} from '@/store/gateway-managed-capability'
+import { $gatewayManagedCapabilities, managedModelRouteCapabilityFrom } from '@/store/gateway-managed-capability'
 import { savePlatformDraftDefault } from '@/store/platform-draft-model'
 import { platformModelCatalog, readPlatformDefault } from '@/store/platform-models'
 import { $activeGatewayProfile } from '@/store/profile'

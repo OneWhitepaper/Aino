@@ -169,7 +169,8 @@ export function useCapabilityScope({
   return {
     canReloadActiveScope:
       (scopeConnectionId === null || scopeConnectionId === (activeGatewayConnectionId() ?? 'local')) &&
-      normalizeProfileKey(typeof scopeProfile === 'object' && scopeProfile ? scopeProfile.profile : scopeProfile) === normalizeProfileKey(activeProfile),
+      normalizeProfileKey(typeof scopeProfile === 'object' && scopeProfile ? scopeProfile.profile : scopeProfile) ===
+        normalizeProfileKey(activeProfile),
     crossBackend: scopeConnectionId !== null && scopeConnectionId !== (activeGatewayConnectionId() ?? 'local'),
     key: scopeKey,
     label: options.find(option => option.value === value)?.label,

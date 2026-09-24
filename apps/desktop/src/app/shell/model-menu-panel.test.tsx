@@ -110,10 +110,7 @@ it('leaves non-reasoning cleanup to the shared managed selection path', async ()
     }
   })
   await platformAccountActions(window.hermesDesktop.platformAccount).refresh()
-  recordGatewayReadyCapability(
-    { profile: 'default' },
-    { type: 'gateway.ready', payload: { managed_model_binding: 1 } }
-  )
+  recordGatewayReadyCapability({ profile: 'default' }, { type: 'gateway.ready', payload: { managed_model_binding: 1 } })
   $currentProvider.set('aino')
   $currentModel.set('catalog-a')
   $currentPlatformOwner.set('user-a')
@@ -134,7 +131,11 @@ it('exposes the existing live reasoning controls for a verified reasoning-capabl
   Object.defineProperty(window, 'hermesDesktop', {
     configurable: true,
     value: {
-      platformAccount: { status: async () => platformSnapshot(), capabilities: async () => ({}), onChanged: () => () => undefined },
+      platformAccount: {
+        status: async () => platformSnapshot(),
+        capabilities: async () => ({}),
+        onChanged: () => () => undefined
+      },
       platformModels: { list: async () => [reasoningModel] }
     }
   })

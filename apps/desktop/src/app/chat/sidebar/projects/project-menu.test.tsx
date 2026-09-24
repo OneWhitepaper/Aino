@@ -146,7 +146,11 @@ describe('ProjectMenu', () => {
     expect(screen.getByRole('menuitem', { name: 'Delete…' }).hasAttribute('data-disabled')).toBe(false)
 
     fireEvent.click(screen.getByRole('menuitem', { name: 'Manage folders' }))
-    expect(openProjectFolders).toHaveBeenCalledExactlyOnceWith({ id: project.id, name: project.label, profile: 'worker' })
+    expect(openProjectFolders).toHaveBeenCalledExactlyOnceWith({
+      id: project.id,
+      name: project.label,
+      profile: 'worker'
+    })
   })
   it('does not wrap the kebab trigger in a Tip', () => {
     render(<ProjectMenu isActive={false} project={project} />)

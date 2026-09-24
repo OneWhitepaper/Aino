@@ -37,9 +37,11 @@ describe('home composer slot positioning', () => {
       if (this.classList.contains('aino-home-composer-slot')) {
         return new DOMRect(0, slotTop, 400, 200)
       }
+
       if (this.classList.contains('aino-home-layout')) {
         return new DOMRect(0, 40, 400, layoutHeight)
       }
+
       // The surrounding chat surface and intrinsic home content do not resize.
       return new DOMRect(0, 40, 400, 700)
     })
@@ -51,6 +53,7 @@ describe('home composer slot positioning', () => {
         </div>
       </I18nProvider>
     )
+
     const surface = container.querySelector<HTMLElement>('[data-chat-surface]')!
     const layout = container.querySelector<HTMLElement>('.aino-home-layout')!
     const slot = container.querySelector<HTMLElement>('.aino-home-composer-slot')!
@@ -60,6 +63,7 @@ describe('home composer slot positioning', () => {
 
     layoutHeight -= 170
     slotTop += 85
+
     for (const observer of observers) {
       if (observer.targets.has(layout)) {
         observer.onResize()

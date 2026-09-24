@@ -237,12 +237,7 @@ export function VoicePlaybackActivity() {
         {!preparing && <PlaybackWaveform audioElement={playback.audioElement} />}
       </div>
 
-      <Button
-        onClick={stopVoicePlayback}
-        size="xs"
-        type="button"
-        variant="ghost"
-      >
+      <Button onClick={stopVoicePlayback} size="xs" type="button" variant="ghost">
         <VolumeX className={iconSize.xs} />
         {t.composer.stop}
       </Button>

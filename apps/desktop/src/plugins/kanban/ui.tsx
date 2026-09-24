@@ -262,7 +262,10 @@ export function Callout({
       className="flex flex-col gap-2 rounded-(--aino-radius-control) p-2.5"
       style={{ backgroundColor: `color-mix(in srgb, ${tone} 7%, transparent)`, borderLeft: `2px solid ${tone}` }}
     >
-      <div className="flex items-start gap-1.5 text-[length:var(--aino-text-caption)] font-medium" style={{ color: tone }}>
+      <div
+        className="flex items-start gap-1.5 text-[length:var(--aino-text-caption)] font-medium"
+        style={{ color: tone }}
+      >
         <Codicon className="mt-px shrink-0" name={icon} size="0.8rem" />
         <span>{title}</span>
       </div>

@@ -274,16 +274,24 @@ export function BotRow({ bot, onDelete, onEdit, onGroup, onNewSection, showHandl
             </SidebarRowLead>
             {pinned ? (
               <Tip label={b.roster.pinned}>
-                <Codicon className="shrink-0 text-[length:var(--aino-text-caption)] text-(--ui-text-quaternary)" name="pinned" />
+                <Codicon
+                  className="shrink-0 text-[length:var(--aino-text-caption)] text-(--ui-text-quaternary)"
+                  name="pinned"
+                />
               </Tip>
             ) : null}
             {hidden ? (
               <Tip label={b.roster.hiddenFromRoster}>
-                <Codicon className="shrink-0 text-[length:var(--aino-text-caption)] text-(--ui-text-quaternary)" name="eye-closed" />
+                <Codicon
+                  className="shrink-0 text-[length:var(--aino-text-caption)] text-(--ui-text-quaternary)"
+                  name="eye-closed"
+                />
               </Tip>
             ) : null}
             <Tip label={rowTooltip}>
-              <span className="min-w-0 truncate text-[length:var(--aino-text-body)] font-medium">{displayName(bot, meta)}</span>
+              <span className="min-w-0 truncate text-[length:var(--aino-text-body)] font-medium">
+                {displayName(bot, meta)}
+              </span>
             </Tip>
           </div>
           {attention ? (

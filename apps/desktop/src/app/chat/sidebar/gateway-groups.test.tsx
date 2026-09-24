@@ -16,9 +16,11 @@ import { ChatSidebar } from './index'
 
 const noop = () => {}
 const resume = vi.fn()
+
 const unavailableAccount = async () => {
   throw new Error('Sidebar account display must not request account services')
 }
+
 const accountActions = createAccountActions({
   kind: 'platform',
   fixedCodeHint: false,

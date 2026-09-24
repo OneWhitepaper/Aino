@@ -58,14 +58,11 @@ import { useStepUpFlow } from './use-step-up'
 
 function createWrapper(client: QueryClient, locale: 'en' | 'zh' = 'en') {
   return function wrapper({ children }: PropsWithChildren) {
-    return createElement(
-      I18nProvider,
-      {
-        configClient: null,
-        initialLocale: locale,
-        children: createElement(QueryClientProvider, { client }, children)
-      }
-    )
+    return createElement(I18nProvider, {
+      configClient: null,
+      initialLocale: locale,
+      children: createElement(QueryClientProvider, { client }, children)
+    })
   }
 }
 

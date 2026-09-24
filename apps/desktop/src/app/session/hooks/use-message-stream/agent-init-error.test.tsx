@@ -112,7 +112,9 @@ describe('useMessageStream agent-init error surfacing (#63078)', () => {
       })
     )
 
-    expect($notifications.get().find(notification => notification.id?.startsWith('gateway-error:'))?.title).toBe('Aino 未能完成回复')
+    expect($notifications.get().find(notification => notification.id?.startsWith('gateway-error:'))?.title).toBe(
+      'Aino 未能完成回复'
+    )
   })
 
   it('localizes the generic in-transcript error when the gateway sends no details', () => {
