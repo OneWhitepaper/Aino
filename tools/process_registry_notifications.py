@@ -196,20 +196,22 @@ def _recovery_lines(evt: dict) -> "list[str]":
     return lines
 
 
-def _task_effort_note(result: dict) -> str:
-    """Compact, decision-relevant facts about how hard one child worked.
+def _task_execution_note(result: dict) -> str:
+    """Execution and format facts about one child, for the parent's awareness only.
 
-    A batch event's own ``model`` is empty, so the preamble cannot name the child model; and the
-    per-task header used to carry only api_calls/duration. Tokens, exit reason and schema validity
-    are already in the result payload, and they are what tells the parent how much independent
-    reading a child actually did — without them the parent can only judge by claim count.
+    ``tokens`` is cumulative session usage (``session_prompt_tokens`` +
+    ``session_completion_tokens``): it counts re-sent context, so it is NOT a measure of how much
+    source a child read, nor of how much of it the child got right. It is rendered as a neutral
+    usage figure — never as a reason to trust a result more or to verify it less.
+    ``exit_reason`` and ``schema_valid`` are execution and format facts as well: a schema-valid
+    result is not a factually correct one.
     """
     parts = []
     tokens = result.get("tokens")
     if isinstance(tokens, dict):
-        depth = sum(int(tokens.get(key) or 0) for key in ("input", "output"))
-        if depth:
-            parts.append(f"{depth:,} tokens")
+        total = sum(int(tokens.get(key) or 0) for key in ("input", "output"))
+        if total:
+            parts.append(f"{total:,} cumulative tokens")
     if result.get("cost_usd") and str(result.get("cost_status") or "") not in ("unknown", ""):
         parts.append(f"${float(result['cost_usd']):.4f}")
     exit_reason = str(result.get("exit_reason") or "").strip()
@@ -221,7 +223,11 @@ def _task_effort_note(result: dict) -> str:
 
 
 def _batch_model_line(results: list[dict], evt: dict) -> str:
-    """Name the child model(s) when the batch event itself carries none."""
+    """Name which model(s) the children ran on.
+
+    An identity fact, not a quality signal: it tells the parent whether a fan-out ran on the model
+    it asked for (and whether the children differed from each other), nothing about correctness.
+    """
     models = []
     for result in results:
         name = str(result.get("model") or "").strip()
@@ -267,7 +273,7 @@ def _format_batch_delegation(evt: dict, deleg_id: str, completed_at: float) -> s
         header = (f"--- {icon} TASK {idx + 1}/{n}" + (f": {r_goal}" if r_goal else "") + f"  (status={r_status}"
                   + (f", api_calls={r['api_calls']}" if r.get("api_calls") else "")
                   + (f", {r['duration_seconds']}s" if r.get("duration_seconds") is not None else "")
-                  + _task_effort_note(r)
+                  + _task_execution_note(r)
                   + (", TRUNCATED: hit max_iterations — work may be incomplete" if r_truncated else ""))
         lines += ["", header + ") ---"]
         if r_status in _DONE and r_summary:

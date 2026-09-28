@@ -1,11 +1,14 @@
-"""A batch completion must tell the parent how hard each child actually worked.
+"""A batch completion should disclose execution facts about each child, without judging them.
 
 The batch event carries no ``model`` of its own, so the preamble printed ``Model: ?`` even though
 every result names the model it ran on. And each task header carried only ``api_calls`` and
-duration, while the payload already holds per-child token usage, cost, exit reason and schema
-validity. Those are the facts a coordinating parent has to judge whether a child's findings are
-worth trusting as-is or need independent re-reading, so they belong in the notification rather
-than staying unrendered in the payload.
+duration, while the payload already holds per-child cumulative token usage, cost, exit reason and
+schema validity — an unfinished or malformed child was indistinguishable from a clean one.
+
+These are identity, usage and execution/format facts. They are deliberately NOT framed as a
+measure of how thoroughly a child worked: ``tokens`` counts re-sent context, so it cannot say how
+much source was read, and a schema-valid result is not a factually correct one. Nothing here
+licenses a parent to verify a child's claims less.
 """
 from __future__ import annotations
 
@@ -53,14 +56,16 @@ def test_the_child_model_is_named_when_the_batch_event_has_none():
     assert "Model: ?" not in text
 
 
-def test_each_task_header_carries_the_tokens_that_child_spent():
+def test_each_task_header_labels_cumulative_usage_rather_than_implying_effort():
+    """Cumulative session usage is a usage figure; the label must not read as "worked harder"."""
     text = format_process_notification(_batch([
         _result(0, tokens={"input": 770_816, "output": 12_409}, api_calls=9, duration_seconds=790.22),
         _result(1, tokens={"input": 90_000, "output": 5_894}, api_calls=3, duration_seconds=652.93),
     ]))
-    # The uneven depth is exactly what a parent needs to see: one child read far more than the other.
-    assert "783,225 tokens" in text
-    assert "95,894 tokens" in text
+    assert "783,225 cumulative tokens" in text
+    assert "95,894 cumulative tokens" in text
+    # No wording that could be read as depth or trust.
+    assert "depth" not in text.lower() and "deeper" not in text.lower()
 
 
 def test_a_child_that_did_not_finish_cleanly_says_so_in_its_header():
