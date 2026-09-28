@@ -756,6 +756,113 @@ def _reasoning_history(item):
     ]
 
 
+def _interleaved_codex_message(*, compaction=False):
+    output = [
+        SimpleNamespace(type="reasoning", id="rs_a", encrypted_content="sealed-a", summary=[]),
+        SimpleNamespace(
+            type="message", role="assistant", id="msg_a", status="completed", phase="commentary",
+            content=[SimpleNamespace(type="output_text", text="Checking the first result.")],
+        ),
+        SimpleNamespace(type="function_call", id="fc_a", call_id="call_a", name="read_file",
+                        arguments='{"path":"a.py"}', status="completed"),
+        SimpleNamespace(type="reasoning", id="rs_b", encrypted_content="sealed-b", summary=[]),
+        SimpleNamespace(
+            type="message", role="assistant", id="msg_b", status="completed", phase="commentary",
+            content=[SimpleNamespace(type="output_text", text="Checking the second result.")],
+        ),
+        SimpleNamespace(type="custom_tool_call", id="fc_b", call_id="call_b", name="terminal",
+                        input="pwd", status="completed"),
+    ]
+    if compaction:
+        output.insert(0, SimpleNamespace(type="compaction", encrypted_content="sealed-checkpoint"))
+    normalized, finish = _normalize_codex_response(
+        SimpleNamespace(status="completed", output=output),
+        issuer_kind="other:https://responses.example.com/v1", issuer_model="gpt-5.6-sol",
+    )
+    message = {
+        "role": "assistant", "content": normalized.content, "finish_reason": finish,
+        "codex_reasoning_items": normalized.codex_reasoning_items,
+        "codex_message_items": normalized.codex_message_items,
+        "tool_calls": [
+            {"id": tc.id, "call_id": tc.call_id, "response_item_id": tc.response_item_id,
+             "type": "function", "function": {"name": tc.function.name, "arguments": tc.function.arguments}}
+            for tc in normalized.tool_calls
+        ],
+    }
+    return message
+
+
+def _replay_labels(items):
+    return [item.get("encrypted_content") or item.get("call_id") or
+            (item.get("content") or [{}])[0].get("text") for item in items]
+
+
+@pytest.mark.parametrize("native_compaction", [False, True])
+def test_interleaved_responses_output_survives_database_roundtrip(tmp_path, native_compaction):
+    """Native output order must survive the same JSON sidecars used by session resume."""
+    from hermes_state import SessionDB
+
+    message = _interleaved_codex_message(compaction=True)
+    db = SessionDB(tmp_path / "state.db")
+    try:
+        db.create_session("ordered-response", source="cli")
+        db.append_message("ordered-response", **message)
+        for call in message["tool_calls"]:
+            db.append_message("ordered-response", role="tool", tool_call_id=call["id"], content="ok")
+        history = db.get_messages_as_conversation("ordered-response")
+    finally:
+        db.close()
+
+    items = _chat_messages_to_responses_input(
+        history, current_issuer_kind="other:https://responses.example.com/v1", current_issuer_model="gpt-5.6-sol",
+        native_compaction_eligible=native_compaction,
+    )
+    assert _replay_labels(items) == (["sealed-checkpoint"] if native_compaction else []) + [
+        "sealed-a", "Checking the first result.", "call_a",
+        "sealed-b", "Checking the second result.", "call_b", "call_a", "call_b",
+    ]
+    assert [i["phase"] for i in items if i["type"] == "message"] == ["commentary", "commentary"]
+    assert all(not key.startswith("_") for item in items for key in item)
+    assert history[0]["codex_reasoning_items"] == message["codex_reasoning_items"]
+
+
+@pytest.mark.parametrize("suppression", [
+    "issuer", "model", "disabled", "trimmed", "legacy", "partial_order", "invalid_order", "changed_calls",
+])
+def test_interleaved_responses_keep_safe_order_when_replay_state_changes(suppression):
+    """Filtered state keeps native order; missing/damaged order falls back without changing calls."""
+    from agent.transports.codex import _newest_reasoning_only
+
+    message = _interleaved_codex_message()
+    issuer, model = "other:https://responses.example.com/v1", "gpt-5.6-sol"
+    if suppression == "trimmed":
+        message = _newest_reasoning_only([message, {
+            "role": "assistant", "codex_reasoning_items": [{"type": "reasoning", "encrypted_content": "newer"}],
+        }])[0]
+    sidecars = (message.get("codex_reasoning_items") or []) + message["codex_message_items"]
+    if suppression == "legacy":
+        for item in sidecars:
+            item.pop("_output_order", None)
+    if suppression == "partial_order":
+        sidecars[0].pop("_output_order", None)
+    if suppression == "invalid_order":
+        sidecars[0]["_output_order"]["index"] = -1
+    if suppression == "changed_calls":
+        message["tool_calls"].pop()
+    items = _chat_messages_to_responses_input(
+        [message], current_issuer_kind="codex_backend" if suppression == "issuer" else issuer,
+        current_issuer_model="other-model" if suppression == "model" else model,
+        replay_encrypted_reasoning=suppression != "disabled",
+    )
+    if suppression in {"legacy", "partial_order", "invalid_order", "changed_calls"}:
+        assert _replay_labels(items) == [
+            "sealed-a", "sealed-b", "Checking the first result.", "Checking the second result.", "call_a",
+        ] + ([] if suppression == "changed_calls" else ["call_b"])
+    else:
+        assert _replay_labels(items) == ["Checking the first result.", "call_a", "Checking the second result.", "call_b"]
+    assert all(not key.startswith("_") for item in items for key in item)
+
+
 def test_reasoning_replay_requires_matching_issuer_model_on_same_endpoint():
     # Blobs are sealed to the minting model, not just the endpoint: same endpoint + other model must drop.
     issuer = "other:https://responses.example.com/v1"

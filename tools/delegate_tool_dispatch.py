@@ -337,7 +337,8 @@ _BACKGROUND_NOTES = {
     ),
     "live_transcripts_hint": (
         "Each subagent streams a human-readable transcript of its operations to the file listed above (append-only, "
-        "one per task). Read or `tail -f` these paths at any time to watch a child work while it runs."
+        "one per task). Read a bounded excerpt when diagnosing a problem or answering a requested progress check. "
+        "Do not poll or tail -f these files to wait: end your turn and the completed results will arrive automatically."
     ),
 }
 

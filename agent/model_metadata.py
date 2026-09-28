@@ -25,6 +25,7 @@ from utils import atomic_json_write, atomic_yaml_write, base_url_host_matches, b
 
 from hermes_constants import OPENROUTER_MODELS_URL, openrouter_variant_base
 from agent.message_metadata import PERSISTENCE_ONLY_MESSAGE_FIELDS
+from agent.api_content import effective_message_content
 
 logger = logging.getLogger(__name__)
 
@@ -2425,7 +2426,7 @@ def _count_image_tokens(msg: Dict[str, Any], cost_per_image: int) -> int:
     """Count image-like content parts in a message; return their token cost."""
     if not isinstance(msg, dict):
         return 0
-    content = msg.get("content")
+    content = effective_message_content(msg)
     count = _count_parts(content, _IMAGE_PART_TYPES)
     count += _count_parts(msg.get("_anthropic_content_blocks"), {"image"})
     # Multimodal tool results that haven't been converted yet.
@@ -2452,8 +2453,7 @@ def strip_opaque_replay_items(items: Any) -> Any:
 def _wire_message_shadow(msg: Dict[str, Any]) -> Dict[str, Any]:
     """Shadow of a message holding only what the provider actually receives.
     * ``api_content`` SUBSTITUTES ``content`` (mirrors ``turn_context.substitute_api_content`` exactly):
-      only a non-empty STRING sidecar on a user/assistant row displaces content; substituting any
-      other shape would UNDERcount — the dangerous direction.
+      a non-empty string or parts-array sidecar on a user/assistant row displaces content.
     * Base64 images become a placeholder; ``_count_image_tokens`` charges them flat.
     * ``reasoning`` never ships as-is (request builds pop it after optionally promoting it into
       ``reasoning_content``); counting both inflated estimates up to +53%.
@@ -2461,8 +2461,7 @@ def _wire_message_shadow(msg: Dict[str, Any]) -> Dict[str, Any]:
       ciphertext the provider prices by its OWN token count, never by bytes; a native compaction
       checkpoint alone can be 5M chars (#100611). They contribute 0 here: only real usage ever
       prices them, and the usage anchor carries that price forward."""
-    sidecar = msg.get("api_content")
-    sidecar_wins = isinstance(sidecar, str) and bool(sidecar) and msg.get("role") in ("user", "assistant")
+    wire_content = effective_message_content(msg)
     _rc = msg.get("reasoning_content")
     drop_reasoning_dup = isinstance(_rc, str) and bool(_rc.strip())
     shadow: Dict[str, Any] = {}
@@ -2470,11 +2469,12 @@ def _wire_message_shadow(msg: Dict[str, Any]) -> Dict[str, Any]:
         if k in ("_anthropic_content_blocks", "reasoning_details") or k in PERSISTENCE_ONLY_MESSAGE_FIELDS or (k == "reasoning" and drop_reasoning_dup):
             continue
         if k == "api_content":
-            if sidecar_wins:
-                shadow["content"] = v
-        elif k == "content" and sidecar_wins:
-            continue
-        elif k == "content" and isinstance(v, list):
+            if "content" in msg or wire_content is None:
+                continue
+            k = "content"
+        if k == "content":
+            v = wire_content
+        if k == "content" and isinstance(v, list):
             shadow[k] = [
                 {"type": part.get("type"), "image": "[stripped]"}
                 if isinstance(part, dict) and part.get("type") in _IMAGE_PART_TYPES

@@ -400,11 +400,13 @@ class MicroCompactionMixin:
         ``repair_message_sequence`` pass 2, done here so the marker and cursor are never collateral
         damage of the downstream repair. Lists untouched."""
         from agent.turn_context import drop_stale_api_content
+        from agent.api_content import effective_message_content
 
         def _plain_user(m: Any) -> bool:
             return (
                 isinstance(m, dict) and m.get("role") == "user" and not _is_summary_marker(m)
                 and isinstance(m.get("content"), str)
+                and not isinstance(effective_message_content(m), list)
             )
 
         merged: List[Dict[str, Any]] = []

@@ -24,6 +24,9 @@ _KIMI_K3_SLUG_RE = re.compile(r"(?:^|[^a-z0-9])k3(?:[^a-z0-9]|$)")
 # (the Codex product tier): no wire accepts it, every declared set stops at ``max``.
 EFFORT_LADDER: tuple[str, ...] = ("none", "minimal", "low", "medium", "high", "xhigh", "max", "ultra")
 
+#: Beyond its clamp, ``ultra`` runs the turn as multi-agent collaboration (``agent/ultra_collaboration.py``).
+ULTRA_EFFORT = "ultra"
+
 #: Widest OpenAI-compatible wire vocabulary (OpenRouter, Nous Portal).
 OPENAI_COMPAT_WIRE_EFFORTS: tuple[str, ...] = ("none", "minimal", "low", "medium", "high", "xhigh", "max")
 
@@ -160,10 +163,12 @@ def route_supported_efforts(provider: Optional[str], model: Optional[str]) -> tu
 def effort_display_label(effort: Optional[str], provider: Optional[str] = None, model: Optional[str] = None) -> str:
     """Picker / ``/reasoning`` status label for a ladder level: the level itself when the route sends
     it verbatim, else ``"<level> (sends <clamped> on this route)"`` so a Hermes-internal step such as
-    ``ultra`` (#61634) is never presented as a distinct wire level the route does not have."""
+    ``ultra`` (#61634) is never presented as a distinct wire level the route does not have; ``ultra``
+    also names its multi-agent mode."""
     requested = str(effort or "").strip().lower()
     clamped = clamp_effort(requested, route_supported_efforts(provider, model))
-    return requested if not requested or clamped == requested else f"{requested} (sends {clamped} on this route)"
+    mode = "multi-agent, " if requested == ULTRA_EFFORT else ""
+    return requested if not requested or clamped == requested else f"{requested} ({mode}sends {clamped} on this route)"
 
 
 def requested_effort(reasoning_config: Optional[dict]) -> Optional[str]:

@@ -584,6 +584,99 @@ assert ad.mark_completion_delivered({delegation_id!r})
 # Integration: delegate_task(background=True) routing
 # ---------------------------------------------------------------------------
 
+@pytest.mark.asyncio
+async def test_live_gateway_recovers_exited_owners_without_cross_profile_delivery(tmp_path, monkeypatch):
+    """A live gateway must recover durable results after their producer exits, once per home."""
+    from agent.secret_scope import is_multiplex_active, set_multiplex_active
+    from gateway.run import GatewayRunner, _profile_runtime_scope
+    from gateway.status import _pid_exists
+
+    repo = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+    homes = [tmp_path / name for name in ("a", "b")]
+    ids = []
+    producer = r'''
+import os, sys, time
+from tools import async_delegation as ad
+def child():
+    raise RuntimeError("interrupted: waiting for model response")
+r = ad.dispatch_async_delegation(
+    goal="recovery", context=None, toolsets=None, role="leaf", model="m",
+    session_key=sys.argv[1], parent_session_id=sys.argv[1], runner=child)
+deadline = time.monotonic() + 10
+while ad.active_count() and time.monotonic() < deadline:
+    time.sleep(.01)
+assert not ad.active_count()
+print(r["delegation_id"], flush=True)
+os._exit(0)
+'''
+    for home in homes:
+        home.mkdir()
+        out = subprocess.run([sys.executable, "-c", producer, home.name], cwd=repo,
+                             env={**os.environ, "HERMES_HOME": str(home), "PYTHONPATH": repo},
+                             capture_output=True, text=True, check=True, timeout=60)
+        delegation_id = out.stdout.strip().splitlines()[-1]
+        ids.append(delegation_id)
+        with sqlite3.connect(home / "state.db") as conn:
+            pid, state = conn.execute("SELECT owner_pid, state FROM async_delegations WHERE delegation_id=?",
+                                      (delegation_id,)).fetchone()
+            assert not _pid_exists(pid) and state == "error"
+            conn.execute("UPDATE async_delegations SET updated_at=? WHERE delegation_id=?",
+                         (time.time() - 600, delegation_id))
+
+    events = queue.Queue()
+    monkeypatch.setattr(process_registry, "completion_queue", events)
+    runner = object.__new__(GatewayRunner)
+    runner._primary_profile_name = "a"
+    runner._served_profile_homes = dict(zip(("a", "b"), homes))
+    runner._enrich_async_delegation_routing = lambda evt: None
+    admitted = []
+
+    async def busy(group):
+        admitted.extend(evt["delegation_id"] for evt in group)
+        return False
+
+    async def one_tick(_queue):
+        runner._running = False
+
+    async def no_wait(_delay):
+        return None
+
+    runner._deliver_async_delegation_group = busy
+    runner._drain_watch_notifications = one_tick
+    monkeypatch.setattr("gateway.run_notifications.asyncio.sleep", no_wait)
+    previous_mode = is_multiplex_active()
+    set_multiplex_active(True)
+    try:
+        with _profile_runtime_scope(homes[0], {}):
+            for _ in range(2):
+                runner._running = True
+                await runner._async_delegation_watcher()
+                assert events.qsize() == 2, "a busy consumer must retain one offered copy per orphan"
+        assert sorted(admitted) == sorted(ids * 2)
+        pending = {evt["session_key"]: evt for evt in (events.get_nowait(), events.get_nowait())}
+        # The same process alternates A -> B -> A under the complete profile scope.
+        for home in (homes[0], homes[1], homes[0]):
+            with _profile_runtime_scope(home, {}):
+                evt = pending[home.name]
+                claim = ad.claim_event_delivery(evt, "gateway-test")
+                if home == homes[0] and evt.get("delivered_in_test"):
+                    assert claim is None
+                else:
+                    assert claim is not None
+                    assert ad.claim_event_delivery(evt, "competing-consumer") is None
+                    if home == homes[0]:
+                        ad.complete_event_delivery(evt, claim)
+                        evt["delivered_in_test"] = True
+                assert ad.sweep_orphaned_completions(events) == 0
+                with sqlite3.connect(home / "state.db") as conn:
+                    rows = conn.execute("SELECT delegation_id, delivery_state FROM async_delegations").fetchall()
+                expected = "delivered" if home == homes[0] else "pending"
+                assert rows == [(evt["delegation_id"], expected)]
+        assert events.empty()
+    finally:
+        set_multiplex_active(previous_mode)
+
+
 def test_delegate_task_background_routes_async_and_does_not_block(monkeypatch):
     """delegate_task(background=True) returns a handle without running the
     child synchronously, and the child completes on the background thread.

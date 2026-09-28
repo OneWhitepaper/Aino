@@ -1,0 +1,38 @@
+▶ no local venv — using Nix dev venv via HERMES_PYTHON: <venv>/bin/python
+▶ running per-file parallel test suite via run_tests_parallel.py
+  (TZ=UTC LANG=C.UTF-8 PYTHONHASHSEED=0; clean env)
+▶ pre-compiling bytecode cache
+▶ launching test runner
+Discovered 12 test files (~436 tests) under ['tests/agent/test_api_content_row_addressed_backfill.py', 'tests/agent/test_api_content_sidecar.py', 'tests/agent/test_codex_responses_adapter.py', 'tests/agent/test_gateway_turn_sidecar.py', 'tests/agent/test_reasoning_effort_labels.py', 'tests/agent/test_run_agent.py', 'tests/agent/test_ultra_collaboration.py', 'tests/gateway/test_message_timestamps.py', 'tests/tools/test_async_delegation.py', 'tests/tools/test_delegate_output_schema.py', 'tests/tools/test_delegate_reasoning_effort.py', 'tests/tui_gateway/test_notification_turn_release.py']; running with -j 8
+[  0.5% |     2/~436 | ✓2 | ✗0] ✓ tests/agent/test_reasoning_effort_labels.py (2✓, 0.6s)
+[  2.3% |    10/~436 | ✓10 | ✗ 0] ✓ tests/agent/test_gateway_turn_sidecar.py (8✓, 0.8s)
+[  3.0% |    13/~436 | ✓13 | ✗ 0] ✓ tests/gateway/test_message_timestamps.py (3✓, 1.4s)
+[ 12.8% |    56/~436 | ✓73 | ✗ 0] ✓ tests/agent/test_codex_responses_adapter.py (60✓, 1.8s)
+[ 19.7% |    86/~436 | ✓106 | ✗  0] ✓ tests/tools/test_delegate_output_schema.py (33✓, 2.6s)
+[ 21.1% |    92/~436 | ✓112 | ✗  0] ✓ tests/agent/test_api_content_row_addressed_backfill.py (6✓, 4.5s)
+[ 22.2% |    97/~436 | ✓119 | ✗  0] ✓ tests/tui_gateway/test_notification_turn_release.py (7✓, 3.2s)
+[ 23.2% |   101/~436 | ✓123 | ✗  0] ✓ tests/tools/test_delegate_reasoning_effort.py (4✓, 5.9s)
+[ 29.4% |   128/~436 | ✓150 | ✗  0] ✓ tests/agent/test_api_content_sidecar.py (27✓, 8.6s)
+[ 30.5% |   133/~436 | ✓157 | ✗  0] ✓ tests/agent/test_ultra_collaboration.py (7✓, 9.0s)
+[ 39.2% |   171/~436 | ✓195 | ✗  0] ✓ tests/tools/test_async_delegation.py (38✓, 17.6s)
+[100.0% |   436/~436 | ✓489 | ✗  0] ✓ tests/agent/test_run_agent.py (294✓, 41.9s)
+
+=== Summary: 12 files, 489 tests passed, 0 failed (100% complete) in 41.9s (8 workers) ===
+  Durations cached to test_durations.json (12 files)
+
+=== Per-file subprocess time distribution ===
+  Files:   12
+  Total subprocess CPU-wall: 98.0s  (runner wall: 41.9s, parallelism: 8x)
+  P50: 4.47s  P90: 17.57s  P95: 41.91s  P99: 41.91s  Max: 41.91s
+  <1s: 2 files (17%)  <2s: 4 files (33%)
+  Top 10 slowest:
+     41.91s  tests/agent/test_run_agent.py
+     17.57s  tests/tools/test_async_delegation.py
+      9.02s  tests/agent/test_ultra_collaboration.py
+      8.65s  tests/agent/test_api_content_sidecar.py
+      5.93s  tests/tools/test_delegate_reasoning_effort.py
+      4.47s  tests/agent/test_api_content_row_addressed_backfill.py
+      3.22s  tests/tui_gateway/test_notification_turn_release.py
+      2.64s  tests/tools/test_delegate_output_schema.py
+      1.76s  tests/agent/test_codex_responses_adapter.py
+      1.44s  tests/gateway/test_message_timestamps.py

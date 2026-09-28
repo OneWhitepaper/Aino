@@ -41,8 +41,21 @@ afterEach(() => {
 
 describe('ReasoningPill', () => {
   it('shows a clamped pick as what the route sends, never as a distinct level (#61634)', () => {
-    // The gateway says this route clamps `ultra` to `max`: compact "Ultra→Max",
+    // The gateway says this route clamps `max` to `xhigh`: compact "Max→XHigh",
     // tooltip in the CLI's `/reasoning` wording.
+    const { unmount: unmountClamp } = render(
+      <SessionViewProvider value={tileView('max', 'xhigh')}>
+        <ReasoningPill disabled={false} model={modelState()} />
+      </SessionViewProvider>
+    )
+
+    expect(screen.getByTestId('reasoning-pill').textContent).toBe('Max→XHigh')
+    expect(screen.getByTestId('reasoning-pill').getAttribute('aria-label')).toBe(
+      'Effort: Max (sends Extra High on this route)'
+    )
+    unmountClamp()
+
+    // Ultra is a mode: it keeps its name, and the tooltip says what it runs and sends.
     const { unmount } = render(
       <SessionViewProvider value={tileView('ultra', 'max')}>
         <ReasoningPill disabled={false} model={modelState()} />
@@ -51,8 +64,8 @@ describe('ReasoningPill', () => {
 
     const pill = screen.getByTestId('reasoning-pill')
 
-    expect(pill.textContent).toBe('Ultra→Max')
-    expect(pill.getAttribute('aria-label')).toBe('Effort: Ultra (sends Max on this route)')
+    expect(pill.textContent).toBe('Ultra')
+    expect(pill.getAttribute('aria-label')).toBe('Effort: Ultra (multi-agent, sends Max)')
     unmount()
 
     // A verbatim wire level (or one the gateway has not stamped yet) makes no claim.

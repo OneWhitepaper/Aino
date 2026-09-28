@@ -26,6 +26,8 @@ from agent.model_metadata import estimate_messages_tokens_rough, estimate_reques
 from agent.image_token_cost import bind_image_token_cost
 from agent.usage_anchor import anchored_context_tokens, restore_usage_anchor
 from agent.turn_author import parse_turn_author
+from agent.ultra_collaboration import ULTRA_MODE_METADATA_KEY, ultra_mode_active, ultra_mode_note
+from agent.api_content import ApiContent, api_content_value
 
 logger = logging.getLogger(__name__)
 
@@ -80,25 +82,28 @@ def _agent_stale_thinking_on_wire(agent: Any) -> bool:
 
 def compose_user_api_content(
     content: Any, ext_prefetch_cache: str, plugin_user_context: str
-) -> Optional[str]:
+) -> Optional[ApiContent]:
     """Compose the API-bound content of the current turn's user message.
 
     Single source for the ``api_content`` sidecar and the wire bytes so they never drift
     (what turn N sends is what turn N+1 replays). ``None`` when nothing is injected."""
-    if not isinstance(content, str):
+    if not isinstance(content, (str, list)):
         return None
     fenced = build_memory_context_block(ext_prefetch_cache) if ext_prefetch_cache else ""
     injections = [part for part in (fenced, plugin_user_context) if part]
     if not injections:
         return None
-    return content + "\n\n" + "\n\n".join(injections)
+    notes = "\n\n".join(injections)
+    if isinstance(content, list):
+        return [*content, {"type": "text", "text": notes}]
+    return content + "\n\n" + notes
 
 
-def substitute_api_content(api_msg: Dict[str, Any]) -> Optional[str]:
+def substitute_api_content(api_msg: Dict[str, Any]) -> Optional[ApiContent]:
     """Pop the ``api_content`` sidecar and substitute it into ``content`` (keeps the
     prompt-cache prefix byte-stable). Returns the popped sidecar, or ``None``."""
-    sidecar = api_msg.pop("api_content", None)
-    if isinstance(sidecar, str) and sidecar and api_msg.get("role") in ("user", "assistant"):
+    sidecar = api_content_value(api_msg.pop("api_content", None))
+    if sidecar and api_msg.get("role") in ("user", "assistant"):
         api_msg["content"] = sidecar
     return sidecar
 
@@ -109,10 +114,9 @@ def drop_stale_api_content(msg: Dict[str, Any]) -> None:
     msg.pop("api_content", None)
 
 
-def extract_api_content_sidecar(msg: Mapping[str, Any]) -> Optional[str]:
-    """Extract the ``api_content`` sidecar; ``None`` when absent/non-string."""
-    v = msg.get("api_content")
-    return v if isinstance(v, str) else None
+def extract_api_content_sidecar(msg: Mapping[str, Any]) -> Optional[ApiContent]:
+    """Extract the string or multimodal wire-content sidecar."""
+    return api_content_value(msg.get("api_content"))
 
 
 def _pop_turn_note(agent: Any, attr: str) -> str:
@@ -138,7 +142,7 @@ def consume_surface_switch_note(agent: Any) -> str:
 
 def append_notes_to_multimodal_content(content: Any, notes: str) -> bool:
     """Append must-deliver notes as a durable text part on a multimodal (list) user
-    message (the sidecar path returns ``None`` for non-string content)."""
+    message for gateway paths that intentionally keep these facts in the transcript."""
     if not notes or not isinstance(content, list):
         return False
     with suppress(Exception):
@@ -789,8 +793,8 @@ def _merge_gateway_notes(
 ) -> str:
     """Must-deliver per-turn notes ride the user-message injection channel (one-shot) so the
     ephemeral system prompt stays byte-stable: the gateway's staged notes, then the
-    surface-switch correction. Multimodal (list) content can't take the string sidecar —
-    append a durable text part instead."""
+    surface-switch correction. Gateway facts in multimodal input stay as durable text
+    parts, preserving that path's existing transcript semantics."""
     _turn_notes = "\n\n".join(
         part for part in (consume_gateway_turn_context_notes(agent),
                           consume_surface_switch_note(agent)) if part
@@ -865,15 +869,22 @@ def _stamp_api_content_sidecar(
     API copy, so stamp the exact sent bytes on the live dict for replay."""
     _turn_user_msg = messages[current_turn_user_idx]
     live_content = _turn_user_msg.get("content")
-    from agent.session_persistence import _persist_lock, durable_user_row_content
+    from agent.session_persistence import _durable_content, _persist_lock, durable_user_row_content
     # Match the row the flush wrote (persist override = clean transcript), not the live bytes.
     durable_content, _api_content = durable_user_row_content(
         agent, _turn_user_msg, live_content,
         compose_user_api_content(live_content or "", ext_prefetch_cache, plugin_user_context),
     )
-    if _api_content is None or _api_content == durable_content:
+    durable_content = _durable_content(durable_content)
+    _metadata = _turn_user_msg.get("display_metadata")
+    _mode_recorded = isinstance(_metadata, dict) and isinstance(_metadata.get(ULTRA_MODE_METADATA_KEY), bool)
+    if _api_content is not None and _api_content != durable_content:
+        _turn_user_msg["api_content"] = _api_content
+    elif not _mode_recorded:
         return
-    _turn_user_msg["api_content"] = _api_content
+    # An adopted unanswered row may retain a one-shot injection from its first
+    # attempt. Metadata-only backfill must persist the sidecar the wire will replay.
+    _api_content = api_content_value(_turn_user_msg.get("api_content"))
 
     # When another writer materialized this turn's user row BEFORE the sidecar existed — in-place
     # preflight compaction, or a close/early flush that raced the prologue (#102194) — the crash
@@ -894,12 +905,13 @@ def _stamp_api_content_sidecar(
         if _db is None or not (isinstance(_row_id, int) or _in_place_compacted):
             return
         try:
+            _metadata_kwargs = {"display_metadata": _metadata} if _mode_recorded else {}
             if isinstance(_row_id, int):
-                _db.set_message_api_content(agent.session_id, _row_id, durable_content, _api_content)
+                _db.set_message_api_content(agent.session_id, _row_id, durable_content, _api_content, **_metadata_kwargs)
             else:
                 # Compacted copies carry no row id; positional is safe only because
                 # archive_and_compact just made this message the newest active user row.
-                _db.set_latest_user_api_content(agent.session_id, durable_content, _api_content)
+                _db.set_latest_user_api_content(agent.session_id, durable_content, _api_content, **_metadata_kwargs)
         except Exception:
             logger.warning("api_content backfill failed for session=%s", agent.session_id or "none", exc_info=True)
 
@@ -1063,6 +1075,14 @@ def build_turn_context(
     plugin_user_context = _merge_gateway_notes(
         agent, messages, current_turn_user_idx, plugin_user_context
     )
+    # Sidecars preserve the user's visible input, including native-image turns.
+    # These routes bypass the shared durable wire-content path, so a mode note could
+    # not be replayed reliably after the first turn.
+    _ultra_note = (
+        ultra_mode_note(agent, messages[:max(current_turn_user_idx, 0)])
+        if not moa_active and getattr(agent, "api_mode", None) != "codex_app_server" else ""
+    )
+    plugin_user_context = "\n\n".join(part for part in (plugin_user_context, _ultra_note) if part)
 
     _bind_interrupt_scope(agent, ra)
     ext_prefetch_cache = _memory_turn_start_and_prefetch(agent, original_user_message, turn_author)
@@ -1074,6 +1094,15 @@ def build_turn_context(
         and 0 <= current_turn_user_idx < len(messages)
         and messages[current_turn_user_idx].get("role") == "user"
     ):
+        if (
+            not getattr(agent, "_delegate_depth", 0)
+            and ("delegate_task" in (getattr(agent, "valid_tool_names", None) or ()) or _ultra_note)
+            and (_ultra_note or not ultra_mode_active(agent))
+        ):
+            row = messages[current_turn_user_idx]
+            row["display_metadata"] = {
+                **(row.get("display_metadata") or {}), ULTRA_MODE_METADATA_KEY: ultra_mode_active(agent),
+            }
         _stamp_api_content_sidecar(
             agent, messages, current_turn_user_idx, ext_prefetch_cache,
             plugin_user_context, preflight_compressed=compaction.compressed,
@@ -1157,14 +1186,14 @@ def build_api_messages(
         # it from EVERY outgoing copy. display_* is display-only timeline metadata
         # (strict OpenAI backends reject unknown keys); _row_id is the durable row id
         # from _rows_to_conversation and only chat-completions strips underscore keys.
-        _api_content = api_msg.pop("api_content", None)
+        _api_content = api_content_value(api_msg.pop("api_content", None))
         for key in ("display_kind", "display_metadata", "_row_id"):
             api_msg.pop(key, None)
 
         # Inject ephemeral context (memory prefetch + pre_llm_call user hooks)
         # at API time only; `messages` is untouched beyond the api_content stamp.
         if msg is current_turn_message and msg.get("role") == "user":
-            if isinstance(_api_content, str) and _api_content:
+            if _api_content:
                 # Reuse the prologue's stamp so sidecar and wire cannot drift
                 # and every pass this turn sends identical bytes.
                 api_msg["content"] = _api_content
@@ -1176,7 +1205,7 @@ def build_api_messages(
                 if _composed is not None:
                     api_msg["content"] = _composed
         elif (
-            isinstance(_api_content, str) and _api_content
+            _api_content
             and msg.get("role") in ("user", "assistant")
         ):
             # Historical row: replay the exact bytes sent live so the prompt-cache

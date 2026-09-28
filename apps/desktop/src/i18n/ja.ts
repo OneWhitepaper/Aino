@@ -3567,6 +3567,8 @@ export const ja = defineLocale({
       max: '最大',
       ultra: 'ウルトラ',
       sendsOnRoute: (level: string) => `このルートでは ${level} を送信`,
+      multiAgent: 'マルチエージェント協働',
+      multiAgentSends: (level: string) => `マルチエージェント協働、${level} を送信`,
       updateFailed: 'モデルオプションの更新に失敗しました',
       fastFailed: '高速モードの更新に失敗しました'
     },

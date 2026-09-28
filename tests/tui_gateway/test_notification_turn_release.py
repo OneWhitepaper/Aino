@@ -9,9 +9,14 @@ starting a turn leaves that session unusable for the life of the backend.
 
 from __future__ import annotations
 
+import os
 import queue
 import sqlite3
+import subprocess
+import sys
 import threading
+import time
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -132,3 +137,96 @@ def test_the_poller_thread_survives_a_dispatch_that_raises(monkeypatch):
 
     assert not worker.is_alive()
     assert handled == [1, 1], "the second event must still be dispatched after the first one raised"
+
+
+def test_live_poller_reoffers_an_orphan_after_wrong_owner_busy_and_failed_admission(tmp_path, monkeypatch):
+    """A durable result survives an absent owner and a rejected turn, without duplicate admission."""
+    from agent.secret_scope import is_multiplex_active, set_multiplex_active
+    from tools import async_delegation as ad
+    from tools.process_registry import process_registry
+
+    repo = str(Path(__file__).resolve().parents[2])
+    home = tmp_path / "profile"
+    home.mkdir()
+    producer = r'''
+import os, time
+from tools import async_delegation as ad
+r = ad.dispatch_async_delegation(
+    goal="recovery", context=None, toolsets=None, role="leaf", model="m",
+    session_key="owner", parent_session_id="owner",
+    runner=lambda: {"status": "completed", "summary": "persisted before reload"})
+deadline = time.monotonic() + 10
+while ad.active_count() and time.monotonic() < deadline:
+    time.sleep(.01)
+assert not ad.active_count()
+print(r["delegation_id"], flush=True)
+os._exit(0)
+'''
+    out = subprocess.run([sys.executable, "-c", producer], cwd=repo,
+                         env={**os.environ, "HERMES_HOME": str(home), "PYTHONPATH": repo},
+                         capture_output=True, text=True, check=True, timeout=60)
+    delegation_id = out.stdout.strip().splitlines()[-1]
+
+    def age_result():
+        with sqlite3.connect(home / "state.db") as conn:
+            conn.execute("UPDATE async_delegations SET updated_at=? WHERE delegation_id=?",
+                         (time.time() - 600, delegation_id))
+
+    def delivery():
+        with sqlite3.connect(home / "state.db") as conn:
+            return conn.execute("SELECT delivery_state, delivery_claim, delivery_attempts "
+                                "FROM async_delegations WHERE delegation_id=?", (delegation_id,)).fetchone()
+
+    events = queue.Queue()
+    monkeypatch.setattr(process_registry, "completion_queue", events)
+    monkeypatch.setattr(server, "_emit", lambda *a, **k: None)
+    for name in ("_poll_bot_live_delivery_guarded", "_maybe_fire_tui_loop_tick", "_maybe_fire_tui_heartbeat_tick"):
+        monkeypatch.setattr(server, name, lambda *a, **k: None)
+    # Exercise the real poller on every pass without waiting for its scheduling interval.
+    monkeypatch.setattr(ad, "ORPHAN_SWEEP_INTERVAL_S", 0.0, raising=False)
+    attempts = []
+
+    def submit(_rid, sid, _session, text, **kwargs):
+        attempts.append((sid, text))
+        if len(attempts) == 1:
+            raise RuntimeError("no free worker")
+
+    monkeypatch.setattr(server, "_run_prompt_submit", submit)
+    sessions = {key: {"session_key": key, "profile_home": str(home), "history": [],
+                      "running": False, "history_lock": threading.RLock()} for key in ("other", "owner")}
+    monkeypatch.setattr(server, "_sessions", {"other": sessions["other"]})
+
+    def poll(key):
+        stop = threading.Event()
+        monkeypatch.setattr(server, "_notif_poll_kanban", lambda *a: stop.set())
+        server._notification_poller_loop(stop, key, sessions[key])
+
+    previous_mode = is_multiplex_active()
+    ad._reset_for_tests()
+    set_multiplex_active(True)
+    try:
+        age_result()
+        poll("other")  # No live owner yet; the discarded offer must remain recoverable.
+        assert events.empty() and attempts == []
+        assert delivery() == ("pending", None, 0)
+        monkeypatch.setitem(server._sessions, "owner", sessions["owner"])
+        sessions["owner"]["running"] = True
+        for _ in range(2):
+            poll("owner")
+            assert events.qsize() == 1, "a busy owner must retain exactly one queued copy"
+            assert delivery() == ("pending", None, 0)
+        sessions["owner"]["running"] = False
+        poll("owner")  # Admission fails after the durable claim; both claims must be returned.
+        assert sessions["owner"]["running"] is False and events.empty()
+        assert delivery() == ("pending", None, 1)
+        age_result()
+        poll("owner")
+        assert delivery() == ("delivered", None, 2)
+        sessions["owner"]["running"] = False
+        poll("owner")
+        assert len(attempts) == 2 and all(sid == "owner" for sid, _ in attempts)
+        assert "persisted before reload" in attempts[-1][1]
+        assert events.empty()
+    finally:
+        set_multiplex_active(previous_mode)
+        ad._reset_for_tests()

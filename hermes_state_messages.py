@@ -10,6 +10,7 @@ import re
 import time
 from typing import Any, Dict, List, Optional, Tuple
 
+from agent.api_content import ApiContent, decode_api_content, encode_api_content
 from agent.context_compressor import (
     _DB_PERSISTED_MARKER as _DB_PERSISTED_MARKER_KEY, _is_checkpoint_item, _newest_checkpoint_carrier,
     split_user_originated_turn)
@@ -274,7 +275,7 @@ class SessionMessagesMixin:
               for k in ("reasoning_details", "codex_reasoning_items", "codex_message_items")),
             msg.get("platform_message_id") or msg.get("message_id"),
             1 if msg.get("observed") else 0, 1 if msg.get("_compressed_summary") else 0, 1,
-            _str_or_none(msg.get("api_content")), _str_or_none(msg.get("display_kind")),
+            _scrub_surrogates(encode_api_content(msg.get("api_content"))), _str_or_none(msg.get("display_kind")),
             display_metadata, self._display_identity(self._display_dedupe_key(identity_row)))
 
     @staticmethod
@@ -296,11 +297,11 @@ class SessionMessagesMixin:
         reasoning_content: str = None, reasoning_details: Any = None, codex_reasoning_items: Any = None,
         codex_message_items: Any = None, platform_message_id: str = None, observed: bool = False,
         effect_disposition: Optional[str] = None, _compressed_summary: bool = False, timestamp: Any = None,
-        api_content: Optional[str] = None, display_kind: Optional[str] = None,
+        api_content: Optional[ApiContent] = None, display_kind: Optional[str] = None,
         display_metadata: Optional[Dict[str, Any]] = None, compression_lock_holder: Optional[str] = None,
         turn_lease_holder: Optional[str] = None, turn_lease_ttl_seconds: float = 300.0) -> int:
         """Append one message; returns the row id and bumps the session counters. ``platform_message_id``:
-        the platform's own id. ``api_content``: byte-fidelity sidecar, the exact string sent to the API when
+        the platform's own id. ``api_content``: byte-fidelity sidecar, the exact content sent to the API when
         it differed from ``content``, stored as sent except lone surrogates."""
         msg = dict(locals())  # every keyword above is a message-dict field of the same name
         # Encode outside the write txn (display metadata first: log-order parity).
@@ -747,7 +748,8 @@ class SessionMessagesMixin:
             self._message_columns_cache = [r[1] for r in conn.execute("PRAGMA table_info(messages)").fetchall()]
         return self._message_columns_cache
 
-    def set_latest_user_api_content(self, session_id: str, content: Any, api_content: str) -> int:
+    def set_latest_user_api_content(self, session_id: str, content: Any, api_content: Optional[ApiContent], *,
+                                    display_metadata: Optional[Dict[str, Any]] = None) -> int:
         """Backfill the ``api_content`` sidecar onto the newest ACTIVE user row (0/1 rows). Preflight compaction
         inserts that row BEFORE the sidecar exists and the later persist identity-skips compacted dicts;
         without this a reload reopens the prompt-cache divergence. ``content`` match guards a racing rewrite.
@@ -765,13 +767,15 @@ class SessionMessagesMixin:
         instead — it addresses the exact row and cannot land on a neighbour.
         """
         return self._write_rowcount(
-            "UPDATE messages SET api_content = ? WHERE id = (SELECT id FROM messages "
+            "UPDATE messages SET api_content = ?, display_metadata = COALESCE(?, display_metadata) WHERE id = (SELECT id FROM messages "
             "WHERE session_id = ? AND role = 'user' AND active = 1 ORDER BY id DESC LIMIT 1"
             ") AND content IS ?",
-            (_scrub_surrogates(api_content), session_id, self._encode_content(content)))
+            (_scrub_surrogates(encode_api_content(api_content)), self._encode_display_metadata(display_metadata),
+             session_id, self._encode_content(content)))
 
     def set_message_api_content(
-        self, session_id: str, row_id: int, content: Any, api_content: str
+        self, session_id: str, row_id: int, content: Any, api_content: Optional[ApiContent], *,
+        display_metadata: Optional[Dict[str, Any]] = None,
     ) -> int:
         """Backfill the ``api_content`` sidecar onto ONE known durable row.
 
@@ -793,9 +797,10 @@ class SessionMessagesMixin:
         if not session_id or isinstance(row_id, bool) or not isinstance(row_id, int) or row_id <= 0:
             return 0
         return self._write_rowcount(
-            "UPDATE messages SET api_content = ? WHERE id = ? AND session_id = ? "
+            "UPDATE messages SET api_content = ?, display_metadata = COALESCE(?, display_metadata) WHERE id = ? AND session_id = ? "
             "AND role = 'user' AND active = 1 AND content IS ?",
-            (_scrub_surrogates(api_content), row_id, session_id, self._encode_content(content)))
+            (_scrub_surrogates(encode_api_content(api_content)), self._encode_display_metadata(display_metadata),
+             row_id, session_id, self._encode_content(content)))
 
     def set_user_message_content(self, session_id: str, row_id: int, content: Any) -> int:
         """Rewrite the content of ONE known active user row. Used when a user turn was written at submit
@@ -936,6 +941,8 @@ class SessionMessagesMixin:
         if summary_flag and msg.pop("_compressed_summary", 0):
             msg["_compressed_summary"] = True
         msg["content"] = self._decode_content(msg["content"])
+        if msg.get("api_content") is not None:
+            msg["api_content"] = decode_api_content(msg["api_content"])
         if msg.get("tool_calls"):
             msg["tool_calls"] = _json_or(
                 msg["tool_calls"], [], f"Failed to deserialize tool_calls in {warn_context}, falling back to []")
@@ -1144,7 +1151,10 @@ class SessionMessagesMixin:
             # the ENTIRE transcript on flush.
             if include_row_ids and row["id"] is not None:
                 msg["_row_id"] = row["id"]
-            msg.update((col, row[col]) for col in ("api_content", "display_kind") if row[col])
+            if row["api_content"]:
+                msg["api_content"] = decode_api_content(row["api_content"])
+            if row["display_kind"]:
+                msg["display_kind"] = row["display_kind"]
             if row["display_metadata"] and (decoded := self._decode_display_metadata(row["display_metadata"])) is not None:
                 msg["display_metadata"] = decoded
             if include_summary_markers and row["_compressed_summary"]:

@@ -487,7 +487,10 @@ def _validate_child_output_schema(
     from tools.delegation_output_schema import build_retry_message, validate_output
     _first_text = result.get("final_response") or ""
     _schema_valid, _schema_errors = validate_output(_first_text, _output_schema)
-    if _schema_valid or not _first_text.strip() or result.get("interrupted", False):
+    # Transport failures carry a human-readable final_response too; they are not
+    # malformed answers and must not restart the task as a schema-repair turn.
+    if (_schema_valid or not _first_text.strip() or result.get("interrupted")
+            or result.get("failed") or result.get("error")):
         return _SchemaOutcome(_output_schema, _schema_valid, _schema_errors, 0)
 
     # Exactly one retry turn, carrying the validation errors verbatim (no
@@ -500,7 +503,7 @@ def _validate_child_output_schema(
         with delegated_child_context(str(getattr(child, "session_id", "") or "")):
             _retry_result = child.run_conversation(
                 user_message=build_retry_message(_schema_errors), task_id=child_task_id,
-                stream_callback=relay_child_text,
+                stream_callback=relay_child_text, conversation_history=result.get("messages"),
             )
     except Exception as _retry_exc:
         logger.warning("Subagent %d schema-retry turn failed: %s", task_index, _retry_exc)
@@ -513,8 +516,10 @@ def _validate_child_output_schema(
         except (TypeError, ValueError):
             pass
         _retry_messages = _retry_result.get("messages")
-        if isinstance(_retry_messages, list) and isinstance(result.get("messages"), list):
-            result["messages"] = result["messages"] + _retry_messages
+        if isinstance(_retry_messages, list):
+            # run_conversation returns the complete continued history, including
+            # the original task constraints and evidence passed above.
+            result["messages"] = _retry_messages
         _schema_valid, _schema_errors = validate_output(_retry_text, _output_schema)
     return _SchemaOutcome(_output_schema, _schema_valid, _schema_errors, 1)
 

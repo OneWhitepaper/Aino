@@ -3436,6 +3436,8 @@ export const ru = defineLocale({
       max: 'Максимум',
       ultra: 'Ультра',
       sendsOnRoute: (level: string) => `на этом маршруте отправляется ${level}`,
+      multiAgent: 'несколько агентов',
+      multiAgentSends: (level: string) => `несколько агентов, отправляется ${level}`,
       updateFailed: 'Не удалось обновить опцию модели',
       fastFailed: 'Не удалось обновить быстрый режим'
     },

@@ -5318,6 +5318,8 @@ export const zh = defineLocale({
       max: '最高',
       ultra: '超高',
       sendsOnRoute: (level: string) => `此路由实际发送 ${level}`,
+      multiAgent: '多智能体协作',
+      multiAgentSends: (level: string) => `多智能体协作，发送 ${level}`,
       updateFailed: '模型选项更新失败',
       fastFailed: '快速模式更新失败'
     },

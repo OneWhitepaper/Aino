@@ -1,0 +1,225 @@
+{
+  "findings": [
+    {
+      "claim": "一次性模型切换的快照不包含 capabilities，但备用恢复路径会读取 snapshot.get(\"capabilities\") 并传给 switch_model，因此该路径无法恢复切换前的能力配置。",
+      "status": "confirmed",
+      "trigger": "执行 /model --once，且 primary_runtime 恢复不存在、返回假值或抛异常，切换前 agent 的能力配置又不是默认值。",
+      "evidence": [
+        {
+          "file": "tui_gateway/model_switch.py",
+          "line_start": 15,
+          "line_end": 22,
+          "reason": "_RUNTIME_KEYS 只包含 model、provider、api_key、base_url、api_mode；快照未保存 capabilities。"
+        },
+        {
+          "file": "tui_gateway/model_switch.py",
+          "line_start": 33,
+          "line_end": 51,
+          "reason": "primary_runtime 恢复失败后调用 switch_model，但 capabilities 使用不存在于该快照的 snapshot.get(\"capabilities\")。"
+        }
+      ]
+    },
+    {
+      "claim": "agent.switch_model 成功后，任一后续提交、持久化、历史标记或通知步骤失败，都没有回滚 live agent；一次性恢复快照甚至要到最后才写入 session。",
+      "status": "confirmed",
+      "trigger": "_restart_slash_worker、持久化函数、_append_model_switch_marker、_emit_session_info 或 status.update 抛异常，或之后的 persist_model_selection 抛异常。",
+      "evidence": [
+        {
+          "file": "tui_gateway/model_switch.py",
+          "line_start": 231,
+          "line_end": 272,
+          "reason": "switch_model 成功后直接执行多个可能失败的后续操作；one_turn_model_restore 只在所有这些操作完成后才写入。"
+        },
+        {
+          "file": "tui_gateway/model_switch.py",
+          "line_start": 323,
+          "line_end": 348,
+          "reason": "_apply_model_switch 的异常处理只恢复 composer_override_profile，没有恢复 agent 的旧模型运行时；全局持久化和 reasoning 更新也发生在 agent 已切换之后。"
+        }
+      ]
+    },
+    {
+      "claim": "模型切换失败被假定为 agent.switch_model 已完成原子回滚，但本模块没有验证或执行二次恢复；该正确性依赖外部 switch_model 契约。",
+      "status": "needs_verification",
+      "trigger": "agent.switch_model 在修改部分运行时字段后抛异常，而其实现没有保证完全恢复旧 provider、model、凭据和 endpoint。",
+      "evidence": [
+        {
+          "file": "tui_gateway/model_switch.py",
+          "line_start": 234,
+          "line_end": 248,
+          "reason": "异常处理只记录并抛出 ValueError，代码注释直接假定 in-place swap 已回滚，没有读取旧状态或显式恢复。"
+        }
+      ]
+    },
+    {
+      "claim": "profile 运行时 scope 的获取过程不是事务性的；中途失败时，已经安装的 home 或 secret scope 可能残留，因为 contextmanager 的 try/finally 位于获取函数调用之后。",
+      "status": "confirmed",
+      "trigger": "set_secret_scope、launch_terminal_env、set_hermes_home_override 或 install_profile_terminal_scope 在前置 scope 已安装后失败。",
+      "evidence": [
+        {
+          "file": "tui_gateway/model_switch.py",
+          "line_start": 71,
+          "line_end": 95,
+          "reason": "profile 分支先安装 home/secret，再安装 terminal；任一后续调用失败时函数没有清理已安装 token。launch profile 在 multiplex 下也可能先安装 secret 后在 launch_terminal_env 失败。"
+        },
+        {
+          "file": "tui_gateway/model_switch.py",
+          "line_start": 120,
+          "line_end": 128,
+          "reason": "_profile_runtime_scope_tokens 在 try 之前调用；获取 token 阶段抛错时不会进入 finally，因此不会调用 release。"
+        }
+      ]
+    },
+    {
+      "claim": "模型切换读取当前运行时与提交切换之间没有本模块级别的会话锁；并发切换时 previous_model、previous_provider、model_override 和持久化结果可能基于过期状态。",
+      "status": "needs_verification",
+      "trigger": "同一 session 同时处理两个 /model 请求，或配置同步与用户切换并发执行，而外部调用方未提供串行化。",
+      "evidence": [
+        {
+          "file": "tui_gateway/model_switch.py",
+          "line_start": 287,
+          "line_end": 304,
+          "reason": "_apply_model_switch 先读取 agent/session 当前状态并解析目标，没有在该读取与提交之间建立锁。"
+        },
+        {
+          "file": "tui_gateway/model_switch.py",
+          "line_start": 231,
+          "line_end": 259,
+          "reason": "_commit_agent_switch 使用之前读取的 current_model 和 previous_provider，并连续修改 agent、session、持久化状态和历史标记。"
+        },
+        {
+          "file": "tui_gateway/model_switch.py",
+          "line_start": 337,
+          "line_end": 346,
+          "reason": "model_override 与全局配置持久化在 agent 切换之后单独写入，缺少并发版本检查或条件提交。"
+        }
+      ]
+    },
+    {
+      "claim": "配置同步在尝试切换前就记录 config_model_seen；切换失败后只记录日志，因此同一个失败配置目标不会在后续 turn 自动重试，直到目标 tuple 发生变化。",
+      "status": "confirmed",
+      "trigger": "config.yaml 的目标模型发生变化，但 _apply_model_switch 因解析、运行时、provider 或持久化相关异常失败。",
+      "evidence": [
+        {
+          "file": "tui_gateway/model_switch.py",
+          "line_start": 425,
+          "line_end": 442,
+          "reason": "目标与 seen 不同后，代码在执行切换前即写入 session[\"config_model_seen\"]。"
+        },
+        {
+          "file": "tui_gateway/model_switch.py",
+          "line_start": 452,
+          "line_end": 462,
+          "reason": "失败路径只 warning 并发送错误通知；下一次同目标会在 seen 比较处直接返回。"
+        }
+      ]
+    },
+    {
+      "claim": "_history_to_messages 对 role=user 且 display_kind=model_switch 的 [System: ...] 行明确跳过隐藏过滤，随后作为 role=user 消息输出；这与函数注释所述“model-switch 不渲染为 user bubble”不一致。",
+      "status": "needs_verification",
+      "trigger": "恢复的历史行同时满足 role=user、文本以 [System: 开头、display_kind=model_switch；是否最终显示为非用户时间线项取决于外部消费者。",
+      "evidence": [
+        {
+          "file": "tui_gateway/session_history.py",
+          "line_start": 137,
+          "line_end": 145,
+          "reason": "隐藏标记判定将该行识别为需要隐藏的 user 系统标记。"
+        },
+        {
+          "file": "tui_gateway/session_history.py",
+          "line_start": 200,
+          "line_end": 212,
+          "reason": "过滤条件对 display_kind=model_switch 特意例外，因此该行不会被 continue。"
+        },
+        {
+          "file": "tui_gateway/session_history.py",
+          "line_start": 241,
+          "line_end": 262,
+          "reason": "该行随后以原 role=user 和 display_kind=model_switch 加入返回 messages。"
+        }
+      ]
+    },
+    {
+      "claim": "图像路径全部无效且用户文本为空时，模型侧图像引用构造函数返回默认提问，但持久化构造函数返回空字符串，导致恢复历史与实际提交内容不一致。",
+      "status": "confirmed",
+      "trigger": "相同的空 user_text 和 image_paths 被传入，且 image_paths 中没有任何 Path.exists() 为真的路径。",
+      "evidence": [
+        {
+          "file": "tui_gateway/session_history.py",
+          "line_start": 24,
+          "line_end": 42,
+          "reason": "_build_image_ref_message 过滤不存在路径后，在无 prefix、无文本时返回 \"What do you see in this image?\"。"
+        },
+        {
+          "file": "tui_gateway/session_history.py",
+          "line_start": 45,
+          "line_end": 54,
+          "reason": "_build_persist_message_with_image_refs 在同样条件下返回空文本。"
+        },
+        {
+          "file": "tui_gateway/session_history.py",
+          "line_start": 57,
+          "line_end": 65,
+          "reason": "_build_persist_user_message 对非 list payload 直接返回上述空持久化文本。"
+        }
+      ]
+    },
+    {
+      "claim": "in-flight 状态操作不携带 turn identity；迟到的 delta 会在没有当前 turn 时新建一个伪 turn，迟到的 clear/fail 也可能清除或覆盖后续 turn。",
+      "status": "needs_verification",
+      "trigger": "前一 turn 的异步回调在 _clear_inflight_turn 后到达，或在新 turn 已通过 _start_inflight_turn 建立后才执行，且外部调用方未保证回调顺序。",
+      "evidence": [
+        {
+          "file": "tui_gateway/session_history.py",
+          "line_start": 287,
+          "line_end": 300,
+          "reason": "_start_inflight_turn 直接覆盖 session[\"inflight_turn\"]，没有 generation 或 turn id。"
+        },
+        {
+          "file": "tui_gateway/session_history.py",
+          "line_start": 303,
+          "line_end": 311,
+          "reason": "_append_inflight_delta 在当前值不是 dict 时直接创建新 turn，且新对象没有 started_at，可能把迟到 delta 变成孤立状态。"
+        },
+        {
+          "file": "tui_gateway/session_history.py",
+          "line_start": 330,
+          "line_end": 358,
+          "reason": "_clear_inflight_turn 和 _fail_inflight_turn 只操作当前 session 值，没有校验它是否属于产生回调的原 turn。"
+        }
+      ]
+    },
+    {
+      "claim": "seed history 只接受非空字符串 content；包含结构化内容、数组、多模态对象或非字符串值的种子行会被静默丢弃。",
+      "status": "confirmed",
+      "trigger": "会话恢复或创建时传入的 seed history item 使用 content 数组、结构化 dict、数值，或仅包含空白字符串。",
+      "evidence": [
+        {
+          "file": "tui_gateway/session_history.py",
+          "line_start": 266,
+          "line_end": 279,
+          "reason": "仅当 content 为 str 且 strip() 非空时才 append；其他合法性取决于外部 seed-history 契约，代码没有错误或保留路径。"
+        }
+      ]
+    },
+    {
+      "claim": "历史恢复解析 assistant.tool_calls 时直接对每个 tc 调用 .get；畸形或部分写入的 tool_calls 行会使整个 _history_to_messages 抛异常，而不是跳过坏项。",
+      "status": "needs_verification",
+      "trigger": "持久化历史中的 assistant.tool_calls 含非 dict 项，或 function 字段不是预期 dict。",
+      "evidence": [
+        {
+          "file": "tui_gateway/session_history.py",
+          "line_start": 217,
+          "line_end": 225,
+          "reason": "循环内直接执行 tc.get 和 fn.get，仅对 arguments 的 JSON 解析做了异常处理，没有保护 tc/function 的形状。"
+        }
+      ]
+    }
+  ],
+  "limitations": [
+    "仅读取并审查 tui_gateway/model_switch.py 与 tui_gateway/session_history.py，未读取或搜索快照外的调用方、agent.switch_model、持久化层、前端消费者或配置解析实现。",
+    "未联网、未安装依赖、未执行运行时测试；因此涉及外部函数是否抛异常、是否原子回滚、是否由调用方串行化，以及 display_kind 的最终渲染语义的结论标为 needs_verification。",
+    "没有假设外部调用方会提供 history_lock、单会话请求串行化或有效图像路径；若这些契约确实存在，相应并发和输入边界风险可能不会实际触发。",
+    "未修改任何文件。"
+  ]
+}

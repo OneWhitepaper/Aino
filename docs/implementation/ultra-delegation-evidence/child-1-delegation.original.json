@@ -1,0 +1,188 @@
+{
+  "findings": [
+    {
+      "claim": "快照未能证明排队中的子任务可被 stop 可靠取消：子任务先被挂接并发出 spawn_requested，只有工作线程真正开始运行后才登记到活动子任务注册表。",
+      "status": "needs_verification",
+      "trigger": "批量或后台派发达到并发上限、子任务尚在等待调度时立即调用 action='stop'。",
+      "evidence": [
+        {
+          "file": "tools/delegate_tool.py",
+          "line_start": 288,
+          "line_end": 291,
+          "reason": "_attach_child 和 subagent.spawn_requested 在构造阶段执行，但此处尚未调用活动注册函数。"
+        },
+        {
+          "file": "tools/delegate_tool.py",
+          "line_start": 326,
+          "line_end": 330,
+          "reason": "_register_child 仅在 _run_single_child 的工作线程路径中执行。"
+        },
+        {
+          "file": "tools/delegate_tool.py",
+          "line_start": 457,
+          "line_end": 459,
+          "reason": "控制动作转交给外部的 _handle_control_action；本文件未展示其如何查找尚未登记的排队子任务。"
+        }
+      ]
+    },
+    {
+      "claim": "运行中 stop 与正常完成之间的线性化和幂等性未被本快照证明；子任务从 await_child 返回后，仍会继续合并 steer、刷新进度、构造结果并发送完成事件，最后才进入 cleanup。",
+      "status": "needs_verification",
+      "trigger": "action='stop' 与子任务从 await_child 返回或发送完成事件同时发生。",
+      "evidence": [
+        {
+          "file": "tools/delegate_tool.py",
+          "line_start": 338,
+          "line_end": 365,
+          "reason": "await_child 返回后依次执行结果校验、late steer 合并、进度刷新、结果构造和 emit_complete，cleanup 位于 finally。"
+        },
+        {
+          "file": "tools/delegate_tool.py",
+          "line_start": 457,
+          "line_end": 459,
+          "reason": "控制动作通过独立的 _handle_control_action 路径处理；本文件未提供其与完成路径的锁、取消令牌或状态仲裁。"
+        }
+      ]
+    },
+    {
+      "claim": "max_concurrent_children 的配置边界只有下限 1，没有上限；大于 10 的值只触发一次成本警告，不会被限制。",
+      "status": "confirmed",
+      "trigger": "delegation.max_concurrent_children 或其环境变量设置为大于 10 的较大正整数。",
+      "evidence": [
+        {
+          "file": "tools/delegate_tool_config.py",
+          "line_start": 93,
+          "line_end": 108,
+          "reason": "解析逻辑使用 max(1, int(v))，明确没有 ceiling；超过 10 仅调用警告逻辑。"
+        },
+        {
+          "file": "tools/delegate_tool.py",
+          "line_start": 503,
+          "line_end": 510,
+          "reason": "delegate_task 直接取得该值并将其传给任务规范化流程。"
+        }
+      ]
+    },
+    {
+      "claim": "max_concurrent_children 的类型边界并非严格整数：有限浮点配置会被 int 截断；若配置加载器提供 float('inf')，OverflowError 不会被 _knob 捕获并可能中断派发。",
+      "status": "confirmed",
+      "trigger": "配置字典中出现 3.9 等有限浮点值，或出现由配置解析得到的无穷大浮点值。",
+      "evidence": [
+        {
+          "file": "tools/delegate_tool_config.py",
+          "line_start": 61,
+          "line_end": 77,
+          "reason": "_knob 只捕获 TypeError 和 ValueError，不捕获 OverflowError。"
+        },
+        {
+          "file": "tools/delegate_tool_config.py",
+          "line_start": 93,
+          "line_end": 102,
+          "reason": "max_concurrent_children 使用 int(v)，有限浮点会被截断，int(float('inf')) 会抛出 OverflowError。"
+        },
+        {
+          "file": "tools/delegate_tool.py",
+          "line_start": 503,
+          "line_end": 504,
+          "reason": "delegate_task 调用该配置读取函数时没有包围 OverflowError 的异常处理。"
+        }
+      ]
+    },
+    {
+      "claim": "legacy 的 delegation.max_async_children 不再提供独立的后台并发上限，而是被明确忽略并改用 max_concurrent_children。",
+      "status": "confirmed",
+      "trigger": "配置中仍设置 delegation.max_async_children，并期望它独立限制后台派发。",
+      "evidence": [
+        {
+          "file": "tools/delegate_tool_config.py",
+          "line_start": 121,
+          "line_end": 132,
+          "reason": "_get_max_async_children 明确记录旧键被忽略，并返回 _get_max_concurrent_children() 的结果。"
+        }
+      ]
+    },
+    {
+      "claim": "本快照只能确认并发值被传入任务规范化和批量派发入口，不能确认运行时是否真正限制同时运行的 worker 数量、是否排队或拒绝，以及满载时是否回退同步执行。",
+      "status": "needs_verification",
+      "trigger": "任务数量超过 max_concurrent_children，尤其是后台批量派发达到容量时。",
+      "evidence": [
+        {
+          "file": "tools/delegate_tool.py",
+          "line_start": 503,
+          "line_end": 510,
+          "reason": "max_children 被传给未展开的 _normalize_task_list。"
+        },
+        {
+          "file": "tools/delegate_tool.py",
+          "line_start": 531,
+          "line_end": 535,
+          "reason": "构造 _Batch 后将执行交给未展开的 _run_batch；本文件没有 worker 数量或队列状态的实现。"
+        },
+        {
+          "file": "tools/delegate_tool_config.py",
+          "line_start": 121,
+          "line_end": 124,
+          "reason": "配置注释声称后台满载时拒绝异步派发，但该行为依赖本快照外的 dispatch 实现。"
+        }
+      ]
+    },
+    {
+      "claim": "在子任务构造参数层面，模型选择路径一致：显式凭据模型优先，provider 运行时可补充模型；没有覆盖时最终回退到 parent_agent.model，随后将 effective_model 传给 AIAgent。",
+      "status": "confirmed",
+      "trigger": "delegation.model、delegation.provider 均未设置，或设置其中任一项后创建子任务。",
+      "evidence": [
+        {
+          "file": "tools/delegate_tool_config.py",
+          "line_start": 416,
+          "line_end": 435,
+          "reason": "凭据解析分别处理 direct endpoint、provider runtime 和纯继承分支；provider 分支返回配置模型、运行时模型或 None。"
+        },
+        {
+          "file": "tools/delegate_tool.py",
+          "line_start": 392,
+          "line_end": 397,
+          "reason": "_build_children 将 creds['model'] 传入 _build_child_preserving_parent_tools。"
+        },
+        {
+          "file": "tools/delegate_tool_config.py",
+          "line_start": 488,
+          "line_end": 500,
+          "reason": "_resolve_child_runtime 使用 model or parent_agent.model 计算 effective_model。"
+        },
+        {
+          "file": "tools/delegate_tool.py",
+          "line_start": 236,
+          "line_end": 245,
+          "reason": "AIAgent 构造时使用运行时凭据，并把 request_overrides 等子任务参数传入。"
+        }
+      ]
+    },
+    {
+      "claim": "provider 覆盖时会重新推导 api_mode，而同 provider 且无覆盖时继承父级 api_mode；这部分路由覆盖策略在代码层面是一致的，但最终模型和 transport 行为仍依赖 AIAgent 及 provider 实现。",
+      "status": "confirmed",
+      "trigger": "子任务 provider 与父级不同、使用 Nous provider，或完全继承父级 provider。",
+      "evidence": [
+        {
+          "file": "tools/delegate_tool_config.py",
+          "line_start": 521,
+          "line_end": 539,
+          "reason": "不同 provider 时将 effective_api_mode 置为 None 以触发重新推导，Nous 单独推导；相同 provider 才继承 parent_agent.api_mode。"
+        },
+        {
+          "file": "tools/delegate_tool_config.py",
+          "line_start": 590,
+          "line_end": 595,
+          "reason": "计算出的 model、provider、api_mode 和 capabilities 被组装进子任务 AIAgent 参数。"
+        }
+      ]
+    }
+  ],
+  "limitations": [
+    "仅读取 tools/delegate_tool.py 与 tools/delegate_tool_config.py，未读取或执行 _Batch、_run_batch、_ChildRun、_handle_control_action、_attach_child、_register_child、_normalize_task_list 及 AIAgent 的实现。",
+    "因此排队取消是否通过父子挂接链补偿、运行中取消是否设置硬中断、完成竞态是否由外部锁或状态机仲裁，均需结合外部实现验证。",
+    "并发上限的实际 worker 和队列语义，以及 max_async_children 被忽略后是否存在其他独立限制，不能仅凭这两份快照确认。",
+    "float('inf') 是否能由实际配置解析器产生未在允许读取范围内验证；该结论针对配置读取函数收到无穷大浮点值的情况。",
+    "模型覆盖结论验证到子任务构造参数组装层；AIAgent、provider runtime 或 fallback 可能对最终模型和传输方式再次处理，未在快照内验证。",
+    "未修改文件，未执行测试，未联网，未安装依赖。"
+  ]
+}

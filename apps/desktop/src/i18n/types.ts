@@ -4059,6 +4059,10 @@ interface UpstreamTranslations {
       ultra: string
       /** The CLI's `/reasoning` clamp note, e.g. "sends Max on this route". */
       sendsOnRoute: (level: string) => string
+      /** Ultra's mode note before the gateway stamps its wire level, e.g. "multi-agent". */
+      multiAgent: string
+      /** Ultra's mode note with the level it sends, e.g. "multi-agent, sends Max". */
+      multiAgentSends: (level: string) => string
       updateFailed: string
       fastFailed: string
     }

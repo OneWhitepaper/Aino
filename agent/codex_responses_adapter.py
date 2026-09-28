@@ -455,10 +455,42 @@ def _replay_message_items(
         if content:
             if linked_to_reasoning and raw_item.get("id"):
                 raw_item = {k: v for k, v in raw_item.items() if k != "id"}
-            replayed.append(_assistant_message_item(
+            replayed_item = _assistant_message_item(
                 raw_item, content, is_github_responses=is_github_responses, current_issuer_kind=current_issuer_kind,
-            ))
+            )
+            if "_output_order" in raw_item:
+                replayed_item["_output_order"] = raw_item["_output_order"]
+            replayed.append(replayed_item)
     return replayed
+
+
+def _restore_output_order(
+    reasoning_items: List[Dict[str, Any]], message_items: List[Dict[str, Any]], tool_items: List[Dict[str, Any]],
+) -> List[Dict[str, Any]]:
+    """Restore interleaved output after replay filtering; legacy/partial metadata keeps the old order.
+
+    Each sidecar carries the call positions too, so dropping foreign reasoning or trimming all but a
+    checkpoint cannot strand the remaining items. Only request-local copies lose the metadata.
+    """
+    native_items = reasoning_items + message_items
+    orders = [item.pop("_output_order", None) for item in native_items]
+    grouped = native_items + tool_items
+    if not orders or not all(isinstance(order, dict) for order in orders):
+        return grouped
+    positions = [order.get("index") for order in orders]
+    call_positions = orders[0].get("tool_calls")
+    if not isinstance(call_positions, list) or len(call_positions) != len(tool_items):
+        return grouped
+    if any(order.get("tool_calls") != call_positions for order in orders):
+        return grouped
+    all_positions = positions + call_positions
+    if not all(type(index) is int and index >= 0 for index in all_positions):
+        return grouped
+    # Never reorder calls, or reorder either sidecar internally on damaged/merged history.
+    groups = (positions[:len(reasoning_items)], positions[len(reasoning_items):], call_positions)
+    if len(set(all_positions)) != len(all_positions) or any(group != sorted(group) for group in groups):
+        return grouped
+    return [item for _, item in sorted(zip(all_positions, grouped), key=lambda pair: pair[0])]
 
 
 class _WireCallIds:
@@ -616,23 +648,24 @@ def _chat_messages_to_responses_input(
             msg, seen_item_ids=seen_item_ids, current_issuer_kind=current_issuer_kind,
             current_issuer_model=current_issuer_model, native_compaction_eligible=native_compaction_eligible,
         )
-        emit(reasoning_items, msg)
         message_items = _replay_message_items(
             msg, is_github_responses=is_github_responses, current_issuer_kind=current_issuer_kind,
         )
-        emit(message_items, msg)
         fallback = None
         if not message_items:
             fallback = content_parts or (content_text if content_text.strip() else "" if reasoning_items else None)
-        tool_items = _replay_tool_call_items(msg, start_index=len(items) + (fallback is not None), wire_ids=wire_ids)
+        tool_items = _replay_tool_call_items(
+            msg, start_index=len(items) + len(reasoning_items) + len(message_items) + (fallback is not None),
+            wire_ids=wire_ids,
+        )
         # A function_call already follows its reasoning. Inventing an empty assistant
         # message between them changes the replayed turn (Muse can emit corrupt finals).
         # Keep a follower only for reasoning with no other following item, and make it
         # non-empty: strict Responses-compatible providers reject "" with 400.
         if fallback is not None and not (fallback == "" and tool_items):
             follower = " " if fallback == "" else fallback
-            emit([{"role": "assistant", "content": wire_content(follower)}], msg)
-        emit(tool_items, msg)
+            message_items.append({"role": "assistant", "content": wire_content(follower)})
+        emit(_restore_output_order(reasoning_items, message_items, tool_items), msg)
     # The server renders nothing placed before a compaction item, so pre-checkpoint history is
     # dead weight and plaintext asks / merged summaries silently vanish. Keep the newest checkpoint
     # first, retain pre-checkpoint USER and SUMMARY messages within a token budget, leave the tail.
@@ -1091,14 +1124,15 @@ class _OutputScan:
         self.saw_commentary_phase = self.saw_final_answer_phase = self.saw_reasoning_item = False
 
     def scan(self, output: List[Any], issuer_kind: Optional[str], issuer_model: Optional[str] = None) -> None:
-        for item in output:
+        call_positions: List[int] = []
+        for output_index, item in enumerate(output):
             item_type = getattr(item, "type", None)
             item_status = _lower_or_none(getattr(item, "status", None))
             if item_status in _INCOMPLETE_STATUSES and item_type not in _SERVER_SIDE_TOOL_CALL_TYPES:
                 self.has_incomplete_items = True
                 self.saw_streaming_or_item_incomplete = True
             if item_type == "message":
-                self._message(item, item_status)
+                self._message(item, item_status, output_index)
             elif item_type in {"reasoning", "compaction"}:
                 if item_type == "reasoning":
                     self.saw_reasoning_item = True
@@ -1109,6 +1143,7 @@ class _OutputScan:
                 # replay, cross-issuer guard and kill switch for free).
                 raw_item = _capture_encrypted_item(item, item_type, issuer_kind, issuer_model)
                 if raw_item is not None:
+                    raw_item["_output_order"] = {"index": output_index}
                     self.reasoning_items_raw.append(raw_item)
                     if item_type == "compaction":
                         logger.info(
@@ -1116,8 +1151,20 @@ class _OutputScan:
                         )
             elif item_type == "custom_tool_call" or (item_type == "function_call" and item_status not in _INCOMPLETE_STATUSES):
                 self.tool_calls.append(_response_tool_call(item, item_type, len(self.tool_calls)))
+                call_positions.append(output_index)
 
-    def _message(self, item: Any, item_status: Optional[str]) -> None:
+        # Only interleaved responses need local ordering metadata. Keeping it in the existing JSON
+        # sidecars preserves DB/session round-trips without changing the model-facing message schema.
+        sidecars = self.reasoning_items_raw + self.message_items_raw
+        grouped_positions = [item["_output_order"]["index"] for item in sidecars] + call_positions
+        interleaved = grouped_positions != sorted(grouped_positions)
+        for item in sidecars:
+            if interleaved:
+                item["_output_order"]["tool_calls"] = call_positions
+            else:
+                item.pop("_output_order")
+
+    def _message(self, item: Any, item_status: Optional[str], output_index: int) -> None:
         normalized_phase = _lower_or_none(getattr(item, "phase", None))
         is_commentary_phase = normalized_phase in {"commentary", "analysis"}
         self.saw_commentary_phase = self.saw_commentary_phase or is_commentary_phase
@@ -1129,10 +1176,12 @@ class _OutputScan:
         # to the reasoning channel; the exact item is still preserved for replay/cache.
         (self.reasoning_parts if is_commentary_phase else self.content_parts).append(message_text)
         item_id = getattr(item, "id", None)
-        self.message_items_raw.append(_message_item(
+        raw_item = _message_item(
             [{"type": "output_text", "text": message_text}], status=_normalize_responses_message_status(item_status),
             item_id=item_id if isinstance(item_id, str) else None, phase=normalized_phase,
-        ))
+        )
+        raw_item["_output_order"] = {"index": output_index}
+        self.message_items_raw.append(raw_item)
 
 
 def _normalize_codex_response(

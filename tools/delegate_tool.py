@@ -18,6 +18,7 @@ from typing import Any, Dict, List, Optional
 
 from tools.terminal_tool import set_approval_callback as _set_subagent_approval_cb  # noqa: F401  (used via _ChildRun.await_child)
 from utils import is_truthy_value
+from hermes_constants import VALID_REASONING_EFFORTS
 
 logger = logging.getLogger(__name__)
 
@@ -47,7 +48,8 @@ from tools.delegate_tool_registry import (  # noqa: F401
     steer_subagent,
 )
 from tools.delegate_tool_tasks import (  # noqa: F401
-    _MAX_TASK_IMAGES, _coerce_task_images, _coerce_task_schemas, _normalize_task_images, _normalize_task_list,
+    _MAX_TASK_IMAGES, _coerce_task_contexts, _coerce_task_images, _coerce_task_reasoning_configs, _coerce_task_schemas,
+    _normalize_task_images, _normalize_task_list,
 )
 from tools.delegate_tool_toolsets import (  # noqa: F401
     DELEGATE_BLOCKED_TOOLS, _expand_parent_toolsets, _resolve_child_toolsets, _strip_blocked_tools,
@@ -178,6 +180,7 @@ def _build_child_agent(
     routing_cfg: Optional[Dict[str, Any]] = None,
     # Legacy; accepted for wire compat but ignored (capability is depth-derived).
     role: str = "leaf",
+    override_reasoning_config: Optional[Dict[str, Any]] = None,
 ):
     """Build (don't run) a child AIAgent on the main thread. override_* (from delegation config) replace parent
     inheritance so children can run on a different provider:model pair."""
@@ -223,6 +226,10 @@ def _build_child_agent(
         override_acp_args=override_acp_args,
         routing_cfg=routing_cfg,
     )
+    if override_reasoning_config is not None:
+        # A task's explicit choice belongs to this child only. Provider clamping
+        # stays at the existing wire boundary, including when its model changes.
+        rt["reasoning_config"] = dict(override_reasoning_config)
     if override_request_overrides is not None:
         # honored whenever set, incl. the inherit branch where
         # _resolve_delegation_credentials already merged OVER the parent's
@@ -262,6 +269,10 @@ def _build_child_agent(
     child_session_ref["session_id"] = getattr(child, "session_id", "") or ""
     child._progress_identity_ref = child_session_ref
     child._delegate_depth, child._delegate_role = child_depth, effective_role  # post-degrade role
+    if override_reasoning_config is not None:
+        # Fallback swaps may re-resolve ordinary model defaults, but this explicit
+        # task choice must survive them and be clamped for the replacement route.
+        child._delegate_reasoning_config_override = dict(override_reasoning_config)
     child._subagent_id, child._parent_subagent_id = subagent_id, parent_subagent_id
     _apply_child_compression_cap(child, delegation_cfg)
     # Ownership chain for action=list/steer/stop; weakref so a finished parent
@@ -369,6 +380,8 @@ def _build_children(
     task_list: List[Dict[str, Any]], task_schemas: List[Optional[Dict[str, Any]]], creds: Dict[str, Any], *,
     top_role: str, max_iterations: int, parent_agent, routing_cfg: Dict[str, Any],
     live_deleg_id: Optional[str], live_writers: list, task_images: Optional[List[Optional[List[str]]]] = None,
+    task_reasoning_configs: Optional[List[Optional[Dict[str, Any]]]] = None,
+    task_contexts: Optional[List[Optional[str]]] = None,
 ) -> tuple[List[tuple], Optional[str]]:
     """Build every child on the main thread (construction is not thread-safe);
     ``(children, None)`` or ``([], error)`` on an explicit-pin preflight failure."""
@@ -385,7 +398,7 @@ def _build_children(
     children = []
     for i, t in enumerate(task_list):
         _task_schema = task_schemas[i] if i < len(task_schemas) else None
-        _child_context = t.get("context")
+        _child_context = task_contexts[i] if task_contexts is not None else t.get("context")
         if _task_schema is not None:
             _child_context = append_output_contract(_child_context, _task_schema)
         try:
@@ -394,6 +407,7 @@ def _build_children(
                 toolsets=None,  # always inherit the parent's toolsets
                 model=creds["model"], max_iterations=max_iterations, task_count=len(task_list),
                 parent_agent=parent_agent, role=_normalize_role(t.get("role") or top_role), **overrides,
+                override_reasoning_config=task_reasoning_configs[i] if task_reasoning_configs else None,
             )
         except ValueError as exc:
             return [], str(exc)
@@ -446,6 +460,8 @@ def delegate_task(
     output_schema: Optional[Dict[str, Any]] = None, images: Optional[List[str]] = None, action: Optional[str] = None,
     subagent_id: Optional[str] = None, message: Optional[str] = None, parent_agent=None,
     credentials_cfg: Optional[Dict[str, Any]] = None,
+    reasoning_effort: Optional[str] = None,
+    conversation_history: Optional[List[Dict[str, Any]]] = None,
 ) -> str:
     """Spawn child agents (single ``goal`` or ``tasks=[...]`` batch) or control running ones. ``action``
     list/steer/stop run synchronously and bypass the pause gate, depth limit and async dispatch. ``role`` is legacy
@@ -506,6 +522,13 @@ def delegate_task(
         task_schemas, err = _coerce_task_schemas(task_list, output_schema)
     if not err:
         task_images, err = _coerce_task_images(task_list, images)
+    if not err:
+        task_reasoning_configs, err = _coerce_task_reasoning_configs(task_list, reasoning_effort)
+    if not err:
+        task_contexts, err = _coerce_task_contexts(
+            task_list, conversation_history if conversation_history is not None
+            else getattr(parent_agent, "_session_messages", None), parent_agent,
+        )
     if err:
         return tool_error(err)
     err = _oneshot_spawn_budget(parent_agent, len(task_list))
@@ -525,6 +548,8 @@ def delegate_task(
     children, err = _build_children(
         task_list, task_schemas, creds, top_role=top_role, max_iterations=default_max_iter, parent_agent=parent_agent,
         routing_cfg=routing_cfg, live_deleg_id=live_deleg_id, live_writers=live_writers, task_images=task_images,
+        task_reasoning_configs=task_reasoning_configs,
+        task_contexts=task_contexts,
     )
     if err:
         return tool_error(err)
@@ -583,8 +608,8 @@ _DESCRIPTION_HEAD = (
     "- Durable work that must survive this session -> cronjob or terminal(background=True, notify=True); /stop, /new, "
     "or process exit halts running subagents (whole tree); each returns an 'interrupted' completion with partial output.\n\n"
     "RULES:\n"
-    "- Children know nothing of this conversation: pass everything needed via 'context', including any required "
-    "output language, tone, or style (e.g. \"respond in Chinese\").\n"
+    "- Children start isolated: supply constraints (e.g. 'respond in Chinese') in 'context' or request 'context_turns'. "
+    "Forward images explicitly with 'images'.\n"
     "- Child summaries are SELF-REPORTS, not verified facts: a child claiming \"uploaded successfully\" or "
     "\"file written\" may be wrong. For external side effects (uploads, remote writes, publishing), require a "
     "verifiable handle (URL, ID, absolute path) and verify it yourself before telling the user the operation "
@@ -658,13 +683,29 @@ DELEGATE_TASK_SCHEMA = {
                     "properties": {
                         "goal": _p(
                             "string",
-                            "What this subagent should accomplish. Be specific and self-contained — it knows "
-                            "nothing about your conversation history.",
+                            "What this subagent should accomplish. Give a specific bounded goal; include needed "
+                            "background in context or explicitly select visible history with context_turns.",
                         ),
                         "context": _p(
                             "string",
                             "Background THIS child needs: file paths, error messages, constraints. Each child "
                             "sees only its own context — repeat shared background in every task that needs it.",
+                        ),
+                        "reasoning_effort": _p(
+                            "string",
+                            "Optional override for this child. Prefer omitting it to use the configured delegation "
+                            "level or inherit the parent's current effort; set it when the task or user calls for "
+                            "a different reasoning level. Provider limits still apply; "
+                            "this never changes the parent's level.",
+                            enum=["none", *VALID_REASONING_EFFORTS],
+                        ),
+                        "context_turns": _p(
+                            "string",
+                            "Optional visible conversation excerpt: 'none' (default, isolated), 'all', or a positive "
+                            "integer string for the most recent user turns and final replies. Includes the current "
+                            "user turn. Use when prior requirements matter; excludes system prompts, tool traces, "
+                            "hidden reasoning and images. Additional task-specific context goes in 'context'.",
+                            pattern="^(none|all|[1-9][0-9]*)$",
                         ),
                         "output_schema": _p(
                             "object",
@@ -747,6 +788,7 @@ registry.register(
         background=_model_background_value(args, kw.get("parent_agent")), output_schema=args.get("output_schema"),
         images=args.get("images"), action=args.get("action"), subagent_id=args.get("subagent_id"), message=args.get("message"),
         parent_agent=kw.get("parent_agent"),
+        reasoning_effort=args.get("reasoning_effort"),
     ),
     check_fn=check_delegate_requirements,
     emoji="🔀",

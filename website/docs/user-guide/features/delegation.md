@@ -10,6 +10,16 @@ The `delegate_task` tool spawns child AIAgent instances with isolated context, i
 
 Top-level model calls run in the background automatically. Hermes returns a handle immediately so the conversation can continue, then posts the result back as a new message. An orchestrator subagent waits for its own workers so it can synthesize their results before returning.
 
+## Ultra: multi-agent collaboration
+
+Selecting **Ultra** (`/reasoning ultra`, the desktop effort picker, or `agent.reasoning_effort: ultra`) enables a proactive delegation policy: when independent parts of the work can run in parallel and materially save time or improve quality, the agent may delegate them without being asked. The policy asks the model to give each subagent a bounded task, continue independent work itself, then verify the necessary claims and integrate the results without repeating the delegated work. Simple or tightly coupled tasks should be handled directly. Whether to delegate remains the model's decision; Ultra does not guarantee delegation on every complex task. Your instructions, including a request not to use subagents, take precedence. Model reasoning runs at the route's strongest supported level.
+
+The parent stays at Ultra. Children use the configured delegation model and effort, or inherit the parent's current settings; the policy prefers this default unless the task or user calls for an explicit effort override. The parent remains responsible for delivering the final answer. When a subagent fails or returns incomplete work, it reuses supported findings and finishes or reassigns only the remaining gap. Operational failures are returned as failures, rather than being retried as output-format errors; a normal format-repair retry retains the child's conversation and original task constraints.
+
+The policy is stated when the mode changes: the first message sent at Ultra enables it, and the first message after switching away revokes it. The note accompanies that message in the model request while the visible user message stays unchanged. The system prompt and past requests stay stable, and the saved conversation preserves the mode on resume. Upgrading an older session or compressing away its mode note can cause the current policy to be stated once again. Text messages and native image attachments both carry mode changes on the current turn. It applies only to top-level turns where `delegate_task` is available; existing concurrency, depth and permission limits still apply. Subagents add model usage.
+
+This policy uses Hermes's standard Agent loop (Chat Completions and Responses). The Codex app-server runtime and inline `moa_config` orchestration do not use this mode-note path; selecting Ultra there still controls the route's reasoning level, but does not enable this proactive delegation policy.
+
 ## Completion delivery
 
 Messaging gateways acknowledge background completions only after their adapter actually
@@ -24,6 +34,8 @@ An unavailable API-server route stays pending without repeated missing-route war
 Malformed messaging routes still produce diagnostics. On the API server, an async delegation
 completion adds a durable timeline delivery row only: the client owns the next model turn.
 Setting background process notifications to `off` still drains pattern-watch events silently.
+
+Gateway and desktop/TUI consumers also check for completed results whose owner process died while the consumer remained running, such as during a desktop reload. The existing profile-scoped ledger and delivery claim re-offer those results without requiring another restart. This recovers a pending result; it does not establish that the parent has produced its final answer.
 
 ## Background process lifetime
 
@@ -52,6 +64,19 @@ delegate_task(tasks=[
 ])
 ```
 
+## Per-task reasoning effort
+
+Set `reasoning_effort` on an individual task, or on a single-goal call, to choose the child's effort without changing the parent:
+
+```python
+delegate_task(tasks=[
+    {"goal": "Extract the documented API limits", "reasoning_effort": "medium"},
+    {"goal": "Review cancellation and cleanup in the worker", "reasoning_effort": "high"}
+])
+```
+
+Omitting it preserves the existing default: `delegation.reasoning_effort` when configured, otherwise the parent's reasoning configuration. An explicit task choice survives a fallback model switch; the selected child's provider route still applies its normal supported-level translation. Invalid task effort values reject the batch before any child starts. An effort choice changes neither concurrency limits nor approval requirements.
+
 ## Structured Output (`output_schema`)
 
 Each task can carry an optional `output_schema`, a JSON Schema object the child's final answer must validate against. The child sees the schema up front as an output contract ("return ONLY the JSON value — no prose, no code fence"); when the answer comes back the parent validates it, and on failure sends the child exactly one bounded correction turn carrying the validation errors verbatim (the schema is not re-pasted). The task's result then gains `schema_valid` (true/false) and, on failure, `schema_errors`.
@@ -79,13 +104,13 @@ Keep schemas forgiving: require only the fields you will actually read. Tasks wi
 
 ## How Subagent Context Works
 
-:::warning Critical: Subagents Know Nothing
-Subagents start with a **completely fresh conversation**. They have zero knowledge of the parent's conversation history, prior tool calls, or anything discussed before delegation. The subagent's only context comes from the `goal` and `context` fields the parent agent populates when it calls `delegate_task`.
+:::warning Context is isolated by default
+Subagents start with a **fresh conversation**. By default, background comes from the task's `goal` and `context`, not the parent's conversation or tool history. A task can explicitly request a visible conversation excerpt with `context_turns`.
 :::
 
-One exception: when the parent has a resolved workspace directory, every subagent's system prompt embeds that workspace's **project context files** (`.hermes.md` > AGENTS.md chain > CLAUDE.md > `.cursorrules` — the same discovery, priority, and size caps as the main agent's system prompt; SOUL.md is excluded). Subagents working in a repo operate under the repo's own conventions without having to rediscover them.
+When the parent has a resolved workspace directory, every subagent's system prompt also embeds that workspace's **project context files** (`.hermes.md` > AGENTS.md chain > CLAUDE.md > `.cursorrules` — the same discovery, priority, and size caps as the main agent's system prompt; SOUL.md is excluded). Subagents working in a repo operate under the repo's own conventions without having to rediscover them.
 
-This means the parent agent must pass **everything** the subagent needs in the call:
+The parent must still supply a specific goal and the constraints needed for that task:
 
 ```python
 # BAD - subagent has no idea what "the error" is
@@ -103,6 +128,26 @@ delegate_task(
 ```
 
 The subagent receives a focused system prompt built from your goal and context, instructing it to complete the task and provide a structured summary of what it did, what it found, any files modified, and any issues encountered.
+
+### Selecting visible conversation context
+
+Each entry in `tasks` accepts `context_turns`:
+
+- `"none"` (default) keeps the existing isolated behavior.
+- `"all"` includes visible user text and final assistant replies still available in the parent's current history.
+- A positive integer string, such as `"2"`, selects the latest two user turns and their final replies, including the current user turn. An image-only turn still counts, although the image itself is omitted.
+
+```python
+delegate_task(tasks=[{
+    "goal": "Review the pagination change against the user's requirements",
+    "context_turns": "2",
+    "context": "Only inspect api/pagination.py; report edge cases without editing.",
+}])
+```
+
+The excerpt is a text snapshot in the child's existing context section, followed by the task-specific `context`. The child still starts a fresh conversation with its assigned `goal`; it does not share the parent's conversation or tool state. System instructions, reasoning, interim commentary, tool traces, API-only instructions and compaction scaffolding are excluded. Compacted-away history cannot be recovered by selecting `"all"`. Use the existing `images` field for material the child needs to see.
+
+Selections are validated for the whole batch before any child starts. Taking the snapshot does not rewrite the parent's history or system prompt. Omit it for a self-contained task, and choose a short excerpt when earlier user requirements matter.
 
 ### Forwarding Images to a Subagent
 

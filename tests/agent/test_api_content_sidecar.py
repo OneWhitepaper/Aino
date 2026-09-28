@@ -274,12 +274,15 @@ class TestPrologueStamping:
         injected bytes are never sent — stamping would persist a lie."""
         agent = _FakeAgent()
         agent.api_mode = "codex_app_server"
+        agent.reasoning_config = {"enabled": True, "effort": "ultra"}
+        agent.valid_tool_names = {"delegate_task"}
         with patch(
             "hermes_cli.plugins.invoke_hook",
             return_value=[{"context": "PLUGIN-CTX"}],
         ):
             ctx = _build(agent)
         assert "api_content" not in ctx.messages[ctx.current_turn_user_idx]
+        assert "Ultra mode" not in ctx.plugin_user_context
 
 
 # ---------------------------------------------------------------------------
@@ -575,12 +578,15 @@ class TestPrologueMoaAndInPlaceBackfill:
         composition — a stamped sidecar would persist bytes that never match
         the wire."""
         agent = _FakeAgent()
+        agent.reasoning_config = {"enabled": True, "effort": "ultra"}
+        agent.valid_tool_names = {"delegate_task"}
         with patch(
             "hermes_cli.plugins.invoke_hook",
             return_value=[{"context": "PLUGIN-CTX"}],
         ):
             ctx = _build(agent, moa_active=True)
         assert "api_content" not in ctx.messages[ctx.current_turn_user_idx]
+        assert "Ultra mode" not in ctx.plugin_user_context
 
     def test_inplace_compaction_backfills_sidecar_into_db(self):
         """In-place preflight compaction inserts the current-turn user row

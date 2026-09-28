@@ -16,6 +16,8 @@ import json
 import threading
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from tools.delegate_tool import (
     DELEGATE_TASK_SCHEMA,
     _run_single_child,
@@ -198,6 +200,64 @@ def _run(child):
 
 
 class TestRunSingleChildSchemaValidation:
+    @pytest.mark.parametrize("failure", [
+        {"failed": True},
+        {"error": "Provider rejected the request"},
+        {"failed": True, "error": "Provider timed out", "failure_reason": "timeout"},
+        {"interrupted": True},
+    ])
+    def test_terminal_child_failure_is_not_restarted_for_schema_repair(self, failure):
+        class TerminalChild(_StubChild):
+            def run_conversation(self, user_message, task_id=None, **kwargs):
+                self.calls.append(user_message)
+                if len(self.calls) == 1:
+                    return {"final_response": "The child could not finish.", "completed": False,
+                            "api_calls": 1, "messages": [], **failure}
+                return {"final_response": '{"city": "Berlin"}', "completed": True,
+                        "api_calls": 1, "messages": []}
+
+        child = TerminalChild([])
+        child._delegate_output_schema = ADDRESS_SCHEMA
+        entry = _run(child)
+
+        assert len(child.calls) == 1
+        assert entry["status"] == ("interrupted" if failure.get("interrupted") else "failed")
+        assert entry["summary"] == "The child could not finish."
+        assert entry.get("schema_retries", 0) == 0
+        assert entry["api_calls"] == 1
+
+    def test_schema_repair_continues_the_existing_child_history_once(self):
+        from tools.delegate_tool_child_run import _validate_child_output_schema
+
+        history = [
+            {"role": "user", "content": "Read the supplied address; do not look it up again."},
+            {"role": "assistant", "content": "City: Berlin"},
+        ]
+        received_history = []
+
+        class RepairChild(_StubChild):
+            def run_conversation(self, user_message, task_id=None, **kwargs):
+                self.calls.append(user_message)
+                previous = kwargs.get("conversation_history") or []
+                received_history.extend(previous)
+                return {"final_response": '{"city": "Berlin"}', "completed": True, "api_calls": 1,
+                        "messages": [*previous, {"role": "user", "content": user_message},
+                                     {"role": "assistant", "content": '{"city": "Berlin"}'}]}
+
+        child = RepairChild([])
+        child._delegate_output_schema = ADDRESS_SCHEMA
+        result = {"final_response": "City: Berlin", "completed": True, "api_calls": 1,
+                  "messages": list(history)}
+        outcome = _validate_child_output_schema(child, result, 0, "child-0", None)
+
+        assert received_history == history
+        assert len(child.calls) == 1
+        assert result["messages"] == [*history, {"role": "user", "content": child.calls[0]},
+                                      {"role": "assistant", "content": '{"city": "Berlin"}'}]
+        assert json.loads(result["final_response"]) == {"city": "Berlin"}
+        assert result["api_calls"] == 2
+        assert outcome.valid is True
+
     def test_valid_first_try_no_retry(self):
         child = _StubChild(['{"city": "Berlin"}'])
         child._delegate_output_schema = ADDRESS_SCHEMA

@@ -30,6 +30,7 @@ from agent.credential_pool import (
 from agent.error_classifier import FailoverReason
 from agent.retry_utils import parse_retry_after_seconds, reset_delay_from_message
 from agent.turn_context import drop_stale_api_content
+from agent.api_content import effective_message_content
 from utils import base_url_host_matches, base_url_hostname, env_var_enabled, atomic_json_write
 logger = logging.getLogger(__name__)
 
@@ -570,6 +571,8 @@ def _merge_consecutive_users(messages: List[Dict]) -> Tuple[List[Dict], int]:
             and prev.get("display_kind") not in {STEER_DISPLAY_KIND, "model_switch", "personality_switch"}
             # Only merge plain-text content; leave multimodal (list) content alone.
             and isinstance(prev.get("content", ""), str) and isinstance(msg.get("content", ""), str)
+            and not isinstance(effective_message_content(prev), list)
+            and not isinstance(effective_message_content(msg), list)
         ):
             prev_content, new_content = prev.get("content", ""), msg.get("content", "")
             merged_content = (

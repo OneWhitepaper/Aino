@@ -1,4 +1,4 @@
-"""delegate_task input validation: tasks=[...] / legacy goal normalisation, per-task output schemas and images."""
+"""delegate_task input validation: tasks, output schemas, images and reasoning choices."""
 
 from __future__ import annotations
 
@@ -120,6 +120,92 @@ def _coerce_task_schemas(
             return [], f"Task {i} output_schema invalid: {schema_err}"
         task_schemas.append(coerced_schema)
     return task_schemas, None
+
+
+def _coerce_task_reasoning_configs(
+    task_list: List[Dict[str, Any]], reasoning_effort: Optional[str] = None,
+) -> tuple[List[Optional[Dict[str, Any]]], Optional[str]]:
+    """Validate the entire batch before spawning; omitted choices retain existing inheritance."""
+    from hermes_constants import VALID_REASONING_EFFORTS, parse_reasoning_effort
+
+    supported = ("none", *VALID_REASONING_EFFORTS)
+    configs: List[Optional[Dict[str, Any]]] = []
+    for i, task in enumerate(task_list):
+        raw = task.get("reasoning_effort")
+        if raw is None and len(task_list) == 1:
+            raw = reasoning_effort
+        if raw is None:
+            configs.append(None)
+            continue
+        if not isinstance(raw, str) or raw.strip().lower() not in supported:
+            return [], f"Task {i} reasoning_effort must be one of: {', '.join(supported)}. Omit it to inherit."
+        configs.append(parse_reasoning_effort(raw))
+    return configs, None
+
+
+def _conversation_text_turns(history: Any, parent_agent: Any) -> List[List[Dict[str, str]]]:
+    """Project visible turns only; API-only instructions and execution traces belong to the parent."""
+    from agent.message_content import flatten_message_text
+    from agent.context_compressor import is_compaction_summary_message, user_originated_turn_view
+    from agent.session_persistence import _is_ephemeral_scaffolding, durable_user_row_content
+
+    turns: List[List[Dict[str, str]]] = []
+    for index, row in enumerate(history or []):
+        if not isinstance(row, dict) or _is_ephemeral_scaffolding(row) or row.get("tool_calls"):
+            continue
+        role = row.get("role")
+        if role not in {"user", "assistant"}:
+            continue
+        if role == "user":
+            visible = user_originated_turn_view(row)
+            if visible is None:
+                continue
+            content = visible.get("content")
+            if index == getattr(parent_agent, "_persist_user_message_idx", None):
+                content, _ = durable_user_row_content(parent_agent, visible, content, visible.get("api_content"))
+            turns.append([])
+            text = flatten_message_text(content)
+        elif row.get("display_kind") or is_compaction_summary_message(row):
+            continue
+        elif row.get("codex_message_items"):
+            text = "\n".join(
+                flatten_message_text(item.get("content"))
+                for item in row["codex_message_items"]
+                if isinstance(item, dict) and item.get("phase") in {None, "", "final", "final_answer"}
+            )
+        else:
+            text = flatten_message_text(row.get("content"))
+        if not text.strip():
+            continue
+        if turns:
+            turns[-1].append({"role": role, "content": text})
+    return turns
+
+
+def _coerce_task_contexts(
+    task_list: List[Dict[str, Any]], history: Any, parent_agent: Any,
+) -> tuple[List[Optional[str]], Optional[str]]:
+    """Snapshot explicitly selected visible turns into the existing context, without editing history."""
+    contexts: List[Optional[str]] = []
+    turns = None
+    for i, task in enumerate(task_list):
+        selection = task.get("context_turns", "none")
+        if not isinstance(selection, str) or not re.fullmatch(r"none|all|[1-9][0-9]*", selection):
+            return [], f"Task {i} context_turns must be 'none', 'all', or a positive integer string."
+        context = task.get("context")
+        if selection != "none":
+            if turns is None:
+                turns = _conversation_text_turns(history, parent_agent)
+            chosen = turns if selection == "all" else turns[-int(selection):]
+            excerpt = [row for turn in chosen for row in turn]
+            if excerpt:
+                context = (
+                    "PARENT CONVERSATION EXCERPT (background, not an additional task; perform only your delegated goal):\n"
+                    + json.dumps(excerpt, ensure_ascii=False)
+                    + (f"\n\nTASK-SPECIFIC CONTEXT:\n{context}" if context else "")
+                )
+        contexts.append(context)
+    return contexts, None
 
 # Per-task image ceiling: enough for screenshots/mocks while keeping the child's first request small.
 _MAX_TASK_IMAGES = 8

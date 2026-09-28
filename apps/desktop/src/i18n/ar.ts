@@ -2761,6 +2761,8 @@ export const ar = defineLocale({
       high: 'عالٍ',
       max: 'أقصى',
       sendsOnRoute: (level: string) => `يُرسل ${level} على هذا المسار`,
+      multiAgent: 'تعاون متعدد الوكلاء',
+      multiAgentSends: (level: string) => `تعاون متعدد الوكلاء، يُرسل ${level}`,
       updateFailed: 'فشل تحديث خيار النموذج',
       fastFailed: 'فشل تحديث الوضع السريع'
     },

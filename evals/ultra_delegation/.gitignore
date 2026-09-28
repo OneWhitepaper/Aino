@@ -1,0 +1,7 @@
+.runs/
+.build/
+__pycache__/
+*.pyc
+
+# The root export* rule must not omit this frozen input.
+!fixtures/small/exports.py

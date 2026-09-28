@@ -1,6 +1,11 @@
 import { DEFAULT_REASONING_EFFORT, isReasoningEffort, type ReasoningEffort } from '@hermes/shared'
 
+import type { Translations } from '@/i18n/types'
 import { normalize } from '@/lib/text'
+
+/** Ultra is a mode, not just a wire level: the backend sends the route's strongest level and
+ *  runs the turn as multi-agent collaboration (`agent/ultra_collaboration.py`). */
+export const MULTI_AGENT_EFFORT = 'ultra'
 
 /** Compact labels for chrome where space is tight (pill, picker rows). Menus
  *  and settings use the translated `shell.modelOptions` strings instead. */
@@ -39,8 +44,9 @@ export function reasoningEffortClamp(
   return { effort: picked, wire: sent }
 }
 
-/** Compact label; a clamped pick shows both ends ("Ultra→Max") so the pill
- *  never presents a Hermes step as a wire level the route does not have. */
+/** Compact label; a clamped pick shows both ends ("Max→XHigh") so the pill
+ *  never presents a Hermes step as a wire level the route does not have. Ultra
+ *  keeps its own name: it is a mode, and `reasoningEffortNote` states what it sends. */
 export function reasoningEffortLabel(
   effort: string,
   wireOrLabeler?: string | ReasoningEffortLabeler,
@@ -51,11 +57,27 @@ export function reasoningEffortLabel(
   const key = normalize(effort)
   const clamp = reasoningEffortClamp(effort, wire)
 
-  if (clamp) {
+  if (clamp && clamp.effort !== MULTI_AGENT_EFFORT) {
     return `${localize?.(clamp.effort) ?? SHORT_LABELS[clamp.effort]}→${localize?.(clamp.wire) ?? SHORT_LABELS[clamp.wire]}`
   }
 
   return key ? (localize?.(key) ?? SHORT_LABELS[key] ?? effort) : ''
+}
+
+/** Parenthetical for an effort choice: Ultra names its multi-agent mode (plus the level it
+ *  sends, once the gateway has stamped it); any other clamped pick names the level sent. */
+export function reasoningEffortNote(
+  effort: string,
+  wire: string | undefined,
+  copy: Translations['shell']['modelOptions']
+): string | null {
+  const clamp = reasoningEffortClamp(effort, wire)
+
+  if (normalize(effort) === MULTI_AGENT_EFFORT) {
+    return clamp ? copy.multiAgentSends(copy[clamp.wire]) : copy.multiAgent
+  }
+
+  return clamp ? copy.sendsOnRoute(copy[clamp.wire]) : null
 }
 
 /** Thinking is on unless a level explicitly says otherwise; an empty value

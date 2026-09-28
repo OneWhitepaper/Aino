@@ -1,0 +1,184 @@
+{
+  "findings": [
+    {
+      "claim": "compress() 本身没有检查 current_tokens 是否达到 threshold_tokens；只要消息数量和边界计算得到可压缩窗口，即使 current_tokens 低于阈值也会进入摘要或确定性降级路径。",
+      "status": "confirmed",
+      "trigger": "调用 compress() 时消息数大于保护头部加最小尾部要求，且 _compress_window() 返回 compress_start < compress_end；current_tokens 低于 threshold_tokens、为 0 或为 None 都不会在本函数内阻止后续处理。",
+      "evidence": [
+        {
+          "file": "agent/context_compressor.py",
+          "line_start": 5046,
+          "line_end": 5079,
+          "reason": "入口只初始化状态、检查最小消息数，并将 current_tokens 用作 display_tokens；没有阈值比较。"
+        },
+        {
+          "file": "agent/context_compressor.py",
+          "line_start": 5089,
+          "line_end": 5099,
+          "reason": "边界可压缩时直接构造 turns_to_summarize。"
+        },
+        {
+          "file": "agent/context_compressor.py",
+          "line_start": 5129,
+          "line_end": 5145,
+          "reason": "满足窗口后直接调用 _summarize_window()，失败或跳过时继续构造 fallback summary 并完成压缩。"
+        }
+      ]
+    },
+    {
+      "claim": "摘要失败并回滚时只恢复了 _previous_summary，没有恢复扫描阶段同时捕获的 _summary_has_user_turn，导致失败尝试可能残留错误的用户来源标记。",
+      "status": "confirmed",
+      "trigger": "_scan_window_handoffs() 发现已有 handoff 并更新 _summary_has_user_turn，随后摘要失败且 _abort_on_summary_failure() 决定中止压缩。",
+      "evidence": [
+        {
+          "file": "agent/context_compressor.py",
+          "line_start": 4705,
+          "line_end": 4710,
+          "reason": "_HandoffScan 同时保存 previous_summary_before 和 has_user_turn_before，表明两项状态都需要支持失败回滚。"
+        },
+        {
+          "file": "agent/context_compressor.py",
+          "line_start": 4724,
+          "line_end": 4735,
+          "reason":"扫描根据真实用户行或 handoff provenance 修改 _summary_has_user_turn。"
+        },
+        {
+          "file": "agent/context_compressor.py",
+          "line_start": 4844,
+          "line_end": 4872,
+          "reason": "中止路径只接收并恢复 previous_summary_before_scan，没有读取或恢复 scan.has_user_turn_before。"
+        },
+        {
+          "file": "agent/context_compressor.py",
+          "line_start": 5131,
+          "line_end": 5138,
+          "reason": "摘要返回空值时进入 _abort_on_summary_failure()，其返回 True 后直接结束压缩。"
+        }
+      ]
+    },
+    {
+      "claim": "_generate_summary() 的摘要调用前准备阶段不在其异常处理范围内；focus/prior-summary 处理、预算计算、序列化或 prompt 构建异常不会在此处进入统一的失败恢复路径。",
+      "status": "confirmed",
+      "trigger": "_redact_compaction_text()、_compute_summary_budget()、_serialize_for_summary() 或 _build_summary_prompt() 在 try 语句开始前抛出异常。",
+      "evidence": [
+        {
+          "file": "agent/context_compressor.py",
+          "line_start": 3622,
+          "line_end": 3639,
+          "reason": "这些准备步骤全部位于 try 开始之前。"
+        },
+        {
+          "file": "agent/context_compressor.py",
+          "line_start": 3640,
+          "line_end": 3669,
+          "reason": "try 只覆盖 _call_summary_llm() 及其后的摘要后处理；异常才会调用 _on_summary_failure()。"
+        },
+        {
+          "file": "agent/context_compressor.py",
+          "line_start": 5131,
+          "line_end": 5145,
+          "reason": "compress() 对 _summarize_window() 没有本文件内的外围 try/finally；准备阶段异常不会走本文件的 fallback 或 abort 分支。"
+        }
+      ]
+    },
+    {
+      "claim": "取消路径没有专门的恢复分支：取消检查会抛出 AuxiliaryExplicitCancellation，但 _generate_summary() 只按 Exception 通用失败处理；若该类型继承 Exception，可能进入 cooldown/fallback，若继承 BaseException，则可能直接逸出。",
+      "status": "needs_verification",
+      "trigger": "进入摘要前或摘要调用完成后 _compression_cancelled() 返回 True。",
+      "evidence": [
+        {
+          "file": "agent/context_compressor.py",
+          "line_start": 3575,
+          "line_end": 3576,
+          "reason": "摘要调用结束后检测取消并抛出 AuxiliaryExplicitCancellation。"
+        },
+        {
+          "file": "agent/context_compressor.py",
+          "line_start": 3611,
+          "line_end": 3613,
+          "reason": "摘要生成入口检测到取消时同样直接抛出 AuxiliaryExplicitCancellation。"
+        },
+        {
+          "file": "agent/context_compressor.py",
+          "line_start": 3668,
+          "line_end": 3669,
+          "reason": "本地捕获条件是 except Exception，未对 AuxiliaryExplicitCancellation 单独分支。"
+        },
+        {
+          "file": "agent/context_compressor.py",
+          "line_start": 3804,
+          "line_end": 3889,
+          "reason": "_on_summary_failure() 没有取消专用处理；未被识别为终止失败时会记录 cooldown 并返回 None。"
+        }
+      ]
+    },
+    {
+      "claim": "摘要返回 None 时，若没有终止失败标记且 abort_on_summary_failure 为 False，compress() 不保留原中间区，而是插入确定性 fallback summary 并删除该区；cooldown 本身不会使本次压缩变成无损 no-op。",
+      "status": "confirmed",
+      "trigger": "摘要因 active cooldown、无 provider、一般性异常或非终止暂态失败返回 None，同时 abort_on_summary_failure=False 且终止失败标记未设置。",
+      "evidence": [
+        {
+          "file": "agent/context_compressor.py",
+          "line_start": 3614,
+          "line_end": 3621,
+          "reason": "active cooldown 时 _generate_summary() 直接返回 None。"
+        },
+        {
+          "file": "agent/context_compressor.py",
+          "line_start": 3813,
+          "line_end": 3829,
+          "reason": "无 provider 分支记录 cooldown 后返回 None。"
+        },
+        {
+          "file": "agent/context_compressor.py",
+          "line_start": 4844,
+          "line_end": 4864,
+          "reason": "只有终止失败或 abort_on_summary_failure=True 才返回 True 以中止；否则允许继续。"
+        },
+        {
+          "file": "agent/context_compressor.py",
+          "line_start": 5131,
+          "line_end": 5145,
+          "reason": "空摘要未中止时调用 _fallback_summary_for_window()，随后组装压缩结果并返回，不再保留 turns_to_summarize。"
+        }
+      ]
+    },
+    {
+      "claim": "显示投影与 user-originated 判定对独立的 compaction replay 行不一致：project_compaction_message_for_display() 隐藏该行，而 split_user_originated_turn() 会把它当作普通真实用户行返回。",
+      "status": "confirmed",
+      "trigger": "_reappend_inflight_user_task() 生成一个不带摘要内容/摘要元数据的 role=user replay 行，并仅设置 display_metadata.compaction_replay=True；该行后面没有可复用的真实用户行。",
+      "evidence": [
+        {
+          "file": "agent/context_compressor.py",
+          "line_start": 4518,
+          "line_end": 4523,
+          "reason": "独立 replay 行复制原用户内容并加上 _INFLIGHT_TASK_REPLAY_HEADER。"
+        },
+        {
+          "file": "agent/context_compressor.py",
+          "line_start": 4550,
+          "line_end": 4552,
+          "reason": "独立 replay 行只通过 display_metadata.compaction_replay 标记。"
+        },
+        {
+          "file": "agent/compaction_display.py",
+          "line_start": 65,
+          "line_end": 72,
+          "reason": "当 compaction_replay=True 且不是摘要消息时，显示投影直接返回 None。"
+        },
+        {
+          "file": "agent/context_compressor.py",
+          "line_start": 5250,
+          "line_end": 5271,
+          "reason": "split_user_originated_turn() 对非摘要行只检查 display_kind；它移除 display_metadata 后仍按 _is_real_user_turn() 返回该 replay 行。"
+        }
+      ]
+    }
+  ],
+  "limitations": [
+    "仅读取 agent/context_compressor.py 与 agent/compaction_display.py；未读取外部调用方、SummaryDispatchMixin、conversation_compression、auxiliary_client、SessionDB 或前端渲染代码。",
+    "因此无法确认外部调用方是否在调用 compress() 前统一执行 token threshold 门禁，也无法确认 _summarize_window() 或更上层是否包裹并恢复准备阶段异常。",
+    "AuxiliaryExplicitCancellation 的继承层级和取消信号安装契约不在允许读取的快照中，取消分支的最终表现需验证。",
+    "未执行运行时测试；关于 display_metadata replay 行的实际可见性，仅依据两个快照内的投影与用户行判定函数关系判断。"
+  ]
+}

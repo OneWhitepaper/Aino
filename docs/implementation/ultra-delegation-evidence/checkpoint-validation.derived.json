@@ -1,0 +1,38 @@
+{
+  "artifact_kind": "derived_checkpoint_validation",
+  "date": "2026-09-28",
+  "checkout_base_commit": "559bbf043287752ed97afd0d6d4d68c9e74227a3",
+  "scope": "Current uncommitted WIP checkpoint, not the historical fixture snapshot and not the full test suite.",
+  "python": {
+    "runner": "scripts/run_tests.sh",
+    "test_files": [
+      "tests/agent/test_api_content_row_addressed_backfill.py",
+      "tests/agent/test_api_content_sidecar.py",
+      "tests/agent/test_codex_responses_adapter.py",
+      "tests/agent/test_gateway_turn_sidecar.py",
+      "tests/agent/test_reasoning_effort_labels.py",
+      "tests/agent/test_run_agent.py",
+      "tests/agent/test_ultra_collaboration.py",
+      "tests/gateway/test_message_timestamps.py",
+      "tests/tools/test_async_delegation.py",
+      "tests/tools/test_delegate_output_schema.py",
+      "tests/tools/test_delegate_reasoning_effort.py",
+      "tests/tui_gateway/test_notification_turn_release.py"
+    ],
+    "files": 12,
+    "passed": 489,
+    "failed": 0,
+    "elapsed_seconds": 41.9,
+    "workers": 8,
+    "receipt": "checkpoint-python.sanitized.log"
+  },
+  "desktop": {
+    "command": "npm run test:ui -- src/app/chat/composer/reasoning-pill.test.tsx src/app/settings/config-field.test.tsx src/lib/reasoning-effort.test.ts",
+    "files": 3,
+    "passed": 9,
+    "elapsed_seconds": 3.21,
+    "receipt_source": "Current-turn desktop tool receipt reported by root agent; raw stdout was not saved."
+  },
+  "paid_model_requests_during_checkpoint": 0,
+  "limits": "Passing targeted regression checks does not establish end-to-end model task completion, answer quality, budget compliance, or full-suite health."
+}

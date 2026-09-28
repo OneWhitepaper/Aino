@@ -1,0 +1,402 @@
+{
+  "artifact_kind": "derived_allowlisted_metrics",
+  "recorded_run_count": 25,
+  "recorded_settled_cost_usd": 56.080199,
+  "cost_scope": "Sum of the 25 recorded settled_cost_usd values as collected on 2026-09-28, rounded to six decimals. Not an assertion that every request or auxiliary call has final settlement. A transport-error run has no rows and is recorded as zero, which is not proof of final zero cost.",
+  "history_order": "Source inventory order, not chronological order. Run suffix alone is not a date.",
+  "original_goal": "Complete complex tasks efficiently and naturally within the full task budget; final answer accuracy is one acceptance dimension.",
+  "comparison_limits": "Historical runs use different interventions and some native comparison runs failed transport, spawning, effort matching, or input budget. No speed/cost ranking or equivalence is established.",
+  "usage_limits": "Numeric token counts are aggregate completed-response observations, distinct from approximate cumulative input guards and final billing. No credential tokens or model reasoning content are included.",
+  "history": [
+    {
+      "run": "live-codex-large-011237",
+      "scenario": "large",
+      "elapsed_seconds": 293.75,
+      "stop_reason": "input_cap",
+      "settled_cost_usd": 2.609249,
+      "children_completed": 0,
+      "children_recorded": 0
+    },
+    {
+      "run": "live-codex-large-093014",
+      "scenario": "large",
+      "elapsed_seconds": 90.98,
+      "stop_reason": "external_observed_budget_or_watchdog",
+      "settled_cost_usd": 0.100995,
+      "children_completed": 0,
+      "children_recorded": 0
+    },
+    {
+      "run": "live-codex-large-093845",
+      "scenario": "large",
+      "elapsed_seconds": 268.4,
+      "stop_reason": "input_cap",
+      "settled_cost_usd": 2.613888,
+      "children_completed": 0,
+      "children_recorded": 0
+    },
+    {
+      "run": "live-codex-large-132010",
+      "scenario": "large",
+      "elapsed_seconds": 30.67,
+      "stop_reason": "upstream_transport_error",
+      "settled_cost_usd": 0.0,
+      "children_completed": 0,
+      "children_recorded": 0
+    },
+    {
+      "run": "live-daily-022007",
+      "scenario": "daily",
+      "elapsed_seconds": 535.61,
+      "stop_reason": "normal_final",
+      "settled_cost_usd": 1.424536,
+      "children_completed": 3,
+      "children_recorded": 3
+    },
+    {
+      "run": "live-daily-170800",
+      "scenario": "daily",
+      "elapsed_seconds": 131.33,
+      "stop_reason": "token_request_cap",
+      "settled_cost_usd": 0.876848,
+      "children_completed": 1,
+      "children_recorded": 3
+    },
+    {
+      "run": "live-daily-171159",
+      "scenario": "daily",
+      "elapsed_seconds": 602.88,
+      "stop_reason": "timeout",
+      "settled_cost_usd": 1.255136,
+      "children_completed": 3,
+      "children_recorded": 3
+    },
+    {
+      "run": "live-daily-175535",
+      "scenario": "daily",
+      "elapsed_seconds": 1203.04,
+      "stop_reason": "timeout",
+      "settled_cost_usd": 1.859994,
+      "children_completed": 3,
+      "children_recorded": 3
+    },
+    {
+      "run": "live-daily_replay-174940",
+      "scenario": "daily_replay",
+      "elapsed_seconds": 255.42,
+      "stop_reason": "normal_final",
+      "settled_cost_usd": 0.386628,
+      "children_completed": 0,
+      "children_recorded": 0
+    },
+    {
+      "run": "live-large-023313",
+      "scenario": "large",
+      "elapsed_seconds": 1130.42,
+      "stop_reason": "token_request_cap",
+      "settled_cost_usd": 4.449358,
+      "children_completed": 3,
+      "children_recorded": 3
+    },
+    {
+      "run": "live-large-090837",
+      "scenario": "large",
+      "elapsed_seconds": 1202.87,
+      "stop_reason": "timeout",
+      "settled_cost_usd": 3.072306,
+      "children_completed": 3,
+      "children_recorded": 3
+    },
+    {
+      "run": "live-large-114237",
+      "scenario": "large",
+      "elapsed_seconds": 671.87,
+      "stop_reason": "token_request_cap",
+      "settled_cost_usd": 4.606043,
+      "children_completed": 3,
+      "children_recorded": 3
+    },
+    {
+      "run": "live-large-124822",
+      "scenario": "large",
+      "elapsed_seconds": 1096.12,
+      "stop_reason": "token_request_cap",
+      "settled_cost_usd": 3.756234,
+      "children_completed": 3,
+      "children_recorded": 3
+    },
+    {
+      "run": "live-large-132101",
+      "scenario": "large",
+      "elapsed_seconds": 1120.27,
+      "stop_reason": "token_request_cap",
+      "settled_cost_usd": 3.855903,
+      "children_completed": 3,
+      "children_recorded": 3
+    },
+    {
+      "run": "live-large-132312",
+      "scenario": "large",
+      "elapsed_seconds": 1202.85,
+      "stop_reason": "timeout",
+      "settled_cost_usd": 2.647557,
+      "children_completed": 3,
+      "children_recorded": 3
+    },
+    {
+      "run": "live-large-140801",
+      "scenario": "large",
+      "elapsed_seconds": 377.56,
+      "stop_reason": "token_request_cap",
+      "settled_cost_usd": 3.444293,
+      "children_completed": 0,
+      "children_recorded": 3
+    },
+    {
+      "run": "live-large-141653",
+      "scenario": "large",
+      "elapsed_seconds": 728.33,
+      "stop_reason": "token_request_cap",
+      "settled_cost_usd": 4.188099,
+      "children_completed": 0,
+      "children_recorded": 3
+    },
+    {
+      "run": "live-large-143428",
+      "scenario": "large",
+      "elapsed_seconds": 1096.14,
+      "stop_reason": "token_request_cap",
+      "settled_cost_usd": 5.183605,
+      "children_completed": 0,
+      "children_recorded": 3
+    },
+    {
+      "run": "live-large-150621",
+      "scenario": "large",
+      "elapsed_seconds": 812.93,
+      "stop_reason": "token_request_cap",
+      "settled_cost_usd": 4.019475,
+      "children_completed": 3,
+      "children_recorded": 3
+    },
+    {
+      "run": "live-length-145743",
+      "scenario": "length",
+      "elapsed_seconds": 79.28,
+      "stop_reason": "normal_final",
+      "settled_cost_usd": 0.11436,
+      "children_completed": 0,
+      "children_recorded": 0
+    },
+    {
+      "run": "live-no_subagent-140951",
+      "scenario": "no_subagent",
+      "elapsed_seconds": 208.73,
+      "stop_reason": "normal_final",
+      "settled_cost_usd": 0.43582,
+      "children_completed": 0,
+      "children_recorded": 0
+    },
+    {
+      "run": "live-replay-140532",
+      "scenario": "replay",
+      "elapsed_seconds": 436.66,
+      "stop_reason": "normal_final",
+      "settled_cost_usd": 1.632997,
+      "children_completed": 0,
+      "children_recorded": 0
+    },
+    {
+      "run": "live-replay-153006",
+      "scenario": "replay",
+      "elapsed_seconds": 485.84,
+      "stop_reason": "timeout",
+      "settled_cost_usd": 1.224844,
+      "children_completed": 0,
+      "children_recorded": 0
+    },
+    {
+      "run": "live-replay-154506",
+      "scenario": "replay",
+      "elapsed_seconds": 1205.92,
+      "stop_reason": "timeout",
+      "settled_cost_usd": 2.192828,
+      "children_completed": 0,
+      "children_recorded": 0
+    },
+    {
+      "run": "live-simple-140846",
+      "scenario": "simple",
+      "elapsed_seconds": 40.43,
+      "stop_reason": "normal_final",
+      "settled_cost_usd": 0.129203,
+      "children_completed": 0,
+      "children_recorded": 0
+    }
+  ],
+  "selected_runs": {
+    "live-large-132101": {
+      "limits": {
+        "seconds": 1200,
+        "requests": 64,
+        "approx_cumulative_input": 2000000,
+        "observed_spend_target_usd": 5.0,
+        "monetary_hard_cap": false
+      },
+      "request_count": 33,
+      "approx_cumulative_input": 2012563,
+      "parent_tool_counts": {
+        "delegate_task": 1,
+        "read_file": 21,
+        "search_files": 19,
+        "execute_code": 1
+      },
+      "parent_character_count_calls": 1,
+      "observed_completed_usage": {
+        "prompt_tokens": 2142779,
+        "cache_read_tokens": 1873408,
+        "cache_write_tokens": 0,
+        "uncached_input_tokens": 269371,
+        "output_tokens": 48207,
+        "reasoning_tokens": 31545,
+        "total_tokens": 2190986
+      },
+      "observed_usage_request_count": 32,
+      "fixture_changed_count": 0,
+      "system_hash_counts_per_session": [
+        1,
+        1,
+        1,
+        1
+      ],
+      "natural_final": false,
+      "acceptance": "failed_original_whole_run_budget_no_parent_final",
+      "cap_hit": "approx_cumulative_input",
+      "children": [
+        {
+          "task_index": 0,
+          "artifact": "child-0-compression-display.original.json",
+          "characters": 7124,
+          "utf8_bytes": 9176,
+          "findings": 6,
+          "confirmed": 5,
+          "needs_verification": 1,
+          "status": "completed",
+          "exit_reason": "completed",
+          "truncated": false,
+          "schema_valid": true,
+          "schema_retries": 0
+        },
+        {
+          "task_index": 1,
+          "artifact": "child-1-delegation.original.json",
+          "characters": 6760,
+          "utf8_bytes": 9242,
+          "findings": 8,
+          "confirmed": 5,
+          "needs_verification": 3,
+          "status": "completed",
+          "exit_reason": "completed",
+          "truncated": false,
+          "schema_valid": true,
+          "schema_retries": 1
+        },
+        {
+          "task_index": 2,
+          "artifact": "child-2-model-history.original.json",
+          "characters": 8680,
+          "utf8_bytes": 11858,
+          "findings": 11,
+          "confirmed": 6,
+          "needs_verification": 5,
+          "status": "completed",
+          "exit_reason": "completed",
+          "truncated": false,
+          "schema_valid": true,
+          "schema_retries": 0
+        }
+      ],
+      "child_seconds_by_task_index": [
+        790.22,
+        652.93,
+        465.53
+      ],
+      "child_api_calls_by_task_index": [
+        9,
+        3,
+        4
+      ],
+      "child_character_count_calls": 0,
+      "batch_delivery": {
+        "dispatch_calls": 1,
+        "tasks_in_dispatch": 3,
+        "completion_notifications": 1,
+        "delivery_attempts": 1,
+        "all_child_summaries_preserved": true,
+        "last_child_complete_seconds": 833.838,
+        "parent_request_with_all_results_seconds": 833.872,
+        "wake_latency_ms": 34
+      },
+      "final_quality": "not_evaluable_no_parent_final"
+    },
+    "live-replay-140532": {
+      "limits": {
+        "seconds": 1200,
+        "requests": 24,
+        "approx_cumulative_input": 2000000,
+        "observed_spend_target_usd": 2.0,
+        "monetary_hard_cap": false
+      },
+      "request_count": 12,
+      "approx_cumulative_input": 1083089,
+      "parent_tool_counts": {
+        "read_file": 17,
+        "search_files": 4,
+        "execute_code": 4
+      },
+      "parent_character_count_calls": 4,
+      "observed_completed_usage": {
+        "prompt_tokens": 1048573,
+        "cache_read_tokens": 927744,
+        "cache_write_tokens": 0,
+        "uncached_input_tokens": 120829,
+        "output_tokens": 15839,
+        "reasoning_tokens": 11342,
+        "total_tokens": 1064412
+      },
+      "observed_usage_request_count": 11,
+      "fixture_changed_count": 0,
+      "system_hash_counts_per_session": [
+        1
+      ],
+      "natural_final": true,
+      "acceptance": "parent_phase_natural_completion_only_accuracy_failed",
+      "source_run": "live-large-132101",
+      "budget_is_independent_of_source_run": true,
+      "new_children": 0,
+      "new_delegate_task_calls": 0,
+      "redelegation_guard_triggered": false,
+      "completed_parent_chat_requests": 11,
+      "auxiliary_requests_after_final_without_completed_usage": 1,
+      "final_event_seconds": 433.356,
+      "final_answer_artifact": "replay-final-answer.original.md",
+      "first_input_matches_source_eight_items": true,
+      "all_11_parent_request_prefixes_match_source": true,
+      "source_config_and_prompt_preserved": true,
+      "system_prompt_difference_from_source": "Two isolated-profile path substitutions; each individual conversation remained stable.",
+      "visible_group_body_characters": [
+        384,
+        385,
+        346
+      ],
+      "raw_markdown_group_body_characters": [
+        392,
+        401,
+        356
+      ],
+      "format_scope": "Group body only; excludes heading, file abbreviation legend, and Top 3. Visible count removes inline backticks. Original prompt did not define the counting convention.",
+      "top_three_present": true,
+      "final_accuracy_passed": false
+    }
+  }
+}

@@ -111,6 +111,8 @@ def build_retry_message(errors: List[str]) -> str:
     error_block = "\n".join(f"- {e}" for e in errors)
     return ("Your previous final response was rejected by the output contract "
             "validator. Validation errors:\n" f"{error_block}\n\n"
+            "Use the existing conversation and evidence to correct only the output format. "
+            "Keep the original task constraints; do not restart the task or repeat completed tool work.\n"
             "Reply with ONLY the corrected JSON object matching the OUTPUT "
             "CONTRACT schema from your task context. No prose, no explanations.")
 

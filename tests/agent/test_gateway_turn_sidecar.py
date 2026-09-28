@@ -183,9 +183,7 @@ class TestStringContentSidecarDelivery:
 
 class TestMultimodalFallback:
     def test_notes_appended_as_text_part_on_list_content(self):
-        """Multimodal turns can't take the string sidecar
-        (compose_user_api_content returns None for lists) — the must-deliver
-        fact is appended as a durable text part instead of dropping."""
+        """Gateway facts retain their existing durable text-part representation."""
         agent = _FakeAgent()
         agent._gateway_turn_context_notes = RESET_NOTE
         content = [
@@ -196,8 +194,8 @@ class TestMultimodalFallback:
             ctx = _build(agent, user_message=content)
         msg = ctx.messages[ctx.current_turn_user_idx]
         assert msg["content"][-1] == {"type": "text", "text": RESET_NOTE}
-        # No string sidecar for list content.
-        assert "api_content" not in msg
+        # The sidecar preserves images when persistence projects content to display text.
+        assert msg["api_content"] == msg["content"]
 
     def test_helper_appends_only_to_lists(self):
         content = [{"type": "text", "text": "hi"}]

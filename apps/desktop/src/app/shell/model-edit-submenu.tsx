@@ -12,7 +12,12 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Switch } from '@/components/ui/switch'
 import { useI18n } from '@/i18n'
-import { isThinkingEnabled, reasoningEffortClamp, resolveReasoningEffort } from '@/lib/reasoning-effort'
+import {
+  isThinkingEnabled,
+  reasoningEffortClamp,
+  reasoningEffortNote,
+  resolveReasoningEffort
+} from '@/lib/reasoning-effort'
 
 // Hermes' real reasoning levels live in lib/reasoning-effort; `none` is owned
 // by the Thinking toggle, not the radio.
@@ -176,16 +181,20 @@ export function ModelOptionsContent({
           <DropdownMenuSeparator className="mx-0" />
           <DropdownMenuLabel className={dropdownMenuSectionLabel}>{copy.effort}</DropdownMenuLabel>
           <DropdownMenuRadioGroup onValueChange={value => onSetOptions({ effort: value })} value={effortValue}>
-            {REASONING_EFFORTS.map(value => (
-              <DropdownMenuRadioItem
-                className={dropdownMenuRow}
-                key={value}
-                onSelect={event => event.preventDefault()}
-                value={value}
-              >
-                {clamp?.effort === value ? `${copy[value]} (${copy.sendsOnRoute(copy[clamp.wire])})` : copy[value]}
-              </DropdownMenuRadioItem>
-            ))}
+            {REASONING_EFFORTS.map(value => {
+              const note = reasoningEffortNote(value, clamp?.effort === value ? clamp.wire : undefined, copy)
+
+              return (
+                <DropdownMenuRadioItem
+                  className={dropdownMenuRow}
+                  key={value}
+                  onSelect={event => event.preventDefault()}
+                  value={value}
+                >
+                  {note ? `${copy[value]} (${note})` : copy[value]}
+                </DropdownMenuRadioItem>
+              )
+            })}
           </DropdownMenuRadioGroup>
         </>
       ) : null}

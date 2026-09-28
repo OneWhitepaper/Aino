@@ -33,6 +33,7 @@ from agent.model_metadata import (
 )
 from agent.redact import redact_sensitive_text
 from agent.turn_context import drop_stale_api_content
+from agent.api_content import effective_message_content
 from tools.todo_tool import TODO_INJECTION_HEADER
 
 logger = logging.getLogger(__name__)
@@ -1227,8 +1228,7 @@ def _estimate_msg_budget_tokens(msg: dict, charge_stale_thinking: bool = True) -
     the full shape; a mismatched size class protects blob-heavy rows as "small" and compaction re-fires.
     ``charge_stale_thinking=False`` skips newest-turn-only thinking keys. Accounting only; never mutates."""
     # Charge the wire substitute, not both it and the clean display content.
-    sidecar = msg.get("api_content")
-    content = sidecar if isinstance(sidecar, str) and sidecar and msg.get("role") in ("user", "assistant") else msg.get("content") or ""
+    content = effective_message_content(msg) or ""
     text_tokens = estimate_tokens_rough(content) if isinstance(content, str) else _content_length_for_budget(content) // _CHARS_PER_TOKEN
     tokens = text_tokens + 10  # +10 for role/key overhead
     tokens += sum(estimate_tokens_rough(str(tc)) for tc in msg.get("tool_calls") or [] if isinstance(tc, dict))
@@ -1507,7 +1507,7 @@ def _strip_historical_media(messages: List[Dict[str, Any]]) -> List[Dict[str, An
 
     def _newest(role: str, has_images) -> int:
         hits = (i for i, m in enumerate(messages) if isinstance(m, dict) and m.get("role") == role)
-        return max((i for i in hits if has_images(messages[i].get("content"))), default=-1)
+        return max((i for i in hits if has_images(effective_message_content(messages[i]))), default=-1)
 
     # Anchor on image-bearing user messages (not all) so a text follow-up still strips the old image.
     anchor = _newest("user", _content_has_images)
@@ -1537,12 +1537,20 @@ def _strip_historical_media(messages: List[Dict[str, Any]]) -> List[Dict[str, An
     def _stripped(i: int, msg: Any) -> Optional[Dict[str, Any]]:
         if not isinstance(msg, dict) or not _is_stale(i, msg):
             return None
-        content = msg.get("content")
+        content = effective_message_content(msg)
         # Native multimodal envelope: route through the tool-message stripper
         # (collapses to text summary, drops stale api_content sidecar).
         if msg.get("role") == "tool" and isinstance(content, dict) and content.get("_multimodal"):
             return _strip_images_from_tool_msg(msg) if _tool_content_has_images(content) else None
-        return _rewritten(msg, _strip_images_from_content(content)) if _content_has_images(content) else None
+        if not _content_has_images(content):
+            return None
+        rewritten = _rewritten(msg, _strip_images_from_content(msg.get("content")))
+        wire_content = _strip_images_from_content(content)
+        if wire_content != rewritten["content"]:
+            # Preserve API-only notes without exposing them in the clean transcript;
+            # only compression may commit this replacement of the cached payload.
+            rewritten["api_content"] = wire_content
+        return rewritten
 
     result = [(_stripped(i, msg), msg) for i, msg in enumerate(messages)]
     if all(new is None for new, _ in result):

@@ -148,6 +148,16 @@ class TestRealEarlyFlushAndOverrideLifecycle:
             assert ctx.messages[ctx.current_turn_user_idx]["api_content"] == expected
             # Backfilled to the exact row in SQLite!
             assert db.get_messages(sid)[-1]["api_content"] == expected
+
+            # An unanswered turn can reuse the same row after its one-shot hook was
+            # consumed. A metadata-only stamp must keep the bytes still used live.
+            agent.valid_tool_names = {"delegate_task"}
+            agent.reasoning_config = {"enabled": True, "effort": "max"}
+            agent._pending_cli_user_message = ctx.messages[ctx.current_turn_user_idx]
+            with patch("hermes_cli.plugins.invoke_hook", return_value=[]):
+                retried = _build(agent)
+            assert retried.messages[retried.current_turn_user_idx]["api_content"] == expected
+            assert db.get_messages(sid)[-1]["api_content"] == expected
         finally:
             db.close()
 

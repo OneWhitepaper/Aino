@@ -1,0 +1,198 @@
+{
+  "schema_version": 1,
+  "source_names": "Logical aliases only; no local absolute paths or account/session identifiers. Sources remain outside the repository.",
+  "source_files": {
+    "acceptance/runs-summary.json": {
+      "sha256": "2d1a8a00bc1c329997614827ba98b693864afd015b96d02d72a4ffa16d8ea8ec",
+      "bytes": 180204
+    },
+    "acceptance/batch-evidence-contract-20260928/final-delivery-audit.md": {
+      "sha256": "fb1b83ff3f78670b4ee98cf092e8e64780e6d7d3105dd2d43516294517065358",
+      "bytes": 4838
+    },
+    "acceptance/batch-evidence-contract-20260928/result-quality-audit.md": {
+      "sha256": "daee97639e9595e103b9885513dd6c269d9aae82d237c0883d4731f5dfedc570",
+      "bytes": 15135
+    },
+    "acceptance/parent-evidence-replay-20260928/final-replay-audit.md": {
+      "sha256": "845db8f4a9df1dfb16557a6ce10fb6eb847fc13e3b8e961f564cd6bd43986575",
+      "bytes": 5572
+    },
+    "acceptance/parent-evidence-replay-20260928/result-quality-audit.md": {
+      "sha256": "cc0dc28ab7905605a1d32a83c7a77951a233bf92fd8aa972564a685d33eac13b",
+      "bytes": 17144
+    },
+    "acceptance/parent-evidence-replay-20260928/live-replay-140532/model-answer.md": {
+      "sha256": "edc469fa474fa04189b95f4dbbfe96729b4d8b8d9499e465f29724f065f6bc3d",
+      "bytes": 2867
+    },
+    "runtime/live-large-132101/report.json": {
+      "sha256": "94787519077beb3e3618512bcf79bdd0a4c31882a49a587672c922e44bc1eed5",
+      "bytes": 2025097
+    },
+    "runtime/live-replay-140532/report.json": {
+      "sha256": "4c57144d994ef5451ac7c1dedfa4b7fb0777dc83e797d48c3b5214ce47e5e9c1",
+      "bytes": 1477354
+    },
+    "runtime/live-large-132101/profile/state.db": {
+      "sha256": "df52fa7480d2eabf66f6c5335cee18eb15fe31b9514975c9488da4595ea2602f",
+      "bytes": 2326528
+    },
+    "checkpoint/aino-ultra-checkpoint-python.log": {
+      "sha256": "2996564ea992193dc653abbb288b95cc0f4a527629a015447c298ab176aab2bb",
+      "bytes": 3055
+    },
+    "runtime/live-large-132101/workspace/agent/compaction_display.py": {
+      "sha256": "a934a332d968af7a352939a44cef971362e1452062fc2b95ffa9b3d89d92a4ff",
+      "bytes": 5001
+    },
+    "runtime/live-large-132101/workspace/agent/context_compressor.py": {
+      "sha256": "cadbfd5fa31c6a77040dea2649f91775fa63512a7c1a0dcfeb69b731d3bb9a42",
+      "bytes": 308831
+    },
+    "runtime/live-large-132101/workspace/tools/delegate_tool.py": {
+      "sha256": "61706524d8f8c9875df7409c5b3bc4e3e48a95e92ac6bf41ad4bb5ff2f943fec",
+      "bytes": 44664
+    },
+    "runtime/live-large-132101/workspace/tools/delegate_tool_config.py": {
+      "sha256": "ebc2487884af83243ada25a8fd8f47711a762c2bc6ef22b01c86ba5ea9152cbe",
+      "bytes": 35991
+    },
+    "runtime/live-large-132101/workspace/tui_gateway/model_switch.py": {
+      "sha256": "5a2d9f238bdaaf4afffecb59ef268a796d278a55133c0380869d380d73af7863",
+      "bytes": 25737
+    },
+    "runtime/live-large-132101/workspace/tui_gateway/session_history.py": {
+      "sha256": "00c767bbe8c2569507af883f2a7e633803a5c705d2450678f818d63d9b110e50",
+      "bytes": 22074
+    }
+  },
+  "original_exports": {
+    "replay-final-answer.original.md": {
+      "source": "acceptance/parent-evidence-replay-20260928/live-replay-140532/model-answer.md",
+      "extraction": "Entire file, byte-for-byte; independently equal to runtime replay report final_event.payload.text UTF-8."
+    },
+    "child-0-compression-display.original.json": {
+      "source": "runtime/live-large-132101/profile/state.db",
+      "extraction": "Only async_delegations.result_json results item task_index=0 summary string encoded as UTF-8. No newline, reformatting, redaction, row wrapper or runtime fields added.",
+      "summary_sha256": "60bcc3289649dc79aa3e19a7fcc673d7c54b22bb7d8f0d13d70f8383d41e8c7e"
+    },
+    "child-1-delegation.original.json": {
+      "source": "runtime/live-large-132101/profile/state.db",
+      "extraction": "Only async_delegations.result_json results item task_index=1 summary string encoded as UTF-8. No newline, reformatting, redaction, row wrapper or runtime fields added.",
+      "summary_sha256": "2b8a69ea4fea990da6c43c974720dafdf0fd18dd5504e88e38935b68198bda7e"
+    },
+    "child-2-model-history.original.json": {
+      "source": "runtime/live-large-132101/profile/state.db",
+      "extraction": "Only async_delegations.result_json results item task_index=2 summary string encoded as UTF-8. No newline, reformatting, redaction, row wrapper or runtime fields added.",
+      "summary_sha256": "10c59f0d14e3d5aa58bd0642d0d7b3aa0859c03b6ed971df2dfaf99acce5c903"
+    }
+  },
+  "derived_sources": {
+    "run-history.derived.json": [
+      "acceptance/runs-summary.json",
+      "runtime/live-large-132101/report.json",
+      "runtime/live-replay-140532/report.json",
+      "acceptance/batch-evidence-contract-20260928/final-delivery-audit.md",
+      "acceptance/parent-evidence-replay-20260928/final-replay-audit.md",
+      "acceptance/parent-evidence-replay-20260928/result-quality-audit.md"
+    ],
+    "checkpoint-python.sanitized.log": [
+      "checkpoint/aino-ultra-checkpoint-python.log"
+    ],
+    "checkpoint-validation.derived.json": [
+      "checkpoint/aino-ultra-checkpoint-python.log",
+      "Root agent current-turn desktop verification receipt"
+    ],
+    "accuracy-notes.derived.md": [
+      "acceptance/batch-evidence-contract-20260928/result-quality-audit.md",
+      "acceptance/parent-evidence-replay-20260928/result-quality-audit.md",
+      "acceptance/batch-evidence-contract-20260928/final-delivery-audit.md",
+      "acceptance/parent-evidence-replay-20260928/final-replay-audit.md",
+      "runtime/live-large-132101/workspace/agent/compaction_display.py",
+      "runtime/live-large-132101/workspace/agent/context_compressor.py",
+      "runtime/live-large-132101/workspace/tools/delegate_tool.py",
+      "runtime/live-large-132101/workspace/tools/delegate_tool_config.py",
+      "runtime/live-large-132101/workspace/tui_gateway/model_switch.py",
+      "runtime/live-large-132101/workspace/tui_gateway/session_history.py"
+    ],
+    "README.md": [
+      "run-history.derived.json",
+      "accuracy-notes.derived.md",
+      "checkpoint-validation.derived.json",
+      "Original extraction equality checks"
+    ]
+  },
+  "source_hashes_unchanged_after_extraction": true,
+  "package_files": {
+    "README.md": {
+      "sha256": "18654a65e9c41540b83f1733155dfefe82edacaef5b3168edef3f2b7529e66fa",
+      "bytes": 7127
+    },
+    "accuracy-notes.derived.md": {
+      "sha256": "22597c63e21d1bc5ab52aff1042233ff90e7dcfe4c22d6e2ed6d715502d08237",
+      "bytes": 6939
+    },
+    "checkpoint-python.sanitized.log": {
+      "sha256": "a84c76e9cbeaabcf8e7d3a0f3f568403272df347c61101c2ed7d319eebed038d",
+      "bytes": 3026
+    },
+    "checkpoint-review.md": {
+      "sha256": "03a54153bf7b38ce2efb325d5f2aa54512856e443808864f2b0d28046c497729",
+      "bytes": 8795
+    },
+    "checkpoint-validation.derived.json": {
+      "sha256": "98719b155cdf19904ccb32d24f46ad9df0572356f2e99d0680d6d25d07c04b9a",
+      "bytes": 1668
+    },
+    "child-0-compression-display.original.json": {
+      "sha256": "60bcc3289649dc79aa3e19a7fcc673d7c54b22bb7d8f0d13d70f8383d41e8c7e",
+      "bytes": 9176
+    },
+    "child-1-delegation.original.json": {
+      "sha256": "2b8a69ea4fea990da6c43c974720dafdf0fd18dd5504e88e38935b68198bda7e",
+      "bytes": 9242
+    },
+    "child-2-model-history.original.json": {
+      "sha256": "10c59f0d14e3d5aa58bd0642d0d7b3aa0859c03b6ed971df2dfaf99acce5c903",
+      "bytes": 11858
+    },
+    "replay-final-answer.original.md": {
+      "sha256": "edc469fa474fa04189b95f4dbbfe96729b4d8b8d9499e465f29724f065f6bc3d",
+      "bytes": 2867
+    },
+    "run-history.derived.json": {
+      "sha256": "0b65819e874925afbc89735e56ec503068521934e82698025ed5a82784dc3d50",
+      "bytes": 12402
+    }
+  },
+  "independently_authored_artifacts": {
+    "checkpoint-review.md": "Current-WIP code review and in-memory reproduction probes authored by the independent checkpoint review agent; not copied from the historical acceptance archive. Package hash covers the supplied report, not independent authentication of its probes."
+  },
+  "repository_fixture_verification": {
+    "evals/ultra_delegation/fixtures/large/agent/compaction_display.py": {
+      "sha256": "a934a332d968af7a352939a44cef971362e1452062fc2b95ffa9b3d89d92a4ff",
+      "matches_source": "runtime/live-large-132101/workspace/agent/compaction_display.py"
+    },
+    "evals/ultra_delegation/fixtures/large/agent/context_compressor.py": {
+      "sha256": "cadbfd5fa31c6a77040dea2649f91775fa63512a7c1a0dcfeb69b731d3bb9a42",
+      "matches_source": "runtime/live-large-132101/workspace/agent/context_compressor.py"
+    },
+    "evals/ultra_delegation/fixtures/large/tools/delegate_tool.py": {
+      "sha256": "61706524d8f8c9875df7409c5b3bc4e3e48a95e92ac6bf41ad4bb5ff2f943fec",
+      "matches_source": "runtime/live-large-132101/workspace/tools/delegate_tool.py"
+    },
+    "evals/ultra_delegation/fixtures/large/tools/delegate_tool_config.py": {
+      "sha256": "ebc2487884af83243ada25a8fd8f47711a762c2bc6ef22b01c86ba5ea9152cbe",
+      "matches_source": "runtime/live-large-132101/workspace/tools/delegate_tool_config.py"
+    },
+    "evals/ultra_delegation/fixtures/large/tui_gateway/model_switch.py": {
+      "sha256": "5a2d9f238bdaaf4afffecb59ef268a796d278a55133c0380869d380d73af7863",
+      "matches_source": "runtime/live-large-132101/workspace/tui_gateway/model_switch.py"
+    },
+    "evals/ultra_delegation/fixtures/large/tui_gateway/session_history.py": {
+      "sha256": "00c767bbe8c2569507af883f2a7e633803a5c705d2450678f818d63d9b110e50",
+      "matches_source": "runtime/live-large-132101/workspace/tui_gateway/session_history.py"
+    }
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "large/agent/compaction_display.py": "a934a332d968af7a352939a44cef971362e1452062fc2b95ffa9b3d89d92a4ff",
+  "large/agent/context_compressor.py": "cadbfd5fa31c6a77040dea2649f91775fa63512a7c1a0dcfeb69b731d3bb9a42",
+  "large/tools/delegate_tool.py": "61706524d8f8c9875df7409c5b3bc4e3e48a95e92ac6bf41ad4bb5ff2f943fec",
+  "large/tools/delegate_tool_config.py": "ebc2487884af83243ada25a8fd8f47711a762c2bc6ef22b01c86ba5ea9152cbe",
+  "large/tui_gateway/model_switch.py": "5a2d9f238bdaaf4afffecb59ef268a796d278a55133c0380869d380d73af7863",
+  "large/tui_gateway/session_history.py": "00c767bbe8c2569507af883f2a7e633803a5c705d2450678f818d63d9b110e50",
+  "small/SPEC.md": "60d56ed54f888135e37cb542f17f123185481fed22197dc9a8d1f0d8af7bd0a3",
+  "small/auth.py": "81d53dd33d2a97d3d3deb0f1b58abb63c96d43d3e2c4d5bfa92ce77485c53155",
+  "small/billing.py": "9a62dafa451e070cee385f441c60b5f81176f60c23ebfe5b708b219b54a0c23d",
+  "small/exports.py": "9920ed7a859ffe4c6e652cf4ab75f813d07e7025c1cae71cfe67883bf453cb7d"
+}

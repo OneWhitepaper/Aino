@@ -1,10 +1,13 @@
 import { DEFAULT_REASONING_EFFORT, REASONING_EFFORT_VALUES } from '@hermes/shared'
 import { describe, expect, it } from 'vitest'
 
+import { en } from '@/i18n/en'
+
 import {
   isThinkingEnabled,
   reasoningEffortClamp,
   reasoningEffortLabel,
+  reasoningEffortNote,
   resolveReasoningEffort
 } from './reasoning-effort'
 
@@ -20,14 +23,23 @@ describe('reasoning-effort', () => {
   })
 
   it('labels a route clamp from the gateway wire level only, never by inference', () => {
-    expect(reasoningEffortLabel('ultra', 'max')).toBe('Ultra→Max')
+    expect(reasoningEffortLabel('max', 'xhigh')).toBe('Max→XHigh')
     expect(reasoningEffortClamp('ultra', 'max')).toEqual({ effort: 'ultra', wire: 'max' })
     // Unknown ('' — not stamped yet / optimistic pick) or verbatim: plain label, no claim.
-    expect(reasoningEffortLabel('ultra', '')).toBe('Ultra')
-    expect(reasoningEffortLabel('ultra')).toBe('Ultra')
+    expect(reasoningEffortLabel('max', '')).toBe('Max')
     expect(reasoningEffortLabel('high', 'high')).toBe('High')
     expect(reasoningEffortClamp('high', 'high')).toBeNull()
     expect(reasoningEffortClamp('none', '')).toBeNull()
+  })
+
+  it('names Ultra as the multi-agent mode while still stating the level it sends', () => {
+    const copy = en.shell.modelOptions
+
+    expect(reasoningEffortLabel('ultra', 'max')).toBe('Ultra')
+    expect(reasoningEffortNote('ultra', 'max', copy)).toBe(copy.multiAgentSends(copy.max))
+    expect(reasoningEffortNote('ultra', '', copy)).toBe(copy.multiAgent)
+    expect(reasoningEffortNote('max', 'xhigh', copy)).toBe(copy.sendsOnRoute(copy.xhigh))
+    expect(reasoningEffortNote('high', 'high', copy)).toBeNull()
   })
 
   it('treats empty as inherit and only `none` as off', () => {

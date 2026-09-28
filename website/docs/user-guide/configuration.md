@@ -1856,11 +1856,14 @@ unreachable or a model isn't listed, Hermes falls back to its built-in
 model-family list and passes your effort through unchanged.
 :::
 
-:::note `ultra` is clamped to the strongest level the route accepts
+:::note `ultra` is the strongest level plus multi-agent collaboration
 `ultra` is a Hermes-internal ladder step: no provider wire accepts it, so every route clamps it
 to its strongest level (`max` on GPT-5.6 Codex and OpenAI-compatible routes, `xhigh` on older
-Codex models). The effort pickers and `/reasoning` status show this as
-`ultra (sends max on this route)` so the level you see is the level that is sent.
+Codex models). `/reasoning` status shows this as `ultra (multi-agent, sends max on this route)`.
+What `ultra` adds is proactive delegation: the agent may hand parallelizable parts of the task to
+subagents without being asked, when that could save time or improve quality (see
+[Ultra: multi-agent collaboration](features/delegation.md#ultra-multi-agent-collaboration)).
+The desktop pill keeps the name **Ultra**; its tooltip reads `multi-agent, sends Max`.
 :::
 
 You can also change the reasoning effort at runtime with the `/reasoning` command:

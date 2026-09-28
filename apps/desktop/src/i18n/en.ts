@@ -5074,6 +5074,8 @@ export const en: Translations = {
       max: 'Max',
       ultra: 'Ultra',
       sendsOnRoute: (level: string) => `sends ${level} on this route`,
+      multiAgent: 'multi-agent',
+      multiAgentSends: (level: string) => `multi-agent, sends ${level}`,
       updateFailed: 'Model option update failed',
       fastFailed: 'Fast mode update failed'
     },

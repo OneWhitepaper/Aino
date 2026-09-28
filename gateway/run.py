@@ -30,6 +30,7 @@ from datetime import datetime
 from typing import Callable, Dict, Optional, Any, List, Tuple, cast
 
 from agent.async_utils import safe_schedule_threadsafe
+from agent.api_content import api_content_value
 from agent.conversation_compression import (
     COMPACTION_DONE_STATUS, COMPACTION_HEARTBEAT_STATUS, COMPACTION_STATUS, COMPRESSION_RETRY_CONTEXT_REDUCED_STATUS_TEMPLATE,
     COMPRESSION_RETRY_MESSAGES_STATUS_TEMPLATE, COMPRESSION_RETRY_TOKENS_STATUS_TEMPLATE,
@@ -1128,12 +1129,13 @@ def _build_replay_entry(
     providers.
     """
     entry: Dict[str, Any] = {"role": role, "content": content}
+    if isinstance(msg.get("display_metadata"), dict):
+        entry["display_metadata"] = dict(msg["display_metadata"])
     # api_content sidecar keeps the request prefix byte-stable — ONLY if this pipeline did not rewrite
     # content. The caller renders timestamps AFTER this check so a stamp alone never drops the sidecar.
-    _sidecar = msg.get("api_content")
+    _sidecar = api_content_value(msg.get("api_content"))
     if (
         role in ("user", "assistant")
-        and isinstance(_sidecar, str)
         and _sidecar
         and content == msg.get("content")):
         entry["api_content"] = _sidecar
@@ -1228,8 +1230,7 @@ def _has_replayable_sidecar(role: Any, content: Any, msg: Dict[str, Any]) -> boo
     return (
         role == "assistant"
         and not content
-        and isinstance(msg.get("api_content"), str)
-        and bool(msg.get("api_content"))
+        and bool(api_content_value(msg.get("api_content")))
     )
 
 
@@ -1289,7 +1290,9 @@ def _build_gateway_agent_history(
                 # optionally followed by the normal context separator. Cleanup
                 # above already invalidated sidecars containing stripped content.
                 sidecar = entry.get("api_content")
-                if rendered != content and sidecar and not (
+                # Parts arrays already carry the exact sent text and images; display-only
+                # timestamp rendering must neither rewrite them nor discard their images.
+                if rendered != content and isinstance(sidecar, str) and sidecar and not (
                     sidecar == rendered or sidecar.startswith(rendered + "\n\n")
                 ):
                     entry.pop("api_content", None)

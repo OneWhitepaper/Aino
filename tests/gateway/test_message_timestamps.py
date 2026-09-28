@@ -67,3 +67,13 @@ def test_build_history_injects_only_when_enabled():
     assert agent_history[0]["content"].endswith("hello")
     # Assistant message is never timestamped.
     assert agent_history[1]["content"] == "hi"
+
+    # A native image's saved wire payload survives either display timestamp setting.
+    parts = [{"type": "text", "text": "hello"},
+             {"type": "image_url", "image_url": {"url": "data:image/png;base64,AAAA"}}]
+    history[0]["api_content"] = parts
+    history[0]["display_metadata"] = {"aino.ultra_collaboration_active": True}
+    for inject in (False, True):
+        agent_history, _ = _build_gateway_agent_history(history, inject_timestamps=inject)
+        assert agent_history[0]["api_content"] == parts
+        assert agent_history[0]["display_metadata"] == history[0]["display_metadata"]
