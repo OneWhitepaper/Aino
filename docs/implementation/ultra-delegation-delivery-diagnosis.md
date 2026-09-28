@@ -226,14 +226,18 @@ config 只有 `max_turns=36`、`reasoning_effort=ultra`、`api_max_retries=1`、
 - **对照条件**：同 fixture 哈希、同 prompt、同模型与档位、同 2M 上限与 $5 观察阈值。
 - **停止条件**：触及 2M 累计输入，或观察花费达到 $5 即停；不重跑、不扩预算。
 - **成功判据（必须同时满足，减少读取本身不算成功）**：
-  1. 自然最终交付（`answer_state == "answered"`，`final_event` 有非空正文）；
+  1. **完整任务自然交付**（`natural_delivery == true`）：需同时满足 `stop_reason == normal_final`、
+     最终事件 `status == complete` 且正文非空、且 `completion_guard.eligible == true`。
+     仅"观察到文本回答"（`answer_state`）**不算**通过——中断说明、等待状态、未完成请求都会被
+     `not_delivered_because` 列出原因；
   2. 原完整任务预算与耗时记录齐全，父/子/辅助请求与全部费用可核对；
   3. 重要结论准确，原有的过度断言（把"证据不足"写成"确定缺陷"）**没有**因减少核验而恶化；
   4. 子结果的条件、limitations 与未完成状态在最终答案中得到保留；
   5. 前缀与原始证据保持完整（`fixture_changed` 为空、系统哈希一致）。
 - **费用**：**$5 观察停止阈值**，最终结算可能超过该值（`observed_usage` 是延迟观察，非硬上限）；
   以 `settlement.json` 为准。
-- **判定工具**：`convergence.py` 的 `answer_state`、`delivery`（任务回合 / 辅助请求 / 未应答分离）、
+- **判定工具**：`convergence.py` 的 `natural_delivery`（含 `not_delivered_because`）、
+  `answer_state`、`delivery`（按 turn 分类：任务回合 / 辅助 / 未分类，附每回合明细）、
   `budget_split`、`fixture_changed_count`。
 
 若该次验证显示"执行/格式可见性"不足以改变行为，下一个候选是 `tool_trace` 摘要（R3，须先核实其
@@ -244,12 +248,21 @@ config 只有 `max_turns=36`、`reasoning_effort=ultra`、`api_max_retries=1`、
 - `evals/ultra_delegation/convergence.py`：从保存的 `report.json`（可选同目录 `events.jsonl`）打印
   请求身份分离（任务回合 / 辅助侧调用 / 未应答）、父子预算拆分、父任务上下文增长、
   子任务自身时长与交付墙钟（两个时钟）、末次 `finish_reason`、`answer_state`、
-  重复工具数与字数核验调用数。`answer_state` 只在该回合以 `stop` 结束**且**最终正文非空时
-  才算 `answered`，其余一律标为 `unknown_*` 或 `mid_tool_loop`，不推断成功或失败。
+  重复工具数与字数核验调用数。回合分类**不按大小**：有响应的回合为任务回合、请求全部未应答
+  且出现在 harness `missing_response_ids` 中的为辅助回合、其余标 `unknown`；
+  `answer_state` 只描述"是否观察到文本回答"，`natural_delivery` 才描述完整任务是否自然交付。
   只读，不运行模型、不写文件。
 - `--input-cap`（`harness.py` / `platform-runner.ts`）：诊断余量探针；报告自标注
   `scenario_ceiling_overridden` 与 `diagnostic_note`，不可能被读成预算内通过。
 - 回归：`tests/evals/test_ultra_delegation_convergence.py`。
+
+### 测试环境事实（纠正先前误判）
+
+`ripgrep` **在本机存在但不在 PATH 上**：`~/.claude-mem/node_modules/@anthropic-ai/
+claude-agent-sdk/vendor/ripgrep/arm64-darwin/rg`（ripgrep 14.1.1，arm64）。`scripts/run_tests.sh`
+用 `PATH="$PATH"` **保留** PATH（`:171`），因此既非"机器未安装"，也非 runner 清理 PATH。
+把这一个目录加入 PATH 后，先前 10 个搜索测试**全部通过**（3 文件 35 项），
+未修改任何测试来绕过。
 
 **已花费用**：余量探针 $5.12（36 行 settled）。该支出不构成任何结论成立的依据。
 后续付费实验需先列假设、对照、预计费用、停止条件与结算滞后风险，并取得明确确认。
