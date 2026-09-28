@@ -102,15 +102,21 @@ def _parent_starts_before_delivery(events_path: Path, ui_session_id: str | None)
 
 
 def _turn_split(report: dict, requests: list[dict], responses: list[dict]) -> dict:
-    """Break a session's requests down by turn, classifying each turn by recorded evidence.
+    """Report each turn's PURPOSE and RESPONSE STATE as two independent dimensions.
 
-    Request count does NOT identify the task turn: dispatch, the post-delivery continuation and the
-    final integration are all normal task turns (the recorded large run has two, with 2 and 15
-    requests, both answered). The harness records no purpose on ``pre_api_request``, so no field in
-    the report can name a turn's intent. What it does record is whether a request produced a
-    response and whether usage was observed, so turns are classed by THAT evidence and never by
-    size: a turn that answered is a task turn, a turn whose requests all went unanswered is
-    auxiliary, and anything else stays ``unknown`` instead of being folded into either bucket.
+    Purpose is not derivable here. The transport does record a real purpose per wire attempt
+    (``wire_attempts[].purpose``, the managed-request purpose header), but that log shares no key
+    with ``requests``: its ``turn_id`` is a transport UUID while a request's is the inner agent turn
+    id, and neither ``api_request_id`` nor ``http_call_id`` appears on both sides. So no request can
+    be labelled chat/auxiliary by evidence, and purpose stays ``unknown`` rather than being inferred.
+
+    Response state is what the report does record, and it is reported without implying intent:
+    ``answered``, ``unanswered`` (no response row) and ``usage_missing`` (flagged in observed_usage)
+    are separate counts. A background side call that answers normally is therefore NOT thereby a
+    task turn, and an interrupted chat request with no response is NOT thereby auxiliary — the two
+    facts do not determine each other.
+
+    Nothing is dropped: every request stays in the totals whatever its purpose or response state.
     """
     answered_ids = {
         str(r.get("api_request_id")) for r in responses if isinstance(r, dict) and r.get("api_request_id")
@@ -128,40 +134,63 @@ def _turn_split(report: dict, requests: list[dict], responses: list[dict]) -> di
 
     turns = []
     for turn_id, turn_requests in by_turn.items():
-        request_ids = {str(r.get("api_request_id")) for r in turn_requests}
-        answered = len(request_ids & answered_ids)
+        answered = [r for r in turn_requests if str(r.get("api_request_id")) in answered_ids]
         unanswered = [r for r in turn_requests if str(r.get("api_request_id")) not in answered_ids]
-        if answered:
-            kind = "task"
-        elif unanswered and all(str(r.get("api_request_id")) in usage_ids for r in unanswered):
-            kind = "auxiliary_unanswered"
-        else:
-            kind = "unknown"
+        usage_missing = [r for r in turn_requests if str(r.get("api_request_id")) in usage_ids]
         turns.append({
             "turn_id": turn_id,
-            "kind": kind,
+            # Unproven by construction (see docstring), kept explicit so no reader assumes a turn was
+            # classed by size or by whether it happened to answer.
+            "purpose": "unknown",
             "requests": len(turn_requests),
-            "answered_requests": answered,
+            "answered_requests": len(answered),
             "unanswered_requests": len(unanswered),
+            "usage_missing_requests": len(usage_missing),
             "approx_input": sum(int(r.get(APPROX_INPUT_FIELD) or 0) for r in turn_requests),
         })
 
-    def gather(*kinds):
-        wanted = {turn["turn_id"] for turn in turns if turn["kind"] in kinds}
-        return [r for r in requests if str(r.get("turn_id") or "") in wanted]
-
-    task_requests = gather("task")
-    auxiliary_requests = gather("auxiliary_unanswered")
-    unknown_requests = gather("unknown")
     return {
         "turns": turns,
-        "task_requests": task_requests,
-        "auxiliary_requests": auxiliary_requests,
-        "unknown_requests": unknown_requests,
+        "wire_purposes": _wire_purpose_totals(report),
+        "answered_requests": [r for r in requests if str(r.get("api_request_id")) in answered_ids],
         "unanswered_requests": [
             r for r in requests if str(r.get("api_request_id")) not in answered_ids
         ],
+        "usage_missing_requests": [
+            r for r in requests if str(r.get("api_request_id")) in usage_ids
+        ],
+        # Purpose could not be proven for any request: every one is listed here so the count is
+        # visible and cannot silently vanish from the totals.
+        "purpose_unproven_requests": list(requests),
     }
+
+
+def _wire_purpose_totals(report: dict) -> dict:
+    """Purpose counts the transport actually recorded, with their unjoinable count.
+
+    ``delegation`` attempts include each child's own managed calls, so these totals describe the
+    wire rather than one session's turn list. ``unjoined_attempts`` makes the gap between the
+    transport log and the request rows visible instead of smoothing it over.
+    """
+    attempts = report.get("wire_attempts")
+    if not isinstance(attempts, list):
+        return {"available": False}
+    counts: dict[str, int] = {}
+    for attempt in attempts:
+        if isinstance(attempt, dict):
+            purpose = str(attempt.get("purpose") or "unlabelled")
+            counts[purpose] = counts.get(purpose, 0) + 1
+    requests = report.get("requests") or []
+    return {
+        "available": True,
+        "attempts_total": len(attempts),
+        "requests_total": len(requests),
+        "unjoined_attempts": len(attempts) - len(requests),
+        "by_purpose": counts,
+        "note": "Transport-recorded purposes. They share no join key with requests, so they stay "
+                "totals only — never attributed to a request or a turn.",
+    }
+
 
 def summarize(report: dict, *, path: str | None = None, events_path: Path | None = None) -> dict:
     limits = report.get("limits") or {}
@@ -184,18 +213,17 @@ def summarize(report: dict, *, path: str | None = None, events_path: Path | None
     child_request_count = sum(len(rs) for sid, rs in requests.items() if sid != parent_id)
 
     split = _turn_split(report, parent_requests, parent_responses)
-    task_requests = split["task_requests"]
-    auxiliary_requests = split["auxiliary_requests"]
-    unknown_requests = split["unknown_requests"]
-    task_cumulative = sum(int(r.get(APPROX_INPUT_FIELD) or 0) for r in task_requests)
-    auxiliary_cumulative = sum(int(r.get(APPROX_INPUT_FIELD) or 0) for r in auxiliary_requests)
-    unknown_cumulative = sum(int(r.get(APPROX_INPUT_FIELD) or 0) for r in unknown_requests)
-    task_response_ids = {str(r.get("api_request_id")) for r in task_requests}
+    answered_requests = split["answered_requests"]
+    unanswered_requests = split["unanswered_requests"]
+    usage_missing_requests = split["usage_missing_requests"]
+    answered_ids = {str(r.get("api_request_id")) for r in answered_requests}
+    # The parent's own delivery verdict is read from the turns that actually answered; requests
+    # whose purpose is unproven still count in every total below.
     task_reasons = [
         str(r.get("finish_reason")) for r in parent_responses
-        if str(r.get("api_request_id")) in task_response_ids
+        if str(r.get("api_request_id")) in answered_ids
     ]
-    approx = [int(r.get(APPROX_INPUT_FIELD) or 0) for r in task_requests]
+    approx = [int(r.get(APPROX_INPUT_FIELD) or 0) for r in answered_requests]
 
     # Two questions, kept apart on purpose.
     #
@@ -271,27 +299,28 @@ def summarize(report: dict, *, path: str | None = None, events_path: Path | None
             "last_child_wall_seconds": delivery_at,
             "parent_requests_total": len(parent_requests),
             # Not the same number as the line above: a session's requests span several turns, and a
-            # turn is classed by evidence (see _turn_split), never by size.
-            "parent_task_turn_requests": len(task_requests),
-            "parent_auxiliary_requests": len(auxiliary_requests),
-            "parent_unclassified_requests": len(unknown_requests),
-            "unanswered_requests": len(split["unanswered_requests"]),
+            "parent_answered_requests": len(answered_requests),
+            "parent_unanswered_requests": len(unanswered_requests),
+            "parent_usage_missing_requests": len(usage_missing_requests),
+            # Purpose is unproven for every request (see _turn_split); the count is stated so it
+            # cannot be mistaken for an empty category, and these requests stay in all totals.
+            "parent_purpose_unproven_requests": len(split["purpose_unproven_requests"]),
             "parent_turns": split["turns"],
+            "wire_purposes": split["wire_purposes"],
             "child_requests_total": child_request_count,
         },
         "budget_split": {
             "cumulative_approx_input_total": cumulative_total,
             "parent_cumulative_approx_input": parent_cumulative,
-            "parent_task_turn_approx_input": task_cumulative,
-            "parent_auxiliary_approx_input": auxiliary_cumulative,
-            "parent_unclassified_approx_input": unknown_cumulative,
+            "parent_answered_approx_input": sum(int(r.get(APPROX_INPUT_FIELD) or 0) for r in answered_requests),
+            "parent_unanswered_approx_input": sum(int(r.get(APPROX_INPUT_FIELD) or 0) for r in unanswered_requests),
             "children_cumulative_approx_input": child_cumulative,
             "note": "limits.approx_cumulative_input is the HARNESS's local rough estimate summed over "
                     "parent and children; it is not a server-side or product limit. The split below is "
                     "derived arithmetic, not an observed per-session allowance.",
         },
         "parent_cost_shape": {
-            "task_turn_requests": len(task_requests),
+            "answered_requests": len(answered_requests),
             "first_request_input": approx[0] if approx else None,
             "peak_request_input": max(approx) if approx else None,
             "mean_request_input": round(sum(approx) / len(approx)) if approx else None,
