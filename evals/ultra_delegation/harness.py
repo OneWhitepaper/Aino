@@ -28,6 +28,7 @@ parser.add_argument('--replay-source', type=Path, help='Resume only the parent a
 parser.add_argument('--replay-dry-redelegate', action='store_true', help='Offline negative probe: attempt a new child spawn and verify replay stops before dispatch')
 parser.add_argument('--codex-dry-case', choices=['tools', 'output-cap', 'delegation', 'delegation-ephemeral'], default='tools')
 parser.add_argument('--codex-native-comparison', action='store_true', help='Explicitly accept documented native Codex tool/depth differences for a bounded live comparison')
+parser.add_argument('--input-cap', type=int, help='DIAGNOSTIC ONLY: replace the scenario cumulative-input ceiling to probe whether headroom alone lets the parent deliver. Never acceptance: the scenario ceiling is part of the recorded budget.')
 args = parser.parse_args()
 if os.sep in args.codex_bin:
     args.codex_bin = str(Path(args.codex_bin).expanduser().resolve())
@@ -76,6 +77,13 @@ if args.budget is None: args.budget = {'simple':300,'no_subagent':600,'large':90
 request_limit = {'daily': 48, 'replay': 24, 'daily_replay': 24}.get(args.scenario, 64)
 is_replay = args.scenario in ('replay', 'daily_replay')
 input_limit = 500000 if args.scenario in ('daily', 'daily_replay') else 2000000
+if args.input_cap is not None:
+    # Diagnostic probe only. The scenario ceiling above is the recorded budget the acceptance
+    # record refers to; raising it answers "is delivery merely short of headroom", which cannot
+    # be scored as passing the original budget.
+    if args.input_cap <= 0:
+        parser.error('--input-cap must be positive')
+    input_limit = args.input_cap
 source_replay_metadata = None
 if args.replay_source:
     source_replay_metadata=json.loads((args.replay_source/'report.json').read_text())
@@ -962,6 +970,11 @@ report['evidence_contract']={'enabled':bool(args.evidence_contract),'schema':evi
     'boundary':'Explicit task-contract intervention, not forced dispatch or runtime rewriting of model tool calls; JSON validity does not prove findings.'}
 report['diagnostic']={'review_skill':args.review_skill, 'original_acceptance_eligible':args.review_skill=='original' and not args.matched_comparison, 'boundary':'Removing the custom review skill changes the review instructions. A final answer here does not pass the original skill-bearing acceptance. Historical comparison is not a randomized causal estimate.' if args.review_skill=='none' else 'Original review skill policy unchanged.'}
 report['limits']={'seconds':args.budget,'requests':request_limit,'approx_cumulative_input':input_limit,'observed_spend_target_usd':report['budget_target_usd'],'monetary_hard_cap':False}
+if args.input_cap is not None:
+    # Self-labelling so a diagnostic probe can never be read as a within-budget pass later.
+    report['limits']['scenario_ceiling_overridden']=True
+    report['limits']['scenario_ceiling_default']=500000 if args.scenario in ('daily','daily_replay') else 2000000
+    report['limits']['diagnostic_note']='Input ceiling raised for a headroom probe. The whole-task budget acceptance does NOT apply to this run.'
 if length_source is not None:
     report['length_source']={'report':str(length_source_path),'text_sha256':hashlib.sha256(length_source.encode()).hexdigest(),'purpose':'Final formatting/counting regression probe only; not the full large-task acceptance.'}
 if replay_data:

@@ -70,7 +70,8 @@ def test_missing_events_leave_the_turn_split_unknown_instead_of_guessed():
     summary = convergence.summarize(_report(), events_path=Path("/nonexistent/events.jsonl"))
     behaviour = summary["parent_delivery_behaviour"]
     assert behaviour["parent_turns_before_delivery"] is None
-    assert behaviour["last_child_seconds"] is None
+    assert behaviour["last_child_wall_seconds"] is None
+    assert summary["delivery"]["last_child_wall_seconds"] is None
 
 
 def test_final_tool_call_means_no_answer_was_ever_offered():
@@ -98,9 +99,11 @@ def test_a_stopped_parent_counts_as_an_attempted_answer():
     assert summary["natural_final"] is True
 
 
-def test_delivery_moment_is_the_last_child_to_finish():
+def test_child_runtime_and_delivery_wall_clock_are_reported_separately():
+    """A child's own duration is not the moment its result landed: children start after dispatch."""
     summary = convergence.summarize(_report(), events_path=Path("/nonexistent/events.jsonl"))
-    assert summary["delivery"]["last_child_seconds"] == 42.5
+    assert summary["delivery"]["children_own_seconds_max"] == 42.5
+    assert summary["delivery"]["last_child_wall_seconds"] is None
 
 
 @pytest.mark.skipif(not FAILED_LIVE_RUN.is_file(), reason="originating machine's run archive absent")

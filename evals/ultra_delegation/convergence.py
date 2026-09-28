@@ -128,9 +128,9 @@ def summarize(report: dict, *, path: str | None = None, events_path: Path | None
     # turn), so a positional tail split would mix the dispatch turn's short status reply into the
     # delivery phase. Answer the question that matters instead: did the parent conclude a turn
     # after the children's results were in hand, and did that turn end with an answer or a tool call?
-    if starts is None:
-        parent_turns_before_delivery, delivery_at = None, None
-    else:
+    parent_turns_before_delivery: int | None = None
+    delivery_at: float | None = None
+    if starts is not None:
         parent_turns_before_delivery, delivery_at = starts
     final_reason = finish_reasons[-1] if finish_reasons else None
     answered = bool(finish_reasons) and final_reason not in ("tool_calls",)
@@ -152,7 +152,10 @@ def summarize(report: dict, *, path: str | None = None, events_path: Path | None
         },
         "delivery": {
             "children_finished": len(report.get("children_finished") or []),
-            "last_child_seconds": _delivery_seconds(report),
+            # Two different clocks: each child's own runtime, versus the wall-clock moment the last
+            # result landed. They are not interchangeable — the children start after dispatch.
+            "children_own_seconds_max": _delivery_seconds(report),
+            "last_child_wall_seconds": delivery_at,
             "parent_requests_total": len(parent_requests),
             "child_requests_total": child_request_count,
         },
@@ -172,7 +175,7 @@ def summarize(report: dict, *, path: str | None = None, events_path: Path | None
         },
         "parent_delivery_behaviour": {
             "parent_turns_before_delivery": parent_turns_before_delivery,
-            "last_child_seconds": delivery_at,
+            "last_child_wall_seconds": delivery_at,
             "finish_reasons": finish_reasons,
             "final_finish_reason": final_reason,
             "answer_attempted": answered,
