@@ -95,6 +95,9 @@ def test_row_is_typed_by_the_turn_start_persist(agent_db):
     assert row["display_metadata"] == {"attempt": 2}
     # The model's copy is untouched: same role, same content.
     assert row["content"] == NOTE
+    # A synthetic row is not a user turn, so no agent control metadata may ride it: Ultra mode
+    # provenance on a scaffolding row would both corrupt this metadata and claim a user turn.
+    assert "aino.ultra_collaboration_active" not in row["display_metadata"]
 
 
 def test_a_real_user_turn_stays_untyped(agent_db):

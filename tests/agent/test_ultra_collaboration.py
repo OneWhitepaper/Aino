@@ -9,8 +9,11 @@ system prompt, tools, reasoning field and every replayed row stay byte-identical
 from __future__ import annotations
 
 import json
+import os
 import threading
 from http.server import BaseHTTPRequestHandler, HTTPServer
+from types import SimpleNamespace
+from unittest.mock import patch
 
 import pytest
 
@@ -74,15 +77,42 @@ def multiplex_mode():
         secret_scope.set_multiplex_active(previous)
 
 
-def _agent(url, reasoning_config, *, toolsets=("delegation",), session_db=None):
+def _agent(url, reasoning_config, *, toolsets=("delegation",), session_db=None, session_id="ultra-collab"):
     from run_agent import AIAgent
 
     return AIAgent(
         api_key="test-key", base_url=url, provider="openai-compat", model="test-model",
         max_iterations=4, enabled_toolsets=list(toolsets), reasoning_config=reasoning_config,
         quiet_mode=True, skip_context_files=True, skip_memory=True, save_trajectories=False,
-        platform="cli", session_id="ultra-collab", session_db=session_db,
+        platform="cli", session_id=session_id, session_db=session_db,
     )
+
+
+def _seed_unanswered_turn(db, session_id, question, *, note, recorded):
+    """The durable tail a failed delivery attempt leaves: its turn-start flush wrote the DM row with
+    the runtime-stamped mode metadata (and the note's sidecar when it carried one) and no reply followed."""
+    db.append_message(
+        session_id, "user", content=question,
+        api_content=f"{question}\n\n{note}" if note else None,
+        display_metadata={ULTRA_MODE_METADATA_KEY: recorded},
+    )
+
+
+def _retry_unanswered_turn(url, effort, db, session_id, question):
+    """Re-run a failed delivery turn through the quiet-CLI dispatcher lane: the env-gated adoption
+    helper re-stages the persisted tail row as this turn's user message, then the real agent runs.
+    History is loaded exactly as that lane loads it — ``cli_agent_setup_mixin._load_resumed_history_late``
+    (and ``api_server._conversation_history_for_session``, minus the alternation repair) reads the
+    transcript WITHOUT row ids, so the retry cannot assume an addressed row."""
+    from hermes_cli.quiet_single_query import adopt_unanswered_turn as adopt_quiet_turn
+    from tools.bot_relay import RESUME_UNANSWERED_TURN_ENV
+
+    agent = _agent(url, dict(effort), session_db=db, session_id=session_id)
+    history = db.get_messages_as_conversation(session_id, repair_alternation=True)
+    cli = SimpleNamespace(conversation_history=history, agent=agent)
+    with patch.dict(os.environ, {RESUME_UNANSWERED_TURN_ENV: "1"}):
+        assert adopt_quiet_turn(cli, question) is True
+    return agent.run_conversation(question, conversation_history=cli.conversation_history)
 
 
 def _chat_requests():
@@ -134,6 +164,62 @@ def test_mode_in_force_survives_rebuilding_the_agent_from_the_store(provider_url
     assert [_user_contents(r)[-1] for r in _chat_requests()] == [
         "q1\n\n" + ULTRA_ON_NOTE, "q2", "q3\n\n" + ULTRA_OFF_NOTE,
     ]
+
+
+def test_adopted_unanswered_turn_retried_at_max_revokes_the_stale_on(provider_url, tmp_path):
+    """A delivery retry adopts the failed attempt's own row, so that row is the only place its
+    Ultra-on note lives: running the retry at Max must revoke it on THIS wire and record what was
+    sent. Leaving the on-note beside a recorded-off turn keeps proactive delegation alive in the
+    transcript with no later note able to revoke it (the retry's own row is never scanned again)."""
+    db = SessionDB(db_path=tmp_path / "state.db")
+    try:
+        db.create_session(session_id="retried-ultra", source="cli")
+        _seed_unanswered_turn(db, "retried-ultra", "resume task", note=ULTRA_ON_NOTE, recorded=True)
+
+        result = _retry_unanswered_turn(provider_url, MAX, db, "retried-ultra", "resume task")
+        assert result["final_response"] == "done"
+        assert _user_contents(_chat_requests()[-1]) == ["resume task\n\n" + ULTRA_OFF_NOTE]
+
+        restored = db.get_messages_as_conversation("retried-ultra")
+        user_rows = [m for m in restored if m["role"] == "user"]
+        assert [m["content"] for m in user_rows] == ["resume task"]  # adopted in place, never appended twice
+        assert user_rows[0]["display_metadata"][ULTRA_MODE_METADATA_KEY] is False
+        assert user_rows[0]["api_content"] == "resume task\n\n" + ULTRA_OFF_NOTE
+
+        # The next turn replays the retry's bytes and repeats nothing: the mode is off for good.
+        _agent(provider_url, dict(MAX), session_db=db, session_id="retried-ultra").run_conversation(
+            "follow up", conversation_history=db.get_messages_as_conversation("retried-ultra", include_row_ids=True),
+        )
+        assert _user_contents(_chat_requests()[-1]) == ["resume task\n\n" + ULTRA_OFF_NOTE, "follow up"]
+    finally:
+        db.close()
+
+
+def test_adopted_unanswered_turn_retried_at_ultra_announces_the_mode(provider_url, tmp_path):
+    """Mirror image: the failed attempt ran at Max (recorded off, nothing on the wire) and the retry
+    runs at Ultra. The adopted row's own record is the whole provenance, so the retry must record the
+    mode it announces — a row left recorded off while the wire says Ultra makes every rebuild announce
+    it again, the same way a sent Max turn becomes the provenance for the next Ultra turn."""
+    db = SessionDB(db_path=tmp_path / "state.db")
+    try:
+        db.create_session(session_id="retried-max", source="cli")
+        _seed_unanswered_turn(db, "retried-max", "resume task", note="", recorded=False)
+
+        _retry_unanswered_turn(provider_url, ULTRA, db, "retried-max", "resume task")
+        assert _user_contents(_chat_requests()[-1]) == ["resume task\n\n" + ULTRA_ON_NOTE]
+
+        restored = db.get_messages_as_conversation("retried-max")
+        user_row = [m for m in restored if m["role"] == "user"][0]
+        assert user_row["display_metadata"][ULTRA_MODE_METADATA_KEY] is True
+        assert user_row["api_content"] == "resume task\n\n" + ULTRA_ON_NOTE
+
+        # Staying on Ultra states nothing further; the announced note is replayed verbatim.
+        _agent(provider_url, dict(ULTRA), session_db=db, session_id="retried-max").run_conversation(
+            "follow up", conversation_history=db.get_messages_as_conversation("retried-max", include_row_ids=True),
+        )
+        assert _user_contents(_chat_requests()[-1]) == ["resume task\n\n" + ULTRA_ON_NOTE, "follow up"]
+    finally:
+        db.close()
 
 
 def test_quoted_mode_notes_do_not_change_the_restored_mode(provider_url, tmp_path):

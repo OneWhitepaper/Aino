@@ -330,8 +330,9 @@ def restore_undelivered_completions(target_queue) -> int:
 
 def _replay_pending(conn, rows, target_queue, now: float) -> int:
     """Put each pending ``(delegation_id, event_json, completed_at, dispatched_at)`` row on ``target_queue``
-    stamped ``restored``, or terminally drop it past ``_MAX_COMPLETION_REPLAY_AGE_S``. Records the offer so
-    the orphan sweep skips the row until the copy is handed back (``return_completion_offer``)."""
+    stamped ``restored``, or terminally drop it past ``_MAX_COMPLETION_REPLAY_AGE_S``. Records the offer
+    BEFORE publishing the copy, so the orphan sweep skips the row until the copy is handed back
+    (``return_completion_offer``)."""
     home, restored = hermes_home_key(get_hermes_home()), 0
     for delegation_id, payload, completed_at, dispatched_at in rows:
         age_basis = completed_at or dispatched_at
@@ -347,9 +348,18 @@ def _replay_pending(conn, rows, target_queue, now: float) -> int:
         evt = json.loads(payload)
         if isinstance(evt, dict):
             evt["restored"] = True
-        target_queue.put(evt)
+        # Offer bookkeeping FIRST: a consumer that can already dequeue the copy must also see the
+        # registration, or its ``return_completion_offer`` (a no-op for an unregistered id) clears
+        # nothing and this process's sweep skips a row with no live copy for the rest of the process.
         with _orphan_lock:
             _offered.add((home, delegation_id))
+        try:
+            target_queue.put(evt)
+        except BaseException:
+            # A failed publication leaves nothing to hand back, so the reservation must not outlive it.
+            with _orphan_lock:
+                _offered.discard((home, delegation_id))
+            raise
         restored += 1
     return restored
 

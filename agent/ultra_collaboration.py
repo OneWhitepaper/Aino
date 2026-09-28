@@ -55,7 +55,10 @@ ULTRA_OFF_NOTE = (
 
 
 def _mode_in_force(history: Iterable[Any]) -> Optional[bool]:
-    """Only runtime-stamped provenance can establish a mode; user text is never provenance."""
+    """Only runtime-stamped provenance can establish a mode; user text is never provenance.
+
+    ``history`` reaches through this turn's user row, so a freshly staged row (no stamp) is skipped
+    while a staged row that already carries one — an adopted unanswered turn — is counted."""
     default_inactive = False
     for message in reversed(list(history)):
         if not isinstance(message, dict) or message.get("role") != "user":
@@ -86,7 +89,9 @@ def ultra_mode_note(agent: Any, history: Iterable[Any]) -> str:
 
     Top-level turns only: children never carry mode notes, their fan-out is bounded by the
     orchestrator rules. Ultra is active when the effort is ``ultra`` and ``delegate_task`` is
-    available; ``history`` is the conversation before this turn's user message."""
+    available; ``history`` is the conversation through this turn's user row. A freshly staged row
+    carries no runtime stamp, but a row adopted from an unanswered turn (a delivery retry) already
+    carries its first attempt's stamp and note, and that note is the mode the transcript is in."""
     if getattr(agent, "_delegate_depth", 0):
         return ""
     history = list(history)

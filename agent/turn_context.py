@@ -1078,8 +1078,14 @@ def build_turn_context(
     # Sidecars preserve the user's visible input, including native-image turns.
     # These routes bypass the shared durable wire-content path, so a mode note could
     # not be replayed reliably after the first turn.
+    #
+    # The scan runs THROUGH this turn's user row: a freshly staged row carries no
+    # runtime stamp, but a row adopted from an unanswered turn carries the stamp and
+    # sidecar of its first attempt. Re-sending that row is the only place its earlier
+    # note lives, so the effort change must be announced against it (Ultra-on beside a
+    # recorded-off row is a mode nothing later can revoke).
     _ultra_note = (
-        ultra_mode_note(agent, messages[:max(current_turn_user_idx, 0)])
+        ultra_mode_note(agent, messages[:current_turn_user_idx + 1])
         if not moa_active and getattr(agent, "api_mode", None) != "codex_app_server" else ""
     )
     plugin_user_context = "\n\n".join(part for part in (plugin_user_context, _ultra_note) if part)
@@ -1094,8 +1100,12 @@ def build_turn_context(
         and 0 <= current_turn_user_idx < len(messages)
         and messages[current_turn_user_idx].get("role") == "user"
     ):
+        # Synthetic turns (crash-recovery notes, delegation completions) write their own
+        # display_kind/display_metadata and are not user turns: stamping the mode onto them
+        # both pollutes that metadata and claims user provenance the mode scan forbids.
         if (
-            not getattr(agent, "_delegate_depth", 0)
+            not messages[current_turn_user_idx].get("display_kind")
+            and not getattr(agent, "_delegate_depth", 0)
             and ("delegate_task" in (getattr(agent, "valid_tool_names", None) or ()) or _ultra_note)
             and (_ultra_note or not ultra_mode_active(agent))
         ):

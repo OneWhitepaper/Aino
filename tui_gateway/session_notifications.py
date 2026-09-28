@@ -467,6 +467,11 @@ def _notif_dispatch_event(sid: str, session: dict, evt: dict, text: str) -> None
         # Another consumer holds the durable row — a gateway sharing this home claims before it verifies
         # the target. No turn will run, and nothing else clears ``running``: a busy session is exempt
         # from the reaper, keeps its lease, and never reaches its bot mailbox again.
+        # Our copy is gone, so hand a delegation's offer back or this process's sweep skips the row
+        # for the rest of its life (the holder's claim is unaffected; sweep SQL excludes live claims).
+        if evt.get("type") == "async_delegation":
+            from tools.async_delegation import return_completion_offer
+            return_completion_offer(evt)
         _notif_release_turn(session)
         return
     kwargs = ({"display_kind": "async_delegation_complete", "display_metadata": _async_delegation_display_metadata(evt)}
@@ -518,6 +523,11 @@ def _notif_handle_event(sid, session, evt, emitted, registry, fmt, deferred, com
         return True
     text = fmt(evt)
     if not text:
+        # Nothing will be delivered from this copy, so a delegation must hand its offer back for the
+        # next sweep; holding it would strand the durable row while the offer claims a live copy.
+        if is_delegation:
+            from tools.async_delegation import return_completion_offer
+            return_completion_offer(evt)
         return True
     # Emit once per dedup key: a re-queued completion would otherwise re-emit every 0.5s while the session is busy,
     # while distinct watch_match events from one process must stay visible.

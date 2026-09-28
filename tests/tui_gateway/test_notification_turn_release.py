@@ -43,13 +43,18 @@ def _no_turn(monkeypatch) -> list:
                          ids=["row-held-by-another-consumer", "ledger-unreadable"])
 def test_a_lost_delivery_claim_hands_the_turn_back(monkeypatch, claim):
     """A gateway sharing this home claims the durable row before it verifies the target, so the
-    poller holding the live copy of the same event gets ``None`` — after it already took the turn."""
+    poller holding the live copy of the same event gets ``None`` — after it already took the turn.
+
+    The copy is discarded here, so a delegation's in-memory offer must go back too: leaving it
+    registered makes this process's orphan sweep skip a row that has no live copy left."""
     def _claim(evt, consumer):
         if isinstance(claim, Exception):
             raise claim
         return claim
 
+    returned: list = []
     monkeypatch.setattr("tools.async_delegation.claim_event_delivery", _claim)
+    monkeypatch.setattr("tools.async_delegation.return_completion_offer", lambda evt: returned.append(evt))
     started = _no_turn(monkeypatch)
     session = _claimed_session()
 
@@ -57,7 +62,29 @@ def test_a_lost_delivery_claim_hands_the_turn_back(monkeypatch, claim):
 
     assert session["running"] is False
     assert started == []
+    assert [evt["delegation_id"] for evt in returned] == ["deleg-1"]
     assert server._notif_claim_turn(session) is True, "the session must be claimable again"
+
+
+def test_a_delegation_whose_notification_text_is_empty_hands_its_offer_back(monkeypatch):
+    """No text means no turn and no delivery from this copy, so the offer must not stay registered.
+
+    The origin gate is satisfied on purpose: an unowned event already returns the offer on its
+    drop path, so only an owned copy isolates the empty-render branch."""
+    returned: list = []
+    monkeypatch.setattr("tools.async_delegation.return_completion_offer", lambda evt: returned.append(evt))
+    started = _no_turn(monkeypatch)
+    evt = {**DELEGATION, "origin_ui_session_id": "sid"}
+
+    delivered = server._notif_handle_event(
+        "sid", {"history_lock": threading.RLock(), "running": False, "history": []},
+        evt, set(), SimpleNamespace(completion_queue=queue.Queue()),
+        lambda evt: "", None,
+    )
+
+    assert delivered is True
+    assert started == []
+    assert [e["delegation_id"] for e in returned] == ["deleg-1"]
 
 
 @pytest.mark.parametrize("fail_at", ["claim", "render"])

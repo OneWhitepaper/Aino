@@ -1343,3 +1343,85 @@ def test_prune_never_evicts_live_records():
 
     assert {"live-stalling", "live-finalizing", "live-running"} <= survivors
     assert "done-0" not in survivors and len(survivors - {"live-stalling", "live-finalizing", "live-running"}) == ad._MAX_RETAINED_COMPLETED
+
+
+# ---------------------------------------------------------------------------
+# Offer registration vs. publication order (orphan-sweep starvation)
+# ---------------------------------------------------------------------------
+
+def _is_offered(delegation_id: str) -> bool:
+    with ad._orphan_lock:
+        return any(key[1] == delegation_id for key in ad._offered)
+
+
+def _pending_row(delegation_id: str, now: float):
+    return [(delegation_id, json.dumps({"type": "async_delegation", "delegation_id": delegation_id}), now, now)]
+
+
+def test_handed_back_offer_leaves_no_stale_registration():
+    """A consumer that dequeues the copy in the window between publication and bookkeeping and
+    hands it back (unowned event, ``return_completion_offer``) must clear the offer. Otherwise the
+    queue holds no copy while ``_offered`` still claims one, and every later sweep in this process
+    skips the still-pending row until restart."""
+    handed_back = threading.Event()
+
+    class HandBackQueue(queue.Queue):
+        def put(self, item, block=True, timeout=None):
+            super().put(item, block, timeout)
+            # The legal scheduling point the leak needs: the copy is visible, bookkeeping is not done.
+            assert handed_back.wait(5), "consumer never handed the copy back"
+
+    q = HandBackQueue()
+    delegation_id, now = "offer-race", time.time()
+
+    def consumer():
+        evt = q.get(timeout=5)
+        ad.return_completion_offer(evt)
+        handed_back.set()
+
+    thread = threading.Thread(target=consumer)
+    thread.start()
+    try:
+        assert ad._replay_pending(None, _pending_row(delegation_id, now), q, now) == 1
+    finally:
+        thread.join(5)
+
+    assert handed_back.is_set() and q.empty(), "the consumer discarded the only copy"
+    assert not _is_offered(delegation_id), (
+        "queue is empty but the offer is still registered: this process's sweep can never re-offer the row again")
+
+
+def test_copy_never_becomes_visible_before_its_offer_is_registered():
+    """Publication-order contract: at the instant a consumer can dequeue the copy, the offer must
+    already be registered — that is what makes the consumer's ``return_completion_offer`` effective.
+    A consumer that only ever observes an unregistered copy can never hand the offer back."""
+    seen_at_receipt: list = []
+    consumer_done = threading.Event()
+
+    class ObservingQueue(queue.Queue):
+        def put(self, item, block=True, timeout=None):
+            super().put(item, block, timeout)
+            assert consumer_done.wait(5), "consumer never drained the offered copy"
+
+        def get(self, block=True, timeout=None):
+            evt = super().get(block, timeout)
+            seen_at_receipt.append(_is_offered(evt["delegation_id"]))
+            consumer_done.set()
+            return evt
+
+    q = ObservingQueue()
+    delegation_id, now = "offer-ordering", time.time()
+
+    def consumer():
+        evt = q.get(timeout=5)
+        ad.return_completion_offer(evt)
+
+    thread = threading.Thread(target=consumer)
+    thread.start()
+    try:
+        assert ad._replay_pending(None, _pending_row(delegation_id, now), q, now) == 1
+    finally:
+        thread.join(5)
+
+    assert seen_at_receipt == [True]
+    assert not _is_offered(delegation_id), "a handed-back offer must not survive its consumer"

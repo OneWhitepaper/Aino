@@ -133,6 +133,32 @@ def _persist_lock(agent):
     return nullcontext() if lock is None else lock
 
 
+def _adopt_row_identity(agent: Any, tail: Dict[str, Any]) -> None:
+    """Give an adopted row its durable address when the loader that produced it carried none.
+
+    The flush marker-skips this row (it is already in the store), so a sidecar/metadata correction the
+    prologue makes for the re-sent bytes can only reach it by address — and the positional fallback is
+    forbidden because it can land on an older row with the same text. Both adoption lanes load history
+    without row ids (``cli_agent_setup_mixin._load_resumed_history_late`` for the delivery re-run,
+    ``api_server._conversation_history_for_session`` for the in-process peer-DM lane), so resolve it here:
+    the store's newest active user row IS the row being re-sent, and the write that consumes the id
+    re-checks the stored content, so a lookup that drifted onto a neighbour is refused, not mis-stamped.
+    """
+    if isinstance(tail.get("_row_id"), int):
+        return
+    db = getattr(agent, "_session_db", None)
+    session_id = getattr(agent, "session_id", None)
+    if db is None or not session_id:
+        return
+    try:
+        row_id = db.latest_message_row_id(session_id, role="user")
+    except Exception:
+        logger.debug("adopted-turn row id lookup failed for session=%s", session_id, exc_info=True)
+        return
+    if isinstance(row_id, int):
+        tail["_row_id"] = row_id
+
+
 def adopt_unanswered_turn(history: List[Dict[str, Any]], query: Any, agent: Any) -> bool:
     """Re-stage the transcript's unanswered tail row as THIS turn's user message; True when adopted.
 
@@ -154,6 +180,10 @@ def adopt_unanswered_turn(history: List[Dict[str, Any]], query: Any, agent: Any)
     the turn over from the DM (the rows stay in the DB as the record of the failed attempt; the re-run's
     answer lands after them as a valid continuation). Anything else declines — no user row at the tail, or a
     different text there — so a person's deliberate re-send of the same text is never swallowed.
+
+    The adopted row also keeps the durable identity of the row it re-sends (``_adopt_row_identity``), so a
+    prologue that rewrites what this turn sends — a mode note the retry no longer wants, for instance —
+    corrects that row instead of leaving the store describing bytes that were never re-sent.
     """
     idx = next((i for i in range(len(history) - 1, -1, -1)
                 if isinstance(history[i], dict) and history[i].get("role") == "user"), None)
@@ -165,6 +195,7 @@ def adopt_unanswered_turn(history: List[Dict[str, Any]], query: Any, agent: Any)
     tail = history[idx]
     del history[idx:]
     tail[_DB_PERSISTED_MARKER] = True
+    _adopt_row_identity(agent, tail)
     agent._pending_cli_user_message = tail
     return True
 
