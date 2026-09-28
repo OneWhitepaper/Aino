@@ -139,8 +139,12 @@ def _notice_lines(results) -> "list[str]":
     return ["", *notice] if notice else []
 
 
-def _preamble(evt: dict, title: str, intro: str, completed_at: float, *, with_goal: bool) -> "list[str]":
-    """Shared preamble: title, intro, blank, dispatch time, [goal], context/toolsets, role+model."""
+def _preamble(evt: dict, title: str, intro: str, completed_at: float, *, with_goal: bool,
+              model_label: "str | None" = None) -> "list[str]":
+    """Shared preamble: title, intro, blank, dispatch time, [goal], context/toolsets, role+model.
+
+    ``model_label`` overrides the event's own ``model``: a batch event carries none, so it would
+    print ``?`` even though each result names the model its child ran on."""
     lines = [title, intro, ""]
     dispatched_at = evt.get("dispatched_at")
     if isinstance(dispatched_at, (int, float)):
@@ -152,7 +156,7 @@ def _preamble(evt: dict, title: str, intro: str, completed_at: float, *, with_go
         lines.append(f"Context you provided: {evt['context']}")
     if evt.get("toolsets"):
         lines.append(f"Toolsets: {', '.join(evt['toolsets'])}")
-    lines.append(f"Role: {evt.get('role') or 'leaf'}   Model: {evt.get('model') or '?'}")
+    lines.append(f"Role: {evt.get('role') or 'leaf'}   Model: {model_label or evt.get('model') or '?'}")
     return lines
 
 
@@ -192,6 +196,45 @@ def _recovery_lines(evt: dict) -> "list[str]":
     return lines
 
 
+def _task_effort_note(result: dict) -> str:
+    """Compact, decision-relevant facts about how hard one child worked.
+
+    A batch event's own ``model`` is empty, so the preamble cannot name the child model; and the
+    per-task header used to carry only api_calls/duration. Tokens, exit reason and schema validity
+    are already in the result payload, and they are what tells the parent how much independent
+    reading a child actually did — without them the parent can only judge by claim count.
+    """
+    parts = []
+    tokens = result.get("tokens")
+    if isinstance(tokens, dict):
+        depth = sum(int(tokens.get(key) or 0) for key in ("input", "output"))
+        if depth:
+            parts.append(f"{depth:,} tokens")
+    if result.get("cost_usd") and str(result.get("cost_status") or "") not in ("unknown", ""):
+        parts.append(f"${float(result['cost_usd']):.4f}")
+    exit_reason = str(result.get("exit_reason") or "").strip()
+    if exit_reason and exit_reason != "completed":
+        parts.append(f"exit={exit_reason}")
+    if result.get("schema_valid") is False:
+        parts.append("schema=INVALID")
+    return (", " + ", ".join(parts)) if parts else ""
+
+
+def _batch_model_line(results: list[dict], evt: dict) -> str:
+    """Name the child model(s) when the batch event itself carries none."""
+    models = []
+    for result in results:
+        name = str(result.get("model") or "").strip()
+        if name and name not in models:
+            models.append(name)
+    event_model = str(evt.get("model") or "").strip()
+    if not models:
+        return event_model or "?"
+    if event_model and event_model not in models:
+        models.insert(0, event_model)
+    return models[0] if len(models) == 1 else f"{models[0]} (+{len(models) - 1} other model(s))"
+
+
 def _format_batch_delegation(evt: dict, deleg_id: str, completed_at: float) -> str:
     """Consolidated block for a delegate_task fan-out that finished as one unit."""
     results, goals = evt.get("results") or [], evt.get("goals") or []
@@ -206,7 +249,8 @@ def _format_batch_delegation(evt: dict, deleg_id: str, completed_at: float) -> s
         "below. Any other units from the same delegate_task call report separately as they finish. You may have "
         "moved on since dispatching — act on these or re-dispatch if things have changed. If you are still waiting "
         "on siblings, end your turn after acting on this one.",
-        completed_at, with_goal=False)
+        completed_at, with_goal=False,
+        model_label=_batch_model_line(results, evt) if results else None)
     lines[-1] += f"   Total duration: {evt.get('total_duration_seconds', evt.get('duration_seconds', '?'))}s"
     lines += _recovery_lines(evt)
     if evt.get("error") and not results:
@@ -223,6 +267,7 @@ def _format_batch_delegation(evt: dict, deleg_id: str, completed_at: float) -> s
         header = (f"--- {icon} TASK {idx + 1}/{n}" + (f": {r_goal}" if r_goal else "") + f"  (status={r_status}"
                   + (f", api_calls={r['api_calls']}" if r.get("api_calls") else "")
                   + (f", {r['duration_seconds']}s" if r.get("duration_seconds") is not None else "")
+                  + _task_effort_note(r)
                   + (", TRUNCATED: hit max_iterations — work may be incomplete" if r_truncated else ""))
         lines += ["", header + ") ---"]
         if r_status in _DONE and r_summary:
