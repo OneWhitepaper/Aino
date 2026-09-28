@@ -26,13 +26,30 @@ DELIVERED_REPLAY_RUN = ARCHIVE / "live-replay-140532" / "report.json"
 
 
 def _report(*, parent_id="parent", child_ids=("child-a",), parent_reasons=("tool_calls",),
-            parent_inputs=(1000,), child_inputs=(500,), stop_reason="token_request_cap"):
-    """A minimal report carrying only the fields the extractor reads."""
-    requests = [{"session_id": parent_id, "approx_input_tokens": value} for value in parent_inputs]
-    responses = [{"session_id": parent_id, "finish_reason": reason} for reason in parent_reasons]
+            parent_inputs=(1000,), child_inputs=(500,), stop_reason="token_request_cap",
+            auxiliary_inputs=(), final_text="", task_turn="turn-1"):
+    """A minimal report carrying only the fields the extractor reads.
+
+    Requests and responses are correlated on ``api_request_id`` and attributed to a turn via
+    ``turn_id`` — the same identity the production observer records — so the fixture can express an
+    auxiliary side call and an unanswered request instead of flattening a session into one list.
+    """
+    requests = [
+        {"session_id": parent_id, "approx_input_tokens": value,
+         "api_request_id": f"{task_turn}:req:{index}", "turn_id": task_turn}
+        for index, value in enumerate(parent_inputs)
+    ]
+    responses = [
+        {"session_id": parent_id, "finish_reason": reason,
+         "api_request_id": f"{task_turn}:req:{index}"}
+        for index, reason in enumerate(parent_reasons)
+    ]
+    for index, value in enumerate(auxiliary_inputs):
+        requests.append({"session_id": parent_id, "approx_input_tokens": value,
+                         "api_request_id": f"aux:{index}", "turn_id": "turn-aux"})
     for child in child_ids:
         requests.extend({"session_id": child, "approx_input_tokens": value} for value in child_inputs)
-    return {
+    report = {
         "scenario": "large",
         "live": True,
         "stop_reason": stop_reason,
@@ -45,6 +62,9 @@ def _report(*, parent_id="parent", child_ids=("child-a",), parent_reasons=("tool
         "children_finished": [{"duration_seconds": 10.0}, {"duration_seconds": 42.5}],
         "parent_all_tool_counts": {"delegate_task": 1},
     }
+    if final_text:
+        report["final_event"] = {"payload": {"text": final_text}}
+    return report
 
 
 def test_budget_split_does_not_claim_the_whole_cap_for_the_parent():
@@ -75,28 +95,71 @@ def test_missing_events_leave_the_turn_split_unknown_instead_of_guessed():
 
 
 def test_final_tool_call_means_no_answer_was_ever_offered():
-    """The interrupted run's shape: everything after dispatch is a tool call, so nothing was cut short."""
+    """The interrupted run's shape: the task turn ends inside its tool loop, so nothing was cut short."""
     summary = convergence.summarize(
-        _report(parent_reasons=("tool_calls", "stop", "tool_calls"), parent_inputs=(1, 2, 3)),
+        _report(parent_reasons=("tool_calls", "tool_calls"), parent_inputs=(1, 2)),
         events_path=Path("/nonexistent/events.jsonl"),
     )
     behaviour = summary["parent_delivery_behaviour"]
     assert behaviour["final_finish_reason"] == "tool_calls"
-    assert behaviour["answer_attempted"] is False
-    assert behaviour["interrupted_mid_tool_loop"] is True
+    assert behaviour["answer_state"] == "mid_tool_loop"
     assert summary["natural_final"] is False
 
 
-def test_a_stopped_parent_counts_as_an_attempted_answer():
+def test_a_stop_without_text_is_not_reported_as_an_answer():
+    """A 'stop' reason alone is not an answer: no final text means the state is not 'answered'."""
+    summary = convergence.summarize(
+        _report(parent_reasons=("tool_calls", "stop"), parent_inputs=(100, 200),
+                stop_reason="normal_final"),
+        events_path=Path("/nonexistent/events.jsonl"),
+    )
+    assert summary["parent_delivery_behaviour"]["answer_state"] == "stopped_without_text"
+
+
+def test_an_unrecognised_finish_reason_is_unknown_not_success():
+    """A None/error reason must never be read as an attempted answer."""
+    summary = convergence.summarize(
+        _report(parent_reasons=(None,), parent_inputs=(1,)),
+        events_path=Path("/nonexistent/events.jsonl"),
+    )
+    state = summary["parent_delivery_behaviour"]["answer_state"]
+    assert state.startswith("unknown"), state
+
+
+def test_a_stopped_parent_with_text_counts_as_answered():
     """A delivered run must not be reported as never having tried."""
     summary = convergence.summarize(
-        _report(parent_reasons=("tool_calls", "stop"), stop_reason="normal_final"),
+        _report(parent_reasons=("tool_calls", "stop"), parent_inputs=(100, 200),
+                stop_reason="normal_final", final_text="final report body"),
         events_path=Path("/nonexistent/events.jsonl"),
     )
     behaviour = summary["parent_delivery_behaviour"]
-    assert behaviour["answer_attempted"] is True
-    assert behaviour["interrupted_mid_tool_loop"] is False
+    assert behaviour["answer_state"] == "answered"
+    assert behaviour["final_event_text_chars"] == len("final report body")
     assert summary["natural_final"] is True
+
+
+def test_auxiliary_side_calls_are_not_counted_as_delivery_turns():
+    """A session also fires background side calls; they must not inflate the delivery request count."""
+    summary = convergence.summarize(
+        _report(parent_inputs=(100, 200), auxiliary_inputs=(999,),
+                parent_reasons=("tool_calls", "stop"), stop_reason="normal_final",
+                final_text="done"),
+        events_path=Path("/nonexistent/events.jsonl"),
+    )
+    delivery = summary["delivery"]
+    assert delivery["parent_requests_total"] == 3      # 2 task + 1 side call
+    assert delivery["parent_task_turn_requests"] == 2
+    assert delivery["parent_auxiliary_requests"] == 1
+    assert summary["budget_split"]["parent_task_turn_approx_input"] == 300
+    assert summary["budget_split"]["parent_auxiliary_approx_input"] == 999
+
+
+def test_an_unanswered_request_is_reported_rather_than_assumed_delivered():
+    """A request cut off before its response must show up as unanswered, not as a completed turn."""
+    report = _report(parent_inputs=(100, 200), parent_reasons=("tool_calls",))
+    summary = convergence.summarize(report, events_path=Path("/nonexistent/events.jsonl"))
+    assert summary["delivery"]["unanswered_requests"] == 1
 
 
 def test_child_runtime_and_delivery_wall_clock_are_reported_separately():
@@ -112,7 +175,7 @@ def test_real_interrupted_run_reports_no_answer_and_a_bounded_context_growth():
     summary = convergence.summarize(report, path=str(FAILED_LIVE_RUN),
                                    events_path=FAILED_LIVE_RUN.parent / "events.jsonl")
     assert summary["natural_final"] is False
-    assert summary["parent_delivery_behaviour"]["answer_attempted"] is False
+    assert summary["parent_delivery_behaviour"]["answer_state"] == "mid_tool_loop"
     # Regression pins for the numbers the diagnosis rests on.
     assert summary["parent_exact_duplicate_tools"] == 0
     assert summary["delivery"]["children_finished"] == 3
@@ -125,4 +188,4 @@ def test_real_delivered_replay_reports_an_answer():
     summary = convergence.summarize(report, path=str(DELIVERED_REPLAY_RUN),
                                    events_path=DELIVERED_REPLAY_RUN.parent / "events.jsonl")
     assert summary["natural_final"] is True
-    assert summary["parent_delivery_behaviour"]["answer_attempted"] is True
+    assert summary["parent_delivery_behaviour"]["answer_state"] == "answered"

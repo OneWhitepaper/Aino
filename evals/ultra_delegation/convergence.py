@@ -101,6 +101,35 @@ def _parent_starts_before_delivery(events_path: Path, ui_session_id: str | None)
     return len([moment for moment in starts if moment < delivery_at]), round(delivery_at, 3)
 
 
+def _split_parent_requests(
+    requests: list[dict], responses: list[dict],
+) -> dict:
+    """Separate the parent's task turns from its auxiliary (background) requests.
+
+    A session's request count is not a delivery-turn count: the parent fires auxiliary calls (the
+    post-final skill review, title work) on their own ``turn_id``, and a request can go unanswered
+    when the run is cut off. Correlating on ``api_request_id`` is what makes the split honest.
+    """
+    answered_ids = {
+        str(r.get("api_request_id")) for r in responses if isinstance(r, dict) and r.get("api_request_id")
+    }
+    by_turn: dict[str, list[dict]] = {}
+    for request in requests:
+        by_turn.setdefault(str(request.get("turn_id") or ""), []).append(request)
+    # The task turn is the one with the most requests; auxiliary turns are single-shot side calls.
+    task_turn = max(by_turn, key=lambda key: len(by_turn[key])) if by_turn else ""
+    task_requests = by_turn.get(task_turn, [])
+    auxiliary = [r for turn, rs in by_turn.items() if turn != task_turn for r in rs]
+    return {
+        "task_turn_id": task_turn,
+        "task_requests": task_requests,
+        "auxiliary_requests": auxiliary,
+        "unanswered_requests": [
+            r for r in requests if str(r.get("api_request_id")) not in answered_ids
+        ],
+    }
+
+
 def summarize(report: dict, *, path: str | None = None, events_path: Path | None = None) -> dict:
     limits = report.get("limits") or {}
     requests, responses = _group_requests(report)
@@ -112,6 +141,7 @@ def summarize(report: dict, *, path: str | None = None, events_path: Path | None
     )
 
     parent_requests = requests.get(parent_id or "", [])
+    parent_responses = responses.get(parent_id or "", [])
     cumulative_total = sum(int(r.get(APPROX_INPUT_FIELD) or 0) for rs in requests.values() for r in rs)
     parent_cumulative = sum(int(r.get(APPROX_INPUT_FIELD) or 0) for r in parent_requests)
 
@@ -120,21 +150,37 @@ def summarize(report: dict, *, path: str | None = None, events_path: Path | None
     child_cumulative = cumulative_total - parent_cumulative
     child_request_count = sum(len(rs) for sid, rs in requests.items() if sid != parent_id)
 
-    finish_reasons = [
-        str(r.get("finish_reason")) for r in responses.get(parent_id or "", []) if isinstance(r, dict)
+    split = _split_parent_requests(parent_requests, parent_responses)
+    task_requests = split["task_requests"]
+    auxiliary_requests = split["auxiliary_requests"]
+    task_cumulative = sum(int(r.get(APPROX_INPUT_FIELD) or 0) for r in task_requests)
+    auxiliary_cumulative = sum(int(r.get(APPROX_INPUT_FIELD) or 0) for r in auxiliary_requests)
+    task_response_ids = {str(r.get("api_request_id")) for r in task_requests}
+    task_reasons = [
+        str(r.get("finish_reason")) for r in parent_responses
+        if str(r.get("api_request_id")) in task_response_ids
     ]
-    approx = [int(r.get(APPROX_INPUT_FIELD) or 0) for r in parent_requests]
-    # ``responses`` is grouped by turn, not sorted by wall clock (``api_call_count`` restarts each
-    # turn), so a positional tail split would mix the dispatch turn's short status reply into the
-    # delivery phase. Answer the question that matters instead: did the parent conclude a turn
-    # after the children's results were in hand, and did that turn end with an answer or a tool call?
+    approx = [int(r.get(APPROX_INPUT_FIELD) or 0) for r in task_requests]
+
+    # ``responses`` is grouped per turn and ``api_call_count`` restarts each turn, so neither order
+    # nor position identifies "the last thing the parent did". Derive the delivery verdict from the
+    # task turn's final reason AND the run's own final text; anything else stays unknown rather than
+    # being read as success or failure.
+    final_reason = task_reasons[-1] if task_reasons else None
+    final_event = report.get("final_event") or {}
+    final_text = ((final_event.get("payload") or {}).get("text")) if isinstance(final_event, dict) else None
+    if final_reason is None:
+        answer_state = "unknown_no_recorded_response"
+    elif final_reason == "tool_calls":
+        answer_state = "mid_tool_loop"          # never offered an answer; an interrupt cut no answer short
+    elif final_reason == "stop":
+        answer_state = "answered" if (final_text or "").strip() else "stopped_without_text"
+    else:
+        answer_state = f"unknown_finish_reason:{final_reason}"
     parent_turns_before_delivery: int | None = None
     delivery_at: float | None = None
     if starts is not None:
         parent_turns_before_delivery, delivery_at = starts
-    final_reason = finish_reasons[-1] if finish_reasons else None
-    answered = bool(finish_reasons) and final_reason not in ("tool_calls",)
-    interrupted_mid_loop = final_reason == "tool_calls"
 
     return {
         "report": path,
@@ -157,18 +203,24 @@ def summarize(report: dict, *, path: str | None = None, events_path: Path | None
             "children_own_seconds_max": _delivery_seconds(report),
             "last_child_wall_seconds": delivery_at,
             "parent_requests_total": len(parent_requests),
+            # Not the same number as the line above: a session also fires auxiliary side calls.
+            "parent_task_turn_requests": len(task_requests),
+            "parent_auxiliary_requests": len(auxiliary_requests),
+            "unanswered_requests": len(split["unanswered_requests"]),
             "child_requests_total": child_request_count,
         },
         "budget_split": {
             "cumulative_approx_input_total": cumulative_total,
             "parent_cumulative_approx_input": parent_cumulative,
+            "parent_task_turn_approx_input": task_cumulative,
+            "parent_auxiliary_approx_input": auxiliary_cumulative,
             "children_cumulative_approx_input": child_cumulative,
             "note": "limits.approx_cumulative_input is the HARNESS's local rough estimate summed over "
                     "parent and children; it is not a server-side or product limit. The split below is "
                     "derived arithmetic, not an observed per-session allowance.",
         },
         "parent_cost_shape": {
-            "requests": len(parent_requests),
+            "task_turn_requests": len(task_requests),
             "first_request_input": approx[0] if approx else None,
             "peak_request_input": max(approx) if approx else None,
             "mean_request_input": round(sum(approx) / len(approx)) if approx else None,
@@ -177,13 +229,14 @@ def summarize(report: dict, *, path: str | None = None, events_path: Path | None
         "parent_delivery_behaviour": {
             "parent_turns_before_delivery": parent_turns_before_delivery,
             "last_child_wall_seconds": delivery_at,
-            "finish_reasons": finish_reasons,
+            "task_turn_finish_reasons": task_reasons,
             "final_finish_reason": final_reason,
-            "answer_attempted": answered,
-            "interrupted_mid_tool_loop": interrupted_mid_loop,
-            "note": "final reason 'tool_calls' means the parent was still in its tool loop when the "
-                    "run ended: it never offered an answer, so the interrupt cannot have cut one short. "
-                    "'stop' with a natural_final is a delivered answer.",
+            "answer_state": answer_state,
+            "final_event_text_chars": len(final_text or ""),
+            "note": "answer_state is derived from the task turn's final reason AND the run's final "
+                    "text: 'mid_tool_loop' means no answer was ever offered; 'answered' needs both a "
+                    "'stop' and non-empty text; every other shape is reported as unknown rather than "
+                    "read as success or failure.",
         },
         "parent_tools": report.get("parent_all_tool_counts") or report.get("parent_tool_counts") or {},
         "parent_exact_duplicate_tools": report.get("parent_exact_duplicate_tools"),

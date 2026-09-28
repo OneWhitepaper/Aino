@@ -91,18 +91,22 @@ config 只有 `max_turns=36`、`reasoning_effort=ultra`、`api_max_retries=1`、
 
 | 量 | 原跑 132101 | 余量探针 | 变化 |
 |---|---:|---:|---:|
-| 父任务累计输入 | 1,184,795（17 请求） | 1,548,445（17 请求） | **+30.7%** |
+| 父任务请求（任务回合 / 辅助） | 15 / 2（共 17） | 15 / 2（共 17） | 同 |
+| 父任务累计输入（任务回合） | 1,172,303 | 1,536,151 | **+31.0%** |
+| 父任务累计输入（辅助） | 12,492 | 12,294 | −1.6% |
 | 子任务累计输入 | 827,768（16 请求） | 914,821（17 请求） | +10.5% |
 | 全任务累计输入 | 2,012,563 | 2,463,266 | +22.4% |
 | 对 3M 上限占比 | — | **82.1%（未触及上限）** | — |
 | 父任务工具调用 | 41（读 21/搜 19/码 1） | 44（读 28/搜 14/码 2） | 读 +7 |
-| 末次父 `finish_reason` | `tool_calls` | `tool_calls` | 均未尝试作答 |
+| `answer_state` | `mid_tool_loop` | `mid_tool_loop` | 均未产出候选答案 |
 | 自然交付 | 否 | 否 | — |
 | 实际花费 | $3.86 | **$5.12**（36 行全部 settled） | — |
 
 **该次运行的准确结论只有一条**：这一次运行在停止前仍未完成。
 它**没有**触及 3M 输入上限（82.1%）就被 `observed_budget_stop`（$5 观察阈值）SIGTERM 中断，
-所以对"3M 输入是否足够"**没有结论**。
+所以对"3M 输入是否足够"**没有结论**。父任务与全任务用量已分开比较：父任务任务回合 +31.0%、
+辅助请求基本不变、子任务 +10.5%。这组差异**不足以**确立"预算增加导致核验扩张"的因果
+（子结果内容、采样、时延、缓存状态均不同，且中断原因不同）。
 
 ## 二、假设（有支持证据，未证实）
 
@@ -162,63 +166,87 @@ config 只有 `max_turns=36`、`reasoning_effort=ultra`、`api_max_retries=1`、
 
 ## 五、方案：复用现有机制（进行中）
 
-### 5.1 已证实的运行时问题（非模型行为）
+### 5.1 已证实的信息呈现缺口（非模型行为）
 
 | # | 问题 | 证据 | 状态 |
 |---|---|---|---|
-| R1 | 批量完成通知丢失**子任务模型名**：batch 事件的 `model` 为空，`_preamble` 打印 `Model: ?`，而每个 result 里有 `model` 未渲染 | 真实通知文本 `Role: leaf   Model: ?`；`process_registry_notifications.py:155` | **已修**（`_batch_model_line` + `model_label`） |
-| R2 | 每任务 header 只给 `api_calls`/`duration`，**token 用量、exit_reason、schema_valid 未渲染** | payload 里 `tokens={input:770816,output:12409}`、`exit_reason`、`schema_valid` 均存在；header 只有前两项 | **已修**（`_task_effort_note`） |
-| R3 | 未使用的 payload 字段还有 `tool_trace`、`cost_usd`、`live_transcripts`；`exit_reason` 仅被折成 truncated 布尔 | `delegate_tool_child_run.py:558-655`，`async_delegation.py:865` | 待评估（见 5.4） |
+| R1 | 批量完成通知丢失**子任务模型名**：batch 事件的 `model` 为空，`_preamble` 打印 `Model: ?`，而每个 result 里有 `model` | 真实通知文本 `Role: leaf   Model: ?`；`process_registry_notifications.py:155` | **已修**（`_batch_model_line` + `model_label`） |
+| R2 | 每任务 header 只给 `api_calls`/`duration`，未给出**累计用量、exit_reason、schema_valid** | payload 里 `tokens={input:770816,output:12409}`、`exit_reason`、`schema_valid` 均存在；header 只有前两项 | **已修**（`_task_execution_note`，中性标注 `cumulative tokens`） |
+| R3 | `tool_trace` 未渲染；`exit_reason` 此前仅被折成 `truncated` 布尔 | `delegate_tool_child_run.py:558-655` | 待评估（见 5.4） |
 
-R1/R2 的意义：父任务此前**看不到**三个子任务的深度差异。真实运行里三个子任务的
-token 用量是 **783,225 / 95,894 / 108,269**——相差近 8 倍。判断"哪个子结果证据更足、
-是否要独立重读"本就依赖这个信息，而它此前完全缺失。
+**这两项只是信息呈现改进，不能被称作父任务重复读取的已确认根因。** 累计 token 来自
+`session_prompt_tokens`（含重复发送的上下文），**不能**说明读了多少不同代码，也不能作为
+"结论更可信、可以少核验"的依据——通知里已按 `cumulative tokens` 中性标注。
+同理，`schema_valid` 表示格式有效，**不等于**事实正确；`exit_reason` 是执行状态。
 
-### 5.2 尚未证实的原因（模型行为，需实验）
+`live_transcript` **此前已在渲染**（`process_registry_notifications.py:177`、`:290`），
+`cost_usd` 为本次新增且仅在 `cost_status` 非 `unknown` 且金额非 0 时显示——本运行是
+`unknown/0.0`，故真实通知中不出现 `$`（符合"不把未知花费写成 0"的既有约定）。
 
-- 交付阶段末段**并行度退化**：`[10, 9, 6, 4, 1, 1, 1, 1, 3, 1, 1]`（交付后序列）。模型证明过
-  单响应 10 个调用的能力，却在末段退化为每次 1 个。11 次单调用响应若能各带 4 个调用，
-  同样的 21 次读取只需约 5 轮而非 11 轮。
-  **未证实**：这是上下文增长、reasoning effort、provider 行为，还是核验策略本身的变化。
-  代码侧确认**运行时没有**每响应调用数上限（唯一的 8 只是并发度，超出者排队）。
+### 5.2 尚未证实的原因（模型行为）
+
+- **并行度不是主因（已复核并撤回先前判断）。** 交付后各轮调用数为
+  `[10, 9, 6, 4, 1, 1, 1, 1, 3, 1, 1]`，其中 6 轮只有 1 个调用（不是先前误述的 11 轮）。
+  逐轮核对查询词后：这 6 轮的搜索目标（`class ContextCompressor`、
+  `_inherit_parent_capabilities`、`_session_profile_runtime_scope`、
+  `def _is_synthetic_compression_user_turn` 等）**均未出现在交付通知或更早结果中**，
+  即都是**由前一步结果发现的新目标**，当时无法并行发起；`id=92/102` 虽命中文件名分词，
+  但其目标符号同属新发现且与前一轮结果配对。
+  因此这些单调用轮是**结果驱动的串行链**，不是可合并的并行机会。运行时侧也确认
+  **没有**每响应调用数上限（唯一的 8 是并发度，超出者排队）。
 - 核验是否"充分即止"无可观测判据。**已测量**：两次运行 100% 的 NV 与 100% 的 confirmed
   条目都被至少一次读取覆盖；`parent_exact_duplicate_tools = 0`；0 次读取越界到子结果未引用的文件。
   **未证实**：哪些读取是必要核验、哪些是冗余（完整 CoT 加密，报告只能给"未被显式引用"的上界）。
+- 单次运行的组间差异不能确立因果：两次运行在子结果内容（25 vs 11 条 findings）、
+  采样、时延与缓存状态上均不同，且中断原因不同（输入阈值 vs 花费阈值）。
+  本轮余量探针只能说明"这一次在停止前仍未完成"。
 
 ### 5.3 准备修改的现有模块与调用点
 
-| 模块 | 调用点 | 修改 | 为何能改善交付 | 准确性 / 缓存 |
+| 模块 | 调用点 | 修改 | 预期作用 | 准确性 / 缓存 |
 |---|---|---|---|---|
-| `tools/process_registry_notifications.py` | `_preamble:155`、`_format_batch_delegation:234`、每任务 header | 补子任务模型名、token 用量、`exit_reason`、`schema_valid` | 让父任务能按**证据深度**判断是否需要独立重读，而不是只能靠 claim 数量猜 | 这是回合内的新 user 行，父前缀不变；只增可见事实，不改结论 |
-| 同上（待评估） | `_format_batch_delegation` 的 `live_transcript` 行与 `tool_trace` | 视 5.4 实验结论决定是否补 `tool_trace` 摘要 | 让"子任务读过哪些行"可直接核对，减少整文件重读 | 同在通知行内，cache-safe |
+| `tools/process_registry_notifications.py` | `_preamble:155`、`_format_batch_delegation`、每任务 header | 补子任务模型名、累计用量、`exit_reason`、`schema_valid`（中性标注） | 让父任务看到**执行与格式事实**（哪个子任务未正常结束、格式是否无效），而不是只能靠 claim 数量猜；**不**声称这些字段代表证据质量 | 回合内新 user 行，父前缀不变；只增可见事实，不改结论 |
+| 同上（待评估） | `_format_batch_delegation` 的 `tool_trace` | 先核实 `tool_trace` 记录的是**请求了哪些范围**还是**实际返回/是否失败截断**，再决定是否渲染摘要 | 若只能证明"请求过这些行"，则**不能**等同于"已正确核验"，不足以支持降低核验标准 | 同在通知行内 |
 
-**不做**：新增累计预算系统、改外部上限、恢复已撤回的催促提示、强制总结。
+**不做**：新增累计预算系统、改外部上限、恢复已撤回的催促提示、强制总结、
+把完整 `tool_trace` 塞进通知（会增加上下文而非减少）。
 
-### 5.4 离线回归与一次真实实验的假设
+### 5.4 离线回归与候选改动验证
 
 **离线回归（已做）**：`tests/tools/test_batch_notification_effort_visibility.py`（6 项）
-——模型名回落、token 渲染、异常子任务的 `exit=`/`schema=INVALID`、干净子任务不加噪音、
+——模型名回落、累计用量中性标注、异常子任务的 `exit=`/`schema=INVALID`、干净子任务不加噪音、
 多模型披露、单任务路径不受影响。红→绿已验（还原生产代码后 4 项红）。
 
-**下一次真实实验（需先取得确认）**：
-- **假设**：把子任务的实际深度（token、exit_reason、schema 有效性、模型名）显式放入通知后，
-  父任务在**相同上限**下的独立重读减少、并在上限内给出最终答案。
-- **对照**：同 fixture、同 prompt、同模型与档位、同 2M 上限与 $5 目标；唯一变量是通知内容。
-  当前只有 R1/R2 已改，因此该实验可同时观察"可见性"这一项。
-- **停止条件**：触及 2M 累计输入或 $5 观察阈值即停；不重跑、不扩预算。
-- **判据**：父任务末端是否出现文本答案（`natural_final`）；父任务请求数与读取次数；
-  以及 `convergence.py` 的 `answer_attempted`。
-- **预计费用**：上次完整 large 运行 $3.86–$5.12，按 $5 上限计。
-- **结算滞后风险**：`observed_usage` 是延迟观察，非硬上限；最终以 `settlement.json` 为准。
+**候选改动验证（最多一次，需先取得明确确认）**：
 
-若该实验显示"可见性"不足以改变行为，则下一个候选是并行度退化（模型行为）与
-`tool_trace` 摘要（R3），二者都需各自的对照实验，不合并变量。
+- **名称**：这是**同配置下的候选改动验证**，不是严格对照实验。从头重跑会重新生成子结果，
+  模型采样、子证据与请求时延都会变化，因此不能宣称"唯一变量是通知内容"，也不能凭一次
+  成功或失败证明因果。
+- **假设**：补入执行/格式事实后，父任务在**相同上限**下更早交付。
+- **对照条件**：同 fixture 哈希、同 prompt、同模型与档位、同 2M 上限与 $5 观察阈值。
+- **停止条件**：触及 2M 累计输入，或观察花费达到 $5 即停；不重跑、不扩预算。
+- **成功判据（必须同时满足，减少读取本身不算成功）**：
+  1. 自然最终交付（`answer_state == "answered"`，`final_event` 有非空正文）；
+  2. 原完整任务预算与耗时记录齐全，父/子/辅助请求与全部费用可核对；
+  3. 重要结论准确，原有的过度断言（把"证据不足"写成"确定缺陷"）**没有**因减少核验而恶化；
+  4. 子结果的条件、limitations 与未完成状态在最终答案中得到保留；
+  5. 前缀与原始证据保持完整（`fixture_changed` 为空、系统哈希一致）。
+- **费用**：**$5 观察停止阈值**，最终结算可能超过该值（`observed_usage` 是延迟观察，非硬上限）；
+  以 `settlement.json` 为准。
+- **判定工具**：`convergence.py` 的 `answer_state`、`delivery`（任务回合 / 辅助请求 / 未应答分离）、
+  `budget_split`、`fixture_changed_count`。
+
+若该次验证显示"执行/格式可见性"不足以改变行为，下一个候选是 `tool_trace` 摘要（R3，须先核实其
+语义边界），仍需各自独立验证，不合并变量。
 
 ## 六、复现入口
 
 - `evals/ultra_delegation/convergence.py`：从保存的 `report.json`（可选同目录 `events.jsonl`）打印
-  父子预算拆分、父任务上下文增长、交付前父回合数、子任务自身时长与交付墙钟（两个不同时钟）、
-  末次 `finish_reason`、是否曾尝试作答、重复工具数、字数核验调用数。只读，不运行模型、不写文件。
+  请求身份分离（任务回合 / 辅助侧调用 / 未应答）、父子预算拆分、父任务上下文增长、
+  子任务自身时长与交付墙钟（两个时钟）、末次 `finish_reason`、`answer_state`、
+  重复工具数与字数核验调用数。`answer_state` 只在该回合以 `stop` 结束**且**最终正文非空时
+  才算 `answered`，其余一律标为 `unknown_*` 或 `mid_tool_loop`，不推断成功或失败。
+  只读，不运行模型、不写文件。
 - `--input-cap`（`harness.py` / `platform-runner.ts`）：诊断余量探针；报告自标注
   `scenario_ceiling_overridden` 与 `diagnostic_note`，不可能被读成预算内通过。
 - 回归：`tests/evals/test_ultra_delegation_convergence.py`。
