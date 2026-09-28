@@ -163,8 +163,9 @@ def summarize(report: dict, *, path: str | None = None, events_path: Path | None
             "cumulative_approx_input_total": cumulative_total,
             "parent_cumulative_approx_input": parent_cumulative,
             "children_cumulative_approx_input": child_cumulative,
-            "note": "limits.approx_cumulative_input caps parent AND children together; "
-                    "the parent's own headroom is the total minus what the children spent.",
+            "note": "limits.approx_cumulative_input is the HARNESS's local rough estimate summed over "
+                    "parent and children; it is not a server-side or product limit. The split below is "
+                    "derived arithmetic, not an observed per-session allowance.",
         },
         "parent_cost_shape": {
             "requests": len(parent_requests),
