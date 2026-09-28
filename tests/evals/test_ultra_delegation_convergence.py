@@ -139,20 +139,135 @@ def test_a_stopped_parent_with_text_counts_as_answered():
     assert summary["natural_final"] is True
 
 
-def test_auxiliary_side_calls_are_not_counted_as_delivery_turns():
-    """A session also fires background side calls; they must not inflate the delivery request count."""
+def test_a_usage_record_is_what_marks_a_turn_auxiliary():
+    """Only a recorded unanswered request (the harness's missing_response_ids) marks a side call.
+
+    Without that evidence the turn stays unclassified, so adding the record must move the same
+    fixture from 'unknown' to 'auxiliary_unanswered' and split its input out of the task total.
+    """
+    turns = [("turn-task", [100, 200], ["tool_calls", "stop"]), ("turn-side", [999], [])]
+    without = convergence.summarize(
+        _multi_turn_report(turns), events_path=Path("/nonexistent/events.jsonl"))
+    assert without["delivery"]["parent_unclassified_requests"] == 1
+    assert without["delivery"]["parent_auxiliary_requests"] == 0
+
+    with_evidence = convergence.summarize(
+        _multi_turn_report(turns, observed_usage={"missing_response_ids": ["turn-side:req:0"]}),
+        events_path=Path("/nonexistent/events.jsonl"),
+    )
+    delivery = with_evidence["delivery"]
+    assert delivery["parent_requests_total"] == 3
+    assert delivery["parent_task_turn_requests"] == 2
+    assert delivery["parent_auxiliary_requests"] == 1
+    assert delivery["parent_unclassified_requests"] == 0
+    assert with_evidence["budget_split"]["parent_task_turn_approx_input"] == 300
+    assert with_evidence["budget_split"]["parent_auxiliary_approx_input"] == 999
+    assert with_evidence["natural_delivery"] is True
+
+
+def _multi_turn_report(turns, *, observed_usage=None, final_text="done", final_status="complete",
+                       guard_eligible=True):
+    """A parent session with several turns, each ``(turn_id, [inputs], [reasons])``."""
+    requests, responses = [], []
+    for turn_id, inputs, reasons in turns:
+        for index, value in enumerate(inputs):
+            requests.append({"session_id": "parent", "approx_input_tokens": value,
+                             "api_request_id": f"{turn_id}:req:{index}", "turn_id": turn_id})
+        for index, reason in enumerate(reasons):
+            responses.append({"session_id": "parent", "finish_reason": reason,
+                              "api_request_id": f"{turn_id}:req:{index}"})
+    report = {
+        "scenario": "large", "live": True, "stop_reason": "normal_final",
+        "limits": {"approx_cumulative_input": 2_000_000},
+        "sessions": [{"id": "parent", "parent_session_id": None}],
+        "requests": requests, "responses": responses,
+        "children_finished": [],
+        "final_event": {"payload": {"status": final_status, "text": final_text}},
+        "completion_guard": {"eligible": guard_eligible},
+    }
+    if observed_usage is not None:
+        report["observed_usage"] = observed_usage
+    return report
+
+
+def test_every_answering_turn_is_a_task_turn_not_just_the_biggest():
+    """Dispatch and the post-delivery continuation are both normal task turns.
+
+    The recorded large run has exactly this shape (2 and 15 requests, both answered). Classifying
+    by size would call the dispatch turn auxiliary and hide two real chat requests.
+    """
     summary = convergence.summarize(
-        _report(parent_inputs=(100, 200), auxiliary_inputs=(999,),
-                parent_reasons=("tool_calls", "stop"), stop_reason="normal_final",
-                final_text="done"),
+        _multi_turn_report([
+            ("turn-dispatch", [100, 200], ["tool_calls", "stop"]),
+            ("turn-delivery", [300, 400, 500], ["tool_calls", "tool_calls", "stop"]),
+        ]),
         events_path=Path("/nonexistent/events.jsonl"),
     )
     delivery = summary["delivery"]
-    assert delivery["parent_requests_total"] == 3      # 2 task + 1 side call
-    assert delivery["parent_task_turn_requests"] == 2
-    assert delivery["parent_auxiliary_requests"] == 1
-    assert summary["budget_split"]["parent_task_turn_approx_input"] == 300
-    assert summary["budget_split"]["parent_auxiliary_approx_input"] == 999
+    assert delivery["parent_requests_total"] == 5
+    assert delivery["parent_task_turn_requests"] == 5
+    assert delivery["parent_auxiliary_requests"] == 0
+    assert delivery["parent_unclassified_requests"] == 0
+    kinds = {turn["kind"] for turn in delivery["parent_turns"]}
+    assert kinds == {"task"}
+    assert len(delivery["parent_turns"]) == 2
+
+
+def test_a_turn_with_no_response_and_no_usage_record_is_unclassified_not_guessed():
+    """Without a response or a usage record there is no evidence of intent: report unknown."""
+    summary = convergence.summarize(
+        _multi_turn_report([
+            ("turn-task", [100], ["stop"]),
+            ("turn-mystery", [250], []),
+        ]),
+        events_path=Path("/nonexistent/events.jsonl"),
+    )
+    delivery = summary["delivery"]
+    assert delivery["parent_task_turn_requests"] == 1
+    assert delivery["parent_unclassified_requests"] == 1
+    assert {turn["kind"] for turn in delivery["parent_turns"]} == {"task", "unknown"}
+
+
+def test_a_shorter_follow_up_turn_can_carry_the_delivery():
+    """A later, smaller turn may hold the delivered answer: recency decides, not request count."""
+    summary = convergence.summarize(
+        _multi_turn_report([
+            ("turn-long", [900, 900, 900], ["tool_calls", "tool_calls", "tool_calls"]),
+            ("turn-short", [50], ["stop"]),
+        ]),
+        events_path=Path("/nonexistent/events.jsonl"),
+    )
+    behaviour = summary["parent_delivery_behaviour"]
+    assert behaviour["answer_state"] == "answered"
+    assert summary["natural_delivery"] is True
+    assert summary["delivery"]["parent_task_turn_requests"] == 4
+
+
+def test_a_non_empty_interrupt_note_is_not_a_delivered_answer():
+    """An interrupted run can carry text; without a complete event and an admitting guard it fails."""
+    summary = convergence.summarize(
+        _multi_turn_report(
+            [("turn-1", [100], ["tool_calls"])],
+            final_text="Operation interrupted: waiting for model response",
+            final_status="interrupted", guard_eligible=False,
+        ),
+        events_path=Path("/nonexistent/events.jsonl"),
+    )
+    assert summary["natural_delivery"] is False
+    assert summary["parent_delivery_behaviour"]["answer_state"] == "mid_tool_loop"
+    reasons = " ".join(summary["not_delivered_because"])
+    assert "status='interrupted'" in reasons
+    assert "completion_guard did not admit" in reasons
+
+
+def test_a_normal_final_without_an_admitting_guard_is_not_a_delivery():
+    """The run's own completion guard must have admitted the final, not just the stop reason."""
+    summary = convergence.summarize(
+        _multi_turn_report([("turn-1", [100], ["stop"])], guard_eligible=False),
+        events_path=Path("/nonexistent/events.jsonl"),
+    )
+    assert summary["natural_delivery"] is False
+    assert "completion_guard did not admit" in " ".join(summary["not_delivered_because"])
 
 
 def test_an_unanswered_request_is_reported_rather_than_assumed_delivered():

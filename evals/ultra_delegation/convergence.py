@@ -101,34 +101,67 @@ def _parent_starts_before_delivery(events_path: Path, ui_session_id: str | None)
     return len([moment for moment in starts if moment < delivery_at]), round(delivery_at, 3)
 
 
-def _split_parent_requests(
-    requests: list[dict], responses: list[dict],
-) -> dict:
-    """Separate the parent's task turns from its auxiliary (background) requests.
+def _turn_split(report: dict, requests: list[dict], responses: list[dict]) -> dict:
+    """Break a session's requests down by turn, classifying each turn by recorded evidence.
 
-    A session's request count is not a delivery-turn count: the parent fires auxiliary calls (the
-    post-final skill review, title work) on their own ``turn_id``, and a request can go unanswered
-    when the run is cut off. Correlating on ``api_request_id`` is what makes the split honest.
+    Request count does NOT identify the task turn: dispatch, the post-delivery continuation and the
+    final integration are all normal task turns (the recorded large run has two, with 2 and 15
+    requests, both answered). The harness records no purpose on ``pre_api_request``, so no field in
+    the report can name a turn's intent. What it does record is whether a request produced a
+    response and whether usage was observed, so turns are classed by THAT evidence and never by
+    size: a turn that answered is a task turn, a turn whose requests all went unanswered is
+    auxiliary, and anything else stays ``unknown`` instead of being folded into either bucket.
     """
     answered_ids = {
         str(r.get("api_request_id")) for r in responses if isinstance(r, dict) and r.get("api_request_id")
     }
+    usage = report.get("observed_usage") or {}
+    usage_ids = set()
+    for key in ("missing_response_ids", "missing_usage_ids", "unmatched_response_ids"):
+        values = usage.get(key)
+        if isinstance(values, list):
+            usage_ids.update(str(value) for value in values)
+
     by_turn: dict[str, list[dict]] = {}
     for request in requests:
         by_turn.setdefault(str(request.get("turn_id") or ""), []).append(request)
-    # The task turn is the one with the most requests; auxiliary turns are single-shot side calls.
-    task_turn = max(by_turn, key=lambda key: len(by_turn[key])) if by_turn else ""
-    task_requests = by_turn.get(task_turn, [])
-    auxiliary = [r for turn, rs in by_turn.items() if turn != task_turn for r in rs]
+
+    turns = []
+    for turn_id, turn_requests in by_turn.items():
+        request_ids = {str(r.get("api_request_id")) for r in turn_requests}
+        answered = len(request_ids & answered_ids)
+        unanswered = [r for r in turn_requests if str(r.get("api_request_id")) not in answered_ids]
+        if answered:
+            kind = "task"
+        elif unanswered and all(str(r.get("api_request_id")) in usage_ids for r in unanswered):
+            kind = "auxiliary_unanswered"
+        else:
+            kind = "unknown"
+        turns.append({
+            "turn_id": turn_id,
+            "kind": kind,
+            "requests": len(turn_requests),
+            "answered_requests": answered,
+            "unanswered_requests": len(unanswered),
+            "approx_input": sum(int(r.get(APPROX_INPUT_FIELD) or 0) for r in turn_requests),
+        })
+
+    def gather(*kinds):
+        wanted = {turn["turn_id"] for turn in turns if turn["kind"] in kinds}
+        return [r for r in requests if str(r.get("turn_id") or "") in wanted]
+
+    task_requests = gather("task")
+    auxiliary_requests = gather("auxiliary_unanswered")
+    unknown_requests = gather("unknown")
     return {
-        "task_turn_id": task_turn,
+        "turns": turns,
         "task_requests": task_requests,
-        "auxiliary_requests": auxiliary,
+        "auxiliary_requests": auxiliary_requests,
+        "unknown_requests": unknown_requests,
         "unanswered_requests": [
             r for r in requests if str(r.get("api_request_id")) not in answered_ids
         ],
     }
-
 
 def summarize(report: dict, *, path: str | None = None, events_path: Path | None = None) -> dict:
     limits = report.get("limits") or {}
@@ -150,11 +183,13 @@ def summarize(report: dict, *, path: str | None = None, events_path: Path | None
     child_cumulative = cumulative_total - parent_cumulative
     child_request_count = sum(len(rs) for sid, rs in requests.items() if sid != parent_id)
 
-    split = _split_parent_requests(parent_requests, parent_responses)
+    split = _turn_split(report, parent_requests, parent_responses)
     task_requests = split["task_requests"]
     auxiliary_requests = split["auxiliary_requests"]
+    unknown_requests = split["unknown_requests"]
     task_cumulative = sum(int(r.get(APPROX_INPUT_FIELD) or 0) for r in task_requests)
     auxiliary_cumulative = sum(int(r.get(APPROX_INPUT_FIELD) or 0) for r in auxiliary_requests)
+    unknown_cumulative = sum(int(r.get(APPROX_INPUT_FIELD) or 0) for r in unknown_requests)
     task_response_ids = {str(r.get("api_request_id")) for r in task_requests}
     task_reasons = [
         str(r.get("finish_reason")) for r in parent_responses
@@ -162,21 +197,51 @@ def summarize(report: dict, *, path: str | None = None, events_path: Path | None
     ]
     approx = [int(r.get(APPROX_INPUT_FIELD) or 0) for r in task_requests]
 
-    # ``responses`` is grouped per turn and ``api_call_count`` restarts each turn, so neither order
-    # nor position identifies "the last thing the parent did". Derive the delivery verdict from the
-    # task turn's final reason AND the run's own final text; anything else stays unknown rather than
-    # being read as success or failure.
+    # Two questions, kept apart on purpose.
+    #
+    # (a) Was a text answer observed at all? That is the task turn's own final reason plus the
+    #     final event's text. ``responses`` is grouped per turn and ``api_call_count`` restarts each
+    #     turn, so neither order nor position identifies "the last thing the parent did".
+    # (b) Did the COMPLETE task deliver naturally? Only when the run itself says so: a normal_final
+    #     stop, a completion event whose status is ``complete`` with non-empty text, and a
+    #     completion guard that actually admitted the final. An interrupt note, a wait status, or an
+    #     unfinished request must never be counted as an accepted delivery.
     final_reason = task_reasons[-1] if task_reasons else None
     final_event = report.get("final_event") or {}
-    final_text = ((final_event.get("payload") or {}).get("text")) if isinstance(final_event, dict) else None
+    payload = final_event.get("payload") if isinstance(final_event, dict) else None
+    payload = payload if isinstance(payload, dict) else {}
+    final_text = payload.get("text")
+    final_status = payload.get("status")
     if final_reason is None:
-        answer_state = "unknown_no_recorded_response"
+        # No response was recorded for the task turn at all. If the run still recorded a completed
+        # final with text, say what is actually known rather than implying the parent never spoke.
+        answer_state = ("answered_from_final_event_only"
+                        if final_status == "complete" and (final_text or "").strip()
+                        else "unknown_no_recorded_response")
     elif final_reason == "tool_calls":
         answer_state = "mid_tool_loop"          # never offered an answer; an interrupt cut no answer short
     elif final_reason == "stop":
         answer_state = "answered" if (final_text or "").strip() else "stopped_without_text"
     else:
         answer_state = f"unknown_finish_reason:{final_reason}"
+
+    guard = report.get("completion_guard") or {}
+    delivery_reasons: list[str] = []
+    if report.get("stop_reason") != "normal_final":
+        delivery_reasons.append(f"stop_reason={report.get('stop_reason')!r} is not normal_final")
+    if not payload:
+        delivery_reasons.append("no final_event payload recorded")
+    else:
+        if final_status != "complete":
+            delivery_reasons.append(f"final event status={final_status!r} is not 'complete'")
+        if not (final_text or "").strip():
+            delivery_reasons.append("final event text is empty")
+    if not guard:
+        delivery_reasons.append("no completion_guard recorded")
+    elif not guard.get("eligible"):
+        delivery_reasons.append("completion_guard did not admit the final")
+    natural_delivery = not delivery_reasons
+
     parent_turns_before_delivery: int | None = None
     delivery_at: float | None = None
     if starts is not None:
@@ -188,6 +253,8 @@ def summarize(report: dict, *, path: str | None = None, events_path: Path | None
         "live": report.get("live"),
         "stop_reason": report.get("stop_reason"),
         "natural_final": report.get("stop_reason") == "normal_final",
+        "natural_delivery": natural_delivery,
+        "not_delivered_because": delivery_reasons,
         "caps": report.get("caps") or [],
         "elapsed_seconds": report.get("elapsed_seconds"),
         "limits": {
@@ -203,10 +270,13 @@ def summarize(report: dict, *, path: str | None = None, events_path: Path | None
             "children_own_seconds_max": _delivery_seconds(report),
             "last_child_wall_seconds": delivery_at,
             "parent_requests_total": len(parent_requests),
-            # Not the same number as the line above: a session also fires auxiliary side calls.
+            # Not the same number as the line above: a session's requests span several turns, and a
+            # turn is classed by evidence (see _turn_split), never by size.
             "parent_task_turn_requests": len(task_requests),
             "parent_auxiliary_requests": len(auxiliary_requests),
+            "parent_unclassified_requests": len(unknown_requests),
             "unanswered_requests": len(split["unanswered_requests"]),
+            "parent_turns": split["turns"],
             "child_requests_total": child_request_count,
         },
         "budget_split": {
@@ -214,6 +284,7 @@ def summarize(report: dict, *, path: str | None = None, events_path: Path | None
             "parent_cumulative_approx_input": parent_cumulative,
             "parent_task_turn_approx_input": task_cumulative,
             "parent_auxiliary_approx_input": auxiliary_cumulative,
+            "parent_unclassified_approx_input": unknown_cumulative,
             "children_cumulative_approx_input": child_cumulative,
             "note": "limits.approx_cumulative_input is the HARNESS's local rough estimate summed over "
                     "parent and children; it is not a server-side or product limit. The split below is "
@@ -232,11 +303,13 @@ def summarize(report: dict, *, path: str | None = None, events_path: Path | None
             "task_turn_finish_reasons": task_reasons,
             "final_finish_reason": final_reason,
             "answer_state": answer_state,
+            "final_event_status": final_status,
             "final_event_text_chars": len(final_text or ""),
-            "note": "answer_state is derived from the task turn's final reason AND the run's final "
-                    "text: 'mid_tool_loop' means no answer was ever offered; 'answered' needs both a "
-                    "'stop' and non-empty text; every other shape is reported as unknown rather than "
-                    "read as success or failure.",
+            "completion_guard_eligible": guard.get("eligible") if guard else None,
+            "note": "answer_state answers only 'was a text answer observed', from the task turn's "
+                    "final reason plus the final event's text ('mid_tool_loop' = no answer ever "
+                    "offered; 'answered' needs both a 'stop' reason and non-empty text; anything else "
+                    "is unknown). Whole-task acceptance is the separate natural_delivery verdict.",
         },
         "parent_tools": report.get("parent_all_tool_counts") or report.get("parent_tool_counts") or {},
         "parent_exact_duplicate_tools": report.get("parent_exact_duplicate_tools"),
