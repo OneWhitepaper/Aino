@@ -48,6 +48,25 @@
 （缓存命中率 87%，但累计输入上限按原始 token 计数，不因缓存折算）。子任务占用 833/1200s 墙钟，
 父任务剩余 366s，而已证实的父任务独立交付需要 ≈433s。
 
+## 被验证并排除的"直觉修复"：启用内置工具结果裁剪
+
+产品**已经**有回合内、确定性、无 LLM、保留 tail、缓存感知的上下文回收：
+`ContextCompressor.prune_tool_results_only`（`context_compressor.py:3157`），在工具循环里由
+`agent/turn_preflight.py:369-385` 每次迭代调用。直觉上"打开它就能让父任务在预算内多跑几轮核验"。
+**不行**，两条硬限制：
+
+1. **它的门槛绑在窗口阈值上，不是服务端累计计数。** 门控是
+   `proactive_prune_tokens`（`agent_init.py:1503`，**默认 0 = 关闭**）与
+   `current_tokens >= proactive_prune_tokens`；而该值在实践中与 `threshold_tokens`
+   （模型上下文窗口的百分比）同级。父任务峰值 92.2k 远低于此，所以**永不触发**。
+2. **把门槛调到 92k 以下会伤缓存、反而更慢更贵。** 函数自身记账：*"A commit breaks the prompt
+   cache, so it requires ``proactive_prune_min_reclaim_tokens`` and a full regrowth runway"*。
+   父任务的上下文主要是**刚读入、正在被核验**的窗口；每轮裁剪都会打断前缀缓存并删掉它正要用的证据。
+
+更根本的是：2M 是**服务端按请求累计**的计数，产品侧看不到，因此任何"按窗口占用"设计的回收机制
+在原理上都无法对齐这个约束。除非引入产品侧累计输入预算（会触及提示/缓存合同），否则
+"让核验变便宜"这条路在现有架构内是走不通的。
+
 ## 已排除的机制（有证据，勿重复排查）
 
 - 通知延迟/重复投递：34ms、`delivery_attempts=1`、`all_child_summaries_preserved=true`。

@@ -1765,6 +1765,21 @@ class GatewayNotificationsMixin:
         if parsed.get("thread_id"):
             evt["thread_id"] = parsed["thread_id"]
 
+    @staticmethod
+    def _hand_back_dropped_offers(events: list[dict]) -> None:
+        """Hand back the in-memory offer of delegation copies this runner is dropping for good.
+
+        The orphan sweep skips a row whose offer is still registered, so a copy discarded without
+        handing the offer back leaves that row undeliverable for the rest of this process's life.
+        Only copies that are neither delivered nor requeued may be handed back: a requeued event
+        still has a live copy, and the sweep's SQL already excludes rows under a live delivery
+        claim, so handing those back would offer a second copy of one result.
+        """
+        from tools.async_delegation import return_completion_offer
+        for evt in events:
+            if evt.get("type") == "async_delegation":
+                return_completion_offer(evt)
+
     async def _deliver_async_delegation_group(self, group: list[dict]) -> Optional[bool]:
         """Deliver a same-session batch of async completions as ONE turn: the primary carries the
         consolidated text of every sibling THIS runner claimed (siblings owned elsewhere are excluded;
@@ -1781,20 +1796,30 @@ class GatewayNotificationsMixin:
         # Keep each unit's stable identity with its row across partial delivery/retry.
         if group and group[0].get("origin_session_id"):
             outcomes = []
+            unrendered: list[dict] = []
             for evt in group:
                 text = _format_gateway_process_notification(evt)
                 if text:
                     outcomes.append(await self._deliver_completion_notification(text, evt))
+                else:
+                    unrendered.append(evt)
+            # Nothing renders for these, and this branch never requeues: their copies end here.
+            self._hand_back_dropped_offers(unrendered)
             return False if False in outcomes else True
         deliverable: list[tuple[dict, str]] = []
+        dropped: list[dict] = []
         for evt in group:
             synth_text = _format_gateway_process_notification(evt)
             if not synth_text:
+                dropped.append(evt)
                 continue
             identity = self._completion_delivery_identity(evt)
             if identity is not None and self._completion_identity_seen(identity):
+                dropped.append(evt)
                 continue
             deliverable.append((evt, synth_text))
+        # Already delivered or inflight in this lifecycle, or nothing to render: no copy survives.
+        self._hand_back_dropped_offers(dropped)
         if not deliverable:
             return None
         if len(deliverable) == 1:
@@ -1809,13 +1834,17 @@ class GatewayNotificationsMixin:
         primary_evt, primary_text = deliverable[0]
         blocks = [primary_text]
         siblings: list[tuple[dict, str]] = []
+        unclaimed: list[dict] = []
         for evt, synth_text in deliverable[1:]:
             claim_id = claim_event_delivery(evt, f"gateway-batch:{id(self)}")
             if claim_id is None:
                 # Another consumer owns this row: keep it out of our text so it is never double-injected.
+                unclaimed.append(evt)
                 continue
             siblings.append((evt, claim_id))
             blocks.append(synth_text)
+        # A sibling we cannot claim is not ours to deliver or requeue, so its copy is gone here.
+        self._hand_back_dropped_offers(unclaimed)
         if not siblings:
             return await self._deliver_completion_notification(primary_text, primary_evt)
         header = (
@@ -1829,9 +1858,11 @@ class GatewayNotificationsMixin:
             consolidated, primary_evt, sibling_claims=siblings,
         )
         if delivered is None:
-            # Primary dropped/owned elsewhere: retry the unadmitted siblings.
+            # Primary dropped/owned elsewhere: retry the unadmitted siblings, and hand back the
+            # offer of every copy that did not make it back onto the queue.
             for evt, _claim_id in siblings:
                 _pr.completion_queue.put(evt)
+            self._hand_back_dropped_offers([primary_evt, *unclaimed])
         return delivered
 
     def _restore_secondary_completion_ledgers(self, profile_homes) -> None:
