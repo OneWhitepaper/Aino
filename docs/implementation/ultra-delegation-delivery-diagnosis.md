@@ -396,9 +396,14 @@ claude-agent-sdk/vendor/ripgrep/arm64-darwin/rg`（ripgrep 14.1.1，arm64）。`
 而本场景三门全关；`_recover_final_from_stream`（`agent/turn_finalizer.py:211-217`）在
 `interrupted or failed` 时**直接跳过**恢复。
 
-**改法**：让"工具参数里已成形的候选答案"成为**已有机制**的输入，而不是新机制——
-`pending_verification_response` 已经是"候选取自本回合、预算耗尽时可用"的既有载体
-（`turn_stop_gates.py:94-128`、`turn_finalizer.py:137-145`）。要做的是：
+**可行性核实（重要）**：现有三条候选答案路径在 `interrupted` 时**全部不可达**——
+`_resolve_budget_fallback` 的门控含 `not interrupted and not failed`（`turn_finalizer.py:132-135`）；
+`_recover_final_from_stream` 在 `interrupted or failed` 时直接返回原值（`:216-217`）；
+`apply_stop_gates` 需要模型先产出文本才会触发（`turn_response_gates` 入口在 `turn_final_response.py:292`），
+而本场景助手正文长度为 0。**因此这不是"纯复用"，必须新增一条分支**，并且会改变中断时的用户可见行为
+（当前设计是中断即无答案），**需要产品负责人明确批准**。
+
+**改法（新分支，最小面）**：沿用 `pending_verification_response` 这个既有载体，但要新增"中断时的兜底"：
 
 1. 在 `turn_finalizer` 的候选解析处识别"本回合最后一次 `execute_code`/写入类工具的参数包含成形候选"
    ——**仅在完全没有 assistant 正文候选时**作为兜底，不覆盖任何真实文本答案；
