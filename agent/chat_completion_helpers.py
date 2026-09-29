@@ -2139,7 +2139,11 @@ def _iteration_summary_api_messages(agent, messages: list) -> list:
 
     ``reasoning_details`` is kept: the anthropic_messages converter rebuilds signed thinking
     blocks from it, and the chat-completions transport already drops it on the wire for routes
-    that do not replay it (``_chat_summary_attempt`` -> ``_build_api_kwargs``)."""
+    that do not replay it (``_chat_summary_attempt`` -> ``_build_api_kwargs``). Responses keeps
+    its opaque replay carriers and uses the ordinary send-path normalization for cache reuse."""
+    from agent.conversation_loop import _canonicalize_api_tool_calls, _clone_message_for_send
+
+    is_codex = agent.api_mode == "codex_responses"
     needs_sanitize = agent._should_sanitize_tool_calls()
     sanitize_model = agent.model
     if needs_sanitize and agent.provider == "moa":
@@ -2148,9 +2152,11 @@ def _iteration_summary_api_messages(agent, messages: list) -> list:
         sanitize_model = (agg_slot or {}).get("model") or sanitize_model
     api_messages = []
     for msg in messages:
-        api_msg = msg.copy()
+        api_msg = _clone_message_for_send(msg) if is_codex else msg.copy()
         agent._copy_reasoning_content_for_api(msg, api_msg)
         for key in _SUMMARY_FOREIGN_MESSAGE_KEYS:
+            if is_codex and key in ("codex_reasoning_items", "codex_message_items"):
+                continue
             api_msg.pop(key, None)
         # Mirror of the transport's role-qualified strip: ``name`` is
         # schema-foreign on tool results only (strict providers reject with
@@ -2163,7 +2169,7 @@ def _iteration_summary_api_messages(agent, messages: list) -> list:
         # any message key outside the Chat Completions schema. The main loop drops these via
         # ChatCompletionsTransport.convert_messages(), but the summary path hand-builds messages and calls
         # chat.completions.create() directly, bypassing the transport — so mirror that sanitization here:
-        # tool_name (SQLite FTS bookkeeping), the codex_* reasoning carriers, timestamp (preserved on
+        # tool_name (SQLite FTS bookkeeping), cross-protocol codex_* carriers, timestamp (preserved on
         # gateway user replay entries for the stale-confirmation expiry check — #47868 rejection class), and
         # every Hermes-internal underscore-prefixed scaffolding key.
         substitute_api_content(api_msg)
@@ -2177,7 +2183,8 @@ def _iteration_summary_api_messages(agent, messages: list) -> list:
     if effective_system:
         api_messages = [{"role": "system", "content": effective_system}] + api_messages
     for idx, pfm in enumerate(agent.prefill_messages or ()):
-        api_messages.insert((1 if effective_system else 0) + idx, pfm.copy())
+        api_messages.insert((1 if effective_system else 0) + idx,
+                            _clone_message_for_send(pfm) if is_codex else pfm.copy())
 
     # Compression/resume can orphan a tool result whose parent tool_call was summarized away.
     api_messages = agent._sanitize_api_messages(api_messages)
@@ -2192,7 +2199,17 @@ def _iteration_summary_api_messages(agent, messages: list) -> list:
     strip_images_for_rejecting_model(agent, api_messages)
     # Thinking-only assistant turns 400 on Anthropic-family providers; _thinking_prefill must
     # survive until here so the drop pass recognizes stubs after reasoning is stripped.
-    api_messages = agent._drop_thinking_only_and_merge_users(api_messages)
+    api_messages = agent._drop_thinking_only_and_merge_users(
+        api_messages, drop_codex_reasoning_items=not is_codex)
+    if is_codex:
+        from agent.message_sanitization import _sanitize_messages_surrogates
+
+        # Match assemble_api_request after repair/drop passes, on the request-local clone.
+        for api_msg in api_messages:
+            if isinstance(api_msg.get("content"), str):
+                api_msg["content"] = api_msg["content"].strip()
+        _canonicalize_api_tool_calls(api_messages)
+        _sanitize_messages_surrogates(api_messages)
     for api_msg in api_messages:  # underscore scaffolding: the transport's sweeper is bypassed here
         if isinstance(api_msg, dict):
             for internal_key in [k for k in api_msg if isinstance(k, str) and k.startswith("_")]:
@@ -2227,11 +2244,8 @@ def _summary_text(agent, response, **normalize_kwargs) -> str:
 def _codex_summary_attempt(agent, api_messages: list, api_request_id: str):
     def _attempt(retry_count: int) -> str:
         codex_kwargs = agent._build_api_kwargs(api_messages)
-        # The transport emits these three as one block (transports/codex.py build_kwargs);
-        # strict Responses backends 400 on tool_choice/parallel_tool_calls without tools.
-        codex_kwargs.pop("tools", None)
-        codex_kwargs.pop("tool_choice", None)
-        codex_kwargs.pop("parallel_tool_calls", None)
+        # Keep the ordinary tools/control block to preserve the cached prefix. The transport
+        # omits controls when tools are absent; _summary_text discards returned tool calls.
         return _summary_text(agent, agent._run_codex_stream(codex_kwargs))
     return _attempt
 

@@ -9,6 +9,7 @@ Run with:  python -m pytest tests/tools/test_file_read_guards.py -v
 
 import json
 import os
+from pathlib import Path
 import tempfile
 import time
 import unittest
@@ -768,6 +769,75 @@ class TestConfigOverride(unittest.TestCase):
         result = json.loads(read_file_tool("/tmp/cfgtest2.txt", task_id="cfg2"))
         self.assertNotIn("error", result)
         self.assertIn("content", result)
+
+
+def test_profile_read_caps_preserve_paged_content_and_write_baselines(tmp_path, monkeypatch):
+    """Routed A→B→A reads use each real config; only complete coverage permits replacement."""
+    from agent.secret_scope import is_multiplex_active, set_multiplex_active
+    from gateway.run import _profile_runtime_scope
+    from tools.file_tools import clear_file_ops_cache
+
+    home_a = tmp_path / ".hermes"
+    home_b = home_a / "profiles" / "b"
+    home_b.mkdir(parents=True)
+    monkeypatch.setattr(Path, "home", lambda: tmp_path)
+    monkeypatch.setenv("HERMES_HOME", str(home_a))
+    for home, cap in ((home_a, 40_000), (home_b, 100_000)):
+        (home / "config.yaml").write_text(
+            json.dumps({"file_read_max_chars": cap,
+                        "terminal": {"backend": "local", "cwd": str(tmp_path)}}),
+            encoding="utf-8",
+        )
+    original = "".join(f"line {number:04d}: " + "evidence " * 12 + "核验证据\n"
+                       for number in range(1, 701))
+    first_pages = []
+    was_multiplexed = is_multiplex_active()
+    set_multiplex_active(True)
+    _read_tracker.clear()
+    try:
+        for visit, (home, cap) in enumerate(((home_a, 40_000), (home_b, 100_000), (home_a, 40_000))):
+            source = tmp_path / f"paged-source-{visit}.txt"
+            source.write_text(original, encoding="utf-8")
+            task_id = f"profile-read-cap-{visit}"
+            with _profile_runtime_scope(home):
+                page = json.loads(read_file_tool(str(source), task_id=task_id))
+                assert "error" not in page, page
+                first_pages.append(page["content"])
+                if page["truncated"]:
+                    refused = json.loads(write_file_tool(str(source), "unseen content lost\n", task_id=task_id))
+                    assert refused.get("stale_write_blocked"), refused
+                    assert source.read_text(encoding="utf-8") == original
+
+                offset = 1
+                recovered = []
+                while True:
+                    assert "error" not in page, page
+                    assert len(page["content"]) <= cap
+                    numbered = [line.split("|", 1) for line in page["content"].splitlines()]
+                    assert [int(number) for number, _ in numbered] == list(range(offset, offset + len(numbered)))
+                    recovered.extend(text for _, text in numbered)
+                    if not page["truncated"]:
+                        break
+                    assert page["truncated_by"] == "bytes"
+                    assert page["next_offset"] == offset + len(numbered)
+                    offset = page["next_offset"]
+                    page = json.loads(read_file_tool(str(source), offset=offset, task_id=task_id))
+                assert "\n".join(recovered) + "\n" == original
+
+                reset_file_dedup(task_id)
+                replacement = original + "verified replacement\n"
+                written = json.loads(write_file_tool(str(source), replacement, task_id=task_id))
+                assert "error" not in written, written
+                assert source.read_text(encoding="utf-8") == replacement
+                refreshed = json.loads(read_file_tool(str(source), offset=701, task_id=task_id))
+                assert "verified replacement" in refreshed["content"]
+                assert not refreshed.get("dedup")
+        assert first_pages[0] == first_pages[2]
+        assert len(first_pages[0]) <= 40_000 < len(first_pages[1]) <= 100_000
+    finally:
+        set_multiplex_active(was_multiplexed)
+        _read_tracker.clear()
+        clear_file_ops_cache()
 
 
 # ---------------------------------------------------------------------------

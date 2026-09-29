@@ -2976,12 +2976,9 @@ class TestHandleMaxIterations:
             for item in input_items
         )
 
-    def test_codex_summary_strips_tool_controls_on_every_attempt(self, agent):
-        """Iteration-limit summaries retry once on an empty answer; both attempts share one
-        ``_attempt`` closure, and both must go out without ``tools``, ``tool_choice`` and
-        ``parallel_tool_calls`` — the transport emits the three as one block, and strict
-        Responses backends 400 on ``tool_choice`` without ``tools``.
-        """
+    @pytest.mark.parametrize("with_tools", [True, False])
+    def test_codex_summary_preserves_tool_block_without_executing_calls(self, agent, with_tools):
+        """Keep the ordinary request's tool prefix and bound tool-only answers to one retry."""
         agent.api_mode = "codex_responses"
         agent.provider = "openai-codex"
         agent.base_url = "https://chatgpt.com/backend-api/codex"
@@ -2989,32 +2986,40 @@ class TestHandleMaxIterations:
         agent._base_url_hostname = "chatgpt.com"
         agent.model = "gpt-5.5"
         agent._cached_system_prompt = "You are helpful."
-        leaked_controls = {"tools", "tool_choice", "parallel_tool_calls"}
-        # Precondition against the real transport: the main-loop request carries all three.
-        assert leaked_controls <= agent._build_api_kwargs([{"role": "user", "content": "do stuff"}]).keys()
+        if not with_tools:
+            agent.tools = []
+        tool_controls = {"tools", "tool_choice", "parallel_tool_calls"}
+        ordinary = agent._build_api_kwargs([{"role": "user", "content": "do stuff"}])
+        expected_tools = {key: ordinary[key] for key in tool_controls if key in ordinary}
+        assert bool(expected_tools) == with_tools
+        assert not expected_tools or tool_controls <= expected_tools.keys()
         bodies = []
 
         def fake_run_codex_stream(kwargs):
             bodies.append(dict(kwargs))
-            text = "" if len(bodies) == 1 else "Summary"
             return SimpleNamespace(
                 status="completed",
-                output=[
+                output=[SimpleNamespace(
+                    type="function_call", id="fc_summary", call_id="call_summary",
+                    name="terminal", arguments="{}", status="completed",
+                )] if len(bodies) == 1 else [
                     SimpleNamespace(
                         type="message",
                         status="completed",
-                        content=[SimpleNamespace(type="output_text", text=text)],
+                        content=[SimpleNamespace(type="output_text", text="Summary")],
                     )
                 ],
             )
 
-        with patch.object(agent, "_run_codex_stream", side_effect=fake_run_codex_stream):
+        with patch.object(agent, "_run_codex_stream", side_effect=fake_run_codex_stream), \
+                patch.object(agent, "_execute_tool_calls") as execute_tools:
             result = agent._handle_max_iterations([{"role": "user", "content": "do stuff"}], 90)
 
         assert result == "Summary"
-        assert len(bodies) == 2, f"expected one retry after the empty summary, got {len(bodies)} attempts"
-        for attempt_index, sent in enumerate(bodies):
-            assert not leaked_controls & sent.keys(), f"attempt {attempt_index}: {sorted(leaked_controls & sent.keys())} leaked"
+        assert len(bodies) == 2, f"expected one retry after the tool-only summary, got {len(bodies)} attempts"
+        execute_tools.assert_not_called()
+        for sent in bodies:
+            assert {key: sent[key] for key in tool_controls if key in sent} == expected_tools
 
     def test_api_sanitizer_matches_responses_call_id_when_id_differs(self, agent):
         messages = [

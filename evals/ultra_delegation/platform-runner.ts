@@ -27,6 +27,9 @@ No account access or model run occurs without --live.
 --budget=SECONDS           30..1200; simple/length 300, daily/no_subagent/daily_replay 600, large/replay 1200
 --spend-target=USD          Observation threshold, >0 and <=5; settlement lag prevents a hard cap
 --input-cap=TOKENS          DIAGNOSTIC ONLY: raise the cumulative-input ceiling for a headroom probe; never within-budget acceptance
+--file-read-max-chars=N     Existing file read limit for a fresh isolated Aino profile; does not raise acceptance budgets
+--child-compression-threshold-tokens=N Existing child compression trigger (>=16000); isolated Aino profile only
+--child-reasoning-effort=high|max Existing delegation default; task overrides and parent Ultra remain unchanged
 --review-skill=original|none Original requires --review-skill-path; none is a large diagnostic
 --review-skill-path=PATH    External private original skill directory
 --matched-comparison        Large/none diagnostic with explicit High children
@@ -53,7 +56,7 @@ const python=configuredPython?(configuredPython.includes(path.sep)?path.resolve(
   [path.join(repo,'.venv/bin/python'),path.join(repo,'venv/bin/python')].find(candidate=>fs.existsSync(candidate))||'python3'
 const externalPathOptions=['--review-skill-path','--replay-source','--legacy-replay-source','--length-source']
 const forwardedPaths=externalPathOptions.flatMap(name=>option(name)?[name+'='+path.resolve(option(name)!)]:[])
-const forwardedOptions=['--name','--codex-bin','--input-cap'].flatMap(name=>{
+const forwardedOptions=['--name','--codex-bin','--input-cap','--file-read-max-chars','--child-compression-threshold-tokens','--child-reasoning-effort'].flatMap(name=>{
   const value=option(name)
   return value?[name+'='+(name==='--codex-bin'&&value.includes(path.sep)?path.resolve(value):value)]:[]
 })

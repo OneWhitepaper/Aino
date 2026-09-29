@@ -13,7 +13,7 @@ from tools.registry import registry
 
 
 @pytest.fixture
-def delegation_runtime(monkeypatch):
+def delegation_runtime(monkeypatch, request):
     from gateway.session_context import clear_session_vars, set_session_vars
     from run_agent import AIAgent
 
@@ -23,10 +23,30 @@ def delegation_runtime(monkeypatch):
     class Provider(BaseHTTPRequestHandler):
         def do_POST(self):  # noqa: N802
             body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
-            if "messages" not in body:
+            if "messages" not in body and "input" not in body:
                 self.send_error(404)
                 return
             requests.append(body)
+            if "input" in body:
+                message = {"id": "msg_local", "type": "message", "role": "assistant",
+                           "status": "completed",
+                           "content": [{"type": "output_text", "text": "done", "annotations": []}]}
+                response = {"id": "resp_local", "object": "response", "created_at": 0,
+                            "model": body["model"], "status": "completed", "output": [message],
+                            "usage": {"input_tokens": 10, "output_tokens": 1, "total_tokens": 11}}
+                events = [
+                    {"type": "response.created",
+                     "response": {**response, "status": "in_progress", "output": []}},
+                    {"type": "response.output_item.done", "output_index": 0, "item": message},
+                    {"type": "response.completed", "response": response},
+                ]
+                payload = "".join(f"data: {json.dumps(event)}\n\n" for event in events).encode()
+                self.send_response(200)
+                self.send_header("Content-Type", "text/event-stream")
+                self.send_header("Content-Length", str(len(payload)))
+                self.end_headers()
+                self.wfile.write(payload)
+                return
             if body.get("model") == "unavailable-primary":
                 payload = json.dumps({"error": {"message": "Model not found", "code": "model_not_found"}}).encode()
                 self.send_response(404)
@@ -78,7 +98,7 @@ def delegation_runtime(monkeypatch):
     monkeypatch.setattr(delegate_tool, "_build_child_agent", capture_child)
     parent = AIAgent(
         api_key="test-key", base_url=f"http://127.0.0.1:{server.server_port}/v1",
-        provider="custom", model="test-model", api_mode="chat_completions",
+        provider="custom", model="test-model", api_mode=getattr(request, "param", "chat_completions"),
         reasoning_config={"enabled": True, "effort": "ultra"}, enabled_toolsets=["delegation"],
         max_iterations=4, quiet_mode=True, skip_context_files=True, skip_memory=True,
         save_trajectories=False, platform="cli", session_id="parent-effort",
@@ -98,6 +118,39 @@ def _decoded(value):
 
 def _wire_effort(request):
     return request.get("reasoning_effort") or request.get("reasoning", {}).get("effort")
+
+
+@pytest.mark.parametrize("delegation_runtime", ["codex_responses"], indirect=True)
+def test_responses_configured_child_effort_yields_to_task_override(delegation_runtime):
+    parent, children, requests, config_path = delegation_runtime
+    config_path.write_text(json.dumps({
+        "agent": {"reasoning_effort": "ultra"},
+        "delegation": {"max_iterations": 4, "max_concurrent_children": 3, "reasoning_effort": "high"},
+    }), encoding="utf-8")
+    history = parent.run_conversation("Parent before delegation")["messages"]
+    original_request = deepcopy(requests[-1])
+    original_history = deepcopy(history)
+    original_config = config_path.read_bytes()
+    tasks = [{"goal": "Review the difficult boundary", "reasoning_effort": "max"},
+             {"goal": "Extract the documented constraints"}]
+    original_tasks = deepcopy(tasks)
+
+    result = _decoded(registry.dispatch("delegate_task", {"tasks": tasks}, parent_agent=parent))
+
+    assert [entry["status"] for entry in result["results"]] == ["completed", "completed"]
+    assert all(child.api_mode == "codex_responses" for child in children)
+    assert {request["input"][-1]["content"]: _wire_effort(request) for request in requests[1:]} == {
+        "Review the difficult boundary": "max", "Extract the documented constraints": "high",
+    }
+    assert tasks == original_tasks and history == original_history
+    assert config_path.read_bytes() == original_config
+    assert parent.reasoning_config == {"enabled": True, "effort": "ultra"}
+
+    parent.run_conversation("Parent after delegation", conversation_history=history)
+    assert _wire_effort(requests[-1]) == _wire_effort(original_request) == "max"
+    assert requests[-1]["input"][:len(original_request["input"])] == original_request["input"]
+    assert requests[-1]["instructions"] == original_request["instructions"]
+    assert requests[-1]["tools"] == original_request["tools"]
 
 
 def test_batch_efforts_reach_child_wires_and_leave_parent_context_unchanged(delegation_runtime):

@@ -73,6 +73,29 @@ local convenience, but putting runs there can change the model's instruction
 context. Reports, event streams, model bodies, databases, copied skills, and
 profiles are local evidence and must not be committed or redistributed unreviewed.
 
+For a fresh Aino task, `--file-read-max-chars=N` sets the existing
+`file_read_max_chars` configuration option in the isolated profile. Both runners
+accept it, and the report records the value under `config`. This changes source
+admission before a tool result enters history: longer reads retain their existing
+line-boundary pagination and `next_offset`. It does not raise the total input,
+request, output, time, or spending thresholds, change the prompt or review skill,
+or change installed user settings. It is a candidate configuration, not evidence
+of lower total cost; additional paging and result quality must be measured.
+Source-owned replays and the native Codex driver reject this Aino-only override.
+
+Two other optional fresh-profile settings reuse existing delegation configuration:
+`--child-reasoning-effort=high|max` sets `delegation.reasoning_effort` without the
+matched-comparison prompt extension or removing the original review skill. A task's
+explicit effort still takes precedence; the parent remains Ultra.
+`--child-compression-threshold-tokens=N` sets the existing child compression trigger
+(at least 16000 tokens), without changing the parent's threshold. This trigger is
+not a hard input or cost cap. Existing compression prunes older source evidence,
+so citation correctness, lost evidence and subsequent rereads must be audited.
+Neither option changes product defaults or installed user profiles. Both reject
+source-owned replay and native Codex; matched comparisons retain their fixed High
+child setting. These are independently selectable diagnostic configurations, not
+proven delivery fixes.
+
 ## Offline RPC check
 
 This command starts a loopback scripted model and exercises the real Aino RPC and
@@ -144,7 +167,7 @@ then `venv/bin/python`, then `python3`. Value options on the Electron runner use
 
 Existing limits are preserved:
 
-| Scenario | Python default seconds | Live runner default seconds | Request threshold | Rough cumulative input | Observed USD target |
+| Scenario | Python default seconds | Live runner default seconds | Request threshold | Cumulative input ceiling | Observed USD target |
 | --- | ---: | ---: | ---: | ---: | ---: |
 | simple | 300 | 300 | 64 | 2,000,000 | 5 |
 | large | 900 | 1200 | 64 | 2,000,000 | 5 |
@@ -153,6 +176,38 @@ Existing limits are preserved:
 | replay | 1200 | 1200 | 24 | 2,000,000 | 2 |
 | daily | 600 | 600 | 48 | 500,000 | 1.5 |
 | daily_replay | 600 | 600 | 24 | 500,000 | 1 |
+
+The cumulative input ceiling is an **acceptance-policy choice**, named by
+`limits.cumulative_input_basis`. The current basis is
+`input_excluding_cache_reads`: per unique `api_request_id`,
+`uncached_input_tokens + cache_write_tokens`, plus validated pending reserves.
+These provider usage buckets do not measure unique or logically new content.
+The metric is neither fresh input nor cost: excluded reads are real input
+the provider processed, and the buckets are priced differently.
+
+Only complete, valid usage satisfying
+`prompt = uncached + cache_write + cache_read` replaces a reserve. Missing,
+invalid, incomplete or conflicting usage retains a validated rough reserve;
+a valid conserved response with an unmatched id is counted and reported
+separately. Unquantifiable or unkeyed work sets `accounting_complete=false`
+and stops with `input_accounting_incomplete`, never silently counting as zero.
+Shared pure accounting and observation helpers live in the existing
+`convergence.py` and use normal imports. Runtime request/response appends and
+accounting observations share the existing lock.
+
+A reserve can settle to a smaller value, so the metric is **non-monotonic**:
+read `ever_crossed` and `peak_value`, not the final value, to identify a crossing.
+Historical replay follows recorded event append order and never preloads future
+responses. It does not establish historical live cross-thread scheduling or
+turn an undelivered run into a natural pass.
+
+The superseded basis, `approx_represented_input`, summed each request's whole
+re-presented context. That was a coherent, *stricter* policy bounding total
+context volume, not a miscount; the present basis is **looser**, so runs scored
+under the two bases are **not comparable**. Reports written before this change
+carry no `input_accounting` block and keep the old semantics — `convergence.py`
+reports each run on its own recorded basis. Native Codex runs record their own
+limits and are a separate budget policy.
 
 All use a 60,000 observed output-token threshold. Native Codex defaults to 1200
 seconds. The live wrapper accepts 30–1200 seconds and an observed spend target

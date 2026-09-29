@@ -29,7 +29,21 @@ parser.add_argument('--replay-dry-redelegate', action='store_true', help='Offlin
 parser.add_argument('--codex-dry-case', choices=['tools', 'output-cap', 'delegation', 'delegation-ephemeral'], default='tools')
 parser.add_argument('--codex-native-comparison', action='store_true', help='Explicitly accept documented native Codex tool/depth differences for a bounded live comparison')
 parser.add_argument('--input-cap', type=int, help='DIAGNOSTIC ONLY: replace the scenario cumulative-input ceiling to probe whether headroom alone lets the parent deliver. Never acceptance: the scenario ceiling is part of the recorded budget.')
+parser.add_argument('--file-read-max-chars', type=int, help='Set the existing file_read_max_chars option in this isolated Aino profile; task, skill, and aggregate acceptance limits stay unchanged')
+parser.add_argument('--child-compression-threshold-tokens', type=int, help='Set existing delegation.compression_threshold_tokens in the isolated profile; compression may discard evidence and must be evaluated')
+parser.add_argument('--child-reasoning-effort', choices=['high', 'max'], help='Set existing delegation.reasoning_effort for this isolated profile; explicit task choices still override it and parent Ultra is unchanged')
 args = parser.parse_args()
+if args.file_read_max_chars is not None:
+    if args.file_read_max_chars <= 0 or args.driver != 'aino' or args.scenario in ('replay', 'daily_replay'):
+        parser.error('--file-read-max-chars requires a positive value and a fresh Aino task')
+if args.child_compression_threshold_tokens is not None:
+    if args.child_compression_threshold_tokens < 16000 or args.driver != 'aino' or args.scenario in ('replay', 'daily_replay'):
+        parser.error('--child-compression-threshold-tokens requires at least 16000 and a fresh Aino task')
+if args.child_reasoning_effort is not None:
+    if args.driver != 'aino' or args.scenario in ('replay', 'daily_replay'):
+        parser.error('--child-reasoning-effort requires a fresh Aino task')
+    if args.matched_comparison and args.child_reasoning_effort != 'high':
+        parser.error('Matched comparison fixes child reasoning effort to high')
 if os.sep in args.codex_bin:
     args.codex_bin = str(Path(args.codex_bin).expanduser().resolve())
 REPO = args.repo.expanduser().resolve()
@@ -97,7 +111,7 @@ os.umask(0o077)
 run = ROOT / (args.name or (('live-' if args.live else 'dry-') + ('codex-' if args.driver == 'codex' else '') + args.scenario + '-' + datetime.now().strftime('%H%M%S')))
 run.mkdir(parents=True, exist_ok=False)
 snapshot = run / 'harness-at-start'; snapshot.mkdir()
-for filename in ('harness.py','codex_driver.py','platform-runner.ts','daily_contract.py'):
+for filename in ('harness.py','convergence.py','codex_driver.py','platform-runner.ts','daily_contract.py'):
     shutil.copy2(SOURCE_ROOT/filename, snapshot/filename)
 (snapshot/'manifest.json').write_text(json.dumps({p.name:hashlib.sha256(p.read_bytes()).hexdigest() for p in snapshot.iterdir() if p.is_file()},indent=2))
 profile = run / 'profile'; profile.mkdir()
@@ -256,6 +270,12 @@ config = {'model': {'default':'gpt-5.6-sol','provider':'aino'},
     'delegation': {'max_concurrent_children':3,'max_iterations':16,'max_spawn_depth':1},
     'terminal': {'backend':'local','cwd':str(execution_workspace)}, 'approvals': {'mode':'smart' if args.live else 'manual'},
     'auxiliary': {'title_generation': {'enabled': args.live}}}
+if args.file_read_max_chars is not None:
+    config['file_read_max_chars'] = args.file_read_max_chars
+if args.child_compression_threshold_tokens is not None:
+    config['delegation']['compression_threshold_tokens'] = args.child_compression_threshold_tokens
+if args.child_reasoning_effort is not None:
+    config['delegation']['reasoning_effort'] = args.child_reasoning_effort
 if args.matched_comparison: config['delegation']['reasoning_effort']='high'
 if args.independent_completions: config['delegation']['independent_completions']=True
 if source_replay_metadata:
@@ -283,64 +303,12 @@ def record(kind, **data):
 def progress(stage, **data):
     out.write(safe({'stage':stage,**data})+'\n');out.flush()
 
-def normalize_observed_usage(usage, source):
-    """Compare completed usage only; absent detail remains unknown, never a zero claim."""
-    if source not in ('aino_hook', 'responses_raw'):
-        raise ValueError('unknown usage source')
-    if usage is None or usage == {}:
-        return None
-    if not isinstance(usage, dict):
-        raise ValueError('usage must be an object')
-    def count(mapping, key, required=False):
-        value = mapping.get(key)
-        if value is None and not required:
-            return None
-        if type(value) is not int or value < 0:
-            raise ValueError('invalid or missing token count: ' + key)
-        return value
-    if source == 'aino_hook':
-        prompt = count(usage, 'prompt_tokens', True)
-        output = count(usage, 'output_tokens', True)
-        cached = count(usage, 'cache_read_tokens')
-        written = count(usage, 'cache_write_tokens')
-        uncached = count(usage, 'input_tokens')
-        reasoning = count(usage, 'reasoning_tokens')
-    else:
-        from agent.usage_pricing import normalize_usage
-        prompt = count(usage, 'input_tokens', True)
-        output = count(usage, 'output_tokens', True)
-        details = usage.get('input_tokens_details', {})
-        output_details = usage.get('output_tokens_details', {})
-        if not isinstance(details, dict) or not isinstance(output_details, dict):
-            raise ValueError('usage details must be objects')
-        cached = count(details, 'cached_tokens')
-        written = count(details, 'cache_write_tokens')
-        legacy_written = count(details, 'cache_creation_tokens')
-        if written is None:
-            written = legacy_written
-        elif legacy_written is not None and written != legacy_written:
-            raise ValueError('conflicting cache write aliases')
-        reasoning = count(output_details, 'reasoning_tokens')
-        # Reuse production normalization, but do not inherit its silent zero defaults.
-        canonical = normalize_usage(usage, provider='aino', api_mode='codex_responses')
-        uncached = canonical.input_tokens if cached is not None and written is not None else None
-    if sum(value for value in (cached, written) if value is not None) > prompt:
-        raise ValueError('cache tokens exceed prompt tokens')
-    if all(value is not None for value in (uncached, cached, written)) and uncached + cached + written != prompt:
-        raise ValueError('input buckets do not equal prompt tokens')
-    if uncached is not None and uncached > prompt:
-        raise ValueError('uncached tokens exceed prompt tokens')
-    if reasoning is not None and reasoning > output:
-        raise ValueError('reasoning tokens exceed output tokens')
-    total = count(usage, 'total_tokens')
-    if total is not None and total != prompt + output:
-        raise ValueError('total tokens do not equal prompt plus output')
-    return {'prompt_tokens':prompt, 'cache_read_tokens':cached, 'cache_write_tokens':written,
-            'uncached_input_tokens':uncached, 'output_tokens':output, 'reasoning_tokens':reasoning,
-            'total_tokens':prompt + output}
+from evals.ultra_delegation.convergence import (
+    cumulative_input_excluding_cache_reads, normalize_observed_usage, observe_input_ceiling,
+)
 
 def summarize_observed_usage(responses, requests, source):
-    """Unique matched response usage; independent of the unchanged rough-input budget."""
+    """Unique matched response usage; distinct from the input-ceiling reservation policy."""
     fields = ('prompt_tokens', 'cache_read_tokens', 'cache_write_tokens', 'uncached_input_tokens',
               'output_tokens', 'reasoning_tokens', 'total_tokens')
     request_ids = {r['api_request_id'] for r in requests
@@ -463,7 +431,10 @@ def install_wire_observer(credential_type, attempts, transports, recorder):
             self.started = time.monotonic()
             self.row = {'observation_id':item['observation_id'], 'http_call_id':item['http_call_id'],
                         'mode':mode, 'dispatch_at_seconds':round(self.started-t0,6), 'received_bytes':0,
-                        'chunk_count':0, 'eof_observed':False, 'close_observed':False}
+                        'chunk_count':0, 'eof_observed':False, 'close_observed':False,
+                        'iterator_advance_seconds':0.0, 'consumer_pause_seconds':0.0}
+            self.iterator_advance_seconds = self.consumer_pause_seconds = 0.0
+            self.consumer_paused_at = None
             self.line_prefix = bytearray()
             self.first_output = False
             self.sse = False
@@ -476,7 +447,22 @@ def install_wire_observer(credential_type, attempts, transports, recorder):
             self.row.update(fields)
             recorder('managed_http_transport', observation_id=self.row['observation_id'],
                      http_call_id=self.row['http_call_id'], mode=self.row['mode'], stage=stage,
-                     since_dispatch_seconds=elapsed, received_bytes=self.row['received_bytes'], **fields)
+                     since_dispatch_seconds=elapsed, received_bytes=self.row['received_bytes'],
+                     iterator_advance_seconds=self.row['iterator_advance_seconds'],
+                     consumer_pause_seconds=self.row['consumer_pause_seconds'], **fields)
+
+        def advanced(self, started):
+            self.iterator_advance_seconds += time.monotonic()-started
+            self.row['iterator_advance_seconds'] = round(self.iterator_advance_seconds,6)
+
+        def pause_consumer(self):
+            self.consumer_paused_at = time.monotonic()
+
+        def resume_consumer(self):
+            if self.consumer_paused_at is not None:
+                self.consumer_pause_seconds += time.monotonic()-self.consumer_paused_at
+                self.row['consumer_pause_seconds'] = round(self.consumer_pause_seconds,6)
+                self.consumer_paused_at = None
 
         def headers(self, response):
             self.sse = 'text/event-stream' in response.headers.get('content-type','').lower()
@@ -520,9 +506,21 @@ def install_wire_observer(credential_type, attempts, transports, recorder):
             self.stream, self.observation = stream, observation
         def __iter__(self):
             try:
-                for chunk in self.stream:
+                iterator = iter(self.stream)
+                while True:
+                    started = time.monotonic()
+                    try:
+                        chunk = next(iterator)
+                    except StopIteration:
+                        break
+                    finally:
+                        self.observation.advanced(started)
                     self.observation.chunk(chunk)
-                    yield chunk
+                    self.observation.pause_consumer()
+                    try:
+                        yield chunk
+                    finally:
+                        self.observation.resume_consumer()
             except GeneratorExit:
                 raise
             except BaseException as error:
@@ -531,6 +529,8 @@ def install_wire_observer(credential_type, attempts, transports, recorder):
             else:
                 self.observation.emit('stream_end', eof_observed=True)
         def close(self):
+            # Explicit response.close() need not resume a suspended iterator.
+            self.observation.resume_consumer()
             try:
                 self.stream.close()
             except BaseException as error:
@@ -544,9 +544,21 @@ def install_wire_observer(credential_type, attempts, transports, recorder):
             self.stream, self.observation = stream, observation
         async def __aiter__(self):
             try:
-                async for chunk in self.stream:
+                iterator = self.stream.__aiter__()
+                while True:
+                    started = time.monotonic()
+                    try:
+                        chunk = await anext(iterator)
+                    except StopAsyncIteration:
+                        break
+                    finally:
+                        self.observation.advanced(started)
                     self.observation.chunk(chunk)
-                    yield chunk
+                    self.observation.pause_consumer()
+                    try:
+                        yield chunk
+                    finally:
+                        self.observation.resume_consumer()
             except GeneratorExit:
                 raise
             except BaseException as error:
@@ -555,6 +567,7 @@ def install_wire_observer(credential_type, attempts, transports, recorder):
             else:
                 self.observation.emit('stream_end', eof_observed=True)
         async def aclose(self):
+            self.observation.resume_consumer()
             try:
                 await self.stream.aclose()
             except BaseException as error:
@@ -602,7 +615,13 @@ def check_wire_observer():
     """No sockets or credentials: run the installed wrappers through HTTPX MockTransport."""
     import asyncio
     import httpx
+    from unittest.mock import patch
     observed, timings, logs = [], [], []
+    class Clock:
+        value = t0
+        def __call__(self): return self.value
+        def advance(self, seconds): self.value += seconds
+    clock = Clock()
     body = {'model':'fake-observer', 'input':[{'type':'message','role':'user','id':'item-1','content':'DO_NOT_LOG_BODY'},
             {'type':'function_call_output','call_id':'call-1','output':'DO_NOT_LOG_OUTPUT'}]}
     chunks = [b': heartbeat\n\n', b'event: response.out', b'put_item.added\n', b'data: {"type":"response.output_item.added"}\n\n']
@@ -612,25 +631,35 @@ def check_wire_observer():
     credential = FakeCredential()
     def capture(kind, **fields): logs.append({'kind':kind, **fields})
     restore = install_wire_observer(FakeCredential, observed, timings, capture)
+    clock_patch = patch.object(time, 'monotonic', clock)
+    clock_patch.start()
     class SyncStream(httpx.SyncByteStream):
         def __init__(self, values, error=None, close_error=None):
             self.values, self.error, self.close_error, self.closed = values, error, close_error, False
         def __iter__(self):
-            yield from self.values
+            for chunk in self.values:
+                clock.advance(2)
+                yield chunk
+            clock.advance(3)
             if self.error: raise self.error
         def close(self):
+            clock.advance(7)
             self.closed = True
             if self.close_error: raise self.close_error
     class AsyncStream(httpx.AsyncByteStream):
         def __init__(self, values, error=None, close_error=None):
             self.values, self.error, self.close_error, self.closed = values, error, close_error, False
         async def __aiter__(self):
-            for chunk in self.values: yield chunk
+            for chunk in self.values:
+                clock.advance(2)
+                yield chunk
+            clock.advance(3)
             if self.error: raise self.error
         async def aclose(self):
+            clock.advance(7)
             self.closed = True
             if self.close_error: raise self.close_error
-    def verify(before, stream, values, error, close_error, sse, early=False):
+    def verify(before, stream, values, error, close_error, sse, early=False, timing=(7,0)):
         row = timings[-1]
         assert len(timings) == before+1 and stream.closed
         assert row['received_bytes'] == sum(map(len,values)) and row['eof_observed'] == (error is None and not early)
@@ -642,13 +671,20 @@ def check_wire_observer():
             assert row['first_output_sse_type'] == 'response.output_item.added'
         if error: assert row['stream_error_type'] == type(error).__name__
         if close_error: assert row['close_error_type'] == type(close_error).__name__
-    cases = [(chunks,None,None,True,False), ([b'{"ok":true}'],None,None,False,False),
-             ([b'partial'],httpx.ReadError('do-not-log-exception-text'),None,False,False),
-             ([],None,RuntimeError('do-not-log-close-text'),False,False),
-             ([b'first',b'unread'],None,None,False,True),
-             ([b': heartbeat\n\n',b'data: {"ty',b'pe":"response.output_item.added","payload":"',b'x'*5000+b'"}\n\n'],None,None,True,False)]
+        # Literal totals include the last EOF/error pull, exclude close work, and
+        # settle early-close consumer time once even if the iterator closes later.
+        assert row.get('iterator_advance_seconds') == timing[0], row
+        assert row.get('consumer_pause_seconds') == timing[1], row
+        last = next(event for event in reversed(logs) if event.get('observation_id') == row['observation_id'])
+        assert last.get('iterator_advance_seconds') == timing[0], last
+        assert last.get('consumer_pause_seconds') == timing[1], last
+    cases = [(chunks,None,None,True,False,(11,20)), ([b'{"ok":true}'],None,None,False,False,(5,5)),
+             ([b'partial'],httpx.ReadError('do-not-log-exception-text'),None,False,False,(5,5)),
+             ([],None,RuntimeError('do-not-log-close-text'),False,False,(3,0)),
+             ([b'first',b'unread'],None,None,False,True,(2,5)),
+             ([b': heartbeat\n\n',b'data: {"ty',b'pe":"response.output_item.added","payload":"',b'x'*5000+b'"}\n\n'],None,None,True,False,(11,20))]
     try:
-        for values,error,close_error,sse,early in cases:
+        for values,error,close_error,sse,early,timing in cases:
             stream = SyncStream(values,error,close_error); before=len(timings)
             transport = httpx.MockTransport(lambda request:httpx.Response(200,
                 headers={'content-type':'text/event-stream' if sse else 'application/json'},stream=stream))
@@ -658,6 +694,7 @@ def check_wire_observer():
                 try:
                     for chunk in response.iter_raw():
                         seen.append(chunk)
+                        clock.advance(5)
                         if early: break
                 except BaseException as actual:
                     assert actual is (error or close_error)
@@ -666,7 +703,7 @@ def check_wire_observer():
                 except BaseException as actual: assert actual is close_error
                 assert seen == (values[:1] if early else values)
                 assert all(actual is expected for actual,expected in zip(seen,values))
-            verify(before,stream,seen,error,close_error,sse,early)
+            verify(before,stream,seen,error,close_error,sse,early,timing)
         stream=SyncStream([b'nonstream ',b'body']);before=len(timings)
         with httpx.Client(transport=httpx.MockTransport(lambda request:httpx.Response(200,stream=stream)),
                           event_hooks={'request':[credential.prepare_request]}) as client:
@@ -674,7 +711,7 @@ def check_wire_observer():
         verify(before,stream,stream.values,None,None,False)
         async def async_cases():
             async def prepare(request): credential.prepare_request(request)
-            for values,error,close_error,sse,early in cases:
+            for values,error,close_error,sse,early,timing in cases:
                 stream=AsyncStream(values,error,close_error);before=len(timings)
                 transport=httpx.MockTransport(lambda request:httpx.Response(200,
                     headers={'content-type':'text/event-stream' if sse else 'application/json'},stream=stream))
@@ -684,6 +721,7 @@ def check_wire_observer():
                     try:
                         async for chunk in response.aiter_raw():
                             seen.append(chunk)
+                            clock.advance(5)
                             if early: break
                     except BaseException as actual: assert actual is (error or close_error)
                     else: assert error is None and close_error is None
@@ -691,7 +729,7 @@ def check_wire_observer():
                     except BaseException as actual: assert actual is close_error
                     assert seen == (values[:1] if early else values)
                     assert all(actual is expected for actual,expected in zip(seen,values))
-                verify(before,stream,seen,error,close_error,sse,early)
+                verify(before,stream,seen,error,close_error,sse,early,timing)
             stream=AsyncStream([b'nonstream ',b'body']);before=len(timings)
             async with httpx.AsyncClient(transport=httpx.MockTransport(lambda request:httpx.Response(200,stream=stream)),
                                         event_hooks={'request':[prepare]}) as client:
@@ -721,12 +759,14 @@ def check_wire_observer():
         assert all(value not in encoded for value in ('DO_NOT_LOG_BODY','DO_NOT_LOG_OUTPUT','do-not-log-'))
     finally:
         restore()
+        clock_patch.stop()
     return {'httpx_version':httpx.__version__, 'sync_async_chunks_preserved':True,
             'errors_propagated_unchanged':True, 'close_preserved':True, 'non_sse_preserved':True,
             'early_close_not_eof':True, 'nonstream_send_preserved':True,
-            'unmanaged_skipped':True, 'metadata_only':True, 'fake_attempts':len(timings)}
+            'unmanaged_skipped':True, 'metadata_only':True, 'fake_attempts':len(timings),
+            'iterator_consumer_timing_separated':True}
 
-if args.matched_comparison:
+if args.driver == 'aino':
     import httpx
     wire_httpx_version = httpx.__version__
     if not args.live:
@@ -747,8 +787,13 @@ from hermes_cli.plugins import PluginContext, get_plugin_manager
 from hermes_cli.plugins_manifest import PluginManifest
 
 cap_event = threading.Event()
-signal.signal(signal.SIGTERM, lambda *_: cap_event.set())
+# SIGTERM can come from the spend monitor, watchdog, or caller; the signal alone
+# does not establish that an internal request/input/output threshold fired.
+external_signal_event = threading.Event()
+signal.signal(signal.SIGTERM, lambda *_: external_signal_event.set())
 billing_seen = set()
+input_ceiling_observations = []
+
 def pre_request(**kw):
     request_payload=kw.get('request') or {}
     body = request_payload.get('body') or {}
@@ -771,17 +816,38 @@ def pre_request(**kw):
         item.update(replay_profile_path_occurrences=system.count(str(profile)),
             replay_system_hash_with_source_profile=compared_hash,
             replay_system_diff_is_profile_paths_only=replay_data['system_hashes_by_session'][replay_data['stored_session_id']]==[compared_hash])
-    with log_lock: requests.append(item)
-    record('pre_api_request',**item)
-    # These are observation-based interrupt thresholds, not an exact monetary hard cap.
-    if len(requests)>=request_limit or sum(int(r.get('approx_input_tokens') or 0) for r in requests)>=input_limit:
-        caps.append('aggregate_request_or_input_threshold'); cap_event.set()
+    # Keep publication, accounting and the observation on the same snapshot. Child hooks
+    # share this RLock; record() re-enters it without allowing another hook to interleave.
+    with log_lock:
+        requests.append(item)
+        record('pre_api_request',**item)
+        observation=observe_input_ceiling(requests,responses,input_ceiling_observations,
+            limit=input_limit,phase='pre_request',api_request_id=item.get('api_request_id'),
+            seconds=round(time.monotonic()-t0,3))
+        record('input_ceiling_observation',**observation)
+        if not observation['accounting_complete']:
+            caps.append('input_accounting_incomplete');cap_event.set()
+        # Observe even the last allowed request: short-circuiting here loses the peak.
+        if len(requests)>=request_limit or observation['stop_required']:
+            if len(requests)>=request_limit or observation['crossed']:
+                caps.append('aggregate_request_or_input_threshold')
+            cap_event.set()
 def post_request(**kw):
     item = {key:kw.get(key) for key in ('session_id','api_request_id','turn_id','api_call_count','api_duration','finish_reason','usage')}
-    with log_lock: responses.append(item)
-    record('post_api_request',**item)
-    output=sum(int((r.get('usage') or {}).get('output_tokens') or (r.get('usage') or {}).get('completion_tokens') or 0) for r in responses)
-    if output>=60000: caps.append('aggregate_output_threshold'); cap_event.set()
+    with log_lock:
+        responses.append(item)
+        record('post_api_request',**item)
+        observation=observe_input_ceiling(requests,responses,input_ceiling_observations,
+            limit=input_limit,phase='post_request',api_request_id=item.get('api_request_id'),
+            seconds=round(time.monotonic()-t0,3))
+        record('input_ceiling_observation',**observation)
+        if not observation['accounting_complete']:
+            caps.append('input_accounting_incomplete');cap_event.set()
+        if observation['stop_required']:
+            if observation['crossed']: caps.append('aggregate_request_or_input_threshold')
+            cap_event.set()
+        output=sum(int((r.get('usage') or {}).get('output_tokens') or (r.get('usage') or {}).get('completion_tokens') or 0) for r in responses)
+        if output>=60000: caps.append('aggregate_output_threshold');cap_event.set()
 observer = PluginContext(PluginManifest(name='ultra-acceptance-observer'),get_plugin_manager())
 observer.register_hook('pre_api_request',pre_request)
 observer.register_hook('post_api_request',post_request)
@@ -969,7 +1035,7 @@ report['evidence_contract']={'enabled':bool(args.evidence_contract),'schema':evi
     'base_prompt_sha256_ignoring_workspace':base_prompt_sha256,
     'boundary':'Explicit task-contract intervention, not forced dispatch or runtime rewriting of model tool calls; JSON validity does not prove findings.'}
 report['diagnostic']={'review_skill':args.review_skill, 'original_acceptance_eligible':args.review_skill=='original' and not args.matched_comparison, 'boundary':'Removing the custom review skill changes the review instructions. A final answer here does not pass the original skill-bearing acceptance. Historical comparison is not a randomized causal estimate.' if args.review_skill=='none' else 'Original review skill policy unchanged.'}
-report['limits']={'seconds':args.budget,'requests':request_limit,'approx_cumulative_input':input_limit,'observed_spend_target_usd':report['budget_target_usd'],'monetary_hard_cap':False}
+report['limits']={'seconds':args.budget,'requests':request_limit,'approx_cumulative_input':input_limit,'cumulative_input_basis':'input_excluding_cache_reads','cumulative_input_policy':'acceptance_policy_change: looser than the superseded approx_represented_input basis; runs under the two bases are not comparable','observed_spend_target_usd':report['budget_target_usd'],'monetary_hard_cap':False}
 if args.input_cap is not None:
     # Self-labelling so a diagnostic probe can never be read as a within-budget pass later.
     report['limits']['scenario_ceiling_overridden']=True
@@ -1042,8 +1108,17 @@ try:
         report['submit']=chat.rpc('prompt.submit',{'session_id':sid,'text':prompt})
     deadline=time.monotonic()+args.budget;last_status=0;candidate=None
     while True:
-        if cap_event.is_set() or time.monotonic()>deadline:
-            stop_reason=('replay_redelegation_attempt' if 'replay_redelegation_attempt' in caps else 'token_request_cap') if cap_event.is_set() else 'timeout'
+        timed_out=time.monotonic()>deadline
+        if cap_event.is_set() or timed_out or external_signal_event.is_set():
+            if cap_event.is_set():
+                if 'replay_redelegation_attempt' in caps:
+                    stop_reason='replay_redelegation_attempt'
+                elif 'input_accounting_incomplete' in caps:
+                    stop_reason='input_accounting_incomplete'
+                else:
+                    stop_reason='token_request_cap'
+            else:
+                stop_reason='timeout' if timed_out else 'external_signal'
             report['interrupt']=chat.rpc('session.interrupt',{'session_id':sid})
             record('harness_interrupt',reason=stop_reason);break
         with log_lock: snapshot=list(events)
@@ -1134,19 +1209,40 @@ finally:
         replay_after=hashes(replay_source/'workspace')
         report['replay']['source_fixture_changed']=[p for p in set(replay_fixture_before)|set(replay_after) if replay_fixture_before.get(p)!=replay_after.get(p)]
     report['fixture_changed']=[p for p in set(fixture_before)|set(hashes(workspace)) if fixture_before.get(p)!=hashes(workspace).get(p)]
-    report['requests']=requests;report['responses']=responses;report['caps']=caps
+    with log_lock:
+        report['requests']=list(requests);report['responses']=list(responses);report['caps']=list(caps)
+        final_snapshot=cumulative_input_excluding_cache_reads(report['requests'],report['responses'])
+        ceiling_observations=list(input_ceiling_observations)
+    peak=max(ceiling_observations,key=lambda o:o['value'],default=None)
+    first_crossing=next((o for o in ceiling_observations if o['crossed']),None)
+    first_incomplete=next((o for o in ceiling_observations if not o['accounting_complete']),None)
+    report['input_accounting']={**final_snapshot,'limit':input_limit,
+        'policy':'acceptance_policy_change',
+        'final_value':final_snapshot['input_excluding_cache_reads'],
+        'peak_value':(peak or {}).get('value'),'peak_at':(peak or {}).get('seconds'),
+        'peak_requests_recorded':(peak or {}).get('requests_recorded'),
+        'first_crossing':first_crossing,'ever_crossed':first_crossing is not None,
+        'first_incomplete':first_incomplete,'ever_incomplete':first_incomplete is not None,
+        'observations':len(ceiling_observations),
+        'superseded_basis':'approx_represented_input',
+        'approx_represented_input':(None if final_snapshot['invalid_request_estimate_rows'] else
+            sum(r['approx_input_tokens'] for r in report['requests'])),
+        'boundary':'ACCEPTANCE POLICY CHANGE, not a correction of a miscount. The ceiling now bounds input excluding cache reads (uncached + cache writes, per unique request; a request without usable usage reserves its rough estimate, and conflicting duplicate usage also reserves). This is LOOSER than the superseded approx_represented_input basis, which summed each request whole re-presented context and was a coherent stricter policy bounding total context volume. Runs scored under the two bases are NOT comparable. The figure is not total new input (excluded cache reads were real input the provider processed) and not a cost (writes, reads and uncached input are priced differently). Because a reservation can be replaced by a smaller settled figure the value is non-monotonic, so final_value alone cannot show whether the ceiling was reached: read peak_value and first_crossing. If a request cannot be covered by complete usage or a valid estimate, or identity is missing, accounting_complete is false and input_accounting_incomplete stops the run independently of crossing the numeric ceiling; first_incomplete remains latched.'}
     report['wire_attempts']=wire_attempts
     report['wire_transports']=wire_transports
     report['wire_observer_self_check']=wire_observer_self_check
     report['wire_observation_limits']={
         'httpx_version':wire_httpx_version,
-        'scope':'Only matched-comparison managed POST requests successfully prepared before the HTTPX attempt.',
+        'scope':'Aino-driver managed POST requests successfully prepared before the HTTPX attempt, independent of matched-comparison or review-skill mode; Codex-driver requests are not observed.',
         'timing':'Process-local monotonic time. Dispatch includes pool/connect/TLS/server wait; headers do not identify generation start.',
+        'iterator_advance_seconds':'Cumulative time inside completed underlying next/anext calls, including EOF and read errors; may include network waiting and local transport work, never a provider CPU measurement.',
+        'consumer_pause_seconds':'Cumulative time from yielding each raw chunk until consumer resume or explicit close; includes caller processing/scheduling. Excludes underlying close work. An unresumed, unclosed pause is not yet counted.',
+        'timing_counter_availability':'Iterator/consumer counters exist only in reports recorded by this observer version. Missing fields in older snapshots mean unavailable, not zero; they cannot be reconstructed from dispatch/EOF timestamps.',
         'first_chunk':'First nonempty raw body chunk may be a heartbeat, not a model text token.',
         'sse':'First output-related SSE type can be a reasoning item, not final text. Only identity-encoded SSE, event fields or leading JSON type in a 4 KiB line prefix; absence is unknown.',
         'sizes':'body_bytes is the full serialized SDK body before hook truncation; per-item bytes/hashes use canonical JSON, not raw wire spans.',
         'implementation':'Harness-only HTTPX _send_single_request wrappers, validated against the reported HTTPX version; no retry/timeout/payload modifications.'}
-    report['observed_usage']=summarize_observed_usage(responses, requests, 'aino_hook')
+    report['observed_usage']=summarize_observed_usage(report['responses'],report['requests'],'aino_hook')
     if usage_self_check is not None: report['usage_self_check']=usage_self_check
     if (profile/'state.db').exists():
         conn=sqlite3.connect(f'file:{profile}/state.db?mode=ro',uri=True);conn.row_factory=sqlite3.Row
@@ -1167,7 +1263,7 @@ finally:
     report['parent_tool_counts']=dict(collections.Counter(c['name'] for c in parent_calls))
     report['children_finished']=[e['payload'] for e in events if e.get('event')=='subagent.complete']
     report['billing']=[(e['payload'].get('billing') or (e['payload'].get('turn_metrics') or {}).get('billing')) for e in events if e.get('event')=='message.complete' and (e['payload'].get('billing') or (e['payload'].get('turn_metrics') or {}).get('billing'))]
-    report['system_hashes_by_session']={s:sorted({r['system_hash'] for r in requests if r['session_id']==s}) for s in {r['session_id'] for r in requests}}
+    report['system_hashes_by_session']={s:sorted({r['system_hash'] for r in report['requests'] if r['session_id']==s}) for s in {r['session_id'] for r in report['requests']}}
     report['parent_exact_duplicate_tools']=sum(n-1 for n in collections.Counter((c['name'],c['arguments']) for c in parent_calls).values() if n>1)
     report['parent_character_count_calls']=[c for c in parent_calls if c['name'] in ('execute_code','terminal') and any(t in str(c['arguments']) for t in ('len(','.length','wc -','字符','字数'))]
     if args.scenario=='daily':

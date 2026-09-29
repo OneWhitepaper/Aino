@@ -9,8 +9,9 @@ are easy to misread by hand (the parent's own budget is not ``limits.approx_cumu
 — that cap covers parent and children together). This prints them in one block so a later
 holder can compare runs without re-deriving the arithmetic.
 
-Read-only: it opens the report and prints JSON. It never runs a model, imports production
-modules, or writes anything.
+The CLI is read-only: it opens the report and sibling events log and prints JSON.
+It never runs a model, executes tools, or writes files. The shared usage normalizer
+lazily imports agent.usage_pricing when normalizing raw Responses usage.
 
 Usage
 -----
@@ -19,13 +20,261 @@ Usage
 from __future__ import annotations
 
 import argparse
+import collections
 import json
+import math
 import sys
 from pathlib import Path
 
 # Same token accounting the harness observer applies: every request the parent AND its
 # children issue counts against the one cumulative figure.
 APPROX_INPUT_FIELD = "approx_input_tokens"
+
+
+def normalize_observed_usage(usage, source):
+    """Compare completed usage only; absent detail remains unknown, never a zero claim."""
+    if source not in ('aino_hook', 'responses_raw'):
+        raise ValueError('unknown usage source')
+    if usage is None or usage == {}:
+        return None
+    if not isinstance(usage, dict):
+        raise ValueError('usage must be an object')
+    def count(mapping, key, required=False):
+        value = mapping.get(key)
+        if value is None and not required:
+            return None
+        if type(value) is not int or value < 0:
+            raise ValueError('invalid or missing token count: ' + key)
+        return value
+    if source == 'aino_hook':
+        prompt = count(usage, 'prompt_tokens', True)
+        output = count(usage, 'output_tokens', True)
+        cached = count(usage, 'cache_read_tokens')
+        written = count(usage, 'cache_write_tokens')
+        uncached = count(usage, 'input_tokens')
+        reasoning = count(usage, 'reasoning_tokens')
+    else:
+        from agent.usage_pricing import normalize_usage
+        prompt = count(usage, 'input_tokens', True)
+        output = count(usage, 'output_tokens', True)
+        details = usage.get('input_tokens_details', {})
+        output_details = usage.get('output_tokens_details', {})
+        if not isinstance(details, dict) or not isinstance(output_details, dict):
+            raise ValueError('usage details must be objects')
+        cached = count(details, 'cached_tokens')
+        written = count(details, 'cache_write_tokens')
+        legacy_written = count(details, 'cache_creation_tokens')
+        if written is None:
+            written = legacy_written
+        elif legacy_written is not None and written != legacy_written:
+            raise ValueError('conflicting cache write aliases')
+        reasoning = count(output_details, 'reasoning_tokens')
+        # Reuse production normalization, but do not inherit its silent zero defaults.
+        canonical = normalize_usage(usage, provider='aino', api_mode='codex_responses')
+        uncached = canonical.input_tokens if cached is not None and written is not None else None
+    if sum(value for value in (cached, written) if value is not None) > prompt:
+        raise ValueError('cache tokens exceed prompt tokens')
+    if all(value is not None for value in (uncached, cached, written)) and uncached + cached + written != prompt:
+        raise ValueError('input buckets do not equal prompt tokens')
+    if uncached is not None and uncached > prompt:
+        raise ValueError('uncached tokens exceed prompt tokens')
+    if reasoning is not None and reasoning > output:
+        raise ValueError('reasoning tokens exceed output tokens')
+    total = count(usage, 'total_tokens')
+    if total is not None and total != prompt + output:
+        raise ValueError('total tokens do not equal prompt plus output')
+    return {'prompt_tokens':prompt, 'cache_read_tokens':cached, 'cache_write_tokens':written,
+            'uncached_input_tokens':uncached, 'output_tokens':output, 'reasoning_tokens':reasoning,
+            'total_tokens':prompt + output}
+
+def cumulative_input_excluding_cache_reads(requests, responses):
+    """Count complete input buckets, retaining estimates until usage is usable.
+
+    Excluding cache reads is a distinct, looser acceptance policy than summing
+    whole-context estimates. This is neither token novelty nor monetary cost.
+    A missing bucket is unknown, including when the other buckets are zero.
+    Conflicting, partial, or invalid duplicate responses cannot release a reserve.
+    Duplicate request estimates retain their largest valid value. Unkeyed rows
+    and IDs without either complete usage or a valid reserve make accounting
+    incomplete; the numeric result alone must never authorize continuation.
+    """
+    req_rows, resp_rows = list(requests), list(responses)
+    requested, estimates = set(), collections.defaultdict(set)
+    invalid_estimate_ids, invalid_estimate_rows = set(), []
+    unkeyed_requests = unkeyed_reserved = 0
+    for index, row in enumerate(req_rows):
+        rid = row.get('api_request_id') if isinstance(row, dict) else None
+        keyed = isinstance(rid, str) and bool(rid.strip())
+        estimate = row.get(APPROX_INPUT_FIELD) if isinstance(row, dict) else None
+        valid_estimate = type(estimate) is int and estimate >= 0
+        if keyed:
+            requested.add(rid)
+        else:
+            unkeyed_requests += 1
+        if not valid_estimate:
+            invalid_estimate_rows.append({'row_index': index, 'api_request_id': rid})
+            if keyed:
+                invalid_estimate_ids.add(rid)
+        elif keyed:
+            estimates[rid].add(estimate)
+        else:
+            # No ID means duplicates cannot be resolved, but a known estimate
+            # still reserves capacity while the incomplete-accounting stop fires.
+            unkeyed_reserved += estimate
+    approx_by_id = {rid: max(values) for rid, values in estimates.items()}
+    conflicting_estimates = {rid: sorted(values) for rid, values in estimates.items() if len(values) > 1}
+
+    grouped = collections.defaultdict(list)
+    unkeyed_responses = 0
+    for row in resp_rows:
+        rid = row.get('api_request_id') if isinstance(row, dict) else None
+        if not isinstance(rid, str) or not rid.strip():
+            unkeyed_responses += 1
+        else:
+            grouped[rid].append(row)
+    settled, conflicting = {}, []
+    invalid_usage_ids, incomplete_usage_ids = set(), set()
+    input_fields = ('uncached_input_tokens', 'cache_read_tokens', 'cache_write_tokens')
+    for rid, rows in grouped.items():
+        values = []
+        for row in rows:
+            try:
+                usage = normalize_observed_usage(row.get('usage'), 'aino_hook')
+            except ValueError:
+                invalid_usage_ids.add(rid)
+                continue
+            if usage is None or any(usage[field] is None for field in input_fields):
+                incomplete_usage_ids.add(rid)
+                continue
+            # normalize_observed_usage checks conservation once every bucket
+            # exists; its partial-observation semantics remain unchanged.
+            values.append(usage)
+        if values and any(value != values[0] for value in values[1:]):
+            conflicting.append(rid)
+        elif values and rid not in invalid_usage_ids and rid not in incomplete_usage_ids:
+            settled[rid] = values[0]
+
+    uncached = sum(usage['uncached_input_tokens'] for usage in settled.values())
+    written = sum(usage['cache_write_tokens'] for usage in settled.values())
+    read = sum(usage['cache_read_tokens'] for usage in settled.values())
+    reserved_ids = sorted((requested | grouped.keys()) - settled.keys())
+    unaccounted_ids = [rid for rid in reserved_ids if rid not in approx_by_id]
+    reserved = unkeyed_reserved + sum(approx_by_id[rid] for rid in reserved_ids if rid in approx_by_id)
+    return {
+        'basis': 'input_excluding_cache_reads',
+        'input_excluding_cache_reads': uncached + written + reserved,
+        'uncached_input_tokens': uncached,
+        'cache_write_tokens': written,
+        'reserved_for_requests_without_usable_usage': reserved,
+        'excluded_cache_read_tokens': read,
+        'settled_requests': len(settled),
+        'requested_requests': len(requested),
+        'reserved_request_ids': reserved_ids,
+        'conflicting_response_ids': sorted(conflicting),
+        'unmatched_response_ids': sorted(grouped.keys() - requested),
+        'unkeyed_response_rows': unkeyed_responses,
+        'accounting_complete': not (unaccounted_ids or unkeyed_requests or unkeyed_responses),
+        'unaccounted_request_ids': unaccounted_ids,
+        'unkeyed_request_rows': unkeyed_requests,
+        'unkeyed_request_reserved_tokens': unkeyed_reserved,
+        'invalid_request_estimate_ids': sorted(invalid_estimate_ids),
+        'invalid_request_estimate_rows': invalid_estimate_rows,
+        'conflicting_request_estimate_ids': sorted(conflicting_estimates),
+        'conflicting_request_estimates': conflicting_estimates,
+        'invalid_usage_response_ids': sorted(invalid_usage_ids),
+        'incomplete_usage_response_ids': sorted(incomplete_usage_ids),
+        'request_rows': len(req_rows),
+        'response_rows': len(resp_rows),
+    }
+
+
+def observe_input_ceiling(requests, responses, observations, *, limit, phase, api_request_id, seconds):
+    """Append one accounting snapshot; caller holds the live observer's lock.
+
+    The same function accepts chronological offline prefixes. A stop caused by
+    a crossing or incomplete accounting stays latched after reservations settle.
+    Snapshot counts come from the counter, never a second read of caller lists.
+    """
+    snapshot = cumulative_input_excluding_cache_reads(requests, responses)
+    crossed = snapshot['input_excluding_cache_reads'] >= limit
+    stopped_before = any(
+        row.get('stop_required') or row.get('crossed') or row.get('accounting_complete') is False
+        for row in observations
+    )
+    observation = {
+        **snapshot,
+        'phase': phase,
+        'api_request_id': api_request_id,
+        'seconds': seconds,
+        'requests_recorded': snapshot['request_rows'],
+        'responses_recorded': snapshot['response_rows'],
+        'value': snapshot['input_excluding_cache_reads'],
+        'reserved': snapshot['reserved_for_requests_without_usable_usage'],
+        'crossed': crossed,
+        'stop_required': bool(stopped_before or crossed or not snapshot['accounting_complete']),
+    }
+    observations.append(observation)
+    return observation
+
+
+
+def _ceiling_basis(report):
+    """Describe the aggregate-input ceiling basis THIS report was actually scored under.
+
+    A report is read on its own recorded terms. Reports written before the basis became
+    configurable carry no ``input_accounting`` and no ``limits.cumulative_input_basis``;
+    for them the basis was the re-presented-context sum, and saying so is not a
+    reinterpretation of their result. A historical run's stop reason, caps and verdict are
+    never restated here.
+
+    Native Codex runs are a separate budget policy: that driver records its own limits block
+    and is not governed by the Aino observer's per-request hooks, so its ceiling figures are
+    not comparable with Aino-driver runs.
+    """
+    limits = report.get("limits") or {}
+    accounting = report.get("input_accounting")
+    driver = (report.get("diagnostic") or {}).get("driver") or report.get("driver")
+    is_codex = driver == "codex" or bool(report.get("codex_native_comparison"))
+    if not isinstance(accounting, dict):
+        return {
+            "basis": "approx_represented_input",
+            "recorded_in_report": False,
+            "policy": "pre_change_default",
+            "driver": driver or ("codex" if is_codex else "aino"),
+            "value": sum(int(r.get(APPROX_INPUT_FIELD) or 0)
+                         for r in (report.get("requests") or [])),
+            "limit": limits.get("approx_cumulative_input"),
+            "note": "No input_accounting block: this run was scored when the ceiling summed each "
+                    "request's whole re-presented context. Its recorded outcome stands as-is and "
+                    "is NOT comparable with runs scored on a cache-read-excluding basis."
+                    + (" Native Codex driver: separate budget policy, not the Aino observer's."
+                       if is_codex else ""),
+        }
+    return {
+        "basis": accounting.get("basis"),
+        "recorded_in_report": True,
+        "policy": accounting.get("policy") or limits.get("cumulative_input_policy"),
+        "driver": driver or "aino",
+        "value": accounting.get("final_value"),
+        "peak_value": accounting.get("peak_value"),
+        "peak_at": accounting.get("peak_at"),
+        "ever_crossed": accounting.get("ever_crossed"),
+        "first_crossing": accounting.get("first_crossing"),
+        "accounting_complete": accounting.get("accounting_complete"),
+        "ever_incomplete": accounting.get("ever_incomplete"),
+        "first_incomplete": accounting.get("first_incomplete"),
+        "unaccounted_request_ids": accounting.get("unaccounted_request_ids"),
+        "unkeyed_request_rows": accounting.get("unkeyed_request_rows"),
+        "unkeyed_response_rows": accounting.get("unkeyed_response_rows"),
+        "limit": accounting.get("limit", limits.get("approx_cumulative_input")),
+        "superseded_value": accounting.get("approx_represented_input"),
+        "note": "Scored on the basis named above. The value is non-monotonic (a reserved rough "
+                "estimate can be replaced by a smaller settled figure), so ever_crossed and "
+                "peak_value decide whether the ceiling was reached, not the final value. "
+                "Incomplete accounting requires an independent stop even below the ceiling; "
+                "a peak below the limit cannot establish complete accounting."
+                + (" Native Codex driver: separate budget policy." if is_codex else ""),
+    }
 
 
 def _group_requests(report: dict) -> tuple[dict[str, list[dict]], dict[str, list[dict]]]:
@@ -63,7 +312,34 @@ def _parent_session_id(report: dict, requests: dict[str, list[dict]]) -> str | N
     return max(requests, key=lambda sid: len(requests[sid]))
 
 
-def _parent_starts_before_delivery(events_path: Path, ui_session_id: str | None) -> tuple[int, float] | None:
+def _read_events(events_path: Path | None) -> list[dict] | None:
+    if events_path is None:
+        return None
+    try:
+        lines = events_path.read_text(encoding="utf-8", errors="replace").splitlines()
+    except OSError:
+        return None
+    events = []
+    for line in lines:
+        try:
+            event = json.loads(line)
+        except ValueError:
+            continue
+        if isinstance(event, dict):
+            events.append(event)
+    return events
+
+
+def _evidence_parent_session_id(report: dict) -> str | None:
+    """New evidence metrics require a stored identity or one explicitly declared root."""
+    if report.get("stored_session_id"):
+        return str(report["stored_session_id"])
+    roots = {str(row["id"]) for row in report.get("sessions") or []
+             if isinstance(row, dict) and row.get("id") and not row.get("parent_session_id")}
+    return next(iter(roots)) if len(roots) == 1 else None
+
+
+def _parent_starts_before_delivery(events: list[dict] | None, ui_session_id: str | None) -> tuple[int, float] | None:
     """``(parent turns started before the last child finished, that finish moment)``.
 
     The report carries no per-request wall-clock stamp, so the events log is the only faithful way
@@ -73,32 +349,108 @@ def _parent_starts_before_delivery(events_path: Path, ui_session_id: str | None)
     the sibling events file is absent: callers must say the split is unknown rather than substitute
     a number that looks like data.
     """
-    if not events_path.is_file():
+    if events is None:
         return None
     starts: list[float] = []
     child_done: list[float] = []
-    try:
-        for line in events_path.read_text(encoding="utf-8", errors="replace").splitlines():
-            if not line.strip():
-                continue
-            try:
-                event = json.loads(line)
-            except ValueError:
-                continue
-            if not isinstance(event, dict):
-                continue
-            name = event.get("event")
-            if name == "message.start" and ui_session_id and str(event.get("session_id")) == ui_session_id:
-                if isinstance(event.get("time"), (int, float)):
-                    starts.append(float(event["time"]))
-            elif name == "subagent.complete" and isinstance(event.get("time"), (int, float)):
-                child_done.append(float(event["time"]))
-    except OSError:
-        return None
+    for event in events:
+        name = event.get("event")
+        if name == "message.start" and ui_session_id and str(event.get("session_id")) == ui_session_id:
+            if isinstance(event.get("time"), (int, float)):
+                starts.append(float(event["time"]))
+        elif name == "subagent.complete" and isinstance(event.get("time"), (int, float)):
+            child_done.append(float(event["time"]))
     if not child_done:
         return None
     delivery_at = max(child_done)
     return len([moment for moment in starts if moment < delivery_at]), round(delivery_at, 3)
+
+
+def _seconds(value) -> float | None:
+    return (float(value) if isinstance(value, (int, float)) and not isinstance(value, bool)
+            and math.isfinite(value) and value >= 0 else None)
+
+
+def _duration_stats(values: list) -> dict:
+    measured = [seconds for value in values if (seconds := _seconds(value)) is not None]
+    return {
+        "count": len(measured), "sum_seconds": round(sum(measured), 3),
+        "mean_seconds": round(sum(measured) / len(measured), 3) if measured else None,
+        "unmeasured_count": len(values) - len(measured),
+    }
+
+
+def _completed_api_durations(report: dict, parent_id: str | None, responses: dict[str, list[dict]]) -> dict:
+    child_ids = {str(row["id"]) for row in report.get("sessions") or []
+                 if isinstance(row, dict) and row.get("id") and parent_id
+                 and row.get("parent_session_id") == parent_id}
+    groups: dict[str, list] = {"parent": [], "children": [], "unattributed": []}
+    for session_id, rows in responses.items():
+        group = "parent" if session_id == parent_id else "children" if session_id in child_ids else "unattributed"
+        groups[group].extend(row.get("api_duration") for row in rows)
+    return {
+        "parent_session_id": parent_id,
+        **{name: _duration_stats(values) for name, values in groups.items()},
+        "note": "Completed response durations only; concurrent calls overlap, so sums are not wall time. "
+                "Request purposes remain unknown.",
+    }
+
+
+def _parent_tool_results(report: dict, parent_id: str | None) -> dict:
+    rows = report.get("db_messages")
+    if not isinstance(rows, list) or not parent_id:
+        return {"available": False, "session_id": parent_id, "count": None, "content_chars": None}
+    tools = [row for row in rows if isinstance(row, dict)
+             and row.get("session_id") == parent_id and row.get("role") == "tool"]
+    return {
+        "available": True, "session_id": parent_id, "count": len(tools),
+        "content_chars": sum(len(row["content"]) for row in tools if isinstance(row.get("content"), str)),
+    }
+
+
+def _parent_tool_timing(events: list[dict] | None, ui_session_id: str | None) -> dict:
+    """Pair parent UI events by tool identity; arguments and results remain uninterpreted."""
+    if events is None or not ui_session_id:
+        return {"available": False}
+    calls, durations, pending = [], [], {}
+    unmatched_completions = 0
+    for event in events:
+        if event.get("session_id") != ui_session_id or event.get("event") not in ("tool.start", "tool.complete"):
+            continue
+        payload = event.get("payload") or {}
+        if not isinstance(payload, dict):
+            continue
+        tool_id = payload.get("tool_id")
+        if event["event"] == "tool.start":
+            call = {"tool_id": tool_id, "name": payload.get("name"),
+                    "start_seconds": _seconds(event.get("time")), "complete_seconds": None,
+                    "duration_seconds": None, "duration_source": None}
+            calls.append(call)
+            if tool_id:
+                pending[tool_id] = call
+            continue
+        call = pending.pop(tool_id, None)
+        if call is None:
+            unmatched_completions += 1
+            continue
+        call["complete_seconds"] = _seconds(event.get("time"))
+        duration = _seconds(payload.get("duration_s"))
+        if duration is not None:
+            call["duration_source"] = "tool.complete.duration_s"
+        elif (call["start_seconds"] is not None and call["complete_seconds"] is not None
+              and call["complete_seconds"] >= call["start_seconds"]):
+            duration = call["complete_seconds"] - call["start_seconds"]
+            call["duration_source"] = "paired_event_times"
+        call["duration_seconds"] = round(duration, 3) if duration is not None else None
+        durations.append(duration)
+    return {
+        "available": True, "started_count": len(calls), "paired_count": len(durations),
+        "unpaired_start_count": len(calls) - len(durations),
+        "unpaired_complete_count": unmatched_completions,
+        "durations": _duration_stats(durations),
+        "execute_code_calls": [call for call in calls if call["name"] == "execute_code"],
+        "note": "Paired per-tool durations; parallel calls overlap. No phase or answer is inferred from tool code.",
+    }
 
 
 def _turn_split(report: dict, requests: list[dict], responses: list[dict]) -> dict:
@@ -197,10 +549,9 @@ def summarize(report: dict, *, path: str | None = None, events_path: Path | None
     requests, responses = _group_requests(report)
     parent_id = _parent_session_id(report, requests)
     events_path = events_path or (Path(path).parent / "events.jsonl" if path else None)
-    starts = (
-        _parent_starts_before_delivery(events_path, report.get("session_id"))
-        if events_path is not None else None
-    )
+    events = _read_events(events_path)
+    starts = _parent_starts_before_delivery(events, report.get("session_id"))
+    evidence_parent_id = _evidence_parent_session_id(report)
 
     parent_requests = requests.get(parent_id or "", [])
     parent_responses = responses.get(parent_id or "", [])
@@ -291,6 +642,7 @@ def summarize(report: dict, *, path: str | None = None, events_path: Path | None
             "approx_cumulative_input": limits.get("approx_cumulative_input"),
             "monetary_hard_cap": limits.get("monetary_hard_cap"),
         },
+        "ceiling_basis": _ceiling_basis(report),
         "delivery": {
             "children_finished": len(report.get("children_finished") or []),
             # Two different clocks: each child's own runtime, versus the wall-clock moment the last
@@ -315,9 +667,11 @@ def summarize(report: dict, *, path: str | None = None, events_path: Path | None
             "parent_answered_approx_input": sum(int(r.get(APPROX_INPUT_FIELD) or 0) for r in answered_requests),
             "parent_unanswered_approx_input": sum(int(r.get(APPROX_INPUT_FIELD) or 0) for r in unanswered_requests),
             "children_cumulative_approx_input": child_cumulative,
-            "note": "limits.approx_cumulative_input is the HARNESS's local rough estimate summed over "
-                    "parent and children; it is not a server-side or product limit. The split below is "
-                    "derived arithmetic, not an observed per-session allowance.",
+            "note": "limits.approx_cumulative_input is the HARNESS's own ceiling over parent and "
+                    "children, not a server-side or product limit. The approx figures in this split "
+                    "are always re-presented-context sums, which is the basis this report was scored "
+                    "under unless ceiling_basis below says otherwise. The split is derived "
+                    "arithmetic, not an observed per-session allowance.",
         },
         "parent_cost_shape": {
             "answered_requests": len(answered_requests),
@@ -341,6 +695,9 @@ def summarize(report: dict, *, path: str | None = None, events_path: Path | None
                     "is unknown). Whole-task acceptance is the separate natural_delivery verdict.",
         },
         "parent_tools": report.get("parent_all_tool_counts") or report.get("parent_tool_counts") or {},
+        "completed_api_durations": _completed_api_durations(report, evidence_parent_id, responses),
+        "parent_tool_results": _parent_tool_results(report, evidence_parent_id),
+        "parent_tool_timing": _parent_tool_timing(events, report.get("session_id")),
         "parent_exact_duplicate_tools": report.get("parent_exact_duplicate_tools"),
         "parent_character_count_calls": len(report.get("parent_character_count_calls") or []),
         "fixture_changed_count": len(report.get("fixture_changed") or []),
@@ -369,8 +726,10 @@ def main(argv: list[str] | None = None) -> int:
         print(f"== {summary['report']}")
         for key in ("scenario", "live", "stop_reason", "natural_final", "caps", "elapsed_seconds"):
             print(f"   {key}: {summary[key]}")
-        for section in ("limits", "delivery", "budget_split", "parent_cost_shape",
-                        "parent_delivery_behaviour", "parent_tools"):
+        for section in ("limits", "ceiling_basis", "delivery", "budget_split",
+                        "parent_cost_shape",
+                        "parent_delivery_behaviour", "parent_tools", "completed_api_durations",
+                        "parent_tool_results", "parent_tool_timing"):
             print(f"   {section}:")
             for name, value in summary[section].items():
                 print(f"      {name}: {value}")
