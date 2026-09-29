@@ -1031,7 +1031,7 @@ function BrowseSection({ onChanged }: { onChanged: () => void }) {
 
         <SearchField
           containerClassName="w-full"
-          inputClassName="w-full"
+          inputClassName="flex-1"
           onChange={setQuery}
           placeholder={copy.browsePlaceholder}
           value={query}

@@ -43,7 +43,9 @@ def test_compute_host_line_json_hello_and_shutdown():
     assert proc.stdin is not None
     out = _stdout_queue(proc)
     try:
-        hello = _read_json_line(out)
+        # Match HostSupervisor's cold-start budget: importing the server can exceed
+        # a protocol round trip's two seconds while parallel test workers compete.
+        hello = _read_json_line(out, timeout=10.0)
         assert hello["type"] == "hello"
         assert hello["host_pid"] == proc.pid
 
@@ -60,3 +62,4 @@ def test_compute_host_line_json_hello_and_shutdown():
     finally:
         if proc.poll() is None:
             proc.kill()
+            proc.wait(timeout=10)

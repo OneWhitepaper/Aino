@@ -722,7 +722,7 @@ function ToolEntry({ part }: ToolEntryProps) {
           {showTerminalTranscript && <TerminalTranscript part={stablePart} pending={isPending} view={view} />}
           {view.imageUrl && (
             <div className="max-w-72 overflow-hidden rounded-[0.25rem] border border-(--ui-stroke-tertiary)">
-              <MarkdownImage alt={copy.outputAlt} className="h-auto w-full object-cover" src={view.imageUrl} />
+              <MarkdownImage alt={copy.outputAlt} src={view.imageUrl} />
             </div>
           )}
           {hasSearchHits && view.searchHits && (

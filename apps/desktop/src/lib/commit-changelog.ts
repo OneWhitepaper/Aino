@@ -42,6 +42,11 @@ interface BuildOptions {
   maxPerGroup?: number
   maxTotal?: number
   copy?: CommitChangelogCopy
+  /** Per-group display labels (e.g. localized). A group without an entry
+   *  keeps its English default. */
+  labels?: Partial<Record<CommitGroupId, string>>
+  /** Label + item for the empty-state fallback group. */
+  fallback?: { label: string; item: string }
 }
 
 const DEFAULT_COPY: CommitChangelogCopy = {
@@ -186,10 +191,12 @@ export function buildCommitChangelog(
     .map(([id, items]) => ({ id, items, label: copy.groups[id], order: GROUP_ORDER[id] }))
     .sort((a, b) => a.order - b.order)
     .slice(0, maxGroups)
-    .map(({ id, items, label }): CommitGroup => ({ id, items, label }))
+    .map(({ id, items, label }): CommitGroup => ({ id, items, label: options.labels?.[id] ?? label }))
 
   if (result.length === 0) {
-    return [{ id: 'other', items: [copy.fallbackItem], label: copy.fallbackLabel }]
+    const fallback = options.fallback
+
+    return [{ id: 'other', items: [fallback?.item ?? copy.fallbackItem], label: fallback?.label ?? copy.fallbackLabel }]
   }
 
   return result

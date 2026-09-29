@@ -14,7 +14,6 @@ timeout, so the loop is never blocked and a stuck teardown degrades gracefully.
 import asyncio
 import logging
 import threading
-import time
 from datetime import datetime
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -91,56 +90,35 @@ def _make_runner_with_cached_agent(close_fn):
 
 @pytest.mark.asyncio
 async def test_reset_does_not_block_event_loop_during_cleanup():
-    """#35994: a slow agent.close() must NOT block the event loop. A
-    concurrent loop task must keep ticking WHILE close() is still blocking
-    (proving cleanup was offloaded to a worker thread, not run inline on
-    the loop). With the pre-fix inline call, the loop is frozen for the
-    whole duration of close() and no ticks accumulate until it returns."""
-    close_started = threading.Event()
+    """#35994: the loop must acknowledge and release cleanup while it is blocked."""
+    loop = asyncio.get_running_loop()
+    loop_thread_id = threading.get_ident()
+    close_started = asyncio.Event()
+    close_finished = threading.Event()
+    cleanup_thread_ids = []
     release = threading.Event()
 
     def slow_close():
-        close_started.set()
-        # Block the WORKER thread (not the loop) until released.
-        release.wait(timeout=5)
+        thread_id = threading.get_ident()
+        cleanup_thread_ids.append(thread_id)
+        loop.call_soon_threadsafe(close_started.set)
+        # An inline regression must fail the identity assertion, not deadlock
+        # the test. Only the worker waits; finally always releases it.
+        if thread_id != loop_thread_id:
+            release.wait()
+        close_finished.set()
 
     runner = _make_runner_with_cached_agent(slow_close)
-
-    ticks = {"n": 0}
-    stop = threading.Event()
-
-    async def _heartbeat():
-        while not stop.is_set():
-            ticks["n"] += 1
-            await asyncio.sleep(0.005)
-
-    hb = asyncio.create_task(_heartbeat())
     reset_task = asyncio.create_task(
         runner._handle_reset_command(_make_event("/new"))
     )
-
-    # Wait until close() has actually started blocking in its worker thread.
-    for _ in range(200):
-        if close_started.is_set():
-            break
-        await asyncio.sleep(0.005)
-    assert close_started.is_set(), "close() never ran"
-
-    # Now sample ticks while close() is STILL blocking. If the loop were
-    # frozen (pre-fix inline call), this stays ~0.
-    ticks_at_block = ticks["n"]
-    await asyncio.sleep(0.1)
-    ticks_during_block = ticks["n"] - ticks_at_block
-
-    release.set()
-    await reset_task
-    stop.set()
-    await hb
-
-    assert ticks_during_block >= 5, (
-        f"event loop was blocked during agent cleanup (#35994): only "
-        f"{ticks_during_block} ticks while close() was running"
-    )
+    try:
+        await asyncio.wait_for(close_started.wait(), timeout=5)
+        assert cleanup_thread_ids[0] != loop_thread_id, "cleanup ran on the event loop (#35994)"
+        assert not close_finished.is_set(), "cleanup returned before the loop released it"
+    finally:
+        release.set()
+        await asyncio.wait_for(reset_task, timeout=5)
     runner.session_store.reset_session.assert_called_once()
 
 

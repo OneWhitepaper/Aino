@@ -230,7 +230,15 @@ function resolveCopy(personality: string | undefined, seed: number | undefined, 
 export function Intro({ home, onInsertPrompt, onPickFiles, personality, seed }: IntroProps) {
   const { locale, t } = useI18n()
   const [mountSeed] = useState(() => Math.floor(Math.random() * 100000))
-  const copy = resolveCopy(personality, mountSeed + (seed ?? 0), locale)
+  const rotationSeed = mountSeed + (seed ?? 0)
+  const copy = resolveCopy(personality, rotationSeed, locale)
+  const personalityKey = normalizeKey(personality)
+
+  const bodies =
+    t.intro.stock[personalityKey] ??
+    (NEUTRAL_PERSONALITIES.has(personalityKey) ? t.intro.stock.none : t.intro.custom(personality || ''))
+
+  const body = bodies?.[Math.abs(rotationSeed) % bodies.length] ?? copy.body
   const showHome = home ?? Boolean(onInsertPrompt || onPickFiles)
   const homeLayoutRef = useRef<HTMLElement>(null)
   const homeContentRef = useRef<HTMLDivElement>(null)
@@ -355,7 +363,7 @@ export function Intro({ home, onInsertPrompt, onPickFiles, personality, seed }: 
       <div className="w-full min-w-0">
         <Wordmark className="mb-1" text={WORDMARK} />
 
-        <p className="m-0 text-center leading-normal tracking-tight">{copy.body}</p>
+        <p className="m-0 text-center leading-normal tracking-tight">{body}</p>
       </div>
     </div>
   )

@@ -72,7 +72,7 @@ export function RightSidebarPane({ onActivateFile, onActivateFolder }: RightSide
         throw new Error(r.couldNotPreview(path))
       }
 
-      openPreview(preview, 'file-browser')
+      openPreview(preview)
     } catch (error) {
       if (toolSessionIsCurrent(session)) {
         notifyError(error, r.previewUnavailable)

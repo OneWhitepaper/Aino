@@ -49,7 +49,6 @@ test.describe('dev-mode boot with mock backend', () => {
       timeout: 30_000,
     })
   })
-
   // A preload that throws never reaches contextBridge, so the renderer boots
   // into "Desktop IPC bridge is unavailable" and every test below it dies on a
   // 120s never-became-ready timeout instead. Checking the bridge by name makes

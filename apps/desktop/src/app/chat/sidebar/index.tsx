@@ -35,7 +35,9 @@ import { comboTokens } from '@/lib/keybinds/combo'
 import { sessionMatchesSearch } from '@/lib/session-search'
 import { normalizeSessionSource, sessionSourceLabel } from '@/lib/session-source'
 import { cn } from '@/lib/utils'
+import { $connectionsRegistry } from '@/store/connection-registry-state'
 import { $activeConnectionId } from '@/store/connections'
+import { $interfaceMode, $showsAdvancedChrome, shownInMode } from '@/store/interface-mode'
 import { $cronJobs } from '@/store/cron'
 import { $bindings } from '@/store/keybinds'
 import {
@@ -79,6 +81,7 @@ import {
 import { notifyError } from '@/store/notifications'
 import {
   $newChatProfile,
+  $profileColors,
   $profiles,
   $profileScope,
   ALL_PROFILES,
@@ -99,6 +102,7 @@ import {
   ALL_PROJECTS,
   enterProject,
   exitProjectScope,
+  followEnteredProjectCwd,
   refreshProjects,
   refreshProjectTree,
   refreshWorktrees,
@@ -115,18 +119,17 @@ import {
 import { openRouteTile } from '@/store/route-tiles'
 import {
   $cronSessions,
-  $currentCwd,
   $gatewayState,
   $messagingPlatformTotals,
   $messagingSessions,
   $messagingTruncated,
   $sessionProfilesTruncated,
   $sessions,
+  $sessionsLoadError,
   $sessionsLoading,
   $unreadFinishedSessionIds,
   markAllSessionsRead,
-  sessionPinId,
-  setCurrentCwd
+  sessionPinId
 } from '@/store/session'
 import { $sessionDotStateById, sessionStatusBucket } from '@/store/session-dot-state'
 import { $unconfirmedPinWrites } from '@/store/session-pin-sync'
@@ -135,6 +138,7 @@ import { $focusedSessionIsTile, $focusedStoredSessionId, $workingSessionIds } fr
 import { ackAllSessionsRead } from '@/store/session-unread'
 import { markSessionUnread } from '@/store/session-unread-remote'
 import { $archivedSessions, loadArchivedSessions } from '@/store/sidebar-archive'
+import { applySidebarNavPrefs, SIDEBAR_NAV_PREFS_AREA } from '@/store/sidebar-nav'
 import { $sidebarSessionRankIds } from '@/store/sidebar-sort'
 
 import {
@@ -154,7 +158,7 @@ import { type NewSessionSplitHandler, startNewSessionDrag } from '../new-session
 import { SidebarSectionAddButton } from './chrome'
 import { SidebarCronJobsSection } from './cron-jobs-section'
 import { SidebarFilterMenu } from './filter-menu'
-import { useGatewaySessionGroups } from './gateway-group-model'
+import { buildGatewaySessionGroups, scopeGatewaySessionGroups, useGatewaySessionGroups } from './gateway-group-model'
 import { SidebarLoadMoreRow } from './load-more-row'
 import { orderByIds, reconcileOrderIds, resolveManualSessionOrderIds, sameIds } from './order'
 import { filterSessionsByProfileScope } from './profile-scope'
@@ -184,7 +188,7 @@ import { useWorkspaceNodeOpen } from './projects/model'
 import { WorkspaceAddButton } from './projects/workspace-header'
 import { WorktreeDialog } from './projects/worktree-dialog'
 import { recentSessionsOutsideProjects } from './recent-sessions'
-import { SidebarLoadErrorState, SidebarSessionSkeletons } from './section-states'
+import { SidebarLoadErrorState, SidebarSessionSkeletons, SidebarStorageCorruptNotice } from './section-states'
 import { buildSessionByAnyId, resolvePinnedSessions } from './session-index'
 import { SidebarSessionsSection, VIRTUALIZE_THRESHOLD } from './sessions-section'
 import { CONTEXT_SPLIT_KIT, SplitSubmenu } from './split-submenu'
@@ -235,14 +239,16 @@ const SIDEBAR_NAV: SidebarNavItem[] = [
     label: '',
     icon: props => <AinoDesignIcon src={navArtifactsIcon} {...props} />,
     route: ARTIFACTS_ROUTE,
-    keybindActionId: 'nav.artifacts'
+    keybindActionId: 'nav.artifacts',
+    tier: 'advanced'
   },
   {
     id: 'cron',
     label: '',
     icon: props => <AinoDesignIcon src={navCronIcon} {...props} />,
     route: CRON_ROUTE,
-    keybindActionId: 'nav.cron'
+    keybindActionId: 'nav.cron',
+    tier: 'advanced'
   }
 ]
 
@@ -373,6 +379,7 @@ export function mergeSearchResults(
 interface ChatSidebarProps extends React.ComponentProps<typeof Sidebar> {
   currentView: AppView
   onNavigate: (item: SidebarNavItem) => void
+  onRetrySessions?: () => Promise<void> | void
   onLoadMoreSessions: () => Promise<void> | void
   onLoadMoreMessaging?: (platform: string) => Promise<void> | void
   onResumeSession: (sessionId: string, session?: SessionInfo) => void
@@ -395,6 +402,7 @@ export function ChatSidebar({
   currentView: routeView,
   onNavigate,
   onLoadMoreSessions,
+  onRetrySessions = onLoadMoreSessions,
   onLoadMoreMessaging,
   onResumeSession,
   onDeleteSession,
@@ -428,13 +436,23 @@ export function ChatSidebar({
             id: c.id,
             label: data.label,
             icon: (props: { className?: string }) => <Codicon name={codicon} {...props} />,
-            route: data.path
+            route: data.path,
+            tier: data.tier
           }
         ]
       }),
     [navContributions]
   )
 
+  const interfaceMode = useStore($interfaceMode)
+  const showsAdvancedChrome = useStore($showsAdvancedChrome)
+  const navPrefs = useContributions(SIDEBAR_NAV_PREFS_AREA)
+  const navItems = useMemo(
+    () => applySidebarNavPrefs([...SIDEBAR_NAV, ...contributedNav].filter(shownInMode(interfaceMode)), navPrefs),
+    [contributedNav, interfaceMode, navPrefs]
+  )
+  const connectionsRegistry = useStore($connectionsRegistry)
+  const profileColors = useStore($profileColors)
   const panesFlipped = useStore($panesFlipped)
   const grouping = useStore($sidebarRecentGrouping)
   const ordering = useStore($sidebarOrdering)
@@ -472,6 +490,7 @@ export function ChatSidebar({
   const messagingPlatformTotals = useStore($messagingPlatformTotals)
   const messagingTruncated = useStore($messagingTruncated)
   const sessionsLoading = useStore($sessionsLoading)
+  const sessionsLoadError = useStore($sessionsLoadError)
   const sessionProfilesTruncated = useStore($sessionProfilesTruncated)
   const unreadCount = useStore($unreadFinishedSessionIds).length
   const profiles = useStore($profiles)
@@ -523,7 +542,6 @@ export function ChatSidebar({
   const reposScanning = useStore($reposScanning)
   const activeProjectId = useStore($activeProjectId)
   const projectScope = useStore($projectScope)
-  const currentCwd = useStore($currentCwd)
   const gatewayState = useStore($gatewayState)
   const newSessionCombo = useStore($bindings)['session.new']?.[0]
   const newSessionKbd = newSessionCombo ? comboTokens(newSessionCombo) : []
@@ -1174,16 +1192,13 @@ export function ChatSidebar({
 
   const lastProjectCwdSyncRef = useRef<null | string>(null)
 
-  const syncProjectCwd = useCallback(
-    (project: SidebarProjectTree) => {
-      const target = projectTreeCwd(project)
+  const syncProjectCwd = useCallback((project: SidebarProjectTree) => {
+    const target = projectTreeCwd(project)
 
-      if (target && target !== currentCwd) {
-        setCurrentCwd(target)
-      }
-    },
-    [currentCwd]
-  )
+    if (target) {
+      followEnteredProjectCwd(target)
+    }
+  }, [])
 
   // eslint-disable-next-line no-restricted-syntax -- legitimate non-atom ref write (see eslint rule comment)
   useEffect(() => {
@@ -1367,10 +1382,8 @@ export function ChatSidebar({
       .sort((a, b) => sessionTime(b.sessions[0]) - sessionTime(a.sessions[0]))
   }, [visibleMessagingSessions, messagingPlatformTotals, messagingTruncated, isPinnedSession, messagingProfile])
 
-  const profileGroups = useGatewaySessionGroups(
-    displayAgentSessions,
-    profileScope === ALL_PROFILES && grouping === 'profile'
-  )
+  const ownerGrouped = profileScope === ALL_PROFILES && grouping === 'profile'
+  const profileGroups = useGatewaySessionGroups(displayAgentSessions, ownerGrouped)
 
   // Pagination is scope-aware. In "All profiles" mode it tracks the global
   // unified set; scoped to one profile it tracks that profile's own truncation
@@ -1601,7 +1614,7 @@ export function ChatSidebar({
         <SidebarGroup className="shrink-0 p-0 pt-2">
           <SidebarGroupContent>
             <SidebarMenu className="gap-0">
-              {[...SIDEBAR_NAV, ...contributedNav].map(item => {
+              {navItems.map(item => {
                 const isInteractive = Boolean(item.action) || Boolean(item.route)
 
                 const active =
@@ -1740,6 +1753,7 @@ export function ChatSidebar({
           </SidebarGroupContent>
         </SidebarGroup>
 
+        <SidebarStorageCorruptNotice />
         <div
           className={cn('flex min-h-0 flex-1 flex-col gap-3 pt-2 pb-1.75', SCROLL_Y, SCROLL_GUTTER)}
           data-sessions-mode={sessionsMode}
@@ -1863,6 +1877,8 @@ export function ChatSidebar({
             emptyState={
               showSessionSkeletons ? (
                 <SidebarSessionSkeletons />
+              ) : sessionsLoadError ? (
+                <SidebarLoadErrorState onRetry={() => void onRetrySessions()} />
               ) : (
                 <div className="px-2 py-2 text-xs text-(--ui-text-tertiary)">
                   {filtersActive ? s.noFilterMatches : s.noSessions}
@@ -1878,7 +1894,7 @@ export function ChatSidebar({
                 />
               ) : null
             }
-            forceEmptyState={showSessionSkeletons}
+            forceEmptyState={showSessionSkeletons || Boolean(sessionsLoadError)}
             grouping={showArchived || rankedGlobally ? 'none' : grouping === 'status' ? 'status' : 'date'}
             groups={displayAgentGroups}
             headerAction={
@@ -1937,11 +1953,20 @@ export function ChatSidebar({
             // More to show if rows are hidden behind the cap, or the backend
             // still has older threads on disk.
             const canRevealMore = visible < group.sessions.length || group.hasMore
+            const ownerGroups = ownerGrouped
+              ? scopeGatewaySessionGroups(
+                  buildGatewaySessionGroups(shownSessions, connectionsRegistry, profileColors),
+                  `messaging:${group.sourceId}`
+                )
+              : undefined
 
             return (
               <SidebarSessionsSection
                 activeSessionId={activeSidebarSessionId}
                 contentClassName={cn('flex max-h-56 flex-col gap-px pb-1.75', GROUP_BODY)}
+                embeddedGroups
+                groups={ownerGroups}
+                showProfileTags={showAllProfiles && !ownerGrouped}
                 emptyState={null}
                 footer={
                   canRevealMore ? (
@@ -1975,7 +2000,7 @@ export function ChatSidebar({
             )
           })}
 
-          {cronJobs.length > 0 && (
+          {showsAdvancedChrome && cronJobs.length > 0 && (
             <SidebarCronJobsSection
               jobs={cronJobs}
               label={s.cronJobs}

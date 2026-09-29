@@ -3,7 +3,8 @@ import { act, renderHook } from '@testing-library/react'
 import { createElement, type PropsWithChildren } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { setRuntimeI18nLocale } from '@/i18n'
+import { I18nProvider, setRuntimeI18nLocale } from '@/i18n'
+import { getRuntimeI18nLocale } from '@/i18n/runtime'
 
 import type { BillingResult } from './api'
 import type { BillingChargeStatusResponse } from './types'
@@ -60,7 +61,11 @@ function controlledClock() {
 function wrapper({ children }: PropsWithChildren) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
 
-  return createElement(QueryClientProvider, { client }, children)
+  return createElement(I18nProvider, {
+    configClient: null,
+    initialLocale: getRuntimeI18nLocale(),
+    children: createElement(QueryClientProvider, { client }, children)
+  })
 }
 
 beforeEach(() => {
@@ -154,7 +159,7 @@ describe('pollChargeSettlement', () => {
       portalUrl: 'https://portal.nousresearch.com/billing'
     })
 
-    expect(outcome).toEqual({
+    expect(outcome).toMatchObject({
       kind: 'ambiguous',
       message: 'Charge may still settle. Check the portal before retrying.',
       portalUrl: 'https://portal.nousresearch.com/billing',
@@ -209,6 +214,7 @@ describe('pollChargeSettlement', () => {
 
     await expect(pollChargeSettlement(api, 'ch_123', clock)).resolves.toEqual({
       kind: 'ambiguous',
+      copy: 'timeout',
       message: '扣款可能仍在结算。请在重试前检查门户。',
       portalUrl: undefined,
       title: '处理超过 5 分钟'

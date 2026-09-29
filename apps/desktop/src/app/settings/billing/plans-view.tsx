@@ -32,7 +32,7 @@ function previewMessage(
 
   const { preview } = phase
   const targetName = preview.target_tier_name ?? fallbackTierName
-  const creditsDelta = formatMonthlyCreditsDelta(preview.monthly_credits_delta)
+  const creditsDelta = formatMonthlyCreditsDelta(preview.monthly_credits_delta, copy)
 
   switch (preview.effect) {
     case 'blocked':
@@ -149,7 +149,7 @@ function PlanCard({ flow, tier }: { flow: DowngradeFlow; tier: BillingPlanTierVi
             {tier.name}
           </div>
           <div className="text-[length:var(--conversation-caption-font-size)] text-(--ui-text-tertiary)">
-            {tier.priceDisplay}/mo
+            {t.billing.plan.monthlyPrice(tier.priceDisplay)}
           </div>
         </div>
       </div>

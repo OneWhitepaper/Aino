@@ -211,7 +211,7 @@ def _workdir_row_model_config(session: dict) -> tuple[str, dict]:
     global default here wins the INSERT-OR-IGNORE race (a reconnect silently reverts to the profile default).
     model_config carries provider/reasoning/service_tier so resume restores effort + fast too."""
     override = raw if isinstance(raw := session.get("model_override"), dict) else {}
-    row_model = str(override.get("model") or "").strip() or _resolve_model()
+    row_model = str(override.get("model") or "").strip() or _session_default_model(session)
     model_config: dict = {k: str(v) for k in ("model", "provider", "base_url", "api_mode") if (v := override.get(k))}
     from .managed_session import managed_metadata
     if managed := managed_metadata(session.get("managed_model_params")):
@@ -356,6 +356,7 @@ def _persist_submit_user_row(session: dict, text: Any, display_kind: str | None)
     durable (the shape ``quiet_single_query`` re-stages an unanswered DM in) so the turn adopts it via
     ``_stage_turn_user_message`` and the flush writes no second row. A failed write stages nothing:
     the turn's crash persist then writes the row as before."""
+    session.pop("_submit_user_row", None)  # a failed/unsupported write must not acknowledge an older send
     key = session.get("session_key")
     if not key or not isinstance(text, str) or not text.strip():
         return

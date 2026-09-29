@@ -517,14 +517,8 @@ export function CreateAgentDialog({ open, onClose, roster }: CreateAgentDialogPr
       host.notify({
         kind: 'success',
         message: remoteTarget
-          ? `Bot "${displayName({
-              name: slug,
-              title: botTitle
-            })}" created on ${targetLabel}`
-          : `Bot "${displayName({
-              name: slug,
-              title: botTitle
-            })}" created`
+          ? b.editor.createdOn(displayName({ name: slug, title: botTitle }), targetLabel)
+          : b.editor.created(displayName({ name: slug, title: botTitle }))
       })
       const wasRemote = remoteTarget
       reset()
@@ -600,7 +594,7 @@ export function CreateAgentDialog({ open, onClose, roster }: CreateAgentDialogPr
       >
         <DialogHeader>
           <DialogTitle>{b.bot.newTitle}</DialogTitle>
-          <DialogDescription>{b.bot.createDescription}</DialogDescription>
+          <DialogDescription>{b.editor.newDescription}</DialogDescription>
         </DialogHeader>
         <div className="grid gap-3.5">
           <div className="flex justify-center py-1">
@@ -748,7 +742,7 @@ export function CreateAgentDialog({ open, onClose, roster }: CreateAgentDialogPr
               {advTab === 'general' ? (
                 <div className="grid gap-3.5">
                   {labeled(
-                    remoteTarget ? b.bot.cloneFromRemote(targetLabel) : b.bot.cloneFromProfile,
+                    remoteTarget ? b.editor.cloneFromOn(targetLabel) : b.editor.cloneFrom,
                     <Select
                       onValueChange={value => {
                         setCloneFrom(value)
@@ -803,7 +797,7 @@ export function CreateAgentDialog({ open, onClose, roster }: CreateAgentDialogPr
                     {b.bot.shareAuth}
                   </label>
                   <div className="pl-6 pt-0.5 text-[length:var(--aino-text-caption)] leading-5 text-(--ui-text-tertiary)">
-                    {b.bot.shareAuthDescription}
+                    {b.editor.shareKeysHint}
                   </div>
                   <label className="flex items-center gap-2 text-xs text-(--ui-text-secondary)">
                     <Checkbox checked={noSkills} onCheckedChange={value => setNoSkills(Boolean(value))} />

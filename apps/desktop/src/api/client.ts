@@ -26,6 +26,8 @@ const DEFAULT_GATEWAY_REQUEST_TIMEOUT_MS = 30_000
 // ever fires when the turn itself would have been abandoned server-side.
 export const PROMPT_SUBMIT_REQUEST_TIMEOUT_MS = 1_800_000
 
+export const GATEWAY_NOT_CONNECTED_MESSAGE = 'Hermes gateway is not connected'
+
 export class HermesGateway extends JsonRpcGatewayClient {
   constructor() {
     super({

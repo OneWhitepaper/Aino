@@ -103,6 +103,7 @@ export function ModelPickerOverlay({ gateway, onSelect, requestGateway }: ModelP
       profile={pickerOwner.profile}
       request={pickerOwner.route ? requestPickerGateway : undefined}
       sessionId={sessionId}
+      setupProfile={pickerOwner.route?.profile ?? pickerOwner.profile}
     />
   )
 }

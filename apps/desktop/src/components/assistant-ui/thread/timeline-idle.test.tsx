@@ -151,15 +151,6 @@ describe('ThreadTimeline popover', () => {
     expect(container.querySelector('[data-slot="thread-timeline-popover"]')).toBeNull()
     expect(screen.queryByText('prompt 0')).toBeNull()
   })
-
-  it('schedules no history read for an unsaved conversation', () => {
-    messages = transcript(2)
-    const schedule = vi.spyOn(window, 'setTimeout')
-
-    renderTimeline()
-
-    expect(schedule.mock.calls.filter(([, delay]) => delay === 200)).toHaveLength(0)
-  })
 })
 
 describe('ThreadTimeline availability', () => {

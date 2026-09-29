@@ -1,4 +1,8 @@
-import type { ConnectionRequestPayload } from '@hermes/shared'
+import type { ConnectionRequestPayload, ToolLabel } from '@hermes/shared'
+
+import type { ToolResultMetadata } from '@/lib/tool-result-metadata'
+
+export type StoredToolCallLabels = Record<string, ToolLabel[]>
 
 import type { PlatformRuntimeFields } from '@/lib/platform-session-model'
 
@@ -469,6 +473,7 @@ export interface HermesConfig {
     auto_tts?: boolean
     stop_phrases?: unknown
     thinking_sound?: unknown
+    barge_in_threshold_multiplier?: unknown
   }
 }
 
@@ -496,12 +501,15 @@ export interface PaginatedSessions {
   /** Per-profile read failures from the cross-profile aggregator (e.g. a locked
    *  or corrupt state.db). Present only on `/api/profiles/sessions`. */
   errors?: Array<{ profile: string; error: string }>
+  /** `{profile: 'corrupt'}` for each listed profile whose state.db is structurally damaged. */
+  storage?: Record<string, 'corrupt'>
 }
 
 export interface SessionCreateResponse {
   info?: SessionRuntimeInfo
   message_count?: number
   messages?: SessionMessage[]
+  messages_omitted?: boolean
   session_id: string
   stored_session_id?: string
 }
@@ -608,6 +616,7 @@ export type TimelineDisplayMetadata =
   | { display_text: string }
   | { reactions: MessageReaction[] }
   | { turn_metrics: unknown }
+  | { tool_result_metadata: ToolResultMetadata }
 
 /** One emoji reaction on a message. One per author, iOS-Tapback style. */
 export interface MessageReaction {
@@ -625,12 +634,18 @@ export interface SessionMessage {
    */
   args?: unknown
   codex_reasoning_items?: unknown
+  labels?: ToolLabel[]
+  tool_call_labels?: StoredToolCallLabels
   /** Responses-API assistant message items; text parts here are the
    *  user-visible reply when `content` persisted empty (#68321). */
   codex_message_items?: unknown
   content: unknown
   /** Backend-projected user-visible content when a physical row also carries internal model scaffolding. */
   display_content?: unknown
+  /** Sanitized, profile-authorized public commentary supplied by the history backend. Never recover this from raw replay. */
+  display_commentary?: string[]
+  /** Display-only reasoning after removing exact public commentary; stored reasoning remains unmodified. */
+  display_reasoning?: string
   context?: unknown
   name?: string
   reasoning?: null | string
@@ -639,6 +654,7 @@ export interface SessionMessage {
   display_kind?:
     | 'async_delegation_complete'
     | 'auto_continue'
+    | 'failed_turn'
     | 'hidden'
     | 'model_switch'
     | 'personality_switch'
@@ -1041,6 +1057,8 @@ export interface ProfileInfo {
   name: string
   path: string
   provider: null | string
+  /** Backend-assigned role from profile.yaml; `setup` marks the onboarding guide's profile. */
+  role?: 'setup' | null
   skill_count: number
 }
 
@@ -1666,6 +1684,7 @@ export interface McpServerTestResponse {
 export interface McpCatalogEntry {
   name: string
   description: string
+  connector_slug?: string | null
   source: string
   transport: string
   auth_type: string

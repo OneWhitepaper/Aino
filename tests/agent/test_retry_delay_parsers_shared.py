@@ -41,10 +41,19 @@ class TestRetryAfterHeaderOneParser:
         ctx = extract_api_error_context(err)
         assert 85 <= ctx["reset_at"] - time.time() <= 91
 
-    def test_metrics_sender_clamps_on_top_of_the_shared_parser(self):
+    def test_metrics_sender_clamps_on_top_of_the_shared_parser(self, monkeypatch):
+        from agent import retry_utils
         from hermes_cli.observability.shared_metrics_sender import _retry_after_seconds
 
-        assert _retry_after_seconds(_http_date(120), 7) in (119, 120)
+        generated_at = datetime(2026, 9, 29, tzinfo=timezone.utc)
+        now = generated_at
+        monkeypatch.setattr(retry_utils, "datetime", SimpleNamespace(now=lambda _tz: now))
+        header = format_datetime(generated_at + timedelta(seconds=120), usegmt=True)
+        # HTTP-date has second precision; sender truncation depends on the read clock,
+        # not how quickly the test process is scheduled after constructing the header.
+        for elapsed, expected in ((0, 120), (0.75, 119), (1.25, 118)):
+            now = generated_at + timedelta(seconds=elapsed)
+            assert _retry_after_seconds(header, 7) == expected
         assert _retry_after_seconds("0", 7) == 1          # floor survives
         assert _retry_after_seconds("99999999", 7) == 86_400  # cap survives
         assert _retry_after_seconds("garbage", 7) == 7

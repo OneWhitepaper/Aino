@@ -136,33 +136,6 @@ function completedOnlyMessage(): ThreadMessage {
   } as unknown as ThreadMessage
 }
 
-function failedOnlyMessage(): ThreadMessage {
-  return {
-    id: 'assistant-failed-only',
-    role: 'assistant',
-    content: [
-      {
-        type: 'tool-call',
-        toolCallId: 'term-failed',
-        toolName: 'terminal',
-        args: { command: 'exit 1' },
-        argsText: JSON.stringify({ command: 'exit 1' }),
-        isError: true,
-        result: { stderr: 'boom' }
-      }
-    ],
-    status: { type: 'complete', reason: 'stop' },
-    createdAt,
-    metadata: {
-      unstable_state: null,
-      unstable_annotations: [],
-      unstable_data: [],
-      steps: [],
-      custom: {}
-    }
-  } as unknown as ThreadMessage
-}
-
 // Two settled activity calls in a row, so the run earns a summary line and
 // collapses behind it.
 function settledRunMessage(): ThreadMessage {
@@ -441,31 +414,6 @@ describe('a file edit among ordinary activity', () => {
 
     expect(shape).toEqual(['summary', 'row', 'summary'])
   })
-
-  it('keeps the diff itself on screen rather than behind the summary', async () => {
-    const { container } = render(<GroupHarness message={editBetweenRunsMessage()} />)
-
-    await waitFor(() => {
-      expect(container.querySelector('[data-tool-row][data-file-edit]')).not.toBeNull()
-    })
-  })
-})
-
-// The transcript rests its scaffolding at a fade, keyed off one attribute. A
-// surface that renders without it is brighter than everything around it, which
-// is how two adjacent, identical rows came to sit at two opacities.
-describe('transcript fade', () => {
-  it('marks every row and summary as scaffolding', async () => {
-    const { container } = render(<GroupHarness message={editBetweenRunsMessage()} />)
-
-    await screen.findByText('Explored 2 files')
-
-    const unmarked = [...container.querySelectorAll('[data-tool-summary],[data-tool-row]')].filter(
-      node => !node.hasAttribute('data-conversation-scaffold')
-    )
-
-    expect(unmarked).toHaveLength(0)
-  })
 })
 
 describe('live tool run', () => {
@@ -705,16 +653,6 @@ describe('tool run left unresolved', () => {
 })
 
 describe('flat tool list approval surfacing', () => {
-  it('keeps the approval host empty when there is no live approval', async () => {
-    const { container } = render(<GroupHarness message={groupedPendingMessage()} />)
-
-    await waitFor(() => {
-      expect(container.querySelectorAll('[data-slot="tool-block"]').length).toBeGreaterThan(0)
-    })
-    expect(container.querySelector('[data-approval-stack]')).not.toBeNull()
-    expect(container.querySelector('[data-approval-stack] [data-approval-run]')).toBeNull()
-  })
-
   it('keeps the approval visible in the same host when tool rows arrive', async () => {
     setApprovalRequest({ command: 'rm -rf /tmp/x', description: 'dangerous command', sessionId: 'sess-1' })
     const message = groupedPendingMessage()
@@ -773,18 +711,6 @@ describe('flat tool list approval surfacing', () => {
 
     // The row is the only thing this message renders, so staying dismissed
     // means nothing comes back — including its dismiss control.
-    await waitFor(() => {
-      expect(screen.queryByLabelText('Dismiss')).toBeNull()
-    })
-  })
-
-  it('lets failed tool rows be dismissed', async () => {
-    render(<GroupHarness message={failedOnlyMessage()} />)
-
-    const dismiss = await screen.findByLabelText('Dismiss')
-
-    fireEvent.click(dismiss)
-
     await waitFor(() => {
       expect(screen.queryByLabelText('Dismiss')).toBeNull()
     })

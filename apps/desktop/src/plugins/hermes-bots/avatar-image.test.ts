@@ -31,6 +31,18 @@ afterEach(() => {
 })
 
 describe('avatar image generation', () => {
+  it('lets image generation outlive the socket generic deadline', async () => {
+    const { generateAvatarImage, IMAGE_GENERATE_TIMEOUT_MS } = await import('./avatar-image')
+    hostMock.request.mockResolvedValue({ success: true, image_data: 'data:image/png;base64,AA==' })
+
+    await expect(generateAvatarImage('scout', 'Scout')).resolves.toBe('data:image/png;base64,AA==')
+
+    const [method, , timeoutMs] = hostMock.request.mock.calls[0] as [string, unknown, number]
+    expect(method).toBe('image.generate')
+    expect(timeoutMs).toBe(IMAGE_GENERATE_TIMEOUT_MS)
+    expect(timeoutMs).toBeGreaterThan(30_000)
+  })
+
   it('uses the localized fallback when the gateway omits an error message', async () => {
     const { generateAvatarImage } = await import('./avatar-image')
 

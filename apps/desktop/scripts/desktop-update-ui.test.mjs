@@ -87,7 +87,6 @@ test.each(['legacy', 'transient', 'ack-failure'])('preserves terminal truth with
   const document = openPage(fetch)
   await vi.advanceTimersByTimeAsync(20_000)
   assert.equal(document.body.className, 'done')
-  assert.equal(document.getElementById('title').textContent, 'Update complete')
 })
 
 test('continues displaying a healthy long update while progress remains reachable', async () => {

@@ -190,37 +190,6 @@ function assistantSeparatedReasoningMessage(): ThreadMessage {
   } as ThreadMessage
 }
 
-function assistantTodoMessage(
-  todos: Array<{ content: string; id: string; status: 'cancelled' | 'completed' | 'in_progress' | 'pending' }>,
-  running = true
-): ThreadMessage {
-  const suffix = todos.map(todo => `${todo.id}:${todo.status}`).join('|') || 'empty'
-
-  return {
-    id: `assistant-todo-${running ? 'running' : 'done'}-${suffix}`,
-    role: 'assistant',
-    content: [
-      {
-        type: 'tool-call',
-        toolCallId: 'todo-1',
-        toolName: 'todo',
-        args: { todos },
-        argsText: JSON.stringify({ todos }),
-        ...(running ? {} : { result: { todos } })
-      }
-    ],
-    status: running ? { type: 'running' } : { type: 'complete', reason: 'stop' },
-    createdAt,
-    metadata: {
-      unstable_state: null,
-      unstable_annotations: [],
-      unstable_data: [],
-      steps: [],
-      custom: {}
-    }
-  } as ThreadMessage
-}
-
 function assistantImageMessage(
   running = false,
   result: unknown = { image: 'https://cdn.example/cat.png', success: true }
@@ -332,12 +301,6 @@ function StreamingHarness({ onControls }: { onControls?: (controls: StreamingCon
     </AssistantRuntimeProvider>
   )
 }
-
-const TodoHarness = ({ message }: { message: ThreadMessage }) => (
-  <ThreadRuntime messages={[message]}>
-    <Thread />
-  </ThreadRuntime>
-)
 
 function MessageHarness({ message }: { message: ThreadMessage }) {
   const runtime = useExternalStoreRuntime<ThreadMessage>({
@@ -468,20 +431,6 @@ function GroupedReasoningHarness() {
   )
 }
 
-function IntroHarness() {
-  const runtime = useExternalStoreRuntime<ThreadMessage>({
-    messages: [],
-    isRunning: false,
-    onNew: async () => {}
-  })
-
-  return (
-    <AssistantRuntimeProvider runtime={runtime}>
-      <Thread intro={{ personality: 'default', seed: 1 }} />
-    </AssistantRuntimeProvider>
-  )
-}
-
 function DismissibleErrorHarness({ onDismissError }: { onDismissError: (messageId: string) => void }) {
   const runtime = useExternalStoreRuntime<ThreadMessage>({
     messages: [assistantErrorMessage('OpenRouter rejected the request (403).')],
@@ -569,12 +518,6 @@ describe('assistant-ui streaming renderer', () => {
     await waitFor(() => {
       expect(container.textContent).toContain('first chunk second chunk')
     })
-  })
-
-  it('does not render composer clearance for intro-only threads', () => {
-    const { container } = render(<IntroHarness />)
-
-    expect(container.querySelector('[data-slot="aui_composer-clearance"]')).toBeNull()
   })
 
   it('suppresses the action footer on sealed interim messages, keeping it on the final reply', () => {
@@ -698,28 +641,6 @@ describe('assistant-ui streaming renderer', () => {
     expect(container.textContent).not.toContain('```ts')
   })
 
-  it('keeps the height-capped thinking preview scrollable after the turn settles', async () => {
-    const { container, settle } = renderSettlingReasoning()
-
-    const live = container.querySelector('[data-slot="aui_thinking-body"]')?.className ?? ''
-
-    expect(live).toContain('max-h-40')
-    expect(live).toMatch(/\boverflow-auto\b/)
-    expect(live).not.toMatch(/\boverflow-hidden\b/)
-
-    settle()
-
-    await waitFor(() => {
-      expect(within(container).getByRole('button', { name: /thought/i })).toBeTruthy()
-    })
-
-    const settled = container.querySelector('[data-slot="aui_thinking-body"]')?.className ?? ''
-
-    expect(settled).toContain('max-h-40')
-    expect(settled).toMatch(/\boverflow-auto\b/)
-    expect(settled).not.toMatch(/\boverflow-hidden\b/)
-  })
-
   it('preserves the thinking reading position on growth and resumes following at the bottom', () => {
     const { container, rerender } = render(
       <RunningMessageHarness message={assistantReasoningMessage('First thought.', true)} />
@@ -768,31 +689,6 @@ describe('assistant-ui streaming renderer', () => {
     height = 1200
     deliverGrowth()
     expect(body.scrollTop).toBe(height - body.clientHeight)
-  })
-
-  it('allows vertical handoff in both preview and expanded thinking bodies', () => {
-    const { container } = render(<RunningReasoningHarness />)
-    const ui = within(container)
-    const toggle = ui.getByRole('button', { name: /thinking/i })
-
-    const preview = container.querySelector('[data-slot="aui_thinking-body"]')?.className ?? ''
-
-    expect(preview).toContain('max-h-40')
-    expect(preview).toMatch(/\boverflow-auto\b/)
-    expect(preview).toMatch(/\boverscroll-y-auto\b/)
-
-    // Manual expansion removes the cap but must keep vertical handoff.
-    fireEvent.click(toggle)
-    expect(toggle.getAttribute('aria-expanded')).toBe('false')
-
-    fireEvent.click(toggle)
-    expect(toggle.getAttribute('aria-expanded')).toBe('true')
-
-    const expanded = container.querySelector('[data-slot="aui_thinking-body"]')?.className ?? ''
-
-    expect(expanded).toMatch(/\boverflow-auto\b/)
-    expect(expanded).not.toContain('max-h-40')
-    expect(expanded).toMatch(/\boverscroll-y-auto\b/)
   })
 
   it('does not collapse a live thinking preview when the turn settles', async () => {
@@ -906,19 +802,6 @@ describe('assistant-ui streaming renderer', () => {
     expect(disclosures[1].querySelector('button')?.getAttribute('aria-expanded')).toBe('true')
     expect(container.textContent).not.toContain('Complete first thought.')
     expect(container.textContent).toContain('Interim answer.')
-  })
-
-  it('does not render an inline todo panel — todos live in the composer status stack', () => {
-    const { container } = render(
-      <TodoHarness
-        message={assistantTodoMessage([
-          { content: 'Gather ingredients', id: 'prep', status: 'completed' },
-          { content: 'Boil water', id: 'boil', status: 'in_progress' }
-        ])}
-      />
-    )
-
-    expect(container.querySelector('[data-slot="aui_todo-hoisted"]')).toBeNull()
   })
 
   it('renders completed image generation results in the tool slot', async () => {

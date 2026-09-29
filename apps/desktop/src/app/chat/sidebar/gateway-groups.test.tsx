@@ -15,6 +15,8 @@ import { makeSessionInfo } from '@/test/session-info'
 import { ChatSidebar } from './index'
 
 const noop = () => {}
+
+const noopAsync = async () => {}
 const resume = vi.fn()
 const unavailableAccount = async () => {
   throw new Error('Sidebar account display must not request account services')
@@ -50,6 +52,7 @@ const mount = () =>
             onNewSessionInWorkspace={noop}
             onNewSessionSplit={noop}
             onResumeSession={resume}
+            onRetrySessions={noopAsync}
             onTriggerCronJob={async () => {}}
           />
         </SidebarProvider>

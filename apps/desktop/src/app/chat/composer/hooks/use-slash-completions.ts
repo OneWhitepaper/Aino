@@ -65,7 +65,7 @@ export function useSlashCompletions(options: {
   loading: boolean
 } {
   const { gateway, sessionId } = options
-  const { t } = useI18n()
+  const { locale, t } = useI18n()
   const commandDescriptions = t.composer.commandDescs
   const browseAllSessions = t.composer.browseAllSessions
   const enabled = Boolean(gateway)
@@ -88,7 +88,7 @@ export function useSlashCompletions(options: {
       .catch(() => {
         // Next keystroke retries; don't block the composer on a warm-up miss.
       })
-  }, [gateway, epoch, catalogKey, sessionParams])
+  }, [gateway, epoch, catalogKey, sessionParams, commandDescriptions])
 
   const fetcher = useCallback(
     async (query: string): Promise<CompletionPayload> => {
@@ -300,5 +300,5 @@ export function useSlashCompletions(options: {
     [sessionId, catalogKey]
   )
 
-  return useLiveCompletionAdapter({ enabled, epoch, fetcher, isCached, toItem })
+  return useLiveCompletionAdapter({ enabled, epoch: `${epoch}:${locale}`, fetcher, isCached, toItem })
 }

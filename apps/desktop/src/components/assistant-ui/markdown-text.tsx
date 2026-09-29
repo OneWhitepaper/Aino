@@ -17,6 +17,7 @@ import { TranscriptVideo } from '@/components/chat/transcript-video'
 import { ZoomableImage } from '@/components/chat/zoomable-image'
 import { ErrorBoundary } from '@/components/error-boundary'
 import { useI18n } from '@/i18n'
+import { useMediaImage } from '@/hooks/use-media-image'
 import { detectArtifact } from '@/lib/artifact-detect'
 import { renderMediaTags } from '@/lib/chat-messages/parts'
 import { normalizeExternalUrl, openExternalLink, PrettyLink } from '@/lib/external-link'
@@ -26,21 +27,21 @@ import { preprocessMarkdown } from '@/lib/markdown-preprocess'
 import {
   downloadGatewayMediaFile,
   isFileMediaPath,
-  isInlineMediaSrc,
   isMarkdownDocumentPath,
   isRemoteGateway,
   mediaExternalUrl,
   mediaKind,
   mediaName,
   mediaPathFromMarkdownHref,
-  resolveMediaDisplaySrc,
-  resolveMediaPlaybackSrc
+  resolveMediaPlaybackSrc,
+  validImageDimensions
 } from '@/lib/media'
 import { isOnboardingEnabled } from '@/lib/onboarding-enabled'
 import { previewTargetFromMarkdownHref } from '@/lib/preview-targets'
 import { sessionRefFromMarkdownHref } from '@/lib/session-refs'
 import { isDirectiveInProgress } from '@/lib/transcript-directives'
 import { cn } from '@/lib/utils'
+import { useForcedTextDirection } from '@/store/text-direction'
 
 import { ArtifactCard } from './artifact-card'
 import { SessionRefLink } from './directive-text'
@@ -150,6 +151,14 @@ function OpenMediaButton({ kind, path }: { kind: 'audio' | 'video'; path: string
 }
 
 function MediaAttachment({ path }: { path: string }) {
+  return mediaKind(path) === 'image' ? (
+    <MarkdownImage alt={mediaName(path)} src={path} />
+  ) : (
+    <MediaPlaybackAttachment path={path} />
+  )
+}
+
+function MediaPlaybackAttachment({ path }: { path: string }) {
   const { t } = useI18n()
   const [src, setSrc] = useState('')
   const [failed, setFailed] = useState(false)
@@ -198,14 +207,6 @@ function MediaAttachment({ path }: { path: string }) {
       }
     }
   }, [kind, path])
-
-  if (kind === 'image' && src) {
-    return (
-      <span className="block">
-        <MarkdownImage alt={name} src={src} />
-      </span>
-    )
-  }
 
   if (kind === 'audio' && src) {
     return (
@@ -270,7 +271,7 @@ function MarkdownLink({ children, className, href, ...props }: ComponentProps<'a
     // rendered/source toggle) instead of the download-link fallback that
     // `mediaKind() === 'file'` would produce. (#84951)
     if (isMarkdownDocumentPath(mediaPath)) {
-      return <PreviewAttachment source="tool-result" target={mediaPath} />
+      return <PreviewAttachment target={mediaPath} />
     }
 
     // Non-media files (PDFs, data files, anything outside MEDIA_BY_EXT):
@@ -280,7 +281,7 @@ function MarkdownLink({ children, className, href, ...props }: ComponentProps<'a
     // branch below produces — so MEDIA: uniformly delivers the richest
     // rendering for every file type.
     if (mediaKind(mediaPath) === 'file') {
-      return <PreviewAttachment source="tool-result" target={mediaPath} />
+      return <PreviewAttachment target={mediaPath} />
     }
 
     return <MediaAttachment path={mediaPath} />
@@ -289,7 +290,7 @@ function MarkdownLink({ children, className, href, ...props }: ComponentProps<'a
   const previewTarget = previewTargetFromMarkdownHref(href)
 
   if (previewTarget) {
-    return <PreviewAttachment source="explicit-link" target={previewTarget} />
+    return <PreviewAttachment target={previewTarget} />
   }
 
   const sessionRef = sessionRefFromMarkdownHref(href)
@@ -314,7 +315,7 @@ function MarkdownLink({ children, className, href, ...props }: ComponentProps<'a
 
     if (fileHref) {
       return mediaKind(fileHref) === 'file' ? (
-        <PreviewAttachment source="explicit-link" target={fileHref} />
+        <PreviewAttachment target={fileHref} />
       ) : (
         <MediaAttachment path={fileHref} />
       )
@@ -374,50 +375,39 @@ export function MarkdownImage(props: ComponentProps<'img'>) {
   return <MarkdownImageContent {...props} />
 }
 
-function MarkdownImageContent({ className, src, alt, ...props }: ComponentProps<'img'>) {
+// A cold frame is ~4:3 because that is the envelope an image can occupy here
+// (--image-preview-max-width x --image-preview-height, 34rem x 26.25rem): every
+// shape, portrait included, fits at the size it would have without a reserved
+// frame. A 16:9 box shrank every narrower image (a 1080x1920 portrait to
+// 172x306). Warm mounts use the measured size instead.
+const COLD_IMAGE_RATIO = 4 / 3
+
+function MarkdownImageContent({
+  className,
+  src,
+  alt,
+  width,
+  height,
+  onLoad,
+  onError,
+  style,
+  ...props
+}: ComponentProps<'img'>) {
   const { t } = useI18n()
   const rawSrc = typeof src === 'string' ? src : ''
-  const [resolvedSrc, setResolvedSrc] = useState(() => (rawSrc && isInlineMediaSrc(rawSrc) ? rawSrc : ''))
-  const [failed, setFailed] = useState(false)
+  const image = useMediaImage(rawSrc, COLD_IMAGE_RATIO, validImageDimensions(width, height))
   const { open, openFailed } = useOpenMediaFile(rawSrc)
   const name = mediaName(rawSrc || String(alt || 'image'))
-
-  useEffect(() => {
-    let cancelled = false
-
-    setFailed(false)
-    setResolvedSrc(rawSrc && isInlineMediaSrc(rawSrc) ? rawSrc : '')
-
-    if (!rawSrc || isInlineMediaSrc(rawSrc)) {
-      return () => {
-        cancelled = true
-      }
-    }
-
-    void resolveMediaDisplaySrc(rawSrc)
-      .then(value => {
-        if (!cancelled) {
-          setResolvedSrc(value)
-        }
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setFailed(true)
-        }
-      })
-
-    return () => {
-      cancelled = true
-    }
-  }, [rawSrc])
 
   if (!rawSrc) {
     return null
   }
 
-  if (failed) {
+  // A broken link has nothing to reserve space for: one line, not an empty
+  // frame. The one-time shift on error is the lesser cost.
+  if (image.failed) {
     return (
-      <span className="my-2 block text-sm text-muted-foreground">
+      <span className="my-2 block text-sm text-muted-foreground" data-slot="aui_markdown-image">
         {t.assistant.markdown.imageLoadFailed(name)}{' '}
         <button className="ref font-medium text-foreground" onClick={open} type="button">
           {t.assistant.markdown.openImage}
@@ -427,26 +417,45 @@ function MarkdownImageContent({ className, src, alt, ...props }: ComponentProps<
     )
   }
 
-  if (!resolvedSrc) {
-    return <span className="my-2 block text-sm text-muted-foreground">{t.assistant.markdown.loading(name)}</span>
-  }
+  // The image keeps its natural size (never upscaled) inside the fixed frame;
+  // the w-fit container hugs it so the download button and shadow sit on the
+  // image, not on the letterbox. Without a frame (a source that failed last
+  // time) it lays out as a plain capped image, like before frames existed.
+  const framed = Boolean(image.frameStyle)
 
-  // The width cap belongs on the container, not the <img>: a percentage
-  // max-width resolves to none while the container measures its fit-content
-  // width, so the box overshoots the rendered image and strands the download
-  // button — which anchors to the container — out in the margin.
   return (
-    <ZoomableImage
-      alt={alt}
-      className={cn(
-        'm-0 block h-auto w-auto max-h-(--image-preview-height) max-w-full rounded-lg object-contain shadow-nous',
-        className
+    <span className="relative my-2 block max-w-full" data-slot="aui_markdown-image" style={image.frameStyle}>
+      {image.src ? (
+        <ZoomableImage
+          {...props}
+          alt={alt}
+          className={cn(
+            'm-0 block h-auto w-auto max-w-full rounded-lg object-scale-down shadow-[0_0.0625rem_0.125rem_color-mix(in_srgb,#000_4%,transparent),0_0.625rem_1.5rem_color-mix(in_srgb,#000_5%,transparent)]',
+            framed ? 'max-h-full' : 'max-h-(--image-preview-height)',
+            className
+          )}
+          containerClassName={
+            framed
+              ? 'absolute left-0 top-0 block h-full w-fit'
+              : 'block w-fit max-w-[min(100%,var(--image-preview-max-width))]'
+          }
+          onError={event => {
+            image.onError()
+            onError?.(event)
+          }}
+          onLoad={event => {
+            image.onLoad(event.currentTarget)
+            onLoad?.(event)
+          }}
+          src={image.src}
+          style={style}
+        />
+      ) : (
+        <span className={cn('block overflow-hidden text-sm text-muted-foreground', framed && 'absolute inset-0')}>
+          {t.assistant.markdown.loading(name)}
+        </span>
       )}
-      containerClassName="my-2 block w-fit max-w-[min(100%,var(--image-preview-max-width))]"
-      slot="aui_markdown-image"
-      src={resolvedSrc}
-      {...props}
-    />
+    </span>
   )
 }
 
@@ -470,6 +479,10 @@ interface MarkdownTextSurfaceProps {
    *  routed @mentions) without owning the Markdown pipeline. Nested inline
    *  markup and code are left as rendered. */
   decorateText?: (children: ReactNode) => ReactNode
+  /** The reader's explicit Text direction (Appearance). Stamped on the root
+   *  and on list/quote boxes in place of their `dir="auto"`, so every prose
+   *  block follows it; undefined is Auto and leaves the DOM attribute-free. */
+  textDirection?: 'ltr' | 'rtl'
 }
 
 // Headings shrink to chat scale rather than the prose default (h1≈xl). Kept
@@ -589,9 +602,19 @@ function MarkdownTextSurface({
   defer,
   disableArtifacts,
   previewOnly,
-  scratchpad
+  scratchpad,
+  textDirection
 }: MarkdownTextSurfaceProps) {
   const { status, text } = useMessagePartText()
+  // List/quote boxes resolve from content under Auto (see the ul/ol/blockquote
+  // notes below); an explicit choice replaces that vote rather than nesting it.
+  const boxDir = textDirection ?? 'auto'
+
+  const surfaceContainerProps = useMemo(
+    () => (textDirection ? { ...containerProps, dir: textDirection } : containerProps),
+    [containerProps, textDirection]
+  )
+
   const isStreaming = status.type === 'running'
 
   // Keep code parsing enabled while streaming so incomplete fenced blocks still
@@ -656,7 +679,7 @@ function MarkdownTextSurface({
           return (
             <blockquote
               className={cn('border-s-2 border-(--ui-stroke-tertiary) ps-3 text-muted-foreground italic', className)}
-              dir="auto"
+              dir={boxDir}
               {...props}
             >
               {children}
@@ -664,10 +687,10 @@ function MarkdownTextSurface({
           )
         },
         ul: ({ className, ...props }: ComponentProps<'ul'>) => (
-          <ul className={cn('my-1 gap-0', className)} dir="auto" {...props} />
+          <ul className={cn('my-1 gap-0', className)} dir={boxDir} {...props} />
         ),
         ol: ({ className, ...props }: ComponentProps<'ol'>) => (
-          <ol className={cn('my-1 gap-0', className)} dir="auto" {...props} />
+          <ol className={cn('my-1 gap-0', className)} dir={boxDir} {...props} />
         ),
         li: ({ children, className, ...props }: ComponentProps<'li'>) => (
           <li className={cn('leading-(--dt-line-height)', className)} {...props}>
@@ -710,7 +733,7 @@ function MarkdownTextSurface({
           )
         }
       }) as StreamdownTextComponents,
-    [decorateText, disableArtifacts, isStreaming, previewOnly, scratchpad]
+    [boxDir, decorateText, disableArtifacts, isStreaming, previewOnly, scratchpad]
   )
 
   if (text.length > MAX_MARKDOWN_CHARS) {
@@ -743,7 +766,7 @@ function MarkdownTextSurface({
       <StreamdownTextPrimitive
         components={components}
         containerClassName={cn(MARKDOWN_CONTAINER_CLASS_NAME, containerClassName)}
-        containerProps={containerProps}
+        containerProps={surfaceContainerProps}
         defer={defer}
         lineNumbers={false}
         mode="streaming"
@@ -805,7 +828,9 @@ export function MarkdownTextContent({ isRunning, text, ...surfaceProps }: Markdo
 }
 
 const MarkdownTextImpl = () => {
-  return <MarkdownTextSurface defer />
+  const textDirection = useForcedTextDirection()
+
+  return <MarkdownTextSurface defer textDirection={textDirection} />
 }
 
 export const MarkdownText = memo(MarkdownTextImpl)

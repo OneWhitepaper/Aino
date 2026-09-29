@@ -1,11 +1,9 @@
-import { cleanup, fireEvent, render } from '@testing-library/react'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { fireEvent, render } from '@testing-library/react'
+import { describe, expect, it, vi } from 'vitest'
 
 import { ANNOTATE_CARD_WIDTH } from '@/lib/preview-annotate'
 
 import { placeAnnotateCard, PreviewAnnotateCard } from './preview-annotate-card'
-
-afterEach(cleanup)
 
 describe('placeAnnotateCard', () => {
   it('sits to the right of the pin instead of past a full-width selection', () => {

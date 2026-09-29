@@ -3,14 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { setRuntimeI18nLocale } from '@/i18n'
 import { $notifications, clearNotifications } from '@/store/notifications'
 
-vi.mock('@/lib/media', () => ({
-  downloadGatewayMediaFile: vi.fn()
-}))
-
-const media = await import('@/lib/media')
-const downloadGatewayMediaFile = vi.mocked(media.downloadGatewayMediaFile)
-
-const { downloadRemoteFile, shouldOfferLocalReveal, shouldOfferRemoteFileDownload } = await import('./file-actions')
+import { downloadRemoteFile, shouldOfferLocalReveal, shouldOfferRemoteFileDownload } from './file-actions'
 
 describe('shouldOfferRemoteFileDownload', () => {
   it('is only for files on a remote backend', () => {
@@ -36,27 +29,31 @@ describe('shouldOfferLocalReveal', () => {
 })
 
 describe('downloadRemoteFile', () => {
+  const saveGatewayFile = vi.fn()
+
   beforeEach(() => {
     clearNotifications()
-    downloadGatewayMediaFile.mockReset()
+    saveGatewayFile.mockReset()
+    vi.stubGlobal('hermesDesktop', { saveGatewayFile })
   })
 
   afterEach(() => {
     clearNotifications()
     setRuntimeI18nLocale('en')
+    vi.unstubAllGlobals()
   })
 
   it('saves a remote gateway file through the native download bridge', async () => {
-    downloadGatewayMediaFile.mockResolvedValue({ path: '/Users/me/Downloads/notes.md', saved: true })
+    saveGatewayFile.mockResolvedValue({ path: '/Users/me/Downloads/notes.md', saved: true })
 
     await downloadRemoteFile('/home/linux/project/notes.md')
 
-    expect(downloadGatewayMediaFile).toHaveBeenCalledWith('/home/linux/project/notes.md')
+    expect(saveGatewayFile).toHaveBeenCalledWith(expect.objectContaining({ path: '/home/linux/project/notes.md' }))
     expect($notifications.get()[0]?.message).toBe('Saved')
   })
 
   it('stays quiet when the save dialog is canceled', async () => {
-    downloadGatewayMediaFile.mockResolvedValue({ canceled: true, saved: false })
+    saveGatewayFile.mockResolvedValue({ canceled: true, saved: false })
 
     await downloadRemoteFile('/home/linux/project/notes.md')
 
@@ -64,7 +61,7 @@ describe('downloadRemoteFile', () => {
   })
 
   it('toasts when the gateway download fails', async () => {
-    downloadGatewayMediaFile.mockRejectedValue(new Error('Desktop file download bridge is unavailable'))
+    vi.stubGlobal('hermesDesktop', {})
 
     await downloadRemoteFile('/home/linux/project/notes.md')
 
@@ -74,7 +71,7 @@ describe('downloadRemoteFile', () => {
 
   it('localizes an unavailable desktop download bridge for Simplified Chinese users', async () => {
     setRuntimeI18nLocale('zh')
-    downloadGatewayMediaFile.mockRejectedValue(new Error('Desktop file download bridge is unavailable'))
+    vi.stubGlobal('hermesDesktop', {})
 
     await downloadRemoteFile('/home/linux/project/notes.md')
 

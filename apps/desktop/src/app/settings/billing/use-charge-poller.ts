@@ -7,12 +7,15 @@ import {
 import { useQueryClient } from '@tanstack/react-query'
 import { useCallback, useRef, useState } from 'react'
 
-import { translateNow } from '@/i18n'
+import { translateNow, useI18n } from '@/i18n'
+import { TRANSLATIONS } from '@/i18n/catalog'
+import { getRuntimeI18nLocale } from '@/i18n/runtime'
 
 import type { BillingApi, BillingRefusal } from './api'
 import { useBillingApi } from './api'
 import { resolveRefusal } from './errors'
 import type { BillingChargeStatusResponse } from './types'
+import type { BillingCopy } from './use-billing-state'
 
 export const CHARGE_POLL_INTERVAL_MS = SETTLEMENT_POLL_INTERVAL_MS
 export const CHARGE_POLL_CAP_MS = SETTLEMENT_POLL_CAP_MS
@@ -28,12 +31,17 @@ export type ChargeFlowOutcome =
   | {
       action?: { type: 'portal'; url?: string } | { type: 'retry' } | { type: 'step_up' }
       kind: 'failure'
+      copy: 'failed' | 'check' | 'untracked' | 'refusal'
+      refusal?: BillingRefusal
+      reason?: null | string
       message: string
       retryFreshKey: boolean
       title: string
     }
   | {
       kind: 'ambiguous'
+      copy: 'unconfirmed' | 'timeout'
+      refusal?: BillingRefusal
       message: string
       portalUrl?: string
       title: string
@@ -98,13 +106,15 @@ export async function pollChargeSettlement(
       return {
         amountUsd: settlement.status.amount_usd,
         kind: 'success',
-        message: translateNow('billing.charge.added', settlement.status.amount_usd || '')
+        message: translateNow('billing.charge.added', settlement.status.amount_usd ?? '')
       }
 
     case 'failed':
       return {
         action: { type: 'retry' },
         kind: 'failure',
+        copy: 'failed',
+        reason: settlement.status.reason,
         message: renderChargeFailed(settlement.status.reason),
         retryFreshKey: true,
         title: translateNow('billing.charge.failedTitle')
@@ -117,6 +127,8 @@ export async function pollChargeSettlement(
 
         return {
           kind: 'ambiguous',
+          copy: 'unconfirmed',
+          refusal,
           message: translateNow('billing.charge.outcomeUnconfirmedMessage', resolved.message),
           portalUrl: portalUrl ?? opts.portalUrl ?? undefined,
           title: translateNow('billing.charge.outcomeUnconfirmedTitle')
@@ -125,6 +137,8 @@ export async function pollChargeSettlement(
 
       return {
         kind: 'failure',
+        copy: 'check',
+        reason: observed.refusal?.message,
         message: observed.refusal?.message || translateNow('billing.charge.checkFailedMessage'),
         retryFreshKey: true,
         title: translateNow('billing.charge.checkFailedTitle')
@@ -134,6 +148,8 @@ export async function pollChargeSettlement(
     case 'refused':
       return {
         kind: 'failure',
+        copy: 'check',
+        reason: observed.refusal?.message || settlement.status.message,
         message:
           observed.refusal?.message || settlement.status.message || translateNow('billing.charge.checkFailedMessage'),
         retryFreshKey: true,
@@ -176,6 +192,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 export function useChargeFlow() {
+  const { t } = useI18n()
   const api = useBillingApi()
   const queryClient = useQueryClient()
   const [phase, setPhase] = useState<ChargeFlowPhase>('idle')
@@ -226,6 +243,8 @@ export function useChargeFlow() {
         setOutcome({
           action,
           kind: 'failure',
+          copy: 'refusal',
+          refusal: chargeResult.refusal,
           message: resolved.message,
           retryFreshKey: false,
           title: resolved.title
@@ -242,6 +261,7 @@ export function useChargeFlow() {
       if (!chargeId) {
         setOutcome({
           kind: 'failure',
+          copy: 'untracked',
           message: translateNow('billing.charge.trackingFailedMessage'),
           retryFreshKey: true,
           title: translateNow('billing.charge.trackingFailedTitle')
@@ -267,7 +287,7 @@ export function useChargeFlow() {
     [api, queryClient, setPhaseState]
   )
 
-  return { outcome, phase, reset, start }
+  return { outcome: outcome ? localizeChargeOutcome(outcome, t.billing) : null, phase, reset, start }
 }
 
 function shouldReuseIdempotencyKey(refusal: BillingRefusal): boolean {
@@ -277,24 +297,72 @@ function shouldReuseIdempotencyKey(refusal: BillingRefusal): boolean {
 function timeoutOutcome(portalUrl?: null | string): ChargeFlowOutcome {
   return {
     kind: 'ambiguous',
+    copy: 'timeout',
     message: translateNow('billing.charge.stillProcessingMessage'),
     portalUrl: portalUrl ?? undefined,
     title: translateNow('billing.charge.stillProcessingTitle')
   }
 }
 
-function renderChargeFailed(reason?: null | string): string {
+function renderChargeFailed(
+  reason: null | string | undefined,
+  copy = TRANSLATIONS[getRuntimeI18nLocale()].billing.charge
+): string {
   switch ((reason || '').trim()) {
     case 'authentication_required':
-      return translateNow('billing.charge.authenticationRequired')
+      return copy.authenticationRequired
 
     case 'payment_method_expired':
-      return translateNow('billing.charge.paymentMethodExpired')
+      return copy.paymentMethodExpired
 
     case 'card_declined':
-      return translateNow('billing.charge.cardDeclined')
+      return copy.cardDeclined
 
     default:
-      return translateNow('billing.charge.failedReason', reason || 'processing_error')
+      return copy.failedReason(reason || 'processing_error')
+  }
+}
+
+// Repaint completed feedback on a locale switch without replaying a charge.
+function localizeChargeOutcome(outcome: ChargeFlowOutcome, copy: BillingCopy): ChargeFlowOutcome {
+  if (outcome.kind === 'success') {
+    return { ...outcome, message: copy.charge.added(outcome.amountUsd ?? '') }
+  }
+
+  switch (outcome.copy) {
+    case 'refusal': {
+      if (!outcome.refusal) {
+        return outcome
+      }
+
+      const resolved = resolveRefusal(outcome.refusal, copy)
+
+      return { ...outcome, message: resolved.message, title: resolved.title }
+    }
+
+    case 'unconfirmed':
+      return outcome.refusal
+        ? {
+            ...outcome,
+            message: copy.charge.outcomeUnconfirmedMessage(resolveRefusal(outcome.refusal, copy).message),
+            title: copy.charge.outcomeUnconfirmedTitle
+          }
+        : outcome
+
+    case 'failed':
+      return { ...outcome, message: renderChargeFailed(outcome.reason, copy.charge), title: copy.charge.failedTitle }
+
+    case 'check':
+      return {
+        ...outcome,
+        message: outcome.reason || copy.charge.checkFailedMessage,
+        title: copy.charge.checkFailedTitle
+      }
+
+    case 'untracked':
+      return { ...outcome, message: copy.charge.trackingFailedMessage, title: copy.charge.trackingFailedTitle }
+
+    case 'timeout':
+      return { ...outcome, message: copy.charge.stillProcessingMessage, title: copy.charge.stillProcessingTitle }
   }
 }

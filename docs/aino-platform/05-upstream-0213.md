@@ -232,3 +232,93 @@ download a bootstrap are therefore unavailable until the repository variables
 Only the upstream repository defaults to the upstream Hermes download URLs.
 Skipped bootstrap routes are disclosed in the matrix summary and are not Aino
 installer coverage.
+
+## Hermes 0.21.5 Integration — 2026-09-29
+
+This update merges the stable upstream release into `codex/proactive-delegation`.
+The September 18 receipts above remain historical results for their own revisions.
+
+| Item | Revision |
+| --- | --- |
+| Saved Aino checkpoint | `7faaa158eb9acb710bb13d5fe418a1501cc196fe` |
+| Upstream release | Hermes Agent `0.21.5`, annotated tag `v2026.9.24` |
+| Upstream release commit | `f97608f178d1ffeca59860195ab7da295f7c8e5f` |
+| Integration branch | `codex/proactive-delegation` |
+
+The checkpoint preserves all pre-update Ultra changes. Work added during this
+integration on configured child effort surviving fallback is deferred at the
+user's request; its source copies, review and recoverable patch are kept in the
+local `ultra-deferred-during-upstream-sync` evidence directory. That candidate
+is excluded from this upstream merge. No paid model acceptance was started.
+
+The integration preserves Aino identity, managed account/model/billing routing,
+the fixed desktop palette and localized UI while adopting upstream plugin,
+kanban and history-projection contracts. Python, CLI and Aino desktop versions
+are `0.21.5`; the upstream desktop package has its own version history.
+
+### September 29 Verification
+
+Completed sweeps and targeted failure closure are recorded separately. Interrupted
+runs are not complete-suite receipts, and overlapping counts must not be added
+together. Logs use `aino-v0215-*`; durable copies are saved outside the checkout
+in this task's `upstream-v0215-merge` evidence directory. These are native macOS
+results, not Windows or Linux runtime acceptance.
+
+| Check | September 29 result |
+| --- | --- |
+| Python full suite before test-only stabilization | 4,743 files; 49,697 passed, 1 failed, 749 skipped; 5 files passed only on automatic retry |
+| Python final targeted closure, automatic retries disabled | 11 files; 59 passed, 0 failed, 1 Linux-only skip |
+| Desktop full sweep | 1,399 files; 11,825 passed, 30 failed, 11 skipped |
+| Desktop exact failed-file rerun | All 19 failed files rerun together: 139 passed, 0 failed |
+| Desktop TypeScript and scoped ESLint | Passed; ESLint covers 31 files with 0 errors and 0 warnings |
+| Shared, Web and TUI TypeScript checks | Passed |
+| Web tests | 48 files, 352 passed |
+| TUI tests | 169 passed files, 1 skipped file; 1,551 passed, 30 skipped |
+| TUI Python-backed slash parity, prepared Python environment | 5 passed |
+| Web and TUI production builds | Passed |
+| Desktop production build | Passed; native helpers and production Electron bundles rebuilt |
+| Isolated native mock chat | Five distinct chat cases passed across the initial run and search-case rerun |
+| Native launch acceptance | Failed overall: product assertions passed, but fixture cleanup/app.close timed out after 90 seconds |
+| Commentary timeline and projection regression | 45 frontend tests and 24 backend tests passed |
+| Compatibility pointers and tracked path casing | Passed |
+
+The Python sweep's sole hard failure waited only two seconds for a cold compute
+host to import the server and emit hello. Twelve concurrent real-process probes
+took 5.44–6.03 seconds, all with correct protocol replies and clean exit. The test
+now uses the production supervisor's existing ten-second startup allowance;
+later protocol-frame deadlines and assertions are unchanged. Its six-file
+related rerun passed 33 tests with one Linux-only skip.
+
+The five retry-only failures were investigated rather than counted as clean
+first attempts. Test-only repairs synchronize compression worker cleanup before
+the second stall, control the HTTP-date read clock, use an event handshake for
+reset cleanup, wait for the real process descendant before timing its kill, and
+disable detached Git maintenance while constructing a local-clone fixture. Git
+Trace2 showed that the fixture's background repack deleted a loose object while
+clone was copying it. No production behavior is changed by these repairs. The
+compression file passed three consecutive runs with automatic retries disabled;
+its exact second-stall assertions remain intact.
+
+A 7,126-file Python/configuration hash snapshot confirms that only these six test
+files changed after the full Python run; production files did not drift. The full
+sweep is not rewritten as a zero-failure run. Similarly, desktop failure closure
+does not claim a second full sweep on an immutable final tree.
+
+The native launch cleanup timeout remains an open verification limitation. It was
+not hidden by force-closing the fixture or weakening the acceptance result. This
+merge does not expand into desktop shutdown lifecycle changes. No isolated
+fixture processes remained after cleanup, and the daily desktop was not restarted.
+
+The TUI broad run used the system Python for its optional registry probe; that
+probe could not import `yaml`. Rerunning the five slash-parity checks with the
+prepared project interpreter completed successfully rather than leaving that
+environment-dependent gap unexamined.
+
+The desktop history fixture now includes the backend's `display_commentary` and
+`display_reasoning` projection. Raw Responses sidecars remain replay data: the
+renderer does not bypass upstream commentary visibility or redaction policy.
+
+The staged merge has no unresolved index entries or conflict-marker warnings.
+The 431 end-of-file whitespace warnings reported relative to the Aino parent
+are also present in that parent's diff to the upstream tag; this integration
+does not broaden the change by reformatting those inherited files.

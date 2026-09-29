@@ -7,6 +7,8 @@ import { closeProject, deleteProject, openProjectFolders } from '@/store/project
 import { ProjectContextMenu, ProjectMenu } from './project-menu'
 import type { SidebarProjectTree } from './workspace-groups'
 
+const tipTrigger = (el: HTMLElement) => el.closest('[data-slot="tooltip-trigger"]')
+
 afterEach(() => {
   cleanup()
   setShowAllProfiles(false)
@@ -15,8 +17,7 @@ afterEach(() => {
 
 // jsdom doesn't implement ResizeObserver; Radix's PopoverContent/Arrow use it
 // (via @radix-ui/react-use-size) to measure the arrow once the popover is
-// actually mounted. The kebab-only test above never opens a Popover, so it
-// doesn't need this — only the appearance-popover test below does.
+// actually mounted.
 beforeAll(() => {
   vi.stubGlobal(
     'ResizeObserver',
@@ -87,8 +88,6 @@ const project = {
   path: '/repo'
 } as unknown as SidebarProjectTree
 
-const tipTrigger = (el: HTMLElement) => el.closest('[data-slot="tooltip-trigger"]')
-
 const openTriggerMenu = (trigger: HTMLElement) => {
   // Radix's dropdown trigger opens on pointerdown (a synthetic 'click' fireEvent
   // alone won't do it), so fire the full mouse sequence a real click produces —
@@ -146,7 +145,11 @@ describe('ProjectMenu', () => {
     expect(screen.getByRole('menuitem', { name: 'Delete…' }).hasAttribute('data-disabled')).toBe(false)
 
     fireEvent.click(screen.getByRole('menuitem', { name: 'Manage folders' }))
-    expect(openProjectFolders).toHaveBeenCalledExactlyOnceWith({ id: project.id, name: project.label, profile: 'worker' })
+    expect(openProjectFolders).toHaveBeenCalledExactlyOnceWith({
+      id: project.id,
+      name: project.label,
+      profile: 'worker'
+    })
   })
   it('does not wrap the kebab trigger in a Tip', () => {
     render(<ProjectMenu isActive={false} project={project} />)

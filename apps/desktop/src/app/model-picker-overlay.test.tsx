@@ -1,106 +1,77 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import type { WritableAtom } from 'nanostores'
 import { afterEach, expect, it, vi } from 'vitest'
 
-import { platformAccountActions } from '@/api/platform'
-import { $activeGatewayRoute, setPrimaryGateway } from '@/store/gateway'
-import { clearGatewayManagedCapabilities, recordGatewayReadyCapability } from '@/store/gateway-managed-capability'
-import { $activeGatewayProfile } from '@/store/profile'
-import {
-  $activeSessionId,
-  $currentModel,
-  $currentProvider,
-  $gatewayState,
-  $modelPickerOpen,
-  setConnection
-} from '@/store/session'
-import { deferred } from '@/test/deferred'
+import { I18nProvider } from '@/i18n'
+import { requestModelOptions } from '@/lib/model-options'
+import { startManualOnboarding } from '@/store/onboarding'
+import { $gatewayState, $modelPickerOpen, $selectedStoredSessionId } from '@/store/session'
+import { $focusedTreePaneId as $focusedTreePaneIdMock } from '@/store/session-focus'
+import { $sessionTiles } from '@/store/session-states'
 import { stubMenuDomApis, stubResizeObserver } from '@/test/jsdom'
-import { platformModel, platformSnapshot } from '@/test/platform-model'
 
 import { ModelPickerOverlay } from './model-picker-overlay'
 
+// The mock below replaces the computed store with a writable atom.
+const $focusedTreePaneId = $focusedTreePaneIdMock as unknown as WritableAtom<null | string>
+
+vi.mock('@/store/session-focus', async () => {
+  const { atom } = await import('nanostores')
+
+  return { $focusedTreePaneId: atom<null | string>(null) }
+})
+vi.mock('@/hermes', async importOriginal => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  getLocalModelsStatus: vi.fn().mockResolvedValue({ loading: {} })
+}))
 vi.mock('@/lib/model-options', async importOriginal => ({
   ...(await importOriginal<Record<string, unknown>>()),
-  requestModelOptions: vi.fn(async () => ({
-    providers: [{ name: 'Custom fixture', slug: 'custom:fixture', models: ['fixture-next'] }]
-  }))
+  requestModelOptions: vi.fn().mockResolvedValue({ model: '', provider: '', providers: [] })
+}))
+vi.mock('@/store/onboarding', async importOriginal => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  startManualOnboarding: vi.fn()
 }))
 
-stubMenuDomApis()
 stubResizeObserver()
+stubMenuDomApis()
+
 afterEach(() => {
   cleanup()
-  $activeSessionId.set(null)
-  $currentModel.set('')
-  $currentProvider.set('')
+  vi.clearAllMocks()
+  $sessionTiles.set([])
+  $focusedTreePaneId.set(null)
+  $selectedStoredSessionId.set(null)
   $modelPickerOpen.set(false)
-  $activeGatewayProfile.set('default')
-  $activeGatewayRoute.set('default')
-  setPrimaryGateway(null, 'default')
-  setConnection(null)
-  clearGatewayManagedCapabilities()
-  Reflect.deleteProperty(window, 'hermesDesktop')
+  $gatewayState.set('idle')
 })
 
-it('preserves the awaited result from the overlay action through the real dialog', async () => {
-  $activeSessionId.set('runtime-fixture')
-  $currentProvider.set('custom:fixture')
-  $currentModel.set('fixture-old')
+it('reads the catalog from the backend profile but hands the Desktop alias to provider setup', async () => {
   $gatewayState.set('open')
   $modelPickerOpen.set(true)
-  const pending = deferred<boolean>()
-  const select = vi.fn(() => pending.promise)
-  render(
-    <QueryClientProvider client={new QueryClient()}>
-      <ModelPickerOverlay onSelect={select} requestGateway={vi.fn()} />
-    </QueryClientProvider>
-  )
-  const row = await screen.findByRole('option', { name: 'fixture-next' })
-  fireEvent.click(row)
-  expect(select).toHaveBeenCalledWith({
-    provider: 'custom:fixture',
-    model: 'fixture-next',
-    sessionId: 'runtime-fixture'
-  })
-  expect($modelPickerOpen.get()).toBe(true)
-  await act(async () => pending.resolve(false))
-  expect($modelPickerOpen.get()).toBe(true)
-  select.mockResolvedValueOnce(true)
-  fireEvent.click(row)
-  await waitFor(() => expect($modelPickerOpen.get()).toBe(false))
-})
-
-it('shows Aino models for a profile-only active socket even when the presentation descriptor is local', async () => {
-  Object.defineProperty(window, 'hermesDesktop', {
-    configurable: true,
-    value: {
-      platformAccount: {
-        status: async () => platformSnapshot(),
-        capabilities: async () => ({}),
-        onChanged: () => () => undefined
-      },
-      platformModels: { list: async () => [platformModel()] }
+  $selectedStoredSessionId.set('primary-a')
+  $sessionTiles.set([
+    {
+      ownerRoute: { connectionId: 'connection-b', profile: 'desktop-b', targetProfile: 'backend-b' },
+      storedSessionId: 'tile-b'
     }
-  })
-  await platformAccountActions(window.hermesDesktop.platformAccount).refresh()
-  setPrimaryGateway({ connectionState: 'open' } as never, 'fixture-workspace')
-  setConnection({ connectionId: 'local', mode: 'local', profile: 'fixture-workspace' } as never)
-  $activeGatewayRoute.set('fixture-workspace')
-  $activeGatewayProfile.set('fixture-workspace')
-  recordGatewayReadyCapability(
-    { profile: 'fixture-workspace' },
-    { type: 'gateway.ready', payload: { managed_model_binding: 1 } }
-  )
-  $gatewayState.set('open')
-  $modelPickerOpen.set(true)
+  ])
+  $focusedTreePaneId.set('session-tile:tile-b')
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
 
   render(
-    <QueryClientProvider client={new QueryClient()}>
-      <ModelPickerOverlay onSelect={vi.fn()} requestGateway={vi.fn()} />
+    <QueryClientProvider client={client}>
+      <I18nProvider>
+        <ModelPickerOverlay onSelect={() => undefined} requestGateway={async () => undefined as never} />
+      </I18nProvider>
     </QueryClientProvider>
   )
 
-  expect(await screen.findByRole('option', { name: /Fixture Model/ })).toBeTruthy()
-  expect(screen.queryByText('This connection does not support Aino models')).toBeNull()
+  await waitFor(() => expect(requestModelOptions).toHaveBeenCalled())
+  expect(vi.mocked(requestModelOptions).mock.calls.every(([options]) => options.profile === 'backend-b')).toBe(true)
+
+  fireEvent.click(await screen.findByRole('button', { name: 'Add provider' }))
+  expect(startManualOnboarding).toHaveBeenCalledWith(undefined, { connectionId: 'connection-b', profile: 'desktop-b' })
+  client.clear()
 })

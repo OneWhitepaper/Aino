@@ -74,7 +74,7 @@ import { startSessionDrag } from './session-drag'
 import { SessionStatusDot } from './session-status-dot'
 import { useSessionTileActions } from './session-tile-actions'
 import { tileOwnerRoute } from './session-tile-owner'
-import { type SessionView, SessionViewProvider } from './session-view'
+import { reasoningEffortPending, type SessionView, SessionViewProvider } from './session-view'
 import { SessionActionsMenu, SessionContextMenu } from './sidebar/session-actions-menu'
 import { lastVisibleMessageIsUser } from './thread-loading'
 
@@ -150,6 +150,8 @@ function buildTileView(storedSessionId: string): SessionView {
     $model: computed($state, state => state?.model ?? ''),
     $provider: computed($state, state => state?.provider ?? ''),
     $reasoningEffort: computed($state, state => state?.reasoningEffort ?? ''),
+    // No slice yet means the tile's resume is still in flight.
+    $reasoningEffortPending: computed($state, state => (state ? reasoningEffortPending(state) : true)),
     $reasoningEffortWire: computed($state, state => state?.reasoningEffortWire ?? ''),
     $runtimeId,
     // Constant for the tile's lifetime — a plain atom, not a computed.

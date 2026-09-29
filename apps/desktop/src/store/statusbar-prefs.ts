@@ -1,5 +1,6 @@
 import { Codecs, persistentAtom } from '@/lib/persisted'
 import { readKey } from '@/lib/storage'
+import { modeBound } from '@/store/interface-mode'
 
 // v1 (`hermes.desktop.statusbarHidden`) was seeded with the approval pill
 // hidden, so every existing store carries an `approval-mode` the user never
@@ -19,7 +20,12 @@ const STATUSBAR_VISIBLE_STORAGE_KEY = 'hermes.desktop.statusbarVisible.v2'
 // palette/keybind still exposes the optional diagnostics bar.
 // Hiding it unmounts the bar and its optional diagnostic subscriptions; the way back
 // is the `view.toggleStatusbar` keybind or the ⌘K row, never the bar itself.
-export const $statusbarVisible = persistentAtom(STATUSBAR_VISIBLE_STORAGE_KEY, false, Codecs.bool)
+// Simple mode rests the bar hidden without touching this preference.
+const $statusbarVisiblePref = persistentAtom(STATUSBAR_VISIBLE_STORAGE_KEY, false, Codecs.bool)
+
+export const $statusbarVisible = modeBound('statusbarVisible', $statusbarVisiblePref, value =>
+  $statusbarVisiblePref.set(value)
+)
 
 export function toggleStatusbarVisible() {
   $statusbarVisible.set(!$statusbarVisible.get())

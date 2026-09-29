@@ -153,7 +153,7 @@ def test_real_child_cap_routes_profile_usage_and_preserves_parent_and_recent_evi
                             child, messages=messages, system_message=None, user_message=task,
                             active_system_prompt="evidence-only", conversation_history=None,
                             compression_attempts=0, max_compression_attempts=3, effective_task_id="cap-contract",
-                            final_response=None, turn_exit_reason=None)
+                            final_response=None, turn_exit_reason=None, current_turn_user_idx=0)
                         assert verdict.compression_attempts == int(should_compress)
                         assert len(summary_calls) == calls_before + int(should_compress)
                         if should_compress:

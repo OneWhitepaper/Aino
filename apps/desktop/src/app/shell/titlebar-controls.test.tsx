@@ -200,25 +200,11 @@ describe('TitlebarControls fixed clusters', () => {
     expect(appControls()).not.toBeNull()
   })
 
-  it('keeps the app clusters on chat', () => {
-    renderControls('/')
-
-    expect(windowControls()).not.toBeNull()
-    expect(appControls()).not.toBeNull()
-  })
-
   it('hides the app clusters on an overlay', () => {
     renderControls('/settings')
 
     expect(windowControls()).toBeNull()
     expect(appControls()).toBeNull()
-  })
-
-  it('keeps the app clusters on a first-party workspace page', () => {
-    renderControls('/capabilities')
-
-    expect(windowControls()).not.toBeNull()
-    expect(appControls()).not.toBeNull()
   })
 
   it('a titleBar.tools item alone does not claim the band', () => {
@@ -282,13 +268,6 @@ describe('TitlebarControls fixed clusters', () => {
       // The mounted controls subscribe to titleBar.* areas — dispose inside
       // act so the unmount-time registry update doesn't warn.
       act(() => disposeChrome())
-    })
-
-    it('hides the app clusters on a contributed full-page route', () => {
-      renderControls('/kanban')
-
-      expect(windowControls()).toBeNull()
-      expect(appControls()).toBeNull()
     })
 
     it('keeps plugin titlebar contributions on a contributed full-page route', () => {

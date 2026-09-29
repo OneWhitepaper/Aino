@@ -654,19 +654,16 @@ export function desktopSlashDescription(command: string, fallback = '', localize
   const canonical = canonicalDesktopSlashCommand(command)
 
   const explicit = localized?.[canonical]?.trim()
-
-  if (explicit) {
-    return explicit
-  }
-
   const key = `composer.commandDescs.${canonical}`
   const translated = translateNow(key)
+  const description =
+    explicit ||
+    (translated !== key && translated.trim() ? translated : '') ||
+    SPEC_BY_NAME.get(canonical)?.description ||
+    fallback
+  const usage = fallback.match(/\s+\(usage:\s+(.+)\)$/s)?.[0] ?? ''
 
-  if (translated !== key && translated.trim()) {
-    return translated
-  }
-
-  return SPEC_BY_NAME.get(canonical)?.description || fallback
+  return description && description !== fallback ? `${description}${usage}` : description
 }
 
 export function desktopSlashCommandArgumentMode(command: string): DesktopSlashArgumentMode | null {

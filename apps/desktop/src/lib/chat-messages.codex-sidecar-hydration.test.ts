@@ -31,6 +31,7 @@ describe('#68321 assistant rows whose reply persisted only in codex_message_item
       content: '',
       reasoning: null,
       reasoning_content: null,
+      display_commentary: ['Working through the approach...'],
       codex_message_items: [
         {
           type: 'message',
@@ -103,6 +104,7 @@ describe('#68321 assistant rows whose reply persisted only in codex_message_item
       role: 'assistant',
       content: '',
       reasoning: '正在检查。',
+      display_commentary: ['正在检查。'],
       codex_message_items: [
         {
           type: 'message',

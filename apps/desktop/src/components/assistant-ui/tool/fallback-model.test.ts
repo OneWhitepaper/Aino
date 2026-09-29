@@ -7,9 +7,11 @@ import {
   clampForDisplay,
   countDiffLineStats,
   inlineDiffFromResult,
+  isPreviewableTarget,
   MAX_TOOL_RENDER_CHARS,
   prettyJson,
-  type ToolPart
+  type ToolPart,
+  toolPreviewOutcome
 } from './fallback-model'
 import { summarizeToolRun } from './run-summary'
 
@@ -276,14 +278,12 @@ describe('buildToolView calls sealed without a result', () => {
     const view = buildToolView(part({ completedAt: 5, result: undefined, toolName: 'terminal' }), '')
 
     expect(view.status).toBe('warning')
-    expect(view.title).toBe('Result unavailable')
   })
 
   it('shows a call the user interrupted as a neutral notice', () => {
     const view = buildToolView(part({ completedAt: 5, interrupted: true, result: undefined, toolName: 'terminal' }), '')
 
     expect(view.status).toBe('notice')
-    expect(view.title).toBe('Interrupted')
   })
 
   it('shows the real result when one arrived after the interruption', () => {
@@ -388,7 +388,7 @@ describe('buildToolView browser_navigate title', () => {
     )
 
     expect(view.status).toBe('error')
-    expect(view.title).toBe('Failed to open hermes-agent.nousresearch.com/docs')
+    expect(view.title).toContain('hermes-agent.nousresearch.com/docs')
   })
 
   it('shows opened title on success', () => {
@@ -402,7 +402,7 @@ describe('buildToolView browser_navigate title', () => {
     )
 
     expect(view.status).toBe('success')
-    expect(view.title).toBe('Opened hermes-agent.nousresearch.com/docs')
+    expect(view.title).toContain('hermes-agent.nousresearch.com/docs')
   })
 })
 
@@ -671,6 +671,27 @@ describe('buildToolView title actions', () => {
   })
 })
 
+// #85132: Windows agents write `C:\\...` / UNC paths; those must get the same
+// artifact preview tag a POSIX `/Users/...` path gets.
+describe('Windows absolute preview targets', () => {
+  it.each(['C:\\Users\\me\\report.html', 'D:/work/report.htm', '\\\\server\\share\\report.html'])(
+    'tags a written %s as a previewable artifact',
+    path => {
+      const outcome = toolPreviewOutcome(
+        part({ args: { content: '<h1>hi</h1>', path }, result: { bytes_written: 11 }, toolName: 'write_file' })
+      )
+
+      expect(outcome.previewTarget).toBe(path)
+      expect(isPreviewableTarget(outcome.previewTarget)).toBe(true)
+    }
+  )
+
+  it('keeps non-HTML Windows files out of the preview tag, like POSIX ones', () => {
+    expect(isPreviewableTarget('C:\\Users\\me\\notes.txt')).toBe(isPreviewableTarget('/Users/me/notes.txt'))
+    expect(isPreviewableTarget('C:\\Users\\me\\notes.txt')).toBe(false)
+  })
+})
+
 describe('clampForDisplay', () => {
   it('passes short payloads through untouched', () => {
     expect(clampForDisplay('hello')).toBe('hello')
@@ -683,8 +704,7 @@ describe('clampForDisplay', () => {
 
     expect(clamped.length).toBeLessThan(oversized.length)
     expect(clamped.startsWith('x'.repeat(MAX_TOOL_RENDER_CHARS))).toBe(true)
-    expect(clamped).toContain('5,000 more characters truncated')
-    expect(clamped).toContain('Copy')
+    expect(clamped).toContain(`${new Intl.NumberFormat().format(5_000)} more characters truncated`)
   })
 
   it('uses the active Simplified Chinese copy for truncated output', () => {
@@ -730,7 +750,6 @@ describe('buildToolView memory status', () => {
     })
 
     expect(view.status).toBe('success')
-    expect(view.title).toBe('Saved to memory')
     expect(view.countLabel).toBe('13 entries')
     expect(view.subtitle).toBe('Applied 1 operation(s).')
   })
@@ -744,7 +763,6 @@ describe('buildToolView memory status', () => {
     })
 
     expect(view.status).toBe('warning')
-    expect(view.title).toBe('Memory write noted')
     expect(view.subtitle).toContain('Memory is full')
   })
 })

@@ -4,6 +4,7 @@ import * as React from 'react'
 
 import { CARD_SURFACE_CLASS } from '@/components/ui/card-surface'
 import { usePopoverPortalContainer } from '@/components/ui/dialog-portal-context'
+import { menuSurfaceClass } from '@/components/ui/menu'
 import { cn } from '@/lib/utils'
 
 function Popover({ ...props }: React.ComponentProps<typeof PopoverPrimitive.Root>) {
@@ -31,7 +32,8 @@ const popoverContentVariants = cva(
         // A high-emphasis announcement uses the same graphite/inverse pair as
         // the primary action. Its arrow stays borderless and shares the fill.
         accent: 'bg-(--popover-surface) text-(--aino-action-fg) shadow-nous [--popover-surface:var(--aino-action-bg)]',
-        card: cn(CARD_SURFACE_CLASS, 'w-80 p-0 [--popover-surface:var(--ui-bg-elevated)]')
+        card: cn(CARD_SURFACE_CLASS, 'w-80 p-0 [--popover-surface:var(--ui-bg-elevated)]'),
+        menu: cn(menuSurfaceClass, 'w-auto')
       }
     },
     defaultVariants: { variant: 'default' }
@@ -53,8 +55,8 @@ function PopoverContent({
   className,
   collisionPadding = 8,
   showArrow = true,
-  sideOffset = 6,
   variant,
+  sideOffset = variant === 'menu' ? 4 : 6,
   ...props
 }: PopoverContentProps) {
   // Portal into the enclosing dialog when nested in one (keeps focus inside so
@@ -78,7 +80,7 @@ function PopoverContent({
             the border on its two outer edges only. Radix authors the child pointing
             "down" and rotates the wrapper per side, so the V always faces outward.
             The square's inner half tucks under the body, opening the border seam. */}
-        {showArrow && (
+        {showArrow && variant !== 'menu' && (
           <PopoverPrimitive.Arrow asChild height={7} width={16}>
             <span className="relative block h-[7px] w-4 overflow-visible">
               <span

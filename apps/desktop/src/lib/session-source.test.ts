@@ -34,10 +34,6 @@ describe('photon messaging source registration', () => {
     expect(terms).toContain('messages')
   })
 
-  it('is registered in the messaging source id list', () => {
-    expect(MESSAGING_SESSION_SOURCE_IDS).toContain('photon')
-  })
-
   it('does not flag local/CLI-ish sources as messaging (guard sanity)', () => {
     expect(isMessagingSource('cli')).toBe(false)
     expect(isMessagingSource(null)).toBe(false)

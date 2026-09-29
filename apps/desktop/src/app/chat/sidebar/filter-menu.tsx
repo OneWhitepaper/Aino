@@ -21,6 +21,7 @@ import {
 import { useI18n } from '@/i18n'
 import { desktopGit } from '@/lib/desktop-git'
 import { cn } from '@/lib/utils'
+import { $showsAdvancedChrome } from '@/store/interface-mode'
 import {
   $sidebarCardRows,
   $sidebarFiltersActive,
@@ -52,12 +53,9 @@ import {
   toggleSidebarRowMeta,
   toggleSidebarStatusFilter
 } from '@/store/layout'
-import {
-  $profiles,
-  $showAllProfiles,
-  normalizeProfileKey
-} from '@/store/profile'
+import { $profiles, $showAllProfiles, normalizeProfileKey, requestProfileCreate } from '@/store/profile'
 import { $profileRailVisible, toggleProfileRailVisible } from '@/store/profile-rail-prefs'
+import { runImportProfileFlow } from '@/store/profile-share'
 import { $projectTree } from '@/store/projects'
 import type { PullRequestBucket } from '@/store/pull-requests'
 import { $unreadFinishedSessionIds, markAllSessionsRead } from '@/store/session'
@@ -201,6 +199,9 @@ export function SidebarFilterMenu({
   // at module load: switching to a remote profile swaps the bridge underneath.
   const prAvailable = Boolean(desktopGit()?.review?.prList)
   const filterLabels = t.ui.actions.labels
+  // Simple mode owns the row readouts and the rail, and PRs are a coding
+  // signal — those rows wait for Advanced rather than appearing pre-decided.
+  const showsAdvancedChrome = useStore($showsAdvancedChrome)
 
   // Both sections are visible together. Never sweep Pinned, Messaging or Cron.
   const foldIds = [
@@ -214,6 +215,7 @@ export function SidebarFilterMenu({
     ...localizeFilterOption(option, filterLabels),
     ...(option.id === 'profile' ? { label: t.sidebar.gatewayGroups.grouping } : {})
   }))
+
   const groupingLabel = groupings.find(option => option.id === recentGrouping)?.label
 
   // Two options are conditional: dragging a row is what picks manual, so it
@@ -306,19 +308,21 @@ export function SidebarFilterMenu({
             </DropdownMenuSubContent>
           </DropdownMenuSub>
 
-          <DropdownMenuSub>
-            <DropdownMenuSubTrigger>{t.ui.actions.show}</DropdownMenuSubTrigger>
-            <DropdownMenuSubContent>
-              {rowMetaOptions.map(option => (
-                <OptionCheckbox
-                  checked={rowMeta.includes(option.id)}
-                  key={option.id}
-                  onCheck={() => toggleSidebarRowMeta(option.id)}
-                  option={localizeFilterOption(option, filterLabels)}
-                />
-              ))}
-            </DropdownMenuSubContent>
-          </DropdownMenuSub>
+          {showsAdvancedChrome && (
+            <DropdownMenuSub>
+              <DropdownMenuSubTrigger>{t.ui.actions.show}</DropdownMenuSubTrigger>
+              <DropdownMenuSubContent>
+                {rowMetaOptions.map(option => (
+                  <OptionCheckbox
+                    checked={rowMeta.includes(option.id)}
+                    key={option.id}
+                    onCheck={() => toggleSidebarRowMeta(option.id)}
+                    option={localizeFilterOption(option, filterLabels)}
+                  />
+                ))}
+              </DropdownMenuSubContent>
+            </DropdownMenuSub>
+          )}
 
           <OptionCheckbox
             checked={showAllSessions}
@@ -337,11 +341,13 @@ export function SidebarFilterMenu({
           {/* The colored strip at the sidebar foot. Off, the statusbar grows a
               profile dropdown beside the gateway switcher, so nobody loses the
               door — this is for people whose profiles are bots, not workspaces. */}
-          <OptionCheckbox
-            checked={profileRailVisible}
-            onCheck={toggleProfileRailVisible}
-            option={{ icon: 'organization', id: 'profile-rail', label: t.sidebar.profileRail }}
-          />
+          {showsAdvancedChrome && (
+            <OptionCheckbox
+              checked={profileRailVisible}
+              onCheck={toggleProfileRailVisible}
+              option={{ icon: 'organization', id: 'profile-rail', label: t.sidebar.profileRail }}
+            />
+          )}
         </DropdownMenuGroup>
 
         <DropdownMenuSeparator />
@@ -365,7 +371,7 @@ export function SidebarFilterMenu({
 
           {/* `gh` only exists where the checkout does, so on a remote backend
               this submenu never appears rather than filtering everything out. */}
-          {prAvailable && (
+          {prAvailable && showsAdvancedChrome && (
             <DropdownMenuSub>
               <DropdownMenuSubTrigger>{t.ui.actions.pullRequest}</DropdownMenuSubTrigger>
               <DropdownMenuSubContent>
@@ -393,6 +399,11 @@ export function SidebarFilterMenu({
                     option={{ icon: 'account', id: name, label: name }}
                   />
                 ))}
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onSelect={requestProfileCreate}>{t.profiles.newProfile}</DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => void runImportProfileFlow()}>
+                  {t.profiles.importProfile}
+                </DropdownMenuItem>
               </DropdownMenuSubContent>
             </DropdownMenuSub>
           )}

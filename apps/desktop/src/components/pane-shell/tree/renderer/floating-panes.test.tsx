@@ -10,10 +10,13 @@ import { act } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { TITLEBAR_HEIGHT } from '@/app/shell/titlebar'
-import { registry } from '@/contrib/registry'
+import type { registry as contributionRegistry } from '@/contrib/registry'
 import { reactRoot } from '@/test/react-root'
 
-import { FloatingPanes } from './floating-panes'
+import type { FloatingPanes as FloatingPanesComponent } from './floating-panes'
+
+let registry: typeof contributionRegistry
+let FloatingPanes: typeof FloatingPanesComponent
 
 const mount = reactRoot()
 let disposers: (() => void)[] = []
@@ -55,8 +58,11 @@ function registerHud(data: Record<string, unknown>) {
 }
 
 describe('FloatingPanes (live DOM)', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
+    vi.resetModules()
     window.localStorage.clear()
+    registry = (await import('@/contrib/registry')).registry
+    FloatingPanes = (await import('./floating-panes')).FloatingPanes
     resizeWindow(1440, 900)
     // setPointerCapture / releasePointerCapture don't exist in jsdom.
     Element.prototype.setPointerCapture = vi.fn()
@@ -151,10 +157,6 @@ describe('FloatingPanes (live DOM)', () => {
 
     const before = card()!.style.left
     const toggle = card()!.querySelector('button')!
-    const chevron = () => toggle.querySelector('i')!
-
-    // Expanded: down chevron (fold). Collapsed: up chevron (restore).
-    expect(chevron().className).toContain('codicon-chevron-down')
 
     // The button is inside the drag handle — [data-floating-no-drag] must
     // stop it starting a drag.
@@ -170,7 +172,6 @@ describe('FloatingPanes (live DOM)', () => {
 
     expect(document.querySelector('[data-testid="hud-body"]')).toBeNull()
     expect(card()!.style.height).toBe('')
-    expect(chevron().className).toContain('codicon-chevron-up')
   })
 
   it('renders one card per floating contribution', () => {

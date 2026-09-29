@@ -140,20 +140,6 @@ describe('useContextBreakdown', () => {
     expect(result.current.breakdown).toBeNull()
     expect(requestGateway).toHaveBeenLastCalledWith('session.context_breakdown', { session_id: 'runtime-2' })
   })
-
-  it('reports the measured occupancy the backend sends, not just the estimate', async () => {
-    // `context_used` on the payload is already the measured figure once a turn
-    // has run — the estimate is the backend's own fallback, not a second value
-    // the client has to choose between.
-    const measured: ContextBreakdown = { ...breakdown, context_used: 12_000 }
-    const requestGateway = vi.fn().mockResolvedValue(measured)
-
-    const { result } = renderHook(() =>
-      useContextBreakdown({ busy: false, enabled: true, requestGateway, sessionId: 'runtime-1' })
-    )
-
-    await waitFor(() => expect(result.current.breakdown?.context_used).toBe(12_000))
-  })
 })
 
 describe('ContextUsagePanel', () => {

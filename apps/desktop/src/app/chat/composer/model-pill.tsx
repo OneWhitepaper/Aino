@@ -18,6 +18,7 @@ import { formatModelPillLabel, providerDisplayName } from '@/lib/model-status-la
 import { cn } from '@/lib/utils'
 import { $currentModelSource, $modelDefaultUnavailable, setModelPickerOpen } from '@/store/session'
 
+import { useComposerModelPillLabel } from './contrib'
 import { onComposerModelMenuRequest } from './focus'
 import { RICH_INPUT_SLOT } from './rich-editor'
 import { useComposerScope } from './scope'
@@ -65,6 +66,7 @@ export function ModelPill({
     currentProvider === 'aino' ? platform.models.find(row => row.id === currentModel)?.display_name : undefined
 
   const fastMode = useStore(view.$fast)
+  const reasoningEffort = useStore(view.$reasoningEffort)
   const modelSource = useStore($currentModelSource)
   const modelDefaultUnavailableState = useStore($modelDefaultUnavailable)
   const modelDefaultUnavailable = view.kind === 'primary' && modelDefaultUnavailableState
@@ -152,12 +154,20 @@ export function ModelPill({
   // The model resolves a beat after the gateway/session comes up. Rather than
   // flash a literal "No model", show a quiet loader (inherits the pill text
   // color at half opacity) until a model lands.
+  //
+  // A `composer.modelPill` provider may override the LABEL (compact reasoning
+  // label, custom naming) — the pill keeps its chrome, pin dot, and menu; only
+  // the text changes, and a provider that declines leaves the core label.
+  const pillLabel = useComposerModelPillLabel({ compact, model: currentModel, reasoningEffort: reasoningEffort || '' })
+
   const label = compact ? (
     <ChevronDown className="size-3.5 shrink-0 opacity-70" />
   ) : (
     <>
       {currentModel.trim() ? (
-        <span className="truncate">{platformName || formatModelPillLabel(currentModel, { fastMode })}</span>
+        <span className="truncate">
+          {platformName || pillLabel || formatModelPillLabel(currentModel, { fastMode })}
+        </span>
       ) : modelDefaultUnavailable ? (
         <span className="truncate">{copy.noModel}</span>
       ) : (

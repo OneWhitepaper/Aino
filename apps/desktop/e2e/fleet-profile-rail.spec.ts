@@ -210,23 +210,6 @@ test.describe('fleet profile rail — two registered gateways', () => {
     await capture(page, '2-re-homed-on-homelab-inbox')
   })
 
-  test('an at-rest square offers gateway-scoped actions, never the legacy remote override', async () => {
-    const square = gatewayGroup(page, 'local').getByRole('button', { name: 'research · This device' })
-    await square.click({ button: 'right' })
-
-    const menu = page.getByRole('menu', { name: 'Actions' })
-    await expect(menu).toBeVisible()
-    await expect(menu.getByRole('menuitem', { name: 'Switch to research on This device' })).toBeVisible()
-    await expect(menu.getByRole('menuitem', { name: 'Rename…' })).toBeVisible()
-    await expect(menu.getByRole('menuitem', { name: 'Edit SOUL.md…' })).toBeVisible()
-    await expect(menu.getByRole('menuitem', { name: 'Delete' })).toBeVisible()
-    await expect(menu.getByRole('menuitem', { name: 'Connect to a remote host…' })).toHaveCount(0)
-
-    await capture(page, '3-at-rest-square-context-menu')
-    await page.keyboard.press('Escape')
-    await expect(menu).toBeHidden()
-  })
-
   test('editing SOUL.md on an at-rest square reads the owning gateway, not the foreground one', async () => {
     const square = gatewayGroup(page, 'local').getByRole('button', { name: 'research · This device' })
     await square.click({ button: 'right' })

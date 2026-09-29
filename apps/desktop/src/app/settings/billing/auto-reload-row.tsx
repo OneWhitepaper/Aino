@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input'
 import { useI18n } from '@/i18n'
 import { cn } from '@/lib/utils'
 
-import { ListRow, Pill } from '../primitives'
+import { LIST_ROW_COLUMNS, ListRow, Pill } from '../primitives'
 
 import { RowValue } from './account-row-value'
 import type { BillingRefusal } from './api'
@@ -35,7 +35,7 @@ export function AutoReloadRow({
   // save — opening Manage on a prefilled (possibly below-min) config must not
   // flash an error (spec §9).
   const [showErrors, setShowErrors] = useState(false)
-  const [message, setMessage] = useState<null | { kind: 'error' | 'success'; text: string }>(null)
+  const [message, setMessage] = useState<null | { kind: 'error' | 'success'; text: 'updated' | 'turnedOff' }>(null)
   const [refusal, setRefusal] = useState<BillingRefusal | null>(null)
 
   const [reloadTo, setReloadTo] = useState(
@@ -98,7 +98,7 @@ export function AutoReloadRow({
     }
 
     await queryClient.invalidateQueries({ queryKey: ['billing', 'state'] })
-    setMessage({ kind: 'success', text: copy.updated })
+    setMessage({ kind: 'success', text: 'updated' })
     setEditing(false)
   }
 
@@ -128,7 +128,7 @@ export function AutoReloadRow({
     }
 
     await queryClient.invalidateQueries({ queryKey: ['billing', 'state'] })
-    setMessage({ kind: 'success', text: copy.turnedOff })
+    setMessage({ kind: 'success', text: 'turnedOff' })
     setEditing(false)
   }
 
@@ -145,7 +145,7 @@ export function AutoReloadRow({
               </div>
             ) : null}
             <BillingRefusalInline refusal={refusal} />
-            {message && <InlineMessage kind={message.kind}>{message.text}</InlineMessage>}
+            {message && <InlineMessage kind={message.kind}>{copy[message.text]}</InlineMessage>}
           </>
         }
         description={row.description}
@@ -168,7 +168,7 @@ export function AutoReloadRow({
   // panes. The form is `invisible` + `aria-hidden` when not editing.
   return (
     <div className="@container">
-      <div className="grid gap-3 py-3 @2xl:grid-cols-[minmax(0,1fr)_minmax(15rem,22rem)] @2xl:items-start">
+      <div className={cn('grid gap-3 py-3 @2xl:items-start', LIST_ROW_COLUMNS)}>
         <div className="min-w-0">
           <div className="text-[length:var(--conversation-text-font-size)] font-medium text-foreground">
             {row.title}
@@ -253,7 +253,7 @@ export function AutoReloadRow({
             {/* VIEW layer — success feedback overlaid in the same cell when not editing. */}
             {!editing && message && (
               <div className="[grid-area:stack]">
-                <InlineMessage kind={message.kind}>{message.text}</InlineMessage>
+                <InlineMessage kind={message.kind}>{copy[message.text]}</InlineMessage>
               </div>
             )}
           </div>

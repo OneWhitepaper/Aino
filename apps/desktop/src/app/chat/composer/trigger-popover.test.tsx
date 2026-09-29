@@ -6,23 +6,18 @@ import { I18nProvider } from '@/i18n'
 import { ComposerTriggerPopover } from './trigger-popover'
 
 function renderPopover(kind: '@' | '/', loading = false) {
-  const onHover = vi.fn()
-  const onPick = vi.fn()
-
-  const rendered = render(
+  return render(
     <I18nProvider configClient={null} initialLocale="zh">
       <ComposerTriggerPopover
         activeIndex={0}
         items={[]}
         kind={kind}
         loading={loading}
-        onHover={onHover}
-        onPick={onPick}
+        onHover={vi.fn()}
+        onPick={vi.fn()}
       />
     </I18nProvider>
   )
-
-  return { ...rendered, onHover, onPick }
 }
 
 function slashItem(command: string) {

@@ -32,7 +32,7 @@ describe('runPreviewTour', () => {
 
   it('localizes a page that does not answer the tour action', async () => {
     setRuntimeI18nLocale('zh')
-    openPreview(urlTarget('https://example.com'), 'tool-result')
+    openPreview(urlTarget('https://example.com'))
     cleanup = registerPreviewScriptRunner($rightRailActiveTabId.get()!, async () => '')
 
     expect(await runPreviewTour({ kind: 'targets' })).toEqual({

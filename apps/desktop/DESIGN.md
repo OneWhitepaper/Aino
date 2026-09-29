@@ -286,7 +286,15 @@ one-offs; if elevation needs to change, change the token.
 
 Menus, selects, dialogs, sheets and popovers share the same `shadow-nous` +
 `--stroke-nous` treatment and 20px panel radius (sheets round their exposed edge).
-Drag affordances may use tokenized dashed targets and local blur. These are semantic surface classes, not licenses
+Every floating list —
+`DropdownMenu`, `Select`, and Popover + cmdk pickers
+(`<PopoverContent variant="menu">` + `<Command variant="menu">`) — paints
+through `src/components/ui/menu.ts`, so a list reads the same wherever it
+opens. Typed fields with suggestions use `ComboboxInput`, never
+`<input list>` + `<datalist>` (Chromium paints that as its own OS popup).
+
+Drag affordances may use tokenized
+dashed targets and local blur. These are semantic surface classes, not licenses
 for call-site shadow or border inventions.
 
 `PopoverContent variant="card"` provides a 320px floating card with 20px corners,
@@ -317,6 +325,17 @@ retires both the painted card and its measured layout footprint; restoring tool
 rows must not insert their full height before the outgoing stack can settle.
 No completion callback may clear the measurement of a newly arrived card.
 Reduced motion settles immediately without retaining empty clearance.
+
+## Window background behavior
+
+Settings → Appearance → Window layout offers **Minimize to tray**, off by default and
+local to this desktop installation. When enabled, minimizing ordinary windows
+hides them without stopping their work. Close, Alt+F4, and Cmd+Q keep their
+normal behavior. The tray's **Show Hermes** restores hidden windows;
+**Quit Hermes** keeps the ordinary active-work confirmation and teardown.
+On macOS the tray lives in the menu bar; the Dock icon hides only when no normal
+window remains visible and returns on restore. If the tray is unavailable,
+ordinary minimize/close behavior is retained rather than hiding an unreachable app.
 
 ## Window glass
 
@@ -521,6 +540,9 @@ existing traffic-light and Window Controls Overlay measurements.
 
 The left cluster shows sidebar, settings, layout editor, and HUD controls. Flip
 and the right-sidebar toggle sit on the right; haptics remain in settings.
+In Simple interface mode only sidebar, settings and the layout editor render,
+and the reserved cluster width shrinks with them (`TITLEBAR_FIXED_TOOLS` is the
+one table both the buttons and the width reservation read).
 Holding Cmd (Ctrl off macOS) reveals small slot numbers over the target strip's
 status dots after 400ms, without changing tab widths. Hints follow the same
 binding and hovered/focused-zone resolver as the number shortcuts.
@@ -859,9 +881,12 @@ long transcript or a busy terminal.
 
 - Every user-facing string goes through `useI18n()` (`src/i18n/context.tsx`).
   No literals in JSX.
-- **Update all locales together** — `en`, `ja`, `zh`, `zh-hant`. A string change
-  in `en.ts` that skips the others is a regression (drifted punctuation,
-  stale labels). Keep trailing-punctuation and tone consistent across all four.
+- **Update all locales together** — every catalog registered in
+  `src/i18n/catalog.ts`. A string change in `en.ts` that skips the others is a
+  regression (drifted punctuation, stale labels). Keep trailing-punctuation and
+  tone consistent across all of them. `fr`, `de`, and `es` are complete
+  `Translations` objects, so a key missing there fails the type check; the
+  `defineLocale()` overlays fall back to English instead.
 
 ## State (TypeScript)
 
@@ -909,7 +934,7 @@ The detailed state contract lives in the scoped
 - [ ] Hot interactions avoid broad subscriptions, layout thrash, and
       `transition-all`?
 - [ ] Keyboard ownership and single-action `Esc` behavior are correct?
-- [ ] All four locales updated for any new/changed string?
+- [ ] All registered locales updated for any new/changed string?
 - [ ] `cursor-pointer`, focus ring, and `Esc`-to-close behave?
 - [ ] Touched a primitive, token, or variant? Its named-contract entry in this
       file is updated in the same change.

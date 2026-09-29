@@ -4,6 +4,7 @@ import { type ReactNode, useEffect } from 'react'
 import { LanguageSwitcher } from '@/components/language-switcher'
 import { Button } from '@/components/ui/button'
 import { SegmentedControl } from '@/components/ui/segmented-control'
+import { Slider } from '@/components/ui/slider'
 import { saveHermesConfig } from '@/hermes'
 import { useI18n } from '@/i18n'
 import { triggerHaptic } from '@/lib/haptics'
@@ -11,12 +12,20 @@ import { Palette } from '@/lib/icons'
 import { $backdrop, setBackdrop } from '@/store/backdrop'
 import { $composerPopoutGesturesEnabled, setComposerPopoutGesturesEnabled } from '@/store/composer-popout'
 import { $embedAllowed, $embedMode, clearEmbedAllowed, type EmbedMode, setEmbedMode } from '@/store/embed-consent'
+import {
+  $interfaceMode,
+  $modeShadowed,
+  INTERFACE_MODES,
+  type InterfaceMode,
+  setInterfaceMode
+} from '@/store/interface-mode'
 import { $introSplash, setIntroSplash } from '@/store/intro-splash'
 import { notifyError } from '@/store/notifications'
 import { $reactionsEnabled, setReactionsEnabled } from '@/store/reactions-enabled'
 import { $reasoningCollapsedByDefault, setReasoningCollapsedByDefault } from '@/store/reasoning-disclosure'
 import { $sessionListDensity, type SessionListDensity, setSessionListDensity } from '@/store/session-list-density'
 import { $tabStripDefault, setTabStripDefault, type TabStripDefault } from '@/store/tabstrip-prefs'
+import { $textDirection, setTextDirection, TEXT_DIRECTIONS, type TextDirection } from '@/store/text-direction'
 import { $hideThreadTimeline, setHideThreadTimeline } from '@/store/thread-timeline'
 import { $spentTipCount, $tipsEnabled, resetTips, setTipsEnabled } from '@/store/tips'
 import {
@@ -54,16 +63,18 @@ import { useTheme } from '@/themes/context'
 
 import { setHermesConfigCache, useHermesConfigRecord } from '../hooks/use-config-record'
 
-import { APPEARANCE_SUBPAGES, appearanceSubpageForSetting, type AppearanceSubpageId } from './appearance-subpages'
+import { AppearanceExtraSlot } from './appearance-contrib'
+import { APPEARANCE_SUBPAGES, type AppearanceSubpageId } from './appearance-subpages'
 import { ChatFontSetting } from './chat-font-setting'
 import { MODE_OPTIONS } from './constants'
 import { setNested } from './helpers'
+import { MinimizeToTraySetting } from './minimize-to-tray-setting'
 import { PetSettings } from './pet-settings'
 import { ListRow, SectionHeading, SettingsContent, SettingsGroup, ToggleRow } from './primitives'
-import { APPEARANCE_SETTING_IDS } from './settings-search'
+import { SETTING_IDS, settingElementId } from './settings-manifest'
 import { settingsSubpageIcon } from './subpages'
 import { TerminalFontSetting } from './terminal-font-setting'
-import { useDeepLinkHighlight } from './use-deep-link-highlight'
+import { useSettingDeepLink } from './use-setting-deep-link'
 
 // display.resume_last_session lives in the backend config record (shared with
 // config.yaml and the cold-start restore in use-desktop-integrations), not a
@@ -103,6 +114,7 @@ function ResumeLastSessionSetting() {
       checked={checked}
       description={a.resumeLastSessionDesc}
       disabled={!config}
+      id={settingElementId(ids.resumeLastSession)}
       label={a.resumeLastSessionTitle}
       onChange={update}
     />
@@ -115,8 +127,7 @@ function ResumeLastSessionSetting() {
 // presets highlights nothing, and the row description keeps showing the
 // exact current percent.
 const UI_SCALE_PRESETS = ['90', '100', '110', '125', '150', '175'] as const
-const appearanceSettingElementId = (id: string) => `setting-field-${id}`
-
+const ids = SETTING_IDS.appearance
 type UiScalePreset = (typeof UI_SCALE_PRESETS)[number]
 
 function matchUiScalePreset(percent: number): UiScalePreset | null {
@@ -154,9 +165,8 @@ interface TranslucencySliderProps {
 function TranslucencySlider({ label, onChange, value }: TranslucencySliderProps) {
   return (
     <>
-      <input
+      <Slider
         aria-label={label}
-        className="h-1 w-40 cursor-pointer appearance-none rounded-full bg-(--ui-stroke-tertiary)"
         max={TRANSLUCENCY_MAX}
         min={TRANSLUCENCY_MIN}
         onBlur={endTranslucencyPeek}
@@ -173,8 +183,6 @@ function TranslucencySlider({ label, onChange, value }: TranslucencySliderProps)
         onPointerDown={beginTranslucencyPeek}
         onPointerUp={endTranslucencyPeek}
         step={TRANSLUCENCY_STEP}
-        style={{ accentColor: 'var(--dt-primary)' }}
-        type="range"
         value={value}
       />
       <span className="w-9 text-right text-[length:var(--conversation-caption-font-size)] tabular-nums text-(--ui-text-tertiary)">
@@ -209,9 +217,13 @@ export function AppearanceSettings({ subpage }: AppearanceSettingsProps = {}) {
   const { t, isSavingLocale } = useI18n()
   const { mode, setMode } = useTheme()
   const toolViewMode = useStore($toolViewMode)
+  const toolViewShadowed = useStore($modeShadowed('toolViewMode'))
   const hideCodeDiffs = useStore($hideCodeDiffs)
+  const hideCodeDiffsShadowed = useStore($modeShadowed('hideCodeDiffs'))
   const hideThreadTimeline = useStore($hideThreadTimeline)
   const reasoningCollapsedByDefault = useStore($reasoningCollapsedByDefault)
+  const reasoningCollapsedShadowed = useStore($modeShadowed('reasoningCollapsedByDefault'))
+  const interfaceMode = useStore($interfaceMode)
   const sessionListDensity = useStore($sessionListDensity)
   const tabStripDefault = useStore($tabStripDefault)
   const titlebarAppActionsSide = useStore($titlebarAppActionsSide)
@@ -222,6 +234,7 @@ export function AppearanceSettings({ subpage }: AppearanceSettingsProps = {}) {
   const translucency = useStore($translucency)
   const glassMode = translucency.mode === 'glass' && GLASS_SUPPORTED
   const userBubbleTransparency = useStore($userBubbleTransparency)
+  const textDirection = useStore($textDirection)
   const reactionsEnabled = useStore($reactionsEnabled)
   const tipsEnabled = useStore($tipsEnabled)
   const toursEnabled = useStore($toursEnabled)
@@ -252,15 +265,8 @@ export function AppearanceSettings({ subpage }: AppearanceSettingsProps = {}) {
     }
 
   const show = (id: AppearanceSubpageId) => subpage === undefined || subpage === id
-  useDeepLinkHighlight({
-    elementId: appearanceSettingElementId,
-    param: 'setting',
-    ready: id => {
-      const targetSubpage = appearanceSubpageForSetting(id)
 
-      return targetSubpage !== undefined && show(targetSubpage)
-    }
-  })
+  useSettingDeepLink('config:appearance', page => page !== undefined && show(page as AppearanceSubpageId))
 
   const modeOptions = MODE_OPTIONS.map(({ id, icon }) => ({ icon, id, label: t.settings.modeOptions[id].label }))
 
@@ -275,6 +281,19 @@ export function AppearanceSettings({ subpage }: AppearanceSettingsProps = {}) {
     { id: 'detailed', label: a.sessionDensityDetailed }
   ] as const satisfies readonly { id: SessionListDensity; label: string }[]
 
+  const interfaceModeOptions = INTERFACE_MODES.map(id => ({
+    id,
+    label: t.interfaceMode[id].label
+  })) satisfies readonly {
+    id: InterfaceMode
+    label: string
+  }[]
+
+  // A row whose value Simple mode currently decides says so where the
+  // preference text would otherwise promise a persistence it cannot deliver.
+  const withModeNote = (description: string, shadowed: boolean) =>
+    shadowed ? `${description} ${t.interfaceMode.sessionNote}` : description
+
   const tabStripOptions = [
     { id: 'auto', label: a.tabStripAuto },
     { id: 'always', label: a.tabStripAlways },
@@ -285,6 +304,11 @@ export function AppearanceSettings({ subpage }: AppearanceSettingsProps = {}) {
     { id: 'right', label: a.appActionsRight },
     { id: 'left', label: a.appActionsLeft }
   ] as const satisfies readonly { id: TitlebarAppActionsSide; label: string }[]
+
+  const textDirectionOptions = TEXT_DIRECTIONS.map(id => ({
+    id,
+    label: a.textDirection[id]
+  })) satisfies readonly { id: TextDirection; label: string }[]
 
   const embedOptions = [
     { id: 'ask', label: a.embedsAsk },
@@ -302,7 +326,7 @@ export function AppearanceSettings({ subpage }: AppearanceSettingsProps = {}) {
         <ListRow
           action={<LanguageSwitcher />}
           description={isSavingLocale ? t.language.saving : t.language.description}
-          id={appearanceSettingElementId(APPEARANCE_SETTING_IDS.language)}
+          id={settingElementId(ids.language)}
           title={t.language.label}
         />
 
@@ -321,7 +345,7 @@ export function AppearanceSettings({ subpage }: AppearanceSettingsProps = {}) {
             />
           }
           description={a.introSplashDesc}
-          id={appearanceSettingElementId(APPEARANCE_SETTING_IDS.introSplash)}
+          id={settingElementId(ids.introSplash)}
           title={a.introSplashTitle}
         />
 
@@ -358,6 +382,7 @@ export function AppearanceSettings({ subpage }: AppearanceSettingsProps = {}) {
             </div>
           }
           description={a.tipsDesc}
+          id={settingElementId(ids.tips)}
           title={a.tipsTitle}
         />
 
@@ -376,6 +401,7 @@ export function AppearanceSettings({ subpage }: AppearanceSettingsProps = {}) {
             />
           }
           description={a.toursDesc}
+          id={settingElementId(ids.tours)}
           title={a.toursTitle}
         />
       </>
@@ -393,7 +419,7 @@ export function AppearanceSettings({ subpage }: AppearanceSettingsProps = {}) {
           />
         }
         description={a.colorModeDesc}
-        id={appearanceSettingElementId(APPEARANCE_SETTING_IDS.theme)}
+        id={settingElementId(ids.theme)}
         title={a.colorMode}
       />
     ),
@@ -411,21 +437,28 @@ export function AppearanceSettings({ subpage }: AppearanceSettingsProps = {}) {
             />
           }
           description={a.uiScaleDesc(zoomPercent)}
-          id={appearanceSettingElementId(APPEARANCE_SETTING_IDS.uiScale)}
+          id={settingElementId(ids.uiScale)}
           title={a.uiScaleTitle}
         />
 
-        <div id={appearanceSettingElementId('desktop.font_family')}>
+        <div id={settingElementId(ids.chatFont)}>
           <ChatFontSetting />
         </div>
 
-        <div id={appearanceSettingElementId('terminal.font_family')}>
+        <div id={settingElementId(ids.terminalFont)}>
           <TerminalFontSetting />
         </div>
       </>
     ),
     'window-layout': (
       <>
+        <ListRow
+          action={<SegmentedControl onChange={setInterfaceMode} options={interfaceModeOptions} value={interfaceMode} />}
+          description={t.interfaceMode.hint}
+          id={settingElementId(ids.interfaceMode)}
+          title={t.interfaceMode.title}
+        />
+        <MinimizeToTraySetting />
         <ListRow
           action={
             <SegmentedControl
@@ -438,6 +471,7 @@ export function AppearanceSettings({ subpage }: AppearanceSettingsProps = {}) {
             />
           }
           description={a.sessionDensityDesc}
+          id={settingElementId(ids.sessionDensity)}
           title={a.sessionDensityTitle}
         />
 
@@ -453,6 +487,7 @@ export function AppearanceSettings({ subpage }: AppearanceSettingsProps = {}) {
             />
           }
           description={a.tabStripDesc}
+          id={settingElementId(ids.tabStrip)}
           title={a.tabStripTitle}
         />
 
@@ -468,7 +503,7 @@ export function AppearanceSettings({ subpage }: AppearanceSettingsProps = {}) {
             />
           }
           description={a.appActionsDesc}
-          id={appearanceSettingElementId(APPEARANCE_SETTING_IDS.appActions)}
+          id={settingElementId(ids.appActions)}
           title={a.appActionsTitle}
         />
 
@@ -550,7 +585,7 @@ export function AppearanceSettings({ subpage }: AppearanceSettingsProps = {}) {
               ) : undefined
             }
             description={glassMode ? a.translucencyGlassDesc : a.translucencyDesc}
-            id={appearanceSettingElementId(APPEARANCE_SETTING_IDS.translucency)}
+            id={settingElementId(ids.translucency)}
             title={a.translucencyTitle}
           />
         )}
@@ -570,13 +605,14 @@ export function AppearanceSettings({ subpage }: AppearanceSettingsProps = {}) {
             />
           }
           description={a.backdropDesc}
-          id={appearanceSettingElementId(APPEARANCE_SETTING_IDS.backdrop)}
+          id={settingElementId(ids.backdrop)}
           title={a.backdropTitle}
         />
 
         <ToggleRow
           checked={composerPopoutGesturesEnabled}
           description={a.composerPopoutDesc}
+          id={settingElementId(ids.composerPopout)}
           label={a.composerPopoutTitle}
           onChange={setComposerPopoutGesturesEnabled}
         />
@@ -584,6 +620,12 @@ export function AppearanceSettings({ subpage }: AppearanceSettingsProps = {}) {
     ),
     'chat-display': (
       <>
+        <ListRow
+          action={<SegmentedControl onChange={setTextDirection} options={textDirectionOptions} value={textDirection} />}
+          description={a.textDirectionDesc}
+          id={settingElementId(ids.textDirection)}
+          title={a.textDirectionTitle}
+        />
         <ListRow
           action={
             // Same peek as the window lever: the bubble being tuned sits
@@ -598,7 +640,7 @@ export function AppearanceSettings({ subpage }: AppearanceSettingsProps = {}) {
             </div>
           }
           description={a.userBubbleDesc}
-          id={appearanceSettingElementId(APPEARANCE_SETTING_IDS.userBubble)}
+          id={settingElementId(ids.userBubble)}
           title={a.userBubbleTitle}
         />
 
@@ -617,7 +659,7 @@ export function AppearanceSettings({ subpage }: AppearanceSettingsProps = {}) {
             />
           }
           description={a.hideThreadTimelineDesc}
-          id={appearanceSettingElementId(APPEARANCE_SETTING_IDS.hideThreadTimeline)}
+          id={settingElementId(ids.hideThreadTimeline)}
           title={a.hideThreadTimelineTitle}
         />
 
@@ -636,6 +678,7 @@ export function AppearanceSettings({ subpage }: AppearanceSettingsProps = {}) {
             />
           }
           description={a.reactionsDesc}
+          id={settingElementId(ids.reactions)}
           title={a.reactionsTitle}
         />
 
@@ -654,6 +697,7 @@ export function AppearanceSettings({ subpage }: AppearanceSettingsProps = {}) {
             />
           }
           description={a.vibeHeartsDesc}
+          id={settingElementId(ids.vibeHearts)}
           title={a.vibeHeartsTitle}
         />
 
@@ -668,8 +712,8 @@ export function AppearanceSettings({ subpage }: AppearanceSettingsProps = {}) {
               value={toolViewMode}
             />
           }
-          description={a.toolViewDesc}
-          id={appearanceSettingElementId(APPEARANCE_SETTING_IDS.toolView)}
+          description={withModeNote(a.toolViewDesc, toolViewShadowed)}
+          id={settingElementId(ids.toolView)}
           title={a.toolViewTitle}
         />
 
@@ -687,8 +731,8 @@ export function AppearanceSettings({ subpage }: AppearanceSettingsProps = {}) {
               value={hideCodeDiffs ? 'on' : 'off'}
             />
           }
-          description={a.hideCodeDiffsDesc}
-          id={appearanceSettingElementId(APPEARANCE_SETTING_IDS.hideCodeDiffs)}
+          description={withModeNote(a.hideCodeDiffsDesc, hideCodeDiffsShadowed)}
+          id={settingElementId(ids.hideCodeDiffs)}
           title={a.hideCodeDiffsTitle}
         />
 
@@ -706,7 +750,8 @@ export function AppearanceSettings({ subpage }: AppearanceSettingsProps = {}) {
               value={reasoningCollapsedByDefault ? 'on' : 'off'}
             />
           }
-          description={a.reasoningCollapsedDesc}
+          description={withModeNote(a.reasoningCollapsedDesc, reasoningCollapsedShadowed)}
+          id={settingElementId(ids.reasoningCollapsed)}
           title={a.reasoningCollapsedTitle}
         />
 
@@ -736,7 +781,7 @@ export function AppearanceSettings({ subpage }: AppearanceSettingsProps = {}) {
             </div>
           }
           description={a.embedsDesc}
-          id={appearanceSettingElementId(APPEARANCE_SETTING_IDS.embeds)}
+          id={settingElementId(ids.embeds)}
           title={a.embedsTitle}
         />
       </>
@@ -757,7 +802,7 @@ export function AppearanceSettings({ subpage }: AppearanceSettingsProps = {}) {
       {APPEARANCE_SUBPAGES.filter(page => show(page.id)).map(page => (
         <section className="mb-6 scroll-mt-6" id={`setting-section-${page.id}`} key={page.id}>
           {page.id === 'pet' ? (
-            <div id={appearanceSettingElementId('appearance.pet')}>{sectionContent.pet}</div>
+            <div id={settingElementId(ids.pet)}>{sectionContent.pet}</div>
           ) : (
             <>
               {subpage === undefined && (
@@ -768,6 +813,7 @@ export function AppearanceSettings({ subpage }: AppearanceSettingsProps = {}) {
           )}
         </section>
       ))}
+      {show('general') && <AppearanceExtraSlot />}
     </SettingsContent>
   )
 }

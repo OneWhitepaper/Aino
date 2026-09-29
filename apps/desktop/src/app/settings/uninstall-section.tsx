@@ -71,7 +71,6 @@ export function UninstallSection() {
   // Gate the agent-removing options on whether an agent is actually present.
   // A future lite client that ships without the bundled agent shows GUI-only.
   const agentInstalled = summary?.agent_installed ?? false
-  const visibleOptions = OPTION_MODES.filter(opt => agentInstalled || !opt.needsAgent)
 
   const handleConfirm = async () => {
     if (!pending) {
@@ -115,6 +114,7 @@ export function UninstallSection() {
   }))
 
   const pendingOption = options.find(opt => opt.mode === pending) ?? null
+  const visibleOptions = options.filter(opt => agentInstalled || !opt.needsAgent)
 
   return (
     <div className={cn('mx-auto w-full max-w-2xl', !hasBreadcrumb && 'mt-8')}>

@@ -30,6 +30,7 @@ import { formatModifierToken } from '@/lib/keybinds/combo'
 import { cn } from '@/lib/utils'
 import { $hapticsMuted, toggleHapticsMuted } from '@/store/haptics'
 import { toggleHud } from '@/store/hud'
+import { $interfaceMode, shownInMode, type Tiered } from '@/store/interface-mode'
 import {
   $fileBrowserOpen,
   $panesFlipped,
@@ -39,7 +40,7 @@ import {
   toggleSidebarOpen
 } from '@/store/layout'
 import { $unreadSessionCount } from '@/store/session-dot-state'
-import { $titlebarAppActionsSide } from '@/store/titlebar-app-actions'
+import { $titlebarAppActionsSide, TITLEBAR_FIXED_TOOLS } from '@/store/titlebar-app-actions'
 
 import { appViewForPath, hidesFixedTitlebarClusters, isRouteBlockingSurface } from '../routes'
 
@@ -54,7 +55,7 @@ import {
 } from './titlebar'
 import { TitlebarIcon } from './titlebar-icon'
 
-export interface TitlebarTool {
+export interface TitlebarTool extends Tiered {
   id: string
   label: string
   active?: boolean
@@ -158,8 +159,12 @@ export function TitlebarControls({ leftTools = [], tools = [] }: TitlebarControl
   const unreadCount = useStore($unreadSessionCount)
   const terminalVisible = useStore($paneVisible('terminal'))
   const appActionsSide = useStore($titlebarAppActionsSide)
+  const interfaceMode = useStore($interfaceMode)
   const unreadBadge = unreadCount > 0 ? unreadCount : undefined
   const unreadHint = unreadBadge ? ` · ${t.titlebar.unreadSessions(unreadBadge)}` : ''
+  // One filter for every cluster: a tool's own `hidden`, then the mode's tier.
+  const shown = shownInMode(interfaceMode)
+  const visibleTool = (tool: TitlebarTool) => !tool.hidden && shown(tool)
 
   const toggleHaptics = () => {
     if (!hapticsMuted) {
@@ -189,6 +194,7 @@ export function TitlebarControls({ leftTools = [], tools = [] }: TitlebarControl
   const rightLabel = rightEdge.open ? t.titlebar.hideRightSidebar : t.titlebar.showRightSidebar
 
   const sidebarTool: TitlebarTool = {
+    ...TITLEBAR_FIXED_TOOLS.sidebar,
     actionId: 'view.toggleSidebar',
     badge: panesFlipped ? undefined : unreadBadge,
     icon: (
@@ -206,6 +212,7 @@ export function TitlebarControls({ leftTools = [], tools = [] }: TitlebarControl
   }
 
   const flipTool: TitlebarTool = {
+    ...TITLEBAR_FIXED_TOOLS['flip-panes'],
     actionId: 'view.flipPanes',
     icon: (
       <AinoDesignIcon
@@ -222,6 +229,7 @@ export function TitlebarControls({ leftTools = [], tools = [] }: TitlebarControl
   }
 
   const rightSidebarTool: TitlebarTool = {
+    ...TITLEBAR_FIXED_TOOLS['right-sidebar'],
     actionId: 'view.toggleRightSidebar',
     badge: panesFlipped ? unreadBadge : undefined,
     icon: <AinoDesignIcon className="size-[18px]" src={titlebarRightSidebarIcon} />,
@@ -237,6 +245,7 @@ export function TitlebarControls({ leftTools = [], tools = [] }: TitlebarControl
   // App actions follow the user's titlebar-side preference.
   const systemTools: TitlebarTool[] = [
     {
+      ...TITLEBAR_FIXED_TOOLS.layout,
       className: 'group/tool',
       icon: <LayoutGlyph modHeld={modHeld} />,
       id: 'layout',
@@ -255,6 +264,7 @@ export function TitlebarControls({ leftTools = [], tools = [] }: TitlebarControl
       title: t.titlebar.layoutEditorTitle(formatModifierToken('mod'))
     },
     {
+      ...TITLEBAR_FIXED_TOOLS.hud,
       // No `title`: TitlebarToolButton passes `title` to TipKeybindLabel as a
       // text OVERRIDE, so a long sentence there replaces the short label and
       // crowds the ⌘⇧H hint off the tooltip. Label only — the hint is appended
@@ -269,6 +279,7 @@ export function TitlebarControls({ leftTools = [], tools = [] }: TitlebarControl
       }
     },
     {
+      ...TITLEBAR_FIXED_TOOLS.haptics,
       active: hapticsMuted,
       icon: hapticsMuted ? (
         <TitlebarIcon name="mute" />
@@ -282,6 +293,7 @@ export function TitlebarControls({ leftTools = [], tools = [] }: TitlebarControl
   ]
 
   const terminalTool: TitlebarTool = {
+    ...TITLEBAR_FIXED_TOOLS.terminal,
     actionId: 'view.showTerminal',
     active: terminalVisible,
     icon: <TitlebarIcon name={terminalVisible ? 'layout-panel' : 'layout-panel-off'} />,
@@ -319,7 +331,7 @@ export function TitlebarControls({ leftTools = [], tools = [] }: TitlebarControl
   // route. Contributed `titleBar.tools` items keep rendering here too, so a
   // chrome-owning page never silently drops a registered item.
   if (hidesFixedTitlebarClusters(view) && pageOwnsTitlebar) {
-    const pageTools = [...leftTools, ...tools].filter(tool => !tool.hidden)
+    const pageTools = [...leftTools, ...tools].filter(visibleTool)
 
     // Both markers are required even when a page contributes to only one side.
     return (
@@ -344,10 +356,10 @@ export function TitlebarControls({ leftTools = [], tools = [] }: TitlebarControl
     appActionsSide === 'left'
       ? [sidebarTool, flipTool, ...systemTools, ...leftTools]
       : [sidebarTool, flipTool, ...leftTools]
-  ).filter(tool => !tool.hidden)
+  ).filter(visibleTool)
 
-  const visibleSystemTools = appActionsSide === 'right' ? systemTools.filter(tool => !tool.hidden) : []
-  const visiblePaneTools = tools.filter(tool => !tool.hidden)
+  const visibleSystemTools = appActionsSide === 'right' ? systemTools.filter(visibleTool) : []
+  const visiblePaneTools = tools.filter(visibleTool)
 
   return (
     <>
@@ -389,9 +401,10 @@ export function TitlebarControls({ leftTools = [], tools = [] }: TitlebarControl
         {visibleSystemTools.map(tool => (
           <TitlebarToolButton key={tool.id} navigate={navigate} tool={tool} />
         ))}
-        <SummaryToggle />
-        <TitlebarToolButton navigate={navigate} tool={terminalTool} />
-        <TitlebarToolButton navigate={navigate} tool={rightSidebarTool} />
+        {shown({ tier: 'advanced' }) && <SummaryToggle />}
+        {visibleTool(terminalTool) && <TitlebarToolButton navigate={navigate} tool={terminalTool} />}
+        {visibleTool(rightSidebarTool) && <TitlebarToolButton navigate={navigate} tool={rightSidebarTool} />}
+        <Slot area="titleBar.right" />
       </div>
     </>
   )

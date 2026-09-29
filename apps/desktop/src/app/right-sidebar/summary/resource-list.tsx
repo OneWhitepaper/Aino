@@ -74,7 +74,7 @@ export function SummaryResourceList({ items, session }: { items: SummaryResource
         }
 
         if (preview) {
-          openPreview(preview, 'manual')
+          openPreview(preview)
         }
       }
     } catch (error) {

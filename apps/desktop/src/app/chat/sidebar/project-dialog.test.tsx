@@ -6,6 +6,8 @@ import { $activeGatewayProfile } from '@/store/profile'
 
 import { ProjectDialog } from './project-dialog'
 
+const tipTrigger = (el: HTMLElement) => el.closest('[data-slot="tooltip-trigger"]')
+
 afterEach(() => {
   cleanup()
   $projectDialog.set({ mode: 'create' })
@@ -95,8 +97,6 @@ vi.mock('@/store/notifications', () => ({
 vi.mock('@/lib/project-idea-templates', () => ({
   randomIdeaTemplates: () => [{ emoji: '🚀', id: 'rocket' }]
 }))
-
-const tipTrigger = (el: HTMLElement) => el.closest('[data-slot="tooltip-trigger"]')
 
 // Fill the create form and click Create once the form is actually submittable
 // (creation requires a name + at least one folder, so the button stays

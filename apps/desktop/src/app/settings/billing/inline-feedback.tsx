@@ -56,7 +56,7 @@ export function BillingRefusalInline({ refusal }: { refusal: BillingRefusal | nu
     return null
   }
 
-  const resolved = resolveRefusal(refusal)
+  const resolved = resolveRefusal(refusal, t.billing)
   const portalUrl = resolved.action.type === 'portal' ? resolved.action.url : undefined
 
   return (

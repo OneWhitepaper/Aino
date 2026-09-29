@@ -40,6 +40,7 @@ import {
   $selectedStoredSessionId,
   $sessions,
   sessionMatchesStoredId,
+  setCurrentCwd,
   setSessions,
   workspaceCwdForNewSession
 } from '@/store/session'
@@ -217,6 +218,23 @@ export function resolveNewSessionCwd(): string {
   }
 
   return workspaceCwdForNewSession()
+}
+
+// Entering a project moves the live workspace only when main holds a fresh
+// draft: the draft has no folder of its own yet, and the project root is where
+// its first message should run. A stored conversation keeps its cwd — entering
+// is a scope switch, and moving the workspace under the selected chat re-pointed
+// Files/Review and the composer's Git context at the project while the
+// transcript stayed on the old session (#72772). The next new chat still lands
+// in the project through resolveNewSessionCwd.
+export function followEnteredProjectCwd(cwd: string): void {
+  const target = cwd.trim()
+
+  if (!target || $selectedStoredSessionId.get() || target === $currentCwd.get()) {
+    return
+  }
+
+  setCurrentCwd(target)
 }
 
 // The project (explicit or auto) that owns `cwd`, by longest path match across
@@ -1033,7 +1051,9 @@ export async function createProject(input: CreateProjectInput, ownerProfile?: st
 
   // All profiles filters the sidebar, not the owner of a new project.
   // Capture the live route so reconnecting cannot retarget the write.
-  const context = await activeProjectsContext(ownerProfile ? projectWriteProfile(ownerProfile) : writableProjectProfile())
+  const context = await activeProjectsContext(
+    ownerProfile ? projectWriteProfile(ownerProfile) : writableProjectProfile()
+  )
   let res: { project: ProjectInfo | null }
 
   try {
@@ -1136,12 +1156,19 @@ export async function updateProject(
 ): Promise<void> {
   const context = await activeProjectsContext(projectWriteProfile(ownerProfile))
   if (context.scope === ALL_PROFILES && ownerProfile) {
-    await gatewayRequestOn(context.gateway, 'projects.update', projectParams({
-      id,
-      ...patch,
-      ...(patch.color === null && { color: '' }),
-      ...(patch.icon === null && { icon: '' })
-    }, context.profile))
+    await gatewayRequestOn(
+      context.gateway,
+      'projects.update',
+      projectParams(
+        {
+          id,
+          ...patch,
+          ...(patch.color === null && { color: '' }),
+          ...(patch.icon === null && { icon: '' })
+        },
+        context.profile
+      )
+    )
     if (stillOnProjectsContext(context)) {
       void refreshProjectTree()
     }
@@ -1202,14 +1229,17 @@ export async function setProjectAppearance(
     return false
   }
 
-  await createProject({
-    name: project.label,
-    folders: [project.path],
-    primaryPath: project.path,
-    // Carry any already-set look so setting one field doesn't wipe the other.
-    color: (patch.color ?? project.color) || undefined,
-    icon: (patch.icon ?? project.icon) || undefined
-  }, project.ownerProfile)
+  await createProject(
+    {
+      name: project.label,
+      folders: [project.path],
+      primaryPath: project.path,
+      // Carry any already-set look so setting one field doesn't wipe the other.
+      color: (patch.color ?? project.color) || undefined,
+      icon: (patch.icon ?? project.icon) || undefined
+    },
+    project.ownerProfile
+  )
 
   return true
 }
@@ -1222,9 +1252,19 @@ export async function addProjectFolder(
 ): Promise<void> {
   const context = await activeProjectsContext(projectWriteProfile(ownerProfile))
   if (context.scope === ALL_PROFILES && ownerProfile) {
-    await gatewayRequestOn(context.gateway, 'projects.add_folder', projectParams({
-      id, path, label: opts.label, is_primary: opts.isPrimary ?? false
-    }, context.profile))
+    await gatewayRequestOn(
+      context.gateway,
+      'projects.add_folder',
+      projectParams(
+        {
+          id,
+          path,
+          label: opts.label,
+          is_primary: opts.isPrimary ?? false
+        },
+        context.profile
+      )
+    )
     if (stillOnProjectsContext(context)) {
       void refreshProjectTree()
     }
@@ -1415,7 +1455,12 @@ export function openProjectAddFolder(project: { id: string; name: string; profil
 }
 
 export function openProjectFolders(project: { id: string; name: string; profile?: string }): void {
-  $projectDialog.set({ mode: 'manage-folders', name: project.name, projectId: project.id, ownerProfile: project.profile })
+  $projectDialog.set({
+    mode: 'manage-folders',
+    name: project.name,
+    projectId: project.id,
+    ownerProfile: project.profile
+  })
 }
 
 export function closeProjectDialog(): void {

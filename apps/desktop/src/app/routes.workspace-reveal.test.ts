@@ -16,8 +16,8 @@ import { host } from '@/sdk'
 
 import {
   $workspaceIsPage,
-  AGENTS_ROUTE,
   appViewForPath,
+  AGENTS_ROUTE,
   ARTIFACTS_ROUTE,
   CAPABILITIES_ROUTE,
   CRON_ROUTE,
@@ -70,8 +70,8 @@ afterEach(() => {
 describe('routePathname', () => {
   it('keeps a bare path and drops a query or hash', () => {
     expect(routePathname(CAPABILITIES_ROUTE)).toBe('/capabilities')
-    expect(routePathname('/capabilities?tab=mcp')).toBe('/capabilities')
-    expect(routePathname('/capabilities?tab=mcp&server=ctx7')).toBe('/capabilities')
+    expect(routePathname('/capabilities?tab=connectors')).toBe('/capabilities')
+    expect(routePathname('/capabilities?tab=connectors&server=ctx7')).toBe('/capabilities')
     expect(routePathname('/settings#keys')).toBe('/settings')
   })
 
@@ -89,8 +89,7 @@ describe('classification of targets carrying a query', () => {
   // last one. Unstripped, they parsed as SESSION ids and read as 'chat'.
   it.each([
     [`${CAPABILITIES_ROUTE}?tab=skills`, 'capabilities'],
-    [`${CAPABILITIES_ROUTE}?tab=toolsets`, 'capabilities'],
-    [`${CAPABILITIES_ROUTE}?tab=mcp&server=ctx7`, 'capabilities'],
+    [`${CAPABILITIES_ROUTE}?tab=connectors&server=ctx7`, 'capabilities'],
     [`${SETTINGS_ROUTE}?tab=keys`, 'settings']
   ])('%s is not a session route', (to, view) => {
     expect(routeSessionId(to)).toBeNull()
@@ -107,7 +106,7 @@ describe('syncWorkspaceRoute', () => {
   })
 
   it('fronts on a page route reached with a query', () => {
-    syncWorkspaceRoute(`${CAPABILITIES_ROUTE}?tab=mcp`)
+    syncWorkspaceRoute(`${CAPABILITIES_ROUTE}?tab=connectors`)
 
     expect($workspaceIsPage.get()).toBe(true)
     expect(fronted()).toBe(true)

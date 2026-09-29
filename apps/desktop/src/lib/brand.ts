@@ -49,7 +49,7 @@ export function brandTranslationTree<T>(value: T): T {
   if (typeof value === 'function') {
     const translate = value as (...args: unknown[]) => unknown
 
-    return ((...args: unknown[]) => applyProductBrand(String(translate(...args)))) as T
+    return ((...args: unknown[]) => brandTranslationTree(translate(...args))) as T
   }
 
   if (Array.isArray(value)) {

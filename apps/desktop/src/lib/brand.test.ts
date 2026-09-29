@@ -33,10 +33,12 @@ describe('Aino product brand overlay', () => {
   it('wraps dynamic and nested translation values without changing shape', () => {
     const branded = brandTranslationTree({
       heading: 'About Hermes Desktop',
-      nested: { message: (count: number) => `${count} Hermes tasks` }
+      nested: { message: (count: number) => `${count} Hermes tasks` },
+      suggestions: (label: string) => [`${label}: Hermes Desktop`, 'Use `hermes tools`']
     })
 
     expect(branded.heading).toBe('About Aino')
     expect(branded.nested.message(3)).toBe('3 Aino tasks')
+    expect(branded.suggestions('My Custom Voice')).toEqual(['My Custom Voice: Aino', 'Use `hermes tools`'])
   })
 })

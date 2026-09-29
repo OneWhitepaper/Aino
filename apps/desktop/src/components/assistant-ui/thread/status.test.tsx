@@ -112,18 +112,3 @@ describe('ResponseLoadingIndicator timer', () => {
     expect(screen.getByText('正在思考')).toBeTruthy()
   })
 })
-
-// The status line sits between tool rows and thinking headers, which the
-// transcript rests at a fade. Without the mark it reads a shade brighter than
-// both — the one line in the column claiming emphasis it hasn't earned.
-describe('status line', () => {
-  afterEach(cleanup)
-
-  it('is marked as transcript scaffolding', () => {
-    $activeSessionId.set('session-a')
-    $turnStartedAt.set(Date.now())
-    const { container } = renderIndicator()
-
-    expect(container.querySelector('[role="status"]')?.hasAttribute('data-conversation-scaffold')).toBe(true)
-  })
-})

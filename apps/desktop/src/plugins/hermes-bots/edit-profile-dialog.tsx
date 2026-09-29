@@ -200,7 +200,7 @@ export function EditProfileDialog({ bot, open, onClose }: EditProfileDialogProps
       >
         <DialogHeader>
           <DialogTitle>{b.bot.editTitle}</DialogTitle>
-          <DialogDescription>{b.bot.appearanceDescription(displayName(bot, null), bot.name)}</DialogDescription>
+          <DialogDescription>{b.editor.editDescription(displayName(bot, null), bot.name)}</DialogDescription>
         </DialogHeader>
         <div className="grid gap-4">
           <div className="flex justify-center py-1">

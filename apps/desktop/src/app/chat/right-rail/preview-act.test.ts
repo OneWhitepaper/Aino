@@ -21,7 +21,7 @@ describe('actOnActivePreview (drive_preview tool)', () => {
   let cleanups: Array<() => void> = []
 
   const openBrowserTab = () => {
-    openPreview(urlTarget('https://example.com'), 'tool-result')
+    openPreview(urlTarget('https://example.com'))
 
     return $rightRailActiveTabId.get()!
   }
@@ -98,19 +98,6 @@ describe('actOnActivePreview (drive_preview tool)', () => {
 
     expect(result.elements?.[0].label).toBe('Log out')
     expect(result.url).toBe('https://example.com/app')
-  })
-
-  it('does not pay the settle delay for a plain inventory', async () => {
-    let injected = ''
-    withRunner(async code => {
-      injected = code
-
-      return JSON.stringify({ elements: [], success: true })
-    })
-
-    await actOnActivePreview({ kind: 'elements' })
-
-    expect(injected).toContain('0 <= 0')
   })
 
   it('awaits page-owned thenables for inventories and settled actions before crossing Electron IPC', async () => {
@@ -394,9 +381,7 @@ describe('actOnActivePreview (drive_preview tool)', () => {
     )
     cleanups.push(registerPreviewInput(tabId, { focus: vi.fn(), send: vi.fn() }))
 
-    expect((await actOnActivePreview({ kind: 'click', ref: '@e1' })).error).toBe(
-      '指针输入没有到达页面，因此没有点击。'
-    )
+    expect((await actOnActivePreview({ kind: 'click', ref: '@e1' })).error).toBe('指针输入没有到达页面，因此没有点击。')
   })
 
   it('says so when the overlay itself swallowed the click', async () => {

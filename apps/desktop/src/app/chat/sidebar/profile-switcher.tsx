@@ -51,6 +51,7 @@ import { connectionDisplayLabel, sortConnectionsForDisplay } from '@/lib/connect
 import { triggerHaptic } from '@/lib/haptics'
 import { Loader2 } from '@/lib/icons'
 import { PROFILE_SWATCHES, profileColorSoft, resolveProfileColor } from '@/lib/profile-color'
+import { profileShortLabel } from '@/lib/profile-short-label'
 import {
   REORDER_DRAG_TRANSITION_CSS,
   REORDER_RAIL_TRANSITION,
@@ -1123,7 +1124,7 @@ function RestSquare({
                     {pending ? (
                       <Loader2 aria-hidden="true" className="size-3 animate-spin" />
                     ) : (
-                      agent.profile.replace(/[^a-z0-9]/gi, '').charAt(0) || '?'
+                      profileShortLabel(agent.profile)
                     )}
                   </button>
                 </TooltipTrigger>
@@ -1336,7 +1337,7 @@ function ProfileSquare({
                     onPointerMove={notePointerMove}
                     onPointerUp={clearPress}
                   >
-                    {label.replace(/[^a-z0-9]/gi, '').charAt(0) || '?'}
+                    {profileShortLabel(label)}
                     {/* The "remote" badge: a tiny globe pinned to the corner of an
                         overridden profile's square, so which profiles leave this
                         machine is visible at a glance (#91349). */}

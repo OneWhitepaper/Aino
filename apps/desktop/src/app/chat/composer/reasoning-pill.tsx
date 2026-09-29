@@ -6,6 +6,7 @@ import { useSessionView } from '@/app/chat/session-view'
 import { ModelMenuCloseContext } from '@/app/shell/model-menu-panel'
 import { Button } from '@/components/ui/button'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
+import { GlyphSpinner } from '@/components/ui/glyph-spinner'
 import { releaseTypingFocus } from '@/components/ui/keyboard-first'
 import { Tip } from '@/components/ui/tooltip'
 import { useI18n } from '@/i18n'
@@ -35,6 +36,7 @@ export function ReasoningPill({ disabled, model }: { disabled: boolean; model: C
   const view = useSessionView()
   const reasoningEffort = useStore(view.$reasoningEffort)
   const reasoningEffortWire = useStore(view.$reasoningEffortWire)
+  const pending = useStore(view.$reasoningEffortPending)
   const defaultEffort = useStore($defaultReasoningEffort)
   const [open, setOpen] = useState(false)
 
@@ -51,7 +53,7 @@ export function ReasoningPill({ disabled, model }: { disabled: boolean; model: C
   const note = reasoningEffortNote(effort, reasoningEffortWire, copy)
   const named = clamp ? copy[clamp.effort] : label
 
-  const title = note ? `${copy.effort}: ${named} (${note})` : `${copy.effort}: ${label}`
+  const title = pending ? copy.effort : note ? `${copy.effort}: ${named} (${note})` : `${copy.effort}: ${label}`
 
   // Closing the menu ends its claim on the keyboard: Radix restores focus to
   // this pill (a toolbar button), so without the release the Enter that
@@ -76,7 +78,7 @@ export function ReasoningPill({ disabled, model }: { disabled: boolean; model: C
             type="button"
             variant="ghost"
           >
-            <span>{label}</span>
+            {pending ? <GlyphSpinner className="opacity-50" spinner="braille" /> : <span>{label}</span>}
             <ChevronDown className="size-2.5 shrink-0 opacity-50" />
           </Button>
         </DropdownMenuTrigger>

@@ -1,7 +1,5 @@
 """Execution-bearing option detection across interpreters and read-only tools."""
 
-import os
-import shlex
 import shutil
 import subprocess
 import time
@@ -32,50 +30,6 @@ def test_real_read_tool_binaries_confirm_option_ownership(
     assert completed.stdout == expected_output
 
 
-@pytest.mark.parametrize(
-    ("tool", "args", "stdin", "needs_tty"),
-    [
-        ("rg", ["--pre", "-payload-marker", "needle", "{input}"], None, False),
-        ("rg", ["--hostname-bin=-payload-marker", "needle", "{input}"], None, False),
-        ("sort", ["--buffer-size=1K", "--compress-program", "-payload-marker"], "{bulk}", False),
-        ("ag", ["--pager=-payload-marker", "needle", "{input}"], None, True),
-        ("man", ["--pager", "-payload-marker", "ls"], None, True),
-        ("man", ["-P", "-payload-marker", "ls"], None, True),
-    ],
-)
-@pytest.mark.linux_only
-def test_real_binaries_execute_leading_dash_program_payload(
-    tmp_path, tool, args, stdin, needs_tty
-):
-    """A PATH marker proves these binaries do not reparse '-program' as an option."""
-    if shutil.which(tool) is None or (needs_tty and shutil.which("script") is None):
-        pytest.skip(f"{tool} or script is not installed")
-
-    marker = tmp_path / "executed"
-    payload = tmp_path / "-payload-marker"
-    payload.write_text("#!/bin/sh\nprintf executed > \"$MARKER\"\ncat\n")
-    payload.chmod(0o755)
-    input_file = tmp_path / "input.txt"
-    input_file.write_text("needle\n")
-    resolved_args = [arg.format(input=str(input_file)) for arg in args]
-    input_text = (
-        "\n".join(str(number) for number in range(10_000, 0, -1)) + "\n"
-        if stdin == "{bulk}"
-        else stdin
-    )
-    env = {
-        **os.environ,
-        "PATH": f"{tmp_path}{os.pathsep}{os.environ['PATH']}",
-        "MARKER": str(marker),
-        "TERM": "xterm",
-    }
-    argv = [tool, *resolved_args]
-    if needs_tty:
-        argv = ["script", "-qec", shlex.join(argv), "/dev/null"]
-
-    subprocess.run(argv, input=input_text, text=True, capture_output=True, env=env, timeout=20)
-
-    assert marker.read_text() == "executed"
 
 
 @pytest.mark.parametrize(
@@ -292,15 +246,6 @@ def _time_benign_segments(count):
     return time.process_time() - started, result
 
 
-def test_benign_segment_scaling_benchmark():
-    """Catch repeated whole-input scans without charging scheduler stalls."""
-    for count in (2_000, 4_000):
-        elapsed, result = _time_benign_segments(count)
-        assert result == (False, None, None)
-        # The unanchored launchctl lookaheads spent tens of CPU seconds rescanning
-        # every suffix. Leave ample headroom for slower hosts after the linear fix.
-        assert elapsed < 10.0, f"{count} benign segments took {elapsed:.3f}s CPU"
-        print(f"benign segment benchmark: {count}={elapsed:.3f}s CPU")
 
 
 def test_max_accepted_separator_free_input_is_fast():

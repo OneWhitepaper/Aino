@@ -22,6 +22,7 @@ import {
   setDataUrlReadMaxMb
 } from '@/store/data-url-read-max'
 import { $disableF12, setDisableF12 } from '@/store/disable-f12'
+import { $alwaysExternalLinks, setAlwaysExternalLinks } from '@/store/external-links'
 import { $keepAwake, setKeepAwake } from '@/store/keep-awake'
 import { notify, notifyError } from '@/store/notifications'
 import { normalizeProfileKey } from '@/store/profile'
@@ -60,7 +61,9 @@ import {
 } from './primitives'
 import { SettingsProfileScope } from './profile-scope'
 import { QuickEntrySettings } from './quick-entry-settings'
+import { SETTING_IDS, settingElementId } from './settings-manifest'
 import { settingsSubpageIcon } from './subpages'
+import { useSettingDeepLink } from './use-setting-deep-link'
 
 export function ConfigSettings({
   activeSectionId,
@@ -109,6 +112,7 @@ function ConfigSettingsInner({
   const c = t.settings.config
   const keepAwake = useStore($keepAwake)
   const disableF12 = useStore($disableF12)
+  const alwaysExternalLinks = useStore($alwaysExternalLinks)
   // The editable draft is local (debounced autosave watches it), but it's seeded
   // from — and saved back through — the shared config cache, so edits are visible
   // in the MCP/model surfaces and reopening the page doesn't reload-flash.
@@ -312,6 +316,8 @@ function ConfigSettingsInner({
   const [searchParams, setSearchParams] = useSearchParams()
   const targetField = searchParams.get('field')
 
+  useSettingDeepLink(`config:${activeSectionId}`, page => subpage === undefined || page === subpage)
+
   useEffect(() => {
     // Model fields mount inside the asynchronously loaded model controller,
     // which owns their highlight once its content is ready.
@@ -462,12 +468,25 @@ function ConfigSettingsInner({
   if (showDesktopSettings) {
     extraControls.desktop = (
       <>
-        <ToggleRow checked={keepAwake} description={c.keepAwakeDesc} label={c.keepAwakeTitle} onChange={setKeepAwake} />
+        <ToggleRow
+          checked={keepAwake}
+          description={c.keepAwakeDesc}
+          id={settingElementId(SETTING_IDS.advanced.keepAwake)}
+          label={c.keepAwakeTitle}
+          onChange={setKeepAwake}
+        />
         <ToggleRow
           checked={disableF12}
           description={c.disableF12Desc}
+          id={settingElementId(SETTING_IDS.advanced.disableF12)}
           label={c.disableF12Title}
           onChange={setDisableF12}
+        />
+        <ToggleRow
+          checked={alwaysExternalLinks}
+          description={c.alwaysExternalLinksDesc}
+          label={c.alwaysExternalLinksTitle}
+          onChange={setAlwaysExternalLinks}
         />
         <PoolLimitsSetting />
         <QuickEntrySettings />
@@ -508,6 +527,7 @@ function ConfigSettingsInner({
   return (
     <SettingsContent>
       <SettingsProfileScope className="mb-5" />
+      {activeSectionId === 'voice' && <ListRow description={c.voiceShortcutHintDesc} title={c.voiceShortcutHintTitle} />}
       {activeSectionId === 'model' && (
         <div className={showModelSettings ? 'mb-6' : undefined}>
           <ModelSettings
@@ -600,6 +620,7 @@ function AttachmentSizeSetting() {
         </div>
       }
       description={c.attachmentSizeDesc}
+      id={settingElementId(SETTING_IDS.chat.attachmentSize)}
       title={c.attachmentSizeTitle}
     />
   )

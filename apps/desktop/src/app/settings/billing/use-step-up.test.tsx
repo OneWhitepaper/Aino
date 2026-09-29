@@ -3,7 +3,7 @@ import { act, renderHook, waitFor } from '@testing-library/react'
 import { createElement, type PropsWithChildren } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { I18nProvider } from '@/i18n'
+import { type I18nContextValue, I18nProvider, TRANSLATIONS, useI18n } from '@/i18n'
 
 const apiMocks = vi.hoisted(() => ({
   stepUp: vi.fn()
@@ -58,14 +58,11 @@ import { useStepUpFlow } from './use-step-up'
 
 function createWrapper(client: QueryClient, locale: 'en' | 'zh' = 'en') {
   return function wrapper({ children }: PropsWithChildren) {
-    return createElement(
-      I18nProvider,
-      {
-        configClient: null,
-        initialLocale: locale,
-        children: createElement(QueryClientProvider, { client }, children)
-      }
-    )
+    return createElement(I18nProvider, {
+      configClient: null,
+      initialLocale: locale,
+      children: createElement(QueryClientProvider, { client }, children)
+    })
   }
 }
 
@@ -79,6 +76,53 @@ afterEach(() => {
 })
 
 describe('useStepUpFlow', () => {
+  it.each(['denied', 'success', 'refusal'] as const)(
+    'repaints a completed %s verification on a locale change without restarting it',
+    async status => {
+      const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+      let language!: I18nContextValue
+
+      function Surface({ children }: PropsWithChildren) {
+        language = useI18n()
+
+        return children
+      }
+
+      function wrapper({ children }: PropsWithChildren) {
+        return createElement(I18nProvider, {
+          configClient: null,
+          initialLocale: 'en',
+          children: createElement(QueryClientProvider, { client }, createElement(Surface, null, children))
+        })
+      }
+
+      apiMocks.stepUp.mockResolvedValue(
+        status === 'refusal'
+          ? { ok: false, refusal: { kind: 'session_revoked', message: '' } }
+          : { data: { granted: status === 'success', ok: true }, ok: true }
+      )
+      const { result } = renderHook(() => useStepUpFlow(), { wrapper })
+
+      await act(async () => {
+        await result.current.start()
+      })
+      const before = result.current.message
+      await act(() => language.setLocale('zh'))
+      const copy = TRANSLATIONS.zh.billing
+      const title =
+        status === 'refusal'
+          ? copy.refusal.sessionLoggedOutTitle
+          : status === 'success'
+            ? copy.stepUp.verificationCompleteTitle
+            : copy.stepUp.verificationNotApprovedTitle
+
+      expect(result.current.message?.title).toBe(title)
+      expect(result.current.message?.title).not.toBe(before?.title)
+      expect(apiMocks.stepUp).toHaveBeenCalledTimes(1)
+      client.clear()
+    }
+  )
+
   it('subscribes for verification, opens the verification URL, cleans up, and invalidates on completion', async () => {
     let resolveStepUp: (value: unknown) => void = () => {}
 

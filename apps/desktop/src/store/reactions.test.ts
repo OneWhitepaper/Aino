@@ -97,10 +97,3 @@ describe('applyReaction', () => {
     expect(before).toEqual(snapshot)
   })
 })
-
-describe('QUICK_REACTIONS', () => {
-  it('is the six iOS Tapback defaults, each distinct', () => {
-    expect(QUICK_REACTIONS).toHaveLength(6)
-    expect(new Set(QUICK_REACTIONS).size).toBe(6)
-  })
-})

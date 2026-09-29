@@ -12,8 +12,8 @@ import {
   titlebarControlsPosition,
   titlebarControlsYNudge,
   titlebarIconSizeCss,
-  titlebarToolsRightCss,
-  titlebarToolsWidthCss
+  titlebarToolsWidthCss,
+  titlebarToolsRightCss
 } from './titlebar'
 
 describe('titlebar sizing', () => {

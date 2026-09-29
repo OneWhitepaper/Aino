@@ -117,7 +117,7 @@ interface ModelPickerProps {
   value: ModelSelection
 }
 
-export function ModelPicker({ bot = null, value, onChange, placeholderModel = '' }: ModelPickerProps) {
+export function ModelPicker({ bot = null, value, onChange, placeholderModel }: ModelPickerProps) {
   const b = useBots()
   const { data, isLoading, error } = useModelOptions(bot)
 
@@ -284,7 +284,7 @@ export function ModelPicker({ bot = null, value, onChange, placeholderModel = ''
                 model: event.target.value
               })
             }
-            placeholder={placeholderModel || b.model.gatewayDefault || b.model.modelNamePlaceholder}
+            placeholder={placeholderModel === undefined ? b.model.gatewayDefault : placeholderModel || b.model.modelNamePlaceholder}
             value={value.model}
           />
         )

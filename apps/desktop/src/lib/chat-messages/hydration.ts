@@ -5,7 +5,14 @@ import { dedupeGeneratedImageEchoesInParts } from '@/lib/generated-images'
 import { parseTurnMetrics } from '@/lib/turn-metrics'
 import type { MessageReaction, ModelSwitchDisplayMetadata, SessionMessage } from '@/types/hermes'
 
-import { assistantTextPart, chatMessageText, dedupeRepeatedTextInParts, reasoningPart, textPart } from './parts'
+import {
+  assistantTextPart,
+  chatMessageText,
+  dedupeRepeatedTextInParts,
+  reasoningPart,
+  renderMediaTags,
+  textPart
+} from './parts'
 import {
   applyStoredToolResult,
   applyStoredToolResultToParts,
@@ -26,27 +33,31 @@ const CONTEXT_REF_RE = /@(file|folder|url|image|tool|terminal):(?:"[^"\n]+"|'[^'
 const DISCORD_TRIGGERING_NOTE_RE =
   /(^|\n)\[Triggering message id: `[^`\n]*` — use as `message_id` for reply\/react\/pin via the discord tools\.\]\n*/
 
-interface CodexMessageTexts {
-  commentary: string[]
-  reply: string
-}
-
-/** Preserve public commentary separately from private analysis, as the live stream does. */
-function codexMessageTexts(message: SessionMessage): CodexMessageTexts {
-  const result: CodexMessageTexts = { commentary: [], reply: '' }
+/**
+ * Backend history projection authorizes/sanitizes public commentary before it
+ * reaches Desktop. Raw Responses sidecars are used only for final-answer fallback;
+ * phase=analysis and raw phase=commentary are never promoted to assistant text.
+ */
+function codexMessageItemText(message: SessionMessage): { commentary: string[]; reply: string } {
   let items = message.codex_message_items
+
+  const commentary = Array.isArray(message.display_commentary)
+    ? message.display_commentary.filter((part): part is string => typeof part === 'string' && Boolean(part.trim()))
+    : []
+
+  const replies: string[] = []
 
   // REST carries SQLite JSON text; RPC history carries the decoded list.
   if (typeof items === 'string') {
     try {
       items = JSON.parse(items)
     } catch {
-      return result
+      return { commentary, reply: '' }
     }
   }
 
   if (!Array.isArray(items)) {
-    return result
+    return { commentary, reply: '' }
   }
 
   for (const item of items) {
@@ -62,61 +73,32 @@ function codexMessageTexts(message: SessionMessage): CodexMessageTexts {
 
     const phase = typeof record.phase === 'string' ? record.phase.trim().toLowerCase() : ''
 
-    if (phase === 'analysis') {
+    if (phase === 'analysis' || phase === 'commentary' || !Array.isArray(record.content)) {
       continue
     }
 
-    const content = record.content
+    const chunks: string[] = []
 
-    if (!Array.isArray(content)) {
-      continue
-    }
-
-    const texts: string[] = []
-
-    for (const part of content) {
+    for (const part of record.content) {
       if (!part || typeof part !== 'object' || Array.isArray(part)) {
         continue
       }
 
       const partRecord = part as Record<string, unknown>
-      const partType = partRecord.type
 
-      if (partType !== 'output_text' && partType !== 'text') {
-        continue
-      }
-
-      const text = partRecord.text
-
-      if (typeof text === 'string' && text.length > 0) {
-        texts.push(text)
+      if ((partRecord.type === 'output_text' || partRecord.type === 'text') && typeof partRecord.text === 'string') {
+        chunks.push(partRecord.text)
       }
     }
 
-    const text = texts.join('')
+    const text = chunks.join('')
 
-    if (phase === 'commentary') {
-      if (text.trim()) {
-        result.commentary.push(text.trim())
-      }
-    } else {
-      result.reply += text
+    if (text) {
+      replies.push(text)
     }
   }
 
-  return result
-}
-
-function reasoningWithoutCommentary(reasoning: string, commentary: string[]): string {
-  // The backend joins phase text into reasoning with blank lines for legacy consumers.
-  // Remove only exact sidecar-backed blocks, never similar wording inside private analysis.
-  let framed = `\n\n${reasoning.trim()}\n\n`
-
-  for (const text of commentary) {
-    framed = framed.replace(`\n\n${text}\n\n`, '\n\n')
-  }
-
-  return framed.trim()
+  return { commentary, reply: replies.join('') }
 }
 
 function displayContentForMessage(role: SessionMessage['role'], content: unknown): string {
@@ -326,6 +308,7 @@ export function toChatMessages(messages: SessionMessage[]): ChatMessage[] {
 
     active.sourceRowIds = [...(active.sourceRowIds ?? []), ...pendingRowIds]
     active.parts = [...active.parts, ...parts]
+    active.durableComplete = false
     active.timestamp = earliestTimestamp(active.timestamp, timestamp, ...parts.map(part => part.timestamp))
     absorbRows(active, pendingToolRows)
 
@@ -343,6 +326,7 @@ export function toChatMessages(messages: SessionMessage[]): ChatMessage[] {
         role: 'assistant',
         parts: pendingToolParts,
         sourceRowIds: pendingRowIds,
+        durableComplete: false,
         ...(pendingToolRows > 1 ? { serverRowSpan: pendingToolRows } : {}),
         timestamp: pendingToolTimestamp
       })
@@ -397,7 +381,9 @@ export function toChatMessages(messages: SessionMessage[]): ChatMessage[] {
       message.display_kind === 'async_delegation_complete' ||
       message.display_kind === 'process_complete' ||
       message.display_kind === 'auto_continue' ||
-      message.display_kind === 'personality_switch'
+      message.display_kind === 'personality_switch' ||
+      // Hermes closing a failed turn, not the model speaking.
+      message.display_kind === 'failed_turn'
         ? 'system'
         : message.role
 
@@ -413,54 +399,62 @@ export function toChatMessages(messages: SessionMessage[]): ChatMessage[] {
     const extractedAttachmentRefs = imageRefExtraction?.refs.length ? imageRefExtraction.refs : undefined
 
     const parts: ChatMessagePart[] = []
+    const sourceHasTools = Array.isArray(message.tool_calls) && message.tool_calls.length > 0
 
-    const codexTexts =
-      message.role === 'assistant' && message.display_kind !== 'hidden' ? codexMessageTexts(message) : undefined
+    const codexText =
+      displayRole === 'assistant' && message.display_kind !== 'hidden' ? codexMessageItemText(message) : null
 
-    const isCommentaryOnly = Boolean(codexTexts?.commentary.length && !codexTexts.reply && !displayContent)
+    const commentary = codexText?.commentary ?? []
 
-    const storedReasoning =
+    const rawReasoning =
       message.reasoning ||
       message.reasoning_content ||
       (typeof message.reasoning_details === 'string' ? message.reasoning_details : '')
 
-    const reasoning = codexTexts?.commentary.length
-      ? reasoningWithoutCommentary(storedReasoning, codexTexts.commentary)
-      : storedReasoning
+    const reasoning = message.display_reasoning !== undefined ? message.display_reasoning : rawReasoning
 
     if (reasoning && message.role === 'assistant') {
       parts.push(reasoningPart(reasoning, message.timestamp))
     }
 
-    for (const text of codexTexts?.commentary ?? []) {
-      parts.push(assistantTextPart(text, message.timestamp, 'commentary'))
+    const reply = message.display_content !== undefined ? displayContent : displayContent || codexText?.reply
+    // Some providers also persist the joined commentary as canonical content.
+    // Keep that authoritative copy once, without treating unrelated final text
+    // as a reason to discard the earlier public messages.
+    const normalized = (value: string) => renderMediaTags(value).replace(/\s+/g, ' ').trim()
+
+    const commentaryIsReply = Boolean(
+      reply && commentary.length && normalized(commentary.join('\n\n')) === normalized(reply)
+    )
+    const isCommentaryOnly = commentary.length > 0 && (!reply || commentaryIsReply)
+    const durableComplete = sourceHasTools || isCommentaryOnly ? false : rowId !== undefined ? true : undefined
+
+    if (!commentaryIsReply) {
+      parts.push(...commentary.map(text => assistantTextPart(text, message.timestamp, 'commentary')))
     }
 
-    if (displayContent) {
-      const displayPhase =
-        !codexTexts?.reply &&
-        ((Array.isArray(message.tool_calls) && message.tool_calls.length > 0) ||
-          codexTexts?.commentary.some(text => text === displayContent.trim()))
-          ? 'commentary'
-          : 'final'
-
+    if (reply) {
       parts.push(
         displayRole === 'assistant'
-          ? assistantTextPart(displayContent, message.timestamp, displayPhase)
-          : textPart(displayContent, message.timestamp)
+          ? assistantTextPart(reply, message.timestamp, commentaryIsReply || sourceHasTools ? 'commentary' : 'final')
+          : textPart(reply, message.timestamp)
       )
-    }
-
-    // Reply text can live only in the sidecar alongside reasoning or tool parts.
-    // Those parts are not a substitute for the answer; canonical content still wins.
-    if (!displayContent && codexTexts?.reply) {
-      parts.push(assistantTextPart(codexTexts.reply, message.timestamp, 'final'))
     }
 
     if (message.role === 'assistant' && Array.isArray(message.tool_calls)) {
       parts.push(
-        ...message.tool_calls.map((call, callIndex) => toolPartFromStoredCall(call, callIndex, message.timestamp))
+        ...message.tool_calls.map((call, callIndex) =>
+          toolPartFromStoredCall(call, callIndex, message.timestamp, message.tool_call_labels)
+        )
       )
+    }
+
+    if (rowId !== undefined) {
+      for (const part of parts) {
+        if (part.type === 'text') {
+          part.sourceRowId = rowId
+        }
+      }
     }
 
     if (!parts.length && !extractedAttachmentRefs?.length) {
@@ -521,10 +515,11 @@ export function toChatMessages(messages: SessionMessage[]): ChatMessage[] {
 
         if (isCommentaryOnly) {
           activeAssistant.interim = true
-        } else if (activeAssistant.interim && !currentHasToolCall && (displayContent || codexTexts?.reply)) {
+        } else if (activeAssistant.interim && !currentHasToolCall && reply) {
           activeAssistant.interim = false
         }
 
+        activeAssistant.durableComplete = durableComplete
         activeAssistant.timestamp = earliestTimestamp(
           activeAssistant.timestamp,
           message.timestamp,
@@ -539,11 +534,15 @@ export function toChatMessages(messages: SessionMessage[]): ChatMessage[] {
     }
 
     const reactions = messageReactions(message.display_metadata)
+    // Gateway resume names the durable row id `row_id`; the REST transcript
+    // prefetch ships the same messages.id as a numeric `id`. Either one lets
+    // reactions address this exact row later.
     result.push({
       id: `${message.timestamp || Date.now()}-${index}-${displayRole}`,
       role: displayRole,
       parts,
       ...(isCommentaryOnly ? { interim: true } : {}),
+      ...(message.role === 'assistant' && durableComplete !== undefined ? { durableComplete } : {}),
       ...(message.display_kind === 'async_delegation_complete' || message.display_kind === 'process_complete'
         ? { asyncResult: asyncResultBody(displayContentForMessage(message.role, message.content || content)) }
         : {}),

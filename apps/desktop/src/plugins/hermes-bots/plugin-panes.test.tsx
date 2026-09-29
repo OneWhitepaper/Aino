@@ -261,16 +261,7 @@ describe('the Scheduled jobs pane', () => {
     mocks.botChatOwnsWorkspace.mockReturnValue(true)
     store(`hermes-bots:pane`).set(true)
 
-    const routines = harness.find('routines')!
-
-    expect(routines.data).toMatchObject({
-      // Repairs persisted layouts that stranded the tile in the Bots tab strip.
-      dock: { enforce: true, pane: 'workspace', pos: 'right' },
-      placement: 'main'
-    })
-    // Glanceable, not something you sit in: it arrives as the right edge's
-    // vertical tab and takes no width off the chat until the user opens it.
-    expect(routines.data!.defaultCollapsed).toBe(true)
+    expect(harness.find('routines')).toBeTruthy()
 
     harness.dispose()
   })

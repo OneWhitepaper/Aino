@@ -5,6 +5,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useI18n } from '@/i18n'
 import { $gateway } from '@/store/gateway'
 
+import type { BillingRefusal } from './api'
 import { useBillingApi } from './api'
 import { resolveRefusal } from './errors'
 
@@ -22,14 +23,19 @@ export interface StepUpMessage {
 }
 
 export function useStepUpFlow() {
-  const api = useBillingApi()
   const { t } = useI18n()
+  const copy = t.billing
+  const api = useBillingApi()
   const gateway = useStore($gateway)
   const queryClient = useQueryClient()
   const offRef = useRef<(() => void) | null>(null)
   const runningRef = useRef(false)
   const runIdRef = useRef(0)
-  const [message, setMessage] = useState<StepUpMessage | null>(null)
+
+  const [message, setMessage] = useState<
+    null | { status: 'denied' | 'success' } | { status: 'refusal'; refusal: BillingRefusal }
+  >(null)
+
   const [phase, setPhase] = useState<StepUpPhase>('idle')
   const [verification, setVerification] = useState<StepUpVerification | null>(null)
 
@@ -104,23 +110,13 @@ export function useStepUpFlow() {
     unsubscribe()
 
     if (!result.ok) {
-      const resolved = resolveRefusal(result.refusal)
-
-      setMessage({
-        kind: 'error',
-        text: resolved.message,
-        title: resolved.title
-      })
+      setMessage({ status: 'refusal', refusal: result.refusal })
 
       return
     }
 
     if (!result.data.granted) {
-      setMessage({
-        kind: 'error',
-        text: t.billing.stepUp.verificationNotApprovedMessage,
-        title: t.billing.stepUp.verificationNotApprovedTitle
-      })
+      setMessage({ status: 'denied' })
 
       return
     }
@@ -129,12 +125,28 @@ export function useStepUpFlow() {
       queryClient.invalidateQueries({ queryKey: ['billing', 'state'] }),
       queryClient.invalidateQueries({ queryKey: ['billing', 'subscription'] })
     ])
-    setMessage({
-      kind: 'success',
-      text: t.billing.stepUp.verificationCompleteMessage,
-      title: t.billing.stepUp.verificationCompleteTitle
-    })
-  }, [api, gateway, queryClient, t, unsubscribe])
+    setMessage({ status: 'success' })
+  }, [api, gateway, queryClient, unsubscribe])
 
-  return { dismiss, message, openVerification, phase, start, verification }
+  let displayMessage: StepUpMessage | null = null
+
+  if (message?.status === 'refusal') {
+    const resolved = resolveRefusal(message.refusal, copy)
+    displayMessage = { kind: 'error', text: resolved.message, title: resolved.title }
+  } else if (message) {
+    displayMessage =
+      message.status === 'success'
+        ? {
+            kind: 'success',
+            text: copy.stepUp.verificationCompleteMessage,
+            title: copy.stepUp.verificationCompleteTitle
+          }
+        : {
+            kind: 'error',
+            text: copy.stepUp.verificationNotApprovedMessage,
+            title: copy.stepUp.verificationNotApprovedTitle
+          }
+  }
+
+  return { dismiss, message: displayMessage, openVerification, phase, start, verification }
 }

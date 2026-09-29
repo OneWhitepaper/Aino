@@ -194,7 +194,7 @@ function BuyCreditsRow({ billing, row }: { billing: BillingStateResponse; row: B
   return (
     <ListRow
       action={
-        <div className="flex min-w-0 flex-wrap items-center justify-start gap-2 @2xl:justify-end">
+        <>
           <SegmentedControl
             disabled={controlsDisabled}
             onChange={value => setAmount(value)}
@@ -223,7 +223,7 @@ function BuyCreditsRow({ billing, row }: { billing: BillingStateResponse; row: B
           <Button disabled={!canBuy} onClick={startBuy} size="xs" type="button" variant="secondary">
             {copy.buy}
           </Button>
-        </div>
+        </>
       }
       below={
         <BuyCreditsOutcome

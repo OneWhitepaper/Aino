@@ -221,16 +221,15 @@ export function deriveBillingView(
   // `logged_in` is false and the generic "connect your account" notice would
   // otherwise win and tell the user to go to the portal.
   if (billing.free_tier) {
-    return freeTierView(billing)
+    return freeTierView(billing, copy)
   }
 
+  // Signing in is the only thing that writes a credential; a portal link never would, so the
+  // page would stay logged out after the user logged in on the web (#87792).
   if (!billing.logged_in || subscription?.logged_in === false) {
     return {
       notice: {
-        action: {
-          label: copy.notice.openPortal,
-          url: billing.portal_url ?? subscription?.portal_url ?? FALLBACK_PORTAL_URL
-        },
+        action: { label: copy.freeTier.signIn, onSelect: openFreeTierSignIn },
         message: copy.notice.loggedOutMessage,
         title: copy.notice.loggedOutTitle
       },
@@ -338,26 +337,24 @@ function emptySummary(copy: BillingCopy): BillingSummaryItemView[] {
  * summary, and a single plan card whose only action is signing in — no payment,
  * credits, auto-refill or usage sections at all.
  */
-function freeTierView(billing: BillingStateResponse): BillingView {
+function freeTierView(billing: BillingStateResponse, copy: BillingCopy): BillingView {
   return {
     notice: {
-      action: { label: 'Sign in', onSelect: openFreeTierSignIn },
-      message: 'Sign in with a Nous account to unlock more models and tools.',
-      title: "You're on the Nous free tier",
+      action: { label: copy.freeTier.signIn, onSelect: openFreeTierSignIn },
+      message: copy.freeTier.message,
+      title: copy.freeTier.title,
       tone: 'info'
     },
     plan: {
-      caption:
-        'Runs on nous/welcome with connectors included. Signing in keeps your connectors and adds the tools that need an account and every other model.',
-      tierName: 'Nous · free tier'
+      caption: copy.freeTier.caption,
+      tierName: copy.freeTier.name
     },
-    planFootnote:
-      'The free tier has no balance and nothing to pay. Payment and usage appear when you sign in with a Nous account.',
+    planFootnote: copy.freeTier.footnote,
     status: 'free_tier',
     summary: [
-      { label: 'Plan', value: 'Free tier' },
-      { label: 'Model', value: billing.free_tier_model ?? FREE_TIER_MODEL },
-      { label: 'Connectors', tone: 'primary', value: 'Included' }
+      { label: copy.summary.plan, value: copy.freeTier.plan },
+      { label: copy.freeTier.model, value: billing.free_tier_model ?? FREE_TIER_MODEL },
+      { label: copy.freeTier.connectors, tone: 'primary', value: copy.freeTier.included }
     ],
     tiers: [],
     usageRows: []
@@ -365,7 +362,7 @@ function freeTierView(billing: BillingStateResponse): BillingView {
 }
 
 function refusalNotice(refusal: BillingRefusal, copy: BillingCopy): BillingNoticeView {
-  const resolved = resolveRefusal(refusal)
+  const resolved = resolveRefusal(refusal, copy)
   const portalUrl = resolved.action.type === 'portal' ? resolved.action.url : undefined
 
   return {
@@ -429,14 +426,14 @@ function creditsPerMonthDisplay(monthlyCredits: null | string, copy: BillingCopy
  * ("−$88/mo"), never the raw number. Zero / absent → null so the caller hides
  * the line entirely.
  */
-export function formatMonthlyCreditsDelta(delta?: null | string): null | string {
+export function formatMonthlyCreditsDelta(delta?: null | string, copy: BillingCopy = en.billing): null | string {
   const amount = parseAmount(delta)
 
   if (amount == null || amount === 0) {
     return null
   }
 
-  return `${amount < 0 ? '−' : '+'}${formatMoney(Math.abs(amount))}/mo`
+  return copy.plan.monthlyPrice(`${amount < 0 ? '−' : '+'}${formatMoney(Math.abs(amount))}`)
 }
 
 /**
@@ -457,7 +454,7 @@ function derivePlanCard(
   copy: BillingCopy
 ): BillingPlanCardView {
   const current = subscription?.current
-  const tierName = current?.tier_name ?? billing.usage?.plan_name ?? 'Free'
+  const tierName = current?.tier_name ?? billing.usage?.plan_name ?? copy.plan.freeTier
   // Price resolves against the UNFILTERED catalog so a grandfathered current tier
   // still shows its price.
   const price = findCurrentTier(subscription)?.dollars_per_month_display

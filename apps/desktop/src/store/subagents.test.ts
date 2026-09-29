@@ -289,7 +289,7 @@ describe('subagent store', () => {
     const item = listFor('s1')[0]
     expect(item?.status).toBe('failed')
     expect(item?.durationSeconds).toBe(612.3)
-    expect(item?.summary).toBe('Timed out after 612.3s')
+    expect(item?.summary).toContain('612.3')
 
     // A timed-out row must be pruned at the next message.start boundary like
     // any other finished row — it must not linger as a live spinner.

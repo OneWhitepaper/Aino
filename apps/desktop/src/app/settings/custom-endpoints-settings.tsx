@@ -26,6 +26,7 @@ import type {
   CustomEndpointUpdate
 } from '@/types/hermes'
 
+import { ComboboxInput } from './combobox-input'
 import { EmptyState, Pill, SectionHeading, SettingsContent, SettingsSkeleton } from './primitives'
 import { SettingsProfileScope } from './profile-scope'
 
@@ -47,7 +48,6 @@ interface EndpointForm {
 }
 
 // Same choices as `hermes model`'s custom-provider setup; '' = runtime auto-detect.
-// This panel is not internationalized — keep the literals it has.
 const API_MODE_OPTIONS: readonly { id: CustomEndpointApiMode; label: string }[] = [
   { id: '', label: 'Auto-detect' },
   { id: 'chat_completions', label: 'Chat Completions' },
@@ -106,6 +106,12 @@ function toPayload(
 export function CustomEndpointsSettings({ onConfigSaved, onMainModelChanged }: CustomEndpointsSettingsProps) {
   const { t } = useI18n()
   const c = t.settings.customEndpoints
+  const apiModeOptions = API_MODE_OPTIONS.map(option => ({
+    ...option,
+    label: option.id ? option.label : c.autoDetect
+  }))
+  const copyRef = useRef(c)
+  copyRef.current = c
   // Shared settings "Applies to" scope: read/write this profile's endpoints,
   // not whichever Bot is active in the left rail. Undefined follows the
   // active profile (request-shaped — never pass null, which retargets primary).
@@ -157,7 +163,7 @@ export function CustomEndpointsSettings({ onConfigSaved, onMainModelChanged }: C
           setDiscoveredModels(current.models)
         }
       } catch (err) {
-        notifyError(err, c.loadFailed)
+        notifyError(err, copyRef.current.loadFailed)
       } finally {
         if (!cancelled) {
           setLoading(false)
@@ -171,7 +177,7 @@ export function CustomEndpointsSettings({ onConfigSaved, onMainModelChanged }: C
       cancelled = true
       mounted.current = false
     }
-  }, [c.loadFailed, scopeProfile])
+  }, [scopeProfile])
 
   async function handleSave() {
     try {
@@ -435,28 +441,23 @@ export function CustomEndpointsSettings({ onConfigSaved, onMainModelChanged }: C
               />
             </label>
             <fieldset className="grid min-w-0 gap-1.5 text-xs text-muted-foreground">
-              <legend className="mb-1.5">API Mode</legend>
+              <legend className="mb-1.5">{c.apiMode}</legend>
               <SegmentedControl
                 className="w-full max-w-full"
                 onChange={apiMode => setForm(current => ({ ...current, apiMode }))}
-                options={API_MODE_OPTIONS}
+                options={apiModeOptions}
                 value={form.apiMode}
               />
             </fieldset>
             <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_12rem]">
               <label className="grid gap-1.5 text-xs text-muted-foreground">
                 {c.defaultModel}
-                <Input
-                  list="custom-endpoint-models"
-                  onChange={event => setForm(current => ({ ...current, model: event.target.value }))}
+                <ComboboxInput
+                  onChange={model => setForm(current => ({ ...current, model }))}
+                  options={allModelOptions}
                   placeholder={c.defaultModelPlaceholder}
                   value={form.model}
                 />
-                <datalist id="custom-endpoint-models">
-                  {allModelOptions.map(model => (
-                    <option key={model} value={model} />
-                  ))}
-                </datalist>
               </label>
               <label className="grid gap-1.5 text-xs text-muted-foreground">
                 {c.context}

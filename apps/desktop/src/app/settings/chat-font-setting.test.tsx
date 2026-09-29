@@ -23,6 +23,7 @@ vi.mock('@/hermes', () => ({
 vi.mock('@/i18n', () => ({
   useI18n: () => ({
     t: {
+      ui: { accessibility: { showOptions: 'Show options' } },
       settings: {
         appearance: {
           chatFontDesc: 'Choose a font.',
@@ -44,7 +45,11 @@ vi.mock('@/store/notifications', () => ({
 
 vi.mock('../hooks/use-config-record', () => ({
   setHermesConfigCache: (config: Record<string, unknown>) => mocks.cache(config),
-  useHermesConfigRecord: () => ({ data: mocks.loadedConfig, dataUpdatedAt: mocks.configUpdatedAt, writeScope: mocks.writeScope })
+  useHermesConfigRecord: () => ({
+    data: mocks.loadedConfig,
+    dataUpdatedAt: mocks.configUpdatedAt,
+    writeScope: mocks.writeScope
+  })
 }))
 
 vi.mock('../hooks/use-on-profile-switch', () => ({

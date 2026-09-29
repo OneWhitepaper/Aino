@@ -5,7 +5,6 @@ import { PaneTab, PaneTabLabel, PaneTabStrip } from './pane-tab'
 
 afterEach(cleanup)
 
-/** The tab shell's own classes, independent of its label's internal layout. */
 const classesOf = (label: string): string[] =>
   screen.getByText(label).closest('[data-slot="pane-tab"]')!.className.split(/\s+/).filter(Boolean)
 

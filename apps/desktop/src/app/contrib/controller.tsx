@@ -6,7 +6,6 @@ import { useLocation } from 'react-router'
 import { SessionDraftTitle } from '@/app/chat/session-draft-title'
 import { SessionStatusDot } from '@/app/chat/session-status-dot'
 import { PALETTE_AREA, type PaletteContribution, paletteToggle } from '@/app/command-palette/contrib'
-import { useConnectionRegistry } from '@/app/gateway/hooks/use-connection-registry'
 import { SidebarIdentityFooter } from '@/app/shell/sidebar-identity-footer'
 import { type StatusbarItem } from '@/app/shell/statusbar-controls'
 import { SummaryWorkspace } from '@/app/shell/summary-workspace'
@@ -32,7 +31,6 @@ import {
   dismissTreePane,
   isPaneVisible,
   markCollapsePane,
-  mirrorLayoutTree,
   paneRootSide,
   persistTree,
   registerLayoutResetHandler,
@@ -56,25 +54,40 @@ import { registry } from '@/contrib/registry'
 import { discoverRuntimePlugins } from '@/contrib/runtime-loader'
 import { LocalizedTabTitle, translateNow } from '@/i18n'
 import { newSessionTitle, sessionTitle as storedSessionTitle } from '@/lib/chat-runtime'
-import { Download, FileText, LayoutDashboard, PanelTop, Terminal, Upload, Users, Zap } from '@/lib/icons'
+import {
+  Download,
+  FileText,
+  LayoutDashboard,
+  PanelBottom,
+  PanelTop,
+  SlidersHorizontal,
+  Terminal,
+  Upload,
+  Users,
+  Zap
+} from '@/lib/icons'
 import { type KeybindContribution, KEYBINDS_AREA } from '@/lib/keybinds/actions'
 import { isOnboardingEnabled } from '@/lib/onboarding-enabled'
 import { readKey, writeKey } from '@/lib/storage'
 import { TRANSCRIPT_DIRECTIVE_AREA, type TranscriptDirectiveContribution } from '@/lib/transcript-directives'
 import { setYoloEnabled } from '@/lib/yolo-session'
+import { $connectionsRegistry } from '@/store/connection-registry-state'
+import { $interfaceMode, $showsAdvancedChrome, setModeContext, toggleSimpleMode } from '@/store/interface-mode'
 import {
   $fileBrowserOpen,
-  $panesFlipped,
   $sidebarOpen,
   FILE_BROWSER_DEFAULT_WIDTH,
   FILE_BROWSER_MAX_WIDTH,
   FILE_BROWSER_MIN_WIDTH,
+  fileBrowserSide,
   setFileBrowserOpen,
   setSidebarOpen,
   SIDEBAR_DEFAULT_WIDTH,
   SIDEBAR_MAX_WIDTH,
-  SIDEBAR_MIN_WIDTH
+  SIDEBAR_MIN_WIDTH,
+  sidebarSide
 } from '@/store/layout'
+import { $profiles } from '@/store/profile'
 import { $profileRailVisible } from '@/store/profile-rail-prefs'
 import { runExportProfileFlow, runImportProfileFlow } from '@/store/profile-share'
 import { $reviewOpen, $reviewRepoCwd, closeReview, restoreReview, REVIEW_PANE_ID } from '@/store/review'
@@ -103,7 +116,8 @@ import { HudShell } from '../hud/hud-shell'
 import { $terminalTakeover, setTerminalTakeover } from '../right-sidebar/store'
 import { $workspaceIsPage, appViewForPath, WORKSPACE_PAGE_HEADER_AREA } from '../routes'
 
-import { DEFAULT_TREE, registerLayoutPresets } from './layout-presets'
+import { BASIC_TREE, DEFAULT_TREE, registerLayoutPresets } from './layout-presets'
+import { bindLayoutSides } from './layout-sides'
 import { FilesPane, LogsPane, ReviewPaneContent } from './panes'
 import { ContribWiring, WiredPane } from './wiring'
 
@@ -232,7 +246,6 @@ registry.registerMany([
       dock: { pane: 'workspace', pos: 'bottom' },
       height: '20vh',
       maxHeight: '80vh',
-      revealOnPreset: true,
       lifecycleKeepAlive: true,
       selfManagedTabs: true,
       tabTitle: () => <LocalizedTabTitle select={t => t.sidebar.terminal} />,
@@ -379,6 +392,17 @@ registry.registerMany([
     get: () => $profileRailVisible.get(),
     set: enabled => $profileRailVisible.set(enabled)
   }),
+  // Simple hides most of the chrome that would offer the way back, so ⌘K is a
+  // guaranteed door (alongside the layout editor and Settings → Appearance).
+  paletteToggle({
+    id: 'view.simpleMode',
+    label: 'Simple mode',
+    action: 'view.toggleSimpleMode',
+    icon: SlidersHorizontal,
+    keywords: ['simple', 'advanced', 'mode', 'interface', 'chrome', 'minimal', 'focus', 'distraction'],
+    get: () => $interfaceMode.get() === 'simple',
+    set: toggleSimpleMode
+  }),
   paletteToggle({
     id: 'view.toggleTabStrip',
     label: 'Toggle tabs',
@@ -431,7 +455,7 @@ registry.registerMany([
 
 registerLayoutPresets()
 
-declareDefaultTree(DEFAULT_TREE)
+declareDefaultTree(DEFAULT_TREE, BASIC_TREE)
 
 // Summary now floats from the titlebar. Retire only its old persisted pane;
 // saved terminal, session and plugin arrangements remain user-owned.
@@ -573,46 +597,7 @@ registerLayoutResetHandler(stackSessionTilesIntoMain)
 // bindToolPaneCollapse — so the boot rule it encodes is testable against the
 // real function instead of a copy. See its docblock for the semantics.
 
-// SIDES have one source of truth: the TREE. The legacy $panesFlipped flag is
-// DERIVED from where the sessions zone actually sits (TitlebarControls maps
-// its left/right buttons through it), so dragging sessions across — or
-// applying a mirrored preset — remaps the buttons automatically. The flip
-// action (⌘\ / titlebar) mirrors the tree only when they disagree.
-const sessionsOnRight = () => {
-  const tree = $layoutTree.get()
-
-  if (!tree) {
-    return null
-  }
-
-  const order = allPaneIds(tree)
-  const sessions = order.indexOf('sessions')
-  const main = order.indexOf('workspace')
-
-  return sessions >= 0 && main >= 0 ? sessions > main : null
-}
-
-$layoutTree.subscribe(() => {
-  const flipped = sessionsOnRight()
-
-  if (flipped !== null && flipped !== $panesFlipped.get()) {
-    $panesFlipped.set(flipped)
-  }
-})
-
-$panesFlipped.listen(flipped => {
-  const current = sessionsOnRight()
-
-  if (current !== null && current !== flipped) {
-    mirrorLayoutTree()
-  }
-})
-
-// POSITIONAL side toggles (titlebar buttons, ⌘B / ⌘J): $sidebarOpen ≙ the
-// LEFT side of the main zone, $fileBrowserOpen ≙ the RIGHT — everything on
-// that side hides together, whatever panes have been rearranged there.
-bindTreeSideVisibility('left', $sidebarOpen, setSidebarOpen)
-bindTreeSideVisibility('right', $fileBrowserOpen, setFileBrowserOpen)
+bindLayoutSides()
 
 // Workspace-scoped surfaces: the file tree and git diff only mean something
 // inside a project. A detached chat (no cwd) hides them — their zones
@@ -670,6 +655,9 @@ $terminalTakeover.listen(open => {
     revealTreePane('terminal')
   }
 })
+// Without the statusbar, the rail is the only way to switch profiles or gateways.
+$profiles.subscribe(profiles => setModeContext({ profileCount: profiles.length }))
+$connectionsRegistry.subscribe(registry => setModeContext({ connectionCount: registry?.connections.length ?? 0 }))
 // ⌘K door onto the same pane the keybind and statusbar pill flip — was a
 // one-way "open" row under Go to, so it never showed on/off and couldn't hide.
 // Reads the TREE like every other pane toggle: `$terminalTakeover` stays true
@@ -836,12 +824,18 @@ registry.register(
 // flips back) — but only while the pane actually lives in that root side
 // column. Dragged next to main, a side collapse can't hide it (the collapse
 // skips main-bearing children), so Close falls back to dismissal there —
-// otherwise ⌘W/Close silently no-op.
+// otherwise ⌘W/Close silently no-op. The sessions opener is the mirror: a
+// preset that places the sidebar shows it, ⌘B truthful.
 registerPaneCloser('sessions', () =>
-  paneRootSide('sessions') === 'left' ? setSidebarOpen(false) : dismissTreePane('sessions')
+  paneRootSide('sessions') === sidebarSide() ? setSidebarOpen(false) : dismissTreePane('sessions')
 )
+registerPaneOpener('sessions', () => {
+  if (paneRootSide('sessions') === sidebarSide()) {
+    setSidebarOpen(true)
+  }
+})
 registerPaneCloser('files', () =>
-  paneRootSide('files') === 'right' ? setFileBrowserOpen(false) : dismissTreePane('files')
+  paneRootSide('files') === fileBrowserSide() ? setFileBrowserOpen(false) : dismissTreePane('files')
 )
 
 // ---------------------------------------------------------------------------
@@ -866,7 +860,6 @@ function TitlebarSlot({ area, className }: TitlebarSlotProps) {
 }
 
 export function ContribController() {
-  useConnectionRegistry()
   const sidebarOpen = useStore($sidebarOpen)
   const location = useLocation()
   const view = appViewForPath(location.pathname)

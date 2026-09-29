@@ -7,8 +7,9 @@ probe spawns the child in its own process group (``process_group=0``) and
 only when the child actually leads its own group, so a shared-group spawn can
 never take down unrelated processes.
 
-These tests use REAL subprocesses (no mocks): a mock cannot reproduce group
-membership or survival semantics.
+These tests use real subprocesses: group membership and survival must come
+from the host OS. The timeout test waits for its descendant to be ready
+before starting the probe timer.
 """
 
 import os
@@ -19,8 +20,8 @@ import time
 
 import pytest
 
-from hermes_cli import _subprocess_compat
 from hermes_cli._subprocess_compat import bounded_git_probe, kill_process_tree
+from hermes_cli.local_runtime import processes
 
 pytestmark = pytest.mark.skipif(
     sys.platform == "win32", reason="POSIX process-group semantics"
@@ -62,23 +63,37 @@ def _wait_marker(marker, timeout=5.0) -> int:
     raise AssertionError("forking script never wrote its descendant pid")
 
 
-def test_timeout_kills_descendants(tmp_path):
+def test_timeout_kills_descendants(tmp_path, monkeypatch):
     """A probe timeout must take the descendant down with the launcher."""
     script, marker = _write_forking_script(tmp_path)
+    real_spawn = processes.spawn_server
+    spawned = []
 
-    out = bounded_git_probe([str(script)], timeout=1.0)
-    assert out == ""
+    def spawn_when_ready(*args, **kwargs):
+        proc, job = real_spawn(*args, **kwargs)
+        spawned.append(proc)
+        # The assertion is about killing an existing descendant, not whether
+        # a loaded runner can schedule the shell before the probe times out.
+        _wait_marker(marker)
+        return proc, job
 
-    child_pid = _wait_marker(marker)
-    # Precondition sanity: the descendant existed (marker written) — now it
-    # must be gone shortly after the probe returned.
-    deadline = time.monotonic() + 3.0
-    while time.monotonic() < deadline and _pid_alive(child_pid):
-        time.sleep(0.05)
-    alive = _pid_alive(child_pid)
-    if alive:  # cleanup so a failure doesn't leak a 300s sleeper
-        os.kill(child_pid, 9)
-    assert not alive, f"descendant {child_pid} survived probe timeout"
+    monkeypatch.setattr(processes, "spawn_server", spawn_when_ready)
+    try:
+        out = bounded_git_probe([str(script)], timeout=2.0)
+        assert out == ""
+
+        child_pid = _wait_marker(marker)
+        deadline = time.monotonic() + 3.0
+        while time.monotonic() < deadline and _pid_alive(child_pid):
+            time.sleep(0.05)
+        alive = _pid_alive(child_pid)
+        if alive:  # cleanup so a failure doesn't leak a 300s sleeper
+            os.kill(child_pid, 9)
+        assert not alive, f"descendant {child_pid} survived probe timeout"
+    finally:
+        for proc in spawned:
+            kill_process_tree(proc)
+            proc.wait(timeout=5)
 
 
 def test_posix_spawn_uses_own_process_group(tmp_path):

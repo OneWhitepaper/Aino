@@ -245,7 +245,7 @@ export function HubSkillsSection({ bot, onInstalled }: HubSkillsSectionProps) {
                   <span className="shrink-0 text-[0.65rem] text-(--ui-text-tertiary)">{b.tools.added}</span>
                 ) : (
                   <Button
-                    aria-label={`Install "${r.name}" and add it to the list above`}
+                    aria-label={b.tools.installHint(r.name)}
                     className="shrink-0 px-2 font-semibold"
                     disabled={installing !== null}
                     onClick={() => void install(r.name)}

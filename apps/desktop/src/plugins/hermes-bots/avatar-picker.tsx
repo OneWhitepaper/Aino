@@ -283,7 +283,7 @@ export function AvatarPicker({ shape, color, image, onShape, onColor, onImage, g
       {tab === 'upload' ? (
         <Button className="w-full justify-center" onClick={upload} type="button" variant="secondary">
           <Codicon className="mr-1 text-[0.8rem]" name="device-camera" />
-          {b.avatar.chooseImage}
+          {b.editor.chooseImage}
         </Button>
       ) : null}
       {tab === 'pet' ? <PetTab image={image} onImage={onImage} /> : null}

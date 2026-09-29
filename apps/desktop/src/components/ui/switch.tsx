@@ -5,7 +5,7 @@ import * as React from 'react'
 import { cn } from '@/lib/utils'
 
 const switchVariants = cva(
-  'peer inline-flex shrink-0 items-center rounded-full border border-(--ui-stroke-secondary) bg-(--ui-bg-primary) shadow-none transition-colors outline-none focus-visible:border-ring focus-visible:ring-[0.1875rem] focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50 data-[state=checked]:border-transparent data-[state=checked]:bg-(--aino-action-bg)',
+  'peer inline-flex shrink-0 items-center rounded-full border border-(--ui-stroke-secondary) bg-(--ui-bg-primary) shadow-none transition-colors outline-none focus-visible:border-ring focus-visible:ring-[0.1875rem] focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50 data-[state=checked]:border-transparent data-[state=checked]:bg-(--aino-action-bg) disabled:data-[state=checked]:bg-(--ui-text-tertiary)',
   {
     variants: {
       size: {

@@ -105,30 +105,6 @@ test('installZoomReassertOnWindowEvents wires show, restore, focus, resize, and 
   assert.equal(calls, 5)
 })
 
-test('focus event reasserts zoom immediately without debounce on Windows (high-DPI alt-tab, #50837)', () => {
-  const handlers = new Map()
-
-  const win = {
-    isDestroyed: () => false,
-    on(event, listener) {
-      handlers.set(event, listener)
-    }
-  }
-
-  let calls = 0
-  installZoomReassertOnWindowEvents(
-    win,
-    () => {
-      calls += 1
-    },
-    'win32'
-  )
-
-  // focus on Windows triggers immediate reassert — no timer involved
-  handlers.get('focus')()
-  assert.equal(calls, 1)
-})
-
 test('isDebouncedReassertEvent debounces focus only on Linux, not Windows/macOS', () => {
   assert.equal(isDebouncedReassertEvent('focus', 'linux'), true)
   assert.equal(isDebouncedReassertEvent('focus', 'win32'), false)

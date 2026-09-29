@@ -85,6 +85,9 @@ describe('live transcript timeline events', () => {
         role: 'assistant' as const,
         content: '',
         reasoning: `${privateAnalysis}\n\n${progress}`,
+        // Both history transports supply the backend-authorized display projection.
+        display_reasoning: privateAnalysis,
+        display_commentary: [progress],
         codex_message_items: transport === 'rest' ? JSON.stringify(items) : items,
         tool_calls: [
           { id: 'call-progress', type: 'function', function: { name: 'read_file', arguments: '{"path":"README.md"}' } }
