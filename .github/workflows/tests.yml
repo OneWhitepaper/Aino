@@ -12,9 +12,39 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  test-matrix:
+    name: Plan complete test coverage
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      unit: ${{ steps.matrix.outputs.unit }}
+      e2e: ${{ steps.matrix.outputs.e2e }}
+      upgrade: ${{ steps.matrix.outputs.upgrade }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: Generate matrices with the existing test runner
+        id: matrix
+        run: |
+          set -euo pipefail
+          # Freeze discovery once; each file belongs to exactly one job.
+          unit=$(python3 scripts/run_tests_parallel.py --generate-slices 4)
+          mapfile -t core_files < <(find tests/e2e -name 'test_*.py' -not -path 'tests/e2e/core/upgrade/*' | sort)
+          mapfile -t upgrade_files < <(find tests/e2e/core/upgrade -name 'test_*.py' | sort)
+          test "${#core_files[@]}" -gt 0
+          test "${#upgrade_files[@]}" -gt 0
+          e2e=$(python3 scripts/run_tests_parallel.py --include-integration --generate-slices "${#core_files[@]}" "${core_files[@]}")
+          upgrade=$(python3 scripts/run_tests_parallel.py --include-integration --generate-slices "${#upgrade_files[@]}" "${upgrade_files[@]}")
+          echo "unit=$unit" >> "$GITHUB_OUTPUT"
+          echo "e2e=$e2e" >> "$GITHUB_OUTPUT"
+          echo "upgrade=$upgrade" >> "$GITHUB_OUTPUT"
+
   test:
-    name: Run tests
-    # Keep the whole suite on a standard runner available to the Aino repo.
+    name: Run tests (slice ${{ matrix.slice.index }}/4)
+    needs: test-matrix
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.test-matrix.outputs.unit) }}
+    # Keep the whole suite across standard runners available to the Aino repo.
     # Bound workers to its actual CPU count instead of the upstream fleet size.
     runs-on: ubuntu-latest
     timeout-minutes: 120
@@ -110,8 +140,9 @@ jobs:
         uses: actions/cache/restore@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
         with:
           path: test_durations.json
-          key: test-durations-never-exact
+          key: test-durations-unit-${{ matrix.slice.index }}-never-exact
           restore-keys: |
+            test-durations-unit-${{ matrix.slice.index }}-
             test-durations-
 
       - name: Run tests
@@ -120,12 +151,12 @@ jobs:
         # with bounded parallelism. No xdist, no shared workers, no
         # module-level state leakage between files.
         #
-        # No --files: the runner discovers the suite itself. The discovered
-        # set is identical to the list the removed matrix job used to pass in.
+        # Run the frozen discovery from the matrix job without reassigning files.
         run: |
           source .venv/bin/activate
-          scripts/run_tests.sh --jobs "$(nproc)"
+          scripts/run_tests.sh --jobs "$(nproc)" --files "$TEST_FILES"
         env:
+          TEST_FILES: ${{ matrix.slice.files }}
           # Ensure tests don't accidentally call real APIs
           OPENROUTER_API_KEY: ""
           OPENAI_API_KEY: ""
@@ -138,12 +169,16 @@ jobs:
         uses: actions/cache/save@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
         with:
           path: test_durations.json
-          key: test-durations-${{ github.run_id }}
+          key: test-durations-unit-${{ matrix.slice.index }}-${{ github.run_id }}
 
   e2e:
-    # The core suites spawn real serve / gateway / tui_gateway / MCP / SQLite
-    # writer processes per test; a 4-vCPU runner serialises them into timeouts.
-    runs-on: ubuntu-latest-32-core
+    name: e2e / ${{ matrix.slice.files }}
+    needs: test-matrix
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.test-matrix.outputs.e2e) }}
+    # One file per VM leaves capacity for the test's real child processes.
+    runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
       - name: Checkout code
@@ -231,15 +266,14 @@ jobs:
           python -c "import sqlite3, hermes_state_wal as w; print('sqlite', sqlite3.sqlite_version); assert not w.is_sqlite_wal_reset_vulnerable()"
 
       - name: Run e2e tests
-        # One subprocess per file, in parallel: the core suites spawn real
-        # processes (serve, gateway, tui_gateway, MCP servers, SQLite writers)
-        # and must not share interpreter state.
+        # One subprocess per file, on its own VM: real process trees get
+        # the standard runner to themselves, with the original test timeouts.
         # tests/e2e/core/upgrade runs in its own job (e2e-upgrade) below.
         run: |
           source .venv/bin/activate
-          mapfile -t files < <(find tests/e2e -name 'test_*.py' -not -path 'tests/e2e/core/upgrade/*' | sort)
-          scripts/run_tests.sh --include-integration "${files[@]}"
+          scripts/run_tests.sh --include-integration --jobs 1 --files "$TEST_FILES"
         env:
+          TEST_FILES: ${{ matrix.slice.files }}
           # Multi-process episodes (torture chamber, compaction kill -9,
           # gateway liveness, delivery exactly-once through a real gateway,
           # the cron virtual-clock soak) legitimately run past the 300 s default.
@@ -254,11 +288,16 @@ jobs:
           NOUS_API_KEY: ""
 
   e2e-upgrade:
+    name: e2e-upgrade / ${{ matrix.slice.files }}
+    needs: test-matrix
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.test-matrix.outputs.upgrade) }}
     # tests/e2e/core/upgrade: a real N-1 -> HEAD `hermes update` (clean,
     # autostash, killed mid-pull / mid-deps, offline), fresh-process import and
     # entrypoint smoke, and the config round-trip property matrix. Its own job:
     # it needs full history + tags, bubblewrap, and one file runs ~5-15 min.
-    runs-on: ubuntu-latest-32-core
+    runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
       - name: Checkout code
@@ -349,8 +388,9 @@ jobs:
       - name: Run upgrade e2e tests
         run: |
           source .venv/bin/activate
-          scripts/run_tests.sh --include-integration tests/e2e/core/upgrade
+          scripts/run_tests.sh --include-integration --jobs 1 --files "$TEST_FILES"
         env:
+          TEST_FILES: ${{ matrix.slice.files }}
           HERMES_TEST_FILE_TIMEOUT: "3000"
           OPENROUTER_API_KEY: ""
           OPENAI_API_KEY: ""
