@@ -7059,6 +7059,7 @@ def test_notification_poller_live_loop_requeues_foreign_completion_for_owner(
     def _deliver(_rid, sid, session, text, **_kw):
         delivered["a" if sid == "sid-a-live-handoff" else "b"].append(text)
         session["running"] = False
+        return True
 
     monkeypatch.setattr(server, "_run_prompt_submit", _deliver)
     server._sessions.update(
@@ -18520,6 +18521,7 @@ def test_notification_poller_emits_distinct_watch_matches_once(monkeypatch):
         turns.append(text)
         with session["history_lock"]:
             session["running"] = False
+        return True
 
     sess = _session()
     server._sessions["sid_watch_dedup"] = sess

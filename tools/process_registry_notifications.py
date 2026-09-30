@@ -10,27 +10,6 @@ from contextlib import suppress
 _DONE = ("completed", "success")
 _REASON_STATUS = {"lost": "marked lost because the process backend disappeared", "failed_start": "failed to start"}
 
-# A completion is a handoff back into the parent's conversation.  Keep this guidance beside the
-# durable notification formatter so it reaches the model after the child result, when the parent
-# is most likely to mistake a completed sidecar for a reason to reopen the whole investigation.
-_DELEGATION_CONVERGENCE_GUIDANCE = (
-    "[DELEGATION RESULT HANDOFF] First account for every task in this result, including failed, partial, "
-    "or schema-invalid tasks. Treat child summaries as evidence to integrate, not proof; preserve limitations "
-    "and unknowns. Verify only central claims that are unsupported or conflicting with the narrowest relevant "
-    "lookup. Do not repeat broad discovery or reread unchanged files just to find more issues. When each "
-    "required task has a result or explicit failure, stop using tools and deliver the original request in its "
-    "requested format."
-)
-
-
-def _delegation_convergence_guidance(*, pending_siblings: bool = False) -> str:
-    """Return the post-result convergence contract, preserving the partial-unit boundary."""
-    if not pending_siblings:
-        return _DELEGATION_CONVERGENCE_GUIDANCE
-    return (_DELEGATION_CONVERGENCE_GUIDANCE + " This is a partial unit. Other sibling units may still be "
-            "pending; do not claim the whole task is complete. End this turn and wait for the remaining "
-            "completion results.")
-
 
 @dataclass(frozen=True, slots=True)
 class ProcessNotificationBatch:
@@ -190,9 +169,8 @@ def _format_task_failure_notice(evt: dict, deleg_id: str) -> str:
     lines = [
         f"[ASYNC DELEGATION TASK FAILED — {deleg_id}, task {idx + 1}/{n}]",
         "One subagent in a background fan-out you dispatched has failed while its siblings are still running. "
-        "The batch's consolidated results will still arrive when the last sibling finishes. This is an interim "
-        "notice: end the current turn and wait for that consolidated result; re-dispatch only if this failure "
-        "blocks the conclusion after the batch is accounted for.",
+        "The batch's consolidated results will still arrive when the last sibling finishes; this is an early "
+        "warning so you can re-dispatch or investigate now instead of then.",
         f"Task: {goal}" if goal else "",
         f"Status: {r.get('status', '?')}   Duration: {r.get('duration_seconds', '?')}s" + (f"\nError: {err}" if err else ""),
     ]
@@ -279,17 +257,10 @@ def _format_batch_delegation(evt: dict, deleg_id: str, completed_at: float) -> s
         "on siblings, end your turn after acting on this one.",
         completed_at, with_goal=False,
         model_label=_batch_model_line(results, evt) if results else None)
-    if n_unit == n and n:
-        lines.append(
-            "All requested subagent attempts are now accounted for. Integrate the available results, state any "
-            "limitations, and answer the user now; make another check only when a missing or conflicting result "
-            "changes the conclusion."
-        )
     lines[-1] += f"   Total duration: {evt.get('total_duration_seconds', evt.get('duration_seconds', '?'))}s"
     lines += _recovery_lines(evt)
     if evt.get("error") and not results:
         lines += ["--- ERROR ---", f"The batch did not complete successfully: {evt['error']}"]
-        lines += ["", _delegation_convergence_guidance(pending_siblings=bool(goals and len(results) < len(goals)))]
         return "\n".join(lines)
     # Config-level rejection notice BEFORE the per-task wall — a rejected
     # delegation model fails every task identically and must not stay buried.
@@ -318,7 +289,6 @@ def _format_batch_delegation(evt: dict, deleg_id: str, completed_at: float) -> s
         if r.get("live_transcript"):
             lines.append(f"Full live transcript (complete tool/assistant trace): {r['live_transcript']}")
         lines += _process_accounting_lines(r)
-    lines += ["", _delegation_convergence_guidance(pending_siblings=bool(goals and len(results) < len(goals)))]
     return "\n".join(lines)
 
 
@@ -377,7 +347,6 @@ def _format_async_delegation(evt: dict) -> str:
             lines += _recovery_lines(evt)
         if summary:
             lines += ["Partial output:", summary]
-    lines += ["", _delegation_convergence_guidance()]
     return "\n".join(lines)
 
 

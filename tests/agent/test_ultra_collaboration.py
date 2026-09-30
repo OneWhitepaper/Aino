@@ -351,15 +351,3 @@ def test_no_note_without_a_top_level_ultra_turn_that_can_delegate(provider_url, 
         agent._delegate_depth = 1
     agent.run_conversation("review auth, billing and exports", conversation_history=[])
     assert _user_contents(_chat_requests()[0]) == ["review auth, billing and exports"]
-
-
-def test_ultra_note_defines_result_integration_and_bounded_verification():
-    """The Ultra contract must converge after delivery without imposing a length or read cap."""
-    assert "completion notice" in ULTRA_ON_NOTE
-    assert "consume the complete result" in ULTRA_ON_NOTE
-    assert "central claims" in ULTRA_ON_NOTE
-    assert "focused lookups" in ULTRA_ON_NOTE
-    assert "Do not reopen a broad scan" in ULTRA_ON_NOTE
-    assert "preserve limitations" in ULTRA_ON_NOTE
-    assert "requested format" in ULTRA_ON_NOTE
-    assert "400" not in ULTRA_ON_NOTE

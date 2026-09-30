@@ -1,10 +1,8 @@
-"""A notification that claims the session's turn must hand it back whenever no turn runs.
+"""Notification dispatch must release its turn claim and retain every unadmitted result.
 
-The poller claims the idle session (``running = True``) and only then claims the event's durable
-delivery row. Nothing else clears ``running``: a busy session is exempt from the reaper, keeps its
-active-session lease, diverts every ``prompt.submit`` into a queue that only a finishing turn
-drains, and never polls its bot mailbox again — so a dispatch that returns or raises without
-starting a turn leaves that session unusable for the life of the backend.
+Claim failures happen before prompt admission and must clear ``running`` themselves. Real
+prompt refusals already do that, but the consumer must also preserve its event for a retry
+without spending a durable delivery attempt or resurrecting already-consumed process output.
 """
 
 from __future__ import annotations
@@ -87,27 +85,104 @@ def test_a_delegation_whose_notification_text_is_empty_hands_its_offer_back(monk
     assert [e["delegation_id"] for e in returned] == ["deleg-1"]
 
 
-def test_a_notification_rejected_before_turn_start_stays_pending(monkeypatch):
-    """A false admission result is retryable, so the durable completion cannot be acknowledged."""
-    released: list = []
-    completed: list = []
-    monkeypatch.setattr("tools.async_delegation.claim_event_delivery", lambda evt, consumer: "claim-1")
-    monkeypatch.setattr("tools.async_delegation.release_event_delivery",
-                        lambda evt, claim: released.append(claim))
-    monkeypatch.setattr("tools.async_delegation.complete_event_delivery",
-                        lambda evt, claim: completed.append(claim))
-    session = _claimed_session()
+@pytest.fixture
+def notification_admission(tmp_path, monkeypatch):
+    """Keep prompt admission, the profile store and event queue real; stop before model work."""
+    from tools import async_delegation as ad
+    from tools.process_registry import ProcessRegistry
+    from tools.process_registry_notifications import format_process_notification
 
-    def reject(*_args, **_kwargs):
-        session["running"] = False
-        return False
+    home = tmp_path / "profile"
+    home.mkdir()
+    monkeypatch.setenv("HERMES_HOME", str(home))
+    sid = "notification-admission"
+    session = {"session_key": "owner", "profile_home": str(home), "history": [],
+               "running": False, "history_lock": threading.RLock(),
+               "agent": SimpleNamespace(session_id="owner", clear_interrupt=lambda: None),
+               "managed_model_params": {"model_source": "aino", "model_id": "unbound"}}
+    frames, workers = [], []
+    monkeypatch.setattr(server, "_sessions", {sid: session})
+    monkeypatch.setattr(server, "_emit", lambda *args, **kwargs: frames.append(args))
 
-    monkeypatch.setattr(server, "_run_prompt_submit", reject)
-    server._notif_dispatch_event("sid", session, dict(DELEGATION), "text")
+    def start_worker(_target, *, name, session):
+        workers.append(session["inflight_turn"]["user"])
+        return object()
 
-    assert session["running"] is False
-    assert released == ["claim-1"]
-    assert completed == []
+    monkeypatch.setattr(server, "_start_session_work", start_worker)
+    ad._reset_for_tests()
+    with server._session_profile_runtime_scope(session):
+        registry = ProcessRegistry()
+        monkeypatch.setattr("tools.process_registry.process_registry", registry)
+        try:
+            yield SimpleNamespace(sid=sid, session=session, registry=registry, ad=ad,
+                                  fmt=format_process_notification, frames=frames, workers=workers)
+        finally:
+            if lease := session.get("active_session_lease"):
+                lease.release()
+            ad._reset_for_tests()
+
+
+@pytest.mark.parametrize("event_kind,refund_failures", [
+    ("durable", 0), pytest.param("durable", 2, id="durable_refund_retry"),
+    ("interim", 0), ("watch", 0),
+])
+def test_a_notification_rejected_before_turn_start_stays_pending(
+    notification_admission, event_kind, refund_failures, monkeypatch,
+):
+    """Repeated real credential refusals keep one live copy and spend no delivery attempts."""
+    env = notification_admission
+    events, ad = env.registry.completion_queue, env.ad
+    handle = ad.dispatch_async_delegation(
+        goal="notify owner", context=None, toolsets=None, role="leaf", model="m",
+        session_key="owner", parent_session_id="owner", origin_ui_session_id=env.sid,
+        runner=lambda: {"status": "completed", "summary": "retained result"})
+    event = events.get(timeout=10)
+    if event_kind == "interim":
+        event = {**event, "task_failure_notice": True, "results": [
+            {"task_index": 0, "status": "error", "error": "child failed"}]}
+    elif event_kind == "watch":
+        event = {"type": "watch_match", "session_id": "proc-watch", "session_key": "owner",
+                 "command": "build", "pattern": "ready", "output": "retained result"}
+    if refund_failures:
+        from sqlite3 import OperationalError
+
+        real_defer, remaining_failures = ad.defer_completion_delivery, refund_failures
+
+        def defer(delegation_id, claim_id):
+            nonlocal remaining_failures
+            if remaining_failures:
+                remaining_failures -= 1
+                raise OperationalError("database is locked")
+            return real_defer(delegation_id, claim_id)
+
+        monkeypatch.setattr(ad, "defer_completion_delivery", defer)
+    events.put(event)
+    emitted = set()
+    for attempt in range(ad._MAX_DELIVERY_ATTEMPTS + 2):
+        server._notif_handle_ready(env.sid, env.session, [events.get_nowait()], emitted,
+                                   env.registry, env.fmt, None)
+        assert env.session["running"] is False
+        assert events.qsize() == 1, "a live owner must keep the same rejected event queued"
+        row = ad.get_durable_delegation(handle["delegation_id"])
+        assert (row["delivery_state"], row["delivery_attempts"]) == (
+            "pending", int(attempt < refund_failures))
+        assert ad.sweep_orphaned_completions(events, now=time.time() + 600) == 0
+        assert events.qsize() == 1
+        assert env.workers == []
+    assert any(frame[0] == "error" and frame[2].get("reason") == "awaiting_managed_credentials"
+               for frame in env.frames)
+
+    env.session.pop("managed_model_params")
+    assert events.get_nowait() is event
+    server._notif_handle_ready(env.sid, env.session, [event], emitted, env.registry, env.fmt, None)
+    row = ad.get_durable_delegation(handle["delegation_id"])
+    assert (row["delivery_state"], row["delivery_attempts"]) == (
+        ("delivered", 1) if event_kind == "durable" else ("pending", 0))
+    assert len(env.workers) == 1
+    assert ad.sweep_orphaned_completions(events, now=time.time() + 600) == 0
+    assert events.empty()
+    server._notif_handle_ready(env.sid, env.session, [], emitted, env.registry, env.fmt, None)
+    assert len(env.workers) == 1
 
 
 @pytest.mark.parametrize("fail_at", ["claim", "render"])
@@ -139,32 +214,44 @@ def test_a_completion_batch_that_cannot_be_prepared_hands_the_turn_back(monkeypa
     assert released == (["claim-a"] if fail_at == "claim" else ["claim-a", "claim-b"])
 
 
-def test_a_completion_batch_rejected_before_turn_start_stays_pending(monkeypatch):
-    events = [{"type": "completion", "session_id": "proc_a"}, {"type": "completion", "session_id": "proc_b"}]
-    released: list = []
-    completed: list = []
-    claims = iter(["claim-a", "claim-b"])
-    monkeypatch.setattr("tools.async_delegation.claim_event_delivery", lambda evt, consumer: next(claims))
-    monkeypatch.setattr("tools.async_delegation.release_event_delivery",
-                        lambda evt, claim: released.append(claim))
-    monkeypatch.setattr("tools.async_delegation.complete_event_delivery",
-                        lambda evt, claim: completed.append(claim))
-    from tools.process_registry_notifications import ProcessNotificationBatch
-    monkeypatch.setattr(ProcessNotificationBatch, "render", lambda self, registry: "batch text")
-    monkeypatch.setattr(ProcessNotificationBatch, "display_text", lambda self, registry: "batch display")
-    session = {"history_lock": threading.RLock(), "running": False, "history": []}
+@pytest.mark.parametrize("shutdown_drain", [False, True])
+def test_a_completion_batch_rejected_before_turn_start_stays_pending(notification_admission, shutdown_drain):
+    """Refused process batches survive in order; already-read output is never replayed."""
+    env = notification_admission
+    registry = env.registry
+    for command in ("already consumed", "first result", "second result"):
+        proc = registry._new_session(command, "", "", "owner", None)
+        proc.notify_on_complete = True
+        proc.append_output(command)
+        registry._running[proc.id] = proc
+        proc.mark_exited(0)
+        registry._move_to_finished(proc)
+    events = [registry.completion_queue.get_nowait() for _ in range(3)]
+    notifications = [(event, env.fmt(event)) for event in events]
+    registry.read_log(events[0]["session_id"])
+    assert registry.is_completion_consumed(events[0]["session_id"])
+    deferred = [] if shutdown_drain else None
+    server._notif_dispatch_completions(env.sid, env.session, notifications, registry, deferred)
+    assert env.session["running"] is False and env.workers == []
+    retained = deferred if shutdown_drain else [registry.completion_queue.get_nowait()
+                                               for _ in range(registry.completion_queue.qsize())]
+    assert retained == events[1:], "only the two unread results should remain, in their original order"
 
-    def reject(*_args, **_kwargs):
-        session["running"] = False
-        return False
-
-    monkeypatch.setattr(server, "_run_prompt_submit", reject)
-    server._notif_dispatch_completions("sid", session, [(e, "t") for e in events],
-                                       SimpleNamespace(completion_queue=queue.Queue()), None)
-
-    assert session["running"] is False
-    assert released == ["claim-a", "claim-b"]
-    assert completed == []
+    env.session.pop("managed_model_params")
+    server._notif_dispatch_completions(env.sid, env.session, [(e, env.fmt(e)) for e in retained],
+                                       registry, deferred)
+    assert len(env.workers) == 1
+    assert "first result" in env.workers[0] and "second result" in env.workers[0]
+    assert "already consumed" not in env.workers[0]
+    env.session["running"] = False
+    for event in events[1:]:
+        registry.read_log(event["session_id"])
+    before = list(deferred) if deferred is not None else []
+    server._notif_dispatch_completions(env.sid, env.session, notifications, registry, deferred)
+    assert env.session["running"] is False and len(env.workers) == 1
+    assert registry.completion_queue.empty()
+    if deferred is not None:
+        assert deferred == before
 
 
 def test_a_loop_wakeup_whose_send_cannot_start_hands_the_turn_back(monkeypatch):

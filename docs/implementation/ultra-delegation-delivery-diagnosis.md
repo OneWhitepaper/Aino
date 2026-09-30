@@ -1963,3 +1963,98 @@ large与一次daily已有自然交付证据；daily独立功能合同仍有两�
 
 完整命令、红绿日志、截图、初始WIP及最终提交台账：
 /Users/zizimutou/.codex/visualizations/2026/09/29/01a0eadc-dc19-7f42-98b4-e6812a7cb811/ultra-eval-desktop-finalization/report.md
+
+### 18.16 独立分支：准入拒绝不丢通知，撤回强制收尾（2026-09-30）
+
+本阶段从2f7cbdf13f在原linked worktree建立codex/ultra-delivery-stability。
+主checkout继续在main；未改其.scratch/，未推送、合并、发布或启动
+日常桌面。系统协作缺陷、模型内容质量和真实任务成功率仍分别判断。
+
+保留上游异步交接说明：1378fa1b289、99f82de0f99分别cherry-pick为
+c4f03df711、b0d89c2fd9，保留原作者；测试适配提交4ec5c60113。
+只在delegate_task可用时放入稳定system层，解释工具明确要求让出
+当前轮时可以等待后台结果，不将等待说明当成完整任务交付。
+既有会话仍复用落盘前缀，不能为立即启用说明而重建历史system。
+
+新复现的运行时缺陷位于TUI/Desktop通知消费侧：_run_prompt_submit
+可能在缺少managed binding、会话关闭等准入检查时返回False，
+此时它已经清除running；旧_notif_submit却丢弃返回值，消费侧把
+没有启动的通知回合确认成delivered。不能将其描述为永久busy。
+仅改为release也不完整：会消耗durable投递次数，并丢弃仍由活
+owner持有的副本；普通completion、watch和interim事件没有可用的
+durable claim，release不能恢复它们。
+
+修复复用既有bool结果、defer_completion_delivery和队列忙碌退避：
+拒绝时不确认投递、不消耗attempt，原副本留待恢复准入后重试。
+普通completion batch只回排未consumed事件，保持原顺序；
+render(None)代表已消费去重，不重新投递。明确抛异常的旧恢复
+语义未扩展为无限重试。本轮未改对话压缩或看板摘要策略。
+
+两项真实行为测试（5个参数化情形）在补全前全部失败：durable、
+interim、watch丢掉唯一副本，普通batch丢掉两个未消费结果。
+修复后通知测试文件13项通过。测试走真实_run_prompt_submit、
+临时profile、SQLite台账、ProcessRegistry队列与orphan sweep，
+仅在模型worker启动边界截断。连续拒绝超过投递上限后仍pending/0，
+恢复后一次启动，durable变成delivered/1；已消费结果不复活。
+独立复核又发现退款写入异常会阻止回排，下一轮简单重排也会撞上
+自己尚未释放的claim。扩展同一测试，在退款边界注入连续两次
+SQLite OperationalError，修复前1项明确失败；原事件暂存旧claim，
+后续先完成退款再重新claim，修复后整文件14项通过。未新增通知
+字段或持久化结构；私有重试标记不进入模型/展示内容。claim过期
+或被其他consumer接管的安全性经静态SQL路径复核，未冒称并发实测。
+
+最终canonical回归233文件：2307 passed、0 failed、9 skipped，
+HERMES_TEST_FILE_RETRIES=0；覆盖完整tests/tui_gateway及委派、
+Ultra、system prompt、缓存恢复、通知展示相关文件。初轮并非全绿：
+6项失败中2项旧成功替身遗漏True返回，已修正；另4项因runner优先
+选本worktree独立.venv（无anthropic），忽略HERMES_PYTHON fallback。
+确认真实ModuleNotFoundError后，最终回归临时复用主checkout已有
+完整.venv（anthropic 0.87.0，与锁文件一致），执行的生产模块仍
+来自本worktree。未安装依赖、未改锁文件；trap已恢复原.venv，
+前后目录inode一致。首轮失败、故障注入红灯与最终绿灯日志均保留。
+
+6dbda6969f和9b490224c9中追加的收尾/等待提示已从最终工作树
+撤回，保留提交与实测历史：把所有子尝试都有结果或失败视为停止
+工具调用的理由，可能提前放弃必要核验或补救；按当前结果数量
+推断还有sibling等待，也不适用于独立完成单元。一次成功不能
+为这些语义风险背书。
+
+本轮两次真实运行的证据必须分开：
+
+| 项目 | live-ultra-delivery-stability | live-convergence-6dbd |
+|---|---|---|
+| 耗时 | 1251.05秒 | 308.55秒 |
+| 结果 | 无任务最终答案 | normal_final，4253字符，guard eligible |
+| skill | none | original |
+| 实际子请求档位 | Max 25次、High 2次 | High 26次 |
+| 实际父请求档位 | Max 7次 | Max 7次 |
+| 触发阈值 | aggregate_output_threshold | 无 |
+| 当时可见已结算 | $5.04721125（35行） | $3.28598100（36行） |
+| 尚无匹配账单的wire | 4（2 chat、2 delegation） | 1 delegation |
+
+两轮都无400字、3600秒、$10观察停止阈值，但并非同配置对照。
+第一轮忘记传child-reasoning-effort=high，模型首批显式选择Ultra；
+也未保留原skill，不能写成High/原技能验收。真正中断来自累计
+输出63659超过60000，其中推理56936；不是64请求上限、2M输入、
+墙钟或$10。子任务报600秒non-streaming超时，但HTTP已返回200和
+部分body，不能称完全没有响应。
+
+第一轮失败早通知确实进入父上下文，父随后补派；截停后原批次
+仍pending，补派中断通知又启动了一条父请求。guard的children_finished
+是截停前快照，最终事件有4次子尝试（1完成、1超时、2被中断）。
+不得把这个现象简化成所有通知丢失或模型永远不交付。
+
+第二轮确有3子完成、父自然答案，但带有已撤回的6dbda6969f提示。
+其最终答案尚无完整独立质量验收，不能当作当前保留补丁的成功
+验收，更不能证明稳定性、准确性或与Codex等效。
+
+协作隔离失误也入账：并行代理在第一轮运行期间修改共享生产
+文件并提交6dbda6969f；第一轮可见Ultra note和通知仍是旧文本，
+第二轮通知匹配新文本，但没有完整模块加载追踪。两轮只有五个
+评测脚本的起始manifest，没有完整生产模块/构建runner冻结。
+事后归档哈希不能补成事前零漂移证明。账单快照均未覆盖全部wire，
+两次可见合计$8.33319225不能称最终总费用；本次复核未再付费。
+
+原始report/events/settlement、事后归档哈希、账单逐ID缺口、回归
+日志及最终提交记录集中在：
+/Users/zizimutou/.codex/visualizations/2026/09/29/01a0eadc-dc19-7f42-98b4-e6812a7cb811/ultra-delivery-stability-20260930/

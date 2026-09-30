@@ -459,9 +459,28 @@ def _notif_poll_kanban_scoped(sid: str, session: dict) -> None:
                       **({"display_metadata": {"notification_category": "diagnostic"}} if diagnostic else {}))
 
 
-def _notif_dispatch_event(sid: str, session: dict, evt: dict, text: str) -> None:
-    """Run the claimed (running=True) agent turn for one notification event."""
+def _notif_defer_delivery(evt: dict, claim: str) -> bool:
+    """Keep an unadmitted claim on its queued copy until its refund can reach the ledger."""
+    from tools.async_delegation import defer_completion_delivery
+
+    evt["_tui_unadmitted_claim"] = claim
+    try:
+        defer_completion_delivery(str(evt.get("delegation_id") or ""), claim)
+    except Exception as exc:
+        _notif_log_failure("notification deferral pending retry", exc)
+        return False
+    evt.pop("_tui_unadmitted_claim", None)
+    return True
+
+
+def _notif_dispatch_event(sid: str, session: dict, evt: dict, text: str) -> bool:
+    """Run a claimed turn; False means admission refused and the caller must retain this copy."""
     from tools.async_delegation import claim_event_delivery, complete_event_delivery, release_event_delivery
+
+    # A failed refund must finish before claiming again, or we collide with our own old claim.
+    if (pending_claim := evt.get("_tui_unadmitted_claim")) and not _notif_defer_delivery(evt, pending_claim):
+        _notif_release_turn(session)
+        return False
     try:
         claim = claim_event_delivery(evt, "tui-poller")
     except Exception as exc:  # shared ledger busy/unreadable: the durable row stays pending and replays
@@ -477,7 +496,7 @@ def _notif_dispatch_event(sid: str, session: dict, evt: dict, text: str) -> None
             from tools.async_delegation import return_completion_offer
             return_completion_offer(evt)
         _notif_release_turn(session)
-        return
+        return True
     kwargs = ({"display_kind": "async_delegation_complete", "display_metadata": _async_delegation_display_metadata(evt)}
               if evt.get("type") == "async_delegation" else {})
     from agent.notification_presentation import diagnostic_process_event
@@ -488,11 +507,15 @@ def _notif_dispatch_event(sid: str, session: dict, evt: dict, text: str) -> None
                                 "notification poller dispatch failed", **kwargs)
     except Exception:
         release_event_delivery(evt, claim)
-        return
+        return True
     if not started:
-        release_event_delivery(evt, claim)
-        return
+        # No delivery ran: refund the claim, retaining the queued offer even while its producer
+        # is alive (the orphan sweep cannot recover that row). Interim/watch events have no claim.
+        if claim:
+            _notif_defer_delivery(evt, claim)
+        return False
     complete_event_delivery(evt, claim)
+    return True
 
 
 def _notif_handle_event(sid, session, evt, emitted, registry, fmt, deferred, completions=None, *, owned=False) -> bool:
@@ -552,13 +575,12 @@ def _notif_handle_event(sid, session, evt, emitted, registry, fmt, deferred, com
     if evt_type == "completion" and completions is not None:
         completions.append((evt, text))
         return True
-    if not _notif_claim_turn(session):
-        queue.put(evt)
-        if deferred is not None:
-            return False
-        time.sleep(0.25)  # back off: the re-queued event keeps the queue non-empty, else this loop spins at 100% CPU
+    if _notif_claim_turn(session) and _notif_dispatch_event(sid, session, evt, text):
         return True
-    _notif_dispatch_event(sid, session, evt, text)
+    queue.put(evt)
+    if deferred is not None:
+        return False
+    time.sleep(0.25)  # back off: the re-queued event keeps the queue non-empty, else this loop spins at 100% CPU
     return True
 
 
@@ -589,22 +611,22 @@ def _notif_dispatch_completions(sid, session, notifications, registry, deferred)
         return
     if text is None:
         _notif_release_turn(session)
-        for event, _text, claim in claimed:
-            release_event_delivery(event, claim)
-        return
-    try:
-        if text is not None:
+    else:
+        try:
             started = _notif_submit(f"__notif__{int(time.time() * 1000)}", sid, session, text,
                                     "completion batch dispatch failed", display_kind=PROCESS_COMPLETE_DISPLAY_KIND,
                                     display_metadata={"display_text": batch.display_text(registry)})
-    except Exception:
-        for event, _text, claim in claimed:
-            release_event_delivery(event, claim)
-        return
-    if not started:
-        for event, _text, claim in claimed:
-            release_event_delivery(event, claim)
-        return
+        except Exception:
+            for event, _text, claim in claimed:
+                release_event_delivery(event, claim)
+            return
+        if not started:
+            for event, _text, _claim in claimed:
+                if not registry.is_completion_consumed(event.get("session_id", "")):
+                    (deferred.append if deferred is not None else registry.completion_queue.put)(event)
+            if deferred is None:
+                time.sleep(0.25)
+            return
     for event, _text, claim in claimed:
         complete_event_delivery(event, claim)
 

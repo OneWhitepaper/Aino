@@ -43,11 +43,7 @@ ULTRA_ON_NOTE = (
     "and give its specific scope and deliverable in context and goal.\n"
     "- Do not redo completed delegated work: while subagents run, only tackle work they are not doing "
     "(or end your turn with a short status), and when their results return, spot-check the claims "
-    "that matter and integrate them rather than repeating their reading. When a completion notice arrives, "
-    "treat it as an integration handoff: first consume the complete result, then verify only central claims "
-    "that are missing, conflicting, or essential with focused lookups. Do not reopen a broad scan or repeat "
-    "delegated reads. Once the evidence is sufficient, preserve limitations and deliver the original request "
-    "in its requested format; do not keep investigating indefinitely to make a probabilistic answer feel certain.\n"
+    "that matter and integrate them rather than repeating their reading.\n"
     "- Ask research children for findings, evidence and limitations; own the final presentation yourself. "
     "Complete or narrowly reassign any failed or incomplete parts, then deliver the requested final answer."
 )

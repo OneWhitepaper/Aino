@@ -44,7 +44,6 @@ def test_process_completion_display_keeps_payload_separate_across_surfaces(monke
     assert "[IMPORTANT" not in visible and "SECRET_OUTPUT_LINE" not in visible
     queued = cli.chat.call_args.args[0]
     assert queued == payload  # the model still receives the full notification
-    assert "[DELEGATION RESULT HANDOFF]" not in payload
 
     cli.conversation_history = []
     cli.agent = SimpleNamespace(run_conversation=Mock(return_value={}))
@@ -61,7 +60,12 @@ def test_process_completion_display_keeps_payload_separate_across_surfaces(monke
     # TUI gateway: the status line and the persisted turn carry the same compact title.
     emitted, submitted = [], []
     monkeypatch.setattr(server, "_emit", lambda *args: emitted.append(args))
-    monkeypatch.setattr(server, "_notif_submit", lambda *args, **kw: submitted.append((args, kw)))
+
+    def submit(*args, **kw):
+        submitted.append((args, kw))
+        return True
+
+    monkeypatch.setattr(server, "_notif_submit", submit)
     monkeypatch.setattr(server, "_notif_claim_turn", lambda session: True)
     session = {"session_key": "display-session", "history_lock": threading.RLock()}
     server._notif_handle_ready("ui-session", session, events, set(), registry, format_process_notification, None,
@@ -71,4 +75,3 @@ def test_process_completion_display_keeps_payload_separate_across_surfaces(monke
     assert text == payload
     assert kwargs["display_kind"] == PROCESS_COMPLETE_DISPLAY_KIND
     assert kwargs["display_metadata"] == {"display_text": expected}
-
