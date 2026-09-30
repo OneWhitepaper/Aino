@@ -66,7 +66,7 @@ rejects the development account adapter even when launched with electron . .
 Core therefore rebundles main/preload with the existing --dev command after
 building the renderer. This does not change release authentication policy.
 
-The transcript oracle opens settled response-process disclosures through their
-real buttons before reading visible text. Aino intentionally folds that activity
-after a final answer; expanding it preserves the full upstream assertions for
-every persisted row, ordering and duplicates. No interim rows are excluded.
+The transcript oracle reads message-root textContent, including intentionally
+folded settled activity, without changing disclosure state or navigation focus.
+Aino may fold activity after a final answer; no interim rows are excluded from
+the persisted ordering and duplicate checks.
