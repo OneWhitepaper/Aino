@@ -111,6 +111,12 @@ def test_a_single_result_notification_is_unchanged_by_the_batch_fields():
     assert "tokens" not in text
 
 
+def test_a_complete_batch_tells_the_parent_to_integrate_and_answer():
+    text = format_process_notification(_batch([_result(0), _result(1), _result(2)]))
+    assert "All requested subagent attempts are now accounted for" in text
+    assert "answer the user now" in text
+
+
 def test_completion_handoff_requires_focused_integration_and_delivery():
     text = format_process_notification(_batch([_result(0)]))
 

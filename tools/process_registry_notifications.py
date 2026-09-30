@@ -190,8 +190,9 @@ def _format_task_failure_notice(evt: dict, deleg_id: str) -> str:
     lines = [
         f"[ASYNC DELEGATION TASK FAILED — {deleg_id}, task {idx + 1}/{n}]",
         "One subagent in a background fan-out you dispatched has failed while its siblings are still running. "
-        "The batch's consolidated results will still arrive when the last sibling finishes; this is an early "
-        "warning so you can re-dispatch or investigate now instead of then.",
+        "The batch's consolidated results will still arrive when the last sibling finishes. This is an interim "
+        "notice: end the current turn and wait for that consolidated result; re-dispatch only if this failure "
+        "blocks the conclusion after the batch is accounted for.",
         f"Task: {goal}" if goal else "",
         f"Status: {r.get('status', '?')}   Duration: {r.get('duration_seconds', '?')}s" + (f"\nError: {err}" if err else ""),
     ]
@@ -278,6 +279,12 @@ def _format_batch_delegation(evt: dict, deleg_id: str, completed_at: float) -> s
         "on siblings, end your turn after acting on this one.",
         completed_at, with_goal=False,
         model_label=_batch_model_line(results, evt) if results else None)
+    if n_unit == n and n:
+        lines.append(
+            "All requested subagent attempts are now accounted for. Integrate the available results, state any "
+            "limitations, and answer the user now; make another check only when a missing or conflicting result "
+            "changes the conclusion."
+        )
     lines[-1] += f"   Total duration: {evt.get('total_duration_seconds', evt.get('duration_seconds', '?'))}s"
     lines += _recovery_lines(evt)
     if evt.get("error") and not results:
