@@ -22,35 +22,9 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  discover:
-    name: Plan Desktop core specs
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    outputs:
-      specs: ${{ steps.specs.outputs.specs }}
-    steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-      - name: Discover every core spec exactly once
-        id: specs
-        run: |
-          python3 - <<'PY' >> "$GITHUB_OUTPUT"
-          import json
-          from pathlib import Path
-
-          specs = sorted(str(path) for path in Path("apps/desktop/e2e/core").glob("*.spec.ts"))
-          if not specs:
-              raise SystemExit("no Desktop core specs found")
-          print("specs=" + json.dumps({"spec": specs}, separators=(",", ":")))
-          PY
-
   core:
-    name: Desktop core E2E / ${{ matrix.spec }}
-    needs: discover
-    strategy:
-      fail-fast: false
-      matrix: ${{ fromJSON(needs.discover.outputs.specs) }}
-    # One spec per standard runner leaves capacity for Electron and hermes serve.
-    # The Playwright config still enforces one worker and zero retries.
+    name: Desktop core E2E (Linux)
+    # The core Playwright config already uses one worker and zero retries.
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -105,7 +79,7 @@ jobs:
         working-directory: apps/desktop
         run: |
           xvfb-run -a --server-args="-screen 0 1280x1024x24" \
-            npx playwright test -c e2e/core/playwright.config.ts "${{ matrix.spec }}"
+            npx playwright test -c e2e/core/playwright.config.ts
         env:
           CI: 'true'
           OPENROUTER_API_KEY: ''
@@ -117,7 +91,7 @@ jobs:
         if: failure() || cancelled()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: desktop-core-e2e-${{ github.sha }}-${{ strategy.job-index }}
+          name: desktop-core-e2e-${{ github.sha }}
           path: |
             apps/desktop/test-results/core
             apps/desktop/playwright-report/core

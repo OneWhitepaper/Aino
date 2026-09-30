@@ -31,6 +31,7 @@ import {
   recordWebSockets,
   sandboxProcesses,
   send,
+  signInCoreAccount,
   waitForInteractive,
   writeProviderHome
 } from './harness'
@@ -115,6 +116,7 @@ test('boot handshake, supervised respawn, and zero orphans on quit', async () =>
     const session: OracleTarget = { sessionId: '', expectUserMarkers: [] }
 
     await test.step('boot: interactive composer, one backend, first turn', async () => {
+      await signInCoreAccount(page)
       await waitForInteractive(app, page)
       await installDuplicateSampler(page)
       await expect.poll(() => backendProcesses(sandbox).length, { message: 'exactly one backend after boot' }).toBe(1)
@@ -223,6 +225,7 @@ test('relaunching the same home: one backend per boot, zero after each quit, tra
         live = await launchCoreApp(coreAppEnv(sandbox))
         const { app, page } = live
         const ws = recordWebSockets(page)
+        if (launch === 1) await signInCoreAccount(page)
         await waitForInteractive(app, page)
         await installDuplicateSampler(page)
         await expect

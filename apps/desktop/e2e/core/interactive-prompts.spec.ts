@@ -26,6 +26,7 @@ import {
   launchCoreApp,
   recordWebSockets,
   send,
+  signInCoreAccount,
   waitForInteractive,
   writeProviderHome
 } from './harness'
@@ -76,6 +77,7 @@ test('clarify and approval prompts round-trip exactly once', async () => {
     provider.completions.find(c => c.marker === marker && c.step === step)
 
   try {
+    await signInCoreAccount(page)
     await waitForInteractive(app, page)
     await installDuplicateSampler(page)
 

@@ -52,3 +52,11 @@ xvfb-run -a npx playwright test -c e2e/core/playwright.config.ts
 
 `HERMES_E2E_CORE_ROOT` picks the sandbox parent dir (default: OS tmpdir);
 `HERMES_E2E_CORE_KEEP=1` keeps sandboxes for post-mortem.
+
+Aino account setup: these unpackaged, loopback-only tests opt in to the existing
+legacy development adapter with account.dev_mode: true in the sandbox config.
+Each fresh sandbox signs in through the real login UI using its local development
+code before exercising the upstream chat/onboarding flows. The WebSocket recorder
+is attached before login; relaunch tests reuse the same sandbox identity and
+verify its persistence. Packaged/platform authentication is unchanged and belongs
+to the separate platform-account suite.

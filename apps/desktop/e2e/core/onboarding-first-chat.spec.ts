@@ -28,6 +28,7 @@ import {
   launchCoreApp,
   recordWebSockets,
   send,
+  signInCoreAccount,
   waitForInteractive
 } from './harness'
 import { assertTranscriptOracle, installDuplicateSampler } from './oracle'
@@ -49,6 +50,7 @@ test('onboarding (custom endpoint) then first chat renders exactly once', async 
   const ws = recordWebSockets(page)
 
   try {
+    await signInCoreAccount(page)
     await installDuplicateSampler(page)
 
     await test.step('first-run onboarding: custom endpoint', async () => {

@@ -24,6 +24,7 @@ import {
   launchCoreApp,
   recordWebSockets,
   send,
+  signInCoreAccount,
   waitForInteractive,
   writeProviderHome
 } from './harness'
@@ -52,6 +53,7 @@ for (const order of ['complete-before-hydrate', 'hydrate-before-complete'] as co
     const ws = recordWebSockets(page)
 
     try {
+      await signInCoreAccount(page)
       await waitForInteractive(app, page)
       await installDuplicateSampler(page)
       provider.script(U(1), [{ text: [`${A(1)} `, 'one'] }])

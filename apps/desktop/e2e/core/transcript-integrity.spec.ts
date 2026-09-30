@@ -29,6 +29,7 @@ import {
   recordWebSockets,
   routePrimaryWebSocket,
   send,
+  signInCoreAccount,
   splitProfileRoute,
   startTcpProxy,
   storedSessionForMarker,
@@ -87,6 +88,7 @@ test('transcript oracle holds across every transition', async () => {
   const sessionB: OracleTarget = { sessionId: '', expectUserMarkers: [] }
 
   try {
+    await signInCoreAccount(page)
     await waitForInteractive(app, page)
     await installDuplicateSampler(page)
 

@@ -21,6 +21,9 @@ import { resolveElectronBinary } from '../electron-binary'
 export const DESKTOP_ROOT = path.resolve(import.meta.dirname, '..', '..')
 export const REPO_ROOT = path.resolve(DESKTOP_ROOT, '..', '..')
 
+// Core uses the existing unpackaged development account in its isolated home.
+const CORE_ACCOUNT_CONFIG = 'account:\n  dev_mode: true\ndisplay:\n  language: en\n'
+
 // ─── Sandbox ────────────────────────────────────────────────────────────
 
 export interface CoreSandbox {
@@ -46,6 +49,7 @@ export function createCoreSandbox(label: string): CoreSandbox {
   const hermesHome = path.join(home, '.hermes')
   const userDataDir = path.join(root, 'user-data')
   fs.mkdirSync(hermesHome, { recursive: true })
+  fs.writeFileSync(path.join(hermesHome, 'config.yaml'), CORE_ACCOUNT_CONFIG)
   fs.mkdirSync(userDataDir, { recursive: true })
   fs.writeFileSync(
     path.join(userDataDir, 'window-state.json'),
@@ -85,7 +89,7 @@ export function createCoreSandbox(label: string): CoreSandbox {
  * approval prompts under test come from Hermes's own detector.
  */
 export function providerConfigYaml(providerUrl: string, extra = '', approvals: 'manual' | 'off' = 'off'): string {
-  return `model:
+  return `${CORE_ACCOUNT_CONFIG}model:
   default: mock-model
   provider: mock
 providers:
@@ -143,6 +147,7 @@ export function coreAppEnv(sandbox: CoreSandbox, extra: Record<string, string> =
     HERMES_HOME: sandbox.hermesHome,
     HERMES_DESKTOP_USER_DATA_DIR: sandbox.userDataDir,
     HERMES_DESKTOP_IGNORE_EXISTING: '1',
+    HERMES_DESKTOP_ISOLATED_BACKEND: '1',
     HERMES_DESKTOP_HERMES_ROOT: REPO_ROOT,
     HERMES_DESKTOP_APP_NAME: `HermesCoreE2E-${path.basename(sandbox.root)}`,
     HERMES_DESKTOP_SKIP_QUIT_CONFIRM: '1',
@@ -163,7 +168,7 @@ export async function launchCoreApp(env: Record<string, string>): Promise<{ app:
 
   const app = await _electron.launch({
     executablePath: resolveElectronBinary([DESKTOP_ROOT, REPO_ROOT]),
-    args: [DESKTOP_ROOT, '--disable-gpu', '--no-sandbox'],
+    args: [DESKTOP_ROOT, '--disable-gpu', '--no-sandbox', '--aino-legacy-account-development'],
     env,
     cwd: DESKTOP_ROOT
   })
@@ -468,6 +473,25 @@ export async function splitProfileRoute(app: ElectronApplication, profile: strin
 }
 
 // ─── Renderer helpers ───────────────────────────────────────────────────
+
+/** Sign in after the socket recorder is attached, before testing chat. */
+export async function signInCoreAccount(page: Page): Promise<void> {
+  const login = page.locator('[data-account-login-card]')
+  await expect(login).toBeVisible()
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () => (window as Window & { hermesDesktop?: { accountAdapter?: string } }).hermesDesktop?.accountAdapter
+      )
+    )
+    .toBe('legacy-development')
+  await page.getByRole('textbox', { name: 'Phone number', exact: true }).fill('+8613800138000')
+  await page.getByRole('checkbox', { name: 'Agree to the user agreement and privacy policy', exact: true }).check()
+  await page.getByRole('button', { name: 'Send code', exact: true }).click()
+  await page.getByRole('textbox', { name: 'Verification code', exact: true }).fill('1234')
+  await page.getByRole('button', { name: 'Sign in', exact: true }).click()
+  await expect(login).toHaveCount(0)
+}
 
 export function composer(page: Page) {
   return page.locator('[data-slot="composer-root"] [contenteditable="true"]').filter({ visible: true }).first()
