@@ -284,7 +284,9 @@ export function ModelPicker({ bot = null, value, onChange, placeholderModel }: M
                 model: event.target.value
               })
             }
-            placeholder={placeholderModel === undefined ? b.model.gatewayDefault : placeholderModel || b.model.modelNamePlaceholder}
+            placeholder={
+              placeholderModel === undefined ? b.model.gatewayDefault : placeholderModel || b.model.modelNamePlaceholder
+            }
             value={value.model}
           />
         )

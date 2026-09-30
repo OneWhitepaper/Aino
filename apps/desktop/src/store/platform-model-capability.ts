@@ -12,7 +12,14 @@ export function platformRecoveryActionForCode(code: string): PlatformRecoveryAct
     return 'account'
   }
 
-  if (['not_authenticated', 'managed_auth_unavailable', 'managed_credential_expired', 'managed_credential_revoked'].includes(code)) {
+  if (
+    [
+      'not_authenticated',
+      'managed_auth_unavailable',
+      'managed_credential_expired',
+      'managed_credential_revoked'
+    ].includes(code)
+  ) {
     return 'account'
   }
 
@@ -53,7 +60,8 @@ export function verifiedPlatformModelFrom(
     !ownerUserId ||
     account?.phase !== 'signed_in' ||
     account.account?.id !== ownerUserId ||
-    (platformOrigin !== undefined && (!owner || owner.user_id !== ownerUserId || owner.platform_origin !== platformOrigin)) ||
+    (platformOrigin !== undefined &&
+      (!owner || owner.user_id !== ownerUserId || owner.platform_origin !== platformOrigin)) ||
     state.phase !== 'ready'
   ) {
     return null
@@ -62,7 +70,11 @@ export function verifiedPlatformModelFrom(
   return state.models.find(model => model.id === modelId && model.state === 'available') ?? null
 }
 
-export function verifiedPlatformModel(modelId: string, ownerUserId: string, platformOrigin?: string): PlatformModel | null {
+export function verifiedPlatformModel(
+  modelId: string,
+  ownerUserId: string,
+  platformOrigin?: string
+): PlatformModel | null {
   return verifiedPlatformModelFrom(platformModelCatalog(), modelId, ownerUserId, platformOrigin)
 }
 
@@ -73,7 +85,9 @@ export function platformErrorSurface(error: unknown): ErrorSurface | null {
   }
 
   const layer =
-    error.code === 'insufficient_balance' || error.code === 'quota_exhausted' || error.code === 'managed_balance_unavailable'
+    error.code === 'insufficient_balance' ||
+    error.code === 'quota_exhausted' ||
+    error.code === 'managed_balance_unavailable'
       ? 'billing'
       : error.code === 'managed_auth_unavailable' ||
           error.code === 'managed_credential_expired' ||

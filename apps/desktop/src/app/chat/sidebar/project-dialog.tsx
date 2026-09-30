@@ -244,7 +244,14 @@ export function ProjectDialog() {
   }
 
   if (mode === 'manage-folders' && state?.projectId) {
-    return <ProjectFoldersDialog key={state.projectId} name={state.name} ownerProfile={state.ownerProfile} projectId={state.projectId} />
+    return (
+      <ProjectFoldersDialog
+        key={state.projectId}
+        name={state.name}
+        ownerProfile={state.ownerProfile}
+        projectId={state.projectId}
+      />
+    )
   }
 
   const title = mode === 'rename' ? p.renameTitle : mode === 'add-folder' ? p.addFolderTitle : p.createTitle

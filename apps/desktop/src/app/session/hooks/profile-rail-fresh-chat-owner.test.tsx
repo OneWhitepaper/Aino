@@ -230,7 +230,8 @@ vi.mock('@/hermes', async importOriginal => ({
 function installDesktop(): void {
   ;(window as unknown as { hermesDesktop: unknown }).hermesDesktop = {
     api: vi.fn(async ({ connectionId, profile, path, method = 'GET' }: HermesApiRequest) => {
-      const expectedConnectionId = ownerPort === V1_PORT ? undefined : resolveNewChatOwnerRoute()?.connectionId || SOURCE_ID
+      const expectedConnectionId =
+        ownerPort === V1_PORT ? undefined : resolveNewChatOwnerRoute()?.connectionId || SOURCE_ID
 
       if (
         path !== '/api/model/info' ||

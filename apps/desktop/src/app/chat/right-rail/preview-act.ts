@@ -368,10 +368,7 @@ async function driveAction(
   } else if (action.kind === 'type') {
     if (found.typable === false) {
       return {
-        error: translateNow(
-          'preview.drive.notTextField',
-          String(found.acted || 'That').replace(/^looking at /, '')
-        ),
+        error: translateNow('preview.drive.notTextField', String(found.acted || 'That').replace(/^looking at /, '')),
         success: false
       }
     }
@@ -467,7 +464,11 @@ async function driveScroll(
   const anchor = trip.result as PreviewActResult & { page?: number; span?: number }
 
   if (!anchor.span) {
-    return { ...anchor, acted: translateNow('preview.drive.scrolledPage'), note: translateNow('preview.drive.nothingToScroll') }
+    return {
+      ...anchor,
+      acted: translateNow('preview.drive.scrolledPage'),
+      note: translateNow('preview.drive.nothingToScroll')
+    }
   }
 
   // A person does not move the mouse to scroll; the wheel turns wherever their

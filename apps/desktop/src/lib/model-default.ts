@@ -31,7 +31,12 @@ export async function resolveModelDefault(scope: ProfileScope, managedRoute?: Pl
     throw new PlatformSelectionError('platform_account_changed')
   }
 
-  const preferredId = readPlatformDefault(currentAccount.account.id, capturedScope, currentAccount.mode, owner.platform_origin)
+  const preferredId = readPlatformDefault(
+    currentAccount.account.id,
+    capturedScope,
+    currentAccount.mode,
+    owner.platform_origin
+  )
 
   const state = catalog.state.get()
   const managedSupported = managedModelRouteCapability(managedRoute ?? capturedScope.route) === 'supported'

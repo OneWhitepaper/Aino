@@ -426,6 +426,7 @@ export function toChatMessages(messages: SessionMessage[]): ChatMessage[] {
     const commentaryIsReply = Boolean(
       reply && commentary.length && normalized(commentary.join('\n\n')) === normalized(reply)
     )
+
     const isCommentaryOnly = commentary.length > 0 && (!reply || commentaryIsReply)
     const durableComplete = sourceHasTools || isCommentaryOnly ? false : rowId !== undefined ? true : undefined
 

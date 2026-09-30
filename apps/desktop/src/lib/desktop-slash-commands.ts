@@ -656,11 +656,13 @@ export function desktopSlashDescription(command: string, fallback = '', localize
   const explicit = localized?.[canonical]?.trim()
   const key = `composer.commandDescs.${canonical}`
   const translated = translateNow(key)
+
   const description =
     explicit ||
     (translated !== key && translated.trim() ? translated : '') ||
     SPEC_BY_NAME.get(canonical)?.description ||
     fallback
+
   const usage = fallback.match(/\s+\(usage:\s+(.+)\)$/s)?.[0] ?? ''
 
   return description && description !== fallback ? `${description}${usage}` : description

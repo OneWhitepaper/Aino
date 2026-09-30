@@ -267,7 +267,12 @@ async function findExistingCanonicalChat(owner: RosterRow | string): Promise<Can
     const message = typeof (error as RpcErrorLike)?.message === 'string' ? (error as { message: string }).message : ''
     const detail = message ? ` (${message})` : ''
     throw new Error(
-      pluginText('bot.registryCheckFailed', `Could not check ${name}'s Bot Chat registry${detail} — not starting a new chat`, name, message)
+      pluginText(
+        'bot.registryCheckFailed',
+        `Could not check ${name}'s Bot Chat registry${detail} — not starting a new chat`,
+        name,
+        message
+      )
     )
   }
 

@@ -145,17 +145,17 @@ export function TerminalBackendPanel({ onConfiguredChange }: TerminalBackendPane
           return (
             <button
               aria-pressed={backend.active}
-            className={cn(
-              'grid gap-0.5 rounded-lg border px-2.5 py-2 text-left transition',
-              backend.active
-                ? 'border-(--ui-stroke-secondary) bg-(--ui-bg-tertiary)'
-                : 'border-transparent bg-background/55 hover:bg-accent/40'
-            )}
-            disabled={selecting !== null}
-            key={backend.name}
-            onClick={() => void handleSelect(backend)}
-            type="button"
-          >
+              className={cn(
+                'grid gap-0.5 rounded-lg border px-2.5 py-2 text-left transition',
+                backend.active
+                  ? 'border-(--ui-stroke-secondary) bg-(--ui-bg-tertiary)'
+                  : 'border-transparent bg-background/55 hover:bg-accent/40'
+              )}
+              disabled={selecting !== null}
+              key={backend.name}
+              onClick={() => void handleSelect(backend)}
+              type="button"
+            >
               <span className="flex flex-wrap items-center gap-2">
                 <span className="text-xs font-medium">{displayBackend.label}</span>
                 <StatusPill backend={backend} />

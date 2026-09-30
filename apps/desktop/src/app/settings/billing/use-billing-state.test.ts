@@ -75,9 +75,11 @@ describe('deriveBillingView', () => {
         expect(view.usageRows.map(row => row.bar?.value)).toEqual(english.usageRows.map(row => row.bar?.value))
         expect(view.topupRow?.chips).toEqual(english.topupRow?.chips)
         expect(view.topupRow?.action?.disabled).toEqual(english.topupRow?.action?.disabled)
+
         if (view.status !== 'free_tier' && view.plan?.tierName !== b.plan.freeTier) {
           expect(view.plan?.tierName).toEqual(english.plan?.tierName)
         }
+
         expect(view.plan?.price).toEqual(english.plan?.price)
 
         if (english.notice) {

@@ -491,6 +491,7 @@ export function ContribWiring({ children }: { children: ReactNode }) {
       const storedProfile = profileScopeForTranscriptSession(
         resolveActiveTranscriptSession(storedSessionId, runtimeSessionId)
       )
+
       await hydrateStoredSessionTranscript({
         attempts,
         storedSessionId,

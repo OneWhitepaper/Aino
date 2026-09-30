@@ -111,7 +111,8 @@ describe('platform account IPC', () => {
     expect(await handler(f.event, { ...input, page_size: 101 })).toMatchObject({ ok: false })
     expect(await handler(f.event, { ...input, expected_user_id: '' })).toMatchObject({ ok: false })
     expect(await handler({ ...f.event, senderFrame: {} }, input)).toMatchObject({
-      ok: false, error: { code: 'unauthorized_platform_ipc' }
+      ok: false,
+      error: { code: 'unauthorized_platform_ipc' }
     })
     expect(f.auth.listUsage).toHaveBeenCalledTimes(1)
     f.controller.dispose()

@@ -1375,9 +1375,11 @@ describe('usePromptActions /compress', () => {
 
   it('preserves automatic compaction without issuing a competing manual request', async () => {
     setSessionCompacting(RUNTIME_SESSION_ID, true)
+
     const requestGateway = vi.fn(async () => {
       throw new Error('session busy')
     })
+
     let handle: HarnessHandle | null = null
     await actRender(
       <Harness onReady={h => (handle = h)} refreshSessions={async () => undefined} requestGateway={requestGateway} />
@@ -1397,9 +1399,11 @@ describe('usePromptActions /compress', () => {
     const updates: Array<{ sessionId: string; storedSessionId: null | string | undefined }> = []
     const seeds: Record<string, unknown>[] = []
     let rejectCompress: (reason: unknown) => void = () => undefined
+
     const compression = new Promise((_, reject) => {
       rejectCompress = reject
     })
+
     let recoveredCalls = 0
 
     const requestGateway = vi.fn(async (method: string, params?: Record<string, unknown>) => {

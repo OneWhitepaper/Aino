@@ -447,10 +447,12 @@ export function ChatSidebar({
   const interfaceMode = useStore($interfaceMode)
   const showsAdvancedChrome = useStore($showsAdvancedChrome)
   const navPrefs = useContributions(SIDEBAR_NAV_PREFS_AREA)
+
   const navItems = useMemo(
     () => applySidebarNavPrefs([...SIDEBAR_NAV, ...contributedNav].filter(shownInMode(interfaceMode)), navPrefs),
     [contributedNav, interfaceMode, navPrefs]
   )
+
   const connectionsRegistry = useStore($connectionsRegistry)
   const profileColors = useStore($profileColors)
   const panesFlipped = useStore($panesFlipped)
@@ -1953,6 +1955,7 @@ export function ChatSidebar({
             // More to show if rows are hidden behind the cap, or the backend
             // still has older threads on disk.
             const canRevealMore = visible < group.sessions.length || group.hasMore
+
             const ownerGroups = ownerGrouped
               ? scopeGatewaySessionGroups(
                   buildGatewaySessionGroups(shownSessions, connectionsRegistry, profileColors),
