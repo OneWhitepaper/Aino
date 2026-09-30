@@ -1,0 +1,96 @@
+{
+  "schema_version": 1,
+  "task_id": "independent_stream_boundary_v1",
+  "classification": "historical_real_bug_repair",
+  "model_files": {
+    "SPEC.md": "b15b84d98b059dec00bc74411f5f4f31fc53dc3c327e4ea3f2e51db8809df036",
+    "think_scrubber.py": "080552759edc99ab5c21261f0ff2186e74528d7b783dfe31d3de89110b6c7b7c"
+  },
+  "source": {
+    "repository": "NousResearch/hermes-agent",
+    "commit": "4e7b0389eaa259e0fff3c5d211a33e343471976e",
+    "path": "agent/think_scrubber.py",
+    "git_blob": "44ddcacff70425a92c55c08fcf0c82013429b6ab",
+    "sha256": "080552759edc99ab5c21261f0ff2186e74528d7b783dfe31d3de89110b6c7b7c",
+    "copy_method": "Exact complete file from local Git object; renamed only to standalone workspace root. No planted defect or source edits.",
+    "known_fix_commit": "a569226f88fb3b5423e3a9de2d76031f40b173ea",
+    "known_fix_subject": "fix(agent): re-arm think scrubber boundary after stream flush",
+    "author": "xxxigm",
+    "freeze_checkout_commit": "0edec2ab77549f7898159525f68cbb8f9c7522d2"
+  },
+  "public_interface": {
+    "module": "think_scrubber",
+    "class": "StreamingThinkScrubber",
+    "methods": {
+      "feed": "(str) -> str",
+      "flush": "() -> str",
+      "reset": "() -> None"
+    }
+  },
+  "oracle": {
+    "path": "evals/ultra_delegation/independent_contract.py",
+    "sha256": "c800e6de6d6ecd50edd4ec6fed0220f8d9ef0704193ab1f5dd8bfa99c457914b",
+    "workspace_argument": "directory containing think_scrubber.py",
+    "output_contract": [
+      "tests_run",
+      "failures",
+      "errors",
+      "successful",
+      "output",
+      "limitations"
+    ],
+    "exposure": "External evaluator only; do not stage into candidate workspace."
+  },
+  "exposure": {
+    "claim": "Not previously run as a task in the locally available Ultra report history examined at freeze.",
+    "model_training_exposure": "unknown; historical public code and fix may have been seen during training or elsewhere",
+    "candidate_answers_seen": 0,
+    "historical_fix_inspected_by_task_author": true,
+    "report_files_examined": 87,
+    "report_scenario_counts": {
+      "daily": 7,
+      "large": 73,
+      "replay": 7
+    },
+    "matching_report_count": 0,
+    "unreadable_report_count": 0,
+    "audit_sha256": "42471d5e9f9a2b8e9b8ba2096809a42c52eeef38d2466a5eaaad691260192fda",
+    "audit_receipt": "/tmp/aino-independent-fixture-freeze-20260930/exposure-audit.json",
+    "limitations": [
+      "Local report-file inventory, including mirrored reports, is not a count of independent runs.",
+      "The inventory cannot prove absence from deleted, remote, unreported runs or model training.",
+      "The author inspected the historical fix when selecting the task; no candidate answer was scored before freezing this oracle."
+    ]
+  },
+  "verification": {
+    "canonical_command": "scripts/run_tests.sh tests/evals/test_ultra_delegation_independent.py --file-retries 0 --tb=short",
+    "red_before_reference_implementation": {
+      "pytest_passed": 0,
+      "pytest_failed": 1,
+      "oracle_tests_run": 2,
+      "oracle_failing_subcases": 15,
+      "oracle_errors": 0,
+      "failure": "After flush, opening reasoning tags in a new response are emitted as visible text."
+    },
+    "green_after_reference_implementation": {
+      "pytest_passed": 2,
+      "pytest_failed": 0,
+      "positive_reference": "Test-only public-interface composition creates a fresh historical stream worker after each flush; no private-field patch is prescribed.",
+      "negative_control": "Unmodified historical module still fails the external oracle CLI."
+    },
+    "model_run_performed": false
+  },
+  "staging": {
+    "copy_only": [
+      "SPEC.md",
+      "think_scrubber.py"
+    ],
+    "exclude": [
+      "manifest.json",
+      "__pycache__",
+      "external oracle",
+      "reference implementation",
+      "test and exposure receipts"
+    ]
+  }
+}

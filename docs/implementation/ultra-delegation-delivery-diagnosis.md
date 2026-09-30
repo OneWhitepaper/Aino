@@ -2132,3 +2132,69 @@ $4.93338825，缺失/额外/重复ID均为0。补入的$0.13058300来自父
 
 事前/事后冻结、原答、逐项系统及语义审计、账单闭合与原始数据：
 /Users/zizimutou/.codex/visualizations/2026/09/29/01a0eadc-dc19-7f42-98b4-e6812a7cb811/ultra-frozen-611074-acceptance/report.md
+
+
+## 19. 三方比较准备的免费实现（2026-09-30）
+
+本轮在 codex/ultra-delivery-stability 的 0edec2ab77 上实施评测接线，
+不修改生产提示、压缩策略、工具规则或最终答案行为。没有启动真实模型、
+账号查询、结算刷新、推送、合并、发布或日常桌面重启。
+前节一次真实自然交付及重要语义不准确的事实保持不变；本节不能证明
+Ultra 的总体稳定性、答案准确性或与 Codex/Hermes 等效。
+
+已完成的接线：
+
+- convergence 按 driver 读取真实证据。Codex 核对根会话与 CLI thread
+  身份、最新完整 turn 的最终消息及已观察父/子响应，不伪造 Aino guard。
+  缺证据保持 unknown，已确认中断才是 not_delivered；无根身份不再把
+  最忙子任务算作父。历史报告及原始预算政策不改写。
+- 新 Codex 运行复用输入归一化、缓存读取排除、未决预留、峰值/首次越界
+  与不完整计量停止机制。保留原始 usage，不把单位一致夸大为观察范围一致。
+  daily/independent 使用真实 workspace-write 与现有外部 scorer；平台
+  wrapper 复用续租管道。局部 HTTP 实测续租后的新请求使用新凭证；
+  这不是一小时真实服务续租或供应商稳定性证明。
+- 修复 Codex 委派探针沿用 large 专有文本造成的修复场景误报，按实际
+  所读文件和真实 shell 回执验证。补齐子任务 unittest 执行证据：匹配
+  本次隔离 codex_home 中 CommandExecution 完成事件的 thread_id 和执行 ID，
+  不把继承历史算给孩子、不伪造父 CLI 事件。保留原始命令、输出和退出码，
+  包括失败测试。模型 JavaScript 注释不是执行事实，跨 write_stdin 的完成
+  事件仍可关联。命令/输出匹配只覆盖已识别的 unittest 路径，不是任意
+  shell 脚本语义或所有测试框架的完备证明。
+- Hermes 使用固定原版 f97608f178d1ffeca59860195ab7da295f7c8e5f
+  （0.21.5）的普通桌面 RPC/custom Responses 配置。15075 个 Git 文件
+  校验与实际模块路径证明来源；未加载 Aino managed 模块。其异步委派、
+  durable 通知、父任务自动继续已在原版大任务回路实测。默认并发子数 10，
+  one-shot 的 2 是不同设置，不能混用。当前入口只允许本地离线模型；
+  Hermes 的真实模型授权/路由仍未接入，不能称三方付费比较已就绪。
+- 新任务 independent_stream_boundary_v1 使用历史原始 think_scrubber.py，
+  覆盖 flush 后流生命周期隔离。仅源码与 SPEC 进入模型工作区；外部 oracle
+  与 manifest 留在外部。历史坏实现有 15 个失败子例、0 errors，另一种
+  合法生命周期实现通过同一 oracle。作者知道历史修复；87 份本地报告
+  （含镜像）未发现同题，不代表模型训练未见，也不是 87 次独立验收。
+
+独立审查曾复现旧答案冒充新 turn、根身份冲突仍通过、缺 stop_reason
+被判失败、最忙孩子冒充父等反例；新增参数测试先红后绿，复核已关闭。
+原生 CLI 的 daily/independent 直做与真实委派四条本地路径都能完成，
+真实子测试回执进入共享 scorer。脚本仅新增冒烟测试、未修复源码，
+因此外部契约继续失败、accepted=false；这是预期的负向准确性验证。
+
+综合回归首次出现 228 passed / 3 failed / 1 skipped。三处失败均为
+runpy 启动时 sibling convergence 导入找不到：原版 Hermes 接线改了
+辅助模块导入，却未兼容 runpy 不自动放入脚本目录。已在现有入口将
+SOURCE_ROOT 加入搜索路径，随后重跑整套定向回归；不通过修改测试隐藏。
+第二轮还遇到首次请求 15 秒等待超时，单独复跑 3 项通过。测试改为
+沿用已有 45 秒任务窗口等候首次请求，未改 harness 的任务预算、网络
+隔离及凭证/前缀断言；再次完整回归。最终回执、红绿记录、来源/候选
+冻结及尚未覆盖范围见本轮外部报告。
+
+后续付费比较仍需先冻结具体任务清单、版本、真实模型/档位、每次限制、
+整批预算和失败停止规则；当前不会自动重跑或借比较更改生产行为。
+这批免费工程工作修的是比较与评分可信度，不把脚本模型输出当作质量结论。
+
+证据归档：
+/Users/zizimutou/.codex/visualizations/2026/09/29/01a0eadc-dc19-7f42-98b4-e6812a7cb811/ultra-comparator-implementation-20260930/report.md
+
+最终综合回归：13 个 Python 文件 / 233 passed / 0 failed / 1 Linux-only
+skip，禁用自动重试；JavaScript 30 项、TypeScript typecheck、Ruff、
+esbuild 与实际 runner --help 均通过。完整红灯及修复后的重跑记录已保留。
+临时使用主检出的已备环境后，原 worktree .venv 按原 inode 还原，未装依赖。

@@ -13,7 +13,7 @@ const option=(name:string)=>process.argv.find(arg=>arg.startsWith(name+'='))?.sl
 if(process.argv.includes('--help')){
   console.log(`Managed Aino acceptance runner (all value options use --name=value).
 Usage: electron platform-runner.cjs SCENARIO --live [options]
-SCENARIO: simple | large | no_subagent | length | replay | daily | daily_replay
+SCENARIO: simple | large | no_subagent | length | replay | daily | daily_replay | independent
 
 No account access or model run occurs without --live.
 --repo=PATH                 Aino checkout (default: current working directory)
@@ -24,7 +24,7 @@ No account access or model run occurs without --live.
 --installation-path=PATH    Existing desktop-installation.json (default: Aino app data)
 --origin=URL                Managed account origin (default: https://api.agentera.com.cn)
 --name=NAME                 New run directory name
---budget=SECONDS           Aino 30..3600; Codex 30..1200; simple/length 300, daily/no_subagent/daily_replay 600, large/replay 1200
+--budget=SECONDS           30..3600; simple/length 300, daily/independent/no_subagent/daily_replay 600, large/replay 1200
 --spend-target=USD          Observation threshold, >0 and <=10; settlement lag prevents a hard cap
 --input-cap=TOKENS          DIAGNOSTIC ONLY: raise the cumulative-input ceiling for a headroom probe; never within-budget acceptance
 --file-read-max-chars=N     Existing file read limit for a fresh isolated Aino profile; does not raise acceptance budgets
@@ -61,13 +61,13 @@ const forwardedOptions=['--name','--codex-bin','--input-cap','--file-read-max-ch
   const value=option(name)
   return value?[name+'='+(name==='--codex-bin'&&value.includes(path.sep)?path.resolve(value):value)]:[]
 })
-const scenario=process.argv.find(arg=>['simple','large','no_subagent','length','replay','daily','daily_replay'].includes(arg))
+const scenario=process.argv.find(arg=>['simple','large','no_subagent','length','replay','daily','daily_replay','independent'].includes(arg))
 const largeReportLength=option('--large-report-length')
 if(largeReportLength!==undefined && !['original','unbounded'].includes(largeReportLength))throw new Error('Invalid --large-report-length policy')
 if(largeReportLength==='unbounded' && scenario!=='large')throw new Error('--large-report-length=unbounded requires a fresh large task; replay keeps its source prompt')
 const driverArg=process.argv.find(arg=>arg.startsWith('--driver='))
 if(driverArg && !['--driver=aino','--driver=codex'].includes(driverArg))throw new Error('Invalid acceptance driver')
-if(driverArg==='--driver=codex' && scenario!=='large')throw new Error('Codex comparison requires large scenario')
+if(driverArg==='--driver=codex' && !['large','daily','independent'].includes(scenario||''))throw new Error('Codex comparison requires a fresh large, daily, or independent scenario')
 const nativeComparison=process.argv.includes('--codex-native-comparison')
 if(driverArg==='--driver=codex' && !nativeComparison)throw new Error('Review native tool/depth differences and pass --codex-native-comparison before a live Codex comparison')
 const reviewSkillArg=process.argv.find(arg=>arg.startsWith('--review-skill='))
@@ -92,13 +92,12 @@ if(evidenceContract && (!matchedComparison || driverArg==='--driver=codex'))thro
 if(independentCompletions && (!matchedComparison || driverArg==='--driver=codex'))throw new Error('Independent completions requires the matched Aino comparison')
 const settlementOnly=process.argv.includes('--settlement-only')
 const budgetArgument=process.argv.find(arg=>arg.startsWith('--budget='))
-const budget=budgetArgument?Number(budgetArgument.slice('--budget='.length)):({simple:300,no_subagent:600,large:1200,length:300,replay:1200,daily:600,daily_replay:600} as Record<string,number>)[scenario||'large']
+const budget=budgetArgument?Number(budgetArgument.slice('--budget='.length)):({simple:300,no_subagent:600,large:1200,length:300,replay:1200,daily:600,daily_replay:600,independent:600} as Record<string,number>)[scenario||'large']
 if(!Number.isInteger(budget)||budget<30||budget>3600)throw new Error('Budget must be 30..3600 seconds')
-if(driverArg==='--driver=codex' && budget>1200)throw new Error('Codex comparison budget must be at most 1200 seconds; this driver does not renew managed leases')
 const spendArgument=process.argv.find(arg=>arg.startsWith('--spend-target='))
-const observedSpendLimit=spendArgument?Number(spendArgument.slice('--spend-target='.length)):scenario==='length'||scenario==='daily_replay'?1:scenario==='replay'?2:scenario==='daily'?1.5:5
+const observedSpendLimit=spendArgument?Number(spendArgument.slice('--spend-target='.length)):scenario==='length'||scenario==='daily_replay'?1:scenario==='replay'?2:scenario==='daily'||scenario==='independent'?1.5:5
 if(!Number.isFinite(observedSpendLimit)||observedSpendLimit<=0||observedSpendLimit>10)throw new Error('Spend observation target must be above 0 and at most 10 USD')
-if(!scenario && !settlementOnly && !process.argv.includes('--catalog-only')) throw new Error('Pass simple, large, no_subagent, length, replay, daily, or daily_replay')
+if(!scenario && !settlementOnly && !process.argv.includes('--catalog-only')) throw new Error('Pass simple, large, no_subagent, length, replay, daily, daily_replay, or independent')
 if(!process.argv.includes('--live')) throw new Error('Account access and paid runs require explicit --live')
 if(!fs.existsSync(path.join(sourceRoot,'harness.py')))throw new Error('--repo must point to this Aino checkout')
 fs.mkdirSync(root,{recursive:true})
@@ -202,8 +201,7 @@ app.whenReady().then(async()=>{
   }
   child.stdin.on('error',()=>{if(!renewalStopped)stopRenewal('lease_pipe_write_failed')})
   child.stdin.write(JSON.stringify({...lease,origin,user_id:String(profile.id)})+'\n')
-  if(driverArg==='--driver=codex')child.stdin.end()
-  else armRenewal(lease.expires_at)
+  armRenewal(lease.expires_at)
   let polling=false;let childClosed=false
   const budgetTimer=setInterval(async()=>{
     if(childClosed||!billingSession||polling||budgetStop)return;polling=true

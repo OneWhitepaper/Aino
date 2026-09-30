@@ -19,6 +19,87 @@ import pytest
 
 from evals.ultra_delegation import convergence
 
+
+@pytest.mark.parametrize('change,state', [
+    ('complete', 'delivered'), ('legacy', 'unknown'), ('missing_child_response', 'unknown'),
+    ('child_still_using_tools', 'not_delivered'), ('mismatched_final', 'unknown'),
+    ('later_turn', 'not_delivered'), ('interrupted', 'not_delivered'),
+    ('unsupported_driver', 'unsupported'),
+    ('missing_stop', 'unknown'), ('missing_root', 'unknown'), ('wrong_root', 'unknown'),
+    ('missing_thread', 'unknown'), ('later_empty_turn', 'unknown'),
+    ('known_auxiliary', 'delivered'),
+])
+def test_native_delivery_uses_its_own_final_and_child_evidence(change, state):
+    """A native final is neither an Aino missing-guard failure nor proof of finished children."""
+    report = {
+        'driver': 'codex', 'stop_reason': 'normal_final', 'returncode': 0,
+        'final_text': 'Final answer.', 'root_session_id': 'root',
+        'cli_events': [
+            {'type': 'thread.started', 'thread_id': 'root'}, {'type': 'turn.started'},
+            {'type': 'item.completed', 'item': {'type': 'agent_message', 'text': 'Final answer.'}},
+            {'type': 'turn.completed'},
+        ],
+        'requests': [
+            {'api_request_id': 'c', 'session_id': 'child', 'purpose': 'delegation'},
+            {'api_request_id': 'r', 'session_id': 'root', 'purpose': 'chat'},
+        ],
+        'responses': [
+            {'api_request_id': 'c', 'session_id': 'child', 'response_status': 'completed',
+             'has_tool_calls': False, 'final_text_chars': 12},
+            {'api_request_id': 'r', 'session_id': 'root', 'response_status': 'completed',
+             'has_tool_calls': False, 'final_text_chars': 13},
+        ],
+    }
+    variants = {
+        'complete': {},
+        'legacy': {'responses': [{'api_request_id': row['api_request_id'], 'session_id': row['session_id']}
+                                 for row in report['responses']]},
+        'missing_child_response': {'responses': report['responses'][1:]},
+        'child_still_using_tools': {'responses': [{**report['responses'][0], 'has_tool_calls': True,
+                                                  'final_text_chars': 0}, report['responses'][1]]},
+        'mismatched_final': {'final_text': 'Another answer.'},
+        'later_turn': {'cli_events': [*report['cli_events'], {'type': 'turn.started'}]},
+        'interrupted': {'stop_reason': 'timeout'},
+        'unsupported_driver': {'driver': 'unmapped-driver'},
+        'missing_stop': {'stop_reason': None},
+        'missing_root': {'root_session_id': None},
+        'wrong_root': {'root_session_id': 'child'},
+        'missing_thread': {'cli_events': report['cli_events'][1:]},
+        'later_empty_turn': {'cli_events': [*report['cli_events'], {'type': 'turn.started'},
+                                           {'type': 'turn.completed'}]},
+        'known_auxiliary': {'requests': [*report['requests'],
+                             {'api_request_id': 'aux', 'session_id': 'root', 'purpose': 'compression'}]},
+    }
+    report.update(variants[change])
+    summary = convergence.summarize(report)
+    assert summary['delivery_evidence']['state'] == state
+    assert summary['natural_delivery'] is ({'delivered': True, 'not_delivered': False}.get(state))
+    assert 'completion_guard' not in ' '.join(summary['not_delivered_because'])
+    assert 'completion_guard' not in report
+
+
+@pytest.mark.parametrize('source', ['aino_hook', 'responses_raw'])
+def test_shared_input_ceiling_counts_same_buckets_for_native_and_aino(source):
+    """Equivalent input buckets settle the same reserve without rewriting raw responses."""
+    requests = [{'api_request_id': 'r', 'approx_input_tokens': 9000}]
+    usage = ({'prompt_tokens': 5500, 'input_tokens': 1000, 'cache_write_tokens': 500,
+              'cache_read_tokens': 4000, 'output_tokens': 100}
+             if source == 'aino_hook' else
+             {'input_tokens': 5500, 'input_tokens_details': {'cached_tokens': 4000, 'cache_write_tokens': 500},
+              'output_tokens': 100})
+    responses = [{'api_request_id': 'r', 'usage': usage}]
+    original = json.dumps(responses, sort_keys=True)
+    observations = []
+    before = convergence.observe_input_ceiling(requests, [], observations, limit=8000,
+        phase='pre', api_request_id='r', seconds=1, usage_source=source)
+    after = convergence.observe_input_ceiling(requests, responses, observations, limit=8000,
+        phase='post', api_request_id='r', seconds=2, usage_source=source)
+    assert before['value'] == 9000 and before['crossed'] is True
+    assert after['value'] == 1500 and after['excluded_cache_read_tokens'] == 4000
+    assert after['crossed'] is False and after['stop_required'] is True
+    assert after['accounting_complete'] is True
+    assert json.dumps(responses, sort_keys=True) == original
+
 # The originating machine's archive. Not distributed with the repo, so every test that needs it
 # skips rather than failing on a reviewer's checkout.
 ARCHIVE = Path("/private/tmp/aino-ultra-acceptance-20260925")
@@ -84,6 +165,17 @@ def test_parent_identification_prefers_the_root_session_over_the_busiest():
     summary = convergence.summarize(report, events_path=Path("/nonexistent/events.jsonl"))
     assert summary["budget_split"]["parent_cumulative_approx_input"] == 10
     assert summary["parent_tools"] == {"delegate_task": 1}
+    report = _report(parent_inputs=(10,), child_inputs=(999, 999, 999))
+    report.update(driver='codex', root_session_id='parent', sessions=[])
+    summary = convergence.summarize(report)
+    assert summary['budget_split']['parent_cumulative_approx_input'] == 10
+    report['root_session_id'] = None
+    summary = convergence.summarize(report)
+    assert summary['delivery']['parent_session_id'] is None
+    assert summary['delivery']['parent_requests_total'] is None
+    assert summary['budget_split']['parent_cumulative_approx_input'] is None
+    assert summary['budget_split']['children_cumulative_approx_input'] is None
+    assert summary['budget_split']['cumulative_approx_input_total'] == 3007
 
 
 def test_missing_events_leave_the_turn_split_unknown_instead_of_guessed():

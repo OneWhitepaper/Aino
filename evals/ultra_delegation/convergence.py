@@ -87,7 +87,7 @@ def normalize_observed_usage(usage, source):
             'uncached_input_tokens':uncached, 'output_tokens':output, 'reasoning_tokens':reasoning,
             'total_tokens':prompt + output}
 
-def cumulative_input_excluding_cache_reads(requests, responses):
+def cumulative_input_excluding_cache_reads(requests, responses, *, usage_source='aino_hook'):
     """Count complete input buckets, retaining estimates until usage is usable.
 
     Excluding cache reads is a distinct, looser acceptance policy than summing
@@ -139,7 +139,7 @@ def cumulative_input_excluding_cache_reads(requests, responses):
         values = []
         for row in rows:
             try:
-                usage = normalize_observed_usage(row.get('usage'), 'aino_hook')
+                usage = normalize_observed_usage(row.get('usage'), usage_source)
             except ValueError:
                 invalid_usage_ids.add(rid)
                 continue
@@ -188,14 +188,14 @@ def cumulative_input_excluding_cache_reads(requests, responses):
     }
 
 
-def observe_input_ceiling(requests, responses, observations, *, limit, phase, api_request_id, seconds):
+def observe_input_ceiling(requests, responses, observations, *, limit, phase, api_request_id, seconds, usage_source='aino_hook'):
     """Append one accounting snapshot; caller holds the live observer's lock.
 
     The same function accepts chronological offline prefixes. A stop caused by
     a crossing or incomplete accounting stays latched after reservations settle.
     Snapshot counts come from the counter, never a second read of caller lists.
     """
-    snapshot = cumulative_input_excluding_cache_reads(requests, responses)
+    snapshot = cumulative_input_excluding_cache_reads(requests, responses, usage_source=usage_source)
     crossed = snapshot['input_excluding_cache_reads'] >= limit
     stopped_before = any(
         row.get('stop_required') or row.get('crossed') or row.get('accounting_complete') is False
@@ -227,9 +227,8 @@ def _ceiling_basis(report):
     reinterpretation of their result. A historical run's stop reason, caps and verdict are
     never restated here.
 
-    Native Codex runs are a separate budget policy: that driver records its own limits block
-    and is not governed by the Aino observer's per-request hooks, so its ceiling figures are
-    not comparable with Aino-driver runs.
+    Legacy Codex reports used a separate budget policy. New reports can record the shared
+    input metric; its definition alone does not establish equal observation scope or costs.
     """
     limits = report.get("limits") or {}
     accounting = report.get("input_accounting")
@@ -273,7 +272,9 @@ def _ceiling_basis(report):
                 "peak_value decide whether the ceiling was reached, not the final value. "
                 "Incomplete accounting requires an independent stop even below the ceiling; "
                 "a peak below the limit cannot establish complete accounting."
-                + (" Native Codex driver: separate budget policy." if is_codex else ""),
+                + (" Native Codex records the shared input metric through its own transport; "
+                   "matching units do not establish identical request coverage or costs."
+                   if is_codex else ""),
     }
 
 
@@ -302,6 +303,11 @@ def _delivery_seconds(report: dict) -> float | None:
 
 def _parent_session_id(report: dict, requests: dict[str, list[dict]]) -> str | None:
     """The root session: declared by ``sessions`` (no ``parent_session_id``), else the busiest."""
+    if report.get('root_session_id'):
+        root = str(report['root_session_id'])
+        return root if root in requests else None
+    if (report.get('driver') or (report.get('diagnostic') or {}).get('driver')) == 'codex':
+        return None
     for entry in report.get("sessions") or []:
         if isinstance(entry, dict) and not entry.get("parent_session_id") and entry.get("id"):
             candidate = str(entry["id"])
@@ -332,6 +338,8 @@ def _read_events(events_path: Path | None) -> list[dict] | None:
 
 def _evidence_parent_session_id(report: dict) -> str | None:
     """New evidence metrics require a stored identity or one explicitly declared root."""
+    if report.get('root_session_id'):
+        return str(report['root_session_id'])
     if report.get("stored_session_id"):
         return str(report["stored_session_id"])
     roots = {str(row["id"]) for row in report.get("sessions") or []
@@ -614,6 +622,73 @@ def _wire_purpose_totals(report: dict) -> dict:
     }
 
 
+def _native_delivery_evidence(report):
+    """Require native CLI final identity and final responses for observed agent sessions."""
+    missing, failed = [], []
+    if not report.get('stop_reason'):
+        missing.append('no stop_reason recorded')
+    elif report.get('stop_reason') != 'normal_final':
+        failed.append(f"stop_reason={report.get('stop_reason')!r} is not normal_final")
+    code = report.get('returncode')
+    if code is None:
+        missing.append('no CLI returncode recorded')
+    elif code != 0:
+        failed.append(f'CLI exited with {code!r}')
+    final = report.get('final_text')
+    if not isinstance(final, str) or not final.strip():
+        missing.append('no nonempty native final_text recorded')
+    events = report.get('cli_events') or []
+    starts = [i for i, e in enumerate(events) if e.get('type') == 'turn.started']
+    final_turn = events[starts[-1]:] if starts else []
+    turns = [e.get('type') for e in final_turn if e.get('type') in ('turn.started', 'turn.completed', 'turn.failed')]
+    if not final_turn:
+        missing.append('no native turn completion recorded')
+    elif turns[-1] != 'turn.completed':
+        failed.append('last native turn did not complete')
+    messages = [e.get('item', {}).get('text') for e in final_turn
+                if e.get('type') == 'item.completed' and (e.get('item') or {}).get('type') == 'agent_message']
+    if not messages or not isinstance(final, str) or not isinstance(messages[-1], str) or messages[-1].strip() != final.strip():
+        missing.append('native final_text does not match the final CLI agent message')
+    root = report.get('root_session_id')
+    if not root:
+        missing.append('no native root_session_id recorded')
+    thread_ids = {e.get('thread_id') for e in events if e.get('type') == 'thread.started'}
+    if not root or thread_ids != {root}:
+        missing.append('native root identity is not established by CLI thread.started')
+    latest = {}
+    for request in report.get('requests') or []:
+        if request.get('purpose') in ('compression', 'title', 'other_auxiliary'):
+            continue
+        if request.get('purpose') not in ('chat', 'delegation'):
+            missing.append('an observed request has no mapped agent purpose')
+            continue
+        sid = request.get('session_id')
+        if not sid or not request.get('api_request_id'):
+            missing.append('an observed agent request has no session/request identity')
+            continue
+        latest[sid] = request
+    if root not in latest:
+        missing.append('no request for the recorded root session')
+    by_request = collections.defaultdict(list)
+    for response in report.get('responses') or []:
+        by_request[response.get('api_request_id')].append(response)
+    for sid, request in latest.items():
+        rows = by_request[request['api_request_id']]
+        if len(rows) != 1 or rows[0].get('session_id') != sid:
+            missing.append(f'no unique final response for agent session {sid}')
+            continue
+        row = rows[0]
+        status, tools, chars = row.get('response_status'), row.get('has_tool_calls'), row.get('final_text_chars')
+        if status is None or type(tools) is not bool or type(chars) is not int:
+            missing.append(f'final response facts unavailable for agent session {sid}')
+        elif status != 'completed' or tools or chars <= 0:
+            failed.append(f'agent session {sid} did not end with a completed text answer')
+    return {'driver': 'codex', 'basis': 'native_cli_final_and_observed_agent_responses',
+            'state': 'not_delivered' if failed else 'unknown' if missing else 'delivered',
+            'reasons': failed + missing, 'observed_agent_sessions': len(latest),
+            'boundary': 'Recorded native final and observed agent completions, not task coverage, factual accuracy or runtime equality.'}
+
+
 def summarize(report: dict, *, path: str | None = None, events_path: Path | None = None) -> dict:
     limits = report.get("limits") or {}
     requests, responses = _group_requests(report)
@@ -630,8 +705,8 @@ def summarize(report: dict, *, path: str | None = None, events_path: Path | None
 
     # The budget is whole-task: subtract what the children had already spent when their
     # results were handed over, or the parent looks richer than it was.
-    child_cumulative = cumulative_total - parent_cumulative
-    child_request_count = sum(len(rs) for sid, rs in requests.items() if sid != parent_id)
+    child_cumulative = cumulative_total - parent_cumulative if parent_id else None
+    child_request_count = sum(len(rs) for sid, rs in requests.items() if sid != parent_id) if parent_id else None
 
     split = _turn_split(report, parent_requests, parent_responses)
     answered_requests = split["answered_requests"]
@@ -698,6 +773,18 @@ def summarize(report: dict, *, path: str | None = None, events_path: Path | None
     elif not guard.get("eligible"):
         delivery_reasons.append("completion_guard did not admit the final")
     natural_delivery = not delivery_reasons
+    driver = report.get('driver') or (report.get('diagnostic') or {}).get('driver') or 'aino'
+    delivery_evidence = {'driver': driver, 'basis': 'desktop_final_event_and_completion_guard',
+                         'state': 'delivered' if natural_delivery else 'not_delivered',
+                         'reasons': delivery_reasons, 'boundary': 'Recorded desktop delivery, not answer quality.'}
+    if driver == 'codex':
+        delivery_evidence = _native_delivery_evidence(report)
+    elif driver not in ('aino', 'hermes'):
+        delivery_evidence = {'driver': driver, 'basis': None, 'state': 'unsupported',
+                             'reasons': ['no delivery evidence mapping for this driver']}
+    if driver != 'aino':
+        natural_delivery = {'delivered': True, 'not_delivered': False}.get(delivery_evidence['state'])
+        delivery_reasons = delivery_evidence['reasons']
 
     parent_turns_before_delivery: int | None = None
     delivery_at: float | None = None
@@ -713,6 +800,7 @@ def summarize(report: dict, *, path: str | None = None, events_path: Path | None
         "stop_reason": report.get("stop_reason"),
         "natural_final": report.get("stop_reason") == "normal_final",
         "natural_delivery": natural_delivery,
+        "delivery_evidence": delivery_evidence,
         "diagnostic": diagnostic,
         "not_delivered_because": delivery_reasons,
         "caps": report.get("caps") or [],
@@ -725,12 +813,13 @@ def summarize(report: dict, *, path: str | None = None, events_path: Path | None
         },
         "ceiling_basis": _ceiling_basis(report),
         "delivery": {
+            "parent_session_id": parent_id,
             "children_finished": len(report.get("children_finished") or []),
             # Two different clocks: each child's own runtime, versus the wall-clock moment the last
             # result landed. They are not interchangeable — the children start after dispatch.
             "children_own_seconds_max": _delivery_seconds(report),
             "last_child_wall_seconds": delivery_at,
-            "parent_requests_total": len(parent_requests),
+            "parent_requests_total": len(parent_requests) if parent_id else None,
             # Not the same number as the line above: a session's requests span several turns, and a
             "parent_answered_requests": len(answered_requests),
             "parent_unanswered_requests": len(unanswered_requests),
@@ -744,7 +833,7 @@ def summarize(report: dict, *, path: str | None = None, events_path: Path | None
         },
         "budget_split": {
             "cumulative_approx_input_total": cumulative_total,
-            "parent_cumulative_approx_input": parent_cumulative,
+            "parent_cumulative_approx_input": parent_cumulative if parent_id else None,
             "parent_answered_approx_input": sum(int(r.get(APPROX_INPUT_FIELD) or 0) for r in answered_requests),
             "parent_unanswered_approx_input": sum(int(r.get(APPROX_INPUT_FIELD) or 0) for r in unanswered_requests),
             "children_cumulative_approx_input": child_cumulative,
@@ -808,9 +897,9 @@ def main(argv: list[str] | None = None) -> int:
 
     for summary in summaries:
         print(f"== {summary['report']}")
-        for key in ("scenario", "live", "stop_reason", "natural_final", "caps", "elapsed_seconds"):
+        for key in ("scenario", "live", "stop_reason", "natural_final", "natural_delivery", "caps", "elapsed_seconds"):
             print(f"   {key}: {summary[key]}")
-        for section in ("diagnostic", "limits", "ceiling_basis", "delivery", "budget_split",
+        for section in ("diagnostic", "delivery_evidence", "limits", "ceiling_basis", "delivery", "budget_split",
                         "parent_cost_shape",
                         "parent_delivery_behaviour", "parent_tools", "completed_api_durations",
                         "parent_tool_results", "parent_tool_timing"):

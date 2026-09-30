@@ -12,24 +12,96 @@ from pathlib import Path
 import queue
 import re
 import secrets
+import shlex
 import signal
 import subprocess
+import sys
 import threading
 import time
 from datetime import datetime, timezone
 from uuid import uuid4, uuid5, NAMESPACE_OID
 
+from evals.ultra_delegation.convergence import (
+    cumulative_input_excluding_cache_reads, observe_input_ceiling,
+)
 
-def budget_reason(requests, cumulative_input, output, seconds, *, max_seconds=1200):
-    if requests >= 64:
+
+def budget_reason(requests, cumulative_input, output, seconds, *, max_seconds=1200,
+                  max_requests=64, max_input=2_000_000, max_output=60_000):
+    if requests >= max_requests:
         return 'request_cap'
-    if cumulative_input >= 2_000_000:
+    if cumulative_input >= max_input:
         return 'input_cap'
-    if output >= 60_000:
+    if output >= max_output:
         return 'output_cap'
     if seconds >= max_seconds:
         return 'timeout'
     return None
+
+
+def _native_shell_receipts(item):
+    if item.get('type') != 'custom_tool_call_output' or not isinstance(item.get('output'), list):
+        return []
+    receipts = []
+    for block in item.get('output') or []:
+        if not isinstance(block, dict) or block.get('type') != 'input_text':
+            continue
+        try:
+            receipt = json.loads(block.get('text', ''))
+        except (TypeError, ValueError):
+            continue
+        if (isinstance(receipt, dict) and type(receipt.get('exit_code')) is int
+                and isinstance(receipt.get('output'), str)):
+            receipts.append(receipt)
+    return receipts
+
+
+def _probe_file_read_returned(item, expected_output):
+    """Verify the native shell receipt, not text mentioned elsewhere in a tool result."""
+    return bool(expected_output) and any(receipt['exit_code'] == 0
+        and receipt['output'].startswith(expected_output) for receipt in _native_shell_receipts(item))
+
+
+def _native_test_tool_calls(requests, codex_home):
+    """Read completed child commands from this run's existing native recordings.
+
+    Native execution IDs survive exec_command/write_stdin boundaries. Model
+    JavaScript, including comments or claims, is not execution evidence.
+    """
+    children = {row['session_id'] for row in requests if row.get('purpose') == 'delegation'
+                and isinstance(row.get('session_id'), str) and row['session_id'].strip()}
+    completed, conflicts = {}, set()
+    for path in sorted((codex_home / 'sessions').rglob('*.jsonl')):
+        with path.open() as recording:
+            for line in recording:
+                try:
+                    row = json.loads(line)
+                except ValueError:
+                    continue
+                if not isinstance(row, dict) or row.get('type') != 'event_msg':
+                    continue
+                event = row.get('payload') or {}
+                item = event.get('item') or {}
+                command = item.get('command')
+                output = item.get('aggregated_output')
+                if (event.get('type') != 'item_completed' or event.get('thread_id') not in children
+                        or item.get('type') != 'CommandExecution'
+                        or not isinstance(item.get('id'), str) or not item['id'].strip()
+                        or type(item.get('exit_code')) is not int
+                        or not isinstance(command, list) or not command
+                        or any(not isinstance(part, str) for part in command)
+                        or not isinstance(output, str)):
+                    continue
+                if (not re.search(r'\s-m\s+unittest\b', ' '.join(command))
+                        or not re.search(r'(?m)^Ran \d+ tests? in [0-9.]+s\r?$', output)):
+                    continue
+                key = (event['thread_id'], item['id'])
+                entry = {'session_id': key[0], 'event_id': key[1], 'turn_id': event.get('turn_id'),
+                         'name': item['type'], 'arguments': command, 'receipts': [item]}
+                if key in completed and completed[key] != entry:
+                    conflicts.add(key)
+                completed[key] = entry
+    return [entry for key, entry in completed.items() if key not in conflicts]
 
 
 def run_codex(ctx):
@@ -42,12 +114,22 @@ def run_codex(ctx):
     from agent.model_metadata import estimate_request_tokens_rough
 
     args, run, workspace = ctx['args'], ctx['run'], ctx['workspace']
+    runtime = ctx['runtime']
+    scenario = runtime['scenario']
+    request_limit, input_limit, output_limit = (runtime[name] for name in
+        ('request_limit', 'input_limit', 'output_limit'))
+    sandbox = 'workspace-write' if runtime['workspace_writable'] else 'read-only'
+    probe_read_path = 'agent/compaction_display.py' if scenario == 'large' else sorted(ctx['fixture_before'])[0]
+    probe_read_text = ''.join((workspace / probe_read_path).read_text().splitlines(keepends=True)[:8]) \
+        if not args.live and args.codex_dry_case.startswith('delegation') else ''
     record, progress, hashes = ctx['record'], ctx['progress'], ctx['hashes']
     lease = ctx['lease']
     started_at = time.monotonic()
     stopped = threading.Event()
+    finished = threading.Event()
     reasons = []
     requests, responses, raw_events = [], [], []
+    input_ceiling_observations = []
     scopes = {}
     tally = {'requests': 0, 'input': 0, 'output': 0}
     token = secrets.token_urlsafe(32)
@@ -74,6 +156,64 @@ def run_codex(ctx):
             if reason not in reasons:
                 reasons.append(reason)
         stopped.set()
+
+    def current_budget_reason():
+        return budget_reason(tally['requests'], tally['input'], tally['output'],
+            time.monotonic() - started_at, max_seconds=args.budget,
+            max_requests=request_limit, max_input=input_limit, max_output=output_limit)
+
+    def observe_input(phase, request_id):
+        observation = observe_input_ceiling(
+            requests, responses, input_ceiling_observations, limit=input_limit,
+            phase=phase, api_request_id=request_id, seconds=round(time.monotonic() - started_at, 3),
+            usage_source='responses_raw',
+        )
+        tally['input'] = observation['value']
+        record('input_ceiling_observation', **observation)
+        if not observation['accounting_complete']:
+            stop('input_accounting_incomplete')
+        elif observation['stop_required']:
+            stop('input_cap')
+        return observation
+
+    def receive_lease_updates():
+        nonlocal lease, upstream_secret, expiry
+        for line in sys.stdin:
+            if finished.is_set():
+                return
+            try:
+                update = json.loads(line)
+                if not isinstance(update, dict) or update.get('type') != 'renew_managed_model':
+                    raise ValueError('Unexpected lease update')
+                renewed = update['lease']
+                secret = renewed['api_key']
+                if not isinstance(secret, str) or not secret:
+                    raise ValueError('Missing renewed credential')
+                ctx['lease_secrets'].append(secret)
+                if (renewed['origin'] != lease['origin'] or str(renewed['user_id']) != str(lease['user_id'])
+                        or renewed['model']['id'] != lease['model']['id']
+                        or renewed['model']['model'] != expected_model
+                        or renewed['model']['api_mode'] != 'responses'
+                        or renewed['base_url'].rstrip('/') != lease['base_url'].rstrip('/')):
+                    raise ValueError('Lease identity changed')
+                credential_id = renewed['credential_id']
+                if not isinstance(credential_id, str) or not credential_id:
+                    raise ValueError('Missing credential identity')
+                expires = datetime.fromisoformat(renewed['expires_at'].replace('Z', '+00:00'))
+                if expires.tzinfo is None or expires.timestamp() <= datetime.now(timezone.utc).timestamp():
+                    raise ValueError('Renewed lease already expired')
+                with lock:
+                    lease, upstream_secret, expiry = renewed, secret, expires.timestamp()
+                    receipt = {'seconds': round(time.monotonic() - started_at, 3),
+                               'expires_at': renewed['expires_at']}
+                    report['lease_renewals'].append(receipt)
+                    record('lease_renewed', **receipt)
+                    progress('lease_renewed', **receipt)
+            except Exception as exc:
+                report['lease_renewal_error_type'] = type(exc).__name__
+                stop('lease_renewal_failed')
+                progress('lease_renewal_failed', error_type=type(exc).__name__)
+                return
 
     signal.signal(signal.SIGTERM, lambda *_: stop('external_observed_budget_or_watchdog'))
 
@@ -130,7 +270,7 @@ def run_codex(ctx):
                 name = 'wait_agent' if spawned else 'spawn_agent'
                 arguments = {'timeout_ms': 10000} if spawned else {
                     'task_name': 'transport_child', 'fork_turns': 'all',
-                    'message': 'LOCAL_CODEX_CHILD_PROBE: Read agent/compaction_display.py using the real shell tool; return LOCAL_CODEX_CHILD_FINAL.'}
+                    'message': f'LOCAL_CODEX_CHILD_PROBE: Read {probe_read_path} using the real shell tool; return LOCAL_CODEX_CHILD_FINAL.'}
                 item = {'id': 'fc_' + ident, 'type': 'function_call', 'call_id': 'call_' + ident,
                         'namespace': 'collaboration', 'name': name, 'arguments': json.dumps(arguments), 'status': 'completed'}
                 final_text = None
@@ -144,7 +284,14 @@ def run_codex(ctx):
         else:
             names = tool_names(body)
             if 'functions.exec' in names:
-                javascript = 'text(await tools.exec_command(' + json.dumps({'cmd': "sed -n '1,8p' agent/compaction_display.py", 'workdir': str(workspace), 'max_output_tokens': 500, 'login': delegation_probe}) + '));'
+                command = "sed -n '1,8p' " + shlex.quote(probe_read_path)
+                if runtime['workspace_writable']:
+                    # Exercise writable tools without pretending the scripted
+                    # response solved a repair or passed the external contract.
+                    smoke = 'import unittest\nclass TransportSmoke(unittest.TestCase):\n    def test_transport(self):\n        self.assertTrue(True)\n'
+                    command += ' && printf %s ' + shlex.quote(smoke) + ' > test_dry_transport.py'
+                    command += ' && ' + shlex.quote(sys.executable) + ' -B -m unittest discover -v'
+                javascript = 'text(await tools.exec_command(' + json.dumps({'cmd': command, 'workdir': str(workspace), 'max_output_tokens': 500, 'login': delegation_probe}) + '));'
                 item = {'id': 'ct_' + ident, 'type': 'custom_tool_call', 'call_id': 'call_' + ident,
                         'namespace': 'functions', 'name': 'exec', 'input': javascript, 'status': 'completed'}
             else:
@@ -186,12 +333,11 @@ def run_codex(ctx):
             return JSONResponse({'error': 'native_v2_depth_limit_not_aligned'}, status_code=409)
         estimate = estimate_request_tokens_rough(body.get('input') or [], system_prompt=body.get('instructions') or '', tools=body.get('tools') or [])
         with lock:
-            current_stop = budget_reason(tally['requests'], tally['input'], tally['output'], time.monotonic() - started_at, max_seconds=args.budget)
+            current_stop = current_budget_reason()
             if stopped.is_set() or current_stop:
                 stop(current_stop or 'already_stopped')
                 return JSONResponse({'error': 'acceptance_budget_reached'}, status_code=429)
             tally['requests'] += 1
-            tally['input'] += estimate
         if scope.purpose == 'chat' and root_thread is None:
             root_thread = thread
         key = ManagedCredential(lambda: upstream_secret, str(lease['user_id']), billing_id,
@@ -208,9 +354,13 @@ def run_codex(ctx):
                 'system_hash': hashlib.sha256(json.dumps([body.get('instructions', ''),
                     *[item.get('content') for item in body.get('input') or [] if item.get('role') in ('system','developer') and item.get('type') != 'additional_tools']], sort_keys=True).encode()).hexdigest(),
                 'wire_metadata': wire_meta}
-        requests.append(info)
-        record('codex_request', **info)
-        why = budget_reason(tally['requests'], tally['input'], tally['output'], time.monotonic()-started_at, max_seconds=args.budget)
+        with lock:
+            requests.append(info)
+            record('codex_request', **info)
+            accounting = observe_input('request', request_id)
+        if not accounting['accounting_complete']:
+            return JSONResponse({'error': 'input_accounting_incomplete'}, status_code=429)
+        why = current_budget_reason()
         if why:
             # Same observation semantics as the Aino hook: interrupt promptly
             # on the threshold-crossing dispatch, including in-flight work.
@@ -266,14 +416,26 @@ def run_codex(ctx):
                             except ValueError:
                                 continue
                             if event.get('type') == 'response.completed':
-                                usage = (event.get('response') or {}).get('usage') or {}
+                                completed = event.get('response') or {}
+                                usage = completed.get('usage') or {}
+                                output_items = completed.get('output')
                                 amount = int(usage.get('output_tokens') or 0)
+                                response = {'api_request_id': request_id, 'session_id': thread, 'usage': usage,
+                                            'api_duration': round(time.monotonic() - start, 3),
+                                            'response_status': completed.get('status'),
+                                            'has_tool_calls': None if not isinstance(output_items, list) else any(
+                                                item.get('type') in ('function_call', 'custom_tool_call') for item in output_items),
+                                            'final_text_chars': None if not isinstance(output_items, list) else sum(
+                                                len(content['text']) for item in output_items
+                                                if item.get('type') == 'message' and item.get('role') == 'assistant'
+                                                for content in item.get('content') or []
+                                                if content.get('type') == 'output_text' and isinstance(content.get('text'), str))}
                                 with lock:
                                     tally['output'] += amount
-                                response = {'api_request_id': request_id, 'session_id': thread, 'usage': usage,
-                                            'api_duration': round(time.monotonic() - start, 3)}
-                                responses.append(response); record('codex_response', **response)
-                                why = budget_reason(tally['requests'], tally['input'], tally['output'], time.monotonic()-started_at, max_seconds=args.budget)
+                                    responses.append(response)
+                                    record('codex_response', **response)
+                                    observe_input('response', request_id)
+                                why = current_budget_reason()
                                 if why:
                                     stop(why)
                     yield chunk
@@ -313,7 +475,7 @@ def run_codex(ctx):
         # Exercise the actual HTTP admission path at both cumulative bounds;
         # this is a fake-transport probe, not a modified live budget.
         statuses = []
-        for key, value in [('requests', 64), ('input', 2_000_000)]:
+        for key, value in [('requests', request_limit), ('input', input_limit)]:
             tally[key] = value
             with httpx.Client(trust_env=False) as local:
                 status = local.post(base + '/responses', headers={'Authorization': 'Bearer ' + token},
@@ -350,7 +512,7 @@ def run_codex(ctx):
             return '{' + ','.join(k+'='+toml(v) for k,v in value.items()) + '}'
         return json.dumps(value, ensure_ascii=False)
     command = [args.codex_bin, 'exec', '--ignore-user-config', '--ignore-rules', '--strict-config',
-               '--json', '--skip-git-repo-check', '--sandbox', 'read-only', '-C', str(workspace),
+               '--json', '--skip-git-repo-check', '--sandbox', sandbox, '-C', str(workspace),
                '--model', expected_model, '--output-last-message', str(run/'final.txt')]
     if not args.live and args.codex_dry_case == 'delegation-ephemeral':
         command.append('--ephemeral')
@@ -358,7 +520,7 @@ def run_codex(ctx):
         command.extend(['-c', name+'='+toml(value)])
     original_prompt = ctx['prompt']
     driver_prompt = original_prompt
-    if args.review_skill == 'original':
+    if args.review_skill == 'original' and ctx['skill_hashes']:
         # Match full text obligation, not the Hermes skill_view discovery machinery.
         driver_prompt += '\n\n<review-skill>\n' + (ctx['skill_target']/'SKILL.md').read_text() + '\n' + (ctx['skill_target']/'references/evidence-rating.md').read_text() + '\n</review-skill>'
     if not args.matched_comparison:
@@ -375,10 +537,10 @@ def run_codex(ctx):
     for name in ('NO_PROXY', 'no_proxy'):
         env[name] = ','.join(filter(None, [env.get(name, ''), '127.0.0.1', 'localhost']))
     events_q = queue.Queue()
-    report = {'driver': 'codex', 'scenario': 'large', 'live': args.live, 'run_dir': str(run),
+    report = {'driver': 'codex', 'scenario': scenario, 'live': args.live, 'run_dir': str(run),
               'prompt': original_prompt, 'driver_prompt': driver_prompt, 'settings': settings,
               'matched_comparison': ctx['comparison'], 'usage_self_check': ctx['usage_self_check'],
-              'codex_home': str(comparison_home),
+              'codex_home': str(comparison_home), 'sandbox': sandbox, 'lease_renewals': [],
               'fixture_hashes': ctx['fixture_before'], 'review_skill_hashes': ctx['skill_hashes'],
               'diagnostic': {'review_skill': args.review_skill, **ctx['length_diagnostic'], 'original_acceptance_eligible': False,
                   'boundary': 'Native Codex CLI comparison; tool schemas, prompt, skill loading and delegation lifecycle differ from Aino. Not a strict one-variable product A/B.'},
@@ -389,11 +551,15 @@ def run_codex(ctx):
                   'Cumulative input estimates differ: Codex includes native tools; Aino preflight uses its message estimator',
                   'Managed endpoint accepted this native wire format in prior runs; quality parity remains unproved'],
               'native_comparison_explicit': args.codex_native_comparison,
-              'limits': {'seconds': args.budget, 'requests': 64, 'approx_cumulative_input': 2_000_000,
-                         'output_tokens': 60_000, 'observed_spend_target_usd': args.spend_target or 5,
+              'limits': {'seconds': args.budget, 'requests': request_limit, 'approx_cumulative_input': input_limit,
+                         'cumulative_input_basis': 'input_excluding_cache_reads',
+                         'cumulative_input_policy': 'acceptance_policy_change; not comparable with historical approx_represented_input runs',
+                         'output_tokens': output_limit, 'observed_spend_target_usd': runtime['budget_target_usd'],
                          'monetary_hard_cap': False},
               'version': subprocess.check_output([args.codex_bin,'--version'], text=True).strip()}
-    progress('session_ready', scenario='large', driver='codex', run_dir=str(run), session_id=billing_id)
+    if args.live:
+        threading.Thread(target=receive_lease_updates, daemon=True).start()
+    progress('session_ready', scenario=scenario, driver='codex', run_dir=str(run), session_id=billing_id)
     progress('billing_identity', session_id=billing_id)
     try:
         child = subprocess.Popen(command, cwd=workspace, env=env, stdin=subprocess.PIPE,
@@ -448,8 +614,10 @@ def run_codex(ctx):
             wire_text = json.dumps(wire_bodies, ensure_ascii=False)
             probe['spawn_error_observed'] = 'collab spawn failed: no thread with id' in wire_text
             probe['child_session_observed'] = any(r['wire_metadata'].get('agent_name') == '/root/transport_child' for r in requests)
-            probe['child_tool_returned'] = any(item.get('type') == 'custom_tool_call_output' and 'Client-facing projection helpers' in json.dumps(item)
-                for body in wire_bodies for item in body.get('input') or [])
+            probe['child_tool_returned'] = any(_probe_file_read_returned(item, probe_read_text)
+                for body, info in zip(wire_bodies, requests)
+                if info['wire_metadata'].get('agent_name') == '/root/transport_child'
+                for item in body.get('input') or [])
             probe['parent_received_child_final'] = any('LOCAL_CODEX_CHILD_FINAL: real shell read completed.' in json.dumps(body)
                 for body, info in zip(wire_bodies, requests) if info['wire_metadata'].get('agent_name') == '/root')
             probe['delegation_lifecycle_passed'] = all(probe[key] for key in ('child_session_observed', 'child_tool_returned', 'parent_received_child_final')) and final.startswith('LOCAL_CODEX_DELEGATION_FINAL')
@@ -458,16 +626,39 @@ def run_codex(ctx):
             if not (probe['expected_failure_reproduced'] if expected_failure else probe['delegation_lifecycle_passed']):
                 report['stop_reason'] = 'delegation_probe_failed'
     finally:
+        finished.set()
         server.should_exit = True; thread.join(10); listener.close()
         report.update(requests=requests, responses=responses, caps=reasons, tally=tally,
-                      elapsed_seconds=round(time.monotonic()-started_at,2), probes=probe, cli_events=raw_events)
+                      root_session_id=root_thread, elapsed_seconds=round(time.monotonic()-started_at,2),
+                      probes=probe, cli_events=raw_events)
+        snapshot = cumulative_input_excluding_cache_reads(requests, responses, usage_source='responses_raw')
+        peak = max(input_ceiling_observations, key=lambda row: row['value'], default=None)
+        crossing = next((row for row in input_ceiling_observations if row['crossed']), None)
+        incomplete = next((row for row in input_ceiling_observations if not row['accounting_complete']), None)
+        report['input_accounting'] = {
+            **snapshot, 'limit': input_limit, 'policy': 'acceptance_policy_change',
+            'final_value': snapshot['input_excluding_cache_reads'],
+            'peak_value': (peak or {}).get('value'), 'peak_at': (peak or {}).get('seconds'),
+            'peak_requests_recorded': (peak or {}).get('requests_recorded'),
+            'first_crossing': crossing, 'ever_crossed': crossing is not None,
+            'first_incomplete': incomplete, 'ever_incomplete': incomplete is not None,
+            'observations': len(input_ceiling_observations),
+            'superseded_basis': 'approx_represented_input',
+            'approx_represented_input': None if snapshot['invalid_request_estimate_rows'] else
+                sum(row['approx_input_tokens'] for row in requests),
+            'boundary': 'ACCEPTANCE POLICY CHANGE: input excluding cache reads counts uncached input + cache writes and reserves rough estimates until complete usable usage arrives. This is looser than historical whole re-presented-context accounting; runs under the two policies are not comparable. Excluded cache reads were real provider input, and this value is not monetary cost. Reservations can settle downward; peak, first_crossing and first_incomplete preserve earlier stops. Missing identity or uncovered input accounting fails closed.',
+        }
         report['observed_usage'] = ctx['summarize_observed_usage'](responses, requests, 'responses_raw')
         report['billing'] = [{'source': 'aino', 'session_id': billing_id, 'turn_id': scope.turn_id,
                               'status': 'pending', **scope.calls.snapshot()} for scope in scopes.values()]
         after = hashes(workspace)
         report['fixture_changed'] = [p for p in set(after)|set(ctx['fixture_before']) if after.get(p)!=ctx['fixture_before'].get(p)]
+        wire = [json.loads(p.read_text()) for p in sorted(run.glob('request-*.json'))]
+        report['native_test_tool_calls'] = _native_test_tool_calls(requests, comparison_home)
+        scored = ctx['score_report'](report)
+        if scored is not None:
+            report = scored
         report['settlement_note'] = 'The platform runner queries actual settlement by the fresh billing session. Scripted dry usage is synthetic and has no charge.'
-        wire = [(json.loads(p.read_text())) for p in sorted(run.glob('request-*.json'))]
         serialized_wire = json.dumps(wire, ensure_ascii=False)
         probe['no_user_skill_plugin_injection'] = all(marker not in serialized_wire for marker in
             ('<skills_instructions>', '<plugins_instructions>', '/.codex/skills', 'plugin://'))
@@ -478,8 +669,8 @@ def run_codex(ctx):
         for path in run.rglob('*'):
             if path.is_file():
                 contents = path.read_bytes()
-                if token.encode() in contents or (args.live and upstream_secret.encode() in contents):
+                if token.encode() in contents or any(secret.encode() in contents for secret in ctx['lease_secrets']):
                     progress('credential_leak_detected', path=str(path)); os._exit(3)
-        progress('finished', driver='codex', run_dir=str(run), stop_reason=report.get('stop_reason'),
+        progress('finished', scenario=scenario, driver='codex', run_dir=str(run), stop_reason=report.get('stop_reason'),
                  requests=tally['requests'], output_tokens=tally['output'], fixture_changed=report['fixture_changed'])
         os._exit(0 if report.get('stop_reason') == 'normal_final' else 2)

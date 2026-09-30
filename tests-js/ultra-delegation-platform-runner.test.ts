@@ -81,7 +81,7 @@ it.each([
   { options: ['--spend-target=10'], error: 'Account access and paid runs require explicit --live' },
   { options: ['--budget=3600', '--spend-target=10'], error: 'Account access and paid runs require explicit --live' },
   { options: ['--driver=codex', '--codex-native-comparison', '--budget=1200'], error: 'Account access and paid runs require explicit --live' },
-  { options: ['--driver=codex', '--codex-native-comparison', '--budget=3600'], error: 'Codex comparison budget must be at most 1200 seconds' },
+  { options: ['--driver=codex', '--codex-native-comparison', '--budget=3600'], error: 'Account access and paid runs require explicit --live' },
   { options: ['--budget=29'], error: 'Budget must be' },
   { options: ['--budget=3601'], error: 'Budget must be' },
   { options: ['--budget=30.5'], error: 'Budget must be' },
@@ -95,6 +95,14 @@ it.each([
 ])('validates limits before account access: $options', async ({ options, error }) => {
   process.argv = ['electron', 'platform-runner.cjs', 'large', ...options]
   expect(executeRunner).toThrow(error)
+  expect(fake.app.whenReady).not.toHaveBeenCalled()
+  expect(fake.auth.modelLease).not.toHaveBeenCalled()
+})
+
+it.each(['daily', 'independent'])('validates native %s without account access', scenario => {
+  process.argv = ['electron', 'platform-runner.cjs', scenario, '--driver=codex',
+    '--codex-native-comparison', '--budget=3600']
+  expect(executeRunner).toThrow('Account access and paid runs require explicit --live')
   expect(fake.app.whenReady).not.toHaveBeenCalled()
   expect(fake.auth.modelLease).not.toHaveBeenCalled()
 })
@@ -128,11 +136,13 @@ it('rejects a directory named SKILL.md before account access', () => {
 })
 
 it.each([
-  { driver: 'aino', failRenewal: false, candidate: false, options: ['--budget=3600', '--spend-target=10'], budget: 3600, spend: 10 },
-  { driver: 'aino', failRenewal: false, candidate: true, options: ['--review-skill=candidate'], budget: 1200, spend: 5 },
-  { driver: 'aino', failRenewal: true, candidate: false, options: [], budget: 1200, spend: 5 },
-  { driver: 'codex', failRenewal: false, candidate: false, options: ['--driver=codex', '--codex-native-comparison'], budget: 1200, spend: 5 },
-])('keeps the lease transport scoped to $driver and cleans up (renewal failure: $failRenewal, candidate: $candidate)', async ({ driver, failRenewal, candidate, options, budget, spend }) => {
+  { driver: 'aino', scenario: 'large', failRenewal: false, candidate: false, options: ['--budget=3600', '--spend-target=10'], budget: 3600, spend: 10 },
+  { driver: 'aino', scenario: 'large', failRenewal: false, candidate: true, options: ['--review-skill=candidate'], budget: 1200, spend: 5 },
+  { driver: 'aino', scenario: 'large', failRenewal: true, candidate: false, options: [], budget: 1200, spend: 5 },
+  { driver: 'codex', scenario: 'large', failRenewal: false, candidate: false, options: ['--driver=codex', '--codex-native-comparison'], budget: 1200, spend: 5 },
+  { driver: 'codex', scenario: 'daily', failRenewal: false, candidate: false, options: ['--driver=codex', '--codex-native-comparison', '--budget=3600'], budget: 3600, spend: 1.5 },
+  { driver: 'codex', scenario: 'independent', failRenewal: true, candidate: false, options: ['--driver=codex', '--codex-native-comparison', '--budget=3600'], budget: 3600, spend: 1.5 },
+])('renews the $driver $scenario lease and cleans up (renewal failure: $failRenewal, candidate: $candidate)', async ({ failRenewal, candidate, scenario, options, budget, spend }) => {
   vi.useFakeTimers()
   temporaryRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'aino-runner-test-'))
   const installation = path.join(temporaryRoot, 'installation.json')
@@ -169,7 +179,7 @@ it.each([
   fake.spawn.mockReturnValue(child)
   const input: string[] = []
   child.stdin.on('data', chunk => input.push(String(chunk)))
-  process.argv = ['electron', 'platform-runner.cjs', 'large', '--live', '--repo=' + repo,
+  process.argv = ['electron', 'platform-runner.cjs', scenario, '--live', '--repo=' + repo,
     '--output-root=' + temporaryRoot, '--installation-path=' + installation, ...options,
     ...(candidate ? ['--review-skill-path=' + skillPath] : [])]
   executeRunner()
@@ -180,23 +190,19 @@ it.each([
     expect(fake.spawn.mock.calls[0][1]).toEqual(expect.arrayContaining(['--review-skill=candidate', '--review-skill-path=' + skillPath]))
   }
 
-  expect(child.stdin.writableEnded).toBe(driver === 'codex')
+  expect(child.stdin.writableEnded).toBe(false)
   expect(input.join('')).toMatch(/\n$/)
   const first = JSON.parse(input.join('').trim())
   expect(first.api_key).toBe(lease.api_key)
   await vi.advanceTimersByTimeAsync(20 * 60_000)
-  const leaseCalls = driver === 'codex' ? 1 : 2
+  const leaseCalls = 2
   expect(fake.auth.modelLease).toHaveBeenCalledTimes(leaseCalls)
 
-  if (driver === 'aino') {
-    expect(fake.auth.modelLease.mock.calls[1][0]).toEqual(fake.auth.modelLease.mock.calls[0][0])
-  }
+  expect(fake.auth.modelLease.mock.calls[1][0]).toEqual(fake.auth.modelLease.mock.calls[0][0])
 
   const frames = input.join('').trim().split('\n').map(line => JSON.parse(line))
 
-  if (driver === 'codex') {
-    expect(frames).toHaveLength(1)
-  } else if (failRenewal) {
+  if (failRenewal) {
     expect(frames).toHaveLength(1)
     expect(logged.join('\n')).toContain('lease_renewal_error')
     await vi.advanceTimersByTimeAsync(20 * 60_000)

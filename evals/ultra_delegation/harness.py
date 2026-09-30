@@ -5,8 +5,10 @@ from pathlib import Path
 from datetime import datetime, timedelta, timezone
 
 SOURCE_ROOT = Path(__file__).resolve().parent
+# Bind evaluator siblings to this script under both direct and runpy entry.
+sys.path.insert(0, str(SOURCE_ROOT))
 parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-parser.add_argument('scenario', choices=['simple', 'large', 'no_subagent', 'length', 'replay', 'daily', 'daily_replay'])
+parser.add_argument('scenario', choices=['simple', 'large', 'no_subagent', 'length', 'replay', 'daily', 'daily_replay', 'independent'])
 parser.add_argument('--live', action='store_true', help='Use a managed lease supplied on stdin; may incur charges. Omit for offline scripted RPC.')
 parser.add_argument('--repo', type=Path, default=SOURCE_ROOT.parents[1], help='Checkout providing the production Python imports')
 parser.add_argument('--fixtures', type=Path, default=SOURCE_ROOT/'fixtures', help='Frozen large/ and small/ fixture root')
@@ -20,7 +22,7 @@ parser.add_argument('--spend-target', type=float)
 parser.add_argument('--name')
 parser.add_argument('--review-skill', choices=['original', 'none', 'candidate'], default='original', help='none removes the skill; candidate uses an experimental external skill for a fresh large Aino task; neither is original-task acceptance')
 parser.add_argument('--large-report-length', choices=['original', 'unbounded'], default='original', help='unbounded removes only the large task per-group length instruction; diagnostic only, never original-task acceptance')
-parser.add_argument('--driver', choices=['aino', 'codex'], default='aino')
+parser.add_argument('--driver', choices=['aino', 'codex', 'hermes'], default='aino')
 parser.add_argument('--matched-comparison', action='store_true', help='Same prompt and explicit High children; diagnostic only')
 parser.add_argument('--independent-completions', action='store_true', help='Use existing per-unit delivery in a fresh isolated Aino comparison profile')
 parser.add_argument('--evidence-contract', action='store_true', help='Ask autonomous delegation to use existing evidence JSON output contracts; parent owns final presentation')
@@ -34,6 +36,13 @@ parser.add_argument('--file-read-max-chars', type=int, help='Set the existing fi
 parser.add_argument('--child-compression-threshold-tokens', type=int, help='Set existing delegation.compression_threshold_tokens in the isolated profile; compression may discard evidence and must be evaluated')
 parser.add_argument('--child-reasoning-effort', choices=['high', 'max'], help='Set existing delegation.reasoning_effort for this isolated profile; explicit task choices still override it and parent Ultra is unchanged')
 args = parser.parse_args()
+is_repair = args.scenario in ('daily', 'independent')
+if args.driver == 'hermes' and (args.live or args.scenario not in ('large', 'daily', 'independent')
+        or args.matched_comparison or args.independent_completions or args.evidence_contract
+        or args.dry_child_results or args.replay_source or args.legacy_replay_source
+        or args.replay_dry_redelegate or args.codex_native_comparison or args.codex_dry_case != 'tools'
+        or args.review_skill == 'candidate'):
+    parser.error('Hermes native evaluation supports offline fresh large/daily/independent tasks only; managed, Codex, replay and Aino comparison options are unavailable')
 if args.large_report_length != 'original' and args.scenario != 'large':
     parser.error('--large-report-length=unbounded requires a fresh large task; replay keeps its source prompt')
 if args.large_report_length == 'unbounded' and args.matched_comparison:
@@ -67,7 +76,14 @@ if args.scenario in ('replay', 'daily_replay') and not (args.replay_source or ar
 if args.legacy_replay_source and (args.scenario not in ('replay', 'daily_replay') or args.replay_source):
     parser.error('--legacy-replay-source requires replay or daily_replay without --replay-source')
 if not (REPO/'tui_gateway/server.py').is_file():
-    parser.error('--repo must be an Aino checkout with tui_gateway/server.py')
+    parser.error('--repo must contain tui_gateway/server.py')
+native_source = None
+if args.driver == 'hermes':
+    from hermes_driver import configure_profile, native_session_params, runtime_source_evidence, verify_native_source
+    try:
+        native_source = verify_native_source(REPO, object_repo=SOURCE_ROOT.parents[1])
+    except ValueError as exc:
+        parser.error(str(exc))
 if not (ORIGINAL/'large').is_dir() or not (ORIGINAL/'small').is_dir():
     parser.error('--fixtures must contain the frozen large/ and small/ directories')
 if args.review_skill == 'candidate':
@@ -87,20 +103,20 @@ if args.independent_completions and (not args.matched_comparison or args.driver 
     parser.error('--independent-completions requires the matched Aino comparison')
 if args.matched_comparison and (args.scenario != 'large' or args.review_skill != 'none'):
     parser.error('Matched comparison requires large --review-skill=none')
-if args.driver == 'codex' and args.scenario != 'large':
-    parser.error('--driver=codex currently supports only the original large task')
+if args.driver == 'codex' and args.scenario not in ('large', 'daily', 'independent'):
+    parser.error('--driver=codex supports fresh large and repair tasks only')
 if args.live and args.codex_dry_case != 'tools':
     parser.error('--codex-dry-case is only a local fake-model probe')
 if args.live and args.driver == 'codex' and not args.codex_native_comparison:
     parser.error('Live Codex comparison requires --codex-native-comparison after reviewing native tool/depth differences')
-if args.driver == 'codex' and args.budget is None:
+if args.driver == 'codex' and args.scenario == 'large' and args.budget is None:
     args.budget = 1200
 if args.review_skill != 'original' and args.scenario != 'large':
     parser.error('--review-skill=none is only supported for the independent large diagnostic')
-if args.budget is None: args.budget = {'simple':300,'no_subagent':600,'large':900,'length':300,'replay':1200,'daily':600,'daily_replay':600}[args.scenario]
-request_limit = {'daily': 48, 'replay': 24, 'daily_replay': 24}.get(args.scenario, 64)
+if args.budget is None: args.budget = {'simple':300,'no_subagent':600,'large':900,'length':300,'replay':1200,'daily':600,'daily_replay':600,'independent':600}[args.scenario]
+request_limit = {'daily': 48, 'independent': 48, 'replay': 24, 'daily_replay': 24}.get(args.scenario, 64)
 is_replay = args.scenario in ('replay', 'daily_replay')
-input_limit = 500000 if args.scenario in ('daily', 'daily_replay') else 2000000
+input_limit = 500000 if args.scenario in ('daily', 'daily_replay', 'independent') else 2000000
 if args.input_cap is not None:
     # Diagnostic probe only. The scenario ceiling above is the recorded budget the acceptance
     # record refers to; raising it answers "is delivery merely short of headroom", which cannot
@@ -122,13 +138,13 @@ if args.replay_source:
     args.matched_comparison=bool(source_replay_metadata.get('matched_comparison'))
     args.evidence_contract=bool(source_replay_metadata.get('evidence_contract',{}).get('enabled'))
     args.independent_completions=bool(source_replay_metadata.get('independent_completions'))
-if args.scenario not in ('daily', 'daily_replay') and args.review_skill == 'original' and args.review_skill_path is None:
+if args.scenario not in ('daily', 'daily_replay', 'independent') and args.review_skill == 'original' and args.review_skill_path is None:
     parser.error('--review-skill=original requires --review-skill-path=/path/to/read-only-source-review; large --review-skill=none is the portable diagnostic')
 os.umask(0o077)
-run = ROOT / (args.name or (('live-' if args.live else 'dry-') + ('codex-' if args.driver == 'codex' else '') + args.scenario + '-' + datetime.now().strftime('%H%M%S')))
+run = ROOT / (args.name or (('live-' if args.live else 'dry-') + (args.driver+'-' if args.driver != 'aino' else '') + args.scenario + '-' + datetime.now().strftime('%H%M%S')))
 run.mkdir(parents=True, exist_ok=False)
 snapshot = run / 'harness-at-start'; snapshot.mkdir()
-for filename in ('harness.py','convergence.py','codex_driver.py','platform-runner.ts','daily_contract.py'):
+for filename in ('harness.py','convergence.py','codex_driver.py','platform-runner.ts','daily_contract.py','independent_contract.py','hermes_driver.py'):
     shutil.copy2(SOURCE_ROOT/filename, snapshot/filename)
 (snapshot/'manifest.json').write_text(json.dumps({p.name:hashlib.sha256(p.read_bytes()).hexdigest() for p in snapshot.iterdir() if p.is_file()},indent=2))
 profile = run / 'profile'; profile.mkdir()
@@ -181,13 +197,22 @@ else:
             os.environ.pop(key, None)
 os.environ.update(HERMES_HOME=str(profile), TERMINAL_CWD=str(workspace), TOKENIZERS_PARALLELISM='false')
 os.chdir(workspace)
+if args.driver == 'hermes':
+    sys.dont_write_bytecode = True
 sys.path.insert(0, str(REPO))
 import yaml
-source = ORIGINAL / ('large' if args.scenario in ('large','replay') else 'small')
-shutil.copytree(source, workspace, dirs_exist_ok=True)
+source = ORIGINAL / ('independent' if args.scenario == 'independent' else 'large' if args.scenario in ('large','replay') else 'small')
+if args.scenario == 'independent':
+    independent_manifest = json.loads((source/'manifest.json').read_text())
+    for filename in ('SPEC.md', 'think_scrubber.py'):
+        if hashlib.sha256((source/filename).read_bytes()).hexdigest() != independent_manifest['model_files'][filename]:
+            raise ValueError('Independent public fixture does not match its freeze: '+filename)
+        shutil.copy2(source/filename, workspace/filename)
+else:
+    shutil.copytree(source, workspace, dirs_exist_ok=True)
 skill_source = args.review_skill_path
 skill_target = profile / 'skills/software-development/read-only-source-review'
-if args.scenario not in ('daily', 'daily_replay') and args.review_skill in ('original', 'candidate'):
+if args.scenario not in ('daily', 'daily_replay', 'independent') and args.review_skill in ('original', 'candidate'):
     shutil.copytree(skill_source, skill_target)
 def hashes(base):
     return {str(p.relative_to(base)): hashlib.sha256(p.read_bytes()).hexdigest() for p in sorted(base.rglob('*')) if p.is_file()}
@@ -253,7 +278,8 @@ execution_workspace = replay_source/'workspace' if is_replay else workspace
 os.environ['TERMINAL_CWD']=str(execution_workspace)
 os.chdir(execution_workspace)
 daily = '请把当前示例项目修到符合 SPEC.md：检查并修复 auth.py 的认证与管理员授权，billing.py 的支付重试、并发幂等和退款、折扣边界，exports.py 的租户隔离与删除记录过滤。保留现有函数接口，为修复补充能重现问题的自动化测试并运行，最后说明修复内容、测试结果和仍未解决的限制。可以修改当前项目文件；不联网、不安装依赖。测试使用 Python 标准库 unittest。'
-prompt = replay_data['prompt'] if is_replay else {'daily':daily,'simple':simple,'large':large,'no_subagent':no_subagent,'length':length}[args.scenario]
+independent = '请修复当前目录中的模块，使其符合 SPEC.md。保留公开接口，为修复补充能重现问题的 Python 标准库 unittest 测试并实际运行；最后说明修改、测试结果及仍未解决的限制。可以修改当前项目文件，不联网、不安装依赖。'
+prompt = replay_data['prompt'] if is_replay else {'daily':daily,'independent':independent,'simple':simple,'large':large,'no_subagent':no_subagent,'length':length}[args.scenario]
 large_report_length = ((replay_data.get('diagnostic') or {}).get('large_report_length', 'original')
                        if is_replay else args.large_report_length)
 length_diagnostic = {
@@ -297,7 +323,7 @@ if args.matched_comparison and not args.replay_source:
         'accounting':'Completed provider prompt includes cached + uncached input. Raw observations retained. Existing rough-input stop thresholds unchanged; estimator scopes still differ.',
         'strict_single_variable_ab':False}
 config = {'model': {'default':'gpt-5.6-sol','provider':'aino'},
-    'agent': {'max_turns':24 if args.scenario in ('replay','daily','daily_replay') else 36,'reasoning_effort':'ultra','api_max_retries':1,'auto_recovery_cycles':0},
+    'agent': {'max_turns':24 if args.scenario in ('replay','daily','daily_replay','independent') else 36,'reasoning_effort':'ultra','api_max_retries':1,'auto_recovery_cycles':0},
     'delegation': {'max_concurrent_children':3,'max_iterations':16,'max_spawn_depth':1},
     'terminal': {'backend':'local','cwd':str(execution_workspace)}, 'approvals': {'mode':'smart' if args.live else 'manual'},
     'auxiliary': {'title_generation': {'enabled': args.live}}}
@@ -318,6 +344,14 @@ if source_replay_metadata:
     comparison=json.loads(json.dumps(source_replay_metadata.get('matched_comparison')))
     evidence_schema=json.loads(json.dumps(source_replay_metadata['evidence_contract']['schema']))
     base_prompt_sha256=source_replay_metadata['evidence_contract']['base_prompt_sha256_ignoring_workspace']
+listener = None
+if args.driver == 'hermes':
+    # Hermes reads provider configuration while building its ordinary RPC session.
+    # Reserve the local endpoint before importing its server and loading config.
+    listener = socket.socket();listener.bind(('127.0.0.1',0));port=listener.getsockname()[1]
+    config['delegation'].pop('max_concurrent_children')
+    config = configure_profile(config, base_url=f'http://127.0.0.1:{port}/v1',
+                               model='gpt-5.6-sol', api_key='local-fixture-no-secret')
 (profile / 'config.yaml').write_text(yaml.safe_dump(config,allow_unicode=True))
 log_lock = threading.RLock(); t0 = time.monotonic(); events = []; requests = []; responses = []; caps = []
 sid = stored_sid = None
@@ -336,7 +370,7 @@ def record(kind, **data):
 def progress(stage, **data):
     out.write(safe({'stage':stage,**data})+'\n');out.flush()
 
-from evals.ultra_delegation.convergence import (
+from convergence import (
     cumulative_input_excluding_cache_reads, normalize_observed_usage, observe_input_ceiling,
 )
 
@@ -405,6 +439,59 @@ if not args.live:
                         'duplicates_not_counted':True, 'invalid_excluded':True,
                         'conflicting_duplicates_excluded':True, 'missing_not_zeroed':True}
     progress('usage_self_check', **usage_self_check)
+
+runtime = {'scenario':args.scenario,'request_limit':request_limit,'input_limit':input_limit,
+           'output_limit':60000,'budget_target_usd':args.spend_target if args.spend_target is not None else
+           {'length':1,'replay':2,'daily':1.5,'independent':1.5,'daily_replay':1}.get(args.scenario,5),
+           'workspace_writable':is_repair}
+
+def run_daily_verification(command):
+    try:
+        completed=subprocess.run(command,cwd=execution_workspace,env={**os.environ,'PYTHONDONTWRITEBYTECODE':'1'},capture_output=True,text=True,timeout=45)
+        return {'command':command,'returncode':completed.returncode,'stdout':completed.stdout,'stderr':completed.stderr}
+    except subprocess.TimeoutExpired as exc:
+        return {'command':command,'timeout':True,'stdout':str(exc.stdout or ''),'stderr':str(exc.stderr or '')}
+
+contract_path = SOURCE_ROOT/('independent_contract.py' if args.scenario=='independent' else 'daily_contract.py')
+repair_baseline = run_daily_verification([sys.executable,'-B',str(contract_path),str(workspace)]) if is_repair else None
+
+def score_report(target):
+    if not is_repair:
+        return target
+    calls = target.get('tool_calls') or []
+    repair = {'fixture_source':str(source),'fixture_source_files':len(fixture_before),
+        'fixture_bytes':sum((source/n).stat().st_size for n in fixture_before),'skill_installed':False,
+        'boundary':'External repair contract; delivery and code correctness remain separate.',
+        'limits':{'seconds':args.budget,'requests':request_limit,'approx_cumulative_input':input_limit,
+                  'observed_spend_target_usd':runtime['budget_target_usd'],'monetary_hard_cap':False},
+        'baseline_contract':repair_baseline}
+    repair['modified_source_files']=[n for n in fixture_before if not (workspace/n).exists() or hashlib.sha256((workspace/n).read_bytes()).hexdigest()!=fixture_before[n]]
+    repair['new_test_files']=[str(p.relative_to(workspace)) for p in workspace.rglob('test*.py') if str(p.relative_to(workspace)) not in fixture_before]
+    repair['model_test_tool_calls']=[c for c in calls if c['name'] in ('terminal','execute_code') and 'unittest' in str(c['arguments'])]
+    repair['model_test_tool_calls'] += [e['item'] for e in target.get('cli_events',[]) if e.get('type')=='item.completed'
+        and (e.get('item') or {}).get('type')=='command_execution' and 'unittest' in str(e['item'].get('command',''))]
+    repair['model_test_tool_calls'] += target.get('native_test_tool_calls') or []
+    repair['all_exact_duplicate_tools']=sum(n-1 for n in collections.Counter((c['session_id'],c['name'],c['arguments']) for c in calls).values() if n>1)
+    signatures=collections.defaultdict(list)
+    for c in calls:
+        if c['name'] in ('read_file','search_files'): signatures[(c['name'],c['arguments'])].append(c)
+    repair['identical_reads_across_agents']=[{'name':key[0],'arguments':key[1],'calls':entries} for key,entries in signatures.items() if len({c['session_id'] for c in entries})>1]
+    repair['source_diffs']={n:''.join(difflib.unified_diff((source/n).read_text().splitlines(True),(workspace/n).read_text().splitlines(True) if (workspace/n).exists() else [],fromfile='before/'+n,tofile='after/'+n)) for n in repair['modified_source_files']}
+    repair['accepted']=False
+    if target.get('stop_reason')=='normal_final':
+        discovery=run_daily_verification([sys.executable,'-B','-m','unittest','discover','-v'])
+        transcript=discovery.get('stdout','')+discovery.get('stderr','')
+        count=re.search(r'Ran (\d+) tests?',transcript)
+        discovery['tests_run']=int(count.group(1)) if count else None
+        repair['independent_unittest']=discovery
+        repair['final_contract']=run_daily_verification([sys.executable,'-B',str(contract_path),str(workspace)])
+        repair['accepted']=bool(args.live and repair['modified_source_files'] and repair['new_test_files'] and repair['model_test_tool_calls'] and discovery.get('returncode')==0 and (discovery.get('tests_run') or 0)>0 and repair['final_contract'].get('returncode')==0)
+    repair['dry_note']='Scripted dry proves transport/file-write/test invocation only; no source repair is attempted.' if not args.live else None
+    if args.scenario=='independent':
+        repair['task_id']=independent_manifest['task_id']
+        repair['freeze_manifest']=independent_manifest
+    target[args.scenario]=repair
+    return target
 
 if args.driver == 'codex':
     from codex_driver import run_codex
@@ -808,7 +895,7 @@ if args.driver == 'aino':
     from agent.auxiliary_billing_scope import ManagedCredential
     install_wire_observer(ManagedCredential, wire_attempts, wire_transports, record)
 
-# The normal managed binding RPC uses exactly two authenticated transports.
+# Native Hermes and Aino share the ordinary desktop transport and event path.
 import uvicorn
 from starlette.applications import Starlette
 from starlette.routing import WebSocketRoute, Route
@@ -818,6 +905,8 @@ from tui_gateway import server as srv
 from tui_gateway.ws import handle_ws
 from hermes_cli.plugins import PluginContext, get_plugin_manager
 from hermes_cli.plugins_manifest import PluginManifest
+if args.driver == 'hermes':
+    runtime_source_evidence(native_source)
 
 cap_event = threading.Event()
 # SIGTERM can come from the spend monitor, watchdog, or caller; the signal alone
@@ -830,8 +919,10 @@ input_ceiling_observations = []
 def pre_request(**kw):
     request_payload=kw.get('request') or {}
     body = request_payload.get('body') or {}
-    from tui_gateway.managed_model_usage import current_usage_metadata
-    billing = current_usage_metadata().get('billing') or {}
+    billing = {}
+    if args.driver == 'aino':
+        from tui_gateway.managed_model_usage import current_usage_metadata
+        billing = current_usage_metadata().get('billing') or {}
     if billing.get('session_id') and billing['session_id'] not in billing_seen:
         billing_seen.add(billing['session_id']);progress('billing_identity',session_id=billing['session_id'])
     system = kw.get('system_prompt') or ''
@@ -974,7 +1065,7 @@ async def model_endpoint(req):
                     task['context']='Dry transport probe. Read only. Supply evidence and uncertainty; parent owns final report formatting.'
                     task['output_schema']=evidence_schema
     elif outputs: final=True
-    if args.scenario=='daily':
+    if is_repair:
         completed_count=len(outputs)
         if completed_count==0:
             name='read_file';arguments={'path':str(workspace/'SPEC.md')};final=False
@@ -999,7 +1090,8 @@ async def model_endpoint(req):
     return StreamingResponse(chunks(),media_type='text/event-stream')
 
 ws_token=uuid.uuid4().hex
-listener=socket.socket();listener.bind(('127.0.0.1',0));port=listener.getsockname()[1]
+if listener is None:
+    listener=socket.socket();listener.bind(('127.0.0.1',0));port=listener.getsockname()[1]
 app=Starlette(routes=[WebSocketRoute('/api/ws',endpoint),Route('/v1/responses',model_endpoint,methods=['POST'])])
 started=threading.Event()
 class Server(uvicorn.Server):
@@ -1055,11 +1147,20 @@ class Client:
             with self.lock: self.pending.pop(n,None)
     def close(self): self.ws.close();self.thread.join(5)
 
-report={'scenario':args.scenario,'live':args.live,'run_dir':str(run),'repo':str(REPO),'prompt':prompt,'config':config,'fixture_hashes':fixture_before,'review_skill_hashes':skill_hashes,'note':'Real desktop WebSocket RPC, real managed model binding, real tools and asynchronous delivery. Dry outputs are scripted transport evidence only. Input and output thresholds interrupt after observation; Observed cost is a budget target, not a monetary hard cap.'}
-report['budget_target_usd']={'length':1,'replay':2,'daily':1.5,'daily_replay':1}.get(args.scenario,5)
+report={'scenario':args.scenario,'driver':args.driver,'live':args.live,'run_dir':str(run),'repo':str(REPO),'prompt':prompt,'config':config,'fixture_hashes':fixture_before,'review_skill_hashes':skill_hashes,'note':'Real desktop WebSocket RPC, real tools and asynchronous delivery. Aino uses managed model binding; native Hermes uses an isolated loopback custom provider. Dry outputs are scripted transport evidence only. Input and output thresholds interrupt after observation; Observed cost is a budget target, not a monetary hard cap.'}
+if args.driver == 'hermes':
+    from tools.delegate_tool_config import _get_max_concurrent_children, _get_max_spawn_depth
+    report['source_identity'] = runtime_source_evidence(native_source)
+    report['source_identity']['version'] = getattr(sys.modules['hermes_cli'], '__version__', None)
+    report['native_driver'] = {'transport':'ordinary_desktop_rpc','offline_only':True,
+        'managed_binding_used':False,'default_concurrency_preserved':True,
+        'effective_max_concurrent_children':_get_max_concurrent_children(),
+        'effective_max_spawn_depth':_get_max_spawn_depth(),
+        'boundary':'Unmodified fixed upstream source with its native asynchronous desktop consumer; not a one-shot substitution. Agent turn/iteration limits are explicit harness configuration. Scripted results are transport evidence only.'}
+report['budget_target_usd']={'length':1,'replay':2,'daily':1.5,'independent':1.5,'daily_replay':1}.get(args.scenario,5)
 if args.spend_target is not None: report['budget_target_usd']=args.spend_target
-reference_seconds={'simple':300,'no_subagent':600,'large':1200,'length':300,'replay':1200,'daily':600,'daily_replay':600}[args.scenario]
-reference_spend={'length':1,'replay':2,'daily':1.5,'daily_replay':1}.get(args.scenario,5)
+reference_seconds={'simple':300,'no_subagent':600,'large':1200,'length':300,'replay':1200,'daily':600,'daily_replay':600,'independent':600}[args.scenario]
+reference_spend={'length':1,'replay':2,'daily':1.5,'independent':1.5,'daily_replay':1}.get(args.scenario,5)
 extended_budget={'reference_seconds':reference_seconds,'reference_spend_target_usd':reference_spend,
     'seconds_extended':args.budget>reference_seconds,
     'spend_target_raised':report['budget_target_usd']>reference_spend,
@@ -1076,7 +1177,7 @@ report['evidence_contract']={'enabled':bool(args.evidence_contract),'schema':evi
     'base_prompt_sha256_ignoring_workspace':base_prompt_sha256,
     'boundary':'Explicit task-contract intervention, not forced dispatch or runtime rewriting of model tool calls; JSON validity does not prove findings.'}
 report['diagnostic']={'review_skill':args.review_skill, **length_diagnostic,'extended_budget':extended_budget,
-    'original_acceptance_eligible':args.review_skill=='original' and not args.matched_comparison and large_report_length=='original' and not budget_extended and args.input_cap is None and (not replay_data or (replay_data.get('diagnostic') or {}).get('original_acceptance_eligible') is not False),
+    'original_acceptance_eligible':args.driver=='aino' and args.scenario!='independent' and args.review_skill=='original' and not args.matched_comparison and large_report_length=='original' and not budget_extended and args.input_cap is None and (not replay_data or (replay_data.get('diagnostic') or {}).get('original_acceptance_eligible') is not False),
     'boundary':{
         'original':'Original review skill policy unchanged.',
         'none':'Removing the custom review skill changes the review instructions. A final answer here does not pass the original skill-bearing acceptance. Historical comparison is not a randomized causal estimate.',
@@ -1087,7 +1188,7 @@ report['lease_renewals']=[]
 if args.input_cap is not None:
     # Self-labelling so a diagnostic probe can never be read as a within-budget pass later.
     report['limits']['scenario_ceiling_overridden']=True
-    report['limits']['scenario_ceiling_default']=500000 if args.scenario in ('daily','daily_replay') else 2000000
+    report['limits']['scenario_ceiling_default']=500000 if args.scenario in ('daily','daily_replay','independent') else 2000000
     report['limits']['diagnostic_note']='Input ceiling explicitly overridden for a diagnostic probe. The whole-task budget acceptance does NOT apply to this run.'
 if length_source is not None:
     report['length_source']={'report':str(length_source_path),'text_sha256':hashlib.sha256(length_source.encode()).hexdigest(),'purpose':'Final formatting/counting regression probe only; not the full large-task acceptance.'}
@@ -1097,20 +1198,12 @@ if replay_data:
         report['replay'].update(source_prompt_preserved=prompt==replay_data['prompt'],
             source_config_preserved=args.live, redelegation_boundary='Existing pre_tool_call blocks spawn and hard-stops this experiment; tools schema is retained. A triggered stop is failed replay, not a recovered success.',
             budget_scope='Fresh parent-only limits; earlier parent/child spending and elapsed time are not charged to this replay. Success cannot pass the original whole-run budget.')
-def run_daily_verification(command):
-    try:
-        completed=subprocess.run(command,cwd=execution_workspace,env={**os.environ,'PYTHONDONTWRITEBYTECODE':'1'},capture_output=True,text=True,timeout=45)
-        return {'command':command,'returncode':completed.returncode,'stdout':completed.stdout,'stderr':completed.stderr}
-    except subprocess.TimeoutExpired as exc:
-        return {'command':command,'timeout':True,'stdout':str(exc.stdout or ''),'stderr':str(exc.stderr or '')}
-if args.scenario=='daily':
-    report['daily']={'fixture_source':str(source),'fixture_source_files':len(fixture_before),'fixture_bytes':sum((workspace/n).stat().st_size for n in fixture_before),'skill_installed':False,'boundary':'Independent small daily repair sample; delegation is observed, not mandatory. This does not replace the large-task acceptance.','limits':{'seconds':args.budget,'requests':request_limit,'approx_cumulative_input':500000,'observed_spend_target_usd':report['budget_target_usd'],'monetary_hard_cap':False}}
-    report['daily']['baseline_contract']=run_daily_verification([sys.executable,'-B',str(SOURCE_ROOT/'daily_contract.py'),str(workspace)])
 chat=main=None;stop_reason=None
 try:
-    chat=Client('chat');main=Client('main')
+    chat=Client('chat');main=Client('main') if args.driver == 'aino' else None
     chat.rpc('client.capabilities',{'server_requests':True})
-    main.rpc('client.capabilities',{'server_requests':True})
+    if main:
+        main.rpc('client.capabilities',{'server_requests':True})
     if replay_data:
         from hermes_state import SessionDB
         seed_db=SessionDB(db_path=profile/'state.db')
@@ -1128,15 +1221,19 @@ try:
         created=chat.rpc('session.resume',{'session_id':replay_stored_id,'source':'desktop','lazy':True,'close_on_disconnect':True})
         sid=created['session_id'];stored_sid=replay_stored_id
         report['replay']['seed_roundtrip_verified']=True
+    elif args.driver == 'hermes':
+        created=chat.rpc('session.create',native_session_params(workspace,model=lease['model']['model'],reasoning_effort=config['agent']['reasoning_effort']))
+        sid=created['session_id'];stored_sid=created['stored_session_id']
     else:
         created=chat.rpc('session.create',{'source':'desktop','cwd':str(workspace),'model_source':'aino','model_id':lease['model']['id'],'reasoning_effort':'ultra','close_on_disconnect':True,'hidden':True,'title':'TEST Ultra acceptance '+args.scenario})
         sid=created['session_id'];stored_sid=created['stored_session_id']
     report.update(session_id=sid,stored_session_id=stored_sid)
-    owner={'platform_origin':lease['origin'],'user_id':str(lease['user_id'])}
-    common={'session_id':sid,'model_id':lease['model']['id'],'owner':owner}
-    ticket=chat.rpc('session.managed_model_ticket',common)['session_ticket']
-    revision=main.rpc('session.claim_managed_model',dict(common,session_ticket=ticket))['binding_revision']
-    main.rpc('session.bind_managed_model',dict(common,binding_revision=revision,model=lease['model']['model'],api_mode=lease['model']['api_mode'],capabilities=lease['model']['capabilities'],api_key=secret,credential_id=lease['credential_id'],base_url=lease['base_url'],expires_at=lease['expires_at']))
+    if args.driver == 'aino':
+        owner={'platform_origin':lease['origin'],'user_id':str(lease['user_id'])}
+        common={'session_id':sid,'model_id':lease['model']['id'],'owner':owner}
+        ticket=chat.rpc('session.managed_model_ticket',common)['session_ticket']
+        revision=main.rpc('session.claim_managed_model',dict(common,session_ticket=ticket))['binding_revision']
+        main.rpc('session.bind_managed_model',dict(common,binding_revision=revision,model=lease['model']['model'],api_mode=lease['model']['api_mode'],capabilities=lease['model']['capabilities'],api_key=secret,credential_id=lease['credential_id'],base_url=lease['base_url'],expires_at=lease['expires_at']))
     if args.live:
         # The pipe carries credentials only; all RPC work stays on the existing controller.
         def receive_lease_updates():
@@ -1330,6 +1427,14 @@ finally:
         'sizes':'body_bytes is the full serialized SDK body before hook truncation; per-item bytes/hashes use canonical JSON, not raw wire spans.',
         'implementation':'Harness-only HTTPX _send_single_request wrappers, validated against the reported HTTPX version; no retry/timeout/payload modifications.'}
     report['observed_usage']=summarize_observed_usage(report['responses'],report['requests'],'aino_hook')
+    if args.driver == 'hermes':
+        report['observed_usage'].update(source='hermes_native_hook',normalization_schema='aino_hook')
+        report['wire_observation_limits']['scope']='Native Hermes hook observations only; Aino managed HTTPX wire observer is not installed.'
+        try:
+            report['source_identity'].update(runtime_source_evidence(native_source))
+        except ValueError as exc:
+            report.update(error_type=type(exc).__name__,error=str(exc),stop_reason='native_source_violation')
+            stop_reason='native_source_violation'
     if usage_self_check is not None: report['usage_self_check']=usage_self_check
     if (profile/'state.db').exists():
         conn=sqlite3.connect(f'file:{profile}/state.db?mode=ro',uri=True);conn.row_factory=sqlite3.Row
@@ -1353,27 +1458,7 @@ finally:
     report['system_hashes_by_session']={s:sorted({r['system_hash'] for r in report['requests'] if r['session_id']==s}) for s in {r['session_id'] for r in report['requests']}}
     report['parent_exact_duplicate_tools']=sum(n-1 for n in collections.Counter((c['name'],c['arguments']) for c in parent_calls).values() if n>1)
     report['parent_character_count_calls']=[c for c in parent_calls if c['name'] in ('execute_code','terminal') and any(t in str(c['arguments']) for t in ('len(','.length','wc -','字符','字数'))]
-    if args.scenario=='daily':
-        daily_report=report['daily']
-        daily_report['modified_source_files']=[n for n in fixture_before if not (workspace/n).exists() or hashlib.sha256((workspace/n).read_bytes()).hexdigest()!=fixture_before[n]]
-        daily_report['new_test_files']=[str(p.relative_to(workspace)) for p in workspace.rglob('test*.py') if str(p.relative_to(workspace)) not in fixture_before]
-        daily_report['model_test_tool_calls']=[c for c in calls if c['name'] in ('terminal','execute_code') and 'unittest' in str(c['arguments'])]
-        daily_report['all_exact_duplicate_tools']=sum(n-1 for n in collections.Counter((c['session_id'],c['name'],c['arguments']) for c in calls).values() if n>1)
-        signatures=collections.defaultdict(list)
-        for c in calls:
-            if c['name'] in ('read_file','search_files'): signatures[(c['name'],c['arguments'])].append(c)
-        daily_report['identical_reads_across_agents']=[{'name':key[0],'arguments':key[1],'calls':entries} for key,entries in signatures.items() if len({c['session_id'] for c in entries})>1]
-        daily_report['source_diffs']={n:''.join(difflib.unified_diff((source/n).read_text().splitlines(True),(workspace/n).read_text().splitlines(True) if (workspace/n).exists() else [],fromfile='before/'+n,tofile='after/'+n)) for n in daily_report['modified_source_files']}
-        if stop_reason=='normal_final':
-            discovery=run_daily_verification([sys.executable,'-B','-m','unittest','discover','-v'])
-            transcript=discovery.get('stdout','')+discovery.get('stderr','')
-            count=re.search(r'Ran (\d+) tests?',transcript)
-            discovery['tests_run']=int(count.group(1)) if count else None
-            daily_report['independent_unittest']=discovery
-            daily_report['final_contract']=run_daily_verification([sys.executable,'-B',str(SOURCE_ROOT/'daily_contract.py'),str(workspace)])
-            daily_report['accepted']=bool(args.live and daily_report['modified_source_files'] and daily_report['new_test_files'] and daily_report['model_test_tool_calls'] and discovery.get('returncode')==0 and (discovery.get('tests_run') or 0)>0 and daily_report['final_contract'].get('returncode')==0)
-        else: daily_report['accepted']=False
-        daily_report['dry_note']='Scripted dry proves RPC/file-write/test invocation only; external behavior checks should still fail because dry does not implement repairs.' if not args.live else None
+    score_report(report)
     if args.scenario=='daily_replay' and stop_reason=='normal_final':
         report['parent_replay_validation']={
             'independent_unittest':run_daily_verification([sys.executable,'-B','-m','unittest','discover','-v']),

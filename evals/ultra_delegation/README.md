@@ -56,9 +56,11 @@ all consumers before changing a shared value.
 Use the existing report and convergence fields. Do not add a combined score or
 change runtime behavior to turn a model's review conclusion into a product rule.
 
-- **Natural delivery:** `natural_delivery` requires `normal_final`, a nonempty
-  `complete` final event and an eligible completion guard. A draft, interruption
-  notice, provider error or waiting message is not successful delivery.
+- **Natural delivery:** Aino and native Hermes require `normal_final`, a nonempty
+  `complete` final event and the actual completion guard. Codex uses its own CLI
+  thread/turn identity, final text and observed root/child response completions.
+  Missing native evidence is unknown; it is not filled with an artificial Aino
+  guard. A draft, interruption notice or waiting message is not delivery.
 - **Task coverage:** inspect the final answer against the actual request. Empty,
   unrelated or materially incomplete answers still fail the task; useful coverage
   does not require every judgment to match another reviewer's judgment.
@@ -576,6 +578,10 @@ not a majority-vote ground truth or a keyword score.
 
 ### Baseline readiness: actual capabilities, not assumed equivalence
 
+This subsection records the documentation-only preparation at 0edec2ab77.
+Its missing capabilities are superseded by the implementation section below;
+the recorded historical runs and their policies are unchanged.
+
 | Baseline | Fixed identity / existing entry | Ready scope | Before claiming a matched comparison |
 | --- | --- | --- | --- |
 | Aino | Current branch above; harness.py and platform-runner.ts | large and daily, loopback dry checks and managed live path | Fresh freeze of source, runner, fixtures, skill, effective config and actual model/effort. Existing results keep their own policy. |
@@ -712,3 +718,100 @@ account/settlement query, push, merge, daily profile change or desktop restart
 was performed. Exact commands, source/fixture identities, logs, native probe
 fields and remaining baseline work are recorded at:
 /Users/zizimutou/.codex/visualizations/2026/09/29/01a0eadc-dc19-7f42-98b4-e6812a7cb811/ultra-cross-task-preparation-20260930/report.md
+
+
+## Comparator implementation — 2026-09-30
+
+This implements the free preparation following 0edec2ab77. It changes only eval
+code, tests and documentation. Production runtime, normal conversation prompts,
+compression and final-answer policy are unchanged. Historical reports remain
+immutable. No live model, account or settlement call is part of these checks.
+
+### Delivery evidence and accounting
+
+Native Codex requires normal exit, root identity from thread.started, a matching
+final message in the last completed CLI turn, and completed text responses for
+the observed root and child sessions. Missing facts stay unknown; the busiest
+child is never substituted for an unidentified native parent. A later empty turn
+cannot reuse an old answer. Explicit auxiliary requests stay in usage totals
+but do not masquerade as unfinished children. Aino/Hermes use their actual final
+event and durable completion guard. These facts do not establish task accuracy.
+
+New Codex reports reuse Aino's normalization and input-ceiling functions:
+uncached input plus cache writes, with pending/invalid usage reserved by rough
+estimate. Excluded reads, final value, peak, first crossing and incomplete
+accounting are recorded; crossing remains latched after a reserve settles lower.
+Legacy reports retain their original represented-input policy. Matching units
+does not prove equal request coverage, tool/schema exposure, costs or prompts.
+
+Codex now supports daily/independent through workspace-write and the shared
+external scorer. Large remains read-only. Default repair limits are 600 seconds,
+48 requests, 500K input, 60K output and $1.50 observed spend; overrides are
+recorded. Historical large defaults remain; specify every budget for comparison.
+The existing renewal stream is connected to the native driver, allowing the
+wrapper's 3600-second setting. Local HTTP checks prove the next request uses
+renewed authority and reject invalid owner, endpoint, expired/missing authority.
+This accelerated local proof is not a one-hour real-provider test.
+
+### Unmodified Hermes baseline
+
+The offline-only adapter uses release f97608f178d1ffeca59860195ab7da295f7c8e5f
+(version 0.21.5), ordinary desktop session RPC and its custom Responses provider.
+Every tracked source blob is checked against the local Git object tree, and
+runtime module paths establish production source identity. Aino managed modules,
+credentials, observer and binding RPCs are excluded. Live Hermes is rejected
+before account/output side effects; live baseline routing is still unimplemented.
+
+Ordinary upstream desktop RPC supports asynchronous delegation and its durable
+completion consumer. Concurrent children default to 10; the distinct one-shot
+spawn budget is 2. The harness preserves the former and records other evaluation
+settings. Local large evidence includes three completed children, one durable
+notification, delivered ledger state and automatic parent final. The independent
+repair path exercises actual file writing and unittest, with no source repair.
+Scripted results measure transport behavior, not model quality or provider speed.
+
+Offline examples (replace the absolute archive path):
+
+    python evals/ultra_delegation/harness.py large --driver=hermes --repo=/absolute/path/to/unmodified-hermes-source --review-skill=none --large-report-length=unbounded --budget=90 --output-root=/tmp/hermes-probe
+    python evals/ultra_delegation/harness.py independent --driver=hermes --repo=/absolute/path/to/unmodified-hermes-source --budget=90 --output-root=/tmp/hermes-independent-probe
+
+These omit --live and use a local scripted endpoint. Aino/Codex use the same
+harness with the matching driver. Codex delegation probes verify the selected
+task file, including repair SPEC.md, rather than a large-only content marker.
+
+### Independent task and external oracle
+
+independent_stream_boundary_v1 freezes historical think_scrubber.py from
+4e7b0389eaa259e0fff3c5d211a33e343471976e. It tests stream lifecycle isolation
+after flush while preserving valid text/tag behavior through feed/flush/reset.
+Only SPEC.md and the historical source are staged. Manifest and external oracle
+stay outside the workspace; both public-file hashes are checked before staging.
+No production bug was injected. The historical source fails 15 oracle subcases
+with zero errors; an alternate lifecycle implementation passes the same oracle.
+
+The oracle was frozen before candidate answers. The manifest records author
+knowledge of the historical fix and a scan of 87 locally available reports,
+including mirrors. This does not establish absence from model training or 87
+independent trials. The original ten-file manifest remains unchanged.
+
+Scripted repair runs add/run a smoke test but leave source and external failures
+unchanged, so accepted=false. Acceptance requires live task execution, source
+changes, added tests, observed unittest invocation, passing independent discovery
+and passing external behavior checks. Natural delivery stays separate.
+
+
+Final free verification: 13 Python files / 233 passed / 0 failed / 1 Linux-only
+skip on macOS, with file retries disabled; 30 JavaScript tests, tests-js typecheck,
+Ruff and bundled runner --help passed. Initial failures and their repairs are
+retained, including the runpy import regression and a 15-second test startup
+wait that was replaced with the harness's existing 45-second window. Task caps
+and renewal/prefix assertions did not change. The prepared main environment was
+temporarily reused and the original worktree environment restored (same inode).
+No dependencies were installed. The native child scoring path uses this run's
+existing CommandExecution completion events, including asynchronous completion;
+it retains raw command/outcome evidence and does not infer execution from model
+JavaScript comments. Recognized unittest commands are not a proof of arbitrary
+shell-program semantics or every test framework.
+
+Implementation, red/green receipts, source freeze and remaining limits:
+/Users/zizimutou/.codex/visualizations/2026/09/29/01a0eadc-dc19-7f42-98b4-e6812a7cb811/ultra-comparator-implementation-20260930/report.md

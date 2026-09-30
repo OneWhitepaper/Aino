@@ -9,6 +9,30 @@ from evals.ultra_delegation import convergence
 from tests.evals.ultra_delegation_harness_fixture import _run_offline_harness
 
 
+@pytest.mark.parametrize('driver', ['aino', 'codex'])
+def test_independent_repair_stages_public_files_and_keeps_external_oracle_private(tmp_path, driver):
+    report = _run_offline_harness(tmp_path, ['--review-skill=original', '--driver='+driver],
+                                  scenario='independent')
+    workspace = tmp_path / 'offline/workspace'
+    assert report['stop_reason'] == 'normal_final'
+    assert set(report['fixture_hashes']) == {'SPEC.md', 'think_scrubber.py'}
+    assert not (workspace / 'manifest.json').exists()
+    assert not (workspace / 'independent_contract.py').exists()
+    assert not report['review_skill_hashes']
+    repair = report['independent']
+    assert report['limits']['seconds'] == repair['limits']['seconds'] == 600
+    assert repair['accepted'] is False
+    assert repair['baseline_contract']['returncode'] == 1
+    assert repair['final_contract']['returncode'] == 1
+    before = json.loads(repair['baseline_contract']['stdout'])
+    after = json.loads(repair['final_contract']['stdout'])
+    assert before['failures'] == after['failures'] > 0
+    assert not repair['modified_source_files']
+    assert repair['new_test_files']
+    assert repair['independent_unittest']['tests_run'] == 1
+    assert repair['model_test_tool_calls']
+
+
 @pytest.mark.parametrize("review_skill", ["original", "none"])
 def test_large_report_length_only_removes_the_limit_and_preserves_diagnostic_provenance(
     tmp_path, review_skill,
@@ -173,4 +197,3 @@ def test_review_skill_candidate_rejects_unsupported_paths_before_creating_a_run(
     assert "invalid choice" not in completed.stderr
     assert "Traceback" not in completed.stderr
     assert not output.exists()
-

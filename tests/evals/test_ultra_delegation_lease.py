@@ -127,7 +127,9 @@ class _LeaseHarness:
         self.send(self.lease)
         self.wait_stage('session_ready', timeout=15)
         assert not self.process.stdin.closed, 'starting the harness must not require stdin EOF'
-        assert self.first_request.wait(timeout=15), ''.join(self.lines)
+        # Agent/tool initialization shares the harness's 45-second run window;
+        # this contract tests renewal after a real request, not startup speed.
+        assert self.first_request.wait(timeout=45), ''.join(self.lines)
 
     def send(self, envelope):
         self.process.stdin.write(json.dumps(envelope) + '\n')
