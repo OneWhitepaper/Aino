@@ -31,8 +31,8 @@ import {
   resetBinding
 } from '@/store/keybinds'
 
-import { SettingsBreadcrumbContext, SettingsContent, SettingsGroup } from './primitives'
 import { HudModifierSettings } from './hud-modifier-settings'
+import { SettingsBreadcrumbContext, SettingsContent, SettingsGroup } from './primitives'
 import { ScreenshotSettings } from './screenshot-settings'
 import { useSettingDeepLink } from './use-setting-deep-link'
 

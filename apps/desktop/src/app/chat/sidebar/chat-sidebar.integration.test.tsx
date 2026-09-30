@@ -7,19 +7,18 @@ import { group, split } from '@/components/pane-shell/tree/model'
 import { $layoutTree, noteActiveTreeGroup } from '@/components/pane-shell/tree/store'
 import { SidebarProvider } from '@/components/ui/sidebar'
 import { registry } from '@/contrib/registry'
+import { $connectionsRegistry } from '@/store/connection-registry-state'
 import {
   $pinnedSessionIds,
-  $sidebarCardRows,
+  $sidebarMessagingOpenIds,
   $sidebarPinsOpen,
   $sidebarRecentsOpen,
   $sidebarWorkspaceNodeOpen,
-  $sidebarMessagingOpenIds,
   setSidebarAgentsGrouped,
   setSidebarGrouping
 } from '@/store/layout'
 import { $openProjectsByProfile } from '@/store/open-projects'
 import { $activeGatewayProfile, $profiles, setShowAllProfiles } from '@/store/profile'
-import { $connectionsRegistry } from '@/store/connection-registry-state'
 import {
   $projectDialog,
   $projects,

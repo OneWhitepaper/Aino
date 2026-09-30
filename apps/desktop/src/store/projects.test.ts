@@ -31,7 +31,6 @@ import {
   $projectTree,
   $projectTreeLoading,
   $startWorkSessionRequest,
-  $worktreeRefreshToken,
   addProjectFolder,
   ALL_PROJECTS,
   closeProject,

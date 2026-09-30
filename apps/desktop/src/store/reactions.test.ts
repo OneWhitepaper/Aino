@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { setRuntimeI18nLocale } from '@/i18n'
 import { $notifications } from '@/store/notifications'
-import { applyReaction, QUICK_REACTIONS } from '@/store/reactions'
+import { applyReaction } from '@/store/reactions'
 import { $activeSessionId, $messages } from '@/store/session'
 import type { MessageReaction } from '@/types/hermes'
 

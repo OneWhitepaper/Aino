@@ -29,11 +29,11 @@ import { PlatformSelectionError } from '@/store/platform-models'
 import { requestFreshSession } from '@/store/profile'
 import { isStoredTranscriptReadOnly } from '@/store/read-only-transcript'
 import {
+  $activeSessionId,
   $currentModel,
   $currentPlatformOrigin,
   $currentPlatformOwner,
   $currentProvider,
-  $activeSessionId,
   $sessions,
   resolveComposerSessionKey,
   setActiveSessionId,

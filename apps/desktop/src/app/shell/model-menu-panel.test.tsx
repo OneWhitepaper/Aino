@@ -4,9 +4,9 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vite
 
 import { platformAccountActions } from '@/api/platform'
 import { DropdownMenu, DropdownMenuContent } from '@/components/ui/dropdown-menu'
+import { $customModels } from '@/store/custom-models'
 import { clearGatewayManagedCapabilities, recordGatewayReadyCapability } from '@/store/gateway-managed-capability'
 import { platformModelCatalog } from '@/store/platform-models'
-import { $customModels } from '@/store/custom-models'
 import { $collapsedProviders, toggleCollapsedProvider } from '@/store/provider-collapse'
 import {
   $activeSessionId,

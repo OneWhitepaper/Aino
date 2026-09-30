@@ -4,7 +4,6 @@ import { setRuntimeI18nLocale } from '@/i18n'
 
 import {
   isMessagingSource,
-  MESSAGING_SESSION_SOURCE_IDS,
   sessionSourceLabel,
   sessionSourceSearchTerms
 } from './session-source'

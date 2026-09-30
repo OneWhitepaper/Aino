@@ -16,8 +16,8 @@ import { host } from '@/sdk'
 
 import {
   $workspaceIsPage,
-  appViewForPath,
   AGENTS_ROUTE,
+  appViewForPath,
   ARTIFACTS_ROUTE,
   CAPABILITIES_ROUTE,
   CRON_ROUTE,

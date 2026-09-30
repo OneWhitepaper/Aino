@@ -30,7 +30,6 @@ import {
   requestRevert,
   restoreReview,
   revealReview,
-  revertReviewFile,
   reviewComposerTarget,
   selectReviewFile,
   stageReviewFile,

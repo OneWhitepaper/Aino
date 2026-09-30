@@ -26,7 +26,6 @@ import {
   $userPlacedPanes,
   activateTreePane,
   bindPaneVisibility,
-  bindTreeSideVisibility,
   declareDefaultTree,
   dismissTreePane,
   isPaneVisible,
@@ -58,7 +57,6 @@ import {
   Download,
   FileText,
   LayoutDashboard,
-  PanelBottom,
   PanelTop,
   SlidersHorizontal,
   Terminal,
@@ -72,7 +70,7 @@ import { readKey, writeKey } from '@/lib/storage'
 import { TRANSCRIPT_DIRECTIVE_AREA, type TranscriptDirectiveContribution } from '@/lib/transcript-directives'
 import { setYoloEnabled } from '@/lib/yolo-session'
 import { $connectionsRegistry } from '@/store/connection-registry-state'
-import { $interfaceMode, $showsAdvancedChrome, setModeContext, toggleSimpleMode } from '@/store/interface-mode'
+import { $interfaceMode, setModeContext, toggleSimpleMode } from '@/store/interface-mode'
 import {
   $fileBrowserOpen,
   $sidebarOpen,

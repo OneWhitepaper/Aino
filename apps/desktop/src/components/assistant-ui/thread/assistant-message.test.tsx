@@ -10,8 +10,8 @@ import { MemoryRouter, useLocation } from 'react-router'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { en } from '@/i18n/en'
-import { applyProductBrand } from '@/lib/brand'
 import type { ErrorCardCopy } from '@/i18n/types'
+import { applyProductBrand } from '@/lib/brand'
 import { $displayTimestamps } from '@/store/display-timestamps'
 
 import { stubThreadEnvironment } from '../test-utils'

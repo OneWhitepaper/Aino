@@ -37,8 +37,8 @@ import { isCardTool, isSilentTool } from '@/lib/tool-render-class'
 import { useEnterAnimation } from '@/lib/use-enter-animation'
 import { cn } from '@/lib/utils'
 import { $reasoningCollapsedByDefault, $showReasoning } from '@/store/reasoning-disclosure'
-import { $toolDisclosureOpen, setToolDisclosureOpen } from '@/store/tool-view'
 import { useForcedTextDirection } from '@/store/text-direction'
+import { $toolDisclosureOpen, setToolDisclosureOpen } from '@/store/tool-view'
 
 type TimelineToolCallProps = ToolCallMessagePartProps & { completedAt?: number; timestamp?: number }
 

@@ -37,8 +37,8 @@ import { normalizeSessionSource, sessionSourceLabel } from '@/lib/session-source
 import { cn } from '@/lib/utils'
 import { $connectionsRegistry } from '@/store/connection-registry-state'
 import { $activeConnectionId } from '@/store/connections'
-import { $interfaceMode, $showsAdvancedChrome, shownInMode } from '@/store/interface-mode'
 import { $cronJobs } from '@/store/cron'
+import { $interfaceMode, $showsAdvancedChrome, shownInMode } from '@/store/interface-mode'
 import { $bindings } from '@/store/keybinds'
 import {
   $panesFlipped,
@@ -1965,8 +1965,6 @@ export function ChatSidebar({
                 activeSessionId={activeSidebarSessionId}
                 contentClassName={cn('flex max-h-56 flex-col gap-px pb-1.75', GROUP_BODY)}
                 embeddedGroups
-                groups={ownerGroups}
-                showProfileTags={showAllProfiles && !ownerGrouped}
                 emptyState={null}
                 footer={
                   canRevealMore ? (
@@ -1977,6 +1975,7 @@ export function ChatSidebar({
                     />
                   ) : null
                 }
+                groups={ownerGroups}
                 key={group.sourceId}
                 label={group.label}
                 labelIcon={
@@ -1996,6 +1995,7 @@ export function ChatSidebar({
                 pinned={false}
                 rootClassName="shrink-0 p-0"
                 sessions={shownSessions}
+                showProfileTags={showAllProfiles && !ownerGrouped}
               />
             )
           })}

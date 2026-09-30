@@ -7,7 +7,7 @@
  */
 
 import { useStore } from '@nanostores/react'
-import { type MouseEventHandler, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { type MouseEventHandler, useCallback, useEffect, useMemo, useState } from 'react'
 
 import { $chatOnboardingSolo } from '@/components/onboarding-chat/assembly'
 import { PaneTab, PaneTabLabel, PaneTabStrip } from '@/components/ui/pane-tab'

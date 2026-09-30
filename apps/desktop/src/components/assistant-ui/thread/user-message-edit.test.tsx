@@ -6,7 +6,7 @@ import { type AppendMessage, ExportedMessageRepository } from '@assistant-ui/rea
 // Note: this covers the React/runtime wiring only. The Electron-level failure
 // mode (titlebar -webkit-app-region:drag swallowing clicks on a message) is
 // not reproducible in jsdom — see USER_BUBBLE_BASE_CLASS's no-drag carve-out.
-import { AssistantRuntimeProvider, type ThreadMessage, useExternalStoreRuntime } from '@assistant-ui/react'
+import { AssistantRuntimeProvider, type ThreadMessage } from '@assistant-ui/react'
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 

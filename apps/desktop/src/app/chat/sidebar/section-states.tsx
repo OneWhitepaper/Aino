@@ -1,7 +1,7 @@
-import sidebarEmptyIcon from '@/assets/aino-home/sidebar-empty.svg'
-import { AinoDesignIcon } from '@/components/aino-design-icon'
 import { useStore } from '@nanostores/react'
 
+import sidebarEmptyIcon from '@/assets/aino-home/sidebar-empty.svg'
+import { AinoDesignIcon } from '@/components/aino-design-icon'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Codicon } from '@/components/ui/codicon'
