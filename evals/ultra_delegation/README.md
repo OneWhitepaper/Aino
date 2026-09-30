@@ -4,7 +4,7 @@ This is a portable source copy of the local acceptance harness used on September
 25–28, 2026, with its frozen large and small fixtures. It exercises the existing
 Aino desktop WebSocket RPC, managed model binding, tools, asynchronous delegation,
 and parent continuation. It adds no product tool, scheduler, or runtime framework.
-The latest scenario is:
+An optional matched diagnostic is:
 
 ```text
 large --review-skill=none --matched-comparison --evidence-contract
@@ -17,6 +17,117 @@ contract asks children to return findings, triggers, file/line evidence, and
 limitations through the existing `output_schema`. The parent retains ownership of
 the three short review sections and Top 3. JSON validity is not evidence that a
 finding is true or that a model completed naturally.
+
+## Current acceptance scope: UI summaries are separate from compression
+
+The user's summary request concerns the board/session overview surface. It does
+not request a new conversation-compaction algorithm, a shorter model-facing
+handoff, or a length limit on normal answers. Preserve the upstream compression
+policy and existing verified Aino transport/profile/billing integrations. A
+finding about `context_compressor.py` in the frozen review fixture is a test of
+the model's code-review accuracy, not authorization to change live compression
+to satisfy a board-display request.
+
+For the current user-approved large-task acceptance, always pass
+`--large-report-length=unbounded`. Retain the separately authorized 3600-second
+budget, $10 observed-spend threshold and configured High children when a new
+live run is actually scheduled; this scope clarification itself starts no run.
+Do not attach a per-group word/character limit to the parent or children. The
+independent candidate review skill remains experimental, not a default product
+change or a demonstrated accuracy fix.
+
+The original 400-character case is an optional historical constrained-output
+stress test. Its existing parser default remains for reproducing old commands,
+so a bare `large` invocation is not the current acceptance recipe. Explicitly
+choose `--large-report-length=original` when intentionally reproducing it.
+`original_acceptance_eligible=false` identifies changed historical conditions;
+it is not by itself a failure of the user's current unrestricted-output goal.
+Natural delivery, material accuracy, elapsed time, cost and stability remain
+separate checks. Existing historical results and fingerprints are unchanged.
+
+Do not bulk-delete the number 400 or code named `summary`: board notifications,
+summary eligibility thresholds, refusal-detection windows, provider reasoning
+summaries and model-facing compaction have different producers and consumers.
+Change the display layer only when addressing a display requirement, and trace
+all consumers before changing a shared value.
+
+## System delivery and answer quality are separate acceptance dimensions
+
+Use the existing report and convergence fields. Do not add a combined score or
+change runtime behavior to turn a model's review conclusion into a product rule.
+
+- **Natural delivery:** `natural_delivery` requires `normal_final`, a nonempty
+  `complete` final event and an eligible completion guard. A draft, interruption
+  notice, provider error or waiting message is not successful delivery.
+- **Task coverage:** inspect the final answer against the actual request. Empty,
+  unrelated or materially incomplete answers still fail the task; useful coverage
+  does not require every judgment to match another reviewer's judgment.
+- **Collaboration integrity:** verify real child sessions and request routing,
+  completion-unit delivery, notification identity/content and subsequent parent
+  activity. Distinguish completed children from failed children with delivered
+  error results. For failures, record whether the parent recovered, reported a
+  limitation or failed the task; do not label all finished children successful.
+- **Model output quality:** keep factual contradictions, missing premises and
+  unsupported impact claims separate from reasonable design or ranking choices.
+  A second model disagreeing is not sufficient evidence. Preserve specific
+  counterexamples and uncertainty. `needs-correction` for one answer is not proof
+  of an orchestration defect; trace missing/corrupted inputs, routing or lifecycle
+  behavior before assigning a product cause. Clearly wrong factual claims remain
+  wrong even when transport succeeds.
+- **Stability and limits:** distinguish an observed successful path from repeated
+  representative success. Different skills, prompts, budgets or provider states
+  are not a controlled comparison or a general success-rate estimate. Record
+  time, cost, cap triggers, outstanding billing and provider failures separately.
+
+Read the actual serialized model/effort when available; configuration alone does
+not prove every request used it. Missing observations remain unknown. Stable
+system hashes prove only that recorded system messages stayed stable, not that
+every cache-relevant prefix or provider-side behavior was identical.
+
+Historical review-method experiments retain their original strict quality
+rubrics and `overall_acceptance` values. The current system audit is an additional
+dimension, not a rewrite of those scores or evidence. Likewise, historical
+`original_acceptance_eligible` describes task-policy comparability, not a current
+unrestricted-output pass/fail gate. Do not require eliminating all model errors
+to close a demonstrated runtime bug; do not use that distinction to excuse
+missing deliverables or verified information loss.
+
+## The historical 400-character task requirement
+
+The frozen `large` prompt includes `每组结论控制在400字以内。` This is an
+author-written acceptance-task requirement, not an upstream Hermes rule or a
+product-wide response limit. The harness sends it as ordinary task text only
+when that scenario is explicitly run. It does not truncate responses at 400
+characters; the separate aggregate output threshold is 60,000 tokens. Normal
+conversations do not automatically load this prompt.
+
+The requirement asks for a compact report. There is no established product need
+for the number 400, nor sufficient evidence identifying why that exact number
+was originally chosen. Historical runs show children inheriting it and spending
+additional calls revising and counting text. That observation does not establish
+it as the sole cause of failure. Keep the frozen prompt for reproducibility,
+not as a default instruction for everyday conversations.
+
+The existing `daily` scenario has no 400-character requirement and exercises a
+separate small repair task. Its results must be reported separately: its task,
+fixtures and limits differ, so it is neither a same-task length ablation nor a
+replacement for the original large acceptance. Both `--review-skill=none` and
+`--evidence-contract` still retain the large prompt's length requirement.
+
+For an explicit same-task length diagnostic, pass
+`--large-report-length=unbounded` to either runner. The default is `original`.
+The diagnostic removes only `每组结论控制在400字以内。`, preserves the skill,
+fixtures and configuration, and records the actual prompt. The length option
+does not itself change budgets; explicit budget overrides are recorded separately.
+Reports set `diagnostic.large_report_length=unbounded` and
+`original_acceptance_eligible=false`; convergence summaries retain these markers.
+This is a changed task, so natural delivery does not mean original-task acceptance.
+Only fresh large tasks accept the override; source-owned replays retain their
+source prompt and diagnostic provenance. No production conversation loads this
+option automatically.
+Combining this override with `--matched-comparison` (including its
+`--evidence-contract` variant) is rejected before run creation or account access,
+so another diagnostic prompt cannot reintroduce the removed length requirement.
 
 ## Contents and setup
 
@@ -87,6 +198,8 @@ Two other optional fresh-profile settings reuse existing delegation configuratio
 `--child-reasoning-effort=high|max` sets `delegation.reasoning_effort` without the
 matched-comparison prompt extension or removing the original review skill. A task's
 explicit effort still takes precedence; the parent remains Ultra.
+The configured child effort also survives provider fallback through the existing
+child override mechanism; ordinary agents continue to resolve fallback defaults.
 `--child-compression-threshold-tokens=N` sets the existing child compression trigger
 (at least 16000 tokens), without changing the parent's threshold. This trigger is
 not a hard input or cost cap. Existing compression prunes older source evidence,
@@ -210,11 +323,29 @@ reports each run on its own recorded basis. Native Codex runs record their own
 limits and are a separate budget policy.
 
 All use a 60,000 observed output-token threshold. Native Codex defaults to 1200
-seconds. The live wrapper accepts 30–1200 seconds and an observed spend target
-above zero and at most USD 5. Request/input/output thresholds stop after
+seconds. The live Aino wrapper accepts 30–3600 seconds (native Codex remains
+limited to 1200 seconds because its driver does not renew leases) and an observed spend target
+above zero and at most USD 10. Scenario defaults stay unchanged (large: 1200
+seconds and USD 5). Request/input/output thresholds stop after
 observation, and settlement polling has lag: none is an exact monetary hard cap.
 The latest matched live command pins 1200 seconds explicitly, as the historical
 scenario did. Model/provider availability and pricing may change.
+
+An explicit extended diagnostic can use `--large-report-length=unbounded
+--budget=3600 --spend-target=10`. This removes the task's length sentence and
+extends the time and spend policies; it does not alter the original review skill,
+fixtures, model effort, 64-request ceiling, 60,000-output threshold, or 2M
+input-excluding-cache-reads threshold. Other limits can therefore stop the run
+before 60 minutes. Reports identify the reference budgets and each extension in
+`diagnostic.extended_budget`, and mark `original_acceptance_eligible=false`.
+Natural completion under these conditions is a result for this changed task and
+budget, not proof of success under the historical 20-minute/USD 5 contract.
+
+The live Aino wrapper retains its lease grant and renews through the existing
+`auth.modelLease` and `session.renew_managed_model` interfaces. Lease updates travel
+only through the private stdin pipe; they do not rebuild the agent or inject model
+messages. A failed renewal does not extend the old lease, and the backend retains
+its real expiry guard. No everyday desktop timeout or prompt default is changed.
 
 After a run, inspect `report.json`, local events, and `settlement.json`. A natural
 final alone does not establish acceptance: check child exit reasons, truncation,
@@ -228,6 +359,52 @@ apps/desktop/node_modules/.bin/electron \
   --repo="$PWD" --output-root="$ACCEPTANCE_OUTPUT"
 ```
 
+### Manual evidence-rating regression cases
+
+Use the fixed large fixture and the run's actual parent answer for these known
+counterexamples. Record the claim, message/session identity, supporting branch,
+missing contract, and whether the parent preserved the limitation. A valid line
+number or child schema is not a semantic quality pass. These are manual review
+cases, not a keyword score or an exhaustive review of every finding.
+
+| Case | Supported observation | Evidence still required for a confirmed defect | Reject as overstatement |
+| --- | --- | --- | --- |
+| Requested-child budget | The code reserves the requested count before constructing children. | A contract requiring only successful starts to consume that budget, plus the relevant failure path. | Calling this monetary overbilling or an incorrect quota charge solely because failed construction does not refund. |
+| Profile change and composer pin | Missing composer provenance returns early; a changed profile can replace a composer pin, with one attempt per config edit. | The intended failure/retry contract and old-pin + failed-switch + later-resume behavior. | Claiming a missing provenance still clears the pin, or equating one attempt per edit with proven permanent loss of recovery. |
+| Post-switch partial commit | A propagating exception after a successful switch can skip later local commit steps. | Helper failure behavior, persistence semantics and outer/later-turn recovery to establish duration and user impact. | Declaring permanent divergence or relative likelihood from the absence of a local rollback alone. |
+| Terminal summary flags after a session reset | The reset leaves terminal failure flags set. | An extra abort requires reaching the failure gate with no final summary, a currently nonterminal failure, and ordinary-failure fallback enabled. | Expanding a conditional extra abort into any future failure freezing the whole session; ignoring successful fallback or feasibility skips. |
+| Repeated one-turn switches | A later switch replaces the saved restore snapshot. | The permitted calling sequence, primary-runtime restoration precedence, and the restore consumer's contract. | Inferring loss of the original effective runtime from the overwritten model-name field alone. |
+
+For the third case, missing evidence does not prove the risk impossible. Keep
+the conditional control-flow finding and name the unverified recovery boundary.
+Existing tests of the current implementation are separate evidence from the
+historical frozen fixture; do not silently import missing dependencies into
+that fixture. Detailed examples and test limits are recorded in the delivery
+diagnosis, sections 17.6 and 17.9.
+
+For an overstatement, trace the actual claim through child assistant message →
+durable result/event → parent notification → parent verification output → final
+finding and cross-group ranking. Record message/session identities and the pair
+`(delegation_id, task_index)`; task indices can repeat across units. Distinguish a
+child's initial overstatement, a parent's retained rating, a parent's correction,
+and a stronger claim introduced during final ranking. Do not label all four as
+the same propagation failure.
+
+Test preservation against the entire saved text, not a few matching keywords.
+Where this harness recorded canonical wire-item hashes, match the notification
+and decisive tool-output items to captured chat requests. That proves client-side
+submission of those items, not provider internals or model understanding. Inspect
+actual returned line windows before saying a comment or branch was available;
+read-file arguments and valid citation line numbers are insufficient. A complete
+child summary does not prove that every preceding tool output was untruncated.
+
+Keep these semantic cases as manual evidence-rating regressions. Do not turn them
+into a keyword scorer, alter a fixture to make a finding true, or patch product
+policy simply because a model called it a defect. Record an attribution of model
+judgment when the relevant content survived and no executable transport defect
+has been demonstrated; this is not a claim that every possible transport path is
+bug-free. The dated, re-derivable lineage receipt is linked in diagnosis §18.8.
+
 ## External skill and saved-run boundaries
 
 The original `read-only-source-review` skill is private and is not included.
@@ -238,6 +415,26 @@ its hashes are recorded. The native comparison embeds `SKILL.md` plus
 `references/evidence-rating.md` from it. Removing the skill changes the task, so
 `large --review-skill=none` is a diagnostic and cannot pass the original
 skill-bearing acceptance.
+
+For an isolated review-method experiment, use `large --review-skill=candidate
+--review-skill-path=/absolute/path/to/candidate`. This reuses the same whole-directory
+installation and records the candidate's actual `review_skill_hashes`; it does not
+modify the original directory or everyday skills. Keep the baseline and candidate
+directories separately frozen. Even byte-identical instructions selected as
+`candidate` remain diagnostic, with `original_acceptance_eligible=false`.
+
+The initial candidate mode accepts only a fresh Aino large task, without matched
+comparison. Candidate-derived replay and length runs are rejected before run
+creation (and before account access in the platform wrapper), including when the
+caller leaves `--review-skill=original` at its default. Native Codex candidate
+comparison is not supported. Existing original/none behavior is retained.
+
+Offline scripted completion proves installation, transport and provenance only:
+the dry model does not read the skill or evaluate findings. A real candidate
+evaluation must check actual skill use and delegation context, complete natural
+delivery, semantic accuracy including true-defect retention, conditional language
+in the final ranking, evidence integrity and all costs. Changing the review method
+is a task-contract intervention, not a runtime fix or original-task acceptance.
 
 The parent-only replay needs the **original local saved run**, including its
 `report.json`, `profile/state.db`, and original `workspace/`. No saved run database,
@@ -288,3 +485,46 @@ root in its four slots and may ignore `agents.max_depth=1`. This comparator is n
 a strict single-variable A/B and does not establish quality parity.
 
 No paid or native Codex run was performed while packaging this source handoff.
+
+
+## Free regression and desktop finalization (2026-09-30)
+
+Run the complete offline suite through the canonical runner:
+
+    scripts/run_tests.sh tests/evals/test_ultra_delegation_*.py
+    npm test --workspace tests-js -- ultra-delegation-platform-runner.test.ts
+
+The original combined convergence file exceeded its effective 343-second timeout.
+It is now separated into convergence metrics, harness hooks, configuration and
+scenario contracts, with one shared offline subprocess fixture. All 52 function
+ASTs, including decorators and assertions, were verified unchanged. No limits,
+assertions or retry policy were weakened. Fresh results: Python 96 passed, zero
+failed, one Linux-only skip on macOS; maximum file time 192.54s. JS runner: 26 passed.
+
+The current-branch Electron development build was checked with isolated HOME,
+HERMES_HOME and userData, a real gateway/child and a loopback scripted model.
+The test waits for both delegation and process notifications to be consumed before
+asserting final idle. It checks running child, full result delivery, parent
+continuation, final text, no running/Stop indicator, and retained Completed status.
+An observed display regression was fixed by retaining received native outcomes in
+the existing retired-child bookkeeping. Transcript and overview use exact receipt
+identities; the live roster still prunes completed work. No model prompts,
+conversation compression or task budgets changed. This is in-memory retention,
+not a new durable store; unknown historical dispatches remain unknown when no
+outcome evidence is available.
+
+Fresh desktop state regression: 72 passed; update-root helper tests: 7 passed;
+native update IPC and lifecycle E2E each passed. The native IPC test was also red
+against the original main process and green with the fix, using a real linked Git
+worktree and existing offline update cache. Build, all three TypeScript targets,
+related ESLint and Ruff passed. Update application, Windows recovery, Linux and
+remote topology were not exercised.
+
+No paid model call, push, merge, daily profile change or daily desktop restart was
+performed during finalization. Prior live system successes and the daily sample's
+two functional failures remain distinct, unchanged evidence. The latest read-only
+ledger refresh still contains 32 settled rows totaling $1.35760500; one title call
+remains unmatched, so final billing is not closed.
+
+Logs, red/green evidence, screenshots, grouped commits and source hashes:
+/Users/zizimutou/.codex/visualizations/2026/09/29/01a0eadc-dc19-7f42-98b4-e6812a7cb811/ultra-eval-desktop-finalization/report.md

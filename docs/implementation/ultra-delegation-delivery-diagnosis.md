@@ -1132,3 +1132,829 @@ title $0.005530）。这是**当时已入账项目**的金额；三条普通请�
 0失败（`test_delegate`、`test_delegate_group_schema`、`test_delegate_reasoning_effort`、
 `test_delegate_interrupted_partial_output`）。其余接手前的未提交修复保留；
 本轮未提交、推送、合并或重启桌面。
+
+## 17. v0.21.5 合并后的恢复修复与 400 字边界（2026-09-29）
+
+本轮在 `codex/proactive-delegation`、HEAD `32371ee0bdaa4a56079e6bf5ce5481c79e84cc81`
+继续。先前因“只合上游”而暂缓的子任务档位补丁已恢复，并补全双协议回归。
+§17.1–17.3记录付费验证前的离线检查；随后获授权执行的真实原题结果见§17.4。
+
+### 17.1 已证实并修复：配置档位在模型回退后丢失
+
+`_build_child_agent` 初始采用有效的 `delegation.reasoning_effort`，但此前只有
+任务显式 override 会保存到 `_delegate_reasoning_config_override`。模型发生
+fallback 后，既有 `_reresolve_fallback_reasoning_config` 因缺少该属性而重新
+采用模型/全局默认值，令配置 High 或关闭推理的孩子变为 Ultra（wire Max）。
+
+修复只复用该 override 属性：任务显式值优先，其次有效 delegation 配置；
+缺失/无效配置保持继承路径。父 Ultra、普通 agent 的 fallback 重解析均不改变，
+没有增加 fallback 分支、工具或缓存前缀改写。
+
+真实 loopback HTTP 测试先返回主模型 404，再由备用模型成功返回，覆盖
+Chat Completions / Responses × 配置 High / False / 配置 High 与任务 Max 冲突。
+同时验证两次实际请求的模型、协议、effort、子最终配置与父配置。原 Responses
+测试服务先返回成功、绕过 404 的缺口也已纠正。
+
+- 仅恢复测试时：7 passed / 4 failed，四项失败均为 High/none 回退后变 Max。
+- 恢复生产修复后：11 passed / 0 failed。
+- 相关委派、schema、协议与 fallback 回归：9 文件 / 171 passed / 0 failed；
+  单 worker、禁自动重试，使用 `scripts/run_tests.sh`。Ruff、diff 检查通过。
+
+该缺陷有独立红→绿证据，但 §16.6 没有配置 High，也未观测到模型 fallback，
+所以不能称它解释或解决了那轮自然交付失败。配置 High 的收益仍是待实测假设。
+
+### 17.2 400 字属于本地验收题，不是产品限制
+
+截图中的旧 `/tmp/aino-ultra-acceptance-20260925/harness.py` 与当前
+`evals/ultra_delegation/harness.py` 均把“每组结论控制在400字以内。”写入
+人工构造的 `large` 任务，通过普通 `prompt.submit` 发送。上游 `v2026.9.24`
+没有该本地验收目录，也没有这条报告要求。此前本文所称“原题”指这道本地
+验收题，不能理解成用户日常需求或 Hermes 的通用规则。
+
+它的作用是要求紧凑报告，不是 token 预算或 400 字截断。400 这个具体数值没有
+已证实的产品必要性，最初选定数字的原因无足够记录。§16.1 已观察到由此产生
+的改稿/计数，不能把这个事实扩大为唯一根因。日常产品路径不自动加载 harness
+或该句；显式运行该验收、或把这句放进普通任务时，模型才会按任务要求处理。
+
+原 `large` 保留以便复现历史受限任务，不把它提升为日常默认约束。已有 `daily`
+不含该要求，应独立报告；它的题目、fixture 和预算不同，不是严格同题 A/B。
+`--review-skill=none` 和 `--evidence-contract` 也不会去掉 large 的 400 字要求。
+本轮没有改验收 prompt、原始技能或历史评分。
+
+### 17.3 免费端到端链路验证及下一次验收边界
+
+复用现有 harness，以隔离 HOME/profile、loopback 脚本模型分别运行：
+
+- `offline-original-configured-high`：原 large、原私有技能、仅子配置 High；
+  `normal_final`，3 子任务完成、通知已投递、父最终事件存在、guard=true、
+  `fixture_changed=[]`。原 1200 秒、2M `input_excluding_cache_reads`、64 请求、
+  60K 输出、$5 观察阈值保留。
+- `offline-daily-configured-high`：既有无 400 字 daily；`normal_final`，
+  read/write/terminal 链路完成，仅新增 `test_dry_transport.py`。dry 按设计
+  不修业务 fixture，独立行为检查仍失败、`daily.accepted=false`，不算日常
+  业务验收通过。该轮没有委派，不能作为子任务档位的额外证据。
+
+两者仅证明本地传输和生命周期，不证明真实模型交付、答案质量、速度或费用。
+原始技能两文件哈希仍与§16.6一致；离线 large 实际请求为父 Max × 3、子 High × 6，
+四个会话各只有一个 system hash。证据与候选冻结目录为
+`/Users/zizimutou/.codex/visualizations/2026/09/29/01a0eadc-dc19-7f42-98b4-e6812a7cb811/ultra-resume-v0215-configured-high/`。
+旧冻结文件保持不变。下一次若获单次付费授权，可沿用原任务与限额验证配置 High，
+检查实际 wire effort、完整自然交付、引用与 limitations、耗时和全部费用；
+不自动重跑、不扩预算。$5 是观察停止阈值，延迟结算可能超过。
+
+### 17.4 配置 High 的真实原题运行：三个子完成，父未自然交付
+
+用户随后明确授权“后续所有任务需求”，本轮执行了一次冻结的完整候选。
+`live-v0215-configured-high` 的 report/events/settlement 和 runner 日志已保存于
+§17.3 证据目录同名子目录。未改原题、技能或限额；归一化 workspace 后原题
+与§16.6完全相同，技能哈希及全部12个fixture文件（含6个既有pyc）哈希也相同。
+运行环境已从旧版本升级到 v0.21.5，因此它不是严格单变量因果对照。
+
+实际委派任务省略 reasoning_effort，三个子从 delegation 配置得到 High；父保持
+Ultra→wire Max。三子分别10/4/12次普通API调用，均正常 completed、无truncated。
+最后一个子在554.671秒返回，父随后运行至1172.31秒，因观察到费用越过$5被中断。
+runner 明确记录 `observed_budget_stop=5.033078`；harness 对应
+`external_signal`、`caps=[]`，不能把它写成输入/输出上限或1200秒超时。
+
+| 指标 | 本次记录 |
+|---|---:|
+| 普通请求 / 响应 | 39 / 38 |
+| 排除缓存读取的输入 / 峰值 | 727,101 / 727,101 |
+| 有效 usage prompt / cache read | 1,895,069 / 1,254,016 |
+| 已观察输出 / 其中 reasoning | 38,736 / 28,637 |
+| 父 read_file / search_files | 26 / 11 |
+| 父精确重复工具 / 计数字数调用 | 0 / 0 |
+| 最终事件 / 完整自然交付 | 无 / false |
+| fixture 变化 | 无 |
+| 各会话 system hash 数 | 均为1 |
+
+停止时48条账单全部settled，合计$5.033078：chat $1.082352、delegation
+$3.912001、other_auxiliary $0.034030、title $0.004695。仍有1条无响应普通
+请求，不能把它推断为免费或宣称不可能后补结算。
+
+可复核的400字行为：第三组8次 execute_code 都是草稿字面量的len/print，长度
+646→563→460→433→428→415→409→399，实际最终正文含Markdown空白为401字符。
+其中第一轮到第二轮还把一项确定问题降为疑点，不能把整段模型时间全部归为
+纯排版。第一组只有一次terminal计数（965），随后继续读证据，不是连续计数循环。
+父本轮没有计数调用，但仍持续核验源码，说明不能仅凭子计数就认定唯一根因。
+
+子结果质量也不是全绿：第二组将“无锁额度检查可能被并发绕过”列为确定问题，
+而固定快照没有证明同一父任务会并发进入此路径；构建还标注main-thread边界。
+提前计额度且构建失败不回滚是可见代码事实，但注释写的是charge requested children，
+是否违反“成功创建才收费”的契约未知。父尚未完成核验，不能把这些中间输出
+当成已通过准确性的最终答案。
+
+本次支持“有效High配置能贯穿子运行，三子在本次都完成”，不证明High使之完成，
+更不证明原题自然交付已修复。下一诊断只在既有harness显式移除large末句400字
+要求，其余题目、技能和限额保持；标注非原题验收，记录实际prompt，独立观察
+字数计数、父核验、自然交付和质量。不会重评分历史结果或把该诊断冒充产品修复。
+
+### 17.5 显式移除篇幅要求的诊断入口（免费验证）
+
+复用现有 harness、Electron runner、Codex driver 和 convergence 报告，新增
+`--large-report-length=original|unbounded`；默认 original 不变。unbounded 只移除
+large 原题末句，不改技能、快照、档位或限额。报告保留实际 prompt，并明确
+`large_report_length=unbounded`、`original_acceptance_eligible=false`。回放继承
+源报告身份，不能把改题的回放再标成原题。旧报告缺少身份时保持 unknown。
+
+独立审查发现 evidence-contract 的另一段提示还会加入400字；已在Python创建
+run之前、Electron访问账号之前拒绝unbounded与matched-comparison的组合，
+而非悄改那段提示。所有其他场景也拒绝直接设置unbounded。
+
+两项参数化行为测试经真实offline RPC验证：初始9项红→9项绿；冲突组合也有
+独立失败证据，修正后全部11项定向通过。完整受影响文件在最后组合guard加入前
+为62 passed、1平台跳过；guard加入后复跑全部11项新增/变更用例。原私有技能
+的额外离线运行`offline-unbounded-configured-high`也通过，归一化目录后题目仅
+减少指定句子，技能、fixture和limits与§17.4一致；dry审批和title设置按既有
+隔离规则不同，不能当真实模型对照。native Codex仅做loopback诊断身份传递验证。
+
+两份技能哈希不变，默认产品配置没有改动。此入口用于回答400字要求的影响，
+既不是新的收尾机制，也不是解除60K输出、1200秒或$5观察阈值。下一次真实结果
+单独记录；即使出现最终答案，也还需核查证据与过度断言，不能外推为稳定修复。
+
+### 17.6 无篇幅限制诊断已自然交付，准确性仍未全部通过
+
+在同一后续授权下运行`live-v0215-unbounded-high`，完整证据保存在
+`/Users/zizimutou/.codex/visualizations/2026/09/29/01a0eadc-dc19-7f42-98b4-e6812a7cb811/ultra-unbounded-diagnostic/`。
+实际首个user题归一化路径后仅删除400字末句；技能两文件、全部12个fixture、
+配置（仅cwd变化）和限额与§17.4一致。三个子任务这次主动显式填写High，前次
+省略该字段；有效档位相同，但不能把本轮High的来源说成纯配置继承。
+
+运行494.67秒后`normal_final`，三个子正常完成、完整结果送达，guard=true，
+父最终正文5,433字符。`diagnostic.original_acceptance_eligible=false`，所以是
+无篇幅限制任务的自然交付，**不是原400字任务验收通过**。源文件无修改，各会话
+system hash均保持稳定。本轮父子字数计数工具调用均为0；三子完整报告分别
+4,588 / 4,125 / 4,511字符。
+
+普通观测请求45、响应44；有效usage输出48,018，其中reasoning 31,893。
+`input_excluding_cache_reads`结束值364,703、运行峰值418,930，均未触及2M；
+没有输入/输出/请求/时间停止事件。父外层工具计数为skill_view 2、delegate_task 1、
+execute_code 2、search_files 3、read_file 6。execute_code还批量核读源码，
+不能把这6次直接与上一轮26次read_file当作同口径的总读取成本比较。
+
+独立只读质量复核见该run的`quality-review.md`：父确实降级了部分子错误，
+例如合成replay后缀消失是否等于用户原始任务丢失。但至少下列定性还缺契约证据：
+
+- 把按requested children扣额度、构建失败不退还直接判作错误扣费。
+- 把profile编辑覆盖旧pin及每次配置变更只尝试一次直接判作确定缺陷。
+- 把未见外部函数实现时的后置异常风险表述为会产生“永久”半提交。
+
+这些问题不靠行号存在或schema有效就能排除。完整自然交付维度通过一次；
+准确性不能无保留通过，稳定性也未验证。旧原题失败记录不重评分。
+
+两次结果也不是随机因果对照：本轮cache read占有效prompt约87.76%，前次约
+66.17%；本轮输出48,018反而高于前次38,736，子报告和查询策略也不同。可以说
+“本次去掉400要求后没有计数调用并完成交付”，不能把全部提速/省钱归因于去400。
+
+### 17.7 延迟结算与当前保留边界
+
+2026-09-29 17:01:23（Asia/Shanghai）再次读取账单，第一轮由结束时48条
+$5.033078补为49条$5.582728；第二轮由48条$4.180215补为49条$4.28181175。
+两轮合计$9.86453975。每轮49个wire http_call_id与49个账单desktop_call_id
+逐一匹配，无缺失/多余ID，全部settled。分别保留结束时和后续对账收据；
+这再次说明$5是观察停止阈值而非货币硬上限。内层普通请求仍各缺1条响应记录，
+不凭无响应状态推断其用途或免费，也不把wire与内层请求强行逐条关联。
+
+本轮确定修复的是子配置档位fallback丢失；诊断新增的是可审计的篇幅变体，
+没有增加强制收尾、累计预算系统或产品通用400字规则，也没有降低日常产品
+默认档位。自然交付与答案可靠性继续分别评价；没有新运行时缺陷证据时，
+不以继续添加收尾提示或救回中间稿来冒充修复。全部改动仍在分支，未提交、
+推送、合并或重启日常桌面。
+
+### 17.8 程序化读取误用对话去重：离线红→绿
+
+2026-09-29继续免费排查，无新增模型调用。历史父会话
+`20260929_164821_d0da52`的messages 93/94记录首批37次内部read_file：
+stdout 88,194字节，捕获50,000，完整spill保留。95/96记录第二批17次读取，
+其中16个(path, offset, limit)与首批完全相同，只有3860/35是新key。两段
+脚本都仅打印`r.get('content', '')`；第二批未截断但只出现35行源码。
+历史记录没有保存这16次内部调用的原始返回dict，不能把源码预期冒充线上
+捕获结果。
+
+真实registry→execute_code→session kernel→RPC的离线复现补齐了机制证据：
+首批37段打印触发截断，第二批1个新key有content、16个重复key返回
+`status=unchanged`且没有content。另一个测试在脚本内循环读取时第二次
+即返回stub。两个契约测试先失败，修复后通过。没有mock文件处理器、RPC
+dispatch或dedup；使用临时文件及测试隔离profile，不访问模型服务。
+
+这不只是脚本忽略status的问题。既有code-execution文档明确约定中间工具
+结果不进入模型上下文，脚本可处理后仅print摘要；但read_file把这些字节
+登记为模型已见，随后向脚本或模型声称“原文已在对话中”。该假设与既有
+能力契约冲突。脚本漏报非content结果、忽略spill提示仍是独立的用法问题。
+修复前这四个运行时源文件的HEAD blob与本地已同步v0.21.5标签
+`v2026.9.24`逐一相同，说明这处具体缺陷继承自该上游版本；这不等于
+所有Ultra交付或准确性问题都已归因于上游。
+
+修复复用现有RPC dispatch、CellAuthority与read tracking：仅在程序化RPC
+调用作用域中跳过对话去重stub及模型连续读取记账；读取成功仍走原文件
+安全检查、脱敏、分页、版本校验、read coverage和写入基线。作用域在
+CellAuthority捕获上下文内进入并finally恢复，本地socket与远端file-RPC
+共用dispatch；token、allowlist、max_tool_calls和审批路由不变。程序读取
+既不把未print的内容登记为模型已见，也不清掉已有直接读取的去重记录。
+
+两项新测试还覆盖脚本连续读5次、脚本只print摘要后首次直接read仍有正文、
+直接read已去重后脚本仍可读、脚本返回后直接read继续stub并最终阻断重复。
+10个相关测试文件169 passed、0 failed；Ruff及git diff --check通过。
+独立临时探针另有3 passed、0 failed，使用macOS LocalEnvironment实际
+运行file-RPC：重复数据读取、直接读取去重、缺文件/拒读/脱敏、250字符
+分页重建、部分读取禁止覆盖、完整基线允许覆盖、外部改动后再次阻断均
+通过。探针首轮1过2失败是其自身误认direct第三次仍为stub及write_file
+成功返回字段，修正断言后通过；不是生产代码的红→绿证据。
+远端kernel既有回归不等于在真实SSH/Windows远端完成验收。该缺陷能解释
+离线复现的补读缺文，不能据此宣称它是此前Ultra耗时或答案定性错误的
+唯一原因，也尚未证明修复后完整模型任务更快或更准确。
+
+### 17.9 固定答案质量反例与覆盖边界
+
+复用README的人工验收段，记录三项已知反例，不改原技能、fixture或历史
+评分，不新增关键词评分器：
+
+1. **requested子额度**：先扣requested、构建失败不退是代码事实；是否应
+   只按成功启动扣额缺契约依据，不能直接定成错误扣费，更不能与美元账单
+   混同。现有oneshot行为测试证明按请求总额限制后续委派，不覆盖失败退款。
+2. **profile与pin**：无composer来源直接返回，能反驳子结果的该触发说法；
+   父最终已修正，不能再把子错误算到父头上。profile编辑覆盖旧pin、每次
+   配置变更仅尝试一次有执行分支和行为测试支持。旧pin+失败+恢复的完整
+   组合尚未证实，不能将这项设计直接判成永久失去自愈。
+3. **后置异常与永久半提交**：换模成功后helper抛出并传播可跳过后续提交，
+   本地缺完整回滚的条件性结论可保留。外部helper、DB语义、上层异常与
+   后续turn/resume恢复未给出时，“永久”“最容易”不足以成立；也不能
+   反向声称风险已排除。换模自身回滚测试不覆盖换模成功后的提交异常。
+
+当前实现的定向行为验证为3文件5 passed、0 failed、无重试：
+`test_oneshot_footprint.py`的requested额度用例；
+`test_tui_gateway_server.py`的无composer来源保留pin和每次编辑一次失败
+通知用例；`test_custom_provider_session_persistence.py`的profile覆盖
+composer及持久化恢复用例。这些是当前实现测试，不能冒充冻结六文件
+已经独立运行；未覆盖构造失败退款、旧pin换模失败组合或永久半提交。
+
+下一次完整验收仍分别报告自然交付、证据评级、耗时/用量/费用、前缀/原始
+证据完整性；日常任务和历史400字压力题分开。上述离线修复与质量检查表
+不改变§17.4原题失败及§17.6无篇幅限制一次交付、准确性未全过的结论。
+
+## 18. 冻结读取候选的两次完整验证（2026-09-29）
+
+用户确认后，按§17.8候选先运行无篇幅限制诊断，再单独运行原400字压力题，
+每种一次。两轮前后22个source hash及整worktree patch均匹配冻结清单；
+运行期间没有改提示、源码、技能、fixture或停止条件。使用原1200秒、
+2M input_excluding_cache_reads、64个主请求、60K输出及$5观察停止阈值。
+两轮均不是`daily`小任务，也不是父阶段重放。完整证据保存在：
+`/Users/zizimutou/.codex/visualizations/2026/09/29/01a0eadc-dc19-7f42-98b4-e6812a7cb811/ultra-programmatic-live-validation/`。
+
+### 18.1 两轮均未自然交付
+
+| 项目 | 无篇幅限制诊断 | 原400字压力题 |
+| --- | --- | --- |
+| run | live-programmatic-read-unbounded-high | live-programmatic-read-original-high |
+| 父stored session | 20260929_173645_d3c19d | 20260929_175842_1aeafe |
+| 停止 | timeout，1203.08秒 | timeout，1202.87秒 |
+| 子结果 | 3/3正常完成并送达 | 3组完成；首次组③失败后由父重派，共4次子尝试 |
+| 父交付 | 1334字符正文在组①首条中途被截断 | 无报告正文；只有进度确认及运行时中断占位 |
+| completion guard | eligible=false | eligible=false |
+| 主请求/完整usage | 50/49 | 56/54 |
+| 父请求/完整usage | 23/22 | 26/25 |
+| wire请求 | 51 | 75 |
+| 输入预算结束值/峰值 | 510403/510403 | 460910/460910 |
+
+实际wire的父chat档位均为max、子delegation均为high，模型均为
+gpt-5.6-sol；不能把配置标签Ultra写成wire的effort值。原400轮的18条
+other_auxiliary全部通过审批prompt的canonical指纹匹配为execute_code
+整脚本smart approval（父10、组②7、重派组③1），不是主API重试；另有
+1条title。64请求阈值是主请求hook口径，不等于wire总数。
+
+原400首次组③收到empty/broken回复，34.1秒后failed；父随后自动重派并
+收到completed结果。错误提示的“可能过载/限流”不是已证实原因。两轮
+输入都未触及2M；缺usage的请求按既有估算预留，而不是按零消耗。
+
+### 18.2 读取正确不等于已证明自然收敛
+
+无篇幅限制轮的四个会话均没有execute_code，根本未触达程序化读取路径。
+父35次直接读取参数全部不同，2995行返回中2715行唯一、280行范围交叠；
+其中70行来自同批并发的区间交叠，不能称为看过结果后重复读。均有正文，
+没有dedup/error/BLOCKED。
+
+原400轮父10次execute_code包含30次程序化read，另有8次direct read。
+38个(path,offset,limit)全不同；30段脚本正文逐行匹配冻结源码。一次
+stdout 51822→50000字节截断，spill完整；省略的1822字节所涉30个源码
+行因同批区间重叠，均在捕获输出其他位置出现。父没有读取spill。
+因此这轮虽覆盖程序化读取，仍未触发旧缺陷所需的同key重读条件，不能
+把它宣称为该缺陷的模型实测红→绿；§17.8的离线契约证据仍独立成立。
+
+父已完成API耗时合计分别656.440与772.014秒，父外层工具耗时合计分别
+7.936与32.040秒；并行求和不等于墙钟。末次未完成请求另耗时间，不能
+从完整usage统计中隐去。现有证据支持主要等待在模型交互，不能细分或
+虚构“核验/起草/反复思考”的时间占比，也不足以将失败归因于读取修复。
+
+### 18.3 准确性仍不可整体验收
+
+无篇幅限制父id165确有1334字符文本；最后父request窗口的540个delta
+拼接后仅多两个前导空白，与interrupted完成事件正文逐字匹配。因此
+“未交付”成立，“从未开始作答”不成立。父首项失败状态残留有局部依据，
+但正文未完成，不能据此评价三组及Top3整体准确性。子报告仍有requested
+额度评级等缺契约问题，不能把子文本冒充父最终判断。
+
+原400父无报告草稿；子组②有7次len(text)计数，结果620、530、542、
+537、543、446、444，父自身没有计数。父一次阶段确认已将组③两个
+结论说成成立，但其中profile/pin断言仍缺composer来源guard及
+once-per-edit契约边界；未交付最终正文，不能断言最终一定保留或降级。
+本轮没有证据把两次失败都归因于400字要求。
+
+### 18.4 结算与尚未闭合的请求
+
+两次结算刷新结果一致：无篇幅限制轮51条wire与51条账单ID逐一匹配，
+全部settled，$5.03164500；原400轮75条wire对应74条已出现账单，
+全部settled，$4.46411900。当前已结算可见合计$9.49576400。
+原400缺少http_call_id `56c9d39d-a26f-4004-aebf-1a8f6f8a7fb3`的账单行。
+该请求通过原始user item的canonical内容指纹及初始/重派因果顺序关联
+到首次失败组③，不是仅按时间接近关联，也不是hook与wire有原生共同
+request-id。未见账单不等于已证明免费，保留这项结算边界；$5仍是
+观察停止阈值而非硬金额上限。
+
+结论：本轮两种任务都未完成自然交付，最终准确性也不能通过。局部读取
+缺陷有离线修复证据，但没有新的缺文或I/O阻塞证据可解释这两轮超时。
+不以恢复中间稿、扩预算、强制总结或重评旧失败代替完整验收。
+
+### 18.5 修正分析器的中断正文归因
+
+两轮运行与零漂移收据保存完毕后，才修改convergence分析器及其现有测试。
+旧实现只看最后一个已完成response的finish_reason；若它是tool_calls，
+就将后续尚无完整response但已流出正文的请求描述为“从未作答”，本轮
+1334字中断正文证明这种解释不成立。
+
+修复复用现有events：只观察report明确的父身份及最后父request，严格
+匹配非空api_request_id、session和已知turn；在同一窗口内收集实际
+delta，排除旧start、interim、不同请求/消息及子会话，并与interrupted
+完成正文匹配。不存在message_id时依赖已界定的请求窗口，不把两个空ID
+当成有效关联。有可靠正文时标记interrupted_with_streamed_text；存在
+未响应父请求但缺少可靠正文时unknown_after_tool_calls；没有未响应
+父请求时可保留mid_tool_loop，仅表示最后观察到工具响应。自然交付
+guard的判定保持原样。
+
+独立review曾发现首版helper未join报告最后request，可能误归同父旧turn
+或不在report中的请求，已由反例实红后修正。两项新增行为测试参数化后
+定向15 passed；独立请求身份反例2 failed→2 passed。最终该现有测试
+文件79 passed、0 failed、1 skipped，Ruff通过。首次全文件回归的旧
+归档断言也已按pending请求的观察边界修正，历史natural_delivery=false
+不变，未把旧失败重评为成功。
+
+重新计算本轮无篇幅限制报告为interrupted_with_streamed_text/1334；
+原400为unknown_after_tool_calls；两者natural_delivery仍false。此前
+成功无篇幅限制报告仍answered/true，原题资格仍false。保留原分析输出
+及新的convergence-corrected.json，明确这是运行后的测量修正，不能
+冒充执行期间运行时修复或任务已通过。
+
+### 18.6 用户指定的无篇幅限制、延时诊断（2026-09-29）
+
+用户明确选择无400字要求的大任务、3600秒上限，以及$10观察停止阈值。
+这同时改变时间与费用策略，不能当作历史1200秒/$5条件下通过。仍保留
+原skill、六文件fixture、父Ultra/max、子配置High、64请求、60K输出和
+2M排除缓存读取输入；其中任何其他上限仍可先于60分钟触发。用户的
+假设是增加余量可使父任务完成，尚待真实运行，不预先宣称已修复。
+
+检查发现实验runner只取得一次托管租约并关闭stdin；生产托管绑定
+最多接受约一小时TTL，所以单改墙钟上限不能保证60分钟可用。新入口
+使用原auth.modelLease与session.renew_managed_model协议，同grant、
+同控制连接和binding_revision续租，不调整服务端到期时间或注入模型
+消息。日常桌面默认不变。续租失败必须留下原因，不能伪装自然完成。
+
+本节在运行前记录候选意图；真实结果、费用及零漂移收据另行归档，
+不得将本节视为已执行或已通过。
+
+本轮补测发现实验费用轮询的既有退出竞态：子进程结束关闭日志后，
+在途查询恢复仍写日志，产生未处理EBADF。独立本地复现后改为在退出
+状态下跳过该回调，保留运行中的费用约束；续租失败状态不用于关闭
+费用轮询。真实失败的两个分支已转绿，runner共18项通过。
+
+新增真实本机HTTP/RPC续租测试3项通过，验证首行stdin无需EOF启动、
+在途续租后下一请求使用新凭据、system哈希不变、失败续租interrupt，
+且旧新凭据均不进入证据。全部模型流量限制在loopback，未付费。
+
+最终免费验证：convergence文件分为互斥三组，65+3+13=81 passed、
+1 skipped；托管绑定/agent原有20项通过；新增续租3项通过；合计Python
+104 passed、1 skipped。JS runner 18项通过，typecheck、窄lint、Ruff
+通过。首次整文件运行被测试runner在355秒终止，保留该记录；分组没有
+改断言或跳过测试，未将超时那次声称为全通过。独立复核竞态修复已关闭。
+
+### 18.7 无篇幅限制/3600秒/$10真实诊断完成（2026-09-29）
+
+冻结后执行一次完整large任务，保持原skill/fixture、父Ultra/max与子配置High，
+未自动重跑。stop_reason=normal_final，最终父事件complete，guard eligible，
+三个子结果completed/schema_valid且未截断；7790字符完整最终答案，耗时
+1185.42秒。运行前后27个冻结文件哈希零漂移，六文件fixture未变，四会话
+system hash各1个。线上续租尚未触发：任务在首次20分钟续租定时点前结束。
+
+输入排除缓存读取最终365435、峰值423870，完整hook输出42045。hook
+38请求/37响应，不把缺响应判定为任务或辅助；wire独立为chat15、delegation22、
+title1、other_auxiliary6。一个缺hook响应仍预留70850输入。退出时43笔
+settled/$3.52508800；14:01:03.738Z刷新后44笔wire与44账单一一匹配，
+全部settled，最终$3.91826800；没有待匹配账单。
+
+自然交付这一项通过，但整体准确性仍needs-correction。独立语义复核指出：
+摘要终端标志漏清是真缺陷，但额外abort需补最终无摘要、当前非终端失败、
+允许普通失败静态回退等条件；requested children额度计数不能无契约地
+改判为只计成功spawn；批量构建的本地清理缺口与实际资源泄漏应分开；
+profile supersede/once-per-edit是明示策略，不能仅凭清pin或不重试判bug；
+连续once字段覆盖也不能忽略primary_runtime优先恢复而断定实际恢复错误。
+原模型答案保持原样，人工勘误单列，不回写成“模型准确性已通过”。
+
+本轮实际早于原1200秒、费用低于原$5，没有使用新增余量，故不支持
+“放大超时/费用导致成功”；一次成功也不证明去400即可稳定交付。
+后续重点是证据分级/设计意图遵循及稳定性，而不是继续无假设地扩预算、
+强制总结或按这些未经证实的评审结论修改产品行为。
+
+完整运行、逐项语义核验、冻结源码/构建、费用与初次测试超时证据：
+/Users/zizimutou/.codex/visualizations/2026/09/29/01a0eadc-dc19-7f42-98b4-e6812a7cb811/ultra-extended-unbounded-validation/report.md
+
+### 18.8 过度断言的子父谱系核验（2026-09-29，免费离线）
+
+本阶段复用§18.7的数据库、事件、history及实际wire项指纹，没有新模型
+调用。三组均在子任务最终文本中先出现条件遗漏或过强评级，父级部分
+纠正、部分保留，并在Top 3再次扩大；不是全部照抄，也不是已经证明
+某种模型、档位或审查方法是因果根因。
+
+组①child84（deleg_c9f73ec3/task0）漏写允许普通失败静态回退的配置
+前提，并将局部abort描述为冻结。4455字符原文完整进入父notice85，
+final109进一步写成“任意摘要失败”，Top1又称无需快照外契约。会话
+reset漏清终端标志的局部缺陷仍成立，但额外abort须有最终无summary、
+进入失败判定、当前失败非终端等条件；成功fallback和feasibility skip
+不能混入。父同时将另一条回退状态正确降为疑点，须保留这一反例。
+
+组②child55（deleg_9d2d7ea1/task0）已将requested额度写成永久消耗，
+将局部清理缺口泛化为资源和状态残留。3880字符原文进入notice56；父
+工具60/61实际返回Charge *requested*注释及完整函数，final109仍列为
+确定缺陷，Top3又合并有限one-shot额度与batch部分构建失败的不同条件。
+child34的execute_code stdout确有57672→50000字节裁剪，不能声称全部
+输出未截断；但child28及后续定向窗口已返回关键契约，父60/61亦完整，
+故现有证据不支持将该误判归因于这些关键行缺失。另须区分空消息
+ValueError：str(exc)为空时不进入父if err直接错误返回分支。
+
+组③child45（deleg_9d2d7ea1/task1）先将profile pin及连续once列为
+confirmed。3692字符原文进入notice56，子25及父65/66/67/77确实返回
+来源guard、supersede、once-per-edit和primary_runtime优先恢复逻辑。
+父对连续once的恢复后果已有降级，但保留确定缺陷标题；QC-PIN主文
+的“可能”在Top3又变成“会使”。字段覆盖事实不等于实际恢复错误，
+也不能仅凭清pin或不重试就将明示策略认定为缺陷。
+
+三份child正文=result/event summary，完整且各出现一次于相应父通知；
+通知又与父history逐字相同。对通知及六个父工具输出构造canonical
+Responses item，其SHA-256与实际chat wire项匹配：notice56覆盖10次
+chat，notice85覆盖6次；两通知与60/61/65/66/67/77工具项均仍在最后
+chat请求81ffb6b2-a8c1-435f-9980-dcfa4bf9a21a中。此证据只证明客户端
+发送内容，不证明供应商内部处理方式、模型注意力或理解正确。父
+86/96/100/105/107无中间论证正文，不据此虚构隐藏思考。
+
+复用README既有Manual evidence-rating regression cases，补终端标志、
+连续once反例与逐阶段归属核验方法；未修改原skill、通知或产品策略。
+一次性复算脚本通过3条child链及6个父工具项；临时副本删一字的反例
+被拒绝，仅证明审计脚本可检出该不一致，不是生产缺陷红→绿证据。
+
+本样本没有新增运行时补丁依据；不为错误评审修改requested配额、
+profile supersede或once-per-edit。若后续尝试审查方法/skill干预，
+须独立标记契约改变，保留原始基线，同时防止将真缺陷一律降级。
+自然交付已通过一次，准确性仍needs-correction，稳定性尚未证明。
+本阶段未新付费，未提交、推送、合并或重启桌面。
+
+逐阶段原文、来源身份、实际源码窗口与可复算wire证据：
+/Users/zizimutou/.codex/visualizations/2026/09/29/01a0eadc-dc19-7f42-98b4-e6812a7cb811/ultra-claim-lineage/report.md
+
+### 18.9 独立审查方法候选（2026-09-29）
+
+原skill已有保守评级、子结果核验及不确定性分离要求，不能把§18.8的
+误判解释成规则缺失。候选仅在外部私有skill副本中替换现有分类和核验
+步骤，强调已建立的契约、完整触发条件、最近反例/替代恢复路径、局部
+事实与远端影响分开，以及最终排名保留前提。子任务沿用goal/context
+传递这些检查的实质内容。局部反例完整时仍可确认，不要求快照外代码
+才能判定；未加入fixture答案、强制JSON、字数或提前收尾规则。
+
+复用评测器的外部skill复制及指纹机制，增加review-skill=candidate。
+首版仅支持fresh large Aino；即使与原skill字节相同仍标为候选，不能
+通过original_acceptance_eligible。replay、legacy replay与length读取
+candidate来源时提前拒绝，避免派生结果被重新标成original；平台入口
+在账号访问前作同样检查。原original/none默认及生产运行时未改。
+
+新接线9项参数化Python行为案例先红后绿。平台首轮来源测试缺repo
+参数，修正测试前提后确认原实现越过账号边界，保留两轮红灯记录。
+独立review还发现SKILL.md为目录时existsSync与is_file不一致；目录
+反例实红后增加isFile检查，平台全部26项通过。此处是新实验入口的
+前置校验修正，不是Ultra语义误判的根因。现有回归结果随本阶段收据
+记录，不以此前测试结果冒称重跑。
+
+八个合成控制由另一个审查代理在不读预期答案的情况下静态审查，
+分类与预期一致，并保留两项明确局部缺陷，拒绝全降级。但A把许可
+计数称为计费，措辞有误，原文及批注保留。没有同代理原skill对照，
+也不是Aino目标模型实验；不能据此声称候选提高了准确性。
+
+候选属于独立审查契约实验，不是运行时修复，不追改原始基线。真实
+验收须另查方法是否实际加载并传入子任务、完整自然交付、全部重要
+结论及排名、真缺陷保留、输入前缀/fixture完整性、耗时和最终费用。
+候选本身不保证质量或稳定性改善。本节仅记准备过程，不表示已经
+启动或通过下一次真实验收。
+
+候选diff、来源指纹、红绿证据与预先固定的评估协议：
+/Users/zizimutou/.codex/visualizations/2026/09/29/01a0eadc-dc19-7f42-98b4-e6812a7cb811/ultra-review-quality-candidate/plan.md
+
+### 18.10 候选完整运行：交付通过，准确性未通过（2026-09-30）
+
+§18.9的冻结候选首次尝试在31.63秒因provider overloaded结束，
+首个父请求没有完整响应，未启动工具或child。用户随后要求继续，
+使用同一代码、候选skill和任务新建一次运行；仅换run名，费用观察
+阈值从$10降为$9.99以给首次已结算请求留余量。没有自动重试循环。
+
+续行1872.46秒（31分12.46秒）以normal_final结束，最终事件complete、
+guard eligible；6905字符正文与父session 20260929_233909_8a719e的
+assistant136逐字一致。仍为无400字/3600秒/父Ultra-max/子配置High，
+64请求、60K输出和2M input_excluding_cache_reads。候选身份及预算/
+任务改变完整留档，original_acceptance_eligible=false；不能写成
+原400字/20分钟通过，或证明技能导致完成、提高准确性及稳定性。
+
+三个child中组①以overloaded失败，组②和③完成；父自行补查第一组。
+第二次delegate_task只是action=list，不是重派；schema_valid=null
+是未指定schema，不能标为格式错误。1200.323秒线上续租成功。续租后
+父会话新发5次同交付turn请求，另有1次final后的不同turn请求；后一项
+用途不能由时间猜测。child此前已结束，未验证child续租后行为。
+四会话实际请求system hash各1个；27个冻结源码/构建文件、候选skill
+及fixture运行前后无漂移。goal/context仅部分传标准，但三child实际
+读取到候选主文；方法送达不等于正确应用，reference读取边界另记。
+
+对父136与Top 3独立复核的最终结论仍为needs-correction：
+
+- 组①保留五终端flag漏清的局部真缺陷，并把触发收窄为新普通失败；
+  但混入_summary_model_fallen_back（不属abort的五flag），将已转主
+  模型后的重试门误写成不再使用主模型；静态回退差异缺False配置、
+  最终无summary且实际进入失败门等条件，Top 2持续无法压缩仍过强。
+- 组②不再把requested计数确认为误扣，继承与排名有所纠正；但构造
+  分支局部无显式补偿被过度确认成生命周期缺陷，漏空字符串ValueError
+  的if err反例，固定custom忽略URL特例及native SDK入口条件。
+- 组③补truthy tool_calls、撤回整事务no-op论证并保留once-per-edit；
+  但fn.get还需truthy tc_id，局部投影异常不等于全恢复不可救济，
+  Top 1扩大了下游后果，helper抛错不证明配置未落盘。457–462已有
+  config-sync失败通知尝试，不能反向声称完全没有错误通知路径。
+
+父答确有纠正，不能直接套child审计；也不能全降级抹去真缺陷。未见
+新增运行时吞答案的证据，不为模型误判修改requested配额、profile或
+once策略。本阶段仅候选评测接线、测试、文档及独立skill副本有增量，
+生产运行时未因本轮审查新增改动。此处完成归档，不追加第三次付费运行。
+
+hook 45请求/43响应，wire46调用（chat18/delegation26/title1/其他辅助1）。
+input_excluding_cache_reads最终/峰值753597，其中缺usage预留269316；
+完整hook输出53659，caps为空。两观察层不能无共享键逐请求归因。
+北京时间00:23只读刷新后，续行45条可见账单均settled，$5.38678200；
+加首次标题$0.00496500，本阶段可见已结算合计$5.39174700。首次chat与
+续行一个delegation仍无匹配账单，不视为免费，不能称费用最终闭合。
+
+本阶段免费验证收据为Python90 passed/1 skipped、JS26 passed；收尾
+只核对日志与冻结指纹，不冒称重新运行。自然交付再次通过，准确性仍
+未通过，整体目标不能宣告完成。完整运行、父级勘误及费用缺口：
+/Users/zizimutou/.codex/visualizations/2026/09/29/01a0eadc-dc19-7f42-98b4-e6812a7cb811/ultra-review-quality-candidate/report.md
+
+### 18.11 需求范围澄清：看板摘要、对话压缩与400字测试分离
+
+用户明确：此前摘要需求指看板摘要；对话中的压缩/摘要保持上游Hermes
+做法。两者不能混用。§18.8–18.10所评判的摘要失败标志，是冻结审查题
+第一组源代码中的结论准确性，不是为看板需求重新设计生产摘要算法。
+此前并列描述易产生歧义，后续统一按下列边界执行。
+
+1. 右侧“会话资源”目前从session.messages派生资源、计划和子任务列表，
+   并非调用session.summary生成对话压缩摘要，也没有每组400字输出要求。
+   独立session.summary后台能力缓存概览，不代替turn loop的压缩历史。
+2. 真正Kanban的board API最多返回200字符摘要预览，详情接口返回完整
+   summary；卡片再对latest_summary/body按两行省略，抽屉显示全文。
+   某些通知首行或诊断的400字符截取有其下游用途，部分还会进入worker
+   唤醒上下文；不能把所有400都当成纯UI或全部删除。
+3. 人工large评测题的“每组结论控制在400字以内”仅是紧凑报告要求。
+   该数字没有已证实的产品必要性，也不是Hermes通用对话规则；历史已
+   观察到额外计数/改稿，但不能把所有失败归因于它。它有受限输出压力
+   测试的用途，不能据此升级为正常对话或当前用户目标的默认限制。
+4. 当前主验收明确使用既有--large-report-length=unbounded。保留原400
+   fixture和旧入口默认仅为复现，运行当前验收必须显式带该参数；不再
+   以original_acceptance_eligible=false本身判当前目标失败。准确性与
+   稳定性仍独立评判，本次候选的needs-correction并非因为没有400字。
+
+相对已合并上游f97608f178d1ffeca59860195ab7da295f7c8e5f，生产摘要周边
+已有Aino的凭据路由、API sidecar、显示provenance和请求缓存修复；不能
+声称字节完全等同上游，也不因本次看板澄清盲目撤销既有适配。本轮不
+改摘要触发、压缩提示、压缩长度、回退策略或原始对话内容。上游自身
+_is_summary_refusal内的normalized[:400]是拒绝检测窗口，不是输出上限。
+
+独立概览的400也并非输出上限：web_session_summary.py在至少两条用户
+轮次时以400输入字符判定是否有足够材料；其输出校验是每点最多600字
+符、每节最多5点。应按展示需求评估这些规则，而非套用人工评测题。
+
+已完成的免费归因复用原始会话和wire记录：12个源码回执及7段逐字
+引文已核对。父112/113/116/127含回退、abort、retry和完整五flag；
+父93/子32含provider特例与入口，父96/子29含truthy tc_id；关键内容
+均出现在最终作答前的本地实际发送记录。首次可见错误分别在父136、
+子70和子67，后两项继续出现在父136。没有发现这些关键证据本地漏传，
+不能由此推断provider内部接收或模型理解，也不代表全部传输路径无错。
+不把这三处语义错误当成改对话摘要算法的依据，不启动新付费运行。
+范围核对及实际输入归因：
+/Users/zizimutou/.codex/visualizations/2026/09/29/01a0eadc-dc19-7f42-98b4-e6812a7cb811/ultra-summary-scope-audit/report.md
+
+### 18.12 分支补丁收敛与免费回归（2026-09-30）
+
+本轮保留codex/proactive-delegation的全部既有未提交改动，在实际
+worktree审查运行时、评测与桌面三组边界。HEAD仍为32371ee0bdaa，
+未提交、推送、合并、启动桌面或增加付费模型调用。没有修改看板
+摘要、对话压缩算法、冻结fixture或模型提示；当前验收继续显式使用
+--large-report-length=unbounded。
+
+新增修复仅针对一处评测元数据缺口：显式--input-cap覆盖此前能同时
+得到scenario_ceiling_overridden=true与original_acceptance_eligible=true。
+在既有资格条件中增加args.input_cap is None，说明改为明确覆盖，
+不再把等值/下调统称为上调。1M/2M/3M真实离线初始化三例先红，
+修复后新增及相关来源合同14项通过。该标记与自然交付、准确性独立，
+不是交付失败根因；历史报告未回写，当前无400字目标不因该标记false
+而失败。修复前评测全文件基线93 passed/1 skipped，不能冒称修复后
+重新全量运行。平台入口JS26项通过。
+
+保留既有程序化读取修复，并在两个既有测试文件补齐两项组合合同：
+本机真实file-RPC及CellAuthority异常后恢复作用域；真实kernel读取
+仍保留完整/局部/版本变化/脱敏的写入基线。隔离副本只恢复四个生产
+文件到HEAD，两例均因第二次读取收到空unchanged stub而红；当前两例
+绿，两个完整文件43项通过。原工作树生产文件没有被还原或再修改。
+本轮9文件运行时基线174 passed/2 skipped，写安全补充9项通过；
+43项与前面有重叠，不相加声称独立测试总数。配置子任务档位继续
+复用现有fallback override，相关真实loopback与父隔离回归包含在
+运行时基线内。全部13个改动Python文件Ruff、py_compile通过。
+
+桌面linked-worktree更新根补丁单独保留：复用既有resolver与git-root，
+2文件7项测试和Electron类型检查通过；但测试只调用既有helper，撤回
+main.ts接线仍会绿，不能宣称主进程接线已红绿或E2E。已有隔离E2E
+fixture会启动真实桌面，本轮不为凑覆盖另建大mock或源码字符串断言。
+这项桌面缺口不混入Ultra运行时完成度。
+
+四份历史证据manifest逐项复核，144+23+207+13共387项全部一致，
+缺失及哈希不匹配均为0；构建runner与本轮起点哈希一致。既有WIP
+按程序化读取、子任务档位、评测、诊断、桌面拆成独立审查补丁，
+不以归档代替提交。红绿日志、补丁清单、起止指纹及适用边界见：
+/Users/zizimutou/.codex/visualizations/2026/09/29/01a0eadc-dc19-7f42-98b4-e6812a7cb811/ultra-branch-consolidation/report.md
+
+本轮收敛不改变§18.10的结论：已观察到自然交付，但重要结论准确性
+仍needs-correction，稳定性未证明。下一轮应围绕独立质量判据提出
+可证伪候选；不要用再次无差别重跑、强制收尾或修改压缩算法替代
+准确性验证。真实SSH、Windows/Linux与桌面主进程E2E不在本轮收据内。
+
+### 18.13 系统交付与模型质量分开核对（2026-09-30）
+
+用户指出，局部回答错误不能自动等同于Ultra协作机制未修复。本轮
+据此补充系统维度审计，复用既有natural_delivery、completion_guard、
+最终事件、通知台账与wire记录；不改变历史质量实验的严格判据或
+overall_acceptance=false，不把模型意见相异作为判错依据，也不要求
+消灭所有模型错误才能关闭一个已有红绿证据的运行时缺陷。空答、
+偏题、主要任务缺失和已证实的信息丢失仍是有效失败，不能据此放过。
+
+从原始report/events重新计算，而非仅引用上一轮文字结论：
+
+- 原skill无400任务1185.42秒自然结束，三个child均completed；候选
+  skill续行1872.46秒自然结束，两个completed、一个provider overloaded
+  failed。两轮均确有三个生命周期相互重叠的子会话。completed事件
+  表示子任务结束，不能把第二轮写成三个子任务都成功。
+- 五份成功child的完整最终正文和一份失败错误正文各在相应父通知
+  中出现一次；通知canonical item hash均匹配实际发送的chat记录。
+  台账无待投递项或缺失通知，父在结果之后继续请求模型。上述证据
+  证明客户端发送链路，不证明provider内部处理或模型理解。
+- 父最终正文分别7790/6905字符，与父持久化消息109/136逐字相同，
+  三组及Top 3均有交付；normal_final、complete和guard eligible一致。
+  第二轮失败子任务结束后，父对其组①文件又做23次读取/搜索工具
+  调用并交付该组；不是重派成功或从中间草稿强制提取最终答案。
+- 实际wire用途记录中，两轮chat分别15/18次全部max，delegation
+  分别22/26次全部high，模型均为gpt-5.6-sol。这里读取嵌套
+  wire_reasoning.effort，不把另一格式的空wire_reasoning_effort误认
+  为档位缺失；wire用途总量不与无共同键的hook逐请求强行关联。
+- 第二轮1200.323秒线上续租后，父在最终答案之前又发5次请求；
+  child均在续租前结束，因此没有验证长child跨续租。第一轮早于
+  首次续租结束，不能叫60分钟耐久通过。各会话记录的system hash
+  唯一只证明system内容稳定，不扩展为所有前缀和provider缓存保证。
+
+候选首次31.63秒的provider overloaded失败继续保留：未启动child，
+natural_delivery=false，不能被两次成功覆盖。三次选定记录不是
+随机或同条件重复实验；不同skill且同属一道审查题，不计算总体
+成功率，不声称已经达到Codex同等效果。五份历史归档462项哈希
+全部一致；两次成功冻结记录中的12个生产文件仍与当前工作树一致。
+
+当前更精确的结论是：核心委派—回传—父续行—自然交付链路已有
+真实成功证据，本轮没有识别出仍在阻断这些链路的已证实协作缺陷；
+模型局部误判继续作为内容质量问题单列，不再单独阻挡系统收尾。
+代表性稳定性仍待补：优先用既有daily场景及其独立行为合同补一个
+不同任务类型的样本，避免再重复同一代码审查题或新增提示系统。
+一个新样本也只能补覆盖，不能证明稳定成功率；长child跨续租、
+桌面UI、真实远端和跨平台是另外的覆盖边界。旧账单缺口也仍保留，
+本轮未刷新费用，不将历史可见已结算额冒称最终闭合。
+
+本轮只更新README与诊断文档，未改生产代码、提示、fixture或测试
+断言，未付费、提交、推送、合并或启动桌面。可重跑审计、逐项矩阵
+及保留的历史边界：
+/Users/zizimutou/.codex/visualizations/2026/09/29/01a0eadc-dc19-7f42-98b4-e6812a7cb811/ultra-system-acceptance-audit/report.md
+
+### 18.14 运行时分组提交及不同任务类型验证（2026-09-30）
+
+用户确认后，提交前按canonical runner新跑11文件185 passed、
+0 failed、2个Windows-only跳过；Ruff通过。只提交两组运行时补丁：
+ba139e1651a155b3f751b5ee731386fe0fcb65fb（程序化读取，7文件）与
+e4a48fc48a3b534f38f52b8e183e05052a4c92eb（子配置档位fallback，2文件）。
+均在codex/proactive-delegation，本轮未推送或合并；其他9个tracked
+修改及2个untracked测试继续保留。提交没有改变已验证的文件字节。
+
+复用既有daily场景，从初始任务进行一次真实验证。题目是修复隔离
+示例的auth.py、billing.py、exports.py，按SPEC补标准库unittest。
+没有400字限制、审查skill或强制委派提示。父Ultra/max、子默认High；
+沿用该场景600秒、48请求、500k排除缓存读取输入、60K输出及$1.50
+观察费用阈值，结算延迟仍可能超过。未重跑、扩大预算或人工修正
+模型输出。canonical十个fixture按既有--fixtures复制；排除仓库
+测试预编译产生的pyc，原fixture文本和独立合同均未改变。
+
+558.77秒normal_final，complete非空最终事件、guard eligible，
+491字符最终正文与父持久化消息一致。模型自主启动三个子任务，
+三者均completed；完整子答各在父通知52出现一次，该通知hash
+匹配五次实际chat输入。台账无pending/missing，父继续整合和测试
+后交付。实际wire chat10次全部max、delegation17次全部high，
+均gpt-5.6-sol；四会话system hash各1个。未触发任何cap，输入
+最终/峰值126113，低于500000。这里增加一个不同任务的成功
+协作/自然交付样本，不推导总体成功率，也不叫全部功能验收通过。
+
+功能结果必须单列：模型新增三个测试文件，其16项测试经独立运行
+全部通过；预先存在的daily_contract基线为10个失败子案例及1个
+错误，修复后仍有2个失败子案例、0错误。因此daily.accepted=false。
+不是另一模型意见，而是既有可执行行为合同；一次免费隔离副本
+复算得到同样两项失败，原输出未改：
+
+- 极大整数金额2**53+3分在零折扣时变成多1分，因浮点计算损失
+  精度；这是数值边界反例，不扩展为所有普通金额都错误。
+- 并发重用导出job ID时，旧下载回写缓存，使新租户拿到旧租户
+  payload；串行清缓存测试通过并不能覆盖该交错。
+
+这些是隔离示例的模型生成代码漏修，不是Aino生产认证、计费或
+导出模块漏洞，也没有证据表明由回传丢失或档位错误导致。协作
+样本通过与功能样本失败同时记录，不重新把所有模型错误并入
+Ultra运行时故障。
+
+一次只读结算刷新后，2026-09-30T03:25:49.500Z可见32笔均settled，
+按desktop_call_id逐一匹配33次wire中的32次，合计$1.35760500。
+另1次title调用尚无匹配账单，不能视为免费或宣称总费用最终闭合。
+28个冻结源码/构建文件执行期间零漂移，原始fixture哈希一致；
+本节仅在结束后追加。没有重启日常桌面或更改日常配置。
+
+本轮完成“两个本地提交+一次不同任务系统验证”。剩余的代表性
+稳定性、长child跨续租、真机/远端覆盖仍需按目标范围评估；不
+为了让此示例通过而再付费重跑或将样例代码改进混入运行时补丁。
+提交、冻结、完整原答、失败回执、费用匹配与最终状态：
+/Users/zizimutou/.codex/visualizations/2026/09/29/01a0eadc-dc19-7f42-98b4-e6812a7cb811/ultra-runtime-commits-daily-validation/report.md
+
+
+### 18.15 免费回归、桌面实际验证与本地收尾（2026-09-30）
+
+本阶段按用户确认继续，不新增付费模型调用。起点e4a48fc48a，
+先封存9个tracked与2个untracked修改；未覆盖历史归档。
+
+首次完整Python回归在convergence文件触发343秒有效文件超时。
+该文件混合纯分析断言与大量真实后端启动，不是模型运行超时。
+按convergence、harness、config、scenarios拆分，复用唯一离线
+进程夹具；52个函数AST（含参数化和断言）拆前拆后完全一致。
+没有删测试、放宽timeout或开启重试。canonical runner新跑5文件：
+96 passed、0 failed、1个Linux-only跳过；最长文件192.54秒。
+JS runner另26 passed，Ruff通过；评测代码/测试提交000e6a6187。
+
+用当前worktree构建Electron并以项目既有--dev选项打主进程包，
+HOME、HERMES_HOME与userData隔离，模型只连接本机脚本服务。
+首次沿用发布构建的兼容packaged标志，导致开发登录夹具不生效；
+切到--dev构建后完成，未改产品登录逻辑、未用日常账户聊天。
+
+实际UI发现：child完成事件被接收，但后台通知触发父任务新一轮
+message.start时，pruneFinishedSessionSubagents清掉live行，委派
+卡片退回原始receipt的Dispatched。两个行为回归先红，再在现有
+retired-child bookkeeping中保留原生终态事实，按精确child/batch
+身份供聊天和看板读取。live列表仍清理，晚到事件仍拒绝；同名新
+任务、跨会话、清除会话和被原生事件替代的fallback占位不冒用旧
+结果。未新增RPC、提示、核心工具或对话摘要策略。修复提交
+8f14e3a785；9文件72项UI回归通过。终态历史只在当前session store
+生命周期保留，重启后不把未知历史派发猜成已完成。
+
+最终E2E等待child和后台进程两份通知进入模型请求、父分别回应后
+再断言idle，避免把两轮间的暂时空闲算作结束。真实本机gateway/
+child链路中：running卡片可见、完整子答进入通知、父续行、最终
+正文可见、child Completed保留且展开可见原结果；Stop、Session
+running、Background task running、streaming标记均清零。页面
+异常、console error、alert均为空。脚本模型验证系统/UI链路，
+不作为真实模型推理质量或新稳定性样本。截图已人工查看；正常
+过程折叠通过真实点击展开，不改DOM绕过检查。
+
+worktree更新根补丁独立提交8d499383cc。用真实.git文件linked
+worktree调用生产hermes:updates:check IPC：原main返回
+supported=false/not-a-git-checkout，同一新增E2E测试红；恢复修复
+版后绿。复用resolveUpdateRoot/findGitRoot与offline update cache。
+7项helper回归、Electron/renderer/E2E类型检查、构建及相关ESLint
+通过。未执行更新应用、Windows恢复或真实远端验证。
+
+2026-09-30T03:47:01.014Z只读刷新daily账单：32个items与上次
+封存逐项一致，全部settled，合计$1.35760500。33个wire中仍缺
+1条title账单，不按免费计、不称最终金额闭合。
+
+本阶段完成已复现的运行时/界面缺陷修复及本地整理。此前两次
+large与一次daily已有自然交付证据；daily独立功能合同仍有两个
+失败子案例，未改写成通过。少量成功不证明总体成功率、所有任务
+内容正确或Codex等效。长child跨续租、Windows/Linux、真实SSH/
+远端仍未覆盖。改动留在codex/proactive-delegation，仅本地提交，
+未推送、合并、发布或重启日常桌面。
+
+完整命令、红绿日志、截图、初始WIP及最终提交台账：
+/Users/zizimutou/.codex/visualizations/2026/09/29/01a0eadc-dc19-7f42-98b4-e6812a7cb811/ultra-eval-desktop-finalization/report.md
