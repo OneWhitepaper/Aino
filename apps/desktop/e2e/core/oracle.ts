@@ -133,6 +133,17 @@ interface RenderedView {
 }
 
 async function renderedView(page: Page): Promise<RenderedView> {
+  // Aino deliberately folds settled activity. Exercise the user disclosure so
+  // every persisted row is still checked as visible text, never filtered out.
+  const viewport = page.locator('[data-slot="aui_thread-viewport"]').filter({ visible: true }).first()
+  const disclosures = viewport.locator('[data-slot="aui_response-process-header"]').getByRole('button')
+  for (const disclosure of await disclosures.all()) {
+    if ((await disclosure.getAttribute('aria-expanded')) === 'false') {
+      await disclosure.click()
+      await expect(disclosure).toHaveAttribute('aria-expanded', 'true')
+    }
+  }
+
   return page.evaluate(() => {
     const viewport = ([...document.querySelectorAll('[data-slot="aui_thread-viewport"]')] as HTMLElement[]).find(
       el => el.getClientRects().length > 0

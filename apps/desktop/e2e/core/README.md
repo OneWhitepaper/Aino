@@ -65,3 +65,8 @@ The release bundle intentionally bakes packaged mode into Electron main and
 rejects the development account adapter even when launched with electron . .
 Core therefore rebundles main/preload with the existing --dev command after
 building the renderer. This does not change release authentication policy.
+
+The transcript oracle opens settled response-process disclosures through their
+real buttons before reading visible text. Aino intentionally folds that activity
+after a final answer; expanding it preserves the full upstream assertions for
+every persisted row, ordering and duplicates. No interim rows are excluded.
