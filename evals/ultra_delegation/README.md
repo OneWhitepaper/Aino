@@ -528,3 +528,187 @@ remains unmatched, so final billing is not closed.
 
 Logs, red/green evidence, screenshots, grouped commits and source hashes:
 /Users/zizimutou/.codex/visualizations/2026/09/29/01a0eadc-dc19-7f42-98b4-e6812a7cb811/ultra-eval-desktop-finalization/report.md
+
+## Cross-task comparison preparation (2026-09-30; no live run authorized here)
+
+**Goal:** prepare reproducible task and baseline checks without treating model
+judgment errors as demonstrated Ultra transport bugs. Reuse this harness, its
+external fixture/skill inputs, existing behavior tests and separate report fields.
+No new product prompt, core tool, evaluator service or forced-final rule is needed.
+
+**Starting point:** codex/ultra-delivery-stability at
+ae1ef077dc9e2411ae756074f778482eed4f709d. Its production code is the same as the
+611074f7342024426ae4f9ba685caa35e16a10b6 frozen live run: one full natural delivery
+with three complete children, but important semantic claims need correction.
+That one result is neither an overall stability rate nor a Codex parity result.
+The preparation changes documentation only; a later documentation commit must not
+be described as the exact HEAD executed by that historical live run.
+
+### Task selection and independent scoring
+
+| Task family | Reuse | Score against | Evidence boundary |
+| --- | --- | --- | --- |
+| Source review | large, original external review skill, unbounded output | Task coverage plus manual claim/evidence/trigger/impact review of the frozen six files | Known regression anchor; many prior runs, not a held-out task. Valid citations alone do not establish correct conclusions. |
+| Code repair | daily with the existing small fixture and SPEC.md | Model-generated tests and the separate daily_contract.py behavior checks, reported separately | Different task from large, but also previously used. Natural delivery and self-reported tests cannot substitute for external behavior. |
+| Recovery and retry | Existing notification, durable-store, replay and lease tests | Queue/claim conservation, exactly-once consumption, intact results, real import/RPC behavior where exercised | Scripted/local validation, not an independent paid model task or real-provider endurance evidence. |
+
+simple and no_subagent use the same small fixture; length and replay depend on
+prior answers. Renaming a run, changing an effort or removing the skill does not
+create a new independent task. The repository currently provides two frozen task
+fixtures, not a fresh generalization set. A future held-out case must have its
+task/specification and external oracle frozen before any candidate answers are
+seen; record its exposure history separately. Do not silently replace the existing
+fixtures or reinterpret historical scores.
+
+For code-repair scoring, map each assertion to an explicit requirement or a
+necessary implication. Separate unspecified policy choices from contradicted
+behavior. Monetary rounding, rejection versus clamping and job-ID reuse policy
+must not acquire new hidden requirements after a model run. Keep known failure
+receipts, such as zero-discount integer precision loss and cross-tenant stale
+payload under a concrete interleaving, with the exact applicable assumptions.
+
+For review scoring, retain supported defects as well as counting overstatements.
+Record the full claim and its source identity; classify contradiction, missing
+premise, unsupported consequence and reasonable design/ranking disagreement
+separately. Trace child-to-parent changes using existing stored messages and wire
+hashes where available. An independent reviewer supplies source-backed reasons,
+not a majority-vote ground truth or a keyword score.
+
+### Baseline readiness: actual capabilities, not assumed equivalence
+
+| Baseline | Fixed identity / existing entry | Ready scope | Before claiming a matched comparison |
+| --- | --- | --- | --- |
+| Aino | Current branch above; harness.py and platform-runner.ts | large and daily, loopback dry checks and managed live path | Fresh freeze of source, runner, fixtures, skill, effective config and actual model/effort. Existing results keep their own policy. |
+| Native Codex | Locally installed codex-cli 0.158.0; codex_driver.py | large only; native dry tools/delegation probes | Native tools, embedded skill text and lifecycle differ; no daily write path. Input still sums represented context; live wrapper permits at most 1200 seconds because this driver lacks lease renewal. |
+| Upstream Hermes | Release v0.21.5 at f97608f178d1ffeca59860195ab7da295f7c8e5f | Native source available in local Git history | No upstream driver exists in this harness. Aino managed/Desktop hooks cannot be called an unmodified upstream run; validate the native entry and provider binding independently. |
+
+The release identity is the second parent of Aino merge
+32371ee0bdaa4a56079e6bf5ce5481c79e84cc81, not the moving upstream/main ref.
+The local annotated tag v2026.9.24 peels to that commit; the release's
+hermes_cli/__init__.py declares version 0.21.5.
+Do not change the daily checkout or infer a latest upstream version from a local
+remote-tracking branch. Baseline preparation needs no fetch or desktop restart.
+
+The upstream CLI already offers chat --query-file with --oneshot and stream-json,
+and the native AIAgent and desktop RPC are existing integration seams. Finite
+one-shot consumers synchronously join children, however, and the default
+delegation.oneshot_max_children is two. Such a run can compare task results with
+those differences declared; it cannot stand in for the desktop's asynchronous
+notification-to-parent path. Use the existing ordinary desktop RPC if that path
+is the question. Upstream stream-json also projects/truncates tool results and
+defaults missing usage fields, so retain raw usage/history evidence before
+claiming intact model inputs or measured zero cache usage.
+
+The release already has evals/core_tool_deferral/worker.py for isolated source
+trees, evals/delegation_group_schema/probe.py for offline schema stability, and
+evals/api_delegation_sync_probe.py for local persistence/delivery checks. Reuse
+these patterns selectively; the existing task-specific provider bindings and
+contracts do not automatically become a general three-product comparator.
+
+Keep the user-approved Aino recipe unbounded/3600 seconds/$10 when describing
+that recipe. Do not shorten it to 1200 seconds merely to label Codex comparable.
+The identical number 2M has different meanings in the two current drivers;
+record cumulative_input_basis and threshold crossings explicitly. Until the
+budget/routing/entry gaps are resolved, native runs are descriptive comparisons,
+not a strict product A/B. Equal task text still does not equal identical system
+prompts, tools, skill loading or provider state.
+
+The existing convergence natural_delivery gate is Aino-specific: it requires an
+Aino final_event and completion_guard. Native Codex reports expose final_text,
+CLI events and their own probes instead. The offline native delegation probe can
+pass while that common summary prints natural_delivery=false with both Aino
+fields missing. Record this as unsupported cross-driver evidence mapping, not a
+Codex delivery failure; do not fabricate an Aino guard to make it true. A later
+comparison needs explicit per-driver evidence mapping in the existing analyzer
+before aggregating delivery outcomes. Historical report files stay unchanged.
+
+Any necessary comparator work belongs in the existing harness/driver/accounting
+paths, with behavior tests proving the executed binding. A new Hermes driver,
+Codex daily support or longer Codex leases is not implemented by this preparation
+and must not appear in a runnable command as though it exists. Reuse the current
+provider and renewal infrastructure where possible; never copy the user's live
+credentials into a fixture or infer request purposes from response presence.
+
+### Execution order and decision rule
+
+1. Freeze candidate source identity and the exact existing fixture/skill files;
+   verify imports use the intended worktree. Copy only manifest-listed fixtures
+   into an external staging root so generated bytecode is not model input.
+2. Run the existing offline scenario, native comparator probe and recovery tests.
+   Use scripts/run_tests.sh for Python tests, with a prepared environment and
+   local model endpoints. Preserve failures and environment corrections.
+3. Record each baseline's executable capabilities and missing pieces. Resolve
+   oracle ambiguity before arranging any further paid comparison; do not modify
+   an oracle to make an already observed answer pass.
+4. Before a paid batch, fix its run list, immutable versions, task exposure, model
+   bindings, per-run limits, aggregate spending scope and stop-on-failure rule.
+   The previous single-run authorization does not launch this batch. No automatic
+   reruns, adaptive prompt edits or budget expansion belong in a frozen batch.
+5. Report each run's natural delivery, coverage, collaboration integrity, material
+   accuracy, elapsed time, usage and settled/missing bills separately. Give raw
+   pass/fail counts by task and baseline; a small pilot is not a reliable population
+   success rate and cannot identify a cause from a single cross-product difference.
+
+An Aino-specific, executable loss/routing/recovery counterexample justifies a
+runtime repair. Intact evidence with an unsupported final claim remains a model
+quality finding until a runtime cause is shown. Similar failures in another
+baseline do not excuse Aino's answer; a baseline success alone does not isolate
+the cause of Aino's failure. Do not require zero possible model errors to close
+a demonstrated transport bug, or use that distinction to accept missing work.
+
+### Free recovery checks and their limits
+
+Reuse the following existing behavior-test files through the canonical runner:
+
+```sh
+scripts/run_tests.sh -j 4 \
+  tests/evals/test_ultra_delegation_*.py \
+  tests/tui_gateway/test_notification_turn_release.py \
+  tests/tools/test_async_delegation_orphan_sweep.py \
+  tests/tools/test_async_delegation.py \
+  tests/tui_gateway/test_managed_model_agent.py \
+  tests/tools/test_managed_delegation_billing.py
+npm test --workspace tests-js -- ultra-delegation-platform-runner.test.ts
+```
+
+The notification test covers rejected admission without losing the copy or
+spending delivery attempts, including transient SQLite refund failures. Refund
+here means returning a delivery attempt, not money. Orphan/claim tests use real
+temporary databases and producer processes; profile recovery includes A-to-B-to-A
+scope checks. Owner-death tests preserve completed child results and keep
+unfinished children unknown; they do not resume a killed in-flight agent.
+
+Managed-agent tests use real RPC/Agent/SDK calls to local scripted endpoints,
+including a later request using renewed authority without rebuilding the agent
+or prompt. Managed-delegation tests check actual child authority and reject an
+uncredentialed endpoint override. These do not query bills or test the real
+account lease service. Some recovery tests replace worker admission/delivery;
+fault-injected database errors are not a real competing-lock stress test.
+
+Together these are component/integration regression checks, not one end-to-end
+proof of missing-lease notification rejection, real automatic renewal, child
+result consumption, natural parent answer and desktop rendering in sequence.
+Keep that missing combined path, real desktop restart/reconnect, real-provider
+expiry and platform/remote coverage explicit. Synthetic models establish no
+answer-quality or provider-speed result.
+
+Preparation receipts: 10 Python files / 175 passed / 0 failed / 1 Linux-only
+skip on macOS, with file retries disabled; the existing JavaScript wrapper suite
+passed 26 tests. The canonical Python runner temporarily used the main checkout's
+prepared environment because its local environment lacks a protocol dependency;
+the original worktree environment was restored with the same directory inode.
+No packages were installed, and production imports remained in this worktree.
+
+Three separate loopback runs also completed: Aino large delivered three child
+results and a guarded parent final; native Codex's actual CLI passed its child
+spawn/read/return probe; Aino daily exercised file writing and unittest. The daily
+script deliberately did not repair code: the independent contract retained the
+same 10 failing subcases and 1 error before/after, daily.accepted=false. That is
+the expected negative quality result, not a failed recovery regression or a
+successful code repair. Synthetic durations cannot rank product performance.
+
+No production or evaluator logic changed in this preparation. No live model,
+account/settlement query, push, merge, daily profile change or desktop restart
+was performed. Exact commands, source/fixture identities, logs, native probe
+fields and remaining baseline work are recorded at:
+/Users/zizimutou/.codex/visualizations/2026/09/29/01a0eadc-dc19-7f42-98b4-e6812a7cb811/ultra-cross-task-preparation-20260930/report.md
