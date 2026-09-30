@@ -6,7 +6,7 @@ import {
 import { parseMaybeObject } from '@/components/assistant-ui/tool/fallback-model'
 import type { ChatMessage } from '@/lib/chat-messages'
 import { type TodoItem, todosFromMessageContent } from '@/lib/todos'
-import type { SubagentProgress } from '@/store/subagents'
+import { type SubagentProgress, subagentsWithHistory } from '@/store/subagents'
 import type { SessionMessage } from '@/types/hermes'
 
 export interface SummaryDelegation {
@@ -97,7 +97,7 @@ export function summaryDelegations(
   history: readonly SummaryDelegation[],
   live: readonly SubagentProgress[]
 ): SummaryDelegation[] {
-  const remaining = new Set(live)
+  const remaining = new Set(subagentsWithHistory(live))
 
   const merged = [...history]
     .reverse()

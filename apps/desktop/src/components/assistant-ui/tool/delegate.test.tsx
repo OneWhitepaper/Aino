@@ -3,7 +3,7 @@ import { atom } from 'nanostores'
 import { afterEach, expect, it, vi } from 'vitest'
 
 import { PRIMARY_SESSION_VIEW, SessionViewProvider } from '@/app/chat/session-view'
-import { $subagentsBySession, upsertSubagent } from '@/store/subagents'
+import { $subagentsBySession, pruneFinishedSessionSubagents, upsertSubagent } from '@/store/subagents'
 import type * as WindowStore from '@/store/windows'
 import { openSessionInNewWindow } from '@/store/windows'
 
@@ -86,6 +86,14 @@ it('keeps child activity collapsed until requested and preserves access through 
   expect(container.querySelector('[data-slot="delegate-detail"]')?.textContent).toContain(summary)
   expect(screen.queryByRole('textbox')).toBeNull()
   expect(screen.getByRole('button', { name: 'Open in new window' })).toBeTruthy()
+  // A completion notification starts another parent turn and prunes the live roster.
+  // The transcript must retain the terminal facts already received for this exact child.
+  act(() => pruneFinishedSessionSubagents('owner'))
+  expect($subagentsBySession.get().owner).toEqual([])
+  expect(screen.getByRole('button', { name: /Review sources.*Completed/ })).toBeTruthy()
+  expect(container.querySelector('[data-slot="delegate-detail"]')?.textContent).toContain(summary)
+  act(() => upsertSubagent('owner', { subagent_id: 'worker-2', goal: 'Review sources', status: 'running' }))
+  expect(screen.getByRole('button', { name: /Review sources.*Completed/ })).toBeTruthy()
   fireEvent.click(screen.getByRole('button', { name: /Review sources.*Completed/ }))
   expect(container.querySelector('[data-slot="delegate-detail"]')).toBeNull()
 })

@@ -54,17 +54,17 @@ const TOOL_PREVIEW_MAX = 96
 
 export const $subagentsBySession = atom<Record<string, SubagentProgress[]>>({})
 
-// A turn prunes display rows, not child identities. Keep retired IDs with the
-// session's current list so late starts/rosters cannot recreate completed work.
+// A turn prunes live rows, not received outcomes. Retain terminal facts with the
+// session's current list for transcript/summary receipts and late-event rejection.
 // Clearing the session (or resetting the store) releases this history too.
-const retiredSubagents = new WeakMap<SubagentProgress[], Set<string>>()
+const retiredSubagents = new WeakMap<readonly SubagentProgress[], Map<string, SubagentProgress>>()
 
 function setSessionSubagents(sid: string, previous: SubagentProgress[], next: SubagentProgress[]) {
-  const retired = retiredSubagents.get(previous) ?? new Set<string>()
+  const retired = new Map(retiredSubagents.get(previous))
 
   for (const item of previous) {
     if (TERMINAL.has(item.status)) {
-      retired.add(item.id)
+      retired.set(item.id, item)
     }
   }
 
@@ -73,6 +73,20 @@ function setSessionSubagents(sid: string, previous: SubagentProgress[], next: Su
   }
 
   $subagentsBySession.set({ ...$subagentsBySession.get(), [sid]: next })
+}
+
+/** Read-only presentation history; completed children never re-enter the live roster. */
+export function subagentsWithHistory(items: readonly SubagentProgress[]): readonly SubagentProgress[] {
+  const retired = retiredSubagents.get(items)
+
+  if (!retired?.size) {
+    return items
+  }
+
+  // A retired tool placeholder is superseded by native child identity, not a second outcome.
+  const native = [...retired].filter(([id]) => !id.startsWith('delegate-tool:'))
+
+  return [...new Map([...native, ...items.map(item => [item.id, item] as const)]).values()]
 }
 
 const isStr = (v: unknown): v is string => typeof v === 'string'

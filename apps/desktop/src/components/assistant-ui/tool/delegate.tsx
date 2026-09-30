@@ -19,7 +19,7 @@ import { useI18n } from '@/i18n'
 import { displayModelName } from '@/lib/model-status-label'
 import { useSessionSlice } from '@/lib/use-session-slice'
 import { cn } from '@/lib/utils'
-import { $subagentsBySession } from '@/store/subagents'
+import { $subagentsBySession, subagentsWithHistory } from '@/store/subagents'
 import { openSessionInNewWindow } from '@/store/windows'
 
 import { type DelegateRow, delegateRowsFromCall, isDelegateRowLive, mergeDelegateRows } from './delegate-model'
@@ -104,7 +104,7 @@ export const DelegateTool: FC<Pick<ToolPart, 'args' | 'result' | 'toolCallId'>> 
   const live = useSessionSlice($subagentsBySession, sessionId)
 
   const rows = useMemo(
-    () => mergeDelegateRows(delegateRowsFromCall(args, result, toolCallId), live, toolCallId),
+    () => mergeDelegateRows(delegateRowsFromCall(args, result, toolCallId), subagentsWithHistory(live), toolCallId),
     [args, live, result, toolCallId]
   )
 

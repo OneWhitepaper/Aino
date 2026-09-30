@@ -1,10 +1,61 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 
 import { toChatMessages } from '@/lib/chat-messages'
-import type { SubagentProgress } from '@/store/subagents'
+import {
+  $subagentsBySession,
+  clearSessionSubagents,
+  pruneDelegateFallbackSubagents,
+  pruneFinishedSessionSubagents,
+  type SubagentProgress,
+  upsertSubagent
+} from '@/store/subagents'
 import type { SessionMessage } from '@/types/hermes'
 
 import { summaryAgentCounts, summaryDelegations, summaryHistoryActivity } from './session-activity'
+
+afterEach(() => $subagentsBySession.set({}))
+
+it('retains exact child outcomes across parent continuations but releases them with their session', () => {
+  const raw: SessionMessage[] = [
+    {
+      role: 'tool',
+      tool_name: 'delegate_task',
+      tool_call_id: 'dispatch',
+      args: { tasks: [{ goal: 'Review' }, { goal: 'Review' }] },
+      content: JSON.stringify({ status: 'dispatched', subagent_ids: ['good', 'bad'] })
+    }
+  ]
+  const history = summaryHistoryActivity(toChatMessages(raw), raw).delegations
+
+  upsertSubagent('owner', { subagent_id: 'delegate-tool:dispatch:0', goal: 'Review', status: 'completed' })
+  pruneDelegateFallbackSubagents('owner')
+  upsertSubagent(
+    'owner',
+    { subagent_id: 'good', goal: 'Review', status: 'completed', summary: 'Verified.' },
+    true,
+    'subagent.complete'
+  )
+  upsertSubagent(
+    'owner',
+    { subagent_id: 'bad', goal: 'Review', status: 'failed', summary: 'Unavailable.' },
+    true,
+    'subagent.complete'
+  )
+  pruneFinishedSessionSubagents('owner')
+  expect($subagentsBySession.get().owner).toEqual([])
+  const groups = summaryDelegations(history, $subagentsBySession.get().owner)
+  expect(groups[0].rows.map(row => row.status)).toEqual(['completed', 'failed'])
+  expect(summaryAgentCounts(groups)).toEqual({ completed: 1, failed: 1, running: 0, dispatched: 0 })
+  expect(summaryDelegations(history, $subagentsBySession.get().other ?? [])[0].rows.map(row => row.status)).toEqual([
+    'dispatched',
+    'dispatched'
+  ])
+  clearSessionSubagents('owner')
+  expect(summaryDelegations(history, $subagentsBySession.get().owner ?? [])[0].rows.map(row => row.status)).toEqual([
+    'dispatched',
+    'dispatched'
+  ])
+})
 
 describe('summary activity history', () => {
   it('retains the last recorded plan and completed delegation after ephemeral runtime stores are cleared', () => {
