@@ -71,9 +71,13 @@ jobs:
         with:
           command: uv sync --locked --python 3.11 --extra all --extra dev
 
-      - name: Build the desktop app
+      - name: Build the unpackaged desktop app
         working-directory: apps/desktop
-        run: npm run build
+        run: |
+          npm run build
+          # Core uses the existing development account adapter. The release
+          # bundle intentionally hard-codes packaged mode and rejects it.
+          node scripts/bundle-electron-main.mjs --dev
 
       - name: Run the core suite under xvfb
         working-directory: apps/desktop

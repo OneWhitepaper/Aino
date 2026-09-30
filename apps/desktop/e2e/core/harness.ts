@@ -163,7 +163,9 @@ export function coreAppEnv(sandbox: CoreSandbox, extra: Record<string, string> =
 
 export async function launchCoreApp(env: Record<string, string>): Promise<{ app: ElectronApplication; page: Page }> {
   if (!fs.existsSync(path.join(DESKTOP_ROOT, 'dist', 'electron-main.mjs'))) {
-    throw new Error("Desktop dist not built: run 'npm run build' in apps/desktop first")
+    throw new Error(
+      "Desktop dist not built: run 'npm run build && node scripts/bundle-electron-main.mjs --dev' in apps/desktop first"
+    )
   }
 
   const app = await _electron.launch({
@@ -478,13 +480,12 @@ export async function splitProfileRoute(app: ElectronApplication, profile: strin
 export async function signInCoreAccount(page: Page): Promise<void> {
   const login = page.locator('[data-account-login-card]')
   await expect(login).toBeVisible()
-  await expect
-    .poll(() =>
-      page.evaluate(
-        () => (window as Window & { hermesDesktop?: { accountAdapter?: string } }).hermesDesktop?.accountAdapter
-      )
-    )
-    .toBe('legacy-development')
+  expect(
+    await page.evaluate(
+      () => (window as Window & { hermesDesktop?: { accountAdapter?: string } }).hermesDesktop?.accountAdapter
+    ),
+    'core requires the unpackaged --dev bundle; release bundles reject the development account adapter'
+  ).toBe('legacy-development')
   await page.getByRole('textbox', { name: 'Phone number', exact: true }).fill('+8613800138000')
   await page.getByRole('checkbox', { name: 'Agree to the user agreement and privacy policy', exact: true }).check()
   await page.getByRole('button', { name: 'Send code', exact: true }).click()

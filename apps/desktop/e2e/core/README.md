@@ -43,7 +43,7 @@ by the turn's own marker), no visual baselines, `retries: 0`, one worker,
 sandboxed `HOME`/`HERMES_HOME`/user-data per test, all `HERMES_*` and
 credential env stripped from the spawned app.
 
-Run locally (Linux, after `npm run build` in `apps/desktop`):
+Run locally (Linux, after `npm run build && node scripts/bundle-electron-main.mjs --dev` in `apps/desktop`):
 
 ```sh
 cd apps/desktop
@@ -60,3 +60,8 @@ code before exercising the upstream chat/onboarding flows. The WebSocket recorde
 is attached before login; relaunch tests reuse the same sandbox identity and
 verify its persistence. Packaged/platform authentication is unchanged and belongs
 to the separate platform-account suite.
+
+The release bundle intentionally bakes packaged mode into Electron main and
+rejects the development account adapter even when launched with electron . .
+Core therefore rebundles main/preload with the existing --dev command after
+building the renderer. This does not change release authentication policy.
