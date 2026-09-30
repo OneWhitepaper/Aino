@@ -240,11 +240,9 @@ test('transcript oracle holds across every transition', async () => {
     let sessionP2: OracleTarget = { sessionId: '', profile: 'p2', expectUserMarkers: [] }
 
     await test.step('non-default profile on the shared host backend: one socket per session', async () => {
-      await page
-        .getByRole('button', { name: 'Bots', exact: true })
-        .or(page.getByRole('tab', { name: 'Bots', exact: true }))
-        .first()
-        .click()
+      const botsTab = page.locator('[data-tree-tab="hermes-bots:pane"]:visible')
+      await expect(botsTab).toHaveCount(1, { timeout: 60_000 })
+      await botsTab.click()
       const row = page.locator('[data-slot="bots-roster"] [data-roster-key="local::p2"]')
       await expect(row).toBeVisible({ timeout: 60_000 })
       await row.click()

@@ -70,3 +70,5 @@ The transcript oracle reads message-root textContent, including intentionally
 folded settled activity, without changing disclosure state or navigation focus.
 Aino may fold activity after a final answer; no interim rows are excluded from
 the persisted ordering and duplicate checks.
+
+The shared-profile step selects the existing visible data-tree-tab contract, matching the other Desktop fixtures, so localization and sidebar presentation cannot make a valid Bots pane look absent.
