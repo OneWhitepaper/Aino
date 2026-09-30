@@ -6,6 +6,7 @@ import path from 'node:path'
 
 import { test } from 'vitest'
 
+import { findGitRoot } from './git-root'
 import { parseHermesVersion, resolveUpdateRoot } from './update-root'
 
 const REPO_ROOT = path.resolve(__dirname, '..', '..', '..')
@@ -75,13 +76,65 @@ test('runtime version parsing reads the canonical Hermes declaration', () => {
   assert.equal(parseHermesVersion('# no version here\n'), null)
 })
 
+test('an explicit linked worktree remains the update owner beside a regular checkout', () => {
+  const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'aino-update-worktree-'))
+  const sourceRoot = path.join(temp, 'source')
+  const worktreeRoot = path.join(temp, 'linked')
+
+  const git = (args: string[]) =>
+    execFileSync(
+      'git',
+      ['-c', 'maintenance.auto=false', '-c', 'commit.gpgsign=false', '-c', 'user.name=Update Test',
+        '-c', 'user.email=update-test@example.invalid', ...args],
+      { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }
+    ).trim()
+
+  try {
+    git(['init', '-b', 'main', sourceRoot])
+    fs.mkdirSync(path.join(sourceRoot, 'hermes_cli'))
+    fs.writeFileSync(path.join(sourceRoot, 'hermes_cli', 'main.py'), '# runtime\n')
+    git(['-C', sourceRoot, 'add', '.'])
+    git(['-C', sourceRoot, 'commit', '-m', 'runtime fixture'])
+    git(['-C', sourceRoot, 'worktree', 'add', '-b', 'linked-runtime', worktreeRoot])
+
+    assert.ok(fs.statSync(path.join(worktreeRoot, '.git')).isFile())
+
+    const options = {
+      activeHermesRoot: sourceRoot,
+      actualPackaged: false,
+      isGitCheckout: (root: string) => findGitRoot(root) === root,
+      isSourceRoot: (root: string) => fs.existsSync(path.join(root, 'hermes_cli', 'main.py')),
+      overrideRoot: worktreeRoot,
+      sourceRepoRoot: sourceRoot
+    }
+
+    const updateRoot = resolveUpdateRoot(options)
+
+    assert.equal(updateRoot, worktreeRoot)
+    assert.equal(findGitRoot(updateRoot), updateRoot)
+    assert.equal(git(['-C', updateRoot, 'branch', '--show-current']), 'linked-runtime')
+    assert.equal(
+      resolveUpdateRoot({ ...options, overrideRoot: null, sourceRepoRoot: worktreeRoot }),
+      worktreeRoot
+    )
+    assert.equal(
+      resolveUpdateRoot({ ...options, overrideRoot: null, sourceRepoRoot: worktreeRoot, actualPackaged: true }),
+      sourceRoot
+    )
+  } finally {
+    fs.rmSync(temp, { force: true, recursive: true })
+  }
+})
+
 test('desktop packaging metadata follows the Hermes runtime version', () => {
   const python = process.env.PYTHON ?? 'python3'
+
   const runtimeVersion = execFileSync(
     python,
     ['-c', 'import hermes_cli; print(hermes_cli.__version__)'],
     { cwd: REPO_ROOT, encoding: 'utf8' }
   ).trim()
+
   const desktopPackage = JSON.parse(fs.readFileSync(path.join(REPO_ROOT, 'apps', 'desktop', 'package.json'), 'utf8'))
 
   assert.ok(runtimeVersion, 'hermes_cli must expose __version__ at runtime')

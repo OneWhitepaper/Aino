@@ -236,6 +236,7 @@ import {
 import { startGatewaysAfterUpdateAbort, stopGatewayBeforeUpdate } from './gateway-stop-before-update'
 import { probeGatewayWebSocket, spawnedBackendProbeOptions } from './gateway-ws-probe'
 import { registerGitIpc } from './git-ipc'
+import { findGitRoot } from './git-root'
 import {
   describeGitHubCredentialSource,
   forgetGhCliToken,
@@ -493,6 +494,7 @@ import { updateCheckAgent } from './update-api-proxy'
 import { waitForUpdateClearance } from './update-gate'
 import { readLiveUpdateMarker, updateHandoffConflict, writeUpdateMarker } from './update-marker'
 import { isOfficialSshRemote, OFFICIAL_REPO_HTTPS_URL } from './update-remote'
+import { resolveUpdateRoot as resolveDesktopUpdateRoot } from './update-root'
 import {
   collectRelaunchArgs,
   describeUpdaterHandoffFailure,
@@ -3155,13 +3157,16 @@ function writeZoomState(zoomLevel) {
 // Dev → SOURCE_REPO_ROOT. Packaged/CLI install → ACTIVE_HERMES_ROOT.
 // HERMES_DESKTOP_HERMES_ROOT always wins so devs can pin a worktree.
 function resolveUpdateRoot() {
-  const candidates = [
-    process.env.HERMES_DESKTOP_HERMES_ROOT && path.resolve(process.env.HERMES_DESKTOP_HERMES_ROOT),
-    !IS_PACKAGED && isHermesSourceRoot(SOURCE_REPO_ROOT) ? SOURCE_REPO_ROOT : null,
-    isHermesSourceRoot(ACTIVE_HERMES_ROOT) ? ACTIVE_HERMES_ROOT : null
-  ].filter(Boolean)
+  const overrideRoot = process.env.HERMES_DESKTOP_HERMES_ROOT
 
-  return candidates.find(c => directoryExists(path.join(c, '.git'))) || candidates[0] || ACTIVE_HERMES_ROOT
+  return resolveDesktopUpdateRoot({
+    activeHermesRoot: ACTIVE_HERMES_ROOT,
+    actualPackaged: app.isPackaged,
+    isGitCheckout: root => findGitRoot(root) === root,
+    isSourceRoot: isHermesSourceRoot,
+    overrideRoot: overrideRoot ? path.resolve(overrideRoot) : null,
+    sourceRepoRoot: SOURCE_REPO_ROOT
+  })
 }
 
 function runGit(args, options: any = {}): Promise<{ code: number; stdout: string; stderr: string }> {
@@ -3261,9 +3266,8 @@ async function resolveHealedBranch(updateRoot, branch) {
 async function checkUpdates({ force = false }: { force?: boolean } = {}) {
   const updateRoot = resolveUpdateRoot()
   let { branch } = readDesktopUpdateConfig()
-  const gitDir = path.join(updateRoot, '.git')
 
-  if (!directoryExists(gitDir)) {
+  if (findGitRoot(updateRoot) !== updateRoot) {
     return {
       supported: false,
       reason: 'not-a-git-checkout',
@@ -4499,7 +4503,7 @@ async function handOffWindowsBootstrapRecovery(reason) {
   const updateRoot = resolveUpdateRoot()
   const { branch: configuredBranch } = readDesktopUpdateConfig()
 
-  const branch = directoryExists(path.join(updateRoot, '.git'))
+  const branch = findGitRoot(updateRoot) === updateRoot
     ? await resolveHealedBranch(updateRoot, configuredBranch || DEFAULT_UPDATE_BRANCH)
     : configuredBranch || DEFAULT_UPDATE_BRANCH
 
