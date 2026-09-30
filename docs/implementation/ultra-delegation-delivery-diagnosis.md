@@ -2058,3 +2058,77 @@ Ultra、system prompt、缓存恢复、通知展示相关文件。初轮并非�
 原始report/events/settlement、事后归档哈希、账单逐ID缺口、回归
 日志及最终提交记录集中在：
 /Users/zizimutou/.codex/visualizations/2026/09/29/01a0eadc-dc19-7f42-98b4-e6812a7cb811/ultra-delivery-stability-20260930/
+
+### 18.17 冻结版本完整验收：自然交付通过，准确性未全通过（2026-09-30）
+
+按用户确认，仅执行一次完整真实验收。实际源码为
+codex/ultra-delivery-stability @ 611074f7342024426ae4f9ba685caa35e16a10b6。
+原技能、六文件、三组与Top 3任务，取消400字；父Ultra、子配置High；
+3600秒、2M input_excluding_cache_reads、64 hook请求、60K hook输出
+（含reasoning）、$10观察停止阈值。无matched-comparison、
+evidence-contract、父阶段重放、压缩覆盖或强制收尾提示。
+
+本次结果为normal_final、natural_delivery=true、caps=[]，耗时
+1402.70秒，父最终正文6955字符。完成guard准入，3子均completed，
+唯一durable批次投递一次，无pending/missing通知。父DB最终消息155
+与最终事件、报告历史、原答导出逐字一致；早期47字符等待说明
+没有被计为完整交付。实际wire为19次chat/max、29次delegation/high，
+另有title1次及auxiliary7次，模型均为gpt-5.6-sol；无补派或子档位覆盖。
+
+子最终正文3583/3760/2758字符逐项比对DB、durable、事件与父通知，
+完整内容各出现一次。父通知83共12680字符，canonical hash匹配
+随后全部15次父chat请求；160/500字符事件预览不是结果截断。
+
+事前冻结及结束后的全树核验：15605个tracked文件、实际runner、
+原技能和六个样本均无变化，fixture_changed=[]，依赖包版本无漂移；
+未将包版本记录夸大为依赖全字节冻结。预检发现fixture内9个生成
+.pyc，只将manifest中的10个规范文件复制到外部样本根，实际large
+workspace恰好六个原文件、哈希相同；未删除或修改仓库样本。
+本节在事后冻结核验完成后追加，属文档变更，不是运行期间改码。
+
+49 pre/48 post hooks；输入最终/峰值444527=未缓存233612+缓存
+写入121605+未决预留89310；无阈值越界。hook输出52475，其中
+reasoning35619已包含；全用途账单输出53366，分别保留观察范围。
+旧represented-input和2291888不是本次批准口径；不将本次记录
+改判为历史400字/20分钟策略通过，也不将两种口径混作同配置对照。
+
+退出快照55行/$4.80280525；唯一一次只读结算刷新后，56个wire
+http_call_id与56个settled desktop_call_id逐一闭合，合计
+$4.93338825，缺失/额外/重复ID均为0。补入的$0.13058300来自父
+最终答案之后的一次auxiliary请求：客户端记录ReadError，无headers，
+但后来有账单；不能定因provider或收尾，也不能称全程零异常。
+刷新没有补造原hook缺失响应；未追加任何付费模型运行。
+
+续租RPC在t=1200.256成功；最后父请求t=970.344开始，耗时421.768
+秒后正常EOF与作答，跨过续租时点。续租后未新发起chat/delegation，
+也未跨过初始租约真正到期点，不能宣称验证新凭证主/子请求或
+一小时到期后的持续运行。主/子48次传输均有200和正常EOF；工具
+发现、auxiliary及收尾警告原样保留。
+
+准确性独立按冻结源码、真实父/子身份与实际工具正文审查：
+
+- 终止标记reset遗漏有局部条件性问题，但额外错误abort还要求
+  同实例、无成功清理、新失败非终止类型及普通fallback可用等。
+  父总结和Top 3丢失必要条件、扩大持续增长后果，不能全判通过。
+- requested children计数及构造失败无局部退款是事实；源码明确
+  以requested为政策，未证明只收成功启动的契约。父收到这条注释，
+  仍作确定配额缺陷，属于缺少契约依据的判断。
+- model switch失败前清内存pin且未局部回滚属实，但不足以证明
+  DB持久值已失或resume必选错模型；helper不清已有resume dict。
+  Top 3的最小复现还遗漏composer provenance前置条件。
+- summary_model字段被清空成立，永久主模型路由及必须恢复旧
+  override的契约不在快照证据内，应降为待验证。
+
+同实例compression_count与会话head protection的局部问题可保留；
+父纠正了一条子投影字段结论，并将部分清理风险降级，不能将
+整份答案归为完全错误。审查不以模型投票或仅引用行号有效判真。
+已检查的关键反证到达父记录，未证明这些语义偏差源于通知丢失。
+不为通过样题修改生产fixture代码或将指定答案写入提示。
+
+因此本次是当前保留补丁的完整自然交付正证据，重要语义准确性
+尚未全通过。单样本不证明总体稳定率、Codex/Hermes等效、所有
+平台/远端或长child跨到期可用。本次授权运行已结束，无自动重跑；
+只追加本地诊断记录，未推送、合并、发布或重启日常桌面。
+
+事前/事后冻结、原答、逐项系统及语义审计、账单闭合与原始数据：
+/Users/zizimutou/.codex/visualizations/2026/09/29/01a0eadc-dc19-7f42-98b4-e6812a7cb811/ultra-frozen-611074-acceptance/report.md
