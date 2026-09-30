@@ -87,6 +87,29 @@ def test_a_delegation_whose_notification_text_is_empty_hands_its_offer_back(monk
     assert [e["delegation_id"] for e in returned] == ["deleg-1"]
 
 
+def test_a_notification_rejected_before_turn_start_stays_pending(monkeypatch):
+    """A false admission result is retryable, so the durable completion cannot be acknowledged."""
+    released: list = []
+    completed: list = []
+    monkeypatch.setattr("tools.async_delegation.claim_event_delivery", lambda evt, consumer: "claim-1")
+    monkeypatch.setattr("tools.async_delegation.release_event_delivery",
+                        lambda evt, claim: released.append(claim))
+    monkeypatch.setattr("tools.async_delegation.complete_event_delivery",
+                        lambda evt, claim: completed.append(claim))
+    session = _claimed_session()
+
+    def reject(*_args, **_kwargs):
+        session["running"] = False
+        return False
+
+    monkeypatch.setattr(server, "_run_prompt_submit", reject)
+    server._notif_dispatch_event("sid", session, dict(DELEGATION), "text")
+
+    assert session["running"] is False
+    assert released == ["claim-1"]
+    assert completed == []
+
+
 @pytest.mark.parametrize("fail_at", ["claim", "render"])
 def test_a_completion_batch_that_cannot_be_prepared_hands_the_turn_back(monkeypatch, fail_at):
     events = [{"type": "completion", "session_id": "proc_a"}, {"type": "completion", "session_id": "proc_b"}]
@@ -114,6 +137,34 @@ def test_a_completion_batch_that_cannot_be_prepared_hands_the_turn_back(monkeypa
     assert session["running"] is False and started == []
     # Claims already taken go back too, or those completions are lost to every consumer for 300 s.
     assert released == (["claim-a"] if fail_at == "claim" else ["claim-a", "claim-b"])
+
+
+def test_a_completion_batch_rejected_before_turn_start_stays_pending(monkeypatch):
+    events = [{"type": "completion", "session_id": "proc_a"}, {"type": "completion", "session_id": "proc_b"}]
+    released: list = []
+    completed: list = []
+    claims = iter(["claim-a", "claim-b"])
+    monkeypatch.setattr("tools.async_delegation.claim_event_delivery", lambda evt, consumer: next(claims))
+    monkeypatch.setattr("tools.async_delegation.release_event_delivery",
+                        lambda evt, claim: released.append(claim))
+    monkeypatch.setattr("tools.async_delegation.complete_event_delivery",
+                        lambda evt, claim: completed.append(claim))
+    from tools.process_registry_notifications import ProcessNotificationBatch
+    monkeypatch.setattr(ProcessNotificationBatch, "render", lambda self, registry: "batch text")
+    monkeypatch.setattr(ProcessNotificationBatch, "display_text", lambda self, registry: "batch display")
+    session = {"history_lock": threading.RLock(), "running": False, "history": []}
+
+    def reject(*_args, **_kwargs):
+        session["running"] = False
+        return False
+
+    monkeypatch.setattr(server, "_run_prompt_submit", reject)
+    server._notif_dispatch_completions("sid", session, [(e, "t") for e in events],
+                                       SimpleNamespace(completion_queue=queue.Queue()), None)
+
+    assert session["running"] is False
+    assert released == ["claim-a", "claim-b"]
+    assert completed == []
 
 
 def test_a_loop_wakeup_whose_send_cannot_start_hands_the_turn_back(monkeypatch):
@@ -217,6 +268,7 @@ os._exit(0)
         attempts.append((sid, text))
         if len(attempts) == 1:
             raise RuntimeError("no free worker")
+        return True
 
     monkeypatch.setattr(server, "_run_prompt_submit", submit)
     sessions = {key: {"session_key": key, "profile_home": str(home), "history": [],

@@ -158,14 +158,17 @@ def _notif_log_failure(what: str, exc: BaseException) -> None:
     print(f"[tui_gateway] {what}: {type(exc).__name__}: {exc}", file=sys.stderr)
 
 
-def _notif_submit(rid: str, sid: str, session: dict, text: str, what: str, **kwargs) -> None:
+def _notif_submit(rid: str, sid: str, session: dict, text: str, what: str, **kwargs) -> bool:
     """message.start + _run_prompt_submit for a claimed (running=True) turn; releases on failure."""
     try:
         from gateway.warning_notifications import render_notification
         with _session_profile_runtime_scope(session):
             render_notification(lambda: _emit("message.start", sid), platform="tui",
                                 diagnostic=(kwargs.get("display_metadata") or {}).get("notification_category") == "diagnostic")
-        _run_prompt_submit(rid, sid, session, text, **kwargs)
+        # ``_run_prompt_submit`` returns False when admission declines the turn and
+        # clears ``session['running']`` itself.  Callers that own a durable event
+        # must keep that event pending instead of acknowledging an unstarted turn.
+        return bool(_run_prompt_submit(rid, sid, session, text, **kwargs))
     except Exception as exc:
         _notif_log_failure(what, exc)
         _notif_release_turn(session)
@@ -481,8 +484,12 @@ def _notif_dispatch_event(sid: str, session: dict, evt: dict, text: str) -> None
     if diagnostic_process_event(evt):
         kwargs.setdefault("display_metadata", {})["notification_category"] = "diagnostic"
     try:
-        _notif_submit(f"__notif__{int(time.time() * 1000)}", sid, session, text, "notification poller dispatch failed", **kwargs)
+        started = _notif_submit(f"__notif__{int(time.time() * 1000)}", sid, session, text,
+                                "notification poller dispatch failed", **kwargs)
     except Exception:
+        release_event_delivery(evt, claim)
+        return
+    if not started:
         release_event_delivery(evt, claim)
         return
     complete_event_delivery(evt, claim)
@@ -582,12 +589,19 @@ def _notif_dispatch_completions(sid, session, notifications, registry, deferred)
         return
     if text is None:
         _notif_release_turn(session)
+        for event, _text, claim in claimed:
+            release_event_delivery(event, claim)
+        return
     try:
         if text is not None:
-            _notif_submit(f"__notif__{int(time.time() * 1000)}", sid, session, text,
-                          "completion batch dispatch failed", display_kind=PROCESS_COMPLETE_DISPLAY_KIND,
-                          display_metadata={"display_text": batch.display_text(registry)})
+            started = _notif_submit(f"__notif__{int(time.time() * 1000)}", sid, session, text,
+                                    "completion batch dispatch failed", display_kind=PROCESS_COMPLETE_DISPLAY_KIND,
+                                    display_metadata={"display_text": batch.display_text(registry)})
     except Exception:
+        for event, _text, claim in claimed:
+            release_event_delivery(event, claim)
+        return
+    if not started:
         for event, _text, claim in claimed:
             release_event_delivery(event, claim)
         return
