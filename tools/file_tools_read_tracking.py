@@ -22,6 +22,8 @@ import os
 import stat
 import threading
 import time
+from contextlib import contextmanager
+from contextvars import ContextVar
 
 from tools.file_state import _evict_oldest
 from tools.file_tools_paths import _authoritative_workspace_root, _resolve_path_for_task
@@ -30,6 +32,17 @@ logger = logging.getLogger("tools.file_tools")
 
 _read_tracker_lock = threading.Lock()
 _read_tracker: dict = {}
+_programmatic_read_active: ContextVar[bool] = ContextVar("programmatic_read_active", default=False)
+
+
+@contextmanager
+def programmatic_read_scope():
+    """RPC consumers need file bytes; their intermediate results are not model context."""
+    token = _programmatic_read_active.set(True)
+    try:
+        yield
+    finally:
+        _programmatic_read_active.reset(token)
 
 # Consecutive patch failures per (task_id, resolved_path); escalates the hint
 # when the model keeps failing the same file. Reset on a successful patch.

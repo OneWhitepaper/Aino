@@ -15,6 +15,8 @@ import time
 import unittest
 from unittest.mock import patch
 
+import pytest
+
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 
 from tools.code_kernel_remote import (
@@ -82,6 +84,60 @@ def _run(env, code="print(1)", *, task="t1", reset=False, timeout=10,
         sandbox_tools=tools, timeout=timeout,
         max_tool_calls=5, reset=reset,
     )
+
+
+def test_file_rpc_reads_preserve_data_and_restore_dispatch_scope(tmp_path, monkeypatch):
+    """Local file-RPC integration; this does not require or simulate an SSH host."""
+    import model_tools
+    from tools.code_execution_rpc import _default_dispatch
+    from tools.code_execution_tool import _run_remote_per_call
+    from tools.code_kernel import CellAuthority
+    from tools.environments.local import LocalEnvironment
+    from tools.file_tools import clear_file_ops_cache
+
+    monkeypatch.setenv("TERMINAL_ENV", "local")
+    source = tmp_path / "rpc-data.txt"
+    source.write_text("file data consumed only inside the script\n", encoding="utf-8")
+    task_id = f"file-rpc-{tmp_path.name}"
+    args = {"path": str(source), "offset": 1, "limit": 1}
+    env = LocalEnvironment(cwd=str(tmp_path), env={"TERMINAL_TEMP_DIR": str(tmp_path)})
+    try:
+        result = json.loads(_run_remote_per_call(
+            env, "local-file-rpc-test",
+            "from hermes_tools import read_file\n"
+            f"for _ in range(5):\n    result = read_file(**{args!r})\n"
+            "    assert result.get('content'), result\n"
+            "print('processed')\n",
+            task_id, frozenset({"read_file"}), timeout=30, max_tool_calls=8,
+            exec_start=time.monotonic(),
+        ))
+        assert result["status"] == "success", result
+        assert result["tool_calls_made"] == 5
+        assert source.read_text().strip() not in result["output"]
+        direct = json.loads(model_tools.handle_function_call("read_file", args, task_id=task_id))
+        assert source.read_text().strip() in direct["content"]
+        repeated = json.loads(model_tools.handle_function_call("read_file", args, task_id=task_id))
+        assert repeated["status"] == "unchanged" and repeated["content_returned"] is False
+
+        # A failing extension before registry dispatch must not leak the scope
+        # into the host thread or a persistent cell's captured context.
+        from tools.file_tools_read_tracking import _programmatic_read_active
+
+        def middleware_failure(*_args, **_kwargs):
+            assert _programmatic_read_active.get() is True
+            raise RuntimeError("request middleware failed")
+
+        authority = CellAuthority(task_id)
+        for dispatch in (_default_dispatch(task_id), authority.dispatch):
+            with monkeypatch.context() as failure:
+                failure.setattr(model_tools, "_apply_request_middleware", middleware_failure)
+                with pytest.raises(RuntimeError, match="request middleware failed"):
+                    dispatch("read_file", args)
+            assert _programmatic_read_active.get() is False
+            assert authority.ctx.run(_programmatic_read_active.get) is False
+    finally:
+        env.cleanup()
+        clear_file_ops_cache(task_id)
 
 
 class RemoteKernelBase(unittest.TestCase):

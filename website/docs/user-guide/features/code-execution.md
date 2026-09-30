@@ -39,6 +39,13 @@ The agent uses `execute_code` when there are:
 
 The key benefit: intermediate tool results never enter the context window — only the final `print()` output comes back, dramatically reducing token usage.
 
+Inside a script, repeated `read_file` calls return file data rather than the
+conversation's "already read" stub. A script may use those bytes without printing
+them, so these reads do not mark the source as already shown to the model. Normal
+file safety checks, redaction, pagination and the per-execution tool-call limit
+still apply. Inspect the returned dictionary for errors before using `content`.
+If printed output is truncated, use the result's spill path to recover it.
+
 ## Practical Examples
 
 ### Data Processing Pipeline

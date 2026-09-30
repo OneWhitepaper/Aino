@@ -63,6 +63,143 @@ def _run(code, **kwargs):
     return json.loads(execute_code(code, task_id="kernel-test", **kwargs))
 
 
+def test_programmatic_rereads_keep_content_after_truncated_batch(tmp_path):
+    """A script consumes file data, not the model's earlier conversation text."""
+    from model_tools import handle_function_call
+
+    source = tmp_path / "batch.txt"
+    source.write_text("".join(f"row-{i}: {'.' * 900}\n" for i in range(76)))
+    task_id = f"batch-read-{tmp_path.name}"
+
+    def cell(code):
+        return json.loads(handle_function_call(
+            "execute_code", {"code": code}, task_id=task_id,
+            enabled_tools=["execute_code", "read_file"],
+        ))
+
+    with _kernel_config():
+        first = cell(
+            "from hermes_tools import read_file\nimport json\n"
+            f"path = {str(source)!r}\n"
+            "for offset in range(1, 75, 2):\n"
+            "    print(read_file(path, offset=offset, limit=2).get('content', ''))\n"
+        )
+        assert first["status"] == "success", first
+        assert first["stdout_truncated"] is True
+        assert Path(first["stdout_spill_path"]).is_file()
+        second = cell(
+            "results = [read_file(path, offset=o, limit=2)\n"
+            "           for o in [75, *range(1, 33, 2)]]\n"
+            "print(json.dumps([{'has_content': bool(r.get('content')),\n"
+            "                   'status': r.get('status'), 'error': r.get('error')}\n"
+            "                  for r in results]))\n"
+        )
+    assert second["status"] == "success", second
+    results = json.loads(second["output"])
+    assert len(results) == 17
+    assert all(result["has_content"] for result in results), results
+
+
+def test_programmatic_reads_do_not_claim_the_model_saw_their_content(tmp_path):
+    from model_tools import handle_function_call
+
+    source = tmp_path / "hidden.txt"
+    source.write_text("evidence only consumed inside the script\n")
+    task_id = f"hidden-read-{tmp_path.name}"
+    args = {"path": str(source), "offset": 1, "limit": 1}
+    with _kernel_config():
+        result = json.loads(handle_function_call(
+            "execute_code", {"code": (
+                "from hermes_tools import read_file\n"
+                f"for _ in range(5):\n    r = read_file(**{args!r})\n"
+                "    assert r.get('content'), r\n"
+                "print('processed')\n"
+            )}, task_id=task_id, enabled_tools=["execute_code", "read_file"],
+        ))
+    assert result["status"] == "success", result
+    assert source.read_text().strip() not in result["output"]
+    first_direct = json.loads(handle_function_call("read_file", args, task_id=task_id))
+    assert source.read_text().strip() in first_direct["content"]
+    second_direct = json.loads(handle_function_call("read_file", args, task_id=task_id))
+    assert second_direct["status"] == "unchanged"
+    assert second_direct["content_returned"] is False
+    with _kernel_config():
+        after_direct = json.loads(handle_function_call(
+            "execute_code", {"code": f"assert read_file(**{args!r}).get('content')"},
+            task_id=task_id, enabled_tools=["execute_code", "read_file"],
+        ))
+    assert after_direct["status"] == "success", after_direct
+    third_direct = json.loads(handle_function_call("read_file", args, task_id=task_id))
+    assert third_direct["status"] == "unchanged"
+    fourth_direct = json.loads(handle_function_call("read_file", args, task_id=task_id))
+    assert "BLOCKED" in fourth_direct["error"]
+    assert fourth_direct["already_read"] == 3
+
+
+def test_programmatic_reads_keep_versioned_unredacted_write_baselines(tmp_path):
+    """Script reads retain write safety without substituting conversation stubs."""
+    from model_tools import handle_function_call
+    from tools.file_tools import clear_file_ops_cache
+
+    task_id = f"programmatic-baseline-{tmp_path.name}"
+    full, partial, stale, redacted = [tmp_path / f"{name}.txt"
+                                      for name in ("full", "partial", "stale", "redacted")]
+    for path in (full, partial, stale):
+        path.write_text("first\nsecond\nthird\n", encoding="utf-8")
+    secret = "ghp_" + "A" * 40
+    redacted.write_text(f"token={secret}\n", encoding="utf-8")
+
+    def cell(code):
+        result = json.loads(handle_function_call(
+            "execute_code", {"code": code}, task_id=task_id,
+            enabled_tools=["execute_code", "read_file", "write_file"],
+        ))
+        assert result["status"] == "success", result
+        return json.loads(result["output"])
+
+    try:
+        with _kernel_config(), patch("agent.redact._REDACT_ENABLED", True):
+            first = cell(
+                "from hermes_tools import read_file, write_file\nimport json\n"
+                f"full = {str(full)!r}\npartial = {str(partial)!r}\n"
+                f"stale = {str(stale)!r}\nredacted = {str(redacted)!r}\n"
+                "for _ in range(5):\n    read = read_file(full)\n"
+                "    assert read.get('content'), read\n"
+                "allowed = write_file(full, content='replacement\\n')\n"
+                "assert read_file(partial, offset=1, limit=1).get('content')\n"
+                "refused_partial = write_file(partial, content='replacement\\n')\n"
+                "assert read_file(stale).get('content')\n"
+                "hidden = read_file(redacted)\n"
+                "refused_redacted = write_file(redacted, content='replacement\\n')\n"
+                "print(json.dumps([allowed, refused_partial, hidden, refused_redacted]))\n"
+            )
+            assert "error" not in first[0], first[0]
+            assert full.read_text() == "replacement\n"
+            assert first[1].get("stale_write_blocked"), first[1]
+            assert partial.read_text() == "first\nsecond\nthird\n"
+            assert secret not in first[2]["content"]
+            assert first[3].get("stale_write_blocked"), first[3]
+            assert redacted.read_text() == f"token={secret}\n"
+
+            stamp = stale.stat()
+            stale.write_text("other\nsecond\nthird\n", encoding="utf-8")
+            os.utime(stale, ns=(stamp.st_atime_ns, stamp.st_mtime_ns))
+            second = cell(
+                "assert read_file(stale, offset=2, limit=2).get('content')\n"
+                "print(json.dumps(write_file(stale, content='replacement\\n')))\n"
+            )
+            assert second.get("stale_write_blocked"), second
+            assert stale.read_text() == "other\nsecond\nthird\n"
+            recovered = cell(
+                "assert read_file(stale).get('content')\n"
+                "print(json.dumps(write_file(stale, content='merged\\n')))\n"
+            )
+            assert "error" not in recovered, recovered
+            assert stale.read_text() == "merged\n"
+    finally:
+        clear_file_ops_cache(task_id)
+
+
 class TestSessionStatePersistence(unittest.TestCase):
     def test_state_persists_across_cells(self):
         with _kernel_config():

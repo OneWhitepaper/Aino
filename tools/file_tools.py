@@ -37,7 +37,7 @@ from tools.file_tools_read_tracking import (
     _bump_consecutive, _cap_read_tracker_data, _check_file_staleness, _check_not_found_cache,
     _file_metadata, _file_version,
     _mark_full_write_baseline, _mark_verification_stale, _note_read_coverage, _patch_failure_lock,
-    _patch_failure_tracker, _read_tracker, _read_tracker_lock, _record_not_found,
+    _patch_failure_tracker, _programmatic_read_active, _read_tracker, _read_tracker_lock, _record_not_found,
     _record_patch_failure, _reset_patch_failures, _task_data, _update_read_timestamp)
 
 logger = logging.getLogger(__name__)
@@ -544,11 +544,16 @@ def _record_successful_read(task_data: dict, task_id: str, path: str, resolved_s
     version = (snapshot or _file_version(resolved_str)) if version_before is not None else None
     stable = version is not None and version[:-1] == version_before == _file_metadata(resolved_str)
     complete = False
+    programmatic = _programmatic_read_active.get()
     with _read_tracker_lock:
-        task_data["dedup_hits"].pop(dedup_key, None)
-        task_data["dedup_generation_reads"].add(dedup_key)
+        # A script may retain/filter these bytes without printing them. Preserve
+        # write baselines, but never treat its data as a model-visible read.
+        count = 0
+        if not programmatic:
+            task_data["dedup_hits"].pop(dedup_key, None)
+            task_data["dedup_generation_reads"].add(dedup_key)
+            count = _bump_consecutive(task_data, ("read", path, offset, limit))
         task_data["read_history"].add((path, offset, limit))
-        count = _bump_consecutive(task_data, ("read", path, offset, limit))
         try:
             _mtime_now = os.path.getmtime(resolved_str)
             task_data.setdefault("read_timestamps", {})[resolved_str] = _mtime_now
@@ -556,7 +561,8 @@ def _record_successful_read(task_data: dict, task_id: str, path: str, resolved_s
             pass
         baselines = task_data["full_write_baselines"]
         if stable and version is not None and count < 4:
-            task_data["dedup"][dedup_key] = version_before
+            if not programmatic:
+                task_data["dedup"][dedup_key] = version_before
             # A narrower view does not undo knowledge of these same bytes. Do
             # not revive a baseline after a partial read of a different version.
             complete = baselines.get(resolved_str) == version
@@ -570,7 +576,7 @@ def _record_successful_read(task_data: dict, task_id: str, path: str, resolved_s
                 baselines[resolved_str] = version
         if not complete:
             baselines.pop(resolved_str, None)
-        if not stable or count >= 4:
+        if not programmatic and (not stable or count >= 4):
             task_data["dedup"].pop(dedup_key, None)
             task_data["dedup_generation_reads"].discard(dedup_key)
         _cap_read_tracker_data(task_data)
@@ -671,7 +677,8 @@ def read_file_tool(path: str, offset: int = 1, limit: int = DEFAULT_READ_LIMIT, 
         # read-before-write guard needs a real read, which the stub path never records (#95976).
         file_ops = _get_file_ops(task_id)
         version_before = _file_metadata(resolved_str) if _file_ops_uses_host_paths(file_ops) else None
-        if (cached_version is not None and not is_background_review()
+        if (not _programmatic_read_active.get()
+                and cached_version is not None and not is_background_review()
                 and version_before == cached_version and content_served_in_generation):
             return _dedup_stub_or_block(task_data, dedup_key, path)
 
