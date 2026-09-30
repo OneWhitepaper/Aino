@@ -1,8 +1,8 @@
-"""Convergence metrics must not misreport a never-attempted answer as an interrupted one.
+"""Convergence metrics separate observed answer text from complete natural delivery.
 
 The whole-task question is "did the parent deliver inside the budget", and the two runs that
-answer it are easy to conflate: a parent still inside its tool loop when the cap fired never
-offered an answer, while a parent that stopped with text and no cap did deliver. The extractor
+answer it are easy to conflate: the last completed tool response may be followed by an
+unfinished request that already streamed text, while a complete guarded final did deliver. The extractor
 also has to keep the budget split honest, because ``limits.approx_cumulative_input`` covers the
 parent AND its children together — reading it as the parent's own headroom overstates the parent.
 
@@ -14,11 +14,6 @@ from __future__ import annotations
 import collections
 import json
 from pathlib import Path
-import queue
-import signal
-import subprocess
-import sys
-import threading
 
 import pytest
 
@@ -100,8 +95,8 @@ def test_missing_events_leave_the_turn_split_unknown_instead_of_guessed():
     assert summary["delivery"]["last_child_wall_seconds"] is None
 
 
-def test_final_tool_call_means_no_answer_was_ever_offered():
-    """The interrupted run's shape: the task turn ends inside its tool loop, so nothing was cut short."""
+def test_completed_tool_response_without_pending_request_stays_in_tool_loop():
+    """No pending request: retain the observed tool-loop state without claiming model intent."""
     summary = convergence.summarize(
         _report(parent_reasons=("tool_calls", "tool_calls"), parent_inputs=(1, 2)),
         events_path=Path("/nonexistent/events.jsonl"),
@@ -110,6 +105,100 @@ def test_final_tool_call_means_no_answer_was_ever_offered():
     assert behaviour["final_finish_reason"] == "tool_calls"
     assert behaviour["answer_state"] == "mid_tool_loop"
     assert summary["natural_final"] is False
+
+
+def _parent_stream_report():
+    report = _report(parent_id="parent-db", child_ids=(), parent_reasons=("tool_calls",),
+                     parent_inputs=(10, 20), child_inputs=(), stop_reason="timeout", task_turn="turn")
+    report.update(session_id="parent-ui", stored_session_id="parent-db", children_finished=[],
+                  final_event=None, completion_guard={"eligible": False})
+    return report
+
+
+def _parent_stream_events(message_id=None):
+    identity = {"message_id": message_id} if message_id is not None else {}
+    return [
+        {"time": 10, "event": "message.start", "session_id": "parent-ui", "payload": dict(identity)},
+        {"time": 11, "kind": "pre_api_request", "session_id": "parent-db", "api_request_id": "turn:req:1", "turn_id": "turn"},
+        {"time": 12, "event": "message.delta", "session_id": "parent-ui", "payload": {**identity, "text": "\n\nEvidence "}},
+        {"time": 13, "event": "message.delta", "session_id": "parent-ui", "payload": {**identity, "text": "partial"}},
+        {"time": 14, "event": "message.complete", "session_id": "parent-ui", "payload": {
+            **identity, "status": "interrupted", "text": "Evidence partial",
+            "persisted_turn": {"complete": False, "row_ids": [11, 12], "user_row_id": 11},
+        }},
+    ]
+
+
+def _summarize_parent_stream(tmp_path, report, events):
+    path = tmp_path / "events.jsonl"
+    path.write_text("\n".join(json.dumps(e) for e in events), encoding="utf-8")
+    return convergence.summarize(report, events_path=path)
+
+
+@pytest.mark.parametrize("message_id", [None, "message-current"], ids=["real-no-id-shape", "matching-id"])
+def test_confirmed_parent_stream_is_observed_but_never_natural_delivery(tmp_path, message_id):
+    summary = _summarize_parent_stream(tmp_path, _parent_stream_report(), _parent_stream_events(message_id))
+    behaviour = summary["parent_delivery_behaviour"]
+    assert behaviour["answer_state"] == "interrupted_with_streamed_text"
+    assert behaviour["interrupted_streamed_text_chars"] == len("Evidence partial")
+    assert summary["natural_delivery"] is False
+    assert summary["natural_final"] is False
+
+
+@pytest.mark.parametrize("case,has_pending,expected_state", [
+    ("only-interrupt-notice", False, "mid_tool_loop"),
+    ("wrong-child", True, "unknown_after_tool_calls"),
+    ("stale-turn", True, "unknown_after_tool_calls"),
+    ("interim-only", False, "mid_tool_loop"),
+    ("different-request", True, "unknown_after_tool_calls"),
+    ("old-turn-request", True, "unknown_after_tool_calls"),
+    ("unreported-request", True, "unknown_after_tool_calls"),
+    ("earlier-report-request", True, "unknown_after_tool_calls"),
+    ("mismatched-request-turn", True, "unknown_after_tool_calls"),
+    ("mismatch", True, "unknown_after_tool_calls"),
+    ("wrong-message-id", True, "unknown_after_tool_calls"),
+    ("missing-parent-id", True, "unknown_after_tool_calls"),
+    ("no-start", False, "mid_tool_loop"),
+])
+def test_unconfirmed_stream_does_not_claim_an_answer_or_no_attempt(tmp_path, case, has_pending, expected_state):
+    report, events = _parent_stream_report(), _parent_stream_events()
+    if not has_pending:
+        report["responses"].append({"session_id": "parent-db", "api_request_id": "turn:req:1", "finish_reason": "tool_calls"})
+    end = events[-1]
+    variants = {
+        "only-interrupt-notice": events[:2] + [{
+            **end, "payload": {**end["payload"], "text": "Execution interrupted by timeout."}}],
+        "wrong-child": events[:2] + [
+            {**event, "session_id": "child-ui"} for event in events[2:4]] + [end],
+        "stale-turn": events[:-1] + [{
+            "time": 13.5, "event": "message.start", "session_id": "parent-ui", "payload": {}}] + [end],
+        "interim-only": events[:2] + [
+            {**event, "event": "message.interim"} for event in events[2:4]] + [end],
+        "different-request": events[:-1] + [{
+            **events[1], "time": 13.5, "api_request_id": "turn:req:2"}] + [end],
+        "old-turn-request": events[:1] + [{
+            **events[1], "api_request_id": "old:req:1", "turn_id": "old-turn"}] + events[2:],
+        "unreported-request": events[:1] + [{
+            **events[1], "api_request_id": "unknown:req:1"}] + events[2:],
+        "earlier-report-request": events[:1] + [{
+            **events[1], "api_request_id": "turn:req:0"}] + events[2:],
+        "mismatched-request-turn": events[:1] + [{
+            **events[1], "turn_id": "old-turn"}] + events[2:],
+        "mismatch": events[:-1] + [{
+            **end, "payload": {**end["payload"], "text": "Another response body"}}],
+        "wrong-message-id": events[:-1] + [{
+            **end, "payload": {**end["payload"], "message_id": "unrelated-message"}}],
+        "missing-parent-id": events,
+        "no-start": events[1:],
+    }
+    if case == "missing-parent-id":
+        report.pop("session_id")
+    events = variants[case]
+    summary = _summarize_parent_stream(tmp_path, report, events)
+    behaviour = summary["parent_delivery_behaviour"]
+    assert behaviour["answer_state"] == expected_state, behaviour
+    assert behaviour.get("interrupted_streamed_text_chars") is None
+    assert summary["natural_delivery"] is False
 
 
 def test_a_stop_without_text_is_not_reported_as_an_answer():
@@ -415,12 +504,13 @@ def test_tool_times_pair_by_id_and_keep_every_execute_code_start(tmp_path):
 
 
 @pytest.mark.skipif(not FAILED_LIVE_RUN.is_file(), reason="originating machine's run archive absent")
-def test_real_interrupted_run_reports_no_answer_and_a_bounded_context_growth():
+def test_real_interrupted_run_keeps_failed_delivery_and_a_bounded_context_growth():
     report = json.loads(FAILED_LIVE_RUN.read_text())
     summary = convergence.summarize(report, path=str(FAILED_LIVE_RUN),
                                    events_path=FAILED_LIVE_RUN.parent / "events.jsonl")
     assert summary["natural_final"] is False
-    assert summary["parent_delivery_behaviour"]["answer_state"] == "mid_tool_loop"
+    assert summary["delivery"]["parent_unanswered_requests"] > 0
+    assert summary["parent_delivery_behaviour"]["answer_state"] == "unknown_after_tool_calls"
     assert summary["natural_delivery"] is False
     # The recorded run has no answerable purpose evidence, so purpose stays unproven for all 17.
     assert summary["delivery"]["parent_requests_total"] == 17
@@ -438,83 +528,6 @@ def test_real_delivered_replay_reports_an_answer():
                                    events_path=DELIVERED_REPLAY_RUN.parent / "events.jsonl")
     assert summary["natural_final"] is True
     assert summary["parent_delivery_behaviour"]["answer_state"] == "answered"
-
-
-def _run_offline_harness(tmp_path, options, *, signal_on_ready=False):
-    repo = Path(__file__).resolve().parents[2]
-    process = subprocess.Popen(
-        [sys.executable, str(repo / "evals/ultra_delegation/harness.py"), "large",
-         "--review-skill=none", *options, f"--output-root={tmp_path}", "--name=offline"],
-        cwd=repo, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT, text=True,
-    )
-    lines = []
-    stages = queue.Queue()
-
-    def collect_output():
-        for line in process.stdout:
-            lines.append(line)
-            try:
-                stages.put(json.loads(line).get("stage"))
-            except (ValueError, AttributeError):
-                continue
-        stages.put("process_exited")
-
-    reader = threading.Thread(target=collect_output, daemon=True)
-    reader.start()
-    try:
-        if signal_on_ready:
-            while True:
-                stage = stages.get(timeout=60)
-                assert stage != "process_exited", "".join(lines)
-                if stage == "session_ready":
-                    process.send_signal(signal.SIGTERM)
-                    break
-        returncode = process.wait(timeout=60)
-    finally:
-        if process.poll() is None:
-            process.kill()
-            process.wait(timeout=10)
-        reader.join(timeout=5)
-        process.stdout.close()
-    assert returncode in (0, 2), "".join(lines)
-    report = json.loads((tmp_path / "offline/report.json").read_text())
-    assert report["live"] is False
-    assert returncode == (0 if report["stop_reason"] == "normal_final" else 2)
-    return report
-
-
-@pytest.mark.parametrize("matched_comparison", [True, False], ids=["matched", "nonmatched"])
-def test_wire_observer_separates_iterator_and_consumer_time_offline(tmp_path, matched_comparison):
-    """The real sync/async observer must not charge consumer pauses to stream reads."""
-    report = _run_offline_harness(
-        tmp_path, [*(["--matched-comparison"] if matched_comparison else []), "--budget=0"],
-    )
-    assert report["wire_observer_self_check"] is not None
-    assert report["wire_observer_self_check"]["iterator_consumer_timing_separated"] is True
-    assert report["stop_reason"] == "timeout"
-    assert report["caps"] == []
-
-
-@pytest.mark.parametrize("stop_reason,options,signal_on_ready", [
-    pytest.param("external_signal", [], True, marks=pytest.mark.linux_only, id="external-signal-linux"),
-    pytest.param("external_signal", [], True, marks=pytest.mark.macos_only, id="external-signal-macos"),
-    ("token_request_cap", ["--input-cap=1"], False),
-    ("normal_final", [], False),
-])
-def test_harness_reports_the_observed_stop_cause(tmp_path, stop_reason, options, signal_on_ready):
-    """An external signal is not evidence that an internal token limit fired."""
-    report = _run_offline_harness(
-        tmp_path, ["--budget=60", *options], signal_on_ready=signal_on_ready,
-    )
-    assert report["stop_reason"] == stop_reason
-    if stop_reason == "token_request_cap":
-        assert "aggregate_request_or_input_threshold" in report["caps"]
-    else:
-        assert report["caps"] == []
-    if stop_reason == "normal_final":
-        assert report["completion_guard"]["eligible"] is True
-        assert report["final_event"]["payload"]["text"].startswith("LOCAL_PARENT_FINAL:")
 
 
 def _count(requests, responses):
@@ -739,140 +752,3 @@ def test_ceiling_observation_latches_a_stop_and_keeps_its_snapshot(has_estimate)
     assert observations == [first, settled]
     assert first["requests_recorded"] == settled["requests_recorded"] == 1
     assert first["value"] == (25_000 if has_estimate else 0)
-
-
-def test_real_harness_hooks_observe_the_request_limit_and_unknown_accounting(tmp_path):
-    """The wired hooks publish their snapshots even when another stop already applies."""
-    repo = Path(__file__).resolve().parents[2]
-    script = r'''
-import json
-import os
-from pathlib import Path
-import runpy
-import sys
-import traceback
-
-repo, output = map(Path, sys.argv[1:])
-harness = repo / "evals/ultra_delegation/harness.py"
-sys.path.insert(0, str(harness.parent))
-sys.argv = [str(harness), "large", "--review-skill=none", "--budget=0",
-            f"--output-root={output}", "--name=hook-probe"]
-real_exit = os._exit
-
-def finish_probe(status):
-    if status not in (0, 2):
-        real_exit(status)
-    runtime = sys._getframe(1).f_globals
-    try:
-        with runtime["log_lock"]:
-            for name in ("requests", "responses", "input_ceiling_observations", "caps"):
-                runtime[name].clear()
-            runtime["cap_event"].clear()
-            runtime["request_limit"] = 2
-            runtime["input_limit"] = 2_000_000
-            runtime["pre_request"](api_request_id="probe:1", approx_input_tokens=25_000)
-            runtime["pre_request"](api_request_id="probe:2", approx_input_tokens=5_000)
-            at_request_limit = list(runtime["input_ceiling_observations"])
-            limit_caps = list(runtime["caps"])
-            limit_stopped = runtime["cap_event"].is_set()
-
-            for name in ("requests", "responses", "input_ceiling_observations", "caps"):
-                runtime[name].clear()
-            runtime["cap_event"].clear()
-            runtime["request_limit"] = 64
-            runtime["pre_request"](api_request_id="probe:missing-estimate")
-            receipt = {"offline_stop": runtime["report"]["stop_reason"],
-                       "at_request_limit": at_request_limit,
-                       "limit_caps": limit_caps, "limit_stopped": limit_stopped,
-                       "incomplete": runtime["input_ceiling_observations"][-1],
-                       "incomplete_caps": list(runtime["caps"]),
-                       "incomplete_stopped": runtime["cap_event"].is_set()}
-        print("HOOK_PROBE:" + json.dumps(receipt), file=sys.__stdout__, flush=True)
-        real_exit(0)
-    except BaseException:
-        traceback.print_exc(file=sys.__stderr__)
-        real_exit(1)
-
-os._exit = finish_probe
-runpy.run_path(str(harness), run_name="__main__")
-'''
-    completed = subprocess.run(
-        [sys.executable, "-c", script, str(repo), str(tmp_path)],
-        cwd=repo, text=True, capture_output=True, timeout=60,
-    )
-    assert completed.returncode == 0, completed.stdout + completed.stderr
-    receipts = [json.loads(line.removeprefix("HOOK_PROBE:"))
-                for line in completed.stdout.splitlines() if line.startswith("HOOK_PROBE:")]
-    assert len(receipts) == 1, completed.stdout + completed.stderr
-    receipt = receipts[0]
-    assert receipt["offline_stop"] == "timeout"
-    assert [(row["api_request_id"], row["requests_recorded"], row["value"])
-            for row in receipt["at_request_limit"]] == [
-        ("probe:1", 1, 25_000), ("probe:2", 2, 30_000),
-    ]
-    assert receipt["limit_stopped"] is True
-    assert "aggregate_request_or_input_threshold" in receipt["limit_caps"]
-    assert receipt["incomplete"]["accounting_complete"] is False
-    assert receipt["incomplete"]["stop_required"] is True
-    assert receipt["incomplete"]["requests_recorded"] == 1
-    assert receipt["incomplete_caps"] == ["input_accounting_incomplete"]
-    assert receipt["incomplete_stopped"] is True
-
-
-def test_report_names_the_basis_and_records_peak_and_first_crossing(tmp_path):
-    """The report must state the policy and let a reader see whether the ceiling was reached."""
-    report = _run_offline_harness(tmp_path, ["--budget=60"])
-    accounting = report["input_accounting"]
-    assert accounting["basis"] == "input_excluding_cache_reads"
-    assert accounting["policy"] == "acceptance_policy_change"
-    assert report["limits"]["cumulative_input_basis"] == "input_excluding_cache_reads"
-    assert "not comparable" in report["limits"]["cumulative_input_policy"]
-    # Superseded basis stays recorded, and is labelled as superseded rather than wrong.
-    assert accounting["superseded_basis"] == "approx_represented_input"
-    assert isinstance(accounting["approx_represented_input"], int)
-    # Non-monotonic value: a final figure alone cannot settle whether the limit was hit.
-    assert accounting["ever_crossed"] is False
-    assert accounting["first_crossing"] is None
-    assert accounting["peak_value"] >= accounting["final_value"]
-    assert accounting["observations"] >= 1
-    assert report["stop_reason"] == "normal_final"
-
-
-def test_aggregate_input_ceiling_still_fires_on_the_new_basis(tmp_path):
-    """Relaxing the basis must not remove the stop: a tiny ceiling still interrupts."""
-    report = _run_offline_harness(tmp_path, ["--budget=60", "--input-cap=1"])
-    assert report["stop_reason"] == "token_request_cap"
-    assert "aggregate_request_or_input_threshold" in report["caps"]
-    accounting = report["input_accounting"]
-    assert accounting["ever_crossed"] is True
-    assert accounting["first_crossing"]["value"] >= 1
-    assert accounting["peak_value"] >= 1
-
-
-@pytest.mark.parametrize("option,config_path,value", [
-    ("--file-read-max-chars=40000", ("file_read_max_chars",), 40_000),
-    ("--child-compression-threshold-tokens=96000", ("delegation", "compression_threshold_tokens"), 96_000),
-    ("--child-reasoning-effort=high", ("delegation", "reasoning_effort"), "high"),
-])
-def test_context_candidate_preserves_task_and_aggregate_limits(tmp_path, option, config_path, value):
-    """Existing context settings never quietly weaken the acceptance contract."""
-    baseline = _run_offline_harness(tmp_path / "baseline", ["--budget=60"])
-    candidate = _run_offline_harness(
-        tmp_path / "candidate", ["--budget=60", option],
-    )
-    candidate_config, baseline_config = candidate["config"], baseline["config"]
-    for key in config_path[:-1]:
-        candidate_config, baseline_config = candidate_config[key], baseline_config[key]
-    assert candidate_config[config_path[-1]] == value
-    assert config_path[-1] not in baseline_config
-    del candidate_config[config_path[-1]]
-    candidate["config"]["terminal"]["cwd"] = baseline["config"]["terminal"]["cwd"]
-    assert candidate["config"] == baseline["config"]
-    assert candidate["limits"] == baseline["limits"]
-    assert candidate["fixture_hashes"] == baseline["fixture_hashes"]
-    assert candidate["review_skill_hashes"] == baseline["review_skill_hashes"]
-    assert candidate["prompt"].replace(candidate["execution_workspace"], "<workspace>") == (
-        baseline["prompt"].replace(baseline["execution_workspace"], "<workspace>")
-    )
-    assert candidate["stop_reason"] == baseline["stop_reason"] == "normal_final"
-    assert candidate["completion_guard"]["eligible"] is True

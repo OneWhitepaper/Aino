@@ -380,7 +380,7 @@ def run_codex(ctx):
               'matched_comparison': ctx['comparison'], 'usage_self_check': ctx['usage_self_check'],
               'codex_home': str(comparison_home),
               'fixture_hashes': ctx['fixture_before'], 'review_skill_hashes': ctx['skill_hashes'],
-              'diagnostic': {'review_skill': args.review_skill, 'original_acceptance_eligible': False,
+              'diagnostic': {'review_skill': args.review_skill, **ctx['length_diagnostic'], 'original_acceptance_eligible': False,
                   'boundary': 'Native Codex CLI comparison; tool schemas, prompt, skill loading and delegation lifecycle differ from Aino. Not a strict one-variable product A/B.'},
               'native_differences': ['Responses Lite additional_tools and functions.exec code-mode',
                   'V2 has four slots including the root, but ignores agents.max_depth=1',

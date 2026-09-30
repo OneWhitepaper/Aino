@@ -11,14 +11,15 @@ parser.add_argument('--live', action='store_true', help='Use a managed lease sup
 parser.add_argument('--repo', type=Path, default=SOURCE_ROOT.parents[1], help='Checkout providing the production Python imports')
 parser.add_argument('--fixtures', type=Path, default=SOURCE_ROOT/'fixtures', help='Frozen large/ and small/ fixture root')
 parser.add_argument('--output-root', type=Path, default=Path(tempfile.gettempdir())/'aino-ultra-delegation-runs', help='Local results root outside the checkout by default')
-parser.add_argument('--review-skill-path', type=Path, help='External original read-only-source-review directory; never bundled here')
+parser.add_argument('--review-skill-path', type=Path, help='External original or candidate read-only-source-review directory; never bundled here')
 parser.add_argument('--length-source', type=Path, help='External saved report.json for the length scenario')
 parser.add_argument('--legacy-replay-source', type=Path, help='External saved run for legacy replay or daily_replay; requires original workspace and profile/state.db')
 parser.add_argument('--codex-bin', default='codex', help='Optional native Codex CLI executable')
 parser.add_argument('--budget', type=int)
 parser.add_argument('--spend-target', type=float)
 parser.add_argument('--name')
-parser.add_argument('--review-skill', choices=['original', 'none'], default='original', help='none is a diagnostic ablation, never original-task acceptance')
+parser.add_argument('--review-skill', choices=['original', 'none', 'candidate'], default='original', help='none removes the skill; candidate uses an experimental external skill for a fresh large Aino task; neither is original-task acceptance')
+parser.add_argument('--large-report-length', choices=['original', 'unbounded'], default='original', help='unbounded removes only the large task per-group length instruction; diagnostic only, never original-task acceptance')
 parser.add_argument('--driver', choices=['aino', 'codex'], default='aino')
 parser.add_argument('--matched-comparison', action='store_true', help='Same prompt and explicit High children; diagnostic only')
 parser.add_argument('--independent-completions', action='store_true', help='Use existing per-unit delivery in a fresh isolated Aino comparison profile')
@@ -33,6 +34,10 @@ parser.add_argument('--file-read-max-chars', type=int, help='Set the existing fi
 parser.add_argument('--child-compression-threshold-tokens', type=int, help='Set existing delegation.compression_threshold_tokens in the isolated profile; compression may discard evidence and must be evaluated')
 parser.add_argument('--child-reasoning-effort', choices=['high', 'max'], help='Set existing delegation.reasoning_effort for this isolated profile; explicit task choices still override it and parent Ultra is unchanged')
 args = parser.parse_args()
+if args.large_report_length != 'original' and args.scenario != 'large':
+    parser.error('--large-report-length=unbounded requires a fresh large task; replay keeps its source prompt')
+if args.large_report_length == 'unbounded' and args.matched_comparison:
+    parser.error('--large-report-length=unbounded cannot combine with --matched-comparison or its evidence contract')
 if args.file_read_max_chars is not None:
     if args.file_read_max_chars <= 0 or args.driver != 'aino' or args.scenario in ('replay', 'daily_replay'):
         parser.error('--file-read-max-chars requires a positive value and a fresh Aino task')
@@ -65,6 +70,11 @@ if not (REPO/'tui_gateway/server.py').is_file():
     parser.error('--repo must be an Aino checkout with tui_gateway/server.py')
 if not (ORIGINAL/'large').is_dir() or not (ORIGINAL/'small').is_dir():
     parser.error('--fixtures must contain the frozen large/ and small/ directories')
+if args.review_skill == 'candidate':
+    if args.scenario != 'large' or args.driver != 'aino' or args.matched_comparison:
+        parser.error('--review-skill=candidate requires a fresh large Aino task without matched comparison')
+    if args.review_skill_path is None or not (args.review_skill_path/'SKILL.md').is_file():
+        parser.error('--review-skill=candidate requires --review-skill-path containing SKILL.md')
 if args.replay_source and (args.scenario!='replay' or args.driver!='aino' or args.matched_comparison or args.evidence_contract or args.independent_completions or args.review_skill!='original'):
     parser.error('--replay-source requires replay with source-owned prompt and configuration')
 if args.replay_dry_redelegate and (args.live or not args.replay_source):
@@ -98,9 +108,16 @@ if args.input_cap is not None:
     if args.input_cap <= 0:
         parser.error('--input-cap must be positive')
     input_limit = args.input_cap
+source_report_metadata = None
+source_run = args.replay_source or args.legacy_replay_source
+source_report_path = source_run/'report.json' if source_run else (args.length_source if args.scenario == 'length' else None)
+if source_report_path is not None:
+    source_report_metadata = json.loads(source_report_path.read_text())
+    if (source_report_metadata.get('diagnostic') or {}).get('review_skill') == 'candidate':
+        parser.error('A candidate source cannot be used for replay or length; review-skill=candidate supports fresh large Aino tasks only')
 source_replay_metadata = None
 if args.replay_source:
-    source_replay_metadata=json.loads((args.replay_source/'report.json').read_text())
+    source_replay_metadata=source_report_metadata
     args.review_skill=source_replay_metadata['diagnostic']['review_skill']
     args.matched_comparison=bool(source_replay_metadata.get('matched_comparison'))
     args.evidence_contract=bool(source_replay_metadata.get('evidence_contract',{}).get('enabled'))
@@ -116,8 +133,10 @@ for filename in ('harness.py','convergence.py','codex_driver.py','platform-runne
 (snapshot/'manifest.json').write_text(json.dumps({p.name:hashlib.sha256(p.read_bytes()).hexdigest() for p in snapshot.iterdir() if p.is_file()},indent=2))
 profile = run / 'profile'; profile.mkdir()
 workspace = run / 'workspace'; workspace.mkdir()
-lease = json.load(sys.stdin) if args.live else None
+lease = json.loads(sys.stdin.readline()) if args.live else None
 secret = str((lease or {}).get('api_key') or '')
+lease_secrets = [secret] if secret else []
+lease_updates = queue.SimpleQueue()
 if not args.live:
     # Only process-launch essentials survive. HOME isolation also prevents implicit
     # discovery of user credentials, config, plugins, skills, and shell startup files.
@@ -168,7 +187,7 @@ source = ORIGINAL / ('large' if args.scenario in ('large','replay') else 'small'
 shutil.copytree(source, workspace, dirs_exist_ok=True)
 skill_source = args.review_skill_path
 skill_target = profile / 'skills/software-development/read-only-source-review'
-if args.scenario not in ('daily', 'daily_replay') and args.review_skill == 'original':
+if args.scenario not in ('daily', 'daily_replay') and args.review_skill in ('original', 'candidate'):
     shutil.copytree(skill_source, skill_target)
 def hashes(base):
     return {str(p.relative_to(base)): hashlib.sha256(p.read_bytes()).hexdigest() for p in sorted(base.rglob('*')) if p.is_file()}
@@ -190,13 +209,15 @@ if args.dry_child_results:
                and not r.get('summary_truncated') for r in recorded_entries)
     recorded_child_results={r['task_index']:r['summary'] for r in recorded_entries}
 large = '请只读审查目录 '+str(workspace)+' 中这三组互相独立的源代码快照：① agent/context_compressor.py 与 agent/compaction_display.py，检查摘要触发、失败恢复和显示状态是否一致；② tools/delegate_tool.py 与 tools/delegate_tool_config.py，检查任务取消、并发上限和模型继承；③ tui_gateway/model_switch.py 与 tui_gateway/session_history.py，检查模型切换和历史恢复的状态一致性。三组都需要结合函数调用与边界分支给出结论，有问题时写出具体触发条件和文件行号；没有充分证据的疑点单列，不要当作确定缺陷。最后汇总最值得优先验证的三个风险及理由。这是选定文件的快照，不需要寻找快照外的依赖，不修改文件、不联网、不安装依赖。每组结论控制在400字以内。'
+if args.large_report_length == 'unbounded':
+    large = large.removesuffix('每组结论控制在400字以内。')
 simple = '只检查当前目录 auth.py 的 authenticate 函数：它是否拒绝了 inactive 用户？给出结论和对应代码位置，不修改文件。'
 no_subagent = '审查当前目录 auth.py、billing.py、exports.py，对照 SPEC.md 分别检查访问控制、支付幂等和退款边界、租户导出隔离。给出有充分代码证据的问题和对应位置。请直接独立完成，不调用子智能体。不修改文件、不运行服务、不联网。'
 length_source_path = args.length_source
 length_source = None
 length = ''
 if args.scenario == 'length':
-    source_report = json.loads(length_source_path.read_text())
+    source_report = source_report_metadata
     length_source = source_report['final_event']['payload']['text']
     length = ('以下是一份已完成的审查记录。请仅根据给定材料整理为三组中文结论：访问控制、支付与退款、租户导出隔离，每组不超过200字；最后列出最应优先解决的一个风险及理由。'
               '这次只做结果整理，无需重新审查、联网或读文件；请直接完成，不委派子智能体。不要把材料中的证据不足项写成确定缺陷。\n\n'
@@ -210,7 +231,7 @@ seed_tool_ids = set()
 replay_stored_id = 'replay_' + uuid.uuid4().hex
 replay_fixture_before = None
 if is_replay:
-    replay_data = json.loads((replay_source/'report.json').read_text())
+    replay_data = source_report_metadata
     boundary = next(i for i,m in enumerate(replay_data['history']) if m.get('display_kind')=='async_delegation_complete')
     replay_prefix = json.loads(json.dumps(replay_data['history'][:boundary]))
     assert boundary>0 and replay_prefix[-1]['role']=='assistant'
@@ -233,6 +254,16 @@ os.environ['TERMINAL_CWD']=str(execution_workspace)
 os.chdir(execution_workspace)
 daily = '请把当前示例项目修到符合 SPEC.md：检查并修复 auth.py 的认证与管理员授权，billing.py 的支付重试、并发幂等和退款、折扣边界，exports.py 的租户隔离与删除记录过滤。保留现有函数接口，为修复补充能重现问题的自动化测试并运行，最后说明修复内容、测试结果和仍未解决的限制。可以修改当前项目文件；不联网、不安装依赖。测试使用 Python 标准库 unittest。'
 prompt = replay_data['prompt'] if is_replay else {'daily':daily,'simple':simple,'large':large,'no_subagent':no_subagent,'length':length}[args.scenario]
+large_report_length = ((replay_data.get('diagnostic') or {}).get('large_report_length', 'original')
+                       if is_replay else args.large_report_length)
+length_diagnostic = {
+    'large_report_length': large_report_length,
+    'large_report_length_boundary': (
+        'DIAGNOSTIC TASK CHANGE: this option removes only the original large task per-group length instruction. '
+        'It does not itself change the skill, fixtures or budgets; other explicit overrides are recorded separately. '
+        'Completion is not original-task acceptance.'
+        if large_report_length == 'unbounded' else 'Default task length instructions unchanged.'),
+}
 comparison = None
 evidence_schema = {
     'type':'object', 'required':['findings','limitations'],
@@ -293,7 +324,9 @@ sid = stored_sid = None
 out = sys.__stdout__
 def safe(value):
     text = json.dumps(value,ensure_ascii=False,default=str)
-    return text.replace(secret,'[REDACTED]') if secret else text
+    for credential in tuple(lease_secrets):
+        text = text.replace(credential,'[REDACTED]')
+    return text
 def record(kind, **data):
     row = {'time':round(time.monotonic()-t0,3),'kind':kind,**data}
     with log_lock:
@@ -979,6 +1012,7 @@ if not lease:
     origin=f'http://127.0.0.1:{port}'
     lease={'origin':origin,'user_id':'local-fixture-user','model':{'id':'local-fixture','model':'gpt-5.6-sol','api_mode':'responses','capabilities':{'tools':True,'vision':False,'reasoning':True}},'api_key':'local-fixture-no-secret','credential_id':'local-fixture-lease','base_url':origin+'/v1','expires_at':(datetime.now(timezone.utc)+timedelta(hours=1)).isoformat()}
     secret=lease['api_key']
+    lease_secrets.append(secret)
 
 class Client:
     def __init__(self,label):
@@ -1024,6 +1058,13 @@ class Client:
 report={'scenario':args.scenario,'live':args.live,'run_dir':str(run),'repo':str(REPO),'prompt':prompt,'config':config,'fixture_hashes':fixture_before,'review_skill_hashes':skill_hashes,'note':'Real desktop WebSocket RPC, real managed model binding, real tools and asynchronous delivery. Dry outputs are scripted transport evidence only. Input and output thresholds interrupt after observation; Observed cost is a budget target, not a monetary hard cap.'}
 report['budget_target_usd']={'length':1,'replay':2,'daily':1.5,'daily_replay':1}.get(args.scenario,5)
 if args.spend_target is not None: report['budget_target_usd']=args.spend_target
+reference_seconds={'simple':300,'no_subagent':600,'large':1200,'length':300,'replay':1200,'daily':600,'daily_replay':600}[args.scenario]
+reference_spend={'length':1,'replay':2,'daily':1.5,'daily_replay':1}.get(args.scenario,5)
+extended_budget={'reference_seconds':reference_seconds,'reference_spend_target_usd':reference_spend,
+    'seconds_extended':args.budget>reference_seconds,
+    'spend_target_raised':report['budget_target_usd']>reference_spend,
+    'boundary':'Explicit time or spend extensions are diagnostic budget-policy changes, not passes under the historical limits. Other limits remain independently enforced.'}
+budget_extended=extended_budget['seconds_extended'] or extended_budget['spend_target_raised']
 report['execution_workspace']=str(execution_workspace)
 report['matched_comparison']=comparison
 report['independent_completions']=bool(args.independent_completions)
@@ -1034,13 +1075,20 @@ if recorded_child_results is not None:
 report['evidence_contract']={'enabled':bool(args.evidence_contract),'schema':evidence_schema if args.evidence_contract else None,
     'base_prompt_sha256_ignoring_workspace':base_prompt_sha256,
     'boundary':'Explicit task-contract intervention, not forced dispatch or runtime rewriting of model tool calls; JSON validity does not prove findings.'}
-report['diagnostic']={'review_skill':args.review_skill, 'original_acceptance_eligible':args.review_skill=='original' and not args.matched_comparison, 'boundary':'Removing the custom review skill changes the review instructions. A final answer here does not pass the original skill-bearing acceptance. Historical comparison is not a randomized causal estimate.' if args.review_skill=='none' else 'Original review skill policy unchanged.'}
+report['diagnostic']={'review_skill':args.review_skill, **length_diagnostic,'extended_budget':extended_budget,
+    'original_acceptance_eligible':args.review_skill=='original' and not args.matched_comparison and large_report_length=='original' and not budget_extended and args.input_cap is None and (not replay_data or (replay_data.get('diagnostic') or {}).get('original_acceptance_eligible') is not False),
+    'boundary':{
+        'original':'Original review skill policy unchanged.',
+        'none':'Removing the custom review skill changes the review instructions. A final answer here does not pass the original skill-bearing acceptance. Historical comparison is not a randomized causal estimate.',
+        'candidate':'Experimental review-method intervention using an external skill candidate. The installed review_skill_hashes identify the actual instructions. Natural delivery is not original-skill acceptance or proof of improved semantic accuracy.',
+    }[args.review_skill]}
 report['limits']={'seconds':args.budget,'requests':request_limit,'approx_cumulative_input':input_limit,'cumulative_input_basis':'input_excluding_cache_reads','cumulative_input_policy':'acceptance_policy_change: looser than the superseded approx_represented_input basis; runs under the two bases are not comparable','observed_spend_target_usd':report['budget_target_usd'],'monetary_hard_cap':False}
+report['lease_renewals']=[]
 if args.input_cap is not None:
     # Self-labelling so a diagnostic probe can never be read as a within-budget pass later.
     report['limits']['scenario_ceiling_overridden']=True
     report['limits']['scenario_ceiling_default']=500000 if args.scenario in ('daily','daily_replay') else 2000000
-    report['limits']['diagnostic_note']='Input ceiling raised for a headroom probe. The whole-task budget acceptance does NOT apply to this run.'
+    report['limits']['diagnostic_note']='Input ceiling explicitly overridden for a diagnostic probe. The whole-task budget acceptance does NOT apply to this run.'
 if length_source is not None:
     report['length_source']={'report':str(length_source_path),'text_sha256':hashlib.sha256(length_source.encode()).hexdigest(),'purpose':'Final formatting/counting regression probe only; not the full large-task acceptance.'}
 if replay_data:
@@ -1089,6 +1137,12 @@ try:
     ticket=chat.rpc('session.managed_model_ticket',common)['session_ticket']
     revision=main.rpc('session.claim_managed_model',dict(common,session_ticket=ticket))['binding_revision']
     main.rpc('session.bind_managed_model',dict(common,binding_revision=revision,model=lease['model']['model'],api_mode=lease['model']['api_mode'],capabilities=lease['model']['capabilities'],api_key=secret,credential_id=lease['credential_id'],base_url=lease['base_url'],expires_at=lease['expires_at']))
+    if args.live:
+        # The pipe carries credentials only; all RPC work stays on the existing controller.
+        def receive_lease_updates():
+            for line in sys.stdin:
+                lease_updates.put(line)
+        threading.Thread(target=receive_lease_updates,daemon=True).start()
     progress('session_ready',scenario=args.scenario,run_dir=str(run),session_id=sid,stored_session_id=stored_sid)
     if replay_data:
         # process.list is a read-only RPC whose normal _sess path builds the resumed agent and poller.
@@ -1108,6 +1162,39 @@ try:
         report['submit']=chat.rpc('prompt.submit',{'session_id':sid,'text':prompt})
     deadline=time.monotonic()+args.budget;last_status=0;candidate=None
     while True:
+        try:
+            update_line=lease_updates.get_nowait()
+        except queue.Empty:
+            update_line=None
+        if update_line is not None:
+            try:
+                update=json.loads(update_line)
+                if not isinstance(update,dict) or update.get('type')!='renew_managed_model':
+                    raise ValueError('Unexpected lease update')
+                renewed_lease=update['lease']
+                renewed_secret=renewed_lease['api_key']
+                if not isinstance(renewed_secret,str) or not renewed_secret:
+                    raise ValueError('Missing renewed credential')
+                lease_secrets.append(renewed_secret)
+                if (renewed_lease['origin']!=lease['origin'] or str(renewed_lease['user_id'])!=str(lease['user_id'])
+                        or renewed_lease['model']['id']!=lease['model']['id']):
+                    raise ValueError('Lease identity changed')
+                renewed=main.rpc('session.renew_managed_model',dict(common,binding_revision=revision,
+                    model=renewed_lease['model']['model'],api_mode=renewed_lease['model']['api_mode'],
+                    capabilities=renewed_lease['model']['capabilities'],api_key=renewed_secret,
+                    credential_id=renewed_lease['credential_id'],base_url=renewed_lease['base_url'],
+                    expires_at=renewed_lease['expires_at']))
+                if not renewed.get('bound') or renewed.get('model_id')!=common['model_id'] or renewed.get('binding_revision')!=revision:
+                    raise ValueError('Renewal not confirmed')
+                receipt={'seconds':round(time.monotonic()-t0,3),'expires_at':renewed_lease['expires_at']}
+                report['lease_renewals'].append(receipt)
+                record('lease_renewed',**receipt);progress('lease_renewed',**receipt)
+            except Exception as exc:
+                stop_reason='lease_renewal_failed'
+                report['lease_renewal_error_type']=type(exc).__name__
+                report['interrupt']=chat.rpc('session.interrupt',{'session_id':sid})
+                record('harness_interrupt',reason=stop_reason,error_type=type(exc).__name__)
+                break
         timed_out=time.monotonic()>deadline
         if cap_event.is_set() or timed_out or external_signal_event.is_set():
             if cap_event.is_set():
@@ -1296,9 +1383,9 @@ finally:
         }
     (run/'report.json').write_text(safe(report))
     progress('finished',scenario=args.scenario,stop_reason=stop_reason,run_dir=str(run),report=str(run/'report.json'),children=len(report['children_finished']),parent_tools=report['parent_tool_counts'],fixture_changed=report['fixture_changed'])
-    # Check the only secret this process knows did not reach any file it produced.
+    # Include every rotated credential when checking the saved evidence.
     leaked=[]
     for p in run.rglob('*'):
-        if args.live and secret and p.is_file() and secret.encode() in p.read_bytes(): leaked.append(str(p.relative_to(run)))
+        if args.live and p.is_file() and any(credential.encode() in p.read_bytes() for credential in lease_secrets): leaked.append(str(p.relative_to(run)))
     if leaked: progress('credential_leak_detected',paths=leaked);os._exit(3)
     out.flush();os._exit(0 if stop_reason=='normal_final' else 2)

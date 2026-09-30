@@ -453,6 +453,76 @@ def _parent_tool_timing(events: list[dict] | None, ui_session_id: str | None) ->
     }
 
 
+def _stream_message_id_compatible(message_id, event_id) -> bool:
+    """Optional IDs constrain an already-bound parent/request window."""
+    if message_id is None:
+        return event_id is None
+    return isinstance(message_id, str) and bool(message_id) and event_id == message_id
+
+
+def _stream_request_matches(event: dict, last_request: dict) -> bool:
+    """Only the report's last explicit parent request can own the interrupted stream."""
+    request_id, turn_id = last_request.get("api_request_id"), last_request.get("turn_id")
+    return (isinstance(request_id, str) and bool(request_id)
+            and event.get("api_request_id") == request_id
+            and event.get("session_id") == last_request.get("session_id")
+            and (not turn_id or event.get("turn_id") == turn_id))
+
+
+def _interrupted_parent_text_chars(events: list[dict] | None, ui_session_id: str | None,
+                                   parent_id: str | None, last_request: dict | None) -> int | None:
+    """Confirm real deltas from the last parent/request window, not an interruption notice.
+
+    This transport may omit message IDs. In that case identity comes from the explicit parent
+    session plus start/report-request boundaries, never from treating missing IDs as a match.
+    """
+    if events is None or not ui_session_id or not parent_id or not last_request:
+        return None
+    start_at = request_at = last_delta_at = None
+    message_id = None
+    chunks: list[str] = []
+    observed = None
+    for event in events:
+        at = _seconds(event.get("time"))
+        if event.get("kind") == "pre_api_request" and event.get("session_id") == parent_id:
+            chunks, observed, last_delta_at = [], None, None
+            request_at = (at if start_at is not None and at is not None and at >= start_at
+                          and _stream_request_matches(event, last_request) else None)
+            continue
+        if event.get("session_id") != ui_session_id:
+            continue
+        name, payload = event.get("event"), event.get("payload")
+        if not isinstance(payload, dict):
+            continue
+        if name == "message.start":
+            start_at, request_at, last_delta_at = at, None, None
+            message_id, chunks, observed = payload.get("message_id"), [], None
+            continue
+        if name in ("message.interim", "tool.start"):
+            request_at, chunks = None, []
+            continue
+        if name not in ("message.delta", "message.complete"):
+            continue
+        if request_at is None or at is None or at < request_at:
+            continue
+        # No-ID events use the parent/request window above; a supplied ID may not mix into it.
+        if not _stream_message_id_compatible(message_id, payload.get("message_id")):
+            request_at, chunks = None, []
+            continue
+        text = payload.get("text")
+        if name == "message.delta":
+            if isinstance(text, str):
+                chunks.append(text)
+                last_delta_at = at
+            continue
+        if (payload.get("status") == "interrupted" and isinstance(text, str) and text.strip()
+                and chunks and last_delta_at is not None and at >= last_delta_at
+                and "".join(chunks).lstrip() == text.lstrip()):
+            observed = len(text)
+        start_at = request_at = None
+    return observed
+
+
 def _turn_split(report: dict, requests: list[dict], responses: list[dict]) -> dict:
     """Report each turn's PURPOSE and RESPONSE STATE as two independent dimensions.
 
@@ -578,8 +648,8 @@ def summarize(report: dict, *, path: str | None = None, events_path: Path | None
 
     # Two questions, kept apart on purpose.
     #
-    # (a) Was a text answer observed at all? That is the task turn's own final reason plus the
-    #     final event's text. ``responses`` is grouped per turn and ``api_call_count`` restarts each
+    # (a) Was text observed at all? A missing response can hide a real interrupted stream, so
+    #     matched parent stream events are independent evidence. ``responses`` is grouped per turn and ``api_call_count`` restarts each
     #     turn, so neither order nor position identifies "the last thing the parent did".
     # (b) Did the COMPLETE task deliver naturally? Only when the run itself says so: a normal_final
     #     stop, a completion event whose status is ``complete`` with non-empty text, and a
@@ -591,14 +661,22 @@ def summarize(report: dict, *, path: str | None = None, events_path: Path | None
     payload = payload if isinstance(payload, dict) else {}
     final_text = payload.get("text")
     final_status = payload.get("status")
-    if final_reason is None:
+    evidence_requests = requests.get(evidence_parent_id or "", [])
+    interrupted_chars = _interrupted_parent_text_chars(
+        events, report.get("session_id"), evidence_parent_id,
+        evidence_requests[-1] if evidence_requests else None,
+    )
+    if interrupted_chars is not None:
+        answer_state = "interrupted_with_streamed_text"
+    elif final_reason is None:
         # No response was recorded for the task turn at all. If the run still recorded a completed
         # final with text, say what is actually known rather than implying the parent never spoke.
         answer_state = ("answered_from_final_event_only"
                         if final_status == "complete" and (final_text or "").strip()
                         else "unknown_no_recorded_response")
     elif final_reason == "tool_calls":
-        answer_state = "mid_tool_loop"          # never offered an answer; an interrupt cut no answer short
+        # A pending request may already have streamed text absent from the completed responses.
+        answer_state = "unknown_after_tool_calls" if unanswered_requests else "mid_tool_loop"
     elif final_reason == "stop":
         answer_state = "answered" if (final_text or "").strip() else "stopped_without_text"
     else:
@@ -626,6 +704,8 @@ def summarize(report: dict, *, path: str | None = None, events_path: Path | None
     if starts is not None:
         parent_turns_before_delivery, delivery_at = starts
 
+    diagnostic = dict(report.get("diagnostic") or {})
+    diagnostic.setdefault("original_acceptance_eligible", None)
     return {
         "report": path,
         "scenario": report.get("scenario"),
@@ -633,6 +713,7 @@ def summarize(report: dict, *, path: str | None = None, events_path: Path | None
         "stop_reason": report.get("stop_reason"),
         "natural_final": report.get("stop_reason") == "normal_final",
         "natural_delivery": natural_delivery,
+        "diagnostic": diagnostic,
         "not_delivered_because": delivery_reasons,
         "caps": report.get("caps") or [],
         "elapsed_seconds": report.get("elapsed_seconds"),
@@ -686,13 +767,16 @@ def summarize(report: dict, *, path: str | None = None, events_path: Path | None
             "task_turn_finish_reasons": task_reasons,
             "final_finish_reason": final_reason,
             "answer_state": answer_state,
+            "interrupted_streamed_text_chars": interrupted_chars,
             "final_event_status": final_status,
             "final_event_text_chars": len(final_text or ""),
             "completion_guard_eligible": guard.get("eligible") if guard else None,
-            "note": "answer_state answers only 'was a text answer observed', from the task turn's "
-                    "final reason plus the final event's text ('mid_tool_loop' = no answer ever "
-                    "offered; 'answered' needs both a 'stop' reason and non-empty text; anything else "
-                    "is unknown). Whole-task acceptance is the separate natural_delivery verdict.",
+            "note": "answer_state describes observed evidence, not whether an answer was attempted. "
+                    "interrupted_with_streamed_text requires matching parent/request-scoped deltas "
+                    "and an interrupted completion. mid_tool_loop describes the last completed "
+                    "tool response with no pending parent request; an unconfirmed pending request "
+                    "remains unknown. natural_delivery records completed delivery, not answer quality "
+                    "or original-task acceptance; diagnostic records any changed task policy.",
         },
         "parent_tools": report.get("parent_all_tool_counts") or report.get("parent_tool_counts") or {},
         "completed_api_durations": _completed_api_durations(report, evidence_parent_id, responses),
@@ -726,7 +810,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"== {summary['report']}")
         for key in ("scenario", "live", "stop_reason", "natural_final", "caps", "elapsed_seconds"):
             print(f"   {key}: {summary[key]}")
-        for section in ("limits", "ceiling_basis", "delivery", "budget_split",
+        for section in ("diagnostic", "limits", "ceiling_basis", "delivery", "budget_split",
                         "parent_cost_shape",
                         "parent_delivery_behaviour", "parent_tools", "completed_api_durations",
                         "parent_tool_results", "parent_tool_timing"):

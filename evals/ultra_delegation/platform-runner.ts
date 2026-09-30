@@ -24,14 +24,15 @@ No account access or model run occurs without --live.
 --installation-path=PATH    Existing desktop-installation.json (default: Aino app data)
 --origin=URL                Managed account origin (default: https://api.agentera.com.cn)
 --name=NAME                 New run directory name
---budget=SECONDS           30..1200; simple/length 300, daily/no_subagent/daily_replay 600, large/replay 1200
---spend-target=USD          Observation threshold, >0 and <=5; settlement lag prevents a hard cap
+--budget=SECONDS           Aino 30..3600; Codex 30..1200; simple/length 300, daily/no_subagent/daily_replay 600, large/replay 1200
+--spend-target=USD          Observation threshold, >0 and <=10; settlement lag prevents a hard cap
 --input-cap=TOKENS          DIAGNOSTIC ONLY: raise the cumulative-input ceiling for a headroom probe; never within-budget acceptance
 --file-read-max-chars=N     Existing file read limit for a fresh isolated Aino profile; does not raise acceptance budgets
 --child-compression-threshold-tokens=N Existing child compression trigger (>=16000); isolated Aino profile only
 --child-reasoning-effort=high|max Existing delegation default; task overrides and parent Ultra remain unchanged
---review-skill=original|none Original requires --review-skill-path; none is a large diagnostic
---review-skill-path=PATH    External private original skill directory
+--review-skill=original|none|candidate Original/candidate require --review-skill-path; candidate is a fresh large Aino diagnostic
+--large-report-length=original|unbounded Large only; unbounded removes the per-group length instruction and is diagnostic
+--review-skill-path=PATH    External private original or candidate skill directory
 --matched-comparison        Large/none diagnostic with explicit High children
 --evidence-contract         Add the latest evidence JSON delivery contract to matched Aino
 --independent-completions    Optional per-unit delivery diagnostic; omitted for latest batch scenario
@@ -56,11 +57,14 @@ const python=configuredPython?(configuredPython.includes(path.sep)?path.resolve(
   [path.join(repo,'.venv/bin/python'),path.join(repo,'venv/bin/python')].find(candidate=>fs.existsSync(candidate))||'python3'
 const externalPathOptions=['--review-skill-path','--replay-source','--legacy-replay-source','--length-source']
 const forwardedPaths=externalPathOptions.flatMap(name=>option(name)?[name+'='+path.resolve(option(name)!)]:[])
-const forwardedOptions=['--name','--codex-bin','--input-cap','--file-read-max-chars','--child-compression-threshold-tokens','--child-reasoning-effort'].flatMap(name=>{
+const forwardedOptions=['--name','--codex-bin','--input-cap','--file-read-max-chars','--child-compression-threshold-tokens','--child-reasoning-effort','--large-report-length'].flatMap(name=>{
   const value=option(name)
   return value?[name+'='+(name==='--codex-bin'&&value.includes(path.sep)?path.resolve(value):value)]:[]
 })
 const scenario=process.argv.find(arg=>['simple','large','no_subagent','length','replay','daily','daily_replay'].includes(arg))
+const largeReportLength=option('--large-report-length')
+if(largeReportLength!==undefined && !['original','unbounded'].includes(largeReportLength))throw new Error('Invalid --large-report-length policy')
+if(largeReportLength==='unbounded' && scenario!=='large')throw new Error('--large-report-length=unbounded requires a fresh large task; replay keeps its source prompt')
 const driverArg=process.argv.find(arg=>arg.startsWith('--driver='))
 if(driverArg && !['--driver=aino','--driver=codex'].includes(driverArg))throw new Error('Invalid acceptance driver')
 if(driverArg==='--driver=codex' && scenario!=='large')throw new Error('Codex comparison requires large scenario')
@@ -69,9 +73,19 @@ if(driverArg==='--driver=codex' && !nativeComparison)throw new Error('Review nat
 const reviewSkillArg=process.argv.find(arg=>arg.startsWith('--review-skill='))
 const replaySourceArg=process.argv.find(arg=>arg.startsWith('--replay-source='))
 if(replaySourceArg && scenario!=='replay')throw new Error('Replay source requires the replay scenario')
-if(reviewSkillArg && !['--review-skill=original','--review-skill=none'].includes(reviewSkillArg))throw new Error('Invalid review skill policy')
+if(reviewSkillArg && !['--review-skill=original','--review-skill=none','--review-skill=candidate'].includes(reviewSkillArg))throw new Error('Invalid review skill policy')
 if(reviewSkillArg==='--review-skill=none' && scenario!=='large')throw new Error('Review skill diagnostic requires large scenario')
 const matchedComparison=process.argv.includes('--matched-comparison')
+if(reviewSkillArg==='--review-skill=candidate'){
+  if(scenario!=='large'||driverArg==='--driver=codex'||matchedComparison)throw new Error('--review-skill=candidate requires a fresh large Aino task without matched comparison')
+  const skillPath=option('--review-skill-path')
+  const skillEntry=skillPath?path.join(path.resolve(skillPath),'SKILL.md'):undefined
+  if(!skillEntry||!fs.existsSync(skillEntry)||!fs.statSync(skillEntry).isFile())throw new Error('--review-skill=candidate requires --review-skill-path containing SKILL.md')
+}
+const sourceRun=option('--replay-source')||option('--legacy-replay-source')
+const sourceReport=sourceRun?path.join(path.resolve(sourceRun),'report.json'):scenario==='length'?option('--length-source'):undefined
+if(sourceReport&&JSON.parse(fs.readFileSync(sourceReport,'utf8')).diagnostic?.review_skill==='candidate')throw new Error('A candidate source cannot be used for replay or length; review-skill=candidate supports fresh large Aino tasks only')
+if(largeReportLength==='unbounded' && matchedComparison)throw new Error('--large-report-length=unbounded cannot combine with --matched-comparison or its evidence contract')
 const independentCompletions=process.argv.includes('--independent-completions')
 const evidenceContract=process.argv.includes('--evidence-contract')
 if(evidenceContract && (!matchedComparison || driverArg==='--driver=codex'))throw new Error('Evidence contract requires the matched Aino comparison')
@@ -79,10 +93,11 @@ if(independentCompletions && (!matchedComparison || driverArg==='--driver=codex'
 const settlementOnly=process.argv.includes('--settlement-only')
 const budgetArgument=process.argv.find(arg=>arg.startsWith('--budget='))
 const budget=budgetArgument?Number(budgetArgument.slice('--budget='.length)):({simple:300,no_subagent:600,large:1200,length:300,replay:1200,daily:600,daily_replay:600} as Record<string,number>)[scenario||'large']
-if(!Number.isInteger(budget)||budget<30||budget>1200)throw new Error('Budget must be 30..1200 seconds')
+if(!Number.isInteger(budget)||budget<30||budget>3600)throw new Error('Budget must be 30..3600 seconds')
+if(driverArg==='--driver=codex' && budget>1200)throw new Error('Codex comparison budget must be at most 1200 seconds; this driver does not renew managed leases')
 const spendArgument=process.argv.find(arg=>arg.startsWith('--spend-target='))
 const observedSpendLimit=spendArgument?Number(spendArgument.slice('--spend-target='.length)):scenario==='length'||scenario==='daily_replay'?1:scenario==='replay'?2:scenario==='daily'?1.5:5
-if(!Number.isFinite(observedSpendLimit)||observedSpendLimit<=0||observedSpendLimit>5)throw new Error('Spend observation target must be above 0 and at most 5 USD')
+if(!Number.isFinite(observedSpendLimit)||observedSpendLimit<=0||observedSpendLimit>10)throw new Error('Spend observation target must be above 0 and at most 10 USD')
 if(!scenario && !settlementOnly && !process.argv.includes('--catalog-only')) throw new Error('Pass simple, large, no_subagent, length, replay, daily, or daily_replay')
 if(!process.argv.includes('--live')) throw new Error('Account access and paid runs require explicit --live')
 if(!fs.existsSync(path.join(sourceRoot,'harness.py')))throw new Error('--repo must point to this Aino checkout')
@@ -147,7 +162,8 @@ app.whenReady().then(async()=>{
   if(!selected)throw new Error('Requested model unavailable')
   if(process.argv.includes('--catalog-only')){console.log(JSON.stringify({stage:'catalog_only',selected}));app.exit(0);return}
   const installation=JSON.parse(fs.readFileSync(path.resolve(option('--installation-path')||path.join(accountData,'desktop-installation.json')),'utf8')).installationId
-  const lease=await auth.modelLease({model_id:selected.id,device_id:installation,connection_grant_id:randomUUID()})
+  const leaseInput={model_id:selected.id,device_id:installation,connection_grant_id:randomUUID()}
+  const lease=await auth.modelLease(leaseInput)
   if(!profile.id)throw new Error('No authenticated identity')
   console.log(JSON.stringify({stage:'catalog',model:selected.model,model_id:selected.id,expires_at:lease.expires_at,api_mode:lease.model.api_mode,prices:Object.fromEntries(Object.entries(selected).filter(([k])=>/price|cost/.test(k)))}))
   sensitive.push(lease.api_key)
@@ -164,23 +180,55 @@ app.whenReady().then(async()=>{
   }
   const consume=(stream:any)=>{let pending='';stream.setEncoding('utf8');stream.on('data',(s:string)=>{pending+=s;const lines=pending.split('\n');pending=lines.pop()||'';for(const line of lines)onLine(line)});stream.on('end',()=>{if(pending)onLine(pending)})}
   consume(child.stdout);consume(child.stderr)
-  child.stdin.end(JSON.stringify({...lease,origin,user_id:String(profile.id)}))
-  let polling=false
+  let renewalTimer:ReturnType<typeof setTimeout>|undefined
+  let renewalStopped=false
+  const stopRenewal=(code:string)=>{
+    renewalStopped=true;clearTimeout(renewalTimer)
+    onLine(JSON.stringify({stage:'lease_renewal_error',code}))
+  }
+  const armRenewal=(expiresAt:string)=>{
+    clearTimeout(renewalTimer)
+    const ttl=Math.max(0,Date.parse(expiresAt)-Date.now())
+    renewalTimer=setTimeout(async()=>{
+      if(renewalStopped)return
+      try{
+        const next=await auth.modelLease(leaseInput)
+        if(renewalStopped)return
+        sensitive.push(next.api_key)
+        child.stdin.write(JSON.stringify({type:'renew_managed_model',lease:{...next,origin,user_id:String(profile.id)}})+'\n')
+        armRenewal(next.expires_at)
+      }catch(error:any){if(!renewalStopped)stopRenewal(error.code||error.name)}
+    },Math.min(20*60_000,Math.max(5_000,ttl/3)))
+  }
+  child.stdin.on('error',()=>{if(!renewalStopped)stopRenewal('lease_pipe_write_failed')})
+  child.stdin.write(JSON.stringify({...lease,origin,user_id:String(profile.id)})+'\n')
+  if(driverArg==='--driver=codex')child.stdin.end()
+  else armRenewal(lease.expires_at)
+  let polling=false;let childClosed=false
   const budgetTimer=setInterval(async()=>{
-    if(!billingSession||polling||budgetStop)return;polling=true
+    if(childClosed||!billingSession||polling||budgetStop)return;polling=true
     try {
       const rows=await usageFor(billingSession)
+      if(childClosed)return
       const amount=rows.reduce((n:number,row:any)=>n+Number(row.actual_cost_decimal||row.charged_amount_usd||row.charged_amount||row.total_cost_usd||row.cost_usd||0),0)
       onLine(JSON.stringify({stage:'observed_usage',rows:rows.length,amount,precision:'settlement-lag; not a monetary hard cap'}))
       if(amount>=observedSpendLimit){budgetStop=true;onLine(JSON.stringify({stage:'observed_budget_stop',amount,observedSpendLimit}));child.kill('SIGTERM')}
-    }catch(error:any){onLine(JSON.stringify({stage:'usage_poll_error',code:error.code||error.name}))}
+    }catch(error:any){if(!childClosed)onLine(JSON.stringify({stage:'usage_poll_error',code:error.code||error.name}))}
     finally{polling=false}
   },30000)
   const watchdog=setTimeout(()=>child.kill('SIGTERM'),(budget+50)*1000)
   const hardStop=setTimeout(()=>child.kill('SIGKILL'),(budget+80)*1000)
-  const exitCode=await new Promise<number|null>((resolve,reject)=>{child.on('error',reject);child.on('close',resolve)})
-  clearInterval(budgetTimer);clearTimeout(watchdog);clearTimeout(hardStop)
-  fs.closeSync(log)
+  let exitCode:number|null=null
+  try{
+    exitCode=await new Promise<number|null>((resolve,reject)=>{
+      child.on('error',error=>{childClosed=true;renewalStopped=true;reject(error)})
+      child.on('close',code=>{childClosed=true;renewalStopped=true;resolve(code)})
+    })
+  }finally{
+    childClosed=true;renewalStopped=true;clearTimeout(renewalTimer)
+    clearInterval(budgetTimer);clearTimeout(watchdog);clearTimeout(hardStop)
+    child.stdin.end();fs.closeSync(log)
+  }
   if(runDir && fs.existsSync(path.join(runDir,'report.json'))){
     try{await refreshSettlement(runDir)}
     catch(error:any){console.log(JSON.stringify({stage:'settlement_error',code:error.code||error.name}))}
