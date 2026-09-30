@@ -109,3 +109,22 @@ def test_a_single_result_notification_is_unchanged_by_the_batch_fields():
     text = format_process_notification(evt)
     assert "Model: gpt-5.6-sol" in text
     assert "tokens" not in text
+
+
+def test_completion_handoff_requires_focused_integration_and_delivery():
+    text = format_process_notification(_batch([_result(0)]))
+
+    assert text.count("[DELEGATION RESULT HANDOFF]") == 1
+    assert "account for every task" in text
+    assert "central claims that are unsupported or conflicting" in text
+    assert "narrowest relevant lookup" in text
+    assert "Do not repeat broad discovery" in text
+    assert "preserve limitations and unknowns" in text
+    assert "requested format" in text
+    assert "Other sibling units may still be pending" in text
+    assert "do not claim the whole task is complete" in text
+    assert text.rfind("[DELEGATION RESULT HANDOFF]") > text.rfind("--- ✓ TASK")
+
+    complete = format_process_notification(_batch([_result(0), _result(1), _result(2)]))
+    assert "Other sibling units may still be pending" not in complete
+    assert "stop using tools and deliver" in complete

@@ -44,6 +44,7 @@ def test_process_completion_display_keeps_payload_separate_across_surfaces(monke
     assert "[IMPORTANT" not in visible and "SECRET_OUTPUT_LINE" not in visible
     queued = cli.chat.call_args.args[0]
     assert queued == payload  # the model still receives the full notification
+    assert "[DELEGATION RESULT HANDOFF]" not in payload
 
     cli.conversation_history = []
     cli.agent = SimpleNamespace(run_conversation=Mock(return_value={}))
@@ -70,5 +71,4 @@ def test_process_completion_display_keeps_payload_separate_across_surfaces(monke
     assert text == payload
     assert kwargs["display_kind"] == PROCESS_COMPLETE_DISPLAY_KIND
     assert kwargs["display_metadata"] == {"display_text": expected}
-
 
