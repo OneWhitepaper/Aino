@@ -57,7 +57,9 @@ def test_monitor_controls_stop_processes_and_never_steer_them():
     from hermes_cli.cli_subagent_monitor import SubagentMonitor
     from tools.process_registry import process_registry
 
-    slow = process_registry.spawn_local(command="sleep 30", cwd='.', task_id='t', owner_task_id='t', session_key='')
+    # Keep the controlled process in our subtree through shutdown; a separate
+    # shell wrapper can exit first and reparent sleep outside the test guard.
+    slow = process_registry.spawn_local(command="exec sleep 30", cwd='.', task_id='t', owner_task_id='t', session_key='')
     slow_id = slow.id
     try:
         dock = SubagentMonitor(SimpleNamespace(agent=None))
