@@ -56,8 +56,18 @@ grow: expansive at the edges, conservative at the waist.
 - **Keep the core narrow.** Prefer, in order: extend existing code → CLI command + skill →
   service-gated tool (`check_fn`) → plugin → MCP server in the catalog → new core tool (last
   resort). See the Footprint Ladder.
-- **Extend, don't duplicate.** Check whether existing infrastructure covers the use case
-  before adding a module/manager/hook. When 3+ open PRs integrate the same *category*
+- **Reuse Hermes first; extend, don't duplicate.** Aino builds on Hermes: upstream
+  capabilities are the default implementation foundation, not merely a reference. Before
+  implementing a requirement, locate the existing Hermes/Aino capability and trace its real
+  call path. Reuse its configuration, APIs, modules, and extension points, making the
+  smallest necessary adaptation. Do not add redundant modules, managers, wrappers, tools,
+  schedulers, delegation engines, or parallel mechanisms when an existing capability can
+  cover the requirement. For agent collaboration, build on Hermes's existing delegation,
+  child-agent lifecycle, and result-return paths. New implementation requires a concrete
+  uncovered requirement: identify the existing paths considered, explain why reuse or a
+  minimal extension cannot cover it, and implement only the missing piece. This does not
+  prohibit necessary extraction or new files for clear code organization; it prohibits
+  duplicating behavior that already exists. When 3+ open PRs integrate the same *category*
   (memory backends, providers, notifiers), design an ABC + orchestrator, wrap the existing
   built-in as the first provider, and turn the competing PRs into plugins against it.
 - **Behavior contracts over snapshots.** Tests assert how two pieces of data relate, never
