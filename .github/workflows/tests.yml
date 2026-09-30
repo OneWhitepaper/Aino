@@ -28,7 +28,9 @@ jobs:
           set -euo pipefail
           # Freeze discovery once; each file belongs to exactly one job.
           unit=$(python3 scripts/run_tests_parallel.py --generate-slices 4)
-          mapfile -t core_files < <(find tests/e2e -name 'test_*.py' -not -path 'tests/e2e/core/upgrade/*' | sort)
+          # Paid live canaries belong to live-providers.yml; pytest's default
+          # 'not live' filter leaves that file with no runnable tests here.
+          mapfile -t core_files < <(find tests/e2e -name 'test_*.py' -not -path 'tests/e2e/core/upgrade/*' -not -path 'tests/e2e/core/live/*' | sort)
           mapfile -t upgrade_files < <(find tests/e2e/core/upgrade -name 'test_*.py' | sort)
           test "${#core_files[@]}" -gt 0
           test "${#upgrade_files[@]}" -gt 0
