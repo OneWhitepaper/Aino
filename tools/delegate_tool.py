@@ -226,6 +226,13 @@ def _build_child_agent(
         override_acp_args=override_acp_args,
         routing_cfg=routing_cfg,
     )
+    reasoning_override = override_reasoning_config
+    if reasoning_override is None:
+        delegation_effort = delegation_cfg.get("reasoning_effort")
+        if delegation_effort is not None:
+            from hermes_constants import parse_reasoning_effort
+            if parse_reasoning_effort(delegation_effort) is not None:
+                reasoning_override = rt["reasoning_config"]
     if override_reasoning_config is not None:
         # A task's explicit choice belongs to this child only. Provider clamping
         # stays at the existing wire boundary, including when its model changes.
@@ -270,10 +277,10 @@ def _build_child_agent(
     child_session_ref["session_id"] = getattr(child, "session_id", "") or ""
     child._progress_identity_ref = child_session_ref
     child._delegate_depth, child._delegate_role = child_depth, effective_role  # post-degrade role
-    if override_reasoning_config is not None:
-        # Fallback swaps may re-resolve ordinary model defaults, but this explicit
-        # task choice must survive them and be clamped for the replacement route.
-        child._delegate_reasoning_config_override = dict(override_reasoning_config)
+    if reasoning_override is not None:
+        # Child-specific effort survives a provider swap; ordinary agents still
+        # re-resolve the fallback model's own defaults.
+        child._delegate_reasoning_config_override = dict(reasoning_override)
     child._subagent_id, child._parent_subagent_id = subagent_id, parent_subagent_id
     _apply_child_compression_cap(child, delegation_cfg)
     # Ownership chain for action=list/steer/stop; weakref so a finished parent

@@ -27,6 +27,14 @@ def delegation_runtime(monkeypatch, request):
                 self.send_error(404)
                 return
             requests.append(body)
+            if body.get("model") == "unavailable-primary":
+                payload = json.dumps({"error": {"message": "Model not found", "code": "model_not_found"}}).encode()
+                self.send_response(404)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(payload)))
+                self.end_headers()
+                self.wfile.write(payload)
+                return
             if "input" in body:
                 message = {"id": "msg_local", "type": "message", "role": "assistant",
                            "status": "completed",
@@ -43,14 +51,6 @@ def delegation_runtime(monkeypatch, request):
                 payload = "".join(f"data: {json.dumps(event)}\n\n" for event in events).encode()
                 self.send_response(200)
                 self.send_header("Content-Type", "text/event-stream")
-                self.send_header("Content-Length", str(len(payload)))
-                self.end_headers()
-                self.wfile.write(payload)
-                return
-            if body.get("model") == "unavailable-primary":
-                payload = json.dumps({"error": {"message": "Model not found", "code": "model_not_found"}}).encode()
-                self.send_response(404)
-                self.send_header("Content-Type", "application/json")
                 self.send_header("Content-Length", str(len(payload)))
                 self.end_headers()
                 self.wfile.write(payload)
@@ -151,6 +151,40 @@ def test_responses_configured_child_effort_yields_to_task_override(delegation_ru
     assert requests[-1]["input"][:len(original_request["input"])] == original_request["input"]
     assert requests[-1]["instructions"] == original_request["instructions"]
     assert requests[-1]["tools"] == original_request["tools"]
+
+
+@pytest.mark.parametrize("delegation_runtime", ["chat_completions", "codex_responses"], indirect=True)
+@pytest.mark.parametrize("configured_effort,task_effort,wire_effort,child_reasoning", [
+    ("high", None, "high", {"enabled": True, "effort": "high"}),
+    (False, None, "none", {"enabled": False}),
+    ("high", "max", "max", {"enabled": True, "effort": "max"}),
+])
+def test_configured_child_effort_survives_provider_fallback(
+    delegation_runtime, configured_effort, task_effort, wire_effort, child_reasoning,
+):
+    parent, children, requests, config_path = delegation_runtime
+    config_path.write_text(json.dumps({
+        "agent": {"reasoning_effort": "ultra"},
+        "delegation": {"model": "unavailable-primary", "max_iterations": 4,
+                       "reasoning_effort": configured_effort,
+                       "fallback_providers": [{"provider": "custom", "model": "fallback-model",
+                           "base_url": parent.base_url, "api_key": "test-key", "api_mode": parent.api_mode}]},
+    }), encoding="utf-8")
+    task = {"goal": "Review the boundary with configured effort"}
+    if task_effort is not None:
+        task["reasoning_effort"] = task_effort
+
+    result = _decoded(registry.dispatch("delegate_task", {
+        "tasks": [task],
+    }, parent_agent=parent))
+
+    assert result["results"][0]["status"] == "completed"
+    assert [request["model"] for request in requests] == ["unavailable-primary", "fallback-model"]
+    body_field = "input" if parent.api_mode == "codex_responses" else "messages"
+    assert all(body_field in request for request in requests)
+    assert [_wire_effort(request) for request in requests] == [wire_effort, wire_effort]
+    assert children[0].reasoning_config == child_reasoning
+    assert parent.reasoning_config == {"enabled": True, "effort": "ultra"}
 
 
 def test_batch_efforts_reach_child_wires_and_leave_parent_context_unchanged(delegation_runtime):
