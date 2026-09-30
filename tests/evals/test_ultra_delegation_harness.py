@@ -1,4 +1,5 @@
 """Real harness stop causes, observer hooks and input ceilings."""
+import hashlib
 import json
 from pathlib import Path
 import subprocess
@@ -6,6 +7,30 @@ import sys
 import pytest
 from evals.ultra_delegation import convergence
 from tests.evals.ultra_delegation_harness_fixture import _run_offline_harness
+
+
+def test_fixture_snapshot_excludes_bytecode_without_modifying_source(tmp_path):
+    fixtures = tmp_path / "fixtures"
+    source = fixtures / "large/agent/context_compressor.py"
+    source.parent.mkdir(parents=True)
+    source.write_bytes(b"# frozen source fixture\n")
+    (fixtures / "small").mkdir()
+    generated = [
+        fixtures / "large/agent/__pycache__/context_compressor.cpython-311.pyc",
+        fixtures / "large/agent/legacy.pyc",
+        fixtures / "large/agent/legacy.pyo",
+    ]
+    for cache in generated:
+        cache.parent.mkdir(parents=True, exist_ok=True)
+        cache.write_bytes(b"local bytecode")
+    report = _run_offline_harness(
+        tmp_path / "run", ["--budget=0", f"--fixtures={fixtures}"],
+    )
+    assert report["fixture_hashes"] == {
+        "agent/context_compressor.py": hashlib.sha256(b"# frozen source fixture\n").hexdigest(),
+    }
+    assert all(cache.read_bytes() == b"local bytecode" for cache in generated)
+    assert source.read_bytes() == b"# frozen source fixture\n"
 
 
 @pytest.mark.parametrize("matched_comparison", [True, False], ids=["matched", "nonmatched"])
@@ -178,4 +203,3 @@ def test_explicit_input_cap_never_claims_original_acceptance(tmp_path, input_cap
     # Changing historical eligibility cannot manufacture a missing final answer.
     report["diagnostic"]["original_acceptance_eligible"] = True
     assert convergence.summarize(report)["natural_delivery"] is False
-

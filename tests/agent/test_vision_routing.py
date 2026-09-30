@@ -173,10 +173,12 @@ class TestTextOnlyMainSkippedForVision:
         Pre-fix this silently returned the deepseek client with model
         substitution, producing ``unknown variant 'image_url'`` at call time.
         """
+        # Exercise a known text-only route without depending on a live catalog response.
         _write_config(isolated_home, """
 model:
   provider: deepseek
   default: deepseek-v4-pro
+  supports_vision: false
 """)
         monkeypatch.setenv("DEEPSEEK_API_KEY", "sk-test")
         _fresh_modules()

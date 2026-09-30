@@ -275,6 +275,10 @@ describe('routing', () => {
   // local member's sourced reply read as somebody else's came back to it as
   // room news, and it answered itself until the round cap.
   it('never re-drives a local member on its own sourced reply', async () => {
+    // Equal timestamps sort by entry ID; keep this ordered exchange on distinct ticks.
+    let now = Date.now()
+    const clock = vi.spyOn(Date, 'now').mockImplementation(() => ++now)
+    onTestFinished(() => clock.mockRestore())
     const room = await loadRoom({ turn: ({ n }) => `Reply ${n} from this device.` })
     const local: GroupMember = { connectionId: 'local', connectionLabel: 'This device', name: 'default', title: '' }
 

@@ -6,7 +6,6 @@ same way the `hermes model` CLI picker does.
 """
 
 from threading import Event
-from time import monotonic
 
 import hermes_cli.inventory as inv
 import hermes_cli.models as models_mod
@@ -108,13 +107,15 @@ def test_apply_pricing_omits_sale_when_original_not_cheaper(monkeypatch):
 def test_model_options_cold_pricing_fetch_runs_off_the_request_path(monkeypatch):
     """A cold pricing endpoint must not delay the first picker payload."""
     fetch_started = Event()
+    fetch_finished = Event()
     release_fetch = Event()
 
     def fake_pricing(_slug, *, force_refresh=False, cached_only=False):
         if cached_only:
             return {}
         fetch_started.set()
-        release_fetch.wait(timeout=5)
+        release_fetch.wait(timeout=10)
+        fetch_finished.set()
         return {}
 
     row = {
@@ -137,7 +138,6 @@ def test_model_options_cold_pricing_fetch_runs_off_the_request_path(monkeypatch)
     monkeypatch.setattr(inv, "_pricing_prewarm_threads", {})
 
     try:
-        started_at = monotonic()
         payload = inv.build_model_options_payload(
             inv.ConfigContext(
                 current_provider="openrouter",
@@ -147,11 +147,10 @@ def test_model_options_cold_pricing_fetch_runs_off_the_request_path(monkeypatch)
                 custom_providers=[],
             )
         )
-        elapsed = monotonic() - started_at
         assert payload["providers"][0]["slug"] == "openrouter"
         assert "pricing" not in payload["providers"][0]
-        assert elapsed < 2.0, f"cold picker blocked for {elapsed:.2f}s"
-        assert fetch_started.wait(timeout=1), "pricing should prewarm in the background"
+        assert fetch_started.wait(timeout=5), "pricing should prewarm in the background"
+        assert not fetch_finished.is_set(), "picker must return while pricing is still blocked"
     finally:
         threads = list(inv._pricing_prewarm_threads.values())
         release_fetch.set()
@@ -474,5 +473,4 @@ def test_cached_only_dynamic_pricing_is_profile_scoped(tmp_path, monkeypatch):
     assert in_profile(tmp_path / "b", endpoint_b, cached_only=False) == expected_b
     assert in_profile(tmp_path / "a", endpoint_b, cached_only=True) == expected_a
     assert in_profile(tmp_path / "b", endpoint_a, cached_only=True) == expected_b
-
 

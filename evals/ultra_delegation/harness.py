@@ -209,7 +209,9 @@ if args.scenario == 'independent':
             raise ValueError('Independent public fixture does not match its freeze: '+filename)
         shutil.copy2(source/filename, workspace/filename)
 else:
-    shutil.copytree(source, workspace, dirs_exist_ok=True)
+    # Compiler caches are local build artifacts, not part of the source-review task.
+    shutil.copytree(source, workspace, dirs_exist_ok=True,
+                    ignore=shutil.ignore_patterns('__pycache__', '*.pyc', '*.pyo'))
 skill_source = args.review_skill_path
 skill_target = profile / 'skills/software-development/read-only-source-review'
 if args.scenario not in ('daily', 'daily_replay', 'independent') and args.review_skill in ('original', 'candidate'):
