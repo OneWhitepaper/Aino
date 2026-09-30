@@ -72,3 +72,10 @@ Aino may fold activity after a final answer; no interim rows are excluded from
 the persisted ordering and duplicate checks.
 
 The shared-profile step selects the existing visible data-tree-tab contract, matching the other Desktop fixtures, so localization and sidebar presentation cannot make a valid Bots pane look absent.
+
+The transcript scenario alone sets `HERMES_DESKTOP_ISOLATED_BACKEND=0` after
+creating its temporary HOME/HERMES_HOME. That is intentional: it tests the
+shared-host profile route and its second-socket injection. The backend ledger,
+spawn gate, provider, and account state still live entirely inside that
+temporary sandbox; every other core scenario retains the isolated-backend
+default.

@@ -72,7 +72,12 @@ test('transcript oracle holds across every transition', async () => {
   const sandbox = createCoreSandbox('transcript')
   writeProviderHome(sandbox.hermesHome, provider.url)
   writeProviderHome(path.join(sandbox.hermesHome, 'profiles', 'p2'), provider.url)
-  const { app, page } = await launchCoreApp(coreAppEnv(sandbox))
+  // This scenario explicitly exercises the shared-host profile route. Keep
+  // the sandbox HOME/HERMES_HOME/user-data isolation, but let p2 ride the
+  // isolated primary backend so splitProfileRoute can create the second
+  // socket it is meant to test. The other core specs keep the isolated backend
+  // default and therefore cannot accidentally attach to a running host.
+  const { app, page } = await launchCoreApp(coreAppEnv(sandbox, { HERMES_DESKTOP_ISOLATED_BACKEND: '0' }))
   const ws = recordWebSockets(page)
   const proxies: { close: () => Promise<void> }[] = []
 
