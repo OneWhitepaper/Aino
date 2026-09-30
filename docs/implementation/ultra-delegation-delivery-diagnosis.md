@@ -419,6 +419,7 @@ assistant 工具参数，并有门槛、最小回收、尾部保护及 rearm 规
 
 用户明确授权一次真实验收，1200 秒、2M 累计粗估输入、64 请求、60K 输出、
 $5 观察费用阈值；不自动重跑或扩预算。运行目录为
+<!-- no-tmp: ok — historical evidence location, not a runtime scratch-path instruction. -->
 `/tmp/aino-ultra-takeover-20260928/live-original`。
 
 版本为 `codex/proactive-delegation` 的 `4ad464e1045e2d572b132d89de1055ff609516aa`
@@ -589,6 +590,7 @@ Chat 路径已有 `419a050427` 的保留工具缓存修复；Responses 的旧 `1
 七个源文件及实际 runner 均在启动前、运行结束后逐项核对无漂移；本节文档追加发生在
 验收结束之后。原冻结件未覆盖、未以事后文档哈希冒充运行版本。
 
+<!-- no-tmp: ok — historical evidence location, not a runtime scratch-path instruction. -->
 原始现场：`/tmp/aino-ultra-takeover-20260928/live-repaired-prefix`。
 持久副本在前述 `ultra-takeover/live-repaired-prefix/`，含 report、events、settlement、
 convergence、controller log 与逐文件哈希 receipt；授权及源冻结文件保存在父目录。
@@ -924,6 +926,7 @@ uncached 89,979 + cache_write 208,644 + reserved 73,987 = 372,610
 | live-read-cap-40000 | 1,916,518 (<2M) | 590,208 | **614,497（650 / 826.949）** | 从未 | 40/43 |
 
 不可变复核证据为
+<!-- no-tmp: ok — historical evidence location, not a runtime scratch-path instruction. -->
 `/tmp/aino-ultra-takeover-20260928/accounting-review/recorded-event-input-peaks.json`，
 内含源事件哈希与峰值邻近事件。三轮没有时间戳逆序；按时间稳定排序并以原始行号
 打破同值的敏感性检查，得到相同峰值。最终预留请求数为 1 / 1 / 3，冲突与未匹配
@@ -1087,6 +1090,7 @@ parent-verification-diagnosis、auxiliary-path-diagnosis的JSON/MD，持久副�
 ### 16.6 原始任务真实验收：子任务阶段触发输出上限
 
 2026-09-29获授权的一次真实运行保存在
+<!-- no-tmp: ok — historical evidence location, not a runtime scratch-path instruction. -->
 `/tmp/aino-ultra-takeover-20260929/live-delegation-schema/`；`report.json`、
 `events.jsonl`和`settlement.json`的持久副本位于
 `/Users/zizimutou/.codex/visualizations/2026/09/29/01a0eadc-dc19-7f42-98b4-e6812a7cb811/ultra-takeover/live-delegation-schema/`。
@@ -1165,6 +1169,7 @@ Chat Completions / Responses × 配置 High / False / 配置 High 与任务 Max 
 
 ### 17.2 400 字属于本地验收题，不是产品限制
 
+<!-- no-tmp: ok — historical evidence location, not a runtime scratch-path instruction. -->
 截图中的旧 `/tmp/aino-ultra-acceptance-20260925/harness.py` 与当前
 `evals/ultra_delegation/harness.py` 均把“每组结论控制在400字以内。”写入
 人工构造的 `large` 任务，通过普通 `prompt.submit` 发送。上游 `v2026.9.24`
