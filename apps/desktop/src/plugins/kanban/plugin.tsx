@@ -102,7 +102,8 @@ const plugin: HermesPlugin = {
     },
     ja: {
       name: 'カンバン',
-      description: 'マルチエージェントのタスクボード。ボード画面、サイドバー入口、ステータスバーの進行中件数を提供します。'
+      description:
+        'マルチエージェントのタスクボード。ボード画面、サイドバー入口、ステータスバーの進行中件数を提供します。'
     }
   },
   defaultEnabled: false,
@@ -153,7 +154,11 @@ const plugin: HermesPlugin = {
           id: 'nav',
           area: SIDEBAR_NAV_AREA,
           order: 50,
-          data: { codicon: 'project', label: pluginText(ctx, 'nav', 'Kanban'), path: '/kanban' } satisfies SidebarNavContribution
+          data: {
+            codicon: 'project',
+            label: pluginText(ctx, 'nav', 'Kanban'),
+            path: '/kanban'
+          } satisfies SidebarNavContribution
         },
         {
           id: 'open',

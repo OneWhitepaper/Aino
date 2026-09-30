@@ -196,7 +196,15 @@ function CardLane({
   )
 }
 
-function SecondLine({ card, description, reason }: { card: ConnectorCardModel; description?: string; reason?: string }) {
+function SecondLine({
+  card,
+  description,
+  reason
+}: {
+  card: ConnectorCardModel
+  description?: string
+  reason?: string
+}) {
   if (reason) {
     return <p className={cn('truncate text-[0.72rem]', REASON_TONE[card.state])}>{reason}</p>
   }

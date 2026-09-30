@@ -33,7 +33,14 @@ it('isolates defaults by account, connection, profile and exact platform origin'
   localStorage.setItem('aino.desktop.platform-default.user-a', 'legacy-model')
   expect(readPlatformDefault('user-a', undefined, 'production', 'https://api.agentera.com.cn')).toBe('legacy-model')
   expect(readPlatformDefault('user-a', 'work', 'production', 'https://api.agentera.com.cn')).toBeNull()
-  expect(readPlatformDefault('user-a', { connectionId: 'remote-b', profile: 'default' }, 'production', 'https://api.agentera.com.cn')).toBeNull()
+  expect(
+    readPlatformDefault(
+      'user-a',
+      { connectionId: 'remote-b', profile: 'default' },
+      'production',
+      'https://api.agentera.com.cn'
+    )
+  ).toBeNull()
   rescopeConnectionScopedStores({ mode: 'remote', baseUrl: 'https://legacy.example', profile: 'default' })
   expect(readPlatformDefault('user-a', undefined, 'development', developmentA)).toBeNull()
   writePlatformDefault('user-a', 'legacy-remote-work', 'work', 'development', developmentA)

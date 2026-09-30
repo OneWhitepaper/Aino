@@ -898,6 +898,7 @@ describe('createBackendSessionForSend profile routing', () => {
       if (method === 'prompt.submit') {
         throw new Error('must not submit after authority changes')
       }
+
       throw new Error(`unexpected request: ${method}`)
     })
 
@@ -1356,9 +1357,11 @@ describe('createBackendSessionForSend profile routing', () => {
       const fixture = await prepareDeferredManagedCreate()
       const close = deferred<object>()
       const events: string[] = []
+
       const release = vi.fn(() => {
         events.push('release')
       })
+
       vi.mocked(retainGatewayForAgent).mockResolvedValueOnce(release)
       $activeGatewayProfile.set('work')
       $newChatProfile.set('work')
@@ -1393,9 +1396,11 @@ describe('createBackendSessionForSend profile routing', () => {
 
         throw new Error(`unexpected ${method}`)
       })
+
       const generic = vi.fn(async () => {
         throw new Error('Unpublished runtime has no generic owner')
       })
+
       let routeToken = 'draft'
       const selectedRef = { current: null as string | null }
       let handle: HarnessHandle | null = null
@@ -2152,6 +2157,7 @@ describe('createBackendSessionForSend profile routing', () => {
 
   it('falls back to the entered project cwd when the current cwd is blank', async () => {
     const { rememberOpenProject } = await import('@/store/open-projects')
+
     const params = await createWith(() => {
       rememberOpenProject({ id: 'p_app', path: '/repo/app' })
       $projectTree.set([

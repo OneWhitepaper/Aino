@@ -96,6 +96,7 @@ export function ModelPickerDialog({
   const [source, setSource] = useState<'aino' | 'custom'>(() =>
     currentProvider && currentProvider !== 'aino' ? 'custom' : 'aino'
   )
+
   // "Add custom model…" flips the search into slug entry: the typed id is
   // offered per provider even while it fuzzy-matches catalog rows.
   const [slugEntry, setSlugEntry] = useState(false)

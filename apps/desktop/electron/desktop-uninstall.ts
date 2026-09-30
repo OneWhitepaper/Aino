@@ -99,12 +99,14 @@ function resolveRemovableAppPath(execPath, platform, env: any = {}) {
     const dir = p.dirname(exe)
 
     const name = p.basename(dir).toLowerCase()
+
     const removableNames = new Set([
       PRODUCT_NAME.toLowerCase(),
       LEGACY_PRODUCT_NAME.toLowerCase(),
       `${PRODUCT_NAME.toLowerCase()}-desktop`,
       `${LEGACY_PRODUCT_NAME.toLowerCase()}-desktop`
     ])
+
     if (removableNames.has(name)) {
       return dir
     }

@@ -11,10 +11,14 @@ export function projectFolderActions(id: string, ownerProfile?: string) {
   const scope = $profileScope.get()
   const activeProfile = normalizeProfileKey($activeGatewayProfile.get())
   const profile = scope === ALL_PROFILES ? (ownerProfile ? normalizeProfileKey(ownerProfile) : null) : projectProfile()
-  const isCurrent = () => Boolean(
-    profile && activeGateway() === gateway && $profileScope.get() === scope &&
-    normalizeProfileKey($activeGatewayProfile.get()) === activeProfile
-  )
+
+  const isCurrent = () =>
+    Boolean(
+      profile &&
+      activeGateway() === gateway &&
+      $profileScope.get() === scope &&
+      normalizeProfileKey($activeGatewayProfile.get()) === activeProfile
+    )
 
   const request = async (method: 'get' | 'add_folder' | 'set_primary' | 'remove_folder', path?: string) => {
     if (!gateway || !isCurrent()) {

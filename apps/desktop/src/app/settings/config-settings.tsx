@@ -527,7 +527,9 @@ function ConfigSettingsInner({
   return (
     <SettingsContent>
       <SettingsProfileScope className="mb-5" />
-      {activeSectionId === 'voice' && <ListRow description={c.voiceShortcutHintDesc} title={c.voiceShortcutHintTitle} />}
+      {activeSectionId === 'voice' && (
+        <ListRow description={c.voiceShortcutHintDesc} title={c.voiceShortcutHintTitle} />
+      )}
       {activeSectionId === 'model' && (
         <div className={showModelSettings ? 'mb-6' : undefined}>
           <ModelSettings

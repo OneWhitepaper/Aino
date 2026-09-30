@@ -96,6 +96,7 @@ describe('runtime plugin localization', () => {
   it('localizes the load failure title in Simplified Chinese', async () => {
     setRuntimeI18nLocale('zh')
     const restore = withBlobReroute()
+
     try {
       const id = await loadRuntimePlugin("import value from 'unsupported-package'; export default value", 'demo')
       expect(id).toBeNull()

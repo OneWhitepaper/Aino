@@ -1,10 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 
-import {
-  createPlatformCaptcha,
-  createPlatformCaptchaBroker,
-  isPlatformCaptchaRequestAllowed
-} from './platform-captcha'
+import { createPlatformCaptcha, createPlatformCaptchaBroker, isPlatformCaptchaRequestAllowed } from './platform-captcha'
 
 const disabled = { captcha: { provider: 'disabled', site_key: '', scene_id: '', prefix: '', region: '' } }
 
@@ -487,7 +483,9 @@ describe('platform captcha broker', () => {
     expect(allowed('https://user@tenant-prefix.captcha-open.aliyuncs.com/verify')).toBe(false)
     expect(allowed('http://tenant-prefix.captcha-open.aliyuncs.com/verify')).toBe(false)
     expect(allowed('https://tenant-prefix.captcha-open.aliyuncs.com:444/verify')).toBe(false)
-    expect(allowed('https://tenant-prefix.evil.captcha-open.aliyuncs.com/verify', { ...cn, prefix: 'tenant-prefix.evil' })).toBe(false)
+    expect(
+      allowed('https://tenant-prefix.evil.captcha-open.aliyuncs.com/verify', { ...cn, prefix: 'tenant-prefix.evil' })
+    ).toBe(false)
   })
 })
 

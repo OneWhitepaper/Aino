@@ -97,6 +97,7 @@ test('quitPromptFor accepts localized copy while preserving dynamic chat titles'
   assert.ok(prompt.detail.includes('• 修复登录'))
   assert.ok(prompt.detail.includes('退出会中断当前回合。'))
 })
+
 for (const primaryRouteKind of ['remote', 'cloud'] as const) {
   test(`quitPromptFor says the agent keeps running on a ${primaryRouteKind} backend`, () => {
     const owned = backendOwnedByApp({ ownedBackendCount: 0, primaryRouteKind })

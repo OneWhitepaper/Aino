@@ -19,7 +19,15 @@ import type { PlatformUsagePage, PlatformUsageQuery } from '../shared/platform-c
 import { parsePlatformCheckoutInfo, parsePlatformWalletSummary } from './platform-billing-contract'
 import { parsePlatformDeviceId, parsePlatformDevices } from './platform-device-contract'
 import { parsePlatformModel } from './platform-model-contract'
-import { parsePaymentQuote, parsePaymentQuoteInput, parsePlatformCreateOrderInput, parsePlatformOrder, parsePlatformOrderId, parsePlatformOrderPage, parsePlatformOrderQuery } from './platform-payment-contract'
+import {
+  parsePaymentQuote,
+  parsePaymentQuoteInput,
+  parsePlatformCreateOrderInput,
+  parsePlatformOrder,
+  parsePlatformOrderId,
+  parsePlatformOrderPage,
+  parsePlatformOrderQuery
+} from './platform-payment-contract'
 import type { PlatformTokenSet } from './platform-token-store'
 import { parsePlatformUsagePage, parsePlatformUsageQuery } from './platform-usage-contract'
 
@@ -335,9 +343,13 @@ export function createPlatformClient({
       return parsePlatformDevices(await request('GET', '/desktop/devices', undefined, token))
     },
     async revokeDevice(token, deviceId) {
-      const data = object(await request('DELETE', `/desktop/devices/${parsePlatformDeviceId(deviceId)}`, undefined, token))
+      const data = object(
+        await request('DELETE', `/desktop/devices/${parsePlatformDeviceId(deviceId)}`, undefined, token)
+      )
 
-      if (data.revoked !== true) { throw new PlatformClientError('invalid_response') }
+      if (data.revoked !== true) {
+        throw new PlatformClientError('invalid_response')
+      }
 
       return { revoked: true }
     },
@@ -347,9 +359,18 @@ export function createPlatformClient({
     async createOrder(token, input) {
       const { amount, ...intent } = parsePlatformCreateOrderInput(input)
 
-      const data = object(await request('POST', '/payment/orders', {
-        ...intent, amount_decimal: amount, payment_source: 'aino_desktop'
-      }, token))
+      const data = object(
+        await request(
+          'POST',
+          '/payment/orders',
+          {
+            ...intent,
+            amount_decimal: amount,
+            payment_source: 'aino_desktop'
+          },
+          token
+        )
+      )
 
       return parsePlatformOrderId(data.order_id, 'invalid_response')
     },
@@ -357,7 +378,9 @@ export function createPlatformClient({
       const id = parsePlatformOrderId(orderId)
       const order = parsePlatformOrder(await request('GET', `/payment/orders/${id}`, undefined, token), now())
 
-      if (order.order_id !== id) { throw new PlatformClientError('invalid_response') }
+      if (order.order_id !== id) {
+        throw new PlatformClientError('invalid_response')
+      }
 
       return order
     },
@@ -490,7 +513,9 @@ export function createPlatformClient({
       return data.map(parsePlatformModel)
     },
     async listUsage(token, input) {
-      const query = new URLSearchParams(Object.entries(parsePlatformUsageQuery(input)).map(([key, value]) => [key, String(value)]))
+      const query = new URLSearchParams(
+        Object.entries(parsePlatformUsageQuery(input)).map(([key, value]) => [key, String(value)])
+      )
 
       return parsePlatformUsagePage(await request('GET', `/usage?${query}`, undefined, token))
     },

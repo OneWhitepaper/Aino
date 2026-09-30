@@ -363,10 +363,7 @@ it('revokes active and pending gateway authority before a remote logout resolves
   expect((await f.controller.bind(f.input, f.window)).ok).toBe(true)
   expect(f.binding()).toMatchObject({ session_id: f.input.session_id })
 
-  const pending = f.controller.bind(
-    { ...f.input, expected_account_revision: f.auth.snapshot().revision },
-    f.window
-  )
+  const pending = f.controller.bind({ ...f.input, expected_account_revision: f.auth.snapshot().revision }, f.window)
 
   await f.leaseReady
 

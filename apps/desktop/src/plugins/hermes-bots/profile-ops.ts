@@ -412,7 +412,11 @@ export async function deleteBot(bot: RosterRow) {
     })
 
     if (result?.blocked || result?.code !== 0) {
-      throw new Error(result?.hint || result?.output || pluginText('bot.deleteFailed', `Could not delete profile ${bot.name}.`, bot.name))
+      throw new Error(
+        result?.hint ||
+          result?.output ||
+          pluginText('bot.deleteFailed', `Could not delete profile ${bot.name}.`, bot.name)
+      )
     }
   }
 

@@ -1711,10 +1711,12 @@ export const ja = defineLocale({
       setupProviderFallback: 'プロバイダー',
       setUpProvider: name => `${name} を設定`,
       otherProviders: '別のプロバイダー',
-      staleAuxiliary: (count, names, provider) => `${count} 件の補助タスク（${names}）は引き続き ${provider} で実行され、メインモデルは使用されません。`,
+      staleAuxiliary: (count, names, provider) =>
+        `${count} 件の補助タスク（${names}）は引き続き ${provider} で実行され、メインモデルは使用されません。`,
       moa: {
         title: 'Mixture of Agents',
-        description: '「Mixture of Agents」プロバイダーのモデルとして表示される名前付きプリセットを設定します。集約モデルが実際に処理を実行します。',
+        description:
+          '「Mixture of Agents」プロバイダーのモデルとして表示される名前付きプリセットを設定します。集約モデルが実際に処理を実行します。',
         preset: 'プリセット',
         enabled: '有効',
         setDefault: 'デフォルトに設定',

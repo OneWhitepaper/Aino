@@ -711,13 +711,14 @@ describe('per-member delta', () => {
 
 describe('threads', () => {
   it('mints a new thread per composer send and lands replies in it', async () => {
-    const room = await loadRoom({ turn: ({ n }) => n === 1 ? 'first reply' : n === 2 ? 'second reply' : '(pass)' })
+    const room = await loadRoom({ turn: ({ n }) => (n === 1 ? 'first reply' : n === 2 ? 'second reply' : '(pass)') })
     const member: GroupMember[] = [{ name: 'research', title: '' }]
     // Sync orders equal-time messages by their stable IDs, independently of
     // send order. Pin that case instead of depending on millisecond timing.
     const clock = vi.spyOn(Date, 'now').mockReturnValue(1_700_000_000_000)
 
-    const ids = vi.spyOn(globalThis.crypto, 'randomUUID')
+    const ids = vi
+      .spyOn(globalThis.crypto, 'randomUUID')
       .mockReturnValueOnce('00000000-0000-4000-8000-000000000004')
       .mockReturnValueOnce('00000000-0000-4000-8000-000000000003')
       .mockReturnValueOnce('00000000-0000-4000-8000-000000000002')

@@ -117,40 +117,61 @@ describe('useMessageStream status-bar usage scoping', () => {
   it.each(['before', 'after'])(
     'merges late billing receipts and non-Aino call facts %s completion only into their original turn',
     order => {
-    mountStream()
+      mountStream()
 
-    const billing = {
-      calls: [{ call_id: 'cbec3bce-4de2-4fbe-a6ee-5ab3e7d990cb', purpose: 'chat' }],
-      calls_complete: false,
-      revision: 1,
-      session_id: '6ccf86e3-f42c-4d1b-9fbe-9b7ea58a03ca',
-      source: 'aino',
-      status: 'pending',
-      turn_id: 'b8664a58-472a-4ba6-b853-94aadee41bb1',
-      user_id: '17'
-    }
+      const billing = {
+        calls: [{ call_id: 'cbec3bce-4de2-4fbe-a6ee-5ab3e7d990cb', purpose: 'chat' }],
+        calls_complete: false,
+        revision: 1,
+        session_id: '6ccf86e3-f42c-4d1b-9fbe-9b7ea58a03ca',
+        source: 'aino',
+        status: 'pending',
+        turn_id: 'b8664a58-472a-4ba6-b853-94aadee41bb1',
+        user_id: '17'
+      }
 
-    const updated = { ...billing, calls_complete: true, revision: 2 }
+      const updated = { ...billing, calls_complete: true, revision: 2 }
 
-    const complete = () => stream.handleEvent({ type: 'message.complete', session_id: SID,
-      payload: { text: 'done', turn_metrics: { billing, duration_s: 3 } } })
+      const complete = () =>
+        stream.handleEvent({
+          type: 'message.complete',
+          session_id: SID,
+          payload: { text: 'done', turn_metrics: { billing, duration_s: 3 } }
+        })
 
-    const receipt = () => stream.handleEvent({ type: 'session.usage', session_id: SID,
-      payload: { reply_billing: updated, reply_non_aino_model_calls: true } })
+      const receipt = () =>
+        stream.handleEvent({
+          type: 'session.usage',
+          session_id: SID,
+          payload: { reply_billing: updated, reply_non_aino_model_calls: true }
+        })
 
-    act(() => { if (order === 'before') { receipt(); complete() } else { complete(); receipt() } })
-    expect(sessionStates.get(SID)?.messages.at(-1)?.turnMetrics).toEqual({
-      billing: updated,
-      duration_s: 3,
-      non_aino_model_calls: true
-    })
-    const messages = sessionStates.get(SID)?.messages
-    act(() => stream.handleEvent({ type: 'session.usage', session_id: SID, payload: { reply_billing: billing } }))
-    expect(sessionStates.get(SID)?.messages).toBe(messages)
-    act(() => stream.handleEvent({ type: 'session.usage', session_id: SID,
-      payload: { reply_billing: { ...updated, revision: 3, user_id: '18' } } }))
-    expect(sessionStates.get(SID)?.messages).toBe(messages)
-    expect($currentUsage.get()).toEqual(BASELINE)
+      act(() => {
+        if (order === 'before') {
+          receipt()
+          complete()
+        } else {
+          complete()
+          receipt()
+        }
+      })
+      expect(sessionStates.get(SID)?.messages.at(-1)?.turnMetrics).toEqual({
+        billing: updated,
+        duration_s: 3,
+        non_aino_model_calls: true
+      })
+      const messages = sessionStates.get(SID)?.messages
+      act(() => stream.handleEvent({ type: 'session.usage', session_id: SID, payload: { reply_billing: billing } }))
+      expect(sessionStates.get(SID)?.messages).toBe(messages)
+      act(() =>
+        stream.handleEvent({
+          type: 'session.usage',
+          session_id: SID,
+          payload: { reply_billing: { ...updated, revision: 3, user_id: '18' } }
+        })
+      )
+      expect(sessionStates.get(SID)?.messages).toBe(messages)
+      expect($currentUsage.get()).toEqual(BASELINE)
     }
   )
 })

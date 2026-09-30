@@ -190,11 +190,7 @@ test('resolveStagedUpdaterBinary reaches the lowercase legacy staged installer',
   })
 
   assert.equal(resolved, staged)
-  assert.deepEqual(probed, [
-    path.join(home, 'Aino-Setup.exe'),
-    path.join(home, 'Hermes-Setup.exe'),
-    staged
-  ])
+  assert.deepEqual(probed, [path.join(home, 'Aino-Setup.exe'), path.join(home, 'Hermes-Setup.exe'), staged])
 })
 
 test('resolveStagedUpdaterBinary returns null off Windows even when hermes-setup is staged (#74836)', () => {

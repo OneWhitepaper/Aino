@@ -5,7 +5,12 @@ import type { ScreenshotApi } from '../electron/command-screenshot-types'
 import type { HudModifierApi } from '../electron/hud-modifier-types'
 import type { HermesNotification } from '../electron/notification-types'
 import type { PoolLimits } from '../electron/pool-limits'
-import type { PlatformAccountBridge, PlatformBillingBridge, PlatformDevicesBridge, PlatformModelsBridge } from '../shared/platform-contract'
+import type {
+  PlatformAccountBridge,
+  PlatformBillingBridge,
+  PlatformDevicesBridge,
+  PlatformModelsBridge
+} from '../shared/platform-contract'
 
 import type { WakeIndicatorState } from './lib/wake-indicator'
 import type {

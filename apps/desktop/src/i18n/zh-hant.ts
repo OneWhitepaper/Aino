@@ -1772,7 +1772,8 @@ export const zhHant = defineLocale({
       setupProviderFallback: '提供方',
       setUpProvider: name => `設定 ${name}`,
       otherProviders: '其他提供方',
-      staleAuxiliary: (count, names, provider) => `${count} 個輔助任務（${names}）仍由 ${provider} 執行，而非主要模型。`,
+      staleAuxiliary: (count, names, provider) =>
+        `${count} 個輔助任務（${names}）仍由 ${provider} 執行，而非主要模型。`,
       moa: {
         title: '混合代理（Mixture of Agents）',
         description: '設定以「混合代理」提供者下模型形式出現的命名預設。聚合模型是實際執行模型。',

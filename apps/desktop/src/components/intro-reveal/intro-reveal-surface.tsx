@@ -51,8 +51,7 @@ export function IntroRevealSurface() {
         className="pointer-events-none absolute left-1/2 top-0 h-[130vmin] w-[150vmin] opacity-0"
         ref={glowRef}
         style={{
-          background:
-            'radial-gradient(ellipse 46% 44% at 50% 22%, var(--ui-bg-elevated), transparent 72%)',
+          background: 'radial-gradient(ellipse 46% 44% at 50% 22%, var(--ui-bg-elevated), transparent 72%)',
           transform: 'translate(-50%, -30%) scale(0.9)'
         }}
       />
@@ -159,7 +158,10 @@ function HeroChat({ frame, viewportRef }: HeroChatProps) {
               }}
             >
               <span
-                className={cn('w-4 text-center font-mono text-[length:var(--aino-text-title)]', !done && 'text-(--ui-text-secondary)')}
+                className={cn(
+                  'w-4 text-center font-mono text-[length:var(--aino-text-title)]',
+                  !done && 'text-(--ui-text-secondary)'
+                )}
                 style={{ color: done ? BLUE : undefined, fontFamily: 'var(--dt-font-mono)' }}
               >
                 {done ? '✓' : SPINNER[frame.tick % SPINNER.length]}

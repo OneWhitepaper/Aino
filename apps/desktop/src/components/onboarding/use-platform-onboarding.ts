@@ -2,10 +2,7 @@ import { useStore } from '@nanostores/react'
 import { useEffect, useState } from 'react'
 
 import { $activeGatewayConnectionId, $activeGatewayRoute } from '@/store/gateway'
-import {
-  $gatewayManagedCapabilities,
-  managedModelRouteCapabilityFrom
-} from '@/store/gateway-managed-capability'
+import { $gatewayManagedCapabilities, managedModelRouteCapabilityFrom } from '@/store/gateway-managed-capability'
 import { platformModelCatalog } from '@/store/platform-models'
 
 /** A platform session can be ready without configuring a persistent BYOK provider. */
@@ -18,18 +15,24 @@ export function usePlatformOnboardingReady(enabled: boolean): boolean {
   const capabilities = useStore($gatewayManagedCapabilities)
   const [verified, setVerified] = useState<{ catalog: typeof catalog; scope: string } | null>(null)
 
-  const supported = managedModelRouteCapabilityFrom(capabilities, {
-    connectionId,
-    profile
-  }) === 'supported'
+  const supported =
+    managedModelRouteCapabilityFrom(capabilities, {
+      connectionId,
+      profile
+    }) === 'supported'
 
   const signedIn = account?.phase === 'signed_in' && Boolean(account.account)
   const scope = account?.account ? JSON.stringify([account.account.id, account.mode, connectionId, profile]) : null
 
-  const recovering = account?.phase === 'offline' || account?.phase === 'loading' ||
+  const recovering =
+    account?.phase === 'offline' ||
+    account?.phase === 'loading' ||
     (signedIn && (state.phase === 'idle' || state.phase === 'loading'))
 
-  const ready = supported && signedIn && state.phase === 'ready' &&
+  const ready =
+    supported &&
+    signedIn &&
+    state.phase === 'ready' &&
     state.models.some(model => model.state === 'available' && model.capabilities.tools)
 
   useEffect(() => {
