@@ -136,7 +136,11 @@ export function UsageView({ rows, truncated = false, variant = 'compact' }: Usag
         <p className="text-muted-foreground">{copy.empty}</p>
       ) : variant === 'table' ? (
         <div className="overflow-x-auto rounded-lg border border-(--ui-stroke-tertiary)">
-          <table aria-label={history.usage} className="w-full min-w-[560px] border-collapse text-left text-xs">
+          <table
+            aria-label={history.usage}
+            className="w-full min-w-[560px] border-collapse text-left text-xs"
+            data-slot="aino-data-table"
+          >
             <thead className="bg-muted/35 text-muted-foreground">
               <tr className="border-b border-(--ui-stroke-tertiary)">
                 {(['time', 'model', 'purpose', 'cost', 'status'] as const).map(column => (

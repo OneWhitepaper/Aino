@@ -228,6 +228,29 @@ Brightness remains per profile and follows peer windows; CLI/TUI skins, typograp
 zoom and native Glass keep their independent settings. Stored theme assets are not
 deleted when upgrading.
 
+The approved reply style is also the system type and density ladder: 15px
+body copy at 1.6 line height, 13px controls and activity, 12px supporting
+metadata, and 18px section/dialog headings. Conversation size aliases resolve
+from these existing Aino roles; routes and body portals do not carry separate
+size palettes. Compact navigation and dense data can retain their explicit UI
+or caption role. The existing bubble fill and shared table-header fill carry
+the faint semantic blue; status, syntax and diff colors keep their meaning.
+User bubbles still consume `--dt-user-bubble` and the existing
+`--user-bubble-keep` preference. At full transparency the fill disappears and
+the outline remains; changing the visual palette must not bypass that setting.
+
+App-owned artifact, billing and Markdown-preview tables opt into the same
+`aino-data-table` presentation marker without a replacement table component.
+Headers share a light fill and fine row separators; column definitions, sorting,
+filters, pagination, copying, selection and horizontal scrolling stay with
+their existing owners. Guest HTML, embedded catalog pages, diagrams
+and terminal output retain their own content styling.
+
+Shared `DialogContent` owns its 20px body padding and 16px gap. The outer
+shell stays unclipped because nested select/popover portals live there; only
+the existing inner body scrolls. Reply billing follows this same contract,
+without a caller-specific scroll container.
+
 Gatewayless auxiliary renderers (Quick Entry, pet overlay, wake indicator, intro reveal) mount
 `ThemeProvider auxiliary`. This presentation-only mode follows the remembered
 active profile and peer appearance storage events, but never publishes gateway
@@ -285,7 +308,7 @@ Don't add per-overlay `shadow-[…]` or `border-(--ui-stroke-secondary)`
 one-offs; if elevation needs to change, change the token.
 
 Menus, selects, dialogs, sheets and popovers share the same `shadow-nous` +
-`--stroke-nous` treatment and 20px panel radius (sheets round their exposed edge).
+`--stroke-nous` treatment and 16px panel radius (sheets round their exposed edge).
 Every floating list —
 `DropdownMenu`, `Select`, and Popover + cmdk pickers
 (`<PopoverContent variant="menu">` + `<Command variant="menu">`) — paints
@@ -359,8 +382,8 @@ renderer and Electron's first window paint.
 | `--chrome-action-hover` | hover fill for quiet controls |
 | `--theme-primary`, `--ui-accent` | brand/accent |
 | `--aino-action-bg / -fg / -hover` | graphite primary action and contrast-safe inverse; shared by button, switch and checkbox |
-| `--aino-radius-control / -row / -panel` | 10px controls and selected rows, 20px floating panels |
-| `--aino-text-caption / -ui / -body / -title` | 12 / 13 / 14 / 15px type roles; page-specific headings can step up |
+| `--aino-radius-control / -row / -panel` | 8px controls and selected rows, 16px floating panels |
+| `--aino-text-caption / -ui / -body / -title` | 12 / 13 / 15 / 18px type roles; document headings can step up |
 | `--aino-surface-*`, `--aino-scrim`, `--aino-focus-ring` | shared paper, rail, strokes, state fills, backdrop and input focus |
 | `--aino-landing-*`, `--shadow-aino-landing-composer` | home/sidebar aliases of the shared semantic roles and `shadow-nous`; no independent light or dark palette |
 
@@ -435,7 +458,7 @@ context-dependent (e.g. "Show" / "Hide"). Never hardcode combos; always use
 `useKeybindHint` or `TipKeybindLabel`.
 
 Notes:
-- Text and icon buttons use the shared 10px control radius; text sizes use padding
+- Text and icon buttons use the shared 8px control radius; text sizes use padding
   + line-height (no fixed heights). Boxless text/link actions have no radius.
   Primary actions use `--aino-action-*`, not the link accent.
 - SVGs inherit `size-3.5` (`size-3` at `xs`). Don't re-set icon size.
@@ -458,7 +481,7 @@ blurred backdrop.
 ## Form controls
 
 - **`controlVariants`** (`src/components/ui/control.ts`) is the shared shape for
-  `Input` / `Textarea` / `SelectTrigger`: 10px corners, 13px normal UI text and
+  `Input` / `Textarea` / `SelectTrigger`: 8px corners, 13px normal UI text and
   padding-driven size. New text-entry controls compose it. Fields have neutral
   fill/hairlines, accent-only focus and a semantic invalid state; grouped fields
   inherit the same font size as bare controls. No page-specific control overrides.
@@ -469,7 +492,7 @@ blurred backdrop.
   (color mode, tool-call display, usage period). Replaces radio piles and
   pill rows. The neutral track and active paper option share the control radius,
   with the same keyboard focus outline as buttons. Menu selection rows use the
-  10px row radius; normal route tabs use a soft neutral selection fill.
+  8px row radius; normal route tabs use a soft neutral selection fill.
 - **`Switch`** (`size="xs"`) — bare, with `aria-label`. No bordered text wrapper.
 - **`FanMenu`** (`src/components/ui/fan-menu.tsx`) — one hub control that
   fans sibling toggles out on hover: `direction` `vertical` | `horizontal`

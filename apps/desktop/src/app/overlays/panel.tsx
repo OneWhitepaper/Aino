@@ -305,7 +305,7 @@ export function PanelEmpty({ action, description, icon = 'inbox', title }: Panel
     <div className="grid flex-1 place-items-center px-6 py-10 text-center" data-aino-empty-state="">
       <div className="flex flex-col items-center gap-2">
         <Codicon className="text-muted-foreground/50" name={icon} size="1.25rem" />
-        {title ? <p className="text-sm font-medium text-foreground/90">{title}</p> : null}
+        {title ? <p className="text-[length:var(--aino-text-body)] font-medium text-foreground/90">{title}</p> : null}
         {description ? (
           <p className="max-w-sm text-xs leading-relaxed text-muted-foreground/70">{description}</p>
         ) : null}

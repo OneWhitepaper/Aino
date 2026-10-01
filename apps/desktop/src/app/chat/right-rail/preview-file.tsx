@@ -363,6 +363,7 @@ function MarkdownTable({ className, ...rest }: ComponentProps<'table'>) {
           'm-0 w-full min-w-[18rem] border-collapse [&_tr]:border-b [&_tr]:border-border last:[&_tr]:border-0',
           className
         )}
+        data-slot="aino-data-table"
         {...rest}
       />
     </div>

@@ -665,7 +665,10 @@ function ArtifactTable({
   const { t } = useI18n()
 
   return (
-    <table className="w-full min-w-176 table-fixed text-left text-[length:var(--conversation-caption-font-size)]">
+    <table
+      className="w-full min-w-176 table-fixed text-left text-[length:var(--conversation-caption-font-size)]"
+      data-slot="aino-data-table"
+    >
       <thead className="border-b border-(--ui-stroke-tertiary) bg-(--ui-bg-quinary) text-[0.625rem] uppercase tracking-[0.08em] text-(--ui-text-tertiary)">
         <tr>
           {ARTIFACT_COLUMNS.map(col => (

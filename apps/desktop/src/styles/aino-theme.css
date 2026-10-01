@@ -1,14 +1,19 @@
 /* Shared by every renderer, including body portals and transparent windows.
    Palette seeds still belong to ThemeProvider; these are the Aino UI roles. */
 :root {
-  --aino-radius-control: 0.625rem;
-  --aino-radius-row: 0.625rem;
-  --aino-radius-panel: 1.25rem;
+  --aino-radius-control: 0.5rem;
+  --aino-radius-row: 0.5rem;
+  --aino-radius-panel: 1rem;
   --aino-text-caption: 0.75rem;
   --aino-text-ui: 0.8125rem;
-  --aino-text-body: 0.875rem;
-  --aino-text-title: 0.9375rem;
-  --aino-line-height: 1.55;
+  --aino-text-body: 0.9375rem;
+  --aino-text-title: 1.125rem;
+  --aino-line-height: 1.6;
+  --conversation-text-font-size: var(--aino-text-body);
+  --conversation-tool-font-size: var(--aino-text-ui);
+  --conversation-caption-font-size: var(--aino-text-caption);
+  --conversation-caption-line-height: 1.25rem;
+  --conversation-line-height: 1.5rem;
   --ui-bg-primary: color-mix(in srgb, var(--ui-base) 10%, transparent);
   --ui-bg-secondary: color-mix(in srgb, var(--ui-base) 7%, transparent);
   --ui-bg-tertiary: color-mix(in srgb, var(--ui-base) 5%, transparent);
@@ -73,7 +78,6 @@
   --ui-row-hover-background: color-mix(in srgb, var(--ui-row-active-background) 55%, transparent);
   --ui-bg-tertiary: color-mix(in srgb, var(--ui-row-active-background) 65%, var(--ui-bg-sidebar));
   --ui-bg-quaternary: var(--ui-bg-editor);
-  --ui-chat-bubble-background: var(--ui-bg-sidebar);
 }
 
 /* Landing and navigation consume the same roles as portals and page chrome. */
@@ -99,6 +103,8 @@
   --shadow-aino-landing-composer: var(--shadow-nous);
   --aino-landing-font: var(--dt-font-sans);
   --aino-band-row2: 2.75rem;
+  --ui-chat-bubble-background: color-mix(in srgb, var(--ui-blue) 4%, var(--aino-surface-control));
+  --aino-table-header-background: color-mix(in srgb, var(--ui-blue) 3%, var(--aino-surface-bg));
 }
 
 /* One rail-tone layer over the native material, not another field tint on
@@ -143,6 +149,36 @@
 
 :is([data-aino-page-shell], [data-aino-settings]) [data-aino-page-content] {
   background: var(--aino-surface-bg) !important;
+}
+
+:is([data-aino-page-content], [data-aino-settings-content], [data-aino-overlay-main]) {
+  font-size: var(--aino-text-body);
+  line-height: var(--aino-line-height);
+}
+
+/* Only app-owned data tables opt in. Artifact documents and embedded sites
+   retain their own presentation and existing scroll/column behaviour. */
+[data-slot='aino-data-table'] {
+  font-size: var(--aino-text-ui);
+  font-variant-numeric: tabular-nums;
+}
+
+[data-slot='aino-data-table'] thead {
+  background: var(--aino-table-header-background);
+  color: var(--ui-text-secondary);
+  font-size: var(--aino-text-caption);
+  letter-spacing: normal;
+  text-transform: none;
+}
+
+[data-slot='aino-data-table'] th {
+  padding-block: 0.625rem;
+  font-weight: 500;
+  line-height: 1.25rem;
+}
+
+[data-slot='aino-data-table'] tbody tr:not(:last-child) {
+  border-bottom: 1px solid var(--ui-stroke-tertiary);
 }
 
 /* Page headers are a single quiet seam, not a second title bar. */
@@ -258,7 +294,7 @@
 /* Settings groups keep labels, values and controls on readable, ruled rows. */
 [data-settings-group] {
   border: 1px solid var(--ui-stroke-secondary);
-  border-radius: 0.5rem;
+  border-radius: var(--aino-radius-row);
   padding-inline: 1rem;
 }
 

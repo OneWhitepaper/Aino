@@ -16,8 +16,12 @@ export function EmptyState({
   return (
     <div className={cn('grid min-h-48 place-items-center text-center', className)} data-aino-empty-state="">
       <div>
-        <div className="text-sm font-medium">{title}</div>
-        {description && <div className="mt-1 text-xs text-muted-foreground">{description}</div>}
+        <div className="text-[length:var(--aino-text-body)] font-medium">{title}</div>
+        {description && (
+          <div className="mt-1 text-[length:var(--aino-text-caption)] leading-relaxed text-muted-foreground">
+            {description}
+          </div>
+        )}
       </div>
     </div>
   )

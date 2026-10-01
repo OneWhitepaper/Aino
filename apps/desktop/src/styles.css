@@ -2448,8 +2448,8 @@ body:not(:has([data-settings-workspace])):has([data-chat-surface][data-conversat
   --composer-control-size: 1.75rem;
   --composer-row-gap: 0.25rem;
   --composer-shell-pad-block-end: 1.25rem;
-  --conversation-text-font-size: 0.9375rem;
-  --conversation-tool-font-size: 0.8125rem;
+  --conversation-text-font-size: var(--aino-text-body);
+  --conversation-tool-font-size: var(--aino-text-ui);
   --conversation-line-height: 1.5rem;
   --conversation-turn-gap: 1.25rem;
   --turn-block-gap: 1rem;
@@ -2600,9 +2600,10 @@ body:not(:has([data-settings-workspace])):has([data-chat-surface][data-conversat
 }
 
 [data-chat-surface][data-conversation-layout] .composer-human-message {
-  border: 0;
+  border: 1px solid
+    color-mix(in srgb, var(--dt-user-bubble-border) calc(100% - var(--user-bubble-keep, 100%)), transparent);
   border-radius: 1rem;
-  background: color-mix(in srgb, var(--ui-blue) 4%, var(--aino-landing-control));
+  background: var(--dt-user-bubble);
   box-shadow: none;
   padding: 0.625rem 0.875rem;
   font-size: var(--conversation-text-font-size);
@@ -2657,7 +2658,7 @@ body:not(:has([data-settings-workspace])):has([data-chat-surface][data-conversat
 }
 
 [data-chat-surface][data-conversation-layout] .aui-md .aui-md-table thead {
-  background: color-mix(in srgb, var(--ui-blue) 3%, var(--aino-landing-surface));
+  background: var(--aino-table-header-background);
   color: var(--ui-text-secondary);
 }
 

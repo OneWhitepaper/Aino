@@ -125,9 +125,12 @@ describe('ConfigSettings autosave', () => {
     expect(screen.getAllByRole('switch')).toHaveLength(2)
 
     const target = container.querySelector<HTMLElement>('[id="setting-field-compression.enabled"]')!
-    await waitFor(() => expect(target.ownerDocument.activeElement).toBe(target))
+    // Focus updates the DOM immediately; router navigation commits separately.
+    await waitFor(() => {
+      expect(target.ownerDocument.activeElement).toBe(target)
+      expect(new URLSearchParams(screen.getByTestId('settings-location').textContent ?? '').has('field')).toBe(false)
+    })
     expect(scrollIntoView).toHaveBeenCalledWith({ behavior: 'smooth', block: 'center' })
-    expect(new URLSearchParams(screen.getByTestId('settings-location').textContent ?? '').has('field')).toBe(false)
 
     fireEvent.click(within(target).getByRole('switch'))
 
