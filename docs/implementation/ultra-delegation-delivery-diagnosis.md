@@ -2283,3 +2283,33 @@ codex/ultra-delivery-stability；本节不表示已推送、合并 main、
 追溯；远端提交与最后的桌面处理结果以集成回执为准。
 日志、命令与环境恢复回执：
 /Users/zizimutou/.codex/visualizations/2026/09/29/01a0eadc-dc19-7f42-98b4-e6812a7cb811/ultra-integration-closeout/
+
+### 2026-10-01：主 CI 的可选 Codex 依赖修正
+
+主 CI 36758911263 的 Python slice 2/4 只有一个测试失败：
+`test_independent_repair_stages_public_files_and_keeps_external_oracle_private[codex]`
+在没有安装 Codex CLI 的 runner 上执行了 `codex --version`，抛出
+FileNotFoundError。Aino 分支通过；这不是生产委派或模型交付失败。
+本机移除 PATH 中的 Codex 后，原代码同样得到 1 passed / 1 failed。
+
+修正复用现有 `test_ultra_delegation_codex.py::codex_probe`：把独立题的
+Codex 文件隔离、oracle 不可见、限制与负向评分断言归入现有 native
+repair 集成测试。Aino 的独立题测试保持必跑。没有安装 CLI 时，只有
+现有 native CLI 测试明确跳过；不安装额外依赖、不模拟 Codex、不改变
+产品或评测运行器，也不移除原有断言。
+
+- 无 Codex PATH：上述两个文件 33 passed / 0 failed / 19 skipped。
+- 有 Codex PATH：现有 native repair 四个场景 4 passed / 0 failed，
+  模型端仅使用本地脚本响应，没有付费模型请求。
+- Ruff 与 git diff --check 通过；未重跑已完成的全量套件。
+
+独立的安装更新 E2E 36766201756 有 7 个失败 job，涉及更新后启动、
+设置页导航和 Windows 进程清理。该工作流在本次合并前的
+36684387420 等运行中已经失败；本次 Ultra 集成未修改这些安装/更新
+代码。已保存当前失败日志与 macOS/Linux 产物，但不把旧红灯自动
+认定为无害，也不宣称安装发行验收通过。其根因和跨平台验证另行跟踪。
+
+桌面重启后的两条 Session not found 日志没有包含请求路径，原进程
+在本次核查时已不再运行。持久化的原会话根行仍存在，之前的 UI
+回执确认历史可见；现有证据不足以确定是哪条查询返回 404，也不足
+以认定为丢会话或 Ultra 回归。本次不据此修改会话恢复逻辑。

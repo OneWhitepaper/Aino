@@ -481,6 +481,20 @@ def test_harness_scores_native_repair_transport_without_claiming_acceptance(code
     assert repair['baseline_contract']['returncode'] != 0
     assert repair['final_contract']['returncode'] != 0
     assert repair['accepted'] is False
+    if scenario == 'independent':
+        # Keep native CLI coverage behind codex_probe's existing availability gate.
+        workspace = codex_probe.run.parent / 'integrated/workspace'
+        assert set(report['fixture_hashes']) == {'SPEC.md', 'think_scrubber.py'}
+        assert not (workspace / 'manifest.json').exists()
+        assert not (workspace / 'independent_contract.py').exists()
+        assert not report['review_skill_hashes']
+        assert report['limits']['seconds'] == repair['limits']['seconds'] == 600
+        assert repair['baseline_contract']['returncode'] == 1
+        assert repair['final_contract']['returncode'] == 1
+        before = json.loads(repair['baseline_contract']['stdout'])
+        after = json.loads(repair['final_contract']['stdout'])
+        assert before['failures'] == after['failures'] > 0
+        assert repair['independent_unittest']['tests_run'] == 1
     assert report['limits']['requests'] == repair['limits']['requests']
     assert report['limits']['approx_cumulative_input'] == repair['limits']['approx_cumulative_input']
     assert summarize(report)['delivery_evidence']['state'] == 'delivered'
