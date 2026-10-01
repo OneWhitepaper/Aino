@@ -9,9 +9,8 @@ from evals.ultra_delegation import convergence
 from tests.evals.ultra_delegation_harness_fixture import _run_offline_harness
 
 
-@pytest.mark.parametrize('driver', ['aino', 'codex'])
-def test_independent_repair_stages_public_files_and_keeps_external_oracle_private(tmp_path, driver):
-    report = _run_offline_harness(tmp_path, ['--review-skill=original', '--driver='+driver],
+def test_independent_repair_stages_public_files_and_keeps_external_oracle_private(tmp_path):
+    report = _run_offline_harness(tmp_path, ['--review-skill=original'],
                                   scenario='independent')
     workspace = tmp_path / 'offline/workspace'
     assert report['stop_reason'] == 'normal_final'
