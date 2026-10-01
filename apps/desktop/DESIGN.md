@@ -611,11 +611,23 @@ so glass and message-bubble transparency do not reveal scrolling text.
   count commands instead of repeating the current command from the ticker.
   Completed timing
   and result counts live in the existing detail disclosure. Public paragraphs
-  use a medium weight and comfortable line height; compact tool rows use
+  use regular weight and comfortable line height; compact tool rows use
   regular weight and the shared line-height and glyph columns. At the normal
-  desktop scale, prose and user bubbles are 15px, activity is 14px with a 24px
-  line height, and glyphs are 14px in a 16px cell. Prose uses 1.7 line height;
-  headings scale from the reading size. Mockup screenshot pixels must not be
+  desktop scale, prose and user bubbles are 15px, activity is 13px with a 24px
+  line height, and glyphs are 14px in a 16px cell. Prose uses 1.6 line height;
+  headings scale from the reading size (23/18/15px for h1/h2/h3 at that scale).
+  The approved reply presentation uses a faint semantic-blue user bubble and
+  table header, continuous unboxed prose, and a shared right-hand disclosure
+  edge. Independent row actions stay outside the toggle. Native thinking keeps
+  its full content behind a fine vertical guide; code surfaces use a hairline
+  border and retain their copy, scrolling and expansion controls. Markdown
+  tables keep declared alignment, horizontal scrolling and column resizing;
+  visual styling never guesses numeric columns or rewrites model content.
+  Expanded reply metrics use one light, wrapping detail surface. The existing
+  compact billing list pairs model/amount above purpose/status/time; its
+  statuses, full amounts, retry conditions and account-history table are unchanged.
+  These are one presentation system, not per-answer modes or length-based rules.
+  Mockup screenshot pixels must not be
   copied into CSS sizes without accounting for capture density. Questions, approvals, failures, file edits, generated outputs and
   registered tool interfaces retain their own surfaces. The live label follows
   the actual pending tool; model waits belong to the existing tail status row.

@@ -640,6 +640,7 @@ function ToolEntry({ part }: ToolEntryProps) {
       data-terminal-tool={showTerminalTranscript ? '' : undefined}
       data-tool-open={open ? '' : undefined}
       data-tool-row=""
+      data-tool-status={view.status}
       ref={enterRef}
     >
       <div className={cn(open && isFileEdit && 'border-b border-(--ui-stroke-tertiary) px-2 py-1.5')}>

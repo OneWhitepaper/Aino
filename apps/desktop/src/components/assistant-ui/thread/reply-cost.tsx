@@ -53,7 +53,7 @@ export function ReplyCost({ billing }: ReplyCostProps) {
               {copy.details}
             </Button>
           </DialogTrigger>
-          <DialogContent>
+          <DialogContent className="max-h-[85dvh] gap-4 overflow-y-auto rounded-2xl p-5">
             <DialogHeader>
               <DialogTitle>{copy.details}</DialogTitle>
               <DialogDescription>

@@ -79,14 +79,14 @@ export function ReplyMetrics({ metrics, durationS }: ReplyMetricsProps) {
       <details className="group/reply-metrics">
         <summary
           aria-label={copy.details}
-          className="flex cursor-pointer list-none items-start gap-1.5 rounded-sm hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring [&::-webkit-details-marker]:hidden"
+          className="flex cursor-pointer list-none items-start justify-between gap-3 rounded-sm hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring [&::-webkit-details-marker]:hidden"
         >
           {line}
           <ChevronDown className="mt-0.5 size-3.5 shrink-0 transition-transform group-open/reply-metrics:rotate-180" />
         </summary>
-        <div className="flex flex-wrap gap-x-4 gap-y-1 pt-1.5">
+        <div className="my-1.5 flex flex-wrap gap-x-6 gap-y-2 rounded-md bg-(--ui-bg-quinary) px-3 py-2.5">
           {details.map(detail => (
-            <span className="min-w-0 [overflow-wrap:anywhere]" key={detail}>
+            <span className="min-w-0 flex-auto [overflow-wrap:anywhere]" key={detail}>
               {detail}
             </span>
           ))}

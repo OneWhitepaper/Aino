@@ -60,7 +60,7 @@ function DelegateRowView({ row, parentSessionId }: DelegateRowViewProps) {
         <span className={SCAFFOLD_GLYPH_CLASS}>
           <Codicon name="agent" size="0.75rem" />
         </span>
-        <span className={cn(SCAFFOLD_LABEL_CLASS, 'min-w-0 truncate')}>{row.goal}</span>
+        <span className={cn(SCAFFOLD_LABEL_CLASS, 'min-w-0 flex-1 truncate')}>{row.goal}</span>
         <span className={cn(SCAFFOLD_META_CLASS, failed && 'text-destructive')}>{statusLabel}</span>
       </ScaffoldRow>
       {expanded && (

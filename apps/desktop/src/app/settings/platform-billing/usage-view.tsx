@@ -211,14 +211,15 @@ export function UsageView({ rows, truncated = false, variant = 'compact' }: Usag
         <ul aria-label={copy.details} className="m-0 list-none divide-y divide-(--ui-stroke-tertiary) p-0">
           {rows.map(row => {
             return (
-              <li className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-start gap-x-4 gap-y-1 py-3" key={row.id}>
-                <span className="min-w-0 [overflow-wrap:anywhere]">{row.model}</span>
+              <li className="grid min-w-0 grid-cols-2 items-start gap-x-4 gap-y-2 py-4" key={row.id}>
+                <span className="min-w-0 font-medium [overflow-wrap:anywhere]">{row.model}</span>
                 <span className="text-right tabular-nums [overflow-wrap:anywhere]">{usageAmount(row, copy)}</span>
-                <span className="text-xs text-muted-foreground">
+                <span className="flex min-w-0 flex-wrap items-start gap-x-1.5 text-xs text-muted-foreground">
                   <UsagePurpose purpose={row.desktop_purpose} />
+                  <span aria-hidden="true">·</span>
+                  <span>{statuses[row.settlement_status]}</span>
                 </span>
-                <span className="text-right text-xs text-muted-foreground">{statuses[row.settlement_status]}</span>
-                <span className="col-span-2 text-xs text-muted-foreground">
+                <span className="min-w-0 text-right text-xs text-muted-foreground">
                   <UsageTime value={row.created_at} />
                 </span>
               </li>

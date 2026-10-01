@@ -18,6 +18,8 @@ import { cn } from '@/lib/utils'
 //     reserves space for it instead of painting underneath it. Interactive
 //     controls go in `action`, which lays out *in flow* at the far right so it
 //     never sits on top of the caret's hit-target.
+//   - The conversation stylesheet uses the toggle/label slots to align carets
+//     at the reading column's right edge; other surfaces retain this compact fit.
 export function DisclosureRow({
   action,
   children,
@@ -41,11 +43,14 @@ export function DisclosureRow({
           'flex min-w-0 max-w-fit items-start gap-1.5 text-left transition-colors',
           onToggle ? 'hover:text-foreground focus-visible:text-foreground focus-visible:outline-none' : 'cursor-default'
         )}
+        data-slot="disclosure-toggle"
         disabled={!onToggle}
         onClick={onToggle}
         type="button"
       >
-        <span className="flex min-w-0 flex-col gap-0.5">{children}</span>
+        <span className="flex min-w-0 flex-col gap-0.5" data-slot="disclosure-label">
+          {children}
+        </span>
         {onToggle && (
           // Wrapper height matches the title row's actual line-height so the
           // caret centres with the title, not the whole subtitle stack.
