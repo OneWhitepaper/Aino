@@ -3736,16 +3736,11 @@ export interface UpstreamTranslations {
       newButton: string
       createTitle: string
       createDesc: string
+      createFolderLocation: (name: string) => string
       renameTitle: string
       addFolderTitle: string
       namePlaceholder: string
       foldersLabel: string
-      ideaLabel: string
-      ideaPlaceholder: string
-      ideaGenerate: string
-      ideaGenerating: string
-      ideaShuffle: string
-      ideaTemplates: Record<string, { label: string; idea: string }>
       noFolders: string
       addFolder: string
       primaryBadge: string

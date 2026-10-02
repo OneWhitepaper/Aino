@@ -89,6 +89,37 @@ export function registerFsIpc({
     }
   })
 
+  // Create or reuse one project directory under an existing parent, matching
+  // the remote mkdir endpoint without opening the OS file manager.
+  ipcMain.handle('hermes:fs:createDir', async (_event, dirPath) => {
+    const raw = String(dirPath || '').trim()
+
+    if (!raw) {
+      throw new Error('Invalid path')
+    }
+
+    const resolved = resolveRequestedPathForIpc(expandUserPath(raw), { purpose: 'Create directory' })
+    const parent = path.dirname(resolved)
+
+    if (!directoryExists(parent)) {
+      throw new Error('Parent directory does not exist')
+    }
+
+    try {
+      await fs.promises.mkdir(resolved)
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'EEXIST') {
+        throw error
+      }
+
+      if (!directoryExists(resolved)) {
+        throw new Error('Path exists and is not a directory')
+      }
+    }
+
+    return { path: resolved }
+  })
+
   // The LOCAL Desktop runtime-plugin root: `<HERMES_HOME>/desktop-plugins`,
   // resolved from the main-process HERMES_HOME (see resolveHermesHome) — NOT from
   // the connected backend. A remote backend reports its own `hermes_home` over
@@ -193,7 +224,7 @@ export function registerFsIpc({
     return { path: dst }
   })
 
-  // Write a small UTF-8 text file (e.g. a project's IDEA.md at creation). The path
+  // Save a small UTF-8 text file from the editor. The path
   // is hardened (resolveRequestedPathForIpc) and the parent must already exist —
   // this never creates directory trees or escapes the allowed roots, and content
   // is size-capped so it can't be abused as a bulk-write primitive.

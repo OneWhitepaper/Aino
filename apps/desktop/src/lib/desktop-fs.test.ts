@@ -5,6 +5,7 @@ import { setRuntimeI18nLocale } from '@/i18n'
 import { $connection } from '@/store/session'
 
 import {
+  createProjectFolder,
   createRemoteDir,
   desktopDefaultCwd,
   desktopFileDiff,
@@ -27,7 +28,9 @@ const readFileDataUrl = vi.fn(async () => 'data:text/plain;base64,bG9jYWw=')
 const gitRoot = vi.fn(async () => '/local')
 const selectPaths = vi.fn(async () => ['/local'])
 
-const api = vi.fn(async ({ path }: { path: string }) => {
+const createDir = vi.fn(async (path: string) => ({ path }))
+
+const api = vi.fn(async ({ body, path }: { body?: { path?: string }; path: string }) => {
   if (path.startsWith('/api/fs/list?')) {
     return { entries: [{ name: 'remote', path: '/remote', isDirectory: true }] }
   }
@@ -49,7 +52,7 @@ const api = vi.fn(async ({ path }: { path: string }) => {
   }
 
   if (path === '/api/files/mkdir') {
-    return { ok: true, path: '/home/user/new folder' }
+    return { ok: true, path: body?.path }
   }
 
   if (path.startsWith('/api/git/file-diff?')) {
@@ -63,6 +66,7 @@ function stubBridge() {
   vi.stubGlobal('window', {
     hermesDesktop: {
       api,
+      createDir,
       gitRoot,
       readDir,
       readFileDataUrl,
@@ -146,6 +150,26 @@ describe('desktop filesystem facade', () => {
       method: 'POST',
       path: '/api/files/mkdir',
       profile: 'team-remote'
+    })
+  })
+
+  it('creates a same-named local project folder under the selected parent', async () => {
+    $connection.set({ mode: 'local' } as never)
+
+    await expect(createProjectFolder('/Users/test/projects', 'Skunkworks')).resolves.toBe(
+      '/Users/test/projects/Skunkworks'
+    )
+    expect(createDir).toHaveBeenCalledWith('/Users/test/projects/Skunkworks')
+  })
+
+  it('creates a same-named remote project folder under the selected backend parent', async () => {
+    $connection.set({ mode: 'remote' } as never)
+
+    await expect(createProjectFolder('/backend/project', 'Skunkworks')).resolves.toBe('/backend/project/Skunkworks')
+    expect(api).toHaveBeenCalledWith({
+      body: { path: '/backend/project/Skunkworks' },
+      method: 'POST',
+      path: '/api/files/mkdir'
     })
   })
 

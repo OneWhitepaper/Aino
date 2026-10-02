@@ -452,6 +452,8 @@ declare global {
       revealPath?: (path: string) => Promise<boolean>
       // Open a DIRECTORY (created if missing) in the OS file manager.
       openDir?: (path: string) => Promise<{ ok: boolean; error?: string }>
+      /** Create one directory without opening the file manager. */
+      createDir?: (path: string) => Promise<{ path: string }>
       // Local Desktop runtime-plugin root (<HERMES_HOME>/desktop-plugins),
       // resolved by Electron independently of the connected backend (#66899).
       // Created on demand; returns the normalized absolute path.

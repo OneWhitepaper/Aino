@@ -8,10 +8,11 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterAll, afterEach, describe, expect, it, vi } from 'vitest'
 
 const electron = vi.hoisted(() => ({
   handlers: new Map<string, (...args: unknown[]) => unknown>(),
+  openPath: vi.fn(async () => ''),
   showItemInFolder: vi.fn()
 }))
 
@@ -21,7 +22,7 @@ vi.mock('electron', () => ({
   },
   shell: {
     showItemInFolder: electron.showItemInFolder,
-    openPath: vi.fn(async () => '')
+    openPath: electron.openPath
   }
 }))
 
@@ -34,6 +35,7 @@ vi.mock('./desktop-plugins-root', () => ({
 }))
 
 import { registerFsIpc } from './fs-ipc'
+import { resolveRequestedPathForIpc } from './hardening'
 
 const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'hermes-fs-ipc-'))
 
@@ -42,15 +44,21 @@ registerFsIpc({
   readActiveDesktopProfile: () => null,
   // `~/` resolves under the scratch dir so tilde paths can be exercised.
   expandUserPath: value => (value.startsWith('~/') ? path.join(scratch, value.slice(2)) : value),
-  resolveRequestedPathForIpc: value => value,
-  directoryExists: value => fs.existsSync(value),
+  resolveRequestedPathForIpc,
+  directoryExists: value => fs.statSync(value, { throwIfNoEntry: false })?.isDirectory() ?? false,
   resolveGitBinary: () => 'git'
 })
 
 const reveal = (target: string) => electron.handlers.get('hermes:fs:reveal')!({}, target)
+const createDir = (target: string) => electron.handlers.get('hermes:fs:createDir')!({}, target)
 
 afterEach(() => {
+  electron.openPath.mockClear()
   electron.showItemInFolder.mockClear()
+})
+
+afterAll(() => {
+  fs.rmSync(scratch, { recursive: true, force: true })
 })
 
 describe('hermes:fs:reveal', () => {
@@ -78,5 +86,45 @@ describe('hermes:fs:reveal', () => {
 
     await expect(reveal('~/tilde.md')).resolves.toBe(true)
     expect(electron.showItemInFolder).toHaveBeenCalledWith(here)
+  })
+})
+
+describe('hermes:fs:createDir', () => {
+  it('creates or reuses a child concurrently without changing its contents or opening the file manager', async () => {
+    const parent = path.join(scratch, 'projects')
+    fs.mkdirSync(parent)
+
+    const target = path.join(parent, 'Skunkworks')
+    await expect(Promise.all([createDir('~/projects/Skunkworks'), createDir(target)])).resolves.toEqual([
+      { path: target },
+      { path: target }
+    ])
+    expect(fs.readdirSync(target)).toEqual([])
+    const file = path.join(target, 'keep.txt')
+    fs.writeFileSync(file, 'preserve me')
+    await expect(Promise.all([createDir(target), createDir(target)])).resolves.toEqual([
+      { path: target },
+      { path: target }
+    ])
+    expect(fs.readFileSync(file, 'utf8')).toBe('preserve me')
+    expect(fs.readdirSync(target)).toEqual(['keep.txt'])
+    expect(electron.openPath).not.toHaveBeenCalled()
+    expect(electron.showItemInFolder).not.toHaveBeenCalled()
+  })
+
+  it('preserves existing paths and rejects invalid paths or missing parents', async () => {
+    const existing = path.join(scratch, 'already-there')
+    fs.mkdirSync(existing)
+    const file = path.join(existing, 'keep.txt')
+    fs.writeFileSync(file, 'preserve me')
+
+    await expect(createDir(file)).rejects.toThrow('Path exists and is not a directory')
+    await expect(createDir(path.join(file, 'child'))).rejects.toThrow('Parent directory does not exist')
+    const missingParent = path.join(scratch, 'not-created')
+    await expect(createDir(path.join(missingParent, 'child'))).rejects.toThrow('Parent directory does not exist')
+    await expect(createDir(path.join(existing, '\0invalid'))).rejects.toThrow('file path is invalid')
+    expect(fs.readFileSync(file, 'utf8')).toBe('preserve me')
+    expect(fs.readdirSync(existing)).toEqual(['keep.txt'])
+    expect(fs.existsSync(missingParent)).toBe(false)
   })
 })

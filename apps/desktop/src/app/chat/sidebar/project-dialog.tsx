@@ -12,13 +12,11 @@ import {
   DialogHeader,
   DialogTitle
 } from '@/components/ui/dialog'
-import { GenerateButton } from '@/components/ui/generate-button'
 import { Input } from '@/components/ui/input'
-import { Textarea } from '@/components/ui/textarea'
 import { Tip } from '@/components/ui/tooltip'
 import { useI18n } from '@/i18n'
+import { createProjectFolder, desktopFsCacheKey } from '@/lib/desktop-fs'
 import { isSubmitEnter } from '@/lib/ime'
-import { type ProjectIdeaTemplate, randomIdeaTemplates } from '@/lib/project-idea-templates'
 import { cn } from '@/lib/utils'
 import { activeGateway } from '@/store/gateway'
 import { notifyError } from '@/store/notifications'
@@ -30,7 +28,6 @@ import {
   clearNewProjectDropPlacement,
   closeProjectDialog,
   createProject,
-  generateProjectIdea,
   goToProject,
   pickProjectFolder,
   renameProject
@@ -51,11 +48,9 @@ export function ProjectDialog() {
 
   const [name, setName] = useState('')
   const [folders, setFolders] = useState<string[]>([])
-  const [idea, setIdea] = useState('')
-  const [templates, setTemplates] = useState<ProjectIdeaTemplate[]>([])
-  const [generatingIdea, setGeneratingIdea] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const nameRef = useRef<HTMLInputElement>(null)
+  const submitInFlight = useRef(false)
 
   // A "New project" DRAG arms where the project should start (tab-strip slot /
   // pane edge / pane center) before the dialog opens. Snapshot it per open —
@@ -77,9 +72,6 @@ export function ProjectDialog() {
     if (open) {
       setName(state?.name ?? '')
       setFolders([])
-      setIdea('')
-      setTemplates(randomIdeaTemplates())
-      setGeneratingIdea(false)
       setSubmitting(false)
 
       if (mode === 'create' || mode === 'rename') {
@@ -99,21 +91,27 @@ export function ProjectDialog() {
   // optional hook that runs exactly when the write SUCCEEDS (before the close)
   // — the New-project drop arm is consumed there, so a failed attempt keeps
   // its placement for the retry while a successful one can't leak it forward.
-  const runSubmit = async <T,>(write: () => Promise<T>, onSuccess?: (result: T) => void) => {
-    if (submitting) {
+  const runSubmit = async <T,>(
+    write: (stillCurrent: () => boolean) => Promise<T>,
+    onSuccess?: (result: T) => boolean | void
+  ) => {
+    if (submitInFlight.current) {
       return
     }
 
     const invocation = $projectDialog.get()
     const gateway = activeGateway()
     const profile = $activeGatewayProfile.get()
+    const fsOwner = desktopFsCacheKey()
 
     const stillCurrent = () =>
       $projectDialog.get() === invocation &&
       activeGateway() === gateway &&
       $activeGatewayProfile.get() === profile &&
+      desktopFsCacheKey() === fsOwner &&
       (invocation?.isCurrent?.() ?? true)
 
+    submitInFlight.current = true
     setSubmitting(true)
 
     try {
@@ -121,15 +119,16 @@ export function ProjectDialog() {
         throw new Error(p.contextChanged)
       }
 
-      const result = await write()
+      const result = await write(stillCurrent)
 
-      if (stillCurrent()) {
-        onSuccess?.(result)
+      if (stillCurrent() && onSuccess?.(result) !== false) {
         closeProjectDialog()
       }
     } catch (err) {
       notifyError(err, p.createFailed)
     } finally {
+      submitInFlight.current = false
+
       if ($projectDialog.get() === invocation) {
         setSubmitting(false)
       }
@@ -140,11 +139,13 @@ export function ProjectDialog() {
     const invocation = $projectDialog.get()
     const gateway = activeGateway()
     const profile = $activeGatewayProfile.get()
+    const fsOwner = desktopFsCacheKey()
 
     const stillCurrent = () =>
       $projectDialog.get() === invocation &&
       activeGateway() === gateway &&
       $activeGatewayProfile.get() === profile &&
+      desktopFsCacheKey() === fsOwner &&
       (invocation?.isCurrent?.() ?? true)
 
     try {
@@ -195,22 +196,49 @@ export function ProjectDialog() {
       return
     }
 
-    // A project owns sessions by folder (cwd-prefix), so creation requires at
-    // least one — a folder-less project couldn't hold a session anyway.
-    if (mode === 'create' && trimmed && folders.length) {
+    // Projects are folder-backed. An empty folder is valid; if the user starts
+    // with only a name, choose its parent and create a same-named directory.
+    if (mode === 'create' && trimmed) {
+      let selectedFolders = folders
+
       // The arm is consumed exactly on SUCCESS (before the close): a failed
       // create leaves the dialog open for a retry that still lands where it
       // was dropped; the open-state effect discards it on cancel/teardown.
       await runSubmit(
-        () =>
-          createProject({
+        async stillCurrent => {
+          if (!selectedFolders.length) {
+            const parent = await pickProjectFolder(p.createFolderLocation(trimmed))
+
+            if (!parent) {
+              return null
+            }
+
+            if (!stillCurrent()) {
+              throw new Error(p.contextChanged)
+            }
+
+            selectedFolders = [await createProjectFolder(parent, trimmed)]
+
+            if (!stillCurrent()) {
+              throw new Error(p.contextChanged)
+            }
+
+            // If project registration fails, retry the existing directory.
+            setFolders(selectedFolders)
+          }
+
+          return createProject({
             dropPlacement,
-            folders,
-            idea: idea.trim() || undefined,
+            folders: selectedFolders,
             name: trimmed,
             use: true
-          }),
+          })
+        },
         created => {
+          if (!created) {
+            return false
+          }
+
           clearNewProjectDropPlacement()
 
           if (created && !dropPlacement) {
@@ -225,26 +253,15 @@ export function ProjectDialog() {
     }
   }
 
-  const generateIdea = async () => {
-    if (generatingIdea) {
-      return
-    }
-
-    setGeneratingIdea(true)
-
-    try {
-      const text = await generateProjectIdea(name)
-
-      if (text) {
-        setIdea(text)
-      }
-    } finally {
-      setGeneratingIdea(false)
-    }
-  }
-
   if (mode === 'manage-folders' && state?.projectId) {
-    return <ProjectFoldersDialog key={state.projectId} name={state.name} ownerProfile={state.ownerProfile} projectId={state.projectId} />
+    return (
+      <ProjectFoldersDialog
+        key={state.projectId}
+        name={state.name}
+        ownerProfile={state.ownerProfile}
+        projectId={state.projectId}
+      />
+    )
   }
 
   const title = mode === 'rename' ? p.renameTitle : mode === 'add-folder' ? p.addFolderTitle : p.createTitle
@@ -329,64 +346,6 @@ export function ProjectDialog() {
           </div>
         )}
 
-        {mode === 'create' && (
-          <div className="flex flex-col gap-1.5">
-            <span className="text-[0.6875rem] font-medium text-(--ui-text-tertiary)">{p.ideaLabel}</span>
-            <div className="relative">
-              <Textarea
-                className="min-h-20 pr-8 text-[0.8125rem]"
-                disabled={submitting}
-                onChange={event => setIdea(event.target.value)}
-                placeholder={p.ideaPlaceholder}
-                value={idea}
-              />
-              <GenerateButton
-                className="absolute top-1 right-1"
-                disabled={submitting}
-                generating={generatingIdea}
-                generatingLabel={p.ideaGenerating}
-                label={p.ideaGenerate}
-                onGenerate={() => void generateIdea()}
-              />
-            </div>
-            <div className="flex flex-wrap items-center gap-1">
-              {templates.map(template => {
-                const copy = p.ideaTemplates[template.id]
-
-                if (!copy) {
-                  return null
-                }
-
-                return (
-                  <button
-                    className="flex items-center gap-1 rounded-full border border-(--ui-stroke-tertiary) px-2 py-0.5 text-[0.6875rem] text-(--ui-text-secondary) transition-colors hover:border-(--ui-stroke-secondary) hover:bg-(--ui-control-hover-background) hover:text-foreground disabled:opacity-50"
-                    disabled={submitting}
-                    key={template.id}
-                    onClick={() => setIdea(copy.idea)}
-                    type="button"
-                  >
-                    <span aria-hidden>{template.emoji}</span>
-                    {copy.label}
-                  </button>
-                )
-              })}
-              <Tip label={p.ideaShuffle}>
-                <Button
-                  aria-label={p.ideaShuffle}
-                  className="size-5 text-(--ui-text-quaternary) hover:text-foreground"
-                  disabled={submitting}
-                  onClick={() => setTemplates(randomIdeaTemplates())}
-                  size="icon-xs"
-                  type="button"
-                  variant="ghost"
-                >
-                  <Codicon name="refresh" size="0.75rem" />
-                </Button>
-              </Tip>
-            </div>
-          </div>
-        )}
-
         {mode === 'add-folder' && (
           <Button disabled={submitting} onClick={() => void pickFolder()} type="button">
             <Codicon name="folder-opened" size="0.875rem" />
@@ -399,11 +358,7 @@ export function ProjectDialog() {
             <Button disabled={submitting} onClick={() => onOpenChange(false)} type="button" variant="ghost">
               {t.common.cancel}
             </Button>
-            <Button
-              disabled={submitting || !name.trim() || (mode === 'create' && folders.length === 0)}
-              onClick={() => void submit()}
-              type="button"
-            >
+            <Button disabled={submitting || !name.trim()} onClick={() => void submit()} type="button">
               {mode === 'rename' ? t.common.save : p.create}
             </Button>
           </DialogFooter>

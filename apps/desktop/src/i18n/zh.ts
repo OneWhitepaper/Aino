@@ -4762,90 +4762,12 @@ export const zh = defineLocale({
       autoDiscovered: '自动发现',
       newButton: '新建项目',
       createTitle: '新建项目',
-      createDesc: '为工作区命名并添加一个或多个文件夹。',
+      createDesc: '输入名称，点击创建后选择存放位置，即可创建同名文件夹并进入对话；也可添加已有文件夹。',
+      createFolderLocation: name => `选择“${name}”文件夹的存放位置`,
       renameTitle: '重命名项目',
       addFolderTitle: '添加文件夹',
       namePlaceholder: '例如 Skunkworks',
       foldersLabel: '文件夹',
-      ideaLabel: '想法',
-      ideaPlaceholder: '这个项目是关于什么的？（保存到 IDEA.md）',
-      ideaGenerate: '生成想法',
-      ideaGenerating: '生成中…',
-      ideaShuffle: '随机模板',
-      ideaTemplates: {
-        'game-jam': {
-          label: '游戏创作',
-          idea: '一个周末完成的迷你浏览器游戏。\n\n- 一个核心机制，反馈足够爽快\n- 无需构建步骤——单个 HTML/JS 文件\n- 60 秒内即可开始游玩'
-        },
-        novel: {
-          label: '小说',
-          idea: '一部正在创作中的小说。\n\n- 跟踪章节、人物和时间线\n- 设定每日字数目标\n- 在草稿旁整理研究笔记'
-        },
-        'discord-bot': {
-          label: 'Discord 机器人',
-          idea: '为小型社区制作的 Discord 机器人。\n\n- 斜杠命令和有趣的每日互动\n- 轻量级持久化\n- 部署到免费的服务上'
-        },
-        'data-viz': {
-          label: '数据可视化',
-          idea: '对我关心的数据集做一个交互式可视化。\n\n- 选择数据集，以及它要回答的一个问题\n- 清理 → 制图 → 添加注释\n- 可作为单页分享'
-        },
-        'generative-art': {
-          label: '生成艺术',
-          idea: '一件生成艺术作品。\n\n- 一个算法，许多随机种子\n- 导出高分辨率静态图\n- 展示最佳作品的画廊'
-        },
-        'recipe-box': {
-          label: '食谱盒子',
-          idea: '个人食谱收藏。\n\n- 可按食材和心情搜索\n- 随时调整份量\n- 自动生成购物清单'
-        },
-        'research-log': {
-          label: '研究日志',
-          idea: '围绕一个开放问题的研究笔记本。\n\n- 记录实验、结果和走过的弯路\n- 在正文中引用来源\n- 每周总结学到的内容'
-        },
-        'budget-tracker': {
-          label: '预算追踪',
-          idea: '简单直接的预算追踪器。\n\n- 导入交易并快速分类\n- 对比每月实际支出与计划\n- 一张图就能说明问题'
-        },
-        'habit-tracker': {
-          label: '习惯追踪',
-          idea: '真正能坚持下来的习惯追踪器。\n\n- 少量每日复选框\n- 不制造压力的连续记录\n- 从容回顾每周进展'
-        },
-        'trip-planner': {
-          label: '旅行规划',
-          idea: '为即将到来的冒险制作旅行规划。\n\n- 按天安排行程\n- 在地图上标记地点并添加笔记\n- 打包清单和预算清单'
-        },
-        'music-toy': {
-          label: '音乐小玩具',
-          idea: '一个小型音乐创作玩具。\n\n- 一种乐器或一个音序器\n- 使用 Web Audio，无需安装\n- 录制并分享循环片段'
-        },
-        'puzzle-maker': {
-          label: '谜题生成器',
-          idea: '为我喜欢的谜题制作一个生成器。\n\n- 以程序方式生成可解谜题\n- 调节难度\n- 既能打印也能直接游玩'
-        },
-        'digital-garden': {
-          label: '数字花园',
-          idea: '一个数字花园／个人维基。\n\n- 彼此链接的原子笔记\n- 随时间生长，永远不会真正“完成”\n- 发布其中适合公开的内容'
-        },
-        'api-wrapper': {
-          label: 'API 封装',
-          idea: '围绕一个常用 API 编写简洁的封装。\n\n- 类型安全的客户端和合理的默认值\n- 每个端点提供一个示例\n- 发布它'
-        },
-        'workout-plan': {
-          label: '训练计划',
-          idea: '训练计划和记录工具。\n\n- 制定每周训练拆分\n- 在手机上快速记录组数\n- 按月跟踪进步'
-        },
-        flashcards: {
-          label: '抽认卡',
-          idea: '一个间隔重复抽认卡应用。\n\n- 快速收集卡片\n- 简单的 SM-2 排程\n- 每天用 5 分钟完成复习'
-        },
-        screenplay: {
-          label: '剧本',
-          idea: '一部短剧本。\n\n- 故事梗概 → 节拍 → 场景\n- 格式规范、专注创作\n- 最终完成一次围读'
-        },
-        'learn-by-building': {
-          label: '边做边学',
-          idea: '用一个项目学习我一直回避的东西。\n\n- 做出能真正教会自己的最小作品\n- 记录每个容易踩坑的地方\n- 成功后写一篇总结'
-        }
-      },
       noFolders: '尚未添加文件夹。',
       addFolder: '添加文件夹',
       primaryBadge: '主',

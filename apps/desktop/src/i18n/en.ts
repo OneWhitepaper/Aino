@@ -4640,90 +4640,12 @@ export const en: Translations = {
       autoDiscovered: 'Auto-discovered',
       newButton: 'New project',
       createTitle: 'New project',
-      createDesc: 'Name a workspace and add one or more folders.',
+      createDesc: 'Enter a name, then choose where to create its folder. You can also add an existing folder.',
+      createFolderLocation: name => `Choose where to create “${name}”`,
       renameTitle: 'Rename project',
       addFolderTitle: 'Add folder',
       namePlaceholder: 'e.g. Skunkworks',
       foldersLabel: 'Folders',
-      ideaLabel: 'Idea',
-      ideaPlaceholder: "What's this project about? (saved to IDEA.md)",
-      ideaGenerate: 'Generate idea',
-      ideaGenerating: 'Generating…',
-      ideaShuffle: 'Shuffle templates',
-      ideaTemplates: {
-        'game-jam': {
-          label: 'Game jam',
-          idea: 'A tiny browser game built in a weekend.\n\n- One core mechanic, juicy feedback\n- No build step — single HTML/JS file\n- Playable in under 60 seconds'
-        },
-        novel: {
-          label: 'Novel',
-          idea: 'A novel-in-progress.\n\n- Track chapters, characters, and timeline\n- Daily word-count goal\n- Keep research notes beside the draft'
-        },
-        'discord-bot': {
-          label: 'Discord bot',
-          idea: 'A Discord bot for a small community.\n\n- Slash commands + a fun daily ritual\n- Lightweight persistence\n- Deploy somewhere free'
-        },
-        'data-viz': {
-          label: 'Data viz',
-          idea: 'An interactive visualization of a dataset I care about.\n\n- Pick the dataset and the one question it answers\n- Clean → chart → annotate\n- Shareable as a single page'
-        },
-        'generative-art': {
-          label: 'Generative art',
-          idea: 'A generative art piece.\n\n- One algorithm, lots of seeds\n- Export high-res stills\n- A gallery of the best outputs'
-        },
-        'recipe-box': {
-          label: 'Recipe box',
-          idea: 'A personal recipe collection.\n\n- Searchable by ingredient and mood\n- Scale servings on the fly\n- Auto-build a shopping list'
-        },
-        'research-log': {
-          label: 'Research log',
-          idea: 'A research notebook for an open question.\n\n- Log experiments, results, and dead ends\n- Cite sources inline\n- Weekly synthesis of what I learned'
-        },
-        'budget-tracker': {
-          label: 'Budget tracker',
-          idea: 'A no-nonsense budget tracker.\n\n- Import transactions, tag them fast\n- Monthly burn vs. plan\n- One chart that tells the truth'
-        },
-        'habit-tracker': {
-          label: 'Habit tracker',
-          idea: 'A habit tracker that actually sticks.\n\n- A handful of daily checkboxes\n- Streaks without guilt\n- A calm weekly review'
-        },
-        'trip-planner': {
-          label: 'Trip planner',
-          idea: 'A trip planner for an upcoming adventure.\n\n- Day-by-day itinerary\n- Map of pins + notes\n- Packing + budget checklist'
-        },
-        'music-toy': {
-          label: 'Music toy',
-          idea: 'A little music-making toy.\n\n- One instrument or sequencer\n- Web Audio, no installs\n- Record + share a loop'
-        },
-        'puzzle-maker': {
-          label: 'Puzzle maker',
-          idea: 'A generator for a puzzle I love.\n\n- Procedurally make solvable puzzles\n- Difficulty dial\n- Printable + playable'
-        },
-        'digital-garden': {
-          label: 'Digital garden',
-          idea: 'A digital garden / personal wiki.\n\n- Atomic notes that link to each other\n- Grows over time, never "done"\n- Publish the public ones'
-        },
-        'api-wrapper': {
-          label: 'API wrapper',
-          idea: 'A clean wrapper around an API I keep reaching for.\n\n- Typed client + sensible defaults\n- One example per endpoint\n- Publish it'
-        },
-        'workout-plan': {
-          label: 'Workout plan',
-          idea: 'A workout planner / logger.\n\n- Build a weekly split\n- Log sets fast on mobile\n- Track progress over months'
-        },
-        flashcards: {
-          label: 'Flashcards',
-          idea: 'A spaced-repetition flashcard app.\n\n- Quick card capture\n- Simple SM-2 scheduling\n- A daily review that fits in 5 minutes'
-        },
-        screenplay: {
-          label: 'Screenplay',
-          idea: 'A short screenplay.\n\n- Logline → beats → scenes\n- Proper format, distraction-free\n- A table read by the end'
-        },
-        'learn-by-building': {
-          label: 'Learn-by-building',
-          idea: "A project to learn a thing I've been avoiding.\n\n- Smallest real thing that teaches it\n- Notes on every gotcha\n- A writeup when it works"
-        }
-      },
       noFolders: 'No folders added yet.',
       addFolder: 'Add folder',
       primaryBadge: 'primary',

@@ -23,17 +23,10 @@ vi.mock('@/i18n', () => ({
           addFolder: 'Add folder',
           create: 'Create',
           createDesc: 'Create a new project',
+          createFolderLocation: (name: string) => `Choose where to create ${name}`,
           createFailed: 'Failed to create project',
           createTitle: 'New project',
           foldersLabel: 'Folders',
-          ideaGenerate: 'Generate',
-          ideaGenerating: 'Generating…',
-          ideaLabel: 'Idea',
-          ideaPlaceholder: 'What are you building?',
-          ideaShuffle: 'Shuffle ideas',
-          ideaTemplates: {
-            rocket: { label: '火箭追踪', idea: '用于追踪火箭发射的项目。' }
-          },
           namePlaceholder: 'Project name',
           noFolders: 'No folders yet',
           primaryBadge: 'Primary',
@@ -78,7 +71,6 @@ vi.mock('@/store/projects', () => ({
   closeProjectDialog: vi.fn(),
   createProject,
   enterProject,
-  generateProjectIdea: vi.fn(),
   goToProject: vi.fn(),
   pickProjectFolder,
   renameProject: vi.fn()
@@ -86,21 +78,23 @@ vi.mock('@/store/projects', () => ({
 
 beforeEach(() => {
   vi.clearAllMocks()
+  $newProjectDropPlacement.set(null)
+  createProjectFolder.mockResolvedValue('/Users/test/Skunkworks')
   createProject.mockResolvedValue({ id: 'p_created' })
   pickProjectFolder.mockResolvedValue('/Users/test/my-folder')
 })
+
+const { createProjectFolder } = vi.hoisted(() => ({ createProjectFolder: vi.fn() }))
+
+vi.mock('@/lib/desktop-fs', () => ({ createProjectFolder, desktopFsCacheKey: () => 'local' }))
 
 vi.mock('@/store/notifications', () => ({
   notifyError: vi.fn()
 }))
 
-vi.mock('@/lib/project-idea-templates', () => ({
-  randomIdeaTemplates: () => [{ emoji: '🚀', id: 'rocket' }]
-}))
-
 // Fill the create form and click Create once the form is actually submittable
-// (creation requires a name + at least one folder, so the button stays
-// disabled until both are in). Awaiting the enable also keeps an async submit
+// (a name is enough to start; Create opens the folder picker when needed).
+// Awaiting the enable also keeps an async submit
 // from one test leaking into the next.
 async function fillCreateForm() {
   fireEvent.change(screen.getByPlaceholderText('Project name'), { target: { value: 'Skunkworks' } })
@@ -182,19 +176,86 @@ describe('ProjectDialog', () => {
       expect(createProject).toHaveBeenCalledWith(expect.objectContaining({ name: 'My project' }))
     })
   })
-  it('wraps the "shuffle idea" button in a Tip', () => {
+  it('creates a same-named folder when creating from a name alone', async () => {
+    const { createProject, goToProject } = vi.mocked(await import('@/store/projects'))
+    const { createProjectFolder } = vi.mocked(await import('@/lib/desktop-fs'))
+    createProjectFolder.mockResolvedValue('/Users/test/Skunkworks')
     render(<ProjectDialog />)
 
-    const button = screen.getByRole('button', { name: 'Shuffle ideas' })
-    expect(tipTrigger(button)).toBeTruthy()
+    fireEvent.change(screen.getByPlaceholderText('Project name'), { target: { value: 'Skunkworks' } })
+    expect((screen.getByRole('button', { name: 'Create' }) as HTMLButtonElement).disabled).toBe(false)
+    expect(screen.queryByRole('textbox', { name: 'Idea' })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Create' }))
+
+    await waitFor(() => {
+      expect(createProjectFolder).toHaveBeenCalledWith('/Users/test/my-folder', 'Skunkworks')
+      expect(createProject).toHaveBeenCalledWith(
+        expect.objectContaining({ folders: ['/Users/test/Skunkworks'], name: 'Skunkworks' })
+      )
+      expect(goToProject).toHaveBeenCalledWith('p_created', { newSession: true })
+    })
   })
 
-  it('renders the localized idea template and inserts its localized content', () => {
+  it('leaves the draft open on picker cancel and ignores a selection after its owner changes', async () => {
+    const { closeProjectDialog, goToProject } = vi.mocked(await import('@/store/projects'))
+    pickProjectFolder.mockResolvedValueOnce(null)
+    render(<ProjectDialog />)
+    fireEvent.change(screen.getByPlaceholderText('Project name'), { target: { value: 'test' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Create' }))
+    await waitFor(() =>
+      expect((screen.getByRole('button', { name: 'Create' }) as HTMLButtonElement).disabled).toBe(false)
+    )
+    expect(closeProjectDialog).not.toHaveBeenCalled()
+    expect(createProjectFolder).not.toHaveBeenCalled()
+
+    let finish!: (path: string) => void
+    pickProjectFolder.mockImplementationOnce(
+      () =>
+        new Promise(resolve => {
+          finish = resolve
+        })
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Create' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Create' }))
+    expect(pickProjectFolder).toHaveBeenCalledTimes(2)
+    const originalProfile = $activeGatewayProfile.get()
+    $activeGatewayProfile.set('changed-profile')
+    await act(async () => finish('/other-profile'))
+    expect(createProjectFolder).not.toHaveBeenCalled()
+    expect(createProject).not.toHaveBeenCalled()
+    expect(goToProject).not.toHaveBeenCalled()
+    $activeGatewayProfile.set(originalProfile)
+  })
+
+  it('keeps the project write guarded when folder creation fails or the route changes', async () => {
+    const { createProject } = vi.mocked(await import('@/store/projects'))
+    const { createProjectFolder } = vi.mocked(await import('@/lib/desktop-fs'))
+    const { notifyError } = vi.mocked(await import('@/store/notifications'))
+    createProjectFolder.mockRejectedValueOnce(new Error('cannot create folder'))
     render(<ProjectDialog />)
 
-    fireEvent.click(screen.getByRole('button', { name: '火箭追踪' }))
+    fireEvent.change(screen.getByPlaceholderText('Project name'), { target: { value: 'Broken' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Create' }))
+    await waitFor(() => expect(notifyError).toHaveBeenCalled())
+    expect(createProject).not.toHaveBeenCalled()
 
-    expect(screen.getByDisplayValue('用于追踪火箭发射的项目。')).toBeTruthy()
+    vi.clearAllMocks()
+    let finish!: (path: string) => void
+    createProjectFolder.mockImplementationOnce(
+      () =>
+        new Promise(resolve => {
+          finish = resolve
+        })
+    )
+    $projectDialog.set({ mode: 'create' })
+    fireEvent.change(screen.getByPlaceholderText('Project name'), { target: { value: 'Stale' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Create' }))
+    await waitFor(() => expect(finish).toBeTypeOf('function'))
+    const originalProfile = $activeGatewayProfile.get()
+    $activeGatewayProfile.set('changed-profile')
+    await act(async () => finish('/Users/test/Stale'))
+    expect(createProject).not.toHaveBeenCalled()
+    $activeGatewayProfile.set(originalProfile)
   })
 
   it('wraps the "remove folder" button in a Tip once a folder is added', async () => {

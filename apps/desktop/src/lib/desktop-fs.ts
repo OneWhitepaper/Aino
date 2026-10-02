@@ -109,12 +109,43 @@ export async function writeDesktopFileText(path: string, content: string): Promi
   return { path: result.path || path }
 }
 
-// Create a folder on the connected backend (POST /api/files/mkdir). Remote-only:
-// in local mode the picker is the native dialog, which creates folders itself.
+// Create a folder on the connected backend (POST /api/files/mkdir). Used by the
+// remote folder picker and project creation; local writes use Electron IPC.
 export async function createRemoteDir(path: string): Promise<string> {
   const result = await remoteFsApi<{ path?: string }>('/api/files/mkdir', { path })
 
   return result.path || path
+}
+
+/** Create a same-named project folder inside the explicitly selected parent. */
+export async function createProjectFolder(parent: string, name: string): Promise<string> {
+  const cleanName = name.trim()
+
+  if (
+    !cleanName ||
+    cleanName === '.' ||
+    cleanName === '..' ||
+    /[/\\]/.test(cleanName) ||
+    [...cleanName].some(char => char.charCodeAt(0) < 32)
+  ) {
+    throw new Error(translateNow('rightSidebar.remotePickerInvalidFolderName'))
+  }
+
+  const base = parent.replace(/[\\/]+$/, '')
+  const separator = parent.includes('\\') && !parent.includes('/') ? '\\' : '/'
+  const target = base + separator + cleanName
+
+  if (isDesktopFsRemoteMode()) {
+    return createRemoteDir(target)
+  }
+
+  const desktop = bridge()
+
+  if (!desktop.createDir) {
+    throw new Error(translateNow('desktop.fsSavingUnavailable'))
+  }
+
+  return (await desktop.createDir(target)).path
 }
 
 export async function readDesktopFileDataUrl(path: string): Promise<string> {
