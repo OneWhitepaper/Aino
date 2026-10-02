@@ -2452,14 +2452,14 @@ body:not(:has([data-settings-workspace])):has([data-chat-surface][data-conversat
   --conversation-tool-font-size: var(--aino-text-ui);
   --conversation-line-height: 1.5rem;
   --conversation-turn-gap: 1.25rem;
-  --turn-block-gap: 1rem;
+  --turn-block-gap: 0.75rem;
   --conversation-glyph-size: 0.875rem;
   --conversation-glyph-cell: 1rem;
   --conversation-glyph-gap: 0.5rem;
   --conversation-activity-size: 0.375rem;
   --scaffold-block-gap: 0.25rem;
   --tool-row-gap: 0rem;
-  --disclosure-caret-rest: 0.65;
+  --disclosure-caret-rest: 0;
   --dt-line-height: 1.6;
   --message-text-indent: 0rem;
   --paragraph-gap: 0.75rem;
@@ -2672,16 +2672,24 @@ body:not(:has([data-settings-workspace])):has([data-chat-surface][data-conversat
   border-bottom: 1px solid var(--ui-stroke-tertiary);
 }
 
-/* Share the right-hand disclosure edge without moving independent actions
-   into the toggle or changing the existing expansion state. */
+/* The label and caret stay together; independent actions keep their own slot. */
 [data-chat-surface][data-conversation-layout] [data-slot='disclosure-toggle'] {
-  flex: 1 1 auto;
-  max-width: 100%;
   border-radius: 0.25rem;
 }
 
-[data-chat-surface][data-conversation-layout] [data-slot='disclosure-label'] {
-  flex: 1 1 auto;
+[data-slot='disclosure-caret'] {
+  opacity: var(--disclosure-caret-rest);
+  transition: opacity 150ms;
+}
+
+[data-slot='disclosure-toggle']:is(:hover, :focus-visible) > [data-slot='disclosure-caret'] {
+  opacity: 0.8;
+}
+
+@media (hover: none) {
+  [data-slot='disclosure-caret'] {
+    opacity: 0.8;
+  }
 }
 
 [data-chat-surface][data-conversation-layout] [data-slot='disclosure-toggle']:focus-visible {
@@ -2706,6 +2714,11 @@ body:not(:has([data-settings-workspace])):has([data-chat-surface][data-conversat
 /* Each sealed assistant message continues the same reading column. */
 [data-chat-surface][data-conversation-layout] [data-slot='aui_response-group'] {
   gap: var(--turn-block-gap);
+}
+
+[data-chat-surface][data-conversation-layout] [data-slot='aui_response-process-header'] {
+  border-bottom: 1px solid var(--ui-stroke-tertiary);
+  padding-bottom: 0.375rem;
 }
 
 [data-chat-surface][data-conversation-layout] [data-tool-title-target='file'] {
@@ -2816,6 +2829,7 @@ body:not(:has([data-settings-workspace])):has([data-chat-surface][data-conversat
 
 [data-chat-surface][data-conversation-layout] [data-slot='aui_assistant-footer'] {
   align-items: flex-start;
+  padding-top: 0.5rem;
   padding-inline: 0;
 }
 
@@ -3089,7 +3103,7 @@ body:not(:has([data-settings-workspace])):has([data-chat-surface][data-conversat
   max-width: 100%;
 }
 
-/* Delegated rows share the reading column's disclosure edge with other tools. */
+/* Delegated rows keep the same available reading width as other tools. */
 [data-slot='aui_assistant-message-content'] [data-slot='tool-block'][data-delegate-card] {
   max-width: 100%;
 }
@@ -3300,11 +3314,11 @@ body:not(:has([data-settings-workspace])):has([data-chat-surface][data-conversat
   display: none;
 }
 
-.aui-process-parts + .aui-process-parts {
+.aui-process-parts:not([hidden]) + .aui-process-parts:not([hidden]) {
   margin-top: var(--turn-block-gap);
 }
 
-.aui-process-parts + [data-slot='aui_turn-activity'] {
+.aui-process-parts:not([hidden]) + [data-slot='aui_turn-activity'] {
   margin-top: var(--turn-block-gap);
 }
 
@@ -3341,11 +3355,6 @@ body:not(:has([data-settings-workspace])):has([data-chat-surface][data-conversat
    next to it, and adjacent margins collapse rather than stacking. */
 [data-slot='aui_assistant-message-content'] > [data-tool-row][data-file-edit] {
   margin-block: var(--turn-block-gap);
-}
-
-/* Keep the disclosure discoverable without needing to hover first. */
-[data-slot='aui_thinking-disclosure'] {
-  --disclosure-caret-rest: 0.65;
 }
 
 /* A streaming turn is sealed into several assistant bubbles as it goes

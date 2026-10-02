@@ -2,8 +2,8 @@ import { compactNumber } from '@hermes/shared'
 import { useContext } from 'react'
 
 import { formatElapsed } from '@/components/chat/activity-timer'
+import { DisclosureCaret } from '@/components/ui/disclosure-caret'
 import { useI18n } from '@/i18n'
-import { ChevronDown } from '@/lib/icons'
 import type { TurnMetrics } from '@/lib/turn-metrics'
 
 import { ReplyCost } from './reply-cost'
@@ -79,10 +79,13 @@ export function ReplyMetrics({ metrics, durationS }: ReplyMetricsProps) {
       <details className="group/reply-metrics">
         <summary
           aria-label={copy.details}
-          className="flex cursor-pointer list-none items-start justify-between gap-3 rounded-sm hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring [&::-webkit-details-marker]:hidden"
+          className="flex w-fit max-w-full cursor-pointer list-none items-start gap-1.5 rounded-sm hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring [&::-webkit-details-marker]:hidden"
+          data-slot="disclosure-toggle"
         >
           {line}
-          <ChevronDown className="mt-0.5 size-3.5 shrink-0 transition-transform group-open/reply-metrics:rotate-180" />
+          <span className="flex h-5 shrink-0 items-center" data-slot="disclosure-caret">
+            <DisclosureCaret className="group-open/reply-metrics:rotate-90" open={false} />
+          </span>
         </summary>
         <div className="my-1.5 flex flex-wrap gap-x-6 gap-y-2 rounded-md bg-(--ui-bg-quinary) px-3 py-2.5">
           {details.map(detail => (

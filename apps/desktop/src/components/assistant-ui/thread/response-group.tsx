@@ -158,7 +158,7 @@ function ResponseSectionView({
       <ResponseProcess.Provider value={process}>
         <div className="group flex min-w-0 flex-col gap-(--scaffold-block-gap)" data-slot="aui_response-group">
           {enabled && (
-            <div className="[--disclosure-caret-rest:0.8]" data-slot="aui_response-process-header">
+            <div data-slot="aui_response-process-header">
               <ScaffoldRow onToggle={() => setToolDisclosureOpen(disclosureId, !open)} open={open}>
                 <span className={SCAFFOLD_LABEL_CLASS}>{label}</span>
               </ScaffoldRow>

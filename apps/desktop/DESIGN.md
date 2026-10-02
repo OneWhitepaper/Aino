@@ -640,8 +640,10 @@ so glass and message-bubble transparency do not reveal scrolling text.
   line height, and glyphs are 14px in a 16px cell. Prose uses 1.6 line height;
   headings scale from the reading size (23/18/15px for h1/h2/h3 at that scale).
   The approved reply presentation uses a faint semantic-blue user bubble and
-  table header, continuous unboxed prose, and a shared right-hand disclosure
-  edge. Independent row actions stay outside the toggle. Native thinking keeps
+  table header and continuous unboxed prose. Disclosure carets sit immediately
+  after their label, with width reserved while hidden. They appear on that
+  toggle's hover or keyboard focus; touch inputs retain a visible affordance.
+  Independent row actions stay outside the toggle. Native thinking keeps
   its full content behind a fine vertical guide; code surfaces use a hairline
   border and retain their copy, scrolling and expansion controls. Markdown
   tables keep declared alignment, horizontal scrolling and column resizing;
@@ -650,6 +652,10 @@ so glass and message-bubble transparency do not reveal scrolling text.
   compact billing list pairs model/amount above purpose/status/time; its
   statuses, full amounts, retry conditions and account-history table are unchanged.
   These are one presentation system, not per-answer modes or length-based rules.
+  Activity rows use the existing 4px scaffold gap, prose/stages use 12px, and
+  the reply footer has 8px clearance. Hidden process parts contribute no
+  inter-block margin. The completed process header has one quiet bottom rule;
+  nested thinking/tool headers do not introduce further dividers.
   Mockup screenshot pixels must not be
   copied into CSS sizes without accounting for capture density. Questions, approvals, failures, file edits, generated outputs and
   registered tool interfaces retain their own surfaces. The live label follows
