@@ -6,6 +6,7 @@ interface ContextBreakdownOptions {
   busy: boolean
   enabled: boolean
   requestGateway: <T = unknown>(method: string, params?: Record<string, unknown>) => Promise<T>
+  refreshKey?: string
   sessionId: null | string
 }
 
@@ -26,10 +27,11 @@ const INITIALIZATION_RETRY_DELAYS_MS = [500, 1000, 2000]
  *  transcript just grew). Held keyed by the session it describes so switching
  *  sessions drops the previous numbers instead of painting them under the new
  *  session's name. */
-export function useContextBreakdown({ busy, enabled, requestGateway, sessionId }: ContextBreakdownOptions) {
+export function useContextBreakdown({ busy, enabled, requestGateway, refreshKey, sessionId }: ContextBreakdownOptions) {
   const [fetched, setFetched] = useState<{
     breakdown: ContextBreakdown
     requestGateway: ContextBreakdownOptions['requestGateway']
+    refreshKey?: string
     sessionId: string
   } | null>(null)
 
@@ -69,11 +71,11 @@ export function useContextBreakdown({ busy, enabled, requestGateway, sessionId }
         return
       }
 
-      if (breakdown?.context_max > 0) {
-        setFetched({ breakdown, requestGateway, sessionId: runtimeId })
+      if (breakdown && (breakdown.context_max > 0 || breakdown.context_used > 0 || breakdown.categories.length > 0)) {
+        setFetched({ breakdown, requestGateway, refreshKey, sessionId: runtimeId })
       } else {
-        // Restored sessions can answer before their lazy agent exists. A zero
-        // capacity is an initialization placeholder, never measured 0% usage.
+        // An entirely empty response can precede lazy session initialization.
+        // A missing capacity alone must not discard known tokens or details.
         setFetched(null)
 
         const delay = INITIALIZATION_RETRY_DELAYS_MS[retry++]
@@ -97,11 +99,14 @@ export function useContextBreakdown({ busy, enabled, requestGateway, sessionId }
         clearTimeout(timer)
       }
     }
-  }, [busy, enabled, requestGateway, requestVersion, sessionId])
+  }, [busy, enabled, requestGateway, requestVersion, refreshKey, sessionId])
 
   return {
     breakdown:
-      fetched && fetched.sessionId === sessionId && fetched.requestGateway === requestGateway
+      fetched &&
+      fetched.sessionId === sessionId &&
+      fetched.requestGateway === requestGateway &&
+      fetched.refreshKey === refreshKey
         ? fetched.breakdown
         : null,
     loading,

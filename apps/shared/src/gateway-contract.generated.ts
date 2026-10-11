@@ -27,6 +27,7 @@ export interface ClaimManagedModelParams {
 export interface ClaimManagedModelResult {
   binding_revision: number
   managed_model_binding: number
+  managed_model_context_window?: boolean
 }
 export interface BindManagedModelParams {
   session_id: string
@@ -41,6 +42,7 @@ export interface BindManagedModelParams {
   model: string
   api_mode: 'chat_completions' | 'responses' | 'anthropic_messages'
   capabilities: ManagedCapabilities
+  context_window?: number | null
 }
 export interface ManagedCapabilities {
   tools: boolean

@@ -38,6 +38,7 @@ class ManagedCredential:
     vision: bool
     scope: BillingScope | None = None
     on_override: Callable[[str, str], None] | None = field(default=None, repr=False)
+    get_context_window: Callable[[], int | None] | None = field(default=None, repr=False)
 
     def __call__(self) -> str:
         return self.get_key()

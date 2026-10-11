@@ -47,7 +47,13 @@ const model: PlatformModel = {
   }
 }
 
-async function rig(options: { delayLeaseAt?: number; delayLogout?: boolean; remote?: boolean; allow?: boolean } = {}) {
+async function rig(options: {
+  delayLeaseAt?: number
+  delayLogout?: boolean
+  remote?: boolean
+  allow?: boolean
+  legacyGateway?: boolean
+} = {}) {
   const received: Array<Record<string, unknown>> = []
   const credentials: Record<string, unknown>[] = []
 
@@ -168,7 +174,11 @@ async function rig(options: { delayLeaseAt?: number; delayLogout?: boolean; remo
             continue
           }
 
-          reply({ managed_model_binding: 1, binding_revision: ++claims })
+          reply({
+            managed_model_binding: 1,
+            binding_revision: ++claims,
+            ...(!options.legacyGateway ? { managed_model_context_window: true } : {})
+          })
         } else if (req.method === 'session.bind_managed_model' || req.method === 'session.renew_managed_model') {
           if (p.binding_revision !== claims) {
             reject()
@@ -278,15 +288,26 @@ it('renews on the retained controller socket without a renderer ticket and stops
   vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
   expect((await f.controller.bind(f.input, f.window)).ok).toBe(true)
   const first = f.binding()
+  expect(first).toMatchObject({ context_window: model.context_window })
   await vi.advanceTimersByTimeAsync(20 * 60_000)
   await vi.waitFor(() => expect(f.received.some(r => r.method === 'session.renew_managed_model')).toBe(true))
   expect(f.credentials).toHaveLength(2)
   expect(f.credentials[1]).toEqual(f.credentials[0])
-  expect(f.binding()).toMatchObject({ binding_revision: first!.binding_revision, owner: first!.owner })
+  expect(f.binding()).toMatchObject({
+    binding_revision: first!.binding_revision,
+    owner: first!.owner,
+    context_window: model.context_window
+  })
   expect(f.received.filter(r => r.method === 'session.claim_managed_model')).toHaveLength(1)
   f.controller.clear(f.input, f.window)
   await vi.advanceTimersByTimeAsync(60 * 60_000)
   expect(f.credentials).toHaveLength(2)
+})
+
+it('keeps binding compatible with gateways that do not accept context metadata', async () => {
+  const f = await rig({ legacyGateway: true })
+  expect((await f.controller.bind(f.input, f.window)).ok).toBe(true)
+  expect(f.binding()).not.toHaveProperty('context_window')
 })
 
 it('uses real auth HTTP and shared WebSocket serialization without exposing the lease in public results', async () => {

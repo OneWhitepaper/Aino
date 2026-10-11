@@ -1332,7 +1332,9 @@ def _account_usage_lines(session: dict) -> list[str]:
 
 @_session_method("session.context_breakdown")
 def _(rid, params: dict, session: dict) -> dict:
-    if (agent := session.get("agent")) is None:
+    agent = session.get("agent")
+    if agent is None or (session.get("_compute_host_active")
+                         and isinstance(_metadata_mirror(session).get("usage"), dict)):
         usage = _session_usage_snapshot(session) or _get_usage(None)
         return _ok(rid, {
             "categories": [], "context_max": usage.get("context_max", 0) or 0,
@@ -1340,8 +1342,10 @@ def _(rid, params: dict, session: dict) -> dict:
             "context_used": usage.get("context_used", 0) or 0,
             "estimated_total": 0,
             "context_estimated": usage.get("context_estimated", False),
-            "context_source": usage.get("context_source", "provider_usage"),
-            "model": _metadata_mirror(session).get("model", "")})
+            "context_source": usage.get("context_source", "unknown"),
+            "model": (_metadata_mirror(session).get("model")
+                      or (session.get("managed_model_params") or {}).get("model")
+                      or _live_session_identity(session)[0])})
     with session["history_lock"]:
         history = list(session.get("history", []))
     # Bind the session context (on the RPC thread the session cwd is unset, so the prompt build inside

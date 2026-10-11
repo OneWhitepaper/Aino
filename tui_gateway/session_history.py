@@ -454,6 +454,81 @@ def _turn_failure_detail(error: Any, reason: Any = None, prompt: Any = None) -> 
     return out + (" cause=%r" % message if message else "")
 
 
+def _cold_history_context_usage(session: dict) -> dict:
+    """Reuse the restored transcript and durable anchor, without a second full history read."""
+    from agent.usage_anchor import USAGE_ANCHOR_MODEL_CONFIG_KEY, anchored_context_tokens
+
+    with session.get("history_lock") or contextlib.nullcontext():
+        history = session.get("history") or []
+        key = (session.get("session_key"), session.get("profile_home"), session.get("history_version", 0),
+               id(history), len(history))
+        if session.get("resume_hydrating") or not key[0] or not history:
+            return {}
+        cached = session.get("_cold_context_usage")
+        if cached and cached[0] == key:
+            return dict(cached[1])
+        snapshot = list(history)
+
+    usage = {}
+    try:
+        with _session_db(session) as db:
+            if db is None:
+                return usage
+            anchor = db.get_session_model_config_value(key[0], USAGE_ANCHOR_MODEL_CONFIG_KEY, None)
+            candidates = [snapshot]
+            # Provider requests include the system message, while SessionDB stores it on the
+            # session row and transcript rows start at the first user message. Validate against
+            # this temporary projection only; never install it into the live session history.
+            if isinstance(anchor, dict):
+                row = db.get_session(key[0]) or {}
+                system_prompt = row.get("_system_prompt_resolved") or row.get("system_prompt")
+                if isinstance(system_prompt, str) and system_prompt:
+                    candidates.append([{"role": "system", "content": system_prompt}, *snapshot])
+                elif int(anchor.get("base_count") or 0) <= len(snapshot):
+                    # Very short sessions can predate system-prompt snapshot persistence. The
+                    # provider still priced a leading system row; this empty placeholder preserves
+                    # row indexes while its content is excluded from the exact anchored total.
+                    candidates.append([{"role": "system", "content": ""}, *snapshot])
+            matched = next((candidate for candidate in candidates
+                            if anchored_context_tokens(candidate, anchor) is not None), None)
+            if matched is not None:
+                tokens = anchored_context_tokens(matched, anchor)
+                delta = matched[int(anchor["base_count"]):]
+                if delta and delta[0].get("role") == "assistant":
+                    delta = delta[1:]
+                source = "provider_usage_plus_estimate" if delta else "provider_usage"
+                usage = {"context_used": tokens, "context_source": source,
+                         "context_estimated": source != "provider_usage"}
+    except Exception:
+        logger.debug("cold session context anchor recovery failed", exc_info=True)
+        return {}
+
+    with session.get("history_lock") or contextlib.nullcontext():
+        current = session.get("history") or []
+        if (current is history and session.get("session_key") == key[0]
+                and session.get("profile_home") == key[1]
+                and session.get("history_version", 0) == key[2] and len(current) == key[4]):
+            session["_cold_context_usage"] = (key, usage)
+            return dict(usage)
+    return {}  # Hydration or a rewind replaced the snapshot while its anchor was being read.
+
+
+def _cold_session_context_usage(session: dict) -> dict:
+    """Cold occupancy follows the owning history; capacity follows the active model lease."""
+    from .managed_model_runtime import get_registry
+
+    usage = _cold_history_context_usage(session)
+    with _sessions_lock:
+        runtime_sid = next((sid for sid, record in _sessions.items() if record is session), None)
+    binding = get_registry().get(runtime_sid, session) if runtime_sid else None
+    context_window = getattr(binding, "context_window", None)
+    if type(context_window) is int and context_window > 0:
+        usage["context_max"] = context_window
+        if "context_used" in usage:
+            usage["context_percent"] = max(0, min(100, round(usage["context_used"] / context_window * 100)))
+    return usage
+
+
 def register(server) -> None:
     """Publish this module's helpers + handlers onto ``server``, rebound to its globals."""
     bind_module(globals(), server, skip=("_",))

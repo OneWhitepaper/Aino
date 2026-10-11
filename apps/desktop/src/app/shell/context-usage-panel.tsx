@@ -48,6 +48,18 @@ export function ContextUsagePanel({
   const usedLabel = contextUsed == null ? '\u2014' : compactNumber(contextUsed)
   const maxLabel = contextMax == null ? '\u2014' : compactNumber(contextMax)
 
+  const hasContextData = (contextMax ?? 0) > 0 || (contextUsed ?? 0) > 0 || categories.length > 0
+
+  const status = compacting
+    ? copy.compacting
+    : contextPercent !== null
+      ? `${usage.context_estimated ? '~' : ''}${copy.percentFull(contextPercent)}`
+      : hasContextData
+        ? null
+        : loading
+          ? copy.loading
+          : copy.empty
+
   if (compact) {
     return (
       <div
@@ -55,18 +67,10 @@ export function ContextUsagePanel({
         data-slot="context-usage-hint"
       >
         <p className="font-medium text-muted-foreground">{copy.title}</p>
-        <p className="text-muted-foreground">
-          {compacting
-            ? copy.compacting
-            : contextPercent !== null
-              ? `${usage.context_estimated ? '~' : ''}${copy.percentFull(contextPercent)}`
-              : loading
-                ? copy.loading
-                : copy.empty}
-        </p>
-        {contextUsed != null && (
+        {status && <p className="text-muted-foreground">{status}</p>}
+        {hasContextData && (
           <p className="text-foreground">
-            {copy.tokenSummary(`${usage.context_estimated ? '~' : ''}${usedLabel}`, maxLabel)}
+            {copy.tokenSummary(`${usage.context_estimated && contextUsed != null ? '~' : ''}${usedLabel}`, maxLabel)}
           </p>
         )}
       </div>
@@ -114,7 +118,9 @@ export function ContextUsagePanel({
 
       {loading && !categories.length && <p className="text-[0.6875rem] text-muted-foreground">{copy.loading}</p>}
 
-      {!loading && !categories.length && <p className="text-[0.6875rem] text-muted-foreground">{copy.empty}</p>}
+      {!loading && !categories.length && !hasContextData && (
+        <p className="text-[0.6875rem] text-muted-foreground">{copy.empty}</p>
+      )}
     </div>
   )
 }

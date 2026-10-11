@@ -76,7 +76,7 @@ def _managed_model_ticket(params, sid, session, peer):
 def _claim_managed_model(params, sid, session, peer):
     revision = get_registry().claim(sid, session, peer, _managed_text(params, "session_ticket"),
                                    _managed_owner(params), _managed_text(params, "model_id", 128))
-    return {"binding_revision": revision, "managed_model_binding": 1}
+    return {"binding_revision": revision, "managed_model_binding": 1, "managed_model_context_window": True}
 
 
 def _binding(params, sid):
@@ -89,6 +89,9 @@ def _binding(params, sid):
         raise ManagedBindingError("managed_binding_invalid")
     mode = _managed_text(params, "api_mode")
     capabilities = params.get("capabilities")
+    context_window = params.get("context_window")
+    if context_window is not None and (type(context_window) is not int or context_window <= 0):
+        raise ManagedBindingError("managed_binding_invalid")
     if (mode not in {"chat_completions", "responses", "anthropic_messages"}
             or not isinstance(capabilities, dict) or capabilities.get("tools") is not True
             or any(type(capabilities.get(k)) is not bool for k in ("tools", "vision", "reasoning"))
@@ -98,15 +101,17 @@ def _binding(params, sid):
         session_id=sid, owner=owner, model_id=_managed_text(params, "model_id", 128),
         model=_managed_text(params, "model", 256), api_mode=mode, capabilities=dict(capabilities),
         credential_id=_managed_text(params, "credential_id"), api_key=_managed_text(params, "api_key", 4096),
-        base_url=params["base_url"], expires_at=expires, binding_revision=revision)
+        base_url=params["base_url"], expires_at=expires, binding_revision=revision,
+        context_window=context_window)
 
 
 @_managed_method("session.bind_managed_model")
 def _bind_managed_model(params, sid, session, peer):
     binding = _binding(params, sid)
     get_registry().bind(binding, session, peer)
-    from .managed_session import apply_bound_selection
+    from .managed_session import apply_bound_selection, sync_bound_context
     apply_bound_selection(sid, session)
+    sync_bound_context(sid, session)
     return {"bound": True, "model_id": binding.model_id, "binding_revision": binding.binding_revision}
 
 
@@ -114,6 +119,8 @@ def _bind_managed_model(params, sid, session, peer):
 def _renew_managed_model(params, sid, session, peer):
     binding = _binding(params, sid)
     get_registry().renew(binding, session, peer)
+    from .managed_session import sync_bound_context
+    sync_bound_context(sid, session)
     return {"bound": True, "model_id": binding.model_id, "binding_revision": binding.binding_revision}
 
 

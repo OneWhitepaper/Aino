@@ -37,6 +37,7 @@ def managed_gateway(tmp_path, monkeypatch):
     requests = []
     request_headers = []
     response_status = {}
+    response_usage = {}
     request_condition = threading.Condition()
     hold, entered, release = threading.Event(), threading.Event(), threading.Event()
 
@@ -87,7 +88,8 @@ def managed_gateway(tmp_path, monkeypatch):
             self.end_headers()
             if body.get("stream"):
                 for data in ({"choices": [{"index": 0, "delta": delta, "finish_reason": None}]},
-                             {"choices": [{"index": 0, "delta": {}, "finish_reason": finish}]}):
+                             {"choices": [{"index": 0, "delta": {}, "finish_reason": finish}],
+                              **({"usage": response_usage} if response_usage else {})}):
                     self.wfile.write(("data: " + json.dumps({"id": "fixture", "object": "chat.completion.chunk",
                         "created": 1, "model": body["model"], **data}) + "\n\n").encode())
                 self.wfile.write(b"data: [DONE]\n\n")
@@ -144,7 +146,8 @@ def managed_gateway(tmp_path, monkeypatch):
             sessions.append(draft["session_id"])
             return draft
 
-        def bind(self, sid, key="fixture-secret-one", owner_id="user-one", model_id="fixture-a", vision=False):
+        def bind(self, sid, key="fixture-secret-one", owner_id="user-one", model_id="fixture-a", vision=False,
+                 context_window=None):
             params = {"session_id": sid, "model_id": model_id, "owner": {
                 "platform_origin": origin, "user_id": owner_id}}
             ticket = result(self.call("session.managed_model_ticket", **params))["session_ticket"]
@@ -153,6 +156,7 @@ def managed_gateway(tmp_path, monkeypatch):
             payload = {**params, "binding_revision": revision, "api_key": key, "credential_id": "lease",
                 "base_url": origin + "/v1", "model": "fixture-upstream" if model_id == "fixture-a" else "fixture-other",
                 "api_mode": self.protocol,
+                "context_window": context_window,
                 "capabilities": {"tools": True, "vision": vision, "reasoning": False},
                 "expires_at": (datetime.now(timezone.utc) + timedelta(minutes=50)).isoformat()}
             result(self.call("session.bind_managed_model", peer=controller, **payload))
@@ -176,6 +180,7 @@ def managed_gateway(tmp_path, monkeypatch):
     rig.requests, rig.db, rig.chat, rig.controller, rig.sessions = requests, db, chat, controller, sessions
     rig.request_headers = request_headers
     rig.response_status = response_status
+    rig.response_usage = response_usage
     rig.request_condition = request_condition
     rig.hold, rig.entered, rig.release = hold, entered, release
     try:
@@ -263,6 +268,40 @@ def test_managed_history_never_falls_back_or_accepts_another_owner(managed_gatew
     assert any(m.get("role") == "tool" for m in f.requests[-1][2]["messages"])
 
 
+def test_managed_context_anchor_survives_reasoning_change_and_cold_resume(managed_gateway):
+    from agent.usage_anchor import USAGE_ANCHOR_MODEL_CONFIG_KEY, anchored_context_tokens
+
+    f = managed_gateway
+    f.response_usage.update(prompt_tokens=1_000, completion_tokens=30, total_tokens=1_030)
+    draft = f.create()
+    sid, key = draft["session_id"], draft["stored_session_id"]
+    f.bind(sid, context_window=372_000)
+    f.submit(sid, "Read sample.txt")
+    session = srv._sessions[sid]
+    agent = session["agent"]
+    anchor = f.db.get_session_model_config_value(key, USAGE_ANCHOR_MODEL_CONFIG_KEY)
+    assert anchor is not None
+    before = (agent._cached_system_prompt, json.dumps(session["history"]), json.dumps(agent.tools))
+
+    result(f.call("config.set", session_id=sid, key="reasoning", value="high"))
+    assert f.db.get_session_model_config_value(key, USAGE_ANCHOR_MODEL_CONFIG_KEY) == anchor
+    assert (agent._cached_system_prompt, json.dumps(session["history"]), json.dumps(agent.tools)) == before
+    requests_before_resume = len(f.requests)
+    result(f.call("session.close", session_id=sid))
+    resumed = result(f.call("session.resume", session_id=key, source="desktop", lazy=True))
+    cold_sid = resumed["session_id"]
+    f.sessions.append(cold_sid)
+    cold_session = srv._sessions[cold_sid]
+    assert cold_session["agent"] is None
+    assert get_registry().get(cold_sid) is None
+    expected = anchored_context_tokens(cold_session["history"], anchor)
+    assert expected is not None and expected > 0
+    usage = result(f.call("session.context_breakdown", session_id=cold_sid))
+    assert usage["context_used"] == expected
+    assert usage["context_source"] == "provider_usage"
+    assert len(f.requests) == requests_before_resume
+
+
 def test_branch_keeps_platform_identity_without_copying_authority(managed_gateway):
     f = managed_gateway
     sid = f.create()["session_id"]
@@ -346,6 +385,51 @@ def test_managed_model_switch_requires_confirmation_then_new_owned_binding(manag
     row = f.db.get_session(srv._sessions[sid]["session_key"])
     assert json.loads(row["model_config"])["model_id"] == "fixture-b"
     assert "error" in f.call("session.renew_managed_model", peer=f.controller, **original)
+
+
+def test_bound_context_owns_parent_child_switch_and_renewal_without_changing_prompt(managed_gateway):
+    from agent.model_metadata import save_context_length
+    from tools.delegate_tool import _build_child_agent
+
+    f = managed_gateway
+    sid = f.create()["session_id"]
+    lease = f.bind(sid, context_window=372_000)
+    cold = result(f.call("session.context_breakdown", session_id=sid))
+    assert cold["context_max"] == lease["context_window"]
+    assert cold["model"] == lease["model"]
+    assert cold["context_source"] == "unknown"
+    # An older generic cache must not override the authenticated catalog, even for the same route.
+    save_context_length(lease["model"], lease["base_url"], 1_000_000)
+    f.submit(sid, "Read sample.txt")
+    session = srv._sessions[sid]
+    agent = session["agent"]
+    assert agent.context_compressor.context_length == lease["context_window"]
+    child = _build_child_agent(0, "Review fixture", None, ["file"], None, 3, 1, agent)
+    try:
+        assert child.context_compressor.context_length == lease["context_window"]
+        before = (agent._cached_system_prompt, json.dumps(session["history"]), json.dumps(agent.tools))
+        renewed = {**lease, "context_window": 248_000,
+                   "expires_at": (datetime.now(timezone.utc) + timedelta(minutes=55)).isoformat()}
+        result(f.call("session.renew_managed_model", peer=f.controller, **renewed))
+        assert agent.context_compressor.context_length == renewed["context_window"]
+        assert child.context_compressor.context_length == renewed["context_window"]
+        assert (agent._cached_system_prompt, json.dumps(session["history"]), json.dumps(agent.tools)) == before
+
+        other_sid = f.create()["session_id"]
+        other_lease = f.bind(other_sid, context_window=196_000)
+        f.submit(other_sid, "Read sample.txt")
+        assert srv._sessions[other_sid]["agent"].context_compressor.context_length == other_lease["context_window"]
+        assert agent.context_compressor.context_length == renewed["context_window"]
+        assert child.context_compressor.context_length == renewed["context_window"]
+
+        result(f.call("config.set", session_id=sid, key="model", value="fixture-b", model_source="aino",
+                      confirm_expensive_model=True))
+        switched = f.bind(sid, model_id="fixture-b", context_window=128_000)
+        assert agent.context_compressor.context_length == switched["context_window"]
+    finally:
+        with agent._active_children_lock:
+            agent._active_children.remove(child)
+        child.close()
 
 
 def test_named_profile_build_and_reset_keep_the_platform_runtime(managed_gateway, tmp_path):

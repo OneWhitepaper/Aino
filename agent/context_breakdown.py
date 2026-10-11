@@ -106,8 +106,13 @@ def context_usage_fields(compressor: Any) -> Dict[str, Any]:
     """Current occupancy only; lifetime throughput is never a context fallback."""
     used = max(0, getattr(compressor, "last_prompt_tokens", 0) or 0)
     maximum = getattr(compressor, "context_length", 0) or 0
-    if not used or not maximum:
+    if not maximum:
         return {}
+    if not used:
+        # A managed catalog can authoritatively provide the window before the
+        # provider reports its first prompt. Keep the capacity visible instead
+        # of making the UI fall back to an unrelated generic model default.
+        return {"context_max": maximum}
     source = context_display_source(compressor)
     return {"context_used": used, "context_max": maximum,
             "context_percent": max(0, min(100, round(used / maximum * 100))),

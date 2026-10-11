@@ -70,11 +70,14 @@ def runtime_for_session(sid):
     # request, including retries. Renewal cannot mutate prompt/history/tools.
     identity = (binding.owner, binding.model_id, binding.model, binding.api_mode, binding.base_url)
 
-    def current_key():
+    def current_binding():
         current = require_binding(sid, session)
         if identity != (current.owner, current.model_id, current.model, current.api_mode, current.base_url):
             raise ManagedBindingError("managed_model_identity_mismatch")
-        return current.api_key
+        return current
+
+    def current_key():
+        return current_binding().api_key
 
     def on_override(provider, purpose):
         current_key()
@@ -88,8 +91,35 @@ def runtime_for_session(sid):
     runtime["api_key"] = ManagedCredential(
         current_key, binding.owner.user_id, usage_session_id(session),
         binding.model, binding.base_url, runtime["api_mode"], bool(binding.capabilities.get("vision")),
-        on_override=on_override)
+        on_override=on_override, get_context_window=lambda: current_binding().context_window)
     return runtime.pop("model"), runtime
+
+
+def sync_bound_context(sid, session):
+    """Refresh only numeric budgets after a lease update, keeping the cached conversation intact."""
+    from . import server
+    from agent.auxiliary_billing_scope import ManagedCredential
+    from agent.model_metadata import get_model_context_length
+
+    binding = require_binding(sid, session)
+    if binding.context_window is None:
+        return
+    agent = session.get("agent")
+    pending = [agent] if agent is not None else []
+    with server._session_profile_runtime_scope(session, hydrate_secrets=False):
+        while pending:
+            current = pending.pop()
+            key = getattr(current, "api_key", None)
+            compressor = getattr(current, "context_compressor", None)
+            if (isinstance(key, ManagedCredential) and key.get_context_window is not None
+                    and current.model == binding.model and current.base_url == binding.base_url
+                    and compressor is not None):
+                compressor.context_length = get_model_context_length(
+                    current.model, base_url=current.base_url, api_key=key, provider=current.provider,
+                    config_context_length=getattr(current, "_config_context_length", None))
+            with current._active_children_lock:
+                pending.extend(current._active_children)
+    server._emit("session.info", sid, server._session_info(agent, session))
 
 
 def submit_refusal(sid, session):

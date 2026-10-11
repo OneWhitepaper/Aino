@@ -37,6 +37,7 @@ class ClaimManagedModelParams(ManagedModelTicketParams):
 class ClaimManagedModelResult(Result):
     binding_revision: int
     managed_model_binding: int
+    managed_model_context_window: bool = False
 
 
 class BindManagedModelParams(ManagedModelTicketParams):
@@ -48,6 +49,7 @@ class BindManagedModelParams(ManagedModelTicketParams):
     model: str
     api_mode: Literal["chat_completions", "responses", "anthropic_messages"]
     capabilities: ManagedCapabilities
+    context_window: int | None = Field(default=None, gt=0, strict=True)
 
 
 class BindManagedModelResult(Result):

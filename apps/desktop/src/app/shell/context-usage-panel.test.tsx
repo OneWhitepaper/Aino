@@ -172,15 +172,24 @@ describe('ContextUsagePanel', () => {
   })
 
   it('does not present missing occupancy as zero usage', () => {
-    render(<ContextUsagePanel breakdown={null} loading={false} usage={{ calls: 0, input: 0, output: 0, total: 0 }} />)
+    for (const compact of [false, true]) {
+      const { unmount } = render(
+        <ContextUsagePanel breakdown={null} compact={compact} loading={false}
+          usage={{ calls: 0, context_max: 372_000, input: 0, output: 0, total: 0 }} />
+      )
 
-    expect(screen.queryByText('0 / 0')).toBeNull()
-    expect(screen.queryByText('0% Full')).toBeNull()
+      expect(screen.queryByText('0 / 0')).toBeNull()
+      expect(screen.queryByText('0% Full')).toBeNull()
+      expect(screen.getByText('— / 372k Tokens')).toBeTruthy()
+      expect(screen.queryByText('No context data yet')).toBeNull()
+      unmount()
+    }
   })
 
-  it('says so when there is no breakdown rather than painting an empty bar', () => {
+  it('does not call measured context unavailable just because category details are absent', () => {
     render(<ContextUsagePanel breakdown={null} loading={false} usage={usage} />)
 
-    expect(screen.getByText('No context data yet')).toBeTruthy()
+    expect(screen.queryByText('No context data yet')).toBeNull()
+    expect(screen.getByText('47% Full')).toBeTruthy()
   })
 })

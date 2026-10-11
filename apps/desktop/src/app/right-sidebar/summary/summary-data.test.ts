@@ -35,7 +35,7 @@ describe('summary data helpers', () => {
     expect(hardwareMeters(emptyHardware)).toEqual({ kind: 'ready', ramPercent: null, vramPercent: null })
   })
 
-  it('fills missing context occupancy from the breakdown without replacing measured usage', () => {
+  it('fills missing occupancy and applies the latest capacity without replacing measured tokens', () => {
     const breakdown = {
       categories: [],
       context_estimated: true,
@@ -56,6 +56,6 @@ describe('summary data helpers', () => {
         { calls: 1, context_max: 100_000, context_percent: 80, context_used: 80_000, input: 0, output: 0, total: 0 },
         breakdown
       )
-    ).toMatchObject({ context_max: 100_000, context_percent: 80, context_used: 80_000 })
+    ).toMatchObject({ context_max: 200_000, context_percent: 40, context_used: 80_000 })
   })
 })

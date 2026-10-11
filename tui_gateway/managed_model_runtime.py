@@ -30,6 +30,7 @@ class ManagedModelBinding:
     base_url: str
     expires_at: datetime
     binding_revision: int
+    context_window: int | None = None
 
 
 @dataclass

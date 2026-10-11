@@ -206,7 +206,11 @@ export function createPlatformRuntimeBindingController(options: {
 
         // Capability and live session authorization are proven BEFORE obtaining
         // the inference secret. Older gateways fail here without receiving a Key.
-        const claim = await binding.rpc.request<{ managed_model_binding?: number; binding_revision?: number }>(
+        const claim = await binding.rpc.request<{
+          managed_model_binding?: number
+          binding_revision?: number
+          managed_model_context_window?: boolean
+        }>(
           'session.claim_managed_model',
           { ...params, session_ticket: input.session_ticket }
         )
@@ -222,6 +226,7 @@ export function createPlatformRuntimeBindingController(options: {
         }
 
         claimedRevision = claim.binding_revision!
+        const supportsContextWindow = claim.managed_model_context_window === true
 
         const lease = await auth.modelLease({
           model_id: input.model_id,
@@ -239,6 +244,7 @@ export function createPlatformRuntimeBindingController(options: {
             model: lease.model.model,
             api_mode: lease.model.api_mode,
             capabilities: lease.model.capabilities,
+            ...(supportsContextWindow ? { context_window: lease.model.context_window } : {}),
             credential_id: lease.credential_id,
             api_key: lease.api_key,
             base_url: lease.base_url,
@@ -292,6 +298,7 @@ export function createPlatformRuntimeBindingController(options: {
                 model: next.model.model,
                 api_mode: next.model.api_mode,
                 capabilities: next.model.capabilities,
+                ...(supportsContextWindow ? { context_window: next.model.context_window } : {}),
                 credential_id: next.credential_id,
                 api_key: next.api_key,
                 base_url: next.base_url,

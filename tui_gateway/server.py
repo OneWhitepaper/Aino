@@ -1633,9 +1633,13 @@ def _runtime_model_config(agent, existing: dict | None = None) -> dict:
     config = dict(existing or {})
     from .managed_session import managed_metadata
     if managed := managed_metadata(getattr(agent, "_managed_model_metadata", None)):
+        from agent.usage_anchor import USAGE_ANCHOR_MODEL_CONFIG_KEY
+        # Reasoning/fast-mode writes update model metadata without changing the
+        # priced transcript; keep Hermes's anchor available for cold recovery.
         return {**{k: v for k, v in config.items() if k in (
             "_branched_from", "_delegate_from", "room_plumbing", "follow_profile_config",
-            "max_iterations", "reasoning_config", "max_tokens", "yolo_mode", "service_tier")},
+            "max_iterations", "reasoning_config", "max_tokens", "yolo_mode", "service_tier",
+            USAGE_ANCHOR_MODEL_CONFIG_KEY)},
             **managed, "provider": "aino"}
     for key in ("model_source", "platform_owner", "model_id"):
         config.pop(key, None)
@@ -2157,9 +2161,11 @@ DESKTOP_BACKEND_CONTRACT = 8
 def _session_usage_snapshot(session: dict | None) -> dict:
     sess = session or {}
     mirror_usage = _metadata_mirror(session).get("usage")
-    if sess.get("agent") is not None and not (sess.get("_compute_host_active") and isinstance(mirror_usage, dict)):
+    if isinstance(mirror_usage, dict) and (sess.get("_compute_host_active") or sess.get("agent") is None):
+        return dict(mirror_usage)
+    if sess.get("agent") is not None:
         return _get_usage(sess["agent"])
-    return dict(mirror_usage) if isinstance(mirror_usage, dict) else {}
+    return _cold_session_context_usage(sess)
 
 
 def _project_info_for_cwd(cwd: str) -> dict | None:
@@ -2821,6 +2827,9 @@ def _schedule_resume_hydration(sid: str, stored_id: str, db, *, close_db: bool =
             session["resume_history_ready"].set()
             _emit("session.resume_progress", sid,
                   {"message_count": session["resume_message_count"], "phase": "history", "status": "complete"})
+            # Managed sessions stay cold until send; hydration can outlast the UI's bounded retries.
+            if "context_used" in (usage := _session_usage_snapshot(session)):
+                _emit("session.usage", sid, {"usage": usage})
             _maybe_schedule_auto_continue(sid, session, stored_id)
             _start_agent_build(sid, session)
         except Exception as exc:

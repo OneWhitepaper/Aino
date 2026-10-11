@@ -388,3 +388,112 @@ def test_context_reads_the_profile_transcript(server, launch_db, profile_db, mon
     output = resp["result"]["output"]
     assert "Conversation: 6 messages" in output
     assert "user: 3, assistant: 3" in output
+
+
+def _seed_context_anchor(db, prompt_tokens, *, tail=False, include_system=False):
+    from agent.usage_anchor import USAGE_ANCHOR_MODEL_CONFIG_KEY, capture_usage_anchor
+
+    db.create_session(SESSION_KEY, source="desktop")
+    db.append_message(SESSION_KEY, "user", f"profile-specific question {prompt_tokens}")
+    priced = db.get_messages_as_conversation(SESSION_KEY)
+    if include_system:
+        priced = [{"role": "system", "content": "stable system prompt"}, *priced]
+        db.update_system_prompt(SESSION_KEY, "stable system prompt")
+    anchor = capture_usage_anchor(prompt_tokens, 30, priced)
+    db.patch_session_model_config(SESSION_KEY, {USAGE_ANCHOR_MODEL_CONFIG_KEY: anchor})
+    db.append_message(SESSION_KEY, "assistant", "the already-priced reply")
+    if tail:
+        db.append_message(SESSION_KEY, "user", "new material not yet priced by the provider")
+    return db.get_messages_as_conversation(SESSION_KEY)
+
+
+def test_cold_context_reuses_profile_anchor_a_b_a_without_rereading_history(
+        server, launch_db, profile_db, monkeypatch):
+    from agent.model_metadata import estimate_messages_tokens_rough
+    from agent.secret_scope import is_multiplex_active, set_multiplex_active
+    from agent.usage_anchor import USAGE_ANCHOR_MODEL_CONFIG_KEY
+
+    profile_home, pdb = profile_db
+    first = _register(server, _seed_context_anchor(launch_db, 300, include_system=True))
+    first.update(agent=None, model_override={"model": "profile-a-model"})
+    second = _register(server, _seed_context_anchor(pdb, 900, tail=True, include_system=True), profile_home=profile_home)
+    second.update(agent=None, model_override={"model": "profile-b-model"})
+    server._sessions["cold-a"] = first
+    server._sessions["cold-b"] = second
+    reads = []
+    original = SessionDB.get_session_model_config_value
+
+    def counted(db, session_id, key, default=None):
+        if key == USAGE_ANCHOR_MODEL_CONFIG_KEY:
+            reads.append(str(db.db_path))
+        return original(db, session_id, key, default)
+
+    def no_second_history_read(*args, **kwargs):
+        raise AssertionError("cold context must reuse the existing hydration instead of rereading all messages")
+
+    monkeypatch.setattr(SessionDB, "get_session_model_config_value", counted)
+    monkeypatch.setattr(SessionDB, "get_messages_as_conversation", no_second_history_read)
+    was_multiplex = is_multiplex_active()
+    set_multiplex_active(True)
+    try:
+        for sid, expected, source, model in (
+            ("cold-a", 330, "provider_usage", "profile-a-model"),
+            ("cold-b", 930 + estimate_messages_tokens_rough(second["history"][2:]),
+             "provider_usage_plus_estimate", "profile-b-model"),
+            ("cold-a", 330, "provider_usage", "profile-a-model"),
+        ):
+            response = _rpc(server, "session.context_breakdown", {"session_id": sid})
+            assert "error" not in response, response
+            usage = response["result"]
+            assert usage["context_used"] == expected
+            assert usage["context_source"] == source
+            assert usage["context_estimated"] is (source != "provider_usage")
+            assert usage["model"] == model
+        assert reads.count(str(launch_db.db_path)) == 1
+        assert reads.count(str(pdb.db_path)) == 1
+    finally:
+        set_multiplex_active(was_multiplex)
+
+
+def test_cold_context_rejects_stale_anchor_and_preserves_compute_host_authority(server, launch_db, monkeypatch):
+    session = _register(server, _seed_context_anchor(launch_db, 300))
+    session.update(agent=None, model_override={"model": "local-model"})
+    session.update(history=[], resume_hydrating=True, resume_history_ready=threading.Event(),
+                   agent_ready=threading.Event())
+    waiting = _rpc(server, "session.context_breakdown", {"session_id": SESSION_ID})["result"]
+    assert waiting["context_source"] == "unknown"
+    events, hydrated = [], threading.Event()
+    monkeypatch.setattr(server, "_emit", lambda kind, sid, payload: events.append((kind, sid, payload)))
+    monkeypatch.setattr(server, "_start_agent_build", lambda *args: hydrated.set())
+    monkeypatch.setattr(server, "_maybe_schedule_auto_continue", lambda *args: None)
+    server._schedule_resume_hydration(SESSION_ID, SESSION_KEY, launch_db)
+    assert hydrated.wait(5), events
+    usage_events = [payload for kind, sid, payload in events if kind == "session.usage" and sid == SESSION_ID]
+    assert len(usage_events) == 1
+    assert usage_events[0]["usage"]["context_used"] == 330
+    assert usage_events[0]["usage"]["context_source"] == "provider_usage"
+    assert _rpc(server, "session.context_breakdown", {"session_id": SESSION_ID})["result"]["context_used"] == 330
+
+    # A rewind can preserve list length. The version invalidates the cached figure,
+    # and the persisted fingerprint must reject the replaced priced message.
+    with session["history_lock"]:
+        session["history"][0] = {"role": "user", "content": "rewritten question"}
+        session["history_version"] += 1
+    stale = _rpc(server, "session.context_breakdown", {"session_id": SESSION_ID})["result"]
+    assert stale["context_source"] == "unknown"
+    assert stale["context_used"] == 0
+
+    session.update(_compute_host_active=True, _metadata_mirror={"model": "host-model", "usage": {
+        "context_used": 470, "context_max": 1_000, "context_percent": 47,
+        "context_source": "provider_usage", "context_estimated": False}})
+    mirrored = _rpc(server, "session.context_breakdown", {"session_id": SESSION_ID})["result"]
+    assert mirrored["context_used"] == 470
+    assert mirrored["context_max"] == 1_000
+    assert mirrored["context_percent"] == 47
+    assert mirrored["context_source"] == "provider_usage"
+    assert mirrored["model"] == "host-model"
+    session["agent"] = object()  # A parked local agent cannot override the active compute host.
+    assert _rpc(server, "session.context_breakdown", {"session_id": SESSION_ID})["result"] == mirrored
+    session["agent"] = None
+    session["_compute_host_active"] = False
+    assert _rpc(server, "session.context_breakdown", {"session_id": SESSION_ID})["result"] == mirrored

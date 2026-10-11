@@ -2182,12 +2182,9 @@ def _update_switch_compressor(agent, custom_providers, effective_context_length,
             custom_providers = get_compatible_custom_providers(load_config())
         except Exception:
             custom_providers = None
-    # agent.api_key may be a callable (Azure Foundry Entra ID); get_model_context_length expects a
-    # string for live probes, so coerce defensively.
-    ctx_api_key = agent.api_key if isinstance(agent.api_key, str) else ""
     try:
         new_context_length = get_model_context_length(
-            agent.model, base_url=agent.base_url, api_key=ctx_api_key, provider=agent.provider,
+            agent.model, base_url=agent.base_url, api_key=agent.api_key, provider=agent.provider,
             config_context_length=effective_context_length, custom_providers=custom_providers,
         )
         agent.context_compressor.update_model(

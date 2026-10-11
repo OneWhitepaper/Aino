@@ -7106,6 +7106,19 @@
           },
           "capabilities": {
             "$ref": "#/components/schemas/ManagedCapabilities"
+          },
+          "context_window": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Context Window"
           }
         },
         "required": [
@@ -7857,6 +7870,11 @@
           "managed_model_binding": {
             "title": "Managed Model Binding",
             "type": "integer"
+          },
+          "managed_model_context_window": {
+            "default": false,
+            "title": "Managed Model Context Window",
+            "type": "boolean"
           }
         },
         "required": [

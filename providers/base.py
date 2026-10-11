@@ -256,7 +256,7 @@ class ProviderProfile:
         """
         return None
 
-    def get_model_context_length(self, model: str) -> int | None:
+    def get_model_context_length(self, model: str, *, base_url: str = "", api_key: Any = "") -> int | None:
         """Provider-qualified context bound; explicit user overrides take precedence."""
         return None
 

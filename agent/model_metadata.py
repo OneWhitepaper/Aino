@@ -2213,7 +2213,7 @@ def _resolve_provider_aware_context_length(model: str, base_url: str, api_key: s
 
 
 def get_model_context_length(
-    model: str, base_url: str = "", api_key: str = "", config_context_length: int | None = None,
+    model: str, base_url: str = "", api_key: Any = "", config_context_length: int | None = None,
     provider: str = "", custom_providers: list | None = None,
 ) -> int:
     """Context length for a model. Resolution order: 0 config override / MoA aggregator /
@@ -2262,9 +2262,17 @@ def get_model_context_length(
     # over the generic caches below; explicit user/endpoint overrides above still take precedence.
     from providers import get_provider_profile
     profile = get_provider_profile(provider)
-    context = profile.get_model_context_length(model) if profile else None
+    context = None
+    if profile:
+        from hermes_cli.plugins_dispatch import PluginDispatchMixin
+        hook = profile.get_model_context_length
+        context = hook(model, **PluginDispatchMixin._hook_callback_kwargs(
+            hook, {"base_url": base_url, "api_key": api_key}))
     if type(context) is int and context > 0:
         return context
+    # Session-aware provider hooks may inspect callable credentials without resolving a secret.
+    # Generic HTTP metadata probes retain their string-key contract.
+    api_key = api_key if isinstance(api_key, str) else ""
     is_bedrock_context = _is_bedrock_context(base_url, provider)
     # A Codex Responses route is keyed on its transport, not its host: behind a proxy
     # (HERMES_CODEX_BASE_URL, model.base_url, custom api_mode: codex_responses) the URL looks

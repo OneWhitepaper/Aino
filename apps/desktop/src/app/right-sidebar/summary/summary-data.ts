@@ -29,18 +29,48 @@ export function summaryEnvironmentState({
   return { cwd: trimmedCwd, kind: 'ready', projectName }
 }
 
-export function summaryContextUsage(usage: UsageStats, breakdown: ContextBreakdown | null): UsageStats {
-  if (!breakdown) {
+export function summaryContextUsage(
+  usage: UsageStats,
+  breakdown: ContextBreakdown | null,
+  fallbackContextMax?: number
+): UsageStats {
+  if (!breakdown && !fallbackContextMax && usage.context_source !== 'unknown') {
     return usage
   }
 
+  // A fresh breakdown resolves the model's current capacity; a retained usage
+  // snapshot can still carry the previous model's window. Occupancy keeps its
+  // measured provenance, while an all-zero initialization placeholder cannot
+  // override useful estimates from the backend.
+  const hasUsage =
+    usage.context_source !== 'unknown' &&
+    usage.context_used != null &&
+    (usage.context_used > 0 || (usage.context_max ?? 0) > 0)
+
+  const hasBreakdownUsage =
+    breakdown &&
+    breakdown.context_source !== 'unknown' &&
+    (breakdown.context_used > 0 || breakdown.categories.length > 0 || breakdown.context_max > 0)
+
+  const context = hasUsage ? usage : hasBreakdownUsage ? breakdown : null
+
+  const contextMax =
+    breakdown && breakdown.context_max > 0
+      ? breakdown.context_max
+      : fallbackContextMax || ((usage.context_max ?? 0) > 0 ? usage.context_max : undefined)
+
+  const contextUsed = context?.context_used
+
   return {
     ...usage,
-    context_estimated: usage.context_estimated ?? breakdown.context_estimated,
-    context_max: usage.context_max ?? breakdown.context_max,
-    context_percent: usage.context_percent ?? breakdown.context_percent,
-    context_source: usage.context_source ?? breakdown.context_source,
-    context_used: usage.context_used ?? breakdown.context_used
+    context_estimated: context?.context_estimated,
+    context_max: contextMax,
+    context_percent:
+      contextMax && contextUsed != null
+        ? Math.max(0, Math.min(100, Math.round((100 * contextUsed) / contextMax)))
+        : undefined,
+    context_source: context?.context_source,
+    context_used: contextUsed
   }
 }
 

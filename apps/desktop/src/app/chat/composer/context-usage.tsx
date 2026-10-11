@@ -1,3 +1,4 @@
+import { compactNumber } from '@hermes/shared'
 import { useStore } from '@nanostores/react'
 import { useEffect, useMemo, useState } from 'react'
 
@@ -12,6 +13,7 @@ import { Tip } from '@/components/ui/tooltip'
 import { useI18n } from '@/i18n'
 import { useStoreSelector } from '@/lib/use-session-slice'
 import { sessionCompacting } from '@/store/compaction'
+import { platformModelCatalog } from '@/store/platform-models'
 import { $sessionStates } from '@/store/session-states'
 import type { UsageStats } from '@/types/hermes'
 
@@ -29,21 +31,60 @@ export function ComposerContextUsage({ enabled, requestGateway }: ComposerContex
   const view = useSessionView()
   const sessionId = useStore(view.$runtimeId)
   const busy = useStore(view.$busy)
+  const model = useStore(view.$model)
+  const provider = useStore(view.$provider)
   const visible = usePaneVisible()
   const compacting = useStore(useMemo(() => sessionCompacting(sessionId), [sessionId]))
   const usage = useStoreSelector($sessionStates, states => (sessionId ? states[sessionId]?.usage : null) ?? EMPTY_USAGE)
+
+  const platformModel = useStoreSelector($sessionStates, states =>
+    sessionId ? states[sessionId]?.platformModel : null
+  )
+
+  const catalog = platformModelCatalog()
+  const catalogState = useStore(catalog.state)
+  const catalogOwner = useStore(catalog.owner.state).owner
+
+  // Cold managed sessions are intentionally not bound until they send. The
+  // existing account catalog can explain their capacity without minting a lease.
+  const catalogContextMax =
+    provider === 'aino' &&
+    Boolean(catalogOwner?.user_id && catalogOwner.platform_origin) &&
+    (!platformModel ||
+      (platformModel.modelId === model &&
+        platformModel.ownerUserId === catalogOwner?.user_id &&
+        platformModel.platformOrigin === catalogOwner?.platform_origin))
+      ? (catalogState.models.find(row => row.id === model)?.context_window ?? undefined)
+      : undefined
+
+  const fallbackContextMax =
+    catalogContextMax &&
+    catalogContextMax > 0 &&
+    (platformModel?.status === 'awaiting_managed_credentials' ||
+      !platformModel ||
+      !(usage.context_max && usage.context_max > 0))
+      ? catalogContextMax
+      : undefined
+
   const [open, setOpen] = useState(false)
   const { t } = useI18n()
   const copy = t.shell.statusbar.contextUsagePanel
 
+  useEffect(() => {
+    if (enabled && visible && provider === 'aino' && catalogState.phase === 'idle') {
+      void catalog.load()
+    }
+  }, [catalog, catalogState.phase, enabled, provider, visible])
+
   const { breakdown, loading, refetch } = useContextBreakdown({
     busy: busy || compacting,
     enabled: enabled && visible,
+    refreshKey: JSON.stringify([provider, model, usage.context_max, fallbackContextMax]),
     requestGateway,
     sessionId
   })
 
-  const resolvedUsage = summaryContextUsage(usage, breakdown)
+  const resolvedUsage = summaryContextUsage(usage, breakdown, fallbackContextMax)
 
   const percent =
     resolvedUsage.context_percent == null ? null : Math.max(0, Math.min(100, Math.round(resolvedUsage.context_percent)))
@@ -58,9 +99,16 @@ export function ComposerContextUsage({ enabled, requestGateway }: ComposerContex
     ? copy.compacting
     : percent !== null
       ? `${resolvedUsage.context_estimated ? '~' : ''}${copy.percentFull(percent)}`
-      : loading
-        ? copy.loading
-        : copy.empty
+      : resolvedUsage.context_used != null || resolvedUsage.context_max != null
+        ? copy.tokenSummary(
+            resolvedUsage.context_used == null
+              ? '\u2014'
+              : `${resolvedUsage.context_estimated ? '~' : ''}${compactNumber(resolvedUsage.context_used)}`,
+            resolvedUsage.context_max == null ? '\u2014' : compactNumber(resolvedUsage.context_max)
+          )
+        : loading
+          ? copy.loading
+          : copy.empty
 
   const label = `${copy.title} · ${status}`
   const panelProps = { breakdown, compacting, loading, usage: resolvedUsage }
@@ -84,15 +132,7 @@ export function ComposerContextUsage({ enabled, requestGateway }: ComposerContex
     >
       <Tip label={<ContextUsagePanel {...panelProps} compact />} side="top" variant="card">
         <PopoverTrigger asChild>
-          <Button
-            aria-label={label}
-            data-slot="composer-context-usage"
-            onFocus={retryUnavailable}
-            onPointerEnter={retryUnavailable}
-            size="icon-xs"
-            type="button"
-            variant="ghost"
-          >
+          <Button aria-label={label} data-slot="composer-context-usage" size="icon-xs" type="button" variant="ghost">
             <Progress
               animated={compacting || loading}
               aria-label={copy.title}
