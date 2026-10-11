@@ -20,13 +20,16 @@ vi.mock('@/i18n', () => ({
       common: { cancel: 'Cancel', save: 'Save' },
       sidebar: {
         projects: {
+          add: 'Add',
           addFolder: 'Add folder',
           create: 'Create',
           createDesc: 'Create a new project',
           createFolderLocation: (name: string) => `Choose where to create ${name}`,
           createFailed: 'Failed to create project',
           createTitle: 'New project',
-          foldersLabel: 'Folders',
+          foldersLabel: 'Source folders',
+          folderSourceLocal: 'Add folders on this computer',
+          folderSourceRemote: 'Add folders on the connected host',
           namePlaceholder: 'Project name',
           noFolders: 'No folders yet',
           primaryBadge: 'Primary',

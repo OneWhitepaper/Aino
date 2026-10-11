@@ -3741,6 +3741,9 @@ export interface UpstreamTranslations {
       addFolderTitle: string
       namePlaceholder: string
       foldersLabel: string
+      folderSourceLocal: string
+      folderSourceRemote: string
+      add: string
       noFolders: string
       addFolder: string
       primaryBadge: string

@@ -1015,6 +1015,7 @@ export async function createProject(input: CreateProjectInput, ownerProfile?: st
   const context = await activeProjectsContext(
     ownerProfile ? projectWriteProfile(ownerProfile) : writableProjectProfile()
   )
+
   let res: { project: ProjectInfo | null }
 
   try {
@@ -1112,6 +1113,7 @@ export async function updateProject(
   ownerProfile?: string
 ): Promise<void> {
   const context = await activeProjectsContext(projectWriteProfile(ownerProfile))
+
   if (context.scope === ALL_PROFILES && ownerProfile) {
     await gatewayRequestOn(
       context.gateway,
@@ -1126,11 +1128,14 @@ export async function updateProject(
         context.profile
       )
     )
+
     if (stillOnProjectsContext(context)) {
       void refreshProjectTree()
     }
+
     return
   }
+
   const snap = snapshotProjects()
 
   $projectTree.set(
@@ -1208,6 +1213,7 @@ export async function addProjectFolder(
   ownerProfile?: string
 ): Promise<void> {
   const context = await activeProjectsContext(projectWriteProfile(ownerProfile))
+
   if (context.scope === ALL_PROFILES && ownerProfile) {
     await gatewayRequestOn(
       context.gateway,
@@ -1222,11 +1228,14 @@ export async function addProjectFolder(
         context.profile
       )
     )
+
     if (stillOnProjectsContext(context)) {
       void refreshProjectTree()
     }
+
     return
   }
+
   const snap = snapshotProjects()
   const trimmed = path.trim()
 
@@ -1286,13 +1295,17 @@ function openSessionBelongsToProject(projectId: string, projects: ProjectInfo[])
 // inside), reconciling from the server payload. A failed delete restores both.
 export async function deleteProject(id: string, ownerProfile?: string): Promise<void> {
   const context = await activeProjectsContext(projectWriteProfile(ownerProfile))
+
   if (context.scope === ALL_PROFILES && ownerProfile) {
     await gatewayRequestOn(context.gateway, 'projects.delete', projectParams({ id }, context.profile))
+
     if (stillOnProjectsContext(context)) {
       void refreshProjectTree()
     }
+
     return
   }
+
   const snap = snapshotProjects()
   // Capture membership BEFORE removal — the project's folders (which determine
   // ownership) are gone once it's dropped from the cache.
