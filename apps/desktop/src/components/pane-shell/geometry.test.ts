@@ -5,19 +5,68 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { stubResizeObserver } from '@/test/jsdom'
 
 import { publishWorkspaceGeometry } from './geometry'
+import { group } from './tree/model'
+import { $layoutTree } from './tree/store'
 
 describe('publishWorkspaceGeometry', () => {
   let mutationCallback: MutationCallback | undefined
+  const initialTree = $layoutTree.get()
 
   afterEach(() => {
     cleanup()
+    $layoutTree.set(initialTree)
     document.body.replaceChildren()
     document.documentElement.style.removeProperty('--workspace-left')
     document.documentElement.style.removeProperty('--workspace-right')
     vi.unstubAllGlobals()
   })
 
-  it('measures the workspace when its anchor mounts after the publisher starts', () => {
+  it('measures the main zone when a session tab replaces or hides its workspace surface', () => {
+    stubResizeObserver()
+    const zone = document.createElement('main')
+    zone.dataset.treeGroup = 'main-test'
+    const tile = document.createElement('div')
+    tile.dataset.sessionAnchor = 'session-tile:selected'
+    zone.append(tile)
+    document.body.append(zone)
+    const parkedHost = document.createElement('div')
+    parkedHost.dataset.treeGroup = 'main-test'
+    parkedHost.dataset.paneHost = 'terminal'
+    document.body.prepend(parkedHost)
+    $layoutTree.set(group(['workspace', 'session-tile:selected'], { id: 'main-test', active: 'session-tile:selected' }))
+    let left = 245
+    let right = window.innerWidth
+    zone.getBoundingClientRect = () =>
+      ({ left, right, width: right - left, top: 43, bottom: 900, height: 857, x: left, y: 43 }) as DOMRect
+
+    const dispose = publishWorkspaceGeometry()
+
+    try {
+      const style = document.documentElement.style
+      expect(style.getPropertyValue('--workspace-left')).toBe(`${left}px`)
+      expect(style.getPropertyValue('--workspace-right')).toBe('0px')
+
+      // Background keep-alive surfaces have no layout box and cannot own chrome.
+      const inactive = document.createElement('div')
+      inactive.dataset.sessionAnchor = 'workspace'
+      inactive.hidden = true
+      document.body.prepend(inactive)
+      window.dispatchEvent(new Event('resize'))
+      expect(style.getPropertyValue('--workspace-left')).toBe(`${left}px`)
+
+      // Sidebar collapse and a mirrored layout use the same zone measurement.
+      left = 0
+      window.dispatchEvent(new Event('resize'))
+      expect(style.getPropertyValue('--workspace-left')).toBe('0px')
+      right = window.innerWidth - 245
+      window.dispatchEvent(new Event('resize'))
+      expect(style.getPropertyValue('--workspace-right')).toBe(`${window.innerWidth - right}px`)
+    } finally {
+      dispose()
+    }
+  })
+
+  it('measures the workspace zone when it mounts after the publisher starts', () => {
     class TestResizeObserver {
       constructor(_callback: ResizeObserverCallback) {}
 
@@ -41,9 +90,10 @@ describe('publishWorkspaceGeometry', () => {
     vi.stubGlobal('ResizeObserver', TestResizeObserver)
     vi.stubGlobal('MutationObserver', TestMutationObserver)
 
+    $layoutTree.set(group(['workspace'], { id: 'late-workspace' }))
     const dispose = publishWorkspaceGeometry()
     const workspace = document.createElement('main')
-    workspace.dataset.sessionAnchor = 'workspace'
+    workspace.dataset.treeGroup = 'late-workspace'
     const workspaceRight = window.innerWidth
     workspace.getBoundingClientRect = () =>
       ({

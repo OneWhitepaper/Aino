@@ -13,6 +13,7 @@
 
 import { type RefObject, useLayoutEffect, useState, useSyncExternalStore } from 'react'
 
+import { findGroupOfPane } from '@/components/pane-shell/tree/model'
 import { $layoutTree } from '@/components/pane-shell/tree/store'
 import { $connection } from '@/store/session'
 
@@ -279,7 +280,15 @@ export function publishWorkspaceGeometry(): () => void {
       return
     }
 
-    const next = document.querySelector<HTMLElement>('[data-session-anchor="workspace"]')
+    // The workspace surface can be unmounted or parked while a sibling session
+    // tab is active. Its layout zone still owns the titlebar alignment. Stable
+    // keep-alive hosts also carry group identity, but do not own zone geometry.
+    const tree = $layoutTree.get()
+    const workspace = tree && findGroupOfPane(tree, 'workspace')
+
+    const next = workspace
+      ? document.querySelector<HTMLElement>(`[data-tree-group="${workspace.id}"]:not([data-pane-host])`)
+      : null
 
     if (next !== el) {
       if (el) {
@@ -292,8 +301,8 @@ export function publishWorkspaceGeometry(): () => void {
         ro.observe(el)
         stopWorkspaceMountObserver()
       } else {
-        // The tree root can mount before the lazy workspace pane. Watch only
-        // until that anchor appears; once found, the element ResizeObserver
+        // The tree root can mount before its workspace zone. Watch only
+        // until that zone appears; once found, the element ResizeObserver
         // and existing tree/resize subscriptions own subsequent measurements.
         watchForWorkspaceMount()
       }
