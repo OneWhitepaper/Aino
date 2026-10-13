@@ -61,6 +61,44 @@ function setup() {
   return { home, invoke, resolve }
 }
 
+async function waitForPreviewChange(owner: EventEmitter, write: () => void, prime = false) {
+  // fs.watch has no ready event. macOS can lose writes made immediately after
+  // creating its stream, especially for a newly-created nested temp directory.
+  // Repeated setup writes stop at the first real delivery; the assertion's
+  // edit below is sent once, after that native readiness handshake.
+  return new Promise<any>((resolve, reject) => {
+    let writes: ReturnType<typeof setInterval> | undefined
+
+    const clear = () => {
+      clearTimeout(deadline)
+
+      if (writes) {
+        clearInterval(writes)
+      }
+
+      owner.removeListener(PREVIEW_FILE_CHANGED_CHANNEL, received)
+    }
+
+    const received = (payload: unknown) => {
+      clear()
+      resolve(payload)
+    }
+
+    const deadline = setTimeout(() => {
+      clear()
+      reject(new Error(prime ? 'preview watcher never became ready' : 'preview file change was not delivered'))
+    }, 5000)
+
+    owner.once(PREVIEW_FILE_CHANGED_CHANNEL, received)
+
+    if (prime) {
+      writes = setInterval(write, 250)
+    }
+
+    write()
+  })
+}
+
 test('preview target resolution and registered readers agree on real file identity and missing paths', async () => {
   const { home, invoke, resolve } = setup()
   const file = path.join(home, 'notes with spaces.md')
@@ -84,22 +122,15 @@ test('preview target resolution and registered readers agree on real file identi
     send: (channel: string, payload: unknown) => owner.emit(channel, payload)
   })
 
-  const changed = new Promise<any>((resolve, reject) => {
-    const timeout = setTimeout(() => reject(new Error('preview file change was not delivered')), 5000)
-    owner.once(PREVIEW_FILE_CHANGED_CHANNEL, payload => {
-      clearTimeout(timeout)
-      resolve(payload)
-    })
-  })
-
   const watcher = await watchPreviewFile(owner, file)
 
   if (!('id' in watcher)) {
     throw new Error('expected active file watch')
   }
 
-  fs.appendFileSync(file, '\nupdated')
-  expect(await changed).toMatchObject({ id: watcher.id, path: file })
+  await waitForPreviewChange(owner, () => fs.appendFileSync(file, '\nwatch readiness'), true)
+  const changed = await waitForPreviewChange(owner, () => fs.appendFileSync(file, '\nupdated'))
+  expect(changed).toMatchObject({ id: watcher.id, path: file })
   owner.emit('destroyed')
   fs.unlinkSync(file)
   expect(await resolve(file, '')).toMatchObject({ previewKind: 'missing' })
