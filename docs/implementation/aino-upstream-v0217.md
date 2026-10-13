@@ -345,3 +345,22 @@ gateway files/389 passed; 26 renderer files/353 passed; lifecycle 98 passed and
 real file reads, native watching, missing-file classification, bounded preview
 versus full plugin reads, and persisted cap round trips. Full CI on the final
 commit is still required before merging.
+
+### Final native-test follow-up
+
+On `d96676a36e`, remote code health passed with 1,299 retained records and zero
+blockers. Full local UI passed 11,582 tests; Electron passed 3,753 with 33 host
+skips after passing the prepared Python path and synchronizing native watcher
+readiness. The watcher test retains its 5-second bounds and asserts a single edit
+after a real event handshake; the concurrent probe delivered 320/320 events.
+
+Windows x64 passed the marker-publication and R6 timestamp regressions. Its
+commit-outcome file reached the runner's 300-second per-file cap after nine
+passed cases, before completing the watchdog group. Tests are now split by
+result, timestamp and watchdog topics, sharing the original fixture/runner in
+`windows_handoff_support.py`. AST comparison confirms every original test body,
+decorator and parametrized case is retained. No per-file or step timeout changed.
+Local collection/classifier: 160 passed, 16 Windows skips; scoped health and
+Windows/static guards pass. Native execution is still required on the new SHA.
+The darwin-x64 bundle failed before build at checkout (GitHub receive timeout,
+then DNS resolution failure); this is recorded separately from test failures.

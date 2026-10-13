@@ -10,6 +10,10 @@ import time
 
 import pytest
 
+from tests.scripts.desktop_update.windows_handoff_support import outcome_handoff
+from tests.scripts.desktop_update.windows_handoff_support import _wait_for_log
+from tests.waiting import wait_until
+
 
 @pytest.mark.platforms("windows")
 def test_windows_update_writes_locale_independent_marker_and_result(tmp_path, monkeypatch):
@@ -41,3 +45,51 @@ def test_windows_update_writes_locale_independent_marker_and_result(tmp_path, mo
     assert type(receipt["finished_at"]) is int
     assert started <= receipt["finished_at"] <= finished
     assert receipt["exit_code"] == 0
+
+
+@pytest.mark.platforms('windows')
+def test_result_is_atomic_json_carrying_started_at_and_warnings(tmp_path: Path) -> None:
+    started = int(time.time()) - 5
+    code, out, _, result, home = outcome_handoff(tmp_path, HERMES_UPDATE_STARTED_AT=str(started))
+    assert code == 0, out
+    assert (result['ok'], result['started_at'], result['warnings']) == (True, started, []), result
+    assert not list(home.glob('.hermes-update-result.json.*.tmp'))
+
+
+@pytest.mark.platforms('windows')
+def test_result_finished_at_is_stamped_after_the_r6_release_wait(tmp_path: Path) -> None:
+    # Keep the real byte-range lock until the hand-off reaches R6. A fixed
+    # 25s holder can exit before startup finishes on a busy Windows runner.
+    import msvcrt
+
+    checkout_lock = None
+    released_at = None
+    initial_finished_at = None
+
+    def hold_checkout(_home: Path, install: Path) -> None:
+        nonlocal checkout_lock
+        checkout_lock = (install / '.hermes-update.lock').open('w+b')
+        checkout_lock.seek(1 << 20)
+        msvcrt.locking(checkout_lock.fileno(), msvcrt.LK_NBLCK, 1)
+
+    def release_checkout(home: Path) -> None:
+        nonlocal released_at, initial_finished_at
+        _wait_for_log(home, 'keeping the update marker')
+        result_path = home / '.hermes-update-result.json'
+        initial_finished_at = json.loads(result_path.read_text(encoding='utf-8-sig'))['finished_at']
+        # finished_at has whole-second resolution; cross it while R6 is blocked
+        # so the original pre-release stamp cannot satisfy the assertion.
+        wait_until(lambda: time.time() >= initial_finished_at + 2, timeout=5,
+                   what='the result timestamp predates checkout release')
+        released_at = int(time.time())
+        checkout_lock.close()
+
+    try:
+        code, out, _, result, _ = outcome_handoff(
+            tmp_path, '-NoGateway', prepare=hold_checkout, on_started=release_checkout)
+    finally:
+        if checkout_lock is not None:
+            checkout_lock.close()
+    assert code == 0, out
+    assert result['ok'] is True
+    assert result['finished_at'] >= released_at > initial_finished_at, result
