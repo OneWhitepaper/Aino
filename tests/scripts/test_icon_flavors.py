@@ -418,3 +418,28 @@ def test_aino_raster_remains_the_desktop_source_across_generation(tmp_path):
     assert_same_geometry(primary, flavored)
     assert primary.tobytes() != flavored.tobytes()
     assert_unbranded_outputs(stable, canary)
+
+
+def test_asset_freshness_ignores_compression_but_detects_changed_pixels():
+    from scripts.generate_icons import asset_frames
+
+    image = Image.new("RGBA", (32, 32), (40, 80, 120, 255))
+    plain, compressed, changed = io.BytesIO(), io.BytesIO(), io.BytesIO()
+    image.save(plain, "PNG", compress_level=0)
+    image.save(compressed, "PNG", compress_level=9)
+    assert plain.getvalue() != compressed.getvalue()
+    assert asset_frames(plain.getvalue(), ".png") == asset_frames(compressed.getvalue(), ".png")
+    image.putpixel((5, 5), (200, 80, 120, 255))
+    image.save(changed, "PNG", compress_level=9)
+    assert asset_frames(changed.getvalue(), ".png") != asset_frames(compressed.getvalue(), ".png")
+
+
+def test_asset_freshness_checks_all_native_frames():
+    from scripts.generate_icons import asset_frames
+
+    image = Image.new("RGBA", (64, 64), (40, 80, 120, 255))
+    full, missing = io.BytesIO(), io.BytesIO()
+    image.save(full, "ICO", sizes=[(16, 16), (32, 32), (64, 64)])
+    image.save(missing, "ICO", sizes=[(32, 32), (64, 64)])
+    assert Image.open(full).tobytes() == Image.open(missing).tobytes()
+    assert asset_frames(full.getvalue(), ".ico") != asset_frames(missing.getvalue(), ".ico")

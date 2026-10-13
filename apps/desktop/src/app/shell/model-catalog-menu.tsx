@@ -467,8 +467,7 @@ export function ModelCatalogMenu({
         return false
       }
 
-      const rememberedTier = preset.serviceTier ?? (preset.fast ? 'priority' : 'normal')
-      const tier = rememberedTier === 'ultrafast' ? (caps?.ultrafast ? 'ultrafast' : 'normal') : rememberedTier === 'priority' && caps?.fast ? 'priority' : 'normal'
+      const tier = supportedPresetTier(preset, caps)
       controller.applyPreset(
         {
           effort: (caps?.reasoning ?? true) ? (preset.effort ?? defaultEffort) : undefined,
@@ -817,7 +816,7 @@ export function ModelCatalogMenu({
                     <DropdownMenuLabel className={favoriteProviderLabel}>{provider.name}</DropdownMenuLabel>
                   ) : null}
                   <ModelFamilyRow
-                      controller={controller}
+                    controller={controller}
                     current={current}
                     defaultEffort={defaultEffort}
                     disabled={disabled || pending}
@@ -1132,10 +1131,15 @@ function ModelFamilyRow({
   // that submenu — without it the row's effort badge reads as a fixed
   // model+effort combo rather than an editable setting (#86966).
   const activate = () => {
-    if (disabled) {return}
+    if (disabled) {
+      return
+    }
 
-    if (isCurrent) {closeMenu()}
-    else {void onSelect(family, provider)}
+    if (isCurrent) {
+      closeMenu()
+    } else {
+      void onSelect(family, provider)
+    }
   }
 
   const toggleFavorite = () => {
@@ -1465,4 +1469,17 @@ function useStoreCollapsed(): string[] {
 
 function useDefaultEffort(): string {
   return useStore($defaultReasoningEffort) || DEFAULT_REASONING_EFFORT
+}
+
+function supportedPresetTier(
+  preset: { serviceTier?: string; fast?: boolean },
+  caps: { fast?: boolean; ultrafast?: boolean } | undefined
+) {
+  const remembered = preset.serviceTier ?? (preset.fast ? 'priority' : 'normal')
+
+  if (remembered === 'ultrafast') {
+    return caps?.ultrafast ? 'ultrafast' : 'normal'
+  }
+
+  return remembered === 'priority' && caps?.fast ? 'priority' : 'normal'
 }

@@ -272,3 +272,34 @@ Latest local classification still has **65 blocking structural findings**
 unchanged upstream debt. The complete report is preserved in the local evidence
 folder as `health-classified-before-cleanup.json`. Structural cleanup and native
 CI verification remain open; this checkpoint must not be merged yet.
+
+
+### Structural cleanup and image freshness follow-up
+
+The first repair checkpoint was pushed as `7d62abb9b0`; remote verification is
+still running. Its image freshness lane exposed a platform mismatch: pinned
+Pillow/resvg versions match, but compressed PNG/container byte sizes differ
+between macOS and Linux. The existing `--check` now compares every rendered
+pixel, native ICO/ICNS frame, and color-management field; SVG/JSON retain exact
+bytes. CI checks the committed files directly without overwriting them first.
+A one-pixel change and a missing native size are both detected; different PNG
+compression alone is accepted. Cross-platform confirmation remains pending CI.
+
+The retained Aino raster is about 636 KiB even after lossless optimization.
+Eight exact generated icon paths were added to the existing blob-size policy's
+shipping-asset allowlist (the same mechanism already used by the DMG icon).
+Their repeated PNG content shares one Git blob; no global limit was raised.
+
+Structural cleanup reuses existing topical files: home/SOUL tests, Kanban init
+tests, memory and Codex continuation tests, and gateway fallback tests were
+moved without deleting coverage. Model pill rendering, pane registration,
+service-tier selection, version labels and model-state snapshots were split
+into named functions. Existing managed-model equality is now shared from its
+own module. No wire or user-visible semantics were intentionally changed.
+
+Receipts: 158 configuration/Kanban tests (6 host skips); 356 agent tests;
+673 gateway tests; 125 UI tests across model menus, state propagation, model
+switching and pane scope. Renderer TypeScript and targeted ESLint pass.
+Scope measurement eliminated 10 of the 65 structural blockers, before the
+additional gateway test extraction. Remaining unchanged scopes still require
+cleanup; do not infer a passing full health gate or merge approval.

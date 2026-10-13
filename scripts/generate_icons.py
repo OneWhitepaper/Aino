@@ -950,10 +950,26 @@ def cmd_write(source: Path, out: Path) -> int:
     return int(failures > 0)
 
 
+def asset_frames(data: bytes, suffix: str) -> list[tuple]:
+    """Compare rendered content across Pillow wheels with different PNG compressors.
+
+    Every native frame and color-management field matters; compression bytes do
+    not. SVG and manifests retain exact-byte comparison in the caller.
+    """
+    with Image.open(io.BytesIO(data)) as image:
+        if suffix == ".ico":
+            frames = [(size, image.ico.getimage(size)) for size in sorted(image.ico.sizes())]
+        elif suffix == ".icns":
+            frames = [(size, image.icns.getimage(size)) for size in sorted(image.icns.itersizes())]
+        else:
+            frames = [(image.size, image)]
+        return [(size, frame.size, frame.convert("RGBA").tobytes(),
+                 tuple((key, frame.info.get(key)) for key in ("icc_profile", "gamma", "srgb", "dpi")))
+                for size, frame in frames]
+
+
 def cmd_check(source: Path, out: Path) -> int:
-    """Structural verification: regenerate every target in memory and assert
-    the invariants that actually matter (there are no committed bytes to
-    byte-compare — outputs are generated on demand)."""
+    """Regenerate in memory; require fresh pixels/frames and valid structure."""
     art, desktop_art = build_art(source)
     problems: list[str] = []
 
@@ -961,7 +977,13 @@ def cmd_check(source: Path, out: Path) -> int:
     for rel, kind, arg in TARGETS:
         try:
             selected = desktop_art if rel.startswith("apps/desktop/") else art
-            target_bytes(selected, kind, arg)
+            expected = target_bytes(selected, kind, arg)
+            actual = (out / rel).read_bytes()
+            suffix = Path(rel).suffix
+            matches = (asset_frames(actual, suffix) == asset_frames(expected, suffix)
+                       if suffix in {".png", ".ico", ".icns"} else actual == expected)
+            if not matches:
+                problems.append(f"{rel}: STALE rendered content; regenerate icons")
         except Exception as exc:
             problems.append(f"{rel}: REGENERATE FAILED ({exc})")
 

@@ -38,6 +38,49 @@ const PILL = cn(
   'text-(--ui-text-tertiary) hover:bg-(--chrome-action-hover) hover:text-foreground'
 )
 
+interface ModelPillContentProps {
+  compact: boolean
+  hasModel: boolean
+  modelLabel: string
+  unavailable: boolean
+  noModelLabel: string
+  pinned: boolean
+  pinnedLabel: string
+}
+
+function ModelPillContent({
+  compact,
+  hasModel,
+  modelLabel,
+  unavailable,
+  noModelLabel,
+  pinned,
+  pinnedLabel
+}: ModelPillContentProps) {
+  return compact ? (
+    <ChevronDown className="size-3.5 shrink-0 opacity-70" />
+  ) : (
+    <>
+      {hasModel ? (
+        <span className="truncate">{modelLabel}</span>
+      ) : unavailable ? (
+        <span className="truncate">{noModelLabel}</span>
+      ) : (
+        <GlyphSpinner className="opacity-50" spinner="braille" />
+      )}
+      {pinned && (
+        <span
+          aria-label={pinnedLabel}
+          className="size-1 shrink-0 rounded-full bg-(--ui-accent)"
+          data-testid="model-pinned-dot"
+          role="img"
+        />
+      )}
+      <ChevronDown className="size-2.5 shrink-0 opacity-50" />
+    </>
+  )
+}
+
 /**
  * Composer model selector — the relocated status-bar pill. Reuses the live
  * `model.options` dropdown (`modelMenuContent`) verbatim; falls back to the
@@ -167,29 +210,16 @@ export function ModelPill({
   // the text changes, and a provider that declines leaves the core label.
   const pillLabel = useComposerModelPillLabel({ compact, model: currentModel, reasoningEffort: reasoningEffort || '' })
 
-  const label = compact ? (
-    <ChevronDown className="size-3.5 shrink-0 opacity-70" />
-  ) : (
-    <>
-      {currentModel.trim() ? (
-        <span className="truncate">
-          {platformName || pillLabel || formatModelPillLabel(currentModel, { fastMode, serviceTier })}
-        </span>
-      ) : modelDefaultUnavailable ? (
-        <span className="truncate">{copy.noModel}</span>
-      ) : (
-        <GlyphSpinner className="opacity-50" spinner="braille" />
-      )}
-      {pinnedOverride && (
-        <span
-          aria-label={copy.modelPinned}
-          className="size-1 shrink-0 rounded-full bg-(--ui-accent)"
-          data-testid="model-pinned-dot"
-          role="img"
-        />
-      )}
-      <ChevronDown className="size-2.5 shrink-0 opacity-50" />
-    </>
+  const label = (
+    <ModelPillContent
+      compact={compact}
+      hasModel={Boolean(currentModel.trim())}
+      modelLabel={platformName || pillLabel || formatModelPillLabel(currentModel, { fastMode, serviceTier })}
+      noModelLabel={copy.noModel}
+      pinned={pinnedOverride}
+      pinnedLabel={copy.modelPinned}
+      unavailable={modelDefaultUnavailable}
+    />
   )
 
   // Compact (floating composer): a snug square holding just the chevron — no pill

@@ -96,14 +96,7 @@ export function resolveVersionStatus({
   const stable = channel === 'stable'
   const available = behind > 0 || !!updateAvailable
 
-  // A client with no version still identifies itself by sha; a backend can't.
-  const named = version ?? (client ? sha : null) ?? copy.unknown
-
-  const base = !client
-    ? copy.backendLabel(named)
-    : remote
-      ? copy.clientLabel(named)
-      : (version && `v${version}`) || named
+  const base = versionBaseLabel(client, remote, version, sha, copy)
 
   // Main channel: commits behind is the precise diff. Stable channel: a
   // count of commits is the wrong vocabulary — a release is one step, so
@@ -132,4 +125,17 @@ export function resolveVersionStatus({
     detail: client && version && sha && !busy && !remote ? sha : undefined,
     unknown: !version && !(client && sha)
   }
+}
+
+function versionBaseLabel(
+  client: boolean,
+  remote: boolean | undefined,
+  version: string | null,
+  sha: string | null,
+  copy: VersionStatusCopy
+): string {
+  // A client with no version still identifies itself by sha; a backend can't.
+  const named = version ?? (client ? sha : null) ?? copy.unknown
+
+  return !client ? copy.backendLabel(named) : remote ? copy.clientLabel(named) : (version && `v${version}`) || named
 }

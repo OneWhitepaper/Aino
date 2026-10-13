@@ -101,13 +101,11 @@ interface SwitchOptions {
   copy: { confirm: string; failed: string; busy: string; recovery: string; retry: string }
 }
 
-function captureModelSwitch({ selection, queryClient, profile, connectionId, cache, copy }: SwitchOptions) {
-  const primaryId = $activeSessionId.get()
-  const sessionId = 'sessionId' in selection ? (selection.sessionId ?? null) : primaryId
-  const primary = !sessionId || sessionId === primaryId
-  const previousState = sessionId ? $sessionStates.get()[sessionId] : undefined
-
-  const previous = {
+function previousModelSelection(
+  primary: boolean,
+  previousState: ReturnType<typeof $sessionStates.get>[string] | undefined
+) {
+  return {
     model: primary ? $currentModel.get() : (previousState?.model ?? ''),
     provider: primary ? $currentProvider.get() : (previousState?.provider ?? ''),
     platformModel: previousState?.platformModel,
@@ -116,6 +114,15 @@ function captureModelSwitch({ selection, queryClient, profile, connectionId, cac
     owner: $currentPlatformOwner.get(),
     origin: $currentPlatformOrigin.get()
   }
+}
+
+function captureModelSwitch({ selection, queryClient, profile, connectionId, cache, copy }: SwitchOptions) {
+  const primaryId = $activeSessionId.get()
+  const sessionId = 'sessionId' in selection ? (selection.sessionId ?? null) : primaryId
+  const primary = !sessionId || sessionId === primaryId
+  const previousState = sessionId ? $sessionStates.get()[sessionId] : undefined
+
+  const previous = previousModelSelection(primary, previousState)
 
   const owner = connectionId ? { connectionId, profile } : profile
   const foregroundScope = platformDefaultScope($activeGatewayProfile.get()).key
@@ -219,7 +226,13 @@ function captureModelSwitch({ selection, queryClient, profile, connectionId, cac
     }
 
     if (tileExists()) {
-      sessionTileDelegate()?.updateSession(sessionId!, state => ({ ...state, model, provider, platformModel, reasoningEffortWire: rollback ? previous.wire : '' }))
+      sessionTileDelegate()?.updateSession(sessionId!, state => ({
+        ...state,
+        model,
+        provider,
+        platformModel,
+        reasoningEffortWire: rollback ? previous.wire : ''
+      }))
     }
 
     cache(sessionId, provider, model, primary && !sessionId, profile)

@@ -16,6 +16,18 @@ export interface PlatformRuntimeFields {
   platform_owner?: { user_id: string; platform_origin: string }
 }
 
+export function samePlatformSessionModel(
+  left: PlatformSessionModel | null | undefined,
+  right: PlatformSessionModel | null | undefined
+): boolean {
+  return (
+    left?.modelId === right?.modelId &&
+    left?.ownerUserId === right?.ownerUserId &&
+    left?.platformOrigin === right?.platformOrigin &&
+    left?.status === right?.status
+  )
+}
+
 export function platformModelStatePatch(
   info: (PlatformRuntimeFields & { provider?: string; model?: string; running?: boolean }) | undefined
 ): {

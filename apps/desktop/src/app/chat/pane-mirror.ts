@@ -102,6 +102,41 @@ export function paneMirror<T>(cfg: PaneMirror<T>): () => void {
     removeTreePane(paneId(key))
   }
 
+  const registerTile = (tile: T, key: string, title: string, existing: boolean) => {
+    const dock = dockFor(tile)
+
+    const disposeRegistration = registry.register({
+      id: paneId(key),
+      area: 'panes',
+      title,
+      data: {
+        tabLead: cfg.tabLead ? () => cfg.tabLead!(key) : undefined,
+        tabTitle: cfg.tabTitle ? () => cfg.tabTitle!(key) : undefined,
+        dock,
+        lifecycleKeepAlive: cfg.lifecycleKeepAlive?.(key),
+        minWidth: cfg.minWidth,
+        newTab: cfg.newTab?.(key),
+        // Every mirrored tile is a full workspace surface docked beside main —
+        // and closeable, which is what keeps its tab when it lands in a zone of
+        // its own (see strip-visibility.ts).
+        placement: 'main',
+        tabDrag: cfg.tabDrag
+          ? (event: ReactPointerEvent<HTMLElement>, onTap: () => void) => cfg.tabDrag!(key, event, onTap)
+          : undefined, // returns boolean (handled) — see PaneChrome.tabDrag
+        tabMenuPrefix: cfg.tabMenuPrefix?.(key),
+        tabWrap: cfg.tabWrap ? (tab: ReactElement) => cfg.tabWrap!(key, tab) : undefined,
+        headerMenu: cfg.headerMenu ? () => cfg.headerMenu!(key) : undefined
+      },
+      render: () => cfg.render(key)
+    })
+
+    registered.set(key, { dispose: disposeRegistration, dock, title })
+
+    if (!existing) {
+      registerPaneCloser(paneId(key), () => cfg.close(key))
+    }
+  }
+
   const sync = () => {
     const tiles = cfg.source.get()
     const wanted = new Set(tiles.map(cfg.key))
@@ -126,38 +161,7 @@ export function paneMirror<T>(cfg: PaneMirror<T>): () => void {
         continue
       }
 
-      const dock = dockFor(tile)
-
-      const disposeRegistration = registry.register({
-        id: paneId(key),
-        area: 'panes',
-        title,
-        data: {
-          tabLead: cfg.tabLead ? () => cfg.tabLead!(key) : undefined,
-          tabTitle: cfg.tabTitle ? () => cfg.tabTitle!(key) : undefined,
-          dock,
-          lifecycleKeepAlive: cfg.lifecycleKeepAlive?.(key),
-          minWidth: cfg.minWidth,
-          newTab: cfg.newTab?.(key),
-          // Every mirrored tile is a full workspace surface docked beside main —
-          // and closeable, which is what keeps its tab when it lands in a zone of
-          // its own (see strip-visibility.ts).
-          placement: 'main',
-          tabDrag: cfg.tabDrag
-            ? (event: ReactPointerEvent<HTMLElement>, onTap: () => void) => cfg.tabDrag!(key, event, onTap)
-            : undefined, // returns boolean (handled) — see PaneChrome.tabDrag
-          tabMenuPrefix: cfg.tabMenuPrefix?.(key),
-          tabWrap: cfg.tabWrap ? (tab: ReactElement) => cfg.tabWrap!(key, tab) : undefined,
-          headerMenu: cfg.headerMenu ? () => cfg.headerMenu!(key) : undefined
-        },
-        render: () => cfg.render(key)
-      })
-
-      registered.set(key, { dispose: disposeRegistration, dock, title })
-
-      if (!current) {
-        registerPaneCloser(paneId(key), () => cfg.close(key))
-      }
+      registerTile(tile, key, title, Boolean(current))
     }
 
     if (unparked) {
