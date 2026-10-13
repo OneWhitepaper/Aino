@@ -135,7 +135,7 @@ import { shouldAttemptCloudBootCascade } from './cloud-boot-cascade'
 import { discoverWithTeamFallback } from './cloud-discovery'
 import { createCloudSessionRecovery } from './cloud-session-recovery'
 import { installCommandScreenshot } from './command-screenshot'
-import { composerImageTimestamp } from './composer-image-name'
+import { saveImageFromUrl, writeComposerImage } from './composer-image-files'
 import { writeComposerPaste } from './composer-paste'
 import { applyConnectionChange, teardownSshState } from './connection-apply'
 import {
@@ -292,24 +292,15 @@ import { findGitRoot } from './git-root'
 import { desktopBackendSpawnEnv, guestOnboardingEnabled, skipIntroEnabled } from './guest-onboarding'
 import {
   assertExistingPathForOpen,
-  ATTACHMENT_UPLOAD_DEFAULT_MAX_BYTES,
-  clampDataUrlReadMaxMb,
-  DATA_URL_READ_DEFAULT_MAX_MB,
-  dataUrlReadMaxBytesFromMb,
   DEFAULT_FETCH_TIMEOUT_MS,
   enableBasicPasswordStoreEncryption,
   encryptDesktopSecret as encryptDesktopSecretStrict,
-  homeRelativeAttachmentCandidates,
-  isMissingFileError,
-  missingFileResult,
-  readFileDataUrlForIpc,
   resolvePersistedRemoteToken,
   resolveReadableFileForIpc,
   resolveRemoteTokenPlainText,
   resolveRequestedPathForIpc,
   resolveTimeoutMs,
   SAFE_STORAGE_ENCODING,
-  TEXT_PREVIEW_SOURCE_MAX_BYTES,
   tightenSecretFileMode,
   writeSecretFileAtomic
 } from './hardening'
@@ -364,7 +355,7 @@ import {
   writeNvidiaEglMarker
 } from './linux-nvidia-egl-fallback'
 import { createLocalBackendLifecycle, waitForTeardown } from './local-backend-lifecycle'
-import { resolveIpcFileReadPath, resolveMediaStreamFile, resolvePreviewTargetPath } from './local-read-path'
+import { resolveMediaStreamFile } from './local-read-path'
 import { localSkinProfileKey, readLocalSkinPayload } from './local-skin'
 import { ACTIVE_LOG_POLL_MS, planLogRotation, reclaimActiveLogIfOversized } from './log-rotation'
 import { registerMachineProfile } from './machine-profile'
@@ -470,11 +461,13 @@ import {
 } from './power-save'
 import { readPreUpdateBackupEnabled } from './pre-update-backup-config'
 import { capturePreviewContents } from './preview-capture'
-import { onPreviewWatchOwnerDestroyed, sendPreviewFileChangedToOwner } from './preview-file-watch'
+import { extensionForMimeType } from './preview-file-metadata'
+import { registerPreviewFileReadIpc } from './preview-file-read-ipc'
+import { createPreviewTargetResolver, expandUserPath } from './preview-file-target'
+import { closePreviewWatchers, stopPreviewFileWatch, watchDirectory, watchPreviewFile } from './preview-file-watch'
 import { hasClosePreviewFlag, previewGuestInputAction } from './preview-guest-escape'
 import { commandFocusedGuest, notePreviewGuestHidden } from './preview-guest-offscreen'
 import { PreviewReachRegistry } from './preview-reach'
-import { previewHttpUrlTarget } from './preview-url-target'
 import {
   createPrimaryRemoteConnection,
   FirstRunSetupResetError,
@@ -681,7 +674,6 @@ import { createStoreStrategy } from './updater/store-client'
 import { isExternalVenvHolder, isHermesOwnedVenvDaemon } from './venv-holder-select'
 import { fetchMarketplaceThemes, searchMarketplaceThemes } from './vscode-marketplace'
 import { createWakeIndicatorWindowController } from './wake-indicator-window'
-import { guardedWatch } from './watch-storm-breaker'
 import { windowAcceleratorAction } from './window-accelerator'
 import { enumerateWindowsFrontToBack, enumerationFailed, readWindowBelow } from './window-below'
 import { bindWindowChromeEvents } from './window-chrome-events'
@@ -1741,118 +1733,6 @@ function applyTitleBarOverlay(win) {
   }
 }
 
-const MEDIA_MIME_TYPES = {
-  '.avi': 'video/x-msvideo',
-  '.bmp': 'image/bmp',
-  '.flac': 'audio/flac',
-  '.gif': 'image/gif',
-  '.jpeg': 'image/jpeg',
-  '.jpg': 'image/jpeg',
-  '.m4a': 'audio/mp4',
-  '.mkv': 'video/x-matroska',
-  '.mov': 'video/quicktime',
-  '.mp3': 'audio/mpeg',
-  '.mp4': 'video/mp4',
-  '.ogg': 'audio/ogg',
-  '.opus': 'audio/ogg; codecs=opus',
-  '.pdf': 'application/pdf',
-  '.png': 'image/png',
-  '.svg': 'image/svg+xml',
-  '.wav': 'audio/wav',
-  '.webm': 'video/webm',
-  '.webp': 'image/webp'
-}
-
-const PREVIEW_HTML_EXTENSIONS = new Set(['.html', '.htm'])
-const PREVIEW_PDF_EXTENSIONS = new Set(['.pdf'])
-const PREVIEW_WATCH_DEBOUNCE_MS = 120
-const TEXT_PREVIEW_MAX_BYTES = 512 * 1024
-
-const PREVIEW_LANGUAGE_BY_EXT = {
-  '.c': 'c',
-  '.conf': 'ini',
-  '.cpp': 'cpp',
-  '.css': 'css',
-  '.csv': 'csv',
-  '.go': 'go',
-  '.graphql': 'graphql',
-  '.h': 'c',
-  '.hpp': 'cpp',
-  '.html': 'html',
-  '.java': 'java',
-  '.js': 'javascript',
-  '.json': 'json',
-  '.jsx': 'jsx',
-  '.kt': 'kotlin',
-  '.lua': 'lua',
-  '.md': 'markdown',
-  '.mjs': 'javascript',
-  '.py': 'python',
-  '.rb': 'ruby',
-  '.rs': 'rust',
-  '.sh': 'shell',
-  '.sql': 'sql',
-  '.svg': 'xml',
-  '.toml': 'toml',
-  '.ts': 'typescript',
-  '.tsx': 'tsx',
-  '.txt': 'text',
-  '.xml': 'xml',
-  '.yaml': 'yaml',
-  '.yml': 'yaml',
-  '.zsh': 'shell'
-}
-
-function looksBinary(buffer) {
-  if (!buffer.length) {
-    return false
-  }
-
-  let suspicious = 0
-
-  for (const byte of buffer) {
-    if (byte === 0) {
-      return true
-    }
-
-    // Allow common whitespace controls: tab, LF, CR.
-    if (byte < 32 && byte !== 9 && byte !== 10 && byte !== 13) {
-      suspicious += 1
-    }
-  }
-
-  return suspicious / buffer.length > 0.12
-}
-
-function previewFileMetadata(filePath, mimeType) {
-  let byteSize = 0
-  let binary = false
-
-  try {
-    const stat = fs.statSync(filePath)
-    byteSize = stat.size
-
-    if (!mimeType.startsWith('image/')) {
-      const fd = fs.openSync(filePath, 'r')
-
-      try {
-        const sample = Buffer.alloc(Math.min(byteSize, 4096))
-        const bytesRead = fs.readSync(fd, sample, 0, sample.length, 0)
-        binary = looksBinary(sample.subarray(0, bytesRead))
-      } finally {
-        fs.closeSync(fd)
-      }
-    }
-  } catch {
-    // Metadata is best-effort; the read handlers surface hard errors later.
-  }
-
-  return {
-    binary,
-    byteSize,
-    large: byteSize > TEXT_PREVIEW_MAX_BYTES
-  }
-}
 
 app.setName(APP_NAME)
 
@@ -2263,7 +2143,6 @@ let connectionRegistryCache = null
 let connectionRegistryCacheMtime = null
 const remoteHeaderSessions = new WeakSet<object>()
 const remoteWsHeaderStore = createRemoteWsHeaderStore()
-const previewWatchers = new Map()
 let previewShortcutActive = false
 const f12ShortcutActiveWindows = new Set<number>()
 let nativeThemeListenerInstalled = false
@@ -5915,426 +5794,8 @@ function fetchPublicJson(url, options: any = {}) {
   )
 }
 
-function mimeTypeForPath(filePath) {
-  const ext = path.extname(filePath || '').toLowerCase()
 
-  return MEDIA_MIME_TYPES[ext] || 'application/octet-stream'
-}
 
-function extensionForMimeType(mimeType) {
-  const type = String(mimeType || '')
-    .split(';')[0]
-    .trim()
-    .toLowerCase()
-
-  if (type === 'image/png') {
-    return '.png'
-  }
-
-  if (type === 'image/jpeg') {
-    return '.jpg'
-  }
-
-  if (type === 'image/gif') {
-    return '.gif'
-  }
-
-  if (type === 'image/webp') {
-    return '.webp'
-  }
-
-  if (type === 'image/bmp') {
-    return '.bmp'
-  }
-
-  if (type === 'image/svg+xml') {
-    return '.svg'
-  }
-
-  return ''
-}
-
-function filenameFromUrl(rawUrl, fallback = 'image') {
-  try {
-    const parsed = new URL(rawUrl)
-    const base = path.basename(decodeURIComponent(parsed.pathname || ''))
-
-    return base && base.includes('.') ? base : fallback
-  } catch {
-    return fallback
-  }
-}
-
-async function resourceBufferFromUrl(rawUrl) {
-  if (!rawUrl) {
-    throw new Error('Missing URL')
-  }
-
-  if (rawUrl.startsWith('data:')) {
-    const match = rawUrl.match(/^data:([^;,]+)?(;base64)?,(.*)$/s)
-
-    if (!match) {
-      throw new Error('Invalid data URL')
-    }
-
-    const mimeType = match[1] || 'application/octet-stream'
-    const encoded = match[3] || ''
-    const buffer = match[2] ? Buffer.from(encoded, 'base64') : Buffer.from(decodeURIComponent(encoded), 'utf8')
-
-    return { buffer, mimeType }
-  }
-
-  if (/^file:/i.test(rawUrl)) {
-    const { resolvedPath } = await resolveReadableFileForIpc(rawUrl, { purpose: 'Image file' })
-    const buffer = await fs.promises.readFile(resolvedPath)
-
-    return { buffer, mimeType: mimeTypeForPath(resolvedPath) }
-  }
-
-  const parsed = new URL(rawUrl)
-  const client = parsed.protocol === 'https:' ? https : http
-
-  return new Promise((resolve, reject) => {
-    const req = client.get(parsed, res => {
-      if ((res.statusCode || 500) >= 400) {
-        reject(new Error(`Failed to fetch ${rawUrl}: ${res.statusCode}`))
-        res.resume()
-
-        return
-      }
-
-      const chunks = []
-      res.on('error', reject)
-      res.on('data', chunk => chunks.push(chunk))
-      res.on('end', () => {
-        resolve({
-          buffer: Buffer.concat(chunks),
-          mimeType: res.headers['content-type'] || 'application/octet-stream'
-        })
-      })
-    })
-
-    req.on('error', reject)
-  })
-}
-
-async function saveImageFromUrl(rawUrl) {
-  const { buffer, mimeType } = (await resourceBufferFromUrl(rawUrl)) as any
-  const extension = extensionForMimeType(mimeType) || '.png'
-  // Generated-image URLs (fal.media etc.) usually end in an extensionless
-  // content hash. Keep the name but always guarantee an extension — without
-  // one Windows saves an unopenable "All Files" blob (#image18 report).
-  const baseName = filenameFromUrl(rawUrl, `image${extension}`)
-  const fallbackName = path.extname(baseName) ? baseName : `${baseName}${extension}`
-
-  let downloadsDir = ''
-
-  try {
-    downloadsDir = app.getPath('downloads')
-  } catch {
-    // Leave the dialog at its last-used location when the OS has no
-    // Downloads directory to offer.
-  }
-
-  const result = await dialog.showSaveDialog(mainWindow, {
-    title: 'Save Image',
-    defaultPath: downloadsDir ? path.join(downloadsDir, fallbackName) : fallbackName,
-    filters: [
-      { name: 'Images', extensions: ['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'svg'] },
-      { name: 'All Files', extensions: ['*'] }
-    ]
-  })
-
-  if (result.canceled || !result.filePath) {
-    return false
-  }
-
-  await fs.promises.writeFile(result.filePath, buffer)
-
-  return true
-}
-
-async function writeComposerImage(buffer, ext = '.png', name = '') {
-  const rawExt = String(ext || '.png')
-    .trim()
-    .toLowerCase()
-
-  const normalizedExt = rawExt.startsWith('.') ? rawExt : `.${rawExt}`
-  const safeExt = /^\.[a-z0-9]{1,5}$/.test(normalizedExt) ? normalizedExt : '.png'
-  const dir = path.join(app.getPath('userData'), 'composer-images')
-  await fs.promises.mkdir(dir, { recursive: true })
-  const stamp = composerImageTimestamp()
-  const random = crypto.randomBytes(3).toString('hex')
-
-  const baseName = String(name || '')
-    .split(/[\\/]/)
-    .pop()
-    ?.replace(/\.[^.]+$/, '')
-
-  const safeName = (baseName || '')
-    .replace(/[^\p{L}\p{N}._-]+/gu, '_')
-    .replace(/^[._-]+|[._-]+$/g, '')
-    .slice(0, 80)
-
-  const fileName = safeName ? `${safeName}_${random}${safeExt}` : `composer_${stamp}_${random}${safeExt}`
-  const filePath = path.join(dir, fileName)
-  await fs.promises.writeFile(filePath, buffer)
-
-  return filePath
-}
-
-function expandUserPath(filePath) {
-  const value = String(filePath || '').trim()
-
-  if (value === '~') {
-    return app.getPath('home')
-  }
-
-  if (value.startsWith(`~${path.sep}`) || value.startsWith('~/')) {
-    return path.join(app.getPath('home'), value.slice(2))
-  }
-
-  return value
-}
-
-/** Markdown hrefs must percent-encode spaces (`/my%20notes/x.md`), but the
- *  on-disk path is the decoded form. When the raw path misses, retry decoded
- *  so chat links to paths with spaces still open in the preview rail. */
-function decodedPathIfMissing(resolvedPath) {
-  if (!/%[0-9a-fA-F]{2}/.test(resolvedPath)) {
-    return null
-  }
-
-  let decoded
-
-  try {
-    decoded = decodeURIComponent(resolvedPath)
-  } catch {
-    return null
-  }
-
-  return decoded !== resolvedPath ? decoded : null
-}
-
-async function previewFileTarget(rawTarget, baseDir) {
-  const raw = String(rawTarget || '').trim()
-  const base = baseDir ? path.resolve(expandUserPath(baseDir)) : resolveHermesCwd()
-
-  // A plain backend target is a WSL/POSIX path; bridge it to a Windows-
-  // accessible form before resolving so the existence checks below (and the
-  // final read) hit the real file rather than a drive-relative C:\home\... miss.
-  let resolved = resolveRequestedPathForIpc(resolvePreviewTargetPath(raw, expandUserPath), {
-    baseDir: base,
-    purpose: 'Preview target'
-  })
-
-  // Attachment references stored in chat history are frequently HOME-relative
-  // (e.g. "AppData/Local/hermes/attachments/foo.xlsx" on Windows, or
-  // ".hermes/attachments/foo.xlsx" elsewhere) rather than relative to the
-  // agent's working directory. The primary resolution above only tries
-  // `base` (the working dir), so such a ref never exists there and the
-  // preview/download 404s even though the file is present on disk (#115609).
-  if (!fileExists(resolved) && !directoryExists(resolved)) {
-    for (const candidate of homeRelativeAttachmentCandidates(raw, app.getPath('home'), HERMES_HOME)) {
-      if (fileExists(candidate)) {
-        resolved = candidate
-
-        break
-      }
-    }
-  }
-
-  // Markdown hrefs must percent-encode spaces (`/my%20notes/x.md`), but the
-  // on-disk path is the decoded form. When the encoded path misses, retry the
-  // decoded form so chat links to paths with spaces still open in the preview
-  // rail (#102782) — before the directory/missing classification below, so a
-  // decoded target is typed by what it actually is.
-  if (!fileExists(resolved) && !directoryExists(resolved)) {
-    const decoded = decodedPathIfMissing(resolved)
-
-    if (decoded && (fileExists(decoded) || directoryExists(decoded))) {
-      resolved = decoded
-    }
-  }
-
-  // A directory is not a preview (#101683). Overloading it as
-  // `<dir>/index.html` made a directory without one classify as missing, and
-  // the renderer's blind fallback then fabricated a broken text-preview tab.
-  // Answer with a typed non-previewable result so the card can offer the
-  // native folder action, and a typed `missing` result so a dead link reports
-  // instead of previewing.
-  if (directoryExists(resolved)) {
-    return {
-      kind: 'file',
-      label: path.basename(resolved) || resolved,
-      path: resolved,
-      previewKind: 'directory',
-      source: raw,
-      url: pathToFileURL(resolved).toString()
-    }
-  }
-
-  if (!fileExists(resolved)) {
-    return {
-      kind: 'file',
-      label: path.basename(resolved) || raw,
-      path: resolved,
-      previewKind: 'missing',
-      source: raw,
-      url: pathToFileURL(resolved).toString()
-    }
-  }
-
-  const ext = path.extname(resolved).toLowerCase()
-
-  ;({ resolvedPath: resolved } = await resolveReadableFileForIpc(resolved, { purpose: 'Preview target' }))
-
-  const mimeType = mimeTypeForPath(resolved)
-  const metadata = previewFileMetadata(resolved, mimeType)
-  const isHtml = PREVIEW_HTML_EXTENSIONS.has(ext)
-  const isImage = mimeType.startsWith('image/')
-  const isPdf = PREVIEW_PDF_EXTENSIONS.has(ext) || mimeType === 'application/pdf'
-  const previewKind = isHtml ? 'html' : isImage ? 'image' : isPdf ? 'pdf' : metadata.binary ? 'binary' : 'text'
-
-  return {
-    binary: metadata.binary,
-    byteSize: metadata.byteSize,
-    kind: 'file',
-    large: metadata.large,
-    label: path.basename(resolved),
-    language: PREVIEW_LANGUAGE_BY_EXT[ext] || 'text',
-    mimeType,
-    path: resolved,
-    previewKind,
-    source: raw,
-    url: pathToFileURL(resolved).toString()
-  }
-}
-
-async function normalizePreviewTarget(rawTarget, baseDir) {
-  const raw = String(rawTarget || '').trim()
-
-  if (!raw) {
-    return null
-  }
-
-  try {
-    if (/^https?:\/\//i.test(raw)) {
-      return previewHttpUrlTarget(raw)
-    }
-
-    return await previewFileTarget(raw, baseDir)
-  } catch {
-    return null
-  }
-}
-
-async function filePathFromPreviewUrl(rawUrl) {
-  const { resolvedPath } = await resolveReadableFileForIpc(String(rawUrl || ''), { purpose: 'Preview file' })
-
-  return resolvedPath
-}
-
-async function watchPreviewFile(owner, rawUrl) {
-  let filePath
-
-  try {
-    filePath = await filePathFromPreviewUrl(rawUrl)
-  } catch (error) {
-    // A restored tab probing a file that is gone is an expected outcome —
-    // answer it like the read handlers do instead of rejecting (Electron logs
-    // every rejected handler as a stack trace at startup).
-    if (isMissingFileError(error)) {
-      return missingFileResult(rawUrl, error)
-    }
-
-    throw error
-  }
-
-  const watchDir = path.dirname(filePath)
-  const targetName = path.basename(filePath)
-  const id = crypto.randomBytes(12).toString('base64url')
-  let timer = null
-
-  // Proactive teardown: the watch must not outlive the window that asked for
-  // it by whole quit-cycles waiting on a change event that never comes.
-  const offOwnerDestroyed = onPreviewWatchOwnerDestroyed(owner, () => stopPreviewFileWatch(id))
-
-  const emit = () => {
-    if (!fileExists(filePath)) {
-      return
-    }
-
-    sendPreviewFileChangedToOwner(owner, { id, path: filePath, url: pathToFileURL(filePath).toString() }, () =>
-      stopPreviewFileWatch(id)
-    )
-  }
-
-  // guardedWatch: a win32 event storm closes the raw fs.watch and falls back
-  // to a slow stat poll instead of pinning the main thread (#118974).
-  const watcher = guardedWatch({
-    platform: process.platform,
-    watch: listener => fs.watch(watchDir, listener),
-    onEvent: (_eventType, filename) => {
-      const changedName = filename ? path.basename(String(filename)) : ''
-
-      if (changedName && changedName !== targetName) {
-        return
-      }
-
-      if (timer) {
-        clearTimeout(timer)
-      }
-
-      timer = setTimeout(() => {
-        timer = null
-        emit()
-      }, PREVIEW_WATCH_DEBOUNCE_MS)
-    },
-    snapshot: () => {
-      const stat = fs.statSync(filePath)
-
-      return `${stat.mtimeMs}:${stat.size}`
-    },
-    onPollChange: emit,
-    onTrip: ({ events, windowMs }) =>
-      console.warn(`[hermes] fs.watch storm on ${watchDir} (${events} events within ${windowMs}ms); polling instead`)
-  })
-
-  previewWatchers.set(id, {
-    owner,
-    close: () => {
-      offOwnerDestroyed()
-
-      if (timer) {
-        clearTimeout(timer)
-      }
-
-      watcher.close()
-    }
-  })
-
-  return { id, path: filePath }
-}
-
-function stopPreviewFileWatch(id) {
-  const watcher = previewWatchers.get(id)
-
-  if (!watcher) {
-    return false
-  }
-
-  watcher.close()
-  previewWatchers.delete(id)
-
-  return true
-}
-
-function closePreviewWatchers() {
-  for (const id of previewWatchers.keys()) {
-    stopPreviewFileWatch(id)
-  }
-}
 
 function requestOptionsWithHeaders(options: any = {}, headers = {}) {
   return {
@@ -6344,68 +5805,6 @@ function requestOptionsWithHeaders(options: any = {}, headers = {}) {
       ...(options.headers || {})
     }
   }
-}
-
-/** Watch a DIRECTORY for entry churn (folders appearing/vanishing) — the
- *  disk-plugin door's "new plugin folder" signal, replacing the renderer's 5s
- *  readdir poll. Same registry + change channel as the preview file watchers
- *  (the renderer reconciles on any tick; per-file edits stay on their own
- *  watches), so stopPreviewFileWatch/closePreviewWatchers manage these too. */
-function watchDirectory(owner, rawDir) {
-  const watchDir = path.resolve(String(rawDir || ''))
-
-  if (!fs.existsSync(watchDir) || !fs.statSync(watchDir).isDirectory()) {
-    throw new Error(`Not a directory: ${watchDir}`)
-  }
-
-  const id = crypto.randomBytes(12).toString('base64url')
-  let timer = null
-
-  // Same proactive teardown as a file watch: a closed window's directory
-  // watch must not keep polling the disk-plugin door until quit.
-  const offOwnerDestroyed = onPreviewWatchOwnerDestroyed(owner, () => stopPreviewFileWatch(id))
-
-  const emit = () => {
-    sendPreviewFileChangedToOwner(owner, { id, path: watchDir, url: pathToFileURL(watchDir).toString() }, () =>
-      stopPreviewFileWatch(id)
-    )
-  }
-
-  // A win32 event storm here pinned a core at 100% (#118974): the breaker
-  // closes the raw watch and falls back to the readdir poll it replaced.
-  const watcher = guardedWatch({
-    platform: process.platform,
-    watch: listener => fs.watch(watchDir, listener),
-    onEvent: () => {
-      if (timer) {
-        clearTimeout(timer)
-      }
-
-      timer = setTimeout(() => {
-        timer = null
-        emit()
-      }, PREVIEW_WATCH_DEBOUNCE_MS)
-    },
-    snapshot: () => fs.readdirSync(watchDir).sort().join('\0'),
-    onPollChange: emit,
-    onTrip: ({ events, windowMs }) =>
-      console.warn(`[hermes] fs.watch storm on ${watchDir} (${events} events within ${windowMs}ms); polling instead`)
-  })
-
-  previewWatchers.set(id, {
-    owner,
-    close: () => {
-      offOwnerDestroyed()
-
-      if (timer) {
-        clearTimeout(timer)
-      }
-
-      watcher.close()
-    }
-  })
-
-  return { id, path: watchDir }
 }
 
 // Best-effort read of a gateway's advertised auth providers, cached per base
@@ -17846,156 +17245,7 @@ const nativeNotifications = registerNativeNotifications({
   focusWindow
 })
 
-// Data-URL file load cap (composer attach + local previews). Main owns the
-// persisted MB value so every IPC read honours Settings → Chat without the
-// renderer having to pass maxBytes on each call. Default is 16 MB; clamp
-// lives in hardening.ts.
-const DATA_URL_READ_MAX_CONFIG_PATH = path.join(app.getPath('userData'), 'data-url-read-max.json')
-
-function readPersistedDataUrlReadMaxMb() {
-  try {
-    return clampDataUrlReadMaxMb(JSON.parse(fs.readFileSync(DATA_URL_READ_MAX_CONFIG_PATH, 'utf8')).maxMb)
-  } catch {
-    return DATA_URL_READ_DEFAULT_MAX_MB
-  }
-}
-
-let dataUrlReadMaxMb = readPersistedDataUrlReadMaxMb()
-
-function persistDataUrlReadMaxMb(maxMb) {
-  const next = clampDataUrlReadMaxMb(maxMb)
-  dataUrlReadMaxMb = next
-
-  try {
-    fs.mkdirSync(path.dirname(DATA_URL_READ_MAX_CONFIG_PATH), { recursive: true })
-    fs.writeFileSync(DATA_URL_READ_MAX_CONFIG_PATH, JSON.stringify({ maxMb: next }, null, 2), 'utf8')
-  } catch (error) {
-    rememberLog(`[data-url-read-max] write failed: ${error.message}`)
-  }
-
-  return next
-}
-
-ipcMain.handle('hermes:data-url-read-max:get', () => ({
-  maxMb: dataUrlReadMaxMb,
-  // Keep the default bytes constant visible for tests / diagnostics.
-  defaultMaxMb: DATA_URL_READ_DEFAULT_MAX_MB,
-  maxBytes: dataUrlReadMaxBytesFromMb(dataUrlReadMaxMb)
-}))
-
-ipcMain.handle('hermes:data-url-read-max:set', (_event, maxMb) => {
-  const next = persistDataUrlReadMaxMb(maxMb)
-
-  return {
-    maxMb: next,
-    defaultMaxMb: DATA_URL_READ_DEFAULT_MAX_MB,
-    maxBytes: dataUrlReadMaxBytesFromMb(next)
-  }
-})
-
-ipcMain.handle('hermes:readFileDataUrl', async (_event, filePath) => {
-  // Backend-reported paths are WSL/POSIX (`/home/...`, `/mnt/c/...`); on a
-  // Windows host bridge them to a UNC/drive form, same as directory reads.
-  const bridgedPath = resolveIpcFileReadPath(filePath)
-
-  try {
-    return await readFileDataUrlForIpc(bridgedPath, {
-      maxBytes: dataUrlReadMaxBytesFromMb(dataUrlReadMaxMb),
-      mimeType: mimeTypeForPath(resolveRequestedPathForIpc(bridgedPath, { purpose: 'File preview' })),
-      purpose: 'File preview'
-    })
-  } catch (error) {
-    if (isMissingFileError(error)) {
-      return missingFileResult(filePath, error)
-    }
-
-    throw error
-  }
-})
-
-// Remote attachment transfer is independent of the preview / Settings path.
-// Keep a finite cap so Electron + base64 memory stays bounded while archives
-// can exceed the default 16 MiB preview ceiling (and still fit the gateway
-// WebSocket frame limit after base64 expansion).
-ipcMain.handle('hermes:readFileDataUrlForAttach', async (_event, filePath) => {
-  const bridgedPath = resolveIpcFileReadPath(filePath)
-
-  try {
-    return await readFileDataUrlForIpc(bridgedPath, {
-      maxBytes: ATTACHMENT_UPLOAD_DEFAULT_MAX_BYTES,
-      mimeType: mimeTypeForPath(resolveRequestedPathForIpc(bridgedPath, { purpose: 'Attachment upload' })),
-      purpose: 'Attachment upload'
-    })
-  } catch (error) {
-    if (isMissingFileError(error)) {
-      return missingFileResult(filePath, error)
-    }
-
-    throw error
-  }
-})
-
-ipcMain.handle('hermes:readFileText', async (_event, filePath) => {
-  try {
-    const { resolvedPath, stat } = await resolveReadableFileForIpc(resolveIpcFileReadPath(filePath), {
-      maxBytes: TEXT_PREVIEW_SOURCE_MAX_BYTES,
-      purpose: 'Text preview'
-    })
-
-    const ext = path.extname(resolvedPath).toLowerCase()
-    const handle = await fs.promises.open(resolvedPath, 'r')
-    const bytesToRead = Math.min(stat.size, TEXT_PREVIEW_MAX_BYTES)
-
-    try {
-      const buffer = Buffer.alloc(bytesToRead)
-      const { bytesRead } = await handle.read(buffer, 0, bytesToRead, 0)
-
-      return {
-        binary: looksBinary(buffer.subarray(0, Math.min(bytesRead, 4096))),
-        byteSize: stat.size,
-        language: PREVIEW_LANGUAGE_BY_EXT[ext] || 'text',
-        mimeType: mimeTypeForPath(resolvedPath),
-        path: resolvedPath,
-        text: buffer.subarray(0, bytesRead).toString('utf8'),
-        truncated: stat.size > TEXT_PREVIEW_MAX_BYTES
-      }
-    } finally {
-      await handle.close()
-    }
-  } catch (error) {
-    // A preview probing a file that is gone (deleted, moved, or cleared from
-    // /tmp since the tab/transcript reference was written) is an expected
-    // outcome. Return a structured error instead of rejecting — Electron logs
-    // every rejected handler with a stack trace even though the renderer shows
-    // "preview unavailable" either way.
-    if (isMissingFileError(error)) {
-      return missingFileResult(filePath, error)
-    }
-
-    throw error
-  }
-})
-
-// Runtime desktop plugins load their FULL source through this door.
-// `hermes:readFileText` is the *preview* read and silently truncates at
-// TEXT_PREVIEW_MAX_BYTES (512 KiB) — for a plugin that means evaluating half a
-// file. Dedicated generous cap, full read, and a hard EFBIG (via maxBytes)
-// instead of truncation when the source exceeds it.
-const PLUGIN_SOURCE_MAX_BYTES = 16 * 1024 * 1024
-
-ipcMain.handle('hermes:readPluginSource', async (_event: unknown, filePath: unknown) => {
-  const { resolvedPath, stat } = await resolveReadableFileForIpc(filePath, {
-    maxBytes: PLUGIN_SOURCE_MAX_BYTES,
-    purpose: 'Plugin source'
-  })
-
-  return {
-    byteSize: stat.size,
-    path: resolvedPath,
-    text: await fs.promises.readFile(resolvedPath, 'utf8'),
-    truncated: false
-  }
-})
+registerPreviewFileReadIpc({ rememberLog })
 
 ipcMain.handle('hermes:selectPaths', async (_event, options: any = {}) => {
   const properties = selectPathsDialogProperties(options || {})
@@ -18060,7 +17310,7 @@ ipcMain.handle('hermes:readClipboard', () => clipboard.readText())
 
 ipcMain.handle('hermes:saveGatewayFile', (_event, payload) => saveGatewayFile(payload))
 
-ipcMain.handle('hermes:saveImageFromUrl', (_event, url) => saveImageFromUrl(String(url || '')))
+ipcMain.handle('hermes:saveImageFromUrl', (_event, url) => saveImageFromUrl(String(url || ''), mainWindow))
 
 // The custom context menu's edit verbs. They act on the SENDER's focused
 // element, so the renderer restores focus to the editable before invoking.
@@ -18161,6 +17411,13 @@ ipcMain.handle('hermes:saveClipboardImage', async () => {
   }
 
   return ''
+})
+
+const normalizePreviewTarget = createPreviewTargetResolver({
+  hermesHome: HERMES_HOME,
+  resolveHermesCwd,
+  fileExists,
+  directoryExists
 })
 
 ipcMain.handle('hermes:normalizePreviewTarget', (_event, target, baseDir) =>
