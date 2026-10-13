@@ -1,4 +1,4 @@
-"""Relay-side accumulator for the chat_completions streaming wire.
+"""Relay stream emitters and accumulator for the chat_completions streaming wire.
 
 Relay invokes its collector for every post-intercept chunk and then its finalizer as soon
 as the provider stream ends — concurrently with Hermes' consumer thread, which may not have
@@ -8,6 +8,8 @@ collector-observed state only, never from the consumer loop's closures. Sibling 
 """
 
 from __future__ import annotations
+
+import contextlib
 
 from types import SimpleNamespace
 from typing import Any
@@ -80,3 +82,39 @@ class RelayChatAccumulator:
         # "stop" also covers Nous Portal ``lastOne`` usage frames, which carry no finish_reason.
         return {"model": self._model, "usage": self._usage,
             "choices": [{"message": message, "finish_reason": self._finish_reason or "stop"}]}
+
+
+def _stream_final_text(response) -> str:
+    with contextlib.suppress(Exception):
+        choices = getattr(response, "choices", None)
+        first_choice = choices[0] if isinstance(choices, (list, tuple)) and choices else None
+        content = getattr(getattr(first_choice, "message", None), "content", None)
+        if isinstance(content, str):
+            return content
+    with contextlib.suppress(Exception):
+        content = getattr(response, "content", None)
+        if isinstance(content, str):
+            return content
+        if isinstance(content, list):
+            return "".join(t for t in (getattr(part, "text", None) for part in content) if isinstance(t, str))
+    return ""
+
+
+def _with_stream_emitters(agent, run):
+    """Bracket ``run()`` with the agent's ``_emit_stream_start`` / ``_emit_stream_end``
+    hooks when present (end carries the final text on success, the error string on
+    failure) and re-raise."""
+    start = getattr(agent, "_emit_stream_start", None)
+    if start is not None:
+        start()
+    try:
+        response = run()
+    except Exception as exc:
+        end = getattr(agent, "_emit_stream_end", None)
+        if end is not None:
+            end(final_text="", finished=False, error=str(exc))
+        raise
+    end = getattr(agent, "_emit_stream_end", None)
+    if end is not None:
+        end(final_text=_stream_final_text(response), finished=True, error=None)
+    return response

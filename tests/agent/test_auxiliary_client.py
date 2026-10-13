@@ -9,6 +9,7 @@ from unittest.mock import patch, MagicMock, AsyncMock
 
 import pytest
 
+from agent.auxiliary_wire import _unwrap_data_envelope
 from agent.auxiliary_client import (
     _NOUS_MODEL,
     CodexAuxiliaryClient,
@@ -36,7 +37,6 @@ from agent.auxiliary_client import (
     _resolve_xai_oauth_for_aux,
     _CodexCompletionsAdapter,
     _pool_runtime_base_url,
-    _unwrap_data_envelope,
 )
 
 

@@ -59,3 +59,11 @@ def _guard_section_overwrite(key: str, value: Any, user_config: dict[str, Any], 
         f"    hermes config set --force {key} {value!r}"]
     print("\n".join(err), file=sys.stderr)
     sys.exit(1)
+
+
+def _default_value_for_key(dotted_key: str):
+    """Return the declared leaf default (None for dicts or missing keys)."""
+    from hermes_cli.config import DEFAULT_CONFIG, cfg_get, _split_key_path
+
+    node = cfg_get(DEFAULT_CONFIG, *_split_key_path(dotted_key))
+    return None if isinstance(node, dict) else node

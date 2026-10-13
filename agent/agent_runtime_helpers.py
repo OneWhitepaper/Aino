@@ -5,6 +5,7 @@ Each function takes the parent ``AIAgent`` as ``agent`` except the stateless mes
 """
 
 from __future__ import annotations
+
 import contextlib
 import copy
 import json
@@ -16,6 +17,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 from hermes_cli.timeouts import get_provider_request_timeout
+from agent.agent_runtime_helpers_dead_connections import _shutdown_socket
 from agent.message_sanitization import (
     _FULL_ARGS_LOG_BOUND, coalesce_tool_call_id, coerce_tool_name, tool_call_id_variants, tool_result_id_variants
 )
@@ -3798,23 +3800,6 @@ def apply_pending_steer_to_tool_results(agent, messages: list, num_tool_msgs: in
         "Delivered /steer to agent after tool batch (%d chars) as new user message: %s", len(steer_text),
         steer_text[:120] + ("..." if len(steer_text) > 120 else ""),
     )
-
-
-def _shutdown_socket(sock: Any) -> None:
-    """``shutdown(SHUT_RDWR)`` WITHOUT closing the FD. ``close()`` from a non-owner thread is
-    unsafe: the SSL BIO caches the raw FD, the kernel recycles it, and a flushed TLS record lands
-    in the wrong file (once clobbered a SQLite header). ``shutdown()`` is FD-safe from any thread.
-    Already shut down / not connected / FD invalid are all benign."""
-    import socket as _socket
-    try:
-        # Clear a blocking timeout so a hung SSL_read notices the shutdown. Still no close().
-        settimeout = getattr(sock, "settimeout", None)
-        if callable(settimeout):
-            with contextlib.suppress(OSError):
-                settimeout(0)
-        sock.shutdown(_socket.SHUT_RDWR)
-    except OSError:
-        pass
 
 
 def force_close_tcp_sockets(client: Any) -> int:

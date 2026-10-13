@@ -589,7 +589,9 @@ def ensure_hermes_home():
 
 # ---- Config loading/saving ----
 
-from hermes_cli.config_defaults import DEFAULT_CONFIG, OPTIONAL_ENV_VARS
+from hermes_cli.config_defaults import DEFAULT_CONFIG
+from hermes_cli.config_section_guard import _default_value_for_key
+from hermes_cli.config_env_defaults import OPTIONAL_ENV_VARS
 from hermes_cli.config_providers import (
     _API_MODE_ALIASES, _CAMEL_ALIASES, _KNOWN_PROVIDER_KEYS, _PROVIDER_NORMALIZE_WARNED,
     _canonical_api_mode, _coerce_ssl_verify, _custom_provider_entry_to_provider_config,
@@ -3189,12 +3191,6 @@ def edit_config():
 
     print(f"Opening {config_path} in {editor}...")
     subprocess.run([editor, str(config_path)], check=False)
-
-
-def _default_value_for_key(dotted_key: str):
-    """Return the leaf value declared for *dotted_key* in ``DEFAULT_CONFIG`` (None for dicts/misses)."""
-    node = cfg_get(DEFAULT_CONFIG, *_split_key_path(dotted_key))
-    return None if isinstance(node, dict) else node
 
 
 # Top-level keys that accept arbitrary user-supplied child keys (schema declares the dict, the

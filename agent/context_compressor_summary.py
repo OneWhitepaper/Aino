@@ -1,4 +1,4 @@
-"""Summary-hook dispatch and cancellation rollback for context compression."""
+"""Summary rendering, hook dispatch, and cancellation rollback for context compression."""
 
 from __future__ import annotations
 
@@ -101,3 +101,47 @@ class SummaryDispatchMixin:
                 self._previous_summary = scan.previous_summary_before
                 self._summary_has_user_turn = scan.has_user_turn_before
             raise
+
+    def _render_tool_call_for_summary(self, tc: Any) -> str:
+        """``  name(args)`` line for the summarizer; object-shaped calls render as ``name(...)``."""
+        from agent.context_compressor import _redact_compaction_text
+        if not isinstance(tc, dict):
+            fn = getattr(tc, "function", None)
+            return f"  {getattr(fn, 'name', '?') if fn else '?'}(...)"
+        fn = tc.get("function", {})
+        # Redact the FULL args before cutting: delimited secrets (PEM BEGIN…END) only match whole, so a
+        # pre-redaction cut would leave a key body straddling the cut unredacted in the persisted summary.
+        args = _redact_compaction_text(fn.get("arguments", ""))
+        if len(args) > self._TOOL_ARGS_MAX:
+            args = args[:self._TOOL_ARGS_HEAD] + "..."
+        return f"  {fn.get('name', '?')}({args})"
+
+    def _serialize_records_for_summary(self, turns: list[dict[str, Any]]) -> list[str]:
+        """Serialize turns into a list of labeled, redacted records for the summarizer."""
+        # Lazy import: agent_runtime_helpers pulls heavy transitive imports.
+        from agent.context_compressor import _summary_part_text, _redact_compaction_text, _MEDIA_DIRECTIVE_RE, elide_middle
+        from agent.agent_runtime_helpers import strip_think_blocks
+        parts = []
+        for msg in turns:
+            role = msg.get("role", "unknown")
+            content = msg.get("content")
+            if isinstance(content, list):
+                content = "\n".join(_summary_part_text(part) for part in content if isinstance(part, (dict, str)))
+            content = _redact_compaction_text(content or "")
+            content = _MEDIA_DIRECTIVE_RE.sub("[media attachment]", content)
+            # Strip inline <think>-style blocks: scratch work wastes summarizer context and risks being kept as fact.
+            if role == "assistant" and content:
+                content = strip_think_blocks(None, content)
+            if len(content) > self._CONTENT_MAX:
+                content = elide_middle(content, self._CONTENT_HEAD, self._CONTENT_TAIL)
+            if role == "tool":
+                parts.append(f"[TOOL RESULT {msg.get('tool_call_id', '')}]: {content}")
+                continue
+            if role == "assistant" and msg.get("tool_calls", []):
+                content += "\n[Tool calls:\n" + "\n".join(map(self._render_tool_call_for_summary, msg["tool_calls"])) + "\n]"
+            parts.append(f"[{role.upper()}]: {content}")
+        return parts
+
+    def _serialize_for_summary(self, turns: list[dict[str, Any]]) -> str:
+        """Serialize turns into labeled, redacted text for the summarizer."""
+        return "\n\n".join(self._serialize_records_for_summary(turns))

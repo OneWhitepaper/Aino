@@ -109,7 +109,7 @@ class ChatStreamWatchdog:
                 return
             self.fired = True
             if self._sock is not None:
-                from agent.agent_runtime_helpers import _shutdown_socket
+                from agent.agent_runtime_helpers_dead_connections import _shutdown_socket
                 _shutdown_socket(self._sock)
 
     def finish(self) -> None:

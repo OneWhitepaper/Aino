@@ -31,6 +31,7 @@ from agent.error_classifier import (
     _extract_status_code)
 from agent.sdk_transform_bypass import bypass_chat_sdk_request_transform
 from agent.errors import EmptyStreamError
+from agent.chat_completion_helpers_relay import _with_stream_emitters
 from agent.chat_completion_stream_monitor import StreamingWaitMonitor
 from agent.transports.chat_completions import is_router_timeout_shim, router_timeout_shim_may_follow
 from agent.fast_mode import effective_request_overrides
@@ -2510,42 +2511,6 @@ def _relay_stream_metadata(agent, api_mode: str) -> dict:
         "call_role": call_role}
 
 
-def _stream_final_text(response) -> str:
-    with contextlib.suppress(Exception):
-        choices = getattr(response, "choices", None)
-        first_choice = choices[0] if isinstance(choices, (list, tuple)) and choices else None
-        content = getattr(getattr(first_choice, "message", None), "content", None)
-        if isinstance(content, str):
-            return content
-    with contextlib.suppress(Exception):
-        content = getattr(response, "content", None)
-        if isinstance(content, str):
-            return content
-        if isinstance(content, list):
-            return "".join(t for t in (getattr(part, "text", None) for part in content) if isinstance(t, str))
-    return ""
-
-
-def _with_stream_emitters(agent, run):
-    """Bracket ``run()`` with the agent's ``_emit_stream_start`` / ``_emit_stream_end``
-    hooks when present (end carries the final text on success, the error string on
-    failure) and re-raise."""
-    start = getattr(agent, "_emit_stream_start", None)
-    if start is not None:
-        start()
-    try:
-        response = run()
-    except Exception as exc:
-        end = getattr(agent, "_emit_stream_end", None)
-        if end is not None:
-            end(final_text="", finished=False, error=str(exc))
-        raise
-    end = getattr(agent, "_emit_stream_end", None)
-    if end is not None:
-        end(final_text=_stream_final_text(response), finished=True, error=None)
-    return response
-
-
 def _stream_codex_passthrough(agent, api_kwargs: dict, on_first_delta):
     """Codex streams internally via _run_codex_stream (reached through
     _interruptible_api_call); park ``on_first_delta`` on the agent so it can pick
@@ -3802,7 +3767,8 @@ class _StreamingCall(StreamingWaitMonitor):
         if response is None or response is not self._attempt_stream_response:
             return
         try:
-            from agent.agent_runtime_helpers import _shutdown_socket, _socket_from_response
+            from agent.agent_runtime_helpers import _socket_from_response
+            from agent.agent_runtime_helpers_dead_connections import _shutdown_socket
             sock = _socket_from_response(response)
             if sock is not None:
                 _shutdown_socket(sock)

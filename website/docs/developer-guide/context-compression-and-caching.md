@@ -4,6 +4,8 @@ Hermes Agent uses a dual compression system and Anthropic prompt caching to
 manage context window usage efficiently across long conversations.
 
 Source files: `agent/context_engine.py` (ABC), `agent/context_compressor.py` (default engine),
+`agent/context_compressor_summary.py` (summary rendering and dispatch),
+`agent/conversation_compression_images.py` (rejected inline-image resizing),
 `agent/prompt_caching.py`, `gateway/run_turn.py` (session hygiene), `agent/compression_facade.py` (search for `_compress_context`)
 
 

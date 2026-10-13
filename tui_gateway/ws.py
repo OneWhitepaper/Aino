@@ -292,6 +292,16 @@ class _SendFailed(Exception):
     """Raised by handle_ws._reply when a reply could not be written: ends the read loop."""
 
 
+async def _detach_managed_transport(transport) -> None:
+    # Remove credentials before the first cancellable await. Transport
+    # shutdown (including ASGI task cancellation) cannot retain them.
+    from .managed_model_runtime import get_registry
+    managed = get_registry()
+    revoked = managed.detach_transport(transport)
+    if revoked:
+        await asyncio.shield(asyncio.to_thread(managed.interrupt_detached, revoked))
+
+
 async def handle_ws(ws: Any, *, auth_identity: dict | None = None, subprotocol: str | None = None) -> None:
     """Run one WebSocket session. Wire-compatible with ``tui_gateway.entry``. *auth_identity* is the server-minted
     ``{user_id, provider}`` recorded at WS-upgrade auth, stored as ``WSTransport.auth_identity`` (the only identity
@@ -445,13 +455,7 @@ async def handle_ws(ws: Any, *, auth_identity: dict | None = None, subprotocol: 
                 _log.error("ws dispatcher failed peer=%s", peer, exc_info=failure)
         reaped_sessions = detached_sessions = 0
         if transport is not None:
-            # Remove credentials before the first cancellable await. Transport
-            # shutdown (including ASGI task cancellation) cannot retain them.
-            from .managed_model_runtime import get_registry
-            managed = get_registry()
-            revoked = managed.detach_transport(transport)
-            if revoked:
-                await asyncio.shield(asyncio.to_thread(managed.interrupt_detached, revoked))
+            await _detach_managed_transport(transport)
             server.unregister_live_transport(transport)
             # Owner-safely park browser controllers this transport registered (a same-identity reconnect may
             # deliver a terminal result for in-flight work). Offloaded: disconnect takes the controller's
