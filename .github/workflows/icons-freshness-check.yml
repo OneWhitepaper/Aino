@@ -47,3 +47,17 @@ jobs:
             echo "::error::Committed icons are stale. Run 'node scripts/generate-icons.mjs' and commit the result."
             exit 1
           fi
+
+      - name: Preserve runner renders when freshness fails
+        if: failure()
+        env:
+          HERMES_PAYLOAD_TAG: ''
+          HERMES_BUILD_COMMIT: ''
+        run: node scripts/generate-icons.mjs --out "$RUNNER_TEMP/icon-renders"
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: failure()
+        with:
+          name: icon-freshness-runner-renders
+          path: ${{ runner.temp }}/icon-renders
+          retention-days: 7

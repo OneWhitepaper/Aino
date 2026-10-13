@@ -66,14 +66,14 @@ jobs:
           bash scripts/run_tests.sh \
             tests/hermes_cli/test_venv_holder_windows_live.py \
             tests/hermes_cli/test_taskkill_identity_windows_live.py \
-            tests/hermes_cli/test_git_trampoline_windows_live.py \
-            tests/pm/test_held_entry_windows_live.py
+            tests/hermes_cli/test_git_trampoline_windows_live.py
 
-      - name: Run desktop runtime handoff live E2E
+      - name: Run PM runtime replacement and desktop handoff live E2E
         shell: bash
         run: |
           scripts/run_tests.sh \
-            tests/hermes_cli/test_update_runtime_windows_live.py \
+            tests/pm/test_held_entry_windows_live.py \
+            tests/scripts/desktop_update/test_desktop_update_runtime_unicode.py \
             -m platforms -v
 
       - name: Run Telegram CLOSE-WAIT reconnect live E2E (#87057)
