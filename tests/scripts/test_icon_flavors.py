@@ -28,6 +28,8 @@ def generate(tmp_path_factory):
     foreign.mkdir()
     (foreign / "sitecustomize.py").write_text("raise SystemExit('foreign interpreter path leaked')\n", encoding="utf-8")
     shutil.copytree(ROOT / "assets", source / "assets")
+    # Exercise the upstream vector renderer independently of Aino raster branding.
+    (source / "assets/aino-icon.png").unlink()
     from scripts.build.icon_environment import prepare_icon_environment
     python = prepare_icon_environment(ROOT, root / "runtime", root / "cache")
     node = shutil.which("node")
@@ -381,3 +383,38 @@ def test_msix_logos_resolve_every_slot_windows_draws(generate, monkeypatch):
         assert light.getpixel(edge)[:3] == plain.getpixel(edge)[:3] == light_plate == (255, 255, 255), size
         dark_plate = dark.getpixel(edge)
         assert dark_plate[3] == 255 and max(dark_plate[:3]) < 60, (size, dark_plate)
+
+
+def test_aino_raster_remains_the_desktop_source_across_generation(tmp_path):
+    """Regeneration must retain Aino art in native containers and channel variants."""
+    canonical = Image.open(ROOT / "assets/aino-icon.png").convert("RGBA")
+    outputs = []
+    for tag in ("", "v1.2.3+canary.20260911T010203Z"):
+        out = tmp_path / ("canary" if tag else "stable")
+        result = subprocess.run(
+            [sys.executable, "-I", str(ROOT / "scripts/generate_icons.py"),
+             "--source", str(ROOT), "--out", str(out)],
+            env={**os.environ, "HERMES_PAYLOAD_TAG": tag, "HERMES_BUILD_COMMIT": ""},
+            capture_output=True, text=True, check=False, timeout=180)
+        assert result.returncode == 0, result.stdout + result.stderr
+        outputs.append(out)
+    stable, canary = outputs
+    primary = Image.open(stable / "apps/desktop/assets/icon.png").convert("RGBA")
+    assert primary.getchannel("A").tobytes() == canonical.getchannel("A").tobytes()
+    diff = ImageChops.difference(primary, canonical).convert("RGB")
+    assert ImageChops.multiply(diff, canonical.getchannel("A").convert("RGB")).getbbox() is None
+    for extension in ("ico", "icns"):
+        image = Image.open(stable / f"apps/desktop/assets/icon.{extension}").convert("RGBA")
+        if extension == "ico":
+            # ICO's largest frame is rendered directly at 256px by resvg;
+            # ICNS starts with the 1024px render and uses Pillow for its mipmaps.
+            from scripts.generate_icons import build_art, render
+            _, desktop_art = build_art(ROOT)
+            expected = render(desktop_art.master, image.width)
+        else:
+            expected = primary.resize(image.size, Image.Resampling.LANCZOS)
+        assert ImageChops.difference(image, expected).getbbox() is None
+    flavored = Image.open(canary / "apps/desktop/assets/icon.png").convert("RGBA")
+    assert_same_geometry(primary, flavored)
+    assert primary.tobytes() != flavored.tobytes()
+    assert_unbranded_outputs(stable, canary)

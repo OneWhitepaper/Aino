@@ -194,7 +194,7 @@ def _merge_carrier_holds_target_text(carrier: dict, db_msg: dict) -> bool:
 
 
 def _restore_repaired_truncation_boundaries(session: dict, history: list, target_row_id: int):
-    """Recover physical user rows only when their repaired replay equals the live transcript.
+    """Restore physical rows; False refuses a divergent replay, None means no restoration needed.
 
     Provider alternation repair can merge a model-switch marker with the next user
     prompt, or an interrupted prompt with its follow-up. The merged row retains the
@@ -219,6 +219,8 @@ def _restore_repaired_truncation_boundaries(session: dict, history: list, target
         for live, stored in zip(history, replay)
     ):
         history[:] = durable
+        return True
+    return False
 
 
 def _coerce_truncate_int(rid, value, param_name="truncate_before_user_ordinal"):
@@ -396,7 +398,8 @@ def _resolve_truncation_ordinal(rid, sid, session, params, history):
     if target_row_id is not None or truncate_message_id is not None:
         if target_row_id is not None:
             param_name, target_repr = "truncate_before_row_id", target_row_id
-            _restore_repaired_truncation_boundaries(session, history, target_row_id)
+            if _restore_repaired_truncation_boundaries(session, history, target_row_id) is False:
+                return _stale()
             user_indices = _history_user_indices(history)
             found_match = _resolve_truncate_row_id(session, history, target_row_id)
             if len(found_match or ()) == 3:

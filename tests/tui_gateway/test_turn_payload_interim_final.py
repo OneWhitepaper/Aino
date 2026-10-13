@@ -20,7 +20,7 @@ def _turn(agent, text):
     return SimpleNamespace(
         result={"final_response": text}, agent=agent, terminal_callback=None,
         receipt_committed=True, receipt_attempted=False, marker_key="", error_retained=False,
-        error_detail="", prompt_text="ping",
+        error_detail="", prompt_text="ping", metrics_start=None,
     )
 
 
@@ -29,7 +29,7 @@ def _payload(monkeypatch, agent, text):
     monkeypatch.setattr(srv, "render_message", lambda _text, _cols: None)
     monkeypatch.setattr(srv, "_clear_inflight_turn", lambda _session: None)
     session = {"pending_title": None, "session_key": "k", "history_lock": contextlib.nullcontext(), "agent": agent}
-    payload, _, _ = srv._complete_turn_payload(session, _turn(agent, text), None, 80)
+    payload, _, _ = srv._complete_turn_payload(session, _turn(agent, text), None, 80, "sid")
     return payload
 
 

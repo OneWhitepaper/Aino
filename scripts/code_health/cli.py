@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import ast
 import json
+import re
 import subprocess
 import sys
 import time
@@ -67,6 +68,7 @@ def _parser() -> argparse.ArgumentParser:
     p.add_argument("--head", help="head commit or tree (default: the working tree, untracked included)")
     p.add_argument("--report", action="store_true", help="burn-down summary of the whole head tree")
     p.add_argument("--json", action="store_true", help="machine-readable findings")
+    p.add_argument("--accepted-upstream", help="reviewed full upstream commit SHA; retain inherited findings in the report")
     p.add_argument("--print-pins", action="store_true",
                    help="print the pinned ruff requirement (CI installs exactly this)")
     return p
@@ -87,7 +89,7 @@ def _skipped(why: str, as_json: bool) -> None:
 
 
 def run(repo: Path, base: str, head: str | None, as_json: bool = False,
-        switch_rev: str | None = None) -> int:
+        switch_rev: str | None = None, accepted_upstream: str | None = None) -> int:
     """Judge ``head`` against ``base``; the ENFORCEMENT switch is read from ``switch_rev``
     (default: the base), never from the head under test."""
     started = time.monotonic()
@@ -109,6 +111,8 @@ def run(repo: Path, base: str, head: str | None, as_json: bool = False,
     base_m = measurer.measure(base, base_paths)
     head_m = measurer.measure(head, head_paths)
     findings = compare(base_m, head_m, changes)
+    if accepted_upstream:
+        _classify_inherited(repo, base, head, accepted_upstream, measurer, findings)
     apply_allows(findings, head_m)
     blocking, advisory = verdict(findings)
     failed = bool(blocking) and mode == "blocking"
@@ -128,6 +132,34 @@ def run(repo: Path, base: str, head: str | None, as_json: bool = False,
     return 1 if failed else 0
 
 
+def _classify_inherited(repo, base, head, upstream, measurer, findings):
+    """Reuse the occurrence-aware ratchet; a new copy or worse metric still fails.
+
+    Both comparisons target the same head, so (path, rule, scope, line) identifies
+    the exact reported occurrence, including repeated occurrences in one scope.
+    Base findings remain in the output with the reviewed provenance attached.
+    """
+    if not re.fullmatch(r"[0-9a-f]{40}", upstream):
+        raise RuntimeError("--accepted-upstream requires a full 40-character commit SHA")
+    upstream = gitio.resolve_rev(repo, upstream)
+    tip = gitio.commit_or_none(repo, head or "HEAD")
+    if tip is None and head == gitio.resolve_tree(repo, "HEAD"):
+        tip = gitio.commit_or_none(repo, "HEAD")
+    if tip is None or gitio.git(repo, "merge-base", upstream, tip).strip() != upstream:
+        raise RuntimeError("accepted upstream must be an ancestor of the head commit")
+    # Once main contains the release, its own ratchet is authoritative again.
+    if gitio.git(repo, "merge-base", upstream, base).strip() == upstream:
+        return
+    changes = gitio.changed_files(repo, upstream, head)
+    old = measurer.measure(upstream, sorted({c.old for c in changes if c.old and in_scope(c.old)}))
+    new = measurer.measure(head, sorted({c.new for c in changes if c.new and in_scope(c.new)}))
+    regressions = compare(old, new, changes)
+    keys = {(f.path, f.rule, f.scope, f.line) for f in regressions}
+    for finding in findings:
+        if finding.rule != "MEASURE" and (finding.path, finding.rule, finding.scope, finding.line) not in keys:
+            finding.allowed_reason = f"inherited from reviewed upstream {upstream}; no regression against that revision"
+
+
 def main(argv: list[str] | None = None) -> int:
     args = _parser().parse_args(argv)
     repo = gitio.repo_root(Path.cwd())
@@ -139,13 +171,15 @@ def main(argv: list[str] | None = None) -> int:
         if args.report:
             return _report(repo, head)
         if args.base:  # CI: the base is the target branch tip, which also holds the switch
-            return run(repo, gitio.resolve_rev(repo, args.base), head, as_json=args.json)
+            return run(repo, gitio.resolve_rev(repo, args.base), head, as_json=args.json,
+                       accepted_upstream=args.accepted_upstream)
         # Locally the base is the merge-base, which lags main; the switch comes from the main tip
         # so a flip on main reaches a branch without a rebase. The head never supplies it.
         tip = gitio.commit_or_none(repo, args.head) if args.head else None
         base = gitio.default_base(repo, tip or "HEAD")
         switch_rev = gitio.commit_or_none(repo, "origin/main") or base
-        return run(repo, base, head, as_json=args.json, switch_rev=switch_rev)
+        return run(repo, base, head, as_json=args.json, switch_rev=switch_rev,
+                   accepted_upstream=args.accepted_upstream)
     except RuntimeError as exc:
         print(f"code health: {exc}", file=sys.stderr)
         return 2

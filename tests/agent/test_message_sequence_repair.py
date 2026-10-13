@@ -102,13 +102,8 @@ def test_repair_preserves_user_content_when_one_side_empty():
     assert messages == [{"role": "user", "content": "real message"}]
 
 
-def test_repair_marker_user_merge_keeps_plain_row_addressable():
-    """#94486: a display-marker user row (model-switch marker, persisted as
-    role=user on purpose per #48338) merging with the plain user row after it
-    must keep the pair addressable — the merged row drops the display
-    classification and carries the plain row's durable id, so rewind/submit
-    addressing (which indexes non-display user turns) can still resolve it.
-    """
+def test_repair_marker_keeps_plain_row_addressable():
+    """The persisted pivot and real prompt keep separate durable identities."""
     agent = _bare_agent()
     messages = [
         {"role": "assistant", "content": "reply"},
@@ -123,14 +118,13 @@ def test_repair_marker_user_merge_keeps_plain_row_addressable():
 
     repairs = AIAgent._repair_message_sequence(agent, messages)
 
-    assert repairs == 1
-    assert len(messages) == 2
-    merged = messages[1]
-    assert merged["role"] == "user"
-    assert not merged.get("display_kind")
-    assert merged["_row_id"] == 12135
-    assert "the user's real prompt" in merged["content"]
-    assert "[System:" in merged["content"]
+    assert repairs == 0
+    assert len(messages) == 3
+    assert messages[1]["display_kind"] == "model_switch"
+    assert messages[1]["_row_id"] == 12134
+    assert messages[2] == {
+        "role": "user", "_row_id": 12135, "content": "the user's real prompt",
+    }
 
 
 def test_repair_plain_user_then_marker_stays_addressable():

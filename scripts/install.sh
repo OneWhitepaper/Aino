@@ -537,9 +537,9 @@ stage_repository() {
     fi
     if [ -d "$INSTALL_DIR/.git" ]; then
         log "Updating $INSTALL_DIR ($BRANCH)"
-        # An explicit HERMES_REPO_URL names the source for reruns too, not
+        # An explicit repository override names the source for reruns too, not
         # just the first clone.
-        if [ -n "${HERMES_REPO_URL:-}" ]; then
+        if [ -n "${HERMES_INSTALL_REPOSITORY_URL:-${HERMES_REPO_URL:-}}" ]; then
             git -C "$INSTALL_DIR" remote set-url origin "$REPO_URL" || fail "cannot point origin at $REPO_URL" git_fetch_failed
         fi
         # Explicit refspec: a tag-pinned --single-branch checkout from an older

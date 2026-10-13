@@ -80,6 +80,36 @@ def _kill(identity):
         proc.wait(timeout=10)
 
 
+def _assert_threads_suspended(pid, api):
+    """Read the kernel suspend count without letting a created thread run.
+
+    psutil's scheduler-state snapshot can still report a CREATE_SUSPENDED
+    thread as initialized/running before it reaches the suspended wait state.
+    SuspendThread returns the previous count; undo only our own increment.
+    """
+    from ctypes import wintypes
+
+    api.OpenThread.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.DWORD]
+    api.OpenThread.restype = wintypes.HANDLE
+    for name in ('SuspendThread', 'ResumeThread'):
+        getattr(api, name).argtypes = [wintypes.HANDLE]
+        getattr(api, name).restype = wintypes.DWORD
+    threads = psutil.Process(pid).threads()
+    assert threads
+    for thread in threads:
+        handle = api.OpenThread(0x0002, False, thread.id)  # THREAD_SUSPEND_RESUME
+        assert handle
+        try:
+            previous = api.SuspendThread(handle)
+            assert previous != 0xFFFFFFFF
+            try:
+                assert previous > 0, 'child thread was not suspended before job assignment'
+            finally:
+                assert api.ResumeThread(handle) == previous + 1
+        finally:
+            assert api.CloseHandle(handle)
+
+
 @pytest.mark.platforms("windows")
 @pytest.mark.parametrize('stop_mode', ['graceful', 'abrupt'])
 @pytest.mark.parametrize('nested', [False, True])
@@ -174,7 +204,7 @@ def test_failed_setup_never_runs_child_and_releases_handles(tmp_path, monkeypatc
 
     def assign(job, proc):
         children.append(proc)
-        assert psutil.Process(proc.pid).status() == psutil.STATUS_STOPPED
+        _assert_threads_suspended(proc.pid, job._api)
         assert not marker.exists()
         # Query the actual kernel object, not implementation source/constants.
         limits = processes._ExtendedLimits()

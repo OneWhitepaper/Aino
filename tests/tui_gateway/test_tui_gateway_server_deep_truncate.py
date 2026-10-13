@@ -178,10 +178,11 @@ def test_prompt_submit_empty_truncation_allowed_with_confirm(monkeypatch):
         assert seen["prompt"] == "first"
         assert seen["history"] == []
         assert replaced == [("session-key", [])]
-        assert server._sessions["confirm-empty-sid"]["history"] == [
-            {"role": "user", "content": "first"},
-            {"role": "assistant", "content": "regenerated"},
+        regenerated = server._sessions["confirm-empty-sid"]["history"]
+        assert [(row["role"], row["content"]) for row in regenerated] == [
+            ("user", "first"), ("assistant", "regenerated"),
         ]
+        assert regenerated[-1]["display_metadata"]["turn_metrics"]["duration_s"] >= 0
     finally:
         server._sessions.pop("confirm-empty-sid", None)
 

@@ -72,6 +72,7 @@ BASE_URLS = {
     "azure-foundry": "https://example.openai.azure.com/openai/v1",
     "openrouter": "https://openrouter.ai/api/v1",
     "custom": "http://127.0.0.1:8080/v1",
+    "aino": "https://models.aino.example/v1",
 }
 
 # Agents built from a base_url alone (``AIAgent(base_url=..., api_key=...)``: ``run_agent.py``
@@ -148,10 +149,17 @@ def _wire(provider: str, model: str, base_url: str) -> dict[str, Any]:
     from agent.turn_context import _PER_TURN_RESET_STATE
     from run_agent import AIAgent
 
+    api_key = "sk-test-0000000000"
+    if provider == "aino":
+        from agent.auxiliary_billing_scope import ManagedCredential
+        api_key = ManagedCredential(
+            lambda: "sk-test-0000000000", "wire-user", "wire-snapshot", model, base_url,
+            "chat_completions", False,
+        )
     with patch("model_tools.get_tool_definitions", return_value=TOOLS), \
          patch("model_tools.check_toolset_requirements", return_value={}), \
          patch("agent.process_bootstrap.OpenAI"):
-        agent = AIAgent(provider=provider, model=model, base_url=base_url, api_key="sk-test-0000000000",
+        agent = AIAgent(provider=provider, model=model, base_url=base_url, api_key=api_key,
                         quiet_mode=True, skip_context_files=True, skip_memory=True, session_id="wire-snapshot")
     for name, value in _PER_TURN_RESET_STATE:
         setattr(agent, name, value)

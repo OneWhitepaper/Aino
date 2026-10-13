@@ -26,7 +26,7 @@ def _patch_agent_bootstrap(monkeypatch):
     # Stream tests use synthetic tokens; context discovery must not probe the live catalog.
     monkeypatch.setattr(
         "agent.model_metadata._fetch_codex_oauth_context_lengths_with_source",
-        lambda _access_token: ({}, False),
+        lambda _access_token, base_url="": ({}, False),
     )
     monkeypatch.setattr(
         "model_tools.get_tool_definitions",

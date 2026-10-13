@@ -25,7 +25,19 @@ jobs:
         id: check-emails
         run: |
           # Get the merge base between this PR and main
-          MERGE_BASE=$(git merge-base origin/main HEAD)
+          MERGE_BASE=$(git merge-base origin/main HEAD) || exit 1
+
+          # Importing a release preserves its original commit authors. Some
+          # historical bot/local/example emails have no GitHub account, and
+          # inventing a login would misattribute their work. Only commits
+          # already in this reviewed release may retain their original names.
+          UPSTREAM=71d34bad1045610252eda02ee79549436896e784
+          IMPORTING_UPSTREAM=false
+          UNIMPORTED_EMAILS=""
+          if git merge-base --is-ancestor "$UPSTREAM" HEAD && ! git merge-base --is-ancestor "$UPSTREAM" "$MERGE_BASE"; then
+            IMPORTING_UPSTREAM=true
+            UNIMPORTED_EMAILS=$(git log "${MERGE_BASE}..HEAD" --not "$UPSTREAM" --format='%ae' --no-merges) || exit 1
+          fi
 
           # Find any new author emails in this PR's commits
           NEW_EMAILS=$(git log ${MERGE_BASE}..HEAD --format='%ae' --no-merges | sort -u)
@@ -57,6 +69,11 @@ jobs:
             fi
 
             if ! grep -qF "\"${email}\"" scripts/releases/authors_legacy.py 2>/dev/null; then
+              if [ "$IMPORTING_UPSTREAM" = true ] && ! grep -Fxq "$email" <<< "$UNIMPORTED_EMAILS"; then
+                echo "Preserved upstream Git authorship (no verified GitHub mapping): $email"
+                git log "${MERGE_BASE}..${UPSTREAM}" --format='%ae%x09%an' --no-merges | awk -F '\t' -v email="$email" '$1 == email { print "  " $2 }' | sort -u
+                continue
+              fi
               AUTHOR=$(git log --author="$email" --format='%an' -1)
               MISSING="${MISSING}\n  ${email} (${AUTHOR})"
             fi
@@ -91,7 +108,7 @@ jobs:
 
             exit 1
           else
-            echo "✅ All contributor emails are mapped."
+            echo "✅ New contributor emails are mapped; imported unmapped authors retain original Git credit."
             echo "review_status=[]" >> "$GITHUB_OUTPUT"
             echo "review_status=[]" > review-status.json
           fi

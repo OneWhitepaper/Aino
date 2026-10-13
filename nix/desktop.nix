@@ -92,6 +92,8 @@ let
     ];
     pname = "hermes-desktop-renderer";
 
+    buildInputs = lib.optionals stdenv.hostPlatform.isLinux [ pkgs.libx11 pkgs.libxi ];
+
     doCheck = true;
 
     buildPhase = ''
@@ -198,6 +200,8 @@ stdenv.mkDerivation {
     install -m 0644 ${generatedIcons}/apps/desktop/assets/icon.png \
       $out/share/icons/hicolor/1024x1024/apps/hermes.png
     export PYTHONPATH=$(mktemp -d)
+    mkdir -p "$PYTHONPATH/hermes_cli"
+    cp ${../hermes_cli/desktop_identity.py} "$PYTHONPATH/hermes_cli/desktop_identity.py"
     cp ${../hermes_cli/linux_desktop_entry.py} "$PYTHONPATH/linux_desktop_entry.py"
     export DESKTOP_EXEC="$out/bin/hermes-desktop"
     export DESKTOP_ICON="$out/share/icons/hicolor/1024x1024/apps/hermes.png"

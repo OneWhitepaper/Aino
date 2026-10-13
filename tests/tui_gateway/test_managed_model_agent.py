@@ -45,6 +45,20 @@ def managed_gateway(tmp_path, monkeypatch):
         def log_message(self, *args):
             pass
 
+        def do_GET(self):
+            # Model discovery uses the same real endpoint as inference. Supplying
+            # metadata keeps cancellation focused on the held inference request.
+            if self.path != "/v1/models":
+                self.send_error(404)
+                return
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            self.wfile.write(json.dumps({"data": [
+                {"id": model, "context_length": 256000}
+                for model in ("fixture-upstream", "fixture-other", "fixture-byok-model")
+            ]}).encode())
+
         def do_POST(self):
             body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
             if self.path == "/api/show":
@@ -352,6 +366,9 @@ def test_cancellation_does_not_replay_a_paid_platform_request(managed_gateway):
     f = managed_gateway
     sid = f.create()["session_id"]
     f.bind(sid)
+    session = srv._sessions[sid]
+    assert session["agent_ready"].wait(timeout=30), "managed agent build did not finish"
+    assert not session.get("agent_error")
     f.hold.set()
     result(f.call("prompt.submit", session_id=sid, text="Read sample.txt"))
     assert f.entered.wait(timeout=10)

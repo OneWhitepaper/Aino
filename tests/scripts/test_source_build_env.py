@@ -86,6 +86,8 @@ if source_build_env "$PROBE_PYTHON" -I -S -c 'raise SystemExit(23)'; then exit 9
     elif shell == "node":
         env["HERMES_DESKTOP_USER_DATA_DIR"] = str(tmp_path / "user-data")
         env["HERMES_PYTHON_SRC_ROOT"] = str(repo)
+        env.update(GIT_CONFIG_COUNT="1", GIT_CONFIG_KEY_0="include.path",
+                   GIT_CONFIG_VALUE_0=str(tmp_path / "gitconfig"))
         command = [shell, "--input-type=module", "-e", '''
 import { pathToFileURL } from 'node:url';
 import { spawnSync } from 'node:child_process';

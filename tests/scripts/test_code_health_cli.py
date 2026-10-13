@@ -128,6 +128,35 @@ def _ratchet_repo(tmp_path: Path, switch: str | None = None) -> tuple[Path, str]
     return repo, _git(repo, "rev-parse", "HEAD")
 
 
+def test_accepted_upstream_preserves_report_but_blocks_new_occurrences_and_growth(tmp_path, capsys):
+    repo = _engine_repo(tmp_path)
+    base = _git(repo, "rev-parse", "HEAD")
+    upstream = _commit(repo, {"pkg/legacy.py": _LEGACY, "pkg/boundary.py": _SWALLOW})
+    assert cli.run(repo, base, None, as_json=True, accepted_upstream=upstream) == 0
+    inherited = json.loads(capsys.readouterr().out)
+    assert inherited and all(upstream in f["allowed_reason"] for f in inherited)
+    _commit(repo, {"pkg/legacy.py": _GROWN, "pkg/copied.py": _SWALLOW})
+    assert cli.run(repo, base, None, as_json=True, accepted_upstream=upstream) == 1
+    report = json.loads(capsys.readouterr().out)
+    blocked = {(f["path"], f["rule"]) for f in report if f["blocking"] and not f["allowed_reason"]}
+    assert ("pkg/legacy.py", "CC") in blocked
+    assert ("pkg/copied.py", "BLE001") in blocked
+    assert any(f["path"] == "pkg/boundary.py" and f["allowed_reason"] for f in report)
+
+
+def test_accepted_upstream_expires_once_main_contains_it_and_rejects_unmerged_refs(tmp_path, capsys):
+    repo = _engine_repo(tmp_path)
+    base = _git(repo, "rev-parse", "HEAD")
+    upstream = _commit(repo, {"pkg/legacy.py": _LEGACY})
+    _commit(repo, {"pkg/legacy.py": _GROWN})
+    assert cli.run(repo, upstream, None, as_json=True, accepted_upstream=upstream) == 1
+    assert all(not f["allowed_reason"] for f in json.loads(capsys.readouterr().out))
+    _git(repo, "checkout", "--detach", base)
+    _write(repo, {"pkg/legacy.py": _GROWN})
+    with pytest.raises(RuntimeError, match="ancestor"):
+        cli.run(repo, base, None, accepted_upstream=upstream)
+
+
 # --- F20: the staged/commit health verdict comes from the judged artifact only -----------------
 
 

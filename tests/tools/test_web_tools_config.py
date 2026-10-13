@@ -432,8 +432,6 @@ class TestParallelClientConfig:
         fake_parallel.Parallel = Parallel
         fake_parallel.AsyncParallel = AsyncParallel
         monkeypatch.setitem(sys.modules, "parallel", fake_parallel)
-        # The fake SDK has no installed distribution for the lazy-dependency probe.
-        monkeypatch.setattr("tools.lazy_deps.feature_missing", lambda feature: ())
 
     def test_creates_client_with_key(self):
         """PARALLEL_API_KEY set → creates Parallel client."""

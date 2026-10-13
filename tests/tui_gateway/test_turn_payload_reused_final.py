@@ -21,9 +21,9 @@ def _payload(monkeypatch, result):
     session = {"pending_title": None, "session_key": "k", "history_lock": contextlib.nullcontext(), "agent": agent}
     st = SimpleNamespace(
         result=result, agent=agent, terminal_callback=None, receipt_committed=True, receipt_attempted=False,
-        marker_key="", error_retained=False, error_detail="", prompt_text="ping",
+        marker_key="", error_retained=False, error_detail="", prompt_text="ping", metrics_start=None,
     )
-    payload, _, _ = srv._complete_turn_payload(session, st, None, 80)
+    payload, _, _ = srv._complete_turn_payload(session, st, None, 80, "sid")
     return payload
 
 

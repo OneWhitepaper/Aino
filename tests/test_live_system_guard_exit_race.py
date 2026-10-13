@@ -10,7 +10,7 @@ from types import SimpleNamespace
 import psutil
 import pytest
 
-from tests.conftest import _live_system_guard
+from tests._fixtures.live_system_guard import _live_system_guard
 
 
 @pytest.fixture

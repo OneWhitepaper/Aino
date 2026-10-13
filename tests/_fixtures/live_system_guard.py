@@ -131,6 +131,13 @@ def _live_system_guard(request, monkeypatch):
             return real_kill(pid, sig, *args, **kwargs)
         if _is_own_subtree(int(pid)):
             return real_kill(pid, sig, *args, **kwargs)
+        if _os.name == "posix" and int(pid) > 0:
+            # A child can be reaped between Process lookup and the ancestry
+            # walk. Preserve ESRCH without signaling a live foreign process.
+            try:
+                real_kill(pid, 0)
+            except PermissionError:
+                pass  # A live but inaccessible process remains foreign.
         raise RuntimeError(
             f"tests/conftest.py live-system guard: blocked os.kill("
             f"{pid}, {sig}) — PID is outside the test process subtree. "

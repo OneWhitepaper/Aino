@@ -178,12 +178,12 @@ jobs:
     name: code health ratchet (blocking)
     if: inputs.event_name == 'pull_request'
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 20
     steps:
       - name: Checkout code
         uses: actions/checkout@f548e57e544e1ff5a4c46bf1e1b8685f8e4a348a # v7.0.1
         with:
-          fetch-depth: 2 # the merge commit and its first parent (the base branch tip)
+          fetch-depth: 0 # include the reviewed upstream import for occurrence-level attribution
 
       - uses: ./.github/actions/setup-pm
         with:
@@ -196,7 +196,27 @@ jobs:
           command: python -m scripts.ci.python_packages "$(python -m scripts.code_health --print-pins)"
 
       - name: Ratchet the PR against the base branch tip
-        run: python scripts/check --only health --base HEAD^1
+        run: |
+          # Approved import of stable Hermes v0.21.7. The checker retains every
+          # base finding and exempts only occurrences not regressed vs this SHA.
+          # Once main contains the release, the normal main ratchet applies.
+          UPSTREAM=71d34bad1045610252eda02ee79549436896e784
+          if git merge-base --is-ancestor "$UPSTREAM" HEAD && ! git merge-base --is-ancestor "$UPSTREAM" HEAD^1; then
+            python -m scripts.code_health --base HEAD^1 --accepted-upstream "$UPSTREAM" --json > code-health-report.json
+          else
+            python -m scripts.code_health --base HEAD^1 --json > code-health-report.json
+          fi
+
+      - name: Preserve full code-health findings
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: code-health-report
+          path: code-health-report.json
+
+      - name: Remove generated report from checkout
+        if: always()
+        run: rm -f code-health-report.json
 
       - name: Check the checkout is clean
         # Last step of every job (tests/ci/test_clean_worktree_check.py): a test or CI step that

@@ -28,7 +28,11 @@ def surface(monkeypatch):
     submits: list = []
     monkeypatch.setattr("tools.async_delegation.claim_event_delivery", lambda evt, consumer: "claimed")
     monkeypatch.setattr("tools.async_delegation.complete_event_delivery", lambda *a, **k: None)
-    monkeypatch.setattr(server, "_run_prompt_submit", lambda rid, sid, session, text, **kw: submits.append((text, kw)))
+    def submit(rid, sid, session, text, **kwargs):
+        submits.append((text, kwargs))
+        return True
+
+    monkeypatch.setattr(server, "_run_prompt_submit", submit)
     monkeypatch.setattr(server, "_emit", lambda *a, **k: None)
     monkeypatch.setattr(server, "_session_owns_notification_event", lambda sid, session, evt: True)
     return submits

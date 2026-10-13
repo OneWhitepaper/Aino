@@ -197,3 +197,78 @@ The upgrade branch and reviewed follow-up fixes are pushed for CI.
 Native Windows and Linux package execution remains unverified on this macOS
 host. The Python receipt is a targeted integration selection, not the complete
 repository suite. Dependency audit notices are not a completed security audit.
+
+
+## CI repair checkpoint (2026-10-13, after `224d06755c`)
+
+This checkpoint is **not approved for main**. The complete remote suite must
+pass on the new commit; Windows and Nix changes are not locally executable.
+
+### Functional fixes and local receipts
+
+- Repaired-history rewind: explicitly refuse a comparable but divergent replay
+  instead of falling through to the upstream carrier-text resolver. Existing
+  legacy/repeated-rewind cases remain supported (702 focused gateway tests pass).
+- Restored the Aino ESRCH-safe test-process guard at its new upstream fixture
+  location. A positive-PID POSIX probe may report ESRCH but never sends a real
+  signal to an unrelated live process.
+- Aligned bootstrap, metrics, turn-ID, heartbeat-admission and notification
+  fixtures with the merged APIs; managed cancellation uses real loopback model
+  metadata and the existing ready event. Aino wire coverage uses a real managed
+  credential with an explicit inert endpoint.
+- Windows suspension checks read the kernel suspend count, rather than a racy
+  scheduler snapshot. Pipe failures now preserve child stacks. Reduced Windows
+  test workers from 16 to 4 after cold PowerShell/CIM stalls and retry evidence;
+  timeouts and behavior assertions remain unchanged.
+- Removed the test for the deleted in-place runtime rebuild API. Existing PM
+  tests retain real publication-failure rollback and Windows held-entry coverage.
+- Smoke environments remove the whole indexed Git override group, preserving
+  valid global redirects; installer repository overrides again reach the real
+  install path. Nix includes X11 build headers and the desktop identity import.
+- Existing icon generation now consumes the retained Aino raster for desktop
+  containers; no new artwork. Two generations produced byte-identical results.
+- Prompt surface regeneration reflects existing Aino branding/delegation. Its
+  macOS renderer initializes native imports before platform pinning and scrubs
+  both temporary-directory aliases. No new model instructions added here.
+
+Combined canonical runner: **20 files, 375 passed, 0 failed, 13 host skips**.
+This includes the 42 code-health CLI tests and 13 icon tests. Earlier broader
+rewind receipt: 702 passed. Ruff passes. No paid model runs or daily-app restart.
+
+### Reviewed supply-chain matches
+
+Five matches in four files are source-quoting transports or inert fixtures:
+`hermes_cli/_launchers.py` encodes its visible generated launcher source;
+`tools/file_operations.py` encodes visible Python snippets for cross-shell
+quoting; the Python gateway fixture uses that launcher source; the two JS
+fixtures encode the literal `x`. No downloaded hidden payload is involved.
+The scanner exempts only the four reviewed Git blob hashes. Any byte change
+restores scanning of the entire file. The current scanner replay exits 0 with
+`found=false`; the production transports remain unchanged.
+
+### Contributor attribution
+
+49 email-to-login mappings were verified through GitHub's commit-author data.
+Generic `you@example.com` was deliberately not globally mapped because multiple
+Git author names use it. Historical unresolvable authors from the fixed upstream
+release retain their original Git names, rather than invented GitHub logins.
+Only authors whose new commits are entirely in that release use this treatment;
+new Aino commits from the same email still require a mapping. CI retains their
+names in its log. The full Git history and existing release fallback are intact.
+
+### User-approved upstream health classification
+
+The user explicitly approved separating inherited stable-upstream findings from
+Aino integration regressions. The reference is fixed to
+`71d34bad1045610252eda02ee79549436896e784` (v0.21.7), must be a head ancestor, and
+expires once the base branch contains it. The existing occurrence-aware comparer
+runs against both the Aino base and the upstream revision. All original findings
+remain in the JSON artifact. A new occurrence, copy or worsened metric stays
+blocking; tests exercise each case and expiration after merge. No targets or
+rule severities changed.
+
+Latest local classification still has **65 blocking structural findings**
+(34 complexity, 24 file-length, 7 function-length). These cannot be waived as
+unchanged upstream debt. The complete report is preserved in the local evidence
+folder as `health-classified-before-cleanup.json`. Structural cleanup and native
+CI verification remain open; this checkpoint must not be merged yet.

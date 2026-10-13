@@ -31,6 +31,7 @@ import shutil
 import socket
 import subprocess
 import sys
+import sysconfig
 import tempfile
 from collections import Counter
 from datetime import UTC, datetime
@@ -74,6 +75,10 @@ SESSION_ID = FIXED_NOW.strftime("%Y%m%d_%H%M%S") + "_prompt_surface"
 
 def _pin_environment() -> None:
     """Pin every input that differs between machines; each one moved bytes in a trial render."""
+    # Resolve native stdlib build data before pinning the rendered skill platform.
+    # Otherwise a later zoneinfo import asks macOS Python for Linux sysconfigdata.
+    sysconfig.get_config_vars()
+    import psutil  # load the native extension before platform pinning
     def refuse(*_a, **_k):
         raise OSError("network disabled while rendering the prompt surface")
     socket.socket.connect = refuse  # type: ignore[method-assign]
@@ -107,11 +112,14 @@ class _ImportFailures(logging.Handler):
 
 def _scrub(text: str, home: Path) -> str:
     import platform as _platform
-    for raw, token in sorted({
-        str(home / ".hermes"): "<HERMES_HOME>",
-        str(home): "<HOME>",
+    replacements = {
         f"{_platform.system()} ({_platform.release()})": "<HOST_OS>",
-    }.items(), key=lambda kv: -len(kv[0])):
+    }
+    # macOS can expose the same temporary home through /var and /private/var.
+    for alias in (home, Path(os.environ.get("HOME", str(home)))):
+        replacements[str(alias / ".hermes")] = "<HERMES_HOME>"
+        replacements[str(alias)] = "<HOME>"
+    for raw, token in sorted(replacements.items(), key=lambda kv: -len(kv[0])):
         text = text.replace(raw, token)
     return text
 

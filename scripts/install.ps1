@@ -835,9 +835,9 @@ function Stage-Repository {
     }
     if (Test-Path (Join-Path $InstallDir ".git")) {
         Log "Updating $InstallDir ($Branch)"
-        # An explicit HERMES_REPO_URL names the source for reruns too, not
+        # An explicit repository override names the source for reruns too, not
         # just the first clone.
-        if ($env:HERMES_REPO_URL) {
+        if ($env:HERMES_INSTALL_REPOSITORY_URL -or $env:HERMES_REPO_URL) {
             Invoke-Native { git -C $InstallDir remote set-url origin $RepoUrl }
             if ($LASTEXITCODE) { Fail "cannot point origin at $RepoUrl" git_fetch_failed }
         }

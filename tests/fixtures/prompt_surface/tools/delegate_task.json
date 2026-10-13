@@ -1,5 +1,5 @@
 {
-  "description": "Spawn subagents in isolated contexts; each gets its own conversation, terminal session, and toolset, and only its final summary returns to you. Pass every task in `tasks` — one entry spawns one subagent, several run in parallel (limit in the tasks description).\n\nSessions without a later-result consumer (including one-shot CLI and cron) join parallel children and return results in this tool call. Otherwise runs in the background: dispatch returns live transcript paths and results re-enter as a new message when subagents finish (one message per call). Background results are delivered only BETWEEN your turns: finish whatever does not depend on them, then give a one-line status and END YOUR TURN. Never wait or poll on transcripts, artifact files, or CI for a child. While children run, `action` (list/steer/stop) controls them live.\n\nUSE FOR: reasoning-heavy subtasks, work that would flood your context, or independent parallel workstreams.\nDO NOT USE FOR (use these instead):\n- Mechanical multi-step work with no reasoning needed -> execute_code\n- A single tool call -> call the tool directly\n- Tasks needing user interaction -> subagents cannot ask questions\n- Durable work that must survive this session -> cronjob or terminal(background=True, notify=True); /stop, /new, or process exit halts running subagents (whole tree); each returns an 'interrupted' completion with partial output.\n\nRULES:\n- Children know nothing of this conversation: pass everything needed via 'context', including any required output language, tone, or style (e.g. \"respond in Chinese\").\n- Child summaries are SELF-REPORTS, not verified facts: a child claiming \"uploaded successfully\" or \"file written\" may be wrong. For external side effects (uploads, remote writes, publishing), require a verifiable handle (URL, ID, absolute path) and verify it yourself before telling the user the operation succeeded.\n- Children cannot close tracked work: a child asked to close it returns findings instead; the parent applies the transition.\n- Children cannot call delegate_task, clarify, memory, or cronjob.\n- Children inherit the parent model unless pinned via delegation.provider / delegation.model in config.yaml.",
+  "description": "Spawn subagents in isolated contexts; each gets its own conversation, terminal session, and toolset, and only its final summary returns to you. Pass every task in `tasks` — one entry spawns one subagent, several run in parallel (limit in the tasks description).\n\nSessions without a later-result consumer (including one-shot CLI and cron) join parallel children and return results in this tool call. Otherwise runs in the background: dispatch returns live transcript paths and results re-enter as a new message when subagents finish (one message per call). Background results are delivered only BETWEEN your turns: finish whatever does not depend on them, then give a one-line status and END YOUR TURN. Never wait or poll on transcripts, artifact files, or CI for a child. While children run, `action` (list/steer/stop) controls them live.\n\nUSE FOR: reasoning-heavy subtasks, work that would flood your context, or independent parallel workstreams.\nDO NOT USE FOR (use these instead):\n- Mechanical multi-step work with no reasoning needed -> execute_code\n- A single tool call -> call the tool directly\n- Tasks needing user interaction -> subagents cannot ask questions\n- Durable work that must survive this session -> cronjob or terminal(background=True, notify=True); /stop, /new, or process exit halts running subagents (whole tree); each returns an 'interrupted' completion with partial output.\n\nRULES:\n- Children start isolated: supply constraints (e.g. 'respond in Chinese') in 'context' or request 'context_turns'. Forward images explicitly with 'images'.\n- Child summaries are SELF-REPORTS, not verified facts: a child claiming \"uploaded successfully\" or \"file written\" may be wrong. For external side effects (uploads, remote writes, publishing), require a verifiable handle (URL, ID, absolute path) and verify it yourself before telling the user the operation succeeded.\n- Children cannot close tracked work: a child asked to close it returns findings instead; the parent applies the transition.\n- Children cannot call delegate_task, clarify, memory, or cronjob.\n- Children inherit the parent model unless pinned via delegation.provider / delegation.model in config.yaml.",
   "name": "delegate_task",
   "parameters": {
     "properties": {
@@ -29,8 +29,13 @@
               "description": "Background THIS child needs: file paths, error messages, constraints. Each child sees only its own context — repeat shared background in every task that needs it.",
               "type": "string"
             },
+            "context_turns": {
+              "description": "Optional visible conversation excerpt: 'none' (default, isolated), 'all', or a positive integer string for the most recent user turns and final replies. Includes the current user turn. Use when prior requirements matter; excludes system prompts, tool traces, hidden reasoning and images. Additional task-specific context goes in 'context'.",
+              "pattern": "^(none|all|[1-9][0-9]*)$",
+              "type": "string"
+            },
             "goal": {
-              "description": "What this subagent should accomplish. Be specific and self-contained — it knows nothing about your conversation history.",
+              "description": "What this subagent should accomplish. Give a specific bounded goal; include needed background in context or explicitly select visible history with context_turns.",
               "type": "string"
             },
             "images": {
@@ -45,6 +50,20 @@
               "properties": {},
               "required": [],
               "type": "object"
+            },
+            "reasoning_effort": {
+              "description": "Optional override for this child. Prefer omitting it to use the configured delegation level or inherit the parent's current effort; set it when the task or user calls for a different reasoning level. Provider limits still apply; this never changes the parent's level.",
+              "enum": [
+                "none",
+                "minimal",
+                "low",
+                "medium",
+                "high",
+                "xhigh",
+                "max",
+                "ultra"
+              ],
+              "type": "string"
             }
           },
           "required": [

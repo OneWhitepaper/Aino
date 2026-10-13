@@ -5,7 +5,8 @@ Usage (from repo root):
     node scripts/generate-icons.mjs           # write
     node scripts/generate-icons.mjs --check   # verify structure
 
-Sources of truth — two axes, composed per target:
+Sources of truth — Aino desktop uses assets/aino-icon.png (commissioned raster).
+Upstream surfaces use two axes, composed per target:
   Girl art (vector):  assets/nous-girl-black.svg  (black positive space)
                       assets/nous-girl-white.svg  (white positive space)
                       straight from the Nous brand kit (Inkscape exports,
@@ -93,6 +94,7 @@ Outputs (99 files):
 from __future__ import annotations
 
 import argparse
+import base64
 import io
 import json
 import math
@@ -102,7 +104,7 @@ import sys
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
-from PIL import Image
+from PIL import Image, ImageOps
 
 try:
     import resvg_py
@@ -296,11 +298,12 @@ TARGETS: list[tuple[str, str, object]] = [
 class IconArt:
     """One generation's rendering inputs and caches; never writes to source."""
 
-    def __init__(self, source: Path, *, colors: tuple[str, str] | None = None, commit: str = ""):
+    def __init__(self, source: Path, *, colors: tuple[str, str] | None = None, commit: str = "", raster: Path | None = None):
         assets = source / "assets"
         self.source = source
         self.colors = colors
         self.commit = commit
+        self.raster = raster
         self.girls = {color: assets / f"nous-girl-{color}.svg" for color in ("black", "white")}
         self.backgrounds = assets / "backgrounds"
         self.paths: dict[str, str] = {}
@@ -314,6 +317,29 @@ class IconArt:
         # Badge-free twins for direct renders below BADGE_MIN_SIZE.
         self.master_small = compose_svg(self, "black", "squircle-light.svg", badge=False)
         self.master_dark_small = compose_svg(self, "white", "squircle-dark.svg", badge=False)
+        if raster:
+            # Aino's commissioned raster is already on the macOS icon grid.
+            # Feed it through the existing container/size renderer, never overwrite
+            # it with the upstream portrait while regenerating release assets.
+            self.master = self.master_mac = raster_svg(self)
+            self.master_dark = self.master_mac_dark = raster_svg(self, dark=True)
+            self.master_small = raster_svg(self, badge=False)
+            self.master_dark_small = raster_svg(self, dark=True, badge=False)
+
+
+def raster_svg(art: IconArt, *, dark: bool = False, badge: bool = True) -> str:
+    image = Image.open(art.raster).convert("RGBA")
+    if art.colors:
+        # Channel color changes preserve the raster's silhouette and shading.
+        alpha = image.getchannel("A")
+        image = ImageOps.colorize(ImageOps.grayscale(image), "#000000", art.colors[dark]).convert("RGBA")
+        image.putalpha(alpha)
+    data = io.BytesIO()
+    image.save(data, "PNG")
+    encoded = base64.b64encode(data.getvalue()).decode("ascii")
+    marker = commit_layer(art.commit, "squircle-mac-light.svg") if art.commit and badge else ""
+    return (f'<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 1024 1024">'
+            f'<image width="1024" height="1024" xlink:href="data:image/png;base64,{encoded}"/>{marker}</svg>')
 
 
 def girl_path(art: IconArt, girl: str) -> str:
@@ -633,6 +659,8 @@ def icon_border_svg(ink: str) -> str:
 def icon_art_svg(art: IconArt, girl: str) -> str:
     """Art layer: the girl registered as on the canvas-filling squircle, joined
     to the border band; the commit badge rides along for commit builds."""
+    if art.raster:
+        return raster_svg(art, dark=girl == "white")
     bg = "icon.icon"  # the plate is the canvas; the system supplies the grid
     join_bottom = ICON_CANVAS - ICON_CANVAS * BORDER_FRACTION + 10 if BORDER_ENABLED else ICON_CANVAS * (1 + EDGE_OVERSHOOT)
     portrait = portrait_layer(art, girl, bg, join_bottom)
@@ -663,6 +691,12 @@ def icon_mono_image(art: IconArt) -> Image.Image:
     """The single grayscale layer behind Clear light/dark and Tinted light/dark
     (Apple's "tinted" specialization). One image, each pixel painted once, so
     translucent materials never stack where the girl meets the ring."""
+    if art.raster:
+        image = Image.open(art.raster).convert("RGBA")
+        mono = ImageOps.grayscale(image).convert("RGBA")
+        mono.putalpha(image.getchannel("A"))
+        return mono
+
     def coverage(svg: str) -> Image.Image:
         return render_svg(svg, ICON_CANVAS).convert("RGBA").getchannel("A")
 
@@ -856,6 +890,8 @@ def target_bytes(art: IconArt, kind: str, arg: object) -> bytes:
 def build_art(source: Path) -> tuple[IconArt, IconArt]:
     """Only desktop outputs carry build identity. Shared branding stays stable."""
     art = IconArt(source)
+    raster = source / "assets/aino-icon.png"
+    desktop_options = {"raster": raster} if raster.is_file() else {}
     tag = os.environ.get("HERMES_PAYLOAD_TAG", "")
     commit = os.environ.get("HERMES_BUILD_COMMIT", "")
     if commit:
@@ -863,10 +899,10 @@ def build_art(source: Path) -> tuple[IconArt, IconArt]:
             raise ValueError("Commit builds cannot also select HERMES_PAYLOAD_TAG")
         if not re.fullmatch(r"[a-f0-9]{40}", commit):
             raise ValueError("HERMES_BUILD_COMMIT requires an exact full 40-character SHA")
-        return art, IconArt(source, colors=("#e34850", "#4a1117"), commit=commit)
+        return art, IconArt(source, colors=("#e34850", "#4a1117"), commit=commit, **desktop_options)
     if _CANARY_TAG_RE.match(tag.strip()):
-        return art, IconArt(source, colors=("#f5cc32", "#443808"))
-    return art, art
+        return art, IconArt(source, colors=("#f5cc32", "#443808"), **desktop_options)
+    return art, IconArt(source, **desktop_options) if desktop_options else art
 
 
 def cmd_write(source: Path, out: Path) -> int:

@@ -31,7 +31,10 @@ export function smokeEnvironment(inherited, home, userData) {
   const keepHermes = new Set(['HERMES_TEST_INSTALL_REF', 'HERMES_TEST_INSTALL_REPO']);
   for (const [key, value] of Object.entries(inherited)) {
     const name = key.toUpperCase();
-    if (!value || /(?:KEY|TOKEN|SECRET|PASSWORD|CREDENTIAL)/.test(name)
+    // Drop inline Git overrides as a unit: filtering KEY alone leaves COUNT
+    // and VALUE behind, making every child git command fail to parse its config.
+    if (!value || /^GIT_CONFIG_(?:COUNT|KEY_\d+|VALUE_\d+)$/.test(name)
+        || /(?:KEY|TOKEN|SECRET|PASSWORD|CREDENTIAL)/.test(name)
         || /^(?:PYTHON|VIRTUAL_ENV|CONDA|NODE_|NPM_|ELECTRON_|VITE_|UV_|PM_)/.test(name)
         || /^(?:OPENAI|ANTHROPIC|OPENROUTER|OLLAMA|GEMINI|GROQ|XAI)_/.test(name)
         || (name.startsWith('HERMES_') && !keepHermes.has(name))

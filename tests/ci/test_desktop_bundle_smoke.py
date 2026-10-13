@@ -177,10 +177,11 @@ def test_stable_phase_result_requires_smoke_but_preserves_other_phases(tmp_path,
 def test_canary_publisher_consumes_staged_bytes_and_writes_pointer_last(tmp_path, r2_server):
     tag = 'v0.28.1+canary.20260818T101010Z'
     env = {**transport_env(tmp_path, r2_server), 'HERMES_DESKTOP_VARIANT': 'bundled',
-           'HERMES_PAYLOAD_TAG': tag, 'RELEASE_TAG': tag}
+           'HERMES_PAYLOAD_TAG': tag, 'RELEASE_TAG': tag,
+           'AZURE_SIGN_PUBLISHER': 'CN=Aino Fixture'}
     # Use the real assembly identity derivation with a stable base available.
     for file in ['scripts/msix-shared.mjs', 'scripts/release-content-types.json',
-                 'apps/desktop/product-identity.cjs', 'apps/desktop/package.json']:
+                 'apps/desktop/product-identity.cjs', 'apps/desktop/brand.json', 'apps/desktop/package.json']:
         target = tmp_path / file
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(ROOT / file, target)
@@ -210,8 +211,8 @@ def test_canary_publisher_consumes_staged_bytes_and_writes_pointer_last(tmp_path
     bundle = release / filename
     with zipfile.ZipFile(bundle, 'w') as archive:
         archive.writestr('AppxMetadata/AppxBundleManifest.xml',
-                         '<Bundle><Identity Name="NousResearch.HermesBundledCanary" '
-                         'Publisher="CN=Nous Research Inc., O=Nous Research Inc., L=Austin, S=Texas, C=US" '
+                         f'<Bundle><Identity Name="{assembled["identity"]["msixAppIdWithOrg"]}" '
+                         f'Publisher="{env["AZURE_SIGN_PUBLISHER"]}" '
                          f'Version="{version}"/></Bundle>')
     tested_bytes = bundle.read_bytes()
     jobs = _workflow()['jobs']
@@ -238,13 +239,13 @@ def test_canary_publisher_consumes_staged_bytes_and_writes_pointer_last(tmp_path
 
     # The publication job must refuse an ambiguous envelope, even when a
     # caller accidentally broadens the receipt selector in future.
-    (tmp_path / 'staged/HermesBundled-0.29.0.0-win.msixbundle').write_bytes(tested_bytes)
+    (tmp_path / f'staged/{assembled["name"]}-0.29.0.0-win.msixbundle').write_bytes(tested_bytes)
     before = len(writes)
     refused = shell_step(tmp_path, r2_server, publisher,
                          'Publish identical tested bytes without rebuilding', env)
     assert refused.returncode != 0
     assert len([row for row in r2_server.requests if row[0] == 'PUT']) == before
-    (tmp_path / 'staged/HermesBundled-0.29.0.0-win.msixbundle').unlink()
+    (tmp_path / f'staged/{assembled["name"]}-0.29.0.0-win.msixbundle').unlink()
 
     # Filename, tag base, and baked identity must still agree. Reading the
     # accepted assembly version is not permission to trust arbitrary metadata.

@@ -75,7 +75,22 @@ jobs:
           # Three-point diff (base...head) diffs from the merge base to HEAD,
           # so only changes introduced by this PR are included — not changes
           # that landed on main after the PR branched off.
-          DIFF=$(git diff "$BASE"..."$HEAD" -- . ':!uv.lock' ':!*.lock' ':!package-lock.json' ':!yarn.lock' || true)
+          EXCLUDES=(':!uv.lock' ':!*.lock' ':!package-lock.json' ':!yarn.lock')
+          # Reviewed v0.21.7 quoting transports and inert launcher fixtures.
+          # Pin whole blobs, not paths: changing ANY byte resumes full scanning.
+          # Decode inputs in production are generated from visible Python source,
+          # never downloaded payloads. See the upgrade report's security review.
+          while read -r blob path; do
+            if [ "$(git rev-parse "$HEAD:$path" 2>/dev/null || true)" = "$blob" ]; then
+              EXCLUDES+=(":!$path")
+            fi
+          done <<'REVIEWED'
+          61ca4d8ef779675d012d9436fe1d10a6ed837cb0 hermes_cli/_launchers.py
+          26220c563cfeea57934868e68e9ca581ca516e24 tools/file_operations.py
+          c51d58080488f240b470179d6aaa15278235af28 tests/gateway/test_gateway_inline_bootstrap_identity.py
+          026a0e4d8caea80d4b9cea77f371171011a7579c tests-js/scripts/desktop-smoke.test.ts
+          REVIEWED
+          DIFF=$(git diff "$BASE"..."$HEAD" -- . "${EXCLUDES[@]}")
 
           FINDINGS=""
 

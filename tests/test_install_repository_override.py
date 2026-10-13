@@ -10,7 +10,6 @@ remote, so it does not depend on GitHub or the network.
 from __future__ import annotations
 
 import os
-import re
 import shutil
 import subprocess
 from pathlib import Path
@@ -61,7 +60,9 @@ def _make_remote(tmp_path: Path) -> Path:
     return remote
 
 
-def test_install_sh_repository_stage_uses_explicit_repository_urls(tmp_path: Path) -> None:
+@pytest.mark.platforms("posix")
+@pytest.mark.parametrize("override", ["HERMES_INSTALL_REPOSITORY_URL", "HERMES_REPO_URL"])
+def test_install_sh_repository_stage_uses_explicit_repository_urls(tmp_path: Path, override: str) -> None:
     remote = _make_remote(tmp_path)
     install_dir = tmp_path / "install"
     hermes_home = tmp_path / "home"
@@ -71,13 +72,11 @@ def test_install_sh_repository_stage_uses_explicit_repository_urls(tmp_path: Pat
         {
             "HERMES_HOME": str(hermes_home),
             "HERMES_INSTALL_DIR": str(install_dir),
-            "HERMES_INSTALL_REPOSITORY_URL": str(remote),
-            "HERMES_INSTALL_REPOSITORY_SSH_URL": str(remote),
+            override: str(remote),
         }
     )
 
-    result = subprocess.run(
-        [
+    command = [
             "bash",
             str(INSTALL_SH),
             "--stage",
@@ -86,46 +85,45 @@ def test_install_sh_repository_stage_uses_explicit_repository_urls(tmp_path: Pat
             "--json",
             "--branch",
             "downstream",
-        ],
-        cwd=REPO_ROOT,
-        env=env,
-        capture_output=True,
-        text=True,
-        check=False,
-    )
+        ]
+    for rerun in (False, True):
+        if rerun:
+            _git(install_dir, "remote", "set-url", "origin", str(tmp_path / "wrong.git"))
+        result = subprocess.run(command, cwd=REPO_ROOT, env=env, capture_output=True,
+                                text=True, check=False, timeout=60)
+        assert result.returncode == 0, result.stderr + "\n" + result.stdout
+        assert _git(install_dir, "remote", "get-url", "origin").stdout.strip() == str(remote)
 
     assert result.returncode == 0, result.stderr + "\n" + result.stdout
     assert (install_dir / "origin-marker.txt").read_text(encoding="utf-8") == "downstream repository\n"
     assert '"ok":true' in result.stdout.splitlines()[-1]
 
 
-def test_install_ps1_repository_urls_have_explicit_environment_overrides() -> None:
-    """Windows bootstrap must be able to clone the branded repository too.
 
-    PowerShell cannot run on this macOS host, so this contract test checks the
-    source-level assignment that is consumed by the Windows repository stage.
-    The defaults remain upstream-compatible for direct Hermes CLI installs.
-    """
-
-    text = INSTALL_PS1.read_text(encoding="utf-8")
-
-    assert re.search(
-        r'\$RepoUrlSsh\s*=\s*if\s*\(\$env:HERMES_INSTALL_REPOSITORY_SSH_URL\)'
-        r'[\s\S]{0,220}?git@github\.com:NousResearch/hermes-agent\.git',
-        text,
-    )
-    assert re.search(
-        r'\$RepoUrlHttps\s*=\s*if\s*\(\$env:HERMES_INSTALL_REPOSITORY_URL\)'
-        r'[\s\S]{0,220}?https://github\.com/NousResearch/hermes-agent\.git',
-        text,
-    )
-
-    archive_block = re.search(
-        r"# Fallback: download ZIP archive[\s\S]*?(?=\n\s*\$zipPath\s*=)",
-        text,
-    )
-    assert archive_block is not None
-    assert "$archiveRepo = $RepoUrlHttps.TrimEnd('/') -replace '\\.git$', ''" in archive_block.group(0)
-    assert '"$archiveRepo/archive/$Commit.zip"' in archive_block.group(0)
-    assert '"$archiveRepo/archive/refs/tags/$Tag.zip"' in archive_block.group(0)
-    assert '"$archiveRepo/archive/refs/heads/$Branch.zip"' in archive_block.group(0)
+@pytest.mark.platforms("windows")
+@pytest.mark.parametrize("override", ["HERMES_INSTALL_REPOSITORY_URL", "HERMES_REPO_URL"])
+def test_install_ps1_repository_stage_uses_explicit_repository_urls(tmp_path: Path, override: str) -> None:
+    remote = _make_remote(tmp_path)
+    install_dir = tmp_path / "install"
+    shell = shutil.which("powershell") or shutil.which("pwsh")
+    assert shell, "native Windows acceptance requires PowerShell"
+    script = tmp_path / "repository.ps1"
+    script.write_text(
+        '$ErrorActionPreference = "Stop"\n'
+        '. $env:PROBE_INSTALLER -Branch downstream -InstallDir $env:PROBE_INSTALL_DIR '
+        '-HermesHome $env:HERMES_HOME -NonInteractive\n'
+        # Reuse the lane's Git; downloading a pinned tool is outside this repository test.
+        'function Get-PinnedGit { return $env:PROBE_GIT }\n'
+        'Stage-Repository\n', encoding="utf-8-sig")
+    env = {**os.environ, override: str(remote), "HERMES_HOME": str(tmp_path / "home"),
+           "PROBE_INSTALLER": str(INSTALL_PS1), "PROBE_INSTALL_DIR": str(install_dir),
+           "PROBE_GIT": shutil.which("git")}
+    for rerun in (False, True):
+        if rerun:
+            _git(install_dir, "remote", "set-url", "origin", str(tmp_path / "wrong.git"))
+        result = subprocess.run([shell, "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass",
+                                 "-File", str(script)], env=env, capture_output=True,
+                                text=True, check=False, timeout=60)
+        assert result.returncode == 0, result.stdout + result.stderr
+        assert _git(install_dir, "remote", "get-url", "origin").stdout.strip() == str(remote)
+        assert (install_dir / "origin-marker.txt").read_text(encoding="utf-8") == "downstream repository\n"
