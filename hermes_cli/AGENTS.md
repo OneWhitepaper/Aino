@@ -72,8 +72,7 @@ Do not add a surface-specific goal parser. ACP has no goal command or goal loop 
 
 ## Config system (`hermes_cli/config.py`)
 
-`config_defaults.py` owns `DEFAULT_CONFIG`; `config_env_defaults.py` owns `OPTIONAL_ENV_VARS`
-and its declaration factories. Both are leaf data modules; neither imports `config.py`.
+Declarations: `config_defaults.py` → `DEFAULT_CONFIG`; `config_env_defaults.py` → `OPTIONAL_ENV_VARS`.
 
 - **config.yaml option:** add to `DEFAULT_CONFIG`. Bump `_config_version` ONLY to actively
   migrate/transform existing config (rename keys, restructure); new keys deep-merge automatically.
