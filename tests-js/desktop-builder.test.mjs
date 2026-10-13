@@ -61,7 +61,9 @@ function fixture() {
   put(join(app, 'electron/main.ts'), 'console.log(JSON.stringify({ stamp: __HERMES_INSTALL_STAMP__, identity: __HERMES_PRODUCT_IDENTITY__ }))')
   put(join(app, 'electron/preload.ts'), 'globalThis.fixturePreload = "compiled preload"')
   put(join(app, 'electron/preview-guest-preload-entry.ts'), 'globalThis.fixtureGuestPreload = "compiled guest preload"')
+  put(join(app, 'electron/platform-captcha-preload.ts'), 'globalThis.fixtureCaptchaPreload = "compiled captcha preload"')
   cpSync(join(repo, 'apps/desktop/product-identity.cjs'), join(app, 'product-identity.cjs'))
+  cpSync(join(repo, 'apps/desktop/brand.json'), join(app, 'brand.json'))
   cpSync(join(repo, 'apps/desktop/electron/native'), join(app, 'electron/native'), { recursive: true })
   // product-identity.cjs resolves the channel request through the in-tree
   // packaging helper (and its content-types table) by relative path.

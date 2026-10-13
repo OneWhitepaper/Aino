@@ -50,8 +50,10 @@ jobs:
           unit=$(python3 scripts/run_tests_parallel.py --generate-slices 4)
           # Paid live canaries belong to live-providers.yml; pytest's default
           # 'not live' filter leaves that file with no runnable tests here.
-          mapfile -t core_files < <(find tests/e2e -name 'test_*.py' -not -path 'tests/e2e/core/upgrade/*' -not -path 'tests/e2e/core/live/*' | sort)
-          mapfile -t upgrade_files < <(find tests/e2e/core/upgrade -name 'test_*.py' | sort)
+          core_files=()
+          while IFS= read -r file; do core_files+=("$file"); done < <(find tests/e2e -name 'test_*.py' -not -path 'tests/e2e/core/upgrade/*' -not -path 'tests/e2e/core/live/*' | sort)
+          upgrade_files=()
+          while IFS= read -r file; do upgrade_files+=("$file"); done < <(find tests/e2e/core/upgrade -name 'test_*.py' | sort)
           test "${#core_files[@]}" -gt 0
           test "${#upgrade_files[@]}" -gt 0
           e2e=$(python3 scripts/run_tests_parallel.py --include-integration --generate-slices "${#core_files[@]}" "${core_files[@]}")
@@ -339,7 +341,7 @@ jobs:
           source .venv/bin/activate
           python -c "import sqlite3, hermes_state_wal as w; print('sqlite', sqlite3.sqlite_version); assert not w.is_sqlite_wal_reset_vulnerable()"
 
-      - name: Run upgrade e2e tests (${{ matrix.shard }})
+      - name: Run upgrade e2e tests (${{ matrix.slice.files }})
         run: |
           set -euo pipefail
           source .venv/bin/activate

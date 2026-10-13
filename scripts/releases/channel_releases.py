@@ -39,13 +39,13 @@ def select_channel(publisher: ChannelPublisher, policy: str) -> str:
     return {"stable-release": "stable", "canary-release": "canary"}[policy]
 
 
-def product_identity(tag: str, run=subprocess.check_output) -> dict:
+def product_identity(tag: str, run=subprocess.check_output, *, variant: str = "bundled") -> dict:
     """Consume the packager's identity, not a Python copy of its naming rules."""
-    env = dict(os.environ, HERMES_DESKTOP_VARIANT="bundled", HERMES_PAYLOAD_TAG=tag)
+    env = dict(os.environ, HERMES_DESKTOP_VARIANT=variant, HERMES_PAYLOAD_TAG=tag)
     for key in ("HERMES_BUILD_COMMIT", "_HERMES_CHANNEL_REQUEST_JSON"):
         env.pop(key, None)
     raw = run(["node", "-e", "console.log(JSON.stringify(require('./apps/desktop/product-identity.cjs')))"],
-              env=env, text=True, encoding="utf-8", timeout=30)
+              cwd=Path(__file__).resolve().parents[2], env=env, text=True, encoding="utf-8", timeout=30)
     identity = json.loads(raw)
     # This token reserves existing native identity; it does not create a new app.
     identity = {key: value for key, value in identity.items() if key not in {"store", "light", "channel"}}

@@ -319,6 +319,7 @@ _UPDATE_DEPENDENCIES = (
     "pm/plugins_state.py",
     "pm/install.py",  # also sealed()/lazy_installs_allowed(): every update's default-tool install
     "hermes_cli/desktop_build_lock.py",
+    "hermes_cli/desktop_identity.py",  # main_desktop's product and legacy app names
     "hermes_cli/memory_provider_migration.py",
     "hermes_cli/left_core_migration.py",  # source_build migrates plugins that left core
     "hermes_cli/web_build_limits.py",  # source_build caps the dashboard Node build
@@ -608,7 +609,9 @@ def classify(files: list[str], run_e2e: bool = False) -> dict[str, bool]:
         inherited = classify(consumers)
         for lane in _FIXTURE_CONSUMER_LANES:
             ret[lane] = ret[lane] or inherited[lane]
-    if not files or any(f.startswith(".github/") for f in files):
+    # GitHub compare returns at most 300 paths; a saturated list can hide
+    # changes in any remaining area, even when its visible prefix is prose.
+    if not files or len(files) >= 300 or any(f.startswith(".github/") for f in files):
         ret["python"] = True
         ret["python_prod"] = True
         ret["docker_meta"] = True

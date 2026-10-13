@@ -134,10 +134,66 @@ Playwright with one worker, isolated homes and local mock inference.
 Local receipts, including the exact Python selection and code-health JSONs:
 `/Users/zizimutou/.codex/visualizations/2026/10/13/aino-upstream-v0217/`.
 
+## Pre-merge review follow-up (2026-10-13)
+
+The merge checkpoint `c2aa9342ba` was pushed to
+`codex/aino-upstream-v0217`; draft PR #10 records the open blockers. It was not
+merged to main and auto-merge was not enabled.
+
+Read-only review found two real publisher integration errors: the macOS feed
+validator and Windows universal-bundle publisher still required Hermes artifact
+names, while Aino's packager generated Aino names. Both now reuse the existing
+product identity resolver. The resolver accepts the existing light variant and
+resolves its module relative to this source checkout, so publication from an
+artifact staging directory also works. Windows assembly-version validation is
+unchanged. A related download-table filter now includes current packager names,
+while retaining historical Hermes record support. Its default repository and
+page branding come from the existing desktop brand configuration.
+
+The original native-feed test with actual packager names reproduced the failure;
+a generated-name download-table test also failed before the fix. The Windows
+workflow-body regression executes the real filename/version selection boundary
+against a temporary staged artifact, intercepting only external publication; it
+rejects a mismatched assembly version. Real loopback publication tests remain.
+A second read-only review found no new significant defect in these scoped fixes.
+
+The first remote CI run (`38343789129`) was cancelled at its one-minute detect
+job limit. `gh api --paginate` was walking nearly ten thousand upstream commits,
+although compare file paths exist only on the first page. The shared action now
+reads that page once; a saturated 300-file response selects all lanes because
+GitHub's file list may be incomplete. Checkout and bounded retries have five
+minutes. Dynamic-matrix replay now executes the real generated test plan and
+asserts that every owned E2E file is selected exactly once. The retired Windows
+launcher test reference was removed, current platform markers restored, and
+Aino's desktop-identity dependency added to the existing routing lists.
+
+The first remote Termux/TUI run failed in the shared JS fixture suite: its
+synthetic desktop omitted `brand.json` and the captcha preload source, and its
+smoke-home assertion expected the upstream brand. The fixture now supplies both
+real build inputs and derives the home expectation from the shared brand.
+The local JS check must use the prepared Python environment; an initial run
+without that environment also exposed host Python/temp-path differences.
+
+Follow-up receipts (these overlap; do not sum as unique tests):
+
+| Check | Result |
+| --- | --- |
+| Publisher identity, feed transport, channels, variant builds | 47 passed |
+| Download tables, stable transaction and artifact publication | 80 passed |
+| CI routing and executable workflow replay | 242 passed, 35 platform skips |
+| Root JS suite, typecheck and ESLint | 242 passed, 3 skips; checks passed |
+| Follow-up patch code health versus merge checkpoint | No new blocking findings |
+
+These fixes do **not** clear the original code-health gate against the pre-upgrade
+Aino base, and do not establish a cause for the intermittent desktop connection
+timeout. Subsequent remote CI is required; cancelled, skipped or still-running
+jobs are not passes. No remote publication has been executed by this work.
+
 ## Validation boundaries
 
 No paid model requests, daily-profile migration, daily desktop restart,
-publication, release signing/notarization, push or merge to main was performed.
+publication, release signing/notarization, or merge to main was performed.
+The upgrade branch and reviewed follow-up fixes are pushed for CI.
 Native Windows and Linux package execution remains unverified on this macOS
 host. The Python receipt is a targeted integration selection, not the complete
 repository suite. Dependency audit notices are not a completed security audit.

@@ -27,6 +27,37 @@ RELEASE_EPOCH = 1_787_965_323
 WINDOWS_VERSION = '2026.5761.123.0'
 
 
+def test_windows_publication_uses_packager_identity_and_checks_assembly_version(tmp_path, monkeypatch):
+    from scripts.releases.channel_releases import product_identity
+
+    workflow = hermes_yaml.safe_load((ROOT / '.github/workflows/desktop-bundled-release.yml').read_text(encoding='utf-8'))
+    step = next(step for step in workflow['jobs']['publish-win32-updater']['steps']
+                if step.get('name') == 'Publish identical tested bytes without rebuilding')
+    script = step['run'].split("python - <<'PY'\n", 1)[1].rsplit('\nPY', 1)[0]
+    identity = product_identity('v1.2.3')
+    staged = tmp_path / 'staged'
+    staged.mkdir()
+    (staged / 'expected-identity.json').write_text(json.dumps({
+        'identity': identity['msixAppIdWithOrg'], 'artifactName': identity['artifactNamePascal'],
+        'publisher': 'CN=Test', 'version': WINDOWS_VERSION,
+    }), encoding='utf-8')
+    bundle = staged / f"{identity['artifactNamePascal']}-{WINDOWS_VERSION}-win.msixbundle"
+    bundle.write_bytes(b'receipt-bound artifact fixture')
+    calls = []
+    monkeypatch.setattr(artifacts, 'main', calls.append)
+    monkeypatch.setenv('HERMES_PAYLOAD_TAG', 'v1.2.3')
+    monkeypatch.chdir(tmp_path)
+    exec(compile(script, 'windows-publication-workflow', 'exec'), {})
+    assert calls == [['publish-appinstaller', '--root', 'staged', '--bundle', f'staged/{bundle.name}',
+                     '--tag', 'v1.2.3', '--variant', 'bundled', '--identity', identity['msixAppIdWithOrg'],
+                     '--publisher', 'CN=Test', '--version', WINDOWS_VERSION]]
+    calls.clear()
+    bundle.rename(bundle.with_name(bundle.name.replace(WINDOWS_VERSION, '2026.5761.124.0')))
+    with pytest.raises(ValueError, match='Assembly version differs'):
+        exec(compile(script, 'windows-publication-workflow', 'exec'), {})
+    assert calls == []
+
+
 def test_windows_metadata_is_read_from_package_and_stale_stamp_is_rejected(tmp_path):
     tag, commit = 'v1.2.3', 'a' * 40
     root = tmp_path / 'release'
@@ -87,7 +118,7 @@ def staged_candidate(tmp_path, r2_server, https_origin):
                 package = f'HermesBundled-1.2.3-win-{arch}.msix'
                 handoff_name = f'win32-{arch}'
             elif platform == 'macos':
-                package = f'HermesBundled-1.2.3-mac-{arch}.zip'
+                package = next(Path(key).name for key in mac_bytes if key.endswith(f'-mac-{arch}.zip'))
                 row.update(version='1.2.3', teamId='ABCDEFGHIJ', filename=package)
                 handoff_name = f'darwin-{arch}'
             else:
@@ -254,8 +285,8 @@ def test_promote_writes_the_stable_mac_feed_from_the_attempt_archive(tmp_path, m
     assert feed['version'] != manifest['archive']
     urls = [entry['url'] for entry in feed['files']]
     assert urls and all(url.startswith(f"/releases/tag/{manifest['archive']}/") for url in urls)
-    assert f"/releases/tag/{manifest['archive']}/HermesBundled-1.2.3-mac-arm64.zip" in urls
-    assert f"/releases/tag/{manifest['archive']}/HermesBundled-1.2.3-mac-x64.zip" in urls
+    mac_packages = [Path(key).name for key in _inputs('1.2.3')[1]]
+    assert set(urls) == {f"/releases/tag/{manifest['archive']}/{name}" for name in mac_packages}
 
     # A release that did not opt into macOS Intel or Termux promotes an
     # arm64-only Mac feed and leaves the APT channel untouched.
@@ -272,7 +303,7 @@ def test_promote_writes_the_stable_mac_feed_from_the_attempt_archive(tmp_path, m
     assert puts == ['/hermes-releases/releases/darwin/stable/stable-mac.yml',
                     '/hermes-releases/releases/win32/stable/stable.appinstaller']
     feed = hermes_yaml.safe_load(r2_server.store['releases/darwin/stable/stable-mac.yml'][0].decode())
-    assert [entry['url'].rsplit('/', 1)[1] for entry in feed['files']] == ['HermesBundled-1.2.3-mac-arm64.zip']
+    assert [entry['url'].rsplit('/', 1)[1] for entry in feed['files']] == [name for name in mac_packages if name.endswith('-mac-arm64.zip')]
 
 
 def test_promote_refuses_when_one_macos_arch_is_missing(tmp_path, monkeypatch, r2_server, https_origin, staged_candidate):

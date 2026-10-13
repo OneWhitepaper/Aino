@@ -54,17 +54,27 @@ from urllib.parse import quote
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from scripts.releases import handoff, r2, semver, stable, versioning
+from scripts.releases.channel_releases import product_identity
 
 MARKER = "<!-- HERMES_BUILDS_TABLE -->"
 END_MARKER = "<!-- /HERMES_BUILDS_TABLE -->"
-DEFAULT_REPO = "NousResearch/hermes-agent"
+_BRAND = json.loads((Path(__file__).resolve().parents[1] / "apps/desktop/brand.json").read_text(encoding="utf-8-sig"))
+DEFAULT_REPO = _BRAND["repositoryUrl"].removeprefix("https://github.com/").rstrip("/")
+_PRODUCT_NAME = _BRAND["productName"]
+# Existing upstream release records remain readable; new artifacts use the
+# packager's identity so changing product branding cannot hide downloads.
+_PRODUCTS = {variant: product_identity("v0.0.0", variant=variant) for variant in ("bundled", "light")}
+_APP_TITLES = {"HermesBundled": "Hermes Desktop", "HermesLight": "Hermes Light (remote-only client)",
+               **{identity["artifactNamePascal"]: identity["displayName"] for identity in _PRODUCTS.values()}}
+_BUNDLED_PATTERN = "(?:" + "|".join(re.escape(name) for name in
+                                  dict.fromkeys(("HermesBundled", _PRODUCTS["bundled"]["artifactNamePascal"]))) + ")"
 
 # Asset name shapes (electron-builder artifactName in
 # apps/desktop/electron-builder.config.cjs):
 #   Hermes-0.28.0-mac-arm64.dmg        (bundled)
 #   HermesBundled-0.28.0-win-x64.msix  (bundled)
 _ASSET_RE = re.compile(
-    r"^(?P<app>HermesBundled|HermesLight)-(?P<version>[^-]+)"
+    r"^(?P<app>" + "|".join(re.escape(name) for name in _APP_TITLES) + r")-(?P<version>[^-]+)"
     r"-(?P<os>mac|win|linux)-(?P<arch>x64|arm64)\.(?P<ext>dmg|msix|AppImage)$"
 )
 
@@ -89,7 +99,7 @@ def parse_assets(names: list[str]) -> dict[str, dict[tuple[str, str], tuple[str,
     the basename, but the stored name keeps the full key so the download
     link points at the object's real location.
     """
-    out: dict[str, dict[tuple[str, str], tuple[str, str]]] = {"HermesBundled": {}, "HermesLight": {}}
+    out: dict[str, dict[tuple[str, str], tuple[str, str]]] = {app: {} for app in _APP_TITLES}
     for name in names:
         base = name.rsplit("/", 1)[-1]
         m = _ASSET_RE.match(base)
@@ -105,7 +115,7 @@ def table_rows(assets_by_app: dict) -> list[tuple[str, list[tuple[str, str, str,
     a row exists only for an object that is actually in the bucket.
     """
     sections: list[tuple[str, list[tuple[str, str, str, str]]]] = []
-    for app, title in (("HermesBundled", "Hermes Desktop"), ("HermesLight", "Hermes Light (remote-only client)")):
+    for app, title in _APP_TITLES.items():
         rows = []
         for key in _ROW_ORDER:
             entry = assets_by_app.get(app, {}).get(key)
@@ -176,19 +186,19 @@ def filter_names_for_version(names: list[str], version: str) -> list[str]:
 # A row needs a unique receipt-listed artifact and its uploaded object.
 _COMMIT_EXPECTED = [
     ("Windows x64 (MSIX)", "win32-x64",
-     r"^HermesBundled-[^-]+-win-x64\.msix$"),
+     r"^" + _BUNDLED_PATTERN + r"-[^-]+-win-x64\.msix$"),
     ("Windows ARM64 (MSIX)", "win32-arm64",
-     r"^HermesBundled-[^-]+-win-arm64\.msix$"),
+     r"^" + _BUNDLED_PATTERN + r"-[^-]+-win-arm64\.msix$"),
     ("Windows universal bundle (MSIXBUNDLE)", "windows-universal",
-     r"^HermesBundled-[^-]+-win\.msixbundle$"),
+     r"^" + _BUNDLED_PATTERN + r"-[^-]+-win\.msixbundle$"),
     ("macOS Apple Silicon (DMG)", "darwin-arm64",
-     r"^HermesBundled-[^-]+-mac-arm64\.dmg$"),
+     r"^" + _BUNDLED_PATTERN + r"-[^-]+-mac-arm64\.dmg$"),
     ("macOS Intel (DMG)", "darwin-x64",
-     r"^HermesBundled-[^-]+-mac-x64\.dmg$"),
+     r"^" + _BUNDLED_PATTERN + r"-[^-]+-mac-x64\.dmg$"),
     ("macOS Apple Silicon (ZIP)", "darwin-arm64",
-     r"^HermesBundled-[^-]+-mac-arm64\.zip$"),
+     r"^" + _BUNDLED_PATTERN + r"-[^-]+-mac-arm64\.zip$"),
     ("macOS Intel (ZIP)", "darwin-x64",
-     r"^HermesBundled-[^-]+-mac-x64\.zip$"),
+     r"^" + _BUNDLED_PATTERN + r"-[^-]+-mac-x64\.zip$"),
     ("Termux aarch64 (.deb)", "termux", r"^.*\.deb$"),
 ]
 
@@ -405,7 +415,7 @@ def render_page(tag: str, assets_by_app: dict, base_url: str,
     channel = r2.channel_for_tag(tag)
     tag_url = f"https://github.com/{quote(repo, safe='/')}/releases/tag/{quote(tag, safe='')}"
     body = [
-        f"<h1>Hermes Desktop {channel} builds</h1>",
+        f"<h1>{html.escape(_PRODUCT_NAME)} Desktop {channel} builds</h1>",
         f"<p>Release {_link(tag_url)}<code>{html.escape(tag)}</code></a>. Only objects this release "
         "actually staged in the bucket are listed.</p>",
     ]
@@ -438,7 +448,7 @@ def render_page(tag: str, assets_by_app: dict, base_url: str,
             [[html.escape(job), f"{_link(run_url)}View build run</a>"] for job in incomplete_jobs],
         ))
     body.extend(smoke_html(smoke_results))
-    return _page(f"Hermes Desktop {channel} builds", tag, body)
+    return _page(f"{_PRODUCT_NAME} Desktop {channel} builds", tag, body)
 
 
 def render_commit_page(commit: str, names: list[str], base_url: str,
@@ -455,7 +465,7 @@ def render_commit_page(commit: str, names: list[str], base_url: str,
         cell = (f"{_link(url)}{html.escape(link_text)}</a>" if url and link_text else "—")
         rows.append([html.escape(label), html.escape(status), cell])
     body = [
-        f"<h1>Hermes commit build <code>{html.escape(commit[:12])}</code></h1>",
+        f"<h1>{html.escape(_PRODUCT_NAME)} commit build <code>{html.escape(commit[:12])}</code></h1>",
         f"<p>Commit {_link(commit_url)}<code>{html.escape(commit)}</code></a>. Every expected binary is listed; "
         "built rows link to downloads; incomplete rows link to the build run when available.</p>",
         *_table(("Binary", "Status", "Download / diagnostics"), rows),
@@ -474,7 +484,7 @@ def render_commit_page(commit: str, names: list[str], base_url: str,
             ]),
         ])
     body.extend(smoke_html(smoke_results))
-    return _page(f"Hermes commit build {commit[:12]}", commit, body)
+    return _page(f"{_PRODUCT_NAME} commit build {commit[:12]}", commit, body)
 
 
 def recorded_build(page: str | None) -> str | None:

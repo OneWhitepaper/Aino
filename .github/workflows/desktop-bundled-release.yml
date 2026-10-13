@@ -1754,8 +1754,9 @@ jobs:
       - name: Retrieve the tested universal bundle
         shell: bash
         run: |
+          product=$(node -p "require('./apps/desktop/product-identity.cjs').artifactNamePascal")
           python -m scripts.releases.handoff fetch --tag "$HERMES_PAYLOAD_TAG" --commit "$RELEASE_COMMIT" \
-            --name windows-universal --root staged --include 'HermesBundled-*-win.msixbundle'
+            --name windows-universal --root staged --include "${product}-*-win.msixbundle"
       - name: Publish identical tested bytes without rebuilding
         shell: bash
         run: |
@@ -1763,17 +1764,17 @@ jobs:
             import identity from "./apps/desktop/product-identity.cjs";
             import { appIdentity, OUT_OF_STORE_PUBLISHER } from "./scripts/msix-shared.mjs";
             const build = appIdentity(process.cwd() + "/apps/desktop");
-            console.log(JSON.stringify({identity: identity.msixAppIdWithOrg, publisher: OUT_OF_STORE_PUBLISHER, version: build.version}));
+            console.log(JSON.stringify({identity: identity.msixAppIdWithOrg, artifactName: build.name, publisher: OUT_OF_STORE_PUBLISHER, version: build.version}));
           ' > staged/expected-identity.json
           python - <<'PY'
           import json, os, re
           from pathlib import Path
           from scripts.bundles.release_artifacts import main, single
           expected = json.loads(Path('staged/expected-identity.json').read_text(encoding='utf-8'))
-          bundle = single(Path('staged').glob('HermesBundled-*-win.msixbundle'))
+          bundle = single(Path('staged').glob(f"{expected['artifactName']}-*-win.msixbundle"))
           # The handoff binds the assembly filename and bytes. Never recompute
           # its revision against stable tags that can change after native smoke.
-          match = re.fullmatch(r'HermesBundled-(\d+\.\d+\.\d+\.\d+)-win\.msixbundle', bundle.name)
+          match = re.fullmatch(re.escape(expected['artifactName']) + r'-(\d+\.\d+\.\d+\.\d+)-win\.msixbundle', bundle.name)
           if not match:
               raise ValueError('Missing assembly version in receipt-bound bundle name')
           version = match[1]

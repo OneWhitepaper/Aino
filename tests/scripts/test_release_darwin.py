@@ -13,6 +13,7 @@ import pytest
 import hermes_yaml as yaml
 
 from scripts.releases import darwin, r2
+from scripts.releases.channel_releases import product_identity
 from tests.scripts.test_release_r2 import r2_server
 from scripts.releases.darwin import (
     _darwin_feed,
@@ -26,8 +27,9 @@ def _inputs(version="0.28.0", light=False):
     channel = "canary" if "+canary." in version else "stable"
     bytes_by_key = {}
     legs = {}
+    product = product_identity(f"v{version}", variant="light" if light else "bundled")["artifactNamePascal"]
     for i, arch in enumerate(("arm64", "x64")):
-        name = f"{'HermesLight' if light else 'HermesBundled'}-{version}-mac-{arch}.zip"
+        name = f"{product}-{version}-mac-{arch}.zip"
         data = f"test artifact {arch}".encode()
         bytes_by_key[f"releases/tag/v{version}/{name}"] = data
         file_entry = {
@@ -108,7 +110,7 @@ def test_rejects_broken_legs_instead_of_publishing(kind):
         if kind == "version":
             feed["version"] = "0.27.0"
         if kind == "variant":
-            feed["files"][0]["url"] = feed["files"][0]["url"].replace("HermesBundled", "HermesLight")
+            feed["files"][0]["url"] = feed["files"][0]["url"].replace("Bundled", "Light")
         if kind == "hash":
             feed["files"][0]["sha512"] = "invalid"
         if kind == "legacy":

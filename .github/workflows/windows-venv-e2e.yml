@@ -74,8 +74,7 @@ jobs:
         run: |
           scripts/run_tests.sh \
             tests/hermes_cli/test_update_runtime_windows_live.py \
-            tests/scripts/desktop_update/test_desktop_update_runtime_launch.py \
-            -m windows_only -v
+            -m platforms -v
 
       - name: Run Telegram CLOSE-WAIT reconnect live E2E (#87057)
         shell: bash

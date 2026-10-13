@@ -132,6 +132,9 @@ def selected_files(step: dict, ctx: dict, repo: Path) -> set[str]:
             if arg == "--files":
                 i += 1
                 paths.extend(args[i].split(os.pathsep))
+            elif arg in ("-j", "--jobs"):
+                i += 1
+                assert int(args[i]) > 0, args  # concurrency does not alter file selection
             elif arg == "-m":
                 i += 1  # native marker evaluation belongs to the native runner
                 assert args[i] in ("platforms and integration", "platforms and not integration"), args

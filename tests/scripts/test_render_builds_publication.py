@@ -19,6 +19,19 @@ rbt = importlib.util.module_from_spec(_SPEC)
 _SPEC.loader.exec_module(rbt)
 
 
+def test_packager_named_assets_reach_download_and_commit_tables():
+    from scripts.releases.channel_releases import product_identity
+
+    for variant in ('bundled', 'light'):
+        product = product_identity('v1.2.3', variant=variant)['artifactNamePascal']
+        name = f'{product}-1.2.3-mac-arm64.dmg'
+        assets = rbt.parse_assets([name])
+        rows = [row for _, section in rbt.table_rows(assets) for row in section]
+        assert [row[-1] for row in rows] == [name]
+        if variant == 'bundled':
+            assert any(re.fullmatch(pattern, name) for _, _, pattern in rbt._COMMIT_EXPECTED)
+
+
 @pytest.fixture
 def release_body(monkeypatch):
     state = {'body': '# Notes\n\n<!-- HERMES_BUILDS_TABLE -->\n\n## Changes\n- x\n', 'edits': []}

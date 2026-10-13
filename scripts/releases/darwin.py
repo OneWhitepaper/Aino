@@ -100,11 +100,14 @@ def merge_mac_feeds(legs: dict[str, str], tag: str, light: bool = False,
                          else "Expected exactly one ARM64 macOS feed")
     files: dict[str, dict[str, Any]] = {}
     first: dict[str, Any] | None = None
+    from .channel_releases import product_identity
+
+    product = product_identity(tag, variant="light" if light else "bundled")["artifactNamePascal"]
     for index, name in enumerate(expected):
         leg = parse_mac_feed(legs[name])
         if str(leg.get("version")) != version:
             raise ValueError(f"Feed version does not match {tag}")
-        prefix = f"{'HermesLight' if light else 'HermesBundled'}-{version}-mac-{arches[index]}"
+        prefix = f"{product}-{version}-mac-{arches[index]}"
         if not any(f.get("url") == f"{prefix}.zip" for f in leg["files"]):
             raise ValueError(f"Missing native ZIP for {arches[index]}")
         for file_entry in leg["files"]:

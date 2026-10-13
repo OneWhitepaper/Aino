@@ -122,6 +122,13 @@ def _inputs_for(called: str, given: dict[str, Any]) -> dict[str, Any]:
     return {name: given.get(name, spec.get("default")) for name, spec in declared.items()}
 
 
+@cache
+def _matrix_outputs(step_json: str, ctx_json: str) -> dict[str, str]:
+    # Cache by the actual step and context: mutation controls still execute their
+    # modified scripts, while lane permutations share identical discovery work.
+    return workflow_steps.outputs(json.loads(step_json), json.loads(ctx_json), _REPO)
+
+
 def _run_workflow(rel: str, *, inputs: dict[str, Any], detect: dict[str, Any] | None = None) -> dict:
     """Which jobs of ``rel`` run on a pull request, recursing into called workflows.
 
@@ -161,10 +168,12 @@ def _run_workflow(rel: str, *, inputs: dict[str, Any], detect: dict[str, Any] | 
             if not gha.condition(cond, ctx):
                 continue
             entry: dict[str, Any] = {"ctx": ctx, "body": body}
-            if name == "e2e-upgrade-plan":
-                plan = next(s for s in body["steps"] if s.get("id") == "plan")
-                entry["outputs"] = workflow_steps.outputs(plan, ctx, _REPO)
-                assert json.loads(entry["outputs"]["shards"]), "upgrade plan selected no shards"
+            if name == "test-matrix":
+                plan = next(s for s in body["steps"] if s.get("id") == "matrix")
+                step_outputs = _matrix_outputs(json.dumps(plan, sort_keys=True), json.dumps(ctx, sort_keys=True))
+                output_ctx = {**ctx, "steps": {"matrix": {"outputs": step_outputs}}}
+                entry["outputs"] = {k: gha.render(v, output_ctx) for k, v in body["outputs"].items()}
+                assert all(json.loads(value)["slice"] for value in entry["outputs"].values())
             uses = body.get("uses")
             if isinstance(uses, str) and uses.startswith("./.github/workflows/"):
                 called = uses[2:]
@@ -189,15 +198,23 @@ def _reached(run: dict, *path: str) -> dict | None:
     return node
 
 
+@cache
+def _selection_receipt(step_json: str) -> frozenset[str]:
+    return frozenset(workflow_steps.selected_files(json.loads(step_json), {}, _REPO))
+
+
 def _selected_test_files(node: dict, name: str, *, windows_only: bool = False) -> set[str]:
     body, ctx = node["body"], node["ctx"]
     steps = [s for s in body["steps"] if s.get("name", "").startswith(name)]
     assert len(steps) == 1, f"missing/ambiguous required step: {name}"
-    matrix = body.get("strategy", {}).get("matrix", {})
-    if "shard" in matrix:
-        cells = [{"shard": s} for s in gha.render(matrix["shard"], ctx)]
+    matrix = gha.render(body.get("strategy", {}).get("matrix", {}), ctx)
+    if "include" in matrix:
+        assert set(matrix) == {"include"}, "combined include/axis matrices need explicit replay semantics"
+        cells = matrix["include"]
     else:
-        cells = matrix.get("include", [{}])
+        assert "exclude" not in matrix, "matrix exclusions need explicit replay semantics"
+        cells = [dict(zip(matrix, values)) for values in itertools.product(
+            *(gha.render(values, ctx) for values in matrix.values()))]
     if windows_only:
         cells = [cell for cell in cells if cell.get("marker") == "windows"]
     assert cells, f"{name}: empty matrix"
@@ -209,7 +226,11 @@ def _selected_test_files(node: dict, name: str, *, windows_only: bool = False) -
             "arch": "ARM64" if "arm" in runner else "X64",
         }}
         workflow_steps.required(body, context)
-        selected |= workflow_steps.selected_files(steps[0], context, _REPO)
+        # Identical rendered invocations share receipts across lane permutations.
+        # Mutated commands, gates and selections get different keys and execute.
+        rendered = {key: ({k: gha.render(v, context) for k, v in value.items()} if key == "env"
+                          else gha.render(value, context)) for key, value in steps[0].items()}
+        selected |= _selection_receipt(json.dumps(rendered, sort_keys=True))
     return selected
 
 
@@ -228,7 +249,6 @@ def _windows_desktop_updater_tests_selected(run: dict) -> bool:
 # Each real consumer of a lane, as a path of job names from ci.yaml down.
 _CONSUMERS: dict[str, tuple[tuple[str, ...], ...]] = {
     "e2e_upgrade": (
-        ("tests", "e2e-upgrade-plan"),
         ("tests", "e2e-upgrade"),
         ("tests-os", "install-update-e2e", "install-update"),
     ),
@@ -244,7 +264,7 @@ def _consumers_reached(run: dict, lane: str) -> dict[str, bool]:
     reached = {}
     for path in _CONSUMERS[lane]:
         node = _reached(run, *path)
-        if node is None or path[-1] == "e2e-upgrade-plan":
+        if node is None:
             reached["/".join(path)] = node is not None
             continue
         name = next(name for _, _, job, name in _REQUIRED_STEP_CASES if job == path[-1])
@@ -512,6 +532,8 @@ def test_replay_rejects_ineffective_required_step(monkeypatch, lane, rel, job, n
     elif mutation == "no-command":
         # Keep every old substring/regex check satisfied, but execute no tests.
         step["run"] = "if false; then\n" + step["run"] + "\nfi\n"
+    elif "TEST_FILES" in step.get("env", {}):
+        step["env"]["TEST_FILES"] = "tests/absent-e2e/test_missing.py"
     elif job == "os-tests":
         step["run"] = step["run"].replace('"${{ matrix.marker }}"', '"macos"')
     elif job == "update":
@@ -532,8 +554,24 @@ def test_selection_receipt_does_not_require_the_native_jobs_venv(tmp_path):
     test_file = tmp_path / rel
     test_file.parent.mkdir(parents=True)
     test_file.write_text("def test_owned(): pass\n", encoding="utf-8")
-    ctx = {"matrix": {"shard": "core"}, "inputs": {}}
+    ctx = {"matrix": {"slice": {"files": rel}}, "inputs": {}}
     assert workflow_steps.selected_files(step, ctx, tmp_path) == {rel}
+
+
+def test_generated_e2e_matrices_run_each_owned_file_once():
+    run = _run_workflow(".github/workflows/tests.yml", inputs={"e2e": True, "e2e_upgrade": True})
+    expected = {path.relative_to(_REPO).as_posix() for path in (_REPO / "tests/e2e").rglob("test_*.py")}
+    upgrade = {path for path in expected if path.startswith("tests/e2e/core/upgrade/")}
+    core = {path for path in expected - upgrade if not path.startswith("tests/e2e/core/live/")}
+    for output, job, name, owned in (
+        ("e2e", "e2e", "Run e2e tests", core),
+        ("upgrade", "e2e-upgrade", "Run upgrade e2e tests", upgrade),
+    ):
+        matrix = json.loads(run["test-matrix"]["outputs"][output])
+        planned = [path for cell in matrix["slice"] for path in cell["files"].split(":")]
+        assert len(planned) == len(set(planned)), f"{output}: duplicate test files across slices"
+        assert set(planned) == owned
+        assert _selected_test_files(run[job], name) == owned
 
 
 @_NATIVE_WINDOWS_TOO

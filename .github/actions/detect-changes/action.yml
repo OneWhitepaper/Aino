@@ -103,16 +103,12 @@ runs:
           # freshly-pushed HEAD would otherwise silently fall open (all lanes
           # run — safe, but wasteful and it masks the API failure).
           #
-          # `.files[]?` (null-safe): with --paginate, a PR more than 100
-          # commits ahead of its merge-base paginates the compare, and pages
-          # after the first carry `files: null` — bare `.files[]` makes jq
-          # die with "cannot iterate over: null", which fails every retry
-          # and forces the fail-open path (seen on stacked PRs). The full
-          # file list (up to the API's 300-file cap) is on page one.
+          # Files are only on page one. Paginating walks every commit page
+          # without recovering more paths and can time out on upstream syncs.
+          # A saturated 300-path response makes the classifier run all lanes.
           CHANGED=""
           for i in 1 2 3; do
             if CHANGED="$(gh api \
-              --paginate \
               "repos/${REPO}/compare/${BASE_SHA}...${HEAD_SHA}" \
               --jq '.files[]?.filename')"; then
               break
