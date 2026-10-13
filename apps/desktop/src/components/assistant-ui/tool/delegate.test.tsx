@@ -66,7 +66,7 @@ it('keeps child activity collapsed until requested and preserves access through 
   expect(screen.getByRole('textbox', { name: 'Instructions for this subagent' })).toBeTruthy()
   expect(screen.getByRole('button', { name: 'Stop' })).toBeTruthy()
   fireEvent.click(screen.getByRole('button', { name: 'Open in new window' }))
-  expect(openSessionInNewWindow).toHaveBeenCalledWith('child-1', { watch: true })
+  expect(openSessionInNewWindow).toHaveBeenCalledWith('child-1', { parentSessionId: 'owner', watch: true })
 
   const summary = `Verified the source. ${'Preserved detail. '.repeat(30)}Final evidence is available.`
   act(() =>

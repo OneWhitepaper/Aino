@@ -12,7 +12,7 @@ def test_native_profile_resolves_its_loopback_endpoint_without_managed_auth(tmp_
     """Wrong provider identity or transport would send this run to a different API."""
     from evals.ultra_delegation.hermes_driver import configure_profile, native_session_params
 
-    import yaml
+    import hermes_yaml as yaml
 
     source = {"model": {"default": "unused", "provider": "aino"},
               "agent": {"max_turns": 36}, "delegation": {"max_iterations": 16}}
@@ -24,19 +24,19 @@ def test_native_profile_resolves_its_loopback_endpoint_without_managed_auth(tmp_
     (profile / "config.yaml").write_text(yaml.safe_dump(config))
     repo = Path(__file__).resolve().parents[2]
     params = native_session_params(tmp_path, model="native-fixture-model", reasoning_effort="high")
-    script = '''
+    script = f'''
 import json, socket
 def deny(*args, **kwargs):
     raise AssertionError("Provider resolution must not access the network")
 socket.create_connection = socket.getaddrinfo = socket.socket.connect = deny
 from hermes_cli.runtime_provider import resolve_runtime_provider
-result = resolve_runtime_provider(requested=%r, target_model=%r)
-print("NATIVE_RUNTIME:" + json.dumps({key:result.get(key) for key in ("provider","api_mode","base_url","api_key")}))
-''' % (params["provider"], params["model"])
+result = resolve_runtime_provider(requested={params["provider"]!r}, target_model={params["model"]!r})
+print("NATIVE_RUNTIME:" + json.dumps({{key:result.get(key) for key in ("provider","api_mode","base_url","api_key")}}))
+'''
     kept = {key: value for key, value in os.environ.items()
             if key in ("PATH", "SYSTEMROOT", "WINDIR", "COMSPEC", "PATHEXT")}
     completed = subprocess.run(
-        [sys.executable, "-c", script], cwd=repo, text=True, capture_output=True, timeout=30,
+        [sys.executable, "-c", script], check=False, cwd=repo, text=True, capture_output=True, timeout=30,
         env={**kept, "HOME": str(home), "USERPROFILE": str(home),
              "HERMES_HOME": str(profile), "PYTHONPATH": str(repo)},
     )
@@ -74,7 +74,7 @@ def test_native_harness_rejects_unsupported_routes_before_creating_a_run(tmp_pat
     completed = subprocess.run(
         [sys.executable, str(repo / "evals/ultra_delegation/harness.py"),
          "large", "--driver=hermes", "--review-skill=none", option,
-         f"--output-root={output}"], stdin=subprocess.DEVNULL,
+         f"--output-root={output}"], check=False, stdin=subprocess.DEVNULL,
         text=True, capture_output=True, cwd=repo, timeout=30,
     )
     assert completed.returncode == 2
@@ -89,7 +89,7 @@ def test_native_harness_rejects_a_non_upstream_checkout_before_creating_a_run(tm
     completed = subprocess.run(
         [sys.executable, str(repo / "evals/ultra_delegation/harness.py"),
          "large", "--driver=hermes", "--review-skill=none", f"--repo={repo}",
-         f"--output-root={output}"], stdin=subprocess.DEVNULL,
+         f"--output-root={output}"], check=False, stdin=subprocess.DEVNULL,
         text=True, capture_output=True, cwd=repo, timeout=30,
     )
     assert completed.returncode == 2

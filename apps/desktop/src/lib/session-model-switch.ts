@@ -23,13 +23,15 @@ import {
   $currentPlatformOwner,
   $currentProvider,
   $currentReasoningEffort,
+  $currentReasoningEffortWire,
   getCurrentModelSource,
   markComposerSelectionManual,
   setCurrentModel,
   setCurrentModelSource,
   setCurrentPlatformOwner,
   setCurrentProvider,
-  setCurrentReasoningEffort
+  setCurrentReasoningEffort,
+  setCurrentReasoningEffortWire
 } from '@/store/session'
 import { $sessionStates, sessionTileDelegate } from '@/store/session-states'
 import type { SessionRuntimeInfo } from '@/types/hermes'
@@ -109,6 +111,7 @@ function captureModelSwitch({ selection, queryClient, profile, connectionId, cac
     model: primary ? $currentModel.get() : (previousState?.model ?? ''),
     provider: primary ? $currentProvider.get() : (previousState?.provider ?? ''),
     platformModel: previousState?.platformModel,
+    wire: primary ? $currentReasoningEffortWire.get() : (previousState?.reasoningEffortWire ?? ''),
     source: getCurrentModelSource(),
     owner: $currentPlatformOwner.get(),
     origin: $currentPlatformOrigin.get()
@@ -209,13 +212,14 @@ function captureModelSwitch({ selection, queryClient, profile, connectionId, cac
 
       if (rollback) {
         setCurrentModelSource(previous.source)
+        setCurrentReasoningEffortWire(previous.wire)
       } else {
         markComposerSelectionManual()
       }
     }
 
     if (tileExists()) {
-      sessionTileDelegate()?.updateSession(sessionId!, state => ({ ...state, model, provider, platformModel }))
+      sessionTileDelegate()?.updateSession(sessionId!, state => ({ ...state, model, provider, platformModel, reasoningEffortWire: rollback ? previous.wire : '' }))
     }
 
     cache(sessionId, provider, model, primary && !sessionId, profile)

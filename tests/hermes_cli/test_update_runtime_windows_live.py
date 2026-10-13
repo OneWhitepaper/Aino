@@ -48,7 +48,7 @@ finally:
 """
 
 
-@pytest.mark.windows_only
+@pytest.mark.platforms("windows")
 def test_config_cutover_with_a_real_directory_holder_checks_sqlite(tmp_path):
     root = tmp_path / "checkout"
     live = root / "venv"

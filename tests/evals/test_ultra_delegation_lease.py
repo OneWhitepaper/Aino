@@ -9,7 +9,7 @@ import sys
 import threading
 import time
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, UTC
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
@@ -93,7 +93,7 @@ class _LeaseHarness:
             'model': {'id': 'fixture-lease-model', 'model': 'gpt-5.6-sol', 'api_mode': 'responses',
                       'capabilities': {'tools': True, 'vision': False, 'reasoning': True}},
             'api_key': self.old_key, 'credential_id': 'fixture-initial', 'base_url': origin + '/v1',
-            'expires_at': (datetime.now(timezone.utc) + timedelta(minutes=10)).isoformat(),
+            'expires_at': (datetime.now(UTC) + timedelta(minutes=10)).isoformat(),
         }
 
     def start(self):
@@ -149,7 +149,7 @@ class _LeaseHarness:
 
     def renewed_lease(self):
         return {**self.lease, 'api_key': self.new_key, 'credential_id': 'fixture-renewed',
-                'expires_at': (datetime.now(timezone.utc) + timedelta(minutes=20)).isoformat()}
+                'expires_at': (datetime.now(UTC) + timedelta(minutes=20)).isoformat()}
 
     def finish(self):
         self.wait_stage('finished', timeout=25)

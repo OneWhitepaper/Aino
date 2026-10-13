@@ -102,7 +102,7 @@ def test_large_report_length_rejects_other_tasks_before_creating_a_run(tmp_path,
     completed = subprocess.run(
         [sys.executable, str(repo / "evals/ultra_delegation/harness.py"), scenario,
          f"--large-report-length={policy}", *options, f"--output-root={output}"],
-        cwd=repo, text=True, capture_output=True, timeout=10,
+        check=False, cwd=repo, text=True, capture_output=True, timeout=10,
     )
     assert completed.returncode == 2
     assert "--large-report-length" in completed.stderr
@@ -189,7 +189,7 @@ def test_review_skill_candidate_rejects_unsupported_paths_before_creating_a_run(
     completed = subprocess.run(
         [sys.executable, str(repo / "evals/ultra_delegation/harness.py"), scenario,
          *options, f"--output-root={output}"],
-        cwd=repo, text=True, capture_output=True, timeout=10,
+        check=False, cwd=repo, text=True, capture_output=True, timeout=10,
     )
     assert completed.returncode == 2
     assert "candidate" in completed.stderr

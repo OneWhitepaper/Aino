@@ -387,8 +387,9 @@ renderer and Electron's first window paint.
 | `--aino-surface-*`, `--aino-scrim`, `--aino-focus-ring` | shared paper, rail, strokes, state fills, backdrop and input focus |
 | `--aino-landing-*`, `--shadow-aino-landing-composer` | home/sidebar aliases of the shared semantic roles and `shadow-nous`; no independent light or dark palette |
 
-Never hardcode `border-gray-*`, `bg-white`, `text-black`, etc. The white tile in
-`BrandMark` is the one sanctioned literal (the mark needs a fixed backdrop).
+Never hardcode `border-gray-*`, `bg-white`, `text-black`, etc. The two tiles in
+`BrandMark` (white in light mode, `#0d1117` in dark) are the sanctioned literals
+(the mark needs a fixed backdrop).
 
 ## Buttons — one component
 
@@ -469,6 +470,13 @@ Notes:
 `src/components/ui/badge.tsx`. Variants: `default` (neutral soft fill), `muted`,
 `warn`, `destructive`, `outline`, `solid` (primary fill — icon-corner counts).
 Sizes: `default`, `xs`, `overlay` (titlebar glyph counts).
+
+## Profile rail
+
+The profile rail keeps its create/import actions outside the scrolling squares.
+Clipped horizontal edges reuse `edgeMask(edges, 'x')` from `fade-scroll.tsx`;
+the default axis remains vertical for `FadeScroll`. Fitting content is unmasked,
+and profile drag gestures temporarily remove the mask so the dragged square stays legible.
 
 ## Context-sensitive dialogs
 
@@ -606,6 +614,16 @@ so glass and message-bubble transparency do not reveal scrolling text.
   that wants the answer inline instead of a mounted dialog calls `confirm()`
   from `src/store/confirm.ts`, which renders this same primitive through the
   single `ConfirmHost` at the shell — the way `notify()` backs notifications.
+
+## Chat typography
+
+Appearance → Typography keeps **UI Scale** as whole-window zoom (100% by
+default). **Chat Text Size** is a separate desktop-local multiplier (110% by
+default) on conversation text and the composer editor, including floating and
+inline-edit composers.
+It does not resize the sidebar, settings, toolbars, media, or pane geometry.
+Conversation size and line-height tokens are derived inside the transcript/editor
+from their root base tokens; do not multiply the global tokens or nest CSS zoom.
 
 ## Chat, tools & boot surfaces
 
@@ -835,6 +853,13 @@ so glass and message-bubble transparency do not reveal scrolling text.
 - Terminals/editors, user artifacts, external sites and cross-origin Skills Hub
   contents are content boundaries. Unify all Aino-owned chrome, controls and
   loading/error states around them; preserve external content and semantic output.
+- Guide startup has a dedicated landing screen with the shared long-operation
+  Loader and a localized startup label. It remains active until the guide's
+  saved conversation is loaded. No greeting, composer, Skip setup, or statusbar
+  appears early. Reduced motion uses a static BrandMark and the same label.
+  On readiness, reveal the real conversation and fade controls in over 100ms.
+  Never fabricate progress, delay readiness for motion, or replace a resumed
+  conversation with a new greeting.
 - Respect `AppShell` overlay ownership. Persistent terminal/content layers,
   route overlays, dialogs, and boot surfaces must not compete through ad-hoc
   z-index literals. Pick a rung of the ladder in `styles.css` instead —
@@ -928,6 +953,9 @@ long transcript or a busy terminal.
   tone consistent across all of them. `fr`, `de`, and `es` are complete
   `Translations` objects, so a key missing there fails the type check; the
   `defineLocale()` overlays fall back to English instead.
+- **Sparse locales** (`ar`, `ru`) override the English base through
+  `defineLocale()`. Large catalogs are split by topic: the Arabic source lives
+  in `src/i18n/ar_<topic>.ts`, recomposed by `src/i18n/ar.ts`.
 
 ## State (TypeScript)
 

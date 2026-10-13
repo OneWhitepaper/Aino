@@ -12,6 +12,7 @@
     "exactOptionalPropertyTypes": false,
     "ignoreDeprecations": "6.0",
     "composite": true,
+    "noEmit": false,
     "declaration": true,
     "rootDir": "..",
     "outDir": "build/electron-types"
@@ -27,7 +28,14 @@
     "../shared/src/json-rpc-gateway.ts",
     "../shared/src/json-rpc-channel.ts",
     "../shared/src/gateway-events.ts",
-    "../shared/src/gateway-contract.generated.ts"
+    "../shared/src/gateway-contract.generated.ts",
+    "product-identity.cjs",
+    "product-identity.d.cts",
+    "update-feed.cjs",
+    "update-feed.d.cts"
   ],
-  "exclude": ["src", "electron/**/*.e2e.mts"]
+  "exclude": [
+    "src",
+    "electron/**/*.e2e.mts"
+  ]
 }

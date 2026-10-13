@@ -2,7 +2,7 @@
 
 import pytest
 
-from tests.tui_gateway.test_managed_model_agent import managed_gateway  # noqa: F401
+from tests.tui_gateway.test_managed_model_agent import managed_gateway
 from tui_gateway import server as srv
 from tui_gateway.managed_model_usage import begin_managed_usage, end_managed_usage
 

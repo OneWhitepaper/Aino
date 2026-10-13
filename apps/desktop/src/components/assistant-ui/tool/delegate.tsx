@@ -42,8 +42,13 @@ function DelegateRowView({ row, parentSessionId }: DelegateRowViewProps) {
   const failed = row.status === 'failed' || row.status === 'interrupted'
 
   // Only a child that reported its own session id has somewhere to go.
-  const open = sessionId ? () => void openSessionInNewWindow(sessionId, { watch: true }) : undefined
+  const open = sessionId ? () => void openSessionInNewWindow(sessionId, { watch: true, parentSessionId }) : undefined
 
+  // The scaffold mark goes on the goal row, NEVER on this wrapper: it fades to
+  // 0.67, and opacity opens a stacking context around the ticker's transformed
+  // reel, which is how old activity lines painted through the one-line window
+  // and the whole card read as stacked ghosts (#105579). styles.css's own
+  // invariant: the mark is per surface and never on a container.
   return (
     <div className="grid min-w-0 max-w-full gap-1" data-conversation-scaffold="" data-delegate-status={row.status}>
       <ScaffoldRow

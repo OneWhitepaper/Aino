@@ -1,6 +1,6 @@
 """Narrow delegation from the owning chat socket to a main-process socket."""
 
-from datetime import datetime, timezone
+from datetime import datetime, UTC
 from urllib.parse import urlsplit
 
 from pathlib import Path
@@ -81,8 +81,8 @@ def _claim_managed_model(params, sid, session, peer):
 
 def _binding(params, sid):
     owner = _managed_owner(params)
-    expires = datetime.fromisoformat(_managed_text(params, "expires_at").replace("Z", "+00:00"))
-    if expires.tzinfo is None or expires <= datetime.now(timezone.utc):
+    expires = datetime.fromisoformat(_managed_text(params, "expires_at"))
+    if expires.tzinfo is None or expires <= datetime.now(UTC):
         raise ManagedBindingError("managed_binding_expired")
     revision = params.get("binding_revision")
     if type(revision) is not int or revision <= 0:

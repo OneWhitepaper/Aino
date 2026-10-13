@@ -32,17 +32,17 @@ def _write_executable(path: Path, machine: int | None = None) -> Path:
         pytest.param(
             "mac-arm64/Aino.app/Contents/MacOS/Aino",
             "mac/Hermes.app/Contents/MacOS/Hermes",
-            marks=pytest.mark.macos_only,
+            marks=pytest.mark.platforms("macos"),
             id="macos",
         ),
         pytest.param(
             "linux-unpacked/Aino", "linux-arm64-unpacked/hermes",
-            marks=pytest.mark.linux_only,
+            marks=pytest.mark.platforms("linux"),
             id="linux",
         ),
         pytest.param(
             "win-unpacked/Aino.exe", "win-arm64-unpacked/Hermes.exe",
-            marks=pytest.mark.windows_only,
+            marks=pytest.mark.platforms("windows"),
             id="windows",
         ),
     ],
@@ -64,7 +64,7 @@ def test_packaged_executable_prefers_current_product_with_legacy_fallback(
     assert main_desktop._desktop_packaged_executable_in(release) == legacy
 
 
-@pytest.mark.windows_only
+@pytest.mark.platforms("windows")
 def test_windows_architecture_preference_precedes_product_preference(tmp_path):
     """An Aino build for an unloadable PE machine must not hide a runnable app."""
     release = tmp_path / "release"

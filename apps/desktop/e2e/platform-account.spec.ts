@@ -1,3 +1,4 @@
+import { writeEnvFile, writeMockProviderConfig } from '../../../tests-js/scripts/mock-provider-config'
 import * as fs from 'node:fs'
 import * as http from 'node:http'
 import * as path from 'node:path'
@@ -9,9 +10,8 @@ import {
   createSandbox,
   launchDesktop,
   waitForAppReady,
-  writeEnvFile,
-  writeMockProviderConfig
-} from './fixtures'
+
+  } from './fixtures'
 import { expect, test } from './test'
 
 interface NativeAccountWindow {
@@ -192,6 +192,8 @@ test('uses the real native platform bridge across windows without a gateway-owne
 
     await page.getByRole('textbox', { name: 'Phone number', exact: true }).fill('+8613800138000')
     await page.getByRole('checkbox', { name: 'Agree to the user agreement and privacy policy', exact: true }).check()
+    // This fixture covers shared in-memory authority, not the host's Keychain.
+    await page.getByRole('checkbox', { name: 'Keep me signed in on this device', exact: true }).uncheck()
     await page.getByRole('button', { name: 'Send code', exact: true }).click()
     await page.getByRole('textbox', { name: 'Verification code', exact: true }).fill('246810')
     expect(platform.requests.some(item => item.path === '/desktop/captcha')).toBe(false)

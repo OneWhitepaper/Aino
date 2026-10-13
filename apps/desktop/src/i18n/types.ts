@@ -8,7 +8,28 @@
 import type { ErrorCodeKey } from '@/lib/error-surface'
 import type { TipId } from '@/lib/tips/catalog'
 
-export type Locale = 'en' | 'zh' | 'zh-hant' | 'ja' | 'ar' | 'ru' | 'fr' | 'de' | 'es'
+import type { AppTourTranslations, HandoffTourTranslations } from './types_app_tour'
+import type { AuxTaskCopyMap } from './types_aux_tasks'
+import type { BillingTranslations } from './types_billing'
+import type { BootTranslations } from './types_boot'
+import type { CatalogInstallTranslations } from './types_catalog_install'
+import type { ConnectorAccountsTranslations, ConnectorCardTranslations } from './types_connectors'
+import type { ModelMenuTranslations } from './types_model_menu'
+import type { NoticeTranslations } from './types_notices'
+import type { OnboardingTranslations } from './types_onboarding'
+import type { SidebarProjectsTranslations } from './types_projects'
+import type { SharedMetricsTranslations } from './types_shared_metrics'
+import type { UninstallSectionTranslations } from './types_uninstall_section'
+import type { UpdateChannelCopy } from './types_update_channel'
+
+/** The locales compiled into the app (`TRANSLATIONS`). */
+export type BundledLocale = 'en' | 'zh' | 'zh-hant' | 'ja' | 'ar' | 'ru' | 'fr' | 'de' | 'es'
+
+/** Any language id the app can render: a bundled locale, or one a plugin /
+ *  the backend registered at runtime (`registerAppLocale`). Lowercase
+ *  BCP-47-ish (`pl`, `pt-br`). Resolve strings through the registry, never
+ *  by indexing `TRANSLATIONS` directly. */
+export type Locale = string
 
 /** One error-card entry: a short title and one plain sentence. Either may
  *  take the failing provider's display name (falls back to "the AI service"). */
@@ -35,6 +56,8 @@ export type ToolTitleKey =
   | 'read_file'
   | 'search_files'
   | 'session_search_recall'
+  | 'setup_choose'
+  | 'start_chat'
   | 'terminal'
   | 'todo'
   | 'vision_analyze'
@@ -53,48 +76,25 @@ interface ModeOptionCopy {
   description: string
 }
 
-interface AuxTaskCopy {
-  label: string
-  hint: string
-}
-
-export interface UpstreamTranslations {
+export interface UpstreamTranslations extends NoticeTranslations {
+  /** Shared-metrics consent: first-run dialog + Settings › Safety toggles. */
+  sharedMetrics: SharedMetricsTranslations
+  appTour: AppTourTranslations
+  externalOpenFailed: {
+    title: string
+    message: string
+    copyUrl: string
+    close: string
+    missing: {
+      title: string
+      message: string
+    }
+  }
   intro: {
     stock: Record<string, string[]>
     custom: (label: string) => string[]
   }
-  connectors: {
-    title: string
-    connect: string
-    skip: string
-    cancel: string
-    retry: string
-    grant: string
-    connected: string
-    checking: string
-    notConnected: string
-    skipped: string
-    disabled: string
-    failed: string
-    needsAuth: string
-    opening: string
-    waiting: string
-    timeout: string
-    refresh: string
-    connectError: string
-    connectErrorFor: (app: string) => string
-    unavailable: string
-    ownerMissing: string
-    search: string
-    empty: string
-    disclaimer: string
-    execution: string
-    setup: (server: string) => string
-    openInBrowser: string
-    setupCancel: string
-    authorizedToolsUnavailable: string
-    required: string
-  }
+  connectors: ConnectorCardTranslations
   connectorsPage: {
     title: string
     searchPlaceholder: (count: number) => string
@@ -248,6 +248,7 @@ export interface UpstreamTranslations {
       advanced: string
       advancedHint: string
     }
+    accounts: ConnectorAccountsTranslations
     tools: {
       title: string
       notInstalledBody: string
@@ -349,119 +350,6 @@ export interface UpstreamTranslations {
     continue: string
     importError: string
   }
-  platformUsage: {
-    pending: string
-    partial: string
-    settled: string
-    unverified: string
-    unavailable: string
-    signIn: string
-    retry: string
-    details: string
-    empty: string
-    truncated: string
-    recordSettled: string
-    notCharged: string
-    purposes: {
-      chat: string
-      title: string
-      compression: string
-      vision: string
-      delegation: string
-      session_summary: string
-      approval: string
-      mcp: string
-      tts_audio_tags: string
-      side_question: string
-      other_auxiliary: string
-    }
-  }
-  platformBillingHistory: {
-    orders: string
-    usage: string
-    empty: string
-    previous: string
-    next: string
-    open: string
-    error: string
-    retry: string
-    qrCode: string
-    filters: string
-    startDate: string
-    endDate: string
-    model: string
-    modelPlaceholder: string
-    purpose: string
-    allPurposes: string
-    search: string
-    reset: string
-    invalidDateRange: string
-    timezone: (zone: string) => string
-    totalRecords: (count: number) => string
-    pageSize: string
-    goToPage: (page: number) => string
-    jumpToPage: string
-    jump: string
-    noMatches: string
-    columns: { time: string; model: string; purpose: string; cost: string; status: string }
-    details: string
-    hideDetails: string
-    copyField: (label: string) => string
-    requestId: string
-    sessionId: string
-    turnId: string
-    callId: string
-    inputTokens: string
-    outputTokens: string
-    cacheReadTokens: string
-    cacheWriteTokens: string
-    unknown: string
-    unknownPurpose: string
-    unclassifiedHelp: string
-  }
-  platformModels: {
-    switchBusy: string
-    switchRecovery: string
-    builtIn: string
-    custom: string
-    search: string
-    signIn: string
-    loading: string
-    retry: string
-    myAccount: string
-    chooseCustom: string
-    recoveryFor: (model: string) => string
-    unavailable: string
-    empty: string
-    catalogError: string
-    balance: string
-    subscription: string
-    insufficient_balance: string
-    quota_exhausted: string
-    details: string
-    input: string
-    output: string
-    cacheRead: string
-    cacheWrite: string
-    context: string
-    tools: string
-    vision: string
-    reasoning: string
-    defaultModel: string
-    followCustom: string
-    defaultTag: string
-    not_authenticated: string
-    platform_account_changed: string
-    bindingFailed: string
-    unsupported: string
-    rate: string
-    tiers: string
-    timePricing: string
-    groupPeak: string
-    unknown: string
-    supported: string
-    unsupportedCapability: string
-  }
   common: {
     apply: string
     back: string
@@ -472,7 +360,6 @@ export interface UpstreamTranslations {
     choose: string
     clear: string
     close: string
-    actions: string
     collapse: string
     confirm: string
     connect: string
@@ -482,7 +369,6 @@ export interface UpstreamTranslations {
     copied: string
     copy: string
     copyFailed: string
-    clipboardUnavailable: string
     delete: string
     docs: string
     done: string
@@ -505,19 +391,10 @@ export interface UpstreamTranslations {
     tryHint: (term: string) => string
     on: string
     off: string
-  }
 
-  /** Empty-chat landing surface copy and quick actions. */
-  home: {
-    subtitle: string
-    placeholder: string
-    workspace: string
-    actions: {
-      analyze: { label: string; description: string; prompt?: string }
-      review: { label: string; description: string; prompt?: string }
-      research: { label: string; description: string; prompt?: string }
-      report: { label: string; description: string; prompt?: string }
-    }
+    actions: string
+
+    clipboardUnavailable: string
   }
 
   fileMenu: {
@@ -541,86 +418,10 @@ export interface UpstreamTranslations {
     revealUnavailable: string
   }
 
-  boot: {
-    ready: string
-    desktopBootFailedWithMessage: (message: string) => string
-    steps: {
-      connectingGateway: string
-      loadingSettings: string
-      loadingSessions: string
-      retryingRemoteBackend: string
-      startingDesktopConnection: string
-      startingHermesDesktop: string
-    }
-    errors: {
-      backgroundExited: string
-      backgroundExitedDuringStartup: string
-      backendStopped: string
-      restartHermes: string
-      openLogs: string
-      desktopBootFailed: string
-      gatewayConnectionLost: string
-      gatewayConnectionLostDetail: string
-      reconnectNow: string
-      connectionSettings: string
-      gatewaySignInRequired: string
-      gatewaySignInRequiredDetail: string
-      signInAgain: string
-      ipcBridgeUnavailable: string
-      backendConnectionTimeout: string
-      gatewayRevalidationTimeout: string
-      gatewayReconnectTimeout: string
-      gatewayWsRemintTimeout: string
-      gatewayFallbackTimeout: string
-      gatewayWsMintTimeout: string
-    }
-    causes: {
-      exitedEarly: string
-      timedOut: string
-      permission: string
-      diskFull: string
-      portInUse: string
-      installMissing: string
-    }
-    failure: {
-      title: string
-      description: string
-      details: string
-      remoteTitle: string
-      remoteDescription: string
-      retry: string
-      repairInstall: string
-      useLocalGateway: string
-      gatewaySettings: string
-      back: string
-      openLogs: string
-      repairHint: string
-      remoteSignInHint: (signInLabel: string) => string
-      signOutAndSignIn: string
-      remoteFailureHint: string
-      cloudDownTitle: string
-      cloudDownDescription: string
-      cloudDownHint: string
-      cloudDownCheckPortal: string
-      cloudDownDiscord: string
-      hideRecentLogs: string
-      showRecentLogs: string
-      signedInTitle: string
-      signedInMessage: string
-      signInIncompleteTitle: string
-      signInIncompleteMessage: string
-      signInFailed: string
-      signInToRemoteGateway: string
-      signInWithProvider: (provider: string) => string
-      identityProvider: string
-      /** Fixed Electron boot prefixes with backend diagnostics appended. */
-      backendStartFailed: (message: string, profile?: string) => string
-      backendExitedBeforeReady: (status: string, suffix: string, profile?: string) => string
-    }
-  }
+  boot: BootTranslations
 
   notifications: {
-    auxiliaryBillingSource: (provider: string) => string
+    sharedProfileWarning: string
     region: string
     hide: string
     show: string
@@ -629,14 +430,19 @@ export interface UpstreamTranslations {
     dismiss: string
     details: string
     copyDetail: string
+    compressDeferredDone: string
     copyDetailFailed: string
     backendOutOfDateTitle: string
     backendOutOfDateMessage: string
+    desktopOutOfDateTitle: string
+    desktopOutOfDateMessage: string
+    updateDesktopApp: string
     installMethodUnsupportedTitle: string
     updateHermes: string
     updateReadyTitle: string
     updateReadyMessage: (count: number) => string
     updateReadyMessageUnknown: string
+    updateReadyMessageAppInstaller: string
     seeWhatsNew: string
     mcp: {
       needsAuthTitle: string
@@ -658,12 +464,14 @@ export interface UpstreamTranslations {
       methodNotAllowed: string
       microphonePermission: string
       openaiRejectedApiKey: string
-      openaiRejectedApiKeyWithStatus: (status: string) => string
       openaiTtsNeedsKey: string
       codeSkewRestartRequired: string
-      spawnFailed: string
       rpcOutOfSync: string
       restartHermesFailed: string
+
+      openaiRejectedApiKeyWithStatus: (status: string) => string
+
+      spawnFailed: string
     }
     actions: {
       restartHermes: string
@@ -714,223 +522,11 @@ export interface UpstreamTranslations {
       backgroundFailedTitle: string
       creditsTitle: string
     }
+
+    auxiliaryBillingSource: (provider: string) => string
   }
 
-  remoteDisplayBanner: {
-    message: (reason: string) => string
-  }
-
-  billingBlock: {
-    titleNous: string
-    titleProvider: (provider: string) => string
-    fallbackMessage: string
-    openBilling: string
-    addCredits: string
-    dismiss: string
-  }
-
-  /** Billing settings page copy. Dynamic account values are supplied by the
-   * backend; these strings describe the controls and known state transitions. */
-  billing: {
-    heading: string
-    preview: string
-    previewAria: string
-    live: string
-    freeTier: {
-      signIn: string
-      title: string
-      message: string
-      caption: string
-      name: string
-      footnote: string
-      plan: string
-      model: string
-      connectors: string
-      included: string
-    }
-    summary: {
-      balance: string
-      plan: string
-      autoRefill: string
-    }
-    sections: {
-      plan: string
-      paymentCredits: string
-      usage: string
-      invoices: string
-    }
-    notice: {
-      loggedOutTitle: string
-      loggedOutMessage: string
-      openPortal: string
-      addCard: string
-      noCardTitle: string
-      noCardMessage: string
-    }
-    plan: {
-      freeTier: string
-      detailsUnavailable: string
-      changesTo: (tier: string, when: string) => string
-      cancelsOn: (when: string) => string
-      renews: (when: string) => string
-      noActive: string
-      monthlyPrice: (price: string) => string
-      changePlan: string
-      viewPlans: string
-      adjustPlan: string
-      choose: string
-      current: string
-      scheduled: string
-      downgrade: string
-      checking: string
-      cannotMake: string
-      alreadyOn: (tier: string) => string
-      scheduledChange: (tier: string, when: string, delta?: string) => string
-      cannotSchedule: string
-      scheduling: string
-      confirmDowngrade: string
-      back: string
-      title: string
-      noPlans: string
-      tryAgain: string
-      cancel: string
-      undo: string
-      undoing: string
-    }
-    payment: {
-      title: string
-      addMethod: string
-      update: string
-      description: string
-      differentCard: string
-      provenance: Record<string, string>
-    }
-    credits: {
-      title: string
-      description: string
-      buy: string
-      customAmountAria: string
-      processing: string
-      added: (amount: string) => string
-      balanceRefreshing: string
-      openPortal: string
-      retry: string
-    }
-    charge: {
-      added: (amount: string) => string
-      failedTitle: string
-      authenticationRequired: string
-      paymentMethodExpired: string
-      cardDeclined: string
-      failedReason: (reason: string) => string
-      outcomeUnconfirmedTitle: string
-      outcomeUnconfirmedMessage: (message: string) => string
-      checkFailedTitle: string
-      checkFailedMessage: string
-      trackingFailedTitle: string
-      trackingFailedMessage: string
-      stillProcessingTitle: string
-      stillProcessingMessage: string
-    }
-    refill: {
-      title: string
-      genericDescription: string
-      managePortal: string
-      turnOnPortal: string
-      reconcile: string
-      reconcileCaption: (card: string) => string
-      enabled: string
-      off: string
-      threshold: string
-      reloadTo: string
-      thresholdAria: string
-      reloadToAria: string
-      turnOffQuestion: string
-      turnOff: string
-      disable: string
-      saving: string
-      save: string
-      cancel: string
-      manage: string
-      updated: string
-      turnedOff: string
-      chargeDescription: (reloadTo: string, threshold: string) => string
-      validationDollar: (label: string) => string
-      validationPositive: (label: string) => string
-      validationMinimum: (label: string, amount: string) => string
-      validationMaximum: (label: string, amount: string) => string
-      validationGreater: string
-    }
-    usage: {
-      subscriptionRemaining: string
-      subscriptionCredits: string
-      creditsPerMonth: (amount: string) => string
-      resets: (date: string) => string
-      left: (remaining: string, monthly: string) => string
-      over: (amount: string) => string
-      topupCredits: string
-      doesNotExpire: string
-      monthlySpendCapUsed: string
-      monthlySpendCap: string
-      defaultCeiling: string
-      monthlyRemoteSpending: string
-      used: (spent: string, limit: string) => string
-      usageFallback: (label: string) => string
-    }
-    status: {
-      enabled: string
-      off: string
-    }
-    stepUp: {
-      openVerification: string
-      dismiss: string
-      waiting: string
-      verify: string
-      verificationNotApprovedTitle: string
-      verificationNotApprovedMessage: string
-      verificationCompleteTitle: string
-      verificationCompleteMessage: string
-    }
-    refusal: {
-      cardConfirmationTitle: string
-      cardConfirmationMessage: string
-      remoteApprovalTitle: string
-      remoteApprovalMessage: string
-      remoteStoppedTitle: string
-      remoteStoppedByAdmin: string
-      remoteStoppedByYou: string
-      reconnectDevice: string
-      sessionLoggedOutTitle: string
-      sessionLoggedOutMessage: string
-      spendingOffTitle: string
-      spendingOffMessage: string
-      adminRoleTitle: string
-      adminRoleMessage: string
-      freshTopupTitle: string
-      freshTopupMessage: string
-      noSavedCardTitle: string
-      noSavedCardMessage: string
-      orgAccessDeniedTitle: string
-      orgAccessDeniedMessage: string
-      monthlyCapTitle: string
-      monthlyCapReached: string
-      monthlyCapRemaining: (remaining: string) => string
-      tooManyTitle: string
-      tooManyMessage: (minutes?: number) => string
-      stripeTitle: string
-      stripeMessage: (minutes?: number) => string
-      dailyLimitTitle: string
-      dailyLimitMessage: string
-      endpointUnavailableTitle: string
-      endpointUnavailableMessage: string
-      requestTimedOutTitle: string
-      requestTimedOutMessage: string
-      connectionFailedTitle: string
-      connectionFailedMessage: string
-      requestFailedTitle: string
-      requestFailedMessage: string
-    }
-  }
+  billingBlock: BillingTranslations['billingBlock']
 
   sendDiagnostics: {
     title: string
@@ -945,14 +541,16 @@ export interface UpstreamTranslations {
     doneDescription: string
     failedTitle: string
     failedHint: string
-    gatewayUnavailable: string
-    uploadFailed: string
     handoffLead: string
     links: {
       discord: string
       github: string
       portal: string
     }
+
+    gatewayUnavailable: string
+
+    uploadFailed: string
   }
 
   titlebar: {
@@ -975,113 +573,6 @@ export interface UpstreamTranslations {
     layoutEditorTitle: (modifier: string) => string
   }
 
-  summary: {
-    aria: string
-    title: string
-    close: string
-    environment: {
-      title: string
-      local: string
-      remote: string
-      project: string
-      workingDirectory: string
-      model: string
-      provider: string
-      profile: string
-      branch: string
-      connection: string
-      noProject: string
-      noSession: string
-    }
-    changes: {
-      title: string
-      files: (count: number) => string
-      additions: string
-      deletions: string
-      staged: (count: number) => string
-      noChanges: string
-      unavailable: string
-      viewDiff: string
-      refresh: string
-      stage: string
-      unstage: string
-      revert: string
-    }
-    git: {
-      title: string
-      branch: string
-      tracking: string
-      ahead: (count: number) => string
-      behind: (count: number) => string
-      commit: string
-      pullRequest: string
-      push: string
-      reviewAndCommit: string
-      clean: string
-      unavailable: string
-      noRepository: string
-    }
-    agents: {
-      title: string
-      dispatched: (count: number) => string
-      finished: string
-      status: Record<'running' | 'queued' | 'completed' | 'failed' | 'interrupted' | 'dispatched', string>
-      running: (count: number) => string
-      completed: (count: number) => string
-      failed: (count: number) => string
-      viewAll: string
-      none: string
-    }
-    context: {
-      title: string
-      noData: string
-    }
-    outputs: {
-      title: string
-      create: string
-      prompt: string
-    }
-    plan: {
-      title: string
-      progress: (done: number, total: number) => string
-      recorded: string
-      status: Record<'pending' | 'in_progress' | 'completed' | 'cancelled', string>
-    }
-    background: {
-      title: string
-      status: Record<'running' | 'done' | 'failed', string>
-    }
-    sources: {
-      title: string
-      add: string
-      image: string
-      skill: string
-      tool: string
-      attachments: string
-      previews: string
-      links: string
-      none: string
-      open: string
-    }
-    resources: {
-      title: string
-      ram: string
-      gpu: string
-      unavailable: string
-      retry: string
-    }
-    state: {
-      loading: string
-      unavailable: string
-      noData: string
-      retry: string
-      showAll: (count: number) => string
-      showLess: string
-      details: string
-      historyUnavailable: string
-    }
-  }
-
   keybinds: {
     title: string
     subtitle: (open: string) => string
@@ -1089,6 +580,7 @@ export interface UpstreamTranslations {
     rebind: string
     reset: string
     resetAll: string
+    clear: string
     pressKey: string
     set: string
     conflictWith: (label: string) => string
@@ -1121,8 +613,10 @@ export interface UpstreamTranslations {
     resetConfirm: string
     exportFailed: string
     resetFailed: string
+    pluginPages: Record<'agentSettings' | 'blurb' | 'empty' | 'manage' | 'missing', string> & {
+      pageCount: (n: number) => string
+    }
     nav: {
-      account: string
       providers: string
       providerAccounts: string
       providerApiKeys: string
@@ -1140,109 +634,17 @@ export interface UpstreamTranslations {
       billing: string
       notifications: string
       vault: string
-    }
-    account: {
-      displayNameLabel: string
-      editDisplayName: string
-      displayNameHint: string
-      displayNameSaved: string
-      accountIdLabel: string
-      loadingStatus: string
-      refresh: string
-      serviceUnavailable: string
-      termsRequired: string
-      legalDevelopmentNotice: string
-      developmentCodeFor: string
-      agreementUnavailable: string
-      phoneLabel: string
-      phonePlaceholder: string
-      invitationCodeLabel: string
-      invitationCodePlaceholder: string
-      existingAccount: string
-      registerAccount: string
-      registrationClosed: string
-      phoneAutoRegister: string
-      phoneLoginUnavailable: string
-      existingAccountPhoneHint: string
-      registrationReturnHint: string
-      registrationOpenFailed: string
-      emailLabel: string
-      emailPlaceholder: string
-      passwordLabel: string
-      passwordPlaceholder: string
-      continueExisting: string
-      rememberLabel: string
-      totpDescription: string
-      totpLabel: string
-      completeSecondFactor: string
-      switchPhone: string
-      phoneMaskedLabel: string
-      emailVerifiedLabel: string
-      offlineDescription: string
-      platformError: (code: string, retryAfter?: number) => string
-      errors: {
-        invalid_identifier: string
-        missing_code: string
-        invalid_code: string
-        expired: string
-        attempts_exceeded: string
-        development_disabled: string
-        retry_cooldown: string
-        state_unavailable: string
-        invalid_display_name: string
-        not_authenticated: string
-        unavailable: string
-      }
-      title: string
-      signInTitle: string
-      signInDescription: string
-      codeTitle: string
-      codeDescription: string
-      identifierLabel: string
-      identifierPlaceholder: string
-      codeLabel: string
-      codePlaceholder: string
-      sendCode: string
-      verify: string
-      back: string
-      resend: string
-      resendIn: (seconds: number) => string
-      signOut: string
-      signedInDescription: string
-      developmentHint: string
-      termsLabel: string
-      termsPrefix: string
-      terms: string
-      and: string
-      privacy: string
-      switchWechat: string
-      codeSentTo: string
-      wechatTitle: string
-      wechatUnavailable: string
-      switchIdentifier: string
+      plugins: string
+
+      account: string
     }
     plugins: {
       title: string
-      blurb: string
-      count: (n: number) => string
       openFolder: string
       rescan: string
       reveal: string
-      enable: string
-      disable: string
       failed: string
-      empty: string
-      errors: {
-        desktopUnavailable: string
-        resolveFolder: string
-        openFolder: string
-        backendHomeMissing: string
-        unknown: string
-        runtimeLoadFailed: (origin: string) => string
-      }
       kinds: { bundled: string; disk: string; runtime: string }
-      agentHalfMissing: string
-      agentHalfMissingTip: string
       installModal: {
         installFromGit: string
         reviewRepository: string
@@ -1290,8 +692,18 @@ export interface UpstreamTranslations {
         agentSuccess: (name: string) => string
         desktopSuccess: (name: string) => string
         agentFailed: string
+        installUncertain: string
         desktopFailed: string
         missingEnv: (name: string, vars: string) => string
+      }
+
+      errors: {
+        desktopUnavailable: string
+        resolveFolder: string
+        openFolder: string
+        backendHomeMissing: string
+        unknown: string
+        runtimeLoadFailed: (origin: string) => string
       }
     }
     vault: {
@@ -1382,6 +794,7 @@ export interface UpstreamTranslations {
       completionSoundTitle: string
       completionSoundDesc: string
       completionSoundPreview: string
+
       completionSoundNames: Record<string, string>
     }
     sections: Record<string, string>
@@ -1400,6 +813,8 @@ export interface UpstreamTranslations {
       hideThreadTimelineDesc: string
       reasoningCollapsedTitle: string
       reasoningCollapsedDesc: string
+      chatTextScaleTitle: string
+      chatTextScaleDesc: string
       uiScaleTitle: string
       uiScaleDesc: (percent: number) => string
       sessionDensityTitle: string
@@ -1455,6 +870,8 @@ export interface UpstreamTranslations {
       textDirection: { auto: string; rtl: string; ltr: string }
       introSplashTitle: string
       introSplashDesc: string
+      modelPricingTitle: string
+      modelPricingDesc: string
       reactionsTitle: string
       reactionsDesc: string
       tipsTitle: string
@@ -1464,6 +881,8 @@ export interface UpstreamTranslations {
       toursDesc: string
       composerPopoutTitle: string
       composerPopoutDesc: string
+      fileBrowserTitle: string
+      fileBrowserDesc: string
       vibeHeartsTitle: string
       vibeHeartsDesc: string
       embedsTitle: string
@@ -1480,7 +899,7 @@ export interface UpstreamTranslations {
       technicalDesc: string
       themeTitle: string
       themeDesc: string
-      themePresets: Record<string, { label: string; description: string }>
+      themeSearchPlaceholder: string
       themeProfileNote: (profile: string) => string
       installTitle: string
       installDesc: string
@@ -1489,21 +908,8 @@ export interface UpstreamTranslations {
       installing: string
       installError: string
       installed: (name: string) => string
-      themeImportErrors: {
-        invalidJson: string
-        notObject: string
-        noColors: string
-        noMarketplaceThemes: (extensionId: string) => string
-        invalidMarketplaceId: string
-        desktopOnly: string
-        builtInCollision: (name: string) => string
-        missingColors: string
-      }
       removeTheme: string
       importedBadge: string
-      themeSearchPlaceholder: string
-      marketplaceHeading: string
-      noInstalledThemesMatch: (query: string) => string
       pet: {
         title: string
         intro: string
@@ -1515,15 +921,6 @@ export interface UpstreamTranslations {
         chooseTitle: string
         chooseDesc: string
         searchPlaceholder: string
-        hatchingProgress: string
-        messagePlaceholder: string
-        openApp: (product: string) => string
-        bubble: {
-          run: readonly string[]
-          review: readonly string[]
-          failed: readonly string[]
-          waiting: readonly string[]
-        }
         unreachable: string
         noMatch: (query: string) => string
         installedTag: string
@@ -1547,68 +944,174 @@ export interface UpstreamTranslations {
         noneAvailable: string
         turnOnFailed: string
         turnOffFailed: string
+
+        hatchingProgress: string
+
+        messagePlaceholder: string
+
+        openApp: (product: string) => string
+
+        bubble: {
+          run: readonly string[]
+          review: readonly string[]
+          failed: readonly string[]
+          waiting: readonly string[]
+        }
+
         spriteLabel: (name: string) => string
       }
+
+      themePresets: Record<string, { label: string; description: string }>
+
+      themeImportErrors: {
+        invalidJson: string
+        notObject: string
+        noColors: string
+        noMarketplaceThemes: (extensionId: string) => string
+        invalidMarketplaceId: string
+        desktopOnly: string
+        builtInCollision: (name: string) => string
+        missingColors: string
+      }
+
+      marketplaceHeading: string
+
+      noInstalledThemesMatch: (query: string) => string
     }
     fieldLabels: Record<string, string>
     fieldDescriptions: Record<string, string>
-    uninstallSection: {
-      dangerZone: string
-      checkingInstalled: string
-      uninstallHermes: string
-      chooseHowMuch: string
-      confirmUninstall: string
-      confirmBody: (what: string) => string
-      appLabel: string
-      couldNotStart: string
-      uninstalling: string
-      yesUninstall: string
-      options: {
-        gui: { title: string; description: string; consequence: string }
-        lite: { title: string; description: string; consequence: string }
-        full: { title: string; description: string; consequence: string }
-      }
-    }
+    uninstallSection: UninstallSectionTranslations
     poolLimits: {
       warmBotBackendsAria: string
       warmBotBackendsTitle: string
       backendIdleTimeoutAria: string
       backendIdleTimeoutTitle: string
     }
-    about: {
-      heading: string
-      version: (value: string) => string
-      versionUnavailable: string
-      bundleOutOfSync: string
-      bundleOutOfSyncDesc: string
-      bundleOutOfSyncAction: string
-      bundleSwapPending: string
-      bundleSwapPendingDesc: string
-      bundleSwapPendingAction: string
-      updates: string
-      checkNow: string
-      checking: string
-      seeWhatsNew: string
-      updateNow: string
-      releaseNotes: string
-      onLatest: string
-      installing: string
-      cantUpdate: string
-      cantReach: string
-      tapCheck: string
-      updateReady: (count: number) => string
-      updateReadyUnknown: string
-      lastChecked: (age: string) => string
-      justNowSuffix: string
-      automaticUpdates: string
-      automaticUpdatesDesc: string
-      branchCommit: (branch: string, commit: string) => string
-      never: string
-      justNow: string
-      minAgo: (count: number) => string
-      hoursAgo: (count: number) => string
-      daysAgo: (count: number) => string
+    customEndpoints: {
+      active: string
+      apiKeySet: string
+      use: string
+      editTitle: string
+      addTitle: string
+      fields: {
+        name: string
+        providerId: string
+        endpointUrl: string
+        defaultModel: string
+        context: string
+        apiKey: string
+        apiKeyNewPlaceholder: string
+        apiKeyPlaceholder: string
+        useNewChats: string
+        discoverModels: string
+      }
+      test: string
+      save: string
+      newEndpoint: string
+      apiMode: string
+      autoDetect: string
+      couldNotLoad: string
+      endpointSaved: string
+      saveFailed: string
+      endpointReachable: string
+      endpointReachableTransport: (transport: string, count: number) => string
+      endpointReachableModels: (count: number) => string
+      endpointValidationFailed: string
+      validationFailed: string
+      activationFailed: string
+      deleteConfirm: (name: string) => string
+      deleteFailed: string
+      title: string
+      deleteEndpoint: string
+      emptyDescription: string
+      emptyTitle: string
+      namePlaceholder: string
+      contextPlaceholder: string
+
+      name: string
+
+      providerId: string
+
+      providerIdPlaceholder: string
+
+      endpointUrl: string
+
+      endpointUrlPlaceholder: string
+
+      defaultModel: string
+
+      defaultModelPlaceholder: string
+
+      context: string
+
+      apiKey: string
+
+      apiKeyKeepPlaceholder: string
+
+      apiKeyOptionalPlaceholder: string
+
+      useForNewChats: string
+
+      discoverModels: string
+
+      testing: string
+
+      saving: string
+
+      loadFailed: string
+
+      saved: string
     }
+    computerUse: {
+      accessibility: string
+      screenRecording: string
+      driverHealth: string
+
+      checking: string
+
+      unsupported: (platform: string) => string
+
+      installDriver: string
+
+      grantAfterInstall: string
+
+      identityNote: string
+
+      linuxNote: string
+
+      windowsNote: string
+
+      recheck: string
+
+      accessibilityHint: string
+
+      screenRecordingHint: string
+
+      granted: string
+
+      notGranted: string
+
+      unknown: string
+
+      ready: string
+
+      notReady: string
+
+      readyHint: string
+
+      waitingApproval: string
+
+      grantPermissions: string
+
+      approveTitle: string
+
+      approveMessage: string
+
+      requestPermissionsFailed: string
+
+      readStatusFailed: string
+    }
+    about: { updates: string; channel: UpdateChannelCopy }
     config: {
       minimizeToTrayTitle: string
       minimizeToTrayDesc: string
@@ -1631,18 +1134,27 @@ export interface UpstreamTranslations {
       toolsetsWipeConfirm: string
       keepAwakeTitle: string
       keepAwakeDesc: string
+      keepAwakeOff: string
+      keepAwakeWhileWorking: string
+      keepAwakeAlways: string
       disableF12Title: string
       disableF12Desc: string
       alwaysExternalLinksTitle: string
       alwaysExternalLinksDesc: string
+      developerTitle: string
+      resetOnboardingTitle: string
+      resetOnboardingDesc: string
+      resetOnboardingAction: string
+      resetOnboardingFailed: string
       attachmentSizeTitle: string
       attachmentSizeDesc: string
       attachmentSizeUnit: string
       attachmentSizeLabel: string
-      attachmentSizeSaveFailed: string
       voiceShortcutHintTitle: string
       voiceShortcutHintDesc: string
       showOptions: string
+
+      attachmentSizeSaveFailed: string
     }
     hudModifier: {
       title: string
@@ -1704,7 +1216,6 @@ export interface UpstreamTranslations {
     // v2 multi-connection registry: Settings → Connections.
     connections: {
       title: string
-      localLabel: string
       intro: string
       stagedNote: string
       launchModeTitle: string
@@ -1760,6 +1271,8 @@ export interface UpstreamTranslations {
       saving: string
       cancel: string
       empty: string
+
+      localLabel: string
     }
     managedUpdates: {
       title: string
@@ -1782,7 +1295,6 @@ export interface UpstreamTranslations {
       loading: string
       unavailableTitle: string
       unavailableDesc: string
-      registryConnectionsUnsupported: string
       title: string
       envOverride: string
       intro: string
@@ -1908,7 +1420,10 @@ export interface UpstreamTranslations {
       sshErrPlatform: string
       sshErrTimeout: string
       sshErrUpdateRequired: string
+      sshErrInteractiveAuth: string
       sshErrUnknown: string
+
+      registryConnectionsUnsupported: string
     }
     keys: {
       loading: string
@@ -1939,15 +1454,6 @@ export interface UpstreamTranslations {
       catalogLoading: string
       catalogInstallFailed: (name: string) => string
       catalogEnvRequired: string
-      oauthTag: string
-      apiKeyTag: string
-      oauthStartFailed: string
-      oauthAuthorizationUrlMissing: string
-      oauthAuthorizationFailed: string
-      oauthCancelled: string
-      /** Localized copy for bundled MCP catalog manifests. Unknown or
-       * user-provided entries intentionally fall back to backend text. */
-      catalogDescriptions: Record<string, string>
       capabilitySummary: (tools: number, prompts: number, resources: number) => string
       costTokens: (tokens: string) => string
       usage30d: (uses: string) => string
@@ -1972,12 +1478,33 @@ export interface UpstreamTranslations {
       deepLinkErrorShape: string
       deepLinkErrorUrl: string
       deepLinkErrorTooLarge: string
+
+      oauthTag: string
+
+      apiKeyTag: string
+
+      oauthStartFailed: string
+
+      oauthAuthorizationUrlMissing: string
+
+      oauthAuthorizationFailed: string
+
+      oauthCancelled: string
+
+      catalogDescriptions: Record<string, string>
+
       importExpectedObject: string
+
       importServerWrapperRequired: string
+
       importButton: string
+
       importPlaceholder: string
+
       importNoMatch: string
+
       importConfirm: string
+
       importConfirmMany: (count: number) => string
     }
     model: {
@@ -2002,15 +1529,13 @@ export interface UpstreamTranslations {
       provider: string
       model: string
       applying: string
-      setupProvider: (provider: string) => string
-      activating: string
-      activate: string
-      apiKeyPlaceholder: (key: string) => string
-      providerNeedsApiKey: (provider: string) => string
-      providerNeedsBrowser: (provider: string) => string
+      mainAppliedTitle: string
+      mainAppliedMessage: (model: string) => string
       defaultsLabel: string
       reasoning: string
       reasoningOff: string
+      speed: string
+      speedStandard: string
       defaultsFailed: string
       loadFailed: string
       restartRequired: string
@@ -2019,17 +1544,42 @@ export interface UpstreamTranslations {
       restartFailed: string
       auxiliaryTitle: string
       resetAllToMain: string
+      staleAuxDismiss: string
       auxiliaryDesc: string
       setToMain: string
       change: string
       autoUseMain: string
       inheritMainEffort: string
+      inheritsFrom: (task: string) => string
+      followTask: (task: string) => string
       providerDefault: string
       fallbackAdd: string
       fallbackEmpty: string
       notInCatalog: string
+      moaTitle: string
+      moaPreset: string
+      moaDescription: string
+      moaAggregator: string
+      moaAggregatorBilled: string
+      moaReferenceHint: string
+      tasks: AuxTaskCopyMap
+
+      setupProvider: (provider: string) => string
+
+      activating: string
+
+      activate: string
+
+      apiKeyPlaceholder: (key: string) => string
+
+      providerNeedsApiKey: (provider: string) => string
+
+      providerNeedsBrowser: (provider: string) => string
+
       otherProviders: string
+
       staleAuxiliary: (count: number, names: string, provider: string) => string
+
       moa: {
         title: string
         description: string
@@ -2046,15 +1596,9 @@ export interface UpstreamTranslations {
         addReferenceModel: string
         aggregator: string
       }
-      moaTitle: string
-      moaPreset: string
-      moaDescription: string
-      moaAggregator: string
-      moaAggregatorBilled: string
-      moaReferenceHint: string
-      tasks: Record<string, AuxTaskCopy>
     }
     localModels: {
+      connectionChanged: string
       title: string
       runtimeTitle: string
       runtimeReady: (backend: string) => string
@@ -2071,7 +1615,6 @@ export interface UpstreamTranslations {
       vram: (label: string) => string
       ram: (label: string) => string
       unifiedMemory: string
-      storage: (total: string, available: string) => string
       modelsTitle: string
       recommended: string
       /** Recommended-badge tooltip by resolver branch; unknown keys (newer
@@ -2083,6 +1626,17 @@ export interface UpstreamTranslations {
       downloaded: string
       downloadAction: (size: string) => string
       downloadProgress: (done: string, total: string) => string
+      downloadStatusRunning: string
+      downloadSpeed: (rate: string) => string
+      downloadEta: (time: string) => string
+      /** Duration units the ETA is composed from; hours carries its
+       *  remainder so a locale orders the two parts itself. */
+      downloadEtaSeconds: (count: number) => string
+      downloadEtaMinutes: (count: number) => string
+      downloadEtaHours: (hours: number, minutes: number) => string
+      downloadPausedLabel: string
+      downloadPauseAction: string
+      downloadResumeAction: string
       downloadDoneToast: (model: string) => string
       installDoneToast: string
       quickstartTitle: string
@@ -2125,6 +1679,8 @@ export interface UpstreamTranslations {
       activateFailed: (model: string) => string
       activateDoneToast: (model: string) => string
       downloadFailed: (model: string) => string
+      downloadPauseFailed: (model: string) => string
+      downloadResumeFailed: (model: string) => string
       pillFitsGpu: string
       pillUsesRam: string
       pillTooBig: string
@@ -2157,6 +1713,8 @@ export interface UpstreamTranslations {
       deleteConfirm: (model: string) => string
       deleted: (model: string) => string
       deleteFailed: string
+
+      storage: (total: string, available: string) => string
     }
     billing: {
       perMonth: (amount: string) => string
@@ -2395,145 +1953,9 @@ export interface UpstreamTranslations {
         title: string
         description: string
       }
+      loading: string
+
       descriptions: Record<string, string>
-      loading: string
-    }
-    customEndpoints: {
-      title: string
-      active: string
-      apiKeySet: string
-      use: string
-      deleteEndpoint: string
-      fields: {
-        name: string
-        providerId: string
-        endpointUrl: string
-        defaultModel: string
-        context: string
-        apiKey: string
-        apiKeyNewPlaceholder: string
-        apiKeyPlaceholder: string
-        useNewChats: string
-        discoverModels: string
-      }
-      apiMode: string
-      autoDetect: string
-      couldNotLoad: string
-      endpointSaved: string
-      emptyTitle: string
-      emptyDescription: string
-      editTitle: string
-      addTitle: string
-      name: string
-      namePlaceholder: string
-      providerId: string
-      providerIdPlaceholder: string
-      endpointUrl: string
-      endpointUrlPlaceholder: string
-      defaultModel: string
-      defaultModelPlaceholder: string
-      context: string
-      contextPlaceholder: string
-      apiKey: string
-      apiKeyKeepPlaceholder: string
-      apiKeyOptionalPlaceholder: string
-      useForNewChats: string
-      discoverModels: string
-      test: string
-      testing: string
-      save: string
-      saving: string
-      newEndpoint: string
-      loadFailed: string
-      saved: string
-      saveFailed: string
-      validationFailed: string
-      activationFailed: string
-      deleteFailed: string
-      deleteConfirm: (name: string) => string
-      endpointReachable: string
-      endpointReachableModels: (count: number) => string
-      endpointReachableTransport: (transport: string, count: number) => string
-      endpointValidationFailed: string
-    }
-    memory: {
-      loadFailed: string
-      loading: string
-      settingsTitle: (label: string) => string
-      fullConfig: string
-      fullConfigDescription: (label: string, profile: string) => string
-      configurationReference: string
-      groupOther: string
-      blankFallback: string
-      cancel: string
-      saveChanges: string
-      savedTitle: (label: string) => string
-      savedMessage: string
-      saveFailed: (label: string) => string
-      retry: string
-      fieldAbout: (label: string) => string
-      set: string
-      notSet: string
-      connectViaOAuth: string
-      reconnect: string
-      connect: string
-      apiKeySet: string
-      oauthSet: string
-      waitingBrowserConsent: string
-      cancelConnection: string
-      startConnectionFailed: string
-      failedStartConnection: string
-      timedOut: string
-      connectionFailed: string
-    }
-    computerUse: {
-      checking: string
-      unsupported: (platform: string) => string
-      installDriver: string
-      grantAfterInstall: string
-      identityNote: string
-      linuxNote: string
-      windowsNote: string
-      recheck: string
-      accessibility: string
-      accessibilityHint: string
-      screenRecording: string
-      screenRecordingHint: string
-      driverHealth: string
-      granted: string
-      notGranted: string
-      unknown: string
-      ready: string
-      notReady: string
-      readyHint: string
-      waitingApproval: string
-      grantPermissions: string
-      approveTitle: string
-      approveMessage: string
-      requestPermissionsFailed: string
-      readStatusFailed: string
-    }
-    uninstall: {
-      dangerZone: string
-      checking: string
-      confirmTitle: string
-      confirmBody: (consequence: string) => string
-      appPath: (path: string) => string
-      uninstalling: string
-      yesUninstall: string
-      cancel: string
-      heading: (name: string) => string
-      intro: string
-      guiTitle: string
-      guiDescription: (name: string) => string
-      guiConsequence: string
-      liteTitle: string
-      liteDescription: (name: string) => string
-      liteConsequence: (name: string) => string
-      fullTitle: string
-      fullDescription: string
-      fullConsequence: (name: string) => string
-      couldNotStart: string
     }
     sessions: {
       loading: string
@@ -2673,8 +2095,154 @@ export interface UpstreamTranslations {
         }
       }
     }
+
+    account: {
+      displayNameLabel: string
+      editDisplayName: string
+      displayNameHint: string
+      displayNameSaved: string
+      accountIdLabel: string
+      loadingStatus: string
+      refresh: string
+      serviceUnavailable: string
+      termsRequired: string
+      legalDevelopmentNotice: string
+      developmentCodeFor: string
+      agreementUnavailable: string
+      phoneLabel: string
+      phonePlaceholder: string
+      invitationCodeLabel: string
+      invitationCodePlaceholder: string
+      existingAccount: string
+      registerAccount: string
+      registrationClosed: string
+      phoneAutoRegister: string
+      phoneLoginUnavailable: string
+      existingAccountPhoneHint: string
+      registrationReturnHint: string
+      registrationOpenFailed: string
+      emailLabel: string
+      emailPlaceholder: string
+      passwordLabel: string
+      passwordPlaceholder: string
+      continueExisting: string
+      rememberLabel: string
+      totpDescription: string
+      totpLabel: string
+      completeSecondFactor: string
+      switchPhone: string
+      phoneMaskedLabel: string
+      emailVerifiedLabel: string
+      offlineDescription: string
+      platformError: (code: string, retryAfter?: number) => string
+      errors: {
+        invalid_identifier: string
+        missing_code: string
+        invalid_code: string
+        expired: string
+        attempts_exceeded: string
+        development_disabled: string
+        retry_cooldown: string
+        state_unavailable: string
+        invalid_display_name: string
+        not_authenticated: string
+        unavailable: string
+      }
+      title: string
+      signInTitle: string
+      signInDescription: string
+      codeTitle: string
+      codeDescription: string
+      identifierLabel: string
+      identifierPlaceholder: string
+      codeLabel: string
+      codePlaceholder: string
+      sendCode: string
+      verify: string
+      back: string
+      resend: string
+      resendIn: (seconds: number) => string
+      signOut: string
+      signedInDescription: string
+      developmentHint: string
+      termsLabel: string
+      termsPrefix: string
+      terms: string
+      and: string
+      privacy: string
+      switchWechat: string
+      codeSentTo: string
+      wechatTitle: string
+      wechatUnavailable: string
+      switchIdentifier: string
+    }
+
+    memory: {
+      loadFailed: string
+      loading: string
+      settingsTitle: (label: string) => string
+      fullConfig: string
+      fullConfigDescription: (label: string, profile: string) => string
+      configurationReference: string
+      groupOther: string
+      blankFallback: string
+      cancel: string
+      saveChanges: string
+      savedTitle: (label: string) => string
+      savedMessage: string
+      saveFailed: (label: string) => string
+      retry: string
+      fieldAbout: (label: string) => string
+      set: string
+      notSet: string
+      connectViaOAuth: string
+      reconnect: string
+      connect: string
+      apiKeySet: string
+      oauthSet: string
+      waitingBrowserConsent: string
+      cancelConnection: string
+      startConnectionFailed: string
+      failedStartConnection: string
+      timedOut: string
+      connectionFailed: string
+    }
+
+    uninstall: {
+      dangerZone: string
+      checking: string
+      confirmTitle: string
+      confirmBody: (consequence: string) => string
+      appPath: (path: string) => string
+      uninstalling: string
+      yesUninstall: string
+      cancel: string
+      heading: (name: string) => string
+      intro: string
+      guiTitle: string
+      guiDescription: (name: string) => string
+      guiConsequence: string
+      liteTitle: string
+      liteDescription: (name: string) => string
+      liteConsequence: (name: string) => string
+      fullTitle: string
+      fullDescription: string
+      fullConsequence: (name: string) => string
+      couldNotStart: string
+    }
   }
 
+  skillDeepLink: {
+    installTitle: (name: string) => string
+    installDescription: string
+    installTo: string
+    thisComputer: string
+    installing: string
+    installComplete: (name: string) => string
+    destinationChanged: string
+    installed: string
+    source: string
+  }
   skills: {
     tabSkills: string
     tabToolsets: string
@@ -2750,15 +2318,20 @@ export interface UpstreamTranslations {
       emptyHint: string
       loadFailed: string
       toggleFailed: (name: string) => string
+      toolsetOn: (name: string, profile: string) => string
+      toolsetOff: (name: string, profile: string) => string
+      toolsetToggleFailed: (name: string) => string
       legacyBackend: string
       portableBadge: string
       serverStates: {
         connected: string
         app_not_running: string
+        hermes_not_connected: string
         endpoint_unavailable: string
         no_interactive_session: string
         version_too_old: string
         missing_app: string
+        unsupported_gpu: string
         unknown: string
       }
       catalogTitle: string
@@ -2795,15 +2368,13 @@ export interface UpstreamTranslations {
         save: string
         saved: (name: string) => string
         saveFailed: (name: string) => string
-        optional: string
+        required: string
         secretSet: string
         secretStoredAs: (env: string) => string
       }
     }
     officialCatalog: string
     officialPill: string
-    archiveConfirmTitle: (name: string) => string
-    archiveConfirmDescription: string
     hub: {
       searchPlaceholder: string
       search: string
@@ -2856,6 +2427,10 @@ export interface UpstreamTranslations {
       scanFailed: string
       searchFailed: string
     }
+
+    archiveConfirmTitle: (name: string) => string
+
+    archiveConfirmDescription: string
   }
 
   starmap: {
@@ -2864,7 +2439,6 @@ export interface UpstreamTranslations {
     close: string
     refresh: string
     memory: string
-    skill: string
     filterAll: string
     filterUsed: string
     filterLearned: string
@@ -2885,15 +2459,27 @@ export interface UpstreamTranslations {
     importSuccess: (nodes: number) => string
     importedBadge: string
     resetToMine: string
+
+    skill: string
+
     legendAge: string
+
     playTimeline: string
+
     pauseTimeline: string
+
     timelineScrubber: string
+
     editNode: (kind: string, label: string) => string
+
     archiveSkill: string
+
     deleteMemory: string
+
     deleteMemoryDescription: string
+
     deleteMemoryTitle: (label: string) => string
+
     couldNotReadCode: string
   }
   agents: {
@@ -2905,8 +2491,6 @@ export interface UpstreamTranslations {
     subtitle: string
     emptyTitle: string
     emptyDesc: string
-    defaultGoal: string
-    timedOutAfter: (seconds: number | string) => string
     running: string
     failed: string
     done: string
@@ -2938,6 +2522,10 @@ export interface UpstreamTranslations {
     durationSeconds: (seconds: string) => string
     durationMinutes: (minutes: number, seconds: number) => string
     tokens: (value: number | string) => string
+
+    defaultGoal: string
+
+    timedOutAfter: (seconds: number | string) => string
   }
 
   commandCenter: {
@@ -2957,27 +2545,8 @@ export interface UpstreamTranslations {
     commandCenter: string
     appearance: string
     settings: string
-    contributedActions: {
-      layoutEditMode: string
-      reloadPlugins: string
-      resetLayout: string
-      toggleStatusbar: string
-      toggleTabs: string
-      keyboardShortcuts: string
-      exportProfile: string
-      importProfile: string
-      toggleTerminal: string
-      toggleLogs: string
-      toggleYolo: string
-    }
     changeTheme: string
     changeColorMode: string
-    splitDirections: {
-      right: string
-      bottom: string
-      left: string
-      top: string
-    }
     pets: {
       title: string
       placeholder: string
@@ -3017,16 +2586,23 @@ export interface UpstreamTranslations {
       remixConfirmTitle: string
       remixConfirmBody: string
       genericError: string
-      hatchingError: string
       referenceImageTooLarge: string
       referenceImageInvalid: string
       adopt: string
       startOver: string
+
+      hatchingError: string
+
       addReference: string
+
       unavailableTitle: string
+
       unavailableDescription: string
+
       setupImageGeneration: string
+
       grabKeyFrom: string
+
       background: {
         view: string
         draftsReadyTitle: string
@@ -3038,6 +2614,7 @@ export interface UpstreamTranslations {
         hatchingFailedTitle: string
         hatchingFailedMessage: string
       }
+
       examples: Record<string, string>
     }
     installTheme: {
@@ -3056,7 +2633,6 @@ export interface UpstreamTranslations {
     mcpServers: string
     archivedChats: string
     sections: Record<'maintenance' | 'sessions' | 'system' | 'usage', string>
-    sectionDescriptions: Record<'maintenance' | 'sessions' | 'system' | 'usage', string>
     nav: Record<'newChat' | 'settings' | 'capabilities' | 'messaging' | 'artifacts', { title: string; detail: string }>
     sectionEntries: Record<'sessions' | 'system' | 'usage', { title: string; detail: string }>
     providerNavigate: string
@@ -3074,6 +2650,7 @@ export interface UpstreamTranslations {
     hermesActiveSessions: (version: string, count: number) => string
     restartGateway: string
     openBrowser: string
+    toggleBrowser: string
     gatewayRestartFailed: string
     sharedGatewayRestartTitle: string
     sharedGatewayRestartDescription: (bots: string) => string
@@ -3153,10 +2730,32 @@ export interface UpstreamTranslations {
       running: string
       viewLog: string
     }
+
+    contributedActions: {
+      layoutEditMode: string
+      reloadPlugins: string
+      resetLayout: string
+      toggleStatusbar: string
+      toggleTabs: string
+      keyboardShortcuts: string
+      exportProfile: string
+      importProfile: string
+      toggleTerminal: string
+      toggleLogs: string
+      toggleYolo: string
+    }
+
+    splitDirections: {
+      right: string
+      bottom: string
+      left: string
+      top: string
+    }
   }
 
   messaging: {
     search: string
+    statusFilter: Record<'all' | 'bad' | 'good' | 'muted' | 'warn', string>
     loading: string
     loadFailed: string
     states: Record<string, string>
@@ -3182,6 +2781,9 @@ export interface UpstreamTranslations {
     replaceValue: string
     openDocs: string
     clearField: (key: string) => string
+    addListEntry: string
+    removeListEntry: string
+    listEntryPlaceholder: string
     enableAria: (name: string) => string
     disableAria: (name: string) => string
     platformEnabled: (name: string) => string
@@ -3312,11 +2914,6 @@ export interface UpstreamTranslations {
 
   profiles: {
     close: string
-    workspaceDesc: string
-    currentBadge: string
-    overview: string
-    capabilities: string
-    configureModel: string
     nameHint: string
     title: string
     count: (count: number) => string
@@ -3327,20 +2924,16 @@ export interface UpstreamTranslations {
      *  which stand alone. Per-profile menus use the bare `exportMenu`. */
     importProfile: string
     exportProfile: string
-    archiveFilter: string
     exportMenu: string
     imported: string
     exported: string
     failedImport: string
     failedExport: string
     allProfiles: string
-    advanced: string
     showAllProfiles: string
     switchToProfile: (name: string) => string
     switchToConnection: (name: string) => string
     switchConnectionFailed: (name: string) => string
-    switchProfileFailed: (name: string) => string
-    openProfileFailed: (name: string) => string
     manageProfiles: string
     connectGateway: string
     fleet: {
@@ -3350,6 +2943,20 @@ export interface UpstreamTranslations {
       onGateway: (name: string, gateway: string) => string
       switchTo: (name: string, gateway: string) => string
       deleteOn: (gateway: string) => string
+      /** At-rest local default pill: device, not Home, and the click's consequence. */
+      localDevice: string
+      switchDeviceTitle: string
+      switchDeviceDesc: string
+      switchDeviceConfirm: string
+      installDeviceTitle: string
+      installDeviceDesc: string
+      installDeviceConfirm: string
+      connectExistingInstead: string
+    }
+    status: {
+      unread: (count: number) => string
+      needsInput: (count: number) => string
+      working: (count: number) => string
     }
     remoteOverride: {
       menuItem: string
@@ -3407,6 +3014,7 @@ export interface UpstreamTranslations {
     skillsLabel: string
     notSet: string
     soulDesc: string
+    soulMissing: string
     soulOptional: string
     soulPlaceholder: (mode: string) => string
     soulPlaceholderCloned: string
@@ -3430,8 +3038,6 @@ export interface UpstreamTranslations {
     cloneFromDefaultDesc: string
     invalidName: (hint: string) => string
     nameRequired: string
-    profileNameRequired: string
-    defaultProfileDeleteBlocked: string
     creating: string
     createAction: string
     renameTitle: string
@@ -3454,6 +3060,28 @@ export interface UpstreamTranslations {
     failedSaveSoul: string
     failedCreate: string
     failedRename: string
+
+    workspaceDesc: string
+
+    currentBadge: string
+
+    overview: string
+
+    capabilities: string
+
+    configureModel: string
+
+    archiveFilter: string
+
+    advanced: string
+
+    switchProfileFailed: (name: string) => string
+
+    openProfileFailed: (name: string) => string
+
+    profileNameRequired: string
+
+    defaultProfileDeleteBlocked: string
   }
 
   modelAssignment: {
@@ -3468,18 +3096,6 @@ export interface UpstreamTranslations {
     close: string
     title: string
     count: (count: number) => string
-    jobFallbackTitle: string
-    modelImpact: {
-      title: string
-      message: (count: number) => string
-      detailMore: (names: string, remaining: number) => string
-      review: string
-      saveFailed: string
-      confirmTitle: string
-      confirmDetail: string
-      confirmAction: string
-      declined: string
-    }
     search: string
     loading: string
     states: Record<string, string>
@@ -3506,6 +3122,7 @@ export interface UpstreamTranslations {
     next: string
     overdueSince: string
     noRuns: string
+    queuedRun: string
     manage: string
     showRuns: string
     hideRuns: string
@@ -3539,6 +3156,8 @@ export interface UpstreamTranslations {
     nameLabel: string
     namePlaceholder: string
     promptLabel: string
+    scriptLabel: string
+    scriptBadge: string
     promptPlaceholder: string
     frequencyLabel: string
     deliverLabel: string
@@ -3572,9 +3191,13 @@ export interface UpstreamTranslations {
       failedLoad: string
       emptyTitle: string
       emptyDesc: string
+
       fieldLabels?: Record<string, string>
+
       fieldDescriptions?: Record<string, string>
+
       optionLabels?: Record<string, string>
+
       catalog: Record<
         string,
         {
@@ -3586,6 +3209,20 @@ export interface UpstreamTranslations {
           >
         }
       >
+    }
+
+    jobFallbackTitle: string
+
+    modelImpact: {
+      title: string
+      message: (count: number) => string
+      detailMore: (names: string, remaining: number) => string
+      review: string
+      saveFailed: string
+      confirmTitle: string
+      confirmDetail: string
+      confirmAction: string
+      declined: string
     }
   }
 
@@ -3602,9 +3239,6 @@ export interface UpstreamTranslations {
     noArtifactsDesc: string
     failedLoad: string
     openFailed: string
-    partialLoadMessage: (failed: number, total: number) => string
-    safeLoadFailure: (count: number) => string
-    unreadableFailure: (count: number) => string
     itemsImage: string
     itemsLink: string
     itemsFile: string
@@ -3625,6 +3259,12 @@ export interface UpstreamTranslations {
     chat: string
     copyUrl: string
     copyPath: string
+
+    partialLoadMessage: (failed: number, total: number) => string
+
+    safeLoadFailure: (count: number) => string
+
+    unreadableFailure: (count: number) => string
   }
 
   artifactCard: {
@@ -3648,7 +3288,6 @@ export interface UpstreamTranslations {
   }
 
   sidebar: {
-    sessionOptions: string
     filter: {
       grouping: string
       ordering: string
@@ -3693,15 +3332,12 @@ export interface UpstreamTranslations {
     }
     profileRail: string
     nav: Record<string, string>
-    /** Display names for built-in session sources (platform ids remain stable). */
-    sources: Record<string, string>
     searchAria: string
     searchPlaceholder: string
     clearSearch: string
     noMatch: (query: string) => string
     results: string
     pinned: string
-    recent: string
     sessions: string
     terminal: string
     files: string
@@ -3727,87 +3363,7 @@ export interface UpstreamTranslations {
       guide: string
     }
     noFilterMatches: string
-    projects: {
-      showAllSessions: string
-      sectionLabel: string
-      empty: string
-      home: string
-      autoDiscovered: string
-      newButton: string
-      createTitle: string
-      createDesc: string
-      createFolderLocation: (name: string) => string
-      renameTitle: string
-      addFolderTitle: string
-      namePlaceholder: string
-      foldersLabel: string
-      folderSourceLocal: string
-      folderSourceRemote: string
-      add: string
-      noFolders: string
-      addFolder: string
-      primaryBadge: string
-      removeFolder: string
-      create: string
-      menu: string
-      menuRename: string
-      menuAppearance: string
-      noColor: string
-      menuAddFolder: string
-      manageFolders: string
-      setPrimaryFolder: string
-      foldersDescription: string
-      keepOneFolder: string
-      contextChanged: string
-      menuSetActive: string
-      menuDelete: string
-      moveToProject: string
-      movedTo: (name: string) => string
-      moveFailed: string
-      moveNoFolder: string
-      moveNoProjects: string
-      reveal: string
-      copyPath: string
-      removeFromSidebar: string
-      createFailed: string
-      unavailableAllProfiles: string
-      activeProfileChanged: string
-      staleBackend: string
-      deleteConfirm: string
-      startWork: string
-      newWorktreeTitle: string
-      newWorktreeDesc: string
-      branchPlaceholder: string
-      branchOff: () => { after: string; before: string }
-      baseBranchPlaceholder: string
-      baseBranchNone: string
-      startWorkFailed: string
-      worktreeStaleBackend: string
-      worktreeProjectLabel: string
-      worktreeProjectPlaceholder: string
-      worktreeProjectNone: string
-      convertBranch: string
-      convertBranchTitle: string
-      convertBranchDesc: string
-      convertBranchPlaceholder: string
-      convertBranchInstead: string
-      branchOpenExisting: string
-      branchSwitchHome: string
-      branchCreateWorktree: string
-      branchTrackRemote: string
-      branchesLoading: string
-      noBranches: string
-      removeWorktree: string
-      removeWorktreeFailed: string
-      removeWorktreeConfirm: string
-      removeWorktreeDirty: string
-      forceRemove: string
-      enter: (label: string) => string
-      reorder: (label: string) => string
-      toggle: (label: string, open: boolean) => string
-      showAllCount: (count: number) => string
-      back: string
-    }
+    projects: SidebarProjectsTranslations
     newSessionIn: (label: string) => string
     showMoreIn: (count: number, label: string) => string
     loading: string
@@ -3826,6 +3382,7 @@ export interface UpstreamTranslations {
       branchFrom: string
       rename: string
       archive: string
+      unarchive: string
       newWindow: string
       openInTerminal: string
       hideTabBar: string
@@ -3840,6 +3397,7 @@ export interface UpstreamTranslations {
       backgroundRunning: string
       draftSession: string
       handoffOrigin: (platform: string) => string
+      continuationOrigin: string
       ownedByProfile: (profile: string) => string
       renamed: string
       renameFailed: string
@@ -3870,11 +3428,16 @@ export interface UpstreamTranslations {
       done: string
     }
     markAllRead: string
+
+    sessionOptions: string
+
+    sources: Record<string, string>
+
+    recent: string
   }
 
   composer: {
     message: string
-    automaticModel: string
     wakingProfile: (profile: string) => string
     placeholderStarting: string
     placeholderReconnecting: string
@@ -3915,42 +3478,6 @@ export interface UpstreamTranslations {
     wakeWordListening: (phrase: string) => string
     wakeWordOff: (phrase: string) => string
     wakeWordPausedVoice: (phrase: string) => string
-    wakeWordArming: string
-    wakeWordClientMicrophoneFailed: string
-    wakeWordGatewayUnavailable: string
-    wakeWordDisabled: string
-    wakeWordDisabledForSurface: string
-    wakeWordOwnedByOtherSurface: string
-    wakeWordUnavailable: string
-    completionGroups: {
-      commands: string
-      configuration: string
-      exit: string
-      info: string
-      options: string
-      session: string
-      sessions: string
-      skills: string
-      themes: string
-      toolsAndSkills: string
-    }
-    referenceDescriptions: {
-      file: string
-      folder: string
-      git: string
-      image: string
-      tool: string
-      url: string
-    }
-    referenceLabels: {
-      file: string
-      folder: string
-      git: string
-      image: string
-      tool: string
-      url: string
-    }
-    browseAllSessions: string
     lookupLoading: string
     lookupNoMatches: string
     lookupTry: string
@@ -3975,7 +3502,10 @@ export interface UpstreamTranslations {
     editingQueuedInComposer: string
     restoredDraftNotice: string
     restoredDraftUndo: string
+    /** The local-setup offer above the input after the first finished task. */
     queueEdit: string
+    queueExpand: string
+    queueCollapse: string
     queueSendNext: string
     queueSend: string
     queueSteer: string
@@ -3984,6 +3514,11 @@ export interface UpstreamTranslations {
     queueResumeTip: string
     queueStuckTitle: string
     queueStuckBody: string
+    queueDroppedTitle: string
+    queueDroppedBody: string
+    terminalSelectionMissingTitle: string
+    terminalSelectionMissingBody: string
+    queuedTerminalSelectionExpiredBody: string
     previewUnavailable: string
     previewLabel: (label: string) => string
     couldNotPreview: (label: string) => string
@@ -4047,6 +3582,55 @@ export interface UpstreamTranslations {
       done: string
       doneTip: string
     }
+
+    automaticModel: string
+
+    wakeWordArming: string
+
+    wakeWordClientMicrophoneFailed: string
+
+    wakeWordGatewayUnavailable: string
+
+    wakeWordDisabled: string
+
+    wakeWordDisabledForSurface: string
+
+    wakeWordOwnedByOtherSurface: string
+
+    wakeWordUnavailable: string
+
+    completionGroups: {
+      commands: string
+      configuration: string
+      exit: string
+      info: string
+      options: string
+      session: string
+      sessions: string
+      skills: string
+      themes: string
+      toolsAndSkills: string
+    }
+
+    referenceDescriptions: {
+      file: string
+      folder: string
+      git: string
+      image: string
+      tool: string
+      url: string
+    }
+
+    referenceLabels: {
+      file: string
+      folder: string
+      git: string
+      image: string
+      tool: string
+      url: string
+    }
+
+    browseAllSessions: string
   }
 
   statusStack: {
@@ -4061,6 +3645,7 @@ export interface UpstreamTranslations {
     goalWaiting: string
     subagents: (count: number) => string
     todos: (done: number, total: number) => string
+    previousTodos: (done: number, total: number) => string
     running: string
     stop: string
     dismiss: string
@@ -4154,13 +3739,7 @@ export interface UpstreamTranslations {
       dismissError: string
       add: string
     }
-    backgroundProcess: string
-    standingGoal: string
     coding: {
-      selectProject: string
-      noProject: string
-      startProjectChat: string
-      viewChanges: string
       title: string
       noBranch: string
       detached: string
@@ -4188,6 +3767,7 @@ export interface UpstreamTranslations {
       scopeUncommitted: string
       scopeBranch: string
       scopeLastTurn: string
+      readOnlyScope: string
       commit: string
       commitAndPush: string
       commitPlaceholder: (shortcut: string) => string
@@ -4204,16 +3784,40 @@ export interface UpstreamTranslations {
       switchTo: (branch: string) => string
       switchFailed: (branch: string) => string
       worktrees: string
+
+      selectProject: string
+
+      noProject: string
+
+      startProjectChat: string
+
+      viewChanges: string
+
       workLocation: string
+
       localWork: string
+
       projectDirectory: string
+
       worktreeWork: string
+
       newChatLocation: string
+
       createWorktree: string
     }
+
+    backgroundProcess: string
+
+    standingGoal: string
   }
 
   updates: {
+    discontinuedTitle: string
+    discontinuedBody: string
+    channels: { stable: string; canary: string }
+    bundleSwapPending: string
+    bundleSwapPendingDesc: string
+    bundleSwapPendingAction: string
     stages: Record<string, string>
     checking: string
     checkFailedTitle: string
@@ -4232,12 +3836,17 @@ export interface UpstreamTranslations {
     availableTitleBackend: string
     availableBodyBackend: string
     availableBodyNoChangelog: string
+    availableBodyAppInstaller: string
     updateNow: string
     maybeLater: string
     moreChanges: (count: number) => string
+    copyFullLog: string
     manualTitle: string
+    manualUnavailableTitle: string
     manualBody: string
+    manualBodyBackend: string
     manualPickedUp: string
+    manualPickedUpBackend: string
     /** GUI/backend skew (#45205): backend updated but the running desktop app
      *  package (AppImage/.deb/.rpm) was not changed and must be reinstalled. */
     guiSkewTitle: string
@@ -4248,6 +3857,10 @@ export interface UpstreamTranslations {
     applyingBody: string
     applyingBodyBackend: string
     applyingClose: string
+    applyingBodyAppInstaller: string
+    applyingCloseAppInstaller: string
+    checkUnknownTitleAppInstaller: string
+    checkUnknownBodyAppInstaller: string
     errorTitle: string
     errorBody: string
     blockerTitle: string
@@ -4285,11 +3898,62 @@ export interface UpstreamTranslations {
       notAvailable: string
       failed: string
       noReturn: string
+      owed: (steps: string) => string
     }
+    /** Update-status overlay + version-details (mechanism-aware update UI), read off t.updates directly. */
+    appName: string
+    version: (value: string) => string
+    versionUnavailable: string
+    checkNow: string
+    seeWhatsNew: string
+    releaseNotes: string
+    onLatest: string
+    installing: string
+    cantReach: string
+    tapCheck: string
+    updateReady: (count: number) => string
+    updateReadyUnknown: string
+    availableBodyRelease: (tag: string) => string
+    lastChecked: (age: string) => string
+    never: string
+    justNow: string
+    minAgo: (count: number) => string
+    hoursAgo: (count: number) => string
+    daysAgo: (count: number) => string
+    justNowSuffix: string
+    bundleOutOfSync: string
+    bundleOutOfSyncDesc: string
+    bundleOutOfSyncAction: string
+    checkingShort: string
+    releaseAvailable: (tag: string) => string
+    versionDetailsTitle: string
+    versionDetailsBody: string
+    versionDetailsVersion: string
+    versionDetailsCommit: string
+    versionDetailsBuildOrigin: string
+    versionDetailsDistribution: string
+    versionDetailsDistributionDesktop: string
+    versionDetailsDistributionDesktopMsix: string
+    versionDetailsDistributionDesktopInstaller: string
+    versionDetailsDistributionSourceInstaller: string
+    versionDetailsDistributionSourceInstallerDesktop: string
+    versionDetailsDistributionSource: string
+    versionDetailsDistributionSourceDesktop: string
+    versionDetailsDistributionStore: string
+    versionDetailsRuntime: string
+    versionDetailsRuntimeEmbedded: string
+    versionDetailsRuntimeExternal: string
+    versionDetailsInstallId: string
+    versionDetailsUncommittedChanges: string
+
     desktopBridgeUnavailable: string
+
     starting: string
+
     backendApplied: string
+
     backendNoReturn: string
+
     changelog: {
       groups: {
         new: string
@@ -4303,26 +3967,9 @@ export interface UpstreamTranslations {
     }
   }
 
-  /** The guided first run's pre-written opening line — banked, not generated,
-   *  so the first paint costs no model time. Translated per locale because the
-   *  model is told to speak the user's language from its first real turn, and
-   *  an English opener above a Japanese reply reads as two different agents.
-   *  `nameSuggestion` offers the OS account name as a default. */
-  handoffTour: {
-    profileTitle: string
-    profileText: string
-    sessionsTitle: string
-    sessionsText: string
-    stayTitle: string
-    stayText: string
-  }
-  guidedGreeting: {
-    line: string
-    nameSuggestion: (name: string) => string
-  }
+  handoffTour: HandoffTourTranslations
   install: {
     stageStates: Record<string, string>
-    stageNames: Record<string, string>
     oneTimeTitle: string
     unsupportedDesc: (platform: string) => string
     installCommand: string
@@ -4332,11 +3979,15 @@ export interface UpstreamTranslations {
     retryAfterRun: string
     setupChoiceTitle: string
     setupChoiceDesc: string
+    setupChoiceDescLocal: string
     connectExistingTitle: string
     connectExistingShort: string
     connectExistingDesc: string
     installLocalTitle: string
     installLocalDesc: string
+    useLocalTitle: string
+    useLocalDesc: string
+    bundledLocalDesc: string
     localStartUnavailable: string
     remoteSetupTitle: string
     remoteSetupDesc: string
@@ -4384,92 +4035,11 @@ export interface UpstreamTranslations {
     copyOutput: string
     reloadRetry: string
     openLogs: string
+
+    stageNames: Record<string, string>
   }
 
-  onboarding: {
-    headerTitle: string
-    headerDesc: string
-    providerTitle: (id: string, fallback: string) => string
-    preparingInstall: string
-    starting: string
-    lookingUpProviders: string
-    collapse: string
-    otherProviders: string
-    haveApiKey: string
-    chooseLater: string
-    recommended: string
-    connected: string
-    featuredPitch: string
-    fireworksPitch: string
-    localModelsTitle: string
-    localModelsPitch: string
-    openRouterPitch: string
-    apiKeyOptions: Record<string, { short: string; description: string; title?: string }>
-    backToSignIn: string
-    getKey: string
-    replaceCurrent: string
-    pasteApiKey: string
-    localApiKeyPlaceholder: string
-    couldNotSave: string
-    connecting: string
-    update: string
-    flowSubtitles: Record<string, string>
-    startingSignIn: (provider: string) => string
-    verifyingCode: (provider: string) => string
-    connectedProvider: (provider: string) => string
-    connectedPicking: (provider: string) => string
-    signInFailed: string
-    signInExpired: string
-    genericApiKeyDescription: (provider: string) => string
-    signInDidNotFinish: (provider: string) => string
-    tryAgain: string
-    useApiKeyInstead: string
-    errorDetails: string
-    pickDifferentProvider: string
-    signInWith: (provider: string) => string
-    openedBrowser: (provider: string) => string
-    authorizeThere: string
-    copyAuthCode: string
-    pasteAuthCode: string
-    reopenAuthPage: string
-    autoBrowser: (provider: string) => string
-    reopenSignInPage: string
-    waitingAuthorize: string
-    externalPending: (provider: string) => string
-    signedIn: string
-    deviceCodeOpened: (provider: string) => string
-    reopenVerification: string
-    copy: string
-    defaultModel: string
-    freeTier: string
-    pro: string
-    free: string
-    price: (input: string, output: string) => string
-    change: string
-    startChatting: string
-    docs: (provider: string) => string
-    readyTitle: string
-    readyMessage: (provider: string) => string
-    gatewayToolsTitle: string
-    gatewayToolsMessage: (tools: string) => string
-    gatewayToolLabel: (tool: string) => string
-    runtimeNotReadyTitle: string
-    runtimeNotReadyMessage: string
-    providerResolutionFailure: (detail?: string) => string
-    startSignInFailed: (detail: string) => string
-    pollFailed: (detail: string) => string
-    signInStatus: (status: string) => string
-    tokenExchangeFailed: string
-    externalProviderUnreachable: (provider: string, command: string) => string
-    enterValueFirst: string
-    saveCredentialFailed: (label: string) => string
-    endpointUrlFirst: string
-    endpointUnreachable: (url: string) => string
-    endpointNoModels: (url: string) => string
-    savedEndpointUnreachable: (url: string) => string
-    saveEndpointFailed: string
-    couldNotChangeModel: string
-  }
+  onboarding: OnboardingTranslations
 
   freeTier: {
     /** Settings › Providers row title while the Nous identity is the free tier. */
@@ -4523,6 +4093,13 @@ export interface UpstreamTranslations {
     unreachableBody: string
     alreadySignedInHeading: string
     alreadySignedInBody: string
+    /** The "keep going" offer the backend times after a finished task (repeats, backing off). */
+    offer: {
+      heading: string
+      body: string
+      signIn: string
+      notNow: string
+    }
     // First-launch set-up failure notice: the free tier could not be created at boot.
     // One sentence per backend code (`hermes_cli/anon_auth.py::ANON_*`); the copy never says
     // the free MODEL is off — what is unavailable is using Hermes without signing in.
@@ -4572,26 +4149,24 @@ export interface UpstreamTranslations {
     addProvider: string
     addCustomModel: string
     removeCustomModel: string
+    resetToDefaults: string
+    resetConfirm: string
+    resetDescription: string
+    resetAction: string
   }
 
   shell: {
     windowControls: string
     paneControls: string
     appControls: string
-    modelMenu: {
-      search: string
-      noModels: string
-      editModels: string
-      refreshModels: string
-      fast: string
-      moaPresets: string
-      moaPrefix: string
-    }
+    modelMenu: ModelMenuTranslations
     modelOptions: {
       noOptions: string
       options: string
       thinking: string
       fast: string
+      ultrafast: string
+      useStandardSpeed: string
       effort: string
       minimal: string
       low: string
@@ -4602,12 +4177,12 @@ export interface UpstreamTranslations {
       ultra: string
       /** The CLI's `/reasoning` clamp note, e.g. "sends Max on this route". */
       sendsOnRoute: (level: string) => string
-      /** Ultra's mode note before the gateway stamps its wire level, e.g. "multi-agent". */
-      multiAgent: string
-      /** Ultra's mode note with the level it sends, e.g. "multi-agent, sends Max". */
-      multiAgentSends: (level: string) => string
       updateFailed: string
       fastFailed: string
+
+      multiAgent: string
+
+      multiAgentSends: (level: string) => string
     }
     gatewayMenu: {
       gateway: string
@@ -4621,10 +4196,11 @@ export interface UpstreamTranslations {
       reconnectGateway: string
       openSystem: string
       connection: (label: string) => string
-      state: (state: string) => string
       recentActivity: string
       viewAllLogs: string
       messagingPlatforms: string
+
+      state: (state: string) => string
     }
     approvalMode: {
       title: string
@@ -4642,6 +4218,7 @@ export interface UpstreamTranslations {
       update: string
       updateInProgress: string
       commitsBehind: (count: number, branch: string) => string
+      releaseAvailable: (tag: string) => string
       desktopVersion: (version: string) => string
       backendVersion: (version: string) => string
       clientLabel: (version: string) => string
@@ -4659,6 +4236,9 @@ export interface UpstreamTranslations {
       showTerminal: string
       hideTerminal: string
       gateway: string
+      backend: string
+      messagingStopped: string
+      messagingDegraded: (name: string) => string
       gatewayReady: string
       gatewayNeedsSetup: string
       gatewayUnavailable: string
@@ -4667,7 +4247,6 @@ export interface UpstreamTranslations {
       gatewayOffline: string
       gatewayRestarting: string
       gatewayTitle: string
-      noRecentGatewayLogs: string
       customizeTitle: string
       hideStatusbar: string
       resetStatusbar: string
@@ -4699,10 +4278,8 @@ export interface UpstreamTranslations {
       openStarmap: string
       turnRunning: string
       contextUsage: string
-      subtaskMonitor: string
+      compressions: (count: number) => string
       systemResources: {
-        backendHost: string
-        unavailable: string
         title: string
         loading: string
         gpuUtilization: string
@@ -4710,9 +4287,12 @@ export interface UpstreamTranslations {
         ram: string
         unifiedNote: string
         toggle: string
+
+        backendHost: string
+
+        unavailable: string
       }
       contextUsagePanel: {
-        compacting: string
         categories: {
           conversation: string
           mcp: string
@@ -4728,21 +4308,32 @@ export interface UpstreamTranslations {
         percentFull: (percent: number) => string
         title: string
         tokenSummary: (used: string, max: string) => string
+
+        compacting: string
       }
-      session: string
+      focusedSince: string
+      focusedSinceTitle: string
       yoloOn: string
       yoloOff: string
       modelNone: string
       noModel: string
-      modelFast: string
-      modelEffort: (effort: string) => string
-      modelVariant: (variant: string) => string
-      modelStatusNoModel: string
       switchModel: string
       openModelPicker: string
       modelPinned: string
       modelTitle: (provider: string, model: string) => string
       providerModelTitle: (provider: string, model: string) => string
+
+      noRecentGatewayLogs: string
+
+      subtaskMonitor: string
+
+      modelFast: string
+
+      modelEffort: (effort: string) => string
+
+      modelVariant: (variant: string) => string
+
+      modelStatusNoModel: string
     }
   }
 
@@ -4782,23 +4373,33 @@ export interface UpstreamTranslations {
     tryAgain: string
     loadingTree: string
     loadingFiles: string
-    loadingPlaceholder: string
-    unableToReadPlaceholder: (error: string) => string
     terminalHide: string
     terminalsAria: string
     terminalNew: string
+    terminalReadOnly: string
+    terminalReadOnlyHelp: string
+    terminalOpenInteractive: string
     terminalCloseOthers: string
     terminalCloseAll: string
-    terminalStartFailed: (error: string) => string
     addToChat: string
+
+    loadingPlaceholder: string
+
+    unableToReadPlaceholder: (error: string) => string
+
+    terminalStartFailed: (error: string) => string
   }
 
   preview: {
     tab: string
-    browserTab: string
+    pin: string
+    unpin: string
     closePane: string
     loading: string
     unavailable: string
+    missingTarget: string
+    missingTitle: string
+    missingBody: (label: string) => string
     opening: string
     hide: string
     openPreview: string
@@ -4820,53 +4421,15 @@ export interface UpstreamTranslations {
     truncated: string
     noInlineTitle: string
     noInlineBody: (mimeType: string) => string
-    desktopBridgeUnavailable: string
-    artifactWriteFailed: string
-    invalidPdfDataUrl: string
-    invalidPdfDataUrlType: string
-    invalidPdfDataUrlPayload: string
-    invalidPdfFileHeader: string
-    pdfObjectUrlUnsupported: string
-    webviewNotReady: string
-    webviewInputUnavailable: string
-    couldNotOpenTarget: (target: string) => string
     edit: string
     editing: string
     unsavedChanges: string
     saveFailed: (message: string) => string
+    saveScopeChanged: string
     diskChangedTitle: string
     diskChangedBody: string
     overwrite: string
     discardReload: string
-    reader: {
-      fileNote: string
-      artifactNote: string
-      loadingNote: string
-    }
-    tour: {
-      noLivePage: string
-      noAnswer: string
-      disabled: string
-      inactiveSession: string
-    }
-    drive: {
-      noLivePage: string
-      inactiveSession: string
-      pageNavigated: string
-      pageRejected: (message: string) => string
-      noAnswer: string
-      cannotLocate: string
-      notTextField: (target: string) => string
-      pointerMissed: (kind: string) => string
-      overlayIntercepted: string
-      nothingToScroll: string
-      pageLoading: string
-      clicked: (target: string) => string
-      typed: (target: string, submitted: boolean) => string
-      hovered: (target: string) => string
-      pressed: (key: string, target: string) => string
-      scrolledPage: string
-    }
     console: {
       deselect: string
       select: string
@@ -4899,8 +4462,6 @@ export interface UpstreamTranslations {
       restartingTitle: string
       restartingMessage: string
       startRestartFailed: (message: string) => string
-      restartNoActiveSession: string
-      restartMissingTaskId: string
       restartFailed: string
       hideConsole: string
       showConsole: string
@@ -4939,6 +4500,64 @@ export interface UpstreamTranslations {
       commentTitle: (n: number) => string
       saveComment: string
       cancelComment: string
+
+      restartNoActiveSession: string
+
+      restartMissingTaskId: string
+    }
+
+    browserTab: string
+
+    desktopBridgeUnavailable: string
+
+    artifactWriteFailed: string
+
+    invalidPdfDataUrl: string
+
+    invalidPdfDataUrlType: string
+
+    invalidPdfDataUrlPayload: string
+
+    invalidPdfFileHeader: string
+
+    pdfObjectUrlUnsupported: string
+
+    webviewNotReady: string
+
+    webviewInputUnavailable: string
+
+    couldNotOpenTarget: (target: string) => string
+
+    reader: {
+      fileNote: string
+      artifactNote: string
+      loadingNote: string
+    }
+
+    tour: {
+      noLivePage: string
+      noAnswer: string
+      disabled: string
+      inactiveSession: string
+    }
+
+    drive: {
+      noLivePage: string
+      inactiveSession: string
+      pageNavigated: string
+      pageRejected: (message: string) => string
+      noAnswer: string
+      cannotLocate: string
+      notTextField: (target: string) => string
+      pointerMissed: (kind: string) => string
+      overlayIntercepted: string
+      nothingToScroll: string
+      pageLoading: string
+      clicked: (target: string) => string
+      typed: (target: string, submitted: boolean) => string
+      hovered: (target: string) => string
+      pressed: (key: string, target: string) => string
+      scrolledPage: string
     }
   }
 
@@ -4951,23 +4570,11 @@ export interface UpstreamTranslations {
   }
 
   zones: {
-    paneTitles: {
-      sessions: string
-      terminal: string
-      files: string
-      review: string
-      logs: string
-    }
-    layoutTitles: {
-      default: string
-      focus: string
-      terminalDeck: string
-      quad: string
-    }
     showTabStrip: string
     hideTabStrip: string
     showStripTab: (title: string) => string
     hideStripTab: (title: string) => string
+    zoneMenuLabel: (title: string) => string
     lastTabKeptTitle: string
     lastTabKeptBody: string
     toggleStripTab: (title: string) => string
@@ -5009,6 +4616,21 @@ export interface UpstreamTranslations {
     notExpressible: string
     zoneCount: (count: number) => string
     tabCount: (count: number) => string
+
+    paneTitles: {
+      sessions: string
+      terminal: string
+      files: string
+      review: string
+      logs: string
+    }
+
+    layoutTitles: {
+      default: string
+      focus: string
+      terminalDeck: string
+      quad: string
+    }
   }
 
   contextMenu: {
@@ -5036,47 +4658,18 @@ export interface UpstreamTranslations {
   }
 
   assistant: {
-    markdown: {
-      alerts: {
-        caution: string
-        important: string
-        note: string
-        tip: string
-        warning: string
-      }
-      mediaFetchFailed: (name: string) => string
-      openFile: (kind: 'audio' | 'video') => string
-      openMedia: (name: string) => string
-      imageLoadFailed: (name: string) => string
-      openImage: string
-      loading: (name: string) => string
-    }
     thread: {
       loadingSession: string
       showEarlier: string
       loadingResponse: string
       loadingLocalModel: (model: string) => string
       processingPrompt: string
-      summarizing: string
-      working: string
       resumeWhenBackgroundDone: (count: number) => string
       thinking: string
       thought: string
       thoughtBriefly: string
       thoughtFor: (duration: string) => string
       turnDuration: (duration: string) => string
-      processTitle: string
-      replyMetrics: {
-        duration: string
-        tokens: string
-        context: string
-        cache: string
-        nonAinoModelCalls: string
-        details: string
-        sessionElapsed: string
-        input: string
-        output: string
-      }
       today: (time: string) => string
       yesterday: (time: string) => string
       copy: string
@@ -5084,20 +4677,8 @@ export interface UpstreamTranslations {
       moreActions: string
       branchNewChat: string
       react: string
-      emojiSearch: string
-      emojiLoading: string
-      emojiEmpty: string
-      moreEmoji: string
-      removeReaction: (emoji: string) => string
-      reactedBy: (product: string) => string
-      reactFailed: string
-      noActiveSession: string
-      gatewayNotConnected: string
-      steered: string
-      modelChanged: string
-      modelChangedTo: (model: string) => string
-      modelChangedFrom: (previousModel: string, model: string) => string
       dismissError: string
+      responseStopped: string
       /** Layer titles for the structured error card (agent/error_surface.py).
        *  `generic` is the fallback when the backend sent no descriptor. */
       errorLayers: {
@@ -5172,6 +4753,8 @@ export interface UpstreamTranslations {
       preparingAudio: string
       stopReading: string
       readAloud: string
+      copyFullResponse: string
+      readAloudFullResponseHint: string
       editMessage: string
       expandMessage: string
       scrollToBottom: string
@@ -5182,17 +4765,69 @@ export interface UpstreamTranslations {
       restoreTitle: string
       restoreBody: string
       restoreConfirm: string
-      restoreFailed: string
       restoreNext: string
       goForward: string
       sendEdited: string
       attachingFile: string
+
+      summarizing: string
+
+      working: string
+
+      processTitle: string
+
+      replyMetrics: {
+        duration: string
+        tokens: string
+        context: string
+        cache: string
+        nonAinoModelCalls: string
+        details: string
+        sessionElapsed: string
+        input: string
+        output: string
+      }
+
+      emojiSearch: string
+
+      emojiLoading: string
+
+      emojiEmpty: string
+
+      moreEmoji: string
+
+      removeReaction: (emoji: string) => string
+
+      reactedBy: (product: string) => string
+
+      reactFailed: string
+
+      noActiveSession: string
+
+      gatewayNotConnected: string
+
+      steered: string
+
+      modelChanged: string
+
+      modelChangedTo: (model: string) => string
+
+      modelChangedFrom: (previousModel: string, model: string) => string
+
+      restoreFailed: string
+
       messaging: (target: string) => string
+
       messaged: (target: string) => string
+
       messageFrom: (sender: string) => string
+
       repliedTo: (sender: string) => string
+
       showMessage: string
+
       showReply: string
+
       output: string
     }
     approval: {
@@ -5203,6 +4838,7 @@ export interface UpstreamTranslations {
       openSafetySettings: string
       run: string
       command: string
+      commandDetails: string
       moreOptions: string
       allowSession: string
       alwaysAllowMenu: string
@@ -5221,37 +4857,34 @@ export interface UpstreamTranslations {
       placeholder: string
       skip: string
       skipped: string
-      continueLabel: string
+      noAnswer: string
       confirmAndContinueLabel: string
-      answeredBadge: string
+      singleSelectHint: string
+      multiSelectHint: string
+      oneQuestion: string
       questionProgress: (answered: number, total: number) => string
-      lateAnswer: (question: string, choice: string) => string
-      lateAnswerTip: string
-      lateAnswerHint: string
+      notDelivered: string
     }
-    catalogInstall: {
-      preparing: string
-      install: string
-      advanced: string
-      skip: string
-      installing: string
-      installed: string
-      notInstalled: string
-      failed: string
-      showNames: string
-      hideNames: string
-      skill: (name: string) => string
-      kind: { plugin: string; skill: string }
-      tier: { official: string; community: string }
-      targetProfile: (profile: string) => string
-      sendFailed: string
-      commitLabel: string
-      subdirLabel: string
-      securityHeading: string
-      scan: { passed: string; warnings: string; failed: string }
-      requirementsLabel: string
-      credentialsHeading: string
+    setupChoose: {
+      kinds: Record<'accent' | 'connectors' | 'layout' | 'plugins' | 'theme', string>
+      loading: string
+      unavailable: string
+      findApp: string
+      customColor: string
+      plugin: string
+      startsLater: string
     }
+    startChat: {
+      starting: (title: string) => string
+      startingUntitled: string
+      untitled: string
+      notStarted: string
+      retry: string
+      inProfile: (profile: string) => string
+      open: string
+      openFailed: string
+    }
+    catalogInstall: CatalogInstallTranslations
     mcpSetup: {
       installTitle: string
       enableTitle: string
@@ -5295,55 +4928,11 @@ export interface UpstreamTranslations {
       }
       outputAlt: string
       rawResponse: string
-      truncatedOutput: (count: number) => string
       copyActivity: string
-      arguments: string
-      result: string
-      payload: string
-      search: string
-      searchResults: string
-      details: string
-      stdout: string
-      stderr: string
-      errorDetails: string
-      snapshotSummary: string
-      delegatedTask: string
-      taskNumber: (index: number) => string
-      fallbacks: {
-        returnedError: string
-        returnedSuccessFalse: string
-        returnedStatus: (status: string) => string
-        commandFailedExitCode: (code: number) => string
-      }
-      cron: {
-        noJobs: string
-        noJobsScheduled: string
-        jobsCount: (count: number) => string
-        schedule: string
-        repeat: string
-        delivery: string
-        nextRun: string
-      }
-      subtitles: {
-        navigatedInBrowser: string
-        capturedBrowserSnapshot: string
-        clickedPage: string
-        clickedPageElement: (target: string) => string
-        filledPageInput: string
-        fieldValue: (field: string, value: string) => string
-        queriedWebSources: string
-        query: (query: string) => string
-        executedCommand: string
-        changedFile: string
-        fetchedWebpage: string
-      }
-      countLabel: (count: number, noun: string, plural: string) => string
       recoveredOne: string
       recoveredMany: (count: number) => string
       failedOne: string
       failedMany: (count: number) => string
-      shell: string
-      statusBackground: string
       statusRunning: string
       statusError: string
       statusRecovered: string
@@ -5358,15 +4947,100 @@ export interface UpstreamTranslations {
         opened: string
         opening: string
         failedToOpen: string
-        failedToRead: string
         searched: string
         searching: string
         ran: string
         running: string
         ranCode: string
         runningCode: string
+
+        failedToRead: string
       }
+      prefixes: {
+        browser: string
+        web: string
+      }
+      titleTemplates: {
+        actionCommand: (action: string, command: string) => string
+        actionQuoted: (action: string, value: string) => string
+        actionTarget: (action: string, target: string) => string
+        prefixedDone: (prefix: string, action: string) => string
+        runningPrefixedTool: (prefix: string, action: string) => string
+        runningTool: (action: string) => string
+
+        searchInTarget: (query: string, target: string, pending: boolean) => string
+      }
+      titles: Record<ToolTitleKey, ToolTitleCopy>
+
+      truncatedOutput: (count: number) => string
+
+      arguments: string
+
+      result: string
+
+      payload: string
+
+      search: string
+
+      searchResults: string
+
+      details: string
+
+      stdout: string
+
+      stderr: string
+
+      errorDetails: string
+
+      snapshotSummary: string
+
+      delegatedTask: string
+
+      taskNumber: (index: number) => string
+
+      fallbacks: {
+        returnedError: string
+        returnedSuccessFalse: string
+        returnedStatus: (status: string) => string
+        commandFailedExitCode: (code: number) => string
+      }
+
+      cron: {
+        noJobs: string
+        noJobsScheduled: string
+        jobsCount: (count: number) => string
+        schedule: string
+        repeat: string
+        delivery: string
+        nextRun: string
+      }
+
+      subtitles: {
+        navigatedInBrowser: string
+        capturedBrowserSnapshot: string
+        clickedPage: string
+        clickedPageElement: (target: string) => string
+        filledPageInput: string
+        fieldValue: (field: string, value: string) => string
+        queriedWebSources: string
+        query: (query: string) => string
+        executedCommand: string
+        changedFile: string
+        fetchedWebpage: string
+      }
+
+      countLabel: (count: number, noun: string, plural: string) => string
+
+      shell: string
+
+      statusBackground: string
+
       runSummary: {
+        search: { count: (count: number) => string; past: string; present: string }
+        read: { count: (count: number) => string; past: string; present: string }
+        browse: { count: (count: number) => string; past: string; present: string }
+        interact: { count: (count: number) => string; past: string; present: string }
+        analyze: { count: (count: number) => string; past: string; present: string }
         delegate: {
           count: (count: number) => string
           past: string
@@ -5393,26 +5067,27 @@ export interface UpstreamTranslations {
           present: string
         }
       }
-      prefixes: {
-        browser: string
-        web: string
+    }
+
+    markdown: {
+      alerts: {
+        caution: string
+        important: string
+        note: string
+        tip: string
+        warning: string
       }
-      titleTemplates: {
-        actionCommand: (action: string, command: string) => string
-        actionQuoted: (action: string, value: string) => string
-        actionTarget: (action: string, target: string) => string
-        searchInTarget: (query: string, target: string, pending: boolean) => string
-        prefixedDone: (prefix: string, action: string) => string
-        runningPrefixedTool: (prefix: string, action: string) => string
-        runningTool: (action: string) => string
-      }
-      titles: Record<ToolTitleKey, ToolTitleCopy>
+      mediaFetchFailed: (name: string) => string
+      openFile: (kind: 'audio' | 'video') => string
+      openMedia: (name: string) => string
+      imageLoadFailed: (name: string) => string
+      openImage: string
+      loading: (name: string) => string
     }
   }
 
   prompts: {
     gatewayDisconnected: string
-    dangerousCommand: string
     reconnect: string
     sudoSendFailed: string
     secretSendFailed: string
@@ -5446,101 +5121,27 @@ export interface UpstreamTranslations {
     vaultUnlockPlaceholder: string
     vaultUnlockKeepLocked: string
     vaultUnlockConfirm: string
+
+    dangerousCommand: string
   }
 
   desktop: {
-    activity: {
-      sessionTask: string
-      agentTaskRunning: string
-      previewRestart: string
-      running: string
-      completed: string
-      unknown: string
-      failed: (code: string) => string
-    }
-    fsBridgeUnavailable: (product: string) => string
-    fsSavingUnavailable: string
-    fsRenameUnavailable: string
-    fsDeleteUnavailable: string
     audioReadFailed: string
-    fileDownloadBridgeUnavailable: string
     sessionUnavailable: string
-    gatewayConnectionClosed: string
-    gatewayConnectionFailed: string
-    gatewayNotConnected: string
-    transcriptSafeLoadLimit: string
     createSessionFailed: string
     promptFailed: string
-    platformVisionUnsupported: string
-    chooseModel: string
     providerCredentialRequired: string
     emptySlashCommand: string
+    slashCommandIgnoredTitle: string
+    slashCommandIgnoredBody: string
     desktopCommands: string
     skillCommandsAvailable: (count: number) => string
-    agentReportedError: string
     warningLine: (message: string) => string
-    errorLine: (message: string) => string
-    wakeUsage: string
-    wakeStartFailed: (reason: string) => string
-    wakeStatus: {
-      title: string
-      state: (listening: boolean) => string
-      phrase: (phrase: string) => string
-      provider: (provider: string) => string
-      surface: (surface: string) => string
-      input: (input: string) => string
-      audioSilent: string
-      inputError: (error: string) => string
-      hint: (hint: string) => string
-      defaultPhrase: string
-      unknown: string
-      auto: string
-      systemDefault: string
-    }
-    sessionTitleSet: (title: string, queued: boolean) => string
-    sessionTitleCleared: string
-    sessionBusyQueued: string
-    sessionBusyInterrupt: string
-    browserRemoteUnavailable: string
-    browserUsage: string
-    browserChecking: (url: string) => string
-    browserStatusConnected: (url: string) => string
-    browserNotConnected: string
-    browserDisconnected: string
-    browserConnected: string
-    browserEndpoint: (url: string) => string
-    browserNextCall: string
-    browserUrlUnavailable: string
-    petScaleUsage: string
-    compressing: (focusTopic: string) => string
-    compressedMessages: (count: number) => string
-    nothingToCompress: string
-    slashNoOutput: (name: string) => string
-    slashEmptyOutput: string
-    slashMissingMessage: (name: string) => string
-    slashEmptyMessage: (name: string) => string
-    slashInvalidResponse: string
-    slashCommandFailed: (name: string, error: string) => string
-    slashUnavailable: {
-      advanced: (command: string) => string
-      composerVoice: string
-      messaging: (command: string) => string
-      settings: (command: string) => string
-      terminal: (command: string) => string
-      modelPicker: (command: string) => string
-      sessionPicker: (command: string) => string
-      fallback: (command: string) => string
-    }
     yoloArmed: string
     yoloOff: string
     yoloSystem: (active: boolean) => string
     yoloTitle: string
     yoloToggleFailed: string
-    botMode: {
-      selectBotBeforeNewChat: string
-      updateForAnotherChat: (product: string) => string
-      selectBotOrGroup: string
-    }
     profileStatus: (current: string) => string
     unknownProfile: string
     noProfileNamed: (target: string, available: string) => string
@@ -5548,14 +5149,10 @@ export interface UpstreamTranslations {
     setProfileFailed: string
     sttDisabled: string
     stopFailed: string
-    modelSwitchConfirm: string
     regenerateFailed: string
     editFailed: string
     editTurnUnavailable: string
     resumeFailed: string
-    restoreNoActiveSession: string
-    restoreTargetMissing: string
-    restoreEmptyMessage: string
     readOnlyTranscriptTitle: string
     readOnlyTranscriptBody: string
     readOnlyTranscriptSendBlocked: string
@@ -5564,8 +5161,6 @@ export interface UpstreamTranslations {
     poolSlotTimeoutBody: string
     poolSlotTimeoutOpenSettings: string
     resumeRetry: string
-    sessionStillAvailableRetry: string
-    sessionUnavailableRetry: string
     nothingToBranch: string
     branchNeedsChat: string
     sessionBusy: string
@@ -5573,41 +5168,11 @@ export interface UpstreamTranslations {
     branchNoText: string
     branchTitle: (n: number) => string
     branchFailed: string
-    stopProcessFailed: string
-    gatewayReconnectUnavailable: string
-    remoteAttachTooLarge: (label: string, maxMb?: number) => string
-    attachmentReadFailed: (label: string) => string
-    attachmentAttachFailed: (label: string) => string
-    skinCommand: {
-      noThemes: string
-      switched: (label: string) => string
-      listHeading: string
-      listHint: string
-      completionList: string
-      completionNext: string
-      completionCurrent: string
-      unknownTheme: (name: string, available: string) => string
-    }
-    commandResults: {
-      noCommands: string
-      steerQueued: (text: string) => string
-      steerQueuedNoText: string
-      steerRejected: string
-      stoppedProcesses: (count: number) => string
-      noBackgroundProcesses: string
-      savedTranscript: (path: string) => string
-      usage: (calls: string, input: string, output: string, total: string) => string
-      noBackgroundTasks: string
-      processLine: (status: string, command: string, metadata: string) => string
-    }
-    openSessionWindowFailed: string
-    openNewWindowFailed: string
-    popOutBrowserFailed: string
-    openSessionTerminalFailed: string
     deleteFailed: string
     archived: string
     archiveFailed: string
-    sessionOwnershipUnavailable: string
+    restored: string
+    unarchiveFailed: string
     cwdChangeFailed: string
     cwdStagedTitle: string
     cwdStagedMessage: string
@@ -5626,10 +5191,12 @@ export interface UpstreamTranslations {
     restartToUseSaveImage: string
     restartToSaveImages: string
     imageDownloadFailed: string
-    imageFetchFailed: (status: string) => string
     openImage: string
     downloadImage: string
     savingImage: string
+    zoomIn: string
+    zoomOut: string
+    resetZoom: string
     imagePreviewFailed: string
     imageAttach: string
     imageWriteFailed: string
@@ -5641,10 +5208,202 @@ export interface UpstreamTranslations {
     noClipboardImage: string
     clipboardPasteFailed: string
     dropFiles: string
+    handoff: {
+      pickPlatform: string
+      success: (platform: string) => string
+      systemNote: (platform: string) => string
+      failed: (error: string) => string
+      timedOut: string
+      startMessaging: string
+    }
+
+    activity: {
+      sessionTask: string
+      agentTaskRunning: string
+      previewRestart: string
+      running: string
+      completed: string
+      unknown: string
+      failed: (code: string) => string
+    }
+
+    fsBridgeUnavailable: (product: string) => string
+
+    fsSavingUnavailable: string
+
+    fsRenameUnavailable: string
+
+    fsDeleteUnavailable: string
+
+    fileDownloadBridgeUnavailable: string
+
+    gatewayConnectionClosed: string
+
+    gatewayConnectionFailed: string
+
+    gatewayNotConnected: string
+
+    transcriptSafeLoadLimit: string
+
+    platformVisionUnsupported: string
+
+    chooseModel: string
+
+    agentReportedError: string
+
+    errorLine: (message: string) => string
+
+    wakeUsage: string
+
+    wakeStartFailed: (reason: string) => string
+
+    wakeStatus: {
+      title: string
+      state: (listening: boolean) => string
+      phrase: (phrase: string) => string
+      provider: (provider: string) => string
+      surface: (surface: string) => string
+      input: (input: string) => string
+      audioSilent: string
+      inputError: (error: string) => string
+      hint: (hint: string) => string
+      defaultPhrase: string
+      unknown: string
+      auto: string
+      systemDefault: string
+    }
+
+    sessionTitleSet: (title: string, queued: boolean) => string
+
+    sessionTitleCleared: string
+
+    sessionBusyQueued: string
+
+    sessionBusyInterrupt: string
+
+    browserRemoteUnavailable: string
+
+    browserUsage: string
+
+    browserChecking: (url: string) => string
+
+    browserStatusConnected: (url: string) => string
+
+    browserNotConnected: string
+
+    browserDisconnected: string
+
+    browserConnected: string
+
+    browserEndpoint: (url: string) => string
+
+    browserNextCall: string
+
+    browserUrlUnavailable: string
+
+    petScaleUsage: string
+
+    compressing: (focusTopic: string) => string
+
+    compressedMessages: (count: number) => string
+
+    nothingToCompress: string
+
+    slashNoOutput: (name: string) => string
+
+    slashEmptyOutput: string
+
+    slashMissingMessage: (name: string) => string
+
+    slashEmptyMessage: (name: string) => string
+
+    slashInvalidResponse: string
+
+    slashCommandFailed: (name: string, error: string) => string
+
+    slashUnavailable: {
+      advanced: (command: string) => string
+      composerVoice: string
+      messaging: (command: string) => string
+      settings: (command: string) => string
+      terminal: (command: string) => string
+      modelPicker: (command: string) => string
+      sessionPicker: (command: string) => string
+      fallback: (command: string) => string
+    }
+
+    botMode: {
+      selectBotBeforeNewChat: string
+      updateForAnotherChat: (product: string) => string
+      selectBotOrGroup: string
+    }
+
+    modelSwitchConfirm: string
+
+    restoreNoActiveSession: string
+
+    restoreTargetMissing: string
+
+    restoreEmptyMessage: string
+
+    sessionStillAvailableRetry: string
+
+    sessionUnavailableRetry: string
+
+    stopProcessFailed: string
+
+    gatewayReconnectUnavailable: string
+
+    remoteAttachTooLarge: (label: string, maxMb?: number) => string
+
+    attachmentReadFailed: (label: string) => string
+
+    attachmentAttachFailed: (label: string) => string
+
+    skinCommand: {
+      noThemes: string
+      switched: (label: string) => string
+      listHeading: string
+      listHint: string
+      completionList: string
+      completionNext: string
+      completionCurrent: string
+      unknownTheme: (name: string, available: string) => string
+    }
+
+    commandResults: {
+      noCommands: string
+      steerQueued: (text: string) => string
+      steerQueuedNoText: string
+      steerRejected: string
+      stoppedProcesses: (count: number) => string
+      noBackgroundProcesses: string
+      savedTranscript: (path: string) => string
+      usage: (calls: string, input: string, output: string, total: string) => string
+      noBackgroundTasks: string
+      processLine: (status: string, command: string, metadata: string) => string
+    }
+
+    openSessionWindowFailed: string
+
+    openNewWindowFailed: string
+
+    popOutBrowserFailed: string
+
+    openSessionTerminalFailed: string
+
+    sessionOwnershipUnavailable: string
+
+    imageFetchFailed: (status: string) => string
+
     attachFailed: (target?: string) => string
+
     attachFolderFailed: (target?: string) => string
+
     pickFilesTitle: string
+
     pickFoldersTitle: string
+
     quickEntry: {
       label: string
       askPlaceholder: string
@@ -5653,14 +5412,6 @@ export interface UpstreamTranslations {
       sendTo: string
       currentChat: string
       newSession: string
-    }
-    handoff: {
-      pickPlatform: string
-      success: (platform: string) => string
-      systemNote: (platform: string) => string
-      failed: (error: string) => string
-      timedOut: string
-      startMessaging: string
     }
   }
 
@@ -5671,7 +5422,6 @@ export interface UpstreamTranslations {
      *  a button, and `action` is its label. */
     items: Record<TipId, { title: string; text: string }> & {
       'local-runtime-update': { title: string; text: string; action: string }
-      'local-setup': { title: string; text: string; action: string }
     }
   }
 
@@ -5679,16 +5429,40 @@ export interface UpstreamTranslations {
     genericFailure: string
     boundaryTitle: string
     boundaryDesc: string
-    contribFailedToRender: (id: string) => string
-    contribFailedToRenderDetail: (id: string, error: string) => string
-    logUnavailable: (error: string) => string
     boundaryDetails: string
     sendDiagnostics: string
     reloadWindow: string
     openLogs: string
+
+    contribFailedToRender: (id: string) => string
+
+    contribFailedToRenderDetail: (id: string, error: string) => string
+
+    logUnavailable: (error: string) => string
   }
 
   ui: {
+    search: {
+      clear: string
+    }
+    logs: {
+      bottom: string
+      search: string
+      top: string
+    }
+    pagination: {
+      label: string
+      previous: string
+      previousAria: string
+      next: string
+      nextAria: string
+    }
+    sidebar: {
+      title: string
+      description: string
+      toggle: (open: boolean) => string
+    }
+
     actions: {
       addContext: string
       filters: string
@@ -5707,6 +5481,7 @@ export interface UpstreamTranslations {
       markAllRead: string
       labels: Record<string, string>
     }
+
     accessibility: {
       showOptions: string
       removeReference: string
@@ -5728,31 +5503,454 @@ export interface UpstreamTranslations {
       close: string
       openPullRequest: (number: number) => string
     }
+
     messages: {
       embedLoad: (label: string) => string
       embedAlwaysAllow: (label: string) => string
       embedLoadFailed: (label: string) => string
       noPageAt: (path: string) => string
     }
+
     routes: {
       artifacts: string
       messaging: string
       capabilities: string
     }
-    search: {
-      clear: string
+  }
+
+  platformUsage: {
+    pending: string
+    partial: string
+    settled: string
+    unverified: string
+    unavailable: string
+    signIn: string
+    retry: string
+    details: string
+    empty: string
+    truncated: string
+    recordSettled: string
+    notCharged: string
+    purposes: {
+      chat: string
+      title: string
+      compression: string
+      vision: string
+      delegation: string
+      session_summary: string
+      approval: string
+      mcp: string
+      tts_audio_tags: string
+      side_question: string
+      other_auxiliary: string
     }
-    pagination: {
-      label: string
-      previous: string
-      previousAria: string
-      next: string
-      nextAria: string
+  }
+
+  platformBillingHistory: {
+    orders: string
+    usage: string
+    empty: string
+    previous: string
+    next: string
+    open: string
+    error: string
+    retry: string
+    qrCode: string
+    filters: string
+    startDate: string
+    endDate: string
+    model: string
+    modelPlaceholder: string
+    purpose: string
+    allPurposes: string
+    search: string
+    reset: string
+    invalidDateRange: string
+    timezone: (zone: string) => string
+    totalRecords: (count: number) => string
+    pageSize: string
+    goToPage: (page: number) => string
+    jumpToPage: string
+    jump: string
+    noMatches: string
+    columns: { time: string; model: string; purpose: string; cost: string; status: string }
+    details: string
+    hideDetails: string
+    copyField: (label: string) => string
+    requestId: string
+    sessionId: string
+    turnId: string
+    callId: string
+    inputTokens: string
+    outputTokens: string
+    cacheReadTokens: string
+    cacheWriteTokens: string
+    unknown: string
+    unknownPurpose: string
+    unclassifiedHelp: string
+  }
+
+  platformModels: {
+    switchBusy: string
+    switchRecovery: string
+    builtIn: string
+    custom: string
+    search: string
+    signIn: string
+    loading: string
+    retry: string
+    myAccount: string
+    chooseCustom: string
+    recoveryFor: (model: string) => string
+    unavailable: string
+    empty: string
+    catalogError: string
+    balance: string
+    subscription: string
+    insufficient_balance: string
+    quota_exhausted: string
+    details: string
+    input: string
+    output: string
+    cacheRead: string
+    cacheWrite: string
+    context: string
+    tools: string
+    vision: string
+    reasoning: string
+    defaultModel: string
+    followCustom: string
+    defaultTag: string
+    not_authenticated: string
+    platform_account_changed: string
+    bindingFailed: string
+    unsupported: string
+    rate: string
+    tiers: string
+    timePricing: string
+    groupPeak: string
+    unknown: string
+    supported: string
+    unsupportedCapability: string
+  }
+
+  home: {
+    subtitle: string
+    placeholder: string
+    workspace: string
+    actions: {
+      analyze: { label: string; description: string; prompt?: string }
+      review: { label: string; description: string; prompt?: string }
+      research: { label: string; description: string; prompt?: string }
+      report: { label: string; description: string; prompt?: string }
     }
-    sidebar: {
+  }
+
+  billing: {
+    heading: string
+    preview: string
+    previewAria: string
+    live: string
+    freeTier: {
+      signIn: string
+      title: string
+      message: string
+      caption: string
+      name: string
+      footnote: string
+      plan: string
+      model: string
+      connectors: string
+      included: string
+    }
+    summary: {
+      balance: string
+      plan: string
+      autoRefill: string
+    }
+    sections: {
+      plan: string
+      paymentCredits: string
+      usage: string
+      invoices: string
+    }
+    notice: {
+      loggedOutTitle: string
+      loggedOutMessage: string
+      openPortal: string
+      addCard: string
+      noCardTitle: string
+      noCardMessage: string
+    }
+    plan: {
+      freeTier: string
+      detailsUnavailable: string
+      changesTo: (tier: string, when: string) => string
+      cancelsOn: (when: string) => string
+      renews: (when: string) => string
+      noActive: string
+      monthlyPrice: (price: string) => string
+      changePlan: string
+      viewPlans: string
+      adjustPlan: string
+      choose: string
+      current: string
+      scheduled: string
+      downgrade: string
+      checking: string
+      cannotMake: string
+      alreadyOn: (tier: string) => string
+      scheduledChange: (tier: string, when: string, delta?: string) => string
+      cannotSchedule: string
+      scheduling: string
+      confirmDowngrade: string
+      back: string
+      title: string
+      noPlans: string
+      tryAgain: string
+      cancel: string
+      undo: string
+      undoing: string
+    }
+    payment: {
+      title: string
+      addMethod: string
+      update: string
+      description: string
+      differentCard: string
+      provenance: Record<string, string>
+    }
+    credits: {
       title: string
       description: string
-      toggle: (open: boolean) => string
+      buy: string
+      customAmountAria: string
+      processing: string
+      added: (amount: string) => string
+      balanceRefreshing: string
+      openPortal: string
+      retry: string
+    }
+    charge: {
+      added: (amount: string) => string
+      failedTitle: string
+      authenticationRequired: string
+      paymentMethodExpired: string
+      cardDeclined: string
+      failedReason: (reason: string) => string
+      outcomeUnconfirmedTitle: string
+      outcomeUnconfirmedMessage: (message: string) => string
+      checkFailedTitle: string
+      checkFailedMessage: string
+      trackingFailedTitle: string
+      trackingFailedMessage: string
+      stillProcessingTitle: string
+      stillProcessingMessage: string
+    }
+    refill: {
+      title: string
+      genericDescription: string
+      managePortal: string
+      turnOnPortal: string
+      reconcile: string
+      reconcileCaption: (card: string) => string
+      enabled: string
+      off: string
+      threshold: string
+      reloadTo: string
+      thresholdAria: string
+      reloadToAria: string
+      turnOffQuestion: string
+      turnOff: string
+      disable: string
+      saving: string
+      save: string
+      cancel: string
+      manage: string
+      updated: string
+      turnedOff: string
+      chargeDescription: (reloadTo: string, threshold: string) => string
+      validationDollar: (label: string) => string
+      validationPositive: (label: string) => string
+      validationMinimum: (label: string, amount: string) => string
+      validationMaximum: (label: string, amount: string) => string
+      validationGreater: string
+    }
+    usage: {
+      subscriptionRemaining: string
+      subscriptionCredits: string
+      creditsPerMonth: (amount: string) => string
+      resets: (date: string) => string
+      left: (remaining: string, monthly: string) => string
+      over: (amount: string) => string
+      topupCredits: string
+      doesNotExpire: string
+      monthlySpendCapUsed: string
+      monthlySpendCap: string
+      defaultCeiling: string
+      monthlyRemoteSpending: string
+      used: (spent: string, limit: string) => string
+      usageFallback: (label: string) => string
+    }
+    status: {
+      enabled: string
+      off: string
+    }
+    stepUp: {
+      openVerification: string
+      dismiss: string
+      waiting: string
+      verify: string
+      verificationNotApprovedTitle: string
+      verificationNotApprovedMessage: string
+      verificationCompleteTitle: string
+      verificationCompleteMessage: string
+    }
+    refusal: {
+      cardConfirmationTitle: string
+      cardConfirmationMessage: string
+      remoteApprovalTitle: string
+      remoteApprovalMessage: string
+      remoteStoppedTitle: string
+      remoteStoppedByAdmin: string
+      remoteStoppedByYou: string
+      reconnectDevice: string
+      sessionLoggedOutTitle: string
+      sessionLoggedOutMessage: string
+      spendingOffTitle: string
+      spendingOffMessage: string
+      adminRoleTitle: string
+      adminRoleMessage: string
+      freshTopupTitle: string
+      freshTopupMessage: string
+      noSavedCardTitle: string
+      noSavedCardMessage: string
+      orgAccessDeniedTitle: string
+      orgAccessDeniedMessage: string
+      monthlyCapTitle: string
+      monthlyCapReached: string
+      monthlyCapRemaining: (remaining: string) => string
+      tooManyTitle: string
+      tooManyMessage: (minutes?: number) => string
+      stripeTitle: string
+      stripeMessage: (minutes?: number) => string
+      dailyLimitTitle: string
+      dailyLimitMessage: string
+      endpointUnavailableTitle: string
+      endpointUnavailableMessage: string
+      requestTimedOutTitle: string
+      requestTimedOutMessage: string
+      connectionFailedTitle: string
+      connectionFailedMessage: string
+      requestFailedTitle: string
+      requestFailedMessage: string
+    }
+  }
+
+  summary: {
+    aria: string
+    title: string
+    close: string
+    environment: {
+      title: string
+      local: string
+      remote: string
+      project: string
+      workingDirectory: string
+      model: string
+      provider: string
+      profile: string
+      branch: string
+      connection: string
+      noProject: string
+      noSession: string
+    }
+    changes: {
+      title: string
+      files: (count: number) => string
+      additions: string
+      deletions: string
+      staged: (count: number) => string
+      noChanges: string
+      unavailable: string
+      viewDiff: string
+      refresh: string
+      stage: string
+      unstage: string
+      revert: string
+    }
+    git: {
+      title: string
+      branch: string
+      tracking: string
+      ahead: (count: number) => string
+      behind: (count: number) => string
+      commit: string
+      pullRequest: string
+      push: string
+      reviewAndCommit: string
+      clean: string
+      unavailable: string
+      noRepository: string
+    }
+    agents: {
+      title: string
+      dispatched: (count: number) => string
+      finished: string
+      status: Record<'running' | 'queued' | 'completed' | 'failed' | 'interrupted' | 'dispatched', string>
+      running: (count: number) => string
+      completed: (count: number) => string
+      failed: (count: number) => string
+      viewAll: string
+      none: string
+    }
+    context: {
+      title: string
+      noData: string
+    }
+    outputs: {
+      title: string
+      create: string
+      prompt: string
+    }
+    plan: {
+      title: string
+      progress: (done: number, total: number) => string
+      recorded: string
+      status: Record<'pending' | 'in_progress' | 'completed' | 'cancelled', string>
+    }
+    background: {
+      title: string
+      status: Record<'running' | 'done' | 'failed', string>
+    }
+    sources: {
+      title: string
+      add: string
+      image: string
+      skill: string
+      tool: string
+      attachments: string
+      previews: string
+      links: string
+      none: string
+      open: string
+    }
+    resources: {
+      title: string
+      ram: string
+      gpu: string
+      unavailable: string
+      retry: string
+    }
+    state: {
+      loading: string
+      unavailable: string
+      noData: string
+      retry: string
+      showAll: (count: number) => string
+      showLess: string
+      details: string
+      historyUnavailable: string
     }
   }
 }

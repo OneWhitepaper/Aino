@@ -19,7 +19,6 @@ def _write_config(tmp_path, monkeypatch, body: str) -> None:
     monkeypatch.setenv("HERMES_HOME", str(tmp_path))
     (tmp_path / "config.yaml").write_text(body)
 
-
 @pytest.mark.parametrize(
     "yaml_body, expected",
     [("gateway:\n  trust_env: false\n", False), ("gateway:\n  trust_env: true\n", True), ("{}\n", True)],
@@ -35,7 +34,6 @@ def test_gateway_trust_env_reads_config(tmp_path, monkeypatch, yaml_body, expect
     assert (gw_base.resolve_proxy_url() is not None) is expected
     monkeypatch.setenv("X_PLATFORM_PROXY", "http://127.0.0.1:1080")
     assert gw_base.resolve_proxy_url("X_PLATFORM_PROXY") == "http://127.0.0.1:1080"
-
 
 class TestResolveProxyUrlMultiplexScope:
     """A secondary multiplex profile's own TELEGRAM_PROXY/DISCORD_PROXY/etc. must gate its
@@ -82,5 +80,3 @@ class TestResolveProxyUrlMultiplexScope:
         monkeypatch.delenv("NO_PROXY", raising=False)
         monkeypatch.delenv("no_proxy", raising=False)
         assert gw_base.resolve_proxy_url("DISCORD_PROXY") == "http://default-profile-proxy:8080"
-
-

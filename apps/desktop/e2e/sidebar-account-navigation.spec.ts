@@ -1,3 +1,4 @@
+import { writeEnvFile, writeMockProviderConfig } from '../../../tests-js/scripts/mock-provider-config'
 import { mkdirSync } from 'node:fs'
 import path from 'node:path'
 
@@ -9,9 +10,8 @@ import {
   launchDesktop,
   type MockBackendFixture,
   waitForAppReady,
-  writeEnvFile,
-  writeMockProviderConfig
-} from './fixtures'
+
+  } from './fixtures'
 import { expect, test } from './test'
 
 test('the signed-in account remains accessible across Sessions and Agent Hub', async () => {

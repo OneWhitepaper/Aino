@@ -14,10 +14,12 @@ import pytest
 
 from hermes_cli import gateway as hermes_gateway
 from hermes_cli import gateway_windows
+from hermes_cli import main as cli_main
+from hermes_cli import main_install_repair
 from hermes_cli import update_cmd
 
 
-pytestmark = pytest.mark.windows_only
+pytestmark = pytest.mark.platforms("windows")
 
 
 def _run_cold_start(monkeypatch, capsys, *, surviving_pids, desktop_owned=False):

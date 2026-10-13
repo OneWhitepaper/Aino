@@ -2,13 +2,17 @@ import { ActionBarPrimitive, BranchPickerPrimitive, MessagePrimitive, useAuiStat
 import { type FC, type ReactNode, useCallback, useEffect, useRef, useState } from 'react'
 
 import { DirectiveContent } from '@/components/assistant-ui/directive-text'
+import { isAttachmentRef } from '@/components/assistant-ui/reference-kinds'
 import {
   messageAttachmentRefs,
   messageContentText,
   PROCESS_NOTIFICATION_RE
 } from '@/components/assistant-ui/thread/content'
+import { MessageHoverTime } from '@/components/assistant-ui/thread/message-hover-time'
 import { ReactionBadge, ReactionPicker } from '@/components/assistant-ui/thread/message-reactions'
+import { SetupLearnedNote, splitSetupLearned } from '@/components/assistant-ui/thread/setup-learned'
 import { BackgroundResult } from '@/components/assistant-ui/thread/system-message'
+import { threadUserOrdinal } from '@/components/assistant-ui/thread/thread-message-index'
 import { MessageTimelineTimestamp } from '@/components/assistant-ui/thread/timeline-timestamp'
 import { type RestoreMessageTarget } from '@/components/assistant-ui/thread/types'
 import { useMessageReactions } from '@/components/assistant-ui/thread/use-message-reactions'
@@ -248,7 +252,60 @@ const ProcessNotificationNote: FC<{ text: string }> = ({ text }) => {
   return <BackgroundResult process report={detail} text={headline} />
 }
 
+function isChipOnlyTurn(hasBody: boolean, attachmentRefs: readonly string[]): boolean {
+  return !hasBody && attachmentRefs.length > 0 && attachmentRefs.every(isAttachmentRef)
+}
+
+interface UserBubbleActionsProps {
+  fullText: string
+  messageId: string
+  onRequestRestoreConfirm?: (messageId: string, target: RestoreMessageTarget) => void
+  runtimeUserOrdinal: RestoreMessageTarget['userOrdinal']
+  showRestore: boolean
+}
+
+const UserBubbleActions: FC<UserBubbleActionsProps> = ({
+  fullText,
+  messageId,
+  onRequestRestoreConfirm,
+  runtimeUserOrdinal,
+  showRestore
+}) => {
+  const copy = useI18n().t.assistant.thread
+
+  return (
+    <>
+      <MessageHoverTime className={cn(!showRestore && 'pr-0.5')} />
+      {showRestore ? (
+        <Tip label={copy.restoreFromHere}>
+          <button
+            aria-label={copy.restoreCheckpoint}
+            className={cn('pointer-events-auto size-6', USER_ACTION_ICON_BUTTON_CLASS)}
+            onClick={event => {
+              event.preventDefault()
+              event.stopPropagation()
+              triggerHaptic('selection')
+              onRequestRestoreConfirm?.(messageId, {
+                text: fullText,
+                userOrdinal: runtimeUserOrdinal
+              })
+            }}
+            onPointerDown={event => {
+              event.preventDefault()
+              event.stopPropagation()
+            }}
+            type="button"
+          >
+            <Codicon name="discard" size="0.875rem" />
+          </button>
+        </Tip>
+      ) : null}
+    </>
+  )
+}
+
 export const UserMessage: FC<{
+  onCancel?: () => Promise<void> | void
   onRequestRestoreConfirm?: (messageId: string, target: RestoreMessageTarget) => void
 }> = ({ onRequestRestoreConfirm }) => {
   const { t } = useI18n()
@@ -256,7 +313,8 @@ export const UserMessage: FC<{
   const messageId = useAuiState(s => s.message.id)
   const durableRowId = useAuiState(s => (s.message.metadata?.custom as { rowId?: number } | undefined)?.rowId)
   const content = useAuiState(s => s.message.content)
-  const messageText = messageContentText(content)
+  const fullText = messageContentText(content)
+  const [messageText, setupLearned] = splitSetupLearned(fullText)
   const threadRunning = useAuiState(s => s.thread.isRunning)
 
   const latestUserId = useAuiState(s => {
@@ -271,23 +329,7 @@ export const UserMessage: FC<{
     return null
   })
 
-  const runtimeUserOrdinal = useAuiState(s => {
-    let ordinal = 0
-
-    for (const message of s.thread.messages) {
-      if (message.role !== 'user') {
-        continue
-      }
-
-      if (message.id === s.message.id) {
-        return ordinal
-      }
-
-      ordinal += 1
-    }
-
-    return null
-  })
+  const runtimeUserOrdinal = useAuiState(s => threadUserOrdinal(s.thread.messages, s.message.id))
 
   const attachmentRefs = useAuiState(s => {
     const custom = (s.message.metadata?.custom ?? {}) as { attachmentRefs?: unknown }
@@ -385,6 +427,7 @@ export const UserMessage: FC<{
   }
 
   const hasBody = messageText.trim().length > 0
+  const chipOnlyTurn = isChipOnlyTurn(hasBody, attachmentRefs)
   const isLatestUser = messageId === latestUserId
   // The composer owns stopping the live turn. Keep its latest prompt from
   // being restored until that turn ends; older prompts can still rewind it.
@@ -404,7 +447,7 @@ export const UserMessage: FC<{
     'border-(--ui-stroke-tertiary) hover:border-(--ui-stroke-secondary)'
   )
 
-  const bubbleContent = hasBody && (
+  const bubbleContent = hasBody ? (
     // Render the user's text through a minimal markdown pipeline:
     // backtick `code` and ``` fenced ``` blocks, with directive chips
     // (`@file:` etc.) still resolved inside the plain-text spans.
@@ -419,19 +462,34 @@ export const UserMessage: FC<{
         <UserMessageText className="wrap-anywhere" text={messageText} />
       </div>
     </div>
+  ) : (
+    // A file-only turn (a bare large paste, a dropped file) has no prose, so
+    // its chips ARE the prompt: they fill the bubble rather than leaving it
+    // empty above a detached row. Images keep their thumbnail row below.
+    chipOnlyTurn && (
+      <div className="flex min-h-[1.25rem] flex-wrap gap-1">
+        <DirectiveContent text={attachmentRefs.join(' ')} />
+      </div>
+    )
   )
 
   return (
     <MessagePrimitive.Root asChild>
       <HumanMessageContainer
         attachments={
-          // Attachments stay BELOW the user bubble in normal flow. Image refs
+          // Attachments live BELOW the sticky bubble in normal flow, so they
+          // scroll away behind the pinned bubble instead of riding along with
+          // it. No negative margin: -mt-* pulls the row up into the sticky box,
+          // where the sticky-prompt clip hides its top even at rest. Image refs
           // render as thumbnails, file refs as chips; no border.
-          attachmentRefs.length > 0 ? (
-            <div className="flex flex-wrap gap-1 -mt-3 mb-2" data-slot="aui_user-attachments">
-              <DirectiveContent text={attachmentRefs.join(' ')} />
-            </div>
-          ) : null
+          <>
+            {attachmentRefs.length > 0 && !chipOnlyTurn && (
+              <div className="mb-2 flex flex-wrap gap-1" data-slot="aui_user-attachments">
+                <DirectiveContent text={attachmentRefs.join(' ')} />
+              </div>
+            )}
+            {setupLearned && <SetupLearnedNote text={setupLearned} />}
+          </>
         }
         durableRowId={durableRowId}
         messageId={messageId}
@@ -521,32 +579,17 @@ export const UserMessage: FC<{
                     </button>
                   </ActionBarPrimitive.Edit>
                 )}
-                {showRestore && (
-                  <div
-                    className="pointer-events-none absolute right-2 bottom-2 z-10 flex items-center justify-center opacity-0 transition-opacity group-hover/user-message:opacity-100 group-focus-within/user-message:opacity-100"
-                    data-action="restore"
-                    data-slot="aui_user-corner-action"
-                  >
-                    <Tip label={copy.restoreFromHere}>
-                      <button
-                        aria-label={copy.restoreCheckpoint}
-                        className={cn('pointer-events-auto size-6', USER_ACTION_ICON_BUTTON_CLASS)}
-                        onClick={event => {
-                          event.preventDefault()
-                          event.stopPropagation()
-                          requestRestore()
-                        }}
-                        onPointerDown={event => {
-                          event.preventDefault()
-                          event.stopPropagation()
-                        }}
-                        type="button"
-                      >
-                        <Codicon name="discard" size="0.875rem" />
-                      </button>
-                    </Tip>
-                  </div>
-                )}
+                {/* Hover cluster, bottom-right: when it was sent and
+                    Restore. Its fill masks the last line's tail while shown. */}
+                <div className="pointer-events-none absolute right-2 bottom-2 z-10 flex items-center gap-1 rounded-md bg-(--dt-user-bubble) pl-1 opacity-0 transition-opacity group-hover/user-message:opacity-100 group-hover/user-message:transition-none group-focus-within/user-message:opacity-100">
+                  <UserBubbleActions
+                    fullText={fullText}
+                    messageId={messageId}
+                    onRequestRestoreConfirm={onRequestRestoreConfirm}
+                    runtimeUserOrdinal={runtimeUserOrdinal}
+                    showRestore={showRestore}
+                  />
+                </div>
               </div>
             </ReactionPicker>
             {/* Below the bubble, same register as the assistant action row:

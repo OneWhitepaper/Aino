@@ -1,5 +1,4 @@
-import { TRANSLATIONS } from '@/i18n/catalog'
-import { getRuntimeI18nLocale } from '@/i18n/runtime'
+import { runtimeTranslations } from '@/i18n/runtime'
 
 import type { BillingRefusal } from './api'
 import type { BillingCopy } from './use-billing-state'
@@ -26,7 +25,7 @@ const stripeRetryMessage = (refusal: BillingRefusal, copy: BillingCopy): string 
 
 export const resolveRefusal = (
   refusal: BillingRefusal,
-  copy: BillingCopy = TRANSLATIONS[getRuntimeI18nLocale()].billing
+  copy: BillingCopy = runtimeTranslations().billing
 ): BillingRefusalPresentation => {
   switch (refusal.kind) {
     case 'consent_required':

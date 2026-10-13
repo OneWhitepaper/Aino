@@ -16,6 +16,7 @@ import { Mail } from '@/lib/icons'
 import { isSubmitEnter } from '@/lib/ime'
 import { $petActivity, $petInfo, setPetInfo } from '@/store/pet'
 import { overlayWindowSize } from '@/store/pet-overlay'
+import { mirrorPetPluginMessages } from '@/store/pet-plugin-messages'
 import { setAwaitingResponse, setBusy } from '@/store/session'
 
 // Fallbacks mirror pet-sprite's defaults; the gateway normally sends real values.
@@ -104,6 +105,7 @@ export function PetOverlayApp() {
       setBusy(Boolean(payload.busy))
       setAwaitingResponse(Boolean(payload.awaiting))
       setUnread(Boolean(payload.unread))
+      mirrorPetPluginMessages(payload.pluginMessages)
 
       // Play a reaction on a new id (ignore the first sync, which just primes it).
       const reaction = payload.reaction ?? null

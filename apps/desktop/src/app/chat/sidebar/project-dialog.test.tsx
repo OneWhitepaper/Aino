@@ -46,8 +46,9 @@ vi.mock('@/i18n', () => ({
 // interactions under test.
 // vi.mock factories are hoisted above the rest of the file, so the atom must
 // be created inside vi.hoisted to exist by the time the factory runs.
-const { $newProjectDropPlacement, $projectDialog, createProject, enterProject, pickProjectFolder } = vi.hoisted(() => {
-  const { atom } = require('nanostores') as typeof Nanostores
+const { $newProjectDropPlacement, $projectDialog, addProjectFolders, createProject, enterProject, pickProjectFolder, pickProjectFolders } =
+  vi.hoisted(() => {
+    const { atom } = require('nanostores') as typeof Nanostores
 
   return {
     // Where a "New project" DRAG armed its drop (null = plain click).
@@ -60,6 +61,8 @@ const { $newProjectDropPlacement, $projectDialog, createProject, enterProject, p
     } | null>({
       mode: 'create'
     }),
+    addProjectFolders: vi.fn(),
+    pickProjectFolders: vi.fn(),
     createProject: vi.fn(),
     enterProject: vi.fn(),
     pickProjectFolder: vi.fn()
@@ -69,13 +72,14 @@ const { $newProjectDropPlacement, $projectDialog, createProject, enterProject, p
 vi.mock('@/store/projects', () => ({
   $newProjectDropPlacement,
   $projectDialog,
-  addProjectFolder: vi.fn(),
+  addProjectFolders,
   clearNewProjectDropPlacement: vi.fn(),
   closeProjectDialog: vi.fn(),
   createProject,
   enterProject,
   goToProject: vi.fn(),
   pickProjectFolder,
+  pickProjectFolders,
   renameProject: vi.fn()
 }))
 
@@ -84,6 +88,8 @@ beforeEach(() => {
   $newProjectDropPlacement.set(null)
   createProjectFolder.mockResolvedValue('/Users/test/Skunkworks')
   createProject.mockResolvedValue({ id: 'p_created' })
+  addProjectFolders.mockResolvedValue(undefined)
+  pickProjectFolders.mockResolvedValue(['/Users/test/my-folder'])
   pickProjectFolder.mockResolvedValue('/Users/test/my-folder')
 })
 
@@ -131,9 +137,9 @@ describe('ProjectDialog', () => {
   })
 
   it('discards a folder chosen after the add-folder dialog changes owner', async () => {
-    const { addProjectFolder, pickProjectFolder } = vi.mocked(await import('@/store/projects'))
-    let finish!: (path: string) => void
-    pickProjectFolder.mockImplementationOnce(
+    const { addProjectFolders, pickProjectFolders } = vi.mocked(await import('@/store/projects'))
+    let finish!: (path: string[]) => void
+    pickProjectFolders.mockImplementationOnce(
       () =>
         new Promise(resolve => {
           finish = resolve
@@ -145,9 +151,9 @@ describe('ProjectDialog', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Add folder' }))
     current = false
     await act(async () => {
-      finish('/owner-a/folder')
+      finish(['/owner-a/folder'])
     })
-    expect(addProjectFolder).not.toHaveBeenCalled()
+    expect(addProjectFolders).not.toHaveBeenCalled()
   })
   it('creates from the folder basename and enters the created project when the name is empty', async () => {
     const { goToProject } = vi.mocked(await import('@/store/projects'))
@@ -384,5 +390,36 @@ describe('ProjectDialog', () => {
     expect(goToProject).not.toHaveBeenCalled()
     $activeGatewayProfile.set(originalProfile)
     $projectDialog.set({ mode: 'create' })
+  })
+})
+
+describe('ProjectDialog add-folder mode (#68741)', () => {
+  it('submits every folder from one multi-select pick in a single submit beat', async () => {
+    const { addProjectFolders, closeProjectDialog } = vi.mocked(await import('@/store/projects'))
+
+    pickProjectFolders.mockResolvedValue(['/work/alpha', '/work/beta', '/work/gamma'])
+    $projectDialog.set({ mode: 'add-folder', name: 'Skunkworks', projectId: 'p_1' })
+
+    render(<ProjectDialog />)
+    fireEvent.click(screen.getByRole('button', { name: 'Add folder' }))
+
+    await waitFor(() => expect(addProjectFolders).toHaveBeenCalledOnce())
+    expect(addProjectFolders).toHaveBeenCalledWith('p_1', ['/work/alpha', '/work/beta', '/work/gamma'], undefined)
+    // One submit beat closes the dialog once on success.
+    await waitFor(() => expect(closeProjectDialog).toHaveBeenCalledOnce())
+  })
+
+  it('keeps the dialog open when nothing is picked (cancelled picker)', async () => {
+    const { addProjectFolders, closeProjectDialog } = vi.mocked(await import('@/store/projects'))
+
+    pickProjectFolders.mockResolvedValue([])
+    $projectDialog.set({ mode: 'add-folder', name: 'Skunkworks', projectId: 'p_1' })
+
+    render(<ProjectDialog />)
+    fireEvent.click(screen.getByRole('button', { name: 'Add folder' }))
+
+    await waitFor(() => expect(pickProjectFolders).toHaveBeenCalledOnce())
+    expect(addProjectFolders).not.toHaveBeenCalled()
+    expect(closeProjectDialog).not.toHaveBeenCalled()
   })
 })

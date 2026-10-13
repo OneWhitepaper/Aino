@@ -2,7 +2,7 @@
 
 import json
 import threading
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, UTC
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
@@ -158,7 +158,7 @@ def managed_gateway(tmp_path, monkeypatch):
                 "api_mode": self.protocol,
                 "context_window": context_window,
                 "capabilities": {"tools": True, "vision": vision, "reasoning": False},
-                "expires_at": (datetime.now(timezone.utc) + timedelta(minutes=50)).isoformat()}
+                "expires_at": (datetime.now(UTC) + timedelta(minutes=50)).isoformat()}
             result(self.call("session.bind_managed_model", peer=controller, **payload))
             return payload
 
@@ -225,7 +225,7 @@ def test_managed_draft_runs_tool_roundtrip_and_renews_without_rebuilding(managed
         return body.get("system") or body.get("instructions") or body["messages"][0]
     prompt = system_prompt(f.requests[-1][2])
     renewed = {**lease, "api_key": "fixture-secret-two",
-               "expires_at": (datetime.now(timezone.utc) + timedelta(minutes=55)).isoformat()}
+               "expires_at": (datetime.now(UTC) + timedelta(minutes=55)).isoformat()}
     result(f.call("session.renew_managed_model", peer=f.controller, **renewed))
     assert session["agent"] is agent
     assert json.dumps(session["history"]) == history
@@ -409,7 +409,7 @@ def test_bound_context_owns_parent_child_switch_and_renewal_without_changing_pro
         assert child.context_compressor.context_length == lease["context_window"]
         before = (agent._cached_system_prompt, json.dumps(session["history"]), json.dumps(agent.tools))
         renewed = {**lease, "context_window": 248_000,
-                   "expires_at": (datetime.now(timezone.utc) + timedelta(minutes=55)).isoformat()}
+                   "expires_at": (datetime.now(UTC) + timedelta(minutes=55)).isoformat()}
         result(f.call("session.renew_managed_model", peer=f.controller, **renewed))
         assert agent.context_compressor.context_length == renewed["context_window"]
         assert child.context_compressor.context_length == renewed["context_window"]

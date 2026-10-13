@@ -15,6 +15,7 @@
 import * as fs from 'node:fs'
 import * as path from 'node:path'
 
+import { writeEnvFile, writeMockProviderConfig } from '../../../tests-js/scripts/mock-provider-config'
 import { startMockServer } from '../../../tests-js/scripts/mock-server'
 
 import {
@@ -24,8 +25,6 @@ import {
   type MockBackendFixture,
   type Sandbox,
   waitForAppReady,
-  writeEnvFile,
-  writeMockProviderConfig
 } from './fixtures'
 import {
   REMOTE_ID,

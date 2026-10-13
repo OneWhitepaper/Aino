@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process'
-import { existsSync, mkdirSync, realpathSync, writeFileSync } from 'node:fs'
+import { cpSync, existsSync, mkdirSync, realpathSync, writeFileSync } from 'node:fs'
 import * as path from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
 
@@ -15,11 +15,14 @@ const rendererErrors: string[] = []
 test.describe.configure({ mode: 'serial' })
 
 test.beforeAll(async () => {
-  fixture = await setupMockBackend({ extraConfig: 'desktop:\n  repo_scan_enabled: false\naccount:\n  dev_mode: true' })
+  fixture = await setupMockBackend({
+    extraConfig: 'desktop:\n  repo_scan_enabled: false\naccount:\n  dev_mode: true',
+    extraDisplayConfig: 'language: en'
+  })
   const { page } = fixture
   await page.emulateMedia({ reducedMotion: 'reduce' })
   page.on('pageerror', error => rendererErrors.push(error.message))
-  await page.getByRole('textbox', { name: 'Email or phone', exact: true }).fill('project-navigation@example.com')
+  await page.getByRole('textbox', { name: 'Phone number', exact: true }).fill('+8613800138000')
   await page.getByRole('checkbox', { name: 'Agree to the user agreement and privacy policy', exact: true }).check()
   await page.getByRole('button', { name: 'Send code', exact: true }).click()
   await page.getByRole('textbox', { name: 'Verification code', exact: true }).fill('1234')
@@ -27,7 +30,13 @@ test.beforeAll(async () => {
   await waitForAppReady(fixture, 120_000)
 })
 
-test.afterAll(async () => {
+test.afterAll(async ({}, testInfo) => {
+  const logs = fixture && path.join(fixture.sandbox.hermesHome, 'logs')
+
+  if (logs && existsSync(logs)) {
+    cpSync(logs, testInfo.outputPath('backend-logs'), { recursive: true })
+  }
+
   await fixture?.cleanup()
 })
 
@@ -178,12 +187,12 @@ test('separates pinned, project and ordinary chats through real folder and sessi
   await browseAllProfiles()
   await pickFolder(createdFolder)
   await sidebar.getByRole('button', { name: 'New project', exact: true }).click()
-  const dialog = page.getByRole('dialog', { name: 'New project', exact: true })
+  const dialog = page.getByRole('dialog', { name: 'Create project', exact: true })
   await expect(dialog).toBeVisible()
   expect(await page.evaluate(() => localStorage.getItem('hermes.desktop.showAllProfiles'))).toBe('false')
-  await dialog.getByPlaceholder('e.g. Skunkworks').fill('Created project')
+  await dialog.getByRole('textbox', { name: 'Project name', exact: true }).fill('Created project')
   await dialog.getByRole('button', { name: 'Add folder', exact: true }).click()
-  await dialog.getByRole('button', { name: 'Create', exact: true }).click()
+  await dialog.getByRole('button', { name: 'Create project', exact: true }).click()
   await expect(dialog).toBeHidden()
   await expect(
     sidebar.getByRole('button', { name: 'New session in Created project', exact: true }).first()
@@ -260,8 +269,14 @@ test('keeps draft text through project selection and manages folders without cha
   expect(original.cwd).toBe(path.join(realpathSync(sandbox.root), 'created-project'))
   expect(receivedUserTexts().find(text => text.includes('Draft project binding probe'))).toContain(attachedFolder)
 
+  const sentSurfaceId = await surface.getAttribute('data-composer-surface-id')
   await surface.getByRole('button', { name: 'Created project', exact: true }).click()
-  await expect(page.getByText('Start a new chat in project', { exact: true })).toBeVisible()
+  await page.getByRole('menuitem', { name: 'New session in Created project', exact: true }).click()
+  // The sent chat's composer is already empty; wait for the newly created
+  // session surface before opening its project picker.
+  await expect(surface).not.toHaveAttribute('data-composer-surface-id', sentSurfaceId!)
+  await expect(composer).toHaveText('')
+  await surface.getByRole('button', { name: 'Created project', exact: true }).click()
   await page.getByRole('menuitem', { name: 'sample-app', exact: true }).click()
   await expect(surface.getByRole('button', { name: 'sample-app', exact: true })).toBeVisible()
   await expect(composer).toHaveText('')
@@ -328,10 +343,10 @@ test('creates and opens projects from the composer without replacing the draft',
   await pickFolder(createdFolder)
   await surface.getByRole('button', { name: 'Select project', exact: true }).click()
   await page.getByRole('menuitem', { name: 'New project', exact: true }).click()
-  const dialog = page.getByRole('dialog', { name: 'New project', exact: true })
-  await dialog.getByPlaceholder('e.g. Skunkworks').fill('Composer created')
+  const dialog = page.getByRole('dialog', { name: 'Create project', exact: true })
+  await dialog.getByRole('textbox', { name: 'Project name', exact: true }).fill('Composer created')
   await dialog.getByRole('button', { name: 'Add folder', exact: true }).click()
-  await dialog.getByRole('button', { name: 'Create', exact: true }).click()
+  await dialog.getByRole('button', { name: 'Create project', exact: true }).click()
   await expect(dialog).toBeHidden()
   await expect(surface.getByRole('button', { name: 'Composer created', exact: true })).toBeVisible()
   await expect(composer).toHaveText('Composer project creation probe')
@@ -348,20 +363,20 @@ test('creates and opens projects from the composer without replacing the draft',
   const row = await sendMessage('Composer project creation probe')
   expect(row.cwd).toBe(openedFolder)
 
-  await page.keyboard.press('ControlOrMeta+Comma')
-  const settings = page.locator('[data-settings-workspace]')
-  await settings.getByRole('button', { name: 'Advanced workspaces', exact: true }).click()
-  const allProfiles = settings.getByRole('switch', { name: 'All profiles', exact: true })
+  await sidebar.getByRole('button', { name: 'Workspaces', exact: true }).click()
+  const workspaces = page.locator('[data-workspaces-page]')
+  await workspaces.getByRole('button', { name: 'Advanced workspaces', exact: true }).click()
+  const allProfiles = workspaces.getByRole('switch', { name: 'All profiles', exact: true })
   await expect(allProfiles).toBeVisible()
   await allProfiles.check()
   await expect.poll(() => page.evaluate(() => localStorage.getItem('hermes.desktop.showAllProfiles'))).toBe('true')
   await allProfiles.uncheck()
   await expect.poll(() => page.evaluate(() => localStorage.getItem('hermes.desktop.showAllProfiles'))).toBe('false')
-  await page.screenshot({ path: test.info().outputPath('settings-advanced-workspaces.png') })
+  await page.screenshot({ path: test.info().outputPath('workspaces-advanced-workspaces.png') })
   await fixture.app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setSize(760, 800, false))
 
   try {
-    const advanced = settings.getByRole('button', { name: 'Advanced workspaces', exact: true })
+    const advanced = workspaces.getByRole('button', { name: 'Advanced workspaces', exact: true })
     await expect(advanced).toBeVisible()
 
     if ((await advanced.getAttribute('aria-expanded')) !== 'true') {
@@ -369,10 +384,10 @@ test('creates and opens projects from the composer without replacing the draft',
     }
 
     await expect(allProfiles).toBeVisible()
-    await page.screenshot({ path: test.info().outputPath('settings-advanced-narrow.png') })
+    await page.screenshot({ path: test.info().outputPath('workspaces-advanced-narrow.png') })
   } finally {
     await fixture.app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setSize(1220, 800, false))
-    await settings.getByRole('button', { name: 'Close settings', exact: true }).click()
+    await sidebar.locator('[data-sidebar="menu-button"]:has([data-tour="sidebar-nav-new-session"])').click()
   }
 
   expect(rendererErrors).toEqual([])
@@ -451,7 +466,7 @@ test('keeps files, summary, review and new shells attached to a chat tab without
 
   const files = page.locator('[data-file-browser]:visible')
   await expect(files.getByText('project-0.txt', { exact: true })).toBeVisible()
-  await page.getByRole('button', { name: 'Session summary', exact: true }).click()
+  await page.getByRole('button', { name: 'Session resources', exact: true }).click()
   const summary = page.locator('[data-slot="summary-pane"]')
   await expect(summary.getByText('tools-project-a', { exact: true })).toBeVisible()
   await files.getByRole('button', { name: 'Refresh tree', exact: true }).click()
@@ -484,6 +499,7 @@ test('keeps files, summary, review and new shells attached to a chat tab without
     .poll(async () => (await savedTerminals()).terminals[0]?.reviveBuffer)
     .toContain(`aino-live-${folders[0]}`)
 
+  await summary.getByRole('button', { name: 'Details', exact: true }).click()
   await summary.getByRole('button', { name: 'View diff', exact: true }).click()
   const review = page.getByRole('complementary', { name: 'Review', exact: true })
   await expect(review.getByText('shared.txt', { exact: true })).toBeVisible()
@@ -597,7 +613,7 @@ test('selects local and isolated work locations without losing the draft or movi
     await hideFiles.click()
   }
 
-  const summaryToggle = page.getByRole('button', { name: 'Session summary', exact: true })
+  const summaryToggle = page.getByRole('button', { name: 'Session resources', exact: true })
 
   if ((await summaryToggle.getAttribute('aria-pressed')) !== 'true') {
     await summaryToggle.click()
@@ -633,7 +649,18 @@ test('restores a worktree conversation and its draft and tools after closing the
     await recent.click()
   }
 
-  await page.getByRole('button', { name: 'Show right sidebar', exact: true }).click()
+  const showFiles = page.getByRole('button', { name: 'Show right sidebar', exact: true })
+
+  if (await showFiles.isVisible()) {
+    await showFiles.click()
+  }
+
+  // A narrowed pane can remain as a collapsed rail after the window widens.
+  if (!(await page.locator('[data-file-browser]:visible').isVisible())) {
+    await page.getByRole('tab', { name: 'Files', exact: true }).click()
+  }
+
+  await page.locator('[data-file-browser]:visible').getByRole('button', { name: 'Refresh tree', exact: true }).click()
   await expect(
     page.locator('[data-file-browser]:visible').getByText('restart-proof.txt', { exact: true })
   ).toBeVisible()
@@ -684,7 +711,7 @@ test('restores a worktree conversation and its draft and tools after closing the
     await expect(restoredSurface.locator('[contenteditable="true"]')).toHaveText('Keep this unfinished worktree draft')
     // Summary visibility is a window-local choice; its contents still follow
     // the restored chat when the user opens it in the new window.
-    await restored.getByRole('button', { name: 'Session summary', exact: true }).click()
+    await restored.getByRole('button', { name: 'Session resources', exact: true }).click()
     await expect(
       restored.locator('[data-slot="summary-pane"]').getByText('work-location-project', { exact: true })
     ).toBeVisible()

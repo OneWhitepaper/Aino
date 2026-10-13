@@ -26,7 +26,67 @@ const INITIALIZATION_RETRY_DELAYS_MS = [500, 1000, 2000]
  *  Refetches when the focused session changes and when a turn ends (the
  *  transcript just grew). Held keyed by the session it describes so switching
  *  sessions drops the previous numbers instead of painting them under the new
- *  session's name. */
+ *  session's name.
+ *
+ *  Two events change the transcript WITHOUT a busy toggle, so the refetch
+ *  must be driven explicitly:
+ *
+ *  - **Compression** — manual `/compress` runs the `session.compress` RPC
+ *    outside any turn (busy never flips), and auto-compression can commit
+ *    mid-turn. The post-compression transcript measures a fraction of the
+ *    pre-compression size, so a served pre-compression breakdown is not
+ *    merely stale, it is wrong by 5-10x (#94001).
+ *  - **Reclaim** (`session.reclaimed`) — the runtime is reaped and the
+ *    session re-resumes; the first refetch can race the agent rebuild.
+ *
+ *  `invalidateContextBreakdown` bumps a per-session generation that both
+ *  call sites (slash.ts after a successful compress, lifecycle.ts on
+ *  reclaim) fire, forcing an immediate refetch. An untrustworthy answer —
+ *  an outright failure, or a ZEROED breakdown from the backend's
+ *  agent-is-None branch (`context_max: 0`) — retries on a bounded backoff;
+ *  once the ladder is exhausted the cached breakdown is EVICTED so the
+ *  meter goes dark honestly rather than showing numbers known to be
+ *  stale. */
+
+/** A breakdown the backend computed from a live agent carries a real
+ *  context_max (the compressor's context_length). Zero means the
+ *  `agent is None` branch answered from empty metadata — not data. */
+function isZeroedBreakdown(breakdown: ContextBreakdown): boolean {
+  return !(breakdown.context_max > 0 || breakdown.context_used > 0 || breakdown.categories.length > 0)
+}
+
+const RETRY_DELAYS_MS = INITIALIZATION_RETRY_DELAYS_MS
+
+/** Per-session invalidation generations. `invalidateContextBreakdown` bumps
+ *  the generation for one session and notifies subscribers; the hook
+ *  subscribes for its own session, so a bump re-runs the fetch immediately. */
+const invalidationGenerations = new Map<string, number>()
+const invalidationListeners = new Set<(sessionId: string, generation: number) => void>()
+
+/** Force a refetch of the context breakdown for `sessionId` on the next
+ *  render. Call when the transcript is known to have changed outside a
+ *  turn: after a successful `session.compress`, and on
+ *  `session.reclaimed`. */
+export function invalidateContextBreakdown(sessionId: string): void {
+  const id = sessionId.trim()
+
+  if (id) {
+    const generation = (invalidationGenerations.get(id) ?? 0) + 1
+
+    invalidationGenerations.set(id, generation)
+
+    for (const listener of invalidationListeners) {
+      listener(id, generation)
+    }
+  }
+}
+
+/** Clear all invalidation generations (test isolation — the Map is
+ *  module-level and would otherwise leak across tests). */
+export function _resetContextBreakdownInvalidationsForTests(): void {
+  invalidationGenerations.clear()
+}
+
 export function useContextBreakdown({ busy, enabled, requestGateway, refreshKey, sessionId }: ContextBreakdownOptions) {
   const [fetched, setFetched] = useState<{
     breakdown: ContextBreakdown
@@ -37,11 +97,24 @@ export function useContextBreakdown({ busy, enabled, requestGateway, refreshKey,
 
   const [loading, setLoading] = useState(false)
   const [requestVersion, refetch] = useReducer(version => version + 1, 0)
+  const [generation, setGeneration] = useState(0)
 
   useEffect(() => {
-    // Mid-turn the transcript changes on every delta and the gateway already
-    // streams measured usage, so an estimate would be both stale and wasteful.
+    if (!sessionId) {return}
+
+    const listener = (id: string, next: number) => {
+      if (id === sessionId) {setGeneration(next)}
+    }
+
+    invalidationListeners.add(listener)
+    setGeneration(invalidationGenerations.get(sessionId) ?? 0)
+
+    return () => { invalidationListeners.delete(listener) }
+  }, [sessionId])
+
+  useEffect(() => {
     if (!enabled || !sessionId || busy) {
+      setFetched(null)
       setLoading(false)
 
       return
@@ -51,43 +124,38 @@ export function useContextBreakdown({ busy, enabled, requestGateway, refreshKey,
     let retry = 0
     let timer: ReturnType<typeof setTimeout> | undefined
     const runtimeId = sessionId
-
     setLoading(true)
 
-    async function fetchBreakdown() {
-      let breakdown: ContextBreakdown
+    const scheduleRetry = () => {
+      const delay = RETRY_DELAYS_MS[retry++]
 
-      try {
-        breakdown = await requestGateway<ContextBreakdown>('session.context_breakdown', { session_id: runtimeId })
-      } catch {
-        if (!cancelled) {
-          setLoading(false)
-        }
-
-        return
-      }
-
-      if (cancelled) {
-        return
-      }
-
-      if (breakdown && (breakdown.context_max > 0 || breakdown.context_used > 0 || breakdown.categories.length > 0)) {
-        setFetched({ breakdown, requestGateway, refreshKey, sessionId: runtimeId })
+      if (delay !== undefined) {
+        timer = setTimeout(() => void fetchBreakdown(), delay)
       } else {
-        // An entirely empty response can precede lazy session initialization.
-        // A missing capacity alone must not discard known tokens or details.
         setFetched(null)
+        setLoading(false)
+      }
+    }
 
-        const delay = INITIALIZATION_RETRY_DELAYS_MS[retry++]
+    async function fetchBreakdown() {
+      try {
+        const breakdown = await requestGateway<ContextBreakdown>('session.context_breakdown', { session_id: runtimeId })
 
-        if (delay !== undefined) {
-          timer = setTimeout(() => void fetchBreakdown(), delay)
+        if (cancelled) {return}
+
+        // Empty metadata can precede lazy initialization. Missing capacity alone
+        // must not discard measured occupancy or restored historical details.
+        if (!breakdown || isZeroedBreakdown(breakdown)) {
+          scheduleRetry()
 
           return
         }
-      }
 
-      setLoading(false)
+        setFetched({ breakdown, requestGateway, refreshKey, sessionId: runtimeId })
+        setLoading(false)
+      } catch {
+        if (!cancelled) {scheduleRetry()}
+      }
     }
 
     void fetchBreakdown()
@@ -95,20 +163,12 @@ export function useContextBreakdown({ busy, enabled, requestGateway, refreshKey,
     return () => {
       cancelled = true
 
-      if (timer !== undefined) {
-        clearTimeout(timer)
-      }
+      if (timer !== undefined) {clearTimeout(timer)}
     }
-  }, [busy, enabled, requestGateway, requestVersion, refreshKey, sessionId])
+  }, [busy, enabled, generation, requestGateway, requestVersion, refreshKey, sessionId])
 
   return {
-    breakdown:
-      fetched &&
-      fetched.sessionId === sessionId &&
-      fetched.requestGateway === requestGateway &&
-      fetched.refreshKey === refreshKey
-        ? fetched.breakdown
-        : null,
+    breakdown: !busy && fetched && fetched.sessionId === sessionId && fetched.requestGateway === requestGateway && fetched.refreshKey === refreshKey ? fetched.breakdown : null,
     loading,
     refetch
   }

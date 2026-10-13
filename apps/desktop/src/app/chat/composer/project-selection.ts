@@ -7,7 +7,8 @@ import { contextPath } from '@/lib/chat-runtime'
 import type { ComposerAttachmentScope } from '@/store/composer'
 import { activeGateway, activeGatewayConnectionId } from '@/store/gateway'
 import { $activeGatewayProfile, pinNewChatProfile } from '@/store/profile'
-import { exitProjectScope, goToProject, requestStartWorkSession } from '@/store/projects'
+import { exitProjectScope } from '@/store/project-scope'
+import { goToProject, requestStartWorkSession } from '@/store/projects'
 import {
   $newChatWorkspaceTargetGeneration,
   setCurrentBranch,

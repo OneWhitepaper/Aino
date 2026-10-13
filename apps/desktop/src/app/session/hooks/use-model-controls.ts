@@ -5,7 +5,7 @@ import { useCallback, useEffect, useRef } from 'react'
 import type { ModelSelection } from '@/app/shell/model-menu-panel'
 import { useI18n } from '@/i18n'
 import { resolveModelDefault } from '@/lib/model-default'
-import { modelOptionsQueryKey } from '@/lib/model-options'
+import { customDefaultSupersedesPick, moaPickRemoved, modelOptionsQueryKey, requestModelOptions } from '@/lib/model-options'
 import { platformDefaultScope } from '@/lib/platform-model-scope'
 import { switchSessionModel } from '@/lib/session-model-switch'
 import { $gatewayManagedCapabilities, managedModelRouteCapabilityFrom } from '@/store/gateway-managed-capability'
@@ -15,6 +15,7 @@ import { $activeGatewayProfile } from '@/store/profile'
 import {
   $activeSessionId,
   $currentModel,
+  $currentProvider,
   $modelDefaultUnavailable,
   $selectedStoredSessionId,
   getComposerSelectionGeneration,
@@ -119,6 +120,9 @@ export function useModelControls({
   // only fills an EMPTY selection so a user's pick (plain UI state in
   // $currentModel) survives the lifecycle refreshes that fire on boot / fresh
   // draft / session events. A live session owns the footer, so skip entirely.
+  // Two provably-stale manual picks are the exception and reseed from the
+  // profile default: the virtual `moa` provider (#90244) and a bare provider
+  // slug the default has migrated to its `custom:<key>` form (#81922).
   const refreshCurrentModel = useCallback(
     async (force = false) => {
       // A forced profile swap opens a new intent epoch; an older in-flight
@@ -155,9 +159,22 @@ export function useModelControls({
         // Catalogs are discovery hints; only the gateway can reject a saved pick.
         const keepManualPick = () => !force && Boolean($currentModel.get()) && getCurrentModelSource() === 'manual'
 
-        if (keepManualPick()) {
-          return
+        let reseedStaleMoa = false
+
+        if (keepManualPick() && $currentProvider.get().toLowerCase() === 'moa') {
+          const key = modelOptionsQueryKey(profile, null, cacheOwnerConnectionId)
+
+          const catalog = queryClient.getQueryData<ModelOptionsResult>(key) ?? await queryClient.fetchQuery({
+            queryKey: key,
+            queryFn: () => requestModelOptions({ profile, request: requestGateway })
+          })
+
+          reseedStaleMoa = moaPickRemoved(catalog, 'moa', $currentModel.get())
         }
+
+        const maybeCustomAlias = keepManualPick() && !!$currentProvider.get() && !$currentProvider.get().includes(':') && $currentProvider.get() !== 'aino'
+
+        if (keepManualPick() && !reseedStaleMoa && !maybeCustomAlias) {return}
 
         $modelDefaultUnavailable.set(false)
 
@@ -172,7 +189,7 @@ export function useModelControls({
           $selectedStoredSessionId.get() ||
           scopeKey !== platformDefaultScope($activeGatewayProfile.get()).key ||
           getComposerSelectionGeneration() !== selectionGeneration ||
-          keepManualPick()
+          (keepManualPick() && !reseedStaleMoa && !customDefaultSupersedesPick($currentProvider.get(), resolved.provider))
         ) {
           return
         }
@@ -212,8 +229,13 @@ export function useModelControls({
         }
       }
     },
-    [cacheOwnerConnectionId, cacheProfile]
+    [cacheOwnerConnectionId, cacheProfile, queryClient, requestGateway]
   )
+
+  const followDefaultModel = useCallback(() => {
+    setCurrentModelSource('default')
+    void refreshCurrentModel()
+  }, [refreshCurrentModel])
 
   const refreshAccountModel = useCallback(() => {
     const next = platformModelCatalog().account.get()
@@ -284,5 +306,5 @@ export function useModelControls({
     ]
   )
 
-  return { applySavedMainModel, refreshCurrentModel, selectModel }
+  return { applySavedMainModel, followDefaultModel, refreshCurrentModel, selectModel }
 }

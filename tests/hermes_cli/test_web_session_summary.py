@@ -28,7 +28,7 @@ def test_real_aux_route_caches_accounts_and_isolates_language_and_profile(tmp_pa
     monkeypatch.setattr(Path, "home", lambda: tmp_path)
     monkeypatch.setenv("HERMES_HOME", str(home))
     monkeypatch.setattr("hermes_state.DEFAULT_DB_PATH", home / "state.db")
-    db, first, reply = _conversation(home)
+    db, first, _reply = _conversation(home)
     tool = db.append_message("task", "tool", "TOOL_START\n" + "large file evidence\n" * 20000 + "TOOL_END")
     requests = []
     citation_override = []

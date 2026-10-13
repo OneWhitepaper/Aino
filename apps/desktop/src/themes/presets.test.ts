@@ -6,7 +6,8 @@ import {
   DEFAULT_SKIN_NAME,
   DEFAULT_TYPOGRAPHY,
   EMOJI_FALLBACK,
-  nousAltTheme
+  nousAltTheme,
+  nousTheme
 } from './presets'
 
 // #40364: none of the UI text/mono fonts carry emoji glyphs, so every font
@@ -48,5 +49,41 @@ describe('legacy Nous palettes', () => {
     expect(BUILTIN_THEMES.nous).not.toBe(nousAltTheme)
     expect(nousAltTheme.darkColors?.background).toBe('#0D2F86')
     expect(BUILTIN_THEMES.nous.darkColors?.background).not.toBe(nousAltTheme.darkColors?.background)
+  })
+})
+
+describe('theme typography Latin Extended fallback (#61392)', () => {
+  const monoStacks: Array<[string, string]> = [
+    ['DEFAULT_TYPOGRAPHY.fontMono', DEFAULT_TYPOGRAPHY.fontMono],
+    ...BUILTIN_THEME_LIST.map(
+      theme =>
+        [
+          `${theme.name}.effectiveFontMono`,
+          theme.typography?.fontMono ?? nousTheme.typography?.fontMono ?? DEFAULT_TYPOGRAPHY.fontMono
+        ] as [string, string]
+    )
+  ]
+
+  it.each(monoStacks)('%s falls back to bundled JetBrains Mono before generic fonts', (_label, stack) => {
+    const jetbrains = stack.indexOf('JetBrains Mono')
+
+    expect(jetbrains).toBeGreaterThanOrEqual(0)
+
+    const genericIndexes = [
+      stack.indexOf('ui-monospace'),
+      stack.indexOf('monospace'),
+      stack.indexOf('Apple Color Emoji'),
+      stack.indexOf('Segoe UI Emoji'),
+      stack.indexOf('Noto Color Emoji')
+    ].filter(index => index >= 0)
+
+    expect(genericIndexes.length).toBeGreaterThan(0)
+    expect(jetbrains).toBeLessThan(Math.min(...genericIndexes))
+  })
+
+  it('default stack includes common Linux monospace glyph fallbacks', () => {
+    expect(DEFAULT_TYPOGRAPHY.fontMono).toContain('DejaVu Sans Mono')
+    expect(DEFAULT_TYPOGRAPHY.fontMono).toContain('Liberation Mono')
+    expect(DEFAULT_TYPOGRAPHY.fontMono).toContain('Noto Sans Mono')
   })
 })

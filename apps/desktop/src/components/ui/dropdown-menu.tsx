@@ -17,7 +17,7 @@ import { cn } from '@/lib/utils'
 // Reuse these instead of re-deriving per menu so every searchable/compact menu
 // reads identically.
 export const dropdownMenuRow = 'gap-2 rounded-(--aino-radius-row) px-2.5 py-1 text-xs'
-export const dropdownMenuSectionLabel = 'px-2.5 pt-1 pb-0.5 text-[0.625rem] font-medium uppercase tracking-wide'
+export const dropdownMenuSectionLabel = 'px-2.5 pt-1 pb-0.5 text-[0.625rem] font-medium uppercase tracking-wide text-(--ui-text-secondary)'
 
 // Keys that must reach Radix's menu handler (navigation/close). Everything else
 // is a filter keystroke and is stopped so the menu's typeahead doesn't hijack it.
@@ -158,6 +158,9 @@ function createHoverSubmenus() {
 
 const HoverSubmenusContext = React.createContext<ReturnType<typeof createHoverSubmenus> | null>(null)
 const SubOpenContext = React.createContext<{ open: boolean; setOpen: SetSubOpen } | null>(null)
+// The parent Content's resolved portal target (dialog content or an explicit
+// portalContainer), so its submenus portal into the same node.
+const MenuPortalContainerContext = React.createContext<HTMLElement | undefined>(undefined)
 
 function useRowSearchHover(props: RowPointerHandlers) {
   const hoverSubmenus = React.useContext(HoverSubmenusContext)
@@ -245,24 +248,26 @@ function DropdownMenuContent({
   React.useEffect(() => hoverSubmenus.dispose, [hoverSubmenus])
 
   return (
-    <HoverSubmenusContext.Provider value={hoverSubmenus}>
-      <DropdownMenuPrimitive.Portal container={container}>
-        <DropdownMenuPrimitive.Content
-          className={cn(
-            menuSurfaceClass,
-            menuMotionClass,
-            'z-50 max-h-(--radix-dropdown-menu-content-available-height) min-w-36 origin-(--radix-dropdown-menu-content-transform-origin) overflow-x-hidden overflow-y-auto',
-            className
-          )}
-          // Keep the menu inside the viewport: Radix flips/shifts away from edges
-          // (avoidCollisions defaults on); the padding stops it kissing the edge.
-          collisionPadding={collisionPadding}
-          data-slot="dropdown-menu-content"
-          sideOffset={sideOffset}
-          {...props}
-        />
-      </DropdownMenuPrimitive.Portal>
-    </HoverSubmenusContext.Provider>
+    <MenuPortalContainerContext.Provider value={container}>
+      <HoverSubmenusContext.Provider value={hoverSubmenus}>
+        <DropdownMenuPrimitive.Portal container={container}>
+          <DropdownMenuPrimitive.Content
+            className={cn(
+              menuSurfaceClass,
+              menuMotionClass,
+              'z-50 max-h-(--radix-dropdown-menu-content-available-height) min-w-36 origin-(--radix-dropdown-menu-content-transform-origin) overflow-x-hidden overflow-y-auto',
+              className
+            )}
+            // Keep the menu inside the viewport: Radix flips/shifts away from edges
+            // (avoidCollisions defaults on); the padding stops it kissing the edge.
+            collisionPadding={collisionPadding}
+            data-slot="dropdown-menu-content"
+            sideOffset={sideOffset}
+            {...props}
+          />
+        </DropdownMenuPrimitive.Portal>
+      </HoverSubmenusContext.Provider>
+    </MenuPortalContainerContext.Provider>
   )
 }
 
@@ -469,16 +474,26 @@ function DropdownMenuSubContent({
   className,
   collisionPadding = 8,
   onPointerMove,
+  style,
   ...props
 }: React.ComponentProps<typeof DropdownMenuPrimitive.SubContent>) {
   const hoverSubmenus = React.useContext(HoverSubmenusContext)
+  // A body portal would sit under a dialog's modal overlay: blurred, and the
+  // overlay eats its clicks (#80798).
+  const container = React.useContext(MenuPortalContainerContext)
 
   return (
     // Portal the submenu out of the parent Content so it escapes that Content's
-    // `overflow` clip. Without this, a submenu opening from a scrollable menu
-    // gets visually cut off at the parent's edges. Radix Popper still anchors
-    // it to the SubTrigger and handles collision/flip, so portaling is safe.
-    <DropdownMenuPrimitive.Portal>
+    // `overflow` clip. Radix Popper still anchors it to the SubTrigger and
+    // handles collision/flip. React events still bubble through the portal, so
+    // the parent menu doesn't treat a press here as an outside click.
+    //
+    // `updatePositionStrategy="always"` makes Floating UI's autoUpdate use a
+    // continuous rAF loop instead of the default "optimized" passive scroll
+    // listeners. Without it, a portaled submenu visibly lags behind its trigger
+    // while the parent Content scrolls: the scroll → getBoundingClientRect →
+    // reposition pipeline cannot keep pace with fast wheel events.
+    <DropdownMenuPrimitive.Portal container={container}>
       <DropdownMenuPrimitive.SubContent
         // Fixed `max-h-80` rather than the Radix available-height variable:
         // that variable is only published on Content, NOT SubContent — using
@@ -486,7 +501,10 @@ function DropdownMenuSubContent({
         className={cn(
           menuSurfaceClass,
           menuMotionClass,
-          'z-50 max-h-80 min-w-36 origin-(--radix-dropdown-menu-content-transform-origin) overflow-y-auto',
+          // Sharing the parent's container means sharing its stacking context,
+          // so step above the parent's z-50.
+          container ? 'z-(--z-modal-popover)' : 'z-50',
+          'max-h-80 min-w-36 origin-(--radix-dropdown-menu-content-transform-origin) overflow-y-auto',
           className
         )}
         // Flip to the other side / shift vertically when near a viewport edge
@@ -499,7 +517,15 @@ function DropdownMenuSubContent({
           hoverSubmenus?.keep()
           onPointerMove?.(event)
         }}
+        // The modal parent menu disables pointer events on dismissable layers
+        // registered before it. A submenu that mounts with the menu registers
+        // first (child effects run first), so Radix marks it `none`.
+        style={{ ...(container ? { pointerEvents: 'auto' } : null), ...style }}
         {...props}
+        // Placed after the spread so callers cannot override it: the rAF loop
+        // is load-bearing for scroll-tracked submenus and must never revert to
+        // the default passive-listener strategy.
+        updatePositionStrategy="always"
       />
     </DropdownMenuPrimitive.Portal>
   )

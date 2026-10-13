@@ -11,7 +11,7 @@ const toolPanel = (): StripPane => ({ collapsePane: true, placement: 'bottom' })
 const sideChrome = (): StripPane => ({ collapsePane: false, placement: 'right' })
 
 describe('auto (no stored choice)', () => {
-  it('gives a lone workspace no strip and a stack of two a strip', () => {
+  it('keeps a lone workspace aligned with the titlebar and shows tabs for stacked panes', () => {
     expect(resolveTabStripVisible({ shown: [workspace()] })).toBe(false)
     expect(resolveTabStripVisible({ shown: [workspace(), sideChrome()] })).toBe(true)
   })
@@ -36,8 +36,7 @@ describe('auto (no stored choice)', () => {
         isCollapsePane: id => id === 'terminal',
         mode: undefined,
         paneFor: id => (id === 'terminal' ? terminal : files),
-        shown,
-        siblingMainZone: false
+        shown
       })
 
     expect(visible(['terminal'])).toBe(false)
@@ -68,11 +67,15 @@ describe('no dead zone', () => {
     expect(resolveTabStripVisible({ mode: 'never', shown: [toolPanel()] })).toBe(true)
   })
 
-  it('still hides a zone that cannot strand anything', () => {
-    // The workspace is uncloseable, a stack is reachable by tab cycling, and
-    // hide-only chrome (sessions / Bots) keeps its panes + ⌘⌥T — the invariant
-    // protects handles, it does not veto hiding as such.
+  it('honors hidden tabs for an uncloseable workspace', () => {
+    // Aino keeps new-chat and navigation actions in the sidebar and titlebar.
     expect(resolveTabStripVisible({ mode: 'never', shown: [workspace()] })).toBe(false)
+  })
+
+  it('still hides a zone that cannot strand anything', () => {
+    // A stack is reachable by tab cycling, and hide-only chrome (sessions /
+    // Bots) keeps its panes + ⌘⌥T — the invariant protects handles, it does
+    // not veto hiding as such.
     expect(resolveTabStripVisible({ mode: 'never', shown: [toolPanel(), toolPanel()] })).toBe(false)
     expect(resolveTabStripVisible({ mode: 'never', shown: [sideChrome()] })).toBe(false)
     expect(resolveTabStripVisible({ mode: 'never', shown: [sideChrome(), sideChrome()] })).toBe(false)
@@ -109,19 +112,13 @@ describe('a full-page view', () => {
   })
 })
 
-// Dragging a session out of the chat strip into its own zone left main a lone
-// workspace: the tile kept its tab (stranded), main lost its tab and its "+",
-// and the two chats side by side read as "the tabs disappeared". Tiles are a
-// tabbed workflow — a main zone keeps its strip while another main zone exists.
-describe('a lone main tile beside another main zone', () => {
-  it('keeps its strip on auto, and only on auto', () => {
-    expect(resolveTabStripVisible({ shown: [workspace()], siblingMainZone: true })).toBe(true)
-    // The whole-window chat is still chromeless, and standing side chrome
-    // never joins the tabbed workflow.
-    expect(resolveTabStripVisible({ shown: [workspace()], siblingMainZone: false })).toBe(false)
-    expect(resolveTabStripVisible({ shown: [sideChrome()], siblingMainZone: true })).toBe(false)
-    // Hide tabs (menu row / ⌘⌥T) still wins — the workspace strands nothing.
-    expect(resolveTabStripVisible({ mode: 'never', shown: [workspace()], siblingMainZone: true })).toBe(false)
+// Aino's sidebar and titlebar own the lone workspace's navigation controls.
+describe('a lone workspace', () => {
+  it('shows its strip only when explicitly requested', () => {
+    expect(resolveTabStripVisible({ shown: [workspace()] })).toBe(false)
+    expect(resolveTabStripVisible({ mode: 'never', shown: [workspace()] })).toBe(false)
+    // Standing side chrome never joins the tabbed workflow.
+    expect(resolveTabStripVisible({ shown: [sideChrome()] })).toBe(false)
   })
 })
 
@@ -147,14 +144,14 @@ describe('tabStripVisibleForZone', () => {
       isCollapsePane: id => id === 'terminal',
       mode,
       paneFor: id => contributions[id],
-      shown,
-      siblingMainZone: false
+      shown
     })
 
   afterEach(() => setTabStripDefault('auto'))
 
   it('reads placement, uncloseable and collapse off the contributions', () => {
     expect(visible(['workspace'])).toBe(false)
+    expect(visible(['workspace'], 'never')).toBe(false)
     expect(visible(['tile:a'], 'never')).toBe(true)
     expect(visible(['terminal'], 'never')).toBe(true)
   })
@@ -164,14 +161,15 @@ describe('tabStripVisibleForZone', () => {
     expect(visible(['workspace'])).toBe(true)
 
     setTabStripDefault('never')
+    expect(visible(['workspace'])).toBe(false)
     expect(visible(['workspace', 'terminal'])).toBe(false)
   })
 
   it("lets a zone's own choice beat the app default", () => {
     setTabStripDefault('never')
-    expect(visible(['workspace'], 'always')).toBe(true)
+    expect(visible(['workspace', 'terminal'], 'always')).toBe(true)
 
     setTabStripDefault('always')
-    expect(visible(['workspace'], 'never')).toBe(false)
+    expect(visible(['workspace', 'terminal'], 'never')).toBe(false)
   })
 })

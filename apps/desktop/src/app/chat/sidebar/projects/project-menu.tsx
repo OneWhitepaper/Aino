@@ -21,7 +21,8 @@ import {
 import { Popover, PopoverAnchor, PopoverContent } from '@/components/ui/popover'
 import { useI18n } from '@/i18n'
 import { isDesktopFsRemoteMode } from '@/lib/desktop-fs'
-import { $panesFlipped } from '@/store/layout'
+import { $panesFlipped, dismissAutoProject, restoreAutoProject } from '@/store/layout'
+import { notify } from '@/store/notifications'
 import { $profileScope, ALL_PROFILES } from '@/store/profile'
 import {
   closeProject,
@@ -57,6 +58,27 @@ function useProjectActions({
   const target = { id: project.id, name: project.label, profile: project.ownerProfile }
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false)
   const ownerUnknown = useStore($profileScope) === ALL_PROFILES && !project.ownerProfile
+
+  const removeAuto = () => {
+    // Capture the id now: the row unmounts (and, when scoped, the scope exits)
+    // the moment we dismiss, so Undo can't read it back off live menu state.
+    const id = project.id
+
+    dismissAutoProject(id)
+
+    if (scoped) {
+      onExitScope?.()
+    }
+
+    // The hide is persisted and otherwise irreversible — there is no other
+    // restore control — so offer a short undo window (mirrors restoreWorktree).
+    notify({
+      action: { label: p.undoHide, onClick: () => restoreAutoProject(id) },
+      durationMs: 8_000,
+      kind: 'success',
+      message: p.hiddenFromSidebar
+    })
+  }
 
   const confirmDelete = async () => {
     await deleteProject(project.id, project.ownerProfile)
@@ -133,7 +155,7 @@ function useProjectActions({
   }
 
   const dangerItem: ActionItemSpec | null = project.isAuto
-    ? null
+    ? { key: 'hide-auto', icon: 'eye-closed', label: p.removeFromSidebar, onSelect: removeAuto }
     : {
         disabled: ownerUnknown,
         icon: 'trash',

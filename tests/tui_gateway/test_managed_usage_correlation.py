@@ -4,7 +4,7 @@ from uuid import UUID
 
 import pytest
 
-from tests.tui_gateway.test_managed_model_agent import managed_gateway  # noqa: F401
+from tests.tui_gateway.test_managed_model_agent import managed_gateway
 
 
 @pytest.mark.parametrize("protocol", ["chat_completions", "responses", "anthropic_messages"])
@@ -87,7 +87,7 @@ def test_custom_reply_persists_its_source_without_relabeling_managed_history(man
 def test_managed_reply_keeps_aino_settlement_and_persists_explicit_external_title_call(
         managed_gateway, tmp_path, monkeypatch):
     import threading
-    import yaml
+    import hermes_yaml as yaml
     import agent.title_generator as titles
     from tui_gateway import server
 
@@ -150,7 +150,7 @@ def test_managed_reply_keeps_aino_settlement_and_persists_explicit_external_titl
 
 def test_late_title_updates_original_reply_not_next_identical_reply(managed_gateway, tmp_path, monkeypatch):
     import threading
-    import yaml
+    import hermes_yaml as yaml
     import agent.title_generator as titles
     from tui_gateway import server
     f = managed_gateway
@@ -200,7 +200,7 @@ def test_late_title_updates_original_reply_not_next_identical_reply(managed_gate
 
 
 def test_background_title_has_the_original_turn_scope(managed_gateway, tmp_path):
-    import yaml
+    import hermes_yaml as yaml
     f = managed_gateway
     config = yaml.safe_load((tmp_path / "config.yaml").read_text())
     config["auxiliary"]["title_generation"]["enabled"] = True
@@ -242,7 +242,7 @@ def test_managed_refusals_are_not_replayed_or_sent_to_byok(managed_gateway, stat
 def test_billing_identity_survives_compression_resume_but_not_a_branch(
         managed_gateway, tmp_path, named_profile, protocol):
     import json
-    import yaml
+    import hermes_yaml as yaml
     from agent.context_compressor import is_compaction_summary_message
     from hermes_cli.profiles import get_profile_dir
     from tests.tui_gateway.test_managed_model_agent import result

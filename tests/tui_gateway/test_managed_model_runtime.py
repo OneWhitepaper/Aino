@@ -1,6 +1,6 @@
 """Test managed model runtime resolution and Agent initialization."""
 import time
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, UTC
 
 import pytest
 
@@ -19,7 +19,7 @@ def valid_binding():
         platform_origin="https://api.agentera.com.cn",
         user_id="test-user-123"
     )
-    expires_at = datetime.now(timezone.utc) + timedelta(minutes=10)
+    expires_at = datetime.now(UTC) + timedelta(minutes=10)
 
     return ManagedModelBinding(
         session_id="test-session",
@@ -60,7 +60,7 @@ def test_resolve_managed_runtime_detects_expired_credential(valid_binding):
         credential_id=valid_binding.credential_id,
         api_key=valid_binding.api_key,
         base_url=valid_binding.base_url,
-        expires_at=datetime.now(timezone.utc) - timedelta(seconds=1),
+        expires_at=datetime.now(UTC) - timedelta(seconds=1),
         binding_revision=valid_binding.binding_revision,
     )
 

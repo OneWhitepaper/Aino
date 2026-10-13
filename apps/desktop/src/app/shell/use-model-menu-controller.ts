@@ -1,6 +1,8 @@
 import { DEFAULT_REASONING_EFFORT, type ModelOptionsResult } from '@hermes/shared'
 import { useStore } from '@nanostores/react'
 import { useQuery } from '@tanstack/react-query'
+import { atom } from 'nanostores'
+import { useRef } from 'react'
 
 import { useSessionView } from '@/app/chat/session-view'
 import { usePlatformModels } from '@/components/platform-model-list'
@@ -10,8 +12,7 @@ import { modelOptionsQueryKey, requestModelOptions } from '@/lib/model-options'
 import { currentPickerSelection } from '@/lib/model-status-label'
 import { platformDefaultScope } from '@/lib/platform-model-scope'
 import { useStoresSelector } from '@/lib/use-session-slice'
-import { $modelPresets, applyModelPreset, modelPresetKey, setModelPreset } from '@/store/model-presets'
-import { notifyError } from '@/store/notifications'
+import { $modelPresets, applyModelPreset, getModelPreset, type ModelPreset, modelPresetKey, modelPresetServiceTier, setModelPreset } from '@/store/model-presets'
 import { verifiedPlatformModel } from '@/store/platform-model-capability'
 import { platformModelCatalog } from '@/store/platform-models'
 import { $activeGatewayProfile } from '@/store/profile'
@@ -19,13 +20,21 @@ import {
   $currentPlatformOrigin,
   $currentPlatformOwner,
   $defaultReasoningEffort,
-  markComposerSelectionManual,
-  setCurrentFastMode,
-  setCurrentReasoningEffort
+  markComposerSelectionManual
 } from '@/store/session'
-import { $sessionStates, sessionTileDelegate } from '@/store/session-states'
+import { $sessionStates } from '@/store/session-states'
 
 import type { ModelMenuController } from './model-catalog-menu'
+
+const UNKNOWN_SERVICE_TIER = atom('')
+const optionEdits = new Map<string, symbol>()
+
+const nextEdit = (key: string) => {
+  const revision = Symbol(key)
+  optionEdits.set(key, revision)
+
+  return revision
+}
 
 export interface ModelSelection {
   model: string
@@ -62,7 +71,9 @@ export function useModelMenuController({
   // shows/switches its own model — not the primary-only globals.
   const view = useSessionView()
   const activeSessionId = useStore(view.$runtimeId)
+  const storedSessionId = useStore(view.$storedId)
   const currentFastMode = useStore(view.$fast)
+  const currentServiceTier = useStore(view.$serviceTier ?? UNKNOWN_SERVICE_TIER)
   const currentModel = useStore(view.$model)
   const currentProvider = useStore(view.$provider)
   const currentReasoningEffort = useStore(view.$reasoningEffort)
@@ -106,95 +117,92 @@ export function useModelMenuController({
     modelOptions.data
   )
 
-  // Push a reasoning change onto the session that owns it, with rollback.
-  const patchReasoning = async (next: string, previous: string, provider: string, model: string) => {
-    if (touchesPrimary) {
-      markComposerSelectionManual()
-      setCurrentReasoningEffort(next)
-    } else if (activeSessionId) {
-      // The wire level belonged to the previous pick; the gateway re-stamps it.
-      sessionTileDelegate()?.updateSession(activeSessionId, state => ({
-        ...state,
-        reasoningEffort: next,
-        reasoningEffortPending: false,
-        reasoningEffortWire: ''
-      }))
-    }
+  const hostScope = `${ownerConnectionId ?? ''}::${profile}`
+  const latestHostScope = useRef(hostScope)
+  latestHostScope.current = hostScope
 
-    // Preset-only without a session: the gateway's `config.set` falls back to
-    // global config when none matches — so don't reach it (preset + optimistic
-    // store are the whole effect).
-    if (!activeSessionId) {
-      return
-    }
+  const patchPreset = (patch: ModelPreset, row: { model: string; provider: string }, failMessage: string) => {
+    const dimensions = [
+      ...(patch.effort !== undefined ? ['effort' as const] : []),
+      ...(modelPresetServiceTier(patch) !== undefined ? ['speed' as const] : [])
+    ]
 
-    try {
-      await requestGateway('config.set', { key: 'reasoning', session_id: activeSessionId, value: next })
-    } catch (err) {
-      if (touchesPrimary) {
-        setCurrentReasoningEffort(previous)
-      } else {
-        sessionTileDelegate()?.updateSession(activeSessionId, state => ({
-          ...state,
-          reasoningEffort: previous,
-          reasoningEffortWire: ''
-        }))
-      }
+    const stamps = new Map(
+      dimensions.map(dimension => {
+        const ownerKey = `${hostScope}::${activeSessionId ?? 'draft'}::${dimension}`
+        const presetKey = `${modelPresetKey(row.provider, row.model)}::${dimension}`
 
-      setModelPreset(provider, model, { effort: previous })
-      notifyError(err, t.shell.modelOptions.updateFailed)
-    }
-  }
-
-  const patchFast = async (enabled: boolean, provider: string, model: string) => {
-    if (touchesPrimary) {
-      markComposerSelectionManual()
-      setCurrentFastMode(enabled)
-    } else if (activeSessionId) {
-      sessionTileDelegate()?.updateSession(activeSessionId, state => ({ ...state, fast: enabled }))
-    }
-
-    if (!activeSessionId) {
-      return
-    }
-
-    try {
-      await requestGateway('config.set', {
-        key: 'fast',
-        session_id: activeSessionId,
-        value: enabled ? 'fast' : 'normal'
+        return [dimension, { ownerKey, presetKey, owner: nextEdit(ownerKey), preset: nextEdit(presetKey) }]
       })
-    } catch (err) {
-      if (touchesPrimary) {
-        setCurrentFastMode(!enabled)
-      } else {
-        sessionTileDelegate()?.updateSession(activeSessionId, state => ({ ...state, fast: !enabled }))
-      }
+    )
 
-      setModelPreset(provider, model, { fast: !enabled })
-      notifyError(err, t.shell.modelOptions.fastFailed)
+    setModelPreset(row.provider, row.model, patch)
+
+    if (touchesPrimary) {
+      markComposerSelectionManual()
     }
+
+    void applyModelPreset(patch, {
+      failMessage,
+      scope: hostScope,
+      primary: touchesPrimary,
+      request: requestGateway,
+      sessionId: activeSessionId,
+      isCurrent: dimension => {
+        const stamp = stamps.get(dimension)!
+
+        return (
+          optionEdits.get(stamp.ownerKey) === stamp.owner &&
+          latestHostScope.current === hostScope &&
+          view.$runtimeId.get() === activeSessionId &&
+          (!view.$model.get() || view.$model.get().replace(/-fast$/, '') === row.model) &&
+          (!view.$provider.get() || view.$provider.get() === row.provider)
+        )
+      },
+      onFailure: (dimension, confirmed) => {
+        const stamp = stamps.get(dimension)!
+
+        if (optionEdits.get(stamp.presetKey) !== stamp.preset) {
+          return
+        }
+
+        const current = getModelPreset(row.provider, row.model)
+
+        if (dimension === 'effort' && current.effort === patch.effort) {
+          setModelPreset(row.provider, row.model, { effort: confirmed.effort })
+        } else if (dimension === 'speed' && modelPresetServiceTier(current) === modelPresetServiceTier(patch)) {
+          setModelPreset(row.provider, row.model, {
+            fast: confirmed.fast ?? false,
+            serviceTier: modelPresetServiceTier(confirmed) ?? 'normal'
+          })
+        }
+      }
+    }).finally(() => {
+      // A settled request only releases its own stamps; a newer writer keeps
+      // its identity, even when another session edits the same model preset.
+      for (const stamp of stamps.values()) {
+        if (optionEdits.get(stamp.ownerKey) === stamp.owner) {
+          optionEdits.delete(stamp.ownerKey)
+        }
+
+        if (optionEdits.get(stamp.presetKey) === stamp.preset) {
+          optionEdits.delete(stamp.presetKey)
+        }
+      }
+    })
   }
 
   const controller: ModelMenuController = {
     // Selecting a model row restores that model's remembered preset onto the
     // session (effort/fast). applyModelPreset owns the batched gateway write.
-    applyPreset: (preset, row) => {
-      setModelPreset(row.provider, row.model, preset)
-
-      void applyModelPreset(preset, {
-        failMessage: t.shell.modelOptions.updateFailed,
-        primary: touchesPrimary,
-        request: requestGateway,
-        sessionId: activeSessionId
-      })
-    },
+    applyPreset: (preset, row) => patchPreset(preset, row, t.shell.modelOptions.updateFailed),
 
     current: {
       effort: currentReasoningEffort,
       effortPending: currentReasoningEffortPending,
       effortWire: currentReasoningEffortWire,
       fast: currentFastMode,
+      serviceTier: currentServiceTier,
       model: optionsModel,
       provider: optionsProvider
     },
@@ -215,21 +223,22 @@ export function useModelMenuController({
       // provider::model, not per-surface — a tile edit re-applies to that model
       // everywhere); the active model also gets it pushed onto its OWN session.
       // Non-active edits stay preset-only — no model switch, no session write.
-      if (patch.effort !== undefined || patch.fast !== undefined) {
-        setModelPreset(row.provider, row.model, patch)
-      }
-
       if (!row.isActive) {
+        setModelPreset(row.provider, row.model, patch)
+
+        // Invalidate a pending rollback for the same globally remembered dimension.
+        if (patch.effort !== undefined) {
+          nextEdit(`${modelPresetKey(row.provider, row.model)}::effort`)
+        }
+
+        if (modelPresetServiceTier(patch) !== undefined) {
+          nextEdit(`${modelPresetKey(row.provider, row.model)}::speed`)
+        }
+
         return
       }
 
-      if (patch.effort !== undefined) {
-        void patchReasoning(patch.effort, currentReasoningEffort, row.provider, row.model)
-      }
-
-      if (patch.fast !== undefined) {
-        void patchFast(patch.fast, row.provider, row.model)
-      }
+      patchPreset(patch, row, t.shell.modelOptions.updateFailed)
     }
   }
 

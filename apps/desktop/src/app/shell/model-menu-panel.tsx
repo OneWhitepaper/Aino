@@ -13,7 +13,9 @@ import { modelOptionsQueryKey, requestModelOptions } from '@/lib/model-options'
 import { managedModelSwitchBlocked } from '@/lib/model-switch-policy'
 import { cn } from '@/lib/utils'
 import { $gatewayManagedCapabilities, managedModelRouteCapabilityFrom } from '@/store/gateway-managed-capability'
+import { $currentModelSource } from '@/store/session'
 
+import { LocalSetupMenuRow } from './local-setup-menu-row'
 import { ModelCatalogMenu, ModelMenuCloseContext } from './model-catalog-menu'
 import { ModelEditSubmenu } from './model-edit-submenu'
 import { type ModelMenuHostProps, useModelMenuController } from './use-model-menu-controller'
@@ -21,11 +23,16 @@ import { type ModelMenuHostProps, useModelMenuController } from './use-model-men
 export { ModelMenuCloseContext } from './model-catalog-menu'
 export type { ModelSelection } from './use-model-menu-controller'
 
+interface ModelMenuPanelProps extends ModelMenuHostProps {
+  /** Drop the sticky composer pick so new chats follow Settings → Model. */
+  onFollowDefaultModel?: () => void
+}
+
 /**
  * The composer's model menu: `ModelCatalogMenu` (the shared renderer) plus the
  * controller that gives a selection its meaning HERE (`useModelMenuController`).
  */
-export function ModelMenuPanel(props: ModelMenuHostProps) {
+export function ModelMenuPanel({ onFollowDefaultModel, ...props }: ModelMenuPanelProps) {
   const { gateway, onSelectModel, ownerConnectionId, profile = 'default', requestGateway } = props
   const { t } = useI18n()
   const copy = t.shell.modelMenu
@@ -33,6 +40,8 @@ export function ModelMenuPanel(props: ModelMenuHostProps) {
   const queryClient = useQueryClient()
   const { activePlatformModel, activeSessionId, controller, defaultEffort } = useModelMenuController(props)
   const view = useSessionView()
+  const modelSource = useStore($currentModelSource)
+  const pinnedDraft = view.kind === 'primary' && !activeSessionId && modelSource === 'manual'
   const currentModel = useStore(view.$model)
   const currentProvider = useStore(view.$provider)
   const currentReasoningEffort = useStore(view.$reasoningEffort)
@@ -135,6 +144,8 @@ export function ModelMenuPanel(props: ModelMenuHostProps) {
           controller={controller}
           disabled={blocked}
           footer={
+            <>
+              {pinnedDraft && onFollowDefaultModel && <DropdownMenuItem onSelect={onFollowDefaultModel}>{copy.followDefault}</DropdownMenuItem>}
             <DropdownMenuItem
               className={cn(dropdownMenuRow, 'text-(--ui-text-tertiary)')}
               disabled={refreshing}
@@ -146,8 +157,10 @@ export function ModelMenuPanel(props: ModelMenuHostProps) {
               <Codicon className={cn(refreshing && 'animate-spin')} name="sync" size="0.75rem" />
               {copy.refreshModels}
             </DropdownMenuItem>
+            </>
           }
           gateway={gateway}
+          header={<LocalSetupMenuRow />}
           includeMoa
           ownerConnectionId={ownerConnectionId}
           profile={profile}

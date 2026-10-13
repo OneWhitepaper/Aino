@@ -44,6 +44,7 @@ interface ThreadProps {
   gateway?: HermesGateway | null
   intro?: IntroProps
   loading?: ThreadLoadingState
+  onCancel?: () => Promise<void> | void
   onBranchInNewChat?: (messageId: string) => void
   onDismissError?: (messageId: string) => void
   onRestoreToMessage?: (messageId: string, target?: RestoreMessageTarget) => Promise<void> | void
@@ -65,6 +66,7 @@ export const Thread = memo(function Thread({
   gateway = null,
   intro,
   loading,
+  onCancel,
   onBranchInNewChat,
   onDismissError,
   onRestoreToMessage,
@@ -122,8 +124,8 @@ export const Thread = memo(function Thread({
   // transcript — thousands of renders of a thread that was about to be
   // replaced, all of it before the resume RPC had even been sent. They
   // reach the edit composer through ThreadEditContext instead (see above).
-  const callbacksRef = useRef({ onBranchInNewChat, onDismissError })
-  callbacksRef.current = { onBranchInNewChat, onDismissError }
+  const callbacksRef = useRef({ onCancel, onBranchInNewChat, onDismissError })
+  callbacksRef.current = { onCancel, onBranchInNewChat, onDismissError }
 
   // Only changes identity when one of the three values does, so Thread
   // re-renders for unrelated reasons never re-render the composer.
@@ -150,7 +152,7 @@ export const Thread = memo(function Thread({
         return <UserEditComposer cwd={editCwd} gateway={editGateway} sessionId={editSessionId} />
       },
       UserMessage: () => (
-        <UserMessage onRequestRestoreConfirm={hasRestoreToMessage ? requestRestoreConfirm : undefined} />
+        <UserMessage onCancel={() => callbacksRef.current.onCancel?.()} onRequestRestoreConfirm={hasRestoreToMessage ? requestRestoreConfirm : undefined} />
       )
     }),
     [hasBranchInNewChat, hasDismissError, hasRestoreToMessage, requestRestoreConfirm]
@@ -188,7 +190,10 @@ export const Thread = memo(function Thread({
 
   return (
     <ThreadEditContext.Provider value={editContext}>
-      <div className="relative grid h-full min-h-0 max-w-full grid-rows-[minmax(0,1fr)] overflow-hidden bg-transparent contain-[layout_paint]">
+      <div
+        className="relative grid h-full min-h-0 max-w-full grid-rows-[minmax(0,1fr)] overflow-hidden bg-transparent contain-[layout_paint]"
+        data-slot="thread"
+      >
         <ThreadMessageList
           clampToComposer={clampToComposer}
           components={messageComponents}
@@ -197,6 +202,7 @@ export const Thread = memo(function Thread({
           scrollProfile={scrollProfile}
           sessionId={sessionId}
           sessionKey={sessionKey}
+          sessionLoading={loading === 'session'}
         />
         {loading === 'session' && <CenteredThreadSpinner />}
         <ThreadTimeline />

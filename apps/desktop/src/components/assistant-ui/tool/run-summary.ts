@@ -2,7 +2,7 @@ import { translateNow } from '@/i18n'
 import { firstStringField } from '@/lib/text'
 import { extractToolErrorMessage } from '@/lib/tool-result-summary'
 
-import { fileEditBasename, isFileEditTool, parseMaybeObject } from './fallback-model'
+import { compactPreview, fileEditBasename, findFirstUrl, hostnameOf, isFileEditTool, parseMaybeObject } from './fallback-model'
 import { skillActivityTitle } from './skill-activity'
 
 /**
@@ -23,9 +23,16 @@ export function isToolCallPart<T extends { type: string }>(part: T): part is Ext
   return part.type === 'tool-call'
 }
 
-type RunCategory = 'browser' | 'delegate' | 'edit' | 'explore' | 'other' | 'run'
+type WebCategory = 'search' | 'read' | 'browse' | 'interact' | 'analyze'
+type RunCategory = WebCategory | 'delegate' | 'edit' | 'explore' | 'other' | 'run'
+interface CategoryCopy { count: (count: number) => string; past: string; present: string }
 
 export interface ToolRunCopy {
+  search?: CategoryCopy
+  read?: CategoryCopy
+  browse?: CategoryCopy
+  interact?: CategoryCopy
+  analyze?: CategoryCopy
   delegate: { count: (count: number) => string; past: string; present: string }
   edit: { count: (count: number) => string; past: string; present: string }
   explore: { count: (count: number) => string; past: string; present: string }
@@ -35,7 +42,7 @@ export interface ToolRunCopy {
 
 // Clause order is fixed so the same run always reads the same way, whichever
 // category happens to be live.
-const CATEGORY_ORDER: readonly RunCategory[] = ['edit', 'explore', 'browser', 'run', 'delegate', 'other']
+const CATEGORY_ORDER: readonly RunCategory[] = ['edit', 'explore', 'search', 'read', 'browse', 'interact', 'analyze', 'run', 'delegate', 'other']
 
 const DEFAULT_COPY: ToolRunCopy = {
   delegate: { count: count => `${count} task${count === 1 ? '' : 's'}`, past: 'Delegated', present: 'Delegating' },
@@ -45,32 +52,40 @@ const DEFAULT_COPY: ToolRunCopy = {
   run: { count: count => `${count} command${count === 1 ? '' : 's'}`, past: 'Ran', present: 'Running' }
 }
 
-const EXPLORE_TOOLS = new Set([
-  'list_files',
-  'read_file',
-  'search_files',
-  'session_search_recall',
-  'vision_analyze',
-  'web_extract',
-  'web_search'
-])
+const WEB_COPY: Record<WebCategory, CategoryCopy> = {
+  search: { count: count => `${count} ${count === 1 ? 'query' : 'queries'}`, past: 'Searched', present: 'Searching' },
+  read: { count: count => `${count} page${count === 1 ? '' : 's'}`, past: 'Read', present: 'Reading' },
+  browse: { count: count => `${count} page${count === 1 ? '' : 's'}`, past: 'Opened', present: 'Opening' },
+  interact: { count: count => `${count} browser action${count === 1 ? '' : 's'}`, past: 'Performed', present: 'Performing' },
+  analyze: { count: count => `${count} image${count === 1 ? '' : 's'}`, past: 'Analyzed', present: 'Analyzing' }
+}
 
-const EXECUTION_CATEGORIES: Record<string, RunCategory> = {
-  terminal: 'run',
+const TOOL_CATEGORY: Record<string, RunCategory> = {
+  browser_navigate: 'browse',
+  delegate_task: 'delegate',
   execute_code: 'run',
-  delegate_task: 'delegate'
+  list_files: 'explore',
+  read_file: 'explore',
+  search_files: 'explore',
+  session_search_recall: 'search',
+  terminal: 'run',
+  vision_analyze: 'analyze',
+  web_extract: 'read',
+  web_search: 'search'
 }
 
 function toolCategory(toolName: string): RunCategory {
-  if (isFileEditTool(toolName)) {
-    return 'edit'
-  }
+  return isFileEditTool(toolName) ? 'edit' : TOOL_CATEGORY[toolName] ?? (toolName.startsWith('browser_') ? 'interact' : 'other')
+}
 
-  if (toolName.startsWith('browser_')) {
-    return 'browser'
-  }
+function unitCount(tool: ToolCallLike): number {
+  const urls = tool.toolName === 'web_extract' ? parseMaybeObject(tool.args).urls : undefined
 
-  return EXECUTION_CATEGORIES[toolName] ?? (EXPLORE_TOOLS.has(toolName) ? 'explore' : 'other')
+  return Array.isArray(urls) && urls.length > 0 ? urls.length : 1
+}
+
+function categoryCopy(category: RunCategory, copy: ToolRunCopy): CategoryCopy {
+  return copy[category] ?? WEB_COPY[category as WebCategory]
 }
 
 function isPending(tool: ToolCallLike): boolean {
@@ -93,18 +108,27 @@ export function toolPresentVerb(toolName: string, copy: ToolRunCopy = DEFAULT_CO
 
   const category = toolCategory(toolName)
 
-  return category === 'browser'
-    ? translateNow(
-        'assistant.tool.titleTemplates.actionTarget',
-        copy.other.present,
-        translateNow('assistant.tool.prefixes.browser')
-      )
-    : copy[category].present
+  return categoryCopy(category, copy).present
 }
 
 /** The thing a tool acted on, as the header should name it. */
 function toolTarget(tool: ToolCallLike): string {
   const args = parseMaybeObject(tool.args)
+  const category = toolCategory(tool.toolName)
+
+  if (category === 'search') {
+    const query = firstStringField(args, ['query', 'search_term'])
+
+    return query ? `“${compactPreview(query, 48)}”` : ''
+  }
+
+  if (category === 'read' || category === 'browse') {
+    return hostnameOf(findFirstUrl(args))
+  }
+
+  if (category === 'analyze' || category === 'interact') {
+    return ''
+  }
 
   const path = firstStringField(args, ['path', 'file', 'filepath'])
 
@@ -118,27 +142,20 @@ function toolTarget(tool: ToolCallLike): string {
  * already has its own ticker line and the complete command stays in its row.
  */
 function clause(category: RunCategory, tools: ToolCallLike[], live: boolean, copy: ToolRunCopy): string {
-  if (category === 'browser') {
-    return translateNow(
-      'assistant.tool.titleTemplates.actionTarget',
-      live ? copy.other.present : copy.other.past,
-      translateNow('assistant.tool.prefixes.browser')
-    )
-  }
-
   if (tools.length === 1 && tools[0].toolName === 'execute_code') {
     return translateNow(live ? 'assistant.tool.actions.runningCode' : 'assistant.tool.actions.ranCode')
   }
 
-  const categoryCopy = copy[category]
-  const verb = live ? categoryCopy.present : categoryCopy.past
-  const target = tools.length === 1 ? toolTarget(tools[0]) : ''
+  const categoryText = categoryCopy(category, copy)
+  const verb = live ? categoryText.present : categoryText.past
+  const count = tools.reduce((sum, tool) => sum + unitCount(tool), 0)
+  const target = count === 1 ? toolTarget(tools[0]) : ''
 
   if (target && category !== 'run') {
     return `${verb} ${target}`
   }
 
-  return `${verb} ${categoryCopy.count(tools.length)}`
+  return `${verb} ${categoryText.count(count)}`
 }
 
 function lowerFirst(text: string): string {

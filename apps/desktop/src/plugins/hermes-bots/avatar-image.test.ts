@@ -1,3 +1,4 @@
+import type { WebviewTag } from 'electron'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { hostMock, i18nMock } = vi.hoisted(() => ({
@@ -60,7 +61,7 @@ describe('device image picker', () => {
       type: ''
     }
 
-    vi.spyOn(document, 'createElement').mockReturnValue(input as unknown as HTMLElement)
+    vi.spyOn(document, 'createElement').mockReturnValue(input as unknown as WebviewTag)
 
     const { pickImageFromDevice } = await import('./avatar-image')
     const pending = pickImageFromDevice()

@@ -6,6 +6,7 @@ builder the main loop uses (hermes-agent#70233)."""
 import copy
 import logging
 from types import SimpleNamespace
+import json
 
 import pytest
 
@@ -95,10 +96,68 @@ def test_responses_summary_preserves_the_ordinary_request_prefix(make_agent, mon
         return SimpleNamespace(status="completed", output=[SimpleNamespace(
             type="message", status="completed", content=[SimpleNamespace(type="output_text", text="Summary")])])
 
-    monkeypatch.setattr(agent, "_run_codex_stream", capture)
+    monkeypatch.setattr(agent, "_interruptible_api_call", capture)
     assert _codex_summary_attempt(agent, _iteration_summary_api_messages(agent, messages), "summary")(0) == "Summary"
     assert captured["input"][:-1] == expected["input"]
     for key in ("instructions", "tools", "tool_choice", "parallel_tool_calls", "prompt_cache_key"):
         assert captured[key] == expected[key]
     assert history == original
     assert agent.prefill_messages == prefills
+
+
+class TestSummaryPrefixParity:
+    """The summary request must close with the same normalization the main send
+    path applies (assemble_api_request): canonical tool-call argument JSON and
+    stripped string content — otherwise the summary's prefix diverges from every
+    prior request and prefix-caching providers re-read the whole conversation
+    (hermes-agent#123002)."""
+
+    def test_canonicalizes_tool_call_arguments_and_strips_content(self, make_agent):
+        agent = make_agent("https://api.groq.com/openai/v1", "custom")
+        history = [
+            {"role": "user", "content": "  q  "},
+            {"role": "assistant", "content": "  thinking out loud  ", "tool_calls": [
+                {"id": "t1", "type": "function",
+                 "function": {"name": "f", "arguments": '{"b": 1, "a": 2}'}},
+            ]},
+            {"role": "tool", "tool_call_id": "t1", "content": "  r  "},
+        ]
+        snapshot = copy.deepcopy(history)
+        out = _iteration_summary_api_messages(agent, history)
+
+        assistant = next(m for m in out if m.get("role") == "assistant")
+        args = assistant["tool_calls"][0]["function"]["arguments"]
+        assert args == json.dumps({"a": 2, "b": 1}, separators=(",", ":"), sort_keys=True)
+
+        # Same whitespace contract as the main path: string content stripped on the
+        # wire copy, history untouched.
+        by_role = {m["role"]: m for m in out if m.get("role") in {"user", "tool"}}
+        assert by_role["user"]["content"] == "q"
+        assert by_role["tool"]["content"] == "r"
+        assert history == snapshot  # send-path rewrites never reach the transcript
+
+    def test_strips_lone_surrogates_like_the_send_path(self, make_agent):
+        agent = make_agent("https://api.groq.com/openai/v1", "custom")
+        history = [
+            {"role": "user", "content": "clip \ud800 paste"},
+            {"role": "assistant", "content": "ok \ud83d", "tool_calls": [
+                {"id": "t1", "type": "function",
+                 "function": {"name": "f", "arguments": '{"k": "v\ud800"}'}},
+            ]},
+            {"role": "tool", "tool_call_id": "t1", "content": "r"},
+            {"role": "user", "content": [{"type": "text", "text": "part \ud800"}]},
+        ]
+        snapshot = copy.deepcopy(history)
+        out = _iteration_summary_api_messages(agent, history)
+        # Main path's third pass rewrites lone surrogates to U+FFFD; anything else diverges the
+        # prefix or makes the SDK's ensure_ascii=False utf-8 encode raise.
+        assert next(m for m in out if m["role"] == "user")["content"] == "clip \ufffd paste"
+        assistant = next(m for m in out if m["role"] == "assistant")
+        assert assistant["content"] == "ok \ufffd"
+        # Canonicalization runs first, so argument surrogates are already ASCII \udXXX escapes.
+        assert assistant["tool_calls"][0]["function"]["arguments"] == '{"k":"v\\ud800"}'
+        assert out[-1]["content"][0]["text"] == "part \ufffd"
+        json.dumps(out, ensure_ascii=False).encode("utf-8")
+        # The sanitizer is in-place and list-content parts are shared nested dicts:
+        # history must keep its stored bytes.
+        assert history == snapshot

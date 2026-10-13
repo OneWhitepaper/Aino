@@ -1,5 +1,5 @@
-import { TRANSLATIONS, type Translations } from '@/i18n'
-import { getRuntimeI18nLocale } from '@/i18n/runtime'
+import { type Translations } from '@/i18n'
+import { runtimeTranslations } from '@/i18n/runtime'
 
 import type { DesktopTheme } from './types'
 
@@ -23,5 +23,5 @@ export function localizedThemeCopy(
 
 /** Resolve a theme's display copy for non-React paths such as `/skin`. */
 export function localizedThemeCopyNow(theme: Pick<DesktopTheme, 'name' | 'label' | 'description'>): LocalizedThemeCopy {
-  return localizedThemeCopy(theme, TRANSLATIONS[getRuntimeI18nLocale()])
+  return localizedThemeCopy(theme, runtimeTranslations())
 }

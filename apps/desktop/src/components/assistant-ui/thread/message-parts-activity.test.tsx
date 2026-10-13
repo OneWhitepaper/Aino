@@ -158,7 +158,7 @@ describe('conversation activity presentation', () => {
       toolName: 'clarify',
       args: { question: 'Which license should I compare?' },
       argsText: '{}',
-      result: { question: 'Which license should I compare?', answer: 'MIT' }
+      result: { responses: [{ question: 'Which license should I compare?', answer: 'MIT' }] }
     }
 
     const output = {

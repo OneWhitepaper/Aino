@@ -56,6 +56,7 @@ import { KeybindSettings } from './keybind-settings'
 import { KEYS_VIEWS, KeysSettings, type KeysView } from './keys-settings'
 import { movedSettingsTabRedirect } from './moved-tabs'
 import { NotificationsSettings } from './notifications-settings'
+import { PAGE_SCOPED_PARAMS, PLUGINS_NAV_ICON, pluginSettingsNavChildren, PluginSettingsPane, usePluginSettingsRoute } from './plugin-settings'
 import { PROVIDER_VIEWS, ProvidersSettings, type ProviderView } from './providers-settings'
 import { SessionsSettings } from './sessions-settings'
 import { SystemResourcesSettings } from './system-resources-settings'
@@ -79,6 +80,7 @@ const SETTINGS_VIEWS: readonly SettingsViewId[] = [
   'billing',
   'sessions',
   'resources',
+  'plugins',
   'about'
 ]
 
@@ -132,11 +134,14 @@ export function SettingsView({
 
   const [activeView] = useRouteEnumParam('tab', SETTINGS_VIEWS, 'account' as SettingsViewId)
 
+  const plugins = usePluginSettingsRoute(activeView === 'plugins')
+
   const setActiveView = useCallback(
     (view: SettingsViewId) => {
       const next = new URLSearchParams(search)
 
       for (const key of [
+        ...PAGE_SCOPED_PARAMS,
         'page',
         'field',
         'setting',
@@ -384,6 +389,14 @@ export function SettingsView({
           onSelect: () => setActiveView('sessions')
         },
         {
+          active: activeView === 'plugins',
+          children: pluginSettingsNavChildren(plugins.entries, plugins.target, plugins.open),
+          icon: PLUGINS_NAV_ICON,
+          id: 'plugins',
+          label: t.settings.nav.plugins,
+          onSelect: () => plugins.open(null)
+        },
+        {
           active: activeView === 'about',
           gapBefore: true,
           icon: Info,
@@ -399,7 +412,7 @@ export function SettingsView({
           onSelect: () => setActiveView('resources')
         }
       ] as OverlayNavGroup[],
-    [activeView, keysView, providerView, t, setActiveView, openProviderView, openKeysView]
+    [activeView, keysView, providerView, plugins, t, setActiveView, openProviderView, openKeysView]
   )
 
   // Type-to-search: printable keystrokes on the Settings surface (outside any
@@ -494,7 +507,9 @@ export function SettingsView({
   )
 
   const activeSettingsContent =
-    activeView === 'account' ? (
+    activeView === 'plugins' ? (
+      <PluginSettingsPane entries={plugins.entries} missing={plugins.missing} onOpen={plugins.open} pending={plugins.pending} target={plugins.target} />
+    ) : activeView === 'account' ? (
       <AccountSettings />
     ) : activeView === 'config:appearance' ? (
       <AppearanceSettings />
