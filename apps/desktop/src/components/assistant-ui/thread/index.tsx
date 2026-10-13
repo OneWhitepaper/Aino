@@ -152,7 +152,10 @@ export const Thread = memo(function Thread({
         return <UserEditComposer cwd={editCwd} gateway={editGateway} sessionId={editSessionId} />
       },
       UserMessage: () => (
-        <UserMessage onCancel={() => callbacksRef.current.onCancel?.()} onRequestRestoreConfirm={hasRestoreToMessage ? requestRestoreConfirm : undefined} />
+        <UserMessage
+          onCancel={() => callbacksRef.current.onCancel?.()}
+          onRequestRestoreConfirm={hasRestoreToMessage ? requestRestoreConfirm : undefined}
+        />
       )
     }),
     [hasBranchInNewChat, hasDismissError, hasRestoreToMessage, requestRestoreConfirm]

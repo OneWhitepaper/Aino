@@ -409,18 +409,17 @@ export const zhHantAssistant = {
           count: count => `${count} 個指令`,
           past: '已執行',
           present: '正在執行'
-        }
-      ,
-"search":{count: (count: number) => count + " 次查詢", past: "已搜尋", present: "正在搜尋"},
+        },
+        search: { count: (count: number) => count + ' 次查詢', past: '已搜尋', present: '正在搜尋' },
 
-"read":{count: (count: number) => count + " 個網頁", past: "已讀取", present: "正在讀取"},
+        read: { count: (count: number) => count + ' 個網頁', past: '已讀取', present: '正在讀取' },
 
-"browse":{count: (count: number) => count + " 個網頁", past: "已開啟", present: "正在開啟"},
+        browse: { count: (count: number) => count + ' 個網頁', past: '已開啟', present: '正在開啟' },
 
-"interact":{count: (count: number) => count + " 次瀏覽器操作", past: "已執行", present: "正在執行"},
+        interact: { count: (count: number) => count + ' 次瀏覽器操作', past: '已執行', present: '正在執行' },
 
-"analyze":{count: (count: number) => count + " 張圖片", past: "已分析", present: "正在分析"},
-}
+        analyze: { count: (count: number) => count + ' 張圖片', past: '已分析', present: '正在分析' }
+      }
     }
   }
 } satisfies Pick<TranslationOverrides, 'assistant'>

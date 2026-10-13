@@ -169,8 +169,12 @@ export function QuickEntryApp() {
             }}
             value={state.target}
           >
-            <option style={QUICK_TARGET_OPTION_STYLE} value={QUICK_TARGET_CURRENT}>{t.desktop.quickEntry.currentChat}</option>
-            <option style={QUICK_TARGET_OPTION_STYLE} value={QUICK_TARGET_NEW}>{t.desktop.quickEntry.newSession}</option>
+            <option style={QUICK_TARGET_OPTION_STYLE} value={QUICK_TARGET_CURRENT}>
+              {t.desktop.quickEntry.currentChat}
+            </option>
+            <option style={QUICK_TARGET_OPTION_STYLE} value={QUICK_TARGET_NEW}>
+              {t.desktop.quickEntry.newSession}
+            </option>
             {state.sessions.map(session => (
               <option key={session.id} style={QUICK_TARGET_OPTION_STYLE} value={session.id}>
                 {session.title}

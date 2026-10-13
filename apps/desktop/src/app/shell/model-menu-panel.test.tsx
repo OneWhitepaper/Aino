@@ -201,7 +201,11 @@ function renderPanel(onSelectModel = vi.fn(), onClose = vi.fn(), Panel = ModelMe
       <DropdownMenu open>
         <DropdownMenuContent>
           <ModelMenuCloseContext.Provider value={onClose}>
-            <Panel onFollowDefaultModel={onClose} onSelectModel={onSelectModel} requestGateway={requestGateway as never} />
+            <Panel
+              onFollowDefaultModel={onClose}
+              onSelectModel={onSelectModel}
+              requestGateway={requestGateway as never}
+            />
           </ModelMenuCloseContext.Provider>
         </DropdownMenuContent>
       </DropdownMenu>

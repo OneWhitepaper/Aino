@@ -1733,7 +1733,6 @@ function applyTitleBarOverlay(win) {
   }
 }
 
-
 app.setName(APP_NAME)
 
 // No application menu until the first window exists. Electron would otherwise
@@ -3525,7 +3524,13 @@ function readWindowState() {
 const accountWindowController = createAccountWindowController()
 
 function persistWindowState() {
-  if (!mainWindow || mainWindow.isDestroyed() || mainWindow.isMinimized() || isAppSized(mainWindow) || accountWindowController.isLogin(mainWindow)) {
+  if (
+    !mainWindow ||
+    mainWindow.isDestroyed() ||
+    mainWindow.isMinimized() ||
+    isAppSized(mainWindow) ||
+    accountWindowController.isLogin(mainWindow)
+  ) {
     return
   }
 
@@ -5068,17 +5073,18 @@ const platformBindingController = createPlatformRuntimeBindingController({
   auth: platformAuth,
   origin: platformClient.origin,
   deviceId: () => desktopInstallationId,
-  resolveConnection: (connectionId, profile) => resolvePlatformBindingTarget({
-    profile,
-    readConfiguration: () => JSON.stringify([readDesktopConnectionsRegistry(), readDesktopConnectionConfig()]),
-    readIdentity: baseUrl => {
-      const identity = _loadNativeTokens(baseUrl)
+  resolveConnection: (connectionId, profile) =>
+    resolvePlatformBindingTarget({
+      profile,
+      readConfiguration: () => JSON.stringify([readDesktopConnectionsRegistry(), readDesktopConnectionConfig()]),
+      readIdentity: baseUrl => {
+        const identity = _loadNativeTokens(baseUrl)
 
-      return JSON.stringify(identity ? [identity.provider, identity.userId] : null)
-    },
-    resolve: () => connectionId ? ensureRegistryBackend(connectionId, profile) : ensureBackend(profile),
-    mintTicket: mintGatewayWsTicket
-  }),
+        return JSON.stringify(identity ? [identity.provider, identity.userId] : null)
+      },
+      resolve: () => (connectionId ? ensureRegistryBackend(connectionId, profile) : ensureBackend(profile)),
+      mintTicket: mintGatewayWsTicket
+    }),
   confirmRemote: async (window, host) =>
     (await dialog.showMessageBox(window as BrowserWindow, platformBindingPrompt(app.getLocale(), host))).response === 1
 })
@@ -5793,9 +5799,6 @@ function fetchPublicJson(url, options: any = {}) {
     { method: options.method || 'GET' }
   )
 }
-
-
-
 
 function requestOptionsWithHeaders(options: any = {}, headers = {}) {
   return {

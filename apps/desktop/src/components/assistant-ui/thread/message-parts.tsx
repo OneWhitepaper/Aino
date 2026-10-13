@@ -23,7 +23,12 @@ import { createToolAttentionReader, ResponseProcessParts } from '@/components/as
 import { TimelineTimestamp } from '@/components/assistant-ui/thread/timeline-timestamp'
 import { DelegateTool } from '@/components/assistant-ui/tool/delegate'
 import { ToolFallback, ToolGroupSlot } from '@/components/assistant-ui/tool/fallback'
-import { parseMaybeObject, toolCallFailed, type ToolPart, toolPreviewOutcome } from '@/components/assistant-ui/tool/fallback-model'
+import {
+  parseMaybeObject,
+  toolCallFailed,
+  type ToolPart,
+  toolPreviewOutcome
+} from '@/components/assistant-ui/tool/fallback-model'
 import { formatElapsed, useElapsedSeconds, useMeasuredDuration } from '@/components/chat/activity-timer'
 import { ActivityTimerText } from '@/components/chat/activity-timer-text'
 import { GeneratedImage } from '@/components/chat/generated-image-result'

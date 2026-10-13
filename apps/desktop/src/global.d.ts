@@ -12,7 +12,12 @@ import type { KeepAwakeMode } from '../electron/power-save'
 import type { UpdateHoldWire } from '../electron/update-hold-types'
 import type { UpdateRunReport } from '../electron/updater/update-metrics'
 import type { WindowSizeMode } from '../electron/window-size-types'
-import type { PlatformAccountBridge, PlatformBillingBridge, PlatformDevicesBridge, PlatformModelsBridge } from '../shared/platform-contract'
+import type {
+  PlatformAccountBridge,
+  PlatformBillingBridge,
+  PlatformDevicesBridge,
+  PlatformModelsBridge
+} from '../shared/platform-contract'
 
 import type { WakeIndicatorState } from './lib/wake-indicator'
 import type {

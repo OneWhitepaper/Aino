@@ -274,7 +274,9 @@ export function useAgentTerminal({ active, id, procId }: { active: boolean; id: 
       // Take focus on activation (parity with the user terminal) so the active
       // agent tab holds focus and ⌘W's isFocusWithin('[data-terminal]') routes
       // the close to this tab rather than to a preview.
-      if (term) {focusTerminalForActivation(term)}
+      if (term) {
+        focusTerminalForActivation(term)
+      }
     })
 
     return () => cancelAnimationFrame(frame)

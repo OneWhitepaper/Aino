@@ -6012,18 +6012,37 @@ export const en: Translations = {
           count: count => `${count} command${count === 1 ? '' : 's'}`,
           past: 'Ran',
           present: 'Running'
+        },
+        search: {
+          count: (count: number) => count + ' ' + (count === 1 ? 'query' : 'queries'),
+          past: 'Searched',
+          present: 'Searching'
+        },
+
+        read: {
+          count: (count: number) => count + ' ' + (count === 1 ? 'page' : 'pages'),
+          past: 'Read',
+          present: 'Reading'
+        },
+
+        browse: {
+          count: (count: number) => count + ' ' + (count === 1 ? 'page' : 'pages'),
+          past: 'Opened',
+          present: 'Opening'
+        },
+
+        interact: {
+          count: (count: number) => count + ' ' + (count === 1 ? 'browser action' : 'browser actions'),
+          past: 'Performed',
+          present: 'Performing'
+        },
+
+        analyze: {
+          count: (count: number) => count + ' ' + (count === 1 ? 'image' : 'images'),
+          past: 'Analyzed',
+          present: 'Analyzing'
         }
-      ,
-"search":{count: (count: number) => count + " " + (count === 1 ? "query" : "queries"), past: "Searched", present: "Searching"},
-
-"read":{count: (count: number) => count + " " + (count === 1 ? "page" : "pages"), past: "Read", present: "Reading"},
-
-"browse":{count: (count: number) => count + " " + (count === 1 ? "page" : "pages"), past: "Opened", present: "Opening"},
-
-"interact":{count: (count: number) => count + " " + (count === 1 ? "browser action" : "browser actions"), past: "Performed", present: "Performing"},
-
-"analyze":{count: (count: number) => count + " " + (count === 1 ? "image" : "images"), past: "Analyzed", present: "Analyzing"},
-}
+      }
     },
     markdown: {
       alerts: {

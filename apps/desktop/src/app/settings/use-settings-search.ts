@@ -116,7 +116,6 @@ export function useSettingsSearchCatalog(enabled: boolean) {
           sections: t.settings.sections
         })
 
-
   const credentialEntries = buildCredentialSearchEntries(
     envVarsFetching || envVarsError ? null : envVars,
     {

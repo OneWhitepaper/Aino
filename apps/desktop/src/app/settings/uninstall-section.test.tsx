@@ -99,13 +99,17 @@ it.each(['gui', 'lite', 'full'] as const)(
         <Surface />
       </I18nProvider>
     )
-    const zh: (typeof TRANSLATIONS)['zh']['settings']['uninstallSection'] = brandTranslationTree(TRANSLATIONS.zh.settings.uninstallSection)
+    const zh: (typeof TRANSLATIONS)['zh']['settings']['uninstallSection'] = brandTranslationTree(
+      TRANSLATIONS.zh.settings.uninstallSection
+    )
     await screen.findByText(zh.uninstallHermes)
     fireEvent.click(screen.getByRole('button', { name: new RegExp(zh.options[mode].title) }))
     expect(screen.getByText(zh.confirmBody(zh.options[mode].consequence))).toBeTruthy()
     expect(run).not.toHaveBeenCalled()
     await act((): Promise<void> => i18n.setLocale('ja'))
-    const ja: (typeof TRANSLATIONS)['ja']['settings']['uninstallSection'] = brandTranslationTree(TRANSLATIONS.ja.settings.uninstallSection)
+    const ja: (typeof TRANSLATIONS)['ja']['settings']['uninstallSection'] = brandTranslationTree(
+      TRANSLATIONS.ja.settings.uninstallSection
+    )
     expect(screen.getByText(ja.confirmBody(ja.options[mode].consequence))).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: ja.yesUninstall }))
     expect(run).toHaveBeenCalledWith(mode)

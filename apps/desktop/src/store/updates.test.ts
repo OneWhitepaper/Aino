@@ -269,7 +269,9 @@ describe('maybeNotifyUpdateAvailable', () => {
     )
 
     expect(notifySpy).toHaveBeenCalledTimes(1)
-    expect(notifySpy.mock.calls[0]?.[0]).toMatchObject({ message: runtimeTranslations().notifications.updateReadyMessageAppInstaller })
+    expect(notifySpy.mock.calls[0]?.[0]).toMatchObject({
+      message: runtimeTranslations().notifications.updateReadyMessageAppInstaller
+    })
   })
 
   // A native macOS (electron-updater) check has no commit to name either: its

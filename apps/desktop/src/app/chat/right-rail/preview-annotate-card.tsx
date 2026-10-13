@@ -101,12 +101,7 @@ export function PreviewAnnotateCard({
         spellCheck
         value={note}
       />
-      <Button
-        aria-label={saveLabel}
-        className="rounded-full"
-        size="icon-sm"
-        type="submit"
-      >
+      <Button aria-label={saveLabel} className="rounded-full" size="icon-sm" type="submit">
         <Codicon name="arrow-up" size="0.875rem" />
       </Button>
     </form>

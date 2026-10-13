@@ -249,7 +249,11 @@ export function ChatBar({
   )
 
   const at = useAtCompletions({ gateway: gateway ?? null, sessionId: sessionId ?? null, cwd: cwd ?? null })
-  const slash = useSlashCompletions({ gateway: gateway ?? null, sessionId: sessionId ?? null, profile: profile ?? null })
+  const slash = useSlashCompletions({
+    gateway: gateway ?? null,
+    sessionId: sessionId ?? null,
+    profile: profile ?? null
+  })
   const emoji = useEmojiCompletions()
 
   const { t } = useI18n()

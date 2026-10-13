@@ -4384,18 +4384,27 @@ export const deOverrides = {
       failed: 'Backend-Update fehlgeschlagen.',
       noReturn:
         'Das Backend kam nicht wieder online. Das Update wurde möglicherweise nicht abgeschlossen — prüfen Sie den Backend-Host.'
+    },
+    desktopBridgeUnavailable: 'Die Desktop-Verbindung ist nicht verfügbar.',
+
+    starting: 'Aktualisierung wird gestartet…',
+
+    backendApplied: 'Backend-Aktualisierung angewendet.',
+
+    backendNoReturn: 'Das Backend ist nicht wieder online.',
+
+    changelog: {
+      groups: {
+        new: 'Neu',
+        fixed: 'Behoben',
+        faster: 'Schneller',
+        improved: 'Verbessert',
+        other: 'Weitere Verbesserungen'
+      },
+      fallbackItem: 'Verbesserungen und Fehlerbehebungen',
+      fallbackLabel: 'In diesem Update'
     }
-  ,
-"desktopBridgeUnavailable":"Die Desktop-Verbindung ist nicht verfügbar.",
-
-"starting":"Aktualisierung wird gestartet…",
-
-"backendApplied":"Backend-Aktualisierung angewendet.",
-
-"backendNoReturn":"Das Backend ist nicht wieder online.",
-
-"changelog":{"groups":{"new":"Neu","fixed":"Behoben","faster":"Schneller","improved":"Verbessert","other":"Weitere Verbesserungen"},"fallbackItem":"Verbesserungen und Fehlerbehebungen","fallbackLabel":"In diesem Update"},
-},
+  },
   handoffTour: {
     localTitle: 'Dieser Rechner kann Modelle lokal ausführen',
     localText: (model: string) =>
@@ -5547,18 +5556,18 @@ export const deOverrides = {
           pending: 'Bearbeitet Datei',
           pendingAction: 'Bearbeitet'
         }
+      },
+      runSummary: {
+        search: { count: (count: number) => count + ' Suchanfragen', past: 'Gesucht', present: 'Suche' },
+        read: { count: (count: number) => count + ' Seiten', past: 'Gelesen', present: 'Lese' },
+
+        browse: { count: (count: number) => count + ' Seiten', past: 'Geöffnet', present: 'Öffne' },
+
+        interact: { count: (count: number) => count + ' Browseraktionen', past: 'Ausgeführt', present: 'Ausführung' },
+
+        analyze: { count: (count: number) => count + ' Bilder', past: 'Analysiert', present: 'Analyse' }
       }
-    ,
-"runSummary":{"search":{count: (count: number) => count + " Suchanfragen", past: "Gesucht", present: "Suche"},
-"read":{count: (count: number) => count + " Seiten", past: "Gelesen", present: "Lese"},
-
-"browse":{count: (count: number) => count + " Seiten", past: "Geöffnet", present: "Öffne"},
-
-"interact":{count: (count: number) => count + " Browseraktionen", past: "Ausgeführt", present: "Ausführung"},
-
-"analyze":{count: (count: number) => count + " Bilder", past: "Analysiert", present: "Analyse"},
-},
-}
+    }
   },
   prompts: {
     gatewayDisconnected: 'Das Hermes-Gateway ist nicht verbunden',

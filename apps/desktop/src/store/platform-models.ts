@@ -25,7 +25,12 @@ function currentOrigin(accountId: string, mode: string): string | null {
   return account?.mode === mode && owner?.user_id === accountId ? owner.platform_origin : null
 }
 
-export function platformDefaultKey(accountId: string, scope: PlatformDefaultScopeInput | undefined, mode: string, origin: string) {
+export function platformDefaultKey(
+  accountId: string,
+  scope: PlatformDefaultScopeInput | undefined,
+  mode: string,
+  origin: string
+) {
   const { key } = platformDefaultScope(scope)
   const accountKey = `${PLATFORM_DEFAULT_PREFIX}${encodeURIComponent(accountId)}`
 
@@ -38,14 +43,20 @@ export function readPlatformDefault(
   mode = 'production',
   origin = currentOrigin(accountId, mode)
 ): string | null {
-  if (!accountId || !origin) {return null}
+  if (!accountId || !origin) {
+    return null
+  }
   const value = readKey(platformDefaultKey(accountId, scope, mode, origin))
 
-  if (value !== null) {return value}
+  if (value !== null) {
+    return value
+  }
 
-  return mode === 'production' && origin === 'https://api.agentera.com.cn' &&
+  return mode === 'production' &&
+    origin === 'https://api.agentera.com.cn' &&
     platformDefaultScope(scope).key === '["legacy-local","default"]'
-    ? readKey(`${PLATFORM_DEFAULT_PREFIX}${encodeURIComponent(accountId)}`) : null
+    ? readKey(`${PLATFORM_DEFAULT_PREFIX}${encodeURIComponent(accountId)}`)
+    : null
 }
 
 export function writePlatformDefault(
@@ -59,7 +70,9 @@ export function writePlatformDefault(
     return
   }
 
-  if (!origin) {throw new PlatformSelectionError('platform_account_changed')}
+  if (!origin) {
+    throw new PlatformSelectionError('platform_account_changed')
+  }
   writeKey(platformDefaultKey(accountId, scope, mode, origin), modelId)
 }
 
@@ -111,7 +124,9 @@ export function requirePlatformSelection(
 export function createPlatformModelCatalog(
   account: ReadableAtom<PlatformAccountSnapshot | null>,
   list: () => Promise<PlatformModel[]>,
-  lookupOwner: (revision: number) => Promise<PlatformModelOwner> = async () => { throw new Error('owner_unavailable') }
+  lookupOwner: (revision: number) => Promise<PlatformModelOwner> = async () => {
+    throw new Error('owner_unavailable')
+  }
 ) {
   const sameAccount = samePlatformAccount
   const owner = createPlatformModelOwner(account, lookupOwner)
@@ -183,7 +198,11 @@ export function platformModelCatalog() {
     const actions = platformAccountActions(desktop.platformAccount)
     cached = {
       bridge: desktop.platformAccount,
-      catalog: createPlatformModelCatalog(actions.snapshot, () => desktop.platformModels.list(), revision => desktop.platformModels.owner(revision))
+      catalog: createPlatformModelCatalog(
+        actions.snapshot,
+        () => desktop.platformModels.list(),
+        revision => desktop.platformModels.owner(revision)
+      )
     }
   }
 

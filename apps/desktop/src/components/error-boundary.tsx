@@ -85,11 +85,17 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
 
     this.props.onError?.(error, info)
 
-    const assistantUiLookupRace = this.props.label === 'root' && (isTransientAssistantUiLookupError(error) || isTransientRendererCompositionError(error))
+    const assistantUiLookupRace =
+      this.props.label === 'root' &&
+      (isTransientAssistantUiLookupError(error) || isTransientRendererCompositionError(error))
     const portalTeardownRace = isTransientPortalUnmountError(error)
 
     if ((assistantUiLookupRace || portalTeardownRace) && this.takeAutoRecoveryAttempt()) {
-      const race = portalTeardownRace ? 'portal teardown' : isTransientRendererCompositionError(error) ? 'renderer composition' : 'assistant-ui lookup'
+      const race = portalTeardownRace
+        ? 'portal teardown'
+        : isTransientRendererCompositionError(error)
+          ? 'renderer composition'
+          : 'assistant-ui lookup'
       console.warn(`${tag} auto-recovering from ${race} render race`, error.message)
       this.autoRecoveryPending = true
       this.scheduleAutoRecovery()

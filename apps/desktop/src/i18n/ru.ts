@@ -4095,18 +4095,18 @@ export const ruOverrides = {
         web_extract: { done: 'Веб-страница прочитана', pending: 'Читаю веб-страницу', pendingAction: 'Читаю' },
         web_search: { done: 'Поиск в вебе выполнен', pending: 'Ищу в вебе', pendingAction: 'Ищу' },
         write_file: { done: 'Файл изменён', pending: 'Изменяю файл', pendingAction: 'Изменяю' }
+      },
+      runSummary: {
+        search: { count: (count: number) => count + ' запросов', past: 'Поиск выполнен', present: 'Поиск' },
+        read: { count: (count: number) => count + ' страниц', past: 'Прочитано', present: 'Чтение' },
+
+        browse: { count: (count: number) => count + ' страниц', past: 'Открыто', present: 'Открытие' },
+
+        interact: { count: (count: number) => count + ' действий браузера', past: 'Выполнено', present: 'Выполнение' },
+
+        analyze: { count: (count: number) => count + ' изображений', past: 'Проанализировано', present: 'Анализ' }
       }
-    ,
-"runSummary":{"search":{count: (count: number) => count + " запросов", past: "Поиск выполнен", present: "Поиск"},
-"read":{count: (count: number) => count + " страниц", past: "Прочитано", present: "Чтение"},
-
-"browse":{count: (count: number) => count + " страниц", past: "Открыто", present: "Открытие"},
-
-"interact":{count: (count: number) => count + " действий браузера", past: "Выполнено", present: "Выполнение"},
-
-"analyze":{count: (count: number) => count + " изображений", past: "Проанализировано", present: "Анализ"},
-},
-}
+    }
   },
   prompts: {
     gatewayDisconnected: 'Шлюз Hermes не подключён',

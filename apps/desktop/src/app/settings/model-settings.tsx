@@ -329,7 +329,9 @@ function ModelDefaultControls({
   const { t } = useI18n()
   const m = t.settings.model
 
-  if (!(reasoningSupported || fastSupported || ultrafastSupported)) {return null}
+  if (!(reasoningSupported || fastSupported || ultrafastSupported)) {
+    return null
+  }
 
   return (
     <div className="mt-3 flex flex-wrap items-center gap-x-6 gap-y-3">

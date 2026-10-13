@@ -11,10 +11,8 @@ const alertVariants = cva(
         default: 'border-(--ui-stroke-tertiary)',
         destructive:
           'border-destructive/35 bg-[color-mix(in_srgb,var(--dt-card)_96%,var(--dt-destructive)_4%)] [&>svg]:text-destructive',
-        warning:
-          'border-(--ui-stroke-tertiary) bg-(--ui-bg-quaternary) [&>svg]:text-(--ui-yellow)',
-        success:
-          'border-(--ui-stroke-tertiary) bg-(--ui-bg-quaternary) [&>svg]:text-(--ui-green)'
+        warning: 'border-(--ui-stroke-tertiary) bg-(--ui-bg-quaternary) [&>svg]:text-(--ui-yellow)',
+        success: 'border-(--ui-stroke-tertiary) bg-(--ui-bg-quaternary) [&>svg]:text-(--ui-green)'
       }
     },
     defaultVariants: {

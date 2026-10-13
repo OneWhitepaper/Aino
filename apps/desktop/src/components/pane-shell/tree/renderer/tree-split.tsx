@@ -862,11 +862,7 @@ function Sash({
         // width stays ~8px so the sash is no harder to hit. A tool sash is
         // offset by the terminal rail's stable h-9 strip and straddles its
         // lower edge, keeping the upper seam visually quiet.
-        horizontal
-          ? 'inset-y-0 left-0 w-[8px]'
-          : toolZone
-            ? 'inset-x-0 top-9 h-[8px]'
-            : 'inset-x-0 top-0 h-[8px]',
+        horizontal ? 'inset-y-0 left-0 w-[8px]' : toolZone ? 'inset-x-0 top-9 h-[8px]' : 'inset-x-0 top-0 h-[8px]',
         disabled ? 'pointer-events-none' : horizontal ? 'cursor-col-resize' : 'cursor-row-resize'
       )}
       // Lets shell-level CSS start the resting hairline below the unified top

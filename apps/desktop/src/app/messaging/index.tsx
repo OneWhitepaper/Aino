@@ -70,13 +70,24 @@ const stateLabel = (state: null | string | undefined, m: Translations['messaging
 // Filter order: what needs you first, then what's fine, then what's off.
 const STATUS_FILTER_ORDER: StatusTone[] = ['bad', 'warn', 'good', 'muted']
 
-function platformMatches(platform: MessagingPlatformInfo, tone: 'all' | StatusTone, query: string, locale: string): boolean {
+function platformMatches(
+  platform: MessagingPlatformInfo,
+  tone: 'all' | StatusTone,
+  query: string,
+  locale: string
+): boolean {
   const q = normalize(query)
 
   return (
     (tone === 'all' || platformStatusTone(platform) === tone) &&
     (!q ||
-      [platform.id, platform.name, platform.description, localizedMessagingPlatformDescription(locale, platform.id, platform.description), platform.state]
+      [
+        platform.id,
+        platform.name,
+        platform.description,
+        localizedMessagingPlatformDescription(locale, platform.id, platform.description),
+        platform.state
+      ]
         .filter(Boolean)
         .some(value => String(value).toLowerCase().includes(q)))
   )

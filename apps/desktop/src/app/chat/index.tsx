@@ -484,7 +484,9 @@ function ComposerHeartField() {
   const petActive = useStore($petActive)
   const petOverlayActive = useStore($petOverlayActive)
 
-  if (petActive || petOverlayActive) {return null}
+  if (petActive || petOverlayActive) {
+    return null
+  }
 
   return (
     <HeartField

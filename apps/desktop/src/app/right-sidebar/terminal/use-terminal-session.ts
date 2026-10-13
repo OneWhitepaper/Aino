@@ -1178,7 +1178,9 @@ export function useTerminalSession({
       fitRef.current?.()
       redrawAllTerminals()
 
-      if (term) {focusTerminalForActivation(term)}
+      if (term) {
+        focusTerminalForActivation(term)
+      }
     })
 
     return () => cancelAnimationFrame(frame)

@@ -417,7 +417,9 @@ function CommentComposer({
       </div>
       {running && onRequeue && (
         <div className="flex items-center justify-between gap-2">
-          <span className="text-[length:var(--aino-text-caption)] leading-tight text-(--ui-text-quaternary)">{k.deliveredLive}</span>
+          <span className="text-[length:var(--aino-text-caption)] leading-tight text-(--ui-text-quaternary)">
+            {k.deliveredLive}
+          </span>
           <Button className="shrink-0" disabled={empty} onClick={requeue} size="xs" variant="outline">
             <Codicon name="debug-restart" size="0.7rem" />
             {k.requeueWithNote}
@@ -452,11 +454,7 @@ function DescriptionSection({ body, onSave }: { body: null | string | undefined;
     >
       {editing ? (
         <div className="flex flex-col gap-1.5">
-          <Textarea
-            className="min-h-24"
-            onChange={event => setDraft(event.target.value)}
-            value={draft}
-          />
+          <Textarea className="min-h-24" onChange={event => setDraft(event.target.value)} value={draft} />
           <Button
             className="self-end"
             onClick={() => {
@@ -565,7 +563,10 @@ function AttachmentsSection({
       {attachments.length > 0 ? (
         <ul className="flex flex-col gap-1">
           {attachments.map(attachment => (
-            <li className="flex items-center gap-1.5 text-[length:var(--aino-text-caption)] text-(--ui-text-tertiary)" key={attachment.id}>
+            <li
+              className="flex items-center gap-1.5 text-[length:var(--aino-text-caption)] text-(--ui-text-tertiary)"
+              key={attachment.id}
+            >
               <AttachmentDownload attachment={attachment} onDownload={onDownload} />
             </li>
           ))}
@@ -628,7 +629,9 @@ function EstimateSection({ id }: { id: string }) {
             </Tip>
           </div>
           {result.rationale && (
-            <p className="text-[length:var(--aino-text-caption)] leading-relaxed text-(--ui-text-quaternary)">{result.rationale}</p>
+            <p className="text-[length:var(--aino-text-caption)] leading-relaxed text-(--ui-text-quaternary)">
+              {result.rationale}
+            </p>
           )}
         </div>
       ) : (
@@ -638,7 +641,9 @@ function EstimateSection({ id }: { id: string }) {
             {est.isPending ? k.estimating : k.estimateEffort}
           </Button>
           <Tip label={k.estimateTipLong}>
-            <span className="text-[length:var(--aino-text-caption)] text-(--ui-text-quaternary)">{k.makesModelCall}</span>
+            <span className="text-[length:var(--aino-text-caption)] text-(--ui-text-quaternary)">
+              {k.makesModelCall}
+            </span>
           </Tip>
         </div>
       )}

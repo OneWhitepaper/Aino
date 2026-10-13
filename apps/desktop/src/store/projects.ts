@@ -1284,7 +1284,9 @@ export async function createProject(input: CreateProjectInput, ownerProfile?: st
   // that reconcile counts/repos.
   const created = res.project
 
-  if (created) {publishCreatedProject(created, input)}
+  if (created) {
+    publishCreatedProject(created, input)
+  }
 
   reconcileProjects()
 

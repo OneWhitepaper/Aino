@@ -7,7 +7,10 @@ import { Loader } from './loader'
 
 describe('Loader', () => {
   beforeEach(() => {
-    vi.stubGlobal('requestAnimationFrame', vi.fn(() => 0))
+    vi.stubGlobal(
+      'requestAnimationFrame',
+      vi.fn(() => 0)
+    )
     vi.stubGlobal('cancelAnimationFrame', vi.fn())
   })
 
