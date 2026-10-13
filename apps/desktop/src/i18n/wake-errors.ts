@@ -1,5 +1,4 @@
-import { TRANSLATIONS } from './catalog'
-import { getRuntimeI18nLocale } from './runtime'
+import { runtimeTranslations } from './runtime'
 import type { Translations } from './types'
 
 /** Fixed client-side wake capture errors owned by the desktop renderer. */
@@ -23,5 +22,5 @@ export function localizedWakeCaptureError(translations: Translations, error: unk
 
 /** Runtime-locale convenience for non-React stores (the wake-word atom). */
 export function localizedWakeCaptureErrorNow(error: unknown): string {
-  return localizedWakeCaptureError(TRANSLATIONS[getRuntimeI18nLocale()], error)
+  return localizedWakeCaptureError(runtimeTranslations(), error)
 }

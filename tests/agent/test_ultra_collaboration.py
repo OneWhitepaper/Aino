@@ -27,7 +27,7 @@ MAX = {"enabled": True, "effort": "max"}
 class _Provider(BaseHTTPRequestHandler):
     requests: list = []
 
-    def do_POST(self):  # noqa: N802 (http.server API)
+    def do_POST(self):
         body = json.loads(self.rfile.read(int(self.headers.get("Content-Length", 0))).decode())
         type(self).requests.append(body)
         if body.get("stream") is True:
@@ -209,7 +209,7 @@ def test_adopted_unanswered_turn_retried_at_ultra_announces_the_mode(provider_ur
         assert _user_contents(_chat_requests()[-1]) == ["resume task\n\n" + ULTRA_ON_NOTE]
 
         restored = db.get_messages_as_conversation("retried-max")
-        user_row = [m for m in restored if m["role"] == "user"][0]
+        user_row = next(m for m in restored if m["role"] == "user")
         assert user_row["display_metadata"][ULTRA_MODE_METADATA_KEY] is True
         assert user_row["api_content"] == "resume task\n\n" + ULTRA_ON_NOTE
 

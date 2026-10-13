@@ -47,3 +47,20 @@ describe.each(cases)('per-profile $name', ({ pref, fallback, a, b, junk }) => {
     expect(pref.resolve('work')).toBe(fallback)
   })
 })
+describe('named-profile appearance stays isolated', () => {
+  beforeEach(() => window.localStorage.clear())
+
+  it('keeps named profile choices from changing another profile fallback', () => {
+    modePref.assign('forge', 'dark')
+    modePref.assign('atlas', 'light')
+    expect(modePref.resolve('forge')).toBe('dark')
+    expect(modePref.resolve('atlas')).toBe('light')
+    expect(modePref.resolve('never-themed')).toBe('system')
+  })
+
+  it('does not promote old named-profile settings into a global preference', () => {
+    window.localStorage.setItem('hermes-desktop-profile-modes-v1', JSON.stringify({ forge: 'dark' }))
+    expect(modePref.resolve('forge')).toBe('dark')
+    expect(modePref.resolve('atlas')).toBe('system')
+  })
+})

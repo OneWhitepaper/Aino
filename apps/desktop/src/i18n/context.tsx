@@ -1,4 +1,5 @@
 import { applyDocumentLocale, isRecord } from '@hermes/shared/i18n'
+import { useStore } from '@nanostores/react'
 import { createContext, type ReactNode, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 
 import { getHermesConfigRecord, type HermesConfigRecord, retainConfigReadOrigin, saveHermesConfig } from '@/hermes'
@@ -7,15 +8,15 @@ import { brandTranslationTree } from '@/lib/brand'
 import { TRANSLATIONS } from './catalog'
 import {
   DEFAULT_LOCALE,
+  isRtlLocale,
   isSupportedLocaleValue,
   localeConfigValue,
   normalizeLocale,
   resolveInitialLocale
 } from './languages'
-import { setRuntimeI18nLocale } from './runtime'
+import { $appLocaleVersion, normalizeLocaleId, resolveTranslations } from './registry'
+import { $requestedLocale, setRuntimeI18nLocale } from './runtime'
 import type { Locale, Translations } from './types'
-
-export { LOCALE_META } from './languages'
 
 export interface I18nConfigClient {
   getConfig: () => Promise<HermesConfigRecord>
@@ -114,12 +115,19 @@ export function I18nProvider({
   // An explicit pick beats a late read in its own scope, not in other profiles.
   const userLocaleRef = useRef(false)
   const scopeGenerationRef = useRef(0)
+  // Registered languages (plugin packs, backend `.desktop.yaml`) change the
+  // catalog without a locale change; the version keys re-resolution.
+  const registryVersion = useStore($appLocaleVersion)
+  // The language THIS scope's config asked for (what $requestedLocale was last
+  // set to from here). A ref, not the atom: another provider's or an earlier
+  // scope's ask must never be promoted into this one.
+  const requestedRef = useRef<null | string>(null)
 
   // eslint-disable-next-line no-restricted-syntax -- legitimate non-atom ref write (see eslint rule comment)
   useEffect(() => {
     localeRef.current = locale
     setRuntimeI18nLocale(locale)
-    applyDocumentLocale(locale)
+    applyDocumentLocale(locale, isRtlLocale(locale))
 
     // Electron menus and native dialogs sit outside React's tree. Keep the
     // main-process mirror best-effort so an older shell (or a non-Electron
@@ -141,12 +149,31 @@ export function I18nProvider({
           // on or fail because an older Electron main process lacks the channel.
         })
     }
-  }, [configClient, configResolved, locale])
+  }, [configClient, configResolved, locale, registryVersion])
+
+  // A saved `display.language` the app could not render at read time (`pl`
+  // before its pack arrived) is parked in $requestedLocale; the moment a
+  // registration makes it renderable, promote it — unless the user has since
+  // picked something else in this scope.
+  useEffect(() => {
+    const requested = requestedRef.current
+
+    if (!requested || userLocaleRef.current || !isSupportedLocaleValue(requested)) {
+      return
+    }
+
+    const next = normalizeLocale(requested)
+
+    if (next !== localeRef.current) {
+      setLocaleState(next)
+    }
+  }, [registryVersion])
 
   // eslint-disable-next-line no-restricted-syntax -- scope-local request generation and user intent, not an atom mirror
   useEffect(() => {
     scopeGenerationRef.current += 1
     userLocaleRef.current = false
+    requestedRef.current = null
     setSaveError(null)
     setIsSavingLocale(false)
 
@@ -180,6 +207,11 @@ export function I18nProvider({
           }
 
           const saved = getConfigDisplayLanguage(config)
+
+          // Publish the raw ask even when it names a language only a pack
+          // can render; the backend-pack sync fetches that pack by this id.
+          requestedRef.current = typeof saved === 'string' && saved.trim() ? normalizeLocaleId(saved) : null
+          $requestedLocale.set(requestedRef.current)
 
           // A saved choice needs no machine probe and always takes precedence.
           if (isSupportedLocaleValue(saved)) {
@@ -239,6 +271,8 @@ export function I18nProvider({
       userLocaleRef.current = true
       setSaveError(null)
       setLocaleState(next)
+      requestedRef.current = next
+      $requestedLocale.set(next)
 
       if (!configClient) {
         return
@@ -251,7 +285,7 @@ export function I18nProvider({
         const result = await configClient.saveConfig(withConfigDisplayLanguage(latestConfig, next))
 
         if (!result.ok) {
-          throw new Error(TRANSLATIONS[next].language.saveError)
+          throw new Error(resolveTranslations(next).language.saveError)
         }
       } catch (error) {
         const nextError = toError(error)
@@ -281,14 +315,12 @@ export function I18nProvider({
       locale,
       saveError,
       setLocale,
-      // Locale files intentionally track upstream Hermes so future syncs stay
-      // low-conflict. Apply the Aino product overlay at the React boundary so
-      // every user-facing string (including newly added upstream keys) uses
-      // the configured product identity while compatibility snippets inside
-      // code spans remain untouched.
-      t: brandTranslationTree(TRANSLATIONS[locale])
+      t: brandTranslationTree(resolveTranslations(locale))
     }),
-    [configLoadError, isLoadingConfig, isSavingLocale, locale, saveError, setLocale]
+    // `registryVersion` is the registry's change token: a pack landing after
+    // first paint re-resolves `t` without a locale change.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [configLoadError, isLoadingConfig, isSavingLocale, locale, registryVersion, saveError, setLocale]
   )
 
   return <I18nContext.Provider value={value}>{children}</I18nContext.Provider>

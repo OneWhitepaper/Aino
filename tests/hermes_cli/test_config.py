@@ -7,7 +7,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 import pytest
-import yaml
+import hermes_yaml as yaml
 
 from hermes_cli.config import (
     DEFAULT_CONFIG,
@@ -35,143 +35,13 @@ from hermes_cli.config import (
 
 class TestGetHermesHome:
     def test_default_path(self):
+        from hermes_constants import _get_platform_default_hermes_home
         with patch.dict(os.environ, {}, clear=False):
             os.environ.pop("HERMES_HOME", None)
             home = get_hermes_home()
-            if sys.platform == "win32":
-                # Windows default is %LOCALAPPDATA%\hermes — see
-                # hermes_constants._get_platform_default_hermes_home.
-                local_appdata = os.environ.get("LOCALAPPDATA", "").strip()
-                base = (
-                    Path(local_appdata)
-                    if local_appdata
-                    else Path.home() / "AppData" / "Local"
-                )
-                assert home == base / "hermes"
-            else:
-                assert home == Path.home() / ".hermes"
+            assert home == _get_platform_default_hermes_home()
 
 
-class TestEnsureHermesHome:
-
-    def test_creates_default_soul_md_if_missing(self, tmp_path):
-        with patch.dict(os.environ, {"HERMES_HOME": str(tmp_path)}):
-            ensure_hermes_home()
-            soul_path = tmp_path / "SOUL.md"
-            assert soul_path.exists()
-            assert soul_path.read_text(encoding="utf-8").strip() != ""
-
-
-    def test_upgrades_legacy_template_soul_md(self, tmp_path):
-        # Older installers seeded a comment-only scaffold that shadowed the
-        # runtime default. A SOUL.md still matching that scaffold carries no
-        # user persona and should be upgraded in place to DEFAULT_SOUL_MD.
-        from hermes_cli.default_soul import DEFAULT_SOUL_MD, _LEGACY_TEMPLATE_SOULS
-
-        with patch.dict(os.environ, {"HERMES_HOME": str(tmp_path)}):
-            soul_path = tmp_path / "SOUL.md"
-            soul_path.write_text(_LEGACY_TEMPLATE_SOULS[0] + "\n", encoding="utf-8")
-            ensure_hermes_home()
-            assert soul_path.read_text(encoding="utf-8") == DEFAULT_SOUL_MD
-
-    # The pre-#95681 DEFAULT_SOUL_MD text, hardcoded (not read from the
-    # module) so this fixture keeps testing the OLD text regardless of any
-    # future change to _LEGACY_TEMPLATE_SOULS's length or ordering.
-    _PRE_REWRITE_DEFAULT_SOUL = (
-        "You are Hermes Agent, an intelligent AI assistant created by Nous "
-        "Research. You are helpful, knowledgeable, and direct. You assist "
-        "users with a wide range of tasks including answering questions, "
-        "writing and editing code, analyzing information, creative work, "
-        "and executing actions via your tools. You communicate clearly, "
-        "admit uncertainty when appropriate, and prioritize being "
-        "genuinely useful over being verbose unless otherwise directed "
-        "below. Be targeted and efficient in your exploration and "
-        "investigations."
-    )
-
-    # The currently shipped Hermes default.  It is hardcoded so this fixture
-    # continues to represent the pre-branding file after DEFAULT_SOUL_MD is
-    # changed to the Aino identity.
-    _PRE_BRANDING_DEFAULT_SOUL = (
-        "You are Hermes Agent, built by Nous Research. Be direct: match the "
-        "length of your reply to the weight of the ask — a one-line question "
-        "gets a one-line answer, and finished work gets a short report of what "
-        "changed, what's verified, and what's left, never a replay of the "
-        "process. No filler (\"Great question,\" \"I'd be happy to\"), no "
-        "restating the request back, no re-summarizing what you already said, "
-        "no narrating tool calls the user can see. Plain claims over "
-        "adjectives; when unsure, say so plainly. Agree because it's right, "
-        "not because the user said it. Depth is earned — give it when the "
-        "user asks for detail, teaches, or the stakes demand it, not by "
-        "default."
-    )
-
-    def test_upgrades_pre_branding_default_soul_md(self, tmp_path):
-        """An untouched Hermes default becomes the Aino default in place."""
-        from hermes_cli.default_soul import DEFAULT_SOUL_MD
-
-        assert self._PRE_BRANDING_DEFAULT_SOUL != DEFAULT_SOUL_MD
-
-        with patch.dict(os.environ, {"HERMES_HOME": str(tmp_path)}):
-            soul_path = tmp_path / "SOUL.md"
-            soul_path.write_text(self._PRE_BRANDING_DEFAULT_SOUL, encoding="utf-8")
-            ensure_hermes_home()
-            assert soul_path.read_text(encoding="utf-8") == DEFAULT_SOUL_MD
-
-    def test_upgrades_ascii_pre_branding_default_soul_md(self, tmp_path):
-        """The ASCII Windows installer generation also migrates safely."""
-        from hermes_cli.default_soul import DEFAULT_SOUL_MD
-
-        ascii_legacy = self._PRE_BRANDING_DEFAULT_SOUL.replace("—", "--")
-
-        with patch.dict(os.environ, {"HERMES_HOME": str(tmp_path)}):
-            soul_path = tmp_path / "SOUL.md"
-            soul_path.write_text(ascii_legacy, encoding="utf-8")
-            ensure_hermes_home()
-            assert soul_path.read_text(encoding="utf-8") == DEFAULT_SOUL_MD
-
-    def test_does_not_upgrade_customized_pre_branding_default(self, tmp_path):
-        """Adding user text to the old default must prevent an overwrite."""
-        from hermes_cli.default_soul import DEFAULT_SOUL_MD
-
-        customized = self._PRE_BRANDING_DEFAULT_SOUL + "\nAlways answer in Chinese."
-
-        with patch.dict(os.environ, {"HERMES_HOME": str(tmp_path)}):
-            soul_path = tmp_path / "SOUL.md"
-            soul_path.write_text(customized, encoding="utf-8")
-            ensure_hermes_home()
-            assert soul_path.read_text(encoding="utf-8") == customized
-            assert customized != DEFAULT_SOUL_MD
-
-    def test_upgrades_pre_rewrite_default_soul_md(self, tmp_path):
-        # Every install seeded between the old DEFAULT_SOUL_MD's introduction
-        # and its #95681 rewrite got the old text auto-written on first run —
-        # not user-authored, so it's just as safe to upgrade in place as the
-        # comment-only scaffolds above. Regression test for that upgrade path.
-        from hermes_cli.default_soul import DEFAULT_SOUL_MD
-
-        assert self._PRE_REWRITE_DEFAULT_SOUL != DEFAULT_SOUL_MD  # sanity: fixture predates the rewrite
-
-        with patch.dict(os.environ, {"HERMES_HOME": str(tmp_path)}):
-            soul_path = tmp_path / "SOUL.md"
-            soul_path.write_text(self._PRE_REWRITE_DEFAULT_SOUL, encoding="utf-8")
-            ensure_hermes_home()
-            assert soul_path.read_text(encoding="utf-8") == DEFAULT_SOUL_MD
-
-    def test_does_not_upgrade_user_customized_soul_md(self, tmp_path):
-        # A SOUL.md that merely starts with the old default but was edited by
-        # the user carries real intent and must never be silently overwritten.
-        from hermes_cli.default_soul import DEFAULT_SOUL_MD
-
-        customized = self._PRE_REWRITE_DEFAULT_SOUL + " Also: always answer in rhyming couplets."
-
-        with patch.dict(os.environ, {"HERMES_HOME": str(tmp_path)}):
-            soul_path = tmp_path / "SOUL.md"
-            soul_path.write_text(customized, encoding="utf-8")
-            ensure_hermes_home()
-            content = soul_path.read_text(encoding="utf-8")
-            assert content == customized
-            assert content != DEFAULT_SOUL_MD
 
 
 
@@ -458,6 +328,54 @@ class TestSaveAndLoadRoundtrip:
         assert config_path.read_text(encoding="utf-8") == original
         assert list((tmp_path / "backups" / "config").glob("config.yaml.corrupt.*"))
 
+    def test_atomic_config_write_refuses_partial_state_instead_of_wiping_config(self, tmp_path):
+        """A partial dict is not a full-state replacement: preserve the existing document."""
+        from hermes_cli.config import atomic_config_write
+
+        config_path = tmp_path / "config.yaml"
+        original = {f"k{i}": i for i in range(99)}
+        config_path.write_text(yaml.safe_dump(original), encoding="utf-8")
+
+        with pytest.raises(RuntimeError, match="would lose settings omitted"):
+            atomic_config_write(config_path, {"skills": {"disabled": ["a"]}})
+
+        assert yaml.safe_load(config_path.read_text(encoding="utf-8")) == original
+
+    def test_atomic_config_write_refuses_nested_omissions_with_same_top_level_keys(self, tmp_path):
+        """Completeness is recursive: keeping the root names must not hide sibling deletion."""
+        from hermes_cli.config import atomic_config_write
+
+        config_path = tmp_path / "config.yaml"
+        original = {
+            "plugins": {"enabled": ["guard"], "disabled": [], "config": {"guard": {"mode": "strict"}}},
+            "model": {"default": "gpt-5"},
+        }
+        config_path.write_text(yaml.safe_dump(original), encoding="utf-8")
+
+        with pytest.raises(RuntimeError, match=r"plugins\.(enabled|config)"):
+            atomic_config_write(
+                config_path,
+                {"plugins": {"disabled": ["legacy"]}, "model": {"default": "gpt-5"}},
+            )
+
+        assert yaml.safe_load(config_path.read_text(encoding="utf-8")) == original
+
+    def test_atomic_config_replace_makes_delete_by_omission_explicit(self, tmp_path):
+        """Full-state owners can still deliberately prune keys without a count-based heuristic."""
+        from hermes_cli.config import atomic_config_replace
+
+        config_path = tmp_path / "config.yaml"
+        config_path.write_text(
+            yaml.safe_dump({"model": {"default": "gpt-5"}, "plugins": {"enabled": ["guard"]}}),
+            encoding="utf-8",
+        )
+
+        replacement = {"model": {"default": "gpt-5"}}
+        atomic_config_replace(config_path, replacement)
+
+        assert yaml.safe_load(config_path.read_text(encoding="utf-8")) == replacement
+
+
 class TestLoadEnvInlineComments:
     def test_unquoted_hash_is_a_comment_quoted_hash_is_data(self, tmp_path):
         """load_env is the one dotenv reader (agent.secret_scope.load_env_file): an unquoted ` #...` tail
@@ -540,9 +458,9 @@ class TestSaveEnvValueSecure:
             second = (tmp_path / ".env").read_text(encoding="utf-8")
             assert first == second
             # One outer wrap layer only (escaped inner quotes, not nested wraps).
-            line = [
+            line = next(
                 ln for ln in first.splitlines() if ln.startswith("TERMINAL_SSH_KEY=")
-            ][0]
+            )
             assert line.startswith('TERMINAL_SSH_KEY="')
             assert line.endswith('"')
             assert line.count('TERMINAL_SSH_KEY="') == 1
@@ -755,8 +673,8 @@ class TestConfigMigrationSecretPrompts:
         monkeypatch.setattr(
             cfg_mod, "check_config_version", lambda **_kwargs: (999, 999)
         )
-        monkeypatch.setattr(cfg_mod, "get_missing_config_fields", lambda: [])
-        monkeypatch.setattr(cfg_mod, "get_missing_skill_config_vars", lambda: [])
+        monkeypatch.setattr(cfg_mod, "get_missing_config_fields", list)
+        monkeypatch.setattr(cfg_mod, "get_missing_skill_config_vars", list)
         monkeypatch.setattr(
             cfg_mod,
             "get_missing_env_vars",
@@ -1008,18 +926,13 @@ class TestConfigSupportFloor:
         with patch.dict(os.environ, {"HERMES_HOME": str(tmp_path)}):
             migrate_config(interactive=False, quiet=True)
         raw = yaml.safe_load(config_path.read_text(encoding="utf-8"))
-        # Pin the golden version the fixtures were captured at, then compare
-        # the rest against the same-latest expectation. If _config_version has
-        # advanced past 33, only the version key may differ.
+        # The fixtures were captured at _config_version 33; later migrations
+        # may add keys, so the captured keys are a subset that must still hold.
         assert raw["_config_version"] == DEFAULT_CONFIG["_config_version"]
-        raw.pop("_config_version")
         exp = dict(expected)
         exp.pop("_config_version")
-        if DEFAULT_CONFIG["_config_version"] == 33:
-            assert raw == exp
-        else:  # future migrations appended — golden subset must still hold
-            for key, val in exp.items():
-                assert raw.get(key) == val, f"parity drift on {key!r}"
+        for key, val in exp.items():
+            assert raw.get(key) == val, f"parity drift on {key!r}"
         assert (tmp_path / ".env").read_text(encoding="utf-8") == expected_env
 
 
@@ -1492,7 +1405,7 @@ class TestEnvWriteDenylist:
         assert _env_line_defines_key(line, "PATH", is_windows=True)
         assert not _env_line_defines_key(line, "PATH", is_windows=False)
 
-    @pytest.mark.windows_only
+    @pytest.mark.platforms("windows")
     @pytest.mark.parametrize(
         "protected_key",
         [

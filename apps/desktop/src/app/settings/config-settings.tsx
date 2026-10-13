@@ -6,6 +6,7 @@ import { useSearchParams } from 'react-router'
 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { SegmentedControl } from '@/components/ui/segmented-control'
 import { getElevenLabsVoices, getHermesConfigSchema, saveHermesConfig } from '@/hermes'
 import { useI18n } from '@/i18n'
 import { triggerHaptic } from '@/lib/haptics'
@@ -21,9 +22,10 @@ import {
   refreshDataUrlReadMaxMb,
   setDataUrlReadMaxMb
 } from '@/store/data-url-read-max'
+import { recordSettingsSaved } from '@/store/desktop-metrics'
 import { $disableF12, setDisableF12 } from '@/store/disable-f12'
 import { $alwaysExternalLinks, setAlwaysExternalLinks } from '@/store/external-links'
-import { $keepAwake, setKeepAwake } from '@/store/keep-awake'
+import { $keepAwakeMode, type KeepAwakeMode, setKeepAwakeMode } from '@/store/keep-awake'
 import { notify, notifyError } from '@/store/notifications'
 import { normalizeProfileKey } from '@/store/profile'
 import { repoDiscoveryPolicyFromConfig, repoDiscoveryPolicySignature, scanAndRecordRepos } from '@/store/projects'
@@ -36,6 +38,7 @@ import { PanelEmpty } from '../overlays/panel'
 
 import { ConfigField } from './config-field'
 import { CONFIG_SUBPAGES, configSubpageForField } from './config-subpages'
+import { DeveloperSettings } from './developer-settings'
 import {
   clearsEnabledToolsets,
   diffConfig,
@@ -62,6 +65,7 @@ import {
 import { SettingsProfileScope } from './profile-scope'
 import { QuickEntrySettings } from './quick-entry-settings'
 import { SETTING_IDS, settingElementId } from './settings-manifest'
+import { SharedMetricsSettings } from './shared-metrics-settings'
 import { settingsSubpageIcon } from './subpages'
 import { useSettingDeepLink } from './use-setting-deep-link'
 
@@ -100,6 +104,75 @@ interface ConfigSettingsProps {
   importInputRef: React.RefObject<HTMLInputElement | null>
 }
 
+interface ConfigSettingsLoadStateProps {
+  configAvailable: boolean
+  schemaAvailable: boolean
+  configLoadFailed: boolean
+  schemaFailed: boolean
+  refetchConfig: () => unknown
+  refetchSchema: () => unknown
+  showModelSettings: boolean
+  showSharedMetrics: boolean
+  showDesktopSettings: boolean
+  subpage?: string
+}
+
+function ConfigSettingsLoadState({
+  configAvailable,
+  schemaAvailable,
+  configLoadFailed,
+  schemaFailed,
+  refetchConfig,
+  refetchSchema,
+  showModelSettings,
+  showSharedMetrics,
+  showDesktopSettings,
+  subpage
+}: ConfigSettingsLoadStateProps) {
+  const { t } = useI18n()
+  const c = t.settings.config
+
+  // A failed config/schema fetch must surface a retry, not spin forever.
+  if ((configLoadFailed && !configAvailable) || (schemaFailed && !schemaAvailable)) {
+    return (
+      <div className="flex h-full min-h-0 flex-1">
+        <PanelEmpty
+          action={
+            <Button
+              onClick={() => {
+                void refetchConfig()
+                void refetchSchema()
+              }}
+              size="sm"
+            >
+              {t.skills.refresh}
+            </Button>
+          }
+          icon="error"
+          title={c.failedLoad}
+        />
+      </div>
+    )
+  }
+
+  // Every section keeps its shape via a skeleton; model gets its bespoke one
+  // (its catalog fetch is the slow part), the rest the shared field rhythm.
+  if (showModelSettings) {
+    return (
+      <SettingsContent>
+        <SettingsProfileScope className="mb-5" />
+        {showSharedMetrics && <SharedMetricsSettings />}
+        {showDesktopSettings && <DeveloperSettings />}
+        <div className="mb-6">
+          <ModelSettingsSkeleton subpage={subpage} />
+        </div>
+      </SettingsContent>
+    )
+  }
+
+  return <SettingsSkeleton sections={[{ rows: 6 }]} />
+}
+
 function ConfigSettingsInner({
   activeSectionId,
   subpage,
@@ -110,7 +183,14 @@ function ConfigSettingsInner({
 }: ConfigSettingsProps & { scopeProfile: string | undefined }) {
   const { t } = useI18n()
   const c = t.settings.config
-  const keepAwake = useStore($keepAwake)
+  const keepAwakeMode = useStore($keepAwakeMode)
+
+  const keepAwakeOptions = [
+    { id: 'off', label: c.keepAwakeOff },
+    { id: 'while-working', label: c.keepAwakeWhileWorking },
+    { id: 'always', label: c.keepAwakeAlways }
+  ] as const satisfies readonly { id: KeepAwakeMode; label: string }[]
+
   const disableF12 = useStore($disableF12)
   const alwaysExternalLinks = useStore($alwaysExternalLinks)
   // The editable draft is local (debounced autosave watches it), but it's seeded
@@ -241,6 +321,9 @@ function ConfigSettingsInner({
           // Mirror the saved record into the shared cache so MCP/model surfaces
           // reflect the edit without their own refetch.
           writeConfigCache(snapshot)
+          const savedScope = writeScope ?? scopeProfile
+
+          recordSettingsSaved(patch, schema ?? {}, typeof savedScope === 'string' ? savedScope : savedScope?.profile)
 
           if (saveVersionRef.current === v) {
             // The repo-discovery scan reads the ACTIVE profile's workspace
@@ -310,6 +393,7 @@ function ConfigSettingsInner({
 
   const showDesktopSettings = activeSectionId === 'advanced' && (subpage === undefined || subpage === 'desktop')
   const showAttachments = activeSectionId === 'chat' && (subpage === undefined || subpage === 'attachments')
+  const showSharedMetrics = activeSectionId === 'safety' && (subpage === undefined || subpage === 'privacy')
 
   // Deep-link target from the command palette (?field=<key>): scroll the row
   // into view and flash it, then drop the param so it doesn't re-fire.
@@ -378,43 +462,20 @@ function ConfigSettingsInner({
   }
 
   if (!config || !schema) {
-    // A failed config/schema fetch must surface a retry, not spin forever.
-    if ((configLoadFailed && !config) || (schemaFailed && !schema)) {
-      return (
-        <div className="flex h-full min-h-0 flex-1">
-          <PanelEmpty
-            action={
-              <Button
-                onClick={() => {
-                  void refetchConfig()
-                  void refetchSchema()
-                }}
-                size="sm"
-              >
-                {t.skills.refresh}
-              </Button>
-            }
-            icon="error"
-            title={c.failedLoad}
-          />
-        </div>
-      )
-    }
-
-    // Every section keeps its shape via a skeleton; model gets its bespoke one
-    // (its catalog fetch is the slow part), the rest the shared field rhythm.
-    if (showModelSettings) {
-      return (
-        <SettingsContent>
-          <SettingsProfileScope className="mb-5" />
-          <div className="mb-6">
-            <ModelSettingsSkeleton subpage={subpage} />
-          </div>
-        </SettingsContent>
-      )
-    }
-
-    return <SettingsSkeleton sections={[{ rows: 6 }]} />
+    return (
+      <ConfigSettingsLoadState
+        configAvailable={Boolean(config)}
+        configLoadFailed={configLoadFailed}
+        refetchConfig={refetchConfig}
+        refetchSchema={refetchSchema}
+        schemaAvailable={Boolean(schema)}
+        schemaFailed={schemaFailed}
+        showDesktopSettings={showDesktopSettings}
+        showModelSettings={showModelSettings}
+        showSharedMetrics={showSharedMetrics}
+        subpage={subpage}
+      />
+    )
   }
 
   const visibleFields = activeSectionId === 'voice' ? fields.filter(([key]) => voiceFieldVisible(key, config)) : fields
@@ -468,12 +529,11 @@ function ConfigSettingsInner({
   if (showDesktopSettings) {
     extraControls.desktop = (
       <>
-        <ToggleRow
-          checked={keepAwake}
+        <ListRow
+          action={<SegmentedControl onChange={setKeepAwakeMode} options={keepAwakeOptions} value={keepAwakeMode} />}
           description={c.keepAwakeDesc}
           id={settingElementId(SETTING_IDS.advanced.keepAwake)}
-          label={c.keepAwakeTitle}
-          onChange={setKeepAwake}
+          title={c.keepAwakeTitle}
         />
         <ToggleRow
           checked={disableF12}
@@ -527,7 +587,11 @@ function ConfigSettingsInner({
   return (
     <SettingsContent>
       <SettingsProfileScope className="mb-5" />
-      {activeSectionId === 'voice' && <ListRow description={c.voiceShortcutHintDesc} title={c.voiceShortcutHintTitle} />}
+      {showSharedMetrics && <SharedMetricsSettings />}
+      {showDesktopSettings && <DeveloperSettings />}
+      {activeSectionId === 'voice' && (
+        <ListRow description={c.voiceShortcutHintDesc} title={c.voiceShortcutHintTitle} />
+      )}
       {activeSectionId === 'model' && (
         <div className={showModelSettings ? 'mb-6' : undefined}>
           <ModelSettings

@@ -8,8 +8,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { useCallback, useRef, useState } from 'react'
 
 import { translateNow, useI18n } from '@/i18n'
-import { TRANSLATIONS } from '@/i18n/catalog'
-import { getRuntimeI18nLocale } from '@/i18n/runtime'
+import { runtimeTranslations } from '@/i18n/runtime'
 
 import type { BillingApi, BillingRefusal } from './api'
 import { useBillingApi } from './api'
@@ -306,7 +305,7 @@ function timeoutOutcome(portalUrl?: null | string): ChargeFlowOutcome {
 
 function renderChargeFailed(
   reason: null | string | undefined,
-  copy = TRANSLATIONS[getRuntimeI18nLocale()].billing.charge
+  copy = runtimeTranslations().billing.charge
 ): string {
   switch ((reason || '').trim()) {
     case 'authentication_required':

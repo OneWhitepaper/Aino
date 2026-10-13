@@ -231,7 +231,7 @@ class TestImagePatchBudgetShrink:
 
         from PIL import Image
 
-        from agent.conversation_compression import try_shrink_image_parts_in_messages
+        from agent.conversation_compression_images import try_shrink_image_parts_in_messages
 
         err = _FakeApiError(
             status_code=400,

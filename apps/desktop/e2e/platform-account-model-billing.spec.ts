@@ -1,16 +1,16 @@
+import { writeEnvFile, writeMockProviderConfig } from '../../../tests-js/scripts/mock-provider-config'
 import { execFileSync } from 'node:child_process'
 import * as fs from 'node:fs'
 import * as path from 'node:path'
 
 import { startMockServer } from '../../../tests-js/scripts/mock-server'
 
-import { buildAppEnv, createSandbox, waitForAppReady, writeEnvFile, writeMockProviderConfig } from './fixtures'
+import { buildAppEnv, createSandbox, waitForAppReady,  } from './fixtures'
 import { assertEdgeAlerts, observeEdgeAlerts, observeNativeRuntime, sendPrompt, sendToolTurn, verifyConcurrentAccountLifecycle, verifyOfflineAndAuthorizationRecovery } from './platform-account-edge-proof'
 import { verifyNativeCompressionAfterRestart, verifyNativeCompressionBeforeRestart } from './platform-compression-proof'
 import { observeInferenceAlerts, verifyInferenceFailures } from './platform-inference-failure-proof'
 import { assertIsolationAlerts, type IsolationParticipant, observeIsolationAlerts, verifyConcurrentIsolation, verifyRetainedHistoryIsolation } from './platform-isolation-proof'
 import { assertLateLeaseAlerts, observeLateLeaseAlerts, verifyLateLeaseAcrossAccountSwitch } from './platform-late-lease-proof'
-import { seedOfflineUpdateCheckCache } from './platform-offline-update-cache'
 import { installPackagedPythonTransport, launchGuardedPackagedDesktop, PACKAGED_PLATFORM_ORIGIN } from './platform-packaged-api'
 import { auditFixtureText, fixtureEnvironment, installLoopbackNodeGuard, installLoopbackPythonGuard, isExpectedBlockedThemeFontRequest, KNOWN_BLOCKED_THEME_FONT_URL, launchGuardedDesktop, type NativeState, type NativeTransportAudit, persistedFixtureText, startRealPlatformAPI } from './platform-real-api'
 import { verifyWebsiteWallet } from './platform-website-wallet'
@@ -140,17 +140,10 @@ function prepareNativePlatformEnvironment(
   options: { compressionInPlace?: boolean } = {}
 ) {
   const compression = options.compressionInPlace === false ? 'compression:\n  in_place: false\n' : ''
-  fs.writeFileSync(path.join(sandbox.hermesHome, 'config.yaml'), `display:\n  language: en\n${compression}auxiliary:\n  title_generation:\n    enabled: false\n`, { mode: 0o600 })
+  fs.writeFileSync(path.join(sandbox.hermesHome, 'config.yaml'), `updates:\n  check: false\ndisplay:\n  language: en\n${compression}auxiliary:\n  title_generation:\n    enabled: false\n`, { mode: 0o600 })
   fs.writeFileSync(path.join(sandbox.hermesHome, '.env'), '', { mode: 0o600 })
   seedPlatformWorkspace(sandbox)
   fs.writeFileSync(path.join(sandbox.userDataDir, 'platform-development.json'), JSON.stringify({ enabled: true, origin: api.info.origin }), { mode: 0o600 })
-  // Electron keys this cache on HEAD, so the checkout must stay frozen across
-  // every restart in a native run.
-  seedOfflineUpdateCheckCache({
-    userDataDir: sandbox.userDataDir,
-    updateRoot: path.resolve(import.meta.dirname, '../../..'),
-    branch: 'main'
-  })
   const inherited = buildAppEnv(sandbox)
   const env: Record<string, string> = { ...fixtureEnvironment(), HOME: sandbox.root }
 

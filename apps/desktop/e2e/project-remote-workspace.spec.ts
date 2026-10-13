@@ -1,3 +1,4 @@
+import { writeEnvFile, writeMockProviderConfig } from '../../../tests-js/scripts/mock-provider-config'
 import { execFileSync } from 'node:child_process'
 import type * as DiagnosticsChannel from 'node:diagnostics_channel'
 import { existsSync, mkdirSync, realpathSync, writeFileSync } from 'node:fs'
@@ -14,9 +15,8 @@ import {
   type MockBackendFixture,
   type Sandbox,
   waitForAppReady,
-  writeEnvFile,
-  writeMockProviderConfig
-} from './fixtures'
+
+  } from './fixtures'
 import {
   REMOTE_ID,
   REMOTE_LABEL,

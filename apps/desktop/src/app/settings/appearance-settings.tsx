@@ -20,6 +20,7 @@ import {
   setInterfaceMode
 } from '@/store/interface-mode'
 import { $introSplash, setIntroSplash } from '@/store/intro-splash'
+import { $fileBrowserOpen, setFileBrowserOpen } from '@/store/layout'
 import { notifyError } from '@/store/notifications'
 import { $reactionsEnabled, setReactionsEnabled } from '@/store/reactions-enabled'
 import { $reasoningCollapsedByDefault, setReasoningCollapsedByDefault } from '@/store/reasoning-disclosure'
@@ -230,6 +231,8 @@ export function AppearanceSettings({ subpage }: AppearanceSettingsProps = {}) {
   const zoomPercent = useStore($zoomPercent)
   const embedMode = useStore($embedMode)
   const embedAllowed = useStore($embedAllowed)
+  const fileBrowserOpen = useStore($fileBrowserOpen)
+  const fileBrowserShadowed = useStore($modeShadowed('fileBrowserOpen'))
   const composerPopoutGesturesEnabled = useStore($composerPopoutGesturesEnabled)
   const translucency = useStore($translucency)
   const glassMode = translucency.mode === 'glass' && GLASS_SUPPORTED
@@ -459,6 +462,13 @@ export function AppearanceSettings({ subpage }: AppearanceSettingsProps = {}) {
           title={t.interfaceMode.title}
         />
         <MinimizeToTraySetting />
+        <ToggleRow
+          checked={fileBrowserOpen}
+          description={withModeNote(a.fileBrowserDesc, fileBrowserShadowed)}
+          id={settingElementId(ids.fileBrowser)}
+          label={a.fileBrowserTitle}
+          onChange={setFileBrowserOpen}
+        />
         <ListRow
           action={
             <SegmentedControl

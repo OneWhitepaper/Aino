@@ -35,5 +35,5 @@ export function localizedPreviewError(translations: Translations, error: unknown
     return translations.preview.couldNotOpenTarget(targetMatch[1])
   }
 
-  return key ? translations.preview[key] as string : raw
+  return key ? (translations.preview[key] as string) : raw
 }

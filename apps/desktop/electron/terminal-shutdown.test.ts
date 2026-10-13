@@ -26,7 +26,7 @@ vi.mock('node-pty', () => ({
         },
         kill: () => {
           shell.killed = true
-          shell.exit({ exitCode: 0, signal: 1 })
+          // Real node-pty does not emit a second exit when closing the reaped master FD.
         }
       }
     }
@@ -45,6 +45,7 @@ it('keeps persisted tabs on app shutdown while ordinary shell exits still notify
     activeSshTerminalTarget: () => null,
     ensureBackend: async () => undefined,
     findOnPath: () => null,
+    sshBinary: () => 'ssh',
     getSshConnectionState: () => undefined,
     isWindows: process.platform === 'win32',
     rememberLog: () => undefined

@@ -3,11 +3,11 @@
 import json
 
 import pytest
-import yaml
+import hermes_yaml as yaml
 
 import tui_gateway.server as srv
 from agent.context_compressor import is_compaction_summary_message
-from tests.tui_gateway.test_managed_model_agent import managed_gateway, result  # noqa: F401
+from tests.tui_gateway.test_managed_model_agent import managed_gateway, result
 from tui_gateway.managed_model_runtime import get_registry
 
 

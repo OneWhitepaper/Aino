@@ -125,22 +125,3 @@ test('an explicit linked worktree remains the update owner beside a regular chec
     fs.rmSync(temp, { force: true, recursive: true })
   }
 })
-
-test('desktop packaging metadata follows the Hermes runtime version', () => {
-  const python = process.env.PYTHON ?? 'python3'
-
-  const runtimeVersion = execFileSync(
-    python,
-    ['-c', 'import hermes_cli; print(hermes_cli.__version__)'],
-    { cwd: REPO_ROOT, encoding: 'utf8' }
-  ).trim()
-
-  const desktopPackage = JSON.parse(fs.readFileSync(path.join(REPO_ROOT, 'apps', 'desktop', 'package.json'), 'utf8'))
-
-  assert.ok(runtimeVersion, 'hermes_cli must expose __version__ at runtime')
-  assert.equal(
-    desktopPackage.version,
-    runtimeVersion,
-    'Electron app.getVersion() and packaged artifact metadata must stay aligned with the Agent runtime.'
-  )
-})

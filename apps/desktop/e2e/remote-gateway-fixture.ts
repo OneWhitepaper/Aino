@@ -1,9 +1,10 @@
+import { writeEnvFile, writeMockProviderConfig } from '../../../tests-js/scripts/mock-provider-config'
 import { type ChildProcess, spawn, spawnSync } from 'node:child_process'
 import * as fs from 'node:fs'
 import * as net from 'node:net'
 import * as path from 'node:path'
 
-import { buildAppEnv, type Sandbox, writeEnvFile, writeMockProviderConfig } from './fixtures'
+import { buildAppEnv, type Sandbox,  } from './fixtures'
 
 const DESKTOP_ROOT = path.resolve(import.meta.dirname, '..')
 const REPO_ROOT = path.resolve(DESKTOP_ROOT, '..', '..')

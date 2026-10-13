@@ -2,7 +2,7 @@
 import json
 import threading
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, UTC
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from types import SimpleNamespace
@@ -142,7 +142,7 @@ def test_summary_managed_model_uses_authorized_lease_and_billing_headers(summary
     revision = registry.claim("live-summary", rig.session, rig.peer, ticket, owner, "fixture-model")
     binding = ManagedModelBinding("live-summary", owner, "fixture-model", "managed-session-model",
         "chat_completions", {}, "credential", "managed-secret", rig.origin + "/v1",
-        datetime.now(timezone.utc) + timedelta(minutes=5), revision)
+        datetime.now(UTC) + timedelta(minutes=5), revision)
     registry.bind(binding, rig.session, rig.peer)
     result = rig.call()
     assert result.get("result", {}).get("summary"), result

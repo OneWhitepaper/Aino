@@ -5,7 +5,7 @@ import socket
 
 import uvicorn
 from websockets.sync.client import connect
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, UTC
 
 from starlette.applications import Starlette
 from starlette.routing import WebSocketRoute
@@ -77,7 +77,7 @@ def test_actual_websocket_delegation_and_disconnect(tmp_path, monkeypatch, caplo
                     "binding_revision": claim["binding_revision"], "model": "fixture-model",
                     "api_mode": "responses", "capabilities": {"tools": True, "vision": False, "reasoning": True},
                     "api_key": secret, "credential_id": "fixture-lease", "base_url": "https://fixture.invalid/v1",
-                    "expires_at": (datetime.now(timezone.utc) + timedelta(minutes=5)).isoformat(),
+                    "expires_at": (datetime.now(UTC) + timedelta(minutes=5)).isoformat(),
                 })
                 assert response["bound"] is True
                 assert get_registry().get(sid).api_key == secret

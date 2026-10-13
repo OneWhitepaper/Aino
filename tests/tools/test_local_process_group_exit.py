@@ -16,7 +16,7 @@ from tools.environments.local import LocalEnvironment, _kill_process_group_posix
 from tools.file_operations import ShellFileOperations
 
 
-@pytest.mark.macos_only
+@pytest.mark.platforms("macos")
 @pytest.mark.parametrize("reap_before_cleanup", [False, True])
 def test_native_search_cleans_up_exited_group(tmp_path, monkeypatch, reap_before_cleanup):
     """The search child can exit between its poll and process-group cleanup."""

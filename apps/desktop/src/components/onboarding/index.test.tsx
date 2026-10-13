@@ -1,5 +1,5 @@
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
-import { afterEach, describe, expect, it } from 'vitest'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { I18nProvider } from '@/i18n'
 import { $desktopOnboarding, type DesktopOnboardingState, type OnboardingContext } from '@/store/onboarding'
@@ -147,5 +147,60 @@ describe('onboarding Picker', () => {
     expect(screen.getByText('本地 / 自定义端点')).toBeTruthy()
     expect(screen.queryByText('Local / custom endpoint')).toBeNull()
     expect(screen.getByPlaceholderText('API 密钥（可选 — 仅当端点需要时填写）')).toBeTruthy()
+  })
+})
+
+describe('ApiKeyForm manual local-model fallback', () => {
+  it('reveals the model-name input only after the endpoint enumerates no models, then forwards the name', async () => {
+    // First Connect: reachable endpoint, empty /v1/models — the wizard must ask
+    // for a manual model name instead of dead-ending. Second Connect: the typed
+    // name is forwarded as the 5th onSave argument.
+    const onSave = vi
+      .fn<
+        (
+          envKey: string,
+          value: string,
+          name: string,
+          apiKey?: string,
+          modelName?: string
+        ) => Promise<{ message?: string; needsModelInput?: boolean; ok: boolean }>
+      >()
+      .mockResolvedValueOnce({
+        ok: false,
+        needsModelInput: true,
+        message: "Connected, but it didn't enumerate any models at /v1/models."
+      })
+      .mockResolvedValueOnce({ ok: true })
+
+    render(<ApiKeyForm canGoBack={false} initialEnvKey="OPENAI_BASE_URL" onBack={() => undefined} onSave={onSave} />)
+
+    fireEvent.change(screen.getByPlaceholderText('http://127.0.0.1:8000/v1'), {
+      target: { value: 'https://api.cohere.ai/compatibility/v1' }
+    })
+
+    // Hidden on the happy path — discovery hasn't failed yet.
+    expect(screen.queryByPlaceholderText('Model name (e.g. command-a-plus-05-2026)')).toBeNull()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Connect' }))
+
+    await waitFor(() => {
+      expect(screen.getByPlaceholderText('Model name (e.g. command-a-plus-05-2026)')).toBeTruthy()
+    })
+
+    fireEvent.change(screen.getByPlaceholderText('Model name (e.g. command-a-plus-05-2026)'), {
+      target: { value: 'command-a-plus-05-2026' }
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Connect' }))
+
+    await waitFor(() => {
+      // apiKey is the (empty) local-key field, forwarded as-is for the local option.
+      expect(onSave).toHaveBeenLastCalledWith(
+        'OPENAI_BASE_URL',
+        'https://api.cohere.ai/compatibility/v1',
+        'Local / custom endpoint',
+        '',
+        'command-a-plus-05-2026'
+      )
+    })
   })
 })

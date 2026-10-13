@@ -1,7 +1,7 @@
 """Short-lived, transport-delegated model authority; never persisted with sessions."""
 
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime, UTC
 import secrets
 import threading
 import time
@@ -173,7 +173,7 @@ class ManagedModelRegistry:
                     or binding.binding_revision != a.revision or binding.owner != a.owner
                     or binding.model_id != a.model_id):
                 raise ManagedBindingError("managed_binding_stale")
-            seconds = (binding.expires_at - datetime.now(timezone.utc)).total_seconds()
+            seconds = (binding.expires_at - datetime.now(UTC)).total_seconds()
             if not 0 < seconds <= 3605:
                 raise ManagedBindingError("managed_binding_expired")
             previous = self._active.get(sid)
@@ -204,7 +204,7 @@ class ManagedModelRegistry:
         """An existing controller may extend ONLY its still-live, exact runtime."""
         with self._lock:
             a = self._active.get(binding.session_id)
-            now = datetime.now(timezone.utc)
+            now = datetime.now(UTC)
             if (not a or a.session is not session or a.peer is not session.get("transport")
                     or session.get("_closing") or a.controller is not peer
                     or a.revision != binding.binding_revision or a.binding.expires_at <= now
@@ -241,7 +241,7 @@ class ManagedModelRegistry:
                 return None
             if (a.session.get("_closing") or a.peer is not a.session.get("transport")
                     or (session is not None and session is not a.session)
-                    or a.binding.expires_at <= datetime.now(timezone.utc)):
+                    or a.binding.expires_at <= datetime.now(UTC)):
                 expired = self._active.pop(session_id)
                 self._cancel(expired)
             else:

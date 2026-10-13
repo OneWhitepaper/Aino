@@ -1,6 +1,6 @@
 """Exercise managed bindings through the actual session/transport dispatcher."""
 import json
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, UTC
 
 import pytest
 
@@ -53,7 +53,7 @@ def prepare(call, sid, owner, controller):
         "model": "fixture-upstream", "capabilities": {"tools": True, "vision": False, "reasoning": False},
         "credential_id": "fixture-credential", "api_key": "test-secret-never-persist",
         "base_url": "https://fixture.invalid/v1",
-        "expires_at": (datetime.now(timezone.utc) + timedelta(minutes=10)).isoformat(),
+        "expires_at": (datetime.now(UTC) + timedelta(minutes=10)).isoformat(),
     }, ticket
 
 
@@ -65,7 +65,7 @@ def test_owned_delegation_rejects_strangers_replay_and_wrong_scope(rig):
         (stranger, "session.bind_managed_model", {}),
         (controller, "session.bind_managed_model", {"profile": "missing-profile"}),
         (controller, "session.bind_managed_model", {"owner": {**params["owner"], "user_id": "other"}}),
-        (controller, "session.bind_managed_model", {"expires_at": datetime.now(timezone.utc).isoformat()}),
+        (controller, "session.bind_managed_model", {"expires_at": datetime.now(UTC).isoformat()}),
         (controller, "session.claim_managed_model", {"session_ticket": ticket}),
     ):
         assert "error" in call(peer, method, **(params | extra))

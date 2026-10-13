@@ -30,7 +30,9 @@ from pathlib import Path
 
 import pytest
 
-pytestmark = pytest.mark.windows_only
+from tests.live_process_fixtures import sleeper_script_path
+
+pytestmark = pytest.mark.platforms("windows")  # live Windows named-pipe E2E
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
@@ -64,7 +66,7 @@ def _argv_visible(pid: int, marker: str) -> bool:
         return False
 
 _CHILD_CODE = r"""
-import asyncio, os, sys
+import asyncio, faulthandler, os, sys
 sys.path.insert(0, sys.argv[1])
 os.environ["HERMES_HOME"] = sys.argv[2]
 from gateway.control_socket import GatewayControlServer
@@ -79,6 +81,10 @@ async def main():
     print(f"SERVER_STARTED {os.getpid()}" if ok else "SERVER_FAILED", flush=True)
     if not ok:
         return
+    # On a client deadline capture the child's actual blocked frame (for
+    # example cold identity/Git discovery), instead of diagnosing every
+    # missing response as a named-pipe transport failure.
+    faulthandler.dump_traceback_later(4, repeat=True)
     await asyncio.sleep(120)
 
 asyncio.run(main())
@@ -89,21 +95,27 @@ asyncio.run(main())
 def live_server(tmp_path: Path):
     home = tmp_path / ".hermes"
     home.mkdir()
-    proc = subprocess.Popen(
-        [sys.executable, "-c", _CHILD_CODE, str(PROJECT_ROOT), str(home)],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True,
-        cwd=str(PROJECT_ROOT),
-    )
-    line = _readline(proc.stdout).strip()
-    if not line.startswith("SERVER_STARTED"):
-        err = proc.stderr.read() if proc.poll() is not None else ""
-        _kill_tree(proc)
-        pytest.fail(f"pipe server child failed to start: {line!r} {err}")
-    server_pid = int(line.split()[1])
-    yield proc, home, server_pid
-    _kill_tree(proc)
+    diagnostics = tmp_path / "pipe-server.stderr.log"
+    with diagnostics.open("wb") as stderr:
+        proc = subprocess.Popen(
+            [sys.executable, "-c", _CHILD_CODE, str(PROJECT_ROOT), str(home)],
+            stdout=subprocess.PIPE,
+            stderr=stderr,
+            text=True,
+            cwd=str(PROJECT_ROOT),
+        )
+        try:
+            line = _readline(proc.stdout).strip()
+            if not line.startswith("SERVER_STARTED"):
+                pytest.fail(f"pipe server child failed to start: {line!r} {_diagnostics(proc, diagnostics)}")
+            server_pid = int(line.split()[1])
+            yield proc, home, server_pid, diagnostics
+        finally:
+            _kill_tree(proc)
+
+
+def _diagnostics(proc, path: Path) -> str:
+    return f"child exit={proc.poll()}; stderr:\n{path.read_text(encoding='utf-8', errors='replace')[-8000:]}"
 
 
 def _kill_tree(proc: subprocess.Popen) -> None:
@@ -112,16 +124,17 @@ def _kill_tree(proc: subprocess.Popen) -> None:
         subprocess.run(
             ["taskkill", "/PID", str(proc.pid), "/T", "/F"],
             capture_output=True,
+            check=False,
         )
         proc.wait()
 
 
 def test_named_pipe_identify_status_and_fleet_consumer(live_server, monkeypatch):
-    proc, home, server_pid = live_server
+    proc, home, server_pid, diagnostics = live_server
     from gateway.control_socket import identify_gateway, query_gateway_control
 
     ident = identify_gateway(home, timeout=5.0)
-    assert ident is not None, "identify returned None against a live pipe server"
+    assert ident is not None, _diagnostics(proc, diagnostics)
     # Compare against the server's SELF-reported pid, not Popen.pid — uv's
     # Windows trampoline makes the spawner's view wrong (see _CHILD_CODE).
     assert ident["pid"] == server_pid
@@ -130,14 +143,14 @@ def test_named_pipe_identify_status_and_fleet_consumer(live_server, monkeypatch)
     assert ident["supervisor"] in {"systemd", "launchd", "desktop", "external", "manual"}
 
     status = query_gateway_control(home, "status", timeout=5.0)
-    assert status is not None
+    assert status is not None, _diagnostics(proc, diagnostics)
     assert status["answering_pid"] == server_pid
 
     # Real fleet consumer prefers the pipe
     import hermes_cli.update_receipt as ur
 
     monkeypatch.setattr(
-        "hermes_cli.build_info.get_code_identity",
+        "hermes_cli.version_info.get_code_identity",
         lambda refresh=False: {"sha": ident.get("code_sha") or "X", "version": "t"},
     )
     monkeypatch.setattr("hermes_cli.profiles._get_default_hermes_home", lambda: home)
@@ -152,10 +165,10 @@ def test_named_pipe_identify_status_and_fleet_consumer(live_server, monkeypatch)
 
 @pytest.mark.spawns_gateway_lookalike
 def test_pipe_gone_after_kill_falls_back(live_server, monkeypatch):
-    proc, home, server_pid = live_server
+    proc, home, _server_pid, diagnostics = live_server
     from gateway.control_socket import identify_gateway
 
-    assert identify_gateway(home, timeout=5.0) is not None
+    assert identify_gateway(home, timeout=5.0) is not None, _diagnostics(proc, diagnostics)
     _kill_tree(proc)
 
     # taskkill /T returns once the tree is signalled; the pipe disappears when
@@ -170,7 +183,7 @@ def test_pipe_gone_after_kill_falls_back(live_server, monkeypatch):
     import hermes_cli.update_receipt as ur
 
     monkeypatch.setattr(
-        "hermes_cli.build_info.get_code_identity",
+        "hermes_cli.version_info.get_code_identity",
         lambda refresh=False: {"sha": "NEW", "version": "t"},
     )
     monkeypatch.setattr("hermes_cli.profiles._get_default_hermes_home", lambda: home)
@@ -190,7 +203,11 @@ def test_pipe_gone_after_kill_falls_back(live_server, monkeypatch):
         )
 
     standin = subprocess.Popen(
-        [sys.executable, "-c", "import time; time.sleep(120)", "hermes", "gateway", "run"],
+        # Use the real interpreter: a Windows venv's python.exe can be a shim
+        # whose PID differs from the process running the command line. The
+        # stand-in runs a SCRIPT, not `-c`: gateway identity is no longer
+        # inferred from inline `-c` source (#107002).
+        [sys._base_executable, sleeper_script_path(), "hermes", "gateway", "run"],
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
     )

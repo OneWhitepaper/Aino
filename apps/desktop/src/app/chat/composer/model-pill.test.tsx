@@ -161,12 +161,12 @@ describe('ModelPill per-surface model label', () => {
       />
     )
 
-    expect(screen.getByText(/Deepseek V4 Pro/i)).toBeTruthy()
+    expect(screen.getByText(/Deepseek V4.*Pro/i)).toBeTruthy()
     expect(screen.getByLabelText(/deepseek-v4-pro/i)).toBeTruthy()
 
     rerender(<ModelPill disabled={false} model={modelState({ model: 'deepseek/deepseek-v4-flash' })} />)
-    expect(screen.getByText(/Deepseek V4 Flash/i)).toBeTruthy()
-    expect(screen.queryByText(/Deepseek V4 Pro/i)).toBeNull()
+    expect(screen.getByText(/Deepseek V4.*Flash/i)).toBeTruthy()
+    expect(screen.queryByText(/Deepseek V4.*Pro/i)).toBeNull()
   })
 
   it('keeps a manually pinned model visible on a draft', () => {
@@ -176,7 +176,7 @@ describe('ModelPill per-surface model label', () => {
     render(<ModelPill disabled={false} model={modelState({ model: 'deepseek/deepseek-v4-flash' })} />)
 
     expect(screen.queryByText('Auto')).toBeNull()
-    expect(screen.getByText(/Deepseek V4 Flash/i)).toBeTruthy()
+    expect(screen.getByText(/Deepseek V4.*Flash/i)).toBeTruthy()
   })
 
   it('shows the chat-bar model even when the primary global differs', () => {
@@ -213,6 +213,27 @@ describe('ModelPill per-surface model label', () => {
 
     expect(screen.getByText('Sonnet')).toBeTruthy()
     expect(screen.queryByText(/primary/i)).toBeNull()
+  })
+})
+
+// #49340: long model names ("DeepSeek V4 Flash · Med") were truncated with a
+// finite `max-w-*` cap even when the composer row had room to spare. The pill
+// now sizes to its content and only gives width back (shrink + min-w-0) under
+// real space pressure, so the label never clips unless the row is actually
+// out of room.
+describe('ModelPill width', () => {
+  it('imposes no finite width cap on the label', () => {
+    setCurrentModel('deepseek/deepseek-v4-flash')
+    $activeSessionId.set(null)
+
+    render(<ModelPill disabled={false} model={modelState({ model: 'deepseek/deepseek-v4-flash' })} />)
+
+    const pill = screen.getByRole('button')
+    expect(pill.className).not.toMatch(/\bmax-w-/)
+    // The squeeze path (collapse stages) still has to work: the pill must keep
+    // yielding width, not overflow the composer row.
+    expect(pill.className).toMatch(/\bmin-w-0\b/)
+    expect(pill.className).toMatch(/\bshrink\b/)
   })
 })
 

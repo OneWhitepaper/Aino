@@ -32,6 +32,7 @@ vi.mock('@hermes/plugin-sdk', () => ({
       ))}
     </div>
   ),
+  Tip: ({ children }: { children: React.ReactNode }) => <>{children}</>,
   Textarea: (props: React.ComponentProps<'textarea'>) => <textarea {...props} />,
   useValue: () => imageState.value
 }))

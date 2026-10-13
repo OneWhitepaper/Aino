@@ -10,23 +10,16 @@
  * real executable, and the electron npm shim would re-spawn out of our
  * control).
  *
- * Usage (from the scratch dir where the driver installed @playwright/test):
+ * Usage (current CI checkout with locked driver dependencies):
  *   node launch-from-spec.mjs --spec /path/launch-spec.json \
  *     [--result $HERMES_HOME/.hermes-update-result.json] \
- *     [--expect-sha <sha> --repo-dir <install dir>] [--no-update] \
- *     [--launch-capture-dir /path/to/e2e-assets/launch-capture] \
- *     [--diagnostics-dir /path/to/ci-artifacts/launch-diagnostics]
+ *     [--expect-sha <sha> --repo-dir <install dir>] [--no-update]
  *
- * --no-update: prove the main renderer, Settings navigation, and backend
- * status RPC, then close. The smoke arm.
- * Otherwise: click Update now, then poll until the update marker clears.
- *   --result      require a fresh successful hand-off result, captured from
- *                 this file or this run's appended desktop log if consumed
- *   --expect-sha  also require the installed checkout to reach this commit
- *                 (requires --repo-dir). Without --result, the captured
- *                 spec must provide HERMES_HOME for marker observation.
- * When both are given, both conditions must pass. Result observation starts
- * before the click and retains evidence across file writes and consumption.
+ * --no-update: require a real desktop chat, then close gracefully.
+ * Otherwise: click Update now, then require a new successful handoff result
+ * or source-update receipt, the expected checkout, and marker removal.
+ * A checkout reset alone is not completion. No driver-assisted relaunch,
+ * force-kill, or rebuild may turn an unfinished update into a passing one.
  * The Playwright close event is unreliable across the update handoff, so
  * neither signal is an app event.
  */
@@ -37,11 +30,12 @@ import { execFileSync } from 'node:child_process';
 import { parseArgs } from 'node:util';
 import { _electron } from '@playwright/test';
 import { prepareWindowForInput } from './window-input.cjs';
-import launchAcceptance from './launch-acceptance.cjs';
-import { captureUpdatedDesktopLaunch, refreshPackagedLaunchSpec } from './desktop-artifact.cjs';
-import { createUpdateCompletionObserver } from './update-completion.cjs';
-
-const { acceptDesktopLaunch, withOwnedApplication } = launchAcceptance;
+import { assertStagedBranch, pickAppWindow, openAbout, readManualUpdateCommand, waitForUpdate } from './update-ui.cjs';
+import { installSourceBranchProbe, prepareSourceBranchEnvironment } from './source-branch-probe.cjs';
+import { observeSourceUpdate } from './source-update-observer.mjs';
+import { runUpdateWindowChat } from './update-window-chat.mjs';
+import { isolateUpdateWindowEnvironment, isolatedElectronArgs, updateWindowEnvironment } from './smoke-env.mjs';
+import { sourceRuntimeSettleCommand } from './source-runtime-settle.mjs';
 
 /**
  * @typedef {{argv: string[], cwd: string, env: Record<string, string>,
@@ -91,6 +85,23 @@ function log(msg) {
   console.log(`[launch-from-spec] ${msg}`);
 }
 
+/**
+ * Settle source runtime/package replacement before Playwright owns Electron.
+ * A first non-metadata startup may replace the packaged app and relaunch it;
+ * doing that after `_electron.launch` attaches loses the inspection pipe.
+ *
+ * @param {string} root
+ * @param {Record<string, string>} env
+ */
+function settleSourceRuntime(root, env) {
+  const invocation = sourceRuntimeSettleCommand(root, env);
+  log('settling source runtime under the captured launch environment');
+  execFileSync(invocation.command, invocation.args, {
+    cwd: root, env, stdio: 'inherit', timeout: 20 * 60_000,
+    windowsVerbatimArguments: invocation.windowsVerbatimArguments,
+  });
+}
+
 // Coarse phase marker for the self-deadline's post-mortem line.
 let currentPhase = 'init';
 /** @param {string} p */
@@ -103,210 +114,183 @@ async function main() {
   // holding node's event loop open, so the driver can outlive its own
   // finished test. Success and failure paths exit explicitly; this unref'd
   // timer is the backstop so no unknown state holds a runner past its budget.
-  const SELF_DEADLINE_MS = 20 * 60 * 1000;
-  const selfDeadline = setTimeout(() => {
-    log(`DRIVER SELF-TIMEOUT after ${SELF_DEADLINE_MS / 60000}min - exiting 124 (phase: ${currentPhase})`);
-    process.exit(124);
-  }, SELF_DEADLINE_MS);
-  selfDeadline.unref();
-
   const { values } = parseArgs({
     options: {
       spec: { type: 'string' },
       result: { type: 'string' },
       'expect-sha': { type: 'string' },
       'repo-dir': { type: 'string' },
-      'launch-capture-dir': { type: 'string' },
-      'diagnostics-dir': { type: 'string' },
+      'old-sha': { type: 'string' },
+      'chat-out': { type: 'string' },
+      'mock-url': { type: 'string' },
       'no-update': { type: 'boolean', default: false },
-      'timeout-ms': { type: 'string', default: '600000' },
+      // A full app-driven update (git pull, dependency sync, npm ci, TUI/web/desktop builds)
+      // takes ~7.5 min on a normal macOS runner and ~10.5 min on a slow one.
+      'timeout-ms': { type: 'string', default: '900000' },
     },
   });
+  // After the update wait (--timeout-ms), not inside it: launch, OLD chat and
+  // relaunch checks get their own 20 minutes.
+  const SELF_DEADLINE_MS = Number(values['timeout-ms']) + 20 * 60 * 1000;
+  const selfDeadline = setTimeout(() => {
+    log(`DRIVER SELF-TIMEOUT after ${SELF_DEADLINE_MS / 60000}min - exiting 124 (phase: ${currentPhase})`);
+    process.exit(124);
+  }, SELF_DEADLINE_MS);
+  selfDeadline.unref();
   if (!values.spec) throw new Error('--spec is required');
+  if (!values['old-sha'] || !values['chat-out'] || !values['mock-url'] || !values['repo-dir']) {
+    throw new Error('--old-sha, --chat-out, --mock-url and --repo-dir are required for OLD chat');
+  }
   /** @type {LaunchSpec} */
   const spec = JSON.parse(fs.readFileSync(values.spec, 'utf8'));
   const launch = resolveLaunch(spec);
-  const expectSha = values['expect-sha'];
-  const repoDir = values['repo-dir'];
-  log(`launching ${launch.executablePath} (shape: ${spec.matchedShape})`);
-
-  const launchElectron = async (options, label) => {
-    if (process.platform !== 'darwin' || process.env.GITHUB_ACTIONS !== 'true') {
-      return _electron.launch(options);
-    }
-    const { diagnoseSlowMacosLaunch } = await import('./macos-launch-diagnostics.cjs');
-    return diagnoseSlowMacosLaunch(() => _electron.launch(options), {
-      executablePath: options.executablePath,
-      outputPrefix: path.join(values['diagnostics-dir'] || path.dirname(values.spec), label),
-      log,
-    });
-  };
+  const capturedEnv = updateWindowEnvironment(launch.env, values['repo-dir'], 'source');
+  settleSourceRuntime(values['repo-dir'], capturedEnv);
+  const launchEnv = isolateUpdateWindowEnvironment(capturedEnv);
+  if (!values['no-update']) {
+    // This unpublished E2E target has no R2 channel record. Only the test
+    // probe selects the real checker's explicit branch path.
+    prepareSourceBranchEnvironment(values['repo-dir'], values['expect-sha'],
+      process.env.HERMES_E2E_REAL_GIT, capturedEnv, launchEnv);
+  }
+  log(`launching ${launch.executablePath} (shape: ${spec.matchedShape}, isolated userData: ${launchEnv.HERMES_DESKTOP_USER_DATA_DIR})`);
 
   phase('launch');
-  const app = await launchElectron({
+  const app = await _electron.launch({
     executablePath: launch.executablePath,
-    args: launch.args,
+    args: isolatedElectronArgs(launch.args, launchEnv.HERMES_DESKTOP_USER_DATA_DIR),
     cwd: launch.cwd,
-    env: launch.env,
-  }, 'initial-launch');
-  const primaryResult = await withOwnedApplication(app, 'initial app teardown', async () => {
-    const accepted = await acceptDesktopLaunch(app, { prepareWindowForInput, log });
-    const window = accepted.window;
-    log(`main renderer accepted: ${await window.title()} (${app.windows().length} windows, Settings open, backend ${accepted.status.version})`);
-    await window.screenshot({ path: `${values.spec}.window.png` }).catch(() => {});
+    env: launchEnv,
+  });
+  if (!values['no-update']) await installSourceBranchProbe(app);
+  const window = await pickAppWindow(app, log);
+  await window.screenshot({ path: `${values.spec}.window.png` }).catch(() => {});
 
-    if (values['no-update']) {
-      log('smoke mode: main renderer, Settings navigation, and backend RPC proven; closing');
-      return { noUpdate: true };
-    }
+  await prepareWindowForInput(app, window);
+  log('[zoom] app window prepared at 100%');
 
-    if (!values.result && !(values['expect-sha'] && values['repo-dir'])) {
-      throw new Error('need --result and/or --expect-sha + --repo-dir unless --no-update');
-    }
-    const deadline = Date.now() + Number(values['timeout-ms']);
+  phase('old-chat');
+  await runUpdateWindowChat(app, window, {
+    mockUrl: values['mock-url'], outDir: values['chat-out'],
+    expectCommit: values['old-sha'],
+    root: values['repo-dir'], origin: 'source', executable: launch.executablePath,
+    userData: launchEnv.HERMES_DESKTOP_USER_DATA_DIR,
+  });
 
-    phase('about-update');
-    // Settings is open: About -> Update now.
-    await window.getByRole('tab', { name: /about/i }).or(
-      window.getByRole('button', { name: /about/i })).first().click();
-    const updateNow = window.getByRole('button', { name: /update now/i }).first();
-    // "Update now" only renders once a check reports behind > 0, and the
-    // About panel starts at "Last checked: never". The boot-time auto-check
-    // can also fail transiently and latch the error UI, while a fresh check
-    // succeeds. Nudge like an impatient user: click Check now whenever it is
-    // clickable (not a spinner), re-test Update now, 3 minute ceiling.
-    const checkNow = window.getByRole('button', { name: /check now/i }).first();
-    const nudgeDeadline = Date.now() + 180_000;
-    let updateVisible = await updateNow.isVisible().catch(() => false);
-    while (!updateVisible && Date.now() < nudgeDeadline) {
-      await checkNow.click({ timeout: 5_000 })
-        .then(() => log('nudged Check now'))
-        .catch(() => {}); // spinner or mid-transition - fine, just wait
-      await window.waitForTimeout(15_000);
-      updateVisible = await updateNow.isVisible().catch(() => false);
-    }
-    try {
-      await updateNow.waitFor({ state: 'visible', timeout: 15_000 });
-    } catch (e) {
-      // The About UI flattens every check failure to a generic "couldn't
-      // reach the update server", hiding the git stderr the main process
-      // captured. Pull the full status over the same IPC the panel uses so
-      // the log names the real error.
-      const status = await window.evaluate(() =>
-        window.hermesDesktop?.updates?.check?.() ?? Promise.resolve('no updates.check bridge')
-      ).catch((err) => `updates.check failed: ${err?.message || err}`);
-      log(`[update-status] ${JSON.stringify(status)}`);
-      throw e;
-    }
-    // The app may relaunch/exit during the update; completion signals are
-    // product state, not Playwright events.
-    const resultPath = values.result;
-    /** @returns {string} */
-    const headSha = () => {
-      try {
-        return execFileSync('git', ['-C', /** @type {string} */ (repoDir), 'rev-parse', 'HEAD'], {
-          encoding: 'utf8',
-        }).trim();
-      } catch {
-        return '';
-      }
-    };
-    const completion = createUpdateCompletionObserver({
-      resultPath, expectedSha: expectSha, hermesHome: spec.env.HERMES_HOME,
-    });
-    try {
-      await updateNow.click();
-      phase('update-poll');
-      log('clicked Update now; observing this update outcome and marker');
-      for (;;) {
-        const status = completion.check(expectSha ? headSha() : undefined);
-        if (status.complete) {
-          log(`update complete: ${status.evidence || `checkout reached ${expectSha}`}; marker cleared`);
-          break;
-        }
-        if (Date.now() > deadline) {
-          await window.screenshot({ path: `${values.spec}.timeout.png` }).catch(() => {});
-          throw new Error(`update completion signal never appeared: ${status.pendingReason}`);
-        }
-        await new Promise((r) => setTimeout(r, 2_000));
-      }
-    } finally {
-      completion.close();
-    }
-
-    // ── Post-update: observe the hand-off state, then relaunch and verify ──
-    // On CI runners the rebuilt app cannot self-relaunch (chrome-sandbox needs
-    // root ownership; user namespaces are restricted), so the product parks on
-    // an "update complete, reopen Hermes to finish" overlay and never exits;
-    // a bare app.close() would wait on it forever. Record the hand-off state,
-    // close with a bounded teardown, then do what the overlay asks (the real
-    // user journey) and assert the relaunched app runs the updated code.
-    phase('post-update');
-    const handoff = await window.evaluate(() => {
-      const text = document.body ? document.body.innerText : ''
-      const m = text.match(/[^\n]*(update complete|reopen|relaunch)[^\n]*/i)
-      return m ? m[0].trim().slice(0, 200) : null
-    }).catch(() => null);
-    log(handoff ? `post-update hand-off state: "${handoff}"` : 'post-update: no hand-off overlay observed (app may self-relaunch)');
-    await window.screenshot({ path: `${values.spec}.post-update.png` }).catch(() => {});
-    return { noUpdate: false };
-  }, { log });
-
-  if (primaryResult.noUpdate) process.exit(0);
-
-  // Resolve the updated product identity. Linux must also run the CLI's
-  // sandbox preparation again: packaging resets the helper's permissions.
-  // Require the main renderer, Settings navigation, and backend to come up
-  // on the updated checkout; log the optional short SHA from the UI too.
-  phase('relaunch');
-  log('relaunching the updated app (the "reopen Hermes" step)');
-  let updatedSpec = repoDir ? refreshPackagedLaunchSpec(spec, repoDir) : spec;
-  if (process.platform === 'linux' && repoDir) {
-    const captureDir = values['launch-capture-dir'];
-    if (!captureDir) throw new Error('--launch-capture-dir is required to prepare the updated Linux desktop');
-    log('capturing the updated hermes desktop launch after product startup preparation');
-    updatedSpec = captureUpdatedDesktopLaunch({
-      hermesPath: path.join(repoDir, 'venv', 'bin', 'hermes'),
-      installDir: repoDir,
-      captureDir,
-      specPath: `${values.spec}.updated.json`,
-      env: spec.env,
-    });
+  if (values['no-update']) {
+    log('smoke mode: OLD desktop chat proven, closing');
+    await app.close();
+    process.exit(0);
   }
-  const updatedLaunch = resolveLaunch(updatedSpec);
-  log(`updated executable: ${updatedLaunch.executablePath}`);
-  const relaunch = await launchElectron({
-    executablePath: updatedLaunch.executablePath,
-    args: updatedLaunch.args,
-    cwd: updatedLaunch.cwd,
-    env: updatedLaunch.env,
-  }, 'updated-launch');
-  await withOwnedApplication(relaunch, 'relaunch teardown', async () => {
-    const relaunched = await acceptDesktopLaunch(relaunch, { prepareWindowForInput, log });
-    const window2 = relaunched.window;
-    // Give the shell a moment to paint the statusbar/version chrome.
-    await new Promise((r) => setTimeout(r, 10_000));
-    const shortSha = (expectSha || '').slice(0, 7);
-    const verdict = await window2.evaluate((sha) => {
-      const text = document.body ? document.body.innerText : ''
-      const version = (text.match(/v\d+\.\d+\.\d+[^\n]*/) || [null])[0]
-      return { version, hasSha: sha ? text.includes(sha) : false }
-    }, shortSha).catch(() => null);
-    await window2.screenshot({ path: `${values.spec}.relaunched.png` }).catch(() => {});
-    log(`relaunched app: version="${verdict?.version || 'unseen'}" expectedSha(${shortSha}) in DOM=${verdict?.hasSha}`);
-    if (!verdict) {
-      throw new Error('relaunched app UI came up but could not be read');
+
+  if (!values.result && !(values['expect-sha'] && values['repo-dir'])) {
+    throw new Error('need --result and/or --expect-sha + --repo-dir unless --no-update');
+  }
+  await assertStagedBranch(window, values['expect-sha'], log);
+  const deadline = Date.now() + Number(values['timeout-ms']);
+
+
+  phase('overlay-loop');
+  const hitDump = () => window.evaluate(() => {
+    const describe = (el) => el ? {
+      tag: el.tagName,
+      cls: (typeof el.className === 'string' ? el.className : '').slice(0, 110),
+      aria: el.getAttribute?.('aria-label') || null,
+      z: (() => { try { return getComputedStyle(el).zIndex } catch { return null } })(),
+    } : null
+    const settings = document.querySelector('button[aria-label="Open settings"]')
+    const r = settings?.getBoundingClientRect()
+    const cluster = settings?.closest('div[class*="fixed"]')
+    const bar = document.querySelector('div[class*="h-[34px]"]')
+    const cs = getComputedStyle(document.documentElement)
+    const rect = (el) => { if (!el) return null; const b = el.getBoundingClientRect(); return `${Math.round(b.x)},${Math.round(b.y)} ${Math.round(b.width)}x${Math.round(b.height)}` }
+    return {
+      settingsRect: rect(settings),
+      stack: r ? document.elementsFromPoint(r.x + r.width / 2, r.y + r.height / 2).slice(0, 6).map(describe) : null,
+      cluster: cluster ? { rect: rect(cluster), z: getComputedStyle(cluster).zIndex, cls: (cluster.className || '').slice(0, 120) } : null,
+      bar: bar ? { rect: rect(bar), z: getComputedStyle(bar).zIndex } : null,
+      vars: {
+        controlsLeft: cs.getPropertyValue('--titlebar-controls-left'),
+        toolsRight: cs.getPropertyValue('--titlebar-tools-right'),
+        toolsWidth: cs.getPropertyValue('--titlebar-tools-width'),
+      },
+      win: `${window.innerWidth}x${window.innerHeight} dpr=${window.devicePixelRatio}`,
     }
-    if (shortSha && !verdict.hasSha) {
-      // Not fatal on its own: packaged builds do not always surface the sha in
-      // the DOM. The window came up on the updated install dir, which is the
-      // user-facing contract; log loudly so a human can tighten this later.
-      log(`NOTE: expected short sha ${shortSha} not found in relaunched DOM; version line was "${verdict.version}"`);
+  }).then((d) => JSON.stringify(d)).catch((e) => `hit-dump failed: ${e.message}`)
+  const ui = {
+    log,
+    shot: (page, name) => page.screenshot({ path: `${values.spec}.${name}.png` }).catch(() => {}),
+  };
+  await openAbout(window, { ...ui, prepare: () => prepareWindowForInput(app, window), confirmSettings: true, hitDump });
+  phase('about-update');
+  const updateNow = await waitForUpdate(window, ui);
+  const observe = observeSourceUpdate({
+    home: spec.env.HERMES_HOME,
+    resultPath: values.result,
+    expectSha: values['expect-sha'],
+  });
+  await updateNow.click();
+  phase('update-poll');
+  log('clicked Update now; polling for result file');
+
+  const manualCommand = await readManualUpdateCommand(window);
+  if (manualCommand) {
+    fs.mkdirSync(values['chat-out'], { recursive: true });
+    fs.writeFileSync(
+      path.join(values['chat-out'], 'manual-update.json'),
+      `${JSON.stringify({ command: manualCommand, oldSha: values['old-sha'] }, null, 2)}\n`,
+    );
+    log(`OLD requires the manual update path: ${manualCommand}`);
+    await app.close();
+    process.exit(42);
+  }
+
+  // The app may relaunch/exit during the update; completion signals are
+  // product state, not Playwright events.
+  const repoDir = values['repo-dir'];
+  /** @returns {string} */
+  const headSha = () => {
+    try {
+      // The driver's real git: a fresh-machine leg takes every git off PATH
+      // so the product must provision its own, and an observer that cannot
+      // spawn git would read '' forever instead of failing.
+      return execFileSync(process.env.HERMES_E2E_REAL_GIT || 'git', ['-C', /** @type {string} */ (repoDir), 'rev-parse', 'HEAD'], {
+        encoding: 'utf8',
+      }).trim();
+    } catch {
+      return '';
     }
-    log(`relaunch verification complete: updated app opened Settings and backend ${relaunched.status.version} answered`);
-  }, { log });
-  // Explicit exit: SIGKILLed Electron leaves driver connections holding
-  // the event loop; falling off main() never terminates.
+  };
+  for (;;) {
+    if (observe(repoDir ? headSha() : '')) {
+      log('successful update receipt and expected checkout observed');
+      break;
+    }
+    if (Date.now() > deadline) {
+      await window.screenshot({ path: `${values.spec}.timeout.png` }).catch(() => {});
+      throw new Error('no successful update completion receipt; leaving the install untouched');
+    }
+    await new Promise((r) => setTimeout(r, 2_000));
+  }
+
+  // Record what the product did. The enclosing source driver verifies the
+  // produced artifacts read-only; this helper does not repair or relaunch.
+  phase('post-update');
+  const handoff = await window.evaluate(() => {
+    const text = document.body ? document.body.innerText : ''
+    const m = text.match(/[^\n]*(update complete|reopen|relaunch)[^\n]*/i)
+    return m ? m[0].trim().slice(0, 200) : null
+  }).catch(() => null);
+  log(handoff ? `post-update hand-off state: "${handoff}"` : 'post-update: no hand-off overlay observed (app may self-relaunch)');
+  await window.screenshot({ path: `${values.spec}.post-update.png` }).catch(() => {});
+
+  if (app.windows().length) {
+    await Promise.race([
+      app.close(),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('app did not close after completion; no force-kill attempted')), 15_000)),
+    ]);
+  }
+  log('update completed without driver-assisted recovery (automatic relaunch not asserted here)');
   process.exit(0);
 }
 

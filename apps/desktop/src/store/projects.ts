@@ -1,22 +1,30 @@
+import { replaceEqualDeep } from '@tanstack/react-query'
 import { atom, computed } from 'nanostores'
 
 import type { NewSessionPlacement } from '@/app/chat/new-session-drag'
 import {
+  excludeProjectSessions,
   liveSessionProjectId,
   NO_PROJECT_ID,
   projectOwnerBySessionId,
   type SidebarProjectTree
 } from '@/app/chat/sidebar/projects/workspace-groups'
 import type { HermesGitBaseBranch, HermesGitBranch } from '@/global'
-import { getHermesConfig, hermesApi, type HermesGateway } from '@/hermes'
+import { getHermesConfig, hermesApi, type HermesGateway, type SessionInfo } from '@/hermes'
 import { translateNow } from '@/i18n'
 import { desktopDefaultCwd, isDesktopFsRemoteMode, selectDesktopPaths } from '@/lib/desktop-fs'
 import { desktopGit } from '@/lib/desktop-git'
 import { isMissingRestEndpoint, isMissingRpcMethod } from '@/lib/gateway-rpc'
 import { isUnderPath } from '@/lib/path-compare'
-import { persistentAtom } from '@/lib/persisted'
+import { stampRowsWithOwningConnection } from '@/lib/session-owner-stamp'
 import { revealFile } from '@/store/file-actions'
-import { $gateway, activeGateway, ensureActiveGatewayOpen } from '@/store/gateway'
+import {
+  $gateway,
+  activeGateway,
+  activeGatewayConnectionId,
+  ensureActiveGatewayOpen,
+  isActivePrimary
+} from '@/store/gateway'
 import { $sidebarShowAllSessions, setSidebarAgentsGrouped, setWorkspaceNodeOpen } from '@/store/layout'
 import { notify } from '@/store/notifications'
 import {
@@ -27,12 +35,20 @@ import {
 } from '@/store/open-projects'
 import {
   $activeGatewayProfile,
+  $profiles,
   $profileScope,
   ALL_PROFILES,
   normalizeProfileKey,
   requestFreshSession,
   setShowAllProfiles
 } from '@/store/profile'
+import {
+  $projectScope,
+  advanceProjectNavigation,
+  ALL_PROJECTS,
+  exitProjectScope,
+  projectNavigationGeneration
+} from '@/store/project-scope'
 import {
   $activeSessionId,
   $currentCwd,
@@ -44,8 +60,17 @@ import {
   setSessions,
   workspaceCwdForNewSession
 } from '@/store/session'
-import { $removedSessionIds, $sessionMutationsInFlight } from '@/store/session-removal'
+import {
+  $removedSessionIds,
+  $sessionMutationsInFlight,
+  captureSessionTombstoneGenerations,
+  sessionRemovalIntersected,
+  type SessionTombstoneGenerationSnapshot,
+  tombstoneRowIds
+} from '@/store/session-removal'
 import type { ProjectInfo, ProjectsPayload } from '@/types/hermes'
+
+import { recordFeatureUse } from './desktop-metrics'
 
 // First-class, per-profile Projects (named, multi-folder workspaces). State is
 // served by the live gateway's `projects.*` JSON-RPC methods, which wrap the
@@ -53,13 +78,17 @@ import type { ProjectInfo, ProjectsPayload } from '@/types/hermes'
 // membership; these atoms are the renderer's cached view.
 
 export const $projects = atom<ProjectInfo[]>([])
+
+// The atom itself lives in ./project-tree (a leaf); re-exported here so every
+// existing import path keeps working — projects.ts remains its only writer.
+import { $projectTree } from './project-tree'
+export { $projectTree }
 export const $activeProjectId = atom<null | string>(null)
 
 // The authoritative project -> repo -> lane tree (overview), served by
 // `projects.tree`. Lanes carry counts + structure; per-project session rows are
 // fetched lazily on drill-in via `fetchProjectSessions`. This is the single
 // source of project membership — the desktop no longer derives it.
-export const $projectTree = atom<SidebarProjectTree[]>([])
 export const $openedProjectTree = computed([$projectTree, $openedProjects], (tree, opened) => {
   const byId = new Map(tree.map(project => [project.id, project]))
 
@@ -103,28 +132,11 @@ function projectsStaleBackendError(): Error {
 // True while the disk scan is in flight (drives the "finding repos" hint).
 export const $reposScanning = atom(false)
 
-// ── Project scope (the "you're inside a project" view, mirroring profile scope)─
-// The sidebar's grouped view is a project switcher: ALL_PROJECTS shows the
-// project overview (a list you drill into), and a concrete id means you've
-// "entered" that project so only its worktrees/branches/sessions show. This is
-// pure view state (localStorage), distinct from the durable active-project
-// pointer in projects.db — though entering a project also makes it active so new
-// chats land there, exactly as selecting a profile does.
-export const ALL_PROJECTS = '__all_projects__'
-
-const PROJECT_SCOPE_KEY = 'hermes.desktop.projectScope'
-
-export const $projectScope = persistentAtom<string>(PROJECT_SCOPE_KEY, ALL_PROJECTS, {
-  decode: raw => raw || ALL_PROJECTS,
-  encode: value => value || ALL_PROJECTS
-})
-let projectNavigationGeneration = 0
-
 // Enter a project: scope the sidebar to it and make it the active project
 // (best-effort — the durable pointer is nice-to-have, the view scope is the
 // point). Never opens a session.
 export function enterProject(id: string): void {
-  projectNavigationGeneration += 1
+  advanceProjectNavigation()
   const project = $projectTree.get().find(node => node.id === id)
 
   if (id !== NO_PROJECT_ID) {
@@ -133,6 +145,7 @@ export function enterProject(id: string): void {
 
   setWorkspaceNodeOpen('section:projects', true)
   $projectScope.set(id)
+  recordFeatureUse('projects')
 
   // Only explicit, persisted projects (ids are `p_<hex>`) become active. Auto
   // projects (ids are filesystem paths) and the Home bucket have no durable row
@@ -140,11 +153,6 @@ export function enterProject(id: string): void {
   if (id.startsWith('p_')) {
     void setActiveProject(id).catch(() => undefined)
   }
-}
-
-export function exitProjectScope(): void {
-  projectNavigationGeneration += 1
-  $projectScope.set(ALL_PROJECTS)
 }
 
 export function closeProject(id: string): void {
@@ -371,10 +379,14 @@ async function gatewayRequest<T>(method: string, params: Record<string, unknown>
   return gateway.request<T>(method, params)
 }
 
+function viewingAllProfiles(): boolean {
+  return $profileScope.get() === ALL_PROFILES && $profiles.get().length > 1
+}
+
 export function projectProfile(): null | string {
   const profile = normalizeProfileKey($activeGatewayProfile.get())
 
-  return $profileScope.get() === ALL_PROFILES || profile === ALL_PROFILES ? null : profile
+  return viewingAllProfiles() || profile === ALL_PROFILES ? null : profile
 }
 
 // All profiles filters the sidebar. Writes still belong to the live gateway profile.
@@ -413,24 +425,47 @@ function isRetryableProjectTreeReadError(error: unknown): boolean {
   return message.includes('request timed out') || message.includes('gateway connection closed')
 }
 
-interface ActiveProjectsContext {
+interface ProjectRowOwner {
+  connectionId: null | string
+  // `local` served as an active registry SECONDARY: its bare rows would
+  // resolve to the window primary, so they need the owner tag.
+  stampLocal: boolean
+}
+
+interface ActiveProjectsContext extends ProjectRowOwner {
   gateway: HermesGateway
   profile: string
   activeProfile: string
   scope: string
 }
 
+function projectRowOwner(): ProjectRowOwner {
+  const connectionId = activeGatewayConnectionId()
+
+  return { connectionId, stampLocal: connectionId === 'local' && !isActivePrimary() }
+}
+
 function stillOnProjectsContext(context: ActiveProjectsContext): boolean {
   return (
     activeGateway() === context.gateway &&
     normalizeProfileKey($activeGatewayProfile.get()) === context.activeProfile &&
-    $profileScope.get() === context.scope
+    $profileScope.get() === context.scope &&
+    activeGatewayConnectionId() === context.connectionId
+  )
+}
+
+function stillOnWritableProjectOwner(context: ActiveProjectsContext): boolean {
+  return (
+    activeGateway() === context.gateway &&
+    normalizeProfileKey($activeGatewayProfile.get()) === context.activeProfile &&
+    activeGatewayConnectionId() === context.connectionId
   )
 }
 
 async function activeProjectsContext(profile = projectProfile()): Promise<ActiveProjectsContext> {
   const scope = $profileScope.get()
   const activeProfile = normalizeProfileKey($activeGatewayProfile.get())
+  const { connectionId, stampLocal } = projectRowOwner()
 
   if (!profile || profile === ALL_PROFILES) {
     throw new Error(translateNow('sidebar.projects.unavailableAllProfiles'))
@@ -455,7 +490,7 @@ async function activeProjectsContext(profile = projectProfile()): Promise<Active
     throw new Error(translateNow('sidebar.projects.activeProfileChanged'))
   }
 
-  return { gateway, profile, activeProfile, scope }
+  return { gateway, profile, activeProfile, scope, connectionId, stampLocal }
 }
 
 function projectWriteProfile(ownerProfile?: string): string {
@@ -522,6 +557,36 @@ const PROJECT_TREE_REQUEST_TIMEOUT_MS = 60_000
 
 let projectTreeRefreshGeneration = 0
 
+// Like REST session-list rows, tree-only rows need their registry owner, stamped
+// at the response boundary rather than derived on click. The canonical stamper
+// owns the rules: a row that already names an owner is never re-owned, and
+// `local` stays bare so the primary keeps the legacy profile door (#94166).
+// The one addition is `local` as a registry secondary (see ProjectRowOwner).
+function stampProjectSessions(sessions: SessionInfo[], owner: ProjectRowOwner): SessionInfo[] {
+  if (owner.connectionId !== 'local') {
+    return stampRowsWithOwningConnection(sessions, owner.connectionId)
+  }
+
+  return owner.stampLocal
+    ? sessions.map(session => (session.connection_id?.trim() ? session : { ...session, connection_id: 'local' }))
+    : sessions
+}
+
+function tagProjectSessionConnection(project: SidebarProjectTree, owner: ProjectRowOwner): SidebarProjectTree {
+  if (!owner.connectionId || (owner.connectionId === 'local' && !owner.stampLocal)) {
+    return project
+  }
+
+  return {
+    ...project,
+    ...(project.previewSessions ? { previewSessions: stampProjectSessions(project.previewSessions, owner) } : {}),
+    repos: project.repos.map(repo => ({
+      ...repo,
+      groups: repo.groups.map(group => ({ ...group, sessions: stampProjectSessions(group.sessions, owner) }))
+    }))
+  }
+}
+
 interface ProjectTreeContext {
   gateway: HermesGateway | null
   profile: string | null
@@ -540,7 +605,13 @@ function beginProjectTreeRead(context: ProjectTreeContext): void {
 function applyProjectTreePayload(res: ProjectTreePayload, context: ProjectTreeContext): void {
   resolvedProjectTreeContext = context
   const scoped = new Set(res.scoped_session_ids ?? [])
-  $projectTree.set(res.projects ?? [])
+  const owner = projectRowOwner()
+  $projectTree.set(
+    replaceEqualDeep(
+      $projectTree.get(),
+      (res.projects ?? []).map(project => tagProjectSessionConnection(project, owner))
+    )
+  )
 
   // Merged all-profile IDs cannot identify the owner of a saved open record.
   if (context.profile) {
@@ -624,7 +695,7 @@ async function refreshProjectTreeOn(context: ActiveProjectsContext): Promise<Sid
 // sessions + the scoped-session-id set). Best-effort: a failure leaves the
 // cached tree intact so the sidebar doesn't flicker.
 export async function refreshProjectTree(): Promise<void> {
-  if ($profileScope.get() === ALL_PROFILES) {
+  if (viewingAllProfiles()) {
     await refreshProjectTreeAcrossProfiles()
 
     return
@@ -642,6 +713,7 @@ export async function refreshProjectTree(): Promise<void> {
 // the REST fan-out reads every profile's databases directly instead of asking
 // us to hold a backend open per profile just to draw lanes.
 async function refreshProjectTreeAcrossProfiles(): Promise<void> {
+  const owner = projectRowOwner()
   const generation = ++projectTreeRefreshGeneration
   const context: ProjectTreeContext = { gateway: activeGateway(), profile: null }
   beginProjectTreeRead(context)
@@ -657,7 +729,8 @@ async function refreshProjectTreeAcrossProfiles(): Promise<void> {
     if (
       generation !== projectTreeRefreshGeneration ||
       $profileScope.get() !== ALL_PROFILES ||
-      activeGateway() !== context.gateway
+      activeGateway() !== context.gateway ||
+      activeGatewayConnectionId() !== owner.connectionId
     ) {
       return
     }
@@ -678,6 +751,28 @@ async function refreshProjectTreeAcrossProfiles(): Promise<void> {
 // membership match exactly.
 let projectSessionsRefreshGeneration = 0
 
+// A drill-in page read before an archive/delete committed can land after the
+// projects.tree prune has dropped the tombstone, resurrecting the row in the
+// entered project's lanes (#123685, same race as the sidebar refresh). The
+// tombstone's generation snapshot survives the prune, so the same guard
+// applies: reject rows whose removal lifecycle moved under this request.
+// `excludeProjectSessions` keeps the project ref when nothing matches, so the
+// no-removal common case stays identity-stable for the drill-in's memo.
+function dropRemovedProjectSessions(
+  project: SidebarProjectTree | null,
+  removalSnapshot: SessionTombstoneGenerationSnapshot
+): SidebarProjectTree | null {
+  if (!project) {
+    return null
+  }
+
+  const tombstones = $removedSessionIds.get()
+
+  return excludeProjectSessions(project, session =>
+    tombstoneRowIds(session).some(id => tombstones.has(id) || sessionRemovalIntersected(removalSnapshot, id))
+  )
+}
+
 // A drill-in only wants the LATEST request (an older one resolving late would
 // paint the wrong project), so those are `supersedable` and resolve null when
 // overtaken. A per-row "Show all" expansion is not: two rows expanding at once,
@@ -692,6 +787,9 @@ export async function fetchProjectSessions(
   if (!profile) {
     return null
   }
+
+  // Snapshot before the read: the guard must cover the whole request window.
+  const removalSnapshot = captureSessionTombstoneGenerations()
 
   let context: ActiveProjectsContext | undefined
 
@@ -708,7 +806,10 @@ export async function fetchProjectSessions(
       return null
     }
 
-    return res.project ?? null
+    return dropRemovedProjectSessions(
+      res.project ? tagProjectSessionConnection(res.project, context) : null,
+      removalSnapshot
+    )
   } catch (error) {
     if (
       (generation !== null && generation !== projectSessionsRefreshGeneration) ||
@@ -720,6 +821,87 @@ export async function fetchProjectSessions(
 
     throw error
   }
+}
+
+// Mirror a successful rename into the cached project surfaces, the same
+// optimistic-layer contract as moveSessionToProject: the backend row IS
+// renamed, but the tree snapshot (overview previews + counts) still carries
+// the old title until its next refresh — and the sidebar overlays live rows
+// only where a live twin exists, so a snapshot-only row in the entered
+// project kept the stale title until a profile switch (#123337). Patch every
+// cached copy by lineage id, then re-pull the authoritative tree.
+export function applyRenamedSessionTitle(sessionId: string, title: string | null): void {
+  const next = title?.trim() || null
+
+  const tree = $projectTree.get()
+  let changed = false
+
+  const renamedTree = tree.map(project => {
+    const renamed = renameProjectSessions(project, sessionId, next)
+
+    changed ||= renamed !== project
+
+    return renamed
+  })
+
+  if (changed) {
+    $projectTree.set(renamedTree)
+  }
+
+  void refreshProjectTree()
+}
+
+/** Patch every cached copy of the renamed conversation inside one project
+ *  node (lane rows + overview previews), keeping the node's reference when
+ *  nothing matched — the tree keeps unchanged nodes by reference so the
+ *  drill-in doesn't refetch on a no-op (#77591). */
+function renameProjectSessions(
+  project: SidebarProjectTree,
+  sessionId: string,
+  next: string | null
+): SidebarProjectTree {
+  let changed = false
+
+  const rename = (sessions: SessionInfo[]): SessionInfo[] =>
+    sessions.map(session => {
+      if (!sessionMatchesStoredId(session, sessionId) || session.title === next) {
+        return session
+      }
+
+      changed = true
+
+      return { ...session, title: next }
+    })
+
+  const repos = project.repos.map(repo => {
+    let repoChanged = false
+
+    const groups = repo.groups.map(group => {
+      const sessions = rename(group.sessions)
+
+      if (sessions === group.sessions) {
+        return group
+      }
+
+      repoChanged = true
+
+      return { ...group, sessions }
+    })
+
+    if (!repoChanged) {
+      return repo
+    }
+
+    return { ...repo, groups, sessionCount: groups.reduce((n, g) => n + g.sessions.length, 0) }
+  })
+
+  const previewSessions = project.previewSessions ? rename(project.previewSessions) : project.previewSessions
+
+  if (!changed) {
+    return project
+  }
+
+  return { ...project, previewSessions, repos, sessionCount: repos.reduce((n, repo) => n + repo.sessionCount, 0) }
 }
 
 interface WorkspaceMovePayload {
@@ -1005,6 +1187,34 @@ function projectInfoToTreeNode(project: ProjectInfo): SidebarProjectTree {
   }
 }
 
+function publishCreatedProject(created: ProjectInfo, input: CreateProjectInput) {
+  rememberOpenProject({ id: created.id, path: created.primary_path ?? created.folders?.[0]?.path ?? null })
+
+  if (!$projects.get().some(proj => proj.id === created.id)) {
+    $projects.set([...$projects.get(), created])
+  }
+
+  if (!$projectTree.get().some(node => node.id === created.id)) {
+    $projectTree.set([projectInfoToTreeNode(created), ...$projectTree.get()])
+  }
+
+  if (input.use) {
+    $activeProjectId.set(created.id)
+  }
+
+  // A "New project" DRAG created this: hand the placement to the completion
+  // side so the project's fresh session draft opens exactly where it was
+  // dropped (tab-strip slot / pane edge / pane center). The plain click
+  // path has no placement and keeps its existing behavior.
+  const rootPath = created.primary_path ?? created.folders?.[0]?.path ?? input.primaryPath
+
+  if (input.dropPlacement && rootPath) {
+    $newProjectSessionRequest.set({ path: rootPath, placement: input.dropPlacement })
+  }
+
+  setSidebarAgentsGrouped(true)
+}
+
 export async function createProject(input: CreateProjectInput, ownerProfile?: string): Promise<ProjectInfo | null> {
   if ($projectsRpcAvailable.get() === false) {
     throw projectsStaleBackendError()
@@ -1049,8 +1259,15 @@ export async function createProject(input: CreateProjectInput, ownerProfile?: st
     throw err
   }
 
-  if (!stillOnProjectsContext(context)) {
-    return res.project
+  // The RPC may have created the project on A while the window moved to B.
+  // The IDEA.md writer and cached/sidebar state below use the current owner;
+  // publishing A's result there can overwrite B's file at the same path.
+  if (!stillOnWritableProjectOwner(context)) {
+    if (res.project) {
+      notify({ kind: 'info', message: translateNow('sidebar.projects.createdInPreviousContext') })
+    }
+
+    return null
   }
 
   markProjectsRpcSuccess()
@@ -1067,33 +1284,7 @@ export async function createProject(input: CreateProjectInput, ownerProfile?: st
   // that reconcile counts/repos.
   const created = res.project
 
-  if (created) {
-    rememberOpenProject({ id: created.id, path: created.primary_path ?? created.folders?.[0]?.path ?? null })
-
-    if (!$projects.get().some(proj => proj.id === created.id)) {
-      $projects.set([...$projects.get(), created])
-    }
-
-    if (!$projectTree.get().some(node => node.id === created.id)) {
-      $projectTree.set([projectInfoToTreeNode(created), ...$projectTree.get()])
-    }
-
-    if (input.use) {
-      $activeProjectId.set(created.id)
-    }
-
-    // A "New project" DRAG created this: hand the placement to the completion
-    // side so the project's fresh session draft opens exactly where it was
-    // dropped (tab-strip slot / pane edge / pane center). The plain click
-    // path has no placement and keeps its existing behavior.
-    const rootPath = created.primary_path ?? created.folders?.[0]?.path ?? input.primaryPath
-
-    if (input.dropPlacement && rootPath) {
-      $newProjectSessionRequest.set({ path: rootPath, placement: input.dropPlacement })
-    }
-
-    setSidebarAgentsGrouped(true)
-  }
+  if (created) {publishCreatedProject(created, input)}
 
   reconcileProjects()
 
@@ -1653,6 +1844,36 @@ export async function pickProjectFolder(title?: string): Promise<null | string> 
   })
 
   return dir || null
+}
+
+// Multi-select variant for the project dialog: one pick can carry several
+// folders (#68741), matching what the native dialog's multiSelections allows.
+export async function pickProjectFolders(): Promise<string[]> {
+  return selectDesktopPaths({
+    defaultPath: (await desktopDefaultCwd())?.cwd,
+    directories: true,
+    multiple: true
+  })
+}
+
+// Add every picked folder to an existing project in one action. Folders the
+// project already has — or repeats within the pick itself — are skipped, so
+// a multi-select never writes duplicate rows (#68741).
+export async function addProjectFolders(id: string, paths: string[], ownerProfile?: string): Promise<void> {
+  const existing = new Set(
+    $projects
+      .get()
+      .find(proj => proj.id === id)
+      ?.folders?.map(folder => folder.path) ?? []
+  )
+
+  for (const path of new Set(paths.map(path => path.trim()).filter(Boolean))) {
+    if (existing.has(path)) {
+      continue
+    }
+
+    await addProjectFolder(id, path, {}, ownerProfile)
+  }
 }
 
 // ⌘O / palette "Open folder…": open a folder AS a project, upserting. A folder

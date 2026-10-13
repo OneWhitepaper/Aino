@@ -28,16 +28,17 @@ import { useI18n } from '@/i18n'
 import { triggerHaptic } from '@/lib/haptics'
 import { formatModifierToken } from '@/lib/keybinds/combo'
 import { cn } from '@/lib/utils'
+import { recordAction } from '@/store/desktop-metrics'
 import { $hapticsMuted, toggleHapticsMuted } from '@/store/haptics'
 import { toggleHud } from '@/store/hud'
 import { $interfaceMode, shownInMode, type Tiered } from '@/store/interface-mode'
 import {
   $fileBrowserOpen,
+  $leftSideOpen,
   $panesFlipped,
-  $sidebarOpen,
-  toggleFileBrowserOpen,
+  toggleLeftSide,
   togglePanesFlipped,
-  toggleSidebarOpen
+  toggleRightSide
 } from '@/store/layout'
 import { $unreadSessionCount } from '@/store/session-dot-state'
 import { $titlebarAppActionsSide, TITLEBAR_FIXED_TOOLS } from '@/store/titlebar-app-actions'
@@ -154,8 +155,8 @@ export function TitlebarControls({ leftTools = [], tools = [] }: TitlebarControl
   const fileBrowserOpen = useStore($fileBrowserOpen)
   const leftSideVisible = useStore($treeSideVisible('left'))
   const narrowViewport = useStore($narrowViewport)
+  const leftSideOpen = useStore($leftSideOpen)
   const panesFlipped = useStore($panesFlipped)
-  const sidebarOpen = useStore($sidebarOpen)
   const unreadCount = useStore($unreadSessionCount)
   const terminalVisible = useStore($paneVisible('terminal'))
   const appActionsSide = useStore($titlebarAppActionsSide)
@@ -170,7 +171,9 @@ export function TitlebarControls({ leftTools = [], tools = [] }: TitlebarControl
     if (!hapticsMuted) {
       triggerHaptic('tap')
     }
+
     toggleHapticsMuted()
+
     if (hapticsMuted) {
       window.requestAnimationFrame(() => triggerHaptic('success'))
     }
@@ -185,11 +188,12 @@ export function TitlebarControls({ leftTools = [], tools = [] }: TitlebarControl
 
   // POSITIONAL toggles: each button shows/hides everything on its physical
   // side of the main zone (the layout tree collapses the whole side), so they
-  // stay correct through flips and rearranges. $sidebarOpen ≙ left side,
-  // $fileBrowserOpen ≙ right side. Never an active highlight — plain
-  // show/hide affordances.
-  const leftEdge = { open: narrowViewport ? sidebarOpen : leftSideVisible, toggle: toggleSidebarOpen }
-  const rightEdge = { open: fileBrowserOpen, toggle: toggleFileBrowserOpen }
+  // stay correct through flips and rearranges. Both edges resolve their column
+  // from the live tree (see toggleLeftSide / toggleRightSide) — the browser
+  // column, the sessions column, whatever is physically left / right. Never an
+  // active highlight — plain show/hide affordances.
+  const leftEdge = { open: leftSideOpen, toggle: toggleLeftSide }
+  const rightEdge = { open: fileBrowserOpen, toggle: toggleRightSide }
   const leftLabel = leftEdge.open ? t.titlebar.hideSidebar : t.titlebar.showSidebar
   const rightLabel = rightEdge.open ? t.titlebar.hideRightSidebar : t.titlebar.showRightSidebar
 
@@ -450,6 +454,10 @@ function TitlebarToolButton({ navigate, tool }: { navigate: ReturnType<typeof us
         data-tour={tool.tour}
         disabled={tool.disabled}
         onClick={event => {
+          if (tool.actionId) {
+            recordAction(tool.actionId, 'click')
+          }
+
           if (tool.to) {
             navigate(tool.to)
           }

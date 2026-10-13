@@ -1,4 +1,5 @@
 import { useStore } from '@nanostores/react'
+import { atom } from 'nanostores'
 import { useCallback, useEffect, useRef, useState } from 'react'
 
 import { useSessionView } from '@/app/chat/session-view'
@@ -27,10 +28,58 @@ import type { ChatBarState } from './types'
 // `shrink` (not `shrink-0`) with a truncating label: the pill is the one
 // control in the row that can give width back continuously, so it absorbs the
 // squeeze between collapse stages instead of pushing Send past the edge.
+// No `max-w-*` cap: the pill sizes to its label, so a long model name only
+// truncates when the row is genuinely out of room (#49340) — not at an
+// arbitrary 160px.
+const UNKNOWN_TIER = atom('')
+
 const PILL = cn(
-  'h-(--composer-control-size) min-w-0 max-w-40 shrink gap-1 rounded-md px-2 text-xs font-normal',
+  'h-(--composer-control-size) min-w-0 shrink gap-1 rounded-md px-2 text-xs font-normal',
   'text-(--ui-text-tertiary) hover:bg-(--chrome-action-hover) hover:text-foreground'
 )
+
+interface ModelPillContentProps {
+  compact: boolean
+  hasModel: boolean
+  modelLabel: string
+  unavailable: boolean
+  noModelLabel: string
+  pinned: boolean
+  pinnedLabel: string
+}
+
+function ModelPillContent({
+  compact,
+  hasModel,
+  modelLabel,
+  unavailable,
+  noModelLabel,
+  pinned,
+  pinnedLabel
+}: ModelPillContentProps) {
+  return compact ? (
+    <ChevronDown className="size-3.5 shrink-0 opacity-70" />
+  ) : (
+    <>
+      {hasModel ? (
+        <span className="truncate">{modelLabel}</span>
+      ) : unavailable ? (
+        <span className="truncate">{noModelLabel}</span>
+      ) : (
+        <GlyphSpinner className="opacity-50" spinner="braille" />
+      )}
+      {pinned && (
+        <span
+          aria-label={pinnedLabel}
+          className="size-1 shrink-0 rounded-full bg-(--ui-accent)"
+          data-testid="model-pinned-dot"
+          role="img"
+        />
+      )}
+      <ChevronDown className="size-2.5 shrink-0 opacity-50" />
+    </>
+  )
+}
 
 /**
  * Composer model selector — the relocated status-bar pill. Reuses the live
@@ -66,6 +115,7 @@ export function ModelPill({
     currentProvider === 'aino' ? platform.models.find(row => row.id === currentModel)?.display_name : undefined
 
   const fastMode = useStore(view.$fast)
+  const serviceTier = useStore(view.$serviceTier ?? UNKNOWN_TIER)
   const reasoningEffort = useStore(view.$reasoningEffort)
   const modelSource = useStore($currentModelSource)
   const modelDefaultUnavailableState = useStore($modelDefaultUnavailable)
@@ -160,29 +210,16 @@ export function ModelPill({
   // the text changes, and a provider that declines leaves the core label.
   const pillLabel = useComposerModelPillLabel({ compact, model: currentModel, reasoningEffort: reasoningEffort || '' })
 
-  const label = compact ? (
-    <ChevronDown className="size-3.5 shrink-0 opacity-70" />
-  ) : (
-    <>
-      {currentModel.trim() ? (
-        <span className="truncate">
-          {platformName || pillLabel || formatModelPillLabel(currentModel, { fastMode })}
-        </span>
-      ) : modelDefaultUnavailable ? (
-        <span className="truncate">{copy.noModel}</span>
-      ) : (
-        <GlyphSpinner className="opacity-50" spinner="braille" />
-      )}
-      {pinnedOverride && (
-        <span
-          aria-label={copy.modelPinned}
-          className="size-1 shrink-0 rounded-full bg-(--ui-accent)"
-          data-testid="model-pinned-dot"
-          role="img"
-        />
-      )}
-      <ChevronDown className="size-2.5 shrink-0 opacity-50" />
-    </>
+  const label = (
+    <ModelPillContent
+      compact={compact}
+      hasModel={Boolean(currentModel.trim())}
+      modelLabel={platformName || pillLabel || formatModelPillLabel(currentModel, { fastMode, serviceTier })}
+      noModelLabel={copy.noModel}
+      pinned={pinnedOverride}
+      pinnedLabel={copy.modelPinned}
+      unavailable={modelDefaultUnavailable}
+    />
   )
 
   // Compact (floating composer): a snug square holding just the chevron — no pill
@@ -238,7 +275,7 @@ export function ModelPill({
       </Tip>
       <DropdownMenuContent
         align="end"
-        className="w-64 p-0"
+        className="w-72 p-0"
         onCloseAutoFocus={event => {
           if (restoreSelection.current) {
             event.preventDefault()

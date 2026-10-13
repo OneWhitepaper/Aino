@@ -23,13 +23,15 @@ import {
   $currentPlatformOwner,
   $currentProvider,
   $currentReasoningEffort,
+  $currentReasoningEffortWire,
   getCurrentModelSource,
   markComposerSelectionManual,
   setCurrentModel,
   setCurrentModelSource,
   setCurrentPlatformOwner,
   setCurrentProvider,
-  setCurrentReasoningEffort
+  setCurrentReasoningEffort,
+  setCurrentReasoningEffortWire
 } from '@/store/session'
 import { $sessionStates, sessionTileDelegate } from '@/store/session-states'
 import type { SessionRuntimeInfo } from '@/types/hermes'
@@ -99,20 +101,28 @@ interface SwitchOptions {
   copy: { confirm: string; failed: string; busy: string; recovery: string; retry: string }
 }
 
+function previousModelSelection(
+  primary: boolean,
+  previousState: ReturnType<typeof $sessionStates.get>[string] | undefined
+) {
+  return {
+    model: primary ? $currentModel.get() : (previousState?.model ?? ''),
+    provider: primary ? $currentProvider.get() : (previousState?.provider ?? ''),
+    platformModel: previousState?.platformModel,
+    wire: primary ? $currentReasoningEffortWire.get() : (previousState?.reasoningEffortWire ?? ''),
+    source: getCurrentModelSource(),
+    owner: $currentPlatformOwner.get(),
+    origin: $currentPlatformOrigin.get()
+  }
+}
+
 function captureModelSwitch({ selection, queryClient, profile, connectionId, cache, copy }: SwitchOptions) {
   const primaryId = $activeSessionId.get()
   const sessionId = 'sessionId' in selection ? (selection.sessionId ?? null) : primaryId
   const primary = !sessionId || sessionId === primaryId
   const previousState = sessionId ? $sessionStates.get()[sessionId] : undefined
 
-  const previous = {
-    model: primary ? $currentModel.get() : (previousState?.model ?? ''),
-    provider: primary ? $currentProvider.get() : (previousState?.provider ?? ''),
-    platformModel: previousState?.platformModel,
-    source: getCurrentModelSource(),
-    owner: $currentPlatformOwner.get(),
-    origin: $currentPlatformOrigin.get()
-  }
+  const previous = previousModelSelection(primary, previousState)
 
   const owner = connectionId ? { connectionId, profile } : profile
   const foregroundScope = platformDefaultScope($activeGatewayProfile.get()).key
@@ -209,13 +219,20 @@ function captureModelSwitch({ selection, queryClient, profile, connectionId, cac
 
       if (rollback) {
         setCurrentModelSource(previous.source)
+        setCurrentReasoningEffortWire(previous.wire)
       } else {
         markComposerSelectionManual()
       }
     }
 
     if (tileExists()) {
-      sessionTileDelegate()?.updateSession(sessionId!, state => ({ ...state, model, provider, platformModel }))
+      sessionTileDelegate()?.updateSession(sessionId!, state => ({
+        ...state,
+        model,
+        provider,
+        platformModel,
+        reasoningEffortWire: rollback ? previous.wire : ''
+      }))
     }
 
     cache(sessionId, provider, model, primary && !sessionId, profile)

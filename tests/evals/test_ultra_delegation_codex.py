@@ -11,7 +11,7 @@ import subprocess
 import sys
 import threading
 import time
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, UTC
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import pytest
@@ -155,7 +155,7 @@ class _CodexProbe:
             'origin': origin, 'user_id': 'local-codex-user', 'api_key': self.old_key,
             'credential_id': 'local-original', 'base_url': origin + '/v1',
             'model': {'id': 'local-model', 'model': 'gpt-5.6-sol', 'api_mode': 'responses'},
-            'expires_at': (datetime.now(timezone.utc) + timedelta(minutes=10)).isoformat(),
+            'expires_at': (datetime.now(UTC) + timedelta(minutes=10)).isoformat(),
         }
 
     def start(self, *, live=False, **options):
@@ -373,7 +373,7 @@ def test_native_codex_renewal_rotates_next_http_request(codex_probe):
     rig = codex_probe
     rig.start(live=True, budget=3600)
     renewed = {**rig.lease, 'api_key': rig.new_key, 'credential_id': 'local-renewed',
-               'expires_at': (datetime.now(timezone.utc) + timedelta(minutes=20)).isoformat()}
+               'expires_at': (datetime.now(UTC) + timedelta(minutes=20)).isoformat()}
     rig.send({'type': 'renew_managed_model', 'lease': renewed})
     receipt = rig.wait_stage('lease_renewed')
     assert receipt['expires_at'] == renewed['expires_at']
@@ -398,7 +398,7 @@ def test_native_codex_invalid_renewal_prevents_the_next_request(codex_probe, inv
     elif invalid_kind == 'foreign-destination':
         renewed['base_url'] = 'https://unreachable.invalid/v1'
     elif invalid_kind == 'expired':
-        renewed['expires_at'] = (datetime.now(timezone.utc) - timedelta(seconds=1)).isoformat()
+        renewed['expires_at'] = (datetime.now(UTC) - timedelta(seconds=1)).isoformat()
     else:
         renewed.pop('api_key')
     rig.send({'type': 'renew_managed_model', 'lease': renewed})
@@ -466,7 +466,7 @@ def test_harness_scores_native_repair_transport_without_claiming_acceptance(code
          '--driver=codex', '--codex-bin=' + codex_probe.codex,
          '--codex-dry-case=' + dry_case,
          '--output-root=' + str(codex_probe.run.parent), '--name=integrated'],
-        cwd=_REPO, stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=60,
+        check=False, cwd=_REPO, stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=60,
     )
     report = json.loads((codex_probe.run.parent / 'integrated/report.json').read_text())
     assert completed.returncode == 0, (completed.stdout, completed.stderr, report['probes'])

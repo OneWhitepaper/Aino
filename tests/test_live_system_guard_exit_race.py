@@ -10,7 +10,7 @@ from types import SimpleNamespace
 import psutil
 import pytest
 
-from tests.conftest import _live_system_guard
+from tests._fixtures.live_system_guard import _live_system_guard
 
 
 @pytest.fixture
@@ -37,7 +37,7 @@ def observed_guard(request):
             next(guard, None)
 
 
-@pytest.mark.macos_only
+@pytest.mark.platforms("macos")
 def test_reaped_child_during_parent_walk_preserves_process_lookup_error(observed_guard, monkeypatch):
     calls, _ = observed_guard
     child = subprocess.Popen([sys.executable, "-c", "pass"])
@@ -61,7 +61,7 @@ def test_reaped_child_during_parent_walk_preserves_process_lookup_error(observed
     assert calls == [(child.pid, 0)]
 
 
-@pytest.mark.macos_only
+@pytest.mark.platforms("macos")
 @pytest.mark.parametrize("permission_denied", [False, True])
 def test_live_foreign_pid_never_receives_a_destructive_signal(observed_guard, permission_denied):
     calls, probe = observed_guard

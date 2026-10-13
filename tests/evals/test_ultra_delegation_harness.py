@@ -47,8 +47,8 @@ def test_wire_observer_separates_iterator_and_consumer_time_offline(tmp_path, ma
 
 
 @pytest.mark.parametrize("stop_reason,options,signal_on_ready", [
-    pytest.param("external_signal", [], True, marks=pytest.mark.linux_only, id="external-signal-linux"),
-    pytest.param("external_signal", [], True, marks=pytest.mark.macos_only, id="external-signal-macos"),
+    pytest.param("external_signal", [], True, marks=pytest.mark.platforms("linux"), id="external-signal-linux"),
+    pytest.param("external_signal", [], True, marks=pytest.mark.platforms("macos"), id="external-signal-macos"),
     ("token_request_cap", ["--input-cap=1"], False),
     ("normal_final", [], False),
 ])
@@ -125,7 +125,7 @@ runpy.run_path(str(harness), run_name="__main__")
 '''
     completed = subprocess.run(
         [sys.executable, "-c", script, str(repo), str(tmp_path)],
-        cwd=repo, text=True, capture_output=True, timeout=60,
+        check=False, cwd=repo, text=True, capture_output=True, timeout=60,
     )
     assert completed.returncode == 0, completed.stdout + completed.stderr
     receipts = [json.loads(line.removeprefix("HOOK_PROBE:"))

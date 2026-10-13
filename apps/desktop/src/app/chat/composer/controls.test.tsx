@@ -202,6 +202,13 @@ describe('ComposerControls shortcut tooltips', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Queue message' }))
     expect(onQueue).toHaveBeenCalledOnce()
   })
+
+  it('hides Queue while idle even if the composer has a payload', () => {
+    renderControls({ busy: false, busyAction: 'queue', hasComposerPayload: true })
+
+    expect(screen.queryByLabelText('Queue message')).toBeNull()
+    expect(screen.getByLabelText('Send')).toBeTruthy()
+  })
 })
 
 describe('wake-word ear visibility', () => {

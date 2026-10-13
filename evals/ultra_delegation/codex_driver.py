@@ -18,7 +18,7 @@ import subprocess
 import sys
 import threading
 import time
-from datetime import datetime, timezone
+from datetime import datetime, UTC
 from uuid import uuid4, uuid5, NAMESPACE_OID
 
 from evals.ultra_delegation.convergence import (
@@ -149,7 +149,7 @@ def run_codex(ctx):
         raise ValueError('Codex comparison requires a Responses lease')
     expected_model = lease['model']['model']
     upstream_secret = lease['api_key']
-    expiry = datetime.fromisoformat(lease['expires_at'].replace('Z', '+00:00')).timestamp()
+    expiry = datetime.fromisoformat(lease['expires_at']).timestamp()
 
     def stop(reason):
         with lock:
@@ -199,8 +199,8 @@ def run_codex(ctx):
                 credential_id = renewed['credential_id']
                 if not isinstance(credential_id, str) or not credential_id:
                     raise ValueError('Missing credential identity')
-                expires = datetime.fromisoformat(renewed['expires_at'].replace('Z', '+00:00'))
-                if expires.tzinfo is None or expires.timestamp() <= datetime.now(timezone.utc).timestamp():
+                expires = datetime.fromisoformat(renewed['expires_at'])
+                if expires.tzinfo is None or expires.timestamp() <= datetime.now(UTC).timestamp():
                     raise ValueError('Renewed lease already expired')
                 with lock:
                     lease, upstream_secret, expiry = renewed, secret, expires.timestamp()
@@ -322,7 +322,7 @@ def run_codex(ctx):
             return JSONResponse({'error': 'managed_model_identity_mismatch'}, status_code=400)
         if body.get('stream') is not True:
             return JSONResponse({'error': 'streaming_required'}, status_code=400)
-        if datetime.now(timezone.utc).timestamp() >= expiry:
+        if datetime.now(UTC).timestamp() >= expiry:
             stop('lease_expired')
             return JSONResponse({'error': 'lease_expired'}, status_code=401)
         thread, scope, wire_meta = metadata(body, req.headers)
@@ -366,7 +366,7 @@ def run_codex(ctx):
             # on the threshold-crossing dispatch, including in-flight work.
             stop(why)
         # Captured model-facing content contains no lease or local proxy token.
-        (run / ('request-%03d.json' % len(requests))).write_text(ctx['safe'](body))
+        (run / f'request-{len(requests):03d}.json').write_text(ctx['safe'](body))
         start = time.monotonic()
         client = upstream_response = None
         if args.live:

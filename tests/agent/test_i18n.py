@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-import yaml
+import hermes_yaml as yaml
 
 from agent import i18n
 
@@ -181,6 +181,12 @@ def test_simplified_chinese_localizes_resume_and_matrix_recovery_copy():
     assert i18n.t("gateway.resume.blocked_not_owner", lang="zh", name="工作") == (
         "⚠️ /resume 已阻止：'**工作**' 属于其他用户或聊天。你只能恢复此聊天中的会话。"
     )
+@pytest.mark.parametrize("lang", list(i18n.SUPPORTED_LANGUAGES))
+def test_catalog_values_have_no_escaped_newlines(lang: str):
+    """A double-escaped ``\\\\n`` in YAML loads as a visible backslash-n, so
+    pickers render ``\\n`` text instead of line breaks (e.g. /reasoning, /fast)."""
+    escaped = [key for key, value in _flatten(_load_raw(lang)).items() if "\\n" in value]
+    assert not escaped, f"{lang}.yaml has literal \\n in: {escaped}"
 
 
 # ---------------------------------------------------------------------------

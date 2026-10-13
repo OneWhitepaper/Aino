@@ -36,11 +36,11 @@ def _open_during_sidecar_retirement(tmp_path, monkeypatch):
         previous.close()
 
 
-@pytest.mark.macos_only
+@pytest.mark.platforms("macos")
 def test_open_survives_sidecar_retirement_macos(tmp_path, monkeypatch):
     _open_during_sidecar_retirement(tmp_path, monkeypatch)
 
 
-@pytest.mark.linux_only
+@pytest.mark.platforms("linux")
 def test_open_survives_sidecar_retirement_linux(tmp_path, monkeypatch):
     _open_during_sidecar_retirement(tmp_path, monkeypatch)

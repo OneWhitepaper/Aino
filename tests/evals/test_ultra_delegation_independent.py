@@ -18,7 +18,7 @@ def test_frozen_candidate_fails_the_external_behavior_contract(tmp_path):
     shutil.copyfile(FIXTURE / "think_scrubber.py", tmp_path / "think_scrubber.py")
     completed = subprocess.run(
         [sys.executable, str(CONTRACT), str(tmp_path)],
-        cwd=tmp_path, text=True, capture_output=True, timeout=15,
+        check=False, cwd=tmp_path, text=True, capture_output=True, timeout=15,
     )
     result = json.loads(completed.stdout)
     assert completed.returncode == 1

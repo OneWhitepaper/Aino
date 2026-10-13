@@ -8,6 +8,7 @@ import { ModelPickerDialog } from '@/components/model-picker'
 import type { HermesGateway } from '@/hermes'
 import { resolveModelPickerOwner } from '@/lib/model-picker-owner'
 import { useStoreSelector } from '@/lib/use-session-slice'
+import { completeFlow } from '@/store/desktop-metrics'
 import { $activeGatewayConnectionId, $activeGatewayRoute } from '@/store/gateway'
 import {
   $activeSessionId,
@@ -20,8 +21,9 @@ import {
   $selectedStoredSessionId,
   setModelPickerOpen
 } from '@/store/session'
+import { $focusedStoredSessionId } from '@/store/session-focus'
 import { requestForSessionProfile } from '@/store/session-request-router'
-import { $focusedRuntimeId, $focusedSessionState, $focusedStoredSessionId, $sessionTiles } from '@/store/session-states'
+import { $focusedRuntimeId, $focusedSessionState, $sessionTiles } from '@/store/session-states'
 
 interface ModelPickerOverlayProps {
   gateway?: HermesGateway
@@ -97,7 +99,11 @@ export function ModelPickerOverlay({ gateway, onSelect, requestGateway }: ModelP
       gw={gateway}
       includePlatform
       onOpenChange={setModelPickerOpen}
-      onSelect={selection => (pickerOwner.route ? selectFocusedModel : onSelect)({ ...selection, sessionId })}
+      onSelect={selection => {
+        completeFlow('model_picker')
+
+        return (pickerOwner.route ? selectFocusedModel : onSelect)({ ...selection, sessionId })
+      }}
       open={open}
       ownerConnectionId={pickerOwner.connectionId}
       profile={pickerOwner.profile}

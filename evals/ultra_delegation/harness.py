@@ -2,7 +2,7 @@
 from __future__ import annotations
 import argparse, collections, difflib, hashlib, json, os, queue, re, shutil, signal, socket, sqlite3, subprocess, sys, tempfile, threading, time, uuid
 from pathlib import Path
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, UTC
 
 SOURCE_ROOT = Path(__file__).resolve().parent
 # Bind evaluator siblings to this script under both direct and runpy entry.
@@ -200,7 +200,7 @@ os.chdir(workspace)
 if args.driver == 'hermes':
     sys.dont_write_bytecode = True
 sys.path.insert(0, str(REPO))
-import yaml
+import hermes_yaml as yaml
 source = ORIGINAL / ('independent' if args.scenario == 'independent' else 'large' if args.scenario in ('large','replay') else 'small')
 if args.scenario == 'independent':
     independent_manifest = json.loads((source/'manifest.json').read_text())
@@ -449,7 +449,7 @@ runtime = {'scenario':args.scenario,'request_limit':request_limit,'input_limit':
 
 def run_daily_verification(command):
     try:
-        completed=subprocess.run(command,cwd=execution_workspace,env={**os.environ,'PYTHONDONTWRITEBYTECODE':'1'},capture_output=True,text=True,timeout=45)
+        completed=subprocess.run(command,check=False, cwd=execution_workspace,env={**os.environ,'PYTHONDONTWRITEBYTECODE':'1'},capture_output=True,text=True,timeout=45)
         return {'command':command,'returncode':completed.returncode,'stdout':completed.stdout,'stderr':completed.stderr}
     except subprocess.TimeoutExpired as exc:
         return {'command':command,'timeout':True,'stdout':str(exc.stdout or ''),'stderr':str(exc.stderr or '')}
@@ -1104,7 +1104,7 @@ server_thread=threading.Thread(target=http_server.run,kwargs={'sockets':[listene
 if not started.wait(15): raise RuntimeError('Local gateway failed to start')
 if not lease:
     origin=f'http://127.0.0.1:{port}'
-    lease={'origin':origin,'user_id':'local-fixture-user','model':{'id':'local-fixture','model':'gpt-5.6-sol','api_mode':'responses','capabilities':{'tools':True,'vision':False,'reasoning':True}},'api_key':'local-fixture-no-secret','credential_id':'local-fixture-lease','base_url':origin+'/v1','expires_at':(datetime.now(timezone.utc)+timedelta(hours=1)).isoformat()}
+    lease={'origin':origin,'user_id':'local-fixture-user','model':{'id':'local-fixture','model':'gpt-5.6-sol','api_mode':'responses','capabilities':{'tools':True,'vision':False,'reasoning':True}},'api_key':'local-fixture-no-secret','credential_id':'local-fixture-lease','base_url':origin+'/v1','expires_at':(datetime.now(UTC)+timedelta(hours=1)).isoformat()}
     secret=lease['api_key']
     lease_secrets.append(secret)
 

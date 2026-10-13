@@ -21,6 +21,7 @@ import driverIife from 'driver.js/dist/driver.js.iife.js?raw'
 import { translateNow } from '@/i18n'
 import { collectTourTargets } from '@/lib/tour/collect-targets'
 import { runTourEngine, type TourAction, type TourResult } from '@/lib/tour/engine'
+import type { PreviewOwner } from '@/store/preview-ownership'
 
 import { activePreviewScriptRunner } from './preview-script-runner'
 
@@ -50,9 +51,10 @@ function buildTourScript(action: TourAction): string {
 })()`
 }
 
-/** Run one tour action in the ACTIVE preview tab's page. */
-export async function runPreviewTour(action: TourAction): Promise<TourResult> {
-  const run = activePreviewScriptRunner()
+/** Run one tour action in the page of the ACTIVE tab among those `owner`
+ *  (the requesting session's stored id; omitted = the focused session) sees. */
+export async function runPreviewTour(action: TourAction, owner?: PreviewOwner): Promise<TourResult> {
+  const run = activePreviewScriptRunner(owner)
 
   if (!run) {
     return { error: translateNow('preview.tour.noLivePage'), success: false }

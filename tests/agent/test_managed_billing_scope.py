@@ -4,7 +4,7 @@ import pytest
 from uuid import UUID, uuid4
 import asyncio
 
-from tests.tui_gateway.test_managed_model_agent import managed_gateway  # noqa: F401
+from tests.tui_gateway.test_managed_model_agent import managed_gateway
 from tui_gateway.managed_session import runtime_for_session
 
 
@@ -104,7 +104,7 @@ def test_side_question_fork_is_correlated_without_changing_parent_runtime(manage
 
 @pytest.mark.parametrize("status", [401, 402])
 def test_managed_aux_failure_cannot_spend_byok_fallback(managed_gateway, tmp_path, status):
-    import yaml
+    import hermes_yaml as yaml
     from agent.auxiliary_client import call_llm
 
     f = managed_gateway
@@ -123,7 +123,7 @@ def test_managed_aux_failure_cannot_spend_byok_fallback(managed_gateway, tmp_pat
 
 
 def test_explicit_byok_override_never_uses_managed_key(managed_gateway, tmp_path):
-    import yaml
+    import hermes_yaml as yaml
     from agent.auxiliary_client import call_llm
     f = managed_gateway
     sid = f.create()["session_id"]

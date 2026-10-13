@@ -7,6 +7,7 @@ import { useI18n } from '@/i18n'
 import { Play } from '@/lib/icons'
 import { allowProvider } from '@/store/embed-consent'
 
+import { EMBED_DEFAULT_H } from './embed-size'
 import type { EmbedDescriptor } from './providers/types'
 
 // Privacy placeholder shown before an embed reaches out to a third party. Sized
@@ -19,7 +20,7 @@ export function EmbedFacade({ descriptor, onLoad }: { descriptor: EmbedDescripto
 
   const style: CSSProperties = descriptor.aspectRatio
     ? { aspectRatio: descriptor.aspectRatio }
-    : { height: descriptor.height ?? 320 }
+    : { height: descriptor.height ?? EMBED_DEFAULT_H }
 
   const actions = [
     { id: 'once', label: t.ui.messages.embedLoad(descriptor.label) },

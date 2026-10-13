@@ -2,7 +2,11 @@ from __future__ import annotations
 
 import contextlib
 import sqlite3
+import sys
+import types
 from pathlib import Path
+
+import pytest
 
 from hermes_cli import kanban_db as kb
 from hermes_cli import kanban_db_connect as kbc
@@ -223,3 +227,39 @@ def test_healthy_fast_path_stays_lock_free(tmp_path, monkeypatch):
     with kbc.connect_closing(db_path):
         pass
     assert len(locks) == 1
+
+
+@pytest.mark.platforms("windows")
+def test_cross_process_init_lock_uses_windows_byte_range_lock(tmp_path, monkeypatch):
+    """Windows must use a real (non-blocking) process lock, not a no-op open.
+
+    The init lock acquires with LK_NBLCK in a bounded retry loop (#36644) so a
+    wedged holder can never block connect() forever; a clean acquire takes the
+    lock once and releases it once.
+
+    ``platforms("windows")``: ``msvcrt`` does not exist off Windows, so faking
+    ``_IS_WINDOWS`` on Linux meant injecting a fake ``msvcrt`` module too —
+    the test then asserted against its own stub rather than the byte-range
+    locking API. Here the platform is real; only ``msvcrt.locking`` is
+    instrumented so the call sequence is observable.
+    """
+    calls: list[tuple[int, int, int]] = []
+    import msvcrt as _msvcrt
+
+    fake_msvcrt = types.SimpleNamespace(
+        LK_NBLCK=_msvcrt.LK_NBLCK,
+        LK_UNLCK=_msvcrt.LK_UNLCK,
+        locking=lambda fd, mode, nbytes: calls.append((fd, mode, nbytes)),
+    )
+    monkeypatch.setitem(sys.modules, "msvcrt", fake_msvcrt)
+
+    db_path = tmp_path / "kanban.db"
+    with kbc._cross_process_init_lock(db_path):
+        # Acquired exactly once via the non-blocking byte-range lock.
+        assert [call[1:] for call in calls] == [(fake_msvcrt.LK_NBLCK, 1)]
+
+    # Released once on exit.
+    assert [call[1:] for call in calls] == [
+        (fake_msvcrt.LK_NBLCK, 1),
+        (fake_msvcrt.LK_UNLCK, 1),
+    ]

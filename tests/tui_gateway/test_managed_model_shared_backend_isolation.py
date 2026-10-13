@@ -4,11 +4,11 @@ import json
 import socket
 import threading
 from contextlib import ExitStack
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, UTC
 
 import pytest
 import uvicorn
-import yaml
+import hermes_yaml as yaml
 from starlette.applications import Starlette
 from starlette.routing import WebSocketRoute
 from websockets.exceptions import InvalidStatus
@@ -18,7 +18,7 @@ import tui_gateway.server as srv
 from hermes_cli import web_server
 from hermes_cli.dashboard_auth.ws_tickets import mint_ticket
 from hermes_cli.web_routers.chat_ws import gateway_ws
-from tests.tui_gateway.test_managed_model_agent import managed_gateway  # noqa: F401
+from tests.tui_gateway.test_managed_model_agent import managed_gateway
 from tui_gateway.managed_model_runtime import get_registry
 
 
@@ -150,7 +150,7 @@ def test_shared_backend_preserves_owner_authority(
                         "tools": True, "vision": False, "reasoning": False,
                     },
                     "expires_at": (
-                        datetime.now(timezone.utc) + timedelta(minutes=10)
+                        datetime.now(UTC) + timedelta(minutes=10)
                     ).isoformat(),
                 }
                 controllers[i].rejected(

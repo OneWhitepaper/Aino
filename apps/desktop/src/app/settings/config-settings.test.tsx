@@ -174,7 +174,8 @@ describe('ConfigSettings autosave', () => {
     try {
       renderConfigSettings()
 
-      const toggle = await screen.findByRole('switch')
+      await screen.findByText('Checkpoints')
+      const toggle = within(window.document.getElementById('setting-field-checkpoints.enabled')!).getByRole('switch')
 
       // Edit: flip checkpoints.enabled on, let the debounced autosave fire.
       toggle.click()
@@ -213,7 +214,8 @@ describe('ConfigSettings autosave', () => {
 
       await vi.waitFor(() => expect(getHermesConfigRecord).toHaveBeenCalledWith('nash'))
 
-      ;(await screen.findByRole('switch')).click()
+      await screen.findByText('Checkpoints')
+      within(window.document.getElementById('setting-field-checkpoints.enabled')!).getByRole('switch').click()
       await vi.advanceTimersByTimeAsync(700)
 
       await vi.waitFor(() => expect(saveHermesConfig).toHaveBeenCalledWith({ checkpoints: { enabled: true } }, 'nash'))

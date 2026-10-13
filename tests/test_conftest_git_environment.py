@@ -23,14 +23,14 @@ def test_git_proxy_isolation_preserves_other_settings(tmp_path, monkeypatch, omi
     env = {key: value for key, value in os.environ.items() if value or not omit_empty_values}
     repo = tmp_path / "repo"
     initialized = subprocess.run(
-        ["git", "init", "--quiet", str(repo)], env=env, capture_output=True, text=True,
+        ["git", "init", "--quiet", str(repo)], check=False, env=env, capture_output=True, text=True,
     )
     assert initialized.returncode == 0, initialized.stderr
 
     for key, expected in (("http.proxy", ""), ("https.proxy", ""), ("user.name", "Fixture Identity")):
         result = subprocess.run(
             ["git", "-C", str(repo), "config", "--get", key],
-            env=env, capture_output=True, text=True,
+            check=False, env=env, capture_output=True, text=True,
         )
         assert result.returncode == 0, result.stderr
         assert result.stdout.strip() == expected

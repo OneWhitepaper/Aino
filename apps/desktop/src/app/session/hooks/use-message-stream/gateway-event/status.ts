@@ -1,14 +1,13 @@
 import { isSessionNotOwnedError } from '@/app/session/hooks/use-prompt-actions/utils'
-import { translateNow, TRANSLATIONS } from '@/i18n'
-import { getRuntimeI18nLocale } from '@/i18n/runtime'
+import { runtimeTranslations, translateNow } from '@/i18n'
 import { textPart, toChatMessages } from '@/lib/chat-messages'
 import { coerceGatewayText } from '@/lib/chat-runtime'
 import type { ErrorSurface } from '@/lib/error-surface'
 import { errorCardText } from '@/lib/error-surface-copy'
-import { isProviderSetupErrorMessage } from '@/lib/provider-setup-errors'
+import { isProviderSetupErrorCode, isProviderSetupErrorMessage } from '@/lib/provider-setup-errors'
 import { type AgentNoticePayload, clearAgentNotice, nativeNoticeInput, showAgentNotice } from '@/store/agent-notices'
-import { clearClarifyRequest } from '@/store/clarify'
-import { reconcileSessionCompacting, setSessionCompacting } from '@/store/compaction'
+import { clearSettledClarifyRequest } from '@/store/clarify'
+import { reconcileSessionCompacting, setSessionCompacting, takeCompressDeferred } from '@/store/compaction'
 import { refreshBackgroundProcesses } from '@/store/composer-status'
 import { applyGoalStatusText } from '@/store/goals'
 import { dispatchNativeNotification } from '@/store/native-notifications'
@@ -22,8 +21,94 @@ import type { SessionMessage } from '@/types/hermes'
 
 import type { GatewayEventContext } from './types'
 
+/** Lifecycle text that announces the session left its selected model for a fallback. */
+export function isFallbackSwitchStatus(kind: string | undefined, text: string): boolean {
+  if (kind === 'fallback') {
+    return Boolean(text.trim())
+  }
+
+  return /model fallback|provider fallback|switched to fallback|switching to fallback/i.test(text)
+}
+
 /** status.update / review.summary / notification.show / notification.clear /
  *  error — the status-and-notice tail of the dispatcher. */
+function statusErrorSurface(errorMessage: string): ErrorSurface | null {
+  const surface: ErrorSurface | null = isSessionNotOwnedError(new Error(errorMessage))
+    ? { code: 'SESSION_NOT_OWNED', layer: 'gateway', retryable: false }
+    : isDiskFullErrorMessage(errorMessage)
+      ? { code: 'disk_full', layer: 'disk', retryable: false }
+      : null
+
+  return surface
+}
+
+function handleModelSwitchStatus(ctx: GatewayEventContext, sessionId: string): void {
+  const { payload, occurredAt, isActiveEvent } = ctx
+  const { flushQueuedDeltas, updateSessionState, sessionStateByRuntimeIdRef, hydrateFromStoredSession } = ctx.deps
+  const entry = payload?.history_entry
+
+  if (entry?.display_kind === 'model_switch') {
+    // The applied switch is already authoritative. Reuse history's
+    // renderer without waiting for a REST fetch or replacing a live turn.
+    const [notice] = toChatMessages([
+      {
+        role: 'user',
+        content: '',
+        display_kind: entry.display_kind,
+        display_metadata: entry.display_metadata as SessionMessage['display_metadata'],
+        row_id: entry.row_id ?? undefined,
+        timestamp: entry.timestamp ?? occurredAt
+      }
+    ])
+
+    flushQueuedDeltas(sessionId)
+    updateSessionState(sessionId, state => {
+      if (
+        state.messages.some(
+          message =>
+            message.modelSwitch &&
+            (notice.rowId !== undefined && message.rowId !== undefined
+              ? notice.rowId === message.rowId
+              : notice.timestamp === message.timestamp)
+        )
+      ) {
+        return state
+      }
+
+      // Deferred switches apply before the next prompt backend-side, but
+      // after its optimistic user row. Prefer durable order, then that
+      // pre-response boundary; host clocks need not agree. A switch at
+      // turn-end (e.g. restoring /model --once) stays after the reply.
+      const persisted = state.messages.findIndex(
+        message => notice.rowId !== undefined && message.rowId !== undefined && message.rowId > notice.rowId
+      )
+
+      const pending =
+        state.awaitingResponse && !state.sawAssistantPayload
+          ? state.messages.findLastIndex(
+              message => message.role === 'user' && !message.hidden && message.rowId === undefined
+            )
+          : -1
+
+      const newer = state.messages.findIndex(
+        message => message.timestamp !== undefined && message.timestamp > notice.timestamp!
+      )
+
+      const index = [persisted, pending, newer].find(index => index >= 0) ?? state.messages.length
+
+      return { ...state, messages: [...state.messages.slice(0, index), notice, ...state.messages.slice(index)] }
+    })
+  } else {
+    // Older backends announce only the kind; their record still needs
+    // the idle history refresh used before structured notices shipped.
+    const state = sessionStateByRuntimeIdRef.current.get(sessionId)
+
+    if (isActiveEvent && state && !state.busy && !state.awaitingResponse && !state.streamId) {
+      void hydrateFromStoredSession(3, state.storedSessionId, sessionId)
+    }
+  }
+}
+
 export function handleStatusEvent(ctx: GatewayEventContext): boolean {
   const { deps, event, payload, sessionId, isActiveEvent, occurredAt } = ctx
 
@@ -56,76 +141,89 @@ export function handleStatusEvent(ctx: GatewayEventContext): boolean {
       reconcileSessionCompacting(sessionId, 'terminal')
       compactedTurnRef.current.delete(sessionId)
 
+      // That same `pending` reply returned before the compress handler could
+      // render the summary or flip its "still running in the background"
+      // toast, so this edge is the only completion the client ever sees.
+      // Without announcing it a deferred /compress finishes in silence: the
+      // corner toast merely expires and the transcript changes underneath the
+      // user with no acknowledgement it ever ran.
+      const deferredCompress = takeCompressDeferred(sessionId)
+
+      const completionText =
+        coerceGatewayText(payload?.text).trim() || translateNow('notifications.compressDeferredDone')
+
+      if (deferredCompress) {
+        // Reuse the id the compress handler notified under, so this replaces
+        // the pending toast in place instead of stacking a second one.
+        notify({
+          durationMs: 5_000,
+          id: `session-compress:${sessionId}`,
+          kind: 'success',
+          message: completionText
+        })
+      }
+
+      const announceDeferredCompress = () => {
+        if (!deferredCompress) {
+          return
+        }
+
+        flushQueuedDeltas(sessionId)
+        updateSessionState(sessionId, state => ({
+          ...state,
+          messages: [
+            ...state.messages,
+            {
+              id: `compress-complete-${occurredAt ?? Date.now()}`,
+              role: 'system',
+              parts: [textPart(completionText, occurredAt)],
+              timestamp: occurredAt
+            }
+          ]
+        }))
+      }
+
       // A compress that finished with no live turn (manual /compress whose
       // RPC answered `pending` because the compute host outlived the wait,
       // #97948) has no turn-end hydrate to refresh the transcript — the
       // summarized bubbles would stay on screen forever. Mid-turn compaction
-      // still defers to the turn's own settle path.
+      // still defers to the turn's own settle path. The notice is appended
+      // only after that hydrate resolves: it replaces the transcript wholesale
+      // and would otherwise drop the line we just added.
       const state = sessionStateByRuntimeIdRef.current.get(sessionId)
 
       if (isActiveEvent && state && !state.busy && !state.awaitingResponse && !state.streamId) {
-        void hydrateFromStoredSession(3, state.storedSessionId, sessionId)
+        void hydrateFromStoredSession(3, state.storedSessionId, sessionId).then(announceDeferredCompress)
+      } else {
+        announceDeferredCompress()
       }
     } else if (sessionId && payload?.kind === 'model_switch') {
-      const entry = payload.history_entry
-
-      if (entry?.display_kind === 'model_switch') {
-        // The applied switch is already authoritative. Reuse history's
-        // renderer without waiting for a REST fetch or replacing a live turn.
-        const [notice] = toChatMessages([{
-          role: 'user',
-          content: '',
-          display_kind: entry.display_kind,
-          display_metadata: entry.display_metadata as SessionMessage['display_metadata'],
-          row_id: entry.row_id ?? undefined,
-          timestamp: entry.timestamp ?? occurredAt
-        }])
-
-        flushQueuedDeltas(sessionId)
-        updateSessionState(sessionId, state => {
-          if (state.messages.some(message => message.modelSwitch && (
-            notice.rowId !== undefined && message.rowId !== undefined
-              ? notice.rowId === message.rowId
-              : notice.timestamp === message.timestamp
-          ))) {
-            return state
-          }
-
-          // Deferred switches apply before the next prompt backend-side, but
-          // after its optimistic user row. Prefer durable order, then that
-          // pre-response boundary; host clocks need not agree. A switch at
-          // turn-end (e.g. restoring /model --once) stays after the reply.
-          const persisted = state.messages.findIndex(message =>
-            notice.rowId !== undefined && message.rowId !== undefined && message.rowId > notice.rowId
-          )
-
-          const pending = state.awaitingResponse && !state.sawAssistantPayload
-            ? state.messages.findLastIndex(message => message.role === 'user' && !message.hidden && message.rowId === undefined)
-            : -1
-
-          const newer = state.messages.findIndex(message =>
-            message.timestamp !== undefined && message.timestamp > notice.timestamp!
-          )
-
-          const index = [persisted, pending, newer].find(index => index >= 0) ?? state.messages.length
-
-          return { ...state, messages: [...state.messages.slice(0, index), notice, ...state.messages.slice(index)] }
-        })
-      } else {
-        // Older backends announce only the kind; their record still needs
-        // the idle history refresh used before structured notices shipped.
-        const state = sessionStateByRuntimeIdRef.current.get(sessionId)
-
-        if (isActiveEvent && state && !state.busy && !state.awaitingResponse && !state.streamId) {
-          void hydrateFromStoredSession(3, state.storedSessionId, sessionId)
-        }
-      }
+      handleModelSwitchStatus(ctx, sessionId)
     } else if (sessionId && payload?.kind === 'process') {
       // The gateway's notification poller announces background process
       // completions / watch matches here — re-sync the status stack.
       void refreshBackgroundProcesses(sessionId)
     } else if (sessionId && payload?.kind === 'goal') {
       applyGoalStatusText(sessionId, coerceGatewayText(payload?.text))
+    } else if (sessionId && isFallbackSwitchStatus(payload?.kind, coerceGatewayText(payload?.text))) {
+      // A provider/model switch is durable: the TUI paints it on the status rail, but Desktop
+      // used to swallow every non-compaction status.update, so the reply came from a different
+      // model with no indication.
+      const text = coerceGatewayText(payload?.text).trim()
+
+      flushQueuedDeltas(sessionId)
+      updateSessionState(sessionId, state => ({
+        ...state,
+        messages: [
+          ...state.messages,
+          {
+            id: `fallback-switch-${occurredAt}`,
+            role: 'system',
+            parts: [textPart(text, occurredAt)],
+            timestamp: occurredAt
+          }
+        ]
+      }))
     }
 
     return true
@@ -197,6 +295,36 @@ export function handleStatusEvent(ctx: GatewayEventContext): boolean {
     return true
   }
 
+  if (event.type === 'background.complete') {
+    // prompt.background RPC (the TUI's /background path) reports the finished
+    // background turn here; the event carries the originating session id, so
+    // the result lands in the conversation that started the task. Persistent
+    // transcript line (not a toast), mirroring the TUI's `[bg <task_id>]`
+    // system line — without it the completion was indistinguishable from a
+    // lost task (#97635).
+    const text = coerceGatewayText(payload?.text).trim()
+
+    if (text && sessionId) {
+      const taskId = String(payload?.task_id ?? '').trim()
+
+      flushQueuedDeltas(sessionId)
+      updateSessionState(sessionId, state => ({
+        ...state,
+        messages: [
+          ...state.messages,
+          {
+            id: `background-complete-${taskId || Date.now()}`,
+            role: 'system',
+            parts: [textPart(taskId ? `[bg ${taskId}]\n${text}` : text, occurredAt)],
+            timestamp: occurredAt
+          }
+        ]
+      }))
+    }
+
+    return true
+  }
+
   if (event.type === 'notification.show') {
     // Driver-agnostic agent notice (credits usage/grant/depleted/restored
     // from `agent/credits_tracker.py`). The Ink TUI renders these in its
@@ -238,7 +366,10 @@ export function handleStatusEvent(ctx: GatewayEventContext): boolean {
 
   if (event.type === 'error') {
     const errorMessage = payload?.message || translateNow('desktop.agentReportedError')
-    const looksLikeProviderSetup = isProviderSetupErrorMessage(errorMessage)
+
+    // The gateway's own verdict when it sent one (agent init with no usable provider), else the
+    // sentence: a blank install must reach onboarding, not a toast it cannot act on.
+    const looksLikeProviderSetup = isProviderSetupErrorCode(payload?.code) || isProviderSetupErrorMessage(errorMessage)
 
     // The gateway's `error` event carries no error_surface (prompt_turn.py
     // emits it for pre-turn refusals). Recover the two codes it CAN mean from
@@ -246,11 +377,7 @@ export function handleStatusEvent(ctx: GatewayEventContext): boolean {
     // as a classified turn: a live-owner refusal (SESSION_NOT_OWNED, #106217)
     // is deterministic — Retry hits the same wall, only a new chat helps —
     // and disk-full is a machine problem, not a provider one.
-    const surface: ErrorSurface | null = isSessionNotOwnedError(new Error(errorMessage))
-      ? { code: 'SESSION_NOT_OWNED', layer: 'gateway', retryable: false }
-      : isDiskFullErrorMessage(errorMessage)
-        ? { code: 'disk_full', layer: 'disk', retryable: false }
-        : null
+    const surface = statusErrorSurface(errorMessage)
 
     // When a code was recovered, the glossed card sentence explains it better
     // than the raw refusal. When none was, the server's own text IS the plain
@@ -258,7 +385,7 @@ export function handleStatusEvent(ctx: GatewayEventContext): boolean {
     // pre-turn failures — agent init, resume, cancelled-before-ready), and
     // burying it under a generic "couldn't finish" gloss would hide the one
     // instruction the user needs.
-    const card = surface ? errorCardText(TRANSLATIONS[getRuntimeI18nLocale()].assistant.thread, surface) : null
+    const card = surface ? errorCardText(runtimeTranslations().assistant.thread, surface) : null
     const toastMessage = card ? `${card.title}. ${card.body}` : errorMessage
 
     // A turn that errors out has also ended — drop any open blocking prompt
@@ -266,7 +393,7 @@ export function handleStatusEvent(ctx: GatewayEventContext): boolean {
     // the failed turn (same intent as the message.complete clear).
     if (sessionId) {
       clearAllPrompts(sessionId)
-      clearClarifyRequest(undefined, sessionId)
+      clearSettledClarifyRequest(sessionId)
       clearActiveSessionTodos(sessionId)
       reconcileSessionCompacting(sessionId, 'terminal')
       compactedTurnRef.current.delete(sessionId)

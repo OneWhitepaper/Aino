@@ -5,6 +5,24 @@ import { type SessionResumeRequest, setResumeExhaustedSessionId } from '@/store/
 import type { SessionProfileRoute } from '@/store/session-request-router'
 import { markSelectionRestore } from '@/store/session-states'
 
+function isStuckOnRoutedSession({
+  creating,
+  selected,
+  active,
+  routed,
+  freshDraftReady
+}: {
+  creating: boolean
+  selected: string | null
+  active: string | null
+  routed: string
+  freshDraftReady: boolean
+}): boolean {
+  const selectionMovedAheadOfRoute = creating && Boolean(selected) && selected !== routed && Boolean(active)
+
+  return routed !== selected && !freshDraftReady && !selectionMovedAheadOfRoute
+}
+
 interface RouteResumeOptions {
   activeSessionId: string | null
   activeSessionIdRef: MutableRefObject<string | null>
@@ -31,7 +49,7 @@ interface RouteResumeOptions {
   runtimeIdByStoredSessionIdRef: MutableRefObject<Map<string, string>>
   selectedStoredSessionId: string | null
   selectedStoredSessionIdRef: MutableRefObject<string | null>
-  startFreshSessionDraft: (focus: boolean) => unknown
+  startFreshSessionDraft: (options: boolean | { replaceRoute?: boolean; rotateFreshDraftKey?: boolean }) => unknown
 }
 
 // Bounded auto-retry for a stranded session window. A resume can fail terminally
@@ -152,7 +170,23 @@ export function useRouteResume({
       // pathname flips to / (same null+/:sid signature). freshDraftReady is the
       // discriminator: it's true while heading into a blank new chat, false when
       // genuinely stranded on a routed session.
-      const stuckOnRoutedSession = routedSessionId !== selectedStoredSessionIdRef.current && !freshDraftReady
+      //
+      // Also must NOT fire when create/fork already moved selection + runtime to
+      // a new session B while the router still shows stale A (#66057). That looks
+      // "stuck on A" but resuming A yanks the UI back off the new chat.
+      //
+      // Scope this suppression to an active pending-create hold only. Once
+      // creatingSessionRef drops (route caught up, user left, or the safety
+      // timeout), a lingering A-route / B-selection mismatch must be able to
+      // self-heal via stuckOnRoutedSession — otherwise ChatView stays in its
+      // route/selection loading state forever after a stuck navigate.
+      const stuckOnRoutedSession = isStuckOnRoutedSession({
+        creating: creatingSessionRef.current,
+        selected: selectedStoredSessionIdRef.current,
+        active: activeSessionIdRef.current,
+        routed: routedSessionId,
+        freshDraftReady
+      })
 
       // Resume when the route meaningfully changed, the gateway just opened, or
       // we're stranded on a routed session that never loaded. The first two
@@ -195,6 +229,15 @@ export function useRouteResume({
       return
     }
 
+    // A sleep/wake WS reconnect can reopen on a new-chat route while the active
+    // runtime session is still the user's current chat. The gateway re-opened;
+    // nothing navigated. Forcing a fresh draft here is what turned every
+    // Windows/macOS sleep/wake cycle into a brand-new session and parked the
+    // previous chat in the sidebar (#53374). Preserve the active chat instead.
+    if (isNewChatRoute(locationPathname) && gatewayBecameOpen && activeSessionId && !freshDraftReady) {
+      return
+    }
+
     if (
       isNewChatRoute(locationPathname) &&
       (!bootResumeRef.current || initialNavigationReady) &&
@@ -204,7 +247,7 @@ export function useRouteResume({
     ) {
       // A fresh draft is a real navigation — any later resume homes normally.
       bootResumeRef.current = false
-      startFreshSessionDraft(true)
+      startFreshSessionDraft({ replaceRoute: true, rotateFreshDraftKey: false })
     }
   }, [
     activeSessionId,

@@ -4,7 +4,7 @@ Cluster: every consumer of ``Retry-After`` / free-text reset grammars goes throu
 so an HTTP-date header or a "resets in 2 hours 5 minutes" body yields the same wait everywhere.
 """
 
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, UTC
 from email.utils import format_datetime
 from types import SimpleNamespace
 
@@ -14,7 +14,7 @@ from agent.retry_utils import parse_retry_after_seconds, reset_delay_from_messag
 
 
 def _http_date(seconds_ahead: int) -> str:
-    return format_datetime(datetime.now(timezone.utc) + timedelta(seconds=seconds_ahead), usegmt=True)
+    return format_datetime(datetime.now(UTC) + timedelta(seconds=seconds_ahead), usegmt=True)
 
 
 class TestRetryAfterHeaderOneParser:
@@ -45,7 +45,7 @@ class TestRetryAfterHeaderOneParser:
         from agent import retry_utils
         from hermes_cli.observability.shared_metrics_sender import _retry_after_seconds
 
-        generated_at = datetime(2026, 9, 29, tzinfo=timezone.utc)
+        generated_at = datetime(2026, 9, 29, tzinfo=UTC)
         now = generated_at
         monkeypatch.setattr(retry_utils, "datetime", SimpleNamespace(now=lambda _tz: now))
         header = format_datetime(generated_at + timedelta(seconds=120), usegmt=True)

@@ -62,13 +62,54 @@ pub fn hermes_home() -> PathBuf {
             return PathBuf::from(override_path);
         }
     }
+    platform_default_home()
+}
 
+/// Root of the profile tree that holds this process's home. Mirrors
+/// `hermes_constants.get_default_hermes_root()`: a HERMES_HOME under the
+/// platform default resolves to the default; otherwise a
+/// `<root>/profiles/<name>` home resolves to `<root>`; any other HERMES_HOME
+/// is its own root; unset means the platform default. Host-wide state (the
+/// update marker) must live here, never in a per-profile home.
+pub fn hermes_root() -> PathBuf {
+    let env_home = std::env::var("HERMES_HOME").ok();
+    hermes_root_from(env_home.as_deref(), &platform_default_home())
+}
+
+fn hermes_root_from(env_home: Option<&str>, native_home: &Path) -> PathBuf {
+    let Some(env_home) = env_home.map(str::trim).filter(|s| !s.is_empty()) else {
+        return native_home.to_path_buf();
+    };
+    let env_path = PathBuf::from(env_home);
+    let canonical = |p: &Path| p.canonicalize().unwrap_or_else(|_| p.to_path_buf());
+    if canonical(&env_path).starts_with(canonical(native_home)) {
+        return native_home.to_path_buf();
+    }
+    match (env_path.parent(), env_path.parent().and_then(Path::parent)) {
+        (Some(parent), Some(grandparent))
+            if parent.file_name().is_some_and(|name| name == "profiles") =>
+        {
+            grandparent.to_path_buf()
+        }
+        _ => env_path,
+    }
+}
+
+fn platform_default_home() -> PathBuf {
+    platform_default_home_with(&std::env::var("HERMES_DATA_DIR_SUFFIX").unwrap_or_default())
+}
+
+/// `suffix` is HERMES_DATA_DIR_SUFFIX, appended literally to the leaf exactly as
+/// `hermes_constants._get_platform_default_hermes_home()` and the desktop's
+/// `platformDefaultHermesHome()` do: channel builds keep their own data dir,
+/// and with it their own update marker.
+fn platform_default_home_with(suffix: &str) -> PathBuf {
     let (primary, legacy) = default_home_paths();
+    if !suffix.is_empty() {
+        let leaf = primary.file_name().unwrap_or_default().to_string_lossy();
+        return primary.with_file_name(format!("{leaf}{suffix}"));
+    }
     let primary_exists = primary.exists();
-    // Only a real checkout is a migration target. This keeps a user who has
-    // merely run the Hermes CLI (and therefore has a config directory) on the
-    // isolated Aino root while still upgrading an existing desktop/runtime
-    // installation in place.
     let legacy_exists = legacy.join("hermes-agent").is_dir();
     select_home(primary, legacy, primary_exists, legacy_exists)
 }
@@ -108,11 +149,12 @@ pub fn installer_dest() -> PathBuf {
 /// mid-update re-locks the venv shim and triggers `force_kill_other_hermes`,
 /// which then kills that legitimate backend in a respawn loop (#50238).
 ///
-/// Lives directly under HERMES_HOME (same rationale as `installer_dest`) so the
-/// Electron desktop — which resolves HERMES_HOME identically and pins it into
-/// the updater's env — agrees on the exact path.
+/// Lives directly under the profile-tree ROOT (`hermes_root`), never a
+/// `profiles/<name>` home: it is one host-wide lock shared with
+/// `hermes_cli/update_lock.py` and the Electron gate, so a profile-scoped
+/// HERMES_HOME must not split it into a second, unguarded file.
 pub fn update_in_progress_marker() -> PathBuf {
-    hermes_home().join(".hermes-update-in-progress")
+    hermes_root().join(".hermes-update-in-progress")
 }
 
 /// Copy the currently-running installer binary to `installer_dest()` so it's
@@ -289,5 +331,42 @@ mod tests {
                 "Aino-Setup"
             })
         );
+    }
+
+    #[test]
+    fn profile_home_resolves_to_its_tree_root() {
+        let native = Path::new("/nonexistent-native/.hermes");
+        assert_eq!(
+            hermes_root_from(Some("/srv/hermes-root/profiles/work"), native),
+            PathBuf::from("/srv/hermes-root"),
+            "a profiles/<name> home must share the root's single update marker"
+        );
+        assert_eq!(
+            hermes_root_from(Some("/srv/hermes-root"), native),
+            PathBuf::from("/srv/hermes-root")
+        );
+        assert_eq!(
+            hermes_root_from(Some("/nonexistent-native/.hermes/profiles/work"), native),
+            native.to_path_buf(),
+            "a home under the platform default resolves to the default"
+        );
+        assert_eq!(hermes_root_from(None, native), native.to_path_buf());
+        assert_eq!(hermes_root_from(Some("  "), native), native.to_path_buf());
+    }
+
+    #[test]
+    fn data_dir_suffix_names_the_default_home_and_its_marker_root() {
+        let plain = platform_default_home_with("");
+        let channel = platform_default_home_with("-channel-build-x");
+        assert_eq!(channel.parent(), plain.parent());
+        assert_eq!(
+            channel.file_name().unwrap().to_string_lossy(),
+            format!(
+                "{}-channel-build-x",
+                plain.file_name().unwrap().to_string_lossy()
+            ),
+            "the suffix is appended to the leaf, as Python and the desktop do"
+        );
+        assert_eq!(hermes_root_from(None, &channel), channel);
     }
 }

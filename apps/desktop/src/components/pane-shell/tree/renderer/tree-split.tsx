@@ -234,8 +234,9 @@ export function TreeSplit({
         const zone = fixed ? edgeFixedZone(child, edge, axis, trackCtx) : null
         const zoneEl = zone ? container.querySelector<HTMLElement>(`[data-tree-group="${zone.id}"]`) : null
         // Clamps live on the zone's split-child WRAPPER (where we render them).
-        const el = zoneEl?.parentElement ?? wrapper
-        const cs = window.getComputedStyle(el)
+        // For a nested section this is the INNER flex item, not the seam partner.
+        const zoneItem = zoneEl?.parentElement ?? wrapper
+        const cs = window.getComputedStyle(zoneItem)
         // A tool panel (terminal / logs) may be dragged down to its collapsed
         // header — the generic 80px floor is not its floor. Below that the
         // release minimizes the zone instead of leaving a useless sliver.
@@ -253,7 +254,10 @@ export function TreeSplit({
           min: toolZone ? floor : Math.max(floor, computedPx(horizontal ? cs.minWidth : cs.minHeight, 0)),
           max: computedPx(horizontal ? cs.maxWidth : cs.maxHeight, Number.POSITIVE_INFINITY),
           collapseId: toolZone ? (zone?.id ?? groupIdOf(child)) : null,
-          floor
+          floor,
+          // The flex item the release commit resizes: the seam partner itself
+          // for a direct group, the inner zone wrapper for a nested section.
+          zoneItem
         }
       }
 
@@ -284,6 +288,9 @@ export function TreeSplit({
           element,
           index,
           initial: side.fixed ? side.size : sizeOf(element),
+          // Seam-partner width at pointerdown. A nested section is wider than
+          // its edge zone, so the preview grows the wrapper from this width.
+          wrapperSize: sizeOf(element),
           // A minimized rail is its 28px strip: it neither donates nor takes,
           // and its remembered weight must survive the gesture so restoring
           // it brings back the size it had before it was folded.
@@ -381,16 +388,17 @@ export function TreeSplit({
         }
       }
 
-      const styleSnapshots = sashTracks.map(track => track.element.getAttribute('style'))
+      // Nested sections also preview their inner zone wrapper, so snapshot it too.
+      const styleSnapshots = [...new Set(sashTracks.flatMap(track => [track.element, track.zoneItem]))].map(
+        el => [el, el.getAttribute('style')] as const
+      )
 
       const restoreStyles = () => {
-        sashTracks.forEach((track, index) => {
-          const style = styleSnapshots[index]
-
+        styleSnapshots.forEach(([el, style]) => {
           if (style === null) {
-            track.element.removeAttribute('style')
+            el.removeAttribute('style')
           } else {
-            track.element.setAttribute('style', style)
+            el.setAttribute('style', style)
           }
         })
       }
@@ -422,7 +430,11 @@ export function TreeSplit({
           const px = plan.sizes[index]
 
           if (track.fixed) {
-            track.element.style.flexBasis = `${px}px`
+            // Fixed tracks plan in zone space. A nested section's wrapper moves
+            // by the zone's delta from its own width. For a direct group both
+            // are one element, and the second write leaves it at `px`.
+            track.element.style.flexBasis = `${track.wrapperSize + px - track.initial}px`
+            track.zoneItem.style.flexBasis = `${px}px`
           } else {
             track.element.style.flex = `0 1 ${px}px`
           }
@@ -479,53 +491,52 @@ export function TreeSplit({
         }
 
         done = true
-        resize.finish()
-
-        // Put every wrapper's inline style back exactly as React last wrote
-        // it BEFORE the store commit. React only rewrites a wrapper whose
-        // style prop changed; a preview pinned on a track the commit leaves
-        // alone (the flex run beside a zone that folded to its rail) would
-        // otherwise survive as a stale `flex: 0 1 <px>` and stop it growing.
-        // A no-movement click has no commit, so this is also its whole cleanup.
-        restoreStyles()
-
-        if (lastPlan && lastPlan.moved !== 0) {
-          // Dragged a tool panel down to its collapsed header? Fold the zone
-          // to its rail instead of persisting a sliver — and DON'T write the
-          // sliver size, so restoring brings back the size it had before.
-          // Only a track THIS gesture took to its floor counts: an unrelated
-          // rail already resting there must not cancel the commit.
-          const collapsedSide = sashTracks.find(
-            (track, index) => track.collapseId && track.initial > track.floor && lastPlan!.sizes[index] <= track.floor
-          )?.collapseId
-
-          if (collapsedSide) {
-            setTreeGroupMinimized(collapsedSide, true)
-          } else {
-            commitPlan(lastPlan)
-          }
-        }
-
-        // Geometry vars re-enable AFTER the final store commit above, so the
-        // release publishes exactly one fresh measurement.
-        endSashDrag()
-        delete handle.dataset.sashDragging
-        releaseGuests()
-        document.body.style.cursor = restoreCursor
-        document.body.style.userSelect = restoreSelect
 
         try {
-          handle.releasePointerCapture?.(pointerId)
-        } catch {
-          // Mirror.
-        }
+          try {
+            resize.finish()
+          } finally {
+            restoreStyles()
+          }
 
-        window.removeEventListener('pointermove', onMove, true)
-        window.removeEventListener('pointerup', cleanup, true)
-        window.removeEventListener('pointercancel', cleanup, true)
-        window.removeEventListener('blur', cleanup)
-        handle.removeEventListener('lostpointercapture', cleanup)
-        persistTree()
+          if (lastPlan && lastPlan.moved !== 0) {
+            // Dragged a tool panel down to its collapsed header? Fold the zone
+            // to its rail instead of persisting a sliver — and DON'T write the
+            // sliver size, so restoring brings back the size it had before.
+            // Only a track THIS gesture took to its floor counts: an unrelated
+            // rail already resting there must not cancel the commit.
+            const collapsedSide = sashTracks.find(
+              (track, index) => track.collapseId && track.initial > track.floor && lastPlan!.sizes[index] <= track.floor
+            )?.collapseId
+
+            if (collapsedSide) {
+              setTreeGroupMinimized(collapsedSide, true)
+            } else {
+              commitPlan(lastPlan)
+            }
+          }
+        } finally {
+          // Geometry vars re-enable AFTER the final store commit above, so the
+          // release publishes exactly one fresh measurement.
+          delete handle.dataset.sashDragging
+          endSashDrag()
+          releaseGuests()
+          document.body.style.cursor = restoreCursor
+          document.body.style.userSelect = restoreSelect
+
+          try {
+            handle.releasePointerCapture?.(pointerId)
+          } catch {
+            // Mirror.
+          }
+
+          window.removeEventListener('pointermove', onMove, true)
+          window.removeEventListener('pointerup', cleanup, true)
+          window.removeEventListener('pointercancel', cleanup, true)
+          window.removeEventListener('blur', cleanup)
+          handle.removeEventListener('lostpointercapture', cleanup)
+          persistTree()
+        }
       }
 
       window.addEventListener('pointermove', onMove, true)
@@ -852,16 +863,17 @@ function Sash({
         // offset by the terminal rail's stable h-9 strip and straddles its
         // lower edge, keeping the upper seam visually quiet.
         horizontal
-          ? 'inset-y-0 left-0 w-[8px] -translate-x-[1px]'
+          ? 'inset-y-0 left-0 w-[8px]'
           : toolZone
-            ? 'inset-x-0 top-9 h-[8px] -translate-y-[1px]'
-            : 'inset-x-0 top-0 h-[8px] -translate-y-[1px]',
+            ? 'inset-x-0 top-9 h-[8px]'
+            : 'inset-x-0 top-0 h-[8px]',
         disabled ? 'pointer-events-none' : horizontal ? 'cursor-col-resize' : 'cursor-row-resize'
       )}
       // Lets shell-level CSS start the resting hairline below the unified top
       // band (vertical seams only) without touching the grab geometry.
       data-navigation-boundary={navigationBoundary}
       data-sash-axis={horizontal ? 'x' : 'y'}
+      data-sash-overlap="trailing"
       data-sash-tool-zone={toolZone || undefined}
       onDoubleClick={disabled ? undefined : onDoubleClick}
       onPointerDown={disabled ? undefined : onPointerDown}

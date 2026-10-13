@@ -36,6 +36,7 @@ it('binds a known unsent tile in place and never mistakes a loading stored chat 
 
   setSessionTileDelegate({
     archiveSession: vi.fn(),
+    branchSessionAtMessage: vi.fn(),
     branchSession: vi.fn(),
     deleteSession: vi.fn(),
     executeSlash: vi.fn(),

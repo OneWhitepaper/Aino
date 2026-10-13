@@ -53,7 +53,7 @@ export function SystemResourcesSettings() {
     refetch
   } = useQuery({
     queryKey: ['system-resources', connection, profile],
-    queryFn: getLocalHardware,
+    queryFn: () => getLocalHardware(),
     retry: false,
     refetchOnWindowFocus: false
   })

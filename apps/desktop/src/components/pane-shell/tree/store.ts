@@ -1,10 +1,9 @@
+import { atom, computed, type ReadableAtom } from 'nanostores'
 /**
  * Layout tree store: one persisted tree replaces paneStates side/band
  * overrides. The DEFAULT tree is declared by the app root (like config);
  * the persisted tree is the user's customization; reset returns to default.
  */
-
-import { atom, computed, type ReadableAtom } from 'nanostores'
 
 import { SIDEBAR_COLLAPSE_MEDIA_QUERY } from '@/app/layout-constants'
 import { setPluginEnabled } from '@/contrib/plugins-store'
@@ -23,7 +22,6 @@ import {
   type DropPosition,
   findGroup,
   findGroupOfPane,
-  findParentSplit,
   groupLeafIds,
   type GroupNode,
   insertAtGroup,
@@ -44,6 +42,8 @@ import {
   type SplitNode,
   type TabStripMode
 } from './model'
+import { beginLayoutHydration, endLayoutHydration, recalledEdgeWeights, rememberPaneShare } from './pane-share-memory'
+import { isTreePaneParked } from './parked-panes'
 import { FLOATING_PLACEMENT } from './renderer/floating-rect'
 import { tabStripVisibleForZone } from './renderer/strip-visibility'
 
@@ -232,60 +232,6 @@ export function undismissTreePanes(paneIds: Iterable<string>): void {
   if (next.size !== dismissed.size) {
     $dismissedPanes.set(next)
   }
-}
-
-// SPLIT-SHARE MEMORY — a tile pane that leaves the tree (the browser closed,
-// a page tile closed) records the share it held against its seam neighbor, so
-// re-opening it docks at the size the user left it. Without this every
-// re-open split the anchor zone [1, 1] again: each agent-triggered browser
-// open re-took half the chat, whatever the user had resized it to.
-const validShare = (share: unknown): share is number =>
-  typeof share === 'number' && Number.isFinite(share) && share > 0 && share < 1
-
-const $paneShares = modeLayout.atom<Record<string, number>>(
-  LAYOUT_KEYS.shares,
-  () => ({}),
-  Codecs.json(value =>
-    value && typeof value === 'object'
-      ? Object.fromEntries(Object.entries(value).filter(([, share]) => validShare(share)))
-      : {}
-  )
-)
-
-function rememberPaneShare(tree: LayoutNode, paneId: string) {
-  const zone = findGroupOfPane(tree, paneId)
-
-  // Only a pane ALONE in its zone owns the zone's track — a stacked tab's
-  // removal doesn't change geometry, so there's no share to remember.
-  if (!zone || zone.panes.length !== 1) {
-    return
-  }
-
-  const parent = findParentSplit(tree, zone.id)
-
-  if (!parent) {
-    return
-  }
-
-  // The previous sibling is the seam partner a re-dock will split again (a
-  // trailing dock lands the tile right of / below its anchor); the pane at
-  // index 0 pairs with the sibling after it instead.
-  const at = parent.children.findIndex(child => child.id === zone.id)
-  const partner = at > 0 ? at - 1 : at + 1
-  const pair = (parent.weights[at] ?? 1) + (parent.weights[partner] ?? 1)
-  const share = pair > 0 ? (parent.weights[at] ?? 1) / pair : null
-
-  if (validShare(share)) {
-    $paneShares.set({ ...$paneShares.get(), [paneId]: share })
-  }
-}
-
-/** The [target, added] weight pair a re-inserted pane's edge split should get,
- *  or undefined for the even default. Persisted state is untrusted. */
-function recalledEdgeWeights(paneId: string): [number, number] | undefined {
-  const share = $paneShares.get()[paneId]
-
-  return validShare(share) ? [1 - share, share] : undefined
 }
 
 // HIDE-ONLY STRIP TABS (`hideOnly` chrome: sessions / Bots) — standing chrome
@@ -779,21 +725,6 @@ export function shownPanesInGroup(group: { panes: readonly string[] }): string[]
   })
 }
 
-/** How many zones currently show a MAIN tile (a chat, a page, a preview). A
- *  count, not a list, so it notifies only when a main zone appears or goes —
- *  every TreeGroup reads it, and a sash drag rewrites the tree once per frame.
- *  Registry-versioned because a freshly adopted session tile is in the tree
- *  before its contribution registers `placement: 'main'`. */
-export const $mainTileZoneCount = computed(
-  [$layoutTree, $hiddenTreePanes, $registryVersion],
-  (tree: LayoutNode | null) =>
-    tree
-      ? groupLeafIds(tree).filter(id =>
-          shownPanesInGroup({ panes: findGroup(tree, id)?.panes ?? [] }).some(isMainStripPane)
-        ).length
-      : 0
-)
-
 /** Is this zone showing a tab strip right now? The store's adapter over the
  *  shared resolver — TreeGroup answers the same question from its own render
  *  inputs, so the toggle command and the strip on screen cannot disagree about
@@ -807,8 +738,7 @@ export function tabStripVisibleForGroup(group: GroupNode): boolean {
     isCollapsePane,
     mode: group.tabStrip,
     paneFor: (id: string) => registered.find(c => c.id === id),
-    shown,
-    siblingMainZone: $mainTileZoneCount.get() > (shown.some(isMainStripPane) ? 1 : 0)
+    shown
   })
 }
 
@@ -887,7 +817,7 @@ export function removeTreePane(paneId: string) {
  *  Usually the root itself (Default, Focus); in a column-root layout (Terminal
  *  deck, Quad) it's the row child that holds sessions/workspace/files. Returns
  *  null when the tree has no row split with side-eligible panes. */
-function rootRow(): SplitNode | null {
+export function rootRow(): SplitNode | null {
   const tree = $layoutTree.get()
 
   if (!tree || tree.type !== 'split') {
@@ -1503,7 +1433,8 @@ export function adoptContributedPanes(): void {
   // turn it into a track that steals width from a zone, which is the whole
   // thing floating exists to avoid.
   const missing = panes.filter(
-    c => !inTree.has(c.id) && !dismissed.has(c.id) && placementOf(c.id) !== FLOATING_PLACEMENT
+    c =>
+      !inTree.has(c.id) && !dismissed.has(c.id) && !isTreePaneParked(c.id) && placementOf(c.id) !== FLOATING_PLACEMENT
   )
 
   if (missing.length === 0) {
@@ -1529,7 +1460,8 @@ export function adoptContributedPanes(): void {
 
     if (target) {
       // Silent adoption: don't front over the zone's active tab — a reveal
-      // does. An edge dock re-takes the share the pane held when it closed.
+      // does. An edge dock re-takes the share the pane held when it closed —
+      // but only against the seam partner it was recorded with (#108679).
       //
       // Nothing writes the strip choice afterwards. This used to read the
       // host's hidden flag before the insert and stamp it back on after, purely
@@ -1544,7 +1476,7 @@ export function adoptContributedPanes(): void {
           dock?.pos ?? 'center',
           dock?.before,
           false,
-          recalledEdgeWeights(pane.id)
+          recalledEdgeWeights(pane.id, anchor)
         ) ?? next
     }
   }
@@ -1570,6 +1502,24 @@ export function watchContributedPanes(): void {
   adoptContributedPanes()
   modeLayout.onRestore(adoptContributedPanes)
   registry.subscribe(adoptContributedPanes)
+}
+
+/** Reconcile the persisted tree with the registry as part of BOOT hydration:
+ *  the reload prune→re-register cycle runs with share recording suspended
+ *  (#108679 — a hydration prune is not a user resize, and its recorded
+ *  shares were what re-docked tiles replayed at half width). Call once from
+ *  the app root, after declareDefaultTree, in place of a bare
+ *  watchContributedPanes() when the surface persists tiles. */
+export function hydrateContributedPanes(): void {
+  beginLayoutHydration()
+
+  try {
+    adoptContributedPanes()
+  } finally {
+    endLayoutHydration()
+  }
+
+  watchContributedPanes()
 }
 
 function commit(next: LayoutNode | null) {
@@ -1647,7 +1597,7 @@ export function dockPaneBeside(paneId: string, anchorPaneId: string) {
 
   const next = findGroupOfPane(tree, paneId)
     ? movePaneOp(tree, paneId, { groupId: anchor.id, pos })
-    : insertAtGroup(tree, anchor.id, paneId, pos, undefined, true, recalledEdgeWeights(paneId))
+    : insertAtGroup(tree, anchor.id, paneId, pos, undefined, true, recalledEdgeWeights(paneId, anchorPaneId))
 
   if (next && next !== tree) {
     commit(next)

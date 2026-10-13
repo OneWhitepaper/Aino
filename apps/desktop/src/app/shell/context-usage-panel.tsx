@@ -1,9 +1,14 @@
 import { compactNumber } from '@hermes/shared'
 import { useMemo } from 'react'
 
+import { Codicon } from '@/components/ui/codicon'
 import { useI18n } from '@/i18n'
 import { cn } from '@/lib/utils'
 import type { ContextBreakdown, ContextUsageCategory, UsageStats } from '@/types/hermes'
+
+function tokenCountLabel(value: number | null | undefined): string {
+  return value == null ? '\u2014' : compactNumber(value)
+}
 
 interface ContextUsagePanelProps {
   compact?: boolean
@@ -45,8 +50,8 @@ export function ContextUsagePanel({
   )
 
   const segmentTotal = categories.reduce((sum, category) => sum + category.tokens, 0) || contextUsed || 1
-  const usedLabel = contextUsed == null ? '\u2014' : compactNumber(contextUsed)
-  const maxLabel = contextMax == null ? '\u2014' : compactNumber(contextMax)
+  const usedLabel = tokenCountLabel(contextUsed)
+  const maxLabel = tokenCountLabel(contextMax)
 
   const hasContextData = (contextMax ?? 0) > 0 || (contextUsed ?? 0) > 0 || categories.length > 0
 
@@ -93,11 +98,24 @@ export function ContextUsagePanel({
         </p>
       )}
 
+
       {contextPercent !== null && (
-        <p className="text-[0.6875rem] text-foreground">
+      <p className="flex items-center justify-between gap-2 text-[0.6875rem] text-foreground">
+        <span>
           {usage.context_estimated ? '~' : ''}
           {copy.percentFull(contextPercent)}
-        </p>
+        </span>
+
+        {usage.compressions !== undefined && (
+          <span
+            className="inline-flex items-center gap-1 text-muted-foreground"
+            data-testid="context-panel-compressions"
+          >
+            <Codicon aria-hidden="true" name="layers" size="0.6875rem" />
+            {t.shell.statusbar.compressions(usage.compressions)}
+          </span>
+        )}
+      </p>
       )}
 
       <ContextUsageBar categories={categories} segmentTotal={segmentTotal} />
@@ -122,6 +140,26 @@ export function ContextUsagePanel({
         <p className="text-[0.6875rem] text-muted-foreground">{copy.empty}</p>
       )}
     </div>
+  )
+}
+
+/** The statusbar meter's trailing `[bar] N%`, plus a quiet `layers N` once the
+ *  live session has compacted — the same glyph the sidebar puts on rows that
+ *  came from a compression, so the two read as one idea. Zero stays out of the
+ *  meter (every fresh session would carry noise); the panel shows it. */
+export function ContextMeterDetail({ bar, compressions }: { bar: string; compressions?: number }) {
+  if (!compressions) {
+    return bar
+  }
+
+  return (
+    <span className="inline-flex items-center gap-1.5">
+      {bar}
+      <span className="inline-flex items-center gap-0.5 tabular-nums" data-testid="context-meter-compressions">
+        <Codicon aria-hidden="true" name="layers" size="0.6875rem" />
+        {compressions}
+      </span>
+    </span>
   )
 }
 

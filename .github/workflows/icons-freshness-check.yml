@@ -1,0 +1,64 @@
+name: Icon Assets Freshness
+
+# The committed icon outputs must match what scripts/generate_icons.py
+# renders from assets/nous-girl-*.svg + assets/backgrounds/*.svg. Regular
+# builds and user installs consume the committed files and never render, so
+# this lane is what keeps them honest: regenerate, structural --check, then
+# fail on any pixel, native frame, SVG or manifest difference. PNG compression
+# differs across platform Pillow wheels; compressed bytes are not artwork.
+# Fix a red run with
+# `node scripts/generate-icons.mjs` on a Linux x86_64 Hermes runtime interpreter
+# (HERMES_PYTHON selects it) and commit.
+#
+# OS/CPU build is part of the renderer: resvg 0.4.0 macOS ARM64 and Linux
+# x86_64 differ at five alpha edge pixels in the installer portrait. Keep the
+# committed reference and this exact-pixel lane on Linux x86_64; do not replace
+# the reference with a macOS render. Text artwork also requires pinned fonts.
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: Regenerate icons + diff against committed
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@f548e57e544e1ff5a4c46bf1e1b8685f8e4a348a # v7.0.1
+
+      # The generator runs on a Hermes runtime interpreter; [] exports one as HERMES_PYTHON.
+      - uses: ./.github/actions/setup-pm
+        with:
+          toolchain: all
+          extras: '[]'
+          cache-python: true
+          prune-python-cache: true
+
+      - name: Verify committed pixels, native frames, and structure against every target
+        env:
+          HERMES_PAYLOAD_TAG: ''
+          HERMES_BUILD_COMMIT: ''
+        run: |
+          node scripts/generate-icons.mjs --check
+          if ! git diff --exit-code --stat || [ -n "$(git status --porcelain --untracked-files=all)" ]; then
+            git status --porcelain --untracked-files=all
+            echo "::error::Committed icons are stale. Run 'node scripts/generate-icons.mjs' and commit the result."
+            exit 1
+          fi
+
+      - name: Preserve runner renders when freshness fails
+        if: failure()
+        env:
+          HERMES_PAYLOAD_TAG: ''
+          HERMES_BUILD_COMMIT: ''
+        run: node scripts/generate-icons.mjs --out "$RUNNER_TEMP/icon-renders"
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: failure()
+        with:
+          name: icon-freshness-runner-renders
+          path: ${{ runner.temp }}/icon-renders
+          retention-days: 7

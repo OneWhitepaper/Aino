@@ -52,9 +52,9 @@ def _replayed_user_content(content: Any) -> Any:
 
 
 def project_compaction_message_for_display(
-    message: Dict[str, Any], *,
-    prior_user_match: Optional[Callable[[Dict[str, Any], Any, Optional[float]], bool]] = None,
-) -> Optional[Dict[str, Any]]:
+    message: dict[str, Any], *,
+    prior_user_match: Optional[Callable[[dict[str, Any], Any, Optional[float]], bool]] = None,
+) -> Optional[dict[str, Any]]:
     """Return authentic transcript content, or ``None`` for a pure handoff.
 
     Model-facing recovery history retains the complete carrier. Display

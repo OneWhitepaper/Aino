@@ -282,7 +282,8 @@ def summary_for_db(db, session_id, language="zh", *, generate=False, retry=False
             return _busy_payload(_source(db, session_id), read_json_or_empty(path))
         except HTTPException:
             raise
-        except Exception as error:
+        except Exception as generation_error:
+            error = generation_error
             latest = _source(db, session_id)
             # A turn can begin before its lease or first message is persisted, while
             # the shared transport is already closing the background request.

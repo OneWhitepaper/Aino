@@ -21,7 +21,7 @@ def delegation_runtime(monkeypatch, request):
     children = []
 
     class Provider(BaseHTTPRequestHandler):
-        def do_POST(self):  # noqa: N802
+        def do_POST(self):
             body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
             if "messages" not in body and "input" not in body:
                 self.send_error(404)

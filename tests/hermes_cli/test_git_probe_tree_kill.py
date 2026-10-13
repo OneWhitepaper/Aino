@@ -23,9 +23,7 @@ import pytest
 from hermes_cli._subprocess_compat import bounded_git_probe, kill_process_tree
 from hermes_cli.local_runtime import processes
 
-pytestmark = pytest.mark.skipif(
-    sys.platform == "win32", reason="POSIX process-group semantics"
-)
+pytestmark = pytest.mark.platforms("posix")  # POSIX process-group semantics
 
 
 def _write_forking_script(tmp_path, marker_name="child.pid"):
@@ -35,7 +33,7 @@ def _write_forking_script(tmp_path, marker_name="child.pid"):
     script.write_text(
         textwrap.dedent(
             f"""\
-            #!/bin/bash
+            #!/usr/bin/env bash
             sleep 300 &
             echo $! > {marker}
             sleep 300
@@ -99,7 +97,7 @@ def test_timeout_kills_descendants(tmp_path, monkeypatch):
 def test_posix_spawn_uses_own_process_group(tmp_path):
     """The probe child must lead its own process group (killpg precondition)."""
     script = tmp_path / "pgid.sh"
-    script.write_text("#!/bin/bash\necho \"$$ $(ps -o pgid= -p $$ | tr -d ' ')\"\n")
+    script.write_text("#!/usr/bin/env bash\necho \"$$ $(ps -o pgid= -p $$ | tr -d ' ')\"\n")
     script.chmod(0o755)
 
     out = bounded_git_probe([str(script)], timeout=5.0)

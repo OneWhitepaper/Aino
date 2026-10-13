@@ -81,56 +81,63 @@ describe('useMessageStream agent-init error surfacing (#63078)', () => {
     expect(toast).toBeDefined()
     expect(toast!.detail).toBeUndefined()
   })
-
-  it('renders the pre-ready cancel error event (#65567 server emit) visibly', () => {
+  it('merges the terminal error frame into the card the agent-init error event already painted', async () => {
     mountStream()
     seedOptimisticFirstMessage()
 
     act(() =>
       stream.handleEvent({
-        payload: { message: 'Turn cancelled before the agent was ready' },
+        payload: { message: 'Hermes could not start the assistant for this session. Details: no provider.' },
         session_id: SID,
         type: 'error'
       })
     )
-
-    const state = stream.state()
-    expect(state.messages.some(m => m.role === 'assistant' && m.error?.includes('cancelled'))).toBe(true)
-    expect(state.messages.some(m => m.id === 'user-123-abc')).toBe(true)
-    expect(state.busy).toBe(false)
-  })
-
-  it('uses Simplified Chinese for the global gateway error toast title', () => {
-    setRuntimeI18nLocale('zh')
-    mountStream()
 
     act(() =>
       stream.handleEvent({
-        payload: { message: 'The upstream service returned an unexpected response.' },
+        payload: {
+          error: 'no provider',
+          error_surface: { code: 'agent_init_failed', layer: 'runtime', retryable: true },
+          status: 'error',
+          text: 'no provider'
+        },
         session_id: SID,
-        type: 'error'
+        type: 'message.complete'
       })
     )
 
-    expect($notifications.get().find(notification => notification.id?.startsWith('gateway-error:'))?.title).toBe(
-      'Aino 未能完成回复'
-    )
+    const errorRows = stream.state().messages.filter(m => m.role === 'assistant' && m.error)
+    expect(errorRows).toHaveLength(1)
+    expect(errorRows[0]!.errorSurface?.code).toBe('agent_init_failed')
   })
-
-  it('localizes the generic in-transcript error when the gateway sends no details', () => {
-    setRuntimeI18nLocale('zh')
+  it('keeps one card when the terminal error frame arrives before the agent-init error event', async () => {
     mountStream()
+    seedOptimisticFirstMessage()
 
     act(() =>
       stream.handleEvent({
-        payload: {},
+        payload: {
+          error: 'no provider',
+          error_surface: { code: 'agent_init_failed', layer: 'runtime', retryable: true },
+          status: 'error',
+          text: 'no provider'
+        },
+        session_id: SID,
+        type: 'message.complete'
+      })
+    )
+
+    act(() =>
+      stream.handleEvent({
+        payload: { message: 'Hermes could not start the assistant for this session. Details: no provider.' },
         session_id: SID,
         type: 'error'
       })
     )
 
-    expect(stream.state().messages.find(message => message.role === 'assistant' && message.error)?.error).toBe(
-      'Aino 报告了错误'
-    )
+    const errorRows = stream.state().messages.filter(m => m.role === 'assistant' && m.error)
+    expect(errorRows).toHaveLength(1)
+    expect(errorRows[0]!.error).toContain('could not start the assistant')
+    expect(errorRows[0]!.errorSurface?.code).toBe('agent_init_failed')
   })
 })

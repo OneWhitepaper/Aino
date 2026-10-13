@@ -1,9 +1,8 @@
-import { useContext, useEffect, useState } from 'react'
+import { type ReactElement, useContext, useEffect, useState } from 'react'
 
 import { Button } from '@/components/ui/button'
-import type { DesktopUninstallMode, DesktopUninstallSummary } from '@/global'
+import type { DesktopUninstallMode, DesktopUninstallResult, DesktopUninstallSummary } from '@/global'
 import { useI18n } from '@/i18n'
-import { PRODUCT_NAME } from '@/lib/brand'
 import { AlertTriangle, Loader2, Trash2 } from '@/lib/icons'
 import { cn } from '@/lib/utils'
 
@@ -11,68 +10,115 @@ import { SectionHeading, SettingsBreadcrumbContext } from './primitives'
 
 interface ModeOption {
   mode: DesktopUninstallMode
+  title: string
+  description: string
+  /** Shown in the confirm step so people know exactly what disappears. */
+  consequence: string
   /** True when the option removes the Python agent (hidden if no agent). */
   needsAgent: boolean
 }
 
-const OPTION_MODES: ModeOption[] = [
-  { mode: 'gui', needsAgent: false },
-  { mode: 'lite', needsAgent: true },
-  { mode: 'full', needsAgent: true }
-]
-
-export function UninstallSection() {
+export function UninstallSection(): ReactElement | null {
   const hasBreadcrumb = useContext(SettingsBreadcrumbContext)
   const { t } = useI18n()
-  const u = t.settings.uninstall
+  const u = t.settings.uninstallSection
+
+  const options: ModeOption[] = [
+    {
+      mode: 'gui',
+      title: u.options.gui.title,
+      description: u.options.gui.description,
+      consequence: u.options.gui.consequence,
+      needsAgent: false
+    },
+    {
+      mode: 'lite',
+      title: u.options.lite.title,
+      description: u.options.lite.description,
+      consequence: u.options.lite.consequence,
+      needsAgent: true
+    },
+    {
+      mode: 'full',
+      title: u.options.full.title,
+      description: u.options.full.description,
+      consequence: u.options.full.consequence,
+      // full removes the agent (and user data), so it's an agent-removing option:
+      // hide it on a lite client with no local agent, same as lite. A lite client
+      // connecting to a remote backend has no local agent OR local user data the
+      // GUI installed, so gui-only is the correct (and only) option there.
+      needsAgent: true
+    }
+  ]
+
   const [summary, setSummary] = useState<DesktopUninstallSummary | null>(null)
-  const [loading, setLoading] = useState(true)
   const [pending, setPending] = useState<DesktopUninstallMode | null>(null)
-  const [running, setRunning] = useState(false)
+  const [running, setRunning] = useState<boolean>(false)
   const [error, setError] = useState<string | null>(null)
 
-  useEffect(() => {
-    let alive = true
-    const bridge = window.hermesDesktop?.uninstall
+  useEffect((): (() => void) | undefined => {
+    let alive: boolean = true
+    const bridge: Window['hermesDesktop']['uninstall'] | undefined = window.hermesDesktop?.uninstall
 
     if (!bridge) {
-      setLoading(false)
-
       return
     }
 
     void bridge
       .summary()
-      .then(result => {
+      .then((result: DesktopUninstallSummary): void => {
         if (alive) {
           setSummary(result)
         }
       })
-      .catch(() => {
-        // Non-fatal — we degrade to offering the GUI-only option.
-      })
-      .finally(() => {
+      .catch((): void => {
+        // A failed ownership probe must not offer a destructive fallback.
         if (alive) {
-          setLoading(false)
+          setSummary(null)
         }
       })
 
-    return () => {
+    return (): void => {
       alive = false
     }
   }, [])
 
-  const bridge = window.hermesDesktop?.uninstall
+  const bridge: Window['hermesDesktop']['uninstall'] | undefined = window.hermesDesktop?.uninstall
 
-  if (!bridge) {
+  if (!bridge || !summary) {
     return null
   }
 
-  // Gate the agent-removing options on whether an agent is actually present.
-  // A future lite client that ships without the bundled agent shows GUI-only.
-  const agentInstalled = summary?.agent_installed ?? false
+  if (!summary.code_removal_allowed) {
+    // The OS or package manager owns removal; show how, never a destructive fallback.
+    if (!summary.native_removal_instructions) {
+      return null
+    }
 
-  const handleConfirm = async () => {
+    return (
+      <div className={cn('mx-auto w-full max-w-2xl', !hasBreadcrumb && 'mt-8')}>
+        <SectionHeading icon={AlertTriangle} page title={u.uninstallHermes} />
+        <div className="flex flex-col gap-2 rounded-xl border border-border/60 bg-background/40 px-4 py-3">
+          <p className="text-xs text-muted-foreground">{u.managedBody}</p>
+          <p className="text-sm font-medium">{summary.native_removal_instructions}</p>
+          <p className="text-xs text-muted-foreground">{u.dataKept(summary.hermes_home)}</p>
+          {summary.platform === 'win32' && (
+            <div className="mt-1">
+              <Button onClick={(): void => void bridge.openAppsSettings()} size="sm" variant="outline">
+                {u.openAppsSettings}
+              </Button>
+            </div>
+          )}
+        </div>
+      </div>
+    )
+  }
+
+  // An owned GUI can remain after its local agent has been removed.
+  const agentInstalled: boolean = summary.agent_installed
+  const visibleOptions: ModeOption[] = options.filter((opt: ModeOption): boolean => agentInstalled || !opt.needsAgent)
+
+  const handleConfirm: () => Promise<void> = async (): Promise<void> => {
     if (!pending) {
       return
     }
@@ -81,7 +127,7 @@ export function UninstallSection() {
     setError(null)
 
     try {
-      const result = await bridge.run(pending)
+      const result: DesktopUninstallResult = await bridge.run(pending)
 
       if (!result.ok) {
         setError(result.message || result.error || u.couldNotStart)
@@ -96,85 +142,58 @@ export function UninstallSection() {
     }
   }
 
-  const options = OPTION_MODES.map(option => ({
-    ...option,
-    title: option.mode === 'gui' ? u.guiTitle : option.mode === 'lite' ? u.liteTitle : u.fullTitle,
-    description:
-      option.mode === 'gui'
-        ? u.guiDescription(PRODUCT_NAME)
-        : option.mode === 'lite'
-          ? u.liteDescription(PRODUCT_NAME)
-          : u.fullDescription,
-    consequence:
-      option.mode === 'gui'
-        ? u.guiConsequence
-        : option.mode === 'lite'
-          ? u.liteConsequence(PRODUCT_NAME)
-          : u.fullConsequence(PRODUCT_NAME)
-  }))
-
-  const pendingOption = options.find(opt => opt.mode === pending) ?? null
-  const visibleOptions = options.filter(opt => agentInstalled || !opt.needsAgent)
+  const pendingOption: ModeOption | null = options.find((opt: ModeOption): boolean => opt.mode === pending) ?? null
 
   return (
     <div className={cn('mx-auto w-full max-w-2xl', !hasBreadcrumb && 'mt-8')}>
       <SectionHeading icon={AlertTriangle} page title={t.settings.uninstallSection.dangerZone} />
 
-      <div className="rounded-(--aino-radius-control) border border-destructive/30 bg-destructive/5 px-4 py-3">
-        {loading ? (
-          <div className="flex items-center gap-2 py-2 text-sm text-muted-foreground">
-            <Loader2 className="size-3.5 animate-spin" />
-            {u.checking}
-          </div>
-        ) : pendingOption ? (
+      <div className="rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-3">
+        {pendingOption ? (
           <div>
-            <p className="text-sm font-medium text-destructive">{u.confirmTitle}</p>
+            <p className="text-sm font-medium text-destructive">{t.settings.uninstallSection.confirmUninstall}</p>
             <p className="mt-1 text-xs text-muted-foreground">{u.confirmBody(pendingOption.consequence)}</p>
             {summary?.running_app_path && (
               <p className="mt-1 font-mono text-[0.68rem] text-muted-foreground/60">
-                {u.appPath(summary.running_app_path)}
+                {u.appLabel} {summary.running_app_path}
               </p>
             )}
             {error && <p className="mt-2 text-xs text-destructive">{error}</p>}
             <div className="mt-3 flex flex-wrap items-center gap-3">
-              <Button disabled={running} onClick={() => void handleConfirm()} size="sm" variant="destructive">
+              <Button disabled={running} onClick={(): void => void handleConfirm()} size="sm" variant="destructive">
                 {running && <Loader2 className="size-3 animate-spin" />}
                 {running ? u.uninstalling : u.yesUninstall}
               </Button>
-              <Button disabled={running} onClick={() => setPending(null)} size="sm" variant="text">
-                {u.cancel}
+              <Button disabled={running} onClick={(): void => setPending(null)} size="sm" variant="text">
+                {t.common.cancel}
               </Button>
             </div>
           </div>
         ) : (
           <div className="flex flex-col gap-2">
-            <p className="text-sm font-medium">{u.heading(PRODUCT_NAME)}</p>
-            <p className="text-xs text-muted-foreground">{u.intro}</p>
+            <p className="text-sm font-medium">{t.settings.uninstallSection.uninstallHermes}</p>
+            <p className="text-xs text-muted-foreground">{u.chooseHowMuch}</p>
             <div className="mt-1 flex flex-col gap-2">
-              {visibleOptions.map(opt => {
-                const copy = options.find(option => option.mode === opt.mode)!
-
-                return (
-                  <button
-                    className={cn(
-                      'flex items-start gap-3 rounded-lg border border-border/60 bg-background/40 px-3 py-2.5 text-left transition',
-                      'hover:border-destructive/40 hover:bg-destructive/5'
-                    )}
-                    key={opt.mode}
-                    onClick={() => {
-                      setError(null)
-                      setPending(opt.mode)
-                    }}
-                    type="button"
-                  >
-                    <Trash2 className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
-                    <span className="min-w-0">
-                      <span className="block text-sm font-medium text-foreground">{copy.title}</span>
-                      <span className="mt-0.5 block text-xs text-muted-foreground">{copy.description}</span>
-                    </span>
-                  </button>
-                )
-              })}
+              {visibleOptions.map((opt: ModeOption): ReactElement => (
+                <button
+                  className={cn(
+                    'flex items-start gap-3 rounded-lg border border-border/60 bg-background/40 px-3 py-2.5 text-left transition',
+                    'hover:border-destructive/40 hover:bg-destructive/5'
+                  )}
+                  key={opt.mode}
+                  onClick={(): void => {
+                    setError(null)
+                    setPending(opt.mode)
+                  }}
+                  type="button"
+                >
+                  <Trash2 className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+                  <span className="min-w-0">
+                    <span className="block text-sm font-medium text-foreground">{opt.title}</span>
+                    <span className="mt-0.5 block text-xs text-muted-foreground">{opt.description}</span>
+                  </span>
+                </button>
+              ))}
             </div>
           </div>
         )}

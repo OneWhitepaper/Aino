@@ -156,6 +156,8 @@ def test_compaction_replay_is_model_only_after_storage(timeline_store, standalon
     if legacy:
         for message in history[1:]:
             message.pop("display_metadata", None)
+            # Legacy producers retained the original timestamp; current replay rows get compaction time.
+            message["timestamp"] = original["timestamp"]
     else:
         assert history[-1]["display_metadata"]["compaction_replay"] is True
     snapshot = deepcopy(history)

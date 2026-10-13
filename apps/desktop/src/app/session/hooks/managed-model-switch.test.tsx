@@ -250,7 +250,7 @@ it('keeps the reopened ModelPill menu when exit animation retains its pending se
   // observe an unfinished exit animation; do not forceMount or remount content.
   const computedStyle = window.getComputedStyle.bind(window)
 
-  const styles = vi.spyOn(window, 'getComputedStyle').mockImplementation((element, pseudo) => {
+  const styles = vi.spyOn(globalThis, 'getComputedStyle').mockImplementation((element, pseudo) => {
     const actual = computedStyle(element, pseudo)
 
     if (!element.matches('[data-slot="dropdown-menu-content"]')) {

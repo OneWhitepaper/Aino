@@ -1,7 +1,7 @@
 import { translateNow } from '@/i18n'
 import type { GatewayEventPayload } from '@/lib/chat-messages'
 import { normalizePersonalityValue } from '@/lib/chat-runtime'
-import { platformModelStatePatch } from '@/lib/platform-session-model'
+import { platformModelStatePatch, samePlatformSessionModel } from '@/lib/platform-session-model'
 import { isTodoToolName } from '@/lib/todos'
 import { extractToolErrorMessage } from '@/lib/tool-result-summary'
 import type { SubagentStatus } from '@/store/subagents'
@@ -91,12 +91,11 @@ export function applySessionInfoStatePatch(
     (patch.model === undefined || patch.model === state.model) &&
     (patch.personality === undefined || patch.personality === state.personality) &&
     (patch.provider === undefined || patch.provider === state.provider) &&
-    (patch.platformModel === undefined ||
-      (patch.platformModel?.modelId === state.platformModel?.modelId &&
-        patch.platformModel?.ownerUserId === state.platformModel?.ownerUserId &&
-        patch.platformModel?.platformOrigin === state.platformModel?.platformOrigin &&
-        patch.platformModel?.status === state.platformModel?.status)) &&
+    (patch.platformModel === undefined || samePlatformSessionModel(patch.platformModel, state.platformModel)) &&
     (patch.reasoningEffort === undefined || patch.reasoningEffort === state.reasoningEffort) &&
+    // The wire level can change alone: an optimistic paint already holds the new
+    // model/effort, so skipping here kept the previous route's clamp ("Medium→Max") forever.
+    (patch.reasoningEffortWire === undefined || patch.reasoningEffortWire === state.reasoningEffortWire) &&
     (patch.reasoningEffortPending === undefined ||
       patch.reasoningEffortPending === Boolean(state.reasoningEffortPending)) &&
     (patch.serviceTier === undefined || patch.serviceTier === state.serviceTier) &&

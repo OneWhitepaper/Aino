@@ -1,3 +1,4 @@
+import { createGatewaySession } from '@/app/session/hooks/use-session-actions/session-create-request'
 import type { PlatformSessionModel } from '@/lib/platform-session-model'
 import { type PlatformModelOwner, samePlatformAccount } from '@/store/platform-model-owner'
 import { platformModelCatalog, PlatformSelectionError, requirePlatformSelection } from '@/store/platform-models'
@@ -76,7 +77,7 @@ export async function createPlatformDraft(
   owner: SessionOwnerScope,
   authority: PlatformDraftAuthority | null
 ): Promise<SessionCreateResponse> {
-  if (params.model_source !== 'aino') {return request('session.create', params)}
+  if (params.model_source !== 'aino') {return createGatewaySession(null, params, request)}
   const catalog = platformModelCatalog()
   const modelId = String(params.model_id || '')
 
@@ -100,7 +101,7 @@ export async function createPlatformDraft(
   // A profile-only socket has no registry route. Its create params still own
   // the native binding target; falling back to default dials another backend.
   const bindingOwner = owner ?? (typeof params.profile === 'string' ? params.profile : 'default')
-  const created = await request<SessionCreateResponse>('session.create', params)
+  const created = await createGatewaySession(null, params, request)
 
   try {
     if (!authorityCurrent()) {

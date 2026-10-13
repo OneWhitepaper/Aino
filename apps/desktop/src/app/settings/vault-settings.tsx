@@ -29,6 +29,7 @@ import { $settingsScopeProfile } from '@/store/settings-scope'
 
 import { CONTROL_TEXT } from './constants'
 import { ListRow, Pill, SectionHeading, SettingsContent, SettingsGroup } from './primitives'
+import { SettingsProfileScope } from './profile-scope'
 
 // Vault data is private to one (connection, profile); the cache key carries that owner so a
 // late response from profile A can never paint under profile B.
@@ -152,6 +153,31 @@ function buildSecret(form: VaultForm): Record<string, string> {
 
 interface VaultSettingsProps {
   subpage?: string
+}
+
+function VaultCredentialsHeading({ count, onAdd }: { count: number; onAdd: () => void }) {
+  const { t } = useI18n()
+  const v = t.settings.vault
+
+  return (
+    <>
+      <SectionHeading
+        aside={
+          <Button className="gap-1.5" onClick={() => onAdd()} size="sm" type="button" variant="outline">
+            <Plus className="size-3.5" />
+            {v.add}
+          </Button>
+        }
+        icon={ShieldLock}
+        meta={count > 0 ? v.count(count) : undefined}
+        page
+        title={v.title}
+      />
+      <p className="mb-2 text-[length:var(--conversation-caption-font-size)] leading-(--conversation-caption-line-height) text-(--ui-text-tertiary)">
+        {v.blurb}
+      </p>
+    </>
+  )
 }
 
 export function VaultSettings({ subpage }: VaultSettingsProps = {}) {
@@ -389,23 +415,13 @@ export function VaultSettings({ subpage }: VaultSettingsProps = {}) {
 
   return (
     <SettingsContent>
+      {/* The vault is per profile (its RPCs ride the (connection, profile) owner above), so the
+          page must SAY which profile it is showing — without the chip a non-default selection
+          looked like the default vault with entries missing (#121966). */}
+      <SettingsProfileScope className="mb-5" />
       {(subpage === undefined || subpage === 'credentials') && (
         <>
-          <SectionHeading
-            aside={
-              <Button className="gap-1.5" onClick={() => openAdd()} size="sm" type="button" variant="outline">
-                <Plus className="size-3.5" />
-                {v.add}
-              </Button>
-            }
-            icon={ShieldLock}
-            meta={items.length > 0 ? v.count(items.length) : undefined}
-            page
-            title={v.title}
-          />
-          <p className="mb-2 text-[length:var(--conversation-caption-font-size)] leading-(--conversation-caption-line-height) text-(--ui-text-tertiary)">
-            {v.blurb}
-          </p>
+          <VaultCredentialsHeading count={items.length} onAdd={openAdd} />
 
           {!isPending && items.length === 0 && <EmptyState description={v.emptyDesc} title={v.empty} />}
 
