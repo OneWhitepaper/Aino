@@ -388,3 +388,14 @@ all scenarios and the fixed 300-second file cap; no production behavior,
 assertion, per-command timeout or runner policy was relaxed. Static AST
 comparison verified the moved PM test body. Local canonical collection: seven
 files, 160 passed, 15 Windows skips; scoped health and static checks green.
+
+On `24cb1f8ee6`, Windows ARM64 native tests passed. Windows x64 no longer
+failed the split outcome/PM files: the PM set passed four cases in 259s,
+Unicode desktop handoff passed six in 260s, and both paired follow-up files
+passed. A different real-process lineage file timed out at 300s after its
+first five cases passed. The changing file and concurrent 260s completions
+point to runner-side PowerShell/cmd tree contention rather than one failing
+assertion. The Windows-only test lane now runs two file processes rather than
+four; all selected files, per-file isolation, per-command and per-file timeouts,
+and assertions stay unchanged. The 60-minute job bound remains. Native CI on
+this candidate is required; this is a concurrency hypothesis, not a proved fix.

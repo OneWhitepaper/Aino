@@ -185,9 +185,13 @@ jobs:
             -m "platforms and not integration" \
             -v --tb=short
         env:
-          # These files spawn nested PowerShell trees. CPU-count parallelism
-          # starves cold child startup before the fixture's idle deadline.
-          HERMES_TEST_WORKERS: ${{ matrix.marker == 'windows' && '4' || '' }}
+          # Native updater/PM files spawn nested PowerShell and cmd trees.
+          # Four concurrent file processes made unrelated files hit the fixed
+          # 300s cap in successive x64 runs (PM, commit outcomes, then lineage)
+          # while all earlier cases passed; ARM64 passed on the same SHA.
+          # Leave test/file timeouts and selection intact; bound competing
+          # process trees instead of weakening the assertions.
+          HERMES_TEST_WORKERS: ${{ matrix.marker == 'windows' && '2' || '' }}
           HERMES_TEST_SLICE: ${{ matrix.slice || '' }}
           # Belt-and-suspenders with tests/conftest.py's env blanking: no
           # test may reach a real provider API.
