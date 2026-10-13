@@ -324,3 +324,24 @@ on the dark/mono layers. Thus OS/CPU renderer buildâ€”not PNG compression aloneâ
 part of reproducibility. The canonical reference remains Linux x86_64, matching
 CI; documentation no longer promises cross-platform pixel determinism. No pixel
 tolerance, freshness exemption, or renderer dependency change was introduced.
+
+### Structural follow-up verification
+
+The full dual-base health report now has zero blocking findings (1,300 retained
+records, including inherited/advisory results). Runtime extraction reuses existing
+socket, auxiliary-wire, stream-emitter, summary, metadata and config-validation
+modules; focused image-recovery and replay-row siblings hold previously inline
+behavior. The shared Aino agent paths retain their original await/call ordering.
+Desktop splits session hooks/test harnesses, locale bundles, gateway types, pane
+share memory and UI subcomponents. Electron main delegates existing preview,
+file-watch and image-persistence behavior to topical modules and keeps the
+existing filesystem hardening path. No policy thresholds or allow comments changed.
+
+Canonical Python receipts: 168 files/2,496 passed/74 skipped, plus 15 files/481
+passed/6 skipped and 9 files/553 passed/6 skipped (overlapping selections, not a
+sum of unique tests). Desktop receipts: 72 hook files/936 passed; 69 locale/pane/
+gateway files/389 passed; 26 renderer files/353 passed; lifecycle 98 passed and
+1 platform skip; preview extraction 88 passed. New preview contracts exercise
+real file reads, native watching, missing-file classification, bounded preview
+versus full plugin reads, and persisted cap round trips. Full CI on the final
+commit is still required before merging.
