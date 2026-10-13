@@ -125,6 +125,42 @@ function formatAge(seconds: number, r: Translations['sidebar']['row']): string {
   return unit === 'second' ? r.ageNow : `${value}${r[AGE_KEY[unit]]}`
 }
 
+interface SessionRowFiguresProps {
+  head: string
+  sep: string
+  showAge: boolean
+  figures: string[]
+  absoluteAge: string
+  age: string
+  timestampDate: Date
+}
+
+function SessionRowFigures({ head, sep, showAge, figures, absoluteAge, age, timestampDate }: SessionRowFiguresProps) {
+  return (
+    <span className="pointer-events-none whitespace-nowrap text-[0.625rem] leading-none text-(--ui-text-tertiary)">
+      {head}
+      {/* The figures own their tail: the separator goes with it. */}
+      <span className={cn('inline-block text-right', TAIL_HIDES)}>
+        {head && sep}
+        {showAge ? (
+          <Tip label={absoluteAge} side="top">
+            <time
+              aria-label={`${age}, ${absoluteAge}`}
+              className="pointer-events-auto focus-visible:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-sidebar-ring"
+              dateTime={timestampDate.toISOString()}
+              tabIndex={0}
+            >
+              {age}
+            </time>
+          </Tip>
+        ) : (
+          figures.at(-1)
+        )}
+      </span>
+    </span>
+  )
+}
+
 function SidebarSessionRowImpl({
   session,
   branchStem,
@@ -225,27 +261,15 @@ function SidebarSessionRowImpl({
     trailing.push({
       key: 'figures',
       node: (
-        <span className="pointer-events-none whitespace-nowrap text-[0.625rem] leading-none text-(--ui-text-tertiary)">
-          {head}
-          {/* The figures own their tail: the separator goes with it. */}
-          <span className={cn('inline-block text-right', TAIL_HIDES)}>
-            {head && sep}
-            {showAge ? (
-              <Tip label={absoluteAge} side="top">
-                <time
-                  aria-label={`${age}, ${absoluteAge}`}
-                  className="pointer-events-auto focus-visible:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-sidebar-ring"
-                  dateTime={timestampDate.toISOString()}
-                  tabIndex={0}
-                >
-                  {age}
-                </time>
-              </Tip>
-            ) : (
-              figures.at(-1)
-            )}
-          </span>
-        </span>
+        <SessionRowFigures
+          absoluteAge={absoluteAge}
+          age={age}
+          figures={figures}
+          head={head}
+          sep={sep}
+          showAge={showAge}
+          timestampDate={timestampDate}
+        />
       )
     })
   }
@@ -576,8 +600,12 @@ function SidebarSessionRowImpl({
                           onPointerEnter={armMarquee}
                           onPointerLeave={disarmMarquee}
                         >
-                          <span className="aino-sidebar-session-label hover-marquee-inner"
-                          data-sidebar-session-label="">{title}</span>
+                          <span
+                            className="aino-sidebar-session-label hover-marquee-inner"
+                            data-sidebar-session-label=""
+                          >
+                            {title}
+                          </span>
                         </SidebarRowLabel>
                       </OverflowTip>
                     </RowButton>

@@ -155,6 +155,31 @@ interface VaultSettingsProps {
   subpage?: string
 }
 
+function VaultCredentialsHeading({ count, onAdd }: { count: number; onAdd: () => void }) {
+  const { t } = useI18n()
+  const v = t.settings.vault
+
+  return (
+    <>
+      <SectionHeading
+        aside={
+          <Button className="gap-1.5" onClick={() => onAdd()} size="sm" type="button" variant="outline">
+            <Plus className="size-3.5" />
+            {v.add}
+          </Button>
+        }
+        icon={ShieldLock}
+        meta={count > 0 ? v.count(count) : undefined}
+        page
+        title={v.title}
+      />
+      <p className="mb-2 text-[length:var(--conversation-caption-font-size)] leading-(--conversation-caption-line-height) text-(--ui-text-tertiary)">
+        {v.blurb}
+      </p>
+    </>
+  )
+}
+
 export function VaultSettings({ subpage }: VaultSettingsProps = {}) {
   const { t } = useI18n()
   const v = t.settings.vault
@@ -396,21 +421,7 @@ export function VaultSettings({ subpage }: VaultSettingsProps = {}) {
       <SettingsProfileScope className="mb-5" />
       {(subpage === undefined || subpage === 'credentials') && (
         <>
-          <SectionHeading
-            aside={
-              <Button className="gap-1.5" onClick={() => openAdd()} size="sm" type="button" variant="outline">
-                <Plus className="size-3.5" />
-                {v.add}
-              </Button>
-            }
-            icon={ShieldLock}
-            meta={items.length > 0 ? v.count(items.length) : undefined}
-            page
-            title={v.title}
-          />
-          <p className="mb-2 text-[length:var(--conversation-caption-font-size)] leading-(--conversation-caption-line-height) text-(--ui-text-tertiary)">
-            {v.blurb}
-          </p>
+          <VaultCredentialsHeading count={items.length} onAdd={openAdd} />
 
           {!isPending && items.length === 0 && <EmptyState description={v.emptyDesc} title={v.empty} />}
 

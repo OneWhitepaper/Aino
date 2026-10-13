@@ -30,7 +30,7 @@ import {
 import { isTodoToolName, nextTodosFromToolEvent, parseTodoRevision } from '@/lib/todos'
 import { turnDoneNotificationBody } from '@/lib/turn-done-notification-body'
 import { parseTurnMetrics } from '@/lib/turn-metrics'
-import type { ScopedServerRequest } from '@/store/gateway'
+import type { ScopedServerRequest } from '@/store/gateway-types'
 import { dispatchNativeNotification } from '@/store/native-notifications'
 import { isDiskFullErrorMessage, notifyError } from '@/store/notifications'
 import { broadcastSessionsChanged } from '@/store/session-sync'
@@ -51,6 +51,40 @@ import { handleServerRequest as dispatchServerRequest } from './gateway-event/se
 import { extendInterruptedReply } from './interrupted-reply'
 import { currentResponseParts, mergeCurrentResponseText } from './response-parts'
 import { completionErrorText, delegateTaskPayloads, MAX_STREAM_FLUSH_GAP_MS, STREAM_DELTA_FLUSH_MS } from './utils'
+
+function completionContinuesInterim(existing: ChatMessage, finalText: string, existingText: string): boolean {
+  const finalContinuesInterim = Boolean(
+    existing.interim &&
+    finalText &&
+    existingText &&
+    (finalText === existingText ||
+      finalText.startsWith(existingText) ||
+      existingText.startsWith(finalText) ||
+      hasHighTextOverlap(finalText, existingText))
+  )
+
+  return finalContinuesInterim
+}
+
+function completionSettlesPersistedRow(
+  existing: ChatMessage,
+  persistedTurn: PersistedTurn | null | undefined
+): boolean {
+  const finalRowId = persistedTurn?.final_assistant_row_id
+
+  const settlesPersistedRow =
+    existing.interim === true &&
+    existing.rowId === undefined &&
+    typeof finalRowId === 'number' &&
+    Number.isSafeInteger(finalRowId) &&
+    finalRowId > 0
+
+  return settlesPersistedRow
+}
+
+function completionDuration(duration: number | undefined, startedAt: number | null): number | undefined {
+  return duration ?? (startedAt ? Math.max(1, Math.round((Date.now() - startedAt) / 1000)) : undefined)
+}
 
 interface MessageStreamOptions {
   activeGatewayProfile?: string
@@ -772,9 +806,7 @@ export function useMessageStream({
 
         // Wall-clock seconds this turn actually ran (message.start stamped
         // turnStartedAt). Read BEFORE the state return below nulls it.
-        const durationS =
-          turnMetrics?.duration_s ??
-          (state.turnStartedAt ? Math.max(1, Math.round((Date.now() - state.turnStartedAt) / 1000)) : undefined)
+        const durationS = completionDuration(turnMetrics?.duration_s, state.turnStartedAt)
 
         const replaceTextPart = (parts: ChatMessagePart[], interim: boolean) => {
           // The backend says every word of this final is already on screen; a
@@ -934,15 +966,7 @@ export function useMessageStream({
             // the final may add a trailing delta, so accept high overlap.
             // (mergeFinalAssistantText, via completeMessage, does the real
             // text merge — replaces the interim's text with the full final.)
-            const finalContinuesInterim = Boolean(
-              existing.interim &&
-              finalText &&
-              existingText &&
-              (finalText === existingText ||
-                finalText.startsWith(existingText) ||
-                existingText.startsWith(finalText) ||
-                hasHighTextOverlap(finalText, existingText))
-            )
+            const finalContinuesInterim = completionContinuesInterim(existing, finalText, existingText)
 
             // A bare `error` event (e.g. the agent build failing) already
             // painted this turn's error card; the turn's terminal error frame
@@ -960,14 +984,7 @@ export function useMessageStream({
             // interim instead of painting a second bubble for one row
             // (#124128). A frame with no receipt keeps the rules below, so a
             // genuinely distinct reply still appends its own bubble.
-            const finalRowId = persistedTurn?.final_assistant_row_id
-
-            const settlesPersistedRow =
-              existing.interim === true &&
-              existing.rowId === undefined &&
-              typeof finalRowId === 'number' &&
-              Number.isSafeInteger(finalRowId) &&
-              finalRowId > 0
+            const settlesPersistedRow = completionSettlesPersistedRow(existing, persistedTurn)
 
             if (
               existing.pending ||

@@ -6,6 +6,10 @@ import { useI18n } from '@/i18n'
 import { cn } from '@/lib/utils'
 import type { ContextBreakdown, ContextUsageCategory, UsageStats } from '@/types/hermes'
 
+function tokenCountLabel(value: number | null | undefined): string {
+  return value == null ? '\u2014' : compactNumber(value)
+}
+
 interface ContextUsagePanelProps {
   compact?: boolean
   compacting?: boolean
@@ -46,8 +50,8 @@ export function ContextUsagePanel({
   )
 
   const segmentTotal = categories.reduce((sum, category) => sum + category.tokens, 0) || contextUsed || 1
-  const usedLabel = contextUsed == null ? '\u2014' : compactNumber(contextUsed)
-  const maxLabel = contextMax == null ? '\u2014' : compactNumber(contextMax)
+  const usedLabel = tokenCountLabel(contextUsed)
+  const maxLabel = tokenCountLabel(contextMax)
 
   const hasContextData = (contextMax ?? 0) > 0 || (contextUsed ?? 0) > 0 || categories.length > 0
 

@@ -27,6 +27,7 @@ describe('tile split-share memory across a hard reload', () => {
 
   async function setup() {
     const tree = await import('@/components/pane-shell/tree/store')
+    const shareMemory = await import('@/components/pane-shell/tree/pane-share-memory')
     const model = await import('@/components/pane-shell/tree/model')
     const { registry } = await import('@/contrib/registry')
 
@@ -50,7 +51,7 @@ describe('tile split-share memory across a hard reload', () => {
     tree.declareDefaultTree(model.group(['workspace'], { id: 'grp-main' }))
     tree.watchContributedPanes()
 
-    return { model, registerTile, registry, tree }
+    return { model, registerTile, registry, tree, shareMemory }
   }
 
   /** The root row's weights, normalized to shares of their sum. */
@@ -80,21 +81,21 @@ describe('tile split-share memory across a hard reload', () => {
   }
 
   it('a reload-cycle prune does not record stale half-shares (hydration suspend)', async () => {
-    const { registerTile, tree } = await setup()
+    const { registerTile, tree, shareMemory } = await setup()
 
     // The reload shape: hydration begins (the mirror's registered map is
     // empty), every persisted tile pane is pruned, then the tiles re-register
     // and re-dock in anchor order. The prune pass must not remember shares.
-    tree.beginLayoutHydration()
+    shareMemory.beginLayoutHydration()
 
     for (const id of ['session-tile:a', 'session-tile:b', 'session-tile:c', 'session-tile:d']) {
       tree.removeTreePane(id)
     }
 
-    tree.endLayoutHydration()
+    shareMemory.endLayoutHydration()
 
     // Persisted shares stay empty — nothing was recorded by the prune.
-    expect(tree.$paneShareRecords.get()).toEqual({})
+    expect(shareMemory.$paneShareRecords.get()).toEqual({})
 
     // Re-dock: the tiles come back in anchor order.
     registerTile('session-tile:a', 'workspace')
@@ -128,7 +129,7 @@ describe('tile split-share memory across a hard reload', () => {
   })
 
   it('a stale recorded share does not replay against a different seam partner', async () => {
-    const { registerTile, tree } = await setup()
+    const { registerTile, tree, shareMemory } = await setup()
 
     // The user really did leave tile A at a quarter of the pair — recorded
     // against the WORKSPACE seam.
@@ -144,7 +145,7 @@ describe('tile split-share memory across a hard reload', () => {
     tree.removeTreePane('session-tile:a')
 
     // The share was recorded against the workspace as seam partner.
-    expect(tree.$paneShareRecords.get()['session-tile:a']).toBeCloseTo(0.25)
+    expect(shareMemory.$paneShareRecords.get()['session-tile:a']).toBeCloseTo(0.25)
 
     // But the tree changes shape before the tile returns: it now re-docks
     // beside ANOTHER tile, not the workspace. The remembered share belongs
@@ -179,7 +180,7 @@ describe('tile split-share memory across a hard reload', () => {
   })
 
   it('a genuine user resize still records and replays against the same partner', async () => {
-    const { registerTile, tree } = await setup()
+    const { registerTile, tree, shareMemory } = await setup()
 
     const disposeA = registerTile('session-tile:a', 'workspace')
     const root = tree.$layoutTree.get()!

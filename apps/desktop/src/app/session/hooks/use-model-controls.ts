@@ -5,7 +5,12 @@ import { useCallback, useEffect, useRef } from 'react'
 import type { ModelSelection } from '@/app/shell/model-menu-panel'
 import { useI18n } from '@/i18n'
 import { resolveModelDefault } from '@/lib/model-default'
-import { customDefaultSupersedesPick, moaPickRemoved, modelOptionsQueryKey, requestModelOptions } from '@/lib/model-options'
+import {
+  customDefaultSupersedesPick,
+  moaPickRemoved,
+  modelOptionsQueryKey,
+  requestModelOptions
+} from '@/lib/model-options'
 import { platformDefaultScope } from '@/lib/platform-model-scope'
 import { switchSessionModel } from '@/lib/session-model-switch'
 import { $gatewayManagedCapabilities, managedModelRouteCapabilityFrom } from '@/store/gateway-managed-capability'
@@ -32,6 +37,37 @@ interface ModelControlsOptions {
   cacheProfile?: string
   queryClient: QueryClient
   requestGateway: <T = unknown>(method: string, params?: Record<string, unknown>) => Promise<T>
+}
+
+function publishResolvedDefault(resolved: Awaited<ReturnType<typeof resolveModelDefault>>): void {
+  const { model: resolvedModel, provider: resolvedProvider, platform: resolvedPlatformDefault } = resolved
+
+  if (resolvedModel) {
+    setCurrentModel(resolvedModel)
+  }
+
+  if (resolvedProvider) {
+    setCurrentProvider(resolvedProvider)
+  }
+
+  if (resolvedModel || resolvedProvider) {
+    $modelDefaultUnavailable.set(false)
+    setCurrentModelSource('default')
+
+    if (resolvedPlatformDefault) {
+      setCurrentPlatformOwner(resolvedPlatformDefault.ownerUserId, resolvedPlatformDefault.platformOrigin || '')
+    } else {
+      setCurrentPlatformOwner('')
+    }
+  }
+}
+
+function isCurrentDraftScope(scopeKey: string): boolean {
+  return (
+    !$activeSessionId.get() &&
+    !$selectedStoredSessionId.get() &&
+    scopeKey === platformDefaultScope($activeGatewayProfile.get()).key
+  )
 }
 
 export function useModelControls({
@@ -138,11 +174,7 @@ export function useModelControls({
       let selectionGeneration: number | null = null
 
       try {
-        if (
-          $activeSessionId.get() ||
-          $selectedStoredSessionId.get() ||
-          scopeKey !== platformDefaultScope($activeGatewayProfile.get()).key
-        ) {
+        if (!isCurrentDraftScope(scopeKey)) {
           return
         }
 
@@ -164,17 +196,25 @@ export function useModelControls({
         if (keepManualPick() && $currentProvider.get().toLowerCase() === 'moa') {
           const key = modelOptionsQueryKey(profile, null, cacheOwnerConnectionId)
 
-          const catalog = queryClient.getQueryData<ModelOptionsResult>(key) ?? await queryClient.fetchQuery({
-            queryKey: key,
-            queryFn: () => requestModelOptions({ profile, request: requestGateway })
-          })
+          const catalog =
+            queryClient.getQueryData<ModelOptionsResult>(key) ??
+            (await queryClient.fetchQuery({
+              queryKey: key,
+              queryFn: () => requestModelOptions({ profile, request: requestGateway })
+            }))
 
           reseedStaleMoa = moaPickRemoved(catalog, 'moa', $currentModel.get())
         }
 
-        const maybeCustomAlias = keepManualPick() && !!$currentProvider.get() && !$currentProvider.get().includes(':') && $currentProvider.get() !== 'aino'
+        const maybeCustomAlias =
+          keepManualPick() &&
+          !!$currentProvider.get() &&
+          !$currentProvider.get().includes(':') &&
+          $currentProvider.get() !== 'aino'
 
-        if (keepManualPick() && !reseedStaleMoa && !maybeCustomAlias) {return}
+        if (keepManualPick() && !reseedStaleMoa && !maybeCustomAlias) {
+          return
+        }
 
         $modelDefaultUnavailable.set(false)
 
@@ -185,43 +225,22 @@ export function useModelControls({
 
         if (
           profileRefreshEpochRef.current !== profileRefreshEpoch ||
-          $activeSessionId.get() ||
-          $selectedStoredSessionId.get() ||
-          scopeKey !== platformDefaultScope($activeGatewayProfile.get()).key ||
+          !isCurrentDraftScope(scopeKey) ||
           getComposerSelectionGeneration() !== selectionGeneration ||
-          (keepManualPick() && !reseedStaleMoa && !customDefaultSupersedesPick($currentProvider.get(), resolved.provider))
+          (keepManualPick() &&
+            !reseedStaleMoa &&
+            !customDefaultSupersedesPick($currentProvider.get(), resolved.provider))
         ) {
           return
         }
 
-        const { model: resolvedModel, provider: resolvedProvider, platform: resolvedPlatformDefault } = resolved
-
-        if (resolvedModel) {
-          setCurrentModel(resolvedModel)
-        }
-
-        if (resolvedProvider) {
-          setCurrentProvider(resolvedProvider)
-        }
-
-        if (resolvedModel || resolvedProvider) {
-          $modelDefaultUnavailable.set(false)
-          setCurrentModelSource('default')
-
-          if (resolvedPlatformDefault) {
-            setCurrentPlatformOwner(resolvedPlatformDefault.ownerUserId, resolvedPlatformDefault.platformOrigin || '')
-          } else {
-            setCurrentPlatformOwner('')
-          }
-        }
+        publishResolvedDefault(resolved)
       } catch (error) {
         if (
           error instanceof PlatformSelectionError &&
           error.code === 'model_unavailable' &&
           profileRefreshEpochRef.current === profileRefreshEpoch &&
-          !$activeSessionId.get() &&
-          !$selectedStoredSessionId.get() &&
-          scopeKey === platformDefaultScope($activeGatewayProfile.get()).key &&
+          isCurrentDraftScope(scopeKey) &&
           selectionGeneration !== null &&
           getComposerSelectionGeneration() === selectionGeneration
         ) {

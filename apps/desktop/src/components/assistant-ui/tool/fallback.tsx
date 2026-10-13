@@ -383,10 +383,44 @@ function useDisclosureOpen(disclosureId: string, fallbackOpen = false): boolean 
   return persistedOpen ?? fallbackOpen
 }
 
+function ToolDiffStats({ diffStats }: { diffStats: { added: number; removed: number } }) {
+  return (
+    <span className="flex shrink-0 items-center gap-1 font-mono text-[0.625rem] tabular-nums">
+      {diffStats.added > 0 && <span className="text-emerald-600 dark:text-emerald-400">+{diffStats.added}</span>}
+      {diffStats.removed > 0 && <span className="text-rose-600 dark:text-rose-400">−{diffStats.removed}</span>}
+    </span>
+  )
+}
+
+function ToolDismissAction({ disclosureId, open }: { disclosureId: string; open: boolean }) {
+  const { t } = useI18n()
+  const statusCopy = t.statusStack
+
+  return (
+    <Button
+      aria-label={statusCopy.dismiss}
+      className={cn(
+        'size-5 rounded-md text-(--ui-text-tertiary) transition-opacity hover:text-(--ui-text-primary) hover:opacity-100',
+        open
+          ? 'opacity-80'
+          : 'opacity-0 group-hover/disclosure-row:opacity-80 group-focus-within/disclosure-row:opacity-80'
+      )}
+      onClick={event => {
+        event.stopPropagation()
+        dismissToolRow(disclosureId)
+      }}
+      size="icon-xs"
+      type="button"
+      variant="ghost"
+    >
+      <Codicon name="close" size="0.75rem" />
+    </Button>
+  )
+}
+
 function ToolEntry({ part }: ToolEntryProps) {
   const { t } = useI18n()
   const copy = t.assistant.tool
-  const statusCopy = t.statusStack
   const messageId = useAuiState(s => s.message.id)
   const messageRunning = useAuiState(selectMessageRunning)
   const embedded = useContext(ToolEmbedContext)
@@ -612,26 +646,7 @@ function ToolEntry({ part }: ToolEntryProps) {
   // a completed/failed row that would otherwise sit at the tail of the chat.
   // It goes in the in-flow `action` slot (not `trailing`) so it can't overlap
   // the disclosure caret's hit-target — see the comment above `trailing`.
-  const dismissAction = canDismiss ? (
-    <Button
-      aria-label={statusCopy.dismiss}
-      className={cn(
-        'size-5 rounded-md text-(--ui-text-tertiary) transition-opacity hover:text-(--ui-text-primary) hover:opacity-100',
-        open
-          ? 'opacity-80'
-          : 'opacity-0 group-hover/disclosure-row:opacity-80 group-focus-within/disclosure-row:opacity-80'
-      )}
-      onClick={event => {
-        event.stopPropagation()
-        dismissToolRow(disclosureId)
-      }}
-      size="icon-xs"
-      type="button"
-      variant="ghost"
-    >
-      <Codicon name="close" size="0.75rem" />
-    </Button>
-  ) : undefined
+  const dismissAction = canDismiss ? <ToolDismissAction disclosureId={disclosureId} open={open} /> : undefined
 
   if (dismissed) {
     return null
@@ -698,16 +713,7 @@ function ToolEntry({ part }: ToolEntryProps) {
               titleAction={view.titleAction}
               titleTarget={view.titleTarget}
             />
-            {showDiffStats && diffStats && (
-              <span className="flex shrink-0 items-center gap-1 font-mono text-[0.625rem] tabular-nums">
-                {diffStats.added > 0 && (
-                  <span className="text-emerald-600 dark:text-emerald-400">+{diffStats.added}</span>
-                )}
-                {diffStats.removed > 0 && (
-                  <span className="text-rose-600 dark:text-rose-400">−{diffStats.removed}</span>
-                )}
-              </span>
-            )}
+            {showDiffStats && diffStats && <ToolDiffStats diffStats={diffStats} />}
           </span>
         </DisclosureRow>
       </div>

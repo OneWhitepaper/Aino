@@ -362,17 +362,17 @@ const TurnActivityRow: FC<TurnActivityRowProps> = ({ active, elapsed, hint, loca
     >
       {active && (
         <>
-          <StatusPulse
-            aria-hidden="true"
-            className={SCAFFOLD_ACTIVITY_GLYPH_CLASS}
-            kind="opacity"
-          />
+          <StatusPulse aria-hidden="true" className={SCAFFOLD_ACTIVITY_GLYPH_CLASS} kind="opacity" />
           {hint ? (
             <WaitHint hint={hint} />
           ) : localLoad ? (
             <ProgressHint label={t.assistant.thread.loadingLocalModel(localLoad.model)} percent={localLoad.percent} />
-          ) : <HintText>{t.assistant.thread.thinking}</HintText>}
-          {(hint || localLoad) && <ActivityTimerText aria-hidden={true} className={SCAFFOLD_META_CLASS} seconds={elapsed} />}
+          ) : (
+            <HintText>{t.assistant.thread.thinking}</HintText>
+          )}
+          {(hint || localLoad) && (
+            <ActivityTimerText aria-hidden={true} className={SCAFFOLD_META_CLASS} seconds={elapsed} />
+          )}
         </>
       )}
     </StatusRow>
@@ -456,6 +456,31 @@ export const TurnActivityIndicator: FC<{ thinking?: boolean }> = ({ thinking = f
     quietSince ?? drafting?.since ?? turnStartedAt
   )
 
+  return (
+    <TurnActivityVisibility
+      active={active}
+      elapsed={elapsed}
+      hint={hint}
+      localLoad={localLoad}
+      reasoningShown={reasoningShown}
+      thinking={thinking}
+    />
+  )
+}
+
+interface TurnActivityVisibilityProps extends React.ComponentProps<typeof TurnActivityRow> {
+  thinking: boolean
+  reasoningShown: boolean
+}
+
+function TurnActivityVisibility({
+  active,
+  elapsed,
+  hint,
+  localLoad,
+  thinking,
+  reasoningShown
+}: TurnActivityVisibilityProps) {
   // Once the row has been shown, keep its live region mounted across
   // quiet/working flips: remounting a role="status" node makes screen readers
   // re-announce it on every gap (#46225). While idle it is visually hidden

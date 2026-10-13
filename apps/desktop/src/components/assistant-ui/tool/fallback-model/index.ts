@@ -1524,6 +1524,35 @@ export function toolPreviewOutcome(part: ToolPart): { previewTarget: string; sta
   }
 }
 
+function toolOutputStreams(part: ToolPart, argsRecord: Record<string, unknown>, resultRecord: Record<string, unknown>) {
+  // For shell/code tools we surface stdout and stderr as separate labeled
+  // streams in the renderer. Many CLIs use stderr for informational
+  // messages (npm progress, git hints), so we deliberately don't paint
+  // stderr destructively even though it's tagged.
+  const rendersAnsi = part.toolName === 'terminal' || part.toolName === 'execute_code'
+  const stdout = rendersAnsi ? firstStringField(resultRecord, ['stdout']) : ''
+  const stderrRaw = rendersAnsi ? firstStringField(resultRecord, ['stderr']) : ''
+  // Only attach stderr when the backend actually returned it as its own
+  // field — otherwise the merged `detail` already covers it and double-
+  // rendering would duplicate output.
+  const hasSplitStreams = rendersAnsi && (Boolean(stdout) || Boolean(stderrRaw))
+  const terminalCommand = part.toolName === 'terminal' ? shellCommand(argsRecord) : undefined
+  const terminalExitCode = part.toolName === 'terminal' ? numericField(resultRecord, 'exit_code') : undefined
+
+  return {
+    rendersAnsi: rendersAnsi || undefined,
+    stderr: hasSplitStreams ? stderrRaw || undefined : undefined,
+    terminalCommand,
+    terminalExitCode,
+    terminalBackground:
+      part.toolName === 'terminal' &&
+      Boolean(
+        resultRecord.session_id || resultRecord.status === 'yielded_to_background' || resultRecord.status === 'running'
+      ),
+    stdout: hasSplitStreams ? stdout || undefined : undefined
+  }
+}
+
 export function buildToolView(part: ToolPart, inlineDiff: string): ToolView {
   const argsRecord = parseMaybeObject(part.args)
   const resultRecord = toolResultRecord(part)
@@ -1583,20 +1612,6 @@ export function buildToolView(part: ToolPart, inlineDiff: string): ToolView {
 
   const resultCount = status === 'error' ? null : toolResultCount(part, argsRecord, resultRecord)
 
-  // For shell/code tools we surface stdout and stderr as separate labeled
-  // streams in the renderer. Many CLIs use stderr for informational
-  // messages (npm progress, git hints), so we deliberately don't paint
-  // stderr destructively even though it's tagged.
-  const rendersAnsi = part.toolName === 'terminal' || part.toolName === 'execute_code'
-  const stdout = rendersAnsi ? firstStringField(resultRecord, ['stdout']) : ''
-  const stderrRaw = rendersAnsi ? firstStringField(resultRecord, ['stderr']) : ''
-  // Only attach stderr when the backend actually returned it as its own
-  // field — otherwise the merged `detail` already covers it and double-
-  // rendering would duplicate output.
-  const hasSplitStreams = rendersAnsi && (Boolean(stdout) || Boolean(stderrRaw))
-  const terminalCommand = part.toolName === 'terminal' ? shellCommand(argsRecord) : undefined
-  const terminalExitCode = part.toolName === 'terminal' ? numericField(resultRecord, 'exit_code') : undefined
-
   return {
     countLabel: resultCount ? formatCountLabel(resultCount) : undefined,
     detail,
@@ -1606,18 +1621,9 @@ export function buildToolView(part: ToolPart, inlineDiff: string): ToolView {
     imageUrl: toolImageUrl(argsRecord, resultRecord),
     inlineDiff,
     previewTarget: toolPreviewTarget(part.innerToolName || part.toolName, argsRecord, resultRecord),
-    rendersAnsi: rendersAnsi || undefined,
+    ...toolOutputStreams(part, argsRecord, resultRecord),
     searchQuery: searchQuery || undefined,
     searchHits: searchHits?.length ? searchHits : undefined,
-    stderr: hasSplitStreams ? stderrRaw || undefined : undefined,
-    terminalCommand,
-    terminalExitCode,
-    terminalBackground:
-      part.toolName === 'terminal' &&
-      Boolean(
-        resultRecord.session_id || resultRecord.status === 'yielded_to_background' || resultRecord.status === 'running'
-      ),
-    stdout: hasSplitStreams ? stdout || undefined : undefined,
     status,
     subtitle,
     title,

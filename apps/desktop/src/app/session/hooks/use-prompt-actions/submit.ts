@@ -151,6 +151,132 @@ export function rebindPaneToResumedRuntime({
   setActiveSessionId(resumedRuntimeId)
 }
 
+function prepareSubmitInput(
+  rawText: string,
+  options: SubmitTextOptions | undefined,
+  scope: NonNullable<SubmitPromptDeps['scope']>
+) {
+  const usingComposerAttachments = !options?.attachments
+
+  // Drop undefined/null holes a session switch or draft restore can leave in
+  // the attachments array (same bug class as AttachmentList #49624). Without
+  // this, the sibling iterations below (a.kind / a.label / a.refText, and the
+  // sync step) throw "Cannot read properties of undefined (reading 'refText')"
+  // and break the chat surface.
+  const attachments = (options?.attachments ?? scope.readAttachments()).filter((a): a is ComposerAttachment =>
+    Boolean(a)
+  )
+
+  const titlePreview = attachments.find(a => typeof a.titlePreview === 'string' && a.titlePreview.trim())?.titlePreview
+
+  // Freeze `@terminal:` chips into transport text before send. Queue drains
+  // already carry frozen transport (tokens stripped at enqueue) — never
+  // re-resolve against the live selection map, or a later Cmd+L that reused
+  // the same shell:row label silently injects unrelated output (#77078).
+  let transportRaw = rawText
+  let bubbleOverride = options?.displayText
+
+  if (!options?.fromQueue) {
+    const frozen = freezeComposerTransportPayload(rawText)
+
+    if (frozen.missingLabels.length > 0) {
+      notify({
+        kind: 'warning',
+        title: translateNow('composer.terminalSelectionMissingTitle'),
+        message: translateNow('composer.terminalSelectionMissingBody')
+      })
+
+      return null
+    }
+
+    transportRaw = frozen.transportText
+
+    if (!bubbleOverride && frozen.displayText !== frozen.transportText) {
+      bubbleOverride = frozen.displayText
+    }
+  }
+
+  const visibleText = sanitizeComposerInput(transportRaw).trim()
+  const hasImage = attachments.some(a => a.kind === 'image')
+
+  // Refs are recomputed after sync (file.attach rewrites @file: refs to
+  // workspace-relative paths the remote gateway can resolve). Seed the
+  // optimistic message with the pre-sync refs, then rewrite once synced.
+  // Images use their bounded base64 thumbnail so the optimistic bubble
+  // renders inline without embedding the full source — see optimisticAttachmentRef.
+  const attachmentRefs = attachments.map(optimisticAttachmentRef).filter((r): r is string => Boolean(r))
+
+  return {
+    usingComposerAttachments,
+    attachments,
+    titlePreview,
+    transportRaw,
+    bubbleOverride,
+    visibleText,
+    hasImage,
+    attachmentRefs
+  }
+}
+
+function acceptsImageAttachments(
+  guardSessionId: string | null,
+  fromQueue: boolean | undefined,
+  copy: Translations['desktop']
+): boolean {
+  const state = guardSessionId ? $sessionStates.get()[guardSessionId] : undefined
+  const provider = state?.provider || $currentProvider.get()
+
+  if (provider === 'aino') {
+    const modelId = state?.platformModel?.modelId || state?.model || $currentModel.get()
+    const ownerUserId = state?.platformModel?.ownerUserId || $currentPlatformOwner.get()
+    const platformOrigin = state?.platformModel?.platformOrigin || $currentPlatformOrigin.get()
+    const model = verifiedPlatformModel(modelId, ownerUserId, platformOrigin || undefined)
+
+    if (!model?.capabilities.vision) {
+      if (!fromQueue) {
+        notify({
+          kind: 'warning',
+          message: copy.platformVisionUnsupported,
+          action: { label: copy.chooseModel, onClick: () => setModelPickerOpen(true) }
+        })
+      }
+
+      return false
+    }
+  }
+
+  return true
+}
+
+function notifySubmitFailure(err: unknown, copy: Translations['desktop']): void {
+  if (err instanceof PlatformSelectionError) {
+    const recovery = platformRecoveryAction(err)
+    notify({
+      kind: 'error',
+      title: copy.promptFailed,
+      message: err.message,
+      action: {
+        label:
+          recovery === 'account'
+            ? translateNow('platformModels.myAccount')
+            : recovery === 'new-chat'
+              ? translateNow('platformModels.newChatCurrentAccount')
+              : recovery === 'rebind'
+                ? translateNow('platformModels.retry')
+                : copy.chooseModel,
+        onClick:
+          recovery === 'account'
+            ? requestBillingSettings
+            : recovery === 'new-chat'
+              ? requestFreshSession
+              : () => setModelPickerOpen(true)
+      }
+    })
+  } else {
+    notifyError(err, copy.promptFailed)
+  }
+}
+
 /** The prompt submit pipeline, extracted from usePromptActions. */
 export function useSubmitPrompt(deps: SubmitPromptDeps) {
   const {
@@ -173,57 +299,23 @@ export function useSubmitPrompt(deps: SubmitPromptDeps) {
 
   return useCallback(
     async (rawText: string, options?: SubmitTextOptions) => {
-      const usingComposerAttachments = !options?.attachments
+      const prepared = prepareSubmitInput(rawText, options, scope)
 
-      // Drop undefined/null holes a session switch or draft restore can leave in
-      // the attachments array (same bug class as AttachmentList #49624). Without
-      // this, the sibling iterations below (a.kind / a.label / a.refText, and the
-      // sync step) throw "Cannot read properties of undefined (reading 'refText')"
-      // and break the chat surface.
-      const attachments = (options?.attachments ?? scope.readAttachments()).filter((a): a is ComposerAttachment =>
-        Boolean(a)
-      )
-
-      const titlePreview = attachments.find(
-        a => typeof a.titlePreview === 'string' && a.titlePreview.trim()
-      )?.titlePreview
-
-      // Freeze `@terminal:` chips into transport text before send. Queue drains
-      // already carry frozen transport (tokens stripped at enqueue) — never
-      // re-resolve against the live selection map, or a later Cmd+L that reused
-      // the same shell:row label silently injects unrelated output (#77078).
-      let transportRaw = rawText
-      let bubbleOverride = options?.displayText
-
-      if (!options?.fromQueue) {
-        const frozen = freezeComposerTransportPayload(rawText)
-
-        if (frozen.missingLabels.length > 0) {
-          notify({
-            kind: 'warning',
-            title: translateNow('composer.terminalSelectionMissingTitle'),
-            message: translateNow('composer.terminalSelectionMissingBody')
-          })
-
-          return false
-        }
-
-        transportRaw = frozen.transportText
-
-        if (!bubbleOverride && frozen.displayText !== frozen.transportText) {
-          bubbleOverride = frozen.displayText
-        }
+      if (!prepared) {
+        return false
       }
 
-      const visibleText = sanitizeComposerInput(transportRaw).trim()
-      const hasImage = attachments.some(a => a.kind === 'image')
+      const {
+        usingComposerAttachments,
+        attachments,
+        titlePreview,
+        transportRaw,
+        bubbleOverride,
+        visibleText,
+        hasImage
+      } = prepared
 
-      // Refs are recomputed after sync (file.attach rewrites @file: refs to
-      // workspace-relative paths the remote gateway can resolve). Seed the
-      // optimistic message with the pre-sync refs, then rewrite once synced.
-      // Images use their bounded base64 thumbnail so the optimistic bubble
-      // renders inline without embedding the full source — see optimisticAttachmentRef.
-      let attachmentRefs = attachments.map(optimisticAttachmentRef).filter((r): r is string => Boolean(r))
+      let { attachmentRefs } = prepared
 
       const buildContextText = (atts: ComposerAttachment[]): string => {
         // atts may be the post-sync array, which can reintroduce holes; filter
@@ -262,28 +354,8 @@ export function useSubmitPrompt(deps: SubmitPromptDeps) {
         return false
       }
 
-      if (hasImage) {
-        const state = guardSessionId ? $sessionStates.get()[guardSessionId] : undefined
-        const provider = state?.provider || $currentProvider.get()
-
-        if (provider === 'aino') {
-          const modelId = state?.platformModel?.modelId || state?.model || $currentModel.get()
-          const ownerUserId = state?.platformModel?.ownerUserId || $currentPlatformOwner.get()
-          const platformOrigin = state?.platformModel?.platformOrigin || $currentPlatformOrigin.get()
-          const model = verifiedPlatformModel(modelId, ownerUserId, platformOrigin || undefined)
-
-          if (!model?.capabilities.vision) {
-            if (!options?.fromQueue) {
-              notify({
-                kind: 'warning',
-                message: copy.platformVisionUnsupported,
-                action: { label: copy.chooseModel, onClick: () => setModelPickerOpen(true) }
-              })
-            }
-
-            return false
-          }
-        }
+      if (hasImage && !acceptsImageAttachments(guardSessionId, options?.fromQueue, copy)) {
+        return false
       }
 
       // Typing barge-in: a new send silences any in-flight spoken reply.
@@ -1119,32 +1191,7 @@ export function useSubmitPrompt(deps: SubmitPromptDeps) {
         }
 
         if (targetIsCurrentView()) {
-          if (err instanceof PlatformSelectionError) {
-            const recovery = platformRecoveryAction(err)
-            notify({
-              kind: 'error',
-              title: copy.promptFailed,
-              message: err.message,
-              action: {
-                label:
-                  recovery === 'account'
-                    ? translateNow('platformModels.myAccount')
-                    : recovery === 'new-chat'
-                      ? translateNow('platformModels.newChatCurrentAccount')
-                      : recovery === 'rebind'
-                        ? translateNow('platformModels.retry')
-                        : copy.chooseModel,
-                onClick:
-                  recovery === 'account'
-                    ? requestBillingSettings
-                    : recovery === 'new-chat'
-                      ? requestFreshSession
-                      : () => setModelPickerOpen(true)
-              }
-            })
-          } else {
-            notifyError(err, copy.promptFailed)
-          }
+          notifySubmitFailure(err, copy)
         }
 
         return false

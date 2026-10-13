@@ -256,6 +256,22 @@ function ZoneMenu({
   )
 }
 
+function GroupMinimizeButton({ minimized, onClick }: { minimized: boolean; onClick: () => void }) {
+  const { t } = useI18n()
+
+  return (
+    <button
+      aria-label={minimized ? t.zones.restore : t.zones.minimize}
+      className="mx-1 grid size-5 shrink-0 place-items-center self-center rounded-md text-(--ui-text-tertiary) opacity-0 transition-opacity hover:bg-(--ui-control-hover-background) hover:text-foreground focus-visible:opacity-100 group-hover/pane-header:opacity-100"
+      onClick={onClick}
+      onPointerDown={e => e.stopPropagation()}
+      type="button"
+    >
+      <Codicon name={minimized ? 'chevron-up' : 'chevron-down'} size="0.75rem" />
+    </button>
+  )
+}
+
 export function TreeGroup({
   node,
   parentAxis,
@@ -644,15 +660,7 @@ export function TreeGroup({
               trailing={
                 <>
                   {showMinimizeButton && (
-                    <button
-                      aria-label={node.minimized ? t.zones.restore : t.zones.minimize}
-                      className="mx-1 grid size-5 shrink-0 place-items-center self-center rounded-md text-(--ui-text-tertiary) opacity-0 transition-opacity hover:bg-(--ui-control-hover-background) hover:text-foreground focus-visible:opacity-100 group-hover/pane-header:opacity-100"
-                      onClick={toggleCollapse}
-                      onPointerDown={e => e.stopPropagation()}
-                      type="button"
-                    >
-                      <Codicon name={node.minimized ? 'chevron-up' : 'chevron-down'} size="0.75rem" />
-                    </button>
+                    <GroupMinimizeButton minimized={Boolean(node.minimized)} onClick={toggleCollapse} />
                   )}
                   <StripDropCaret groupId={node.id} stripRef={stripRef} />
                 </>

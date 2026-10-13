@@ -304,6 +304,25 @@ const UserBubbleActions: FC<UserBubbleActionsProps> = ({
   )
 }
 
+interface UserMessageAttachmentsProps {
+  attachmentRefs: string[]
+  chipOnlyTurn: boolean
+  setupLearned: string | null
+}
+
+function UserMessageAttachments({ attachmentRefs, chipOnlyTurn, setupLearned }: UserMessageAttachmentsProps) {
+  return (
+    <>
+      {attachmentRefs.length > 0 && !chipOnlyTurn && (
+        <div className="mb-2 flex flex-wrap gap-1" data-slot="aui_user-attachments">
+          <DirectiveContent text={attachmentRefs.join(' ')} />
+        </div>
+      )}
+      {setupLearned && <SetupLearnedNote text={setupLearned} />}
+    </>
+  )
+}
+
 export const UserMessage: FC<{
   onCancel?: () => Promise<void> | void
   onRequestRestoreConfirm?: (messageId: string, target: RestoreMessageTarget) => void
@@ -482,14 +501,11 @@ export const UserMessage: FC<{
           // it. No negative margin: -mt-* pulls the row up into the sticky box,
           // where the sticky-prompt clip hides its top even at rest. Image refs
           // render as thumbnails, file refs as chips; no border.
-          <>
-            {attachmentRefs.length > 0 && !chipOnlyTurn && (
-              <div className="mb-2 flex flex-wrap gap-1" data-slot="aui_user-attachments">
-                <DirectiveContent text={attachmentRefs.join(' ')} />
-              </div>
-            )}
-            {setupLearned && <SetupLearnedNote text={setupLearned} />}
-          </>
+          <UserMessageAttachments
+            attachmentRefs={attachmentRefs}
+            chipOnlyTurn={chipOnlyTurn}
+            setupLearned={setupLearned}
+          />
         }
         durableRowId={durableRowId}
         messageId={messageId}

@@ -307,6 +307,80 @@ interface ModelSettingsProps {
   scopeProfile?: string
 }
 
+interface ModelDefaultControlsProps {
+  reasoningSupported: boolean
+  fastSupported: boolean
+  ultrafastSupported: boolean
+  effortValue: string
+  speedValue: SpeedTier
+  fastOn: boolean
+  writeAgentDefault: (key: string, value: boolean | string) => Promise<void>
+}
+
+function ModelDefaultControls({
+  reasoningSupported,
+  fastSupported,
+  ultrafastSupported,
+  effortValue,
+  speedValue,
+  fastOn,
+  writeAgentDefault
+}: ModelDefaultControlsProps) {
+  const { t } = useI18n()
+  const m = t.settings.model
+
+  if (!(reasoningSupported || fastSupported || ultrafastSupported)) {return null}
+
+  return (
+    <div className="mt-3 flex flex-wrap items-center gap-x-6 gap-y-3">
+      <span className="text-xs text-muted-foreground">{m.defaultsLabel}</span>
+      {reasoningSupported && (
+        <div className="flex items-center gap-2 text-xs">
+          <span className="shrink-0 whitespace-nowrap">{m.reasoning}</span>
+          <Select onValueChange={value => void writeAgentDefault('agent.reasoning_effort', value)} value={effortValue}>
+            <SelectTrigger className={cn('min-w-28', CONTROL_TEXT)}>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {REASONING_EFFORT_VALUES.map(value => (
+                <SelectItem key={value} value={value}>
+                  {value === 'none' ? m.reasoningOff : t.shell.modelOptions[value]}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      )}
+      {ultrafastSupported ? (
+        <div className="flex items-center gap-2 text-xs">
+          <span className="shrink-0 whitespace-nowrap">{m.speed}</span>
+          <Select onValueChange={value => void writeAgentDefault('agent.service_tier', value)} value={speedValue}>
+            <SelectTrigger aria-label={m.speed} className={cn('min-w-28', CONTROL_TEXT)}>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="normal">{m.speedStandard}</SelectItem>
+              {fastSupported && <SelectItem value="fast">{t.shell.modelOptions.fast}</SelectItem>}
+              <SelectItem value="ultrafast">{t.shell.modelOptions.ultrafast}</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      ) : (
+        fastSupported && (
+          <label className="flex items-center gap-2 text-xs">
+            {t.shell.modelOptions.fast}
+            <Switch
+              checked={fastOn}
+              onCheckedChange={checked => void writeAgentDefault('agent.service_tier', checked ? 'fast' : 'normal')}
+              size="xs"
+            />
+          </label>
+        )
+      )}
+    </div>
+  )
+}
+
 export function ModelSettings({
   onMainModelChanged,
   scopeProfile,
@@ -1102,61 +1176,16 @@ export function ModelSettings({
                 : m.providerNeedsBrowser(selectedProviderRow.name)}
             </p>
           )}
-          {config && mainModel && (reasoningSupported || fastSupported || ultrafastSupported) && (
-            <div className="mt-3 flex flex-wrap items-center gap-x-6 gap-y-3">
-              <span className="text-xs text-muted-foreground">{m.defaultsLabel}</span>
-              {reasoningSupported && (
-                <div className="flex items-center gap-2 text-xs">
-                  <span className="shrink-0 whitespace-nowrap">{m.reasoning}</span>
-                  <Select
-                    onValueChange={value => void writeAgentDefault('agent.reasoning_effort', value)}
-                    value={effortValue}
-                  >
-                    <SelectTrigger className={cn('min-w-28', CONTROL_TEXT)}>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {REASONING_EFFORT_VALUES.map(value => (
-                        <SelectItem key={value} value={value}>
-                          {value === 'none' ? m.reasoningOff : t.shell.modelOptions[value]}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              )}
-              {ultrafastSupported ? (
-                <div className="flex items-center gap-2 text-xs">
-                  <span className="shrink-0 whitespace-nowrap">{m.speed}</span>
-                  <Select
-                    onValueChange={value => void writeAgentDefault('agent.service_tier', value)}
-                    value={speedValue}
-                  >
-                    <SelectTrigger aria-label={m.speed} className={cn('min-w-28', CONTROL_TEXT)}>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="normal">{m.speedStandard}</SelectItem>
-                      {fastSupported && <SelectItem value="fast">{t.shell.modelOptions.fast}</SelectItem>}
-                      <SelectItem value="ultrafast">{t.shell.modelOptions.ultrafast}</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              ) : (
-                fastSupported && (
-                  <label className="flex items-center gap-2 text-xs">
-                    {t.shell.modelOptions.fast}
-                    <Switch
-                      checked={fastOn}
-                      onCheckedChange={checked =>
-                        void writeAgentDefault('agent.service_tier', checked ? 'fast' : 'normal')
-                      }
-                      size="xs"
-                    />
-                  </label>
-                )
-              )}
-            </div>
+          {config && mainModel && (
+            <ModelDefaultControls
+              effortValue={effortValue}
+              fastOn={fastOn}
+              fastSupported={fastSupported}
+              reasoningSupported={reasoningSupported}
+              speedValue={speedValue}
+              ultrafastSupported={ultrafastSupported}
+              writeAgentDefault={writeAgentDefault}
+            />
           )}
           {errorNotice}
           {switchStaleAux.length > 0 && (

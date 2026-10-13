@@ -53,7 +53,6 @@ import {
   reconnectSecondaryGateways,
   reportPrimaryGatewayEvent,
   reportPrimaryGatewayState,
-  type ScopedServerRequest,
   setPrimaryGateway,
   setPrimaryGatewayConnection,
   touchSecondaryGateways
@@ -66,6 +65,7 @@ import {
   isCurrentGatewaySwitch,
   registerGatewaySwitchLifecycle
 } from '@/store/gateway-switch'
+import { type ScopedServerRequest } from '@/store/gateway-types'
 import { watchLocalRuntimeJobs } from '@/store/local-runtime-jobs'
 import { notify, notifyError, RECOVERY_ACTIONS } from '@/store/notifications'
 import { loadPoolLimits } from '@/store/pool-limits'

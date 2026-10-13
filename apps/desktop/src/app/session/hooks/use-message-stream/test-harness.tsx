@@ -6,7 +6,7 @@ import { vi } from 'vitest'
 
 import type { ClientSessionState } from '@/app/types'
 import { createClientSessionState } from '@/lib/chat-runtime'
-import type { ScopedServerRequest } from '@/store/gateway'
+import type { ScopedServerRequest } from '@/store/gateway-types'
 
 import { useMessageStream } from './index'
 

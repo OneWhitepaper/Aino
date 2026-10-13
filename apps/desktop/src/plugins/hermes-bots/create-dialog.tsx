@@ -118,6 +118,20 @@ interface CreateAgentDialogProps {
   roster: RosterRow[]
 }
 
+function creationTabs(b: ReturnType<typeof useBots>, showCapabilities: boolean) {
+  return showCapabilities
+    ? [
+        { id: 'general', label: b.bot.general },
+        { id: 'capabilities', label: b.bot.capabilities }
+      ]
+    : [
+        { id: 'general', label: b.bot.general },
+        { id: 'skills', label: b.bot.skills },
+        { id: 'toolsets', label: b.bot.tools },
+        { id: 'mcp', label: b.bot.mcp }
+      ]
+}
+
 export function CreateAgentDialog({ open, onClose, onConfigureModel, roster }: CreateAgentDialogProps) {
   const { t } = useI18n()
   const b = useBots()
@@ -753,19 +767,7 @@ export function CreateAgentDialog({ open, onClose, onConfigureModel, roster }: C
                     ensureCaps()
                   }
                 }}
-                options={
-                  CapabilitiesView && (!remoteTarget || capabilitiesViewRoutesConnections)
-                    ? [
-                        { id: 'general', label: b.bot.general },
-                        { id: 'capabilities', label: b.bot.capabilities }
-                      ]
-                    : [
-                        { id: 'general', label: b.bot.general },
-                        { id: 'skills', label: b.bot.skills },
-                        { id: 'toolsets', label: b.bot.tools },
-                        { id: 'mcp', label: b.bot.mcp }
-                      ]
-                }
+                options={creationTabs(b, Boolean(CapabilitiesView && (!remoteTarget || capabilitiesViewRoutesConnections)))}
                 value={advTab}
               />
               {advTab === 'general' ? (

@@ -133,6 +133,36 @@ function maybeRebindPaneToRebuiltRuntime(ctx: GatewayEventContext): boolean {
   return true
 }
 
+function applySessionInfoPreferences(payload: GatewayEventContext['payload']): void {
+  if (typeof payload?.terminal_backend === 'string') {
+    setTerminalBackend(payload.terminal_backend)
+  }
+
+  if (typeof payload?.personality === 'string') {
+    setCurrentPersonality(normalizePersonalityValue(payload.personality))
+  }
+
+  if (typeof payload?.reasoning_effort === 'string') {
+    setCurrentReasoningEffort(payload.reasoning_effort)
+  }
+
+  if (typeof payload?.reasoning_effort_wire === 'string') {
+    setCurrentReasoningEffortWire(payload.reasoning_effort_wire)
+  }
+
+  if (typeof payload?.service_tier === 'string') {
+    setCurrentServiceTier(payload.service_tier)
+  }
+
+  if (typeof payload?.fast === 'boolean') {
+    setCurrentFastMode(payload.fast)
+  }
+
+  if (typeof payload?.yolo === 'boolean') {
+    setYoloActive(payload.yolo)
+  }
+}
+
 /** session.info / session.usage / session.title. */
 export function handleSessionInfoEvent(ctx: GatewayEventContext): boolean {
   const { deps, event, payload, sessionId, explicitSid, isActiveEvent, occurredAt, fromActiveSource } = ctx
@@ -241,33 +271,7 @@ export function handleSessionInfoEvent(ctx: GatewayEventContext): boolean {
         setCurrentBranch(payload.branch)
       }
 
-      if (typeof payload?.terminal_backend === 'string') {
-        setTerminalBackend(payload.terminal_backend)
-      }
-
-      if (typeof payload?.personality === 'string') {
-        setCurrentPersonality(normalizePersonalityValue(payload.personality))
-      }
-
-      if (typeof payload?.reasoning_effort === 'string') {
-        setCurrentReasoningEffort(payload.reasoning_effort)
-      }
-
-      if (typeof payload?.reasoning_effort_wire === 'string') {
-        setCurrentReasoningEffortWire(payload.reasoning_effort_wire)
-      }
-
-      if (typeof payload?.service_tier === 'string') {
-        setCurrentServiceTier(payload.service_tier)
-      }
-
-      if (typeof payload?.fast === 'boolean') {
-        setCurrentFastMode(payload.fast)
-      }
-
-      if (typeof payload?.yolo === 'boolean') {
-        setYoloActive(payload.yolo)
-      }
+      applySessionInfoPreferences(payload)
     }
 
     if (sessionId && (hasStatePatch || payload?.usage)) {
@@ -506,11 +510,9 @@ export function handleSessionInfoEvent(ctx: GatewayEventContext): boolean {
 
   if (event.type === 'session.usage') {
     if (payload?.reply_billing && sessionId) {
-      updateSessionState(sessionId, state => receiveReplyBilling(
-        state,
-        payload.reply_billing,
-        payload.reply_non_aino_model_calls === true
-      ))
+      updateSessionState(sessionId, state =>
+        receiveReplyBilling(state, payload.reply_billing, payload.reply_non_aino_model_calls === true)
+      )
     }
 
     // Live usage tick emitted while a turn is mid-flight (see tui_gateway

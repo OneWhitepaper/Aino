@@ -104,6 +104,75 @@ interface ConfigSettingsProps {
   importInputRef: React.RefObject<HTMLInputElement | null>
 }
 
+interface ConfigSettingsLoadStateProps {
+  configAvailable: boolean
+  schemaAvailable: boolean
+  configLoadFailed: boolean
+  schemaFailed: boolean
+  refetchConfig: () => unknown
+  refetchSchema: () => unknown
+  showModelSettings: boolean
+  showSharedMetrics: boolean
+  showDesktopSettings: boolean
+  subpage?: string
+}
+
+function ConfigSettingsLoadState({
+  configAvailable,
+  schemaAvailable,
+  configLoadFailed,
+  schemaFailed,
+  refetchConfig,
+  refetchSchema,
+  showModelSettings,
+  showSharedMetrics,
+  showDesktopSettings,
+  subpage
+}: ConfigSettingsLoadStateProps) {
+  const { t } = useI18n()
+  const c = t.settings.config
+
+  // A failed config/schema fetch must surface a retry, not spin forever.
+  if ((configLoadFailed && !configAvailable) || (schemaFailed && !schemaAvailable)) {
+    return (
+      <div className="flex h-full min-h-0 flex-1">
+        <PanelEmpty
+          action={
+            <Button
+              onClick={() => {
+                void refetchConfig()
+                void refetchSchema()
+              }}
+              size="sm"
+            >
+              {t.skills.refresh}
+            </Button>
+          }
+          icon="error"
+          title={c.failedLoad}
+        />
+      </div>
+    )
+  }
+
+  // Every section keeps its shape via a skeleton; model gets its bespoke one
+  // (its catalog fetch is the slow part), the rest the shared field rhythm.
+  if (showModelSettings) {
+    return (
+      <SettingsContent>
+        <SettingsProfileScope className="mb-5" />
+        {showSharedMetrics && <SharedMetricsSettings />}
+        {showDesktopSettings && <DeveloperSettings />}
+        <div className="mb-6">
+          <ModelSettingsSkeleton subpage={subpage} />
+        </div>
+      </SettingsContent>
+    )
+  }
+
+  return <SettingsSkeleton sections={[{ rows: 6 }]} />
+}
+
 function ConfigSettingsInner({
   activeSectionId,
   subpage,
@@ -393,45 +462,20 @@ function ConfigSettingsInner({
   }
 
   if (!config || !schema) {
-    // A failed config/schema fetch must surface a retry, not spin forever.
-    if ((configLoadFailed && !config) || (schemaFailed && !schema)) {
-      return (
-        <div className="flex h-full min-h-0 flex-1">
-          <PanelEmpty
-            action={
-              <Button
-                onClick={() => {
-                  void refetchConfig()
-                  void refetchSchema()
-                }}
-                size="sm"
-              >
-                {t.skills.refresh}
-              </Button>
-            }
-            icon="error"
-            title={c.failedLoad}
-          />
-        </div>
-      )
-    }
-
-    // Every section keeps its shape via a skeleton; model gets its bespoke one
-    // (its catalog fetch is the slow part), the rest the shared field rhythm.
-    if (showModelSettings) {
-      return (
-        <SettingsContent>
-          <SettingsProfileScope className="mb-5" />
-      {showSharedMetrics && <SharedMetricsSettings />}
-      {showDesktopSettings && <DeveloperSettings />}
-          <div className="mb-6">
-            <ModelSettingsSkeleton subpage={subpage} />
-          </div>
-        </SettingsContent>
-      )
-    }
-
-    return <SettingsSkeleton sections={[{ rows: 6 }]} />
+    return (
+      <ConfigSettingsLoadState
+        configAvailable={Boolean(config)}
+        configLoadFailed={configLoadFailed}
+        refetchConfig={refetchConfig}
+        refetchSchema={refetchSchema}
+        schemaAvailable={Boolean(schema)}
+        schemaFailed={schemaFailed}
+        showDesktopSettings={showDesktopSettings}
+        showModelSettings={showModelSettings}
+        showSharedMetrics={showSharedMetrics}
+        subpage={subpage}
+      />
+    )
   }
 
   const visibleFields = activeSectionId === 'voice' ? fields.filter(([key]) => voiceFieldVisible(key, config)) : fields
@@ -545,7 +589,9 @@ function ConfigSettingsInner({
       <SettingsProfileScope className="mb-5" />
       {showSharedMetrics && <SharedMetricsSettings />}
       {showDesktopSettings && <DeveloperSettings />}
-      {activeSectionId === 'voice' && <ListRow description={c.voiceShortcutHintDesc} title={c.voiceShortcutHintTitle} />}
+      {activeSectionId === 'voice' && (
+        <ListRow description={c.voiceShortcutHintDesc} title={c.voiceShortcutHintTitle} />
+      )}
       {activeSectionId === 'model' && (
         <div className={showModelSettings ? 'mb-6' : undefined}>
           <ModelSettings

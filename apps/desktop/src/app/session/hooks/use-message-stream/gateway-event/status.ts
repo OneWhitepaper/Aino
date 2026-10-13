@@ -32,6 +32,83 @@ export function isFallbackSwitchStatus(kind: string | undefined, text: string): 
 
 /** status.update / review.summary / notification.show / notification.clear /
  *  error — the status-and-notice tail of the dispatcher. */
+function statusErrorSurface(errorMessage: string): ErrorSurface | null {
+  const surface: ErrorSurface | null = isSessionNotOwnedError(new Error(errorMessage))
+    ? { code: 'SESSION_NOT_OWNED', layer: 'gateway', retryable: false }
+    : isDiskFullErrorMessage(errorMessage)
+      ? { code: 'disk_full', layer: 'disk', retryable: false }
+      : null
+
+  return surface
+}
+
+function handleModelSwitchStatus(ctx: GatewayEventContext, sessionId: string): void {
+  const { payload, occurredAt, isActiveEvent } = ctx
+  const { flushQueuedDeltas, updateSessionState, sessionStateByRuntimeIdRef, hydrateFromStoredSession } = ctx.deps
+  const entry = payload?.history_entry
+
+  if (entry?.display_kind === 'model_switch') {
+    // The applied switch is already authoritative. Reuse history's
+    // renderer without waiting for a REST fetch or replacing a live turn.
+    const [notice] = toChatMessages([
+      {
+        role: 'user',
+        content: '',
+        display_kind: entry.display_kind,
+        display_metadata: entry.display_metadata as SessionMessage['display_metadata'],
+        row_id: entry.row_id ?? undefined,
+        timestamp: entry.timestamp ?? occurredAt
+      }
+    ])
+
+    flushQueuedDeltas(sessionId)
+    updateSessionState(sessionId, state => {
+      if (
+        state.messages.some(
+          message =>
+            message.modelSwitch &&
+            (notice.rowId !== undefined && message.rowId !== undefined
+              ? notice.rowId === message.rowId
+              : notice.timestamp === message.timestamp)
+        )
+      ) {
+        return state
+      }
+
+      // Deferred switches apply before the next prompt backend-side, but
+      // after its optimistic user row. Prefer durable order, then that
+      // pre-response boundary; host clocks need not agree. A switch at
+      // turn-end (e.g. restoring /model --once) stays after the reply.
+      const persisted = state.messages.findIndex(
+        message => notice.rowId !== undefined && message.rowId !== undefined && message.rowId > notice.rowId
+      )
+
+      const pending =
+        state.awaitingResponse && !state.sawAssistantPayload
+          ? state.messages.findLastIndex(
+              message => message.role === 'user' && !message.hidden && message.rowId === undefined
+            )
+          : -1
+
+      const newer = state.messages.findIndex(
+        message => message.timestamp !== undefined && message.timestamp > notice.timestamp!
+      )
+
+      const index = [persisted, pending, newer].find(index => index >= 0) ?? state.messages.length
+
+      return { ...state, messages: [...state.messages.slice(0, index), notice, ...state.messages.slice(index)] }
+    })
+  } else {
+    // Older backends announce only the kind; their record still needs
+    // the idle history refresh used before structured notices shipped.
+    const state = sessionStateByRuntimeIdRef.current.get(sessionId)
+
+    if (isActiveEvent && state && !state.busy && !state.awaitingResponse && !state.streamId) {
+      void hydrateFromStoredSession(3, state.storedSessionId, sessionId)
+    }
+  }
+}
+
 export function handleStatusEvent(ctx: GatewayEventContext): boolean {
   const { deps, event, payload, sessionId, isActiveEvent, occurredAt } = ctx
 
@@ -121,59 +198,7 @@ export function handleStatusEvent(ctx: GatewayEventContext): boolean {
         announceDeferredCompress()
       }
     } else if (sessionId && payload?.kind === 'model_switch') {
-      const entry = payload.history_entry
-
-      if (entry?.display_kind === 'model_switch') {
-        // The applied switch is already authoritative. Reuse history's
-        // renderer without waiting for a REST fetch or replacing a live turn.
-        const [notice] = toChatMessages([{
-          role: 'user',
-          content: '',
-          display_kind: entry.display_kind,
-          display_metadata: entry.display_metadata as SessionMessage['display_metadata'],
-          row_id: entry.row_id ?? undefined,
-          timestamp: entry.timestamp ?? occurredAt
-        }])
-
-        flushQueuedDeltas(sessionId)
-        updateSessionState(sessionId, state => {
-          if (state.messages.some(message => message.modelSwitch && (
-            notice.rowId !== undefined && message.rowId !== undefined
-              ? notice.rowId === message.rowId
-              : notice.timestamp === message.timestamp
-          ))) {
-            return state
-          }
-
-          // Deferred switches apply before the next prompt backend-side, but
-          // after its optimistic user row. Prefer durable order, then that
-          // pre-response boundary; host clocks need not agree. A switch at
-          // turn-end (e.g. restoring /model --once) stays after the reply.
-          const persisted = state.messages.findIndex(message =>
-            notice.rowId !== undefined && message.rowId !== undefined && message.rowId > notice.rowId
-          )
-
-          const pending = state.awaitingResponse && !state.sawAssistantPayload
-            ? state.messages.findLastIndex(message => message.role === 'user' && !message.hidden && message.rowId === undefined)
-            : -1
-
-          const newer = state.messages.findIndex(message =>
-            message.timestamp !== undefined && message.timestamp > notice.timestamp!
-          )
-
-          const index = [persisted, pending, newer].find(index => index >= 0) ?? state.messages.length
-
-          return { ...state, messages: [...state.messages.slice(0, index), notice, ...state.messages.slice(index)] }
-        })
-      } else {
-        // Older backends announce only the kind; their record still needs
-        // the idle history refresh used before structured notices shipped.
-        const state = sessionStateByRuntimeIdRef.current.get(sessionId)
-
-        if (isActiveEvent && state && !state.busy && !state.awaitingResponse && !state.streamId) {
-          void hydrateFromStoredSession(3, state.storedSessionId, sessionId)
-        }
-      }
+      handleModelSwitchStatus(ctx, sessionId)
     } else if (sessionId && payload?.kind === 'process') {
       // The gateway's notification poller announces background process
       // completions / watch matches here — re-sync the status stack.
@@ -352,11 +377,7 @@ export function handleStatusEvent(ctx: GatewayEventContext): boolean {
     // as a classified turn: a live-owner refusal (SESSION_NOT_OWNED, #106217)
     // is deterministic — Retry hits the same wall, only a new chat helps —
     // and disk-full is a machine problem, not a provider one.
-    const surface: ErrorSurface | null = isSessionNotOwnedError(new Error(errorMessage))
-      ? { code: 'SESSION_NOT_OWNED', layer: 'gateway', retryable: false }
-      : isDiskFullErrorMessage(errorMessage)
-        ? { code: 'disk_full', layer: 'disk', retryable: false }
-        : null
+    const surface = statusErrorSurface(errorMessage)
 
     // When a code was recovered, the glossed card sentence explains it better
     // than the raw refusal. When none was, the server's own text IS the plain

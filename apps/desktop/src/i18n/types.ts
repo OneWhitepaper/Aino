@@ -1,3 +1,5 @@
+import type { ErrorCodeKey } from '@/lib/error-surface'
+import type { TipId } from '@/lib/tips/catalog'
 // Desktop i18n type contract.
 //
 // `Translations` is the single source of truth for every translatable string
@@ -5,12 +7,10 @@
 // partial locales should use `defineLocale()` so missing desktop-only strings
 // fall back to English while new keys remain type-checked.
 
-import type { ErrorCodeKey } from '@/lib/error-surface'
-import type { TipId } from '@/lib/tips/catalog'
-
 import type { AppTourTranslations, HandoffTourTranslations } from './types_app_tour'
 import type { AuxTaskCopyMap } from './types_aux_tasks'
 import type { BillingTranslations } from './types_billing'
+import type { BillingSurfaceTranslations } from './types_billing_surface'
 import type { BootTranslations } from './types_boot'
 import type { CatalogInstallTranslations } from './types_catalog_install'
 import type { ConnectorAccountsTranslations, ConnectorCardTranslations } from './types_connectors'
@@ -19,6 +19,7 @@ import type { NoticeTranslations } from './types_notices'
 import type { OnboardingTranslations } from './types_onboarding'
 import type { SidebarProjectsTranslations } from './types_projects'
 import type { SharedMetricsTranslations } from './types_shared_metrics'
+import type { SummaryTranslations } from './types_summary_surface'
 import type { UninstallSectionTranslations } from './types_uninstall_section'
 import type { UpdateChannelCopy } from './types_update_channel'
 
@@ -5646,313 +5647,9 @@ export interface UpstreamTranslations extends NoticeTranslations {
     }
   }
 
-  billing: {
-    heading: string
-    preview: string
-    previewAria: string
-    live: string
-    freeTier: {
-      signIn: string
-      title: string
-      message: string
-      caption: string
-      name: string
-      footnote: string
-      plan: string
-      model: string
-      connectors: string
-      included: string
-    }
-    summary: {
-      balance: string
-      plan: string
-      autoRefill: string
-    }
-    sections: {
-      plan: string
-      paymentCredits: string
-      usage: string
-      invoices: string
-    }
-    notice: {
-      loggedOutTitle: string
-      loggedOutMessage: string
-      openPortal: string
-      addCard: string
-      noCardTitle: string
-      noCardMessage: string
-    }
-    plan: {
-      freeTier: string
-      detailsUnavailable: string
-      changesTo: (tier: string, when: string) => string
-      cancelsOn: (when: string) => string
-      renews: (when: string) => string
-      noActive: string
-      monthlyPrice: (price: string) => string
-      changePlan: string
-      viewPlans: string
-      adjustPlan: string
-      choose: string
-      current: string
-      scheduled: string
-      downgrade: string
-      checking: string
-      cannotMake: string
-      alreadyOn: (tier: string) => string
-      scheduledChange: (tier: string, when: string, delta?: string) => string
-      cannotSchedule: string
-      scheduling: string
-      confirmDowngrade: string
-      back: string
-      title: string
-      noPlans: string
-      tryAgain: string
-      cancel: string
-      undo: string
-      undoing: string
-    }
-    payment: {
-      title: string
-      addMethod: string
-      update: string
-      description: string
-      differentCard: string
-      provenance: Record<string, string>
-    }
-    credits: {
-      title: string
-      description: string
-      buy: string
-      customAmountAria: string
-      processing: string
-      added: (amount: string) => string
-      balanceRefreshing: string
-      openPortal: string
-      retry: string
-    }
-    charge: {
-      added: (amount: string) => string
-      failedTitle: string
-      authenticationRequired: string
-      paymentMethodExpired: string
-      cardDeclined: string
-      failedReason: (reason: string) => string
-      outcomeUnconfirmedTitle: string
-      outcomeUnconfirmedMessage: (message: string) => string
-      checkFailedTitle: string
-      checkFailedMessage: string
-      trackingFailedTitle: string
-      trackingFailedMessage: string
-      stillProcessingTitle: string
-      stillProcessingMessage: string
-    }
-    refill: {
-      title: string
-      genericDescription: string
-      managePortal: string
-      turnOnPortal: string
-      reconcile: string
-      reconcileCaption: (card: string) => string
-      enabled: string
-      off: string
-      threshold: string
-      reloadTo: string
-      thresholdAria: string
-      reloadToAria: string
-      turnOffQuestion: string
-      turnOff: string
-      disable: string
-      saving: string
-      save: string
-      cancel: string
-      manage: string
-      updated: string
-      turnedOff: string
-      chargeDescription: (reloadTo: string, threshold: string) => string
-      validationDollar: (label: string) => string
-      validationPositive: (label: string) => string
-      validationMinimum: (label: string, amount: string) => string
-      validationMaximum: (label: string, amount: string) => string
-      validationGreater: string
-    }
-    usage: {
-      subscriptionRemaining: string
-      subscriptionCredits: string
-      creditsPerMonth: (amount: string) => string
-      resets: (date: string) => string
-      left: (remaining: string, monthly: string) => string
-      over: (amount: string) => string
-      topupCredits: string
-      doesNotExpire: string
-      monthlySpendCapUsed: string
-      monthlySpendCap: string
-      defaultCeiling: string
-      monthlyRemoteSpending: string
-      used: (spent: string, limit: string) => string
-      usageFallback: (label: string) => string
-    }
-    status: {
-      enabled: string
-      off: string
-    }
-    stepUp: {
-      openVerification: string
-      dismiss: string
-      waiting: string
-      verify: string
-      verificationNotApprovedTitle: string
-      verificationNotApprovedMessage: string
-      verificationCompleteTitle: string
-      verificationCompleteMessage: string
-    }
-    refusal: {
-      cardConfirmationTitle: string
-      cardConfirmationMessage: string
-      remoteApprovalTitle: string
-      remoteApprovalMessage: string
-      remoteStoppedTitle: string
-      remoteStoppedByAdmin: string
-      remoteStoppedByYou: string
-      reconnectDevice: string
-      sessionLoggedOutTitle: string
-      sessionLoggedOutMessage: string
-      spendingOffTitle: string
-      spendingOffMessage: string
-      adminRoleTitle: string
-      adminRoleMessage: string
-      freshTopupTitle: string
-      freshTopupMessage: string
-      noSavedCardTitle: string
-      noSavedCardMessage: string
-      orgAccessDeniedTitle: string
-      orgAccessDeniedMessage: string
-      monthlyCapTitle: string
-      monthlyCapReached: string
-      monthlyCapRemaining: (remaining: string) => string
-      tooManyTitle: string
-      tooManyMessage: (minutes?: number) => string
-      stripeTitle: string
-      stripeMessage: (minutes?: number) => string
-      dailyLimitTitle: string
-      dailyLimitMessage: string
-      endpointUnavailableTitle: string
-      endpointUnavailableMessage: string
-      requestTimedOutTitle: string
-      requestTimedOutMessage: string
-      connectionFailedTitle: string
-      connectionFailedMessage: string
-      requestFailedTitle: string
-      requestFailedMessage: string
-    }
-  }
+  billing: BillingSurfaceTranslations
 
-  summary: {
-    aria: string
-    title: string
-    close: string
-    environment: {
-      title: string
-      local: string
-      remote: string
-      project: string
-      workingDirectory: string
-      model: string
-      provider: string
-      profile: string
-      branch: string
-      connection: string
-      noProject: string
-      noSession: string
-    }
-    changes: {
-      title: string
-      files: (count: number) => string
-      additions: string
-      deletions: string
-      staged: (count: number) => string
-      noChanges: string
-      unavailable: string
-      viewDiff: string
-      refresh: string
-      stage: string
-      unstage: string
-      revert: string
-    }
-    git: {
-      title: string
-      branch: string
-      tracking: string
-      ahead: (count: number) => string
-      behind: (count: number) => string
-      commit: string
-      pullRequest: string
-      push: string
-      reviewAndCommit: string
-      clean: string
-      unavailable: string
-      noRepository: string
-    }
-    agents: {
-      title: string
-      dispatched: (count: number) => string
-      finished: string
-      status: Record<'running' | 'queued' | 'completed' | 'failed' | 'interrupted' | 'dispatched', string>
-      running: (count: number) => string
-      completed: (count: number) => string
-      failed: (count: number) => string
-      viewAll: string
-      none: string
-    }
-    context: {
-      title: string
-      noData: string
-    }
-    outputs: {
-      title: string
-      create: string
-      prompt: string
-    }
-    plan: {
-      title: string
-      progress: (done: number, total: number) => string
-      recorded: string
-      status: Record<'pending' | 'in_progress' | 'completed' | 'cancelled', string>
-    }
-    background: {
-      title: string
-      status: Record<'running' | 'done' | 'failed', string>
-    }
-    sources: {
-      title: string
-      add: string
-      image: string
-      skill: string
-      tool: string
-      attachments: string
-      previews: string
-      links: string
-      none: string
-      open: string
-    }
-    resources: {
-      title: string
-      ram: string
-      gpu: string
-      unavailable: string
-      retry: string
-    }
-    state: {
-      loading: string
-      unavailable: string
-      noData: string
-      retry: string
-      showAll: (count: number) => string
-      showLess: string
-      details: string
-      historyUnavailable: string
-    }
-  }
+  summary: SummaryTranslations
 }
 
 /**

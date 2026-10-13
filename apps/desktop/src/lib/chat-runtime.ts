@@ -433,12 +433,7 @@ export function messageCreatedAt(message: Pick<ChatMessage, 'timestamp'>, nowMs 
     : new Date(nowMs)
 }
 
-export function toRuntimeMessage(message: ChatMessage): ThreadMessage {
-  const role =
-    message.role === 'user' || message.role === 'assistant' || message.role === 'system' ? message.role : 'assistant'
-
-  const createdAt = messageCreatedAt(message)
-
+function runtimeMessageMetadata(message: ChatMessage) {
   // Reactions and the durable row id ride metadata.custom for every role — the
   // established channel for per-message extras (attachmentRefs below).
   const reactionMeta = {
@@ -451,6 +446,17 @@ export function toRuntimeMessage(message: ChatMessage): ThreadMessage {
     typeof message.timestamp === 'number' && Number.isFinite(message.timestamp) && message.timestamp > 0
       ? { timelineTimestamp: message.timestamp }
       : {}
+
+  return { reactionMeta, timelineMeta }
+}
+
+export function toRuntimeMessage(message: ChatMessage): ThreadMessage {
+  const role =
+    message.role === 'user' || message.role === 'assistant' || message.role === 'system' ? message.role : 'assistant'
+
+  const createdAt = messageCreatedAt(message)
+
+  const { reactionMeta, timelineMeta } = runtimeMessageMetadata(message)
 
   if (role === 'user') {
     return {

@@ -21,10 +21,10 @@ import {
 } from '@/store/session'
 import type { SessionInfo, SessionResumeResult } from '@/types/hermes'
 
+import { selectBranchMessages, toBranchMessages } from './branch-messages'
+import { applyRuntimeInfo, applyStoredSessionPreviewRuntimeInfo } from './runtime-info'
 import {
   appendLiveSessionProjection,
-  applyRuntimeInfo,
-  applyStoredSessionPreviewRuntimeInfo,
   chatMessageArraysEquivalent,
   chatMessagesEquivalent,
   chatPartsEquivalent,
@@ -37,10 +37,8 @@ import {
   reconcileResumeMessages,
   removeRepresentedLocalLiveProjection,
   resolveResumedBusy,
-  selectBranchMessages,
   sessionMatchesStoredId,
-  sessionShouldHaveTranscript,
-  toBranchMessages
+  sessionShouldHaveTranscript
 } from './utils'
 
 const msg = (id: string, role: ChatMessage['role'], text: string, extra: Partial<ChatMessage> = {}): ChatMessage =>

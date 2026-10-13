@@ -1,6 +1,6 @@
 import type { SessionOwnerRoute } from '@/store/session-request-router'
 
-import type { BranchMessage } from './utils'
+import type { BranchMessage } from './branch-messages'
 
 interface BranchCreateKeyInput {
   branchCount?: number

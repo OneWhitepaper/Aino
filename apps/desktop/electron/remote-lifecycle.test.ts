@@ -1,3 +1,4 @@
+
 import assert from 'node:assert/strict'
 import { exec as execCallback, spawn } from 'node:child_process'
 import { once } from 'node:events'
@@ -10,9 +11,7 @@ import { test } from 'vitest'
 
 import { profileSshOverride } from './connection-config'
 import {
-  assertRemoteInstallUpdateClear,
   buildSpawnCommand,
-  classifySshReuseProof,
   cleanupStale,
   connect,
   DEFAULT_READY_TIMEOUT_MS,
@@ -22,7 +21,6 @@ import {
   isForwardBindCollision,
   isLockfileSkew,
   listRemoteHermesProfiles,
-  locateHermes,
   LOCKFILE_SCHEMA_VERSION,
   lockfilePath,
   MIN_READY_TIMEOUT_MS,
@@ -46,203 +44,9 @@ import {
   validateRemotePath,
   writeLockfile
 } from './remote-lifecycle'
+import { connectDeps, fakeSsh, ownedLock, OWNERSHIP_ID, SPAWN_NONCE } from './remote-lifecycle-fixtures'
 import type { SshConnection } from './ssh-connection'
-
-const OWNERSHIP_ID = '0123456789abcdef0123456789abcdef'
-const SPAWN_NONCE = '0123456789abcdef'
 const exec = promisify(execCallback)
-
-test('SSH reuse proof rejects a backend whose runtime was replaced', () => {
-  assert.equal(
-    classifySshReuseProof(
-      { ok: true, sshOwnerNonce: SPAWN_NONCE, protocolVersion: 1, runtimeIntact: false },
-      SPAWN_NONCE
-    ),
-    'authenticated-stale'
-  )
-})
-
-test('SSH reuse proof remains compatible when runtime state is absent', () => {
-  assert.equal(
-    classifySshReuseProof({ ok: true, sshOwnerNonce: SPAWN_NONCE, protocolVersion: 1 }, SPAWN_NONCE),
-    'authenticated-ok'
-  )
-})
-
-function ownedLock(over: any = {}) {
-  return {
-    schemaVersion: LOCKFILE_SCHEMA_VERSION,
-    protocolVersion: PROTOCOL_VERSION,
-    ownershipId: OWNERSHIP_ID,
-    spawnNonce: SPAWN_NONCE,
-    pid: 333,
-    port: 40000,
-    profile: '',
-    hermesPath: '~/.local/bin/hermes',
-    hermesHome: '~/.hermes',
-    logPath: spawnLogPath(OWNERSHIP_ID, SPAWN_NONCE),
-    tokenFingerprint: fingerprintToken('stored-token'),
-    startedAt: '2026-07-14T00:00:00.000Z',
-    creationTime: 'linux:123456',
-    ...over
-  }
-}
-
-// A fake SshConnection whose exec() is matched against an ordered list of
-// [regex|fn, response|fn] rules. First match wins; unmatched commands return ''.
-function fakeSsh(rules: any[] = []) {
-  const calls: string[] = []
-
-  return {
-    calls,
-    async exec(cmd) {
-      calls.push(cmd)
-
-      // Existing lifecycle fixtures predate the install-wide relaunch gate.
-      // Their default remote has no update marker; focused marker tests below
-      // use explicit SSH doubles to exercise live/uncertain transitions.
-      const mutexWrapped = /setsid|nohup/.test(cmd) // spawn payloads run under the relaunch probe's marker gate
-
-      if (cmd.includes('.hermes-update-in-progress') && !mutexWrapped) {
-        return 'CLEAR'
-      }
-
-      const applicableRules = rules.filter(([matcher]) => {
-        if (mutexWrapped && matcher instanceof RegExp && /kill -0/.test(matcher.source)) {
-          return false
-        }
-
-        return !(mutexWrapped && matcher instanceof RegExp && /python3 -c/.test(matcher.source))
-      })
-
-      if (
-        (cmd.includes('print("TERMINATED")') && !cmd.includes('pidfd_open') && !mutexWrapped) ||
-        cmd.includes('printf TERMINATED')
-      ) {
-        return 'TERMINATED'
-      }
-
-      for (const [matcher, resp] of applicableRules) {
-        const hit = typeof matcher === 'function' ? matcher(cmd) : matcher.test(cmd)
-
-        if (hit) {
-          const out = typeof resp === 'function' ? resp(cmd) : resp
-
-          if (out instanceof Error) {
-            throw out
-          }
-
-          return out
-        }
-      }
-
-      return ''
-    }
-  }
-}
-
-test('POSIX relaunch gate refuses live and uncertain install markers without executing Hermes', async () => {
-  for (const observation of ['LIVE:4242', 'UNCERTAIN']) {
-    const calls: string[] = []
-
-    const ssh = {
-      async exec(command) {
-        calls.push(command)
-
-        if (command === 'uname -s; uname -m') {
-          return 'Linux\nx86_64\n'
-        }
-
-        if (command.includes('HERMES_HOME')) {
-          return '/home/alice/.hermes\n'
-        }
-
-        if (command.includes('.hermes-update-in-progress')) {
-          return observation
-        }
-
-        throw new Error(`unexpected command after update gate: ${command}`)
-      }
-    }
-
-    await assert.rejects(
-      () => connect(connectDeps(ssh)),
-      (error: any) => error.kind === 'update-in-progress'
-    )
-    assert.equal(
-      calls.some(command => /\[ -x |--version|lock\.json|serve --help|setsid/.test(command)),
-      false
-    )
-  }
-})
-
-test('POSIX relaunch gate permits absent/dead markers and normalizes named-profile homes install-wide', async () => {
-  const commands: string[] = []
-
-  const ssh = {
-    async exec(command) {
-      commands.push(command)
-
-      return 'CLEAR'
-    }
-  }
-
-  await assertRemoteInstallUpdateClear(ssh, '/home/alice/.hermes/profiles/research')
-  assert.ok(commands[0].endsWith(" '/home/alice/.hermes/.hermes-update-in-progress'"), commands[0].slice(-80))
-})
-
-test('POSIX relaunch gate rechecks after token upload immediately before process creation', async () => {
-  const calls: string[] = []
-  let markerChecks = 0
-
-  const ssh = {
-    async exec(command) {
-      calls.push(command)
-
-      if (command === 'uname -s; uname -m') {
-        return 'Linux\nx86_64\n'
-      }
-
-      if (command.includes('HERMES_HOME')) {
-        return '/home/alice/.hermes\n'
-      }
-
-      if (command.includes('.hermes-update-in-progress')) {
-        markerChecks += 1
-
-        return markerChecks >= 3 ? 'LIVE:4242' : 'CLEAR'
-      }
-
-      if (/\[ -x /.test(command)) {
-        return 'OK'
-      }
-
-      if (command.includes('serve --help')) {
-        return 'YES\n'
-      }
-
-      if (command.includes('python3 -c')) {
-        return ''
-      }
-
-      if (command.includes('lock.json')) {
-        return ''
-      }
-
-      return ''
-    }
-  }
-
-  await assert.rejects(
-    () => connect(connectDeps(ssh)),
-    (error: any) => error.kind === 'update-in-progress'
-  )
-  assert.equal(markerChecks, 3)
-  assert.equal(
-    calls.some(command => /setsid|nohup/.test(command)),
-    false
-  )
-})
 
 test('readRemoteInstallId reads the backend identity without spawning a dashboard or minting one', async () => {
   const ssh = fakeSsh([
@@ -317,114 +121,6 @@ test('listRemoteHermesProfiles rejects a hostile HERMES_HOME', async () => {
   assert.equal(
     ssh.calls.some(cmd => cmd.includes('ls -1')),
     false
-  )
-})
-
-test('locateHermes prefers the explicit profile path when executable', async () => {
-  const ssh = fakeSsh([[/\[ -x .*\/opt\/hermes/, 'OK']])
-  assert.equal(await locateHermes(ssh, '/opt/hermes'), '/opt/hermes')
-})
-
-test('locateHermes throws (no silent fallback) when an EXPLICIT path is not executable', async () => {
-  // command -v WOULD find a different install, but an explicit path must not
-  // silently fall back to it — that is the "connected to the wrong hermes" bug.
-  const ssh = fakeSsh([
-    [/command -v hermes/, '/home/u/.local/bin/hermes\n'],
-    [/\[ -x .*\.local\/bin\/hermes/, 'OK']
-  ])
-
-  await assert.rejects(
-    () => locateHermes(ssh, '/bad/path/hermes'),
-    (err: any) => {
-      assert.equal(err.kind, 'hermes-not-found')
-      assert.match(err.message, /\/bad\/path\/hermes/)
-
-      return true
-    }
-  )
-})
-
-test('locateHermes falls back to the login-shell command -v probe', async () => {
-  const ssh = fakeSsh([
-    [/command -v hermes/, '/home/u/.local/bin/hermes\n'],
-    [/\[ -x .*\.local\/bin\/hermes/, 'OK']
-  ])
-
-  assert.equal(await locateHermes(ssh, ''), '/home/u/.local/bin/hermes')
-})
-
-test('locateHermes preserves an installer wrapper instead of resolving its interpreter', async () => {
-  // install.sh venv mode writes: exec "$HERMES_BIN" "$HERMES_ENTRYPOINT" "$@",
-  // where $HERMES_BIN is the venv python. The old canonicalization returned
-  // that interpreter, so `<python> --version` printed "Python x.y.z" and
-  // `<python> serve --help` failed outright (#74411). The wrapper itself is
-  // executable and forwards args correctly — return it untouched.
-  const ssh = fakeSsh([
-    [/command -v hermes/, '/home/u/.local/bin/hermes\n'],
-    [/\[ -x .*\.local\/bin\/hermes/, 'OK'],
-    // If the removed python3 wrapper-parser were ever reintroduced, this rule
-    // would reward it with an interpreter path and the assertions below fail.
-    [/python3 -c/, '/home/u/.hermes/hermes-agent/venv/bin/python\n']
-  ])
-
-  assert.equal(await locateHermes(ssh, ''), '/home/u/.local/bin/hermes')
-  assert.ok(
-    !ssh.calls.some(cmd => cmd.includes('python3 -c')),
-    'locateHermes must not shell out to a python3 parser to rewrite the launcher'
-  )
-})
-
-test('locateHermes returns an explicit remoteHermesPath unchanged', async () => {
-  // The override half of #74411: an explicit remoteHermesPath pointing at a
-  // wrapper was also canonicalized to its interpreter, so overriding to
-  // ~/.local/bin/hermes changed nothing for affected users.
-  const ssh = fakeSsh([
-    [/\[ -x .*\.local\/bin\/hermes/, 'OK'],
-    [/python3 -c/, '/home/u/.hermes/hermes-agent/venv/bin/python\n']
-  ])
-
-  assert.equal(await locateHermes(ssh, '~/.local/bin/hermes'), '~/.local/bin/hermes')
-  assert.ok(!ssh.calls.some(cmd => cmd.includes('python3 -c')), 'an explicit remoteHermesPath must never be rewritten')
-})
-
-test('locateHermes falls back to ~/.local/bin/hermes when the login-shell probe misses', async () => {
-  // ~/.local/bin is the non-root installer's command location (scripts/install.sh).
-  const ssh = fakeSsh([
-    [/command -v hermes/, ''],
-    [/\[ -x .*\.local\/bin\/hermes/, 'OK']
-  ])
-
-  assert.equal(await locateHermes(ssh, ''), '~/.local/bin/hermes')
-})
-
-test('locateHermes tries the conventional venv path last', async () => {
-  const ssh = fakeSsh([[/\[ -x .*venv\/bin\/hermes/, 'OK']])
-  assert.equal(await locateHermes(ssh, ''), '~/.hermes/hermes-agent/venv/bin/hermes')
-})
-
-test('locateHermes throws a hermes-not-found error with an install hint', async () => {
-  const ssh = fakeSsh([]) // nothing is executable
-  await assert.rejects(
-    () => locateHermes(ssh, ''),
-    (err: any) => {
-      assert.equal(err.kind, 'hermes-not-found')
-      assert.match(err.message, /install/i)
-
-      return true
-    }
-  )
-})
-
-test('locateHermes uses a login shell for the command -v probe', async () => {
-  const ssh = fakeSsh([
-    [/command -v hermes/, '/x/hermes'],
-    [/\[ -x/, 'OK']
-  ])
-
-  await locateHermes(ssh, '')
-  assert.ok(
-    ssh.calls.some(c => /bash -lc/.test(c)),
-    'must probe in a login shell (PATH pitfall)'
   )
 })
 
@@ -1122,23 +818,6 @@ test('scrapeReadyPort times out and reports a dead spawn', async () => {
     }
   )
 })
-
-function connectDeps(ssh, over: any = {}) {
-  return {
-    ssh,
-    ownershipId: OWNERSHIP_ID,
-    profile: '',
-    forward: async () => {},
-    cancelForward: async () => {},
-    pickLocalPort: async () => 50001,
-    waitForHermes: async () => {},
-    probeReuseProof: async () => 'authenticated-ok',
-    adoptServedToken: async (_baseUrl, spawn) => spawn || 'served-token',
-    rememberLog: () => {},
-    readyTimeoutMs: 2000,
-    ...over
-  }
-}
 
 test('connect() spawns fresh when there is no lockfile, adopts the served token', async () => {
   const ssh = fakeSsh([

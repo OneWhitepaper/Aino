@@ -863,6 +863,32 @@ const ScheduledRetryAction: FC<{ resetsAt: number }> = ({ resetsAt }) => {
   )
 }
 
+function PlatformRecoveryActions({ recovery }: { recovery: ReturnType<typeof platformRecoveryActionForCode> }) {
+  const { t } = useI18n()
+  const inRouter = useInRouterContext()
+
+  return (
+    <>
+      {recovery === 'account' && inRouter && <AccountRecoveryAction label={t.platformModels.myAccount} />}
+      {recovery === 'new-chat' && (
+        <button className="aui-error-action" data-action="new-chat" onClick={requestFreshSession} type="button">
+          {t.platformModels.newChatCurrentAccount}
+        </button>
+      )}
+      {(recovery === 'picker' || recovery === 'rebind') && (
+        <button
+          className="aui-error-action"
+          data-action={recovery}
+          onClick={() => setModelPickerOpen(true)}
+          type="button"
+        >
+          {t.desktop.chooseModel}
+        </button>
+      )}
+    </>
+  )
+}
+
 const ErrorRecoveryActions: FC = () => {
   const { t } = useI18n()
   const copy = t.assistant.thread
@@ -1029,22 +1055,7 @@ const ErrorRecoveryActions: FC = () => {
           </button>
         </ActionBarPrimitive.Reload>
       )}
-      {recovery === 'account' && inRouter && <AccountRecoveryAction label={t.platformModels.myAccount} />}
-      {recovery === 'new-chat' && (
-        <button className="aui-error-action" data-action="new-chat" onClick={requestFreshSession} type="button">
-          {t.platformModels.newChatCurrentAccount}
-        </button>
-      )}
-      {(recovery === 'picker' || recovery === 'rebind') && (
-        <button
-          className="aui-error-action"
-          data-action={recovery}
-          onClick={() => setModelPickerOpen(true)}
-          type="button"
-        >
-          {t.desktop.chooseModel}
-        </button>
-      )}
+      <PlatformRecoveryActions recovery={recovery} />
       {plan.retry && limitReset && (
         <span className="px-1 text-xs text-muted-foreground" data-testid="error-limit-reset">
           {copy.errorLimitResets(limitReset)}

@@ -5,6 +5,24 @@ import { type SessionResumeRequest, setResumeExhaustedSessionId } from '@/store/
 import type { SessionProfileRoute } from '@/store/session-request-router'
 import { markSelectionRestore } from '@/store/session-states'
 
+function isStuckOnRoutedSession({
+  creating,
+  selected,
+  active,
+  routed,
+  freshDraftReady
+}: {
+  creating: boolean
+  selected: string | null
+  active: string | null
+  routed: string
+  freshDraftReady: boolean
+}): boolean {
+  const selectionMovedAheadOfRoute = creating && Boolean(selected) && selected !== routed && Boolean(active)
+
+  return routed !== selected && !freshDraftReady && !selectionMovedAheadOfRoute
+}
+
 interface RouteResumeOptions {
   activeSessionId: string | null
   activeSessionIdRef: MutableRefObject<string | null>
@@ -162,14 +180,13 @@ export function useRouteResume({
       // timeout), a lingering A-route / B-selection mismatch must be able to
       // self-heal via stuckOnRoutedSession — otherwise ChatView stays in its
       // route/selection loading state forever after a stuck navigate.
-      const selectionMovedAheadOfRoute =
-        creatingSessionRef.current &&
-        Boolean(selectedStoredSessionIdRef.current) &&
-        selectedStoredSessionIdRef.current !== routedSessionId &&
-        Boolean(activeSessionIdRef.current)
-
-      const stuckOnRoutedSession =
-        routedSessionId !== selectedStoredSessionIdRef.current && !freshDraftReady && !selectionMovedAheadOfRoute
+      const stuckOnRoutedSession = isStuckOnRoutedSession({
+        creating: creatingSessionRef.current,
+        selected: selectedStoredSessionIdRef.current,
+        active: activeSessionIdRef.current,
+        routed: routedSessionId,
+        freshDraftReady
+      })
 
       // Resume when the route meaningfully changed, the gateway just opened, or
       // we're stranded on a routed session that never loaded. The first two

@@ -59,9 +59,9 @@ import {
   requestGatewayForProfile,
   retainGatewayForAgent,
   retainGatewayForRelay,
-  retireLocalProfileGateways,
-  type SpawnPriority
+  retireLocalProfileGateways
 } from '@/store/gateway'
+import { type SpawnPriority } from '@/store/gateway-types'
 import { notify, notifyError } from '@/store/notifications'
 import {
   $activeGatewayProfile,

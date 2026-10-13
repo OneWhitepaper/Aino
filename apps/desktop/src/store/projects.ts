@@ -42,7 +42,13 @@ import {
   requestFreshSession,
   setShowAllProfiles
 } from '@/store/profile'
-import { $projectScope, advanceProjectNavigation, ALL_PROJECTS, exitProjectScope, projectNavigationGeneration } from '@/store/project-scope'
+import {
+  $projectScope,
+  advanceProjectNavigation,
+  ALL_PROJECTS,
+  exitProjectScope,
+  projectNavigationGeneration
+} from '@/store/project-scope'
 import {
   $activeSessionId,
   $currentCwd,
@@ -125,7 +131,6 @@ function projectsStaleBackendError(): Error {
 
 // True while the disk scan is in flight (drives the "finding repos" hint).
 export const $reposScanning = atom(false)
-
 
 // Enter a project: scope the sidebar to it and make it the active project
 // (best-effort — the durable pointer is nice-to-have, the view scope is the
@@ -601,7 +606,12 @@ function applyProjectTreePayload(res: ProjectTreePayload, context: ProjectTreeCo
   resolvedProjectTreeContext = context
   const scoped = new Set(res.scoped_session_ids ?? [])
   const owner = projectRowOwner()
-  $projectTree.set(replaceEqualDeep($projectTree.get(), (res.projects ?? []).map(project => tagProjectSessionConnection(project, owner))))
+  $projectTree.set(
+    replaceEqualDeep(
+      $projectTree.get(),
+      (res.projects ?? []).map(project => tagProjectSessionConnection(project, owner))
+    )
+  )
 
   // Merged all-profile IDs cannot identify the owner of a saved open record.
   if (context.profile) {
@@ -1177,6 +1187,34 @@ function projectInfoToTreeNode(project: ProjectInfo): SidebarProjectTree {
   }
 }
 
+function publishCreatedProject(created: ProjectInfo, input: CreateProjectInput) {
+  rememberOpenProject({ id: created.id, path: created.primary_path ?? created.folders?.[0]?.path ?? null })
+
+  if (!$projects.get().some(proj => proj.id === created.id)) {
+    $projects.set([...$projects.get(), created])
+  }
+
+  if (!$projectTree.get().some(node => node.id === created.id)) {
+    $projectTree.set([projectInfoToTreeNode(created), ...$projectTree.get()])
+  }
+
+  if (input.use) {
+    $activeProjectId.set(created.id)
+  }
+
+  // A "New project" DRAG created this: hand the placement to the completion
+  // side so the project's fresh session draft opens exactly where it was
+  // dropped (tab-strip slot / pane edge / pane center). The plain click
+  // path has no placement and keeps its existing behavior.
+  const rootPath = created.primary_path ?? created.folders?.[0]?.path ?? input.primaryPath
+
+  if (input.dropPlacement && rootPath) {
+    $newProjectSessionRequest.set({ path: rootPath, placement: input.dropPlacement })
+  }
+
+  setSidebarAgentsGrouped(true)
+}
+
 export async function createProject(input: CreateProjectInput, ownerProfile?: string): Promise<ProjectInfo | null> {
   if ($projectsRpcAvailable.get() === false) {
     throw projectsStaleBackendError()
@@ -1246,33 +1284,7 @@ export async function createProject(input: CreateProjectInput, ownerProfile?: st
   // that reconcile counts/repos.
   const created = res.project
 
-  if (created) {
-    rememberOpenProject({ id: created.id, path: created.primary_path ?? created.folders?.[0]?.path ?? null })
-
-    if (!$projects.get().some(proj => proj.id === created.id)) {
-      $projects.set([...$projects.get(), created])
-    }
-
-    if (!$projectTree.get().some(node => node.id === created.id)) {
-      $projectTree.set([projectInfoToTreeNode(created), ...$projectTree.get()])
-    }
-
-    if (input.use) {
-      $activeProjectId.set(created.id)
-    }
-
-    // A "New project" DRAG created this: hand the placement to the completion
-    // side so the project's fresh session draft opens exactly where it was
-    // dropped (tab-strip slot / pane edge / pane center). The plain click
-    // path has no placement and keeps its existing behavior.
-    const rootPath = created.primary_path ?? created.folders?.[0]?.path ?? input.primaryPath
-
-    if (input.dropPlacement && rootPath) {
-      $newProjectSessionRequest.set({ path: rootPath, placement: input.dropPlacement })
-    }
-
-    setSidebarAgentsGrouped(true)
-  }
+  if (created) {publishCreatedProject(created, input)}
 
   reconcileProjects()
 

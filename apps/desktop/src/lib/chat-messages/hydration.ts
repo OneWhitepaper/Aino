@@ -316,6 +316,20 @@ function timelineDisplayContent(message: SessionMessage, content: string): strin
   return content
 }
 
+function storedReasoningText(message: SessionMessage) {
+  return message.reasoning || message.reasoning_content || reasoningTextFromDetails(message.reasoning_details)
+}
+
+function liftMessageAttachmentRefs(displayRole: string, rawDisplayContent: string | null) {
+  const imageRefExtraction = displayRole === 'user' && rawDisplayContent ? extractImageRefs(rawDisplayContent) : null
+  const fileRefExtraction = imageRefExtraction ? splitLeadingAttachmentRefs(imageRefExtraction.cleanedText) : null
+  const displayContent = fileRefExtraction ? fileRefExtraction.text : rawDisplayContent
+  const liftedRefs = [...(fileRefExtraction?.refs ?? []), ...(imageRefExtraction?.refs ?? [])]
+  const extractedAttachmentRefs = liftedRefs.length ? liftedRefs : undefined
+
+  return { displayContent, extractedAttachmentRefs }
+}
+
 export function toChatMessages(messages: SessionMessage[]): ChatMessage[] {
   const result: ChatMessage[] = []
   let pendingToolParts: ChatMessagePart[] = []
@@ -484,11 +498,7 @@ export function toChatMessages(messages: SessionMessage[]): ChatMessage[] {
     // optimistic composer already uses) and render them via the dedicated
     // attachments row below the bubble instead. The leading `@file:` block
     // (attached files, large pastes) moves there too, for the same parity.
-    const imageRefExtraction = displayRole === 'user' && rawDisplayContent ? extractImageRefs(rawDisplayContent) : null
-    const fileRefExtraction = imageRefExtraction ? splitLeadingAttachmentRefs(imageRefExtraction.cleanedText) : null
-    const displayContent = fileRefExtraction ? fileRefExtraction.text : rawDisplayContent
-    const liftedRefs = [...(fileRefExtraction?.refs ?? []), ...(imageRefExtraction?.refs ?? [])]
-    const extractedAttachmentRefs = liftedRefs.length ? liftedRefs : undefined
+    const { displayContent, extractedAttachmentRefs } = liftMessageAttachmentRefs(displayRole, rawDisplayContent)
 
     const parts: ChatMessagePart[] = []
     const sourceHasTools = Array.isArray(message.tool_calls) && message.tool_calls.length > 0
@@ -498,8 +508,7 @@ export function toChatMessages(messages: SessionMessage[]): ChatMessage[] {
 
     const commentary = codexText?.commentary ?? []
 
-    const rawReasoning =
-      message.reasoning || message.reasoning_content || reasoningTextFromDetails(message.reasoning_details)
+    const rawReasoning = storedReasoningText(message)
 
     const reasoning = message.display_reasoning !== undefined ? message.display_reasoning : rawReasoning
 

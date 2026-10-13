@@ -375,7 +375,11 @@ export function DesktopOnboardingOverlay({
     return null
   }
 
-  if (platformReady && !onboarding.manual && (onboarding.flow.status === 'idle' || onboarding.flow.status === 'success')) {
+  if (
+    platformReady &&
+    !onboarding.manual &&
+    (onboarding.flow.status === 'idle' || onboarding.flow.status === 'success')
+  ) {
     return null
   }
 
@@ -588,7 +592,9 @@ function Header() {
   return (
     <div className="bg-(--ui-bg-elevated) px-5 pt-5 pb-1">
       <h2 className="text-[length:var(--aino-text-title)] font-semibold tracking-tight">{t.onboarding.headerTitle}</h2>
-      <p className="mt-1 max-w-xl text-[length:var(--aino-text-ui)] leading-5 text-(--ui-text-tertiary)">{t.onboarding.headerDesc}</p>
+      <p className="mt-1 max-w-xl text-[length:var(--aino-text-ui)] leading-5 text-(--ui-text-tertiary)">
+        {t.onboarding.headerDesc}
+      </p>
     </div>
   )
 }
@@ -748,6 +754,35 @@ function ChooseLaterLink() {
 // provider catalog + a setEnvVar-backed save (plus `isSet`/`onClear` so it can
 // double as a manage surface). Keep it free of store/ctx coupling so both
 // surfaces render the identical form.
+interface ApiKeyFormActionsProps {
+  alreadySet: boolean
+  onClear?: (envKey: string) => void
+  envKey: string
+  canSave: boolean
+  saving: boolean
+  submit: () => Promise<void>
+}
+
+function ApiKeyFormActions({ alreadySet, onClear, envKey, canSave, saving, submit }: ApiKeyFormActionsProps) {
+  const { t } = useI18n()
+
+  return (
+    <div className="flex items-center justify-between gap-3">
+      <div>
+        {alreadySet && onClear ? (
+          <Button onClick={() => onClear(envKey)} size="sm" variant="ghost">
+            {t.common.remove}
+          </Button>
+        ) : null}
+      </div>
+      <Button disabled={!canSave || saving} onClick={() => void submit()}>
+        {saving ? <Loader2 className="animate-spin" /> : <KeyRound />}
+        {saving ? t.onboarding.connecting : alreadySet ? t.onboarding.update : t.common.connect}
+      </Button>
+    </div>
+  )
+}
+
 export function ApiKeyForm({
   canGoBack,
   initialEnvKey,
@@ -833,7 +868,9 @@ export function ApiKeyForm({
   // model is still broken from the runtime's POV).
   const canSave = value.trim().length >= 1 && (!isLocal || !showModelInput || modelName.trim().length >= 1)
   const optionCopy = t.onboarding.apiKeyOptions[option.id]
-  const optionDescription = optionCopy?.description ?? option.description ?? t.onboarding.genericApiKeyDescription(option.name)
+
+  const optionDescription =
+    optionCopy?.description ?? option.description ?? t.onboarding.genericApiKeyDescription(option.name)
 
   const submit = async () => {
     if (!canSave || saving) {
@@ -892,7 +929,9 @@ export function ApiKeyForm({
             type="button"
           >
             <div className="flex items-center justify-between gap-2">
-              <span className="text-sm font-medium">{t.onboarding.apiKeyOptions[o.id]?.title ?? o.title ?? o.name}</span>
+              <span className="text-sm font-medium">
+                {t.onboarding.apiKeyOptions[o.id]?.title ?? o.title ?? o.name}
+              </span>
               {isSet?.(o.envKey) ? <Check className="size-3.5 text-muted-foreground" /> : null}
             </div>
             {(t.onboarding.apiKeyOptions[o.id]?.short ?? o.short) ? (
@@ -945,19 +984,14 @@ export function ApiKeyForm({
         {error ? <p className="text-xs text-destructive">{error}</p> : null}
       </div>
 
-      <div className="flex items-center justify-between gap-3">
-        <div>
-          {alreadySet && onClear ? (
-            <Button onClick={() => onClear(option.envKey)} size="sm" variant="ghost">
-              {t.common.remove}
-            </Button>
-          ) : null}
-        </div>
-        <Button disabled={!canSave || saving} onClick={() => void submit()}>
-          {saving ? <Loader2 className="animate-spin" /> : <KeyRound />}
-          {saving ? t.onboarding.connecting : alreadySet ? t.onboarding.update : t.common.connect}
-        </Button>
-      </div>
+      <ApiKeyFormActions
+        alreadySet={alreadySet}
+        canSave={canSave}
+        envKey={option.envKey}
+        onClear={onClear}
+        saving={saving}
+        submit={submit}
+      />
     </div>
   )
 }

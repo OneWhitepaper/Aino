@@ -63,6 +63,30 @@ interface ModelPickerDialogProps {
   includePlatform?: boolean
 }
 
+interface CurrentModelDescriptionProps {
+  optionsModel: string
+  currentModel: string
+  optionsProvider: string
+  currentProvider: string
+}
+
+function CurrentModelDescription({
+  optionsModel,
+  currentModel,
+  optionsProvider,
+  currentProvider
+}: CurrentModelDescriptionProps) {
+  const { t } = useI18n()
+  const copy = t.modelPicker
+
+  return (
+    <DialogDescription className="font-mono text-xs leading-relaxed">
+      {copy.current} {optionsModel || currentModel || copy.unknown}
+      {optionsProvider || currentProvider ? ` · ${optionsProvider || currentProvider}` : ''}
+    </DialogDescription>
+  )
+}
+
 export function ModelPickerDialog({
   open,
   onOpenChange,
@@ -236,10 +260,12 @@ export function ModelPickerDialog({
       >
         <DialogHeader className="border-b border-border px-4 py-3">
           <DialogTitle>{copy.title}</DialogTitle>
-          <DialogDescription className="font-mono text-xs leading-relaxed">
-            {copy.current} {optionsModel || currentModel || copy.unknown}
-            {optionsProvider || currentProvider ? ` · ${optionsProvider || currentProvider}` : ''}
-          </DialogDescription>
+          <CurrentModelDescription
+            currentModel={currentModel}
+            currentProvider={currentProvider}
+            optionsModel={optionsModel}
+            optionsProvider={optionsProvider}
+          />
         </DialogHeader>
 
         {includePlatform && window.hermesDesktop?.platformModels && (

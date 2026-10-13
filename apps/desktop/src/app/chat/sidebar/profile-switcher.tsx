@@ -193,6 +193,63 @@ const stepThroughCells: Modifier = ({ containerNodeRect, draggingNodeRect, trans
 // (gateway, profile); the workspace still lives on one gateway at a time, only
 // the picker spans the fleet. Groups keep registry order regardless of which
 // one is active, so a square never moves under the pointer that clicked it.
+interface ProfileHomePillsProps {
+  fleet: boolean
+  multiProfile: boolean
+  defaultProfile: ProfileInfo | undefined
+  isAll: boolean
+  onDefault: boolean
+  activeConnectionId: string | null
+}
+
+function ProfileHomePills({
+  fleet,
+  multiProfile,
+  defaultProfile,
+  isAll,
+  onDefault,
+  activeConnectionId
+}: ProfileHomePillsProps) {
+  const { t } = useI18n()
+  const p = t.profiles
+
+  return (
+    <>
+      {/* One button toggles default ↔ all: home face when scoped to a profile,
+          layers face when showing everything. Pinned left like Manage is right.
+          Hidden until a second profile exists. */}
+      {!fleet &&
+        multiProfile &&
+        (defaultProfile ? (
+          // On default → toggle to all. Anywhere else (all view or a named
+          // profile) → return to default. So leaving a profile never lands on all.
+          <ProfilePill
+            active={isAll || onDefault}
+            connectionId={activeConnectionId ?? undefined}
+            glyph={isAll ? 'layers' : 'home'}
+            label={onDefault ? p.showAllProfiles : p.switchToProfile(profileLabel(defaultProfile))}
+            onSelect={() => (onDefault ? setShowAllProfiles(true) : selectProfile(defaultProfile.name))}
+            profile={defaultProfile.name}
+          />
+        ) : (
+          <ProfilePill active={isAll} glyph="layers" label={p.allProfiles} onSelect={() => setShowAllProfiles(true)} />
+        ))}
+
+      {/* Single-profile: the active default's home icon next to the create +. */}
+      {!fleet && !multiProfile && defaultProfile && (
+        <ProfilePill
+          active
+          connectionId={activeConnectionId ?? undefined}
+          glyph="home"
+          label={profileLabel(defaultProfile)}
+          onSelect={() => selectProfile(defaultProfile.name)}
+          profile={defaultProfile.name}
+        />
+      )}
+    </>
+  )
+}
+
 export function ProfileRail() {
   const { t, locale } = useI18n()
   const p = t.profiles
@@ -523,37 +580,14 @@ export function ProfileRail() {
         />
       )}
 
-      {/* One button toggles default ↔ all: home face when scoped to a profile,
-          layers face when showing everything. Pinned left like Manage is right.
-          Hidden until a second profile exists. */}
-      {!fleet &&
-        multiProfile &&
-        (defaultProfile ? (
-          // On default → toggle to all. Anywhere else (all view or a named
-          // profile) → return to default. So leaving a profile never lands on all.
-          <ProfilePill
-            active={isAll || onDefault}
-            connectionId={activeConnectionId ?? undefined}
-            glyph={isAll ? 'layers' : 'home'}
-            label={onDefault ? p.showAllProfiles : p.switchToProfile(profileLabel(defaultProfile))}
-            onSelect={() => (onDefault ? setShowAllProfiles(true) : selectProfile(defaultProfile.name))}
-            profile={defaultProfile.name}
-          />
-        ) : (
-          <ProfilePill active={isAll} glyph="layers" label={p.allProfiles} onSelect={() => setShowAllProfiles(true)} />
-        ))}
-
-      {/* Single-profile: the active default's home icon next to the create +. */}
-      {!fleet && !multiProfile && defaultProfile && (
-        <ProfilePill
-          active
-          connectionId={activeConnectionId ?? undefined}
-          glyph="home"
-          label={profileLabel(defaultProfile)}
-          onSelect={() => selectProfile(defaultProfile.name)}
-          profile={defaultProfile.name}
-        />
-      )}
+      <ProfileHomePills
+        activeConnectionId={activeConnectionId}
+        defaultProfile={defaultProfile}
+        fleet={fleet}
+        isAll={isAll}
+        multiProfile={multiProfile}
+        onDefault={onDefault}
+      />
 
       {condensed ? (
         // Condensed path: one compact dropdown instead of N squares. No drag
