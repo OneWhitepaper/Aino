@@ -4395,18 +4395,27 @@ export const frOverrides = {
       failed: 'Échec de la mise à jour du backend.',
       noReturn:
         "Le backend ne s'est pas reconnecté. La mise à jour n'est peut-être pas terminée — vérifiez l'hôte du backend."
+    },
+    desktopBridgeUnavailable: 'La connexion au bureau est indisponible.',
+
+    starting: 'Démarrage de la mise à jour…',
+
+    backendApplied: 'La mise à jour du service a été appliquée.',
+
+    backendNoReturn: 'Le service ne s’est pas reconnecté.',
+
+    changelog: {
+      groups: {
+        new: 'Nouveautés',
+        fixed: 'Corrections',
+        faster: 'Performances',
+        improved: 'Améliorations',
+        other: 'Autres améliorations'
+      },
+      fallbackItem: 'Améliorations et corrections',
+      fallbackLabel: 'Dans cette mise à jour'
     }
-  ,
-"desktopBridgeUnavailable":"La connexion au bureau est indisponible.",
-
-"starting":"Démarrage de la mise à jour…",
-
-"backendApplied":"La mise à jour du service a été appliquée.",
-
-"backendNoReturn":"Le service ne s’est pas reconnecté.",
-
-"changelog":{"groups":{"new":"Nouveautés","fixed":"Corrections","faster":"Performances","improved":"Améliorations","other":"Autres améliorations"},"fallbackItem":"Améliorations et corrections","fallbackLabel":"Dans cette mise à jour"},
-},
+  },
   handoffTour: {
     localTitle: 'Cette machine peut exécuter des modèles en local',
     localText: (model: string) =>
@@ -5555,18 +5564,22 @@ export const frOverrides = {
           pending: 'Modification du fichier en cours',
           pendingAction: 'Modification en cours'
         }
+      },
+      runSummary: {
+        search: { count: (count: number) => count + ' requêtes', past: 'Recherché', present: 'Recherche' },
+        read: { count: (count: number) => count + ' pages', past: 'Lu', present: 'Lecture' },
+
+        browse: { count: (count: number) => count + ' pages', past: 'Ouvert', present: 'Ouverture' },
+
+        interact: {
+          count: (count: number) => count + ' actions du navigateur',
+          past: 'Effectué',
+          present: 'Exécution'
+        },
+
+        analyze: { count: (count: number) => count + ' images', past: 'Analysé', present: 'Analyse' }
       }
-    ,
-"runSummary":{"search":{count: (count: number) => count + " requêtes", past: "Recherché", present: "Recherche"},
-"read":{count: (count: number) => count + " pages", past: "Lu", present: "Lecture"},
-
-"browse":{count: (count: number) => count + " pages", past: "Ouvert", present: "Ouverture"},
-
-"interact":{count: (count: number) => count + " actions du navigateur", past: "Effectué", present: "Exécution"},
-
-"analyze":{count: (count: number) => count + " images", past: "Analysé", present: "Analyse"},
-},
-}
+    }
   },
   prompts: {
     gatewayDisconnected: "La Gateway Hermes n'est pas connectée",

@@ -139,7 +139,15 @@ it('does not use a local filesystem or shell for a chat belonging to another con
     >)
   )
   // A connection switch restores its own tile bucket; reopen this chat on that owner.
-  act(() => $sessionTiles.set([{ storedSessionId: 'tile-chat', runtimeId: 'tile-runtime', ownerRoute: { connectionId: 'remote-b', profile: 'default' } }]))
+  act(() =>
+    $sessionTiles.set([
+      {
+        storedSessionId: 'tile-chat',
+        runtimeId: 'tile-runtime',
+        ownerRoute: { connectionId: 'remote-b', profile: 'default' }
+      }
+    ])
+  )
   // Publish the newly attached runtime's workspace.
   act(() => $sessionStates.set({ 'tile-runtime': { ...createClientSessionState('tile-chat'), cwd: '/project-b' } }))
   const remoteTerminal = createTerminal()!

@@ -281,5 +281,4 @@ describe('terminal reveal keyboard focus', () => {
     expect(document.activeElement).not.toBe(visible)
     expect(isPaneVisible('terminal')).toBe(false)
   })
-
 })

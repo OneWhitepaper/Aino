@@ -106,10 +106,12 @@ function toPayload(
 export function CustomEndpointsSettings({ onConfigSaved, onMainModelChanged }: CustomEndpointsSettingsProps) {
   const { t } = useI18n()
   const c = t.settings.customEndpoints
+
   const apiModeOptions = API_MODE_OPTIONS.map(option => ({
     ...option,
     label: option.id ? option.label : c.autoDetect
   }))
+
   const copyRef = useRef(c)
   copyRef.current = c
   // Shared settings "Applies to" scope: read/write this profile's endpoints,

@@ -26,7 +26,36 @@ import { deferred } from '@/test/deferred'
 import type { ProjectInfo } from '@/types/hermes'
 
 import { $projectScope, ALL_PROJECTS, exitProjectScope } from './project-scope'
-import { $activeProjectId, $openedProjectTree, $projects, $projectsRpcAvailable, $projectTree, $projectTreeLoading, $startWorkSessionRequest, addProjectFolder, addProjectFolders, applyRenamedSessionTitle, closeProject, createProject, deleteProject, enterProject, fetchProjectSessions, followActiveSessionCwd, openFolderAsProject, openProjectCreate, pickProjectFolder, pickProjectFolders, projectIdForCwd, projectNameForCwd, refreshProjects, refreshProjectTree, resolveNewSessionCwd, scanAndRecordRepos, startWorkInRepo, updateProject } from './projects'
+import {
+  $activeProjectId,
+  $openedProjectTree,
+  $projects,
+  $projectsRpcAvailable,
+  $projectTree,
+  $projectTreeLoading,
+  $startWorkSessionRequest,
+  addProjectFolder,
+  addProjectFolders,
+  applyRenamedSessionTitle,
+  closeProject,
+  createProject,
+  deleteProject,
+  enterProject,
+  fetchProjectSessions,
+  followActiveSessionCwd,
+  openFolderAsProject,
+  openProjectCreate,
+  pickProjectFolder,
+  pickProjectFolders,
+  projectIdForCwd,
+  projectNameForCwd,
+  refreshProjects,
+  refreshProjectTree,
+  resolveNewSessionCwd,
+  scanAndRecordRepos,
+  startWorkInRepo,
+  updateProject
+} from './projects'
 import {
   $removedSessionIds,
   $sessionMutationsInFlight,
@@ -90,7 +119,6 @@ const notifications = await import('@/store/notifications')
 const notify = vi.mocked(notifications.notify)
 
 beforeEach(() => $openProjectsByProfile.set({}))
-
 
 describe('project scope', () => {
   beforeEach(() => {

@@ -335,17 +335,17 @@ export const arAssistant = {
           pending: 'جار تحرير الملف',
           pendingAction: 'جار التحرير'
         }
+      },
+      runSummary: {
+        search: { count: (count: number) => count + ' استعلامات', past: 'تم البحث', present: 'جارٍ البحث' },
+        read: { count: (count: number) => count + ' صفحات', past: 'تمت القراءة', present: 'جارٍ القراءة' },
+
+        browse: { count: (count: number) => count + ' صفحات', past: 'تم الفتح', present: 'جارٍ الفتح' },
+
+        interact: { count: (count: number) => count + ' إجراءات متصفح', past: 'تم التنفيذ', present: 'جارٍ التنفيذ' },
+
+        analyze: { count: (count: number) => count + ' صور', past: 'تم التحليل', present: 'جارٍ التحليل' }
       }
-    ,
-"runSummary":{"search":{count: (count: number) => count + " استعلامات", past: "تم البحث", present: "جارٍ البحث"},
-"read":{count: (count: number) => count + " صفحات", past: "تمت القراءة", present: "جارٍ القراءة"},
-
-"browse":{count: (count: number) => count + " صفحات", past: "تم الفتح", present: "جارٍ الفتح"},
-
-"interact":{count: (count: number) => count + " إجراءات متصفح", past: "تم التنفيذ", present: "جارٍ التنفيذ"},
-
-"analyze":{count: (count: number) => count + " صور", past: "تم التحليل", present: "جارٍ التحليل"},
-},
-}
+    }
   }
 } satisfies Pick<TranslationOverrides, 'assistant'>

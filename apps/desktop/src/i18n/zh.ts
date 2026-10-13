@@ -37,10 +37,9 @@ export const zhOverrides = {
     title: '无法打开此链接',
     message: '没有注册用于打开此地址的浏览器。请复制链接并手动打开。',
     copyUrl: '复制链接',
-    close: '关闭'
-  ,
-"missing":{"title":"文件不存在","message":"此文件不存在，可能已被删除、移动，或位于另一台设备。"},
-},
+    close: '关闭',
+    missing: { title: '文件不存在', message: '此文件不存在，可能已被删除、移动，或位于另一台设备。' }
+  },
   sharedMetrics: zhSharedMetrics,
   intro: introZh,
   connectors: zhConnectorCard,
@@ -227,22 +226,24 @@ export const zhOverrides = {
       diskFull: '磁盘空间已满，Aino 无法启动。',
       portInUse: 'Aino 需要的网络端口正被其他程序占用。',
       installMissing: 'Aino 安装文件不完整，请选择“修复安装”。'
+    },
+    updateHold: {
+      description: 'Hermes 正在等待更新结束，避免加载仍在修改的文件。等待解除后会自动启动。',
+      heldUnknown: '更新程序已退出，但其启动的进程仍占用 Hermes 安装目录。',
+
+      unverified: '更新助手暂时无法确认哪个进程占用了安装目录，Hermes 会继续检查。',
+
+      recoveryHint:
+        '通常等待几分钟即可恢复。如果仍未恢复，请退出 Hermes，结束残留的 git 或 hermes 进程（或重启电脑），然后重新打开。',
+
+      confirmTitle: '更新仍占用安装目录，是否继续启动 Hermes？',
+
+      confirmBody:
+        '残留的更新进程可能仍在修改文件。现在启动可能加载尚未完成更新的安装内容，导致应用无法工作，直到重新更新。Hermes 会记录此选择，并保留更新标记。',
+
+      startAnywayRefused: '启动前安装目录的占用状态发生了变化，请核对后重试。'
     }
-  ,
-"updateHold":{"description":"Hermes 正在等待更新结束，避免加载仍在修改的文件。等待解除后会自动启动。",
-"heldUnknown":"更新程序已退出，但其启动的进程仍占用 Hermes 安装目录。",
-
-"unverified":"更新助手暂时无法确认哪个进程占用了安装目录，Hermes 会继续检查。",
-
-"recoveryHint":"通常等待几分钟即可恢复。如果仍未恢复，请退出 Hermes，结束残留的 git 或 hermes 进程（或重启电脑），然后重新打开。",
-
-"confirmTitle":"更新仍占用安装目录，是否继续启动 Hermes？",
-
-"confirmBody":"残留的更新进程可能仍在修改文件。现在启动可能加载尚未完成更新的安装内容，导致应用无法工作，直到重新更新。Hermes 会记录此选择，并保留更新标记。",
-
-"startAnywayRefused":"启动前安装目录的占用状态发生了变化，请核对后重试。",
-},
-},
+  },
 
   notifications: {
     sharedProfileWarning:
@@ -1048,10 +1049,9 @@ export const zhOverrides = {
         ember: { label: '余烬', description: '温暖的深红与青铜色——锻造氛围' },
         mono: { label: '单色', description: '简洁的灰度界面——极简且专注' },
         slate: { label: '石板', description: '冷调石板蓝——专注开发者主题' },
-        cyberpunk: { label: '赛博朋克', description: '黑底霓虹绿——矩阵终端风格' }
-      ,
-"classic":{"label":"经典","description":"经典终端风格配色"},
-},
+        cyberpunk: { label: '赛博朋克', description: '黑底霓虹绿——矩阵终端风格' },
+        classic: { label: '经典', description: '经典终端风格配色' }
+      },
 
       themeImportErrors: {
         invalidJson: '主题文件不是有效的 JSON。',
@@ -1322,10 +1322,9 @@ export const zhOverrides = {
         echoTranscripts: '将语音消息的原始 🎙️ 转写文本发回聊天。',
         elevenlabs: {
           languageCode: '可选的 ISO-639-3 语言代码。留空让 ElevenLabs 自动检测。'
-        }
-      ,
-"streaming":"说话时实时显示转写文字（支持 OpenAI、xAI、ElevenLabs）；发生错误时回退到录音转写。",
-},
+        },
+        streaming: '说话时实时显示转写文字（支持 OpenAI、xAI、ElevenLabs）；发生错误时回退到录音转写。'
+      },
       tts: {
         xai: {
           voiceId: 'xAI 语音 ID（例如 eve）或自定义语音 ID。',
@@ -1372,10 +1371,9 @@ export const zhOverrides = {
           description: '移除应用、智能体和所有用户数据——配置、聊天记录、定时任务、密钥和日志。',
           consequence: '全部内容——聊天图形界面、Hermes 智能体以及你的所有配置、聊天记录、密钥和日志'
         }
-      }
-    ,
-"managedBody":"此安装由系统管理，Hermes 无法自行移除。",
-},
+      },
+      managedBody: '此安装由系统管理，Hermes 无法自行移除。'
+    },
     poolLimits: {
       warmBotBackendsAria: '预热机器人后端',
       warmBotBackendsTitle: '预热机器人后端',
@@ -4094,7 +4092,8 @@ export const zhOverrides = {
 
   handoffTour: {
     localTitle: '此电脑支持运行本地模型',
-    localText: (model: string) => model + ' 适合你的硬件。它可免费运行，对话内容不会离开电脑。你随时可以在这里的模型菜单中选择它。',
+    localText: (model: string) =>
+      model + ' 适合你的硬件。它可免费运行，对话内容不会离开电脑。你随时可以在这里的模型菜单中选择它。',
     profileTitle: '第一个任务在默认配置中运行',
     profileText: '在此切换配置。当前亮起的是默认配置，任务会话保存在其中。另一个是初始设置配置，欢迎会话保存在那里。',
     sessionsTitle: '每个配置独立保存自己的会话',
@@ -5674,10 +5673,9 @@ export const zhOverrides = {
 
         free_tier_outage: { title: '免费模型暂时不可用', body: '请稍后重新发送消息。' },
 
-        free_tier_refused: { title: '此请求需要登录', body: '请登录免费的 Nous 账户。' }
-      ,
-"no_reply":{"body":"Hermes 结束了本轮但未给出回复，请重试。"},
-},
+        free_tier_refused: { title: '此请求需要登录', body: '请登录免费的 Nous 账户。' },
+        no_reply: { body: 'Hermes 结束了本轮但未给出回复，请重试。' }
+      },
       errorLayers: {
         auth: '认证错误',
         billing: '额度不足',
@@ -5876,12 +5874,9 @@ export const zhOverrides = {
       securityHeading: '安全',
       scan: { passed: '扫描通过', warnings: '扫描发现警告', failed: '扫描未通过' },
       requirementsLabel: '要求',
-      credentialsHeading: '凭据'
-    ,
-"phase":{"python_packages":"正在安装 Python 依赖包…",
-"loading_tools":"正在加载工具…",
-},
-},
+      credentialsHeading: '凭据',
+      phase: { python_packages: '正在安装 Python 依赖包…', loading_tools: '正在加载工具…' }
+    },
     mcpSetup: {
       installTitle: '添加 MCP 服务器',
       enableTitle: '启用 MCP 服务器',
@@ -6096,18 +6091,17 @@ export const zhOverrides = {
           count: count => `${count} 个命令`,
           past: '已运行',
           present: '正在运行'
-        }
-      ,
-"search":{count: (count: number) => count + " 次查询", past: "已搜索", present: "正在搜索"},
+        },
+        search: { count: (count: number) => count + ' 次查询', past: '已搜索', present: '正在搜索' },
 
-"read":{count: (count: number) => count + " 个网页", past: "已读取", present: "正在读取"},
+        read: { count: (count: number) => count + ' 个网页', past: '已读取', present: '正在读取' },
 
-"browse":{count: (count: number) => count + " 个网页", past: "已打开", present: "正在打开"},
+        browse: { count: (count: number) => count + ' 个网页', past: '已打开', present: '正在打开' },
 
-"interact":{count: (count: number) => count + " 次浏览器操作", past: "已执行", present: "正在执行"},
+        interact: { count: (count: number) => count + ' 次浏览器操作', past: '已执行', present: '正在执行' },
 
-"analyze":{count: (count: number) => count + " 张图片", past: "已分析", present: "正在分析"},
-}
+        analyze: { count: (count: number) => count + ' 张图片', past: '已分析', present: '正在分析' }
+      }
     },
     markdown: {
       alerts: {
@@ -6839,18 +6833,18 @@ export const zhOverrides = {
       hintDestructive: { label: '破坏性', long: '无法在此处撤销该更改。' },
       hintIdempotent: { label: '可重复', long: '重复运行与运行一次的效果相同。' },
       hintOpenWorld: { label: '外部', long: '会访问此应用之外的内容。' }
+    },
+    accounts: {
+      aliasHint: '使用小写字母、数字和连字符，最多 32 个字符，例如 work 或 home。',
+      aliasInvalid: '请使用小写字母、数字和连字符，并以字母或数字开头。',
+
+      aliasTaken: '此名称已被使用。',
+
+      renameGone: '此账户已不存在，可能已被移除或在重新连接后被替换。',
+
+      removeBody: 'Hermes 将停止使用此账户，其他账户仍保持连接。'
     }
-  ,
-"accounts":{"aliasHint":"使用小写字母、数字和连字符，最多 32 个字符，例如 work 或 home。",
-"aliasInvalid":"请使用小写字母、数字和连字符，并以字母或数字开头。",
-
-"aliasTaken":"此名称已被使用。",
-
-"renameGone":"此账户已不存在，可能已被移除或在重新连接后被替换。",
-
-"removeBody":"Hermes 将停止使用此账户，其他账户仍保持连接。",
-},
-},
+  },
 
   platformRechargeErrors: {
     conflict: '较早的请求已创建订单。请关闭此窗口，在订单历史中打开原订单，不要重复付款。',
@@ -7080,9 +7074,17 @@ export const zhOverrides = {
 
   billing: zhBilling,
 
-  summary: zhSummary
-,
-"appTour":{"sessions":{"title":"你的会话","text":"所有对话都在这里，可以搜索、置顶或重新打开。"},"composer":{"title":"在这里提问","text":"描述你想完成的任务，输入 @ 可以引用文件。"},"newSession":{"title":"开始新对话","text":"新会话拥有独立的上下文，建议每项任务使用一个会话。"},"model":{"title":"选择模型","text":"选择由哪个模型回答你的问题。"},"modelLocal":"此电脑支持运行本地模型，可在“设置 → 供应商 → 本地模型”中配置。","capabilities":{"title":"能力","text":"管理 Hermes 可用的技能、工具和插件，也可以在这里添加更多。"},"messaging":{"title":"消息平台","text":"通过 Telegram、Slack、Discord 等平台使用 Hermes。"},"rightPane":{"title":"工作面板","text":"在右侧打开文件、终端、代码审查和内置浏览器。"}},
+  summary: zhSummary,
+  appTour: {
+    sessions: { title: '你的会话', text: '所有对话都在这里，可以搜索、置顶或重新打开。' },
+    composer: { title: '在这里提问', text: '描述你想完成的任务，输入 @ 可以引用文件。' },
+    newSession: { title: '开始新对话', text: '新会话拥有独立的上下文，建议每项任务使用一个会话。' },
+    model: { title: '选择模型', text: '选择由哪个模型回答你的问题。' },
+    modelLocal: '此电脑支持运行本地模型，可在“设置 → 供应商 → 本地模型”中配置。',
+    capabilities: { title: '能力', text: '管理 Hermes 可用的技能、工具和插件，也可以在这里添加更多。' },
+    messaging: { title: '消息平台', text: '通过 Telegram、Slack、Discord 等平台使用 Hermes。' },
+    rightPane: { title: '工作面板', text: '在右侧打开文件、终端、代码审查和内置浏览器。' }
+  }
 } satisfies TranslationOverrides
 
 export const zh = defineLocale(zhOverrides)

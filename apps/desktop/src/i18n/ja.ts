@@ -4147,18 +4147,17 @@ export const jaOverrides = {
           count: count => `${count} 件のコマンド`,
           past: '実行完了',
           present: '実行中'
-        }
-      ,
-"search":{count: (count: number) => count + " 件の検索", past: "検索済み", present: "検索中"},
+        },
+        search: { count: (count: number) => count + ' 件の検索', past: '検索済み', present: '検索中' },
 
-"read":{count: (count: number) => count + " ページ", past: "読取済み", present: "読取中"},
+        read: { count: (count: number) => count + ' ページ', past: '読取済み', present: '読取中' },
 
-"browse":{count: (count: number) => count + " ページ", past: "表示済み", present: "表示中"},
+        browse: { count: (count: number) => count + ' ページ', past: '表示済み', present: '表示中' },
 
-"interact":{count: (count: number) => count + " 件のブラウザー操作", past: "実行済み", present: "実行中"},
+        interact: { count: (count: number) => count + ' 件のブラウザー操作', past: '実行済み', present: '実行中' },
 
-"analyze":{count: (count: number) => count + " 枚の画像", past: "解析済み", present: "解析中"},
-}
+        analyze: { count: (count: number) => count + ' 枚の画像', past: '解析済み', present: '解析中' }
+      }
     }
   },
 

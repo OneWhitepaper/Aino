@@ -42,7 +42,9 @@ const fixture = vi.hoisted(() => ({
   activeRef: { current: 'rt-foreground' }
 }))
 
-vi.mock('@/app/account/account-gate', () => ({ AccountGate: ({ children }: { children: React.ReactNode }) => children }))
+vi.mock('@/app/account/account-gate', () => ({
+  AccountGate: ({ children }: { children: React.ReactNode }) => children
+}))
 vi.mock('@/store/gateway', async importActual => ({
   ...(await importActual<Record<string, unknown>>()),
   activeGatewayConnectionId: () => 'local',

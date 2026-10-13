@@ -35,6 +35,7 @@ export function localizedBlueprintField(
   const label = fieldCopy?.label ?? t.cron.blueprints.fieldLabels?.[field.name] ?? field.label
   const help = fieldCopy?.help ?? t.cron.blueprints.fieldDescriptions?.[field.name] ?? field.help
   const displayDefault = fieldCopy?.displayDefault
+
   const optionLabels = Object.fromEntries(
     field.options.map(option => [
       option,

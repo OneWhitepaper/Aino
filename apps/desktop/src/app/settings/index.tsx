@@ -56,7 +56,13 @@ import { KeybindSettings } from './keybind-settings'
 import { KEYS_VIEWS, KeysSettings, type KeysView } from './keys-settings'
 import { movedSettingsTabRedirect } from './moved-tabs'
 import { NotificationsSettings } from './notifications-settings'
-import { PAGE_SCOPED_PARAMS, PLUGINS_NAV_ICON, pluginSettingsNavChildren, PluginSettingsPane, usePluginSettingsRoute } from './plugin-settings'
+import {
+  PAGE_SCOPED_PARAMS,
+  PLUGINS_NAV_ICON,
+  pluginSettingsNavChildren,
+  PluginSettingsPane,
+  usePluginSettingsRoute
+} from './plugin-settings'
 import { PROVIDER_VIEWS, ProvidersSettings, type ProviderView } from './providers-settings'
 import { SessionsSettings } from './sessions-settings'
 import { SystemResourcesSettings } from './system-resources-settings'
@@ -508,7 +514,13 @@ export function SettingsView({
 
   const activeSettingsContent =
     activeView === 'plugins' ? (
-      <PluginSettingsPane entries={plugins.entries} missing={plugins.missing} onOpen={plugins.open} pending={plugins.pending} target={plugins.target} />
+      <PluginSettingsPane
+        entries={plugins.entries}
+        missing={plugins.missing}
+        onOpen={plugins.open}
+        pending={plugins.pending}
+        target={plugins.target}
+      />
     ) : activeView === 'account' ? (
       <AccountSettings />
     ) : activeView === 'config:appearance' ? (

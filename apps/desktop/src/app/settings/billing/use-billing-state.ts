@@ -415,9 +415,7 @@ function plansCapable(
 function creditsPerMonthDisplay(monthlyCredits: null | string, copy: BillingCopy): string | undefined {
   const credits = Number((monthlyCredits ?? '').replace(/,/g, ''))
 
-  return Number.isFinite(credits) && credits > 0
-    ? copy.usage.creditsPerMonth(formatMoney(credits))
-    : undefined
+  return Number.isFinite(credits) && credits > 0 ? copy.usage.creditsPerMonth(formatMoney(credits)) : undefined
 }
 
 /**

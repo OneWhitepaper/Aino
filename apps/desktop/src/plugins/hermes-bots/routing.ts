@@ -96,11 +96,7 @@ export function botWorkspaceOwnerKey(bot: RosterRow) {
   return `bot:${route ? botRouteKey(route) : String(bot?.name || 'default')}`
 }
 
-export function setBotsWorkspaceOwner(
-  ownerKey: string,
-  bot: null | RosterRow = null,
-  blockedMessage?: string
-) {
+export function setBotsWorkspaceOwner(ownerKey: string, bot: null | RosterRow = null, blockedMessage?: string) {
   // Render-reachable (sidebar listener fires on visibility flips). An
   // orphaned row degrades to the blocked target instead of throwing.
   const route = bot ? resolveBotConnectionRoute(bot).route : null
@@ -111,9 +107,9 @@ export function setBotsWorkspaceOwner(
         route
       }
     : {
-      kind: 'blocked',
-      message: blockedMessage ?? translateNow('desktop.botMode.selectBotOrGroup')
-    }
+        kind: 'blocked',
+        message: blockedMessage ?? translateNow('desktop.botMode.selectBotOrGroup')
+      }
 
   host.setWorkspaceScope?.('bots', ownerKey, target)
 }

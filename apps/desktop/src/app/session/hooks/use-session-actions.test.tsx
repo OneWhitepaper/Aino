@@ -25,11 +25,7 @@ import {
 import { I18nProvider, setRuntimeI18nLocale } from '@/i18n'
 import { createClientSessionState } from '@/lib/chat-runtime'
 import { $clarifyRequests, clearClarifyRequest, setClarifyRequest } from '@/store/clarify'
-import {
-  clearSessionDraft,
-  stashSessionDraft,
-  takeSessionDraft
-} from '@/store/composer'
+import { clearSessionDraft, stashSessionDraft, takeSessionDraft } from '@/store/composer'
 import { $backgroundStatusBySession, type ComposerStatusItem } from '@/store/composer-status'
 import { activeGatewayConnectionId, requestGatewayForAgent, requestGatewayForProfile } from '@/store/gateway'
 import { $goalsBySession, type SessionGoal } from '@/store/goals'
@@ -113,9 +109,7 @@ import { useSessionActions } from './use-session-actions'
 import { createWith } from './use-session-actions-create-harness'
 import { Harness, type HarnessHandle, storedSession } from './use-session-actions-harness'
 import { clientState, ResumeHarness } from './use-session-actions-resume-harness'
-import {
-  createPersistedDisplayTranscriptProvenance
-} from './use-session-actions/transcript-provenance'
+import { createPersistedDisplayTranscriptProvenance } from './use-session-actions/transcript-provenance'
 import { useSessionStateCache } from './use-session-state-cache'
 
 vi.mock('@/hermes', async importOriginal => ({

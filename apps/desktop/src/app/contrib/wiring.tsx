@@ -1324,7 +1324,13 @@ export function ContribWiring({ children }: { children: ReactNode }) {
           />
         )}
         {!isAuxiliaryWindow() && <FreeTierSignInDialog onSelectModel={selectModel} />}
-        {!isAuxiliaryWindow() && <SharedMetricsConsentDialog enabled={gatewayState === 'open'} profile={activeGatewayProfile} requestGateway={requestGateway} />}
+        {!isAuxiliaryWindow() && (
+          <SharedMetricsConsentDialog
+            enabled={gatewayState === 'open'}
+            profile={activeGatewayProfile}
+            requestGateway={requestGateway}
+          />
+        )}
         {!isAuxiliaryWindow() && (
           <DesktopOnboardingOverlay
             enabled={gatewayState === 'open'}
@@ -1421,9 +1427,9 @@ export function ContribWiring({ children }: { children: ReactNode }) {
         {/* Petdex floating mascot — renders nothing unless installed + enabled.
       {/* Fallback modal when opening an external URL fails — carries the URL
           so a dead system-browser click is never silent. */}
-      <ExternalOpenFailedDialog />
+        <ExternalOpenFailedDialog />
 
-      {/* Petdex floating mascot — renders nothing unless installed + enabled.
+        {/* Petdex floating mascot — renders nothing unless installed + enabled.
           Never in the HUD: that window is the chat bar and nothing else. */}
         {!isHudWindow() && !isBrowserWindow() && <FloatingPet />}
 

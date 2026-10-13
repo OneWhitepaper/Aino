@@ -767,7 +767,10 @@ export function CreateAgentDialog({ open, onClose, onConfigureModel, roster }: C
                     ensureCaps()
                   }
                 }}
-                options={creationTabs(b, Boolean(CapabilitiesView && (!remoteTarget || capabilitiesViewRoutesConnections)))}
+                options={creationTabs(
+                  b,
+                  Boolean(CapabilitiesView && (!remoteTarget || capabilitiesViewRoutesConnections))
+                )}
                 value={advTab}
               />
               {advTab === 'general' ? (

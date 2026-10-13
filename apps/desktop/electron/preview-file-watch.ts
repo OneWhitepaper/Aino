@@ -106,7 +106,9 @@ export async function watchPreviewFile(owner, rawUrl) {
 
   const emit = () => {
     try {
-      if (!fs.statSync(filePath).isFile()) {return}
+      if (!fs.statSync(filePath).isFile()) {
+        return
+      }
     } catch {
       return
     }

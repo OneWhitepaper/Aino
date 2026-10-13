@@ -143,6 +143,7 @@ it('retires cached billing data on logout while unmounted and rejects a changed 
     user_id: '17',
     generation
   }))
+
   window.hermesDesktop = {
     platformAccount: account,
     platformBilling: { summary, scope }

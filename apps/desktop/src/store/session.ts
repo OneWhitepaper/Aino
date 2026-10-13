@@ -1720,7 +1720,7 @@ export const setCurrentModel = (next: Updater<string>) => {
 
   if ($currentModel.get().trim()) {
     $modelDefaultUnavailable.set(false)
-    }
+  }
 
   if ($currentModel.get() !== previous) {
     // The wire level belongs to one (provider, model, effort) triple, and a

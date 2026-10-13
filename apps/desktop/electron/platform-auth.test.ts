@@ -132,7 +132,9 @@ async function createPlatformAuthTestRig(options: { delaySave?: boolean } = {}) 
 describe('platform auth ownership', () => {
   it('keeps account revisions stable when authenticated resources fail without changing authentication', async () => {
     const origin = await servePlatform(async ({ path }) => {
-      if (path === '/api/v1/user/profile') { return okProfile(17, 'owner') }
+      if (path === '/api/v1/user/profile') {
+        return okProfile(17, 'owner')
+      }
 
       return errorEnvelope(404, 'NOT_FOUND')
     })
@@ -160,9 +162,13 @@ describe('platform auth ownership', () => {
     const response = deferred<unknown>()
 
     const origin = await servePlatform(async ({ path }) => {
-      if (path === '/api/v1/user/profile') { return okProfile(17, 'owner') }
+      if (path === '/api/v1/user/profile') {
+        return okProfile(17, 'owner')
+      }
 
-      if (path === '/api/v1/auth/logout') { return ok({ success: true }) }
+      if (path === '/api/v1/auth/logout') {
+        return ok({ success: true })
+      }
 
       if (path === '/api/v1/desktop/billing-summary') {
         started.resolve()
@@ -181,8 +187,15 @@ describe('platform auth ownership', () => {
     const rejected = expect(pending).rejects.toMatchObject({ code: 'auth_attempt_superseded' })
     await started.promise
     await auth.logout()
-    response.resolve({ currency: 'USD', balance: '1.00000000', available_balance: '1.00000000', frozen_balance: '0',
-      payment_enabled: false, active_subscriptions: [], updated_at: '2026-09-16T00:00:00Z' })
+    response.resolve({
+      currency: 'USD',
+      balance: '1.00000000',
+      available_balance: '1.00000000',
+      frozen_balance: '0',
+      payment_enabled: false,
+      active_subscriptions: [],
+      updated_at: '2026-09-16T00:00:00Z'
+    })
     await rejected
     expect(() => auth.billingScope('17')).toThrow()
   })
@@ -193,9 +206,13 @@ describe('platform auth ownership', () => {
     let usageRequests = 0
 
     const origin = await servePlatform(async ({ path }) => {
-      if (path === '/api/v1/user/profile') { return okProfile(17, 'owner') }
+      if (path === '/api/v1/user/profile') {
+        return okProfile(17, 'owner')
+      }
 
-      if (path === '/api/v1/auth/logout') { return ok({ success: true }) }
+      if (path === '/api/v1/auth/logout') {
+        return ok({ success: true })
+      }
 
       if (path.startsWith('/api/v1/usage?')) {
         usageRequests += 1
@@ -356,9 +373,13 @@ describe('platform auth ownership', () => {
     let updateAuth = ''
 
     const origin = await servePlatform(async ({ path, authorization, body }) => {
-      if (path === '/api/v1/user/profile') {return okProfile(1, 'old')}
+      if (path === '/api/v1/user/profile') {
+        return okProfile(1, 'old')
+      }
 
-      if (path === '/api/v1/auth/login') {return errorEnvelope(401, 'INVALID_CREDENTIALS')}
+      if (path === '/api/v1/auth/login') {
+        return errorEnvelope(401, 'INVALID_CREDENTIALS')
+      }
 
       if (path === '/api/v1/user') {
         updateAuth = authorization
@@ -387,7 +408,9 @@ describe('platform auth ownership', () => {
     let logoutCalls = 0
 
     const origin = await servePlatform(async ({ path }) => {
-      if (path === '/api/v1/user/profile') {return okProfile(1, 'old')}
+      if (path === '/api/v1/user/profile') {
+        return okProfile(1, 'old')
+      }
 
       if (path === '/api/v1/auth/logout') {
         logoutCalls += 1
@@ -412,7 +435,11 @@ describe('platform auth ownership', () => {
     await first.initialize()
     await expect(first.logout()).rejects.toMatchObject({ code: 'secure_store_write_failed' })
     expect(logoutCalls).toBe(1)
-    expect(first.snapshot()).toMatchObject({ phase: 'signed_in', account: { id: '1' }, error: { code: 'secure_store_write_failed' } })
+    expect(first.snapshot()).toMatchObject({
+      phase: 'signed_in',
+      account: { id: '1' },
+      error: { code: 'secure_store_write_failed' }
+    })
 
     const restarted = createAuth(origin, stored, store)
     await restarted.initialize()
@@ -421,9 +448,13 @@ describe('platform auth ownership', () => {
 
   it('surfaces unconfirmed remote revocation after durable local logout', async () => {
     const origin = await servePlatform(async ({ path }) => {
-      if (path === '/api/v1/user/profile') {return okProfile(1, 'old')}
+      if (path === '/api/v1/user/profile') {
+        return okProfile(1, 'old')
+      }
 
-      if (path === '/api/v1/auth/logout') {return errorEnvelope(503, 'REVOCATION_UNAVAILABLE')}
+      if (path === '/api/v1/auth/logout') {
+        return errorEnvelope(503, 'REVOCATION_UNAVAILABLE')
+      }
       throw new Error(`unexpected ${path}`)
     })
 
@@ -438,9 +469,13 @@ describe('platform auth ownership', () => {
 
   it('isolates subscriber failures from a successful authentication transition', async () => {
     const origin = await servePlatform(async ({ path }) => {
-      if (path === '/api/v1/auth/login') {return okTokens('new')}
+      if (path === '/api/v1/auth/login') {
+        return okTokens('new')
+      }
 
-      if (path === '/api/v1/user/profile') {return okProfile(2, 'new')}
+      if (path === '/api/v1/user/profile') {
+        return okProfile(2, 'new')
+      }
       throw new Error(`unexpected ${path}`)
     })
 
@@ -461,7 +496,9 @@ describe('platform auth ownership', () => {
     let newUpdateCalls = 0
 
     const origin = await servePlatform(async ({ path, authorization, body }) => {
-      if (path === '/api/v1/user/profile') {return okProfile(1, 'old')}
+      if (path === '/api/v1/user/profile') {
+        return okProfile(1, 'old')
+      }
 
       if (path === '/api/v1/user') {
         if (authorization === 'Bearer old-access') {
@@ -487,10 +524,7 @@ describe('platform auth ownership', () => {
     const auth = createAuth(origin, rememberedTokens('old'))
     await auth.initialize()
 
-    await Promise.all([
-      auth.updateProfile({ display_name: 'first' }),
-      auth.updateProfile({ display_name: 'second' })
-    ])
+    await Promise.all([auth.updateProfile({ display_name: 'first' }), auth.updateProfile({ display_name: 'second' })])
     expect(oldUpdateCalls).toBe(2)
     expect(refreshCalls).toBe(1)
     expect(newUpdateCalls).toBe(2)
@@ -501,12 +535,16 @@ describe('platform auth ownership', () => {
     let refreshCalls = 0
 
     const origin = await servePlatform(async ({ path, authorization }) => {
-      if (path === '/api/v1/user/profile') {return okProfile(1, 'old')}
+      if (path === '/api/v1/user/profile') {
+        return okProfile(1, 'old')
+      }
 
       if (path === '/api/v1/user/account-bindings/phone/send-code') {
         bindingCalls += 1
 
-        if (authorization === 'Bearer old-access') {return errorEnvelope(401, 'TOKEN_EXPIRED')}
+        if (authorization === 'Bearer old-access') {
+          return errorEnvelope(401, 'TOKEN_EXPIRED')
+        }
 
         return ok({ challenge_id: 'challenge', expires_in: 300, retry_after: 60, delivery: 'submitted' })
       }
@@ -540,7 +578,9 @@ describe('platform auth ownership', () => {
     let profile = 'old'
 
     const origin = await servePlatform(async ({ path }) => {
-      if (path === '/api/v1/user/profile') {return okProfile(profile === 'old' ? 1 : 2, profile)}
+      if (path === '/api/v1/user/profile') {
+        return okProfile(profile === 'old' ? 1 : 2, profile)
+      }
 
       if (path === '/api/v1/auth/logout') {
         logoutStarted.resolve()
@@ -593,7 +633,9 @@ describe('platform auth ownership', () => {
     let updateCalls = 0
 
     const origin = await servePlatform(async ({ path }) => {
-      if (path === '/api/v1/user/profile') {return okProfile(1, 'old')}
+      if (path === '/api/v1/user/profile') {
+        return okProfile(1, 'old')
+      }
 
       if (path === '/api/v1/auth/logout') {
         logoutStarted.resolve()
@@ -635,7 +677,9 @@ describe('platform auth ownership', () => {
     let updateCalls = 0
 
     const origin = await servePlatform(async ({ path }) => {
-      if (path === '/api/v1/user/profile') {return okProfile(1, 'old')}
+      if (path === '/api/v1/user/profile') {
+        return okProfile(1, 'old')
+      }
 
       if (path === '/api/v1/auth/logout') {
         const response = logoutResponses[logoutCalls]
@@ -678,7 +722,9 @@ describe('platform auth ownership', () => {
     let updateCalls = 0
 
     const origin = await servePlatform(async ({ path }) => {
-      if (path === '/api/v1/user/profile') {return okProfile(1, 'old')}
+      if (path === '/api/v1/user/profile') {
+        return okProfile(1, 'old')
+      }
 
       if (path === '/api/v1/auth/logout') {
         logoutStarted.resolve()
@@ -686,7 +732,9 @@ describe('platform auth ownership', () => {
         return logoutResponse.promise
       }
 
-      if (path === '/api/v1/auth/login') {return errorEnvelope(401, 'INVALID_CREDENTIALS')}
+      if (path === '/api/v1/auth/login') {
+        return errorEnvelope(401, 'INVALID_CREDENTIALS')
+      }
 
       if (path === '/api/v1/user') {
         updateCalls += 1
@@ -733,7 +781,9 @@ describe('platform auth ownership', () => {
     let updateCalls = 0
 
     const origin = await servePlatform(async ({ path }) => {
-      if (path === '/api/v1/user/profile') {return okProfile(1, 'old')}
+      if (path === '/api/v1/user/profile') {
+        return okProfile(1, 'old')
+      }
 
       if (path === '/api/v1/auth/logout') {
         logoutStarted.resolve()
@@ -801,7 +851,9 @@ describe('platform auth ownership', () => {
     let profile = 'old'
 
     const origin = await servePlatform(async ({ path, body }) => {
-      if (path === '/api/v1/user/profile') {return okProfile(profile === 'old' ? 1 : 2, profile)}
+      if (path === '/api/v1/user/profile') {
+        return okProfile(profile === 'old' ? 1 : 2, profile)
+      }
 
       if (path === '/api/v1/auth/logout') {
         logoutStarted.resolve()
@@ -818,7 +870,9 @@ describe('platform auth ownership', () => {
       if (path === '/api/v1/auth/login/2fa') {
         expect(body.temp_token).toBe('replacement-temp')
 
-        if (body.totp_code === '000000') {return errorEnvelope(401, 'INVALID_TOTP_CODE')}
+        if (body.totp_code === '000000') {
+          return errorEnvelope(401, 'INVALID_TOTP_CODE')
+        }
         profile = 'new'
 
         return okTokens('new')
@@ -870,7 +924,9 @@ describe('platform auth ownership', () => {
     let refreshCalls = 0
 
     const origin = await servePlatform(async ({ path, authorization, body }) => {
-      if (path === '/api/v1/user/profile') {return okProfile(1, 'old')}
+      if (path === '/api/v1/user/profile') {
+        return okProfile(1, 'old')
+      }
 
       if (path === '/api/v1/user') {
         if (authorization === 'Bearer old-access') {
@@ -920,7 +976,9 @@ describe('platform auth ownership', () => {
       if (path === '/api/v1/user/profile') {
         profileCalls += 1
 
-        if (profileCalls === 2) {return errorEnvelope(503, 'PROFILE_UNAVAILABLE')}
+        if (profileCalls === 2) {
+          return errorEnvelope(503, 'PROFILE_UNAVAILABLE')
+        }
 
         expect(authorization).toBe(profileCalls === 1 ? 'Bearer old-access' : 'Bearer new-access')
 
@@ -966,7 +1024,9 @@ describe('platform auth ownership', () => {
         return available ? okProfile(1, 'old') : errorEnvelope(503, 'OFFLINE')
       }
 
-      if (path === '/api/v1/auth/refresh') {return okTokens('new')}
+      if (path === '/api/v1/auth/refresh') {
+        return okTokens('new')
+      }
       throw new Error(`unexpected ${path}`)
     })
 
@@ -1032,7 +1092,9 @@ async function servePlatform(
   const server = http.createServer(async (req, res) => {
     const chunks: Buffer[] = []
 
-    for await (const chunk of req) {chunks.push(Buffer.from(chunk))}
+    for await (const chunk of req) {
+      chunks.push(Buffer.from(chunk))
+    }
     const body = chunks.length > 0 ? JSON.parse(Buffer.concat(chunks).toString()) : {}
 
     const result = await handler({

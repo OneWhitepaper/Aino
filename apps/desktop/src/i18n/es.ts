@@ -4379,18 +4379,27 @@ export const esOverrides = {
       failed: 'Falló la actualización del backend.',
       noReturn:
         'El backend no volvió a estar disponible. Puede que la actualización no se haya completado; revisa el host del backend.'
+    },
+    desktopBridgeUnavailable: 'La conexión con el escritorio no está disponible.',
+
+    starting: 'Iniciando actualización…',
+
+    backendApplied: 'Actualización del servicio aplicada.',
+
+    backendNoReturn: 'El servicio no volvió a conectarse.',
+
+    changelog: {
+      groups: {
+        new: 'Novedades',
+        fixed: 'Correcciones',
+        faster: 'Rendimiento',
+        improved: 'Mejoras',
+        other: 'Otras mejoras'
+      },
+      fallbackItem: 'Mejoras y correcciones',
+      fallbackLabel: 'En esta actualización'
     }
-  ,
-"desktopBridgeUnavailable":"La conexión con el escritorio no está disponible.",
-
-"starting":"Iniciando actualización…",
-
-"backendApplied":"Actualización del servicio aplicada.",
-
-"backendNoReturn":"El servicio no volvió a conectarse.",
-
-"changelog":{"groups":{"new":"Novedades","fixed":"Correcciones","faster":"Rendimiento","improved":"Mejoras","other":"Otras mejoras"},"fallbackItem":"Mejoras y correcciones","fallbackLabel":"En esta actualización"},
-},
+  },
   handoffTour: {
     localTitle: 'Este equipo puede ejecutar modelos localmente',
     localText: (model: string) =>
@@ -5541,18 +5550,22 @@ export const esOverrides = {
           pending: 'Escribir archivo',
           pendingAction: 'Escribiendo'
         }
+      },
+      runSummary: {
+        search: { count: (count: number) => count + ' consultas', past: 'Buscado', present: 'Buscando' },
+        read: { count: (count: number) => count + ' páginas', past: 'Leído', present: 'Leyendo' },
+
+        browse: { count: (count: number) => count + ' páginas', past: 'Abierto', present: 'Abriendo' },
+
+        interact: {
+          count: (count: number) => count + ' acciones del navegador',
+          past: 'Realizado',
+          present: 'Realizando'
+        },
+
+        analyze: { count: (count: number) => count + ' imágenes', past: 'Analizado', present: 'Analizando' }
       }
-    ,
-"runSummary":{"search":{count: (count: number) => count + " consultas", past: "Buscado", present: "Buscando"},
-"read":{count: (count: number) => count + " páginas", past: "Leído", present: "Leyendo"},
-
-"browse":{count: (count: number) => count + " páginas", past: "Abierto", present: "Abriendo"},
-
-"interact":{count: (count: number) => count + " acciones del navegador", past: "Realizado", present: "Realizando"},
-
-"analyze":{count: (count: number) => count + " imágenes", past: "Analizado", present: "Analizando"},
-},
-}
+    }
   },
   prompts: {
     gatewayDisconnected: 'Hermes está sin conexión ahora mismo. Reconéctate y vuelve a enviarlo.',

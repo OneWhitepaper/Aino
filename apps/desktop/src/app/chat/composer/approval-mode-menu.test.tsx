@@ -52,7 +52,11 @@ describe('composer approval mode', () => {
     fireEvent.click(await screen.findByRole('menuitemradio', { name: /manual/i }))
 
     await waitFor(() => {
-      expect(requestGateway).toHaveBeenCalledWith('config.set', { key: 'approvals.mode', value: 'manual', profile: 'work' })
+      expect(requestGateway).toHaveBeenCalledWith('config.set', {
+        key: 'approvals.mode',
+        value: 'manual',
+        profile: 'work'
+      })
       expect(screen.getByRole('button', { name: /manual/i })).toBeTruthy()
     })
   })

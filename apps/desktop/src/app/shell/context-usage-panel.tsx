@@ -98,24 +98,23 @@ export function ContextUsagePanel({
         </p>
       )}
 
-
       {contextPercent !== null && (
-      <p className="flex items-center justify-between gap-2 text-[0.6875rem] text-foreground">
-        <span>
-          {usage.context_estimated ? '~' : ''}
-          {copy.percentFull(contextPercent)}
-        </span>
-
-        {usage.compressions !== undefined && (
-          <span
-            className="inline-flex items-center gap-1 text-muted-foreground"
-            data-testid="context-panel-compressions"
-          >
-            <Codicon aria-hidden="true" name="layers" size="0.6875rem" />
-            {t.shell.statusbar.compressions(usage.compressions)}
+        <p className="flex items-center justify-between gap-2 text-[0.6875rem] text-foreground">
+          <span>
+            {usage.context_estimated ? '~' : ''}
+            {copy.percentFull(contextPercent)}
           </span>
-        )}
-      </p>
+
+          {usage.compressions !== undefined && (
+            <span
+              className="inline-flex items-center gap-1 text-muted-foreground"
+              data-testid="context-panel-compressions"
+            >
+              <Codicon aria-hidden="true" name="layers" size="0.6875rem" />
+              {t.shell.statusbar.compressions(usage.compressions)}
+            </span>
+          )}
+        </p>
       )}
 
       <ContextUsageBar categories={categories} segmentTotal={segmentTotal} />

@@ -137,5 +137,4 @@ export function useChatBarState({
       supportsReasoning
     ]
   )
-
 }
