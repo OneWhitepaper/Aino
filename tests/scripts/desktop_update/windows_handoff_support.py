@@ -240,3 +240,136 @@ def assert_post_commit_followup(tmp_path: Path, receipt: str, ok: bool) -> None:
     else:
         assert code == 130, out
         assert (result['ok'], result['exit_code']) == (False, 130), result
+
+
+CLI = """
+import sys
+from pathlib import Path
+def main():
+    if '--version' in sys.argv:
+        print('Install directory: ' + str(Path(__file__).resolve().parents[1])); return 0
+    if '--help' in sys.argv:
+        print('--keep-stash'); return 0
+    return 0
+if __name__ == '__main__':
+    sys.exit(main())
+"""
+
+
+@pytest.fixture
+def sleeper():
+    proc = subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(600)'])
+    yield proc
+    proc.kill()
+    proc.wait()
+
+
+def _protected_pid() -> int:
+    """A live pid that grants only limited query rights (a SYSTEM/protected service): what
+    Get-Process .StartTime needs is denied, what CIM/GetProcessTimes need is granted."""
+    import ctypes
+    k32 = ctypes.windll.kernel32
+    k32.OpenProcess.restype = ctypes.c_void_p
+    names = ('csrss.exe', 'smss.exe', 'wininit.exe', 'services.exe', 'lsass.exe', 'MsMpEng.exe')
+    rows = subprocess.run(
+        ['powershell', '-NoProfile', '-Command',
+         'Get-CimInstance Win32_Process | ForEach-Object { \'{0} {1}\' -f $_.ProcessId, $_.Name }'],
+        capture_output=True, text=True, timeout=60, check=True,
+    ).stdout.splitlines()
+    for row in rows:
+        pid, _, name = row.strip().partition(' ')
+        if name not in names:
+            continue
+        full = k32.OpenProcess(0x0400, False, int(pid))         # PROCESS_QUERY_INFORMATION
+        limited = k32.OpenProcess(0x1000, False, int(pid))      # ..._LIMITED_INFORMATION
+        for handle in (full, limited):
+            if handle:
+                k32.CloseHandle(ctypes.c_void_p(handle))
+        if limited and not full:
+            return int(pid)
+    pytest.fail('no process here grants only limited query rights: ' + ', '.join(rows[:40]))
+
+
+def _run(home: Path, *args: str, install: Path | None = None, timeout: int = 120):
+    command = ['powershell', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', str(SCRIPT),
+               '-InstallRoot', str(install or home / 'hermes-agent'), '-NoUi', *args]
+    env = {**os.environ, 'HERMES_HOME': str(home), 'HERMES_RUNTIME_DIR': str(home / 'empty-store')}
+    proc = subprocess.Popen(command, cwd=home, env=env,
+                            stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+    try:
+        out, _ = proc.communicate(timeout=timeout)
+    except subprocess.TimeoutExpired:
+        subprocess.run(['taskkill', '/T', '/F', '/PID', str(proc.pid)], capture_output=True, check=False)
+        out, _ = proc.communicate()
+        pytest.fail(f'hand-off did not finish within {timeout}s: {out}')
+    return proc.pid, proc.returncode, out
+
+
+def _result(home: Path) -> dict:
+    return json.loads((home / '.hermes-update-result.json').read_text(encoding='utf-8-sig'))
+
+
+_BODIES = {   # contract A2: identical verdicts in every reader
+    'crlf-bom-v2': ('\ufeff{pid}\r\n{now}\r\nct:{ct}\r\n', 'live'),
+    'missing-line-2': ('{pid}\n', 'dead'),
+    'garbled-line-2': ('{pid}\nsoon\nct:{ct}\n', 'dead'),
+    'fractional-started-at': ('{pid}\n{now}.5\nct:{ct}\n', 'dead'),
+    'garbled-ct-is-v1-fresh': ('{pid}\n{now}\nct:garbage\n', 'live'),
+    'garbled-ct-is-v1-past-20min': ('{pid}\n{old}\nct:garbage\n', 'dead'),
+    'delegate-without-ct-is-ignored': ('999999\n{now}\nct:1.000\ndelegate:{pid}\n', 'dead'),
+}
+
+
+def assert_marker_body(
+    tmp_path: Path, sleeper: subprocess.Popen, case: str,
+) -> None:
+    template, verdict = _BODIES[case]
+    now = int(time.time())
+    body = template.format(pid=sleeper.pid, now=now, old=now - 1300, ct=_creation_time(sleeper.pid)).encode()
+    (tmp_path / MARKER).write_bytes(body)
+    pid, code, out = _run(tmp_path, '-SelfTestMarker', '-NoMarkerCleanup')
+    if verdict == 'live':
+        assert code == 2, out
+        assert (tmp_path / MARKER).read_bytes() == body
+    else:
+        assert code == 0, out
+        assert (tmp_path / MARKER).read_bytes().decode().split('\n')[0] == str(pid)
+
+
+OLD_DESKTOP = r"""
+import os, subprocess, sys, time
+from pathlib import Path
+# be3fd671d70 checkout.ts: spawn the cmd.exe wrapper (non-detached), then in the
+# same tick overwrite the marker with the WRAPPER's pid as a v1 claim, then
+# stay up (the -SelfTestMarker script ends before it would wait us out).
+home, script, mode, foreign = Path(sys.argv[1]), sys.argv[2], sys.argv[3], int(sys.argv[4])
+other_desktop, env_skew = int(sys.argv[5]), int(sys.argv[6])  # a Desktop that is NOT the wrapper's parent
+started = int(time.time())
+env = dict(os.environ, HERMES_UPDATE_STARTED_AT=str(started + env_skew))
+ps = [os.environ['POWERSHELL'], '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', script,
+      '-InstallRoot', str(home / 'hermes-agent'), '-NoUi', '-SelfTestMarker', '-NoMarkerCleanup',
+      '-DesktopPid', str(other_desktop or os.getpid())]
+wrapper = ['cmd.exe', '/d', '/s', '/c'] + (['start', '', '/b'] if mode == 'start-b' else [])
+child = subprocess.Popen(wrapper + ps, cwd=home, env=env, stdin=subprocess.DEVNULL,
+                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+owner = foreign or child.pid
+(home / '.hermes-update-in-progress').write_bytes(f'{owner}\n{started}\n'.encode())
+(home / 'desktop.json').write_text(f'{os.getpid()} {child.pid} {started}', encoding='utf-8')
+time.sleep(600)
+"""
+
+
+def _old_desktop(home: Path, mode: str, foreign: int = 0, other_desktop: int = 0,
+                 env_skew: int = 0) -> tuple[subprocess.Popen, int, int, int]:
+    program = home.parent / 'old_desktop.py'
+    program.write_text(OLD_DESKTOP, encoding='utf-8')
+    desktop = subprocess.Popen([sys.executable, str(program), str(home), str(SCRIPT), mode, str(foreign),
+                                str(other_desktop), str(env_skew)],
+                               env={**os.environ, 'HERMES_HOME': str(home), 'POWERSHELL': POWERSHELL})
+    deadline = time.monotonic() + 30
+    while not (home / 'desktop.json').exists():
+        assert time.monotonic() < deadline and desktop.poll() is None, 'old desktop never spawned'
+        time.sleep(0.05)
+    time.sleep(0.2)
+    desktop_pid, wrapper, started = map(int, (home / 'desktop.json').read_text(encoding='utf-8-sig').split())
+    return desktop, wrapper, started, desktop_pid

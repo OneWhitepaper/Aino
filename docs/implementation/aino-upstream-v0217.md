@@ -399,3 +399,19 @@ assertion. The Windows-only test lane now runs two file processes rather than
 four; all selected files, per-file isolation, per-command and per-file timeouts,
 and assertions stay unchanged. The 60-minute job bound remains. Native CI on
 this candidate is required; this is a concurrency hypothesis, not a proved fix.
+
+On `70188e99d0`, both Windows lanes again reached the unchanged 300-second
+per-file cap in marker and lineage tests. ARM64 completed 9/10 lineage cases
+and 6/19 marker cases; x64 completed 8/10 and 5/19 respectively, with no
+assertion failures before termination. Two workers therefore did not by itself
+resolve cumulative file duration. Marker tests now run in ownership, protected
+identity, format, bridge, lifecycle and survival groups; lineage tests split old
+wrappers, environment identity, the shared rule table and run identity. The seven
+format scenarios are partitioned into disjoint groups of three and four, sharing
+the original assertion body in the existing handoff support module. All original
+test assertion bodies were compared by AST and retained unchanged. Shared
+helpers/fixtures reuse that same module. Selection, the two-worker limit and all
+command/file/job timeouts remain unchanged. Local canonical collection and CI
+routing passed (176 tests, 46 host skips); scoped health has zero findings.
+These local skips do not establish native Windows success; the new SHA must pass
+both Windows lanes before merge.
