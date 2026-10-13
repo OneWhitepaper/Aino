@@ -180,6 +180,9 @@ def test_receipt_is_recorded_only_on_a_day_the_sender_can_ever_send(marks, monke
     t0 = datetime(2026, 10, 6, tzinfo=UTC)
     clock = {"now": t0 + timedelta(hours=9)}
     monkeypatch.setattr(store_module, "_utc_now", lambda: clock["now"])
+    # Consent and receipt expiry must see the same simulated day. Otherwise
+    # this fixed-date receipt expires one week after the test was authored.
+    monkeypatch.setattr(install_run.time, "time", lambda: clock["now"].timestamp())
     monkeypatch.setattr("hermes_cli.config.read_raw_config_readonly",
                         lambda: {"telemetry": {"shared_metrics": {"enabled": True, "send": True}}})
     store = store_module.SharedMetricsStore()

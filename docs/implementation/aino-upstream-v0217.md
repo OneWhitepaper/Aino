@@ -364,3 +364,14 @@ Local collection/classifier: 160 passed, 16 Windows skips; scoped health and
 Windows/static guards pass. Native execution is still required on the new SHA.
 The darwin-x64 bundle failed before build at checkout (GitHub receive timeout,
 then DNS resolution failure); this is recorded separately from test failures.
+
+The ARM64 native lane confirmed the same per-file cumulative timeout, after ten
+passed cases (including the watchdog outcome); no assertion failed. The split
+covers both native lanes. Linux slice 1 exposed two further failures, reproduced
+locally before correction: the old-updater frozen import surface still requires
+`config_defaults.OPTIONAL_ENV_VARS`, and a fixed-date consent test let receipt
+expiry use wall time, so it began expiring its fixture seven days after authoring.
+The mutable registry again lives at its original owner, constructed from extracted
+pure declarations; current consumers use that owner too. The test now binds consent
+and expiry to the same simulated clock. Unchanged failing tests plus config suite:
+742 passed, 4 host skips; dual-base scoped health has zero blockers.

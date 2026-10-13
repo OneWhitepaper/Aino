@@ -4,6 +4,12 @@ Pure-data leaf module — must not import from hermes_cli.config. Comments are t
 docs of config.yaml.
 """
 
+from hermes_cli.config_env_defaults import ENV_DECLARATIONS
+
+# Old running updaters load this owner after swapping the checkout. Keep the
+# mutable registry here; provider/plugin enrichment also uses this same object.
+OPTIONAL_ENV_VARS = dict(ENV_DECLARATIONS)
+
 
 #: Image every container terminal backend (docker/modal/daytona/singularity) uses unless the
 #: user pins one. LEGACY_SANDBOX_IMAGES are the plain defaults that preceded the desktop stack
