@@ -7,12 +7,13 @@ name: Icon Assets Freshness
 # fail on any pixel, native frame, SVG or manifest difference. PNG compression
 # differs across platform Pillow wheels; compressed bytes are not artwork.
 # Fix a red run with
-# `node scripts/generate-icons.mjs` on a Hermes runtime interpreter and commit.
+# `node scripts/generate-icons.mjs` on a Linux x86_64 Hermes runtime interpreter
+# (HERMES_PYTHON selects it) and commit.
 #
-# Pixel-determinism note: resvg renders the same SVG to identical pixels on any
-# host for pure-shape artwork. If the master ever contains <text>, font
-# rendering can differ across OSes — pin fonts via resvg's font_files/font_dirs
-# and commit a known font before relying on this check for that master.
+# OS/CPU build is part of the renderer: resvg 0.4.0 macOS ARM64 and Linux
+# x86_64 differ at five alpha edge pixels in the installer portrait. Keep the
+# committed reference and this exact-pixel lane on Linux x86_64; do not replace
+# the reference with a macOS render. Text artwork also requires pinned fonts.
 
 on:
   workflow_call:

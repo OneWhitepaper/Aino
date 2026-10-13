@@ -5,6 +5,11 @@ Usage (from repo root):
     node scripts/generate-icons.mjs           # write
     node scripts/generate-icons.mjs --check   # verify structure
 
+Committed reference regeneration/checking uses a Linux x86_64 interpreter
+selected via HERMES_PYTHON, matching the freshness lane. With resvg-py 0.4.0,
+macOS ARM64 differs at five alpha-edge pixels in the installer portrait.
+PNG compression bytes may vary; rendered pixels and native frames must not.
+
 Sources of truth — Aino desktop uses assets/aino-icon.png (commissioned raster).
 Upstream surfaces use two axes, composed per target:
   Girl art (vector):  assets/nous-girl-black.svg  (black positive space)

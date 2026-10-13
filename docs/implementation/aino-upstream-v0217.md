@@ -303,3 +303,24 @@ switching and pane scope. Renderer TypeScript and targeted ESLint pass.
 Scope measurement eliminated 10 of the 65 structural blockers, before the
 additional gateway test extraction. Remaining unchanged scopes still require
 cleanup; do not infer a passing full health gate or merge approval.
+
+### Native handoff synchronization and renderer provenance (204d708924 follow-up)
+
+The Windows marker-lock probe now waits at the existing fixture help command,
+then observes the suspended child's completed job assignment before killing its
+owner. It no longer races marker claim/publication or waits on a slow CIM scan.
+The R6 timestamp probe keeps a real byte-range lock until the production release
+wait is observed, instead of assuming startup finishes before a 25-second timer.
+The stale Windows workflow test path now names the retained PM runtime-replacement
+and desktop runtime-resolution coverage. Local classification: 160 passed; 15
+Windows tests skipped on macOS. Native CI remains authoritative for those probes.
+
+Icon CI diagnostic artifact from run 38380028041 was compared against the local
+files using the same exact pixel/frame/profile checker: after restoring upstream's
+installer `art-light.png`, all 99 targets match. The Mac ARM64 render differed at
+five alpha pixels (bbox 524,1014–526,1023, max delta 16); RGB was unchanged. A Mac
+x86_64 render reproduced upstream's light portrait exactly, but differs from Linux
+on the dark/mono layers. Thus OS/CPU renderer build—not PNG compression alone—is
+part of reproducibility. The canonical reference remains Linux x86_64, matching
+CI; documentation no longer promises cross-platform pixel determinism. No pixel
+tolerance, freshness exemption, or renderer dependency change was introduced.
