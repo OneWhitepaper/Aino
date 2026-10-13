@@ -375,3 +375,16 @@ The mutable registry again lives at its original owner, constructed from extract
 pure declarations; current consumers use that owner too. The test now binds consent
 and expiry to the same simulated clock. Unchanged failing tests plus config suite:
 742 passed, 4 host skips; dual-base scoped health has zero blockers.
+
+The next x64 native run exposed two separate **per-file** 300-second timeouts
+under CI load: four of five PM build-dependency scenarios passed before the
+last native-command case began, and the commit-outcome file timed out during
+its parametrized fourth follow-up case. The already separated watchdog file
+passed all three cases. The remaining PM native-command test now has its own
+file; existing shared PowerShell helpers moved intact to a non-test support
+module. Four follow-up scenarios are split into two paired files; their single
+assertion body remains in the existing handoff support module. This preserves
+all scenarios and the fixed 300-second file cap; no production behavior,
+assertion, per-command timeout or runner policy was relaxed. Static AST
+comparison verified the moved PM test body. Local canonical collection: seven
+files, 160 passed, 15 Windows skips; scoped health and static checks green.
