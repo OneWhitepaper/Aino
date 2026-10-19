@@ -31,10 +31,8 @@ from hermes_cli.gitlock import (
 )
 
 
-@pytest.fixture
-def repo(tmp_path: Path) -> Path:
+def _init_repo(root: Path) -> Path:
     """A real, tiny git repo with two commits (no network)."""
-    root = tmp_path / "repo"
     root.mkdir()
     subprocess.run(["git", "init", "-q"], cwd=root, check=True)
     subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=root, check=True)
@@ -46,6 +44,11 @@ def repo(tmp_path: Path) -> Path:
     subprocess.run(["git", "add", "b.txt"], cwd=root, check=True)
     subprocess.run(["git", "commit", "-q", "-m", "second"], cwd=root, check=True)
     return root
+
+
+@pytest.fixture
+def repo(tmp_path: Path) -> Path:
+    return _init_repo(tmp_path / "repo")
 
 
 def _touch(path: Path, age_seconds: float) -> None:
@@ -471,8 +474,9 @@ def test_a_git_elsewhere_exiting_mid_scan_is_gone_not_a_hidden_holder(repo: Path
     from hermes_cli import _early_recovery as er
     from tests.waiting import wait_until
 
-    other = tmp_path / "other"
-    shutil.copytree(repo, other)
+    # A commit can leave Git's detached maintenance running: copying .git
+    # races transient lock removal. This process needs its own repo, not a copy.
+    other = _init_repo(tmp_path / "other")
     lock = repo / ".git" / "index.lock"
     lock.write_bytes(b"")  # a killed git's: nothing holds it
     marker = "hermes.test=exits-mid-scan"

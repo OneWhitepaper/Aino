@@ -106,24 +106,31 @@ class TestGitTrampolineSelfHeal:
         assert result == git_cmd
         run.assert_not_called()
 
-    def test_portable_git_candidates_check_shared_root_first(self, tmp_path, monkeypatch):
-        # Profile-scoped layout: HERMES_HOME = <root>/profiles/foo, but the
-        # PortableGit tree lives under the SHARED root (monerostar review on
-        # #88136). The candidate list must check get_default_hermes_root()
-        # before the profile home.
+    @pytest.mark.parametrize("arch", ["ucrt64", "mingw64", "clangarm64", "mingw32"])
+    @pytest.mark.parametrize("shared_probe", [False, True, None])
+    def test_portable_git_recovery_prefers_healthy_shared_install(
+        self, tmp_path, monkeypatch, arch, shared_probe,
+    ):
+        # Layouts are filesystem data, not a mocked host OS. A profile update
+        # first uses the shared install, falling back only if its probe fails
+        # or reports the trampoline guard.
         import hermes_constants
-        from hermes_cli.update_cmd_git import _portable_git_candidates
+        from hermes_cli import update_cmd_git
 
         root = tmp_path / "root"
         profile_home = root / "profiles" / "foo"
-
+        shared = root / "git" / arch / "libexec" / "git-core" / "git.exe"
+        profile = profile_home / "git" / arch / "libexec" / "git-core" / "git.exe"
+        for candidate in (shared, profile):
+            candidate.parent.mkdir(parents=True)
+            candidate.touch()
         monkeypatch.setattr(hermes_constants, "get_default_hermes_root", lambda: root)
         monkeypatch.setattr(hermes_constants, "get_hermes_home", lambda: profile_home)
-
-        candidates = _portable_git_candidates()
-        assert candidates[0] == (
-            root / "git" / "mingw64" / "libexec" / "git-core" / "git.exe"
-        )
-        assert candidates[1] == (
-            profile_home / "git" / "mingw64" / "libexec" / "git-core" / "git.exe"
-        )
+        probes = {str(shared): shared_probe, str(profile): False}
+        # Ignore the test host's system Git: only fixture binaries can pass.
+        monkeypatch.setattr(update_cmd_git, "_probe_fork_bomb", lambda argv: probes.get(argv[0]))
+        expected = shared if shared_probe is False else profile
+        assert update_cmd_git._locate_real_git() == expected
+        probes[str(shared)] = True
+        probes[str(profile)] = None
+        assert update_cmd_git._locate_real_git() is None

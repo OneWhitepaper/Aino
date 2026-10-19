@@ -561,6 +561,11 @@ def _git_is_trampoline(git_cmd: list) -> bool:
     return _probe_fork_bomb(git_cmd) is True
 
 
+# Git for Windows 2.56 moved x64 from mingw64 to ucrt64; older installs and
+# ARM64 keep their own runtime directories (including managed PortableGit).
+_GIT_WINDOWS_ARCH_DIRS = ("clangarm64", "ucrt64", "mingw64", "mingw32")
+
+
 def _portable_git_candidates() -> list:
     """PortableGit candidates: shared root first (where the managed tree actually lives, not the
     profile-scoped HERMES_HOME), then profile home as a fallback for custom layouts.
@@ -572,7 +577,11 @@ def _portable_git_candidates() -> list:
     from hermes_constants import get_default_hermes_root, get_hermes_home
     candidates = []
     with suppress(Exception):
-        candidates += [root / "git" / "mingw64" / "libexec" / "git-core" / "git.exe" for root in (get_default_hermes_root(), Path(get_hermes_home()))]
+        candidates += [
+            root / "git" / arch / "libexec" / "git-core" / "git.exe"
+            for root in (get_default_hermes_root(), Path(get_hermes_home()))
+            for arch in _GIT_WINDOWS_ARCH_DIRS
+        ]
     return candidates
 
 
@@ -582,13 +591,13 @@ def _locate_real_git() -> Optional[Path]:
     fetch-failure ZIP fallback handle it. A failed probe (None) disqualifies a candidate like a guard hit.
 
     The trampoline symptom is PATH-level: ``bin\\git.exe`` / ``cmd\\git.exe`` (both ~46KB shims) fail to
-    re-exec git-core, while the real binary at ``mingw64\\libexec\\git-core\\git.exe`` (≈4.4MB) works when
+    re-exec git-core, while the real binary under the architecture's ``libexec/git-core`` works when
     invoked directly (#87876).
     """
     candidates = [
         Path(base) / "Git" / arch / "libexec" / "git-core" / "git.exe"
         for base in (r"C:\Program Files", r"C:\Program Files (x86)")
-        for arch in ("clangarm64", "mingw64", "mingw32")
+        for arch in _GIT_WINDOWS_ARCH_DIRS
     ] + _portable_git_candidates()
     return next((c for c in candidates if c.exists() and _probe_fork_bomb([str(c)]) is False), None)
 

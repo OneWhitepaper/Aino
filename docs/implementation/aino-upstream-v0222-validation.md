@@ -53,3 +53,14 @@ Contributor attribution uses the same fixed v0.22.2 SHA to preserve imported aut
 The plugin admission workflow accepts the reviewed upstream import only while the target branch does not yet contain it, and only when the catalog and enforcement inputs match the pinned release. Before validating all 118 changed entries, it checks out the complete trusted release tree and removes untracked files from the disposable CI checkout. Aino application divergence therefore cannot change the plugin validation runtime. Ordinary catalog submissions retain the data-only restriction.
 
 An initial overstrict whole-PR equality check was rejected by actual CI and corrected. Six real Bash fixture scenarios and an isolated synthetic merge of the actual Aino branch validate the import, rejection and expiry paths. The existing Linux-only fixture suite is skipped on macOS; its full pinned-plugin validation remains a Linux CI check.
+
+## First complete hosted CI findings
+
+The first complete hosted application run passed desktop UI (11,684), Electron (3,782, 21 platform skips), all workspace JS/TS checks, both macOS test slices, Windows ARM64 and the 118-entry pinned catalog validation. It exposed four remaining cases:
+
+- The receipt test retained an obsolete patch of `install_run.time` after upstream unified expiry with the already-patched shared clock. The test now follows that existing clock seam; 11 focused tests pass.
+- The CommandCode plugin-only fallback test depended on mutable models.dev data. It now pins catalog absence for that branch; a separate real credential-resolution check proves the legacy key across all four provider names despite the catalog's newer alias. The provider and identity lane passes 14 tests.
+- A Git-lock test copied a repository while detached maintenance removed a transient file. It now initializes a separate real repository with the existing fixture helper. Local lane: 18 passed, four Linux cases skipped; actual process/editor fixture smoke passes.
+- Git for Windows 2.56 changed x64 runtime layout from `mingw64` to `ucrt64`. The existing recovery locator now covers that architecture alongside older and ARM64 layouts for both standard and managed installations. Local lane: 13 passed, eight Windows-specific tests skipped; native Windows rerun required.
+
+These findings were corrected without lowering assertions or replacing native platform acceptance. The subsequent exact-commit CI run is the final gate.
