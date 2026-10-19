@@ -21,8 +21,8 @@ catalog edits or unreviewed code commits are rejected.
 Tests cover accepted pinned imports, rejection of an extra code commit, and
 expiry after the target branch advances. Validation receipts:
 
-- `/tmp/aino-v0222-ci-attribution.log`
-- `/tmp/aino-v0222-ci-plugin.log`
+- `temporary/aino-v0222-ci-attribution.log`
+- `temporary/aino-v0222-ci-plugin.log`
 - `scripts/run_tests.sh tests/ci/test_plugin_catalog_ci_confinement.py` (the
   Linux-marked file is skipped on this macOS host; syntax and fixture checks
   were run directly and are recorded above).
