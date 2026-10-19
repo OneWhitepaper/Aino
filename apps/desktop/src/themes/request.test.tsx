@@ -4,9 +4,9 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { registry } from '@/contrib/registry'
 
 import { __resetBackendSkinSync } from './backend-sync'
-import { skinPref, ThemeProvider, useTheme } from './context'
+import { modePref, skinPref, ThemeProvider, useTheme } from './context'
 import { midnightTheme } from './presets'
-import { requestTheme } from './request'
+import { requestMode, requestTheme } from './request'
 import type { DesktopTheme } from './types'
 import { THEMES_AREA } from './user-themes'
 
@@ -60,6 +60,15 @@ describe('requestTheme', () => {
 
     expect(accepted).toBe(false)
     expect(skinPref.resolve('default')).toBe('mono')
+  })
+
+  it('switches and persists light/dark from outside React', () => {
+    renderProbe()
+
+    act(() => requestMode('dark'))
+
+    expect(ctx.mode).toBe('dark')
+    expect(modePref.resolve('default')).toBe('dark')
   })
 
   it('refuses a name that does not resolve, leaving the appearance untouched', () => {

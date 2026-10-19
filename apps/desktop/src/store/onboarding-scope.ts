@@ -1,6 +1,8 @@
 import { getApiRequestConnection, getApiRequestProfile, type ProfileScope } from '@/hermes'
 import { RECONNECT_ATTEMPT_TIMEOUT_MS, withTimeout } from '@/lib/with-timeout'
-import { requestGatewayForAgent } from '@/store/gateway'
+import { activeGatewayConnectionId, requestGatewayForAgent } from '@/store/gateway'
+
+import type { SessionOwnerRoute } from './session-request-router'
 
 export interface OnboardingScope {
   connectionId?: null | string
@@ -52,4 +54,11 @@ export async function requestOnboardingGateway<T>(
   }
 
   return requestGatewayForAgent<T>(scope.connectionId ?? null, profile, method, routedParams)
+}
+
+/** First-run lives in the selected computer's default profile, never the focused chat's owner. */
+export function captureFirstRunOwner(): SessionOwnerRoute | null {
+  const connectionId = activeGatewayConnectionId()
+
+  return connectionId ? { connectionId, profile: 'default' } : null
 }

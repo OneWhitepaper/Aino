@@ -69,7 +69,8 @@ async function ping(port: number, token: string): Promise<unknown> {
 test.skipIf(process.platform === 'win32')(
   'a PM source launcher reaches real health and RPC without adopting a legacy venv (POSIX)',
   async (): Promise<void> => {
-    const temp: string = fs.mkdtempSync(path.join(os.tmpdir(), 'desktop-pm-start-'))
+    // PM resolves selected paths, including macOS's /var -> /private/var alias.
+    const temp: string = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'desktop-pm-start-')))
     const home: string = path.join(temp, 'home with spaces')
 
     const env: NodeJS.ProcessEnv = Object.fromEntries(

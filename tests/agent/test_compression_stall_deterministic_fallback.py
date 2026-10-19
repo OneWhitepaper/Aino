@@ -78,9 +78,13 @@ def _summary_rows(messages):
     return [m for m in messages if isinstance(m.get("content"), str) and m["content"].startswith(SUMMARY_PREFIX)]
 
 
+
 @pytest.fixture
 def fast_timeouts(monkeypatch):
-    monkeypatch.setattr(cc, "resolve_context_compression_timeouts", lambda compression_cfg=None: (2.0, 8.0))
+    # The idle window bounds each attempt INCLUDING the deterministic rung's no-LLM compress pass (prompt
+    # rebuild, SQLite commit, malloc_trim), which outran a 0.4 s window on loaded CI runners. 2 s keeps a
+    # stall cheap while leaving that work several times its normal cost.
+    monkeypatch.setattr(cc, "resolve_context_compression_timeouts", lambda compression_cfg=None: (2.0, 20.0))
 
 
 def test_second_consecutive_stall_commits_the_deterministic_fallback_summary(tmp_path, fast_timeouts):

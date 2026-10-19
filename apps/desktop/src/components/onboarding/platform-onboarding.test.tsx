@@ -6,6 +6,7 @@ import { platformAccountActions } from '@/api/platform'
 import { $activeGatewayRoute, setPrimaryGateway, setPrimaryGatewayConnectionId } from '@/store/gateway'
 import { clearGatewayManagedCapabilities, recordGatewayReadyCapability } from '@/store/gateway-managed-capability'
 import { $desktopOnboarding } from '@/store/onboarding'
+import { markOnboardingDecided } from '@/store/onboarding-presence'
 import { platformModelCatalog, requirePlatformSelection } from '@/store/platform-models'
 import { $activeGatewayProfile } from '@/store/profile'
 import { setConnection } from '@/store/session'
@@ -15,6 +16,8 @@ import { platformModel, platformSnapshot } from '@/test/platform-model'
 import type { PlatformAccountSnapshot, PlatformModel } from '../../../shared/platform-contract'
 
 import { DesktopOnboardingOverlay } from '.'
+
+markOnboardingDecided()
 
 const requestGateway = async <T,>(method: string): Promise<T> => {
   if (method === 'setup.status') {

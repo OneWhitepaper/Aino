@@ -367,6 +367,9 @@ def test_cancellation_does_not_replay_a_paid_platform_request(managed_gateway):
     sid = f.create()["session_id"]
     f.bind(sid)
     session = srv._sessions[sid]
+    # Prewarming may already have run before the lease was bound; the ordinary
+    # on-demand build is what makes readiness deterministic before holding HTTP.
+    srv._start_agent_build(sid, session)
     assert session["agent_ready"].wait(timeout=30), "managed agent build did not finish"
     assert not session.get("agent_error")
     f.hold.set()
