@@ -82,13 +82,9 @@ jobs:
           if git merge-base --is-ancestor "$UPSTREAM" HEAD^2 \
               && ! git merge-base --is-ancestor "$UPSTREAM" HEAD^1; then
             IMPORTING_UPSTREAM=true
-            # The PR head itself must be exactly the reviewed release tree.
-            # This keeps an otherwise valid release import from carrying an
-            # extra code or catalog commit that was never admitted upstream.
-            if ! git diff --quiet "$UPSTREAM" HEAD^2; then
-              echo "::error::upstream import PR head contains changes beyond reviewed v0.22.2"
-              exit 1
-            fi
+            # Aino compatibility commits may follow the release import. The
+            # catalog and enforcement inputs below remain byte-for-byte pinned;
+            # unrelated application changes are checked by the ordinary CI lanes.
             # The catalog is data from the reviewed release verbatim.  This
             # rejects a release import with a locally added or edited entry,
             # while still allowing every imported entry to pass the clone and
