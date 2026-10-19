@@ -70,6 +70,46 @@ jobs:
             echo "::error::expected the pull_request merge commit as HEAD"
             exit 1
           fi
+
+          # A v0.22.2 upstream import is the one reviewed exception to the
+          # entry-PR data-only rule.  GitHub checks out the PR merge commit, so
+          # its second parent is the proposed PR head and its first parent is
+          # the target branch.  The release must be present in the PR head but
+          # absent from the target branch; once main contains it this exception
+          # expires and the normal admission rule applies again.
+          UPSTREAM=d923a5eb487a17c0a68801bba9ef0f56c81040a8
+          IMPORTING_UPSTREAM=false
+          if git merge-base --is-ancestor "$UPSTREAM" HEAD^2 \
+              && ! git merge-base --is-ancestor "$UPSTREAM" HEAD^1; then
+            IMPORTING_UPSTREAM=true
+            # The PR head itself must be exactly the reviewed release tree.
+            # This keeps an otherwise valid release import from carrying an
+            # extra code or catalog commit that was never admitted upstream.
+            if ! git diff --quiet "$UPSTREAM" HEAD^2; then
+              echo "::error::upstream import PR head contains changes beyond reviewed v0.22.2"
+              exit 1
+            fi
+            # The catalog is data from the reviewed release verbatim.  This
+            # rejects a release import with a locally added or edited entry,
+            # while still allowing every imported entry to pass the clone and
+            # pinned-source checks below.
+            if ! git diff --quiet "$UPSTREAM" -- plugin-catalog/; then
+              echo "::error::upstream import changed plugin-catalog/ beyond reviewed v0.22.2"
+              exit 1
+            fi
+            # The import must use the release's reviewed enforcement inputs.
+            # These files are consumed by this job before any plugin code runs;
+            # keeping them byte-for-byte pinned prevents an import PR from
+            # weakening the scanner or PM setup while it is being admitted.
+            if ! git diff --quiet "$UPSTREAM" -- \
+                scripts/scan_plugin_payloads.py \
+                scripts/validate_plugin_catalog.py \
+                .github/actions/setup-pm/action.yml; then
+              echo "::error::upstream import changed catalog enforcement inputs"
+              exit 1
+            fi
+            echo "Validated reviewed upstream import $UPSTREAM"
+          fi
           # Added + modified + renamed + typechanged entry files only; deletions
           # and removed.yaml have nothing to clone. A rename or file->symlink
           # change that slipped past this list would skip the supply-chain gate.
@@ -79,7 +119,7 @@ jobs:
           # failure still fails the step instead of looking like "no changes".
           CHANGED=$(printf '%s' "$CHANGED" | grep -v '/removed\.yaml$' || true)
 
-          if [ -n "$CHANGED" ]; then
+          if [ -n "$CHANGED" ] && [ "$IMPORTING_UPSTREAM" != true ]; then
             # Admission PRs must be data-only: the gate's own enforcement code
             # (this workflow, the validator, the composite actions, the built
             # hermes) resolves from the PR checkout, so an entry PR that also

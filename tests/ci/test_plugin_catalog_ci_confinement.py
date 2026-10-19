@@ -31,7 +31,13 @@ def _step(name_prefix: str) -> str:
         for step in job["steps"]:
             if step.get("name", "").startswith(name_prefix):
                 # The workflow expands ${{ github.base_ref }} before bash sees it.
-                return step["run"].replace("${{ github.base_ref }}", "main")
+                text = step["run"].replace("${{ github.base_ref }}", "main")
+                # Import-admission tests substitute a fixture commit for the
+                # reviewed release pin; normal cases exercise the real pin.
+                return text.replace(
+                    "d923a5eb487a17c0a68801bba9ef0f56c81040a8",
+                    os.environ.get("CATALOG_CI_UPSTREAM", "d923a5eb487a17c0a68801bba9ef0f56c81040a8"),
+                )
     raise LookupError(name_prefix)
 
 
@@ -323,3 +329,69 @@ def test_changed_entries_step(tmp_path, change, rc, listed, text):
     assert [f for f in lines if f and "__EOF__" not in f and f != "files<<__EOF__"] == listed
     if text:
         assert text in res.stdout
+
+
+def _import_merge(tmp_path: Path, *, extra: bool = False) -> tuple[Path, str, str]:
+    """Build a merge-shaped checkout for the reviewed upstream exception."""
+    repo = tmp_path / ("import-extra" if extra else "import-ok")
+    _write(repo, {"plugin-catalog/base.yaml": "name: base\n", "code.py": "base = 1\n"})
+    _git(repo, "init", "-qb", "main")
+    base = _commit(repo, "base")
+    _git(repo, "checkout", "-qb", "release")
+    _write(repo, {"plugin-catalog/imported.yaml": "name: imported\n", "code.py": "release = 1\n"})
+    release = _commit(repo, "v0.22.2")
+    if extra:
+        _write(repo, {"code.py": "release = 1\nmalicious = True\n"})
+        _commit(repo, "unreviewed code")
+    _git(repo, "checkout", "-q", "main")
+    _git(repo, "merge", "-q", "--no-ff", "-m", "merge", "release")
+    _git(repo, "checkout", "-q", "--detach")
+    _git(repo, "update-ref", "refs/remotes/origin/main", base)
+    return repo, release, base
+
+
+def test_reviewed_upstream_import_is_admitted(tmp_path, monkeypatch):
+    repo, release, _ = _import_merge(tmp_path)
+    monkeypatch.setenv("CATALOG_CI_UPSTREAM", release)
+    out = tmp_path / "gh-output.txt"
+    out.touch()
+    res = _run(_step("Find changed catalog"), tmp_path, repo,
+               {**os.environ, "GITHUB_OUTPUT": str(out)})
+    assert res.returncode == 0, res.stdout + res.stderr
+    assert "Validated reviewed upstream import" in res.stdout
+    assert "plugin-catalog/imported.yaml" in out.read_text(encoding="utf-8")
+
+
+def test_upstream_import_with_unreviewed_code_is_rejected(tmp_path, monkeypatch):
+    repo, release, _ = _import_merge(tmp_path, extra=True)
+    monkeypatch.setenv("CATALOG_CI_UPSTREAM", release)
+    out = tmp_path / "gh-output.txt"
+    out.touch()
+    res = _run(_step("Find changed catalog"), tmp_path, repo,
+               {**os.environ, "GITHUB_OUTPUT": str(out)})
+    assert res.returncode != 0
+    assert "contains changes beyond reviewed v0.22.2" in res.stdout
+
+
+def test_reviewed_import_exception_expires_once_main_contains_release(tmp_path, monkeypatch):
+    repo, release, _ = _import_merge(tmp_path)
+    # Recreate GitHub's merge after main has advanced past the release: the
+    # first parent now contains the pinned commit, so the exception must not
+    # activate even though the PR head also descends from that commit.
+    _git(repo, "checkout", "-qb", "target", release)
+    _write(repo, {"target.txt": "main\n"})
+    target = _commit(repo, "main after release")
+    _git(repo, "checkout", "-qb", "pr", release)
+    _write(repo, {"pr.txt": "pr\n"})
+    _commit(repo, "pr")
+    _git(repo, "checkout", "-q", "target")
+    _git(repo, "merge", "-q", "--no-ff", "-m", "merge", "pr")
+    _git(repo, "checkout", "-q", "--detach")
+    _git(repo, "update-ref", "refs/remotes/origin/main", target)
+    monkeypatch.setenv("CATALOG_CI_UPSTREAM", release)
+    out = tmp_path / "gh-output.txt"
+    out.touch()
+    res = _run(_step("Find changed catalog"), tmp_path, repo,
+               {**os.environ, "GITHUB_OUTPUT": str(out)})
+    assert res.returncode == 0, res.stdout + res.stderr
+    assert "Validated reviewed upstream import" not in res.stdout
