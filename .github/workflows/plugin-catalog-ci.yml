@@ -82,9 +82,8 @@ jobs:
           if git merge-base --is-ancestor "$UPSTREAM" HEAD^2 \
               && ! git merge-base --is-ancestor "$UPSTREAM" HEAD^1; then
             IMPORTING_UPSTREAM=true
-            # Aino compatibility commits may follow the release import. The
-            # catalog and enforcement inputs below remain byte-for-byte pinned;
-            # unrelated application changes are checked by the ordinary CI lanes.
+            # Aino compatibility commits may follow the release import;
+            # validation below switches to the trusted release's entire tree.
             # The catalog is data from the reviewed release verbatim.  This
             # rejects a release import with a locally added or edited entry,
             # while still allowing every imported entry to pass the clone and
@@ -104,6 +103,7 @@ jobs:
               echo "::error::upstream import changed catalog enforcement inputs"
               exit 1
             fi
+            echo "validation_ref=$UPSTREAM" >> "$GITHUB_OUTPUT"
             echo "Validated reviewed upstream import $UPSTREAM"
           fi
           # Added + modified + renamed + typechanged entry files only; deletions
@@ -142,7 +142,19 @@ jobs:
             echo '__EOF__'
           } >> "$GITHUB_OUTPUT"
 
-      - name: Prepare Hermes from the PR's own checkout
+      - name: Check out reviewed upstream validation tree
+        if: steps.changed.outputs.files != '' && steps.changed.outputs.validation_ref != ''
+        env:
+          VALIDATION_REF: ${{ steps.changed.outputs.validation_ref }}
+        run: |
+          set -euo pipefail
+          # Keep the original PR's changed-entry output, but load the complete
+          # runtime, PM actions and scanners from the fixed reviewed commit.
+          # Cleaning also prevents untracked PR modules shadowing trusted code.
+          git checkout --detach "$VALIDATION_REF"
+          git clean -ffdx
+
+      - name: Prepare Hermes from the validation checkout
         if: steps.changed.outputs.files != ''
         uses: ./.github/actions/setup-pm
         with:

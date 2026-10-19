@@ -26,7 +26,7 @@ All Python tests used the canonical `scripts/run_tests.sh` with a fresh PM-manag
 | Infrastructure lane | 105 passed, 6 skipped |
 | Full renderer suite | 11,676 passed, 1,380 files |
 | Full Electron suite | 3,763 passed, 36 platform skips |
-| Native macOS project/account E2E | 8 passed, isolated Electron/backend and local mock services |
+| Native macOS project/account E2E | Initial combined 8 passed; after terminal repair, final project suite 7 passed (account suite unchanged), isolated Electron/backend and local mock services |
 | Managed onboarding real SDK/loopback opening | 3 tests passed; no model request before binding |
 | Final captured-owner/hook fix lane | 55 tests passed; real-dispatcher positive-control rerun 4 passed |
 | Final desktop typecheck | Passed |
@@ -34,7 +34,7 @@ All Python tests used the canonical `scripts/run_tests.sh` with a fresh PM-manag
 | Production desktop build | Passed |
 | Static guards | 11 passed, including Windows footguns, paths, configuration writers, OS markers, AGENTS size, case collisions, lazy dependencies, profile archives, blob size and Ruff |
 
-These lanes overlap; their counts must not be added as a unique total. Complete renderer/Electron suites preceded the final owner-routing adjustment, which has focused routing and window-role coverage plus final typechecking/build. A subsequent native rerun found a terminal restore defect inherited from both pre-upgrade main and upstream: the existing prompt cleaner removed the first command/output when preceded by the zsh spacer. The cleanup now requires real history before treating a blank as a multiline-prompt separator; its exact first-command case reproduces red before the fix. Skip navigation also retains its captured owner when the ended event arrives before the RPC reply. Both regression fixes pass the 60-test focused lane; final native confirmation is required separately. Native Windows/Linux validation belongs to CI.
+These lanes overlap; their counts must not be added as a unique total. Complete renderer/Electron suites preceded the final owner-routing adjustment, which has focused routing and window-role coverage plus final typechecking/build. A subsequent native rerun found a terminal restore defect inherited from both pre-upgrade main and upstream: the existing prompt cleaner removed the first command/output when preceded by the zsh spacer. The cleanup now requires real history before treating a blank as a multiline-prompt separator; its exact first-command case reproduces red before the fix. Skip navigation also retains its captured owner when the ended event arrives before the RPC reply. Both regression fixes pass the 60-test focused lane; the final native project suite passes all seven scenarios without assertion or timeout changes. Native Windows/Linux validation belongs to CI.
 
 Failures found during validation included missing BYOK metadata in fixtures, outdated accent/localization expectations, an actual conditional React hook, captured-owner routing, legacy history display, and symlinked entrypoint handling. They were corrected rather than exempted. Pytest fixture registration was made explicit to satisfy the existing isolated Ruff health checker.
 
@@ -44,4 +44,12 @@ This validates deterministic runtime/UI behavior, not probabilistic Ultra task a
 
 The dependency audit reports 27 findings (4 critical, 7 high). Sampled affected package versions already exist in both the pre-upgrade main and upstream release. This is not a security-clean claim; forced major dependency upgrades are outside this compatibility sync.
 
-Full code-health JSON, screenshots and local validation logs are retained with the task artifacts. Final independent review and exact-commit CI results are recorded in the pull request before main integration.
+Final code-health analysis of the integration checkpoint retained five allowed findings and zero effective blockers; independent review approved the application changes. Full JSON, screenshots and local logs are retained with the task artifacts. Exact-commit CI results are recorded in the pull request before main integration.
+
+## CI import compatibility
+
+Contributor attribution uses the same fixed v0.22.2 SHA to preserve imported authorship without inventing GitHub identities. New Aino authors still require mappings.
+
+The plugin admission workflow accepts the reviewed upstream import only while the target branch does not yet contain it, and only when the catalog and enforcement inputs match the pinned release. Before validating all 118 changed entries, it checks out the complete trusted release tree and removes untracked files from the disposable CI checkout. Aino application divergence therefore cannot change the plugin validation runtime. Ordinary catalog submissions retain the data-only restriction.
+
+An initial overstrict whole-PR equality check was rejected by actual CI and corrected. Six real Bash fixture scenarios and an isolated synthetic merge of the actual Aino branch validate the import, rejection and expiry paths. The existing Linux-only fixture suite is skipped on macOS; its full pinned-plugin validation remains a Linux CI check.
