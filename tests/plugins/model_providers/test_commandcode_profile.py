@@ -140,7 +140,7 @@ class TestCommandCodeFetchModelsPickerContract:
     """
 
 
-    def test_resolve_provider_full(self):
+    def test_resolve_provider_full(self, monkeypatch):
         """Both profiles must resolve through the model-switch path.
 
         Regression: ``resolve_provider_full`` only knew models.dev + overlay
@@ -150,14 +150,36 @@ class TestCommandCodeFetchModelsPickerContract:
         """
         from hermes_cli.providers import resolve_provider_full
 
+        # Exercise the plugin-only fallback even when the external catalog adds this provider.
+        monkeypatch.setattr("agent.models_dev.get_provider_info", lambda *_a, **_kw: None)
         chat = resolve_provider_full("commandcode", {}, [])
         assert chat is not None and chat.id == "commandcode"
         assert chat.transport == "openai_chat"
+        assert chat.source == "plugin-profile"
         assert "COMMANDCODE_API_KEY" in chat.api_key_env_vars
 
         anth = resolve_provider_full("commandcode-anthropic", {}, [])
         assert anth is not None and anth.id == "commandcode-anthropic"
         assert anth.transport == "anthropic_messages"
+        assert anth.source == "plugin-profile"
+
+    def test_catalog_metadata_does_not_replace_plugin_credential_aliases(self, monkeypatch, tmp_path):
+        from agent.models_dev import ProviderInfo
+        from hermes_cli.auth import resolve_api_key_provider_credentials
+        from hermes_cli.providers import resolve_provider_full
+
+        catalog = ProviderInfo(id="commandcode", name="CommandCode", env=("CMD_API_KEY",),
+                               api="https://api.commandcode.ai/provider/v1")
+        monkeypatch.setattr("agent.models_dev.get_provider_info",
+                            lambda name, **_kw: catalog if name == "commandcode" else None)
+        (tmp_path / ".env").write_text("COMMANDCODE_API_KEY=fixture-commandcode-secret\n", encoding="utf-8")
+        monkeypatch.setenv("HERMES_HOME", str(tmp_path))
+        monkeypatch.delenv("CMD_API_KEY", raising=False)
+        assert resolve_provider_full("commandcode", {}, []).source == "models.dev"
+        for name in ("commandcode", "commandcode-chat", "commandcode-anthropic", "commandcode-claude"):
+            runtime = resolve_api_key_provider_credentials(name)
+            assert runtime["api_key"] == "fixture-commandcode-secret"
+
 
 
 # ── base_url endpoint override ───────────────────────────────────────────────

@@ -2,16 +2,17 @@ import type { ConnectionState } from '@hermes/shared'
 import { useStore } from '@nanostores/react'
 import { useEffect, useRef, useState } from 'react'
 
+import { BrandMark } from '@/components/brand-mark'
 import { Button } from '@/components/ui/button'
 import { DecodeText } from '@/components/ui/decode-text'
+import { Loader } from '@/components/ui/loader'
 import { prefersReducedMotion } from '@/hooks/use-media-query'
 import { useI18n } from '@/i18n'
-import { isOnboardingEnabled } from '@/lib/onboarding-enabled'
 import { cn } from '@/lib/utils'
 import { $desktopBoot, type DesktopBootState } from '@/store/boot'
 import { $gatewaySwitching } from '@/store/gateway-switch'
-import { $onboardingStateRead } from '@/store/onboarding-gate'
-import { $introStartExit, $introView } from '@/store/onboarding-intro'
+import { $decideExit, $introStartExit, $introView } from '@/store/onboarding-intro'
+import { $onboardingDecided } from '@/store/onboarding-presence'
 import { $gatewayState } from '@/store/session'
 import { isHudWindow, isMainWindow } from '@/store/windows'
 
@@ -61,6 +62,7 @@ function isInitialConnect(
 
 interface ConnectingOverlayViewProps {
   decoding: boolean
+  starting?: boolean
   onExit: (() => void) | null
   phase: Phase
 }
@@ -80,7 +82,9 @@ function SlowSetupStart({ onExit }: { onExit: () => void }) {
   )
 }
 
-function ConnectingOverlayView({ decoding, onExit, phase }: ConnectingOverlayViewProps) {
+function ConnectingOverlayView({ decoding, onExit, phase, starting = false }: ConnectingOverlayViewProps) {
+  const { t } = useI18n()
+  const reduce = prefersReducedMotion()
   const leaving = phase !== 'live'
   const overlayHidden = phase === 'overlay-out' || phase === 'gone'
 
@@ -97,6 +101,11 @@ function ConnectingOverlayView({ decoding, onExit, phase }: ConnectingOverlayVie
     >
       {onExit ? (
         <SlowSetupStart onExit={onExit} />
+      ) : starting ? (
+        <div className="grid justify-items-center gap-4" role="status">
+          {reduce ? <BrandMark className="size-16" /> : <Loader className="size-20" label={t.onboarding.starting} />}
+          <span className="text-sm text-muted-foreground">{t.onboarding.starting}</span>
+        </div>
       ) : (
         <DecodeText
           active={decoding}
@@ -114,15 +123,37 @@ function ConnectingOverlayView({ decoding, onExit, phase }: ConnectingOverlayVie
   )
 }
 
+/**
+ * Held until the app knows whether onboarding runs, so the chat never flashes before it. The due check
+ * has no deadline: past its budget (`decideOnboarding`) this overlay offers Continue, which releases the
+ * app for this launch. Once onboarding runs, the first-run intro's `starting` screen is this overlay and
+ * stays up until its chat is open, offering a way out when the start is slow. A rerun from Settings
+ * brings that screen back after boot.
+ */
+function useOnboardingHold(previewing: boolean) {
+  const onboardingDecided = useStore($onboardingDecided)
+  const introView = useStore($introView)
+  const introStartExit = useStore($introStartExit)
+  const decideExit = useStore($decideExit)
+
+  const watching = !previewing && isMainWindow()
+  const introStarting = watching && introView === 'starting'
+  const deciding = watching && !onboardingDecided
+
+  return {
+    holds: introStarting || deciding,
+    introStarting,
+    onExit: introStarting ? introStartExit : deciding ? decideExit : null
+  }
+}
+
 export function GatewayConnectingOverlay() {
   const gatewayState = useStore($gatewayState)
   const boot = useStore($desktopBoot)
   const gatewaySwitching = useStore($gatewaySwitching)
-  const onboardingStateRead = useStore($onboardingStateRead)
-  const introView = useStore($introView)
-  const introStartExit = useStore($introStartExit)
   const [previewing] = useState(forcedPreview)
   const hudWindow = isHudWindow()
+  const { holds: onboardingHolds, introStarting, onExit } = useOnboardingHold(previewing)
   const reduce = prefersReducedMotion()
   // Under reduced motion, skip the multi-phase exit choreography (text-out →
   // hold → overlay fade) and jump straight to gone so the overlay unmounts
@@ -146,14 +177,15 @@ export function GatewayConnectingOverlay() {
   // Latches once we've actually shown the overlay, so the brief frame where
   // gatewayState flips to "open" (connecting -> false) before the exit phase
   // kicks in doesn't unmount us and cause a flash.
-  if (previewing || connecting) {
+  if (previewing || connecting || introStarting) {
     shownRef.current = true
   }
 
-  // The first-run intro's `starting` screen is this overlay: it stays up until the backend says
-  // whether the intro runs and, if it does, until the setup chat is open.
-  const introHolds =
-    !previewing && isMainWindow() && isOnboardingEnabled() && (!onboardingStateRead || introView === 'starting')
+  useEffect(() => {
+    if (introStarting && phase !== 'live') {
+      setPhase('live')
+    }
+  }, [introStarting, phase])
 
   // Kick off the exit when connected: real connect, or a faked timer in preview.
   useEffect(() => {
@@ -175,14 +207,14 @@ export function GatewayConnectingOverlay() {
       return () => window.clearTimeout(id)
     }
 
-    if (gatewayState === 'open' && shownRef.current && !introHolds) {
+    if (gatewayState === 'open' && shownRef.current && !onboardingHolds) {
       // Under reduced motion, skip the multi-phase exit choreography
       // (text-out → hold → overlay fade) and jump straight to gone so the
       // overlay unmounts the instant the gateway opens. E2E screenshots
       // rely on this to avoid catching the overlay mid-fade.
       setPhase(reduce ? 'gone' : 'text-out')
     }
-  }, [phase, previewing, gatewayState, introHolds, hudWindow, reduce])
+  }, [phase, previewing, gatewayState, onboardingHolds, hudWindow, reduce])
 
   // Advance the exit choreography: text-out -> overlay-out -> gone.
   useEffect(() => {
@@ -228,10 +260,6 @@ export function GatewayConnectingOverlay() {
   }
 
   return (
-    <ConnectingOverlayView
-      decoding={phase === 'live' && (previewing || connecting)}
-      onExit={introHolds ? introStartExit : null}
-      phase={phase}
-    />
+    <ConnectingOverlayView decoding={phase === 'live' && (previewing || connecting)} onExit={onExit} phase={phase} starting={introStarting} />
   )
 }

@@ -31,10 +31,8 @@ from hermes_cli.gitlock import (
 )
 
 
-@pytest.fixture
-def repo(tmp_path: Path) -> Path:
+def _init_repo(root: Path) -> Path:
     """A real, tiny git repo with two commits (no network)."""
-    root = tmp_path / "repo"
     root.mkdir()
     subprocess.run(["git", "init", "-q"], cwd=root, check=True)
     subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=root, check=True)
@@ -46,6 +44,11 @@ def repo(tmp_path: Path) -> Path:
     subprocess.run(["git", "add", "b.txt"], cwd=root, check=True)
     subprocess.run(["git", "commit", "-q", "-m", "second"], cwd=root, check=True)
     return root
+
+
+@pytest.fixture
+def repo(tmp_path: Path) -> Path:
+    return _init_repo(tmp_path / "repo")
 
 
 def _touch(path: Path, age_seconds: float) -> None:
@@ -460,6 +463,39 @@ def test_a_killed_updates_lock_stays_while_any_git_works_in_the_checkout(repo: P
             proc.wait()
     if not form.startswith("dashed"):
         assert release_dead_index_lock(repo) is True, "once the checkout's git is gone the killed update's lock goes"
+
+
+@pytest.mark.skipif(not Path("/proc/self/fd").is_dir(), reason="ownership proof via /proc (Linux)")
+def test_a_git_elsewhere_exiting_mid_scan_is_gone_not_a_hidden_holder(repo: Path, tmp_path: Path, monkeypatch) -> None:
+    """A git in ANOTHER repository that exits between the scan reading its argv and its cwd/environ
+    (unreadable once it has released its memory) is gone: it holds nothing and takes no lock. Read
+    as a hidden git that may work here, any busy machine's git churn postponed the launch repair
+    ("a running git holds the index after an interrupted `hermes update`")."""
+    from hermes_cli import _early_recovery as er
+    from tests.waiting import wait_until
+
+    # A commit can leave Git's detached maintenance running: copying .git
+    # races transient lock removal. This process needs its own repo, not a copy.
+    other = _init_repo(tmp_path / "other")
+    lock = repo / ".git" / "index.lock"
+    lock.write_bytes(b"")  # a killed git's: nothing holds it
+    marker = "hermes.test=exits-mid-scan"
+    proc = _git_in_the_editor(other, tmp_path, ["git", "-c", marker, "commit", "-a"])
+    real = er._counts_as_holder
+
+    def exits_after_its_argv_was_read(args: list[str], any_git: bool) -> bool:
+        if marker in args and proc.returncode is None:
+            Path(f"{other / '.git' / 'COMMIT_EDITMSG'}.go").write_text("", encoding="utf-8")
+            wait_until(lambda: Path(f"/proc/{proc.pid}/stat").read_bytes().rsplit(b") ", 1)[1][:1] == b"Z",
+                       what="the other repository's git to exit (unreaped)")
+        return real(args, any_git)
+
+    monkeypatch.setattr(er, "_counts_as_holder", exits_after_its_argv_was_read)
+    try:
+        assert er._held_open(lock, repo) is False
+    finally:
+        Path(f"{other / '.git' / 'COMMIT_EDITMSG'}.go").write_text("", encoding="utf-8")
+        proc.wait(timeout=20)
 
 
 def test_lock_keeping_git_is_recognised_in_every_form_and_by_path_components(tmp_path: Path, monkeypatch) -> None:

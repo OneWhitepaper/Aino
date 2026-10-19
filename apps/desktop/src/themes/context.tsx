@@ -22,6 +22,7 @@ import { $pendingSkinApply } from './backend-sync'
 import { $chatFontFamily, resolveChatFontFamily } from './chat-font'
 import { harmonize, readableInk } from './color'
 import { DEFAULT_SKIN_NAME, DEFAULT_TYPOGRAPHY, monoTheme, nousTheme } from './presets'
+import { $pendingModeApply } from './request'
 import type { DesktopTheme, DesktopThemeColors } from './types'
 import { resolveTheme } from './user-themes'
 
@@ -130,8 +131,10 @@ function synthLightColors(seed: DesktopTheme): DesktopThemeColors {
 
 /** Returns the seed palette for a given skin + mode (no overrides applied). */
 export function getBaseColors(skinName: string, mode: 'light' | 'dark'): DesktopThemeColors {
-  const seed = resolveTheme(skinName) ?? nousTheme
+  return paletteFor(resolveTheme(skinName) ?? nousTheme, mode)
+}
 
+function paletteFor(seed: DesktopTheme, mode: 'light' | 'dark'): DesktopThemeColors {
   if (mode === 'dark') {
     return seed.darkColors ?? seed.colors
   }
@@ -486,6 +489,16 @@ export function ThemeProvider({ auxiliary = false, children }: ThemeProviderProp
       $pendingSkinApply.set(null)
     }
   }, [auxiliary, pendingSkin, setTheme])
+
+  // Same door for light/dark/system (set_theme from the agent).
+  const pendingMode = useStore($pendingModeApply)
+
+  useEffect(() => {
+    if (pendingMode) {
+      setMode(pendingMode)
+      $pendingModeApply.set(null)
+    }
+  }, [pendingMode, setMode])
 
   // The light/dark toggle (Shift+X by default) is owned by the keybind runtime
   // (`appearance.toggleMode`) so it shows up in the hotkey map and is rebindable.

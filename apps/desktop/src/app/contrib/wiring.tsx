@@ -13,6 +13,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { type CSSProperties, lazy, type ReactNode, Suspense, useCallback, useEffect, useMemo, useRef } from 'react'
 import { useLocation, useNavigate } from 'react-router'
 
+import { useAccountActions } from '@/app/account/account-context'
 import { AccountGate } from '@/app/account/account-gate'
 import { SummaryPane } from '@/app/right-sidebar/summary'
 import { formatRefValue } from '@/components/assistant-ui/directive-text'
@@ -25,7 +26,8 @@ import { FreeTierSignInDialog } from '@/components/free-tier/sign-in-dialog'
 import { GatewayConnectingOverlay } from '@/components/gateway-connecting-overlay'
 import { NotificationStack } from '@/components/notifications'
 import { DesktopOnboardingOverlay } from '@/components/onboarding'
-import { OnboardingChatGate } from '@/components/onboarding-chat/gate'
+import { firstRunIntro } from '@/components/onboarding/first-run/kickoff'
+import { OnboardingEnd } from '@/components/onboarding/onboarding-end'
 import { $newSessionTabAction, registerPaneCloser } from '@/components/pane-shell/tree/store'
 import {
   $workspaceMode,
@@ -54,6 +56,14 @@ import { reconnectGateway } from '@/store/gateway-reconnect'
 import { $interfaceMode, shownInMode } from '@/store/interface-mode'
 import { $pinnedSessionIds, pinSession, restoreWorktree, unpinSession } from '@/store/layout'
 import { notifyError } from '@/store/notifications'
+import { markOnboardingDecided } from '@/store/onboarding-presence'
+import {
+  $onboardingChatOpener,
+  decideOnboarding,
+  type OnboardingRequest,
+  type OnboardingResume
+} from '@/store/onboarding-run'
+import { captureFirstRunOwner } from '@/store/onboarding-scope'
 import { $poolLimitsSettingsRequest } from '@/store/pool-limits'
 import { $previewTarget } from '@/store/preview'
 import {
@@ -89,6 +99,7 @@ import {
   setBusy,
   setMessages
 } from '@/store/session'
+import type { SessionOwnerRoute } from '@/store/session-request-router'
 import { reportPendingUpdateRun } from '@/store/shared-metrics'
 import { $archivedSessions } from '@/store/sidebar-archive'
 import { $titlebarAppActionsSide, titlebarAppActionsClusterCounts } from '@/store/titlebar-app-actions'
@@ -170,7 +181,6 @@ import { usePetBridge } from './hooks/use-pet-bridge'
 import { useQuickEntryBridge } from './hooks/use-quick-entry-bridge'
 import { useSessionTileDelegate } from './hooks/use-session-tile-delegate'
 import { McpInstallDeepLinkDialog } from './mcp-install-deeplink-dialog'
-import { type KickoffSlashCommand, useOnboardingKickoff } from './onboarding-kickoff'
 import { useTitlebarToolContributions } from './panes'
 import { type AmbientGatewayRequest, createSessionRpcDispatcher } from './session-rpc-dispatcher'
 import { ChatRoutesSurface, SidebarSurface, TerminalSurface } from './surfaces'
@@ -214,6 +224,37 @@ function useRouteRequestNavigation(navigate: ReturnType<typeof useNavigate>): vo
     routeRequestSeenRef.current = routeRequest.seq
     navigate(routeRequest.path)
   }, [navigate, routeRequest])
+}
+
+// The main window asks the backend whether first-run onboarding is due and opens it with main's
+// intro around it; every other window never runs it, so its first-run surfaces are free at once.
+// Settings' Run onboarding again opens its chat through the same opener.
+function FirstRunOnboarding({ request, open, gatewayOpen }: {
+  request: OnboardingRequest
+  open: OnboardingResume
+  gatewayOpen: boolean
+}) {
+  const account = useStore(useAccountActions().state)
+  const ready = gatewayOpen && account.authenticated
+  useEffect(() => {
+    if (!isMainWindow()) {
+      markOnboardingDecided()
+    } else if (ready) {
+      void decideOnboarding(request, open, { intro: firstRunIntro(), owner: captureFirstRunOwner() })
+    }
+  }, [ready, open, request])
+
+  useEffect(() => {
+    if (!isMainWindow()) {
+      return
+    }
+
+    $onboardingChatOpener.set(open)
+
+    return () => $onboardingChatOpener.set(null)
+  }, [open])
+
+  return null
 }
 
 // Recovery actions raised by toast buttons (Restart Hermes, Open Billing, pool
@@ -296,6 +337,10 @@ function useRecoveryRequestToasts(): void {
 }
 
 export function ContribWiring({ children }: { children: ReactNode }) {
+  useEffect(() => {
+    if (!isMainWindow()) { markOnboardingDecided() }
+  }, [])
+
   const queryClient = useQueryClient()
   const location = useLocation()
   const navigate = useNavigate()
@@ -417,26 +462,13 @@ export function ContribWiring({ children }: { children: ReactNode }) {
   const { loadMoreMessagingForPlatform, loadMoreSessions, refreshCronJobs, refreshMessagingSessions, refreshSessions } =
     useSessionListActions({ profileScope })
 
-  const updateActiveSessionRuntimeInfo = useCallback(
-    (info: { branch?: string; cwd?: string }) => {
-      const sessionId = activeSessionIdRef.current
-
-      if (!sessionId) {
-        return
-      }
-
-      updateSessionState(sessionId, state => ({
-        ...state,
-        branch: info.branch ?? state.branch,
-        cwd: info.cwd ?? state.cwd
-      }))
-    },
-    [activeSessionIdRef, updateSessionState]
-  )
-
-  const { refreshProjectBranch } = useCwdActions({
+  const { changeSessionCwd, refreshProjectBranch } = useCwdActions({
     activeSessionIdRef,
-    onSessionRuntimeInfo: updateActiveSessionRuntimeInfo,
+    onSessionRuntimeInfo: useCallback(
+      (sessionId: string, { branch, cwd }: { branch?: string; cwd?: string }) =>
+        updateSessionState(sessionId, state => ({ ...state, branch: branch ?? state.branch, cwd: cwd ?? state.cwd })),
+      [updateSessionState]
+    ),
     requestGateway
   })
 
@@ -615,16 +647,20 @@ export function ContribWiring({ children }: { children: ReactNode }) {
     }
   }, [startSessionInWorkspace, startWorkSessionRequest])
 
+  // Opens a stored chat on screen: resume it, then route to it (resume alone selects it, the route
+  // stays where it was). Throws when the chat did not become the selected one.
   const adoptSessionRoute = useCallback(
-    async (storedSessionId: string) => {
+    async (storedSessionId: string, _replaceRoute?: boolean, owner?: SessionOwnerRoute) => {
       creatingSessionRef.current = true
 
       try {
-        await resumeSession(storedSessionId, true)
+        await resumeSession(storedSessionId, true, owner)
 
-        if ($selectedStoredSessionId.get() === storedSessionId) {
-          navigate(sessionRoute(storedSessionId), { replace: true })
+        if ($selectedStoredSessionId.get() !== storedSessionId) {
+          throw new Error('The onboarding chat could not be opened.')
         }
+
+        navigate(sessionRoute(storedSessionId), { replace: true })
       } finally {
         window.setTimeout(() => {
           creatingSessionRef.current = false
@@ -633,6 +669,7 @@ export function ContribWiring({ children }: { children: ReactNode }) {
     },
     [navigate, resumeSession]
   )
+
 
   // "New project" DRAG completion: the dialog created a project that was
   // dropped onto a chat zone (tab-strip slot / pane edge / pane center). Open
@@ -703,17 +740,6 @@ export function ContribWiring({ children }: { children: ReactNode }) {
     startFreshSessionDraft,
     sttEnabled,
     updateSessionState
-  })
-
-  const runKickoffSlash = useCallback<KickoffSlashCommand>(
-    (command, options) => executeSlashCommand(command, { ...options, typed: false }),
-    [executeSlashCommand]
-  )
-
-  const kickoffFirstChat = useOnboardingKickoff({
-    requestGateway: ambientRequestGateway,
-    resumeSession: adoptSessionRoute,
-    runSlashCommand: runKickoffSlash
   })
 
   // Runs outside the selected ChatBar so queues belonging to background
@@ -1154,6 +1180,7 @@ export function ContribWiring({ children }: { children: ReactNode }) {
         .then(() => undefined)
         .catch(() => undefined),
     followDefaultModel,
+    changeSessionCwd,
     getGateway: () => gatewayRef.current,
     openAgents,
     openCommandCenterSection,
@@ -1284,6 +1311,7 @@ export function ContribWiring({ children }: { children: ReactNode }) {
   return (
     <ContribWiringContext.Provider value={api}>
       <AccountGate>
+        {!isAuxiliaryWindow() && <FirstRunOnboarding gatewayOpen={gatewayState === 'open'} open={adoptSessionRoute} request={requestGateway} />}
         <div
           className="contents"
           style={
@@ -1315,14 +1343,7 @@ export function ContribWiring({ children }: { children: ReactNode }) {
 
         {/* The full real overlay set (mirrors DesktopController's `overlays`). */}
         <RemoteDisplayBanner />
-        {!isAuxiliaryWindow() && (
-          <OnboardingChatGate
-            enabled={gatewayState === 'open'}
-            onKickoff={kickoffFirstChat}
-            requestGateway={ambientRequestGateway}
-            runsIntro={isMainWindow()}
-          />
-        )}
+        {!isAuxiliaryWindow() && <OnboardingEnd />}
         {!isAuxiliaryWindow() && <FreeTierSignInDialog onSelectModel={selectModel} />}
         {!isAuxiliaryWindow() && <SharedMetricsConsentDialog enabled={gatewayState === 'open'} profile={activeGatewayProfile} requestGateway={requestGateway} />}
         {!isAuxiliaryWindow() && (

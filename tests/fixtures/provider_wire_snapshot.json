@@ -6275,7 +6275,7 @@
    "extra_body": {
     "thinking_config": {
      "includeThoughts": false,
-     "thinkingBudget": 0
+     "thinkingLevel": "low"
     }
    },
    "messages": [
@@ -10778,7 +10778,7 @@
      "role": "user"
     }
    ],
-   "model": "gemini-3.5-flash",
+   "model": "gemini-3.1-pro",
    "timeout": 1800.0,
    "tools": [
     {
@@ -10801,7 +10801,7 @@
     }
    ]
   },
-  "model": "gemini-3.5-flash",
+  "model": "gemini-3.1-pro",
   "off": {
    "messages": [
     {
@@ -10836,7 +10836,7 @@
      "role": "user"
     }
    ],
-   "model": "gemini-3.5-flash",
+   "model": "gemini-3.1-pro",
    "timeout": 1800.0,
    "tools": [
     {
@@ -10893,7 +10893,7 @@
      "role": "user"
     }
    ],
-   "model": "gemini-3.5-flash",
+   "model": "gemini-3.1-pro",
    "timeout": 1800.0,
    "tools": [
     {
@@ -11710,7 +11710,7 @@
      "google": {
       "thinking_config": {
        "include_thoughts": false,
-       "thinking_budget": 0
+       "thinking_level": "low"
       }
      }
     }

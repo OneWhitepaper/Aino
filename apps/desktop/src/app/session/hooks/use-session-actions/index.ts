@@ -24,6 +24,7 @@ import {
   restorePendingClarifyToolCall,
   settlePendingClarifyToolCall,
   stripPendingClarifyProjectionForCache,
+  textPart,
   toChatMessages
 } from '@/lib/chat-messages'
 import { markReasoningEffortPending } from '@/lib/chat-runtime'
@@ -155,7 +156,7 @@ import {
 } from './authoritative-messages'
 import { branchCreateKey } from './branch-create-key'
 import { type BranchMessage, selectBranchMessages, toBranchMessages } from './branch-messages'
-import { sessionCreateOverrideParams, type SessionCreateOverrides, type SessionSeedMessage } from './create-overrides'
+import { type SessionCreateOverrides } from './create-overrides'
 import { desktopSessionCreateParams } from './create-params'
 import { markSessionCreatedThisRun, sessionCreatedThisRun } from './created-this-run'
 import { captureDisplayHydration } from './display-hydration'
@@ -352,16 +353,7 @@ export function useSessionActions({
   )
 
   const createBackendSessionForSend = useCallback(
-    async (
-      preview: string | null = null,
-      seedMessages?: SessionSeedMessage[],
-      // Create the session titled or at a pinned reasoning effort (guided
-      // onboarding mints its welcome chat this way). The owning profile is NOT
-      // an override — point $newChatProfile at it first (selectProfile-style)
-      // so the create lands on that profile's own backend and every later
-      // ambient RPC follows.
-      createOverrides?: SessionCreateOverrides
-    ): Promise<string | null> => {
+    async (preview: string | null = null, createOverrides?: SessionCreateOverrides): Promise<string | null> => {
       const startingStoredSessionId = selectedStoredSessionIdRef.current
       const startingRouteToken = getRouteToken()
 
@@ -401,8 +393,7 @@ export function useSessionActions({
         } = await desktopSessionCreateParams(cwd, capturedRoute, capturedProfile, legacyProfileIntent)
 
         const params: Record<string, unknown> = {
-          ...baseParams,
-          ...sessionCreateOverrideParams(createOverrides, seedMessages)
+          ...baseParams
         }
 
         // Lease the owner socket for the whole create → owner-publication
@@ -622,9 +613,50 @@ export function useSessionActions({
         runtimeIdByStoredSessionIdRef.current.set(stored, created.session_id)
         ensureSessionState(created.session_id, stored)
         upsertOptimisticSession(created, stored, null, text.trim())
+        // The route's warm resume paints this cached state as-is, so the first
+        // user message has to be in it, as a composer send seeds it.
+        const firstMessageId = `user-${created.session_id}`
+        updateSessionState(
+          created.session_id,
+          state => ({
+            ...state,
+            messages: [
+              ...state.messages,
+              {
+                id: firstMessageId,
+                role: 'user',
+                parts: [textPart(text.trim())],
+                timestamp: Date.now() / 1000
+              }
+            ],
+            awaitingResponse: true,
+            busy: true,
+            turnStartedAt: state.turnStartedAt ?? Date.now()
+          }),
+          stored
+        )
+
         // Submit the exact runtime id returned by session.create so this
         // atomic path cannot fall back to a route token (#85590).
-        await requestGateway('prompt.submit', { session_id: created.session_id, text })
+        try {
+          await requestGateway('prompt.submit', { session_id: created.session_id, text })
+        } catch (error) {
+          // A refused prompt leaves no turn behind, so its bubble and spinner go too.
+          updateSessionState(
+            created.session_id,
+            state => ({
+              ...state,
+              messages: state.messages.filter(message => message.id !== firstMessageId),
+              awaitingResponse: false,
+              busy: false,
+              turnStartedAt: null
+            }),
+            stored
+          )
+
+          throw error
+        }
+
         navigate(sessionRoute(stored), { replace: true })
 
         return { runtimeSessionId: created.session_id, sessionId: stored }
@@ -641,7 +673,8 @@ export function useSessionActions({
       navigate,
       requestGateway,
       runtimeIdByStoredSessionIdRef,
-      selectedStoredSessionIdRef
+      selectedStoredSessionIdRef,
+      updateSessionState
     ]
   )
 

@@ -6,7 +6,7 @@ import type { DragKind } from './hooks/use-file-drop-zone'
 import { composerStaysMounted } from './thread-loading'
 
 interface ShowChatBarOptions {
-  guideOpening: boolean
+  guideOpening?: boolean
   loadingSession: boolean
   resumeExhausted: boolean
   routedSessionId: null | string
@@ -21,7 +21,7 @@ interface ShowChatBarOptions {
 // (periodic list/status refresh, hydrate through an empty frame) must not
 // unmount it again — see composerStaysMounted (#117375).
 export function useShowChatBar({
-  guideOpening,
+  guideOpening = false,
   loadingSession,
   resumeExhausted,
   routedSessionId,
@@ -29,14 +29,14 @@ export function useShowChatBar({
 }: ShowChatBarOptions): boolean {
   const settledRoutedSessionRef = useRef<null | string>(null)
 
-  if (!guideOpening && !loadingSession && routedSessionView) {
+  if (!loadingSession && routedSessionView) {
     settledRoutedSessionRef.current = routedSessionId
   } else if (!routedSessionView) {
     settledRoutedSessionRef.current = null
   }
 
   return composerStaysMounted({
-    hideComposer: resumeExhausted || isWatchWindow(),
+    hideComposer: guideOpening || resumeExhausted || isWatchWindow(),
     loadingSession,
     routedSessionId,
     settledRoutedSessionId: settledRoutedSessionRef.current

@@ -33,6 +33,12 @@ describe('isIdlePromptOnly', () => {
 })
 
 describe('cleanReviveSnapshot', () => {
+  it('keeps a first command after the leading zsh partial-line spacer', () => {
+    const snapshot = ['\x1b[7m%\x1b[0m', 'user@host % printf marker', 'marker', 'user@host %'].join('\r\n')
+    expect(cleanReviveSnapshot(snapshot)).toContain('marker')
+    expect(cleanReviveSnapshot(snapshot)).toContain('printf marker')
+  })
+
   it('drops a spaced trailing prompt block after a blank separator (starship)', () => {
     const snapshot = ['echo hi', 'hi', '', PS_PROMPT].join('\r\n')
 

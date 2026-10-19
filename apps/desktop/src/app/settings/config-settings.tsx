@@ -38,7 +38,6 @@ import { PanelEmpty } from '../overlays/panel'
 
 import { ConfigField } from './config-field'
 import { CONFIG_SUBPAGES, configSubpageForField } from './config-subpages'
-import { DeveloperSettings } from './developer-settings'
 import {
   clearsEnabledToolsets,
   diffConfig,
@@ -52,6 +51,7 @@ import {
 import { MemoryConnect } from './memory/connect'
 import { ProviderConfigPanel } from './memory/provider-config-panel'
 import { ModelSettings, ModelSettingsSkeleton } from './model-settings'
+import { OnboardingSettings } from './onboarding-settings'
 import { PoolLimitsSetting } from './pool-limits-setting'
 import {
   EmptyState,
@@ -162,7 +162,7 @@ function ConfigSettingsLoadState({
       <SettingsContent>
         <SettingsProfileScope className="mb-5" />
         {showSharedMetrics && <SharedMetricsSettings />}
-        {showDesktopSettings && <DeveloperSettings />}
+        {showDesktopSettings && <OnboardingSettings />}
         <div className="mb-6">
           <ModelSettingsSkeleton subpage={subpage} />
         </div>
@@ -588,7 +588,7 @@ function ConfigSettingsInner({
     <SettingsContent>
       <SettingsProfileScope className="mb-5" />
       {showSharedMetrics && <SharedMetricsSettings />}
-      {showDesktopSettings && <DeveloperSettings />}
+      {showDesktopSettings && <OnboardingSettings />}
       {activeSectionId === 'voice' && (
         <ListRow description={c.voiceShortcutHintDesc} title={c.voiceShortcutHintTitle} />
       )}

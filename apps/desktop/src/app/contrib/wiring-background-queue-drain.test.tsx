@@ -10,6 +10,7 @@ import {
   getQueuedPrompts
 } from '@/store/composer-queue'
 import { $activeConnectionId } from '@/store/connections'
+import { $onboardingDecided, $onboardingSurfaceClear } from '@/store/onboarding-presence'
 import {
   $activeSessionId,
   $connection,
@@ -30,6 +31,7 @@ import type { AmbientGatewayRequest } from './session-rpc-dispatcher'
 // dispatcher. Stub unrelated chrome/boot and the prompt/network boundaries;
 // this proves scheduling/routing, not a WebSocket or an LLM's execution.
 const fixture = vi.hoisted(() => ({
+  windowRole: 'main',
   ambientRequest: vi.fn(async () => {
     throw new Error('foreground must not receive background RPCs')
   }),
@@ -42,6 +44,17 @@ const fixture = vi.hoisted(() => ({
   activeRef: { current: 'rt-foreground' }
 }))
 
+vi.mock('@/store/windows', async original => ({
+  ...(await original<Record<string, unknown>>()),
+  isMainWindow: () => fixture.windowRole === 'main',
+  isAuxiliaryWindow: () => ['secondary', 'hud', 'browser'].includes(fixture.windowRole)
+}))
+vi.mock('@/app/account/account-context', async () => {
+  const { atom } = await import('nanostores')
+  const state = atom({ authenticated: false })
+
+  return { useAccountActions: () => ({ state }) }
+})
 vi.mock('@/app/account/account-gate', () => ({ AccountGate: ({ children }: { children: React.ReactNode }) => children }))
 vi.mock('@/store/gateway', async importActual => ({
   ...(await importActual<Record<string, unknown>>()),
@@ -145,6 +158,7 @@ import { ContribWiring } from './wiring'
 const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
 
 beforeEach(() => {
+  fixture.windowRole = 'main'
   vi.useFakeTimers()
   vi.clearAllMocks()
   clearAllSessionStates()
@@ -233,4 +247,13 @@ describe('ContribWiring background queue: independent remote owner', () => {
     })
     expect(getQueuedPrompts('stored-remote')).toHaveLength(0)
   })
+})
+
+
+it.each(['secondary', 'hud', 'browser', 'peer'])('releases first-run surfaces in the %s window without a startup request', role => {
+  fixture.windowRole = role
+  $onboardingDecided.set(false)
+  render(<MemoryRouter><QueryClientProvider client={queryClient}><ContribWiring>{null}</ContribWiring></QueryClientProvider></MemoryRouter>)
+  expect($onboardingSurfaceClear.get()).toBe(true)
+  expect(fixture.ambientRequest).not.toHaveBeenCalledWith('onboarding.state', expect.anything(), expect.anything())
 })

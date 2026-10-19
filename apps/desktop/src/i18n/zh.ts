@@ -23,13 +23,16 @@ import { defineFieldCopy } from '@/app/settings/field-copy'
 import { defineLocale, type TranslationOverrides } from './define-locale'
 import { introZh } from './intro-zh'
 import { zhAuxTasks } from './zh_aux_tasks'
+import { zhClarify } from './zh_clarify'
 import { zhConnectorCard } from './zh_connector_card'
+import { zhFirstRun } from './zh_first_run'
 import { zhLocalModels } from './zh_local_models'
 import { zhModelMenu } from './zh_model_menu'
 import { zhNotices } from './zh_notices'
 import { zhOnboarding } from './zh_onboarding'
 import { zhProjects } from './zh_projects'
 import { zhSharedMetrics } from './zh_shared_metrics'
+import { zhThemePicker } from './zh_theme_picker'
 import { zhUpdateChannel } from './zh_update_channel'
 
 export const zhOverrides = {
@@ -42,6 +45,7 @@ export const zhOverrides = {
 "missing":{"title":"文件不存在","message":"此文件不存在，可能已被删除、移动，或位于另一台设备。"},
 },
   sharedMetrics: zhSharedMetrics,
+  firstRun: zhFirstRun,
   intro: introZh,
   connectors: zhConnectorCard,
   sessionImport: {
@@ -717,10 +721,6 @@ export const zhOverrides = {
         profileLabel: '安装到配置文件',
         agentTargetLocal: (profile, dir) => `安装到 ${profile} 后端（${dir}）`,
         agentTargetRemote: profile => `安装到已连接的 ${profile} 后端`,
-        catalogPinned: (name, sha) =>
-          `Hermes 目录条目「${name}」— agent 部分将安装在经过审核的固定提交${sha ? ` ${sha}` : ''}，而不是分支最新代码。`,
-        reviewedHeading: '经过审核的目录条目',
-        reviewedIntro: '此条目已在其固定提交处经过人工审核。你仍可在下方检查确切代码。',
         toolsConnected: n => `已连接 ${n} 个工具`,
         skillsReady: names => (names.length === 1 ? `技能 ${names[0]} 已就绪` : `${names.length} 个技能已就绪`),
         nextChat: '更多工具将在下一次聊天中可用',
@@ -736,7 +736,6 @@ export const zhOverrides = {
         sourceHeading: '源代码',
         viewRepository: '查看仓库',
         viewPluginFiles: '查看插件文件',
-        gitCloneLabel: 'Git 克隆地址',
         enableAgent: '安装后启用智能体插件',
         forceReinstall: '强制重装（替换已存在的安装）',
         pinToCommit: '固定到提交（可选）',
@@ -755,7 +754,12 @@ export const zhOverrides = {
         agentFailed: '智能体插件安装失败',
         installUncertain: 'Hermes 已停止等待安装结果，但插件可能仍在安装。关闭此窗口并刷新插件列表，然后再尝试安装。',
         desktopFailed: '桌面插件安装失败',
-        missingEnv: (_name, vars) => `缺少环境变量：${vars}。请在设置 → 密钥中添加。`
+        missingEnv: (_name, vars) => `缺少环境变量：${vars}。请在设置 → 密钥中添加。`,
+        verified: '已验证', unverified: '未验证', reviewedByNous: '已由 Nous 审核。',
+        installsAndEnables: profile => `安装到 ${profile}，并立即启用。`,
+        installsOnly: profile => `安装到 ${profile}。`, advanced: '高级', versionLabel: '版本',
+        reviewedPin: sha => (sha ? `已审核的固定提交 ${sha}` : '已审核的固定提交'),
+        latestCommit: '最新提交', nothingToInstall: '此包在这里没有可安装的内容。'
       },
       errors: {
         desktopUnavailable: '桌面插件不可用',
@@ -1544,11 +1548,6 @@ export const zhOverrides = {
       alwaysExternalLinksTitle: '始终在外部浏览器中打开链接',
       alwaysExternalLinksDesc:
         '点击的每个链接都在系统浏览器中打开，而不是应用内浏览器。右键菜单中的“在应用内浏览器中打开”仍然可用。',
-      developerTitle: '开发者',
-      resetOnboardingTitle: '重置新手引导',
-      resetOnboardingDesc: '删除设置对话，重建设置配置文件，并重新运行首次设置。你自己的配置文件、对话和插件会保留。',
-      resetOnboardingAction: '重置',
-      resetOnboardingFailed: '无法重置新手引导',
       attachmentSizeTitle: '预览 / 图片加载大小上限',
       attachmentSizeDesc:
         '桌面端为预览和图片附件加载本地文件的大小上限（MB）。默认为 16。远程非图片附件使用单独的 256 MB 上限。设置过大会将整个文件读入内存，可能导致应用卡死或崩溃。',
@@ -4092,16 +4091,6 @@ export const zhOverrides = {
     recent: '最近'
   },
 
-  handoffTour: {
-    localTitle: '此电脑支持运行本地模型',
-    localText: (model: string) => model + ' 适合你的硬件。它可免费运行，对话内容不会离开电脑。你随时可以在这里的模型菜单中选择它。',
-    profileTitle: '第一个任务在默认配置中运行',
-    profileText: '在此切换配置。当前亮起的是默认配置，任务会话保存在其中。另一个是初始设置配置，欢迎会话保存在那里。',
-    sessionsTitle: '每个配置独立保存自己的会话',
-    sessionsText: '此列表属于默认配置。新会话在当前选中的配置中创建；切换配置后，列表也会随之变化。',
-    stayTitle: '随时返回寻求帮助',
-    stayText: '需要帮助时，切换到初始设置配置并打开欢迎会话。它会一直保留在那里。'
-  },
 
   composer: {
     message: '消息',
@@ -5813,48 +5802,8 @@ export const zhOverrides = {
       alwaysAllow: '始终允许',
       timedOutSystemLine: '审批已超时，命令未执行。请让智能体重试，或在“设置 > 安全 > 审批超时”中延长等待时间。'
     },
-    clarify: {
-      notReady: '澄清请求尚未就绪',
-      gatewayDisconnected: 'Hermes 网关未连接',
-      sendFailed: '无法发送澄清响应',
-      loadingQuestion: '正在加载问题…',
-      other: '其他 (输入你的答案)',
-      placeholder: '输入你的答案…',
-      skip: '跳过',
-      skipped: '已跳过',
-      noAnswer: '未回答',
-      confirmAndContinueLabel: '确认并继续',
-      singleSelectHint: '选一个',
-      multiSelectHint: '可多选',
-      oneQuestion: '1 个问题',
-      questionProgress: (answered, total) => `已回答 ${answered}/${total}`,
-      notDelivered: '此问题未送达应用，无法在此回答。请按停止结束本轮，然后在聊天中回复。'
-    },
-    setupChoose: {
-      kinds: {
-        accent: '强调色',
-        connectors: '应用',
-        layout: '布局',
-        plugins: '插件',
-        theme: '外观'
-      },
-      loading: '正在加载选项…',
-      unavailable: '此列表暂不可用，请直接在对话中回复。',
-      findApp: '查找应用',
-      customColor: '自定义颜色',
-      plugin: '插件',
-      startsLater: '开始时我们会帮你设置好这些。'
-    },
-    startChat: {
-      starting: title => `正在启动“${title}”…`,
-      startingUntitled: '正在启动对话…',
-      untitled: '新对话',
-      notStarted: '对话未能启动',
-      retry: '重试',
-      inProfile: profile => `位于 ${profile}`,
-      open: '打开',
-      openFailed: '无法打开对话'
-    },
+    clarify: zhClarify,
+    themePicker: zhThemePicker,
     catalogInstall: {
       preparing: '正在准备安装…',
       install: '安装',
@@ -5982,8 +5931,6 @@ export const zhOverrides = {
         read_file: { done: '已读取文件', pending: '正在读取文件', pendingAction: '正在读取' },
         search_files: { done: '已搜索文件', pending: '正在搜索文件', pendingAction: '正在搜索' },
         session_search_recall: { done: '已搜索会话历史', pending: '正在搜索会话历史', pendingAction: '正在搜索' },
-        setup_choose: { done: '已提出设置问题', pending: '正在提出设置问题', pendingAction: '正在提问' },
-        start_chat: { done: '已启动对话', pending: '正在启动对话', pendingAction: '正在启动' },
         terminal: { done: '已运行命令', pending: '正在运行命令', pendingAction: '正在运行' },
         todo: { done: '已更新待办', pending: '正在更新待办', pendingAction: '正在更新' },
         vision_analyze: { done: '已分析图片', pending: '正在分析图片', pendingAction: '正在分析' },

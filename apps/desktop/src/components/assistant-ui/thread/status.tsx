@@ -12,7 +12,7 @@ import {
   SCAFFOLD_LABEL_CLASS,
   SCAFFOLD_META_CLASS
 } from '@/components/chat/scaffold-row'
-import { useOnboardingChatActive } from '@/components/onboarding-chat/assembly'
+import { useOnboardingChatActive } from '@/components/onboarding/first-run/assembly'
 import { Codicon } from '@/components/ui/codicon'
 import { Loader } from '@/components/ui/loader'
 import { StatusPulse } from '@/components/ui/status-pulse'
@@ -397,8 +397,8 @@ export const TurnActivityIndicator: FC<{ thinking?: boolean }> = ({ thinking = f
   const { t } = useI18n()
   // Same rule the reasoning disclosure renders by (message-parts.tsx).
   const showReasoning = useStore($showReasoning)
-  const guidedChat = useOnboardingChatActive()
-  const reasoningShown = showReasoning && !guidedChat
+  const onboardingChat = useOnboardingChatActive()
+  const reasoningShown = showReasoning && !onboardingChat
   const activity = useAuiState(s => activitySignature(s.message.content, reasoningShown))
 
   // Keep the last-progress timestamp so a later named wait can measure its

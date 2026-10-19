@@ -31,7 +31,13 @@ def _step(name_prefix: str) -> str:
         for step in job["steps"]:
             if step.get("name", "").startswith(name_prefix):
                 # The workflow expands ${{ github.base_ref }} before bash sees it.
-                return step["run"].replace("${{ github.base_ref }}", "main")
+                text = step["run"].replace("${{ github.base_ref }}", "main")
+                # Import-admission tests substitute a fixture commit for the
+                # reviewed release pin; normal cases exercise the real pin.
+                return text.replace(
+                    "d923a5eb487a17c0a68801bba9ef0f56c81040a8",
+                    os.environ.get("CATALOG_CI_UPSTREAM", "d923a5eb487a17c0a68801bba9ef0f56c81040a8"),
+                )
     raise LookupError(name_prefix)
 
 
@@ -323,3 +329,93 @@ def test_changed_entries_step(tmp_path, change, rc, listed, text):
     assert [f for f in lines if f and "__EOF__" not in f and f != "files<<__EOF__"] == listed
     if text:
         assert text in res.stdout
+
+
+def _import_merge(tmp_path: Path, *, changes=None) -> tuple[Path, str, str]:
+    """Model Aino main, an upstream merge plus compatibility fix, and GitHub's merge."""
+    repo = tmp_path / "import"
+    _write(repo, {"plugin-catalog/base.yaml": "name: base\n", "code.py": "base = 1\n"})
+    _git(repo, "init", "-qb", "main")
+    _commit(repo, "common base")
+    _git(repo, "checkout", "-qb", "release")
+    _write(repo, {"plugin-catalog/imported.yaml": "name: imported\n", "code.py": "release = 1\n"})
+    release = _commit(repo, "reviewed release")
+    _git(repo, "checkout", "-q", "main")
+    _write(repo, {"aino.py": "aino = True\n"})
+    base = _commit(repo, "existing Aino application")
+    _git(repo, "checkout", "-qb", "pr")
+    _git(repo, "merge", "-q", "--no-ff", "-m", "import release", "release")
+    _write(repo, {"code.py": "aino_compatibility = True\n", **(changes or {})})
+    _commit(repo, "Aino compatibility after import")
+    _git(repo, "checkout", "-q", "main")
+    _git(repo, "merge", "-q", "--no-ff", "-m", "GitHub PR merge", "pr")
+    _git(repo, "checkout", "-q", "--detach")
+    _git(repo, "update-ref", "refs/remotes/origin/main", base)
+    return repo, release, base
+
+
+def test_aino_import_validates_from_reviewed_tree(tmp_path, monkeypatch):
+    repo, release, _ = _import_merge(tmp_path)
+    monkeypatch.setenv("CATALOG_CI_UPSTREAM", release)
+    out = tmp_path / "gh-output.txt"
+    out.touch()
+    res = _run(_step("Find changed catalog"), tmp_path, repo,
+               {**os.environ, "GITHUB_OUTPUT": str(out)})
+    assert res.returncode == 0, res.stdout + res.stderr
+    output = out.read_text(encoding="utf-8")
+    assert f"validation_ref={release}\n" in output
+    assert "plugin-catalog/imported.yaml\n" in output
+    assert (repo / "aino.py").exists()
+    assert (repo / "code.py").read_text() == "aino_compatibility = True\n"
+    # Exercise the actual transition, including removal of untracked import
+    # shadows, before setup-pm/Hermes consume anything from the checkout.
+    (repo / "shadow.py").write_text("untrusted = True\n")
+    checkout = _run(_step("Check out reviewed upstream"), tmp_path, repo,
+                    {**os.environ, "VALIDATION_REF": release})
+    assert checkout.returncode == 0, checkout.stdout + checkout.stderr
+    assert _git(repo, "rev-parse", "HEAD") == release
+    assert (repo / "code.py").read_text() == "release = 1\n"
+    assert not (repo / "aino.py").exists()
+    assert not (repo / "shadow.py").exists()
+    assert out.read_text(encoding="utf-8") == output
+    assert (repo / "plugin-catalog/imported.yaml").is_file()
+
+
+@pytest.mark.parametrize("changes, error", [
+    ({"plugin-catalog/evil.yaml": "name: evil\n"}, "changed plugin-catalog/"),
+    ({"plugin-catalog/imported.yaml": "name: tampered\n"}, "changed plugin-catalog/"),
+    ({"scripts/scan_plugin_payloads.py": "print('PASS')\n"}, "changed catalog enforcement inputs"),
+    ({".github/actions/setup-pm/action.yml": "runs: malicious\n"}, "changed catalog enforcement inputs"),
+])
+def test_import_with_catalog_or_enforcement_changes_is_rejected(tmp_path, monkeypatch, changes, error):
+    repo, release, _ = _import_merge(tmp_path, changes=changes)
+    monkeypatch.setenv("CATALOG_CI_UPSTREAM", release)
+    out = tmp_path / "gh-output.txt"
+    out.touch()
+    res = _run(_step("Find changed catalog"), tmp_path, repo,
+               {**os.environ, "GITHUB_OUTPUT": str(out)})
+    assert res.returncode != 0, res.stdout + res.stderr
+    assert error in res.stdout
+    assert "validation_ref=" not in out.read_text(encoding="utf-8")
+
+
+def test_reviewed_import_exception_expires_once_main_contains_release(tmp_path, monkeypatch):
+    repo, release, _ = _import_merge(tmp_path)
+    _git(repo, "checkout", "-qb", "target", release)
+    _write(repo, {"target.txt": "main\n"})
+    target = _commit(repo, "main after release")
+    _git(repo, "checkout", "-qb", "next-pr", release)
+    _write(repo, {"pr.txt": "pr\n", "plugin-catalog/next.yaml": "name: next\n"})
+    _commit(repo, "mixed code and catalog after import")
+    _git(repo, "checkout", "-q", "target")
+    _git(repo, "merge", "-q", "--no-ff", "-m", "merge", "next-pr")
+    _git(repo, "checkout", "-q", "--detach")
+    _git(repo, "update-ref", "refs/remotes/origin/main", target)
+    monkeypatch.setenv("CATALOG_CI_UPSTREAM", release)
+    out = tmp_path / "gh-output.txt"
+    out.touch()
+    res = _run(_step("Find changed catalog"), tmp_path, repo,
+               {**os.environ, "GITHUB_OUTPUT": str(out)})
+    assert res.returncode != 0, res.stdout + res.stderr
+    assert "catalog entry PRs may only touch" in res.stdout
+    assert "validation_ref=" not in out.read_text(encoding="utf-8")

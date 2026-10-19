@@ -219,7 +219,10 @@ export function cleanReviveSnapshot(serialized: string): string {
   }
 
   const lastBlank = lines.findLastIndex(line => !visibleText(line))
-  const spacedPrompt = lastBlank >= 0 && lines.length - 1 - lastBlank <= 3
+  // A leading shell spacer is not a separator after history: treating it as
+  // one erases the first short command/output together with the final prompt.
+  const historyBeforeGap = lines.slice(0, Math.max(0, lastBlank)).some(line => Boolean(visibleText(line)))
+  const spacedPrompt = historyBeforeGap && lines.length - 1 - lastBlank <= 3
 
   // Spaced prompt (starship/powerline): drop the block after the blank
   // separator. Otherwise the last line is the single-line prompt itself.

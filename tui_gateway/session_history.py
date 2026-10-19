@@ -329,9 +329,9 @@ def _history_to_messages(history: list[dict], *, profile_home=None, image_urls: 
         if role == "user":
             if user_originated_turn_view(m) is not None:
                 prior_users.append(m)
-            # A setup handoff's first message carries the first-task skill after what the user sees.
-            from agent.first_task_prompt import visible_text
-            content_text = visible_text(_DISCORD_TRIGGERING_NOTE_RE.sub(r"\1", content_text))
+            content_text = _DISCORD_TRIGGERING_NOTE_RE.sub(r"\1", content_text)
+            # Retired setup handoffs still carry the model-only skill in saved transcripts.
+            content_text = content_text.partition("\n\n[/first-task]\n\n")[0]
         if role == "assistant" and m.get("tool_calls"):
             _index_history_tool_calls(m, tool_call_args)
         if role == "user" and m.get("display_kind") == STEER_DISPLAY_KIND:
