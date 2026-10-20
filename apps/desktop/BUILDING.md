@@ -419,6 +419,12 @@ stamp and unsigned executable, and runs the existing native desktop chat smoke.
 Successful files and checksums are retained as GitHub Actions artifacts for 14
 days. This lane does not publish to the website or any update feed. ZIP users
 extract and launch the executable; MSIX install/update coverage is separate.
+The ZIP is also retained before smoke under an explicitly `unverified` artifact
+name, so a failed test does not discard the build. The `--platform-account` smoke
+option reuses the desktop account fixture, native phone-login UI and HTTPS proxy
+with certificate validation enabled. Inference uses the existing custom mock
+provider. This verifies packaged login and chat plumbing, not production SMS,
+platform model leases, real billing, or Windows update installation.
 
 Prepare and activate the [PM developer environment](../../website/docs/reference/package-management.md#developer-workflow)
 first. Use Bash `source ./activate` or PowerShell `. .\activate.ps1`, and keep a

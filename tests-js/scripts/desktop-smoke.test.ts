@@ -702,3 +702,28 @@ test('re-writing the same provider config is byte-identical', (): void => {
       + 'MOCK_API_KEY=e2e-mock-key\nOPENAI_API_KEY=e2e-mock-key\n')
   } finally { fs.rmSync(home, { recursive: true, force: true }) }
 })
+
+test('platform account smoke uses verified TLS proxy and pins UI language before launch', async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'smoke-account-'))
+  const home = path.join(root, 'home')
+  const exe = path.join(root, 'fixture-executable')
+  fs.writeFileSync(exe, '#!/bin/sh\nexit 1\n', { mode: 0o755 })
+  let launched = false
+
+  try {
+    await expect(runInstalledDesktopSmoke({ exe, root, origin: 'bundled', home,
+      'user-data': path.join(root, 'user-data'), out: root, phase: 'installed',
+      'expect-commit': 'a'.repeat(40), 'platform-account': true }, async launch => {
+      if (!launch?.env) { throw new Error('Missing smoke launch environment') }
+      launched = true
+      expect(launch.env?.NODE_USE_ENV_PROXY).toBe('1')
+      expect(launch.env?.HTTPS_PROXY).toMatch(/^http:\/\/127\.0\.0\.1:/)
+      expect(fs.readFileSync(launch.env!.NODE_EXTRA_CA_CERTS!, 'utf8')).toContain('BEGIN CERTIFICATE')
+      expect(launch.env?.NODE_TLS_REJECT_UNAUTHORIZED).not.toBe('0')
+      expect(yaml.load(fs.readFileSync(path.join(home, 'config.yaml'), 'utf8'))).toMatchObject({ display: { language: 'en' } })
+      throw new Error('fixture launch deliberately stopped')
+    })).rejects.toThrow('fixture launch deliberately stopped')
+    expect(launched).toBe(true)
+    expect(fs.existsSync(path.join(root, 'edge-ca'))).toBe(false)
+  } finally { fs.rmSync(root, { recursive: true, force: true }) }
+})

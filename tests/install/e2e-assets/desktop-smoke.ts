@@ -15,6 +15,8 @@ import { type ChatIdentity, readChatIdentity, runDesktopChatSmoke, waitForChatRe
 import { assertBackendOrigin, localBackendProcess, readBundledBundleEnv, readInstallationCommit } from '../../../tests-js/scripts/desktop-smoke-process.ts'
 import { validateMockUrl, writeEnvFile, writeMockProviderConfig } from '../../../tests-js/scripts/mock-provider-config.ts'
 import { type MockServer, startMockServer } from '../../../tests-js/scripts/mock-server.ts'
+import { signInPlatformFixture, startPlatformServer } from '../../../tests-js/scripts/platform-account-fixture.ts'
+import { startHttpsEdge } from '../../../apps/desktop/e2e/update/github-edge.ts'
 
 import { type SmokeEnvironment, smokeEnvironment, within } from './smoke-env.mjs'
 import { sourceRuntimeSettleCommand } from './source-runtime-settle.mjs'
@@ -29,6 +31,7 @@ const optionsSchema = z.object({
   home: absolutePath, 'user-data': absolutePath, out: absolutePath,
   phase: z.enum(['old', 'new', 'installed']), 'expect-commit': z.string().regex(/^[0-9a-f]{40}$/),
   'launch-spec': absolutePath.optional(), 'mock-url': z.string().optional(),
+  'platform-account': z.boolean().optional(),
 })
 type SmokeOptions = z.infer<typeof optionsSchema>
 
@@ -275,6 +278,37 @@ function assertResolvedIdentity(identity: ChatIdentity, options: SmokeOptions, p
 
 export type LaunchElectron = (launch: Parameters<typeof _electron.launch>[0]) => Promise<ElectronApplication>
 
+async function prepareAccountFixture(enabled: boolean | undefined, out: string, env: SmokeEnvironment) {
+  if (!enabled) { return undefined }
+  const account = await startPlatformServer()
+  try {
+    const edge = await startHttpsEdge(out, { host: 'api.agentera.com.cn', handler: account.handler, tunnelOthers: false })
+    Object.assign(env, edge.env, { NODE_USE_ENV_PROXY: '1', NODE_EXTRA_CA_CERTS: edge.caBundle })
+    return {
+      signIn: signInPlatformFixture,
+      proof: () => ({
+        mode: 'synthetic-account-real-native-bridge',
+        requests: account.requests.map(({ method, path: route }) => ({ method, path: route })),
+        proxyHits: edge.apiHits, blockedConnects: edge.deniedConnects,
+        boundary: 'Local account fixture and custom mock inference; no production SMS, platform model lease or billing verification.'
+      }),
+      close: async () => {
+        try { await edge.close() } finally {
+          await account.close()
+          fs.rmSync(path.join(out, 'edge-ca'), { recursive: true, force: true })
+        }
+      }
+    }
+  } catch (error) { await account.close(); throw error }
+}
+
+function seedSmokeProviders(options: SmokeOptions, predictedHome: string | undefined, mockUrl: string) {
+  for (const home of new Set([...candidateSmokeHermesHomes(options.home, options['user-data']), ...(predictedHome ? [predictedHome] : [])])) {
+    writeMockProviderConfig(home, mockUrl, options['platform-account'] ? '  language: en' : undefined)
+    writeEnvFile(home, 'e2e-mock-key', mockUrl)
+  }
+}
+
 // `launchApp` is a parameter so a test can substitute a failing launcher and
 // exercise the seeding that happens before the launch without touching Playwright.
 export async function runInstalledDesktopSmoke(options: SmokeOptions, launchApp: LaunchElectron = (launch) => _electron.launch(launch)): Promise<void> {
@@ -285,11 +319,13 @@ export async function runInstalledDesktopSmoke(options: SmokeOptions, launchApp:
   let app: ElectronApplication | undefined
   let page: Page | undefined
   let predictedHome: string | undefined
+  let account: Awaited<ReturnType<typeof prepareAccountFixture>>
   const consoleLines: string[] = []
   try {
     fs.accessSync(options.exe, fs.constants.X_OK)
     fs.accessSync(options.root)
     const launch: Launch = resolveSmokeLaunch(options)
+    account = await prepareAccountFixture(options['platform-account'], out, launch.env)
     const bundleEnv: Record<string, string | null> | undefined = options.origin === 'bundled' ? readBundledBundleEnv(options.root) : undefined
     predictedHome = bundleEnv ? predictSmokeHermesHome(launch.env, bundleEnv) : undefined
 
@@ -316,10 +352,7 @@ export async function runInstalledDesktopSmoke(options: SmokeOptions, launchApp:
     // provider config and .env. When the artifact's stamp carries its baked
     // bundle env, predict the home the app will actually resolve and seed that
     // too, refusing to seed a non-empty one.
-    for (const home of new Set([...candidateSmokeHermesHomes(options.home, options['user-data']), ...(predictedHome ? [predictedHome] : [])])) {
-      writeMockProviderConfig(home, mockUrl)
-      writeEnvFile(home, 'e2e-mock-key', mockUrl)
-    }
+    seedSmokeProviders(options, predictedHome, mockUrl)
     app = await launchApp({ ...launch, timeout: 120_000 })
     app.process().stdout?.on('data', (chunk: Buffer): void => { consoleLines.push(redact(chunk.toString())) })
     app.process().stderr?.on('data', (chunk: Buffer): void => { consoleLines.push(redact(chunk.toString())) })
@@ -327,6 +360,7 @@ export async function runInstalledDesktopSmoke(options: SmokeOptions, launchApp:
     page = await pickAppWindow(app, (message: string): void => { consoleLines.push(redact(message)) })
     page.on('pageerror', (error: Error): void => { consoleLines.push(redact(error.message)) })
     await prepareWindowForInput(app, page)
+    await account?.signIn(page)
     await waitForChatReady(page)
     const running = await verifyRunningDesktop(app, options, launch, predictedHome)
     const connection = await backendConnection(page)
@@ -352,7 +386,7 @@ export async function runInstalledDesktopSmoke(options: SmokeOptions, launchApp:
     await app.context().tracing.start({ screenshots: true, snapshots: false, sources: false })
     const chat = await runDesktopChatSmoke(page, { mockUrl, phase: options.phase, outDir: out, expectCommit: options['expect-commit'], provenanceCommit })
     fs.writeFileSync(receiptPath, `${JSON.stringify({ ...chat, status: 'closing' }, null, 2)}\n`)
-    const result = { ...chat, origin: options.origin, root: options.root, executable: options.exe, running, predictedHome,
+    const result = { ...chat, account: account?.proof(), origin: options.origin, root: options.root, executable: options.exe, running, predictedHome,
       localModeConfigured: true, backend: { ...backend, command: redact(backend.command) }, launchKind: options.phase === 'new' ? 'post-update-launch' : 'installed-launch' }
     await app.context().tracing.stop({ path: path.join(out, `desktop-chat-${options.phase}.zip`) })
     await gracefulClose(app)
@@ -371,6 +405,7 @@ export async function runInstalledDesktopSmoke(options: SmokeOptions, launchApp:
     } finally {
       if (app) { await gracefulClose(app).catch((error: Error): void => { console.error(redact(error.message)) }) }
       if (mock) { await mock.close() }
+      await account?.close()
     }
   }
 }
@@ -380,6 +415,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     exe: { type: 'string' }, root: { type: 'string' }, origin: { type: 'string' }, home: { type: 'string' },
     'user-data': { type: 'string' }, out: { type: 'string' }, phase: { type: 'string' },
     'expect-commit': { type: 'string' }, 'launch-spec': { type: 'string' }, 'mock-url': { type: 'string' },
+    'platform-account': { type: 'boolean' },
   } })
   try {
     await runInstalledDesktopSmoke(optionsSchema.parse(values))

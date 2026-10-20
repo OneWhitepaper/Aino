@@ -265,6 +265,14 @@ jobs:
         run: |
           python scripts/bundles/desktop.py --prepared "$env:RUNNER_TEMP/desktop-job/prepared.json" -- --publish=never
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Retain built ZIP for inspection even if smoke fails
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: aino-unverified-windows-x64-${{ github.sha }}
+          path: apps/desktop/release/*-win-x64.zip
+          compression-level: 0
+          if-no-files-found: error
+          retention-days: 14
       - name: Extract ZIP and run the existing native chat smoke
         shell: pwsh
         run: |
@@ -284,7 +292,7 @@ jobs:
           node tests/install/e2e-assets/bundle-smoke-metadata.mjs stamp --platform win32 --stamp "$install/resources/install-stamp.json" --commit $env:GITHUB_SHA
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           @{ commit=$env:GITHUB_SHA; format='zip'; signed=$false; sha256=(Get-FileHash $archive.FullName -Algorithm SHA256).Hash; bytes=$archive.Length; stamp=$stamp } | ConvertTo-Json -Depth 20 | Set-Content "$proof/artifact.json"
-          node tests/install/e2e-assets/desktop-smoke.ts --exe $exe[0].FullName --root "$install/resources/agent-payload" --origin bundled --home "$env:RUNNER_TEMP/zip-home" --user-data "$env:RUNNER_TEMP/zip-user-data" --out $proof --phase installed --expect-commit $env:GITHUB_SHA
+          node tests/install/e2e-assets/desktop-smoke.ts --exe $exe[0].FullName --root "$install/resources/agent-payload" --origin bundled --home "$env:RUNNER_TEMP/zip-home" --user-data "$env:RUNNER_TEMP/zip-user-data" --out $proof --phase installed --expect-commit $env:GITHUB_SHA --platform-account
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Save verified candidate ZIP
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
