@@ -195,6 +195,14 @@ on:
         description: 'Build and smoke an unsigned Windows x64 ZIP from this dispatch ref; optional tag and exact claim, no publication.'
         type: boolean
         default: false
+      claim-tag:
+        description: 'Versioned unsigned ZIP only: annotated candidate claim (rc.N-vX.Y.Z).'
+        type: string
+        default: ''
+      claim-object:
+        description: 'Versioned unsigned ZIP only: exact 40-hex claim tag object.'
+        type: string
+        default: ''
 
 permissions:
   contents: write
