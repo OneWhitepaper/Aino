@@ -8,6 +8,9 @@ import fs from 'node:fs'
 import os from 'node:os'
 import { publishPackagingInputs } from './prepared-packaging.mjs'
 import { recordNativeInputs } from './prepared-native-deps.mjs'
+import { createRequire } from 'node:module'
+const builderEntry = createRequire(import.meta.url).resolve('electron-builder')
+const { configureBuildCommand, createYargs, normalizeOptions } = await import(new URL('./builder.js', 'file://' + builderEntry).href)
 
 test('validate-only admits real prepared inputs without launching tools and rejects unsafe arguments', async () => {
   const source = path.resolve(import.meta.dirname, '../../..')
@@ -25,6 +28,15 @@ test('validate-only admits real prepared inputs without launching tools and reje
     const args = ['--validate-only', '--prepared', manifest, '--native-deps', nativeDeps, '--dir']
     const options = { spawn: () => { throw new Error('validation must not launch tools') } }
     assert.equal(runElectronBuilder(args, options), 0)
+    for (const flag of [[], ['--publish=never'], ['--publish', 'never'], ['-p', 'never']]) {
+      let forwarded
+      assert.equal(runElectronBuilder([...args.filter(arg => arg !== '--validate-only'), ...flag], {
+        spawn: (_node, argv) => { forwarded = argv; return { status: 0 } }
+      }), 0)
+      const cli = forwarded.slice(forwarded.findIndex(arg => arg.endsWith('cli.js')) + 1)
+      const parsed = await configureBuildCommand(createYargs()).parse(cli)
+      assert.equal(normalizeOptions(parsed).publish, 'never')
+    }
     assert.throws(() => runElectronBuilder([...args, '-c.npmRebuild=true'], options), /not admitted/)
     assert.throws(() => runElectronBuilder(['--validate-only'], options), /--prepared/)
     const cli = spawnSync(process.execPath, [path.join(import.meta.dirname, 'run-electron-builder.mjs'), ...args], { encoding: 'utf8' })

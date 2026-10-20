@@ -144,6 +144,10 @@ export function runElectronBuilder(args, { spawn = spawnSync } = {}) {
   const arch = args.find(arg => architectures.includes(arg))?.slice(2) || process.arch
   const inputs = readPackagingInputs(manifest, source, `${platform}-${arch}`)
   validatePreparedBuilderArgs(args, inputs)
+  // yargs turns repeated --publish=never into an array, which the builder
+  // treats as a publishing policy. The wrapper owns this argument exactly once.
+  args = args.filter((arg, index) => arg !== '--publish=never' && arg !== '--publish' && arg !== '-p'
+    && !(arg === 'never' && ['--publish', '-p'].includes(args[index - 1])))
   if (!nativeDeps) throw preparationRequired('--native-deps is required with --prepared')
   readNativeInputs({ source, nativeDeps, platform, arch })
   if (validateOnly) return 0

@@ -281,12 +281,13 @@ jobs:
           python scripts/bundles/desktop.py --prepared "$env:RUNNER_TEMP/desktop-job/prepared.json" -- --publish=never
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Retain built ZIP for inspection even if smoke fails
+        if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: aino-unverified-windows-x64-${{ github.sha }}
           path: apps/desktop/release/*-win-x64.zip
           compression-level: 0
-          if-no-files-found: error
+          if-no-files-found: warn
           retention-days: 14
       - name: Extract ZIP and run the existing native chat smoke
         shell: pwsh
