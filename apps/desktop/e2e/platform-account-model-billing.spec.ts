@@ -1,8 +1,8 @@
-import { writeEnvFile, writeMockProviderConfig } from '../../../tests-js/scripts/mock-provider-config'
 import { execFileSync } from 'node:child_process'
 import * as fs from 'node:fs'
 import * as path from 'node:path'
 
+import { writeEnvFile, writeMockProviderConfig } from '../../../tests-js/scripts/mock-provider-config'
 import { startMockServer } from '../../../tests-js/scripts/mock-server'
 
 import { buildAppEnv, createSandbox, waitForAppReady,  } from './fixtures'
@@ -11,7 +11,7 @@ import { verifyNativeCompressionAfterRestart, verifyNativeCompressionBeforeResta
 import { observeInferenceAlerts, verifyInferenceFailures } from './platform-inference-failure-proof'
 import { assertIsolationAlerts, type IsolationParticipant, observeIsolationAlerts, verifyConcurrentIsolation, verifyRetainedHistoryIsolation } from './platform-isolation-proof'
 import { assertLateLeaseAlerts, observeLateLeaseAlerts, verifyLateLeaseAcrossAccountSwitch } from './platform-late-lease-proof'
-import { installPackagedPythonTransport, launchGuardedPackagedDesktop, PACKAGED_PLATFORM_ORIGIN } from './platform-packaged-api'
+import { launchGuardedPackagedDesktop, PACKAGED_PLATFORM_ORIGIN, packagedBackendEvidence, packagedExecutable, startPackagedTransport } from './platform-packaged-api'
 import { auditFixtureText, fixtureEnvironment, installLoopbackNodeGuard, installLoopbackPythonGuard, isExpectedBlockedThemeFontRequest, KNOWN_BLOCKED_THEME_FONT_URL, launchGuardedDesktop, type NativeState, type NativeTransportAudit, persistedFixtureText, startRealPlatformAPI } from './platform-real-api'
 import { verifyWebsiteWallet } from './platform-website-wallet'
 import { seedPlatformWorkspace, verifyPlatformWorkspace } from './platform-workspace-proof'
@@ -714,6 +714,7 @@ test('packaged default sandbox supports platform login tools and history restart
   test.skip(!packagePath, 'Requires an explicitly built local candidate package')
   const repoRoot = path.resolve(import.meta.dirname, '../../..')
   const sandbox = createSandbox('platform-packaged')
+  let edge: Awaited<ReturnType<typeof startPackagedTransport>> | null = null
   let api: Awaited<ReturnType<typeof startRealPlatformAPI>> | null = null
   let launched: Awaited<ReturnType<typeof launchGuardedPackagedDesktop>> | null = null
   const consoleLines: string[] = []
@@ -724,9 +725,16 @@ test('packaged default sandbox supports platform login tools and history restart
   let stage = 'fixture'
 
   try {
-    api = await startRealPlatformAPI(path.resolve(repoRoot, '../Aino-API'))
+    api = await startRealPlatformAPI(process.env.AINO_NATIVE_API_ROOT || path.resolve(repoRoot, '../Aino-API'))
     const prepared = prepareNativePlatformEnvironment(sandbox, api)
-    installPackagedPythonTransport(prepared.env.PYTHONPATH, api.info.origin)
+    delete prepared.env.PYTHONPATH
+    delete prepared.env.HERMES_DESKTOP_HERMES_ROOT
+    prepared.env.HERMES_DESKTOP_ISOLATED_BACKEND = '1'
+    edge = await startPackagedTransport(sandbox.root, api.info.origin)
+    Object.assign(prepared.env, edge.env)
+    // Use Hermes' existing route-specific CA setting, keeping certificate verification enabled.
+    fs.appendFileSync(path.join(sandbox.hermesHome, 'config.yaml'),
+      `providers:\n  aino:\n    base_url: ${PACKAGED_PLATFORM_ORIGIN}/v1\n    ssl_ca_cert: ${JSON.stringify(edge.caBundle)}\n`)
     let previousCodeAt = 0
     let historyURL = ''
     const initial = await api.control<NativeState>('state').catch(() => null)
@@ -734,7 +742,6 @@ test('packaged default sandbox supports platform login tools and history restart
 
     for (const index of [0, 1]) {
       stage = `launch-${index}`
-      const previousPids = pythonGuardPids(sandbox)
       launched = await launchGuardedPackagedDesktop(prepared.env, prepared.nodeGuard, packagePath!, api.info.origin)
       launchAudits.push(observeNativeLaunch(launched, consoleLines))
       const proof = launched.packageProof
@@ -744,7 +751,7 @@ test('packaged default sandbox supports platform login tools and history restart
       expect(proof.stop.frames.length).toBeGreaterThan(0)
       expect(proof.state.packaged).toBe(true)
       expect(proof.state.appPath).toBe(path.join(packagePath!, 'Contents/Resources/app.asar'))
-      expect(proof.state.executable).toBe(path.join(packagePath!, 'Contents/MacOS/Aino'))
+      expect(proof.state.executable).toBe(packagedExecutable(packagePath!))
       expect(proof.state.noSandbox).toBe(false)
       expect(proof.state.disableSandbox).toBe(false)
       expect(proof.state.windows.length).toBeGreaterThan(0)
@@ -771,7 +778,9 @@ test('packaged default sandbox supports platform login tools and history restart
       stage = `login-${index}`
       previousCodeAt = await signInForThisSession(launched.page, api, previousCodeAt)
       await waitForAppReady(launched as never, 120_000)
-      assertNewGuardedBackend(sandbox, previousPids)
+      const backend = await packagedBackendEvidence(prepared.env, packagePath!)
+      expect(fs.existsSync(path.join(sandbox.hermesHome, 'packaged-sandbox-launches')),
+        'Bundled backend must enter the OS sandbox before any prompt').toBe(true)
       stage = `tool-turn-${index}`
       let after: NativeState
 
@@ -783,7 +792,7 @@ test('packaged default sandbox supports platform login tools and history restart
         await expect(launched.page.getByText(`Verified ${api.info.fixture_content}`, { exact: false }).first()).toBeVisible({ timeout: 60_000 })
         const before = await api.control<NativeState>('state')
         await sendPrompt(launched.page, `Read ${api.info.fixture_path} again after restarting the packaged app.`)
-        await expect.poll(async () => (await api!.control<NativeState>('state')).usage_calls).toBe(before.usage_calls + 2)
+        await expect.poll(async () => (await api!.control<NativeState>('state')).usage_calls, { timeout: 60_000 }).toBe(before.usage_calls + 2)
         await expect(launched.page.locator('[contenteditable="true"]').first().locator('xpath=ancestor::form').getByRole('button', { name: 'Stop', exact: true })).toHaveCount(0)
         after = await api.control<NativeState>('state')
         expect(after.model_calls).toBe(before.model_calls + 2)
@@ -807,7 +816,7 @@ test('packaged default sandbox supports platform login tools and history restart
       expect(exit.all_exited).toBe(true)
       expect(exit.forced).toBe(false)
       expect(exit.processes.some(identity => identity.role.startsWith('backend:'))).toBe(true)
-      launches.push({ ...proof, owner, rendererAudit, charge, exit })
+      launches.push({ ...proof, owner, rendererAudit, charge, exit, backend })
       launched = null
     }
 
@@ -816,9 +825,16 @@ test('packaged default sandbox supports platform login tools and history restart
     const transport = await assertNoBlockedTransport(sandbox, launchAudits)
 
     const requests = { main: fs.readFileSync(path.join(sandbox.hermesHome, 'packaged-main-mapped-requests'), 'utf8').trim().split('\n'),
-      python: fs.readFileSync(path.join(sandbox.hermesHome, 'packaged-python-mapped-requests'), 'utf8').trim().split('\n') }
+      python: edge.apiHits }
 
-    expect(requests.python).toHaveLength(4)
+    expect(requests.python.filter(request => request === 'POST /v1/chat/completions')).toHaveLength(4)
+    // Bundled Hermes refreshes these public catalogs at startup. The proxy
+    // rejects CONNECT before TLS or HTTP data can leave the isolated fixture.
+    const catalogHosts = new Set(['models.dev:443', 'hermes-agent.nousresearch.com:443', 'raw.githubusercontent.com:443'])
+    expect(edge.deniedConnects.filter(host => !catalogHosts.has(host))).toEqual([])
+    expect(edge.failures).toEqual([])
+    const sandboxLaunches = fs.readFileSync(path.join(sandbox.hermesHome, 'packaged-sandbox-launches'), 'utf8').trim().split('\n').map(line => JSON.parse(line))
+    expect(sandboxLaunches.length).toBeGreaterThanOrEqual(2)
 
     const persistedAudit = await auditFixtureText(api, [...persistedFixtureText(sandbox.hermesHome),
       ...persistedFixtureText(sandbox.userDataDir), fs.readFileSync(api.logPath, 'utf8'), ...consoleLines, JSON.stringify(launches)])
@@ -826,14 +842,20 @@ test('packaged default sandbox supports platform login tools and history restart
     await testInfo.attach('packaged-platform-receipt', { body: JSON.stringify({ source: {
       aino: execFileSync('git', ['rev-parse', 'HEAD'], { cwd: repoRoot, encoding: 'utf8' }).trim(), api: api.apiSha },
     package_path: packagePath, run_id: api.info.run_id, initial, turns, launches, requests, persistedAudit, transport,
-    boundary: 'Unmodified packaged production app, default Chromium sandbox, inspector-installed transport maps exact production origin to loopback fixture; session-only login; configured checkout Python runtime; no real service/TLS/Keychain/notarization claim.' }, null, 2), contentType: 'application/json' })
+    isolation: edge.isolation, blocked_catalog_connects: edge.deniedConnects, sandboxLaunches,
+    artifact_stamp: JSON.parse(fs.readFileSync(path.join(packagePath!, 'Contents/Resources/install-stamp.json'), 'utf8')),
+    boundary: 'Unmodified packaged production app and bundled Python; default Chromium sandbox, OS network sandbox on backend and tool descendants. Inspector maps account transport and explicit HTTPS proxy maps model transport to loopback fixture; route-specific fixture CA retains TLS verification. No real service, personal Keychain or model-quality claim.' }, null, 2), contentType: 'application/json' })
   } catch (error) {
     primaryError = error
     console.log(`Packaged native failed at ${stage}`)
 
     if (launched) { await launched.page.screenshot({ path: testInfo.outputPath('packaged-platform-error.png') }).catch(() => undefined) }
+    await testInfo.attach('packaged-failure-evidence', { body: JSON.stringify({ stage, connects: edge?.connects, hits: edge?.apiHits,
+      denied: edge?.deniedConnects, failures: edge?.failures, consoleLines }, null, 2), contentType: 'application/json' })
   } finally {
     try { await launched?.close() } catch (error) { cleanupErrors.push(error) }
+
+    try { await edge?.close() } catch (error) { cleanupErrors.push(error) }
 
     try { await api?.close() } catch (error) { cleanupErrors.push(error) }
 

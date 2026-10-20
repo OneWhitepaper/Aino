@@ -1,6 +1,7 @@
 import { execFileSync } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
 import * as fs from 'node:fs'
+import * as http from 'node:http'
 import { createRequire } from 'node:module'
 import * as path from 'node:path'
 
@@ -10,8 +11,10 @@ import type { BrowserWindow as NativeWindow } from 'electron'
 import { fixtureEnvironment, isExpectedBlockedThemeFontRequest, KNOWN_BLOCKED_THEME_FONT_URL, type NativeTransportAudit } from './platform-real-api'
 import { processStartMarkerWithEnvironment } from './platform-workspace-proof'
 import { installErrorBannerGuard } from './test'
+import { startHttpsEdge } from './update/github-edge'
 
 const require = createRequire(import.meta.url)
+const sandboxModule = new URL('../scripts/d2-packaged-smoke.mjs', import.meta.url).href
 export const PACKAGED_PLATFORM_ORIGIN = 'https://api.agentera.com.cn'
 
 interface OwnedProcess {
@@ -187,27 +190,73 @@ function ownedPackageCleanup(app: ElectronApplication, env: Record<string, strin
 
 // The package retains its production origin and validates real server-issued
 // credentials. Only this external harness maps transport to the disposable API.
-export function installPackagedPythonTransport(directory: string, apiOrigin: string) {
-  fs.appendFileSync(path.join(directory, 'sitecustomize.py'), `
-import httpx
-_original_httpx_send = httpx.HTTPTransport.handle_request
-def _packaged_request(self, request):
-    if str(request.url).startswith('${PACKAGED_PLATFORM_ORIGIN}/v1/'):
-        request.url = httpx.URL('${apiOrigin}' + request.url.raw_path.decode())
-        request.headers['host'] = request.url.netloc.decode()
-        with open(os.path.join(os.environ['HERMES_HOME'], 'packaged-python-mapped-requests'), 'a') as f:
-            f.write(request.method + ' ' + request.url.path + '\\n')
-    return _original_httpx_send(self, request)
-httpx.HTTPTransport.handle_request = _packaged_request
-`)
+export async function startPackagedTransport(root: string, apiOrigin: string) {
+  const { sandboxPolicy, proveSandboxGuards } = await import(sandboxModule)
+  const destination = new URL(apiOrigin)
+
+  if (destination.protocol !== 'http:' || destination.hostname !== '127.0.0.1') {throw new Error('Expected loopback API fixture')}
+  const failures: string[] = []
+
+  const edge = await startHttpsEdge(root, { host: new URL(PACKAGED_PLATFORM_ORIGIN).hostname, tunnelOthers: false,
+    handler: (req, res) => {
+      if (!req.url?.startsWith('/v1/')) { res.writeHead(403); res.end();
+
+ return }
+
+      const upstream = http.request({ hostname: destination.hostname, port: destination.port,
+        path: req.url, method: req.method, headers: { ...req.headers, host: destination.host } }, reply => {
+        res.writeHead(reply.statusCode ?? 502, reply.headers)
+        reply.pipe(res)
+      })
+
+      upstream.on('error', error => { failures.push(error.message); res.destroy(error) })
+      req.once('aborted', () => upstream.destroy())
+      res.once('close', () => { if (!res.writableEnded) {upstream.destroy()} })
+      req.pipe(upstream)
+    } })
+
+  try {
+    const isolation = await proveSandboxGuards(sandboxPolicy())
+
+    return { ...edge, failures, isolation }
+  } catch (error) { await edge.close(); throw error }
 }
 
-export function preparePackagedHarness(
+export function packagedExecutable(appPath: string) {
+  const name = execFileSync('/usr/bin/plutil', ['-extract', 'CFBundleExecutable', 'raw', '-o', '-',
+    path.join(appPath, 'Contents/Info.plist')], { encoding: 'utf8' }).trim()
+
+  if (!name || /[/\\]/.test(name)) {throw new Error('Invalid bundle executable')}
+
+  return path.join(appPath, 'Contents/MacOS', name)
+}
+
+export async function packagedBackendEvidence(env: Record<string, string>, appPath: string) {
+  const stamp = JSON.parse(fs.readFileSync(path.join(appPath, 'Contents/Resources/install-stamp.json'), 'utf8'))
+  const python = path.join(appPath, 'Contents/Resources/agent-payload', stamp.runtime.storePython)
+  const ownership = JSON.parse(fs.readFileSync(path.join(env.HERMES_DESKTOP_USER_DATA_DIR, 'backend-ownership.json'), 'utf8'))
+  const evidence = []
+
+  for (const backend of ownership.backends ?? []) {
+    if (!backend.nonce || !backend.profile || !await sameProcess(backend)) {throw new Error('Invalid owned backend identity')}
+    const command = execFileSync('/bin/ps', ['-ww', '-p', String(backend.pid), '-o', 'command='], { encoding: 'utf8' }).trim()
+
+    if (!command.startsWith(python + ' ')) {throw new Error('Backend did not use the bundled interpreter')}
+    evidence.push({ pid: backend.pid, startMarker: backend.startMarker, command, python })
+  }
+
+  if (!evidence.length) {throw new Error('No live bundled backend')}
+
+  return evidence
+}
+
+export async function preparePackagedHarness(
   env: Record<string, string>,
   nodeGuard: string,
   appPath: string,
   apiOrigin: string
 ) {
+  const { sandboxPolicy } = await import(sandboxModule)
   const root = path.dirname(nodeGuard)
   const launchId = randomUUID()
   const guard = path.join(root, `packaged-transport-${launchId}.cjs`)
@@ -217,7 +266,9 @@ export function preparePackagedHarness(
   const stdoutLog = path.join(env.HERMES_HOME, `packaged-${launchId}.stdout.log`)
   const stderrLog = path.join(env.HERMES_HOME, `packaged-${launchId}.stderr.log`)
   const wrapper = path.join(root, `packaged-inspector-launch-${launchId}.cjs`)
-  const executable = path.join(appPath, 'Contents/MacOS/Aino')
+  const executable = packagedExecutable(appPath)
+  const stamp = JSON.parse(fs.readFileSync(path.join(appPath, 'Contents/Resources/install-stamp.json'), 'utf8'))
+  const backendLauncher = path.join(appPath, 'Contents/Resources/agent-payload', stamp.runtime.commands.hermes)
   const expectedEntry = path.join(appPath, 'Contents/Resources/app.asar/dist/electron-main.mjs')
   fs.writeFileSync(guard, `
 const fs = require('node:fs'), path = require('node:path');
@@ -285,9 +336,15 @@ const cp=require('node:child_process');
 for(const name of ['spawn','spawnSync','execFile','execFileSync']) {
  const original=cp[name];cp[name]=function(command,...args){
   if(path.basename(String(command))==='security')throw new Error('Packaged fixture denies personal Keychain command');
+  if(String(command)===${JSON.stringify(backendLauncher)}){
+   if(!Array.isArray(args[0]))throw new Error('Expected bundled launcher argv');
+   fs.appendFileSync(path.join(process.env.HERMES_HOME,'packaged-sandbox-launches'),JSON.stringify({command,args:args[0]})+'\\n');
+   return original.call(this,'/usr/bin/sandbox-exec',['-p',${JSON.stringify(sandboxPolicy())},command,...args[0]],...args.slice(1));
+  }
   return original.call(this,command,...args);
  };
 }
+require('node:module').syncBuiltinESMExports();
 fs.writeFileSync(${JSON.stringify(mainMarker)},JSON.stringify({pid:process.pid,packaged:app.isPackaged,ready:app.isReady(),appPath:app.getAppPath(),executable:process.execPath,argv:process.argv}));
 `, { mode: 0o600 })
   fs.writeFileSync(wrapper, `#!${process.execPath}
@@ -339,7 +396,7 @@ child.on('exit',(code,signal)=>{clearTimeout(timer);clearTimeout(killTimer);ws?.
 export async function launchGuardedPackagedDesktop(
   env: Record<string, string>, nodeGuard: string, appPath: string, apiOrigin: string
 ) {
-  const scripts = preparePackagedHarness(env, nodeGuard, appPath, apiOrigin)
+  const scripts = await preparePackagedHarness(env, nodeGuard, appPath, apiOrigin)
   const { wrapper, mainMarker, stopMarker, processMarker } = scripts
 
   const app = await _electron.launch({ executablePath: wrapper, args: [

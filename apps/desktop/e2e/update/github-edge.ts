@@ -24,6 +24,7 @@ export interface GithubEdge {
   caBundle: string
   /** host:port of every CONNECT the proxy saw, in order. */
   connects: string[]
+  deniedConnects: string[]
   /** method + path of every request the fake api.github.com answered. */
   apiHits: string[]
   env: Record<string, string>
@@ -35,7 +36,7 @@ function openssl(args: string[], cwd: string): void {
 }
 
 /** A throwaway root + an api.github.com leaf signed by it. */
-function makeCerts(dir: string): { key: Buffer; cert: Buffer; caPem: string } {
+function makeCerts(dir: string, host: string): { key: Buffer; cert: Buffer; caPem: string } {
   fs.mkdirSync(dir, { recursive: true })
   // Python >= 3.13 verifies with X509_STRICT: the root needs keyUsage, the leaf an AKI.
   openssl(
@@ -63,13 +64,13 @@ function makeCerts(dir: string): { key: Buffer; cert: Buffer; caPem: string } {
     dir
   )
   openssl(
-    ['req', '-newkey', 'rsa:2048', '-nodes', '-keyout', 'leaf.key', '-out', 'leaf.csr', '-subj', '/CN=api.github.com'],
+    ['req', '-newkey', 'rsa:2048', '-nodes', '-keyout', 'leaf.key', '-out', 'leaf.csr', '-subj', `/CN=${host}`],
     dir
   )
   fs.writeFileSync(
     path.join(dir, 'leaf.ext'),
     'basicConstraints=CA:FALSE\nkeyUsage=critical,digitalSignature,keyEncipherment\nextendedKeyUsage=serverAuth\n' +
-      'subjectAltName=DNS:api.github.com\nsubjectKeyIdentifier=hash\nauthorityKeyIdentifier=keyid,issuer\n'
+      `subjectAltName=DNS:${host}\nsubjectKeyIdentifier=hash\nauthorityKeyIdentifier=keyid,issuer\n`
   )
   openssl(
     [
@@ -106,10 +107,9 @@ function gitIn(repo: string, args: string[]): { ok: boolean; out: string } {
 }
 
 /** The GitHub REST shapes the check reads, computed from the bare origin at request time. */
-function apiHandler(origin: string, hits: string[]) {
+function apiHandler(origin: string) {
   return (req: http.IncomingMessage, res: http.ServerResponse) => {
     const url = new URL(req.url ?? '/', 'https://api.github.com')
-    hits.push(`${req.method} ${url.pathname}`)
 
     const send = (status: number, body: string, type = 'application/json') => {
       res.writeHead(status, { 'content-type': type })
@@ -171,14 +171,33 @@ export async function startGithubEdge(
   origin: string,
   baseCaBundle: string | undefined
 ): Promise<GithubEdge> {
-  const { key, cert, caPem } = makeCerts(path.join(workDir, 'edge-ca'))
+  return startHttpsEdge(workDir, { host: 'api.github.com', handler: apiHandler(origin), baseCaBundle, tunnelOthers: true })
+}
+
+export interface HttpsEdgeOptions {
+  host: string
+  handler: http.RequestListener
+  baseCaBundle?: string
+  tunnelOthers: boolean
+}
+
+/** Reuses the update suite's TLS transport without injecting code into the installed runtime. */
+export async function startHttpsEdge(workDir: string, options: HttpsEdgeOptions): Promise<GithubEdge> {
+  if (!/^[a-zA-Z0-9.-]+$/.test(options.host)) {throw new Error('Invalid TLS fixture hostname')}
+  const { key, cert, caPem } = makeCerts(path.join(workDir, 'edge-ca'), options.host)
   const caBundle = path.join(workDir, 'edge-ca', 'bundle.pem')
-  const systemBundle = [baseCaBundle, '/etc/ssl/certs/ca-certificates.crt'].find(p => p && fs.existsSync(p))
+  const systemBundle = [options.baseCaBundle, '/etc/ssl/certs/ca-certificates.crt'].find(p => p && fs.existsSync(p))
   fs.writeFileSync(caBundle, `${systemBundle ? fs.readFileSync(systemBundle, 'utf8') : ''}\n${caPem}`)
 
   const connects: string[] = []
   const apiHits: string[] = []
-  const api = http.createServer(apiHandler(origin, apiHits))
+  const deniedConnects: string[] = []
+
+  const api = http.createServer((req, res) => {
+    apiHits.push(`${req.method} ${new URL(req.url ?? '/', `https://${options.host}`).pathname}`)
+    options.handler(req, res)
+  })
+
   const sockets = new Set<net.Socket>()
 
   const proxy = http.createServer((_req, res) => {
@@ -198,7 +217,7 @@ export async function startGithubEdge(
     const port = Number(portText || 443)
     client.on('error', () => undefined)
 
-    if (host === 'api.github.com') {
+    if (host === options.host && port === 443) {
       client.write('HTTP/1.1 200 Connection Established\r\n\r\n')
 
       if (head.length) {
@@ -208,6 +227,13 @@ export async function startGithubEdge(
       const secure = new tls.TLSSocket(client, { isServer: true, key, cert })
       secure.on('error', () => undefined)
       api.emit('connection', secure)
+
+      return
+    }
+
+    if (!options.tunnelOthers) {
+      deniedConnects.push(target)
+      client.end('HTTP/1.1 403 Forbidden\r\nConnection: close\r\nContent-Length: 0\r\n\r\n')
 
       return
     }
@@ -235,6 +261,7 @@ export async function startGithubEdge(
     proxyUrl,
     caBundle,
     connects,
+    deniedConnects,
     apiHits,
     env: {
       HTTPS_PROXY: proxyUrl,

@@ -191,6 +191,10 @@ on:
         required: false
         type: boolean
         default: false
+      unsigned_windows_zip:
+        description: 'Build and smoke an unsigned Windows x64 ZIP from this dispatch ref; candidate artifact only, no publication.'
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -212,7 +216,95 @@ env:
   RELEASE_CLAIM_OBJECT: ${{ inputs.claim-object }}
 
 jobs:
+  unsigned-windows-zip:
+    name: Unsigned Windows x64 ZIP candidate
+    if: github.event_name == 'workflow_dispatch' && inputs.unsigned_windows_zip == true
+    runs-on: windows-latest
+    timeout-minutes: 180
+    permissions:
+      contents: read
+    steps:
+      - name: Reject mixed release requests
+        shell: pwsh
+        env:
+          TAG: ${{ inputs.tag }}
+          BUILD_COMMIT: ${{ inputs.build_commit }}
+          CHANNEL: ${{ inputs.channel }}
+          DISPOSABLE_CHANNEL: ${{ inputs.disposable_channel }}
+          UPLOAD_RELEASE: ${{ inputs.upload_release }}
+        run: |
+          if ($env:TAG -or $env:BUILD_COMMIT -or $env:CHANNEL -or $env:DISPOSABLE_CHANNEL -or $env:UPLOAD_RELEASE -eq 'true') {
+            throw 'Unsigned ZIP builds use only the dispatch ref and cannot select a release or publication'
+          }
+      - uses: actions/checkout@f548e57e544e1ff5a4c46bf1e1b8685f8e4a348a # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.13'
+      - name: Restore desktop dependency inputs
+        uses: ./.github/actions/desktop-build-cache
+        with:
+          phase: restore
+          source: ${{ github.workspace }}
+          work: ${{ runner.temp }}/desktop-job
+          cache: ${{ github.workspace }}/.cache/desktop-inputs
+          producer: desktop
+      - name: Prepare the existing bundled build as ZIP
+        shell: pwsh
+        run: |
+          python scripts/bundles/desktop.py --commit $env:GITHUB_SHA --variant bundled --windows-zip --prepare-only --work "$env:RUNNER_TEMP/desktop-job"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python -m scripts.ci.desktop_commands "$env:RUNNER_TEMP/desktop-job/prepared.json"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Build unsigned candidate
+        shell: pwsh
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+        run: |
+          python scripts/bundles/desktop.py --prepared "$env:RUNNER_TEMP/desktop-job/prepared.json" -- --publish=never
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Extract ZIP and run the existing native chat smoke
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $archives = @(Get-ChildItem apps/desktop/release/*-win-x64.zip)
+          if ($archives.Count -ne 1) { throw 'Expected exactly one Windows x64 ZIP' }
+          $archive = $archives[0]
+          $install = "$env:RUNNER_TEMP/zip-install"
+          $proof = "$env:RUNNER_TEMP/zip-proof"
+          New-Item -ItemType Directory -Path $proof | Out-Null
+          Expand-Archive -LiteralPath $archive.FullName -DestinationPath $install
+          $stamp = Get-Content -Raw "$install/resources/install-stamp.json" | ConvertFrom-Json
+          $exe = @(Get-ChildItem "$install/*.exe" | Where-Object { $_.Name -notin @('elevate.exe', 'chrome_crashpad_handler.exe') })
+          if ($exe.Count -ne 1) { throw 'Expected one packaged desktop executable' }
+          $signature = Get-AuthenticodeSignature $exe[0].FullName
+          if ($signature.Status -ne 'NotSigned') { throw 'Candidate must be explicitly unsigned' }
+          node tests/install/e2e-assets/bundle-smoke-metadata.mjs stamp --platform win32 --stamp "$install/resources/install-stamp.json" --commit $env:GITHUB_SHA
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          @{ commit=$env:GITHUB_SHA; format='zip'; signed=$false; sha256=(Get-FileHash $archive.FullName -Algorithm SHA256).Hash; bytes=$archive.Length; stamp=$stamp } | ConvertTo-Json -Depth 20 | Set-Content "$proof/artifact.json"
+          node tests/install/e2e-assets/desktop-smoke.ts --exe $exe[0].FullName --root "$install/resources/agent-payload" --origin bundled --home "$env:RUNNER_TEMP/zip-home" --user-data "$env:RUNNER_TEMP/zip-user-data" --out $proof --phase installed --expect-commit $env:GITHUB_SHA
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Save verified candidate ZIP
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: aino-unsigned-windows-x64-${{ github.sha }}
+          path: apps/desktop/release/*-win-x64.zip
+          compression-level: 0
+          if-no-files-found: error
+          retention-days: 14
+      - name: Save smoke diagnostics
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: aino-unsigned-windows-x64-proof-${{ github.run_id }}
+          path: ${{ runner.temp }}/zip-proof
+          if-no-files-found: ignore
+          retention-days: 14
+
   validate:
+    if: inputs.unsigned_windows_zip != true
     name: Pre-build setup
     # One dispatch: in disposable mode the allocation steps run first (the
     # channel pin comes from them), then admission validates the build source.

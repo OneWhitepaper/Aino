@@ -47,9 +47,11 @@ def _only(matches: list[str], role: str) -> str:
 
 
 def native_builds(jobs: dict) -> dict[tuple[str, str], str]:
-    """``(target, "release" | "commit")`` -> id of that native build leg."""
+    """``(target, "release" | "commit")`` -> an admission-controlled release leg."""
     legs: dict[tuple[str, str], str] = {}
     for name, job in jobs.items():
+        if "validate" not in needs_of(job):
+            continue
         if not any(step.get("uses") == BUILD_CACHE_ACTION for step in job.get("steps", [])):
             continue
         (target,) = [row["label"] for row in job["strategy"]["matrix"]["target"]]

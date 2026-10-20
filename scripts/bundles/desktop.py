@@ -97,6 +97,8 @@ def _build_prepared(prepared, builder_args: list[str], variant: str | None) -> N
         env["HERMES_RELEASE_EPOCH"] = str(request.release_epoch)
     desktop = repo / "apps/desktop"
     targets = {"win32": ["--win", "msix"], "darwin": ["--mac", "dmg", "zip"], "linux": ["--linux", "AppImage"]}[sys.platform]
+    if request.windows_zip:
+        targets = ["--win", "zip"]
     package_args = ["--prepared", str(prepared.packager), "--native-deps", str(prepared.native),
                     *targets, f"-c.extraMetadata.version={request.version}"]
     run([node, "scripts/run-electron-builder.mjs", "--validate-only", *package_args, *builder_args],
@@ -148,6 +150,8 @@ def main() -> None:
     parser.add_argument("--release-commit", help="Admitted commit for a stable tag not created until green")
     parser.add_argument("--channel-request", type=Path, help="Immutable admitted channel request JSON")
     parser.add_argument("--variant", choices=["bundled", "store", "light"])
+    parser.add_argument("--windows-zip", action="store_true",
+                        help="Windows bundled commit candidate as ZIP; no Store or update feed publication")
     parser.add_argument("--repo", type=Path, default=ROOT)
     parser.add_argument("--work", type=Path)
     parser.add_argument("--cache", type=Path)
@@ -161,7 +165,7 @@ def main() -> None:
     try:
         if args.prepared:
             if (args.tag or args.commit_build or args.release_commit or args.channel_request
-                    or args.prepare_only or args.work or args.cache or args.clean):
+                    or args.prepare_only or args.work or args.cache or args.clean or args.windows_zip):
                 parser.error("--prepared supplies the complete build request")
             build_prepared(args.prepared, builder_args, args.variant)
         else:
@@ -174,7 +178,7 @@ def main() -> None:
                                           bundle_env=decode(os.environ.get("HERMES_BUNDLE_ENV_JSON", "")),
                                           channel_request=json.loads(args.channel_request.read_text(encoding="utf-8-sig"))
                                           if args.channel_request else None,
-                                          release_commit=args.release_commit)
+                                          release_commit=args.release_commit, windows_zip=args.windows_zip)
             if args.prepare_only and builder_args:
                 parser.error("builder arguments belong to the build phase")
             result = prepare(request, clean=args.clean)

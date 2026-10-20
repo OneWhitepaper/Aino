@@ -15,6 +15,7 @@ import os from 'node:os'
 import path from 'node:path'
 
 import { _electron } from '@playwright/test'
+import { isMain } from './utils.mjs'
 
 const APP_NAME = 'Aino'
 const FATAL_BOOT_LOG = /(?:uncaught exception|unhandled rejection|render process gone|did-fail-load|no queryclient set|something broke in the interface)/i
@@ -130,7 +131,7 @@ function quotedPolicyPath(value) {
   return String(value).replace(/\\/g, '\\\\').replace(/"/g, '\\"')
 }
 
-function sandboxPolicy(personalHome = os.homedir()) {
+export function sandboxPolicy(personalHome = os.homedir()) {
   const deniedReads = [
     ...PERSONAL_CREDENTIAL_PATHS.map(relative => path.join(personalHome, relative)),
     path.join(personalHome, 'Library', 'Keychains'),
@@ -183,7 +184,7 @@ function proveWorkspaceGuard() {
   }
 }
 
-async function proveSandboxGuards(policy) {
+export async function proveSandboxGuards(policy) {
   const server = await new Promise((resolve, reject) => {
     const value = net.createServer(socket => socket.destroy())
     value.once('error', reject)
@@ -623,9 +624,13 @@ async function main() {
   }
 }
 
-if (process.argv.includes('--self-test-sandbox')) {
-  const result = { workspace: proveWorkspaceGuard(), sandbox: await proveSandboxGuards(sandboxPolicy()) }
-  process.stdout.write(`${JSON.stringify(result)}\n`)
-} else {
-  await main()
+async function runCli() {
+  if (process.argv.includes('--self-test-sandbox')) {
+    const result = { workspace: proveWorkspaceGuard(), sandbox: await proveSandboxGuards(sandboxPolicy()) }
+    process.stdout.write(`${JSON.stringify(result)}\n`)
+  } else {
+    await main()
+  }
 }
+
+if (isMain(import.meta.url)) runCli().catch(error => { console.error(error); process.exitCode = 1 })

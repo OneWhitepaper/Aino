@@ -338,6 +338,25 @@ version are different facts. `scripts/msix-shared.mjs` owns these derivations.
 
 ## macOS signing and updates
 
+The account/tool/history smoke can exercise an already built macOS bundle:
+
+```sh
+cd apps/desktop
+AINO_NATIVE_API_ROOT=/path/to/Aino-API \
+AINO_NATIVE_PACKAGED_APP='/path/to/Aino.app' \
+npx playwright test e2e/platform-account-model-billing.spec.ts \
+  --grep 'packaged default sandbox' --workers 1
+```
+
+This uses the existing Docker-backed API fixture and the bundle's interpreter.
+The update test's HTTPS edge supplies a temporary, route-specific CA and a
+loopback proxy; the backend and its tool children inherit the existing native
+smoke's network sandbox. No Python module is injected into the bundle, and
+Chromium retains its own sandbox. The receipt records the install stamp,
+backend process identity, tool results, billing and history after restart.
+It validates the local fixture flow, not real-service authentication, model
+quality, remembered Keychain login or an application update.
+
 `CSC_LINK` and `CSC_KEY_PASSWORD` supply the Developer ID identity.
 The notarization hook accepts `APPLE_API_KEY`, `APPLE_API_KEY_ID`, and
 `APPLE_API_ISSUER`, or a keychain profile. CI materializes the API key from
@@ -383,6 +402,23 @@ Changes to its preparation provider need native DMG/detach and
 signing/notarization acceptance; a successful download is not native execution proof.
 
 ## Development, assets, and verification
+
+### Unsigned Windows ZIP candidates
+
+On native Windows, `python scripts/bundles/desktop.py --commit <full-sha>
+--variant bundled --windows-zip` reuses the same dependency preparation,
+bundled runtime and electron-builder pipeline, selecting its existing ZIP target.
+This option accepts commit candidates only; tagged releases, Store packages and
+channel builds retain their existing signing and publication requirements.
+Leave signing credentials unset for an unsigned candidate.
+
+The existing `desktop-bundled-release.yml` workflow also accepts
+`unsigned_windows_zip=true` on a pushed branch. It builds Windows x64 from the
+exact dispatch SHA without release credentials, extracts the ZIP, validates its
+stamp and unsigned executable, and runs the existing native desktop chat smoke.
+Successful files and checksums are retained as GitHub Actions artifacts for 14
+days. This lane does not publish to the website or any update feed. ZIP users
+extract and launch the executable; MSIX install/update coverage is separate.
 
 Prepare and activate the [PM developer environment](../../website/docs/reference/package-management.md#developer-workflow)
 first. Use Bash `source ./activate` or PowerShell `. .\activate.ps1`, and keep a
