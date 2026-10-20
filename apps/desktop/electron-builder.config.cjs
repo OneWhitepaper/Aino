@@ -124,7 +124,10 @@ module.exports = {
   // rewritten file (#105629). afterPack keeps the signing/payload work.
   afterExtract: 'scripts/after-extract.mjs',
   afterPack: 'scripts/after-pack.mjs',
-  ...(process.platform === 'darwin' ? { afterSign: 'scripts/notarize.mjs' } : {}),
+  ...(process.platform === 'darwin' ? {
+    afterSign: 'scripts/notarize.mjs',
+    artifactBuildCompleted: 'scripts/notarize.mjs'
+  } : {}),
   extraResources: [
     {
       from: 'build/install-stamp.json',
@@ -196,6 +199,10 @@ module.exports = {
     })
   },
   dmg: {
+    // The app signature does not cover the downloadable disk-image container.
+    sign: true,
+    // The artifact hook emits the blockmap and feed data after container stapling.
+    writeUpdateInfo: false,
     // Avoid the failing optional APFS shrink pass; keep compressed conversion.
     shrink: false,
     // Use the Aino icon and neutral background for the installer volume.

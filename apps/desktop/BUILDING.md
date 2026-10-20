@@ -348,6 +348,19 @@ notarization. The existing after-sign hook owns submission and stapling.
 Publication checks signatures, the stapled ticket, and Gatekeeper assessment.
 Unsigned local builds do not satisfy these gates.
 
+The DMG container is signed separately through electron-builder's `dmg.sign`.
+The existing notarization hook also runs at `artifactBuildCompleted`: it
+submits and staples the signed DMG, checks Gatekeeper, then generates its
+blockmap and update metadata. `dmg.writeUpdateInfo` is disabled only to defer
+that first blockmap until the final bytes exist. Without Apple credentials,
+local builds still get blockmaps but do not satisfy publication gates.
+For standalone DMG notarization, sign the image before submitting it, then
+staple and validate the accepted image. Signing an already stapled image
+invalidates that ticket; submit the changed image again. Check the container
+with `spctl --assess --type open --context context:primary-signature` as well
+as checking the app with `spctl --assess --type execute`. After any artifact
+mutation, regenerate its blockmap and release checksums from the final bytes.
+
 Both DMG and ZIP artifacts are required by the release pipeline. The ZIP is
 the update artifact, not an optional duplicate of the download DMG.
 See [macOS bundle updates](../../docs/macos-bundle-updates.md) for feed validation
