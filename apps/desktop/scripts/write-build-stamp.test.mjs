@@ -99,6 +99,16 @@ const runtime = {
   sitePackages: 'venv/lib/python3.14/site-packages', commands: { hermes: 'bin/hermes' }
 }
 
+test('versioned Windows ZIP keeps external updates without changing native release owners', () => {
+  const env = { HERMES_DESKTOP_VARIANT: 'bundled', HERMES_PAYLOAD_TAG: 'v0.1.0' }
+  const zip = buildStampPayload(baseStamp, env, 'win32', { runtime }, { windowsZip: true })
+  assert.equal(zip.tag, 'v0.1.0')
+  assert.equal(zip.updateMechanism, 'external')
+  assert.equal(buildStampPayload(baseStamp, env, 'win32', { runtime }).updateMechanism, 'app-installer')
+  assert.equal(buildStampPayload(baseStamp, env, 'darwin', { runtime }).updateMechanism, 'electron-updater')
+  assert.throws(() => buildStampPayload(baseStamp, env, 'darwin', { runtime }, { windowsZip: true }), /Windows ZIP/)
+})
+
 test('bundled stamp carries the builder contract and refuses an unstaged payload', () => {
   const env = { HERMES_DESKTOP_VARIANT: 'bundled' }
   assert.throws(() => buildStampPayload(baseStamp, env, 'darwin'), /payload/)

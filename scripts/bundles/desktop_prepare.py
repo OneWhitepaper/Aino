@@ -193,8 +193,8 @@ class BuildRequest:
 
     def validate_channel(self) -> None:
         if self.windows_zip and (not self.target.startswith("win32-") or self.variant != "bundled"
-                                 or self.tag is not None or self.channel_request is not None):
-            raise ValueError("Windows ZIP requires a bundled Windows commit build, without a release channel")
+                                 or self.channel_request is not None):
+            raise ValueError("Windows ZIP requires a bundled Windows build, without a native update channel")
         if self.channel_request is None:
             return
         channel = validate_channel_request(self.channel_request)

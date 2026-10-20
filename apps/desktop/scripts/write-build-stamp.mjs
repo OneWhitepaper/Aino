@@ -12,6 +12,7 @@ import productIdentity from "../product-identity.cjs"
 import { channelBuildRequest } from "../../../scripts/msix-shared.mjs"
 import { validateBundleEnvironment } from "./bundle-env.mjs"
 import { execFileSync } from "child_process"
+import { parseArgs } from "node:util"
 
 import { isMain } from "./utils.mjs"
 
@@ -153,6 +154,7 @@ export function writeDesktopStamp(outDir, built) {
 }
 
 function main() {
+  const { values } = parseArgs({ options: { 'windows-zip': { type: 'boolean', default: false } } })
   const stamp = resolveStamp()
   if (!stamp || !stamp.commit) {
     // Should not happen — fromFallback() always provides a commit.
@@ -191,7 +193,7 @@ function main() {
   const payload = bundled
     ? stageDesktopLaunchers(join(OUT_DIR, 'agent-payload'))
     : null
-  const built = buildStampPayload(stamp, process.env, process.platform, payload)
+  const built = buildStampPayload(stamp, process.env, process.platform, payload, { windowsZip: values['windows-zip'] })
   writeDesktopStamp(OUT_DIR, built)
   console.log(
     "[write-build-stamp] wrote " +
@@ -207,9 +209,12 @@ function main() {
 /** One artifact schema for source, bundled and Light builds.
  * The PM bundle builder supplies launch paths only for bundled artifacts.
  */
-export function buildStampPayload(stamp, env = process.env, platform = process.platform, payload = null) {
+export function buildStampPayload(stamp, env = process.env, platform = process.platform, payload = null, { windowsZip = false } = {}) {
   const variant = (env.HERMES_DESKTOP_VARIANT || "").trim()
   const channelBuild = channelBuildRequest(env)
+  if (windowsZip && (platform !== 'win32' || variant !== 'bundled' || channelBuild)) {
+    throw new Error('Windows ZIP requires bundled Windows without a native update channel')
+  }
   if (channelBuild && (stamp.commit !== channelBuild.commit || stamp.dirty)) throw new Error('Channel build identity does not match stamp')
   const commitBuild = env.HERMES_BUILD_COMMIT || null
   if (commitBuild && (!/^[a-f0-9]{40}$/.test(commitBuild) || commitBuild !== stamp.commit)) {
@@ -266,7 +271,7 @@ export function buildStampPayload(stamp, env = process.env, platform = process.p
     payload: variant === "store" ? "bundled" : variant || "bootstrap",
     distribution: "desktop-app",
 
-    updateMechanism: commitBuild ? 'external' : updateMechanism,
+    updateMechanism: commitBuild || windowsZip ? 'external' : updateMechanism,
     tag: channelBuild?.receiverCandidate ? channelBuild.releaseTag : env.HERMES_PAYLOAD_TAG || null,
     ...(bundleEnv ? { bundleEnv } : {}),
     ...(bundled ? { runtime: payload.runtime } : {})

@@ -9,12 +9,21 @@ commands package the current desktop build; they do not stage a fresh runtime.
 |---|---|---|
 | Windows x64 / ARM64, sideload | Signed per-architecture MSIX packages, combined into a universal `.msixbundle`; `.appinstaller` descriptor | Windows App Installer |
 | Windows x64 / ARM64, Store | Store-identity MSIX packages and a separate Store bundle | Microsoft Store |
+| Windows, unsigned download | Bundled ZIP built with `--windows-zip` | External replacement; no App Installer feed |
 | macOS ARM64 / x64 | Signed, notarized `Hermes.app` in DMG and ZIP artifacts | `electron-updater` with Squirrel.Mac |
 | Linux x64 / ARM64 | Local builder can produce AppImage | External replacement; Linux desktop release legs are disabled |
 
 The current MSIX manifest requires Windows 11 22H2 (`10.0.22621.0`).
 The source-script Windows support range is separate from this package floor.
 Windows desktop packaging uses MSIX, not NSIS or MSI.
+
+Aino's unsigned Windows download reuses the bundle builder with `--windows-zip`.
+It supports commit candidates and versioned builds (`--tag` plus the exact stable
+claim and `--release-commit`), but not Store or native update channels. The stamp
+declares external updates even when tagged. The opt-in `unsigned_windows_zip`
+workflow tests the dispatch commit on Windows and retains artifacts; it never
+publishes a release or inherits release-signing credentials. A versioned dispatch
+must supply the annotated claim tag/object as well as the requested tag.
 
 `bundled` carries the local runtime. `store` carries the same runtime under
 Partner Center's package identity. `light` is a remote-only client without

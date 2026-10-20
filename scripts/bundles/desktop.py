@@ -125,13 +125,14 @@ def _build_prepared(prepared, builder_args: list[str], variant: str | None) -> N
     # electron-builder holds it, and the final check proves it was handed back.
     # Stamp before the render lands: the stamp's git check would call the
     # checkout dirty while the flavored icons sit over committed files.
-    run([node, "scripts/write-build-stamp.mjs"], cwd=desktop, env=env)
+    run([node, "scripts/write-build-stamp.mjs", *(["--windows-zip"] if request.windows_zip else [])],
+        cwd=desktop, env=env)
     with flavored_assets(icons / "apps/desktop/assets", desktop / "assets"):
         run([node, "scripts/build/desktop.mjs", "--source", str(repo), "--icons", str(icons),
              "--stamp", str(desktop / "build/install-stamp.json"), "--native-deps", str(prepared.native),
              "--out", str(desktop / "dist")], cwd=repo, env=env)
         version_args = []
-        if sys.platform == "win32" and request.channel_request is None and request.tag is not None:
+        if sys.platform == "win32" and not request.windows_zip and request.channel_request is None and request.tag is not None:
             script = "const m=require('./scripts/msix-shared.mjs');console.log(m.nativeQuad(process.argv[1], Number(process.env.HERMES_RELEASE_EPOCH)))"
             quad = capture([node, "-e", script, request.tag], repo, env)
             version_args = [f'-c.extraMetadata.shortVersion={quad}', f'-c.extraMetadata.shortVersionWindows={quad}']
@@ -151,7 +152,7 @@ def main() -> None:
     parser.add_argument("--channel-request", type=Path, help="Immutable admitted channel request JSON")
     parser.add_argument("--variant", choices=["bundled", "store", "light"])
     parser.add_argument("--windows-zip", action="store_true",
-                        help="Windows bundled commit candidate as ZIP; no Store or update feed publication")
+                        help="Windows bundled build as ZIP with external updates; no Store or update feed publication")
     parser.add_argument("--repo", type=Path, default=ROOT)
     parser.add_argument("--work", type=Path)
     parser.add_argument("--cache", type=Path)

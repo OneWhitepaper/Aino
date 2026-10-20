@@ -192,7 +192,7 @@ on:
         type: boolean
         default: false
       unsigned_windows_zip:
-        description: 'Build and smoke an unsigned Windows x64 ZIP from this dispatch ref; candidate artifact only, no publication.'
+        description: 'Build and smoke an unsigned Windows x64 ZIP from this dispatch ref; optional tag and exact claim, no publication.'
         type: boolean
         default: false
 
@@ -233,13 +233,17 @@ jobs:
           DISPOSABLE_CHANNEL: ${{ inputs.disposable_channel }}
           UPLOAD_RELEASE: ${{ inputs.upload_release }}
         run: |
-          if ($env:TAG -or $env:BUILD_COMMIT -or $env:CHANNEL -or $env:DISPOSABLE_CHANNEL -or $env:UPLOAD_RELEASE -eq 'true') {
-            throw 'Unsigned ZIP builds use only the dispatch ref and cannot select a release or publication'
+          if ($env:BUILD_COMMIT -or $env:CHANNEL -or $env:DISPOSABLE_CHANNEL -or $env:UPLOAD_RELEASE -eq 'true') {
+            throw 'Unsigned ZIP builds use only the dispatch ref and cannot select an update channel or publication'
+          }
+          if ($env:TAG -and ($env:TAG -notmatch '^v\d+\.\d+\.\d+$' -or -not $env:RELEASE_CLAIM_TAG -or -not $env:RELEASE_CLAIM_OBJECT)) {
+            throw 'Versioned ZIP requires a stable tag and its exact annotated claim'
           }
       - uses: actions/checkout@f548e57e544e1ff5a4c46bf1e1b8685f8e4a348a # v7.0.1
         with:
           ref: ${{ github.sha }}
           persist-credentials: false
+          fetch-depth: 0
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: '3.13'
@@ -253,8 +257,11 @@ jobs:
           producer: desktop
       - name: Prepare the existing bundled build as ZIP
         shell: pwsh
+        env:
+          TAG: ${{ inputs.tag }}
         run: |
-          python scripts/bundles/desktop.py --commit $env:GITHUB_SHA --variant bundled --windows-zip --prepare-only --work "$env:RUNNER_TEMP/desktop-job"
+          $identity = if ($env:TAG) { @('--tag', $env:TAG, '--release-commit', $env:GITHUB_SHA) } else { @('--commit', $env:GITHUB_SHA) }
+          python scripts/bundles/desktop.py @identity --variant bundled --windows-zip --prepare-only --work "$env:RUNNER_TEMP/desktop-job"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python -m scripts.ci.desktop_commands "$env:RUNNER_TEMP/desktop-job/prepared.json"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
@@ -275,6 +282,8 @@ jobs:
           retention-days: 14
       - name: Extract ZIP and run the existing native chat smoke
         shell: pwsh
+        env:
+          TAG: ${{ inputs.tag }}
         run: |
           $ErrorActionPreference = 'Stop'
           $archives = @(Get-ChildItem apps/desktop/release/*-win-x64.zip)
@@ -289,7 +298,8 @@ jobs:
           if ($exe.Count -ne 1) { throw 'Expected one packaged desktop executable' }
           $signature = Get-AuthenticodeSignature $exe[0].FullName
           if ($signature.Status -ne 'NotSigned') { throw 'Candidate must be explicitly unsigned' }
-          node tests/install/e2e-assets/bundle-smoke-metadata.mjs stamp --platform win32 --stamp "$install/resources/install-stamp.json" --commit $env:GITHUB_SHA
+          $tagArgs = if ($env:TAG) { @('--tag', $env:TAG) } else { @() }
+          node tests/install/e2e-assets/bundle-smoke-metadata.mjs stamp --platform win32 --format zip --stamp "$install/resources/install-stamp.json" --commit $env:GITHUB_SHA @tagArgs
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           @{ commit=$env:GITHUB_SHA; format='zip'; signed=$false; sha256=(Get-FileHash $archive.FullName -Algorithm SHA256).Hash; bytes=$archive.Length; stamp=$stamp } | ConvertTo-Json -Depth 20 | Set-Content "$proof/artifact.json"
           node tests/install/e2e-assets/desktop-smoke.ts --exe $exe[0].FullName --root "$install/resources/agent-payload" --origin bundled --home "$env:RUNNER_TEMP/zip-home" --user-data "$env:RUNNER_TEMP/zip-user-data" --out $proof --phase installed --expect-commit $env:GITHUB_SHA --platform-account
