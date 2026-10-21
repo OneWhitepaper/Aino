@@ -99,11 +99,13 @@ class BuildRequest:
     bundle_env: dict[str, str | None]
     channel_request: dict | None = None
     release_epoch: int | None = None
+    windows_zip: bool = False
 
     @classmethod
     def create(cls, source: Path, *, tag: str | None, commit: str | None, variant: str,
                work: Path, cache: Path, bundle_env: dict[str, str | None],
-               channel_request: dict | None = None, release_commit: str | None = None) -> BuildRequest:
+               channel_request: dict | None = None, release_commit: str | None = None,
+               windows_zip: bool = False) -> BuildRequest:
         from pm.store import current_target
         from scripts.bundles.desktop import release_version
         from scripts.releases.bundle_env import validate
@@ -172,11 +174,16 @@ class BuildRequest:
             if version != channel_request["sourceVersion"]:
                 raise ValueError("channel sourceVersion differs from checkout project version")
             version = channel_request["version"]
-        return cls(source, work, cache, commit, tag, version, variant, current_target(), bundle_env,
-                   channel_request, release_epoch)
+        request = cls(source, work, cache, commit, tag, version, variant, current_target(), bundle_env,
+                      channel_request, release_epoch, windows_zip)
+        request.validate_channel()
+        return request
 
     def data(self) -> dict:
-        return {**asdict(self), "source": str(self.source), "work": str(self.work), "cache": str(self.cache)}
+        data = {**asdict(self), "source": str(self.source), "work": str(self.work), "cache": str(self.cache)}
+        if not self.windows_zip:
+            data.pop("windows_zip")  # Preserve fingerprints of existing prepared builds.
+        return data
 
     @classmethod
     def from_data(cls, data: dict) -> BuildRequest:
@@ -185,6 +192,9 @@ class BuildRequest:
         return request
 
     def validate_channel(self) -> None:
+        if self.windows_zip and (not self.target.startswith("win32-") or self.variant != "bundled"
+                                 or self.channel_request is not None):
+            raise ValueError("Windows ZIP requires a bundled Windows build, without a native update channel")
         if self.channel_request is None:
             return
         channel = validate_channel_request(self.channel_request)
@@ -357,7 +367,8 @@ def prepare_in_worker(request: BuildRequest) -> Path:
         dmg = prepare_dmgbuild(request.cache / "tools", request.cache / "python/build")
         dmg_args = ["--dmgbuild", str(dmg)]
     run([str(node), "apps/desktop/scripts/prepare-packaging-tools.mjs", "--source", str(request.source),
-         "--out", str(packager), "--cache", str(request.cache / "packager"), "--target", request.target, *dmg_args],
+         "--out", str(packager), "--cache", str(request.cache / "packager"), "--target", request.target,
+         *(["--format", "zip"] if request.windows_zip else []), *dmg_args],
         cwd=request.source, env=env)
     run([str(node), "apps/desktop/scripts/probe-prepared-native.mjs", "--source", str(request.source),
          "--native-deps", str(native), "--packaging", str(packager / "prepared.json"),

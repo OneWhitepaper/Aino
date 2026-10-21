@@ -9,12 +9,21 @@ commands package the current desktop build; they do not stage a fresh runtime.
 |---|---|---|
 | Windows x64 / ARM64, sideload | Signed per-architecture MSIX packages, combined into a universal `.msixbundle`; `.appinstaller` descriptor | Windows App Installer |
 | Windows x64 / ARM64, Store | Store-identity MSIX packages and a separate Store bundle | Microsoft Store |
+| Windows x64 / ARM64, unsigned download | Bundled ZIP built with `--windows-zip` | External replacement; no App Installer feed |
 | macOS ARM64 / x64 | Signed, notarized `Hermes.app` in DMG and ZIP artifacts | `electron-updater` with Squirrel.Mac |
-| Linux x64 / ARM64 | Local builder can produce AppImage | External replacement; Linux desktop release legs are disabled |
+| Linux x64 / ARM64 | Native AppImage candidates; DEB/RPM repackaged from the admitted payload | External replacement; automated Linux release publication remains disabled |
 
 The current MSIX manifest requires Windows 11 22H2 (`10.0.22621.0`).
 The source-script Windows support range is separate from this package floor.
 Windows desktop packaging uses MSIX, not NSIS or MSI.
+
+Aino's unsigned Windows download reuses the bundle builder with `--windows-zip`.
+It supports commit candidates and versioned builds (`--tag` plus the exact stable
+claim and `--release-commit`), but not Store or native update channels. The stamp
+declares external updates even when tagged. The opt-in `unsigned_windows_zip`
+workflow tests the dispatch commit on Windows and retains artifacts; it never
+publishes a release or inherits release-signing credentials. A versioned dispatch
+must supply the annotated claim tag/object as well as the requested tag.
 
 `bundled` carries the local runtime. `store` carries the same runtime under
 Partner Center's package identity. `light` is a remote-only client without
@@ -338,6 +347,25 @@ version are different facts. `scripts/msix-shared.mjs` owns these derivations.
 
 ## macOS signing and updates
 
+The account/tool/history smoke can exercise an already built macOS bundle:
+
+```sh
+cd apps/desktop
+AINO_NATIVE_API_ROOT=/path/to/Aino-API \
+AINO_NATIVE_PACKAGED_APP='/path/to/Aino.app' \
+npx playwright test e2e/platform-account-model-billing.spec.ts \
+  --grep 'packaged default sandbox' --workers 1
+```
+
+This uses the existing Docker-backed API fixture and the bundle's interpreter.
+The update test's HTTPS edge supplies a temporary, route-specific CA and a
+loopback proxy; the backend and its tool children inherit the existing native
+smoke's network sandbox. No Python module is injected into the bundle, and
+Chromium retains its own sandbox. The receipt records the install stamp,
+backend process identity, tool results, billing and history after restart.
+It validates the local fixture flow, not real-service authentication, model
+quality, remembered Keychain login or an application update.
+
 `CSC_LINK` and `CSC_KEY_PASSWORD` supply the Developer ID identity.
 The notarization hook accepts `APPLE_API_KEY`, `APPLE_API_KEY_ID`, and
 `APPLE_API_ISSUER`, or a keychain profile. CI materializes the API key from
@@ -347,6 +375,19 @@ The app and nested Mach-O binaries, including Chromium, must be signed before
 notarization. The existing after-sign hook owns submission and stapling.
 Publication checks signatures, the stapled ticket, and Gatekeeper assessment.
 Unsigned local builds do not satisfy these gates.
+
+The DMG container is signed separately through electron-builder's `dmg.sign`.
+The existing notarization hook also runs at `artifactBuildCompleted`: it
+submits and staples the signed DMG, checks Gatekeeper, then generates its
+blockmap and update metadata. `dmg.writeUpdateInfo` is disabled only to defer
+that first blockmap until the final bytes exist. Without Apple credentials,
+local builds still get blockmaps but do not satisfy publication gates.
+For standalone DMG notarization, sign the image before submitting it, then
+staple and validate the accepted image. Signing an already stapled image
+invalidates that ticket; submit the changed image again. Check the container
+with `spctl --assess --type open --context context:primary-signature` as well
+as checking the app with `spctl --assess --type execute`. After any artifact
+mutation, regenerate its blockmap and release checksums from the final bytes.
 
 Both DMG and ZIP artifacts are required by the release pipeline. The ZIP is
 the update artifact, not an optional duplicate of the download DMG.
@@ -370,6 +411,42 @@ Changes to its preparation provider need native DMG/detach and
 signing/notarization acceptance; a successful download is not native execution proof.
 
 ## Development, assets, and verification
+
+### Native candidates without release publication
+
+On native Windows, `python scripts/bundles/desktop.py --commit <full-sha>
+--variant bundled --windows-zip` reuses the same dependency preparation,
+bundled runtime and electron-builder pipeline, selecting its existing ZIP target.
+This option accepts commit candidates or versioned builds with an admitted stable
+claim. Store packages and channel builds retain their existing signing and
+publication requirements.
+Leave signing credentials unset for an unsigned candidate.
+
+The existing `desktop-bundled-release.yml` workflow also accepts
+`unsigned_windows_zip=true` on a pushed branch. Its legacy input name selects a
+candidate lane; `candidate_target` chooses Windows x64/ARM64 ZIP, Linux x64/ARM64
+AppImage, unsigned Intel Mac ZIP/DMG, or all targets. Windows x64 remains the
+default. Each target builds on its native host from the exact dispatch SHA
+without release credentials. Windows/Linux validate the extracted stamp and
+native executable, then run the existing desktop chat smoke. Unsigned Mac
+artifacts remain unverified until separate signed/notarized native acceptance.
+Successful files and checksums are retained as GitHub Actions artifacts for 14
+days. This lane does not publish to the website or any update feed. ZIP users
+extract and launch the executable; MSIX install/update coverage is separate.
+The ZIP is also retained before smoke under an explicitly `unverified` artifact
+name, so a failed test does not discard the build. The `--platform-account` smoke
+option reuses the desktop account fixture, native phone-login UI and HTTPS proxy
+with certificate validation enabled. Inference uses the existing custom mock
+provider. This verifies packaged login and chat plumbing, not production SMS,
+platform model leases, real billing, or Windows update installation.
+
+The existing `desktop-bundle-smoke.yml` can re-smoke a retained Linux AppImage by
+exact artifact ID, run, source commit and archive SHA-256 without rebuilding it.
+It accepts both the old display-name executable and the corrected Linux command
+name, but rejects missing or ambiguous executables. Choosing `format=deb` reuses
+that admitted payload to produce DEB and RPM packages, preserving runtime bytes
+while adapting the command filename. Package-install evidence from Ubuntu does
+not establish compatibility with Fedora or other RPM distributions.
 
 Prepare and activate the [PM developer environment](../../website/docs/reference/package-management.md#developer-workflow)
 first. Use Bash `source ./activate` or PowerShell `. .\activate.ps1`, and keep a

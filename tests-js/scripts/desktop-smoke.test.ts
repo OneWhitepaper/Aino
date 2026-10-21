@@ -7,7 +7,7 @@ import yaml from 'js-yaml'
 import { expect, test } from 'vitest'
 
 import brand from '../../apps/desktop/brand.json' with { type: 'json' }
-import { candidateSmokeHermesHomes, predictSmokeHermesHome, resolveSmokeLaunch, runInstalledDesktopSmoke, smokeEnvironment } from '../../tests/install/e2e-assets/desktop-smoke.ts'
+import { assertAppImageIdentity, candidateSmokeHermesHomes, predictSmokeHermesHome, resolveSmokeLaunch, runInstalledDesktopSmoke, smokeEnvironment } from '../../tests/install/e2e-assets/desktop-smoke.ts'
 import { sourceRuntimeSettleCommand } from '../../tests/install/e2e-assets/source-runtime-settle.mjs'
 import { assertUpdateWindowBackendOrigin, assertUpdateWindowProcess } from '../../tests/install/e2e-assets/update-window-chat.mjs'
 
@@ -62,6 +62,62 @@ test('one server owns inference and a fresh, per-server prompt witness', async (
   }
 
   await expect(readMockPrompts(first.url)).rejects.toThrow()
+})
+
+test('packaged smoke explicitly keeps the Chromium sandbox enabled', (): void => {
+  const root = path.resolve(os.tmpdir(), 'native-smoke-sandbox')
+
+  const launch = resolveSmokeLaunch({ exe: path.join(root, 'app'), root, origin: 'bundled',
+    home: path.join(root, 'home'), 'user-data': path.join(root, 'user-data'), out: path.join(root, 'proof'),
+    phase: 'installed', 'expect-commit': 'a'.repeat(40) })
+
+  expect(launch.chromiumSandbox).toBe(true)
+  expect(launch.args).not.toContain('--no-sandbox')
+})
+
+test.runIf(process.platform === 'linux')('AppImage smoke launches the original artifact with the sandbox enabled', (): void => {
+  const root = path.resolve(os.tmpdir(), 'native-appimage-smoke')
+  const appimage = path.join(root, 'Aino.AppImage')
+
+  const launch = resolveSmokeLaunch({ exe: path.join(root, 'Aino Agent'), root, origin: 'bundled', appimage,
+    home: path.join(root, 'home'), 'user-data': path.join(root, 'user-data'), out: path.join(root, 'proof'),
+    phase: 'installed', 'expect-commit': 'a'.repeat(40) })
+
+  expect(launch.executablePath).toBe(appimage)
+  expect(launch.chromiumSandbox).toBe(true)
+})
+
+test('mounted AppImage identity rejects another artifact, executable or stamp', (): void => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'appimage-identity-'))
+  const appimage = path.join(root, 'Aino.AppImage')
+  const appdir = path.join(root, 'mounted')
+  const resources = path.join(appdir, 'resources')
+  const extracted = path.join(root, 'extracted', 'resources')
+  fs.mkdirSync(resources, { recursive: true })
+  fs.mkdirSync(extracted, { recursive: true })
+  fs.writeFileSync(appimage, 'artifact fixture')
+  fs.writeFileSync(path.join(resources, 'install-stamp.json'), 'same stamp')
+  fs.writeFileSync(path.join(extracted, 'install-stamp.json'), 'same stamp')
+  const options = { appimage, exe: path.join(extracted, '..', 'Aino Agent'), root: path.join(extracted, 'agent-payload') }
+  const running = { appimage, appdir, executable: path.join(appdir, 'Aino Agent'), resources }
+  fs.writeFileSync(options.exe, 'extracted executable')
+  fs.writeFileSync(running.executable, 'mounted executable')
+
+  try {
+    expect((): void => assertAppImageIdentity(running, options)).not.toThrow()
+    expect((): void => assertAppImageIdentity({ ...running, appimage: undefined }, options)).toThrow('selected artifact')
+    expect((): void => assertAppImageIdentity({ ...running, executable: options.exe }, options)).toThrow('selected artifact')
+    fs.writeFileSync(path.join(resources, 'install-stamp.json'), 'other stamp')
+    expect((): void => assertAppImageIdentity(running, options)).toThrow('stamp differs')
+  } finally { fs.rmSync(root, { recursive: true, force: true }) }
+})
+
+test('tool chat requires a fresh completed tool-result response', (): void => {
+  const user: TranscriptMessage = { id: 'user', role: 'user', text: 'tool nonce', streaming: false, error: false }
+  const assistant: TranscriptMessage = { id: 'reply', role: 'assistant', text: 'E2E_CALL_RESULT: verified', streaming: false, error: false }
+  expect(newCompletedPair([user, assistant], [], 'tool nonce', 'E2E_CALL_RESULT:')).toEqual({ user, assistant })
+  expect(newCompletedPair([user, { ...assistant, text: MOCK_REPLY }], [], 'tool nonce', 'E2E_CALL_RESULT:')).toBeNull()
+  expect(newCompletedPair([user, assistant], ['reply'], 'tool nonce', 'E2E_CALL_RESULT:')).toBeNull()
 })
 
 test('provider reconfiguration preserves feed, plugins, history and explicit fixture options', (): void => {
@@ -701,4 +757,29 @@ test('re-writing the same provider config is byte-identical', (): void => {
       'OPENAI_BASE_URL=http://127.0.0.1:9000/v1\n# keep me\nOTHER_TEST_VALUE=kept\n'
       + 'MOCK_API_KEY=e2e-mock-key\nOPENAI_API_KEY=e2e-mock-key\n')
   } finally { fs.rmSync(home, { recursive: true, force: true }) }
+})
+
+test('platform account smoke uses verified TLS proxy and pins UI language before launch', async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'smoke-account-'))
+  const home = path.join(root, 'home')
+  const exe = path.join(root, 'fixture-executable')
+  fs.writeFileSync(exe, '#!/bin/sh\nexit 1\n', { mode: 0o755 })
+  let launched = false
+
+  try {
+    await expect(runInstalledDesktopSmoke({ exe, root, origin: 'bundled', home,
+      'user-data': path.join(root, 'user-data'), out: root, phase: 'installed',
+      'expect-commit': 'a'.repeat(40), 'platform-account': true }, async launch => {
+      if (!launch?.env) { throw new Error('Missing smoke launch environment') }
+      launched = true
+      expect(launch.env?.NODE_USE_ENV_PROXY).toBe('1')
+      expect(launch.env?.HTTPS_PROXY).toMatch(/^http:\/\/127\.0\.0\.1:/)
+      expect(fs.readFileSync(launch.env!.NODE_EXTRA_CA_CERTS!, 'utf8')).toContain('BEGIN CERTIFICATE')
+      expect(launch.env?.NODE_TLS_REJECT_UNAUTHORIZED).not.toBe('0')
+      expect(yaml.load(fs.readFileSync(path.join(home, 'config.yaml'), 'utf8'))).toMatchObject({ display: { language: 'en' } })
+      throw new Error('fixture launch deliberately stopped')
+    })).rejects.toThrow('fixture launch deliberately stopped')
+    expect(launched).toBe(true)
+    expect(fs.existsSync(path.join(root, 'edge-ca'))).toBe(false)
+  } finally { fs.rmSync(root, { recursive: true, force: true }) }
 })

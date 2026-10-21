@@ -50,6 +50,25 @@ def test_validate_exports_the_admitted_sha_as_a_job_output():
     assert "steps.admission.outputs.sha" in outputs["sha"]
 
 
+def test_unsigned_zip_candidate_is_opt_in_and_cannot_enter_release_admission():
+    jobs = _workflow()["jobs"]
+    candidates = [job for job in jobs.values() if "inputs.unsigned_windows_zip == true" in job.get("if", "")]
+    assert len(candidates) == 1
+    candidate = candidates[0]
+    assert candidate["permissions"] == {"contents": "read"}
+    assert "environment" not in candidate
+    assert not needs_of(candidate)
+    for event in ("workflow_dispatch", "pull_request", "push"):
+        for enabled in (True, False):
+            inputs = {"unsigned_windows_zip": enabled}
+            assert gate(candidate["if"], inputs, {}, github={"event_name": event}) == (
+                enabled and event == "workflow_dispatch")
+            assert gate(jobs["validate"]["if"], inputs, {}) == (not enabled)
+    # Credential inheritance or deployment environments would turn this
+    # unprivileged branch build into a release path.
+    assert all("secrets" not in step for step in candidate["steps"])
+
+
 def _checkout_refs(job: dict, inputs: dict, needs: dict) -> list:
     """The revision each checkout that runs under *inputs* resolves to, in order."""
     refs = []

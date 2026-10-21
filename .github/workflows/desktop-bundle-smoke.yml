@@ -13,8 +13,13 @@ on:
       format: {required: true, type: string}
       sha: {description: Commit whose staged artifact is smoked, required: true, type: string}
       tag: {default: '', type: string}
+      archive-tag: {description: 'Existing attempt archive containing the receipt-bound candidate', default: '', type: string}
       commit-build: {default: false, type: boolean}
-      public-base: {required: true, type: string}
+      public-base: {required: false, default: '', type: string}
+      artifact-id: {description: 'Existing GitHub native candidate artifact ID; no rebuild', default: '', type: string}
+      artifact-run: {default: '', type: string}
+      artifact-sha256: {description: 'Exact GitHub artifact archive digest', default: '', type: string}
+      github-release: {description: 'Fetch an existing GitHub release attempt; artifact-sha256 pins its handoff receipt', default: false, type: boolean}
   workflow_call:
     inputs:
       platform:
@@ -60,9 +65,304 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 jobs:
+  native-candidate:
+    name: Re-smoke native ${{ inputs.platform }}-${{ inputs.arch }} candidate
+    if: github.event_name == 'workflow_dispatch' && inputs.artifact-id != ''
+    runs-on: ${{ inputs.arch == 'arm64' && 'ubuntu-24.04-arm' || 'ubuntu-24.04' }}
+    timeout-minutes: 90
+    permissions:
+      contents: read
+      actions: read
+    env:
+      EXPECTED_COMMIT: ${{ inputs.sha }}
+      EXPECTED_TARGET: ${{ inputs.platform }}-${{ inputs.arch }}
+      RELEASE_TAG: ${{ inputs.tag }}
+    steps:
+      - uses: actions/checkout@f548e57e544e1ff5a4c46bf1e1b8685f8e4a348a # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Require Linux candidate on its native host
+        env:
+          PLATFORM: ${{ inputs.platform }}
+          FORMAT: ${{ inputs.format }}
+        run: |
+          python3 - <<'PYCODE'
+          import os
+          from pm.store import current_target
+          if os.environ['PLATFORM'] != 'linux' or os.environ['FORMAT'] not in ('AppImage', 'deb') or current_target() != os.environ['EXPECTED_TARGET']:
+              raise SystemExit('GitHub candidate re-smoke requires a native Linux AppImage or DEB installation')
+          PYCODE
+      - name: Install system desktop dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq xvfb libgtk-3-0 libnotify4 libnss3 libxss1 libxtst6 xdg-utils libatspi2.0-0 libdrm2 libgbm1 libasound2t64 libfuse2t64
+      - name: Set up driver tools only
+        uses: ./.github/actions/setup-pm
+        with:
+          toolchain: all
+          cache: false
+          cache-python: false
+          cache-node: false
+          archive-inputs: false
+      - name: Install locked smoke dependencies
+        if: inputs.format == 'AppImage'
+        run: npm ci --workspace tests-js --include-workspace-root --omit=dev --ignore-scripts --no-audit --no-fund
+      - name: Install locked package tools and smoke dependencies
+        if: inputs.format == 'deb'
+        run: |
+          npm ci --workspace apps/desktop --workspace tests-js --include-workspace-root --ignore-scripts --no-audit --no-fund
+          sudo apt-get install -y -qq rpm
+          node node_modules/vitest/vitest.mjs run apps/desktop/scripts/run-electron-builder.test.mjs
+      - name: Fetch exact existing candidate
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ARTIFACT_ID: ${{ inputs.artifact-id }}
+          ARTIFACT_RUN: ${{ inputs.artifact-run }}
+          ARTIFACT_SHA256: ${{ inputs.artifact-sha256 }}
+        run: |
+          python -m scripts.ci.native_candidate_artifact --artifact-id "$ARTIFACT_ID" --run "$ARTIFACT_RUN" --commit "$EXPECTED_COMMIT" --target "$EXPECTED_TARGET" --digest "$ARTIFACT_SHA256" --out "$RUNNER_TEMP/candidate-download"
+      - name: Extract and inspect the exact artifact
+        id: metadata
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          files=("$RUNNER_TEMP/candidate-download/"*.AppImage)
+          test "${#files[@]}" -eq 1
+          chmod +x "${files[0]}"
+          mkdir "$RUNNER_TEMP/candidate-extracted" "$RUNNER_TEMP/candidate-proof"
+          cd "$RUNNER_TEMP/candidate-extracted"
+          "${files[0]}" --appimage-extract > "$RUNNER_TEMP/candidate-proof/extraction.log"
+          echo "CANDIDATE_APPIMAGE=${files[0]}" >> "$GITHUB_ENV"
+          echo "CANDIDATE_ROOT=$PWD/squashfs-root/resources/agent-payload" >> "$GITHUB_ENV"
+          echo "CANDIDATE_INSTALL=$PWD/squashfs-root" >> "$GITHUB_ENV"
+      - name: Verify product identity architecture and provenance
+        run: |
+          python - <<'PYCODE'
+          import hashlib, json, os, subprocess
+          from pathlib import Path
+          from pm.package import machine_matches_binary
+          root = Path(os.environ['CANDIDATE_ROOT'])
+          env = {**os.environ, 'HERMES_DESKTOP_VARIANT': 'bundled', 'HERMES_PAYLOAD_TAG': os.environ['RELEASE_TAG'], 'HERMES_BUILD_COMMIT': '' if os.environ['RELEASE_TAG'] else os.environ['EXPECTED_COMMIT']}
+          names = json.loads(subprocess.check_output(['node', '-e', "const c=require('./apps/desktop/electron-builder.config.cjs'); console.log(JSON.stringify([c.linux.executableName,c.executableName]))"], text=True, env=env))
+          # Older admitted AppImages predate the Linux command-name correction.
+          executables = [Path(os.environ['CANDIDATE_INSTALL']) / name for name in dict.fromkeys(names)
+                         if (Path(os.environ['CANDIDATE_INSTALL']) / name).is_file()]
+          if len(executables) != 1:
+              raise SystemExit(f'Expected exactly one product executable, found {len(executables)}')
+          exe = executables[0]
+          manifest = json.loads((root / 'manifest.json').read_text())
+          for binary in (exe, root / manifest['runtime']['storePython']):
+              if machine_matches_binary(binary, os.environ['EXPECTED_TARGET']) is not True:
+                  raise SystemExit(f'Wrong native architecture: {binary.name}')
+          artifact = Path(os.environ['CANDIDATE_APPIMAGE'])
+          with artifact.open('rb') as stream:
+              digest = hashlib.file_digest(stream, 'sha256').hexdigest()
+          proof = Path(os.environ['RUNNER_TEMP']) / 'candidate-proof'
+          (proof / 'artifact.json').write_text(json.dumps({'commit': os.environ['EXPECTED_COMMIT'], 'target': os.environ['EXPECTED_TARGET'], 'name': artifact.name, 'sha256': digest, 'bytes': artifact.stat().st_size, 'nativeBinaryAudit': True}, indent=2))
+          with open(os.environ['GITHUB_ENV'], 'a') as stream:
+              stream.write(f'CANDIDATE_EXE={exe}' + chr(10))
+          PYCODE
+          node tests/install/e2e-assets/bundle-smoke-metadata.mjs stamp --platform linux --format AppImage --stamp "$CANDIDATE_INSTALL/resources/install-stamp.json" --commit "$EXPECTED_COMMIT" --tag "$RELEASE_TAG"
+          cp "$RUNNER_TEMP/candidate-download/source-artifact.json" "$RUNNER_TEMP/candidate-proof/"
+      - name: Prepare native installer packaging tools
+        if: inputs.format == 'deb'
+        run: |
+          set -euo pipefail
+          export HERMES_DESKTOP_VARIANT=bundled HERMES_PAYLOAD_TAG="$RELEASE_TAG"
+          export HERMES_BUILD_COMMIT="$EXPECTED_COMMIT"
+          if [ -n "$RELEASE_TAG" ]; then export HERMES_BUILD_COMMIT=; fi
+          node apps/desktop/scripts/prepare-packaging-tools.mjs --source "$GITHUB_WORKSPACE" --out "$RUNNER_TEMP/package-tools" --cache "$RUNNER_TEMP/package-cache" --target "$EXPECTED_TARGET" --format deb --format rpm
+          version=$(node tests/install/e2e-assets/bundle-smoke-metadata.mjs stamp --platform linux --format AppImage --stamp "$CANDIDATE_INSTALL/resources/install-stamp.json" --commit "$EXPECTED_COMMIT" --tag "$RELEASE_TAG" | tr -d '"')
+          cp "$CANDIDATE_INSTALL/AppRun" "$RUNNER_TEMP/candidate-proof/supplier-AppRun"
+          node -e 'console.log(JSON.stringify({electronBuilder:require("./node_modules/electron-builder/package.json").version,appBuilderLib:require("./node_modules/app-builder-lib/package.json").version}))' > "$RUNNER_TEMP/candidate-proof/supplier-versions.json"
+          echo "HERMES_DESKTOP_VARIANT=$HERMES_DESKTOP_VARIANT" >> "$GITHUB_ENV"
+          echo "HERMES_PAYLOAD_TAG=$HERMES_PAYLOAD_TAG" >> "$GITHUB_ENV"
+          echo "HERMES_BUILD_COMMIT=$HERMES_BUILD_COMMIT" >> "$GITHUB_ENV"
+          echo "PACKAGE_VERSION=$version" >> "$GITHUB_ENV"
+          # Adapt only the executable filename to the current packaging identity;
+          # the admitted binary and all runtime payload bytes remain unchanged.
+          executable=$(node -e 'console.log(require("./apps/desktop/electron-builder.config.cjs").linux.executableName)')
+          if [ "$(basename "$CANDIDATE_EXE")" != "$executable" ]; then
+            test ! -e "$CANDIDATE_INSTALL/$executable"
+            mv "$CANDIDATE_EXE" "$CANDIDATE_INSTALL/$executable"
+          fi
+          echo "CANDIDATE_EXE=$CANDIDATE_INSTALL/$executable" >> "$GITHUB_ENV"
+      - name: Package existing native payload as DEB
+        if: inputs.format == 'deb'
+        run: |
+          cd apps/desktop
+          node scripts/run-electron-builder.mjs --prepared "$RUNNER_TEMP/package-tools/prepared.json" --prepackaged "$CANDIDATE_INSTALL" --linux deb --${{ inputs.arch }} -c.extraMetadata.version="$PACKAGE_VERSION" -c.directories.output="$RUNNER_TEMP/native-packages"
+      - name: Retain unverified DEB before RPM packaging
+        if: always() && inputs.format == 'deb'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: aino-unverified-deb-${{ inputs.arch }}-${{ github.run_id }}
+          path: ${{ runner.temp }}/native-packages/*.deb
+          compression-level: 0
+          retention-days: 14
+          if-no-files-found: warn
+      - name: Package existing native payload as RPM
+        if: inputs.format == 'deb'
+        run: |
+          cd apps/desktop
+          node scripts/run-electron-builder.mjs --prepared "$RUNNER_TEMP/package-tools/prepared.json" --prepackaged "$CANDIDATE_INSTALL" --linux rpm --${{ inputs.arch }} -c.extraMetadata.version="$PACKAGE_VERSION" -c.directories.output="$RUNNER_TEMP/native-packages"
+      - name: Record native installer hashes
+        if: inputs.format == 'deb'
+        run: |
+          python - <<'PYCODE'
+          import hashlib, json, os
+          from pathlib import Path
+          root = Path(os.environ['RUNNER_TEMP'])
+          artifacts = []
+          for file in sorted((root / 'native-packages').iterdir()):
+              if file.suffix not in ('.deb', '.rpm'):
+                  continue
+              with file.open('rb') as stream:
+                  digest = hashlib.file_digest(stream, 'sha256').hexdigest()
+              artifacts.append({'name': file.name, 'sha256': digest, 'bytes': file.stat().st_size})
+          (root / 'candidate-proof/packages.json').write_text(json.dumps({'sourceCommit': os.environ['EXPECTED_COMMIT'], 'packagingCommit': os.environ['GITHUB_SHA'], 'artifacts': artifacts}, indent=2))
+          PYCODE
+      - name: Retain unverified native DEB and RPM files
+        if: always() && inputs.format == 'deb'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: aino-unverified-linux-packages-${{ inputs.arch }}-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/native-packages/*.deb
+            ${{ runner.temp }}/native-packages/*.rpm
+          compression-level: 0
+          retention-days: 14
+          if-no-files-found: warn
+      - name: Install DEB through the native package manager
+        if: inputs.format == 'deb'
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          packages=("$RUNNER_TEMP/native-packages/"*.deb)
+          test "${#packages[@]}" -eq 1
+          sudo apt-get install -y "${packages[0]}"
+          package=$(dpkg-deb --field "${packages[0]}" Package)
+          PACKAGE_NAME="$package" python - <<'PYCODE'
+          import hashlib, os, subprocess
+          from pathlib import Path
+          original = Path(os.environ['CANDIDATE_EXE'])
+          listing = subprocess.check_output(['dpkg', '-L', os.environ['PACKAGE_NAME']], text=True, encoding='utf-8').splitlines()
+          executables = [Path(file) for file in listing if Path(file).name == original.name and Path(file).is_file() and not Path(file).is_symlink()]
+          if len(executables) != 1:
+              raise SystemExit('Expected one native DEB executable')
+          installed = executables[0]
+          for relative in (original.name, 'resources/app.asar', 'resources/install-stamp.json', 'resources/agent-payload/manifest.json'):
+              paths = [original.parent / relative, installed.parent / relative]
+              digests = []
+              for file in paths:
+                  with file.open('rb') as stream:
+                      digests.append(hashlib.file_digest(stream, 'sha256').hexdigest())
+              if digests[0] != digests[1]:
+                  raise SystemExit(f'Installed DEB changes existing payload bytes: {relative}')
+          payload = installed.parent / 'resources/agent-payload'
+          with open(os.environ['GITHUB_ENV'], 'a') as stream:
+              stream.write(f'CANDIDATE_EXE={installed}' + chr(10))
+              stream.write(f'CANDIDATE_ROOT={payload}' + chr(10))
+          PYCODE
+      - name: Installed DEB startup login chat and tool smoke
+        if: inputs.format == 'deb'
+        run: |
+          xvfb-run -a --server-args='-screen 0 1280x1024x24' node tests/install/e2e-assets/desktop-smoke.ts --exe "$CANDIDATE_EXE" --root "$CANDIDATE_ROOT" --origin bundled --home "$RUNNER_TEMP/deb-home" --user-data "$RUNNER_TEMP/deb-user-data" --out "$RUNNER_TEMP/candidate-proof/deb" --phase installed --expect-commit "$EXPECTED_COMMIT" --platform-account --tool-smoke
+      - name: Retain verified native DEB
+        if: inputs.format == 'deb'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: aino-verified-deb-${{ inputs.arch }}-${{ github.run_id }}
+          path: ${{ runner.temp }}/native-packages/*.deb
+          compression-level: 0
+          retention-days: 14
+          if-no-files-found: error
+      - name: Install RPM on the native Ubuntu host
+        if: inputs.format == 'deb'
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          deb=("$RUNNER_TEMP/native-packages/"*.deb)
+          rpm=("$RUNNER_TEMP/native-packages/"*.rpm)
+          test "${#rpm[@]}" -eq 1
+          sudo apt-get remove -y "$(dpkg-deb --field "${deb[0]}" Package)"
+          test ! -e "/usr/bin/$(basename "$CANDIDATE_EXE")"
+          test ! -L "/usr/bin/$(basename "$CANDIDATE_EXE")"
+          # Dependencies come from Ubuntu apt; RPM's database cannot see them.
+          sudo rpm -ivh --nodeps "${rpm[0]}"
+          package=$(rpm -qp --queryformat '%{NAME}' "${rpm[0]}")
+          PACKAGE_NAME="$package" python - <<'PYCODE'
+          import hashlib, os, subprocess
+          from pathlib import Path
+          original = Path(os.environ['CANDIDATE_INSTALL']) / Path(os.environ['CANDIDATE_EXE']).name
+          listing = subprocess.check_output(['sudo', 'rpm', '-ql', os.environ['PACKAGE_NAME']], text=True, encoding='utf-8').splitlines()
+          executables = [Path(file) for file in listing if Path(file).name == original.name and Path(file).is_file() and not Path(file).is_symlink()]
+          if len(executables) != 1:
+              raise SystemExit('Expected one native RPM executable')
+          installed = executables[0]
+          for relative in (original.name, 'resources/app.asar', 'resources/install-stamp.json', 'resources/agent-payload/manifest.json'):
+              digests = []
+              for file in (original.parent / relative, installed.parent / relative):
+                  with file.open('rb') as stream:
+                      digests.append(hashlib.file_digest(stream, 'sha256').hexdigest())
+              if digests[0] != digests[1]:
+                  raise SystemExit(f'Installed RPM changes existing payload bytes: {relative}')
+          libraries = subprocess.check_output(['ldd', str(installed)], text=True, encoding='utf-8')
+          if 'not found' in libraries:
+              raise SystemExit(libraries)
+          payload = installed.parent / 'resources/agent-payload'
+          with open(os.environ['GITHUB_ENV'], 'a') as stream:
+              stream.write(f'CANDIDATE_EXE={installed}' + chr(10))
+              stream.write(f'CANDIDATE_ROOT={payload}' + chr(10))
+          PYCODE
+      - name: Installed RPM startup login chat and tool smoke
+        if: inputs.format == 'deb'
+        run: |
+          xvfb-run -a --server-args='-screen 0 1280x1024x24' node tests/install/e2e-assets/desktop-smoke.ts --exe "$CANDIDATE_EXE" --root "$CANDIDATE_ROOT" --origin bundled --home "$RUNNER_TEMP/rpm-home" --user-data "$RUNNER_TEMP/rpm-user-data" --out "$RUNNER_TEMP/candidate-proof/rpm-ubuntu" --phase installed --expect-commit "$EXPECTED_COMMIT" --platform-account --tool-smoke
+      - name: Retain native RPM with Ubuntu verification scope
+        if: inputs.format == 'deb'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: aino-rpm-ubuntu-smoked-${{ inputs.arch }}-${{ github.run_id }}
+          path: ${{ runner.temp }}/native-packages/*.rpm
+          compression-level: 0
+          retention-days: 14
+          if-no-files-found: error
+      - name: Direct AppImage startup login chat and tool smoke
+        if: inputs.format == 'AppImage'
+        id: direct
+        continue-on-error: true
+        run: |
+          xvfb-run -a --server-args='-screen 0 1280x1024x24' node tests/install/e2e-assets/desktop-smoke.ts --appimage "$CANDIDATE_APPIMAGE" --exe "$CANDIDATE_EXE" --root "$CANDIDATE_ROOT" --origin bundled --home "$RUNNER_TEMP/direct-home" --user-data "$RUNNER_TEMP/direct-user-data" --out "$RUNNER_TEMP/candidate-proof/direct" --phase installed --expect-commit "$EXPECTED_COMMIT" --platform-account --tool-smoke
+      - name: Extracted startup login chat and tool smoke
+        if: inputs.format == 'AppImage'
+        id: extracted
+        continue-on-error: true
+        run: |
+          sudo chown root:root "$CANDIDATE_INSTALL/chrome-sandbox"
+          sudo chmod 4755 "$CANDIDATE_INSTALL/chrome-sandbox"
+          xvfb-run -a --server-args='-screen 0 1280x1024x24' node tests/install/e2e-assets/desktop-smoke.ts --exe "$CANDIDATE_EXE" --root "$CANDIDATE_ROOT" --origin bundled --home "$RUNNER_TEMP/extracted-home" --user-data "$RUNNER_TEMP/extracted-user-data" --out "$RUNNER_TEMP/candidate-proof/extracted" --phase installed --expect-commit "$EXPECTED_COMMIT" --platform-account --tool-smoke
+      - name: Require direct and extracted sandboxed smoke
+        if: always() && inputs.format == 'AppImage'
+        env:
+          DIRECT: ${{ steps.direct.outcome }}
+          EXTRACTED: ${{ steps.extracted.outcome }}
+        run: test "$DIRECT" = success && test "$EXTRACTED" = success
+      - name: Save verification diagnostics
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: aino-native-resmoke-${{ inputs.platform }}-${{ inputs.arch }}-${{ github.run_id }}
+          path: ${{ runner.temp }}/candidate-proof
+          retention-days: 14
+          if-no-files-found: warn
+
   validate:
+    if: inputs.artifact-id == ''
     name: Require a supported native smoke target
     runs-on: ubuntu-24.04
     timeout-minutes: 5
@@ -82,7 +382,8 @@ jobs:
     needs: validate
     if: inputs.platform == 'darwin'
     runs-on: ${{ inputs.arch == 'x64' && 'macos-15-intel' || 'macos-15' }}
-    timeout-minutes: 30
+    # Signed release candidates may be served by a bandwidth-limited origin.
+    timeout-minutes: 120
     # Also constrains the recording action's nested cache to read-only.
     cache-mode: read
     env: &smoke-env
@@ -124,13 +425,54 @@ jobs:
         shell: bash
         run: npm ci --workspace tests-js --include-workspace-root --omit=dev --ignore-scripts --no-audit --no-fund
 
+      - name: Audit native TLS fixture before downloading the application
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          node --input-type=module <<'JS'
+          import fs from 'node:fs';
+          import path from 'node:path';
+          import { execFileSync } from 'node:child_process';
+          import { startHttpsEdge } from './apps/desktop/e2e/update/github-edge.ts';
+          const root = path.join(process.env.SMOKE_ROOT, 'transport-preflight');
+          const edge = await startHttpsEdge(root, { host: 'api.agentera.com.cn', tunnelOthers: false,
+            handler: (_request, response) => response.end('fixture-ok') });
+          try {
+            const certs = Object.fromEntries(['ca.pem', 'leaf.pem'].map(name =>
+              [name, fs.readFileSync(path.join(root, 'edge-ca', name), 'utf8')]));
+            const verify = (() => {
+              try { return { status: 0, output: execFileSync('openssl', ['verify', '-purpose', 'sslserver', '-CAfile',
+                path.join(root, 'edge-ca/ca.pem'), path.join(root, 'edge-ca/leaf.pem')], { encoding: 'utf8' }) }; }
+              catch (error) { return { status: error.status, output: String(error.stderr) }; }
+            })();
+            fs.mkdirSync(path.join(process.env.SMOKE_ROOT, 'out'), { recursive: true });
+            fs.writeFileSync(path.join(process.env.SMOKE_ROOT, 'out/tls-preflight.json'), JSON.stringify({
+              openssl: execFileSync('openssl', ['version'], { encoding: 'utf8' }).trim(), verify, certificates: certs
+            }, null, 2));
+            if (verify.status !== 0) { throw new Error('Native TLS fixture certificate verification failed'); }
+          } finally { await edge.close(); }
+          JS
+
+      - name: Retain public TLS fixture certificates
+        if: always() && runner.os == 'macOS'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: desktop-tls-preflight-${{ github.run_id }}
+          path: ${{ env.SMOKE_ROOT }}/out/tls-preflight.json
+          retention-days: 14
+          if-no-files-found: error
+
       - name: Fetch one exact downloadable artifact
         id: artifact
         shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          GITHUB_RELEASE_TRANSPORT: ${{ inputs.github-release || false }}
+          HANDOFF_SHA256: ${{ inputs.artifact-sha256 }}
         run: |
           set -euo pipefail
           mkdir -p "$SMOKE_ROOT/out"
-          product=HermesBundled
           if [ -n "${CHANNEL_BUILD:-}" ]; then
             test "$COMMIT_BUILD" = false
             test -z "$RELEASE_TAG"
@@ -138,6 +480,8 @@ jobs:
               --request-sha256 "$CHANNEL_REQUEST_SHA256" --public-base "$PUBLIC_BASE" \
               --out "$SMOKE_ROOT/request.json"
             product=$(python -c 'import json,sys; print(json.load(open(sys.argv[1]))["identity"]["artifactNamePascal"])' "$SMOKE_ROOT/request.json")
+          else
+            product=$(HERMES_DESKTOP_VARIANT=bundled HERMES_PAYLOAD_TAG="$RELEASE_TAG" HERMES_BUILD_COMMIT="${RELEASE_COMMIT}" node -e 'if(process.env.HERMES_PAYLOAD_TAG)process.env.HERMES_BUILD_COMMIT=""; console.log(require("./apps/desktop/product-identity.cjs").artifactNamePascal)')
           fi
           case "$PLATFORM/$ARCH/$FORMAT" in
             darwin/arm64/dmg|darwin/x64/dmg|darwin/arm64/zip|darwin/x64/zip)
@@ -154,8 +498,31 @@ jobs:
             args=(--commit-build "$RELEASE_COMMIT")
           fi
           if [ -n "${CHANNEL_BUILD:-}" ]; then args=(--channel-request "$SMOKE_ROOT/request.json"); fi
-          python -m scripts.releases.handoff fetch --public-base "$PUBLIC_BASE" "${args[@]}" \
-            --name "$name" --root "$SMOKE_ROOT/download" --include "$pattern" 2>&1 | tee "$SMOKE_ROOT/out/fetch.log"
+          if [ "${GITHUB_RELEASE_TRANSPORT:-false}" = true ]; then
+            test "$GITHUB_EVENT_NAME" = workflow_dispatch
+            test "$PLATFORM" = darwin
+            test -n "$ARCHIVE_TAG"
+            test -n "$RELEASE_TAG"
+            test "$COMMIT_BUILD" = false
+            test -z "${CHANNEL_BUILD:-}"
+            mkdir -p "$SMOKE_ROOT/download"
+            gh release download "$ARCHIVE_TAG" --pattern "handoff-$name.json" --dir "$SMOKE_ROOT/download"
+            python - "$name" <<'PY'
+          import json, os, re, sys
+          from pathlib import Path
+          from scripts.releases.handoff import validate_receipt
+          from scripts.releases.r2 import file_sha256
+          receipt = Path(os.environ['SMOKE_ROOT']) / 'download' / f'handoff-{sys.argv[1]}.json'
+          digest = os.environ['HANDOFF_SHA256']
+          if not re.fullmatch(r'[a-f0-9]{64}', digest) or file_sha256(receipt) != digest:
+              raise ValueError('GitHub release handoff differs from the exact receipt digest')
+          validate_receipt(json.loads(receipt.read_text()), os.environ['ARCHIVE_TAG'], os.environ['RELEASE_COMMIT'], sys.argv[1])
+          PY
+            gh release download "$ARCHIVE_TAG" --pattern "$pattern" --dir "$SMOKE_ROOT/download"
+          else
+            python -m scripts.releases.handoff fetch --public-base "$PUBLIC_BASE" "${args[@]}" \
+              --name "$name" --root "$SMOKE_ROOT/download" --include "$pattern" 2>&1 | tee "$SMOKE_ROOT/out/fetch.log"
+          fi
           python - "$name" "$pattern" <<'PY'
           import fnmatch, json, os, sys
           from pathlib import Path

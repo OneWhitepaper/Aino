@@ -8,6 +8,9 @@ import fs from 'node:fs'
 import os from 'node:os'
 import { publishPackagingInputs } from './prepared-packaging.mjs'
 import { recordNativeInputs } from './prepared-native-deps.mjs'
+import { createRequire } from 'node:module'
+const builderEntry = createRequire(import.meta.url).resolve('electron-builder')
+const { configureBuildCommand, createYargs, normalizeOptions } = await import(new URL('./builder.js', 'file://' + builderEntry).href)
 
 test('validate-only admits real prepared inputs without launching tools and rejects unsafe arguments', async () => {
   const source = path.resolve(import.meta.dirname, '../../..')
@@ -17,6 +20,7 @@ test('validate-only admits real prepared inputs without launching tools and reje
     fs.writeFileSync(electron, 'fixture archive')
     const toolsets = { sevenZip: path.join(out, 'sevenZip'), icons: path.join(out, 'icons') }
     for (const dir of Object.values(toolsets)) fs.mkdirSync(dir)
+    fs.writeFileSync(path.join(toolsets.icons, 'icon-tool.js'), 'console.log(require("node:path").basename(__filename))')
     const manifest = await publishPackagingInputs({ source, out, target: `${process.platform}-${process.arch}`, formats: ['dir'], electron, toolsets })
     const nativeDeps = path.join(out, 'native')
     fs.mkdirSync(path.join(nativeDeps, 'node-pty'), { recursive: true })
@@ -25,6 +29,20 @@ test('validate-only admits real prepared inputs without launching tools and reje
     const args = ['--validate-only', '--prepared', manifest, '--native-deps', nativeDeps, '--dir']
     const options = { spawn: () => { throw new Error('validation must not launch tools') } }
     assert.equal(runElectronBuilder(args, options), 0)
+    for (const flag of [[], ['--publish=never'], ['--publish', 'never'], ['-p', 'never']]) {
+      let forwarded
+      assert.equal(runElectronBuilder([...args.filter(arg => arg !== '--validate-only'), ...flag], {
+        spawn: (_node, argv) => { forwarded = argv; return { status: 0 } }
+      }), 0)
+      const cli = forwarded.slice(forwarded.findIndex(arg => arg.endsWith('cli.js')) + 1)
+      const parsed = await configureBuildCommand(createYargs()).parse(cli)
+      assert.equal(normalizeOptions(parsed).publish, 'never')
+      const iconDirectory = forwarded.find(arg => arg.startsWith('-c.toolsets.icons.url=file://')).split('file://')[1]
+      const icon = spawnSync(process.execPath, [path.join(iconDirectory, 'icon-tool.js')], { encoding: 'utf8' })
+      assert.equal(icon.status, 0, icon.stderr)
+      assert.equal(icon.stdout.trim(), 'icon-tool.js')
+      assert.equal(fs.existsSync(path.join(toolsets.icons, 'package.json')), false, 'immutable tool cache must stay unchanged')
+    }
     assert.throws(() => runElectronBuilder([...args, '-c.npmRebuild=true'], options), /not admitted/)
     assert.throws(() => runElectronBuilder(['--validate-only'], options), /--prepared/)
     const cli = spawnSync(process.execPath, [path.join(import.meta.dirname, 'run-electron-builder.mjs'), ...args], { encoding: 'utf8' })
@@ -68,6 +86,32 @@ test('strict builder refuses absent inputs before loading electron-builder', () 
   assert.doesNotMatch(result.stdout, /electron-builder\s+version/)
 })
 
+test.runIf(process.platform === 'linux')('prepackaged native Linux formats reuse existing app bytes without staging native dependencies', async () => {
+  const source = path.resolve(import.meta.dirname, '../../..')
+  const out = fs.mkdtempSync(path.join(os.tmpdir(), 'builder-prepackaged-'))
+  try {
+    const electron = path.join(out, 'electron.zip')
+    fs.writeFileSync(electron, 'fixture archive')
+    const toolsets = { sevenZip: path.join(out, 'sevenZip'), icons: path.join(out, 'icons') }
+    for (const dir of Object.values(toolsets)) fs.mkdirSync(dir)
+    const manifest = await publishPackagingInputs({ source, out, target: `${process.platform}-${process.arch}`, formats: ['deb', 'rpm'], electron, toolsets })
+    const app = path.join(out, 'app')
+    const resources = path.join(app, 'resources')
+    fs.mkdirSync(path.join(resources, 'agent-payload'), { recursive: true })
+    fs.writeFileSync(path.join(resources, 'app.asar'), 'unchanged packaged app')
+    fs.writeFileSync(path.join(resources, 'agent-payload/manifest.json'), '{}')
+    const stamp = path.join(resources, 'install-stamp.json')
+    fs.writeFileSync(stamp, JSON.stringify({ payload: 'bundled', dirty: false, commit: 'a'.repeat(40) }))
+    const args = ['--prepared', manifest, '--prepackaged', app, '--linux', 'deb', 'rpm']
+    let forwarded
+    assert.equal(runElectronBuilder(args, { spawn: (_node, argv) => { forwarded = argv; return { status: 0 } } }), 0)
+    assert.equal(forwarded[forwarded.indexOf('--prepackaged') + 1], app)
+    assert.equal(fs.readFileSync(path.join(resources, 'app.asar'), 'utf8'), 'unchanged packaged app')
+    fs.writeFileSync(stamp, JSON.stringify({ payload: 'bundled', dirty: true, commit: 'a'.repeat(40) }))
+    assert.throws(() => runElectronBuilder(args), /clean bundled commit/)
+  } finally { fs.rmSync(out, { recursive: true, force: true }) }
+})
+
 test('npm run builder forwards an apostrophe path to the wrapper verbatim', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'builder-'))
   const manifest = path.join(root, "r'y'z", 'missing.json')
@@ -102,4 +146,17 @@ test('MSIX packaging requires the configured Aino certificate subject', () => {
   assert.throws(() => requireMsixPublisher({}), /AZURE_SIGN_PUBLISHER/)
   const publisher = 'CN=Fixture Publisher'
   assert.equal(requireMsixPublisher({ AZURE_SIGN_PUBLISHER: publisher }), publisher)
+})
+
+test('Linux executable identity fits update-alternatives while preserving the display name', () => {
+  const script = `const config = require('./electron-builder.config.cjs'); console.log(JSON.stringify({name: config.linux.executableName ?? config.executableName, display: config.productName}))`
+  const result = spawnSync(process.execPath, ['-e', script], {
+    cwd: path.resolve(import.meta.dirname, '..'),
+    env: { ...process.env, HERMES_DESKTOP_VARIANT: 'bundled', HERMES_BUILD_COMMIT: '', HERMES_PAYLOAD_TAG: 'v0.1.0' },
+    encoding: 'utf8'
+  })
+  assert.equal(result.status, 0, result.stderr)
+  const identity = JSON.parse(result.stdout)
+  assert.match(identity.name, /^[a-zA-Z0-9][a-zA-Z0-9._-]*$/)
+  assert.equal(identity.display, 'Aino Agent')
 })

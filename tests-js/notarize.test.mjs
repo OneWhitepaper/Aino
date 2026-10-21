@@ -1,4 +1,6 @@
-import { mkdtempSync, mkdirSync, existsSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, existsSync, rmSync, writeFileSync, readFileSync, appendFileSync } from 'node:fs'
+import { createHash } from 'node:crypto'
+import { gunzipSync } from 'node:zlib'
 import os from 'node:os'
 import path from 'node:path'
 import { expect, test, vi } from 'vitest'
@@ -22,6 +24,59 @@ function fixture() {
     cleanup: () => rmSync(root, { recursive: true, force: true })
   }
 }
+
+test('DMG completion notarizes final signed bytes before emitting blockmap and feed metadata', async () => {
+  const f = fixture()
+  const file = path.join(f.root, 'Aino.dmg')
+  const emitted = []
+  const calls = []
+  writeFileSync(file, 'signed image fixture')
+  const event = { file, target: { name: 'dmg' }, safeArtifactName: 'Aino.dmg', isWriteUpdateInfo: false,
+    packager: { emitArtifactBuildCompleted: async value => { emitted.push(value) } } }
+  const run = async (command, args) => {
+    calls.push([command, ...args])
+    if (args[0] === 'notarytool') return { stdout: JSON.stringify({ id: submissionId, status: 'Accepted' }) }
+    if (args[0] === 'stapler' && args[1] === 'staple') appendFileSync(file, ' plus accepted ticket')
+    return { stdout: '', stderr: '' }
+  }
+  try {
+    await notarize(event, { run, env: f.environments[0], log: () => {} })
+    expect(calls.map(c => c[0] === 'xcrun' ? c.slice(1, 3).join(' ') : c[0])).toEqual([
+      'codesign', 'notarytool submit', 'stapler staple', 'stapler validate', 'spctl'
+    ])
+    expect(calls[1]).toContain(file)
+    const bytes = readFileSync(file)
+    expect(bytes.toString()).toBe('signed image fixture plus accepted ticket')
+    expect(event.updateInfo).toEqual({ size: 41, sha512: createHash('sha512').update(bytes).digest('base64') })
+    expect(event.isWriteUpdateInfo).toBe(true)
+    expect(emitted).toHaveLength(1)
+    expect(emitted[0].file).toBe(file + '.blockmap')
+    const blockmap = JSON.parse(gunzipSync(readFileSync(file + '.blockmap')))
+    expect(blockmap.files[0].sizes.reduce((sum, n) => sum + n, 0)).toBe(41)
+  } finally { f.cleanup() }
+})
+
+test('DMG rejection does not emit update metadata; credential-free local images still get a blockmap', async () => {
+  const f = fixture()
+  const file = path.join(f.root, 'Aino.dmg')
+  const emitted = []
+  writeFileSync(file, 'local image')
+  const event = { file, target: { name: 'dmg' }, packager: { emitArtifactBuildCompleted: async e => emitted.push(e) } }
+  try {
+    const run = async (_command, args) => {
+      if (args[0] === 'notarytool' && args[1] === 'submit') return { stdout: JSON.stringify({ id: submissionId, status: 'Invalid' }) }
+      return { stdout: 'rejected fixture', stderr: '' }
+    }
+    await expect(notarize(event, { run, env: f.environments[0], log: () => {} })).rejects.toThrow('Invalid')
+    expect(emitted).toEqual([])
+    expect(event.updateInfo).toBeUndefined()
+    await notarize(event, { env: {}, log: () => {}, run: async () => { throw new Error('No credential-free native calls') } })
+    expect(event.updateInfo.size).toBe(11)
+    expect(emitted).toHaveLength(1)
+    await notarize({ ...event, file: file + '.blockmap', target: { name: 'dmg' } }, { env: {} })
+    expect(emitted).toHaveLength(1)
+  } finally { f.cleanup() }
+})
 
 test('accepted submissions retry only ticket propagation, without resubmitting or rebuilding', async () => {
   const f = fixture()

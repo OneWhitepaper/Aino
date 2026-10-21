@@ -99,7 +99,18 @@ const BUILD_CACHE = './.github/actions/desktop-build-cache'
 const cacheUsers = workflow => Object.entries(workflow.jobs)
   .filter(([, job]) => (job.steps ?? []).some(step => step.uses === BUILD_CACHE))
 const targetOf = job => job.strategy.matrix.target.map(row => row.label)
-const desktopLegs = cacheUsers(desktop)
+const desktopLegs = cacheUsers(desktop).filter(([, job]) => job.needs?.includes('validate'))
+
+it('standalone candidates can restore dependency inputs but cannot save to the release cache', () => {
+  const candidates = cacheUsers(desktop).filter(([, job]) => !job.needs?.includes('validate'))
+  expect(candidates.length).toBeGreaterThan(0)
+  for (const [, job] of candidates) {
+    const steps = job.steps.filter(step => step.uses === BUILD_CACHE)
+    expect(steps.map(step => step.with.phase)).toEqual(['restore'])
+    expect(job.permissions).toEqual({ contents: 'read' })
+    expect(job['cache-mode']).not.toBe('write')
+  }
+})
 
 const SHA = 'a'.repeat(40)
 const dispatches = {

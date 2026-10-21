@@ -1,4 +1,5 @@
 import { spawnSync } from 'node:child_process'
+import { randomUUID, X509Certificate } from 'node:crypto'
 import fs from 'node:fs'
 import { createRequire } from 'node:module'
 import os from 'node:os'
@@ -9,12 +10,14 @@ import { parseArgs } from 'node:util'
 import { _electron, type ElectronApplication, type Page } from '@playwright/test'
 import { z } from 'zod'
 
+import { startHttpsEdge } from '../../../apps/desktop/e2e/update/github-edge.ts'
 import { resolveDesktopHermesHome } from '../../../apps/desktop/electron/data-paths.mjs'
 import { applyBundleEnvironment } from '../../../apps/desktop/scripts/bundle-env.mjs'
 import { type ChatIdentity, readChatIdentity, runDesktopChatSmoke, waitForChatReady } from '../../../tests-js/scripts/desktop-chat-smoke.ts'
 import { assertBackendOrigin, localBackendProcess, readBundledBundleEnv, readInstallationCommit } from '../../../tests-js/scripts/desktop-smoke-process.ts'
 import { validateMockUrl, writeEnvFile, writeMockProviderConfig } from '../../../tests-js/scripts/mock-provider-config.ts'
 import { type MockServer, startMockServer } from '../../../tests-js/scripts/mock-server.ts'
+import { signInPlatformFixture, startPlatformServer } from '../../../tests-js/scripts/platform-account-fixture.ts'
 
 import { type SmokeEnvironment, smokeEnvironment, within } from './smoke-env.mjs'
 import { sourceRuntimeSettleCommand } from './source-runtime-settle.mjs'
@@ -29,6 +32,7 @@ const optionsSchema = z.object({
   home: absolutePath, 'user-data': absolutePath, out: absolutePath,
   phase: z.enum(['old', 'new', 'installed']), 'expect-commit': z.string().regex(/^[0-9a-f]{40}$/),
   'launch-spec': absolutePath.optional(), 'mock-url': z.string().optional(),
+  'platform-account': z.boolean().optional(), 'tool-smoke': z.boolean().optional(), appimage: absolutePath.optional(),
 })
 type SmokeOptions = z.infer<typeof optionsSchema>
 
@@ -39,6 +43,7 @@ const launchSpecSchema = z.object({
 })
 
 interface Launch {
+  chromiumSandbox: true
   executablePath: string
   args: string[]
   cwd: string
@@ -46,6 +51,9 @@ interface Launch {
 }
 
 interface RunningDesktop {
+  sandboxDisabled: boolean
+  appimage?: string
+  appdir?: string
   pid: number
   executable: string
   resources: string
@@ -140,7 +148,21 @@ export function resolveSmokeLaunch(options: SmokeOptions): Launch {
       }
     }
   }
-  return { executablePath: options.exe, args, cwd, env }
+  if (args.some((arg: string): boolean => /^--(?:no-sandbox|disable-setuid-sandbox)(?:=|$)/.test(arg))) {
+    throw new Error('Desktop smoke requires Chromium sandboxing')
+  }
+  return { chromiumSandbox: true, executablePath: smokeExecutable(options), args, cwd, env }
+}
+
+function smokeExecutable(options: SmokeOptions): string {
+  if (options.appimage && (process.platform !== 'linux' || options.origin !== 'bundled')) {
+    throw new Error('AppImage launch requires a bundled Linux installation')
+  }
+  return options.appimage ?? options.exe
+}
+
+function runningOptions(options: SmokeOptions, running: RunningDesktop): SmokeOptions {
+  return options.appimage ? { ...options, root: path.join(running.resources, 'agent-payload'), exe: running.executable } : options
 }
 
 /** Select local through the persisted connection contract before any baked remote default can dial. */
@@ -228,12 +250,26 @@ async function gracefulClose(app: ElectronApplication): Promise<void> {
   }
 }
 
+export function assertAppImageIdentity(running: Pick<RunningDesktop, 'appimage' | 'appdir' | 'executable' | 'resources'>, options: Pick<SmokeOptions, 'appimage' | 'exe' | 'root'>): void {
+  if (!options.appimage || !running.appimage || fs.realpathSync(running.appimage) !== fs.realpathSync(options.appimage)
+      || !running.appdir || !within(running.appdir, running.executable)
+      || !within(running.appdir, running.resources) || path.basename(running.executable) !== path.basename(options.exe)) {
+    throw new Error('Running AppImage does not match the selected artifact and executable')
+  }
+  const extractedStamp = fs.readFileSync(path.join(options.root, '..', 'install-stamp.json'))
+  const mountedStamp = fs.readFileSync(path.join(running.resources, 'install-stamp.json'))
+  if (!extractedStamp.equals(mountedStamp)) { throw new Error('Mounted AppImage stamp differs from the extracted artifact') }
+}
+
 async function verifyRunningDesktop(app: ElectronApplication, options: SmokeOptions, launch: Launch, predictedHome?: string): Promise<RunningDesktop> {
   const running = await app.evaluate(({ app: electronApp }): RunningDesktop => {
     // SAFETY: this callback runs in Electron main, whose process includes resourcesPath.
     const runtime = process as ElectronProcess
-    return { pid: runtime.pid, executable: runtime.execPath, resources: runtime.resourcesPath, userData: electronApp.getPath('userData'), home: electronApp.getPath('home') }
+    return { pid: runtime.pid, executable: runtime.execPath, resources: runtime.resourcesPath, userData: electronApp.getPath('userData'), home: electronApp.getPath('home'),
+      appimage: runtime.env.APPIMAGE, appdir: runtime.env.APPDIR,
+      sandboxDisabled: electronApp.commandLine.hasSwitch('no-sandbox') || electronApp.commandLine.hasSwitch('disable-setuid-sandbox') }
   })
+  if (running.sandboxDisabled) { throw new Error('Running desktop disabled the Chromium sandbox') }
   // Chromium resolves DIR_HOME from the HOME env only on Linux; macOS
   // (NSHomeDirectory) and Windows (CSIDL_PROFILE) ignore it, so the home
   // equality is a contract only there. On those platforms the isolation proof
@@ -249,6 +285,10 @@ async function verifyRunningDesktop(app: ElectronApplication, options: SmokeOpti
     if (fs.realpathSync(running.userData) !== fs.realpathSync(options['user-data']) || !homeHonored) {
       throw new Error('Desktop did not honor the isolated home and userData directories')
     }
+  }
+  if (options.appimage) {
+    assertAppImageIdentity(running, options)
+    return running
   }
   if (fs.realpathSync(running.executable) !== fs.realpathSync(options.exe)) {
     throw new Error('Running Electron executable differs from --exe')
@@ -275,6 +315,42 @@ function assertResolvedIdentity(identity: ChatIdentity, options: SmokeOptions, p
 
 export type LaunchElectron = (launch: Parameters<typeof _electron.launch>[0]) => Promise<ElectronApplication>
 
+async function prepareAccountFixture(enabled: boolean | undefined, out: string, env: SmokeEnvironment) {
+  if (!enabled) { return undefined }
+  const account = await startPlatformServer()
+  try {
+    const edge = await startHttpsEdge(out, { host: 'api.agentera.com.cn', handler: account.handler, tunnelOthers: false })
+    Object.assign(env, edge.env, { NODE_USE_ENV_PROXY: '1', NODE_EXTRA_CA_CERTS: edge.caBundle })
+    return {
+      signIn: signInPlatformFixture,
+      proof: () => ({
+        mode: 'synthetic-account-real-native-bridge',
+        requests: account.requests.map(({ method, path: route }) => ({ method, path: route })),
+        proxyHits: edge.apiHits, proxyConnects: edge.connects, blockedConnects: edge.deniedConnects,
+        certificates: ['ca.pem', 'leaf.pem'].map(name => {
+          const certificate = new X509Certificate(fs.readFileSync(path.join(out, 'edge-ca', name)))
+          return { name, subject: certificate.subject, issuer: certificate.issuer,
+            fingerprint: certificate.fingerprint256, validFrom: certificate.validFrom, validTo: certificate.validTo }
+        }),
+        boundary: 'Local account fixture and custom mock inference; no production SMS, platform model lease or billing verification.'
+      }),
+      close: async () => {
+        try { await edge.close() } finally {
+          await account.close()
+          fs.rmSync(path.join(out, 'edge-ca'), { recursive: true, force: true })
+        }
+      }
+    }
+  } catch (error) { await account.close(); throw error }
+}
+
+function seedSmokeProviders(options: SmokeOptions, predictedHome: string | undefined, mockUrl: string) {
+  for (const home of new Set([...candidateSmokeHermesHomes(options.home, options['user-data']), ...(predictedHome ? [predictedHome] : [])])) {
+    writeMockProviderConfig(home, mockUrl, options['platform-account'] ? '  language: en' : undefined)
+    writeEnvFile(home, 'e2e-mock-key', mockUrl)
+  }
+}
+
 // `launchApp` is a parameter so a test can substitute a failing launcher and
 // exercise the seeding that happens before the launch without touching Playwright.
 export async function runInstalledDesktopSmoke(options: SmokeOptions, launchApp: LaunchElectron = (launch) => _electron.launch(launch)): Promise<void> {
@@ -285,11 +361,13 @@ export async function runInstalledDesktopSmoke(options: SmokeOptions, launchApp:
   let app: ElectronApplication | undefined
   let page: Page | undefined
   let predictedHome: string | undefined
+  let account: Awaited<ReturnType<typeof prepareAccountFixture>>
   const consoleLines: string[] = []
   try {
     fs.accessSync(options.exe, fs.constants.X_OK)
     fs.accessSync(options.root)
     const launch: Launch = resolveSmokeLaunch(options)
+    account = await prepareAccountFixture(options['platform-account'], out, launch.env)
     const bundleEnv: Record<string, string | null> | undefined = options.origin === 'bundled' ? readBundledBundleEnv(options.root) : undefined
     predictedHome = bundleEnv ? predictSmokeHermesHome(launch.env, bundleEnv) : undefined
 
@@ -316,10 +394,7 @@ export async function runInstalledDesktopSmoke(options: SmokeOptions, launchApp:
     // provider config and .env. When the artifact's stamp carries its baked
     // bundle env, predict the home the app will actually resolve and seed that
     // too, refusing to seed a non-empty one.
-    for (const home of new Set([...candidateSmokeHermesHomes(options.home, options['user-data']), ...(predictedHome ? [predictedHome] : [])])) {
-      writeMockProviderConfig(home, mockUrl)
-      writeEnvFile(home, 'e2e-mock-key', mockUrl)
-    }
+    seedSmokeProviders(options, predictedHome, mockUrl)
     app = await launchApp({ ...launch, timeout: 120_000 })
     app.process().stdout?.on('data', (chunk: Buffer): void => { consoleLines.push(redact(chunk.toString())) })
     app.process().stderr?.on('data', (chunk: Buffer): void => { consoleLines.push(redact(chunk.toString())) })
@@ -327,8 +402,10 @@ export async function runInstalledDesktopSmoke(options: SmokeOptions, launchApp:
     page = await pickAppWindow(app, (message: string): void => { consoleLines.push(redact(message)) })
     page.on('pageerror', (error: Error): void => { consoleLines.push(redact(error.message)) })
     await prepareWindowForInput(app, page)
+    await account?.signIn(page)
     await waitForChatReady(page)
     const running = await verifyRunningDesktop(app, options, launch, predictedHome)
+    options = runningOptions(options, running)
     const connection = await backendConnection(page)
     const base = new URL(connection.baseUrl)
     if (connection.mode !== 'local' || !['127.0.0.1', 'localhost', '[::1]'].includes(base.hostname)) {
@@ -351,8 +428,18 @@ export async function runInstalledDesktopSmoke(options: SmokeOptions, launchApp:
     // Trace only chat actions. Connection probes can return credential-bearing logs.
     await app.context().tracing.start({ screenshots: true, snapshots: false, sources: false })
     const chat = await runDesktopChatSmoke(page, { mockUrl, phase: options.phase, outDir: out, expectCommit: options['expect-commit'], provenanceCommit })
+    let tool
+    if (options['tool-smoke']) {
+      const marker = path.join(options.home, `native-tool-${randomUUID()}.txt`)
+      const content = `Native tool verified ${options['expect-commit']} ${randomUUID()}`
+      const toolChat = await runDesktopChatSmoke(page, { mockUrl, phase: options.phase,
+        outDir: path.join(out, 'tool'), expectCommit: options['expect-commit'], provenanceCommit,
+        prompt: `E2E_CALL(write_file)[${JSON.stringify({ path: marker, content })}]`, expectedReply: 'E2E_CALL_RESULT:' })
+      if (fs.readFileSync(marker, 'utf8') !== content) { throw new Error('Native write_file did not produce the requested marker') }
+      tool = { status: 'passed', name: 'write_file', marker, content, chat: toolChat }
+    }
     fs.writeFileSync(receiptPath, `${JSON.stringify({ ...chat, status: 'closing' }, null, 2)}\n`)
-    const result = { ...chat, origin: options.origin, root: options.root, executable: options.exe, running, predictedHome,
+    const result = { ...chat, tool, account: account?.proof(), origin: options.origin, root: options.root, executable: options.exe, running, predictedHome,
       localModeConfigured: true, backend: { ...backend, command: redact(backend.command) }, launchKind: options.phase === 'new' ? 'post-update-launch' : 'installed-launch' }
     await app.context().tracing.stop({ path: path.join(out, `desktop-chat-${options.phase}.zip`) })
     await gracefulClose(app)
@@ -362,7 +449,8 @@ export async function runInstalledDesktopSmoke(options: SmokeOptions, launchApp:
     if (page) { await page.screenshot({ path: path.join(out, `desktop-chat-${options.phase}-failed.png`) }).catch((): void => {}) }
     if (app) { await app.context().tracing.stop({ path: path.join(out, `desktop-chat-${options.phase}-failed.zip`) }).catch((): void => {}) }
     fs.writeFileSync(receiptPath, `${JSON.stringify({ status: 'failed', phase: options.phase, origin: options.origin, root: options.root,
-      executable: options.exe, expectedCommit: options['expect-commit'], error: redact(String(error)) }, null, 2)}\n`)
+      executable: options.exe, expectedCommit: options['expect-commit'], error: redact(String(error)),
+      account: account?.proof() }, null, 2)}\n`)
     throw error
   } finally {
     fs.writeFileSync(path.join(out, `desktop-app-${options.phase}.log`), consoleLines.join('\n'))
@@ -371,6 +459,7 @@ export async function runInstalledDesktopSmoke(options: SmokeOptions, launchApp:
     } finally {
       if (app) { await gracefulClose(app).catch((error: Error): void => { console.error(redact(error.message)) }) }
       if (mock) { await mock.close() }
+      await account?.close()
     }
   }
 }
@@ -380,6 +469,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     exe: { type: 'string' }, root: { type: 'string' }, origin: { type: 'string' }, home: { type: 'string' },
     'user-data': { type: 'string' }, out: { type: 'string' }, phase: { type: 'string' },
     'expect-commit': { type: 'string' }, 'launch-spec': { type: 'string' }, 'mock-url': { type: 'string' },
+    'platform-account': { type: 'boolean' }, 'tool-smoke': { type: 'boolean' }, appimage: { type: 'string' },
   } })
   try {
     await runInstalledDesktopSmoke(optionsSchema.parse(values))

@@ -4,12 +4,31 @@ import os from 'node:os'
 import path from 'node:path'
 import { execFileSync, spawnSync } from 'node:child_process'
 import { bundleIdentity, verifyBundleStamp, verifyMacMetadata } from '../tests/install/e2e-assets/bundle-smoke-metadata.mjs'
+
 import { stampAssertions } from '../tests/install/e2e-assets/mac-bundled-manifest.cjs'
 import { randomBytes } from 'node:crypto'
 import { buildStampPayload } from '../apps/desktop/scripts/write-build-stamp.mjs'
 
 const commit = 'a'.repeat(40)
 
+test('Linux AppImage provenance uses the production external update owner', () => {
+  const env = { HERMES_DESKTOP_VARIANT: 'bundled', HERMES_PAYLOAD_TAG: 'v0.1.0' }
+  const stamp = buildStampPayload({ commit, dirty: false }, env, 'linux',
+    { runtime: { commands: { hermes: 'bin/hermes' } } })
+  const options = { commit, tag: 'v0.1.0', platform: 'linux', format: 'AppImage' }
+  expect(verifyBundleStamp(stamp, options)).toBe('0.1.0')
+  expect(() => verifyBundleStamp({ ...stamp, updateMechanism: 'electron-updater' }, options)).toThrow('updateMechanism')
+  expect(() => verifyBundleStamp({ ...stamp, commit: 'b'.repeat(40) }, options)).toThrow('commit')
+})
+
+test('a versioned Windows ZIP requires external updates and cannot pass as MSIX', () => {
+  const commit = 'a'.repeat(40)
+  const stamp = { commit, tag: 'v0.1.0', payload: 'bundled', distribution: 'desktop-app', dirty: false, updateMechanism: 'external' }
+  const options = { commit, tag: 'v0.1.0', platform: 'win32', format: 'zip' }
+  expect(verifyBundleStamp(stamp, options)).toBe('0.1.0')
+  expect(() => verifyBundleStamp({ ...stamp, updateMechanism: 'app-installer' }, options)).toThrow('updateMechanism')
+  expect(() => verifyBundleStamp(stamp, { ...options, format: 'msix' })).toThrow('updateMechanism')
+})
 test('fresh-install provenance admits tagless commit stamps without relaxing update acceptance', () => {
   const stamp = { commit, tag: null, source: 'commit-build', branch: null, dirty: false,
     distribution: 'desktop-app', payload: 'bundled', updateMechanism: 'external', displayVersion: '1.2.3' }

@@ -127,18 +127,9 @@ async function submitAndStaple(zipPath, appPath, auth, { run, sleep, log, now })
   }
 }
 
-export default async function notarize(context, {
+export async function notarizeFile(artifactPath, staplePath = artifactPath, {
   run = runCommand, env = process.env, sleep = setTimeout, log = console.log, now = () => performance.now()
 } = {}) {
-  const { electronPlatformName, appOutDir, packager } = context
-  if (electronPlatformName !== 'darwin') return
-
-  const appName = packager.appInfo.productFilename
-  const appPath = path.join(appOutDir, `${appName}.app`)
-  if (!fs.existsSync(appPath)) {
-    throw new Error(`Cannot notarize missing app bundle: ${appPath}`)
-  }
-
   const profile = String(env.APPLE_NOTARY_PROFILE || '').trim()
   let auth
   let cleanup = () => {}
@@ -152,23 +143,62 @@ export default async function notarize(context, {
       log(
         'Skipping notarization: APPLE_API_KEY, APPLE_API_KEY_ID, and APPLE_API_ISSUER are not fully configured.'
       )
-      return
+      return false
     }
     const key = resolveApiKeyPath(rawApiKey)
     auth = ['--key', key.keyPath, '--key-id', keyId, '--issuer', issuer]
     cleanup = key.cleanup
   }
 
+  try {
+    await submitAndStaple(artifactPath, staplePath, auth, { run, sleep, log, now })
+    return true
+  } finally {
+    cleanup()
+  }
+}
+
+async function finalizeDmg(event, options) {
+  const { file, target, packager, safeArtifactName } = event
+  if (target?.name !== 'dmg' || !file.endsWith('.dmg')) return
+  const run = options.run ?? runCommand
+  // The container must already be signed; never mutate its signature after submission.
+  const env = options.env ?? process.env
+  if (env.APPLE_NOTARY_PROFILE || (env.APPLE_API_KEY && env.APPLE_API_KEY_ID && env.APPLE_API_ISSUER)) {
+    await run('codesign', ['--verify', '--strict', file])
+    await notarizeFile(file, file, options)
+    await run('xcrun', ['stapler', 'validate', file])
+    await run('spctl', ['--assess', '--type', 'open', '--context', 'context:primary-signature', file])
+  }
+  // dmg.writeUpdateInfo=false defers the first blockmap until after stapling.
+  // The builder consumes this event's refreshed metadata only after this hook resolves.
+  const { createBlockmap } = await import('app-builder-lib/internal')
+  event.updateInfo = await createBlockmap(file, target, packager, safeArtifactName)
+  event.isWriteUpdateInfo = true
+}
+
+export default async function notarize(context, options = {}) {
+  if (context.file) return finalizeDmg(context, options)
+  const { electronPlatformName, appOutDir, packager } = context
+  if (electronPlatformName !== 'darwin') return
+  const appName = packager.appInfo.productFilename
+  const appPath = path.join(appOutDir, `${appName}.app`)
+  if (!fs.existsSync(appPath)) throw new Error(`Cannot notarize missing app bundle: ${appPath}`)
+  const env = options.env ?? process.env
+  if (!env.APPLE_NOTARY_PROFILE && !(env.APPLE_API_KEY && env.APPLE_API_KEY_ID && env.APPLE_API_ISSUER)) {
+    (options.log ?? console.log)('Skipping notarization: Apple credentials are not fully configured.')
+    return
+  }
+  const run = options.run ?? runCommand
   const zipPath = path.join(appOutDir, `${appName}.zip`)
   try {
     await run('ditto', ['-c', '-k', '--sequesterRsrc', '--keepParent', appPath, zipPath])
-    await submitAndStaple(zipPath, appPath, auth, { run, sleep, log, now })
+    await notarizeFile(zipPath, appPath, options)
   } finally {
     try {
       fs.rmSync(zipPath, { force: true })
     } catch {
       // Best-effort cleanup.
     }
-    cleanup()
   }
 }

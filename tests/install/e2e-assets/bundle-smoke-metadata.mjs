@@ -37,13 +37,18 @@ export function bundleIdentity(commit, tag = '', channelRequest = null) {
 }
 
 /** @param {object} stamp
- * @param {{commit: string, tag?: string, platform: string,
+ * @param {{commit: string, tag?: string, platform: string, format?: string,
  * channelRequest?: import('../../../apps/desktop/electron/install-stamp.js').ChannelBuildRequest | null}} options */
-export function verifyBundleStamp(stamp, { commit, tag = '', platform, channelRequest = null }) {
-  if (!['darwin', 'win32'].includes(platform)) throw new Error('Unsupported native platform')
+export function verifyBundleStamp(stamp, { commit, tag = '', platform, format, channelRequest = null }) {
+  if (!['darwin', 'win32', 'linux'].includes(platform)) throw new Error('Unsupported native platform')
   const request = channelRequest === null ? null : admitChannelRequest(channelRequest, commit, tag)
   const expected = { commit, tag: request?.receiverCandidate ? request.releaseTag : tag || null, payload: 'bundled', distribution: 'desktop-app', dirty: false,
-    updateMechanism: tag || request ? { darwin: 'electron-updater', win32: 'app-installer' }[platform] : 'external' }
+    updateMechanism: tag || request ? { darwin: 'electron-updater', win32: 'app-installer', linux: 'external' }[platform] : 'external' }
+  if (platform === 'linux' && request) throw new Error('Linux candidates cannot join a native update channel')
+  if (platform === 'win32' && format === 'zip') {
+    if (request) throw new Error('Windows ZIP cannot join a native update channel')
+    expected.updateMechanism = 'external'
+  }
   if (!tag && !request) Object.assign(expected, { source: 'commit-build', branch: null })
   for (const [key, value] of Object.entries(expected)) {
     if (stamp?.[key] !== value) throw new Error(`stamp.${key}: ${JSON.stringify(stamp?.[key])} != ${JSON.stringify(value)}`)
@@ -132,7 +137,7 @@ function prepareDirectories(work, out) {
 function main() {
   const [command, ...args] = process.argv.slice(2)
   const { values } = parseArgs({ args, options: Object.fromEntries(
-    ['commit', 'tag', 'platform', 'stamp', 'app', 'arch', 'out', 'work', 'channel-request'].map(key => [key, { type: 'string' }])) })
+    ['commit', 'tag', 'platform', 'format', 'stamp', 'app', 'arch', 'out', 'work', 'channel-request'].map(key => [key, { type: 'string' }])) })
   if (values['channel-request'] !== undefined) {
     // Preserve the raw JSON for the protocol decoder's duplicate-key checks.
     const raw = fs.readFileSync(values['channel-request'], 'utf8')

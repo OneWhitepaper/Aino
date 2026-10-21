@@ -30,6 +30,25 @@ def _project(tmp_path: Path) -> tuple[Path, str]:
     return source, commit
 
 
+def test_windows_zip_request_roundtrip_preserves_format_without_native_update_channel(tmp_path):
+    from scripts.bundles.desktop_prepare import BuildRequest
+
+    # Target is serialized build data here, not a simulated host platform.
+    data = dict(source=str(tmp_path), work=str(tmp_path / "work"), cache=str(tmp_path / "cache"),
+                commit="a" * 40, tag=None, version="1.2.3", variant="bundled", target="win32-x64",
+                bundle_env={}, windows_zip=True)
+    request = BuildRequest.from_data(data)
+    assert BuildRequest.from_data(request.data()).windows_zip is True
+    tagged = BuildRequest.from_data({**data, "tag": "v1.2.3", "release_epoch": 1787965323})
+    assert BuildRequest.from_data(tagged.data()).tag == "v1.2.3"
+    for changes in ({"channel_request": {}}, {"variant": "store"}, {"target": "darwin-arm64"}):
+        with pytest.raises(ValueError, match="Windows ZIP"):
+            BuildRequest.from_data({**data, **changes})
+    legacy = BuildRequest.from_data({key: value for key, value in data.items() if key != "windows_zip"})
+    assert "windows_zip" not in legacy.data()
+    assert legacy.identity_digest() != request.identity_digest()
+
+
 def test_stable_build_accepts_the_admitted_commit_before_the_final_tag_exists(tmp_path, monkeypatch):
     from scripts.bundles.desktop_inputs import identity_environment
     from scripts.bundles.desktop_prepare import BuildRequest

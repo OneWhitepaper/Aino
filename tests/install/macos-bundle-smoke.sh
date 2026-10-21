@@ -77,4 +77,5 @@ root=$("$node" -e 'console.log(require(process.argv[1]).root)' "$out/installed-i
 cmp "$out/artifact-before.sha256" "$out/artifact-after.sha256"
 cd "$work"
 "$node" "$assets/desktop-smoke.ts" --exe "$exe" --root "$root" --origin bundled \
-  --home "$work/home" --user-data "$work/user-data" --out "$out" --phase installed --expect-commit "$commit"
+  --home "$work/home" --user-data "$work/user-data" --out "$out" --phase installed --expect-commit "$commit" \
+  --platform-account --tool-smoke
