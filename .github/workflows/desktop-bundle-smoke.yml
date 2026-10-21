@@ -13,6 +13,7 @@ on:
       format: {required: true, type: string}
       sha: {description: Commit whose staged artifact is smoked, required: true, type: string}
       tag: {default: '', type: string}
+      archive-tag: {description: 'Existing attempt archive containing the receipt-bound candidate', default: '', type: string}
       commit-build: {default: false, type: boolean}
       public-base: {required: false, default: '', type: string}
       artifact-id: {description: 'Existing GitHub native candidate artifact ID; no rebuild', default: '', type: string}
@@ -375,7 +376,8 @@ jobs:
     needs: validate
     if: inputs.platform == 'darwin'
     runs-on: ${{ inputs.arch == 'x64' && 'macos-15-intel' || 'macos-15' }}
-    timeout-minutes: 30
+    # Signed release candidates may be served by a bandwidth-limited origin.
+    timeout-minutes: 120
     # Also constrains the recording action's nested cache to read-only.
     cache-mode: read
     env: &smoke-env
