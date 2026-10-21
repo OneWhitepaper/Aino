@@ -140,4 +140,3 @@ export async function signInPlatformFixture(page: Page) {
   await page.getByRole('button', { name: 'Sign in', exact: true }).click()
   await expect(page.getByRole('button', { name: 'My account · Native member', exact: true })).toBeVisible({ timeout: 120_000 })
 }
-
