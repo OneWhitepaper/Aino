@@ -244,7 +244,6 @@ jobs:
       CANDIDATE_TARGET: ${{ matrix.target.label }}
       CANDIDATE_PLATFORM: ${{ matrix.target.platform }}
       CANDIDATE_GLOB: ${{ matrix.target.glob }}
-      CANDIDATE_PROOF: ${{ runner.temp }}/candidate-proof
     steps:
       - name: Reject mixed release requests
         shell: python
@@ -281,6 +280,8 @@ jobs:
           target = os.environ['CANDIDATE_TARGET']
           if current_target() != target or machine_matches_binary(Path(sys.executable), target) is not True:
               raise SystemExit(f'Native host/interpreter must match {target}')
+          with open(os.environ['GITHUB_ENV'], 'a', encoding='utf-8') as stream:
+              stream.write(f"CANDIDATE_PROOF={Path(os.environ['RUNNER_TEMP']) / 'candidate-proof'}" + chr(10))
           print(f'Native host and Python verified: {target}')
       - name: Restore desktop dependency inputs
         uses: ./.github/actions/desktop-build-cache
