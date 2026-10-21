@@ -70,7 +70,7 @@ jobs:
     name: Re-smoke native ${{ inputs.platform }}-${{ inputs.arch }} candidate
     if: github.event_name == 'workflow_dispatch' && inputs.artifact-id != ''
     runs-on: ${{ inputs.arch == 'arm64' && 'ubuntu-24.04-arm' || 'ubuntu-24.04' }}
-    timeout-minutes: 45
+    timeout-minutes: 90
     permissions:
       contents: read
       actions: read
@@ -161,7 +161,7 @@ jobs:
           PYCODE
           node tests/install/e2e-assets/bundle-smoke-metadata.mjs stamp --platform linux --format AppImage --stamp "$CANDIDATE_INSTALL/resources/install-stamp.json" --commit "$EXPECTED_COMMIT" --tag "$RELEASE_TAG"
           cp "$RUNNER_TEMP/candidate-download/source-artifact.json" "$RUNNER_TEMP/candidate-proof/"
-      - name: Package existing native payload as DEB and RPM
+      - name: Prepare native installer packaging tools
         if: inputs.format == 'deb'
         run: |
           set -euo pipefail
@@ -172,8 +172,32 @@ jobs:
           version=$(node tests/install/e2e-assets/bundle-smoke-metadata.mjs stamp --platform linux --format AppImage --stamp "$CANDIDATE_INSTALL/resources/install-stamp.json" --commit "$EXPECTED_COMMIT" --tag "$RELEASE_TAG" | tr -d '"')
           cp "$CANDIDATE_INSTALL/AppRun" "$RUNNER_TEMP/candidate-proof/supplier-AppRun"
           node -e 'console.log(JSON.stringify({electronBuilder:require("./node_modules/electron-builder/package.json").version,appBuilderLib:require("./node_modules/app-builder-lib/package.json").version}))' > "$RUNNER_TEMP/candidate-proof/supplier-versions.json"
+          echo "HERMES_DESKTOP_VARIANT=$HERMES_DESKTOP_VARIANT" >> "$GITHUB_ENV"
+          echo "HERMES_PAYLOAD_TAG=$HERMES_PAYLOAD_TAG" >> "$GITHUB_ENV"
+          echo "HERMES_BUILD_COMMIT=$HERMES_BUILD_COMMIT" >> "$GITHUB_ENV"
+          echo "PACKAGE_VERSION=$version" >> "$GITHUB_ENV"
+      - name: Package existing native payload as DEB
+        if: inputs.format == 'deb'
+        run: |
           cd apps/desktop
-          node scripts/run-electron-builder.mjs --prepared "$RUNNER_TEMP/package-tools/prepared.json" --prepackaged "$CANDIDATE_INSTALL" --linux deb rpm --${{ inputs.arch }} -c.extraMetadata.version="$version" -c.directories.output="$RUNNER_TEMP/native-packages"
+          node scripts/run-electron-builder.mjs --prepared "$RUNNER_TEMP/package-tools/prepared.json" --prepackaged "$CANDIDATE_INSTALL" --linux deb --${{ inputs.arch }} -c.extraMetadata.version="$PACKAGE_VERSION" -c.directories.output="$RUNNER_TEMP/native-packages"
+      - name: Retain unverified DEB before RPM packaging
+        if: always() && inputs.format == 'deb'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: aino-unverified-deb-${{ inputs.arch }}-${{ github.run_id }}
+          path: ${{ runner.temp }}/native-packages/*.deb
+          compression-level: 0
+          retention-days: 14
+          if-no-files-found: warn
+      - name: Package existing native payload as RPM
+        if: inputs.format == 'deb'
+        run: |
+          cd apps/desktop
+          node scripts/run-electron-builder.mjs --prepared "$RUNNER_TEMP/package-tools/prepared.json" --prepackaged "$CANDIDATE_INSTALL" --linux rpm --${{ inputs.arch }} -c.extraMetadata.version="$PACKAGE_VERSION" -c.directories.output="$RUNNER_TEMP/native-packages"
+      - name: Record native installer hashes
+        if: inputs.format == 'deb'
+        run: |
           python - <<'PYCODE'
           import hashlib, json, os
           from pathlib import Path
