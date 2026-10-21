@@ -420,6 +420,42 @@ jobs:
         shell: bash
         run: npm ci --workspace tests-js --include-workspace-root --omit=dev --ignore-scripts --no-audit --no-fund
 
+      - name: Audit native TLS fixture before downloading the application
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          node --input-type=module <<'JS'
+          import fs from 'node:fs';
+          import path from 'node:path';
+          import { execFileSync } from 'node:child_process';
+          import { startHttpsEdge } from './apps/desktop/e2e/update/github-edge.ts';
+          const root = path.join(process.env.SMOKE_ROOT, 'transport-preflight');
+          const edge = await startHttpsEdge(root, { host: 'api.agentera.com.cn', tunnelOthers: false,
+            handler: (_request, response) => response.end('fixture-ok') });
+          try {
+            const certs = Object.fromEntries(['ca.pem', 'leaf.pem'].map(name =>
+              [name, fs.readFileSync(path.join(root, 'edge-ca', name), 'utf8')]));
+            const verify = (() => {
+              try { return { status: 0, output: execFileSync('openssl', ['verify', '-CAfile',
+                path.join(root, 'edge-ca/ca.pem'), path.join(root, 'edge-ca/leaf.pem')], { encoding: 'utf8' }) }; }
+              catch (error) { return { status: error.status, output: String(error.stderr) }; }
+            })();
+            fs.mkdirSync(path.join(process.env.SMOKE_ROOT, 'out'), { recursive: true });
+            fs.writeFileSync(path.join(process.env.SMOKE_ROOT, 'out/tls-preflight.json'), JSON.stringify({
+              openssl: execFileSync('openssl', ['version'], { encoding: 'utf8' }).trim(), verify, certificates: certs
+            }, null, 2));
+          } finally { await edge.close(); }
+          JS
+
+      - name: Retain public TLS fixture certificates
+        if: runner.os == 'macOS'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: desktop-tls-preflight-${{ github.run_id }}
+          path: ${{ env.SMOKE_ROOT }}/out/tls-preflight.json
+          retention-days: 14
+          if-no-files-found: error
+
       - name: Fetch one exact downloadable artifact
         id: artifact
         shell: bash
