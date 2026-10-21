@@ -19,6 +19,7 @@ on:
       artifact-id: {description: 'Existing GitHub native candidate artifact ID; no rebuild', default: '', type: string}
       artifact-run: {default: '', type: string}
       artifact-sha256: {description: 'Exact GitHub artifact archive digest', default: '', type: string}
+      github-release: {description: 'Fetch the attempt from a draft GitHub release; artifact-sha256 pins its handoff receipt', default: false, type: boolean}
   workflow_call:
     inputs:
       platform:
@@ -422,6 +423,11 @@ jobs:
       - name: Fetch one exact downloadable artifact
         id: artifact
         shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          GITHUB_RELEASE_TRANSPORT: ${{ inputs.github-release || false }}
+          HANDOFF_SHA256: ${{ inputs.artifact-sha256 }}
         run: |
           set -euo pipefail
           mkdir -p "$SMOKE_ROOT/out"
@@ -449,8 +455,31 @@ jobs:
             args=(--commit-build "$RELEASE_COMMIT")
           fi
           if [ -n "${CHANNEL_BUILD:-}" ]; then args=(--channel-request "$SMOKE_ROOT/request.json"); fi
-          python -m scripts.releases.handoff fetch --public-base "$PUBLIC_BASE" "${args[@]}" \
-            --name "$name" --root "$SMOKE_ROOT/download" --include "$pattern" 2>&1 | tee "$SMOKE_ROOT/out/fetch.log"
+          if [ "$GITHUB_RELEASE_TRANSPORT" = true ]; then
+            test "$GITHUB_EVENT_NAME" = workflow_dispatch
+            test "$PLATFORM" = darwin
+            test -n "$ARCHIVE_TAG"
+            test -n "$RELEASE_TAG"
+            test "$COMMIT_BUILD" = false
+            test -z "${CHANNEL_BUILD:-}"
+            mkdir -p "$SMOKE_ROOT/download"
+            gh release download "$ARCHIVE_TAG" --pattern "handoff-$name.json" --dir "$SMOKE_ROOT/download"
+            python - "$name" <<'PY'
+          import json, os, re, sys
+          from pathlib import Path
+          from scripts.releases.handoff import validate_receipt
+          from scripts.releases.r2 import file_sha256
+          receipt = Path(os.environ['SMOKE_ROOT']) / 'download' / f'handoff-{sys.argv[1]}.json'
+          digest = os.environ['HANDOFF_SHA256']
+          if not re.fullmatch(r'[a-f0-9]{64}', digest) or file_sha256(receipt) != digest:
+              raise ValueError('Draft release handoff differs from the exact receipt digest')
+          validate_receipt(json.loads(receipt.read_text()), os.environ['ARCHIVE_TAG'], os.environ['RELEASE_COMMIT'], sys.argv[1])
+          PY
+            gh release download "$ARCHIVE_TAG" --pattern "$pattern" --dir "$SMOKE_ROOT/download"
+          else
+            python -m scripts.releases.handoff fetch --public-base "$PUBLIC_BASE" "${args[@]}" \
+              --name "$name" --root "$SMOKE_ROOT/download" --include "$pattern" 2>&1 | tee "$SMOKE_ROOT/out/fetch.log"
+          fi
           python - "$name" "$pattern" <<'PY'
           import fnmatch, json, os, sys
           from pathlib import Path
