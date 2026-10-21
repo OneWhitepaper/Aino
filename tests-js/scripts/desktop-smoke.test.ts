@@ -64,6 +64,15 @@ test('one server owns inference and a fresh, per-server prompt witness', async (
   await expect(readMockPrompts(first.url)).rejects.toThrow()
 })
 
+test('packaged smoke explicitly keeps the Chromium sandbox enabled', (): void => {
+  const root = path.resolve(os.tmpdir(), 'native-smoke-sandbox')
+  const launch = resolveSmokeLaunch({ exe: path.join(root, 'app'), root, origin: 'bundled',
+    home: path.join(root, 'home'), 'user-data': path.join(root, 'user-data'), out: path.join(root, 'proof'),
+    phase: 'installed', 'expect-commit': 'a'.repeat(40) })
+  expect(launch.chromiumSandbox).toBe(true)
+  expect(launch.args).not.toContain('--no-sandbox')
+})
+
 test('tool chat requires a fresh completed tool-result response', (): void => {
   const user: TranscriptMessage = { id: 'user', role: 'user', text: 'tool nonce', streaming: false, error: false }
   const assistant: TranscriptMessage = { id: 'reply', role: 'assistant', text: 'E2E_CALL_RESULT: verified', streaming: false, error: false }

@@ -43,6 +43,7 @@ const launchSpecSchema = z.object({
 })
 
 interface Launch {
+  chromiumSandbox: true
   executablePath: string
   args: string[]
   cwd: string
@@ -50,6 +51,7 @@ interface Launch {
 }
 
 interface RunningDesktop {
+  sandboxDisabled: boolean
   pid: number
   executable: string
   resources: string
@@ -144,7 +146,10 @@ export function resolveSmokeLaunch(options: SmokeOptions): Launch {
       }
     }
   }
-  return { executablePath: options.exe, args, cwd, env }
+  if (args.some((arg: string): boolean => /^--(?:no-sandbox|disable-setuid-sandbox)(?:=|$)/.test(arg))) {
+    throw new Error('Desktop smoke requires Chromium sandboxing')
+  }
+  return { chromiumSandbox: true, executablePath: options.exe, args, cwd, env }
 }
 
 /** Select local through the persisted connection contract before any baked remote default can dial. */
@@ -236,8 +241,10 @@ async function verifyRunningDesktop(app: ElectronApplication, options: SmokeOpti
   const running = await app.evaluate(({ app: electronApp }): RunningDesktop => {
     // SAFETY: this callback runs in Electron main, whose process includes resourcesPath.
     const runtime = process as ElectronProcess
-    return { pid: runtime.pid, executable: runtime.execPath, resources: runtime.resourcesPath, userData: electronApp.getPath('userData'), home: electronApp.getPath('home') }
+    return { pid: runtime.pid, executable: runtime.execPath, resources: runtime.resourcesPath, userData: electronApp.getPath('userData'), home: electronApp.getPath('home'),
+      sandboxDisabled: electronApp.commandLine.hasSwitch('no-sandbox') || electronApp.commandLine.hasSwitch('disable-setuid-sandbox') }
   })
+  if (running.sandboxDisabled) { throw new Error('Running desktop disabled the Chromium sandbox') }
   // Chromium resolves DIR_HOME from the HOME env only on Linux; macOS
   // (NSHomeDirectory) and Windows (CSIDL_PROFILE) ignore it, so the home
   // equality is a contract only there. On those platforms the isolation proof
