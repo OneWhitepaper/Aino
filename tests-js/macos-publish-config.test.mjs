@@ -2,8 +2,22 @@ import { execFileSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import { expect, it } from 'vitest'
 import feedContract from '../apps/desktop/update-feed.cjs'
+import fs from 'node:fs'
+import yaml from 'js-yaml'
 
 const root = fileURLToPath(new URL('../', import.meta.url))
+
+it('native candidate embeds the official existing Mac updater endpoint without publication', () => {
+  const workflow = yaml.load(fs.readFileSync(new URL('../.github/workflows/desktop-bundled-release.yml', import.meta.url), 'utf8'))
+  const job = Object.values(workflow.jobs).find(job => job.if?.includes('inputs.unsigned_windows_zip == true'))
+  const build = job.steps.find(step => step.env?.CSC_IDENTITY_AUTO_DISCOVERY === 'false')
+  const result = execFileSync(process.execPath, ['-e', 'console.log(JSON.stringify(require("./apps/desktop/electron-builder.config.cjs").mac.publish))'], {
+    cwd: root, encoding: 'utf8', env: { ...process.env, ...build.env,
+      HERMES_DESKTOP_VARIANT: 'bundled', HERMES_PAYLOAD_TAG: 'v0.1.0', HERMES_BUILD_COMMIT: '', _HERMES_CHANNEL_REQUEST_JSON: '' }
+  })
+  const feed = feedContract.darwinFeed('stable', false)
+  expect(JSON.parse(result)).toEqual([{ provider: 'generic', url: `https://petoi.cn/${feed.directory}/`, channel: feed.channel }])
+})
 
 it.each([
   ['bundled', 'v0.28.0', 'stable', false],

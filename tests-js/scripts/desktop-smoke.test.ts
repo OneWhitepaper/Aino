@@ -7,7 +7,7 @@ import yaml from 'js-yaml'
 import { expect, test } from 'vitest'
 
 import brand from '../../apps/desktop/brand.json' with { type: 'json' }
-import { candidateSmokeHermesHomes, predictSmokeHermesHome, resolveSmokeLaunch, runInstalledDesktopSmoke, smokeEnvironment } from '../../tests/install/e2e-assets/desktop-smoke.ts'
+import { assertAppImageIdentity, candidateSmokeHermesHomes, predictSmokeHermesHome, resolveSmokeLaunch, runInstalledDesktopSmoke, smokeEnvironment } from '../../tests/install/e2e-assets/desktop-smoke.ts'
 import { sourceRuntimeSettleCommand } from '../../tests/install/e2e-assets/source-runtime-settle.mjs'
 import { assertUpdateWindowBackendOrigin, assertUpdateWindowProcess } from '../../tests/install/e2e-assets/update-window-chat.mjs'
 
@@ -71,6 +71,41 @@ test('packaged smoke explicitly keeps the Chromium sandbox enabled', (): void =>
     phase: 'installed', 'expect-commit': 'a'.repeat(40) })
   expect(launch.chromiumSandbox).toBe(true)
   expect(launch.args).not.toContain('--no-sandbox')
+})
+
+test.runIf(process.platform === 'linux')('AppImage smoke launches the original artifact with the sandbox enabled', (): void => {
+  const root = path.resolve(os.tmpdir(), 'native-appimage-smoke')
+  const appimage = path.join(root, 'Aino.AppImage')
+  const launch = resolveSmokeLaunch({ exe: path.join(root, 'Aino Agent'), root, origin: 'bundled', appimage,
+    home: path.join(root, 'home'), 'user-data': path.join(root, 'user-data'), out: path.join(root, 'proof'),
+    phase: 'installed', 'expect-commit': 'a'.repeat(40) })
+  expect(launch.executablePath).toBe(appimage)
+  expect(launch.chromiumSandbox).toBe(true)
+})
+
+test('mounted AppImage identity rejects another artifact, executable or stamp', (): void => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'appimage-identity-'))
+  const appimage = path.join(root, 'Aino.AppImage')
+  const appdir = path.join(root, 'mounted')
+  const resources = path.join(appdir, 'resources')
+  const extracted = path.join(root, 'extracted', 'resources')
+  fs.mkdirSync(resources, { recursive: true })
+  fs.mkdirSync(extracted, { recursive: true })
+  fs.writeFileSync(appimage, 'artifact fixture')
+  fs.writeFileSync(path.join(resources, 'install-stamp.json'), 'same stamp')
+  fs.writeFileSync(path.join(extracted, 'install-stamp.json'), 'same stamp')
+  const options = { appimage, exe: path.join(extracted, '..', 'Aino Agent'), root: path.join(extracted, 'agent-payload') }
+  const running = { appimage, appdir, executable: path.join(appdir, 'Aino Agent'), resources }
+  fs.writeFileSync(options.exe, 'extracted executable')
+  fs.writeFileSync(running.executable, 'mounted executable')
+
+  try {
+    expect((): void => assertAppImageIdentity(running, options)).not.toThrow()
+    expect((): void => assertAppImageIdentity({ ...running, appimage: undefined }, options)).toThrow('selected artifact')
+    expect((): void => assertAppImageIdentity({ ...running, executable: options.exe }, options)).toThrow('selected artifact')
+    fs.writeFileSync(path.join(resources, 'install-stamp.json'), 'other stamp')
+    expect((): void => assertAppImageIdentity(running, options)).toThrow('stamp differs')
+  } finally { fs.rmSync(root, { recursive: true, force: true }) }
 })
 
 test('tool chat requires a fresh completed tool-result response', (): void => {

@@ -14,7 +14,10 @@ on:
       sha: {description: Commit whose staged artifact is smoked, required: true, type: string}
       tag: {default: '', type: string}
       commit-build: {default: false, type: boolean}
-      public-base: {required: true, type: string}
+      public-base: {required: false, default: '', type: string}
+      artifact-id: {description: 'Existing GitHub native candidate artifact ID; no rebuild', default: '', type: string}
+      artifact-run: {default: '', type: string}
+      artifact-sha256: {description: 'Exact GitHub artifact archive digest', default: '', type: string}
   workflow_call:
     inputs:
       platform:
@@ -60,9 +63,126 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 jobs:
+  native-candidate:
+    name: Re-smoke native ${{ inputs.platform }}-${{ inputs.arch }} candidate
+    if: github.event_name == 'workflow_dispatch' && inputs.artifact-id != ''
+    runs-on: ${{ inputs.arch == 'arm64' && 'ubuntu-24.04-arm' || 'ubuntu-24.04' }}
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      actions: read
+    env:
+      EXPECTED_COMMIT: ${{ inputs.sha }}
+      EXPECTED_TARGET: ${{ inputs.platform }}-${{ inputs.arch }}
+      RELEASE_TAG: ${{ inputs.tag }}
+    steps:
+      - uses: actions/checkout@f548e57e544e1ff5a4c46bf1e1b8685f8e4a348a # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Require Linux AppImage on its native host
+        env:
+          PLATFORM: ${{ inputs.platform }}
+          FORMAT: ${{ inputs.format }}
+        run: |
+          python3 - <<'PYCODE'
+          import os
+          from pm.store import current_target
+          if os.environ['PLATFORM'] != 'linux' or os.environ['FORMAT'] != 'AppImage' or current_target() != os.environ['EXPECTED_TARGET']:
+              raise SystemExit('GitHub candidate re-smoke currently requires a native Linux AppImage')
+          PYCODE
+      - name: Install system desktop dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq xvfb libgtk-3-0 libnotify4 libnss3 libxss1 libxtst6 xdg-utils libatspi2.0-0 libdrm2 libgbm1 libasound2t64 libfuse2t64
+      - name: Set up driver tools only
+        uses: ./.github/actions/setup-pm
+        with:
+          toolchain: all
+          cache: false
+          cache-python: false
+          cache-node: false
+          archive-inputs: false
+      - name: Install locked smoke dependencies
+        run: npm ci --workspace tests-js --include-workspace-root --omit=dev --ignore-scripts --no-audit --no-fund
+      - name: Fetch exact existing candidate
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ARTIFACT_ID: ${{ inputs.artifact-id }}
+          ARTIFACT_RUN: ${{ inputs.artifact-run }}
+          ARTIFACT_SHA256: ${{ inputs.artifact-sha256 }}
+        run: |
+          python -m scripts.ci.native_candidate_artifact --artifact-id "$ARTIFACT_ID" --run "$ARTIFACT_RUN" --commit "$EXPECTED_COMMIT" --target "$EXPECTED_TARGET" --digest "$ARTIFACT_SHA256" --out "$RUNNER_TEMP/candidate-download"
+      - name: Extract and inspect the exact artifact
+        id: metadata
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          files=("$RUNNER_TEMP/candidate-download/"*.AppImage)
+          test "${#files[@]}" -eq 1
+          chmod +x "${files[0]}"
+          mkdir "$RUNNER_TEMP/candidate-extracted" "$RUNNER_TEMP/candidate-proof"
+          cd "$RUNNER_TEMP/candidate-extracted"
+          "${files[0]}" --appimage-extract > "$RUNNER_TEMP/candidate-proof/extraction.log"
+          echo "CANDIDATE_APPIMAGE=${files[0]}" >> "$GITHUB_ENV"
+          echo "CANDIDATE_ROOT=$PWD/squashfs-root/resources/agent-payload" >> "$GITHUB_ENV"
+          echo "CANDIDATE_INSTALL=$PWD/squashfs-root" >> "$GITHUB_ENV"
+      - name: Verify product identity architecture and provenance
+        run: |
+          python - <<'PYCODE'
+          import hashlib, json, os, subprocess
+          from pathlib import Path
+          from pm.package import machine_matches_binary
+          root = Path(os.environ['CANDIDATE_ROOT'])
+          env = {**os.environ, 'HERMES_DESKTOP_VARIANT': 'bundled', 'HERMES_PAYLOAD_TAG': os.environ['RELEASE_TAG'], 'HERMES_BUILD_COMMIT': ''}
+          name = subprocess.check_output(['node', '-e', "console.log(require('./apps/desktop/product-identity.cjs').displayName)"], text=True, env=env).strip()
+          exe = Path(os.environ['CANDIDATE_INSTALL']) / name
+          manifest = json.loads((root / 'manifest.json').read_text())
+          for binary in (exe, root / manifest['runtime']['storePython']):
+              if machine_matches_binary(binary, os.environ['EXPECTED_TARGET']) is not True:
+                  raise SystemExit(f'Wrong native architecture: {binary.name}')
+          artifact = Path(os.environ['CANDIDATE_APPIMAGE'])
+          with artifact.open('rb') as stream:
+              digest = hashlib.file_digest(stream, 'sha256').hexdigest()
+          proof = Path(os.environ['RUNNER_TEMP']) / 'candidate-proof'
+          (proof / 'artifact.json').write_text(json.dumps({'commit': os.environ['EXPECTED_COMMIT'], 'target': os.environ['EXPECTED_TARGET'], 'name': artifact.name, 'sha256': digest, 'bytes': artifact.stat().st_size, 'nativeBinaryAudit': True}, indent=2))
+          with open(os.environ['GITHUB_ENV'], 'a') as stream:
+              stream.write(f'CANDIDATE_EXE={exe}' + chr(10))
+          PYCODE
+          node tests/install/e2e-assets/bundle-smoke-metadata.mjs stamp --platform linux --format AppImage --stamp "$CANDIDATE_INSTALL/resources/install-stamp.json" --commit "$EXPECTED_COMMIT" --tag "$RELEASE_TAG"
+          cp "$RUNNER_TEMP/candidate-download/source-artifact.json" "$RUNNER_TEMP/candidate-proof/"
+      - name: Direct AppImage startup login chat and tool smoke
+        id: direct
+        continue-on-error: true
+        run: |
+          xvfb-run -a --server-args='-screen 0 1280x1024x24' node tests/install/e2e-assets/desktop-smoke.ts --appimage "$CANDIDATE_APPIMAGE" --exe "$CANDIDATE_EXE" --root "$CANDIDATE_ROOT" --origin bundled --home "$RUNNER_TEMP/direct-home" --user-data "$RUNNER_TEMP/direct-user-data" --out "$RUNNER_TEMP/candidate-proof/direct" --phase installed --expect-commit "$EXPECTED_COMMIT" --platform-account --tool-smoke
+      - name: Extracted startup login chat and tool smoke
+        id: extracted
+        continue-on-error: true
+        run: |
+          sudo chown root:root "$CANDIDATE_INSTALL/chrome-sandbox"
+          sudo chmod 4755 "$CANDIDATE_INSTALL/chrome-sandbox"
+          xvfb-run -a --server-args='-screen 0 1280x1024x24' node tests/install/e2e-assets/desktop-smoke.ts --exe "$CANDIDATE_EXE" --root "$CANDIDATE_ROOT" --origin bundled --home "$RUNNER_TEMP/extracted-home" --user-data "$RUNNER_TEMP/extracted-user-data" --out "$RUNNER_TEMP/candidate-proof/extracted" --phase installed --expect-commit "$EXPECTED_COMMIT" --platform-account --tool-smoke
+      - name: Require direct and extracted sandboxed smoke
+        if: always()
+        env:
+          DIRECT: ${{ steps.direct.outcome }}
+          EXTRACTED: ${{ steps.extracted.outcome }}
+        run: test "$DIRECT" = success && test "$EXTRACTED" = success
+      - name: Save verification diagnostics
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: aino-native-resmoke-${{ inputs.platform }}-${{ inputs.arch }}-${{ github.run_id }}
+          path: ${{ runner.temp }}/candidate-proof
+          retention-days: 14
+          if-no-files-found: warn
+
   validate:
+    if: inputs.artifact-id == ''
     name: Require a supported native smoke target
     runs-on: ubuntu-24.04
     timeout-minutes: 5

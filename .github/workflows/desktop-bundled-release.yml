@@ -239,7 +239,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        target: ${{ fromJSON('{"win32-x64":[{"label":"win32-x64","platform":"win32","arch":"x64","runner":"windows-latest","artifact":"windows-x64","glob":"*-win-x64.zip"}],"win32-arm64":[{"label":"win32-arm64","platform":"win32","arch":"arm64","runner":"windows-11-arm","artifact":"windows-arm64","glob":"*-win-arm64.zip"}],"linux-x64":[{"label":"linux-x64","platform":"linux","arch":"x64","runner":"ubuntu-24.04","artifact":"linux-x64","glob":"*-linux-x64.AppImage"}],"linux-arm64":[{"label":"linux-arm64","platform":"linux","arch":"arm64","runner":"ubuntu-24.04-arm","artifact":"linux-arm64","glob":"*-linux-arm64.AppImage"}],"darwin-x64":[{"label":"darwin-x64","platform":"darwin","arch":"x64","runner":"macos-15-intel","artifact":"darwin-x64","glob":"*-mac-x64.*"}],"all":[{"label":"win32-x64","platform":"win32","arch":"x64","runner":"windows-latest","artifact":"windows-x64","glob":"*-win-x64.zip"},{"label":"win32-arm64","platform":"win32","arch":"arm64","runner":"windows-11-arm","artifact":"windows-arm64","glob":"*-win-arm64.zip"},{"label":"linux-x64","platform":"linux","arch":"x64","runner":"ubuntu-24.04","artifact":"linux-x64","glob":"*-linux-x64.AppImage"},{"label":"linux-arm64","platform":"linux","arch":"arm64","runner":"ubuntu-24.04-arm","artifact":"linux-arm64","glob":"*-linux-arm64.AppImage"},{"label":"darwin-x64","platform":"darwin","arch":"x64","runner":"macos-15-intel","artifact":"darwin-x64","glob":"*-mac-x64.*"}]}')[inputs.candidate_target || 'win32-x64'] }}
+        target: ${{ fromJSON('{"win32-x64":[{"label":"win32-x64","platform":"win32","arch":"x64","runner":"windows-latest","artifact":"windows-x64","glob":"*-win-x64.zip"}],"win32-arm64":[{"label":"win32-arm64","platform":"win32","arch":"arm64","runner":"windows-11-arm","artifact":"windows-arm64","glob":"*-win-arm64.zip"}],"linux-x64":[{"label":"linux-x64","platform":"linux","arch":"x64","runner":"ubuntu-24.04","artifact":"linux-x64","glob":"*-linux-x86_64.AppImage"}],"linux-arm64":[{"label":"linux-arm64","platform":"linux","arch":"arm64","runner":"ubuntu-24.04-arm","artifact":"linux-arm64","glob":"*-linux-arm64.AppImage"}],"darwin-x64":[{"label":"darwin-x64","platform":"darwin","arch":"x64","runner":"macos-15-intel","artifact":"darwin-x64","glob":"*-mac-x64.*"}],"all":[{"label":"win32-x64","platform":"win32","arch":"x64","runner":"windows-latest","artifact":"windows-x64","glob":"*-win-x64.zip"},{"label":"win32-arm64","platform":"win32","arch":"arm64","runner":"windows-11-arm","artifact":"windows-arm64","glob":"*-win-arm64.zip"},{"label":"linux-x64","platform":"linux","arch":"x64","runner":"ubuntu-24.04","artifact":"linux-x64","glob":"*-linux-x86_64.AppImage"},{"label":"linux-arm64","platform":"linux","arch":"arm64","runner":"ubuntu-24.04-arm","artifact":"linux-arm64","glob":"*-linux-arm64.AppImage"},{"label":"darwin-x64","platform":"darwin","arch":"x64","runner":"macos-15-intel","artifact":"darwin-x64","glob":"*-mac-x64.*"}]}')[inputs.candidate_target || 'win32-x64'] }}
     env:
       CANDIDATE_TARGET: ${{ matrix.target.label }}
       CANDIDATE_PLATFORM: ${{ matrix.target.platform }}
@@ -312,6 +312,7 @@ jobs:
         shell: python
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+          CLOUDFLARE_R2_PUBLIC_URL: 'https://petoi.cn'
         run: |
           import os, subprocess, sys
           prepared = os.path.join(os.environ['RUNNER_TEMP'], 'desktop-job', 'prepared.json')
@@ -357,6 +358,7 @@ jobs:
           # Set up the shipped sandbox helper; Chromium's sandbox stays enabled.
           sudo chown root:root "$install/chrome-sandbox"
           sudo chmod 4755 "$install/chrome-sandbox"
+          echo "CANDIDATE_APPIMAGE=$archive" >> "$GITHUB_ENV"
           echo "CANDIDATE_INSTALL=$install" >> "$GITHUB_ENV"
           echo "CANDIDATE_ROOT=$install/resources/agent-payload" >> "$GITHUB_ENV"
           echo "CANDIDATE_STAMP=$install/resources/install-stamp.json" >> "$GITHUB_ENV"
@@ -379,6 +381,8 @@ jobs:
           echo "CANDIDATE_STAMP=$app/Contents/Resources/install-stamp.json" >> "$GITHUB_ENV"
       - name: Verify native executable and embedded Python architecture
         shell: python
+        env:
+          TAG: ${{ inputs.tag }}
         run: |
           import hashlib, json, os, sys
           from pathlib import Path
@@ -386,18 +390,17 @@ jobs:
           from pm.package import machine_matches_binary
           target = os.environ['CANDIDATE_TARGET']
           root = Path(os.environ['CANDIDATE_ROOT'])
-          if sys.platform == 'linux':
-              candidates = [entry for entry in Path(os.environ['CANDIDATE_INSTALL']).iterdir()
-                            if entry.is_file() and os.access(entry, os.X_OK)
-                            and entry.name not in ('chrome-sandbox', 'chrome_crashpad_handler')
-                            and not entry.name.endswith('.so')
-                            and machine_matches_binary(entry, target) is True]
-              if len(candidates) != 1:
-                  raise SystemExit(f'Expected one native Electron executable, found {candidates}')
-              os.environ['CANDIDATE_EXE'] = str(candidates[0])
-              with open(os.environ['GITHUB_ENV'], 'a', encoding='utf-8') as stream:
-                  stream.write(f'CANDIDATE_EXE={candidates[0]}' + chr(10))
           manifest = json.loads((root / 'manifest.json').read_text(encoding='utf-8'))
+          if sys.platform == 'linux':
+              import subprocess
+              identity_env = {**os.environ, 'HERMES_DESKTOP_VARIANT': 'bundled',
+                              'HERMES_PAYLOAD_TAG': os.environ.get('TAG', ''),
+                              'HERMES_BUILD_COMMIT': '' if os.environ.get('TAG') else os.environ['GITHUB_SHA']}
+              name = subprocess.check_output(['node', '-e', "console.log(require('./apps/desktop/product-identity.cjs').displayName)"], env=identity_env, text=True).strip()
+              executable = Path(os.environ['CANDIDATE_INSTALL']) / name
+              os.environ['CANDIDATE_EXE'] = str(executable)
+              with open(os.environ['GITHUB_ENV'], 'a', encoding='utf-8') as stream:
+                  stream.write(f'CANDIDATE_EXE={executable}' + chr(10))
           binaries = [Path(os.environ['CANDIDATE_EXE']), root / manifest['runtime']['storePython']]
           for binary in binaries:
               if machine_matches_binary(binary, target) is not True:
@@ -425,6 +428,13 @@ jobs:
           if [ "$CANDIDATE_PLATFORM" = linux ]; then format=AppImage; fi
           node tests/install/e2e-assets/bundle-smoke-metadata.mjs stamp --platform "$CANDIDATE_PLATFORM" --format "$format" --stamp "$CANDIDATE_STAMP" --commit "$GITHUB_SHA" "${args[@]}"
           bash scripts/smoke-payload.sh "$CANDIDATE_ROOT" 2>&1 | tee "$CANDIDATE_PROOF/payload-smoke.log"
+      - name: Run direct sandboxed AppImage smoke
+        if: matrix.target.platform == 'linux'
+        id: direct-appimage
+        continue-on-error: true
+        shell: bash
+        run: |
+          xvfb-run -a --server-args='-screen 0 1280x1024x24' node tests/install/e2e-assets/desktop-smoke.ts --appimage "$CANDIDATE_APPIMAGE" --exe "$CANDIDATE_EXE" --root "$CANDIDATE_ROOT" --origin bundled --home "$RUNNER_TEMP/direct-home" --user-data "$RUNNER_TEMP/direct-user-data" --out "$CANDIDATE_PROOF/direct" --phase installed --expect-commit "$GITHUB_SHA" --platform-account --tool-smoke
       - name: Run native startup login chat and tool smoke
         shell: bash
         run: |
@@ -435,6 +445,12 @@ jobs:
           else
             "${command[@]}"
           fi
+      - name: Require direct AppImage acceptance
+        if: matrix.target.platform == 'linux'
+        env:
+          DIRECT: ${{ steps.direct-appimage.outcome }}
+        shell: bash
+        run: test "$DIRECT" = success
       - name: Save verified unsigned Windows or Linux candidate
         id: verified
         if: matrix.target.platform != 'darwin'
