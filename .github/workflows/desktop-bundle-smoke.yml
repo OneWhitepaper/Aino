@@ -176,6 +176,14 @@ jobs:
           echo "HERMES_PAYLOAD_TAG=$HERMES_PAYLOAD_TAG" >> "$GITHUB_ENV"
           echo "HERMES_BUILD_COMMIT=$HERMES_BUILD_COMMIT" >> "$GITHUB_ENV"
           echo "PACKAGE_VERSION=$version" >> "$GITHUB_ENV"
+          # Adapt only the executable filename to the current packaging identity;
+          # the admitted binary and all runtime payload bytes remain unchanged.
+          executable=$(node -e 'console.log(require("./apps/desktop/electron-builder.config.cjs").linux.executableName)')
+          if [ "$(basename "$CANDIDATE_EXE")" != "$executable" ]; then
+            test ! -e "$CANDIDATE_INSTALL/$executable"
+            mv "$CANDIDATE_EXE" "$CANDIDATE_INSTALL/$executable"
+          fi
+          echo "CANDIDATE_EXE=$CANDIDATE_INSTALL/$executable" >> "$GITHUB_ENV"
       - name: Package existing native payload as DEB
         if: inputs.format == 'deb'
         run: |
@@ -275,6 +283,8 @@ jobs:
           rpm=("$RUNNER_TEMP/native-packages/"*.rpm)
           test "${#rpm[@]}" -eq 1
           sudo apt-get remove -y "$(dpkg-deb --field "${deb[0]}" Package)"
+          test ! -e "/usr/bin/$(basename "$CANDIDATE_EXE")"
+          test ! -L "/usr/bin/$(basename "$CANDIDATE_EXE")"
           # Dependencies come from Ubuntu apt; RPM's database cannot see them.
           sudo rpm -ivh --nodeps "${rpm[0]}"
           package=$(rpm -qp --queryformat '%{NAME}' "${rpm[0]}")
@@ -282,7 +292,7 @@ jobs:
           import hashlib, os, subprocess
           from pathlib import Path
           original = Path(os.environ['CANDIDATE_INSTALL']) / Path(os.environ['CANDIDATE_EXE']).name
-          listing = subprocess.check_output(['rpm', '-ql', os.environ['PACKAGE_NAME']], text=True, encoding='utf-8').splitlines()
+          listing = subprocess.check_output(['sudo', 'rpm', '-ql', os.environ['PACKAGE_NAME']], text=True, encoding='utf-8').splitlines()
           executables = [Path(file) for file in listing if Path(file).name == original.name and Path(file).is_file() and not Path(file).is_symlink()]
           if len(executables) != 1:
               raise SystemExit('Expected one native RPM executable')

@@ -147,3 +147,16 @@ test('MSIX packaging requires the configured Aino certificate subject', () => {
   const publisher = 'CN=Fixture Publisher'
   assert.equal(requireMsixPublisher({ AZURE_SIGN_PUBLISHER: publisher }), publisher)
 })
+
+test('Linux executable identity fits update-alternatives while preserving the display name', () => {
+  const script = `const config = require('./electron-builder.config.cjs'); console.log(JSON.stringify({name: config.linux.executableName ?? config.executableName, display: config.productName}))`
+  const result = spawnSync(process.execPath, ['-e', script], {
+    cwd: path.resolve(import.meta.dirname, '..'),
+    env: { ...process.env, HERMES_DESKTOP_VARIANT: 'bundled', HERMES_BUILD_COMMIT: '', HERMES_PAYLOAD_TAG: 'v0.1.0' },
+    encoding: 'utf8'
+  })
+  assert.equal(result.status, 0, result.stderr)
+  const identity = JSON.parse(result.stdout)
+  assert.match(identity.name, /^[a-zA-Z0-9][a-zA-Z0-9._-]*$/)
+  assert.equal(identity.display, 'Aino Agent')
+})

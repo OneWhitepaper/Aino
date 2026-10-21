@@ -276,6 +276,8 @@ module.exports = {
     showNameOnTiles: true
   },
   linux: {
+    // update-alternatives requires a command name without spaces.
+    executableName: appNamePascal.toLowerCase(),
     category: 'Development',
     maintainer: 'OneWhitepaper',
     synopsis: light
