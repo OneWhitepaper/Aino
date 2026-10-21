@@ -137,7 +137,7 @@ jobs:
           from pathlib import Path
           from pm.package import machine_matches_binary
           root = Path(os.environ['CANDIDATE_ROOT'])
-          env = {**os.environ, 'HERMES_DESKTOP_VARIANT': 'bundled', 'HERMES_PAYLOAD_TAG': os.environ['RELEASE_TAG'], 'HERMES_BUILD_COMMIT': ''}
+          env = {**os.environ, 'HERMES_DESKTOP_VARIANT': 'bundled', 'HERMES_PAYLOAD_TAG': os.environ['RELEASE_TAG'], 'HERMES_BUILD_COMMIT': '' if os.environ['RELEASE_TAG'] else os.environ['EXPECTED_COMMIT']}
           name = subprocess.check_output(['node', '-e', "console.log(require('./apps/desktop/product-identity.cjs').displayName)"], text=True, env=env).strip()
           exe = Path(os.environ['CANDIDATE_INSTALL']) / name
           manifest = json.loads((root / 'manifest.json').read_text())

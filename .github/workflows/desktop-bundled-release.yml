@@ -1628,6 +1628,7 @@ jobs:
       && inputs.skip-tests != true
     permissions:
       contents: read
+      actions: read
     strategy:
       fail-fast: false
       matrix:
@@ -1661,6 +1662,7 @@ jobs:
       && inputs.skip-tests != true
     permissions:
       contents: read
+      actions: read
     strategy:
       fail-fast: false
       matrix:
@@ -1694,6 +1696,7 @@ jobs:
       && inputs.skip-signed != true
     permissions:
       contents: read
+      actions: read
     uses: ./.github/workflows/desktop-bundle-smoke.yml
     with:
       platform: win32
@@ -1723,6 +1726,7 @@ jobs:
       && inputs.skip-signed != true
     permissions:
       contents: read
+      actions: read
     uses: ./.github/workflows/desktop-bundle-smoke.yml
     with:
       platform: win32
