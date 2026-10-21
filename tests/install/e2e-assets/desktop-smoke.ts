@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process'
-import { randomUUID } from 'node:crypto'
+import { randomUUID, X509Certificate } from 'node:crypto'
 import fs from 'node:fs'
 import { createRequire } from 'node:module'
 import os from 'node:os'
@@ -327,7 +327,12 @@ async function prepareAccountFixture(enabled: boolean | undefined, out: string, 
       proof: () => ({
         mode: 'synthetic-account-real-native-bridge',
         requests: account.requests.map(({ method, path: route }) => ({ method, path: route })),
-        proxyHits: edge.apiHits, blockedConnects: edge.deniedConnects,
+        proxyHits: edge.apiHits, proxyConnects: edge.connects, blockedConnects: edge.deniedConnects,
+        certificates: ['ca.pem', 'leaf.pem'].map(name => {
+          const certificate = new X509Certificate(fs.readFileSync(path.join(out, 'edge-ca', name)))
+          return { name, subject: certificate.subject, issuer: certificate.issuer,
+            fingerprint: certificate.fingerprint256, validFrom: certificate.validFrom, validTo: certificate.validTo }
+        }),
         boundary: 'Local account fixture and custom mock inference; no production SMS, platform model lease or billing verification.'
       }),
       close: async () => {
@@ -358,14 +363,34 @@ async function diagnoseAccountTransport(app: ElectronApplication | undefined): P
     const extraCertificates = tls.getCACertificates('extra')
     const defaults = tls.getCACertificates('default')
     const proxy = process.env.https_proxy || process.env.HTTPS_PROXY
+    const verifyTunnel = (ca?: string) => new Promise<unknown>(resolve => {
+      const address = new URL(proxy!)
+      const socket = process.getBuiltinModule('net').connect(Number(address.port), address.hostname)
+      socket.setTimeout(5_000, () => { socket.destroy(); resolve({ error: 'tunnel timeout' }) })
+      socket.once('error', error => resolve({ error: error.message }))
+      socket.once('connect', () => socket.write('CONNECT api.agentera.com.cn:443 HTTP/1.1\r\nHost: api.agentera.com.cn:443\r\n\r\n'))
+      socket.once('data', () => {
+        const secure = tls.connect({ socket, servername: 'api.agentera.com.cn', ...(ca ? { ca } : {}) })
+        secure.once('secureConnect', () => {
+          resolve({ authorized: secure.authorized, fingerprint: secure.getPeerCertificate().fingerprint256 })
+          secure.destroy()
+        })
+        secure.once('error', (error: Error & { code?: string }) => resolve({ error: error.message, code: error.code }))
+      })
+    })
+    const tunnelDefault = await verifyTunnel()
+    const ca = process.getBuiltinModule('fs').readFileSync(process.env.NODE_EXTRA_CA_CERTS!, 'utf8')
+    const tunnelExplicit = await verifyTunnel(ca)
     // This diagnostic runs only after a failed smoke, never on the passing path.
     http.setGlobalProxyFromEnv?.()
-    return { before, afterProxyReset: await check(), node: process.versions.node, arch: process.arch,
+    return { before, tunnelDefault, tunnelExplicit, afterProxyReset: await check(), node: process.versions.node, arch: process.arch,
       platform: process.platform, envProxy: process.env.NODE_USE_ENV_PROXY,
       loopbackProxy: proxy?.startsWith('http://127.0.0.1:') ? proxy : 'not-loopback',
       noProxy: process.env.no_proxy || process.env.NO_PROXY,
       extraCaCount: extraCertificates.length, defaultCaCount: defaults.length,
       extraCaTrusted: extraCertificates.every(certificate => defaults.includes(certificate)),
+      extraCaMatchesFile: extraCertificates.every(certificate => ca.includes(certificate.trim())),
+      systemCaSubjects: tls.getCACertificates('system').map(certificate => new (process.getBuiltinModule('crypto').X509Certificate)(certificate).subject),
       proxyResetAvailable: typeof http.setGlobalProxyFromEnv === 'function' }
   }).catch(error => ({ error: String(error) }))
 }
