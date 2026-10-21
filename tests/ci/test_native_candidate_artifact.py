@@ -37,7 +37,7 @@ def test_resmoke_admission_selects_one_source_and_requires_both_sandboxed_launch
     for arch, runner in (("x64", "ubuntu-24.04"), ("arm64", "ubuntu-24.04-arm")):
         assert evaluate(candidate["runs-on"], {"arch": arch}, {}) == runner
     (verdict,) = [step for step in candidate["steps"] if set(step.get("env", {})) == {"DIRECT", "EXTRACTED"}]
-    assert gate(verdict["if"], {}, {}, failed=True, job_if=False)
+    assert gate(verdict["if"], {"format": "AppImage"}, {}, failed=True, job_if=False)
     for direct in ("success", "failure", "skipped", ""):
         for extracted in ("success", "failure", "skipped", ""):
             outcome = subprocess.run(["bash", "-c", verdict["run"]],

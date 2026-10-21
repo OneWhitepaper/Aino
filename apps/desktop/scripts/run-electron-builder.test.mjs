@@ -86,6 +86,32 @@ test('strict builder refuses absent inputs before loading electron-builder', () 
   assert.doesNotMatch(result.stdout, /electron-builder\s+version/)
 })
 
+test.runIf(process.platform === 'linux')('prepackaged native Linux formats reuse existing app bytes without staging native dependencies', async () => {
+  const source = path.resolve(import.meta.dirname, '../../..')
+  const out = fs.mkdtempSync(path.join(os.tmpdir(), 'builder-prepackaged-'))
+  try {
+    const electron = path.join(out, 'electron.zip')
+    fs.writeFileSync(electron, 'fixture archive')
+    const toolsets = { sevenZip: path.join(out, 'sevenZip'), icons: path.join(out, 'icons') }
+    for (const dir of Object.values(toolsets)) fs.mkdirSync(dir)
+    const manifest = await publishPackagingInputs({ source, out, target: `${process.platform}-${process.arch}`, formats: ['deb', 'rpm'], electron, toolsets })
+    const app = path.join(out, 'app')
+    const resources = path.join(app, 'resources')
+    fs.mkdirSync(path.join(resources, 'agent-payload'), { recursive: true })
+    fs.writeFileSync(path.join(resources, 'app.asar'), 'unchanged packaged app')
+    fs.writeFileSync(path.join(resources, 'agent-payload/manifest.json'), '{}')
+    const stamp = path.join(resources, 'install-stamp.json')
+    fs.writeFileSync(stamp, JSON.stringify({ payload: 'bundled', dirty: false, commit: 'a'.repeat(40) }))
+    const args = ['--prepared', manifest, '--prepackaged', app, '--linux', 'deb', 'rpm']
+    let forwarded
+    assert.equal(runElectronBuilder(args, { spawn: (_node, argv) => { forwarded = argv; return { status: 0 } } }), 0)
+    assert.equal(forwarded[forwarded.indexOf('--prepackaged') + 1], app)
+    assert.equal(fs.readFileSync(path.join(resources, 'app.asar'), 'utf8'), 'unchanged packaged app')
+    fs.writeFileSync(stamp, JSON.stringify({ payload: 'bundled', dirty: true, commit: 'a'.repeat(40) }))
+    assert.throws(() => runElectronBuilder(args), /clean bundled commit/)
+  } finally { fs.rmSync(out, { recursive: true, force: true }) }
+})
+
 test('npm run builder forwards an apostrophe path to the wrapper verbatim', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'builder-'))
   const manifest = path.join(root, "r'y'z", 'missing.json')

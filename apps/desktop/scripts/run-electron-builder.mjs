@@ -140,6 +140,8 @@ export function runElectronBuilder(args, { spawn = spawnSync } = {}) {
   args = args.filter(arg => arg !== '--validate-only')
   const manifest = takeOption(args, '--prepared')
   const nativeDeps = takeOption(args, '--native-deps')
+  const prepackaged = takeOption(args, '--prepackaged')
+  if (prepackaged && !manifest) throw preparationRequired('--prepackaged requires --prepared')
   if (validateOnly && !manifest) throw preparationRequired('--validate-only requires --prepared')
   if (sourceFormats(args).includes('msix')) requireMsixPublisher()
   if (!manifest) return runSourceBuilds(args, nativeDeps, spawn)
@@ -151,8 +153,11 @@ export function runElectronBuilder(args, { spawn = spawnSync } = {}) {
   // treats as a publishing policy. The wrapper owns this argument exactly once.
   args = args.filter((arg, index) => arg !== '--publish=never' && arg !== '--publish' && arg !== '-p'
     && !(arg === 'never' && ['--publish', '-p'].includes(args[index - 1])))
-  if (!nativeDeps) throw preparationRequired('--native-deps is required with --prepared')
-  readNativeInputs({ source, nativeDeps, platform, arch })
+  if (prepackaged) validatePrepackaged(prepackaged, platform, arch)
+  else {
+    if (!nativeDeps) throw preparationRequired('--native-deps is required with --prepared')
+    readNativeInputs({ source, nativeDeps, platform, arch })
+  }
   if (validateOnly) return 0
   const builder = pinnedPackageRoot(source, 'electron-builder')
   pinnedPackageRoot(source, 'app-builder-lib')
@@ -169,10 +174,26 @@ export function runElectronBuilder(args, { spawn = spawnSync } = {}) {
   if (inputs.dmgbuild) env.CUSTOM_DMGBUILD_PATH = inputs.dmgbuild
   if (inputs.windows?.dotnetRoot) env.DOTNET_ROOT = inputs.windows.dotnetRoot
   const result = spawn(process.execPath, [...preloads, path.join(builder, bin), ...args,
+    ...(prepackaged ? ['--prepackaged', prepackaged] : []),
     '--config', 'electron-builder.config.cjs', '--publish', 'never', `-c.electronDist=${inputs.electron}`,
     ...toolsetArguments(inputs)], { cwd: app, stdio: 'inherit', env })
   if (result.error) throw result.error
   return result.status ?? 1
+}
+
+/** @param {string} directory @param {string} platform @param {string} arch */
+function validatePrepackaged(directory, platform, arch) {
+  if (platform !== 'linux' || process.platform !== platform || process.arch !== arch) {
+    throw preparationRequired('Prepackaged candidates require their native Linux host')
+  }
+  if (!fs.statSync(directory).isDirectory()) throw new Error('Prepackaged candidate must be a directory')
+  const resources = path.join(directory, 'resources')
+  const stamp = JSON.parse(fs.readFileSync(path.join(resources, 'install-stamp.json'), 'utf8'))
+  if (stamp.payload !== 'bundled' || stamp.dirty !== false || !/^[a-f0-9]{40}$/.test(stamp.commit)) {
+    throw new Error('Prepackaged candidate requires a clean bundled commit stamp')
+  }
+  fs.accessSync(path.join(resources, 'app.asar'))
+  fs.accessSync(path.join(resources, 'agent-payload', 'manifest.json'))
 }
 
 /** @param {string[]} args @returns {string[]} */

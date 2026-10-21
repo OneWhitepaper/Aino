@@ -83,7 +83,7 @@ jobs:
         with:
           ref: ${{ github.sha }}
           persist-credentials: false
-      - name: Require Linux AppImage on its native host
+      - name: Require Linux candidate on its native host
         env:
           PLATFORM: ${{ inputs.platform }}
           FORMAT: ${{ inputs.format }}
@@ -91,8 +91,8 @@ jobs:
           python3 - <<'PYCODE'
           import os
           from pm.store import current_target
-          if os.environ['PLATFORM'] != 'linux' or os.environ['FORMAT'] != 'AppImage' or current_target() != os.environ['EXPECTED_TARGET']:
-              raise SystemExit('GitHub candidate re-smoke currently requires a native Linux AppImage')
+          if os.environ['PLATFORM'] != 'linux' or os.environ['FORMAT'] not in ('AppImage', 'deb') or current_target() != os.environ['EXPECTED_TARGET']:
+              raise SystemExit('GitHub candidate re-smoke requires a native Linux AppImage or DEB installation')
           PYCODE
       - name: Install system desktop dependencies
         run: |
@@ -107,7 +107,14 @@ jobs:
           cache-node: false
           archive-inputs: false
       - name: Install locked smoke dependencies
+        if: inputs.format == 'AppImage'
         run: npm ci --workspace tests-js --include-workspace-root --omit=dev --ignore-scripts --no-audit --no-fund
+      - name: Install locked package tools and smoke dependencies
+        if: inputs.format == 'deb'
+        run: |
+          npm ci --workspace apps/desktop --workspace tests-js --include-workspace-root --ignore-scripts --no-audit --no-fund
+          sudo apt-get install -y -qq rpm
+          node node_modules/vitest/vitest.mjs run apps/desktop/scripts/run-electron-builder.test.mjs
       - name: Fetch exact existing candidate
         env:
           GH_TOKEN: ${{ github.token }}
@@ -154,12 +161,144 @@ jobs:
           PYCODE
           node tests/install/e2e-assets/bundle-smoke-metadata.mjs stamp --platform linux --format AppImage --stamp "$CANDIDATE_INSTALL/resources/install-stamp.json" --commit "$EXPECTED_COMMIT" --tag "$RELEASE_TAG"
           cp "$RUNNER_TEMP/candidate-download/source-artifact.json" "$RUNNER_TEMP/candidate-proof/"
+      - name: Package existing native payload as DEB and RPM
+        if: inputs.format == 'deb'
+        run: |
+          set -euo pipefail
+          export HERMES_DESKTOP_VARIANT=bundled HERMES_PAYLOAD_TAG="$RELEASE_TAG"
+          export HERMES_BUILD_COMMIT="$EXPECTED_COMMIT"
+          if [ -n "$RELEASE_TAG" ]; then export HERMES_BUILD_COMMIT=; fi
+          node apps/desktop/scripts/prepare-packaging-tools.mjs --source "$GITHUB_WORKSPACE" --out "$RUNNER_TEMP/package-tools" --cache "$RUNNER_TEMP/package-cache" --target "$EXPECTED_TARGET" --format deb --format rpm
+          version=$(node tests/install/e2e-assets/bundle-smoke-metadata.mjs stamp --platform linux --format AppImage --stamp "$CANDIDATE_INSTALL/resources/install-stamp.json" --commit "$EXPECTED_COMMIT" --tag "$RELEASE_TAG" | tr -d '"')
+          cp "$CANDIDATE_INSTALL/AppRun" "$RUNNER_TEMP/candidate-proof/supplier-AppRun"
+          node -e 'console.log(JSON.stringify({electronBuilder:require("./node_modules/electron-builder/package.json").version,appBuilderLib:require("./node_modules/app-builder-lib/package.json").version}))' > "$RUNNER_TEMP/candidate-proof/supplier-versions.json"
+          cd apps/desktop
+          node scripts/run-electron-builder.mjs --prepared "$RUNNER_TEMP/package-tools/prepared.json" --prepackaged "$CANDIDATE_INSTALL" --linux deb rpm --${{ inputs.arch }} -c.extraMetadata.version="$version" -c.directories.output="$RUNNER_TEMP/native-packages"
+          python - <<'PYCODE'
+          import hashlib, json, os
+          from pathlib import Path
+          root = Path(os.environ['RUNNER_TEMP'])
+          artifacts = []
+          for file in sorted((root / 'native-packages').iterdir()):
+              if file.suffix not in ('.deb', '.rpm'):
+                  continue
+              with file.open('rb') as stream:
+                  digest = hashlib.file_digest(stream, 'sha256').hexdigest()
+              artifacts.append({'name': file.name, 'sha256': digest, 'bytes': file.stat().st_size})
+          (root / 'candidate-proof/packages.json').write_text(json.dumps({'sourceCommit': os.environ['EXPECTED_COMMIT'], 'packagingCommit': os.environ['GITHUB_SHA'], 'artifacts': artifacts}, indent=2))
+          PYCODE
+      - name: Retain unverified native DEB and RPM files
+        if: always() && inputs.format == 'deb'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: aino-unverified-linux-packages-${{ inputs.arch }}-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/native-packages/*.deb
+            ${{ runner.temp }}/native-packages/*.rpm
+          compression-level: 0
+          retention-days: 14
+          if-no-files-found: warn
+      - name: Install DEB through the native package manager
+        if: inputs.format == 'deb'
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          packages=("$RUNNER_TEMP/native-packages/"*.deb)
+          test "${#packages[@]}" -eq 1
+          sudo apt-get install -y "${packages[0]}"
+          package=$(dpkg-deb --field "${packages[0]}" Package)
+          PACKAGE_NAME="$package" python - <<'PYCODE'
+          import hashlib, os, subprocess
+          from pathlib import Path
+          original = Path(os.environ['CANDIDATE_EXE'])
+          listing = subprocess.check_output(['dpkg', '-L', os.environ['PACKAGE_NAME']], text=True, encoding='utf-8').splitlines()
+          executables = [Path(file) for file in listing if Path(file).name == original.name and Path(file).is_file() and not Path(file).is_symlink()]
+          if len(executables) != 1:
+              raise SystemExit('Expected one native DEB executable')
+          installed = executables[0]
+          for relative in (original.name, 'resources/app.asar', 'resources/install-stamp.json', 'resources/agent-payload/manifest.json'):
+              paths = [original.parent / relative, installed.parent / relative]
+              digests = []
+              for file in paths:
+                  with file.open('rb') as stream:
+                      digests.append(hashlib.file_digest(stream, 'sha256').hexdigest())
+              if digests[0] != digests[1]:
+                  raise SystemExit(f'Installed DEB changes existing payload bytes: {relative}')
+          payload = installed.parent / 'resources/agent-payload'
+          with open(os.environ['GITHUB_ENV'], 'a') as stream:
+              stream.write(f'CANDIDATE_EXE={installed}' + chr(10))
+              stream.write(f'CANDIDATE_ROOT={payload}' + chr(10))
+          PYCODE
+      - name: Installed DEB startup login chat and tool smoke
+        if: inputs.format == 'deb'
+        run: |
+          xvfb-run -a --server-args='-screen 0 1280x1024x24' node tests/install/e2e-assets/desktop-smoke.ts --exe "$CANDIDATE_EXE" --root "$CANDIDATE_ROOT" --origin bundled --home "$RUNNER_TEMP/deb-home" --user-data "$RUNNER_TEMP/deb-user-data" --out "$RUNNER_TEMP/candidate-proof/deb" --phase installed --expect-commit "$EXPECTED_COMMIT" --platform-account --tool-smoke
+      - name: Retain verified native DEB
+        if: inputs.format == 'deb'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: aino-verified-deb-${{ inputs.arch }}-${{ github.run_id }}
+          path: ${{ runner.temp }}/native-packages/*.deb
+          compression-level: 0
+          retention-days: 14
+          if-no-files-found: error
+      - name: Install RPM on the native Ubuntu host
+        if: inputs.format == 'deb'
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          deb=("$RUNNER_TEMP/native-packages/"*.deb)
+          rpm=("$RUNNER_TEMP/native-packages/"*.rpm)
+          test "${#rpm[@]}" -eq 1
+          sudo apt-get remove -y "$(dpkg-deb --field "${deb[0]}" Package)"
+          # Dependencies come from Ubuntu apt; RPM's database cannot see them.
+          sudo rpm -ivh --nodeps "${rpm[0]}"
+          package=$(rpm -qp --queryformat '%{NAME}' "${rpm[0]}")
+          PACKAGE_NAME="$package" python - <<'PYCODE'
+          import hashlib, os, subprocess
+          from pathlib import Path
+          original = Path(os.environ['CANDIDATE_INSTALL']) / Path(os.environ['CANDIDATE_EXE']).name
+          listing = subprocess.check_output(['rpm', '-ql', os.environ['PACKAGE_NAME']], text=True, encoding='utf-8').splitlines()
+          executables = [Path(file) for file in listing if Path(file).name == original.name and Path(file).is_file() and not Path(file).is_symlink()]
+          if len(executables) != 1:
+              raise SystemExit('Expected one native RPM executable')
+          installed = executables[0]
+          for relative in (original.name, 'resources/app.asar', 'resources/install-stamp.json', 'resources/agent-payload/manifest.json'):
+              digests = []
+              for file in (original.parent / relative, installed.parent / relative):
+                  with file.open('rb') as stream:
+                      digests.append(hashlib.file_digest(stream, 'sha256').hexdigest())
+              if digests[0] != digests[1]:
+                  raise SystemExit(f'Installed RPM changes existing payload bytes: {relative}')
+          libraries = subprocess.check_output(['ldd', str(installed)], text=True, encoding='utf-8')
+          if 'not found' in libraries:
+              raise SystemExit(libraries)
+          payload = installed.parent / 'resources/agent-payload'
+          with open(os.environ['GITHUB_ENV'], 'a') as stream:
+              stream.write(f'CANDIDATE_EXE={installed}' + chr(10))
+              stream.write(f'CANDIDATE_ROOT={payload}' + chr(10))
+          PYCODE
+      - name: Installed RPM startup login chat and tool smoke
+        if: inputs.format == 'deb'
+        run: |
+          xvfb-run -a --server-args='-screen 0 1280x1024x24' node tests/install/e2e-assets/desktop-smoke.ts --exe "$CANDIDATE_EXE" --root "$CANDIDATE_ROOT" --origin bundled --home "$RUNNER_TEMP/rpm-home" --user-data "$RUNNER_TEMP/rpm-user-data" --out "$RUNNER_TEMP/candidate-proof/rpm-ubuntu" --phase installed --expect-commit "$EXPECTED_COMMIT" --platform-account --tool-smoke
+      - name: Retain native RPM with Ubuntu verification scope
+        if: inputs.format == 'deb'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: aino-rpm-ubuntu-smoked-${{ inputs.arch }}-${{ github.run_id }}
+          path: ${{ runner.temp }}/native-packages/*.rpm
+          compression-level: 0
+          retention-days: 14
+          if-no-files-found: error
       - name: Direct AppImage startup login chat and tool smoke
+        if: inputs.format == 'AppImage'
         id: direct
         continue-on-error: true
         run: |
           xvfb-run -a --server-args='-screen 0 1280x1024x24' node tests/install/e2e-assets/desktop-smoke.ts --appimage "$CANDIDATE_APPIMAGE" --exe "$CANDIDATE_EXE" --root "$CANDIDATE_ROOT" --origin bundled --home "$RUNNER_TEMP/direct-home" --user-data "$RUNNER_TEMP/direct-user-data" --out "$RUNNER_TEMP/candidate-proof/direct" --phase installed --expect-commit "$EXPECTED_COMMIT" --platform-account --tool-smoke
       - name: Extracted startup login chat and tool smoke
+        if: inputs.format == 'AppImage'
         id: extracted
         continue-on-error: true
         run: |
@@ -167,7 +306,7 @@ jobs:
           sudo chmod 4755 "$CANDIDATE_INSTALL/chrome-sandbox"
           xvfb-run -a --server-args='-screen 0 1280x1024x24' node tests/install/e2e-assets/desktop-smoke.ts --exe "$CANDIDATE_EXE" --root "$CANDIDATE_ROOT" --origin bundled --home "$RUNNER_TEMP/extracted-home" --user-data "$RUNNER_TEMP/extracted-user-data" --out "$RUNNER_TEMP/candidate-proof/extracted" --phase installed --expect-commit "$EXPECTED_COMMIT" --platform-account --tool-smoke
       - name: Require direct and extracted sandboxed smoke
-        if: always()
+        if: always() && inputs.format == 'AppImage'
         env:
           DIRECT: ${{ steps.direct.outcome }}
           EXTRACTED: ${{ steps.extracted.outcome }}
@@ -250,7 +389,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p "$SMOKE_ROOT/out"
-          product=HermesBundled
+          product=$(HERMES_DESKTOP_VARIANT=bundled HERMES_PAYLOAD_TAG="$RELEASE_TAG" HERMES_BUILD_COMMIT="${RELEASE_COMMIT}" node -e 'if(process.env.HERMES_PAYLOAD_TAG)process.env.HERMES_BUILD_COMMIT=""; console.log(require("./apps/desktop/product-identity.cjs").artifactNamePascal)')
           if [ -n "${CHANNEL_BUILD:-}" ]; then
             test "$COMMIT_BUILD" = false
             test -z "$RELEASE_TAG"
