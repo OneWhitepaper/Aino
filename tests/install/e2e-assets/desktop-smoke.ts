@@ -343,16 +343,30 @@ async function prepareAccountFixture(enabled: boolean | undefined, out: string, 
 async function diagnoseAccountTransport(app: ElectronApplication | undefined): Promise<unknown> {
   if (!app) { return undefined }
   return app.evaluate(async () => {
-    try {
-      const response = await fetch('https://api.agentera.com.cn/api/v1/settings/public', { signal: AbortSignal.timeout(10_000) })
-      return { status: response.status, node: process.versions.node, platform: process.platform,
-        envProxy: process.env.NODE_USE_ENV_PROXY, extraCa: Boolean(process.env.NODE_EXTRA_CA_CERTS) }
-    } catch (error) {
-      const failure = error as Error & { cause?: Error & { code?: string } }
-      return { error: failure.message, cause: failure.cause?.message, code: failure.cause?.code,
-        node: process.versions.node, platform: process.platform,
-        envProxy: process.env.NODE_USE_ENV_PROXY, extraCa: Boolean(process.env.NODE_EXTRA_CA_CERTS) }
+    const check = async () => {
+      try {
+        const response = await fetch('https://api.agentera.com.cn/api/v1/settings/public', { signal: AbortSignal.timeout(10_000) })
+        return { status: response.status }
+      } catch (error) {
+        const failure = error as Error & { cause?: Error & { code?: string } }
+        return { error: failure.message, cause: failure.cause?.message, code: failure.cause?.code }
+      }
     }
+    const before = await check()
+    const tls = process.getBuiltinModule('tls')
+    const http = process.getBuiltinModule('http') as typeof import('node:http') & { setGlobalProxyFromEnv?: () => unknown }
+    const extraCertificates = tls.getCACertificates('extra')
+    const defaults = tls.getCACertificates('default')
+    const proxy = process.env.https_proxy || process.env.HTTPS_PROXY
+    // This diagnostic runs only after a failed smoke, never on the passing path.
+    http.setGlobalProxyFromEnv?.()
+    return { before, afterProxyReset: await check(), node: process.versions.node, arch: process.arch,
+      platform: process.platform, envProxy: process.env.NODE_USE_ENV_PROXY,
+      loopbackProxy: proxy?.startsWith('http://127.0.0.1:') ? proxy : 'not-loopback',
+      noProxy: process.env.no_proxy || process.env.NO_PROXY,
+      extraCaCount: extraCertificates.length, defaultCaCount: defaults.length,
+      extraCaTrusted: extraCertificates.every(certificate => defaults.includes(certificate)),
+      proxyResetAvailable: typeof http.setGlobalProxyFromEnv === 'function' }
   }).catch(error => ({ error: String(error) }))
 }
 
