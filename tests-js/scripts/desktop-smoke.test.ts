@@ -66,9 +66,11 @@ test('one server owns inference and a fresh, per-server prompt witness', async (
 
 test('packaged smoke explicitly keeps the Chromium sandbox enabled', (): void => {
   const root = path.resolve(os.tmpdir(), 'native-smoke-sandbox')
+
   const launch = resolveSmokeLaunch({ exe: path.join(root, 'app'), root, origin: 'bundled',
     home: path.join(root, 'home'), 'user-data': path.join(root, 'user-data'), out: path.join(root, 'proof'),
     phase: 'installed', 'expect-commit': 'a'.repeat(40) })
+
   expect(launch.chromiumSandbox).toBe(true)
   expect(launch.args).not.toContain('--no-sandbox')
 })
@@ -76,9 +78,11 @@ test('packaged smoke explicitly keeps the Chromium sandbox enabled', (): void =>
 test.runIf(process.platform === 'linux')('AppImage smoke launches the original artifact with the sandbox enabled', (): void => {
   const root = path.resolve(os.tmpdir(), 'native-appimage-smoke')
   const appimage = path.join(root, 'Aino.AppImage')
+
   const launch = resolveSmokeLaunch({ exe: path.join(root, 'Aino Agent'), root, origin: 'bundled', appimage,
     home: path.join(root, 'home'), 'user-data': path.join(root, 'user-data'), out: path.join(root, 'proof'),
     phase: 'installed', 'expect-commit': 'a'.repeat(40) })
+
   expect(launch.executablePath).toBe(appimage)
   expect(launch.chromiumSandbox).toBe(true)
 })

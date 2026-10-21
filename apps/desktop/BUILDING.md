@@ -9,9 +9,9 @@ commands package the current desktop build; they do not stage a fresh runtime.
 |---|---|---|
 | Windows x64 / ARM64, sideload | Signed per-architecture MSIX packages, combined into a universal `.msixbundle`; `.appinstaller` descriptor | Windows App Installer |
 | Windows x64 / ARM64, Store | Store-identity MSIX packages and a separate Store bundle | Microsoft Store |
-| Windows, unsigned download | Bundled ZIP built with `--windows-zip` | External replacement; no App Installer feed |
+| Windows x64 / ARM64, unsigned download | Bundled ZIP built with `--windows-zip` | External replacement; no App Installer feed |
 | macOS ARM64 / x64 | Signed, notarized `Hermes.app` in DMG and ZIP artifacts | `electron-updater` with Squirrel.Mac |
-| Linux x64 / ARM64 | Local builder can produce AppImage | External replacement; Linux desktop release legs are disabled |
+| Linux x64 / ARM64 | Native AppImage candidates; DEB/RPM repackaged from the admitted payload | External replacement; automated Linux release publication remains disabled |
 
 The current MSIX manifest requires Windows 11 22H2 (`10.0.22621.0`).
 The source-script Windows support range is separate from this package floor.
@@ -412,19 +412,24 @@ signing/notarization acceptance; a successful download is not native execution p
 
 ## Development, assets, and verification
 
-### Unsigned Windows ZIP candidates
+### Native candidates without release publication
 
 On native Windows, `python scripts/bundles/desktop.py --commit <full-sha>
 --variant bundled --windows-zip` reuses the same dependency preparation,
 bundled runtime and electron-builder pipeline, selecting its existing ZIP target.
-This option accepts commit candidates only; tagged releases, Store packages and
-channel builds retain their existing signing and publication requirements.
+This option accepts commit candidates or versioned builds with an admitted stable
+claim. Store packages and channel builds retain their existing signing and
+publication requirements.
 Leave signing credentials unset for an unsigned candidate.
 
 The existing `desktop-bundled-release.yml` workflow also accepts
-`unsigned_windows_zip=true` on a pushed branch. It builds Windows x64 from the
-exact dispatch SHA without release credentials, extracts the ZIP, validates its
-stamp and unsigned executable, and runs the existing native desktop chat smoke.
+`unsigned_windows_zip=true` on a pushed branch. Its legacy input name selects a
+candidate lane; `candidate_target` chooses Windows x64/ARM64 ZIP, Linux x64/ARM64
+AppImage, unsigned Intel Mac ZIP/DMG, or all targets. Windows x64 remains the
+default. Each target builds on its native host from the exact dispatch SHA
+without release credentials. Windows/Linux validate the extracted stamp and
+native executable, then run the existing desktop chat smoke. Unsigned Mac
+artifacts remain unverified until separate signed/notarized native acceptance.
 Successful files and checksums are retained as GitHub Actions artifacts for 14
 days. This lane does not publish to the website or any update feed. ZIP users
 extract and launch the executable; MSIX install/update coverage is separate.
@@ -434,6 +439,14 @@ option reuses the desktop account fixture, native phone-login UI and HTTPS proxy
 with certificate validation enabled. Inference uses the existing custom mock
 provider. This verifies packaged login and chat plumbing, not production SMS,
 platform model leases, real billing, or Windows update installation.
+
+The existing `desktop-bundle-smoke.yml` can re-smoke a retained Linux AppImage by
+exact artifact ID, run, source commit and archive SHA-256 without rebuilding it.
+It accepts both the old display-name executable and the corrected Linux command
+name, but rejects missing or ambiguous executables. Choosing `format=deb` reuses
+that admitted payload to produce DEB and RPM packages, preserving runtime bytes
+while adapting the command filename. Package-install evidence from Ubuntu does
+not establish compatibility with Fedora or other RPM distributions.
 
 Prepare and activate the [PM developer environment](../../website/docs/reference/package-management.md#developer-workflow)
 first. Use Bash `source ./activate` or PowerShell `. .\activate.ps1`, and keep a

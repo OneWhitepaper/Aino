@@ -9,7 +9,7 @@ import { expect, test } from 'vitest'
 
 import { startGithubEdge, startHttpsEdge } from './update/github-edge'
 
-test.skipIf(process.platform !== 'darwin')('isolated HTTPS edge preserves request bytes and TLS verification without module injection', async () => {
+test.skipIf(process.platform === 'win32')('isolated HTTPS edge preserves request bytes and TLS verification without module injection', async () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'aino-edge-'))
   const requests: string[] = []
   let edge: Awaited<ReturnType<typeof startHttpsEdge>> | undefined
@@ -57,7 +57,7 @@ test.skipIf(process.platform !== 'darwin')('isolated HTTPS edge preserves reques
   }
 })
 
-test.skipIf(process.platform !== 'darwin')('existing GitHub edge still serves the local repository tip over verified TLS', async () => {
+test.skipIf(process.platform === 'win32')('existing GitHub edge still serves the local repository tip over verified TLS', async () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'aino-github-edge-'))
   const run = promisify(execFile)
   let edge: Awaited<ReturnType<typeof startGithubEdge>> | undefined
@@ -76,6 +76,35 @@ test.skipIf(process.platform !== 'darwin')('existing GitHub edge still serves th
     expect(JSON.parse(stdout)).toEqual({ sha: expected.trim() })
     expect(edge.apiHits).toEqual(['GET /repos/fixture/repo/commits/main'])
   } finally {
+    await edge?.close()
+    fs.rmSync(root, { recursive: true, force: true })
+  }
+})
+
+test.skipIf(process.platform === 'win32')('ambient OpenSSL request extensions cannot restrict the fixture CA to client authentication', async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'aino-edge-ambient-'))
+  const previous = process.env.OPENSSL_CONF
+  const config = path.join(root, 'openssl.cnf')
+  fs.writeFileSync(config, '[req]\ndistinguished_name=dn\nx509_extensions=ambient_ca\n' +
+    '[dn]\n[ambient_ca]\nbasicConstraints=critical,CA:TRUE\n' +
+    'keyUsage=critical,keyCertSign,cRLSign\nsubjectKeyIdentifier=hash\nextendedKeyUsage=clientAuth\n')
+  process.env.OPENSSL_CONF = config
+  let edge: Awaited<ReturnType<typeof startHttpsEdge>> | undefined
+
+  try {
+    edge = await startHttpsEdge(root, { host: 'api.fixture.test', tunnelOthers: false,
+      handler: (_request, response) => response.end('verified') })
+
+    await promisify(execFile)('openssl', ['verify', '-purpose', 'sslserver', '-CAfile',
+      path.join(root, 'edge-ca/ca.pem'), path.join(root, 'edge-ca/leaf.pem')])
+
+    const { stdout } = await promisify(execFile)('/usr/bin/curl', ['--silent', '--show-error', '--fail',
+      '--proxy', edge.proxyUrl, '--noproxy', '', '--cacert', edge.caBundle,
+      'https://api.fixture.test/'], { timeout: 5000 })
+
+    expect(stdout).toBe('verified')
+  } finally {
+    if (previous === undefined) { delete process.env.OPENSSL_CONF } else { process.env.OPENSSL_CONF = previous }
     await edge?.close()
     fs.rmSync(root, { recursive: true, force: true })
   }

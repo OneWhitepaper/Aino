@@ -323,7 +323,6 @@ async function prepareAccountFixture(enabled: boolean | undefined, out: string, 
     Object.assign(env, edge.env, { NODE_USE_ENV_PROXY: '1', NODE_EXTRA_CA_CERTS: edge.caBundle })
     return {
       signIn: signInPlatformFixture,
-      diagnose: diagnoseAccountTransport,
       proof: () => ({
         mode: 'synthetic-account-real-native-bridge',
         requests: account.requests.map(({ method, path: route }) => ({ method, path: route })),
@@ -343,56 +342,6 @@ async function prepareAccountFixture(enabled: boolean | undefined, out: string, 
       }
     }
   } catch (error) { await account.close(); throw error }
-}
-
-async function diagnoseAccountTransport(app: ElectronApplication | undefined): Promise<unknown> {
-  if (!app) { return undefined }
-  return app.evaluate(async () => {
-    const check = async () => {
-      try {
-        const response = await fetch('https://api.agentera.com.cn/api/v1/settings/public', { signal: AbortSignal.timeout(10_000) })
-        return { status: response.status }
-      } catch (error) {
-        const failure = error as Error & { cause?: Error & { code?: string } }
-        return { error: failure.message, cause: failure.cause?.message, code: failure.cause?.code }
-      }
-    }
-    const before = await check()
-    const tls = process.getBuiltinModule('tls')
-    const http = process.getBuiltinModule('http') as typeof import('node:http') & { setGlobalProxyFromEnv?: () => unknown }
-    const extraCertificates = tls.getCACertificates('extra')
-    const defaults = tls.getCACertificates('default')
-    const proxy = process.env.https_proxy || process.env.HTTPS_PROXY
-    const verifyTunnel = (ca?: string) => new Promise<unknown>(resolve => {
-      const address = new URL(proxy!)
-      const socket = process.getBuiltinModule('net').connect(Number(address.port), address.hostname)
-      socket.setTimeout(5_000, () => { socket.destroy(); resolve({ error: 'tunnel timeout' }) })
-      socket.once('error', error => resolve({ error: error.message }))
-      socket.once('connect', () => socket.write('CONNECT api.agentera.com.cn:443 HTTP/1.1\r\nHost: api.agentera.com.cn:443\r\n\r\n'))
-      socket.once('data', () => {
-        const secure = tls.connect({ socket, servername: 'api.agentera.com.cn', ...(ca ? { ca } : {}) })
-        secure.once('secureConnect', () => {
-          resolve({ authorized: secure.authorized, fingerprint: secure.getPeerCertificate().fingerprint256 })
-          secure.destroy()
-        })
-        secure.once('error', (error: Error & { code?: string }) => resolve({ error: error.message, code: error.code }))
-      })
-    })
-    const tunnelDefault = await verifyTunnel()
-    const ca = process.getBuiltinModule('fs').readFileSync(process.env.NODE_EXTRA_CA_CERTS!, 'utf8')
-    const tunnelExplicit = await verifyTunnel(ca)
-    // This diagnostic runs only after a failed smoke, never on the passing path.
-    http.setGlobalProxyFromEnv?.()
-    return { before, tunnelDefault, tunnelExplicit, afterProxyReset: await check(), node: process.versions.node, arch: process.arch,
-      platform: process.platform, envProxy: process.env.NODE_USE_ENV_PROXY,
-      loopbackProxy: proxy?.startsWith('http://127.0.0.1:') ? proxy : 'not-loopback',
-      noProxy: process.env.no_proxy || process.env.NO_PROXY,
-      extraCaCount: extraCertificates.length, defaultCaCount: defaults.length,
-      extraCaTrusted: extraCertificates.every(certificate => defaults.includes(certificate)),
-      extraCaMatchesFile: extraCertificates.every(certificate => ca.includes(certificate.trim())),
-      systemCaSubjects: tls.getCACertificates('system').map(certificate => new (process.getBuiltinModule('crypto').X509Certificate)(certificate).subject),
-      proxyResetAvailable: typeof http.setGlobalProxyFromEnv === 'function' }
-  }).catch(error => ({ error: String(error) }))
 }
 
 function seedSmokeProviders(options: SmokeOptions, predictedHome: string | undefined, mockUrl: string) {
@@ -501,7 +450,7 @@ export async function runInstalledDesktopSmoke(options: SmokeOptions, launchApp:
     if (app) { await app.context().tracing.stop({ path: path.join(out, `desktop-chat-${options.phase}-failed.zip`) }).catch((): void => {}) }
     fs.writeFileSync(receiptPath, `${JSON.stringify({ status: 'failed', phase: options.phase, origin: options.origin, root: options.root,
       executable: options.exe, expectedCommit: options['expect-commit'], error: redact(String(error)),
-      accountTransport: await account?.diagnose(app), account: account?.proof() }, null, 2)}\n`)
+      account: account?.proof() }, null, 2)}\n`)
     throw error
   } finally {
     fs.writeFileSync(path.join(out, `desktop-app-${options.phase}.log`), consoleLines.join('\n'))

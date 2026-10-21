@@ -19,7 +19,7 @@ on:
       artifact-id: {description: 'Existing GitHub native candidate artifact ID; no rebuild', default: '', type: string}
       artifact-run: {default: '', type: string}
       artifact-sha256: {description: 'Exact GitHub artifact archive digest', default: '', type: string}
-      github-release: {description: 'Fetch the attempt from a draft GitHub release; artifact-sha256 pins its handoff receipt', default: false, type: boolean}
+      github-release: {description: 'Fetch an existing GitHub release attempt; artifact-sha256 pins its handoff receipt', default: false, type: boolean}
   workflow_call:
     inputs:
       platform:
@@ -147,8 +147,13 @@ jobs:
           from pm.package import machine_matches_binary
           root = Path(os.environ['CANDIDATE_ROOT'])
           env = {**os.environ, 'HERMES_DESKTOP_VARIANT': 'bundled', 'HERMES_PAYLOAD_TAG': os.environ['RELEASE_TAG'], 'HERMES_BUILD_COMMIT': '' if os.environ['RELEASE_TAG'] else os.environ['EXPECTED_COMMIT']}
-          name = subprocess.check_output(['node', '-e', "console.log(require('./apps/desktop/product-identity.cjs').displayName)"], text=True, env=env).strip()
-          exe = Path(os.environ['CANDIDATE_INSTALL']) / name
+          names = json.loads(subprocess.check_output(['node', '-e', "const c=require('./apps/desktop/electron-builder.config.cjs'); console.log(JSON.stringify([c.linux.executableName,c.executableName]))"], text=True, env=env))
+          # Older admitted AppImages predate the Linux command-name correction.
+          executables = [Path(os.environ['CANDIDATE_INSTALL']) / name for name in dict.fromkeys(names)
+                         if (Path(os.environ['CANDIDATE_INSTALL']) / name).is_file()]
+          if len(executables) != 1:
+              raise SystemExit(f'Expected exactly one product executable, found {len(executables)}')
+          exe = executables[0]
           manifest = json.loads((root / 'manifest.json').read_text())
           for binary in (exe, root / manifest['runtime']['storePython']):
               if machine_matches_binary(binary, os.environ['EXPECTED_TARGET']) is not True:
@@ -436,7 +441,7 @@ jobs:
             const certs = Object.fromEntries(['ca.pem', 'leaf.pem'].map(name =>
               [name, fs.readFileSync(path.join(root, 'edge-ca', name), 'utf8')]));
             const verify = (() => {
-              try { return { status: 0, output: execFileSync('openssl', ['verify', '-CAfile',
+              try { return { status: 0, output: execFileSync('openssl', ['verify', '-purpose', 'sslserver', '-CAfile',
                 path.join(root, 'edge-ca/ca.pem'), path.join(root, 'edge-ca/leaf.pem')], { encoding: 'utf8' }) }; }
               catch (error) { return { status: error.status, output: String(error.stderr) }; }
             })();
@@ -444,11 +449,12 @@ jobs:
             fs.writeFileSync(path.join(process.env.SMOKE_ROOT, 'out/tls-preflight.json'), JSON.stringify({
               openssl: execFileSync('openssl', ['version'], { encoding: 'utf8' }).trim(), verify, certificates: certs
             }, null, 2));
+            if (verify.status !== 0) { throw new Error('Native TLS fixture certificate verification failed'); }
           } finally { await edge.close(); }
           JS
 
       - name: Retain public TLS fixture certificates
-        if: runner.os == 'macOS'
+        if: always() && runner.os == 'macOS'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: desktop-tls-preflight-${{ github.run_id }}
@@ -467,7 +473,6 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p "$SMOKE_ROOT/out"
-          product=$(HERMES_DESKTOP_VARIANT=bundled HERMES_PAYLOAD_TAG="$RELEASE_TAG" HERMES_BUILD_COMMIT="${RELEASE_COMMIT}" node -e 'if(process.env.HERMES_PAYLOAD_TAG)process.env.HERMES_BUILD_COMMIT=""; console.log(require("./apps/desktop/product-identity.cjs").artifactNamePascal)')
           if [ -n "${CHANNEL_BUILD:-}" ]; then
             test "$COMMIT_BUILD" = false
             test -z "$RELEASE_TAG"
@@ -475,6 +480,8 @@ jobs:
               --request-sha256 "$CHANNEL_REQUEST_SHA256" --public-base "$PUBLIC_BASE" \
               --out "$SMOKE_ROOT/request.json"
             product=$(python -c 'import json,sys; print(json.load(open(sys.argv[1]))["identity"]["artifactNamePascal"])' "$SMOKE_ROOT/request.json")
+          else
+            product=$(HERMES_DESKTOP_VARIANT=bundled HERMES_PAYLOAD_TAG="$RELEASE_TAG" HERMES_BUILD_COMMIT="${RELEASE_COMMIT}" node -e 'if(process.env.HERMES_PAYLOAD_TAG)process.env.HERMES_BUILD_COMMIT=""; console.log(require("./apps/desktop/product-identity.cjs").artifactNamePascal)')
           fi
           case "$PLATFORM/$ARCH/$FORMAT" in
             darwin/arm64/dmg|darwin/x64/dmg|darwin/arm64/zip|darwin/x64/zip)
@@ -491,7 +498,7 @@ jobs:
             args=(--commit-build "$RELEASE_COMMIT")
           fi
           if [ -n "${CHANNEL_BUILD:-}" ]; then args=(--channel-request "$SMOKE_ROOT/request.json"); fi
-          if [ "$GITHUB_RELEASE_TRANSPORT" = true ]; then
+          if [ "${GITHUB_RELEASE_TRANSPORT:-false}" = true ]; then
             test "$GITHUB_EVENT_NAME" = workflow_dispatch
             test "$PLATFORM" = darwin
             test -n "$ARCHIVE_TAG"
@@ -508,7 +515,7 @@ jobs:
           receipt = Path(os.environ['SMOKE_ROOT']) / 'download' / f'handoff-{sys.argv[1]}.json'
           digest = os.environ['HANDOFF_SHA256']
           if not re.fullmatch(r'[a-f0-9]{64}', digest) or file_sha256(receipt) != digest:
-              raise ValueError('Draft release handoff differs from the exact receipt digest')
+              raise ValueError('GitHub release handoff differs from the exact receipt digest')
           validate_receipt(json.loads(receipt.read_text()), os.environ['ARCHIVE_TAG'], os.environ['RELEASE_COMMIT'], sys.argv[1])
           PY
             gh release download "$ARCHIVE_TAG" --pattern "$pattern" --dir "$SMOKE_ROOT/download"

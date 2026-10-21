@@ -53,7 +53,8 @@ def test_reusable_smoke_callers_grant_required_artifact_read_permission():
 
 
 @pytest.mark.parametrize("tag", ["", "v0.1.0"])
-def test_resmoke_checks_the_packaged_product_identity_for_tags_and_commits(tmp_path, tag):
+@pytest.mark.parametrize("layout", ["current", "legacy", "missing", "ambiguous"])
+def test_resmoke_checks_the_packaged_product_identity_for_tags_and_commits(tmp_path, tag, layout):
     from pm.store import current_target
     commit = "a" * 40
     install = tmp_path / "install"
@@ -64,10 +65,13 @@ def test_resmoke_checks_the_packaged_product_identity_for_tags_and_commits(tmp_p
     (root / "manifest.json").write_text(json.dumps({"runtime": {"storePython": "python"}}))
     env = {**os.environ, "HERMES_DESKTOP_VARIANT": "bundled", "HERMES_PAYLOAD_TAG": tag,
            "HERMES_BUILD_COMMIT": "" if tag else commit, "_HERMES_CHANNEL_REQUEST_JSON": ""}
-    name = subprocess.check_output(["node", "-e",
-        "console.log(require('./apps/desktop/product-identity.cjs').displayName)"],
-        env=env, text=True, encoding="utf-8", timeout=10).strip()
-    (install / name).symlink_to(sys.executable)
+    names = json.loads(subprocess.check_output(["node", "-e",
+        "const c=require('./apps/desktop/electron-builder.config.cjs'); "
+        "console.log(JSON.stringify({current:c.linux.executableName,legacy:c.executableName}))"],
+        env=env, text=True, encoding="utf-8", timeout=10))
+    for key, name in names.items():
+        if layout in (key, "ambiguous"):
+            (install / name).symlink_to(sys.executable)
     artifact = tmp_path / "fixture.AppImage"
     artifact.write_bytes(b"identity audit fixture")
     (tmp_path / "candidate-proof").mkdir()
@@ -80,5 +84,13 @@ def test_resmoke_checks_the_packaged_product_identity_for_tags_and_commits(tmp_p
     env.update(EXPECTED_COMMIT=commit, EXPECTED_TARGET=current_target(), RELEASE_TAG=tag,
                CANDIDATE_ROOT=str(root), CANDIDATE_INSTALL=str(install), CANDIDATE_APPIMAGE=str(artifact),
                RUNNER_TEMP=str(tmp_path), GITHUB_ENV=str(tmp_path / "env"))
-    subprocess.run([sys.executable, "-c", script], env=env, check=True, timeout=15)
-    assert f"CANDIDATE_EXE={install / name}" in (tmp_path / "env").read_text()
+    result = subprocess.run([sys.executable, "-c", script], env=env, check=False,
+                            capture_output=True, text=True, timeout=15)
+    if layout in ("missing", "ambiguous"):
+        assert result.returncode != 0
+        assert "Expected exactly one product executable" in result.stderr
+        assert not (tmp_path / "env").exists()
+        assert not (tmp_path / "candidate-proof/artifact.json").exists()
+    else:
+        assert result.returncode == 0, result.stderr
+        assert f"CANDIDATE_EXE={install / names[layout]}" in (tmp_path / "env").read_text()

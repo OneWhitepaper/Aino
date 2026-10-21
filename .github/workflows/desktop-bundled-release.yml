@@ -396,7 +396,7 @@ jobs:
               identity_env = {**os.environ, 'HERMES_DESKTOP_VARIANT': 'bundled',
                               'HERMES_PAYLOAD_TAG': os.environ.get('TAG', ''),
                               'HERMES_BUILD_COMMIT': '' if os.environ.get('TAG') else os.environ['GITHUB_SHA']}
-              name = subprocess.check_output(['node', '-e', "console.log(require('./apps/desktop/product-identity.cjs').displayName)"], env=identity_env, text=True).strip()
+              name = subprocess.check_output(['node', '-e', "console.log(require('./apps/desktop/electron-builder.config.cjs').linux.executableName)"], env=identity_env, text=True).strip()
               executable = Path(os.environ['CANDIDATE_INSTALL']) / name
               os.environ['CANDIDATE_EXE'] = str(executable)
               with open(os.environ['GITHUB_ENV'], 'a', encoding='utf-8') as stream:

@@ -1,8 +1,11 @@
 """Stable runs on the default branch, so every lane must be told which commit to test."""
 import re
+from io import StringIO
 from pathlib import Path
 
 from ruamel.yaml import YAML
+
+from tests.ci import _gha_expr as gha
 
 ROOT = Path(__file__).resolve().parents[2]
 WORKFLOWS = ROOT / ".github/workflows"
@@ -11,8 +14,8 @@ LOCAL_CALL = re.compile(r"^\./\.github/workflows/(?P<name>[^/@]+)$")
 # Reusable workflows that already named their commit input before this contract.
 EXISTING_INPUT = {"pm-bundle.yml": "ref", "desktop-bundle-smoke.yml": "sha"}
 
-# Checkouts that deliberately follow the controller (default-branch) tree, with the reason.
-CONTROLLER_CHECKOUTS: dict[tuple[str, str], str] = {}
+# These jobs only re-smoke an exact artifact through workflow_dispatch, never a stable call.
+MANUAL_ONLY_JOBS = {("desktop-bundle-smoke.yml", "native-candidate")}
 
 
 def load(name: str) -> dict:
@@ -40,6 +43,21 @@ def reachable(root: str = "stable-release.yml") -> dict[str, dict]:
 
 def commit_input(name: str) -> str:
     return EXISTING_INPUT.get(name, "commit")
+
+
+def manual_only(name: str, job_name: str, doc: dict, job: dict) -> bool:
+    if (name, job_name) not in MANUAL_ONLY_JOBS:
+        return False
+    # Reusable workflows inherit their caller's event, including workflow_dispatch.
+    # The artifact selector must therefore be absent from the reusable contract.
+    call_inputs = doc["on"]["workflow_call"]["inputs"]
+    assert "artifact-id" not in call_inputs
+    for event in ("workflow_dispatch", "push", "pull_request", "workflow_call"):
+        context = {"github": {"event_name": event}, "inputs": {}}
+        assert not gha.condition(job.get("if"), context), f"{name}:{job_name} reachable by stable caller"
+    context = {"github": {"event_name": "workflow_dispatch"}, "inputs": {"artifact-id": "123"}}
+    assert gha.condition(job.get("if"), context), f"{name}:{job_name} cannot re-smoke an existing artifact"
+    return True
 
 
 def test_every_reusable_lane_accepts_a_commit():
@@ -70,10 +88,10 @@ def test_every_checkout_follows_the_commit_input():
             continue
         key = commit_input(name)
         for job_name, job in (doc.get("jobs") or {}).items():
+            if manual_only(name, job_name, doc, job):
+                continue
             for index, step in enumerate(job.get("steps") or []):
                 if not step.get("uses", "").startswith("actions/checkout"):
-                    continue
-                if (name, f"{job_name}[{index}]") in CONTROLLER_CHECKOUTS:
                     continue
                 ref = (step.get("with") or {}).get("ref", "")
                 assert f"inputs.{key}" in ref, f"{name}:{job_name}[{index}] checks out {ref or 'the default sha'}"
@@ -129,14 +147,23 @@ REFERENCE = re.compile(r"GITHUB_SHA|github\.sha|github\.ref_name|github\.ref\b|G
 
 
 def test_no_lane_uses_the_controller_commit_as_the_commit_under_test():
-    for name in reachable():
+    for name, doc in reachable().items():
         if name in {"stable-release.yml", "desktop-bundled-release.yml"}:
             continue
-        for number, line in enumerate((WORKFLOWS / name).read_text(encoding="utf-8").splitlines(), 1):
-            text = line.strip()
-            if text.startswith(("#", "group:")) or not REFERENCE.search(text):
-                continue
-            if FALLBACK.search(text) or "inputs.commit" in text:
-                continue
-            assert any(allowed in text for allowed, _reason in CONTROLLER_REFERENCES), \
-                f"{name}:{number} uses the triggering ref or SHA: {text}"
+        blocks = [("workflow", {key: value for key, value in doc.items() if key != "jobs"})]
+        blocks.extend((job_name, job) for job_name, job in doc["jobs"].items()
+                      if not manual_only(name, job_name, doc, job))
+        for scope, block in blocks:
+            output = StringIO()
+            yaml = YAML()
+            yaml.default_flow_style = False
+            yaml.width = 1_000_000
+            yaml.dump(block, output)
+            for line in output.getvalue().splitlines():
+                text = line.strip()
+                if text.startswith(("#", "group:")) or not REFERENCE.search(text):
+                    continue
+                if FALLBACK.search(text) or "inputs.commit" in text:
+                    continue
+                assert any(allowed in text for allowed, _reason in CONTROLLER_REFERENCES), \
+                    f"{name}:{scope} uses the triggering ref or SHA: {text}"

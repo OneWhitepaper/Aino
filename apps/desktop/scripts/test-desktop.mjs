@@ -7,6 +7,7 @@ import { listPackage } from '@electron/asar'
 
 import PACKAGE_JSON from '../package.json' with { type: 'json' }
 import BRAND from '../brand.json' with { type: 'json' }
+import BUILDER_CONFIG from '../electron-builder.config.cjs'
 
 const MODE = process.argv[2] || 'help'
 const ARCH = process.arch === 'arm64' ? 'arm64' : 'x64'
@@ -57,7 +58,7 @@ const APP = (() => {
   // linux unpacked layout matches windows but with different binary name
   const unpacked = path.join(RELEASE_ROOT, 'linux-unpacked')
   const binary = firstExistingPath(
-    [EXECUTABLE_NAME, LEGACY_PRODUCT_NAME, 'hermes'].map(name => path.join(unpacked, name))
+    [BUILDER_CONFIG.linux.executableName, EXECUTABLE_NAME, LEGACY_PRODUCT_NAME, 'hermes'].map(name => path.join(unpacked, name))
   )
   return {
     appPath: unpacked,
