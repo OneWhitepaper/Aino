@@ -323,6 +323,7 @@ async function prepareAccountFixture(enabled: boolean | undefined, out: string, 
     Object.assign(env, edge.env, { NODE_USE_ENV_PROXY: '1', NODE_EXTRA_CA_CERTS: edge.caBundle })
     return {
       signIn: signInPlatformFixture,
+      diagnose: diagnoseAccountTransport,
       proof: () => ({
         mode: 'synthetic-account-real-native-bridge',
         requests: account.requests.map(({ method, path: route }) => ({ method, path: route })),
@@ -337,6 +338,22 @@ async function prepareAccountFixture(enabled: boolean | undefined, out: string, 
       }
     }
   } catch (error) { await account.close(); throw error }
+}
+
+async function diagnoseAccountTransport(app: ElectronApplication | undefined): Promise<unknown> {
+  if (!app) { return undefined }
+  return app.evaluate(async () => {
+    try {
+      const response = await fetch('https://api.agentera.com.cn/api/v1/settings/public', { signal: AbortSignal.timeout(10_000) })
+      return { status: response.status, node: process.versions.node, platform: process.platform,
+        envProxy: process.env.NODE_USE_ENV_PROXY, extraCa: Boolean(process.env.NODE_EXTRA_CA_CERTS) }
+    } catch (error) {
+      const failure = error as Error & { cause?: Error & { code?: string } }
+      return { error: failure.message, cause: failure.cause?.message, code: failure.cause?.code,
+        node: process.versions.node, platform: process.platform,
+        envProxy: process.env.NODE_USE_ENV_PROXY, extraCa: Boolean(process.env.NODE_EXTRA_CA_CERTS) }
+    }
+  }).catch(error => ({ error: String(error) }))
 }
 
 function seedSmokeProviders(options: SmokeOptions, predictedHome: string | undefined, mockUrl: string) {
@@ -444,7 +461,8 @@ export async function runInstalledDesktopSmoke(options: SmokeOptions, launchApp:
     if (page) { await page.screenshot({ path: path.join(out, `desktop-chat-${options.phase}-failed.png`) }).catch((): void => {}) }
     if (app) { await app.context().tracing.stop({ path: path.join(out, `desktop-chat-${options.phase}-failed.zip`) }).catch((): void => {}) }
     fs.writeFileSync(receiptPath, `${JSON.stringify({ status: 'failed', phase: options.phase, origin: options.origin, root: options.root,
-      executable: options.exe, expectedCommit: options['expect-commit'], error: redact(String(error)) }, null, 2)}\n`)
+      executable: options.exe, expectedCommit: options['expect-commit'], error: redact(String(error)),
+      accountTransport: await account?.diagnose(app), account: account?.proof() }, null, 2)}\n`)
     throw error
   } finally {
     fs.writeFileSync(path.join(out, `desktop-app-${options.phase}.log`), consoleLines.join('\n'))
