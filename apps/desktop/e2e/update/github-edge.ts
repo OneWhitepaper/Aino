@@ -38,28 +38,48 @@ function openssl(args: string[], cwd: string): void {
 /** A throwaway root + an api.github.com leaf signed by it. */
 function makeCerts(dir: string, host: string): { key: Buffer; cert: Buffer; caPem: string } {
   fs.mkdirSync(dir, { recursive: true })
-  // Python >= 3.13 verifies with X509_STRICT: the root needs keyUsage, the leaf an AKI.
+  // Build the CA and leaf with explicit extension sections. Passing -addext to
+  // `req -x509` can merge with a runner's openssl.cnf and emit duplicate X.509
+  // extensions; newer OpenSSL accepts that, while the macOS Intel runner's
+  // Node TLS stack rejects the resulting chain as UNABLE_TO_VERIFY_LEAF.
+  fs.writeFileSync(
+    path.join(dir, 'ca.ext'),
+    '[ca_ext]\n' +
+      'basicConstraints=critical,CA:TRUE,pathlen:1\n' +
+      'keyUsage=critical,keyCertSign,cRLSign\n' +
+      'subjectKeyIdentifier=hash\n'
+  )
   openssl(
     [
       'req',
-      '-x509',
       '-newkey',
       'rsa:2048',
       '-nodes',
       '-keyout',
       'ca.key',
       '-out',
+      'ca.csr',
+      '-subj',
+      '/CN=hermes-update-e2e-root'
+    ],
+    dir
+  )
+  openssl(
+    [
+      'x509',
+      '-req',
+      '-in',
+      'ca.csr',
+      '-signkey',
+      'ca.key',
+      '-out',
       'ca.pem',
       '-days',
       '2',
-      '-subj',
-      '/CN=hermes-update-e2e-root',
-      '-addext',
-      'basicConstraints=critical,CA:TRUE',
-      '-addext',
-      'keyUsage=critical,keyCertSign,cRLSign',
-      '-addext',
-      'subjectKeyIdentifier=hash'
+      '-extfile',
+      'ca.ext',
+      '-extensions',
+      'ca_ext'
     ],
     dir
   )
@@ -69,7 +89,8 @@ function makeCerts(dir: string, host: string): { key: Buffer; cert: Buffer; caPe
   )
   fs.writeFileSync(
     path.join(dir, 'leaf.ext'),
-    'basicConstraints=CA:FALSE\nkeyUsage=critical,digitalSignature,keyEncipherment\nextendedKeyUsage=serverAuth\n' +
+    '[server_ext]\n' +
+      'basicConstraints=critical,CA:FALSE\nkeyUsage=critical,digitalSignature,keyEncipherment\nextendedKeyUsage=serverAuth\n' +
       `subjectAltName=DNS:${host}\nsubjectKeyIdentifier=hash\nauthorityKeyIdentifier=keyid,issuer\n`
   )
   openssl(
@@ -88,7 +109,9 @@ function makeCerts(dir: string, host: string): { key: Buffer; cert: Buffer; caPe
       '-days',
       '2',
       '-extfile',
-      'leaf.ext'
+      'leaf.ext',
+      '-extensions',
+      'server_ext'
     ],
     dir
   )
