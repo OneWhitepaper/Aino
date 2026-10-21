@@ -77,6 +77,9 @@ function toolsetArguments(inputs) {
   const config = require(path.join(app, 'electron-builder.config.cjs'))
   const tools = path.join(app, config.directories?.buildResources || 'build', 'prepared-packaging-tools')
   fs.mkdirSync(tools, { recursive: true })
+  // Upstream tool archives contain CommonJS .js entrypoints and must not inherit
+  // the desktop application's type:module after relocation into build resources.
+  fs.writeFileSync(path.join(tools, 'package.json'), '{"type":"commonjs"}\n')
   return Object.entries(inputs.toolsets).map(([name, directory]) => {
     const destination = path.join(tools, name)
     fs.rmSync(destination, { recursive: true, force: true })

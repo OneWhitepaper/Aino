@@ -20,6 +20,7 @@ test('validate-only admits real prepared inputs without launching tools and reje
     fs.writeFileSync(electron, 'fixture archive')
     const toolsets = { sevenZip: path.join(out, 'sevenZip'), icons: path.join(out, 'icons') }
     for (const dir of Object.values(toolsets)) fs.mkdirSync(dir)
+    fs.writeFileSync(path.join(toolsets.icons, 'icon-tool.js'), 'console.log(require("node:path").basename(__filename))')
     const manifest = await publishPackagingInputs({ source, out, target: `${process.platform}-${process.arch}`, formats: ['dir'], electron, toolsets })
     const nativeDeps = path.join(out, 'native')
     fs.mkdirSync(path.join(nativeDeps, 'node-pty'), { recursive: true })
@@ -36,6 +37,11 @@ test('validate-only admits real prepared inputs without launching tools and reje
       const cli = forwarded.slice(forwarded.findIndex(arg => arg.endsWith('cli.js')) + 1)
       const parsed = await configureBuildCommand(createYargs()).parse(cli)
       assert.equal(normalizeOptions(parsed).publish, 'never')
+      const iconDirectory = forwarded.find(arg => arg.startsWith('-c.toolsets.icons.url=file://')).split('file://')[1]
+      const icon = spawnSync(process.execPath, [path.join(iconDirectory, 'icon-tool.js')], { encoding: 'utf8' })
+      assert.equal(icon.status, 0, icon.stderr)
+      assert.equal(icon.stdout.trim(), 'icon-tool.js')
+      assert.equal(fs.existsSync(path.join(toolsets.icons, 'package.json')), false, 'immutable tool cache must stay unchanged')
     }
     assert.throws(() => runElectronBuilder([...args, '-c.npmRebuild=true'], options), /not admitted/)
     assert.throws(() => runElectronBuilder(['--validate-only'], options), /--prepared/)
