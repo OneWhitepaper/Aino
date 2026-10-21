@@ -192,15 +192,20 @@ on:
         type: boolean
         default: false
       unsigned_windows_zip:
-        description: 'Build and smoke an unsigned Windows x64 ZIP from this dispatch ref; optional tag and exact claim, no publication.'
+        description: 'Native candidate lane (legacy name): ZIP/AppImage/unsigned Mac, exact version claim, no publication.'
         type: boolean
         default: false
+      candidate_target:
+        description: 'Native target; Mac outputs remain unverified until signed/notarized.'
+        type: choice
+        options: [win32-x64, win32-arm64, linux-x64, linux-arm64, darwin-x64, all]
+        default: win32-x64
       claim-tag:
-        description: 'Versioned unsigned ZIP only: annotated candidate claim (rc.N-vX.Y.Z).'
+        description: 'Versioned native candidate: annotated claim (rc.N-vX.Y.Z).'
         type: string
         default: ''
       claim-object:
-        description: 'Versioned unsigned ZIP only: exact 40-hex claim tag object.'
+        description: 'Versioned native candidate: exact 40-hex claim tag object.'
         type: string
         default: ''
 
@@ -225,15 +230,24 @@ env:
 
 jobs:
   unsigned-windows-zip:
-    name: Unsigned Windows x64 ZIP candidate
+    name: Native ${{ matrix.target.label }} candidate
     if: github.event_name == 'workflow_dispatch' && inputs.unsigned_windows_zip == true
-    runs-on: windows-latest
+    runs-on: ${{ matrix.target.runner }}
     timeout-minutes: 180
     permissions:
       contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        target: ${{ fromJSON('{"win32-x64":[{"label":"win32-x64","platform":"win32","arch":"x64","runner":"windows-latest","artifact":"windows-x64","glob":"*-win-x64.zip"}],"win32-arm64":[{"label":"win32-arm64","platform":"win32","arch":"arm64","runner":"windows-11-arm","artifact":"windows-arm64","glob":"*-win-arm64.zip"}],"linux-x64":[{"label":"linux-x64","platform":"linux","arch":"x64","runner":"ubuntu-24.04","artifact":"linux-x64","glob":"*-linux-x64.AppImage"}],"linux-arm64":[{"label":"linux-arm64","platform":"linux","arch":"arm64","runner":"ubuntu-24.04-arm","artifact":"linux-arm64","glob":"*-linux-arm64.AppImage"}],"darwin-x64":[{"label":"darwin-x64","platform":"darwin","arch":"x64","runner":"macos-15-intel","artifact":"darwin-x64","glob":"*-mac-x64.*"}],"all":[{"label":"win32-x64","platform":"win32","arch":"x64","runner":"windows-latest","artifact":"windows-x64","glob":"*-win-x64.zip"},{"label":"win32-arm64","platform":"win32","arch":"arm64","runner":"windows-11-arm","artifact":"windows-arm64","glob":"*-win-arm64.zip"},{"label":"linux-x64","platform":"linux","arch":"x64","runner":"ubuntu-24.04","artifact":"linux-x64","glob":"*-linux-x64.AppImage"},{"label":"linux-arm64","platform":"linux","arch":"arm64","runner":"ubuntu-24.04-arm","artifact":"linux-arm64","glob":"*-linux-arm64.AppImage"},{"label":"darwin-x64","platform":"darwin","arch":"x64","runner":"macos-15-intel","artifact":"darwin-x64","glob":"*-mac-x64.*"}]}')[inputs.candidate_target || 'win32-x64'] }}
+    env:
+      CANDIDATE_TARGET: ${{ matrix.target.label }}
+      CANDIDATE_PLATFORM: ${{ matrix.target.platform }}
+      CANDIDATE_GLOB: ${{ matrix.target.glob }}
+      CANDIDATE_PROOF: ${{ runner.temp }}/candidate-proof
     steps:
       - name: Reject mixed release requests
-        shell: pwsh
+        shell: python
         env:
           TAG: ${{ inputs.tag }}
           BUILD_COMMIT: ${{ inputs.build_commit }}
@@ -241,12 +255,12 @@ jobs:
           DISPOSABLE_CHANNEL: ${{ inputs.disposable_channel }}
           UPLOAD_RELEASE: ${{ inputs.upload_release }}
         run: |
-          if ($env:BUILD_COMMIT -or $env:CHANNEL -or $env:DISPOSABLE_CHANNEL -or $env:UPLOAD_RELEASE -eq 'true') {
-            throw 'Unsigned ZIP builds use only the dispatch ref and cannot select an update channel or publication'
-          }
-          if ($env:TAG -and ($env:TAG -notmatch '^v\d+\.\d+\.\d+$' -or -not $env:RELEASE_CLAIM_TAG -or -not $env:RELEASE_CLAIM_OBJECT)) {
-            throw 'Versioned ZIP requires a stable tag and its exact annotated claim'
-          }
+          import os, re
+          if any(os.environ.get(key) for key in ('BUILD_COMMIT', 'CHANNEL', 'DISPOSABLE_CHANNEL')) or os.environ['UPLOAD_RELEASE'] == 'true':
+              raise SystemExit('Native candidates use the dispatch ref and cannot select a channel or publication')
+          tag = os.environ['TAG']
+          if tag and (not re.fullmatch(r'v[0-9]+[.][0-9]+[.][0-9]+', tag) or not os.environ.get('RELEASE_CLAIM_TAG') or not os.environ.get('RELEASE_CLAIM_OBJECT')):
+              raise SystemExit('Versioned candidate requires a stable tag and its exact annotated claim')
       - uses: actions/checkout@f548e57e544e1ff5a4c46bf1e1b8685f8e4a348a # v7.0.1
         with:
           ref: ${{ github.sha }}
@@ -255,6 +269,19 @@ jobs:
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: '3.13'
+          architecture: ${{ matrix.target.arch }}
+      - name: Require a native build host
+        shell: python
+        run: |
+          import os, sys
+          from pathlib import Path
+          sys.path.insert(0, os.environ['GITHUB_WORKSPACE'])
+          from pm.store import current_target
+          from pm.package import machine_matches_binary
+          target = os.environ['CANDIDATE_TARGET']
+          if current_target() != target or machine_matches_binary(Path(sys.executable), target) is not True:
+              raise SystemExit(f'Native host/interpreter must match {target}')
+          print(f'Native host and Python verified: {target}')
       - name: Restore desktop dependency inputs
         uses: ./.github/actions/desktop-build-cache
         with:
@@ -263,61 +290,157 @@ jobs:
           work: ${{ runner.temp }}/desktop-job
           cache: ${{ github.workspace }}/.cache/desktop-inputs
           producer: desktop
-      - name: Prepare the existing bundled build as ZIP
-        shell: pwsh
+      - name: Install Linux desktop prerequisites
+        if: matrix.target.platform == 'linux'
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq xvfb libgtk-3-0 libnotify4 libnss3 libxss1 libxtst6 xdg-utils libatspi2.0-0 libdrm2 libgbm1 libasound2t64 libfuse2t64
+      - name: Prepare the existing bundled native build
+        shell: python
         env:
           TAG: ${{ inputs.tag }}
         run: |
-          $identity = if ($env:TAG) { @('--tag', $env:TAG, '--release-commit', $env:GITHUB_SHA) } else { @('--commit', $env:GITHUB_SHA) }
-          python scripts/bundles/desktop.py @identity --variant bundled --windows-zip --prepare-only --work "$env:RUNNER_TEMP/desktop-job"
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          python -m scripts.ci.desktop_commands "$env:RUNNER_TEMP/desktop-job/prepared.json"
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-      - name: Build unsigned candidate
-        shell: pwsh
+          import os, subprocess, sys
+          work = os.path.join(os.environ['RUNNER_TEMP'], 'desktop-job')
+          tag = os.environ['TAG']
+          identity = ['--tag', tag, '--release-commit', os.environ['GITHUB_SHA']] if tag else ['--commit', os.environ['GITHUB_SHA']]
+          formats = ['--windows-zip'] if sys.platform == 'win32' else []
+          subprocess.run([sys.executable, 'scripts/bundles/desktop.py', *identity, '--variant', 'bundled', *formats, '--prepare-only', '--work', work], check=True)
+          subprocess.run([sys.executable, '-m', 'scripts.ci.desktop_commands', os.path.join(work, 'prepared.json')], check=True)
+      - name: Build native candidate without publishing
+        shell: python
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
         run: |
-          python scripts/bundles/desktop.py --prepared "$env:RUNNER_TEMP/desktop-job/prepared.json" -- --publish=never
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-      - name: Retain built ZIP for inspection even if smoke fails
+          import os, subprocess, sys
+          prepared = os.path.join(os.environ['RUNNER_TEMP'], 'desktop-job', 'prepared.json')
+          subprocess.run([sys.executable, 'scripts/bundles/desktop.py', '--prepared', prepared, '--', '--publish=never'], check=True)
+      - name: Retain packages for inspection even if smoke fails
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: aino-unverified-windows-x64-${{ github.sha }}
-          path: apps/desktop/release/*-win-x64.zip
+          name: aino-unverified-${{ matrix.target.artifact }}-${{ github.sha }}
+          path: apps/desktop/release/${{ matrix.target.glob }}
           compression-level: 0
           if-no-files-found: warn
           retention-days: 14
-      - name: Extract ZIP and run the existing native chat smoke
+      - name: Extract Windows ZIP
+        if: matrix.target.platform == 'win32'
         shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $archives = @(Get-ChildItem "apps/desktop/release/$env:CANDIDATE_GLOB")
+          if ($archives.Count -ne 1) { throw 'Expected exactly one candidate ZIP' }
+          $install = "$env:RUNNER_TEMP/candidate-install"
+          Expand-Archive -LiteralPath $archives[0].FullName -DestinationPath $install
+          $exe = @(Get-ChildItem "$install/*.exe" | Where-Object { $_.Name -notin @('elevate.exe', 'chrome_crashpad_handler.exe') })
+          if ($exe.Count -ne 1) { throw 'Expected one packaged desktop executable' }
+          if ((Get-AuthenticodeSignature $exe[0].FullName).Status -ne 'NotSigned') { throw 'Candidate must be explicitly unsigned' }
+          "CANDIDATE_EXE=$($exe[0].FullName)" >> $env:GITHUB_ENV
+          "CANDIDATE_ROOT=$install/resources/agent-payload" >> $env:GITHUB_ENV
+          "CANDIDATE_STAMP=$install/resources/install-stamp.json" >> $env:GITHUB_ENV
+      - name: Extract Linux AppImage and prepare its sandbox
+        if: matrix.target.platform == 'linux'
+        shell: bash
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          archives=(apps/desktop/release/$CANDIDATE_GLOB)
+          test "${#archives[@]}" -eq 1
+          archive="$(realpath "${archives[0]}")"
+          chmod +x "$archive"
+          mkdir "$RUNNER_TEMP/candidate-install"
+          cd "$RUNNER_TEMP/candidate-install"
+          "$archive" --appimage-extract > "$RUNNER_TEMP/appimage-extract.log"
+          install="$PWD/squashfs-root"
+          # Set up the shipped sandbox helper; Chromium's sandbox stays enabled.
+          sudo chown root:root "$install/chrome-sandbox"
+          sudo chmod 4755 "$install/chrome-sandbox"
+          echo "CANDIDATE_INSTALL=$install" >> "$GITHUB_ENV"
+          echo "CANDIDATE_ROOT=$install/resources/agent-payload" >> "$GITHUB_ENV"
+          echo "CANDIDATE_STAMP=$install/resources/install-stamp.json" >> "$GITHUB_ENV"
+      - name: Extract unsigned Intel Mac ZIP
+        if: matrix.target.platform == 'darwin'
+        shell: bash
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          archives=(apps/desktop/release/*-mac-x64.zip)
+          test "${#archives[@]}" -eq 1
+          mkdir "$RUNNER_TEMP/candidate-install"
+          ditto -x -k "${archives[0]}" "$RUNNER_TEMP/candidate-install"
+          apps=("$RUNNER_TEMP/candidate-install/"*.app)
+          test "${#apps[@]}" -eq 1
+          app="${apps[0]}"
+          executable=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$app/Contents/Info.plist")
+          echo "CANDIDATE_EXE=$app/Contents/MacOS/$executable" >> "$GITHUB_ENV"
+          echo "CANDIDATE_ROOT=$app/Contents/Resources/agent-payload" >> "$GITHUB_ENV"
+          echo "CANDIDATE_STAMP=$app/Contents/Resources/install-stamp.json" >> "$GITHUB_ENV"
+      - name: Verify native executable and embedded Python architecture
+        shell: python
+        run: |
+          import hashlib, json, os, sys
+          from pathlib import Path
+          sys.path.insert(0, os.environ['GITHUB_WORKSPACE'])
+          from pm.package import machine_matches_binary
+          target = os.environ['CANDIDATE_TARGET']
+          root = Path(os.environ['CANDIDATE_ROOT'])
+          if sys.platform == 'linux':
+              candidates = [entry for entry in Path(os.environ['CANDIDATE_INSTALL']).iterdir()
+                            if entry.is_file() and os.access(entry, os.X_OK)
+                            and entry.name not in ('chrome-sandbox', 'chrome_crashpad_handler')
+                            and not entry.name.endswith('.so')
+                            and machine_matches_binary(entry, target) is True]
+              if len(candidates) != 1:
+                  raise SystemExit(f'Expected one native Electron executable, found {candidates}')
+              os.environ['CANDIDATE_EXE'] = str(candidates[0])
+              with open(os.environ['GITHUB_ENV'], 'a', encoding='utf-8') as stream:
+                  stream.write(f'CANDIDATE_EXE={candidates[0]}' + chr(10))
+          manifest = json.loads((root / 'manifest.json').read_text(encoding='utf-8'))
+          binaries = [Path(os.environ['CANDIDATE_EXE']), root / manifest['runtime']['storePython']]
+          for binary in binaries:
+              if machine_matches_binary(binary, target) is not True:
+                  raise SystemExit(f'Packaged binary does not match {target}: {binary.name}')
+          proof = Path(os.environ['CANDIDATE_PROOF'])
+          proof.mkdir(parents=True, exist_ok=True)
+          artifacts = []
+          for artifact in sorted(Path('apps/desktop/release').glob(os.environ['CANDIDATE_GLOB'])):
+              with artifact.open('rb') as stream:
+                  digest = hashlib.file_digest(stream, 'sha256').hexdigest()
+              artifacts.append({'name': artifact.name, 'sha256': digest, 'bytes': artifact.stat().st_size})
+          receipt = {'commit': os.environ['GITHUB_SHA'], 'target': target, 'nativeBinaryAudit': True,
+                     'signed': False, 'publicationEligible': False, 'artifacts': artifacts,
+                     'stamp': json.loads(Path(os.environ['CANDIDATE_STAMP']).read_text(encoding='utf-8'))}
+          (proof / 'artifact.json').write_text(json.dumps(receipt, indent=2) + chr(10), encoding='utf-8')
+      - name: Verify provenance and the relocated payload launch contract
+        shell: bash
         env:
           TAG: ${{ inputs.tag }}
         run: |
-          $ErrorActionPreference = 'Stop'
-          $archives = @(Get-ChildItem apps/desktop/release/*-win-x64.zip)
-          if ($archives.Count -ne 1) { throw 'Expected exactly one Windows x64 ZIP' }
-          $archive = $archives[0]
-          $install = "$env:RUNNER_TEMP/zip-install"
-          $proof = "$env:RUNNER_TEMP/zip-proof"
-          New-Item -ItemType Directory -Path $proof | Out-Null
-          Expand-Archive -LiteralPath $archive.FullName -DestinationPath $install
-          $stamp = Get-Content -Raw "$install/resources/install-stamp.json" | ConvertFrom-Json
-          $exe = @(Get-ChildItem "$install/*.exe" | Where-Object { $_.Name -notin @('elevate.exe', 'chrome_crashpad_handler.exe') })
-          if ($exe.Count -ne 1) { throw 'Expected one packaged desktop executable' }
-          $signature = Get-AuthenticodeSignature $exe[0].FullName
-          if ($signature.Status -ne 'NotSigned') { throw 'Candidate must be explicitly unsigned' }
-          $tagArgs = if ($env:TAG) { @('--tag', $env:TAG) } else { @() }
-          node tests/install/e2e-assets/bundle-smoke-metadata.mjs stamp --platform win32 --format zip --stamp "$install/resources/install-stamp.json" --commit $env:GITHUB_SHA @tagArgs
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          @{ commit=$env:GITHUB_SHA; format='zip'; signed=$false; sha256=(Get-FileHash $archive.FullName -Algorithm SHA256).Hash; bytes=$archive.Length; stamp=$stamp } | ConvertTo-Json -Depth 20 | Set-Content "$proof/artifact.json"
-          node tests/install/e2e-assets/desktop-smoke.ts --exe $exe[0].FullName --root "$install/resources/agent-payload" --origin bundled --home "$env:RUNNER_TEMP/zip-home" --user-data "$env:RUNNER_TEMP/zip-user-data" --out $proof --phase installed --expect-commit $env:GITHUB_SHA --platform-account
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-      - name: Save verified candidate ZIP
+          set -euo pipefail
+          args=()
+          if [ -n "$TAG" ]; then args+=(--tag "$TAG"); fi
+          format=zip
+          if [ "$CANDIDATE_PLATFORM" = linux ]; then format=AppImage; fi
+          node tests/install/e2e-assets/bundle-smoke-metadata.mjs stamp --platform "$CANDIDATE_PLATFORM" --format "$format" --stamp "$CANDIDATE_STAMP" --commit "$GITHUB_SHA" "${args[@]}"
+          bash scripts/smoke-payload.sh "$CANDIDATE_ROOT" 2>&1 | tee "$CANDIDATE_PROOF/payload-smoke.log"
+      - name: Run native startup login chat and tool smoke
+        shell: bash
+        run: |
+          set -euo pipefail
+          command=(node tests/install/e2e-assets/desktop-smoke.ts --exe "$CANDIDATE_EXE" --root "$CANDIDATE_ROOT" --origin bundled --home "$RUNNER_TEMP/candidate-home" --user-data "$RUNNER_TEMP/candidate-user-data" --out "$CANDIDATE_PROOF" --phase installed --expect-commit "$GITHUB_SHA" --platform-account --tool-smoke)
+          if [ "$CANDIDATE_PLATFORM" = linux ]; then
+            xvfb-run -a --server-args='-screen 0 1280x1024x24' "${command[@]}"
+          else
+            "${command[@]}"
+          fi
+      - name: Save verified unsigned Windows or Linux candidate
+        id: verified
+        if: matrix.target.platform != 'darwin'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: aino-unsigned-windows-x64-${{ github.sha }}
-          path: apps/desktop/release/*-win-x64.zip
+          name: aino-unsigned-${{ matrix.target.artifact }}-${{ github.sha }}
+          path: apps/desktop/release/${{ matrix.target.glob }}
           compression-level: 0
           if-no-files-found: error
           retention-days: 14
@@ -325,8 +448,8 @@ jobs:
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: aino-unsigned-windows-x64-proof-${{ github.run_id }}
-          path: ${{ runner.temp }}/zip-proof
+          name: aino-unsigned-${{ matrix.target.artifact }}-proof-${{ github.run_id }}
+          path: ${{ runner.temp }}/candidate-proof
           if-no-files-found: ignore
           retention-days: 14
 

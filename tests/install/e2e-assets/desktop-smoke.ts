@@ -1,4 +1,5 @@
 import { spawnSync } from 'node:child_process'
+import { randomUUID } from 'node:crypto'
 import fs from 'node:fs'
 import { createRequire } from 'node:module'
 import os from 'node:os'
@@ -31,7 +32,7 @@ const optionsSchema = z.object({
   home: absolutePath, 'user-data': absolutePath, out: absolutePath,
   phase: z.enum(['old', 'new', 'installed']), 'expect-commit': z.string().regex(/^[0-9a-f]{40}$/),
   'launch-spec': absolutePath.optional(), 'mock-url': z.string().optional(),
-  'platform-account': z.boolean().optional(),
+  'platform-account': z.boolean().optional(), 'tool-smoke': z.boolean().optional(),
 })
 type SmokeOptions = z.infer<typeof optionsSchema>
 
@@ -385,8 +386,18 @@ export async function runInstalledDesktopSmoke(options: SmokeOptions, launchApp:
     // Trace only chat actions. Connection probes can return credential-bearing logs.
     await app.context().tracing.start({ screenshots: true, snapshots: false, sources: false })
     const chat = await runDesktopChatSmoke(page, { mockUrl, phase: options.phase, outDir: out, expectCommit: options['expect-commit'], provenanceCommit })
+    let tool
+    if (options['tool-smoke']) {
+      const marker = path.join(options.home, `native-tool-${randomUUID()}.txt`)
+      const content = `Native tool verified ${options['expect-commit']} ${randomUUID()}`
+      const toolChat = await runDesktopChatSmoke(page, { mockUrl, phase: options.phase,
+        outDir: path.join(out, 'tool'), expectCommit: options['expect-commit'], provenanceCommit,
+        prompt: `E2E_CALL(write_file)[${JSON.stringify({ path: marker, content })}]`, expectedReply: 'E2E_CALL_RESULT:' })
+      if (fs.readFileSync(marker, 'utf8') !== content) { throw new Error('Native write_file did not produce the requested marker') }
+      tool = { status: 'passed', name: 'write_file', marker, content, chat: toolChat }
+    }
     fs.writeFileSync(receiptPath, `${JSON.stringify({ ...chat, status: 'closing' }, null, 2)}\n`)
-    const result = { ...chat, account: account?.proof(), origin: options.origin, root: options.root, executable: options.exe, running, predictedHome,
+    const result = { ...chat, tool, account: account?.proof(), origin: options.origin, root: options.root, executable: options.exe, running, predictedHome,
       localModeConfigured: true, backend: { ...backend, command: redact(backend.command) }, launchKind: options.phase === 'new' ? 'post-update-launch' : 'installed-launch' }
     await app.context().tracing.stop({ path: path.join(out, `desktop-chat-${options.phase}.zip`) })
     await gracefulClose(app)
@@ -415,7 +426,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     exe: { type: 'string' }, root: { type: 'string' }, origin: { type: 'string' }, home: { type: 'string' },
     'user-data': { type: 'string' }, out: { type: 'string' }, phase: { type: 'string' },
     'expect-commit': { type: 'string' }, 'launch-spec': { type: 'string' }, 'mock-url': { type: 'string' },
-    'platform-account': { type: 'boolean' },
+    'platform-account': { type: 'boolean' }, 'tool-smoke': { type: 'boolean' },
   } })
   try {
     await runInstalledDesktopSmoke(optionsSchema.parse(values))

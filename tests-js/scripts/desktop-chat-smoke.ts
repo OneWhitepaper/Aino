@@ -17,6 +17,8 @@ export interface DesktopChatSmokeOptions {
   expectCommit?: string
   provenanceCommit?: string
   observePrompts?: () => Promise<readonly string[]>
+  prompt?: string
+  expectedReply?: string
 }
 
 export interface ChatIdentity {
@@ -181,6 +183,7 @@ async function readTranscript(page: Page): Promise<TranscriptMessage[]> {
 /** Match an ordered new pair, never a reply carried over from an earlier checkpoint. */
 export function newCompletedPair(
   messages: TranscriptMessage[], beforeIds: readonly string[], prompt: string,
+  expectedReply: string = MOCK_REPLY,
 ): { user: TranscriptMessage; assistant: TranscriptMessage } | null {
   const userIndex = messages.findIndex((message: TranscriptMessage): boolean =>
     message.role === 'user' && message.text.includes(prompt) && !beforeIds.includes(message.id))
@@ -189,7 +192,7 @@ export function newCompletedPair(
   const assistant = messages[userIndex + 1]
 
   if (!user || !user.id || !assistant?.id || assistant.role !== 'assistant'
-      || beforeIds.includes(assistant.id) || !assistant.text.includes(MOCK_REPLY)
+      || beforeIds.includes(assistant.id) || !assistant.text.includes(expectedReply)
       || assistant.streaming || assistant.error) {
     return null
   }
@@ -250,7 +253,7 @@ export async function runDesktopChatSmoke(page: Page, options: DesktopChatSmokeO
   const receiptPath = path.join(outDir, `desktop-chat-${phase}.json`)
   const evidencePath = path.join(outDir, `desktop-chat-${phase}-renderer.log`)
   const screenshot = path.join(outDir, `desktop-chat-${phase}.png`)
-  const prompt = `Hello, can you hear me? Desktop smoke ${phase} ${randomUUID()}`
+  const prompt = options.prompt ?? `Hello, can you hear me? Desktop smoke ${phase} ${randomUUID()}`
   const observe = options.observePrompts ?? ((): Promise<string[]> => readMockPrompts(options.mockUrl))
   // A send the app swallows and a send the app never made look identical from
   // the mock's side; the renderer's own console is the only witness to which.
@@ -312,12 +315,12 @@ export async function runDesktopChatSmoke(page: Page, options: DesktopChatSmokeO
 
       return witnessIndex >= before
     }, { timeout: 90_000, message: 'The mock must receive this checkpoint prompt after the send' }).toBe(true)
-    await expect.poll(async (): Promise<boolean> => newCompletedPair(await readTranscript(page), beforeIds, prompt) !== null,
+    await expect.poll(async (): Promise<boolean> => newCompletedPair(await readTranscript(page), beforeIds, prompt, options.expectedReply) !== null,
       { timeout: 90_000, message: 'A new completed assistant reply must follow the new user message' }).toBe(true)
     // An empty idle composer offers voice chat; older desktops retain Send.
     // Stop and the streaming marker must settle even when all reply text arrived.
     await expect(page.locator('[data-slot="composer-root"] button[aria-label="Start voice conversation"]:visible, [data-slot="composer-root"] button[type="submit"][aria-label="Send"]:visible')).toBeVisible({ timeout: 90_000 })
-    const pair = newCompletedPair(await readTranscript(page), beforeIds, prompt)
+    const pair = newCompletedPair(await readTranscript(page), beforeIds, prompt, options.expectedReply)
 
     if (!pair) {
       throw new Error('New transcript pair disappeared before the turn completed')

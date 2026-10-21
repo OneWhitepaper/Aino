@@ -64,6 +64,14 @@ test('one server owns inference and a fresh, per-server prompt witness', async (
   await expect(readMockPrompts(first.url)).rejects.toThrow()
 })
 
+test('tool chat requires a fresh completed tool-result response', (): void => {
+  const user: TranscriptMessage = { id: 'user', role: 'user', text: 'tool nonce', streaming: false, error: false }
+  const assistant: TranscriptMessage = { id: 'reply', role: 'assistant', text: 'E2E_CALL_RESULT: verified', streaming: false, error: false }
+  expect(newCompletedPair([user, assistant], [], 'tool nonce', 'E2E_CALL_RESULT:')).toEqual({ user, assistant })
+  expect(newCompletedPair([user, { ...assistant, text: MOCK_REPLY }], [], 'tool nonce', 'E2E_CALL_RESULT:')).toBeNull()
+  expect(newCompletedPair([user, assistant], ['reply'], 'tool nonce', 'E2E_CALL_RESULT:')).toBeNull()
+})
+
 test('provider reconfiguration preserves feed, plugins, history and explicit fixture options', (): void => {
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'smoke-config-'))
 

@@ -11,6 +11,16 @@ import { buildStampPayload } from '../apps/desktop/scripts/write-build-stamp.mjs
 
 const commit = 'a'.repeat(40)
 
+test('Linux AppImage provenance uses the production external update owner', () => {
+  const env = { HERMES_DESKTOP_VARIANT: 'bundled', HERMES_PAYLOAD_TAG: 'v0.1.0' }
+  const stamp = buildStampPayload({ commit, dirty: false }, env, 'linux',
+    { runtime: { commands: { hermes: 'bin/hermes' } } })
+  const options = { commit, tag: 'v0.1.0', platform: 'linux', format: 'AppImage' }
+  expect(verifyBundleStamp(stamp, options)).toBe('0.1.0')
+  expect(() => verifyBundleStamp({ ...stamp, updateMechanism: 'electron-updater' }, options)).toThrow('updateMechanism')
+  expect(() => verifyBundleStamp({ ...stamp, commit: 'b'.repeat(40) }, options)).toThrow('commit')
+})
+
 test('a versioned Windows ZIP requires external updates and cannot pass as MSIX', () => {
   const commit = 'a'.repeat(40)
   const stamp = { commit, tag: 'v0.1.0', payload: 'bundled', distribution: 'desktop-app', dirty: false, updateMechanism: 'external' }

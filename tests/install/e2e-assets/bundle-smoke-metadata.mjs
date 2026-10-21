@@ -40,10 +40,11 @@ export function bundleIdentity(commit, tag = '', channelRequest = null) {
  * @param {{commit: string, tag?: string, platform: string, format?: string,
  * channelRequest?: import('../../../apps/desktop/electron/install-stamp.js').ChannelBuildRequest | null}} options */
 export function verifyBundleStamp(stamp, { commit, tag = '', platform, format, channelRequest = null }) {
-  if (!['darwin', 'win32'].includes(platform)) throw new Error('Unsupported native platform')
+  if (!['darwin', 'win32', 'linux'].includes(platform)) throw new Error('Unsupported native platform')
   const request = channelRequest === null ? null : admitChannelRequest(channelRequest, commit, tag)
   const expected = { commit, tag: request?.receiverCandidate ? request.releaseTag : tag || null, payload: 'bundled', distribution: 'desktop-app', dirty: false,
-    updateMechanism: tag || request ? { darwin: 'electron-updater', win32: 'app-installer' }[platform] : 'external' }
+    updateMechanism: tag || request ? { darwin: 'electron-updater', win32: 'app-installer', linux: 'external' }[platform] : 'external' }
+  if (platform === 'linux' && request) throw new Error('Linux candidates cannot join a native update channel')
   if (platform === 'win32' && format === 'zip') {
     if (request) throw new Error('Windows ZIP cannot join a native update channel')
     expected.updateMechanism = 'external'
