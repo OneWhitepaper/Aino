@@ -74,8 +74,7 @@ export function listMcpServers(): Promise<{ servers: McpServerSummary[] }> {
   })
 }
 
-/** Add one server to `mcp_servers` (validated + name-collision-checked
- *  server-side — the same endpoint the dashboard's add form uses). */
+/** Add one server through the existing validated MCP route. */
 export function addMcpServer(
   body: {
     name: string
@@ -95,8 +94,7 @@ export function addMcpServer(
   })
 }
 
-/** Remove one server from `mcp_servers` (the inline setup card's rollback
- *  when a directory install is cancelled after the config write). */
+/** Remove a just-added server when a hosted OAuth flow is cancelled. */
 export function removeMcpServer(name: string, profile?: ProfileScope): Promise<{ ok: boolean }> {
   return window.hermesDesktop.api<{ ok: boolean }>({
     ...capabilityScoped(profile),

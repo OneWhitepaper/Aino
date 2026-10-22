@@ -1,10 +1,14 @@
 import { randomUUID } from 'node:crypto'
 
+import WebSocket from 'ws'
+
 import { JsonRpcGatewayClient } from '../../shared/src/json-rpc-gateway'
 import type { BindPlatformModelInput, BindPlatformModelResult, PlatformModel } from '../shared/platform-contract'
 
 import type { PlatformAuth } from './platform-auth'
 import { PlatformClientError } from './platform-client'
+
+const CANONICAL_GATEWAY_PROTOCOL = 'hermes-gateway-v1'
 
 export interface PlatformBindingTarget {
   fingerprint: string
@@ -403,12 +407,17 @@ export async function openPlatformGateway(wsUrl: string, headers: Record<string,
   const rpc = new JsonRpcGatewayClient({
     connectTimeoutMs: 10_000,
     requestTimeoutMs: 10_000,
-    socketFactory: url =>
-      new (
-        WebSocket as unknown as {
-          new (url: string, options: { headers: Record<string, string> }): WebSocket
-        }
-      )(url, { headers })
+    socketFactory: url => {
+      const parsed = new URL(url)
+      const native = parsed.searchParams.has('native_dial')
+      const ticket = native ? parsed.searchParams.get('ticket') : null
+
+      if (native && !ticket) {throw new Error('Native gateway requires a fresh private ticket')}
+
+      if (ticket) {parsed.searchParams.delete('ticket')}
+
+      return new WebSocket(parsed.toString(), native ? [CANONICAL_GATEWAY_PROTOCOL, `hermes-gateway-ticket.${ticket}`] : undefined, { headers })
+    }
   })
 
   try {

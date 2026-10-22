@@ -7,6 +7,7 @@ import { platformModelCatalog } from '@/store/platform-models'
 import { dropSessionState, publishSessionState } from '@/store/session-states'
 import { platformModel, platformSnapshot } from '@/test/platform-model'
 
+import { $poolLimits } from './pool-limits'
 import { isSessionGone, latchSessionGone, resetBackgroundPollingGuard } from './session-gone-latch'
 
 // Regression coverage for the #89206 wake-failure class: session-scoped RPCs
@@ -104,8 +105,7 @@ function installDesktop(): void {
       port: connectionId === 'source-a' ? 6161 : 6262,
       profile,
       token: `${connectionId}-token`
-    })),
-    touchBackend: vi.fn(async () => undefined)
+    }))
   }
 }
 
@@ -639,7 +639,7 @@ describe('requestForSessionProfile', () => {
 
     // Age the socket past the min-lifetime grace (#94769) so this prune
     // asserts the turn-lease release, not the freshly-opened spare.
-    vi.useFakeTimers({ now: Date.now() + SECONDARY_MIN_LIFETIME_MS + 1_000 })
+    vi.useFakeTimers({ now: Date.now() + Math.max(SECONDARY_MIN_LIFETIME_MS, $poolLimits.get().idleMs) + 1_000 })
     pruneSecondaryGateways(new Set())
     vi.useRealTimers()
     expect(secondaryGateways[0].close).toHaveBeenCalledOnce()

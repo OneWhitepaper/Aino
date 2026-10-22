@@ -267,9 +267,7 @@ export function getElevenLabsVoices(profile?: null | string): Promise<ElevenLabs
   })
 }
 
-/** `gh` CLI presence + auth state, for the composer's GitHub skill pill
- *  (GitHub is deliberately not an MCP — the github/* skills are the
- *  integration). Backend caches for 5 minutes; `refresh` bypasses. */
+/** Cached backend probe used by the composer's GitHub skill suggestion. */
 export function getGhAuthStatus(refresh = false): Promise<{ available: boolean; authenticated: boolean }> {
   return hermesApi<{ available: boolean; authenticated: boolean }>({
     ...profileScoped(),

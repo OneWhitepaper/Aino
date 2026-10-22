@@ -13,6 +13,7 @@ import { triggerHaptic } from '@/lib/haptics'
 import { Settings2 } from '@/lib/icons'
 import { isSubmitEnter } from '@/lib/ime'
 import { confirm } from '@/store/confirm'
+import { $activeConnectionId } from '@/store/connections'
 import {
   $dataUrlReadMaxMb,
   clampDataUrlReadMaxMb,
@@ -38,6 +39,7 @@ import { PanelEmpty } from '../overlays/panel'
 
 import { ConfigField } from './config-field'
 import { CONFIG_SUBPAGES, configSubpageForField } from './config-subpages'
+import { DELEGATION_ROUTE_COMPANION_KEY, DelegationRouteRow } from './delegation-route-row'
 import {
   clearsEnabledToolsets,
   diffConfig,
@@ -81,12 +83,13 @@ export function ConfigSettings({
   // when the target profile changes — the same guarantee useOnProfileSwitch
   // provides for app-wide switches, without hand-clearing each piece.
   const scopeProfile = useStore($settingsRequestProfile)
+  const connectionId = useStore($activeConnectionId)
 
   return (
     <ConfigSettingsInner
       activeSectionId={activeSectionId}
       importInputRef={importInputRef}
-      key={scopeProfile ?? '__active__'}
+      key={JSON.stringify([connectionId, scopeProfile ?? '__active__'])}
       onConfigSaved={onConfigSaved}
       onMainModelChanged={onMainModelChanged}
       scopeProfile={scopeProfile}
@@ -409,7 +412,9 @@ function ConfigSettingsInner({
       return
     }
 
-    const element = document.getElementById(`setting-field-${targetField}`)
+    const element = document.getElementById(
+      `setting-field-${targetField === DELEGATION_ROUTE_COMPANION_KEY ? 'delegation.model' : targetField}`
+    )
 
     if (!element) {
       return
@@ -478,30 +483,36 @@ function ConfigSettingsInner({
     )
   }
 
-  const visibleFields = activeSectionId === 'voice' ? fields.filter(([key]) => voiceFieldVisible(key, config)) : fields
+  const visibleFields = (
+    activeSectionId === 'voice' ? fields.filter(([key]) => voiceFieldVisible(key, config)) : fields
+  ).filter(([key]) => key !== DELEGATION_ROUTE_COMPANION_KEY)
 
   const renderFieldGroup = (entries: [string, ConfigFieldSchema][], extra?: ReactNode) => (
     <SettingsGroup>
       {extra}
       {entries.map(([key, field]) => (
         <div className="scroll-mt-6" data-settings-row="" id={`setting-field-${key}`} key={key}>
-          <ConfigField
-            descriptionExtra={
-              key === 'memory.provider' && isExternalMemoryProvider(getNested(config, key)) ? (
-                <MemoryConnect profile={scopeProfile} provider={String(getNested(config, key))} />
-              ) : undefined
-            }
-            enumOptions={
-              key === 'tts.elevenlabs.voice_id'
-                ? enumOptionsFor(key, getNested(config, key), config, elevenLabsVoiceOptions ?? undefined)
-                : enumOptionsFor(key, getNested(config, key), config)
-            }
-            onChange={value => updateConfig(setNested(config, key, value))}
-            optionLabels={key === 'tts.elevenlabs.voice_id' ? elevenLabsVoiceLabels : undefined}
-            schema={field}
-            schemaKey={key}
-            value={getNested(config, key)}
-          />
+          {key === 'delegation.model' ? (
+            <DelegationRouteRow config={config} onConfigChange={updateConfig} scope={writeScope ?? scopeProfile} />
+          ) : (
+            <ConfigField
+              descriptionExtra={
+                key === 'memory.provider' && isExternalMemoryProvider(getNested(config, key)) ? (
+                  <MemoryConnect profile={scopeProfile} provider={String(getNested(config, key))} />
+                ) : undefined
+              }
+              enumOptions={
+                key === 'tts.elevenlabs.voice_id'
+                  ? enumOptionsFor(key, getNested(config, key), config, elevenLabsVoiceOptions ?? undefined)
+                  : enumOptionsFor(key, getNested(config, key), config)
+              }
+              onChange={value => updateConfig(setNested(config, key, value))}
+              optionLabels={key === 'tts.elevenlabs.voice_id' ? elevenLabsVoiceLabels : undefined}
+              schema={field}
+              schemaKey={key}
+              value={getNested(config, key)}
+            />
+          )}
           {key === 'memory.provider' && isExternalMemoryProvider(getNested(config, key)) ? (
             <ProviderConfigPanel
               key={String(getNested(config, key))}

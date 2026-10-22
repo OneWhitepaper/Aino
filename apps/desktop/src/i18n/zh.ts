@@ -22,12 +22,13 @@ import { defineFieldCopy } from '@/app/settings/field-copy'
 
 import { defineLocale, type TranslationOverrides } from './define-locale'
 import { introZh } from './intro-zh'
-import { zhAuxTasks } from './zh_aux_tasks'
+import { zhCatalog, zhSkillDeepLink } from './zh_catalog'
 import { zhClarify } from './zh_clarify'
 import { zhConnectorCard } from './zh_connector_card'
 import { zhFirstRun } from './zh_first_run'
 import { zhLocalModels } from './zh_local_models'
 import { zhModelMenu } from './zh_model_menu'
+import { zhModelSettings } from './zh_model_settings'
 import { zhNotices } from './zh_notices'
 import { zhOnboarding } from './zh_onboarding'
 import { zhProjects } from './zh_projects'
@@ -36,14 +37,32 @@ import { zhThemePicker } from './zh_theme_picker'
 import { zhUpdateChannel } from './zh_update_channel'
 
 export const zhOverrides = {
+  appTour: {
+    sessions: { title: '你的会话', text: '所有对话都在这里，可以搜索、置顶或重新打开。' },
+    composer: { title: '在这里提问', text: '描述你想完成的任务，输入 @ 可以引用文件。' },
+    newSession: { title: '开始新对话', text: '新会话拥有独立的上下文，建议每项任务使用一个会话。' },
+    model: { title: '选择模型', text: '选择由哪个模型回答你的问题。' },
+    modelLocal: '此电脑支持运行本地模型，可在“设置 → 供应商 → 本地模型”中配置。',
+    capabilities: { title: '能力', text: '管理 Hermes 可用的技能、工具和插件，也可以在这里添加更多。' },
+    messaging: { title: '消息平台', text: '通过 Telegram、Slack、Discord 等平台使用 Hermes。' },
+    rightPane: { title: '工作面板', text: '在右侧打开文件、终端、代码审查和内置浏览器。' }
+  },
+  catalog: zhCatalog,
+  gatewayGroupOpen: {
+    opening: '正在打开网关群聊…',
+    lookupFailed: '无法在网关上找到此群聊。请重试。',
+    missing: '此网关群聊已不存在。'
+  },
   externalOpenFailed: {
     title: '无法打开此链接',
     message: '没有注册用于打开此地址的浏览器。请复制链接并手动打开。',
     copyUrl: '复制链接',
-    close: '关闭'
-  ,
-"missing":{"title":"文件不存在","message":"此文件不存在，可能已被删除、移动，或位于另一台设备。"},
-},
+    close: '关闭',
+    missing: {
+      title: '文件不存在',
+      message: '此文件不存在，可能已被删除、移动，或位于另一台设备。'
+    }
+  },
   sharedMetrics: zhSharedMetrics,
   firstRun: zhFirstRun,
   intro: introZh,
@@ -1381,10 +1400,14 @@ export const zhOverrides = {
 "managedBody":"此安装由系统管理，Hermes 无法自行移除。",
 },
     poolLimits: {
-      warmBotBackendsAria: '预热机器人后端',
-      warmBotBackendsTitle: '预热机器人后端',
-      backendIdleTimeoutAria: '后端空闲超时（毫秒）',
-      backendIdleTimeoutTitle: '后端空闲超时（毫秒）'
+      warmBotBackendsAria: '保持预热的档案连接数',
+      warmBotBackendsTitle: '保持预热的档案连接数',
+      warmBotBackendsDesc:
+        '限制为快速切换而保持的次级档案连接数。达到上限后会停止悬停预热并回收多余的闲置连接；手动打开和活动中的档案不会被阻止或断开。',
+      backendIdleTimeoutAria: '档案连接空闲超时（毫秒）',
+      backendIdleTimeoutTitle: '档案连接空闲超时（毫秒）',
+      backendIdleTimeoutDesc:
+        '闲置档案连接在关闭前保留的时间。这里只断开闲置 socket，不会停止共享 Hermes gateway 或后台任务。'
     },
     customEndpoints: {
       active: '当前使用',
@@ -1952,94 +1975,7 @@ export const zhOverrides = {
 
       importConfirmMany: count => `添加 ${count} 个服务器到 mcp.json`
     },
-    model: {
-      setupProviderFallback: '提供方',
-      setUpProvider: name => `设置 ${name}`,
-      staleAuxBefore: (count, names) => `${count} 个辅助任务（${names}）仍由 `,
-      staleAuxAfter: ' 运行，而不是主模型。',
-      staleAuxOtherProviders: '其他提供方',
-      moaEnabled: '启用',
-      moaSetDefault: '设为默认',
-      moaNewPresetPlaceholder: '新预设',
-      moaAddPreset: '添加预设',
-      customModel: '自定义模型…',
-      customModelPlaceholder: '模型 ID',
-      chooseFromList: '从列表中选择',
-      moaDefault: '默认：',
-      moaReferenceToggle: (enabled, index) => `${enabled ? '禁用' : '启用'}参考 ${index}`,
-      moaReferenceTitle: index => `参考 ${index}`,
-      moaAddReference: '添加参考模型',
-      loading: '正在加载模型配置...',
-      appliesDesc: '应用于新会话。可在输入框的模型选择器中临时切换当前对话。',
-      provider: '提供方',
-      model: '模型',
-      applying: '应用中...',
-      defaultsLabel: '默认值',
-      reasoning: '推理',
-      reasoningOff: '关闭',
-      speed: '速度',
-      speedStandard: '标准',
-      defaultsFailed: '保存模型默认值失败',
-      loadFailed: '无法加载模型',
-      restartRequired: '更新后此后端仍在运行旧代码。请重启以加载新代码。',
-      restartBackend: '重启后端',
-      restartingBackend: '正在重启后端...',
-      restartFailed: '无法重启后端',
-      auxiliaryTitle: '辅助模型',
-      resetAllToMain: '全部重置为主模型',
-      staleAuxDismiss: '不再显示',
-      auxiliaryDesc: '辅助任务默认使用主模型。你可以为任意任务指定专用模型。',
-      setToMain: '设为主模型',
-      change: '更改',
-      autoUseMain: '自动 · 使用主模型',
-      inheritMainEffort: '继承 · 主模型推理强度',
-      inheritsFrom: task => `继承 ${task}`,
-      followTask: task => `跟随 ${task}`,
-      providerDefault: '(提供方默认)',
-      fallbackAdd: '添加备用模型',
-      fallbackEmpty: '未配置备用模型 — 默认模型失败时才会使用备用模型。',
-      notInCatalog: '不在该提供方的模型列表中 — 调用可能回退到备用模型。',
-      moaTitle: '混合智能体（Mixture of Agents）',
-      moaPreset: '预设',
-      moaDescription:
-        '配置以「混合智能体」提供商下模型形式出现的命名预设。聚合模型是执行模型——它运行工具循环的每一步，整个运行几乎全部费用都计入其提供商。参考模型默认每轮用户消息仅提供一次建议。',
-      moaAggregator: '聚合模型',
-      moaAggregatorBilled: '执行模型 · 整个运行在此计费',
-      moaReferenceHint: '默认每轮仅建议一次',
-      tasks: zhAuxTasks,
-      setupProvider: provider => `设置 ${provider}`,
-
-      activating: '激活中…',
-
-      activate: '激活',
-
-      apiKeyPlaceholder: key => `粘贴 ${key}`,
-
-      providerNeedsApiKey: provider => `${provider} 需要 API 密钥——完成设置后才能选择模型。`,
-
-      providerNeedsBrowser: provider => `${provider} 通过浏览器登录——Hermes 会为你完成流程。`,
-
-      otherProviders: '其他提供方',
-
-      staleAuxiliary: (count, names, provider) => `${count} 个辅助任务（${names}）仍在使用${provider}，而不是主模型。`,
-
-      moa: {
-        title: '智能体混合（Mixture of Agents）',
-        description: '配置命名预设，它们会作为“智能体混合”提供方下的模型显示。聚合器是实际执行模型。',
-        preset: '预设',
-        enabled: '已启用',
-        setDefault: '设为默认',
-        delete: '删除',
-        newPresetPlaceholder: '新预设',
-        addPreset: '添加预设',
-        defaultLabel: '默认',
-        reference: index => `参考模型 ${index}`,
-        toggleReference: (enabled, index) => `${enabled ? '停用' : '启用'}参考模型 ${index}`,
-        remove: '移除',
-        addReferenceModel: '添加参考模型',
-        aggregator: '聚合器'
-      }
-    },
+    model: zhModelSettings,
     localModels: zhLocalModels,
     billing: {
       perMonth: amount => `${amount}/月`,
@@ -2594,17 +2530,7 @@ export const zhOverrides = {
     }
   },
 
-  skillDeepLink: {
-    installTitle: (name: string) => `安装“${name}”？`,
-    installDescription: '此技能将在新会话中可用。请仅安装可信来源的内容。',
-    installTo: '安装到',
-    thisComputer: '此电脑',
-    installing: '正在安装…',
-    installComplete: (name: string) => `已安装“${name}”`,
-    destinationChanged: '安装目标已更改。请关闭此对话框并重新打开安装链接。',
-    installed: '已安装',
-    source: '来源'
-  },
+  skillDeepLink: zhSkillDeepLink,
   skills: {
     tabSkills: '技能',
     tabToolsets: '工具集',
@@ -2659,6 +2585,8 @@ export const zhOverrides = {
     archive: '归档',
     skillArchivedTitle: '技能已归档',
     skillArchivedMessage: '可通过 hermes curator restore 恢复。',
+  // The catalog moved to its own capabilities page; its copy lives under the
+  // top-level catalog keys above.
     tabPlugins: '插件',
     plugins: {
       agentTitle: 'Agent 插件',
@@ -2689,20 +2617,17 @@ export const zhOverrides = {
       toggleFailed: (name: string) => `无法切换 ${name}`,
       legacyBackend: '此后端版本较旧，不支持按键名切换插件 — 请更新 Hermes 后再在此管理。',
       portableBadge: '便携',
-      catalogTitle: '插件目录',
-      catalogBrowse: '浏览',
-      catalogHide: '隐藏目录浏览器',
-      catalogHint:
-        '点击任意插件上的「+ Add to this Agent」— 经过审核的条目会以其固定提交安装到所选配置。捆绑的 agent+桌面插件会同时提供两部分。',
       alreadyInstalled: (name: string) => `${name} 已安装在此配置中。`,
       catalogProvenance: (sha: string) => `从 Hermes 目录安装${sha ? `，固定提交 ${sha}` : ''}。`,
       pinnedProvenance: (sha: string) => `已固定到提交 ${sha}。重新固定前将拒绝更新。`,
       pinnedBadge: (sha: string) => `固定 @ ${sha}`,
-      tierOfficial: '官方',
-      tierCommunity: '社区',
       updateToPin: (sha: string) => `更新到 ${sha}`,
       updateFailed: (name: string) => `无法更新 ${name}`,
       updated: (name: string) => `${name} 已更新到当前目录固定提交。重启网关后生效。`,
+      updateConsentTitle: (name: string) => `${name} 请求增加功能`,
+      updateConsentBody: (name: string, sha: string) =>
+        `${name} 的新目录版本（${sha}）会增加当前安装版本没有的功能。仅在信任这些功能时应用更新：`,
+      updateConsentConfirm: '应用更新',
       uninstall: '卸载',
       uninstallTip: (name: string, profile: string) => `从 ${profile} 卸载 ${name}`,
       uninstallConfirmTitle: (name: string) => `卸载 ${name}？`,
@@ -4120,6 +4045,7 @@ export const zhOverrides = {
     openDirective: '打开',
     queueMessage: '排队消息',
     steer: '引导当前运行',
+    redirect: '重新定向当前运行',
     stop: '停止',
     send: '发送',
     speaking: '讲话中',
@@ -4322,6 +4248,11 @@ export const zhOverrides = {
     queueSteer: '引导 — 立即修正当前回合',
     queueSend: '发送',
     queueDelete: '删除',
+    queueLostNote: '重启期间该轮次已丢失',
+    restoreImageDraft: '恢复图片草稿',
+    queueCancelFailed: '无法移除排队的轮次',
+    queueLostDiscard: '丢弃',
+    queueLostDiscardTip: '网关在该轮次进行中重启，无法完成。丢弃后其后的排队轮次将继续执行。',
     queueResume: '继续',
     queueResumeTip: '已被停止操作暂停 — 继续发送排队的回合',
     queueStuckTitle: '排队消息未发送',
@@ -4547,7 +4478,7 @@ export const zhOverrides = {
       heartbeatEveryHours: hours => `每 ${hours} 小时`,
       heartbeatEverySeconds: seconds => `每 ${seconds} 秒`,
       heartbeatNext: time => `下次 ${time}`,
-      heartbeatDueWaitingForIdle: '已到期，等待会话空闲',
+      dueWaitingForIdle: '已到期，等待会话空闲',
       heartbeatActions: '心跳操作',
       pauseHeartbeat: '暂停心跳',
       resumeHeartbeat: '恢复心跳',
@@ -5663,10 +5594,24 @@ export const zhOverrides = {
 
         free_tier_outage: { title: '免费模型暂时不可用', body: '请稍后重新发送消息。' },
 
-        free_tier_refused: { title: '此请求需要登录', body: '请登录免费的 Nous 账户。' }
-      ,
-"no_reply":{"body":"Hermes 结束了本轮但未给出回复，请重试。"},
-},
+        free_tier_refused: { title: '此请求需要登录', body: '请登录免费的 Nous 账户。' },
+        no_reply: {
+          title: 'Hermes 未返回回复',
+          body: 'Hermes 结束了本轮但未给出回复，请重试。'
+        },
+        SESSION_OWNER_BUSY: {
+          title: 'Hermes 正忙于此会话',
+          body: '另一个轮次正在运行，你的消息无法加入队列。消息未发送。请在该轮次结束后重试。'
+        },
+        SESSION_OWNER_UNCONFIRMED: {
+          title: '消息可能已排入队列',
+          body: '网关未能及时确认消息。如果消息已排队，它将在前一轮结束或解决后运行。请先检查聊天，再决定是否重新发送。'
+        },
+        cron_session_read_only: {
+          title: '此聊天属于一个定时任务',
+          body: '它只运行该任务，因此你的消息未被执行。请新建聊天后再发送。'
+        }
+      },
       errorLayers: {
         auth: '认证错误',
         billing: '额度不足',
@@ -5817,7 +5762,7 @@ export const zhOverrides = {
       hideNames: '隐藏名称',
       skill: name => `技能 ${name}`,
       kind: { plugin: '插件', skill: '技能' },
-      tier: { official: '官方', community: '社区' },
+      tier: { official: '官方', verified: '已验证', community: '社区' },
       targetProfile: profile => `安装到你的 ${profile} 配置文件`,
       sendFailed: '无法发送你的回复，请重试。',
       commitLabel: '提交',
@@ -7028,8 +6973,6 @@ export const zhOverrides = {
   billing: zhBilling,
 
   summary: zhSummary
-,
-"appTour":{"sessions":{"title":"你的会话","text":"所有对话都在这里，可以搜索、置顶或重新打开。"},"composer":{"title":"在这里提问","text":"描述你想完成的任务，输入 @ 可以引用文件。"},"newSession":{"title":"开始新对话","text":"新会话拥有独立的上下文，建议每项任务使用一个会话。"},"model":{"title":"选择模型","text":"选择由哪个模型回答你的问题。"},"modelLocal":"此电脑支持运行本地模型，可在“设置 → 供应商 → 本地模型”中配置。","capabilities":{"title":"能力","text":"管理 Hermes 可用的技能、工具和插件，也可以在这里添加更多。"},"messaging":{"title":"消息平台","text":"通过 Telegram、Slack、Discord 等平台使用 Hermes。"},"rightPane":{"title":"工作面板","text":"在右侧打开文件、终端、代码审查和内置浏览器。"}},
 } satisfies TranslationOverrides
 
 export const zh = defineLocale(zhOverrides)

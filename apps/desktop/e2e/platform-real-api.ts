@@ -314,6 +314,7 @@ export async function auditFixtureText(
 }
 
 export async function startRealPlatformAPI(apiRoot: string) {
+  apiRoot = process.env.AINO_NATIVE_API_ROOT || apiRoot
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'aino-native-api-'))
   fs.chmodSync(dir, 0o700)
   const runtimeHome = path.join(dir, 'home')

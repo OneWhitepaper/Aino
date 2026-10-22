@@ -164,7 +164,7 @@ function answer(socket: MockGateway, method: string, params: Record<string, unkn
   }
 
   if (method === 'prompt.submit') {
-    return { ok: true }
+    return { admission_id: params.submission_id, status: 'started' }
   }
 
   if (method === 'session.resume' || method === 'session.activate') {
@@ -259,8 +259,7 @@ function installDesktop(): void {
           : 9999
 
       return { port, profile, token: `${connectionId}-${profile}-token`, wsUrl: `ws://127.0.0.1:${port}/ws` }
-    }),
-    touchBackend: vi.fn(async () => undefined)
+    })
   }
 }
 

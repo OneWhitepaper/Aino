@@ -17,6 +17,7 @@ import {
   setPrimaryGateway,
   setPrimaryGatewayConnectionId
 } from './gateway'
+import { $poolLimits, POOL_LIMITS_DEFAULTS } from './pool-limits'
 import { requestForSessionProfile } from './session-request-router'
 
 // Real request router, registry and JSON-RPC client; only the browser network
@@ -161,6 +162,7 @@ beforeEach(async () => {
 
 afterEach(() => {
   closeSecondaryGateways()
+  $poolLimits.set({ ...POOL_LIMITS_DEFAULTS })
   primary.close()
   setPrimaryGateway(null)
   setPrimaryGatewayConnectionId(null)
@@ -177,87 +179,95 @@ describe('background remote turn reconnect', () => {
     { name: 'turn lease only, network error and close', retained: false, drop: true, error: true },
     { name: 'retained control, network close', retained: true, drop: true, error: false },
     { name: 'turn lease only, uninterrupted control', retained: false, drop: false, error: false }
-  ])('$name: delivers completion without selecting the remote', async ({ retained, drop, error }) => {
-    if (retained) {
-      const opened = openGatewayForAgent(owner.connectionId, owner.profile)
+  ])(
+    '$name: delivers completion without selecting the remote',
+    async ({ retained, drop, error }) => {
+      if (retained) {
+        const opened = openGatewayForAgent(owner.connectionId, owner.profile)
+        await vi.advanceTimersByTimeAsync(10)
+        await opened
+      }
+
+      // No open/ensure/relay/foreground pin in the H2 case. The routed submit
+      // itself acquires a whole-turn lease and releases its per-request lease
+      // after ACK, leaving ONLY the whole-turn lease while the model runs.
+      const submitted = requestForSessionProfile(owner, ambient, 'prompt.submit', {
+        session_id: sessionId,
+        text: 'Continue the already-bound background session'
+      })
+
       await vi.advanceTimersByTimeAsync(10)
-      await opened
-    }
+      await expect(submitted).resolves.toEqual({ status: 'streaming' })
+      const remote = sockets.filter(socket => socket.url === remoteUrl)
+      expect(remote).toHaveLength(1)
+      expect(remote[0].requests).toEqual([
+        expect.objectContaining({ method: 'prompt.submit', params: expect.objectContaining({ session_id: sessionId }) })
+      ])
+      expect(liveSecondaryConnectionIds()).toEqual(new Set([owner.connectionId]))
+      const started = publish('message.start', {})
+      expect(onEvent).toHaveBeenCalledWith(expect.objectContaining({ ...started, connectionId: owner.connectionId }))
+      onEvent.mockClear()
 
-    // No open/ensure/relay/foreground pin in the H2 case. The routed submit
-    // itself acquires a whole-turn lease and releases its per-request lease
-    // after ACK, leaving ONLY the whole-turn lease while the model runs.
-    const submitted = requestForSessionProfile(owner, ambient, 'prompt.submit', {
-      session_id: sessionId,
-      text: 'Continue the already-bound background session'
-    })
+      if (drop) {
+        remote[0].networkDrop(error)
+        await vi.advanceTimersByTimeAsync(1)
+        expect(remote[0].readyState).toBe(NetworkSocket.CLOSED)
+        // Emitted during the outage: only session.events.since can recover it.
+        publish('message.delta', { text: 'during outage' })
+        // First backoff is deterministic; this also crosses the backoff cap.
+        // No explicit reconnect, request, selection or prewarm rescues the entry.
+        await vi.advanceTimersByTimeAsync(16_000)
+        await vi.dynamicImportSettled()
+        await vi.advanceTimersByTimeAsync(10)
+        expect
+          .soft(
+            sockets.filter(socket => socket.url === remoteUrl),
+            'automatic redial'
+          )
+          .toHaveLength(2)
+        expect
+          .soft(liveSecondaryConnectionIds(), 'remote registry route remains live')
+          .toEqual(new Set([owner.connectionId]))
+        expect
+          .soft(onEvent, 'outage notification is replayed')
+          .toHaveBeenCalledWith(
+            expect.objectContaining({ type: 'message.delta', session_id: sessionId, connectionId: owner.connectionId })
+          )
+      }
 
-    await vi.advanceTimersByTimeAsync(10)
-    await expect(submitted).resolves.toEqual({ status: 'streaming' })
-    const remote = sockets.filter(socket => socket.url === remoteUrl)
-    expect(remote).toHaveLength(1)
-    expect(remote[0].requests).toEqual([
-      expect.objectContaining({ method: 'prompt.submit', params: expect.objectContaining({ session_id: sessionId }) })
-    ])
-    expect(liveSecondaryConnectionIds()).toEqual(new Set([owner.connectionId]))
-    const started = publish('message.start', {})
-    expect(onEvent).toHaveBeenCalledWith(expect.objectContaining({ ...started, connectionId: owner.connectionId }))
-    onEvent.mockClear()
-
-    if (drop) {
-      remote[0].networkDrop(error)
-      await vi.advanceTimersByTimeAsync(1)
-      expect(remote[0].readyState).toBe(NetworkSocket.CLOSED)
-      // Emitted during the outage: only session.events.since can recover it.
-      publish('message.delta', { text: 'during outage' })
-      // First backoff is deterministic; this also crosses the backoff cap.
-      // No explicit reconnect, request, selection or prewarm rescues the entry.
-      await vi.advanceTimersByTimeAsync(16_000)
-      await vi.dynamicImportSettled()
-      await vi.advanceTimersByTimeAsync(10)
+      const completed = publish('message.complete', { text: 'finished' })
       expect
-        .soft(
-          sockets.filter(socket => socket.url === remoteUrl),
-          'automatic redial'
-        )
-        .toHaveLength(2)
-      expect
-        .soft(liveSecondaryConnectionIds(), 'remote registry route remains live')
-        .toEqual(new Set([owner.connectionId]))
-      expect
-        .soft(onEvent, 'outage notification is replayed')
+        .soft(onEvent, 'live completion reaches the background event fan-in')
         .toHaveBeenCalledWith(
-          expect.objectContaining({ type: 'message.delta', session_id: sessionId, connectionId: owner.connectionId })
+          expect.objectContaining({ ...completed, connectionId: owner.connectionId, profile: owner.profile })
         )
-    }
+      expect(activeGateway()).toBe(primary)
+      expect(activeGatewayProfileKey()).toBe('default')
+      expect(activeGatewayConnectionId()).toBe('local')
+      expect(onActiveRouteChanged).not.toHaveBeenCalled()
+      expect(ambient).not.toHaveBeenCalled()
 
-    const completed = publish('message.complete', { text: 'finished' })
-    expect
-      .soft(onEvent, 'live completion reaches the background event fan-in')
-      .toHaveBeenCalledWith(
-        expect.objectContaining({ ...completed, connectionId: owner.connectionId, profile: owner.profile })
-      )
-    expect(activeGateway()).toBe(primary)
-    expect(activeGatewayProfileKey()).toBe('default')
-    expect(activeGatewayConnectionId()).toBe('local')
-    expect(onActiveRouteChanged).not.toHaveBeenCalled()
-    expect(ambient).not.toHaveBeenCalled()
+      // Normal authoritative settlement still releases an unpinned live turn.
+      publish('session.info', { running: false })
+      await vi.advanceTimersByTimeAsync(501)
 
-    // Normal authoritative settlement still releases an unpinned live turn.
-    publish('session.info', { running: false })
-    await vi.advanceTimersByTimeAsync(501)
-
-    if (!retained) {
-      expect(liveSecondaryConnectionIds()).toEqual(new Set())
-      expect(
-        sockets.filter(socket => socket.url === remoteUrl).every(socket => socket.readyState === NetworkSocket.CLOSED)
-      ).toBe(true)
-    }
-  })
+      if (!retained) {
+        expect(liveSecondaryConnectionIds()).toEqual(new Set())
+        expect(
+          sockets.filter(socket => socket.url === remoteUrl).every(socket => socket.readyState === NetworkSocket.CLOSED)
+        ).toBe(true)
+      }
+    },
+    30_000
+  )
 
   it.each(['close', 'remove', 'prune', 'missing connection'] as const)(
     '%s stops reconnect and releases the old session lease before reuse',
     async cleanup => {
+      if (cleanup === 'prune') {
+        $poolLimits.set({ ...$poolLimits.get(), idleMs: 60_000 })
+      }
+
       const submit = () =>
         requestForSessionProfile(owner, ambient, 'prompt.submit', {
           session_id: sessionId,
@@ -275,7 +285,7 @@ describe('background remote turn reconnect', () => {
       // grace window while it is still healthy so the prune variant
       // exercises the dispose path instead of the grace skip.
       if (cleanup === 'prune') {
-        await vi.advanceTimersByTimeAsync(SECONDARY_MIN_LIFETIME_MS + 1)
+        await vi.advanceTimersByTimeAsync(Math.max(SECONDARY_MIN_LIFETIME_MS, $poolLimits.get().idleMs) + 1)
       }
 
       const original = sockets.find(socket => socket.url === remoteUrl)!

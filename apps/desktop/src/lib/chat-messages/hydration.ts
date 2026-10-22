@@ -1,5 +1,6 @@
 import { skillInvocationText } from '@hermes/shared'
 
+import { formatRefValue } from '@/components/assistant-ui/directive-text'
 import { splitLeadingAttachmentRefs } from '@/components/assistant-ui/reference-kinds'
 import { extractImageRefs } from '@/lib/embedded-images'
 import { parseErrorSurface } from '@/lib/error-surface'
@@ -34,6 +35,26 @@ const ATTACHED_CONTEXT_MARKER_RE = /(?:^|\n)--- Attached Context ---\s*\n/
 const LEGACY_HEARTBEAT_ROW_RE = /^\[Background process \S+ heartbeat #\d+ /
 const CONTEXT_WARNINGS_MARKER_RE = /(?:^|\n)--- Context Warnings ---[\s\S]*$/
 const CONTEXT_REF_RE = /@(file|folder|url|image|tool|terminal):(?:"[^"\n]+"|'[^'\n]+'|`[^`\n]+`|\S+)/g
+
+function persistedRowIds(message: SessionMessage): number[] {
+  const rowId = message.row_id ?? (typeof message.id === 'number' ? message.id : undefined)
+
+  return rowId === undefined ? [] : [rowId]
+}
+
+// Native ingress persists the image-routing hints followed by one placeholder
+// per flattened image part. Recognize that suffix only, not quoted caption prose.
+function persistedImageRefs(text: string) {
+  const suffix = /\n\n((?:\[Image attached(?: at)?: [^\n]+\]\n)+)((?:\[screenshot\](?:\n|$))+)$/.exec(text)
+
+  if (!suffix) { return extractImageRefs(text) }
+  const paths = [...suffix[1].matchAll(/^\[Image attached(?: at)?: (.+)\]$/gm)].map(match => match[1])
+
+  if (paths.length !== suffix[2].split('[screenshot]').length - 1) { return extractImageRefs(text) }
+  const extracted = extractImageRefs(text.slice(0, suffix.index))
+
+  return { cleanedText: extracted.cleanedText, refs: [...extracted.refs, ...paths.map(path => `@image:${formatRefValue(path)}`)] }
+}
 
 // Gateway routing note for Discord turns (gateway/run_inbound.py::discord_triggering_note).
 // Current gateways persist the authored text; this heals rows written before that fix. Only
@@ -191,6 +212,12 @@ function parseDisplayMetadata(metadata: SessionMessage['display_metadata']): nul
   return parsed && typeof parsed === 'object' ? (parsed as Record<string, unknown>) : null
 }
 
+// A micro-compaction merge (`display_metadata.model_only`) is the model's copy of prompts whose originals
+// the history shows: the owner's resume snapshot keeps it as an undo target, and it is never painted.
+function isPainted(message: SessionMessage): boolean {
+  return parseDisplayMetadata(message.display_metadata)?.model_only !== true
+}
+
 // `agent/conversation_loop.py::_failed_turn_display_metadata`: the failed turn's error card,
 // kept on its boundary row so a reopened session shows it after the live frame is gone.
 function failedTurnError(
@@ -321,7 +348,7 @@ function storedReasoningText(message: SessionMessage) {
 }
 
 function liftMessageAttachmentRefs(displayRole: string, rawDisplayContent: string | null) {
-  const imageRefExtraction = displayRole === 'user' && rawDisplayContent ? extractImageRefs(rawDisplayContent) : null
+  const imageRefExtraction = displayRole === 'user' && rawDisplayContent ? persistedImageRefs(rawDisplayContent) : null
   const fileRefExtraction = imageRefExtraction ? splitLeadingAttachmentRefs(imageRefExtraction.cleanedText) : null
   const displayContent = fileRefExtraction ? fileRefExtraction.text : rawDisplayContent
   const liftedRefs = [...(fileRefExtraction?.refs ?? []), ...(imageRefExtraction?.refs ?? [])]
@@ -437,9 +464,12 @@ export function toChatMessages(messages: SessionMessage[]): ChatMessage[] {
   }
 
   messages.forEach((message, index) => {
-    const rowId = message.row_id ?? (typeof message.id === 'number' ? message.id : undefined)
-    const rowIds = rowId === undefined ? [] : [rowId]
+    if (!isPainted(message)) {
+      return
+    }
 
+    const rowIds = persistedRowIds(message)
+    const rowId = rowIds[0]
     if (message.role === 'assistant') {
       nearestAssistant = message
     } else if (message.role === 'user' || message.role === 'system') {

@@ -76,3 +76,12 @@ def _unwrap_data_envelope(response: Any, task: str | None = None) -> Any:
         choices=choices,
         usage=data.get("usage"),
     )
+
+
+def relay_chat_metadata(metadata: dict) -> dict:
+    """Relay metadata for an auxiliary attempt.
+
+    Relay intercepts ``client.chat.completions.create``, so it decodes a chat-completions
+    request even when the adapter speaks Responses or Messages to its provider.
+    """
+    return {**metadata, "api_mode": "chat_completions"}

@@ -15,6 +15,47 @@ _registry = HandlerRegistry()
 _RUNTIME_KEYS = ("model", "provider", "api_key", "base_url", "api_mode")
 
 
+def _append_model_switch_marker(
+    session: dict | None, *, model: str, provider: str,
+    previous_model: str = "", previous_provider: str = "",
+) -> dict | None:
+    """Persist the current model pivot and its before/after display metadata."""
+    session_key = str((session or {}).get("session_key") or "").strip()
+    if not session_key:
+        return None
+    provider_part = f" via provider {provider}" if provider else ""
+    marker = (f"{_MODEL_SWITCH_MARKER_PREFIX}{model}{provider_part}. From this point forward, use this runtime "
+              "metadata when answering questions about what model/provider is active.]")
+    metadata = {"model": model, "provider": provider, "previous_model": previous_model,
+                "previous_provider": previous_provider}
+    timestamp = time.time()
+    entry = {"role": "user", "content": marker, "display_kind": "model_switch",
+             "display_metadata": metadata, "timestamp": timestamp}
+    with session.get("history_lock") or contextlib.nullcontext():
+        history = session.setdefault("history", [])
+        history[:] = [row for row in history if not _is_model_switch_marker(row)]
+        history.append(entry)
+        session["history_version"] = int(session.get("history_version", 0)) + 1
+    try:
+        agent = session.get("agent")
+        db = getattr(agent, "_session_db", None) if agent is not None else None
+        if db is None:
+            _ensure_session_db_row(session)
+        with (contextlib.nullcontext(db) if db is not None else _session_db(session)) as db:
+            if db is not None:
+                from agent.context_compressor import _DB_PERSISTED_MARKER
+                target = _submit_row_target_key(session)
+                db.deactivate_messages_by_display_kind(target, "model_switch")
+                from agent.message_metadata import stamp_message_uid
+                entry["_row_id"] = db.append_message(
+                    session_id=target, role="user", content=marker, display_kind="model_switch",
+                    display_metadata=metadata, timestamp=timestamp, message_uid=stamp_message_uid(entry))
+                entry[_DB_PERSISTED_MARKER] = True
+    except Exception:
+        logger.warning("failed to persist model switch marker", exc_info=True)
+    return entry
+
+
 def _snapshot_agent_model_runtime(agent) -> dict:
     """Capture the current agent model runtime for a one-turn restore."""
     return {**{k: getattr(agent, k, "") for k in _RUNTIME_KEYS},

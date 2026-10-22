@@ -12,8 +12,11 @@ test.beforeAll(async () => {
   const { page } = fixture
   page.on('pageerror', error => rendererErrors.push(error.message))
   page.on('console', message => {
-    if (message.type() === 'error') rendererErrors.push(message.text())
+    if (message.type() === 'error') {
+      rendererErrors.push(message.text())
+    }
   })
+
   expect(
     await page.evaluate(() => (window as Window & { hermesDesktop?: { accountAdapter?: string } }).hermesDesktop?.accountAdapter)
   ).toBe('legacy-development')
@@ -41,7 +44,7 @@ test('offers only brightness modes in appearance and the command palette', async
   await page.reload()
   await waitForAppReady(fixture, 120_000)
   expect(await page.locator('html').evaluate(node => node.style.backgroundColor)).not.toBe('rgb(255, 0, 0)')
-  await page.locator('[data-aino-sidebar]').getByRole('button', { name: 'Open settings', exact: true }).click()
+  await page.getByRole('button', { name: 'Open settings', exact: true }).click()
   await page.getByRole('button', { name: 'Appearance', exact: true }).click()
   await expect(page.getByPlaceholder('Search your themes or the VS Code Marketplace…')).toHaveCount(0)
   await expect(page.getByRole('button', { name: /Catppuccin|Everforest|Solarized/ })).toHaveCount(0)
@@ -55,6 +58,7 @@ test('offers only brightness modes in appearance and the command palette', async
     await expect(control).toHaveAttribute('aria-pressed', 'true')
     await expect(page.locator('html')).toHaveAttribute('data-hermes-mode', mode)
     await expect(page.locator('html')).toHaveAttribute('data-hermes-theme', 'mono')
+
     if (mode === 'dark') {
       await page.screenshot({ path: test.info().outputPath('appearance-modes-dark.png') })
     }
@@ -95,7 +99,7 @@ test('offers only brightness modes in appearance and the command palette', async
   await page.reload()
   await waitForAppReady(fixture, 120_000)
   await expect(page.locator('html')).toHaveAttribute('data-hermes-theme', 'mono')
-  await page.locator('[data-aino-sidebar]').getByRole('button', { name: 'Open settings', exact: true }).click()
+  await page.getByRole('button', { name: 'Open settings', exact: true }).click()
   await page.getByRole('button', { name: 'Appearance', exact: true }).click()
   await page.getByRole('button', { name: 'Switch language', exact: true }).click()
   await page.mouse.move(0, 0)

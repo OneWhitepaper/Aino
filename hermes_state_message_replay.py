@@ -2,7 +2,7 @@
 
 from agent.api_content import decode_api_content
 from agent.context_compressor import _DB_PERSISTED_MARKER as _DB_PERSISTED_MARKER_KEY
-from agent.message_metadata import DB_ROW_SNAPSHOT
+from agent.message_metadata import DB_ROW_SNAPSHOT, lift_data_use
 from hermes_state_common import _json_or
 from hermes_state_identity import _restore_identity_columns
 
@@ -31,6 +31,7 @@ def decode_replay_row(db, row, *, stamp_snapshot, include_row_ids, include_summa
         msg["display_kind"] = row["display_kind"]
     if row["display_metadata"] and (decoded := db._decode_display_metadata(row["display_metadata"])) is not None:
         msg["display_metadata"] = decoded
+        lift_data_use(msg)
     if include_summary_markers and row["_compressed_summary"]:
         msg["_compressed_summary"] = True
     msg.update(

@@ -55,6 +55,8 @@ import {
   transcriptRowIds
 } from './pending-turn-identity'
 
+export { goneSessionVerdict, isSessionGoneError, resolveResumedBusy } from './resume-verdicts'
+
 function withAppendedText(message: ChatMessage, suffix: string): ChatMessage {
   let appended = false
 
@@ -1677,6 +1679,34 @@ export function overlayConcurrentMessageChanges(
     )
   }
 
+  const representedByStoredRow = (current: ChatMessage): boolean => {
+    const rows = transcriptRowIds(current)
+
+    return (
+      rows.length > 0 &&
+      rows.every(id =>
+        overlaid.some(
+          message =>
+            message.id !== current.id && message.role === current.role && transcriptRowIds(message).includes(id)
+        )
+      )
+    )
+  }
+
+  const representedOnPage = (current: ChatMessage): boolean =>
+    // The page can still carry the row's older streaming copy by id when it
+    // was composed from the baseline; the committed row replaces both.
+    (current.role === 'assistant' &&
+      current.pending !== true &&
+      !current.error &&
+      isLiveTailReplyId(current.id) &&
+      committedOnPage(current)) ||
+    // A completion receipt bound this optimistic prompt to its stored row
+    // while REST was in flight, so it differs from the pre-bind baseline only
+    // by that row id. The page already carries the stored row under its own
+    // id: the prompt is represented, not a new concurrent row.
+    (current.role === 'user' && representedByStoredRow(current))
+
   for (const current of currentMessages) {
     const baseline = baselineById.get(current.id)
     const changedSinceBaseline = !baseline || !chatMessagesEquivalent(baseline, current)
@@ -1687,15 +1717,7 @@ export function overlayConcurrentMessageChanges(
 
     const nextIndex = nextIndexById.get(current.id)
 
-    // The page can still carry the row's older streaming copy by id when it
-    // was composed from the baseline; the committed row replaces both.
-    if (
-      current.role === 'assistant' &&
-      current.pending !== true &&
-      !current.error &&
-      isLiveTailReplyId(current.id) &&
-      committedOnPage(current)
-    ) {
+    if (representedOnPage(current)) {
       if (nextIndex !== undefined) {
         dropped.add(current.id)
       }
@@ -2221,11 +2243,6 @@ export async function resolveSessionOwner(storedSessionId: null | string): Promi
 // rotated backend) — the REST transcript 404s with `Session not found`. Distinct
 // from a transient/wedged backend (ECONNREFUSED, timeout), which must still
 // retry rather than discard the id.
-export function isSessionGoneError(err: unknown): boolean {
-  const message = err instanceof Error ? err.message : String(err ?? '')
-
-  return message.includes('404') || /session not found/i.test(message)
-}
 
 /**
  * What to do when a resume's RPC and REST fallback BOTH came back
@@ -2243,16 +2260,6 @@ export function isSessionGoneError(err: unknown): boolean {
  * the resume once the swap settles); `'draft'` is reserved for a session
  * that is verifiably gone in calm conditions.
  */
-export function goneSessionVerdict(options: {
-  /** The session was created by this window in this run — never discard. */
-  createdThisRun: boolean
-  /** A post-failure re-resolve still finds the row on SOME profile. */
-  stillListed: boolean
-  /** A profile swap or connection switch is in flight (or just targeted). */
-  switchInFlight: boolean
-}): 'draft' | 'retry' {
-  return options.createdThisRun || options.stillListed || options.switchInFlight ? 'retry' : 'draft'
-}
 
 /**
  * The busy value a resume/activate response should land with (#70449).
@@ -2270,6 +2277,3 @@ export function goneSessionVerdict(options: {
  * A snapshot that says `running: true` always wins — adopting a live turn is
  * never stale.
  */
-export function resolveResumedBusy(snapshotRunning: boolean | null | undefined, liveBusy: boolean): boolean {
-  return Boolean(snapshotRunning) || liveBusy
-}

@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { $poolLimits } from './pool-limits'
+
 // Cross-connection event/prune scoping: every registered source exposes a
 // 'default' profile (the roster force-unshifts it), so any consumer keyed by
 // the bare profile name conflates two connected gateways' activity. These
@@ -74,8 +76,7 @@ function installDesktop(): void {
     getGatewayWsUrlFor: vi.fn(
       async ({ connectionId, profile }: { connectionId: string; profile: string }) =>
         `wss://${connectionId}.invalid/api/ws?profile=${profile}`
-    ),
-    touchBackend: vi.fn(async () => undefined)
+    )
   }
 }
 
@@ -149,10 +150,10 @@ describe('primary gateway registry scope', () => {
 
 describe('pruneSecondaryGateways with registry-scoped entries', () => {
   // The min-lifetime grace (#94769) spares a freshly opened idle socket for
-  // one prune tick, so reclamation assertions age the socket past the grace
-  // window first; spare assertions are unaffected by aging.
+  // one prune tick. Reclamation assertions age the socket past both the grace
+  // window and the configured idle deadline; spare assertions are unaffected.
   const pruneAged = (keep?: Set<string>) => {
-    vi.useFakeTimers({ now: Date.now() + SECONDARY_MIN_LIFETIME_MS + 1_000 })
+    vi.useFakeTimers({ now: Date.now() + Math.max(SECONDARY_MIN_LIFETIME_MS, $poolLimits.get().idleMs) + 1_000 })
     pruneSecondaryGateways(keep ?? new Set())
     vi.useRealTimers()
   }

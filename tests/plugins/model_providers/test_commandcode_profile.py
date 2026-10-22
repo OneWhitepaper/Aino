@@ -148,10 +148,11 @@ class TestCommandCodeFetchModelsPickerContract:
         "Unknown provider" on /model switches even though the picker listed
         them.
         """
-        from hermes_cli.providers import resolve_provider_full
+        from hermes_cli.providers import HERMES_OVERLAYS, resolve_provider_full
 
-        # Exercise the plugin-only fallback even when the external catalog adds this provider.
+        # Isolate the plugin fallback from catalog and built-in credential overlays.
         monkeypatch.setattr("agent.models_dev.get_provider_info", lambda *_a, **_kw: None)
+        monkeypatch.delitem(HERMES_OVERLAYS, "commandcode", raising=False)
         chat = resolve_provider_full("commandcode", {}, [])
         assert chat is not None and chat.id == "commandcode"
         assert chat.transport == "openai_chat"

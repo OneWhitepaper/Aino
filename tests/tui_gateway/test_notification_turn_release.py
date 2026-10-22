@@ -207,7 +207,8 @@ def test_a_completion_batch_that_cannot_be_prepared_hands_the_turn_back(monkeypa
     session = {"history_lock": threading.RLock(), "running": False, "history": []}
 
     server._notif_dispatch_completions("sid", session, [(e, "t") for e in events],
-                                       SimpleNamespace(completion_queue=queue.Queue()), None)
+                                       SimpleNamespace(completion_queue=queue.Queue(),
+                                                       is_completion_consumed=lambda _: False), None)
 
     assert session["running"] is False and started == []
     # Claims already taken go back too, or those completions are lost to every consumer for 300 s.
@@ -280,8 +281,7 @@ def test_the_poller_thread_survives_a_dispatch_that_raises(monkeypatch):
     events.put({"type": "completion", "session_id": "proc_a"})
     monkeypatch.setattr("tools.process_registry.process_registry",
                         SimpleNamespace(completion_queue=events, restore_completions=lambda: 0))
-    for name in ("_poll_bot_live_delivery_guarded", "_maybe_fire_tui_loop_tick",
-                 "_maybe_fire_tui_heartbeat_tick", "_notif_poll_kanban"):
+    for name in ("_maybe_fire_tui_loop_tick", "_maybe_fire_tui_heartbeat_tick", "_notif_poll_kanban"):
         monkeypatch.setattr(server, name, lambda *a, **k: None)
     stop = threading.Event()
     handled: list = []
@@ -346,7 +346,7 @@ os._exit(0)
     events = queue.Queue()
     monkeypatch.setattr(process_registry, "completion_queue", events)
     monkeypatch.setattr(server, "_emit", lambda *a, **k: None)
-    for name in ("_poll_bot_live_delivery_guarded", "_maybe_fire_tui_loop_tick", "_maybe_fire_tui_heartbeat_tick"):
+    for name in ("_maybe_fire_tui_loop_tick", "_maybe_fire_tui_heartbeat_tick"):
         monkeypatch.setattr(server, name, lambda *a, **k: None)
     # Exercise the real poller on every pass without waiting for its scheduling interval.
     monkeypatch.setattr(ad, "ORPHAN_SWEEP_INTERVAL_S", 0.0, raising=False)

@@ -289,6 +289,7 @@ describe('watchDeadSessionPrune', () => {
 
   it('clamps the debounce so list churn cannot starve the sweep', async () => {
     vi.useFakeTimers()
+    const schedule = vi.spyOn(globalThis, 'setTimeout')
     const unsubscribe = watchDeadSessionPrune()
 
     try {
@@ -301,7 +302,8 @@ describe('watchDeadSessionPrune', () => {
       $sessions.set([row('a')])
       vi.advanceTimersByTime(1_000)
       $sessions.set([row('a'), row('b')])
-      expect(vi.getTimerCount()).toBe(1)
+      expect(schedule.mock.calls.filter(([, delay]) => delay === 2_000)).toHaveLength(1)
+      expect(schedule.mock.calls.filter(([, delay]) => delay === 5_000)).toHaveLength(0)
 
       vi.advanceTimersByTime(1_000)
       await vi.runOnlyPendingTimersAsync()
@@ -310,6 +312,7 @@ describe('watchDeadSessionPrune', () => {
       expect(vi.getTimerCount()).toBe(0)
     } finally {
       unsubscribe()
+      schedule.mockRestore()
       vi.useRealTimers()
     }
   })

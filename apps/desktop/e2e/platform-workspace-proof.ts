@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process'
 import * as fs from 'node:fs'
 import * as path from 'node:path'
 
@@ -13,11 +14,10 @@ interface WorkspaceWindow {
   }
 }
 
-interface BackendIdentity {
-  nonce: string
+interface GatewayIdentity {
   pid: number
-  profile: string
-  startMarker: string
+  home: string
+  startTime: number
 }
 
 interface BackendClaimModule {
@@ -26,6 +26,26 @@ interface BackendClaimModule {
 
 const BACKEND_CLAIM_MODULE_PATH = '../electron/backend-claim.ts'
 const MARKER_ENV_KEYS = ['TZ', 'LANG', 'LC_ALL'] as const
+const REPO_ROOT = path.resolve(import.meta.dirname, '../../..')
+
+const GATEWAY_IDENTITY_SCRIPT = `import json, pathlib, sys
+from gateway.status import get_process_start_time, get_running_pid_identity_strict, read_runtime_status
+home = pathlib.Path(sys.argv[1]).resolve()
+identity = get_running_pid_identity_strict(home / 'gateway.pid')
+record = read_runtime_status(home / 'gateway_state.json')
+if identity is None:
+    print('null')
+    sys.exit(0)
+if not isinstance(record, dict):
+    raise RuntimeError('sandbox gateway has no runtime status')
+pid, _ = identity
+start = get_process_start_time(pid)
+if (record.get('pid') != pid or record.get('start_time') != start
+        or pathlib.Path(record.get('hermes_home', '')).resolve() != home):
+    raise RuntimeError('sandbox gateway status does not match the live owner')
+print(json.dumps({'pid': pid, 'startTime': start, 'home': str(home)}))
+`
+
 let backendClaimModule: Promise<BackendClaimModule> | null = null
 
 export const PLATFORM_WORKSPACE = 'fixture-workspace'
@@ -38,8 +58,8 @@ export function seedPlatformWorkspace(sandbox: Sandbox) {
 }
 
 async function openWorkspaceRail(page: Page) {
-  await page.evaluate(() => { window.location.hash = '/settings?tab=account' })
-  const settings = page.locator('[data-settings-workspace]')
+  await page.evaluate(() => { window.location.hash = '/profiles' })
+  const settings = page.locator('[data-workspaces-page]')
   const advanced = settings.getByRole('button', { name: 'Advanced workspaces', exact: true })
 
   await expect(advanced).toBeVisible()
@@ -57,27 +77,45 @@ async function openWorkspaceRail(page: Page) {
   return rail
 }
 
-function readBackendIdentity(sandbox: Sandbox, profile: string): BackendIdentity {
-  const ownershipPath = path.join(sandbox.userDataDir, 'backend-ownership.json')
-  const ownership = JSON.parse(fs.readFileSync(ownershipPath, 'utf8')) as { backends?: unknown[] }
-
-  const candidate = ownership.backends?.find(entry => (
-    typeof entry === 'object' && entry !== null && 'profile' in entry && entry.profile === profile
-  ))
-
-  expect(candidate, `backend ownership for ${profile}`).toBeDefined()
-
-  if (!isBackendIdentity(candidate)) {
-    throw new Error(`Backend ownership for ${profile} did not contain a complete process identity.`)
-  }
-
-  return candidate
+function gatewayEnvironment(sandbox: Sandbox): Record<string, string> {
+  return { ...fixtureEnvironment(), HOME: sandbox.root, HERMES_HOME: sandbox.hermesHome,
+    PYTHONPATH: path.join(sandbox.root, 'python-network-guard') }
 }
 
-async function expectLiveBackend(identity: BackendIdentity) {
-  const actual = await processStartMarkerWithEnvironment(identity.pid, fixtureEnvironment())
+function gatewayPython(): string {
+  return process.env.HERMES_DESKTOP_PYTHON || path.join(REPO_ROOT, '.venv', 'bin', 'python')
+}
 
-  expect(actual).toBe(identity.startMarker)
+function inspectGatewayIdentity(sandbox: Sandbox): GatewayIdentity | null {
+  const output = execFileSync(gatewayPython(), ['-c', GATEWAY_IDENTITY_SCRIPT, sandbox.hermesHome], {
+    cwd: REPO_ROOT, env: gatewayEnvironment(sandbox), encoding: 'utf8', timeout: 30_000
+  })
+
+  const identity = JSON.parse(output) as GatewayIdentity | null
+
+  if (identity === null) {return null}
+  expect(identity.pid).toBeGreaterThan(0)
+  expect(identity.startTime).toBeGreaterThan(0)
+  expect(identity.home).toBe(fs.realpathSync(sandbox.hermesHome))
+
+  return identity
+}
+
+function readGatewayIdentity(sandbox: Sandbox): GatewayIdentity {
+  const identity = inspectGatewayIdentity(sandbox)
+
+  expect(identity, 'sandbox gateway is running').not.toBeNull()
+
+  return identity!
+}
+
+export function stopFixtureGateway(sandbox: Sandbox): void {
+  if (!fs.existsSync(path.join(sandbox.hermesHome, 'gateway.pid'))) {return}
+
+  if (inspectGatewayIdentity(sandbox) === null) {return}
+  execFileSync(gatewayPython(), ['-m', 'hermes_cli.main', 'gateway', 'stop', '--yes'], {
+    cwd: REPO_ROOT, env: gatewayEnvironment(sandbox), encoding: 'utf8', timeout: 90_000
+  })
 }
 
 export async function processStartMarkerWithEnvironment(pid: number, environment: Record<string, string>) {
@@ -106,25 +144,6 @@ export async function processStartMarkerWithEnvironment(pid: number, environment
   }
 }
 
-function isBackendIdentity(value: unknown): value is BackendIdentity {
-  if (typeof value !== 'object' || value === null) {
-    return false
-  }
-
-  const candidate = value as Partial<BackendIdentity>
-
-  return (
-    Number.isInteger(candidate.pid) &&
-    Number(candidate.pid) > 0 &&
-    typeof candidate.profile === 'string' &&
-    candidate.profile.length > 0 &&
-    typeof candidate.nonce === 'string' &&
-    candidate.nonce.length > 0 &&
-    typeof candidate.startMarker === 'string' &&
-    candidate.startMarker.length > 0
-  )
-}
-
 function guardPids(home: string): number[] {
   return fs
     .readFileSync(path.join(home, 'python-network-guard-active'), 'utf8')
@@ -143,10 +162,9 @@ export async function verifyPlatformWorkspace(
 ) {
   const { page } = launched
   const before = await api.control<NativeState>('state')
-  const defaultBackend = readBackendIdentity(sandbox, 'default')
+  const gatewayOwner = readGatewayIdentity(sandbox)
 
-  await expectLiveBackend(defaultBackend)
-  expect(guardPids(sandbox.hermesHome)).toContain(defaultBackend.pid)
+  expect(guardPids(sandbox.hermesHome)).toContain(gatewayOwner.pid)
 
   let rail = await openWorkspaceRail(page)
   await rail.getByRole('button', { name: PLATFORM_WORKSPACE, exact: true }).click()
@@ -169,12 +187,11 @@ export async function verifyPlatformWorkspace(
   expect(current.wallet.balance).toBe(before.balance)
 
   const profileHome = path.join(sandbox.hermesHome, 'profiles', PLATFORM_WORKSPACE)
-  const backend = readBackendIdentity(sandbox, PLATFORM_WORKSPACE)
+  const workspaceOwner = readGatewayIdentity(sandbox)
 
-  await expectLiveBackend(backend)
-  expect(backend.pid).not.toBe(defaultBackend.pid)
-  expect(backend.nonce).not.toBe(defaultBackend.nonce)
-  expect(guardPids(sandbox.hermesHome)).toContain(backend.pid)
+  expect(workspaceOwner).toEqual(gatewayOwner)
+  expect(guardPids(sandbox.hermesHome)).toContain(workspaceOwner.pid)
+  expect(fs.existsSync(path.join(profileHome, 'gateway.pid'))).toBe(false)
   expect(fs.readFileSync(path.join(profileHome, 'config.yaml'), 'utf8')).not.toContain('api_key')
 
   await page.locator('[data-tour="model-pill"]').first().click()
@@ -237,5 +254,5 @@ export async function verifyPlatformWorkspace(
   expect(mainAfterShow.account.account?.id).toBe(accountID)
   expect(mainAfterShow.wallet.balance).toBe(after.balance)
 
-  return { profile: PLATFORM_WORKSPACE, account_id: accountID, distinct_guarded_backend: true, peer_account_matches: true, peer_wallet_matches: true, peerAudit, hide_show_preserves_account: true, hide_show_preserves_wallet: true, before, after }
+  return { profile: PLATFORM_WORKSPACE, account_id: accountID, canonical_owner_verified: true, profile_scope_verified: true, peer_account_matches: true, peer_wallet_matches: true, peerAudit, hide_show_preserves_account: true, hide_show_preserves_wallet: true, before, after }
 }

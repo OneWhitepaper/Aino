@@ -75,6 +75,8 @@ export interface Secondary {
    * remount loop (#94769). 0 = never opened.
    */
   lastOpenedAt: number
+  /** Last routed activity, used to expire an otherwise idle secondary socket. */
+  lastActivityAt: number
   /** Date.now() of the CURRENT socket's 'open'; null while not open. Stability
    *  clock for the backoff reset (#83134) — `lastOpenedAt` persists across
    *  closes and would make every failed redial look like a stable session. */

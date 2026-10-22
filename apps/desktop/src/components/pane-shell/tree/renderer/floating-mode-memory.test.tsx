@@ -1,16 +1,27 @@
 import { act, cleanup, fireEvent, render } from '@testing-library/react'
-import { afterEach, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
+
+import type { registry as registryValue } from '@/contrib/registry'
+import type { setInterfaceMode as setInterfaceModeValue } from '@/store/interface-mode'
+
+import type { FloatingPanes as FloatingPanesValue } from './floating-panes'
 
 afterEach(cleanup)
 
-it.each([false, true])('restores floating geometry and collapse with keep-alive=%s', async keepAlive => {
+let registry: typeof registryValue
+let setInterfaceMode: typeof setInterfaceModeValue
+let FloatingPanes: typeof FloatingPanesValue
+
+beforeEach(async () => {
   window.localStorage.clear()
   vi.resetModules()
   window.localStorage.setItem('hermes.desktop.floatingPanes.v1', JSON.stringify({ card: { x: 37, y: 71 } }))
-  const { registry } = await import('@/contrib/registry')
-  const { setInterfaceMode } = await import('@/store/interface-mode')
-  const { FloatingPanes } = await import('./floating-panes')
+  registry = (await import('@/contrib/registry')).registry
+  setInterfaceMode = (await import('@/store/interface-mode')).setInterfaceMode
+  FloatingPanes = (await import('./floating-panes')).FloatingPanes
+})
 
+it.each([false, true])('restores floating geometry and collapse with keep-alive=%s', keepAlive => {
   const dispose = registry.register({
     area: 'panes',
     id: 'card',

@@ -197,6 +197,9 @@ class TestFamilyRouting:
         captured = {"endpoint": None, "arguments": None}
 
         class FakeHandle:
+            def iter_events(self, **_):
+                return iter(())
+
             def get(self):
                 return {"video": {"url": "https://fake/out.mp4"}}
 
@@ -540,6 +543,9 @@ class TestUpscalePass:
         captured = {"calls": []}
 
         class FakeHandle:
+            def iter_events(self, **_):
+                return iter(())
+
             def __init__(self, endpoint):
                 self._endpoint = endpoint
 
@@ -613,6 +619,9 @@ class TestUpscalePass:
         captured = {}
 
         class FakeHandle:
+            def iter_events(self, **_):
+                return iter(())
+
             def get(self):
                 return {"video": {"url": "https://fake/upscaled.mp4"}}
 

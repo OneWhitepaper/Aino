@@ -11,6 +11,7 @@ import { recordNativeInputs } from './prepared-native-deps.mjs'
 import { createRequire } from 'node:module'
 const builderEntry = createRequire(import.meta.url).resolve('electron-builder')
 const { configureBuildCommand, createYargs, normalizeOptions } = await import(new URL('./builder.js', 'file://' + builderEntry).href)
+import { productOutput } from '../../../scripts/build/frontend-common.mjs'
 
 test('validate-only admits real prepared inputs without launching tools and rejects unsafe arguments', async () => {
   const source = path.resolve(import.meta.dirname, '../../..')
@@ -70,6 +71,13 @@ test('source multiarch prepares isolated native and packaging inputs before each
   }
   assert.equal(calls.length, 6)
   assert.notEqual(calls[0][calls[0].indexOf('--out') + 1], calls[3][calls[3].indexOf('--out') + 1])
+  // Each per-target native dir is one stage-native-deps.mjs may publish: its product guard admits
+  // only generated homes in the tree (an arch flag on a source build failed there before staging).
+  const source = path.resolve(import.meta.dirname, '../../..')
+  for (const call of calls.filter(args => args[0].endsWith('stage-native-deps.mjs'))) {
+    const out = call[call.indexOf('--out') + 1]
+    assert.doesNotThrow(() => productOutput(source, out, ['node_modules', 'apps/desktop/node_modules', 'apps/desktop/src', 'apps/desktop/electron']), out)
+  }
   calls.length = 0
   assert.equal(runElectronBuilder(['--dir'], { spawn }), 0)
   assert.equal(calls.filter(args => args[0].endsWith('prepare-packaging-tools.mjs')).length, 1)

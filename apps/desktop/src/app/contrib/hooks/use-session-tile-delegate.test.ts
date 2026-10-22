@@ -7,11 +7,16 @@ import type * as HermesModule from '@/hermes'
 import { setRuntimeI18nLocale } from '@/i18n/runtime'
 import { textPart } from '@/lib/chat-messages'
 import { createClientSessionState } from '@/lib/chat-runtime'
+import { clearSessionDraft, stashSessionDraft, takeSessionDraft } from '@/store/composer'
 import { $notifications } from '@/store/notifications'
 import { $cronRunReadOnlyVerdicts, recordCronRunVerdict } from '@/store/read-only-transcript'
-import { setSessionOwnerHint, setSessions } from '@/store/session'
+import { $activeSessionId, setSessionOwnerHint, setSessions } from '@/store/session'
 import { $sessionTiles, sessionTileDelegate } from '@/store/session-states'
 import type { SessionInfo } from '@/types/hermes'
+
+import {
+  clearSingleFlightSessionResumeState
+} from '../../session/hooks/use-prompt-actions/single-flight-resume'
 
 import { useSessionTileDelegate } from './use-session-tile-delegate'
 
@@ -74,12 +79,14 @@ function renderTile(
 describe('useSessionTileDelegate resumeTile', () => {
   beforeEach(() => {
     setRuntimeI18nLocale('zh')
+    clearSingleFlightSessionResumeState()
     setSessions([])
     vi.mocked(getLatestSessionMessages).mockClear()
   })
 
   afterEach(() => {
     setRuntimeI18nLocale('en')
+    clearSingleFlightSessionResumeState()
     setSessions([])
   })
 
@@ -204,6 +211,68 @@ describe('useSessionTileDelegate resumeTile', () => {
     expect(runtimeId).toBe('runtime-a')
     expect(requestGateway).not.toHaveBeenCalled()
     expect(getLatestSessionMessages).not.toHaveBeenCalled()
+  })
+
+  it('forces an owner-routed message snapshot into a warm tile without touching foreground state', async () => {
+    const ownerRoute = { connectionId: 'remote-tile', profile: 'tile-profile', targetProfile: 'backend-tile' }
+
+    const pending = {
+      id: 'user-pending',
+      parts: [{ type: 'text', text: 'local pending prompt' }],
+      pending: true,
+      role: 'user'
+    }
+
+    const warm = { busy: false, messages: [pending], storedSessionId: 'stored-tile' }
+    const runtimeIdByStoredSessionIdRef = { current: new Map([['stored-tile', 'runtime-tile']]) }
+    const states = { current: new Map([['runtime-tile', warm]]) }
+
+    const update = vi.fn((id, updater) => {
+      const next = updater(states.current.get(id))
+      states.current.set(id, next)
+
+      return next
+    })
+
+    $activeSessionId.set('runtime-foreground')
+    $sessionTiles.set([{ ownerRoute, runtimeId: 'runtime-tile', storedSessionId: 'stored-tile' }] as never)
+    stashSessionDraft('stored-tile', 'unsent tile draft', [])
+    vi.mocked(requestGatewayForAgent).mockResolvedValueOnce({
+      info: { model: 'snapshot-model' },
+      message_count: 2,
+      messages: [
+        { content: 'new prompt', role: 'user', timestamp: 1 },
+        { content: 'new answer', role: 'assistant', timestamp: 2 }
+      ],
+      resumed: 'stored-tile',
+      running: true,
+      session_id: 'runtime-tile'
+    } as never)
+
+    renderTile(vi.fn(), {
+      runtimeIdByStoredSessionIdRef,
+      sessionStateByRuntimeIdRef: states,
+      updateSessionState: update
+    })
+
+    await sessionTileDelegate()!.resumeTile('stored-tile', { authoritativeSnapshot: true })
+
+    expect(requestGatewayForAgent).toHaveBeenCalledWith('remote-tile', 'tile-profile', 'session.resume', {
+      cols: 96,
+      omit_messages: false,
+      profile: 'backend-tile',
+      session_id: 'stored-tile'
+    })
+    expect(getLatestSessionMessages).not.toHaveBeenCalled()
+    expect(states.current.get('runtime-tile')).toMatchObject({ busy: true, model: 'snapshot-model' })
+    expect(JSON.stringify(states.current.get('runtime-tile')?.messages)).toContain('new answer')
+    expect(states.current.get('runtime-tile')?.messages).toContainEqual(pending)
+    expect($activeSessionId.get()).toBe('runtime-foreground')
+    expect(takeSessionDraft('stored-tile').text).toBe('unsent tile draft')
+
+    clearSessionDraft('stored-tile')
+    $activeSessionId.set(null)
+    $sessionTiles.set([])
   })
 
   it('merges persisted messages into a warm tile on explicit reopen (#96183)', async () => {
@@ -516,13 +585,13 @@ describe('useSessionTileDelegate resumeTile', () => {
     )
   })
 
-  it('hydrates the tile model and provider from resume info', async () => {
+  it('hydrates the tile workspace, model and provider from resume info', async () => {
     setSessions([row({ id: 'stored-model', profile: 'default' })])
 
     const updateSessionState = vi.fn()
 
     vi.mocked(requestGatewayForProfile).mockResolvedValueOnce({
-      info: { fast: true, model: 'gpt-5', provider: 'openai', reasoning_effort: 'high', running: false },
+      info: { cwd: '/repo/.worktrees/restored', fast: true, model: 'gpt-5', provider: 'openai', reasoning_effort: 'high', running: false },
       session_id: 'runtime-model'
     } as never)
 
@@ -536,6 +605,7 @@ describe('useSessionTileDelegate resumeTile', () => {
     const next = updater({ messages: [] })
 
     expect(next.model).toBe('gpt-5')
+    expect(next.cwd).toBe('/repo/.worktrees/restored')
     expect(next.provider).toBe('openai')
     expect(next.reasoningEffort).toBe('high')
     expect(next.reasoningEffortPending).toBe(false)

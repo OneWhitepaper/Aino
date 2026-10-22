@@ -9,11 +9,9 @@ system prompt, tools, reasoning field and every replayed row stay byte-identical
 from __future__ import annotations
 
 import json
-import os
 import threading
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from types import SimpleNamespace
-from unittest.mock import patch
 
 import pytest
 
@@ -99,20 +97,17 @@ def _seed_unanswered_turn(db, session_id, question, *, note, recorded):
 
 
 def _retry_unanswered_turn(url, effort, db, session_id, question):
-    """Re-run a failed delivery turn through the quiet-CLI dispatcher lane: the env-gated adoption
-    helper re-stages the persisted tail row as this turn's user message, then the real agent runs.
-    History is loaded exactly as that lane loads it — ``cli_agent_setup_mixin._load_resumed_history_late``
-    (and ``api_server._conversation_history_for_session``, minus the alternation repair) reads the
-    transcript WITHOUT row ids, so the retry cannot assume an addressed row."""
-    from hermes_cli.quiet_single_query import adopt_unanswered_turn as adopt_quiet_turn
-    from tools.bot_relay import RESUME_UNANSWERED_TURN_ENV
+    """Adopt the unanswered row through the gateway's shared persistence helper.
+
+    The canonical gateway now owns quiet turns too. Load without row ids to
+    exercise the same durable-address recovery needed by older transcripts.
+    """
+    from agent.session_persistence import adopt_unanswered_turn
 
     agent = _agent(url, dict(effort), session_db=db, session_id=session_id)
     history = db.get_messages_as_conversation(session_id, repair_alternation=True)
-    cli = SimpleNamespace(conversation_history=history, agent=agent)
-    with patch.dict(os.environ, {RESUME_UNANSWERED_TURN_ENV: "1"}):
-        assert adopt_quiet_turn(cli, question) is True
-    return agent.run_conversation(question, conversation_history=cli.conversation_history)
+    assert adopt_unanswered_turn(history, question, agent) is True
+    return agent.run_conversation(question, conversation_history=history)
 
 
 def _chat_requests():

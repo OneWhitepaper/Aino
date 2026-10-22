@@ -3,7 +3,6 @@ import { useEffect } from 'react'
 import { vi } from 'vitest'
 
 import { createClientSessionState } from '@/lib/chat-runtime'
-import { type SessionProfileRoute } from '@/store/session-request-router'
 
 import type { ClientSessionState } from '../../types'
 
@@ -24,9 +23,7 @@ export function ResumeHarness({
   getRouteToken?: () => string
   onStateUpdate?: (sessionId: string, state: ClientSessionState) => void
   onViewSync?: (sessionId: string, state: ClientSessionState) => void
-  onReady: (
-    resume: (storedSessionId: string, replaceRoute?: boolean, ownerRoute?: SessionProfileRoute) => Promise<unknown>
-  ) => void
+  onReady: (resume: ReturnType<typeof useSessionActions>['resumeSession']) => void
   requestGateway: <T>(method: string, params?: Record<string, unknown>) => Promise<T>
   runtimeIdByStoredSessionIdRef?: MutableRefObject<Map<string, string>>
   selectedStoredSessionId?: string | null
