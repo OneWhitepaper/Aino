@@ -45,6 +45,16 @@ async def test_managed_create_binding_and_cold_resume_require_a_fresh_lease(tmp_
                             submission_id='unbound')
         assert denied['error']['data']['reason'] == 'awaiting_managed_credentials'
 
+        reader = AuthorityConnection(authority, Peer(), {
+            'user_id': 'owner', 'provider': 'local', 'capabilities': ['session:read']})
+        try:
+            resumed = await call(reader, 'session.resume', session_id=sid)
+            assert 'result' in resumed, resumed
+            denied = await call(reader, 'prompt.submit', session_id=sid, submission_id='read-only')
+            assert denied['error']['data']['reason'] == 'permission_denied', denied
+        finally:
+            await reader.close()
+
         ticket = await call(viewer, 'session.managed_model_ticket', session_id=sid,
                             owner=owner, model_id='catalog-a')
         assert 'result' in ticket, ticket

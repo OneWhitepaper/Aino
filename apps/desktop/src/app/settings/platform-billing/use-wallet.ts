@@ -11,7 +11,16 @@ import type {
   PlatformWalletSummary
 } from '../../../../shared/platform-contract'
 
+import { paymentErrorCode } from './use-order-status'
+
 const unavailable = atom<PlatformAccountSnapshot | null>(null)
+
+const retiredScopeErrors = new Set([
+  'platform_account_changed',
+  'auth_attempt_superseded',
+  'authentication_required',
+  'logout_in_progress'
+])
 
 interface WalletResult {
   key: string
@@ -98,23 +107,23 @@ export function useWallet() {
           setResult({ key, wallet, error: null, loading: false, scope })
         }
       } catch (error) {
-        const code =
-          error && typeof error === 'object' && 'code' in error && typeof error.code === 'string'
-            ? error.code
-            : 'network_error'
+        const code = paymentErrorCode(error)
 
         // Scope validation is local. A failed network read can keep data only while
         // this exact login still owns it (including same-user reauthentication).
         let scope: PlatformBillingScope | null = null
+        let retired = false
 
         try {
           const current = await bridge.scope(input)
 
           if (activeScope && samePlatformBillingScope(activeScope, current)) {
             scope = current
+          } else if (activeScope) {
+            retired = true
           }
-        } catch {
-          /* No billing authority remains. */
+        } catch (scopeError) {
+          retired = retiredScopeErrors.has(paymentErrorCode(scopeError))
         }
 
         if (alive && revision === authorityRevision) {
@@ -125,7 +134,7 @@ export function useWallet() {
           setResult(previous => ({
             key,
             wallet: scope && previous.key === key ? previous.wallet : null,
-            error: code,
+            error: retired ? null : code,
             loading: false,
             scope
           }))
@@ -166,7 +175,7 @@ export function useWallet() {
           setResult({ key, wallet: null, error: null, loading: true, scope: null })
           setRefresh(value => value + 1)
         })
-        .catch(() => {
+        .catch(error => {
           if (!alive || validation !== scopeValidation) {
             return
           }
@@ -177,7 +186,14 @@ export function useWallet() {
             queryClient.removeQueries({ queryKey: platformBillingQueryKey(captured) })
           }
 
-          setResult({ key, wallet: null, error: 'platform_account_changed', loading: false, scope: null })
+          const code = paymentErrorCode(error)
+          setResult({
+            key,
+            wallet: null,
+            error: retiredScopeErrors.has(code) ? null : code,
+            loading: false,
+            scope: null
+          })
         })
     })
 

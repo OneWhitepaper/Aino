@@ -143,6 +143,7 @@ it('retires cached billing data on logout while unmounted and rejects a changed 
     user_id: '17',
     generation
   }))
+
   window.hermesDesktop = {
     platformAccount: account,
     platformBilling: { summary, scope }
@@ -191,6 +192,123 @@ it('retires cached billing data on logout while unmounted and rejects a changed 
   expect(screen.queryByText('33 USD')).toBeNull()
   await act(async () => resolveWallet({ ...wallet, balance: '44', available_balance: '44' }))
   expect(await screen.findByText('44 USD')).toBeTruthy()
+})
+
+it.each(['platform_account_changed', 'logout_in_progress', 'authentication_required', 'network_error'])(
+  'clears an unavailable wallet scope and preserves genuine errors (%s)',
+  async code => {
+    const account = { onChanged: () => () => {} } as unknown as PlatformAccountBridge
+    const snapshot = platformAccountActions(account).snapshot
+
+    const signedIn = {
+      revision: 1,
+      phase: 'signed_in' as const,
+      account: { id: '17', display_name: 'Fixture', phone_masked: '', email: '' },
+      mode: 'development' as const,
+      remember_state: 'session_only' as const,
+      error: null
+    }
+
+    snapshot.set(signedIn)
+    let generation = 1
+
+    const scope = vi.fn(async (): Promise<PlatformBillingScope> => {
+      if (generation !== 1) {
+        throw Object.assign(new Error(code), { code })
+      }
+
+      return { origin: 'https://billing.example', user_id: '17', generation }
+    })
+
+    window.hermesDesktop = {
+      platformAccount: account,
+      platformBilling: {
+        scope,
+        summary: async () => ({
+          currency: 'USD',
+          balance: '17',
+          available_balance: '17',
+          frozen_balance: '0',
+          payment_enabled: false,
+          active_subscriptions: [],
+          updated_at: '2026-09-16T00:00:00Z'
+        })
+      }
+    } as unknown as typeof original
+    render(
+      <I18nProvider configClient={null} initialLocale="en">
+        <PlatformWallet />
+      </I18nProvider>
+    )
+    await screen.findByText('17 USD')
+
+    generation = 2
+    await act(async () => snapshot.set({ ...signedIn, revision: 2 }))
+    await waitFor(() => expect(screen.queryByText('17 USD')).toBeNull())
+
+    if (code === 'network_error') {
+      expect(screen.getByRole('alert')).toBeTruthy()
+    } else {
+      expect(screen.queryByRole('alert')).toBeNull()
+    }
+  }
+)
+
+it('discards an in-flight wallet response when its login generation retires before the account event', async () => {
+  const account = { onChanged: () => () => {} } as unknown as PlatformAccountBridge
+  platformAccountActions(account).snapshot.set({
+    revision: 1,
+    phase: 'signed_in',
+    account: { id: '17', display_name: 'Fixture', phone_masked: '', email: '' },
+    mode: 'development',
+    remember_state: 'session_only',
+    error: null
+  })
+
+  const wallet: PlatformWalletSummary = {
+    currency: 'USD',
+    balance: '17',
+    available_balance: '17',
+    frozen_balance: '0',
+    payment_enabled: false,
+    active_subscriptions: [],
+    updated_at: '2026-09-16T00:00:00Z'
+  }
+
+  let release!: (value: PlatformWalletSummary) => void
+  let generation = 1
+
+  const summary = vi
+    .fn()
+    .mockResolvedValueOnce(wallet)
+    .mockImplementationOnce(
+      () =>
+        new Promise<PlatformWalletSummary>(resolve => {
+          release = resolve
+        })
+    )
+
+  window.hermesDesktop = {
+    platformAccount: account,
+    platformBilling: {
+      scope: async () => ({ origin: 'https://billing.example', user_id: '17', generation }),
+      summary
+    }
+  } as unknown as typeof original
+  render(
+    <I18nProvider configClient={null} initialLocale="en">
+      <PlatformWallet />
+    </I18nProvider>
+  )
+  await screen.findByText('17 USD')
+  fireEvent.click(screen.getByRole('button', { name: 'Refresh' }))
+  await waitFor(() => expect(release).toBeTypeOf('function'))
+  generation = 2
+  await act(async () => release({ ...wallet, balance: '22', available_balance: '22' }))
+  await waitFor(() => expect(screen.queryByText('17 USD')).toBeNull())
+  expect(screen.queryByText('22 USD')).toBeNull()
+  expect(screen.queryByRole('alert')).toBeNull()
+  expect(queryClient.getQueriesData({ queryKey: ['billing', 'platform'] })).toHaveLength(0)
 })
 
 it('does not reopen a prior account recharge dialog for the next signed-in account', async () => {

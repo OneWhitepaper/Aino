@@ -45,7 +45,8 @@ jobs:
 
   pinned-source-validate:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    # Release imports validate hundreds of pinned entries through the same gates.
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@f548e57e544e1ff5a4c46bf1e1b8685f8e4a348a # v7.0.1
         with:

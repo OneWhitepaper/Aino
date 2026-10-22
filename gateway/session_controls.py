@@ -702,16 +702,18 @@ class AuthorityConnection:
         if self._voice_stop_replay(ref, params) or await self._typed_voice_stop(ref, params):
             self._record_voice_stop(ref, params)
             return {'voice_stopped': True}
+        request = self.submission(ref, params)
+        self.authority.authorize(self.actor, ref, 'session:submit')
         from gateway.session_platform_model import binding_key, selection_for_policy, managed_state
         from gateway.session_policy import policy_for_source
         from tui_gateway.managed_model_runtime import get_registry
-        live = self.authority.sessions.get(ref.session_id)
-        policy = policy_for_source(self.authority.runner, live.source) if live else None
+        live = self.authority.sessions[ref.session_id]
+        policy = policy_for_source(self.authority.runner, live.source) if live.source is not None else None
         if selection_for_policy(policy) and get_registry().get(
                 binding_key(self.authority, ref.session_id), managed_state(self.authority, ref.session_id)) is None:
             raise RuntimeStoreError('awaiting_managed_credentials')
         # The interactive WS is the one surface a restart's after-turn wait admits (#139041).
-        receipt = await self.authority.submit(self.actor, self.submission(ref, params),
+        receipt = await self.authority.submit(self.actor, request,
                                               queue_while_restarting=self._operator is True)
         return asdict(receipt)
 
