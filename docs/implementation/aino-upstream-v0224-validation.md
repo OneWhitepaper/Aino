@@ -79,3 +79,8 @@ A secondary actionlint v1.7.12 audit flags the pre-existing `cache-mode` job fie
 The first hosted plugin-catalog gate caught five missing trailing blank lines in three upstream YAML files. The files now match the exact reviewed release byte-for-byte; no guard logic changed. The EOF whitespace warning is intentionally retained to preserve that provenance. Catalog structural validation accepts 761 entries; focused local tests pass 14 with 35 Linux-only skips.
 
 The compressed managed-session cold-resume regression was proven red on the prior implementation (`KeyError: model_source`) and green after extending the shared safe metadata carry list. Both native scenarios now pass without modifying account ownership checks, cached-prefix handling, or the production tool-ID sanitizer.
+
+## First hosted CI repairs
+
+- macOS slow schema reconciliation could exhaust its progress budget during `BEGIN IMMEDIATE`, outside the existing rollback/error translation block. The begin now shares that block. A deterministic real-SQLite regression fails before the fix and passes after it; the complete file passes 29 tests with one Linux-only skip.
+- Termux's selected-workspace install exposed an undeclared `tests-js` dependency on `app-builder-lib` for real DMG blockmap tests. The test workspace now declares the existing pinned version, without changing production notarization. An isolated selected-workspace install reproduced 2 failures before the fix and passes all 6 notarization tests after it. Root JavaScript validation with the PM test interpreter passes all 257 tests (4 skipped), typecheck and lint.

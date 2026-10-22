@@ -561,6 +561,25 @@ except HTTPException as exc:
 '''
 
 
+def test_browse_budget_interrupt_during_begin_raises_budget_error_without_writing(tmp_path):
+    import hermes_state_reconcile as reconcile
+
+    path = _lagging_store_with_history(_profile_home(tmp_path), rows=1)
+    before = _file_state(path)
+
+    class InterruptAtBegin(reconcile._Budget):
+        def arm(self, conn):
+            def interrupt():
+                self.expired = True
+                return 1
+            conn.set_progress_handler(interrupt, 1)
+
+    with pytest.raises(reconcile.BrowseBudgetExceeded):
+        reconcile._apply_additive_schema(path, InterruptAtBegin(30))
+    assert _file_state(path) == before
+    assert "last_read_at" not in _session_columns(path)
+
+
 @pytest.mark.platforms("linux", "macos")
 @pytest.mark.parametrize("phase", ["ddl"])
 def test_slow_browse_reconcile_gives_up_inside_its_budget_and_boot_waits_it_out(tmp_path, phase):
