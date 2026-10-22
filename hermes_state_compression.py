@@ -85,6 +85,7 @@ _CHAIN_CAP = 1000
 # model_config keys that belong to the whole conversation, not one compression segment: a rotation
 # carries them onto the child (per-segment keys such as usage anchors stay behind).
 _CONVERSATION_MODEL_CONFIG_KEYS = ("onboarding_run",)
+_MANAGED_MODEL_CONFIG_KEYS = ("model_source", "platform_owner", "model_id", "model", "api_mode", "provider")
 
 
 def _walk_compression_chain(session_id: str, step) -> list[str]:
@@ -327,13 +328,16 @@ class SessionCompressionMixin:
         _insert_session_row's compression-fork backfill: the child stays on the parent's profile and keeps
         gateway routing/origin columns; no owner on either side -> this store's profile."""
         from hermes_state_sessions import _parse_model_config
-        carried = {key: value for key, value in _parse_model_config(parent["model_config"]).items()
-                   if key in _CONVERSATION_MODEL_CONFIG_KEYS}
+        parent_config = _parse_model_config(parent["model_config"])
+        continuation = not any(k in (model_config or {}) for k in ("_branched_from", "_reset_from"))
+        carried_keys = _CONVERSATION_MODEL_CONFIG_KEYS
+        if continuation and parent_config.get("model_source") == "aino":
+            carried_keys += _MANAGED_MODEL_CONFIG_KEYS
+        carried = {key: value for key, value in parent_config.items() if key in carried_keys}
         model_config = {**carried, **(model_config or {})}
         system_prompt_hash = self._store_system_prompt(conn, system_prompt)
         # Pin/archive are compression-lineage flags; canonical branch/reset verbs also publish through
         # here, and their child is its own conversation, so it starts unpinned and visible.
-        continuation = not any(k in (model_config or {}) for k in ("_branched_from", "_reset_from"))
         # Copy a real creating surface. Automatic compression passes the parent's live
         # label (``local`` after the peer refresh); reset, branch and the compress
         # mutation pass the policy label. ``local`` and ``unknown`` are not surfaces,
