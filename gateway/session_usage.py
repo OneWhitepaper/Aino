@@ -180,6 +180,48 @@ def publish_usage(turn, agent, *, record: bool = False) -> None:
                 captured["session_usage"] = stats
 
 
+def begin_reply_metrics(turn, agent, history):
+    """Reuse the embedded viewer's display-only metrics for a canonical local turn."""
+    from gateway.run_turn_progress import local_viewer_turn
+    from tui_gateway.turn_metrics import begin_turn_metrics
+    if not local_viewer_turn(turn) or turn._ctx.mute_notification_reply:
+        return None
+    session = {"history": history}
+    db = getattr(agent, "_session_db", None)
+    if db is not None:
+        stored = db.get_session(agent.session_id)
+        if stored:
+            session["created_at"] = stored.get("started_at")
+    return session, begin_turn_metrics(agent, session)
+
+
+def finish_reply_metrics(turn, agent, result, state) -> None:
+    """Keep live, rehydrated and late receipts on the same reply without editing its prompt."""
+    if state is None:
+        return
+    from tui_gateway.turn_metrics import finish_turn_metrics
+    session, start = state
+    session["history"] = result.get("messages", [])
+    authority, sid, _generation = turn._approval_owner
+    live = authority.sessions.get(sid)
+
+    def updated(billing, outside_aino):
+        # Auxiliary work may finish after the next admission starts. It belongs to this
+        # reply's billing turn, never to the stream's current execution generation.
+        if live is not None and authority.sessions.get(sid) is live:
+            payload = {"reply_billing": billing}
+            if outside_aino:
+                payload["reply_non_aino_model_calls"] = True
+            live.event_stream.publish(sid, payload, event_type="session.usage", execution={})
+
+    persist = (not any(result.get(key) for key in ("failed", "error", "interrupted"))
+               and result.get("completed") is not False)
+    result["turn_metrics"] = finish_turn_metrics(
+        agent, session, start, tui_usage(usage_stats(agent)), result.get("final_response") or "",
+        persist=persist, on_billing_update=updated)
+    result["messages"] = session["history"]
+
+
 async def stats(connection, ref, params):
     """``session.stats {session_id}``: the same dict ``session.usage`` carries."""
     from hermes_state_runtime import RuntimeStoreError

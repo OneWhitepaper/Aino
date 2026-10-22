@@ -31,6 +31,24 @@ _MOA_KEYS = {"moa.reference": {"moa_index": "index", "moa_count": "count"},
              "moa.aggregating": {}}
 
 
+def completion_metadata(agent, result) -> dict:
+    """The embedded viewer's reply diagnostics and classified recovery on the canonical path."""
+    metadata = {"local_viewer": True}
+    for key in ("turn_metrics", "billing_block"):
+        if isinstance(result.get(key), dict):
+            metadata[key] = result[key]
+    if isinstance(result.get("warning"), str) and result["warning"]:
+        metadata["warning"] = result["warning"]
+    if (result.get("failed") or result.get("error")) and not result.get("interrupted"):
+        from agent.error_surface import build_error_surface_from_result
+        surface = build_error_surface_from_result(
+            result, provider=str(getattr(agent, "provider", "") or ""),
+            model=str(getattr(agent, "model", "") or ""))
+        if surface:
+            metadata["error_surface"] = surface
+    return metadata
+
+
 def wire(turn, agent) -> dict:
     """Install this turn's local-viewer sinks on ``agent``; returns what ``restore`` needs."""
     previous = {name: getattr(agent, name, None) for name in _TURN_ATTRS}

@@ -936,7 +936,14 @@ test('native late lease cannot revive the signed-out account after replacement l
   } catch (error) {
     primaryError = error
 
-    if (launched) { await launched.page.screenshot({ path: testInfo.outputPath('native-late-lease-error.png') }).catch(() => undefined) }
+    if (launched) {
+      await launched.page.screenshot({ path: testInfo.outputPath('native-late-lease-error.png') }).catch(() => undefined)
+      await testInfo.attach('late-lease-terminal-diagnostic', { contentType: 'application/json',
+        body: JSON.stringify(await launched.page.evaluate(() => ({
+          events: (window as unknown as { edgeTerminalEvents?: unknown[] }).edgeTerminalEvents,
+          metrics: [...document.querySelectorAll('[data-slot="aui_reply-metrics"]')].map(node => node.outerHTML)
+        })), null, 2) })
+    }
   } finally {
     if (api) {
       try { await api.control('faults', JSON.stringify({ hold_credential_response: false })) } catch (error) { cleanupErrors.push(error) }

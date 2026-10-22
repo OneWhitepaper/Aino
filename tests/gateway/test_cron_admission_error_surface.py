@@ -84,3 +84,29 @@ async def test_cron_refusal_is_in_the_reopened_transcript(owner, monkeypatch, tm
     metadata = tail['display_metadata']
     metadata = json.loads(metadata) if isinstance(metadata, str) else metadata
     assert metadata == {'error': tail['content'], 'error_surface': _SURFACE}
+
+
+@pytest.mark.parametrize(('reason', 'has_boundary'), [
+    ('server_error', True), ('context_overflow', False),
+    ('compression_deferred', False), ('compression_exhausted', False),
+])
+def test_provider_error_projection_does_not_rewrite_the_agents_transcript(owner, reason, has_boundary):
+    from gateway.local_viewer_events import completion_metadata
+    from gateway.session_results import finish_result
+    from hermes_state_runtime import admit_session_input, claim_session_input
+
+    owner.db.create_session('provider-failure', source='desktop')
+    admit_session_input(owner.db, epoch=owner.epoch, principal_id='desktop-user', session_id='provider-failure',
+                        request_id='failed-send', payload={'text': 'work'})
+    row = claim_session_input(owner.db, epoch=owner.epoch, session_id='provider-failure')
+    owner.db.append_message('provider-failure', 'user', 'work')
+    if has_boundary:
+        owner.db.append_message('provider-failure', 'assistant', 'Some actions may have completed; check before retrying.',
+                               display_kind='failed_turn')
+    before = owner.db.get_messages('provider-failure')
+    result = {'failed': True, 'error': 'raw provider detail', 'failure_reason': reason, 'messages': []}
+    result.update(completion_metadata(SimpleNamespace(provider='custom', model='m'), result))
+    settled, _ = finish_result(owner.db, epoch=owner.epoch, row=row, response='',
+                              outcome='failed', result={'result': result, 'usage': {}})
+    assert settled['outcome'] == 'failed'
+    assert owner.db.get_messages('provider-failure') == before

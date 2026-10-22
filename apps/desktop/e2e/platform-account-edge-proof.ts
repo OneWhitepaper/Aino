@@ -26,6 +26,7 @@ interface EdgeWindow {
   edgeAlerts: Array<{ expected: boolean; message: string }>
   edgeRuntime?: { socket: WebSocket; id: string }
   edgeRuntimeObserverInstalled?: boolean
+  edgeTerminalEvents?: unknown[]
 }
 export interface NativeFaultState {
   profile_calls: number
@@ -63,7 +64,9 @@ export async function observeEdgeAlerts(launched: Launch, allowRevocation: boole
         const text = alert.textContent?.trim() ?? ''
 
         if (!text) { continue }
-        const message = alert.querySelector(':scope > div:first-child > div > .min-w-0')?.textContent?.trim()
+
+        const message = (alert.querySelector('details > div') ??
+          alert.querySelector(':scope > div:first-child > div > .min-w-0'))?.textContent?.trim()
 
         const expected = allow && (
           message === 'Aino model authorization was revoked. Sign in and select the model again.' ||
@@ -104,6 +107,7 @@ export async function observeNativeRuntime(page: Page) {
 
     if (target.edgeRuntimeObserverInstalled) { return }
     target.edgeRuntimeObserverInstalled = true
+    target.edgeTerminalEvents = []
     const Original = window.WebSocket
     window.WebSocket = new Proxy(Original, {
       construct(ctor, args) {
@@ -119,6 +123,10 @@ export async function observeNativeRuntime(page: Page) {
             response = JSON.parse(event.data)
           } catch {
             return
+          }
+
+          if (event.data.includes('"turn_metrics"') || event.data.includes('"message.complete"')) {
+            target.edgeTerminalEvents?.push(response)
           }
 
           if (response.result?.session_id && response.result.info?.model_source === 'aino') {
@@ -415,6 +423,8 @@ export async function verifyOfflineAndAuthorizationRecovery({ launched, api, acc
   // start a feedback loop of failed billing reads while the service is offline.
   await page.getByRole('button', { name: 'Refresh', exact: true }).click()
   await expect(page.getByText(`${Number(initial.balance)} USD`, { exact: true })).toBeVisible()
+  // Device inventory owns its recovery separately from account and wallet state.
+  await page.getByRole('button', { name: 'Refresh devices', exact: true }).click()
 
   for (const candidate of pages) {
     await expect(candidate.getByText('The account service is offline. Check your connection and retry.', { exact: true })).toHaveCount(0)
@@ -440,6 +450,8 @@ export async function verifyOfflineAndAuthorizationRecovery({ launched, api, acc
   await api.control('faults', JSON.stringify({ hold_inference_before_auth: false }))
   const recovery = page.locator('button.aui-error-action[data-action="account"]').last()
   await expect(recovery).toBeVisible({ timeout: 30_000 })
+  const errorCard = recovery.locator('xpath=ancestor::*[@role="alert"]')
+  await errorCard.getByText('Details', { exact: true }).click()
   await expect(page.getByText('Aino model authorization was revoked.', { exact: false }).first()).toBeVisible()
   const errorBlock = recovery.locator('..')
   await expect(errorBlock.getByRole('button', { name: /retry/i })).toHaveCount(0)

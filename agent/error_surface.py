@@ -97,9 +97,10 @@ def _surface(layer: str, code: str, retryable: bool, provider: str = "", model: 
         # Clients name the failing provider in the card copy ("OpenCode Go did
         # not answer…"), not by its config slug.
         surface["provider_label"] = _provider_label(provider)
-    if layer == LAYER_AUTH and provider:
+    if layer == LAYER_AUTH and provider and not code.startswith("managed_"):
         # OAuth providers are fixed by signing in again; API-key providers by
-        # replacing the key. The client's one-click recovery needs to know which.
+        # replacing the key. Aino-managed grants use the existing account recovery,
+        # never the underlying provider's key/OAuth editor.
         surface["auth_kind"] = auth_kind(provider)
         if surface["auth_kind"] == "api_key" and (env_var := _api_key_env(provider)):
             surface["api_key_env"] = env_var

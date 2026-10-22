@@ -62,11 +62,17 @@ def completion_payload(row, settled, response, captured):
     # final repeats a reply the viewer already painted, so it settles in place.
     captured_result = (captured or {}).get('result') or {}
     if isinstance(captured_result.get('error_surface'), dict):
-        # Only gateway-owned refusals set this (``session_cron.execute``); ``text`` is already their copy.
+        # Gateway refusals and local-viewer turns retain their existing error classifier.
         complete['error_surface'] = captured_result['error_surface']
     if response and captured_result.get('response_reused'):
         complete['response_reused'] = True
     if captured_result.get('local_viewer'):
+        if captured_result.get('partial') is True:
+            complete['partial'] = True
+        if isinstance(captured_result.get('error'), str) and captured_result['error']:
+            complete['error'] = captured_result['error']
+        if isinstance(captured_result.get('turn_metrics'), dict):
+            complete['turn_metrics'] = captured_result['turn_metrics']
         if captured_result.get('response_previewed'):
             complete['response_previewed'] = True
         if captured_result.get('response_transformed'):
@@ -139,10 +145,11 @@ def owner_stop_notice(captured, outcome, row=None):
 
 def gateway_refusal_boundary(captured, outcome):
     """``(notice, display_metadata)`` for a failed turn the gateway itself refused with a renderable
-    descriptor (``session_cron.execute``: the only producer of ``result.error_surface``), else None."""
+    descriptor. A viewer's provider descriptor does not authorize a transcript write."""
+    from gateway.session_cron import CRON_SESSION_READ_ONLY_SURFACE
     value = (captured or {}).get('result') or {}
     surface, error = value.get('error_surface'), value.get('error')
-    if outcome != 'failed' or not isinstance(surface, dict) or not isinstance(error, str) or not error:
+    if outcome != 'failed' or surface != CRON_SESSION_READ_ONLY_SURFACE or not isinstance(error, str) or not error:
         return None
     return error, {'error': error, 'error_surface': dict(surface)}
 

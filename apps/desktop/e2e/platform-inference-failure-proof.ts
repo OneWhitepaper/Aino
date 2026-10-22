@@ -28,7 +28,9 @@ export async function observeInferenceAlerts(page: Page) {
 
     const scan = () => {
       for (const alert of document.querySelectorAll('[role="alert"]')) {
-        const message = alert.querySelector(':scope > div:first-child > div > .min-w-0')?.textContent?.trim() ?? ''
+        const message = (alert.querySelector('details > div') ??
+          alert.querySelector(':scope > div:first-child > div > .min-w-0'))?.textContent?.trim() ?? ''
+
         const text = alert.textContent?.trim() ?? ''
 
         if (text && !target.inferenceAlerts.some(entry => entry.message === text)) {
@@ -77,9 +79,37 @@ export async function verifyInferenceFailures({ launched, api }: EdgeContext) {
     await api.control('faults', JSON.stringify({ inference_http_status: status, inference_http_failures: 8,
       inference_retry_after_seconds: status === 429 ? 2 : 0 }))
     await sendPrompt(page, `Read the same fixture file while checking HTTP ${status} recovery.`)
-    const expectedMessage = status === 429 ? 'HTTP 429: Upstream rate limit exceeded, please retry later' : 'HTTP 502: Upstream service temporarily unavailable'
-    await expect(page.getByText(expectedMessage, { exact: true }).last()).toBeVisible({ timeout: 60_000 })
+
+    if (status === 503) {
+      // v0.22.4 parks an undelivered transient failure on its bounded recovery
+      // ladder. Restore the fixture while that existing, visible wait is active.
+      await expect(page.getByText(/Provider temporarily unavailable.*retrying automatically/).last()).toBeVisible({ timeout: 45_000 })
+      const waiting = await api.control<FailureFaults>('faults')
+      const attempts = waiting.authenticated_inference_attempts - faultsBefore.authenticated_inference_attempts
+      expect(attempts).toBeGreaterThan(1)
+      // It is waiting with injected failures still available, rather than
+      // succeeding because it silently consumed all eight fixture failures.
+      expect(attempts).toBeLessThan(8)
+      expect(waiting.inference_503s - faultsBefore.inference_503s).toBe(attempts)
+      expect(waiting.provider_attempts - faultsBefore.provider_attempts).toBe(attempts)
+      expect(completeConsumption(await api.control<NativeState>('state'))).toEqual(completeConsumption(before))
+      await api.control('faults', JSON.stringify({ inference_http_status: 0, inference_http_failures: 0, inference_retry_after_seconds: 0 }))
+      const recovered = await recoveredTurn(page, api, before)
+      const after = await api.control<FailureFaults>('faults')
+      expect(after.inference_requests - waiting.inference_requests).toBe(2)
+      transientProof.push({ upstream_status: status, client_status: 502, rejected_attempts: attempts,
+        visible_bounded_recovery: true, automatic_recovery: true, before: consumption(before), recovered: consumption(recovered) })
+
+      continue
+    }
+
+    const expectedMessage = 'HTTP 429: Upstream rate limit exceeded, please retry later'
     await settled(page)
+    const card = page.getByRole('alert').filter({ has: page.getByText(expectedMessage, { exact: true }) })
+    await expect(card).toHaveCount(1)
+    await expect(card.getByText('The AI service is busy', { exact: true })).toBeVisible()
+    await card.getByText('Details', { exact: true }).click()
+    await expect(card.getByText(expectedMessage, { exact: true })).toBeVisible()
     const failed = await api.control<FailureFaults>('faults')
     const attempts = failed.authenticated_inference_attempts - faultsBefore.authenticated_inference_attempts
     expect(attempts).toBeGreaterThan(1)
@@ -102,7 +132,7 @@ export async function verifyInferenceFailures({ launched, api }: EdgeContext) {
     const recovered = await recoveredTurn(page, api, before)
     const after = await api.control<FailureFaults>('faults')
     expect(after.inference_requests - failed.inference_requests).toBe(2)
-    transientProof.push({ upstream_status: status, client_status: status === 503 ? 502 : 429, rejected_attempts: attempts, provider_attempts: failed.provider_attempts - faultsBefore.provider_attempts, platform_ingress_intervals_ms: intervals,
+    transientProof.push({ upstream_status: status, client_status: 429, rejected_attempts: attempts, provider_attempts: failed.provider_attempts - faultsBefore.provider_attempts, platform_ingress_intervals_ms: intervals,
       before: consumption(before), recovered: consumption(recovered), user_clicked_retry: true })
   }
 
@@ -115,8 +145,14 @@ export async function verifyInferenceFailures({ launched, api }: EdgeContext) {
   const empty = await api.control<NativeState>('state')
   expect(Number(empty.balance)).toBe(0)
   await api.control('faults', JSON.stringify({ hold_inference_before_auth: false }))
-  await expect(page.getByText('Aino balance or subscription quota is unavailable. Check your account or select another model.', { exact: true }).last()).toBeVisible({ timeout: 30_000 })
   await settled(page)
+
+  const balanceCard = page.getByRole('alert').filter({ has: page.getByText(
+    'Aino balance or subscription quota is unavailable. Check your account or select another model.', { exact: true }) })
+
+  await expect(balanceCard).toHaveCount(1)
+  await balanceCard.getByText('Details', { exact: true }).click()
+  await expect(balanceCard.getByText('Aino balance or subscription quota is unavailable. Check your account or select another model.', { exact: true })).toBeVisible()
   const denied = await api.control<NativeState>('state')
   expect(completeConsumption(denied)).toEqual(completeConsumption(empty))
   const deniedFaults = await api.control<FailureFaults>('faults')
