@@ -367,7 +367,7 @@ describe('createBackendSessionForSend profile routing', () => {
       }
 
       if (method === 'prompt.submit') {
-        return {} as never
+        return { submission_id: params?.submission_id, session_id: params?.session_id, status: 'started' } as never
       }
 
       throw new Error(`unexpected request: ${method}`)
@@ -396,7 +396,7 @@ describe('createBackendSessionForSend profile routing', () => {
     expect(order).toEqual(['session.create', 'session.managed_model_ticket', 'bind', 'prompt.submit'])
     expect(requestGateway).toHaveBeenCalledWith(
       'prompt.submit',
-      { session_id: RUNTIME_SESSION_ID, text: 'first managed prompt' },
+      { session_id: RUNTIME_SESSION_ID, submission_id: expect.any(String), text: 'first managed prompt' },
       1_800_000
     )
     expect(requestGateway.mock.calls.find(([method]) => method === 'config.set')).toBeUndefined()
@@ -877,7 +877,7 @@ describe('createBackendSessionForSend profile routing', () => {
     setCurrentReasoningEffort('high')
     vi.mocked(getGlobalModelInfo).mockReturnValue(globalModel.promise)
 
-    const requestGateway = vi.fn(async (method: string) => {
+    const requestGateway = vi.fn(async (method: string, params?: Record<string, unknown>) => {
       order.push(method)
 
       if (method === 'session.create') {
@@ -898,7 +898,7 @@ describe('createBackendSessionForSend profile routing', () => {
       }
 
       if (method === 'prompt.submit') {
-        return {} as never
+        return { submission_id: params?.submission_id, session_id: params?.session_id, status: 'started' } as never
       }
 
       throw new Error(`unexpected request: ${method}`)
@@ -1018,10 +1018,12 @@ describe('createBackendSessionForSend profile routing', () => {
     const catalogLoad = vi.spyOn(platformModelCatalog(), 'load').mockReturnValue(catalogReady.promise)
     vi.mocked(ensureGatewayProfile).mockReturnValueOnce(profileReady.promise)
 
-    const requestGateway = vi.fn(async (method: string) =>
+    const requestGateway = vi.fn(async (method: string, params?: Record<string, unknown>) =>
       method === 'session.create'
         ? ({ session_id: RUNTIME_SESSION_ID, stored_session_id: null } as never)
-        : ({} as never)
+        : method === 'prompt.submit'
+          ? ({ submission_id: params?.submission_id, session_id: params?.session_id, status: 'started' } as never)
+          : ({} as never)
     )
 
     const { result: controls } = renderHook(() => useModelControls({ queryClient: new QueryClient(), requestGateway }))
@@ -1197,7 +1199,7 @@ describe('createBackendSessionForSend profile routing', () => {
       }
 
       if (method === 'prompt.submit') {
-        return {} as never
+        return { submission_id: params?.submission_id, session_id: params?.session_id, status: 'started' } as never
       }
 
       throw new Error(`unexpected request: ${method}`)

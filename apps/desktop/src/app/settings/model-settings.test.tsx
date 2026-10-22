@@ -137,6 +137,16 @@ describe('ModelSettings profile scope', () => {
 })
 
 describe('ModelSettings', () => {
+  it('labels the main provider, model and default controls independently', async () => {
+    renderModelSettings()
+
+    expect(await screen.findByRole('combobox', { name: 'Provider' })).toBeTruthy()
+    expect(screen.getByRole('combobox', { name: 'Model' })).toBeTruthy()
+    expect(await screen.findByRole('combobox', { name: 'Reasoning' })).toBeTruthy()
+    expect(screen.getByText('Provider', { exact: true })).toBeTruthy()
+    expect(screen.getByText('Model', { exact: true })).toBeTruthy()
+    expect(setModelAssignment).not.toHaveBeenCalled()
+  })
   it.each(['custom', 'local', 'custom:lab'])(
     'opens local endpoint setup when %s has no inventory row',
     async provider => {
@@ -594,8 +604,9 @@ describe('ModelSettings', () => {
       )
       const modelCopy = TRANSLATIONS[locale].settings.model
       const englishCopy = TRANSLATIONS.en.settings.model
-      const warning = modelCopy.staleAuxiliary(1, modelCopy.tasks.curator.label, 'openrouter')
-      expect(warning).not.toBe(englishCopy.staleAuxiliary(1, englishCopy.tasks.curator.label, 'openrouter'))
+      const warning = `${modelCopy.staleAuxBefore(1, modelCopy.tasks.curator.label)}openrouter${modelCopy.staleAuxAfter}`
+      const englishWarning = `${englishCopy.staleAuxBefore(1, englishCopy.tasks.curator.label)}openrouter${englishCopy.staleAuxAfter}`
+      expect(warning).not.toBe(englishWarning)
       expect(
         await screen.findByText((_, element) => element?.tagName === 'SPAN' && element.textContent === warning)
       ).toBeTruthy()
@@ -816,17 +827,17 @@ describe('ModelSettings MoA preset editor', () => {
           </I18nProvider>
         </MemoryRouter>
       )
-      expect(m.moa.description).not.toBe(TRANSLATIONS.en.settings.model.moa.description)
+      expect(m.moaDescription).not.toBe(TRANSLATIONS.en.settings.model.moaDescription)
       expect(m.moaReferenceHint).not.toBe(TRANSLATIONS.en.settings.model.moaReferenceHint)
       expect(m.moaAggregatorBilled).not.toBe(TRANSLATIONS.en.settings.model.moaAggregatorBilled)
-      await screen.findByText(m.moa.description)
-      expect(screen.getByText(m.moa.reference(1))).toBeTruthy()
-      expect(screen.getByText(m.moa.aggregator)).toBeTruthy()
-      expect(screen.getByRole('button', { name: m.moa.addReferenceModel })).toBeTruthy()
-      expect(screen.getByRole('button', { name: m.moa.setDefault })).toBeTruthy()
-      expect(screen.getByPlaceholderText(m.moa.newPresetPlaceholder)).toBeTruthy()
-      fireEvent.click(screen.getByRole('switch', { name: m.moa.toggleReference(true, 1) }))
-      expect(screen.getByRole('switch', { name: m.moa.toggleReference(false, 1) }).getAttribute('aria-checked')).toBe(
+      await screen.findByText(m.moaDescription)
+      expect(screen.getByText(m.moaReferenceTitle(1))).toBeTruthy()
+      expect(screen.getByText(m.moaAggregator)).toBeTruthy()
+      expect(screen.getByRole('button', { name: m.moaAddReference })).toBeTruthy()
+      expect(screen.getByRole('button', { name: m.moaSetDefault })).toBeTruthy()
+      expect(screen.getByPlaceholderText(m.moaNewPresetPlaceholder)).toBeTruthy()
+      fireEvent.click(screen.getByRole('switch', { name: m.moaReferenceToggle(true, 1) }))
+      expect(screen.getByRole('switch', { name: m.moaReferenceToggle(false, 1) }).getAttribute('aria-checked')).toBe(
         'false'
       )
       await waitFor(() => expect(saveMoaModels).toHaveBeenCalled())

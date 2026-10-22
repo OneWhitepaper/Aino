@@ -28,6 +28,8 @@ export interface AgentNoticePayload {
   ttl_ms?: null | number
   key?: string
   id?: string
+  /** Full text behind a short `text` (the low-disk auto-prune question): the toast's expandable body. */
+  detail?: string
 }
 
 const LEVEL_TO_TOAST_KIND: Record<string, NotificationKind> = {
@@ -141,7 +143,8 @@ export function noticeToToast(payload: AgentNoticePayload | undefined): Notifica
     id: payload?.key || payload?.id,
     kind: LEVEL_TO_TOAST_KIND[payload?.level ?? 'info'] ?? 'info',
     message: primary,
-    meta
+    meta,
+    ...(payload?.detail?.trim() ? { detail: payload.detail.trim() } : {})
   }
 }
 

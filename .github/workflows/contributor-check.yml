@@ -37,7 +37,7 @@ jobs:
           # historical bot/local/example emails have no GitHub account, and
           # inventing a login would misattribute their work. Only commits
           # already in this reviewed release may retain their original names.
-          UPSTREAM=d923a5eb487a17c0a68801bba9ef0f56c81040a8
+          UPSTREAM=4d04303818b61bf3aa09278af48356315515965b
           IMPORTING_UPSTREAM=false
           UNIMPORTED_EMAILS=""
           if git merge-base --is-ancestor "$UPSTREAM" HEAD && ! git merge-base --is-ancestor "$UPSTREAM" "$MERGE_BASE"; then

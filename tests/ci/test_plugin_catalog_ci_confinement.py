@@ -35,8 +35,8 @@ def _step(name_prefix: str) -> str:
                 # Import-admission tests substitute a fixture commit for the
                 # reviewed release pin; normal cases exercise the real pin.
                 return text.replace(
-                    "d923a5eb487a17c0a68801bba9ef0f56c81040a8",
-                    os.environ.get("CATALOG_CI_UPSTREAM", "d923a5eb487a17c0a68801bba9ef0f56c81040a8"),
+                    "4d04303818b61bf3aa09278af48356315515965b",
+                    os.environ.get("CATALOG_CI_UPSTREAM", "4d04303818b61bf3aa09278af48356315515965b"),
                 )
     raise LookupError(name_prefix)
 

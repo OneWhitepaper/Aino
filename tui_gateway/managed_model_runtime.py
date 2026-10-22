@@ -66,7 +66,12 @@ def transport_principal(transport):
 
 
 def _interrupt(binding, session):
-    if not binding or not session.get("running"):
+    if not binding:
+        return
+    if interrupt := session.get("_interrupt_managed"):
+        interrupt()
+        return
+    if not session.get("running"):
         return
     from . import server
     with server._sessions_lock:

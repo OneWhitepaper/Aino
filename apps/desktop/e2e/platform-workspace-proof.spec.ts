@@ -62,7 +62,7 @@ test('Python guard keeps startup identity at the inherited root while auditing p
     PYTHONPATH: installLoopbackPythonGuard(root)
   }
 
-  const python = path.resolve(import.meta.dirname, '../../../.venv/bin/python')
+  const python = process.env.HERMES_DESKTOP_PYTHON || path.resolve(import.meta.dirname, '../../../.venv/bin/python')
   const forbiddenAddress = '203.0.113.1'
 
   const child = spawn(python, ['-c', `import json, os, socket, sys
@@ -106,7 +106,7 @@ sys.stdin.readline()
   } finally {
     stdout.close()
 
-    if (child.exitCode === null) {
+    if (child.pid && child.exitCode === null) {
       const exited = once(child, 'exit')
 
       child.kill('SIGTERM')

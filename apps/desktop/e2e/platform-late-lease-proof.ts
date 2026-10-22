@@ -55,7 +55,9 @@ export async function observeLateLeaseAlerts(launched: Launch) {
     const scan = () => {
       for (const alert of document.querySelectorAll('[role="alert"]')) {
         const text = alert.textContent?.trim() ?? ''
-        const message = alert.querySelector(':scope > div:first-child > div > .min-w-0')?.textContent?.trim()
+
+        const message = (alert.querySelector('details > div') ??
+          alert.querySelector(':scope > div:first-child > div > .min-w-0'))?.textContent?.trim()
 
         if (!text) { continue }
         const expected = target.lateLeaseResponseReleased && message === expectedMessage

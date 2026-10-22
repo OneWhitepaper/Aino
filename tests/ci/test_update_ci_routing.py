@@ -168,12 +168,16 @@ def _run_workflow(rel: str, *, inputs: dict[str, Any], detect: dict[str, Any] | 
             if not gha.condition(cond, ctx):
                 continue
             entry: dict[str, Any] = {"ctx": ctx, "body": body}
-            if name == "test-matrix":
-                plan = next(s for s in body["steps"] if s.get("id") == "matrix")
+            if name in ("test-matrix", "e2e-upgrade-plan"):
+                plan_id = "matrix" if name == "test-matrix" else "plan"
+                plan = next(s for s in body["steps"] if s.get("id") == plan_id)
                 step_outputs = _matrix_outputs(json.dumps(plan, sort_keys=True), json.dumps(ctx, sort_keys=True))
-                output_ctx = {**ctx, "steps": {"matrix": {"outputs": step_outputs}}}
+                output_ctx = {**ctx, "steps": {plan_id: {"outputs": step_outputs}}}
                 entry["outputs"] = {k: gha.render(v, output_ctx) for k, v in body["outputs"].items()}
-                assert all(json.loads(value)["slice"] for value in entry["outputs"].values())
+                if name == "test-matrix":
+                    assert all(json.loads(value)["slice"] for value in entry["outputs"].values())
+                else:
+                    assert json.loads(entry["outputs"]["shards"])
             uses = body.get("uses")
             if isinstance(uses, str) and uses.startswith("./.github/workflows/"):
                 called = uses[2:]
@@ -360,7 +364,7 @@ def test_update_path_change_selects_every_suite_that_exercises_it(path, lanes):
 
 # Review CI2/CI3: update-path files the classifier sent to the wrong suites.
 _CI3_CASES = {
-    # /api/health `commit`: host-backend-attach compares it before attaching after an update.
+    # /api/health `commit`: the Desktop compares it before attaching after an update.
     "hermes_cli/web_routers/status.py": ("python", "e2e_desktop_update"),
     # The SSH remote's marker judge/gate: typecheck/vitest and the marker contract's script tests.
     "apps/desktop/electron/remote-update-marker-programs.ts": ("frontend", "desktop_updater"),
@@ -554,7 +558,7 @@ def test_selection_receipt_does_not_require_the_native_jobs_venv(tmp_path):
     test_file = tmp_path / rel
     test_file.parent.mkdir(parents=True)
     test_file.write_text("def test_owned(): pass\n", encoding="utf-8")
-    ctx = {"matrix": {"slice": {"files": rel}}, "inputs": {}}
+    ctx = {"matrix": {"shard": "core"}, "inputs": {}}
     assert workflow_steps.selected_files(step, ctx, tmp_path) == {rel}
 
 
@@ -563,15 +567,15 @@ def test_generated_e2e_matrices_run_each_owned_file_once():
     expected = {path.relative_to(_REPO).as_posix() for path in (_REPO / "tests/e2e").rglob("test_*.py")}
     upgrade = {path for path in expected if path.startswith("tests/e2e/core/upgrade/")}
     core = {path for path in expected - upgrade if not path.startswith("tests/e2e/core/live/")}
-    for output, job, name, owned in (
-        ("e2e", "e2e", "Run e2e tests", core),
-        ("upgrade", "e2e-upgrade", "Run upgrade e2e tests", upgrade),
-    ):
-        matrix = json.loads(run["test-matrix"]["outputs"][output])
-        planned = [path for cell in matrix["slice"] for path in cell["files"].split(":")]
-        assert len(planned) == len(set(planned)), f"{output}: duplicate test files across slices"
-        assert set(planned) == owned
-        assert _selected_test_files(run[job], name) == owned
+    matrix = json.loads(run["test-matrix"]["outputs"]["e2e"])
+    planned = [path for cell in matrix["slice"] for path in cell["files"].split(":")]
+    assert len(planned) == len(set(planned)), "e2e: duplicate test files across slices"
+    assert set(planned) == core
+    assert _selected_test_files(run["e2e"], "Run e2e tests") == core
+
+    shards = json.loads(run["e2e-upgrade-plan"]["outputs"]["shards"])
+    assert len(shards) == len(set(shards)), "upgrade: duplicate suite shards"
+    assert _selected_test_files(run["e2e-upgrade"], "Run upgrade e2e tests") == upgrade
 
 
 @_NATIVE_WINDOWS_TOO

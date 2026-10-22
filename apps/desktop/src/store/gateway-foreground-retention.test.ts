@@ -50,6 +50,7 @@ const { $sessionTiles, foregroundSessionScopes, liveSessionScopes, recordSession
   await import('./session-states')
 
 const { stampSecondaryProfileOwner } = await import('./session-event-provenance')
+const { $poolLimits, POOL_LIMITS_DEFAULTS } = await import('./pool-limits')
 const { $selectedStoredSessionId, $sessions, setActiveSessionId } = await import('@/store/session')
 
 function installDesktop(): void {
@@ -70,8 +71,7 @@ function installDesktop(): void {
     getGatewayWsUrlFor: vi.fn(
       async ({ connectionId, profile }: { connectionId: string; profile: string }) =>
         `wss://${connectionId}.invalid/api/ws?profile=${profile}`
-    ),
-    touchBackend: vi.fn(async () => undefined)
+    )
   }
 }
 
@@ -89,10 +89,15 @@ const BOT_TILE = {
 beforeEach(() => {
   installDesktop()
   // Wired exactly as use-gateway-boot wires it.
-  configureGatewayRegistry({ foregroundScopes: foregroundSessionScopes, onEvent: vi.fn() })
+  configureGatewayRegistry({
+    foregroundScopes: foregroundSessionScopes,
+    liveScopes: liveSessionScopes,
+    onEvent: vi.fn()
+  })
   setPrimaryGateway({ connectionState: 'open' } as never, 'default')
   gatewayMocks.closed = []
   $sessionTiles.set([])
+  $poolLimits.set({ ...POOL_LIMITS_DEFAULTS, idleMs: SECONDARY_MIN_LIFETIME_MS })
 })
 
 afterEach(() => {
@@ -100,6 +105,7 @@ afterEach(() => {
   $sessionTiles.set([])
   $sessions.set([])
   setActiveSessionId(null)
+  $poolLimits.set({ ...POOL_LIMITS_DEFAULTS })
   $selectedStoredSessionId.set(null)
   vi.clearAllMocks()
   delete (window as unknown as { hermesDesktop?: unknown }).hermesDesktop
@@ -182,6 +188,63 @@ describe('foreground tile retention vs. the live-work pruner (#93892)', () => {
     pruneAged()
 
     expect(gatewayMocks.closed).toEqual(['wss://local.invalid/api/ws?profile=bot'])
+  })
+
+  it('keeps a pre-warmed socket for the configured idle retention window', async () => {
+    const startedAt = Date.now()
+    vi.useFakeTimers({ now: startedAt })
+    try {
+      $poolLimits.set({ ...POOL_LIMITS_DEFAULTS, idleMs: 60_000 })
+      await openGatewayForAgent('local', 'bot')
+
+      vi.setSystemTime(startedAt + 59_000)
+      pruneSecondaryGateways(idleKeepSet())
+      expect(gatewayMocks.closed).toEqual([])
+
+      vi.setSystemTime(startedAt + 60_001)
+      pruneSecondaryGateways(idleKeepSet())
+      expect(gatewayMocks.closed).toEqual(['wss://local.invalid/api/ws?profile=bot'])
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('reclaims the least-recently-active idle socket when the connection cap is lowered', async () => {
+    vi.useFakeTimers({ now: Date.now() })
+    try {
+      await openGatewayForAgent('local', 'bot-a')
+      vi.setSystemTime(Date.now() + SECONDARY_MIN_LIFETIME_MS + 1_000)
+      await openGatewayForAgent('local', 'bot-b')
+      vi.setSystemTime(Date.now() + SECONDARY_MIN_LIFETIME_MS + 1_000)
+
+      $poolLimits.set({ ...POOL_LIMITS_DEFAULTS, maxBackends: 1 })
+
+      expect(gatewayMocks.closed).toEqual(['wss://local.invalid/api/ws?profile=bot-a'])
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('never reclaims a foreground-bound route to satisfy the connection cap', async () => {
+    vi.useFakeTimers({ now: Date.now() })
+    try {
+      await openGatewayForAgent('local', 'bot-a')
+      vi.setSystemTime(Date.now() + SECONDARY_MIN_LIFETIME_MS + 1_000)
+      await openGatewayForAgent('local', 'bot-b')
+      vi.setSystemTime(Date.now() + SECONDARY_MIN_LIFETIME_MS + 1_000)
+      $sessionTiles.set([
+        {
+          ...BOT_TILE,
+          ownerRoute: { connectionId: 'local', mode: 'local', profile: 'bot-a' }
+        }
+      ])
+
+      $poolLimits.set({ ...POOL_LIMITS_DEFAULTS, maxBackends: 1 })
+
+      expect(gatewayMocks.closed).toEqual(['wss://local.invalid/api/ws?profile=bot-b'])
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('does not let a tile on one source pin another source’s same-named profile', async () => {

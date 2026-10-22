@@ -1,8 +1,7 @@
 import { normalizePersonalityValue } from '@/lib/chat-runtime'
 import { platformModelStatePatch } from '@/lib/platform-session-model'
-import { reconcileApprovalModeForProfile } from '@/store/approval-mode'
 import { requestDesktopOnboardingForCredentialWarning } from '@/store/onboarding'
-import { $activeGatewayProfile } from '@/store/profile'
+import { pendingSnapshotFence, reconcilePendingSubmissions } from '@/store/pending-submissions'
 import {
   commitWorkspaceCwdForSelectedSession,
   releaseWorkspaceCwdOwner,
@@ -22,10 +21,13 @@ import {
   setWorkspaceCwdOwner,
   setYoloActive
 } from '@/store/session'
+import type { SessionOwnerScope } from '@/store/session-request-router'
 import { reportBackendContract, reportInstallMethodWarning } from '@/store/updates'
 import type { SessionRuntimeInfo } from '@/types/hermes'
 
 import type { ClientSessionState } from '../../../types'
+
+import { reconcileOwnerApprovalMode } from './runtime-owner'
 
 export type SessionRuntimeStatePatch = Partial<
   Pick<
@@ -60,6 +62,7 @@ export interface ApplyRuntimeInfoOptions {
    * per-session state is unaffected.
    */
   foreground?: boolean
+  owner?: SessionOwnerScope
 }
 
 /** Mirror a session's runtime state into the composer atoms the MAIN pane
@@ -121,7 +124,7 @@ export function publishRuntimeToComposer(state: SessionRuntimeStatePatch): void 
 
 export function applyRuntimeInfo(
   info: SessionRuntimeInfo | undefined,
-  { foreground = true }: ApplyRuntimeInfoOptions = {}
+  { foreground = true, owner }: ApplyRuntimeInfoOptions = {}
 ): SessionRuntimeStatePatch | null {
   if (!info) {
     return null
@@ -129,11 +132,16 @@ export function applyRuntimeInfo(
 
   // App/profile-level reporting is session-independent — a tile's runtime
   // reports backend skew and credential warnings just as usefully.
-  reportBackendContract(info.desktop_contract)
-
-  if (info.approval_mode !== undefined) {
-    reconcileApprovalModeForProfile($activeGatewayProfile.get(), info.approval_mode)
+  if (info.stored_session_id) {
+    reconcilePendingSubmissions(
+      info.stored_session_id,
+      info.pending_submissions,
+      pendingSnapshotFence(info.replay_epoch, info.last_sequence)
+    )
   }
+
+  reportBackendContract(info.desktop_contract, info.desktop_protocol)
+  reconcileOwnerApprovalMode(info, owner)
 
   requestDesktopOnboardingForCredentialWarning(info.credential_warning)
 

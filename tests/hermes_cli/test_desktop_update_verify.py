@@ -1,6 +1,7 @@
 """Receipt validation uses packaged output, not just a source stamp."""
 import json
 import struct
+from pathlib import Path
 
 import pytest
 
@@ -8,10 +9,14 @@ from hermes_cli import desktop_update_verify as verify
 from tests.hermes_cli.test_source_build import copy_freshness_scripts, stamp_product, use_host_node_as_pm_node
 
 
+def _fixture_executable(root: Path) -> Path:
+    return root / 'apps/desktop/release/win-unpacked/Aino.exe'
+
+
 @pytest.fixture
 def bundle(tmp_path, monkeypatch):
-    desktop = tmp_path / 'apps/desktop'
-    resources = desktop / 'release/fixture/resources'
+    executable = _fixture_executable(tmp_path)
+    resources = executable.parent / 'resources'
     dist = resources / 'app.asar.unpacked/dist'
     (dist / 'assets').mkdir(parents=True)
     (dist / 'index.html').write_text('<script type="module" src="./assets/index.js"></script>', encoding='utf-8')
@@ -24,11 +29,12 @@ def bundle(tmp_path, monkeypatch):
     archive = resources / 'app.asar'
     archive.write_bytes(struct.pack('<4I', 4, 8 + len(padded), 4 + len(padded), len(header)) + padded + package)
     (tmp_path / '.gitignore').write_text('apps/desktop/release/\n', encoding='utf-8')
-    monkeypatch.setattr(verify, '_desktop_packaged_executable', lambda _: resources.parent / 'Hermes.exe')
+    monkeypatch.setattr(verify, '_desktop_packaged_executable', lambda _: executable)
     monkeypatch.setattr(verify, '_desktop_exe_integrity_error', lambda _: None)
     # Host-independent artifact contract; executable lookup itself is covered natively.
     from hermes_cli import main_desktop
-    monkeypatch.setattr(main_desktop, '_desktop_packaged_executable', lambda _: resources.parent / 'Hermes.exe')
+    monkeypatch.setattr(main_desktop, '_desktop_packaged_executable', lambda _: executable)
+    monkeypatch.setattr(main_desktop, '_packaged_resources_dir', lambda _: resources)
     copy_freshness_scripts(tmp_path)
     stamp_product(tmp_path, "desktop", dist)
     use_host_node_as_pm_node(monkeypatch)
@@ -69,12 +75,10 @@ def test_default_root_is_the_imported_checkout_not_cwd(tmp_path, monkeypatch):
 
 def _app_only_under(root):
     """A packaged-app lookup that finds an app under *root* and nowhere else."""
-    from pathlib import Path
-
     desktop = (root / 'apps' / 'desktop').resolve()
 
     def lookup(candidate):
-        return desktop / 'release/fixture/Hermes.exe' if Path(candidate).resolve() == desktop else None
+        return _fixture_executable(root) if Path(candidate).resolve() == desktop else None
 
     return lookup
 

@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto'
 
 import { buildGatewayWsUrlWithTicket } from './connection-config'
+import type { GatewayEndpoint } from './local-gateway'
 import type { PlatformBindingTarget } from './platform-runtime-binding'
 import { openPlatformGateway } from './platform-runtime-binding'
 
@@ -15,6 +16,14 @@ export interface ManagedGatewayDescriptor {
   sharedRemote?: boolean
   headers?: Record<string, string>
   token?: string | null
+  gatewayEndpoint?: GatewayEndpoint
+}
+
+function bindingProfile(descriptor: ManagedGatewayDescriptor, profile: string): string {
+  const shared = descriptor.gatewayEndpoint || descriptor.sharedRemote ||
+    (descriptor.mode !== 'local' && descriptor.remoteKind !== 'ssh')
+
+  return shared ? profile || 'default' : 'default'
 }
 
 export async function resolvePlatformBindingTarget(input: {
@@ -23,6 +32,7 @@ export async function resolvePlatformBindingTarget(input: {
   readIdentity(baseUrl: string): string
   resolve(): Promise<ManagedGatewayDescriptor>
   mintTicket(baseUrl: string, headers: Record<string, string>): Promise<string>
+  nativeDial?(profile: string): Promise<string>
 }): Promise<PlatformBindingTarget> {
   const configuration = input.readConfiguration()
   const descriptor = await input.resolve()
@@ -73,14 +83,17 @@ export async function resolvePlatformBindingTarget(input: {
     fingerprint,
     host: tunnel ? descriptor.remoteHost || 'SSH' : base.host,
     remote: !local,
-    profile: descriptor.sharedRemote || (!local && !tunnel) ? input.profile || 'default' : 'default',
+    profile: bindingProfile(descriptor, input.profile),
     isCurrent: () => input.readConfiguration() === configuration && input.readIdentity(descriptor.baseUrl) === identity,
     open: async () => {
       // Tickets on pooled descriptors may already have been consumed by the UI.
-      const wsUrl =
-        descriptor.authMode === 'oauth'
+      const wsUrl = descriptor.gatewayEndpoint
+        ? await input.nativeDial?.(input.profile)
+        : descriptor.authMode === 'oauth'
           ? buildGatewayWsUrlWithTicket(descriptor.baseUrl, await input.mintTicket(descriptor.baseUrl, headers))
           : descriptor.wsUrl
+
+      if (!wsUrl) {throw new Error('Native gateway ticket dial unavailable')}
 
       if (input.readConfiguration() !== configuration || input.readIdentity(descriptor.baseUrl) !== identity) {
         throw new Error('binding_cancelled')

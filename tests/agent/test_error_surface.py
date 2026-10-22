@@ -79,6 +79,15 @@ def test_every_provider_surface_carries_the_display_label():
     assert "provider_label" not in build_error_surface_from_result(_failed_result("timeout"))
 
 
+@pytest.mark.parametrize("reason", ["managed_credential_expired", "managed_credential_revoked", "managed_auth_unavailable"])
+def test_managed_auth_keeps_account_recovery_instead_of_provider_key_editor(reason):
+    surface = build_error_surface_from_result(
+        {**_failed_result(reason), "failure_retryable": False}, provider="custom", model="m")
+    assert surface["layer"] == LAYER_AUTH and surface["code"] == reason
+    assert surface["retryable"] is False
+    assert "auth_kind" not in surface and "api_key_env" not in surface
+
+
 def test_result_billing_block_wins():
     surface = build_error_surface_from_result(
         _failed_result("rate_limit", billing_block={"provider": "nous"})

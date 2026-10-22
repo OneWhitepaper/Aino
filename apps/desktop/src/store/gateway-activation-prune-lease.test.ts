@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { $poolLimits } from './pool-limits'
+
 // Regression suite for #89622: clicking a profile in the rail did nothing.
 // The live-work pruner (pruneSecondaryGateways) disposed the switch target's
 // secondary entry while its socket was still dialing — the target is not yet
@@ -69,8 +71,7 @@ function installDesktop(): void {
       profile,
       token: 'registry-token'
     })),
-    getGatewayWsUrlFor: vi.fn(async () => 'ws://127.0.0.1:6161/ws'),
-    touchBackend: vi.fn(async () => undefined)
+    getGatewayWsUrlFor: vi.fn(async () => 'ws://127.0.0.1:6161/ws')
   }
 }
 
@@ -155,9 +156,9 @@ describe('activation lease vs. the live-work pruner (#89622)', () => {
     // lease released, the idle entry must be disposed exactly as before.
     await ensureGatewayForProfile('default')
 
-    // Age the socket past the min-lifetime grace so this prune asserts the
-    // lease release, not the freshly-opened spare (#94769).
-    vi.useFakeTimers({ now: Date.now() + SECONDARY_MIN_LIFETIME_MS + 1_000 })
+    // Age the socket past the configured idle deadline so this prune asserts
+    // the lease release, not retention of a freshly opened route.
+    vi.useFakeTimers({ now: Date.now() + Math.max(SECONDARY_MIN_LIFETIME_MS, $poolLimits.get().idleMs) + 1_000 })
     pruneSecondaryGateways(new Set())
     vi.useRealTimers()
 
@@ -184,7 +185,7 @@ describe('activation lease vs. the live-work pruner (#89622)', () => {
     // Past the lease window — which now spans a whole dial budget (#120298) —
     // reclaimed. (Lease is wall-clock bounded so a leaked lease cannot pin a
     // dead entry forever.)
-    vi.setSystemTime(Date.now() + SOURCE_SWITCH_DIAL_TIMEOUT_MS + SECONDARY_MIN_LIFETIME_MS)
+    vi.setSystemTime(Date.now() + SOURCE_SWITCH_DIAL_TIMEOUT_MS + $poolLimits.get().idleMs + 1)
     pruneSecondaryGateways(new Set())
     expect(secondaryGateways[0].close).toHaveBeenCalled()
 
@@ -210,8 +211,8 @@ describe('activation lease vs. the live-work pruner (#89622)', () => {
     pruneSecondaryGateways(new Set())
     expect(secondaryGateways[0].close).not.toHaveBeenCalled()
 
-    // Past the grace window: reclaimed as idle, as before.
-    vi.setSystemTime(Date.now() + SECONDARY_MIN_LIFETIME_MS + 1_000)
+    // Past the configured idle window: reclaimed.
+    vi.setSystemTime(Date.now() + $poolLimits.get().idleMs + 1_000)
     pruneSecondaryGateways(new Set())
     expect(secondaryGateways[0].close).toHaveBeenCalled()
   })

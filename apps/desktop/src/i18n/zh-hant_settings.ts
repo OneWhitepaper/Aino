@@ -105,6 +105,16 @@ export const zhHantSettings = {
       pageCount: (n: number) => `${n} 個頁面`,
       missing: '這個外掛程式沒有設定頁面，可能已停用或解除安裝。'
     },
+    poolLimits: {
+      warmBotBackendsAria: '保留的設定檔連線數',
+      warmBotBackendsTitle: '保留的設定檔連線數',
+      warmBotBackendsDesc:
+        '限制為快速切換而保留的次要設定檔連線。達到上限後會停止滑鼠懸停預熱並關閉多餘的閒置連線；手動開啟或使用中的設定檔仍可使用。',
+      backendIdleTimeoutAria: '設定檔連線閒置逾時（毫秒）',
+      backendIdleTimeoutTitle: '設定檔連線閒置逾時（毫秒）',
+      backendIdleTimeoutDesc:
+        '未使用的設定檔連線在關閉前保留的時間。只會中斷閒置 socket，不會停止共用 Hermes 閘道或其背景工作。'
+    },
     nav: {
       providers: '提供方',
       providerAccounts: '帳號',
@@ -737,12 +747,6 @@ export const zhHantSettings = {
         }
       }
     },
-    poolLimits: {
-      warmBotBackendsAria: '預熱機器人後端',
-      warmBotBackendsTitle: '預熱機器人後端',
-      backendIdleTimeoutAria: '後端閒置逾時（毫秒）',
-      backendIdleTimeoutTitle: '後端閒置逾時（毫秒）'
-    },
     customEndpoints: {
       active: '已啟用',
       apiKeySet: '已設定 API 金鑰',
@@ -1084,7 +1088,7 @@ export const zhHantSettings = {
     model: {
       setupProviderFallback: '提供方',
       setUpProvider: name => `設定 ${name}`,
-      staleAuxBefore: (count, names) => `${count} 個輔助任務（${names}）仍由 `,
+      staleAuxBefore: (count: number, names: string) => `${count} 個輔助任務（${names}）仍由 `,
       staleAuxAfter: ' 執行，而非主要模型。',
       staleAuxOtherProviders: '其他提供方',
       moaEnabled: '啟用',
@@ -1095,8 +1099,8 @@ export const zhHantSettings = {
       customModelPlaceholder: '模型 ID',
       chooseFromList: '從清單中選擇',
       moaDefault: '預設：',
-      moaReferenceToggle: (enabled, index) => `${enabled ? '停用' : '啟用'}參考 ${index}`,
-      moaReferenceTitle: index => `參考 ${index}`,
+      moaReferenceToggle: (enabled: boolean, index: number) => `${enabled ? '停用' : '啟用'}參考 ${index}`,
+      moaReferenceTitle: (index: number) => `參考 ${index}`,
       moaAddReference: '新增參考模型',
       loading: '正在載入模型設定...',
       appliesDesc: '套用至新工作階段。可在輸入框的模型選擇器中臨時切換目前對話。',
@@ -1143,7 +1147,7 @@ export const zhHantSettings = {
       },
       otherProviders: '其他提供方',
 
-      staleAuxiliary: (count, names, provider) =>
+      staleAuxiliary: (count: number, names: string, provider: string) =>
         `${count} 個輔助任務（${names}）仍由 ${provider} 執行，而非主要模型。`,
 
       moa: {
@@ -1156,11 +1160,27 @@ export const zhHantSettings = {
         newPresetPlaceholder: '新預設',
         addPreset: '新增預設',
         defaultLabel: '預設',
-        reference: index => `參考 ${index}`,
-        toggleReference: (enabled, index) => `${enabled ? '停用' : '啟用'}參考 ${index}`,
+        reference: (index: number) => `參考 ${index}`,
+        toggleReference: (enabled: boolean, index: number) => `${enabled ? '停用' : '啟用'}參考 ${index}`,
         remove: '移除',
         addReferenceModel: '新增參考模型',
         aggregator: '聚合模型'
+      },
+      subagents: {
+        inherit: '繼承主代理設定',
+        modelOnly: '自訂模型（沿用主代理憑證）',
+        providerLabel: '子代理提供方',
+        modelLabel: '子代理模型',
+        direct: '直接端點覆寫',
+        customProvider: '自訂提供方...',
+        customProviderLabel: '自訂子代理提供方',
+        parentModel: '使用主代理模型',
+        parentModelWarning:
+          '所選提供方必須支援主代理模型。模型不相容時，僅指定提供方的路由可能失敗。若該提供方設定了自己的預設模型，子代理會改用該模型。',
+        directActive: '直接端點已啟用，優先於已儲存的提供方。選擇此模式時會保留其端點與憑證。',
+        directClear: '套用此路由會清除直接端點及其儲存的金鑰。其他請求設定維持不變。',
+        catalogFailed: '模型目錄無法使用。請手動輸入提供方與模型，或重試。',
+        draftHint: '套用前，變更只保留在本機。'
       }
     },
     localModels: {

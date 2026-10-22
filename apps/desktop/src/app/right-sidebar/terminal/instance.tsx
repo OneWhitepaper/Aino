@@ -53,6 +53,7 @@ export function TerminalInstance({
 
   return (
     <div
+      aria-busy={status === 'starting'}
       className={cn(INSTANCE_CLASS, active ? 'visible' : 'invisible pointer-events-none')}
       // Focus-scope markers. The shared [data-terminal] routes close-tab
       // commands here; [data-interactive-terminal] marks the surface as a live

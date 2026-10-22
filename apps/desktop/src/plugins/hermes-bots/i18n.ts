@@ -23,25 +23,44 @@
  *    English where it is WRITTEN (`group-chat-parts.tsx`, `group-rounds.ts`);
  *    the places that RENDER the reader's own lines use `group.you` instead.
  *
- * Locales follow kanban: `en` / `ja` / `zh` / `zh-hant`. Arabic falls through
- * the resolution chain (active locale → this plugin's `en` → the key) the
- * same way a missing string in any locale does. Nouns match core: ボット /
- * 机器人 / 機器人, プロファイル / 工作区 / 設定檔, ゲートウェイ / 网关 / 閘道.
+ * Legacy Bot Mode copy follows kanban: `en` / `ja` / `zh` / `zh-hant`.
+ * Canonical hosted groups additionally have `ar`, `ru`, `fr`, `de`, and
+ * `es` strings; missing legacy copy falls through to English. Nouns match
+ * core: ボット / 机器人 / 機器人, プロファイル / 工作区 / 設定檔, ゲートウェイ / 网关 / 閘道.
  */
 
 import { type PluginLocaleBundles, type PluginTranslate, usePluginI18n } from '@hermes/plugin-sdk'
 import { useMemo } from 'react'
 
+import { CANONICAL_GROUP_LOCALES } from './canonical-group-locales'
 import { bind, type Bound } from './i18n-bind'
-import { en } from './i18n-en'
-import { ja } from './i18n-ja'
-import type { BotsMessages } from './i18n-types'
-import { zh } from './i18n-zh'
-import { zhHant } from './i18n-zhHant'
+import { en as legacyEn } from './i18n-en'
+import { ja as legacyJa } from './i18n-ja'
+import type { BotsMessages as UpstreamBotsMessages } from './i18n-messages'
+import type { BotsMessages as LegacyBotsMessages } from './i18n-types'
+import { zh as legacyZh } from './i18n-zh'
+import { zhHant as legacyZhHant } from './i18n-zhHant'
 import { getPluginCtx } from './shared'
 
+type BotsMessages = LegacyBotsMessages & Pick<UpstreamBotsMessages, 'canonical'>
+
+const en: BotsMessages = { ...legacyEn, canonical: CANONICAL_GROUP_LOCALES.en }
+const ja: BotsMessages = { ...legacyJa, canonical: CANONICAL_GROUP_LOCALES.ja }
+const zh: BotsMessages = { ...legacyZh, canonical: CANONICAL_GROUP_LOCALES.zh }
+const zhHant: BotsMessages = { ...legacyZhHant, canonical: CANONICAL_GROUP_LOCALES['zh-hant'] }
+
 /** Registered via `ctx.i18n.register` at plugin load (disposer tracked). */
-export const BOTS_LOCALES: PluginLocaleBundles = { en, ja, zh, 'zh-hant': zhHant }
+export const BOTS_LOCALES: PluginLocaleBundles = {
+  en,
+  ja,
+  zh,
+  'zh-hant': zhHant,
+  ar: { canonical: CANONICAL_GROUP_LOCALES.ar },
+  ru: { canonical: CANONICAL_GROUP_LOCALES.ru },
+  fr: { canonical: CANONICAL_GROUP_LOCALES.fr },
+  de: { canonical: CANONICAL_GROUP_LOCALES.de },
+  es: { canonical: CANONICAL_GROUP_LOCALES.es }
+}
 
 export type BotsText = Bound<BotsMessages>
 

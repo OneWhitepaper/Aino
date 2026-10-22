@@ -9,8 +9,25 @@ import sqlite3
 import pytest
 
 from gateway import hosted_rooms
+from gateway.hosted_room_policy_checkpoint import HostedRoomPolicyCheckpoint
 from hermes_constants import get_hermes_home
 from hermes_state import SessionDB
+
+
+def test_policy_index_waits_for_room_schema_on_first_open():
+    db_path = get_hermes_home() / "state.db"
+    HostedRoomPolicyCheckpoint(db_path)
+
+    with hosted_rooms._connect(db_path) as conn:
+        assert conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='index' AND name='idx_hosted_room_user_thread'"
+        ).fetchone() is None
+
+    HostedRoomPolicyCheckpoint(db_path)
+    with sqlite3.connect(db_path) as conn:
+        assert conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='index' AND name='idx_hosted_room_user_thread'"
+        ).fetchone() is not None
 
 
 @pytest.mark.parametrize("creator, expected_table", [

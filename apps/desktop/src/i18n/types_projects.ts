@@ -28,6 +28,7 @@ export interface SidebarProjectsTranslations {
   movedTo: (name: string) => string
   moveFailed: string
   moveNoFolder: string
+  moveBusy: string
   moveNoProjects: string
   reveal: string
   copyPath: string

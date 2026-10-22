@@ -318,7 +318,6 @@ function McpSetupRow({ action, onReissue, reissueBlocked, reissuing, request, ta
   const verb = rowVerb(target, action)
   const fields = target.requiredEnv
 
-  // The composer's MCP suggestion index caches the configured servers; this row just changed them.
   useEffect(() => {
     if (target.state === 'connected') {
       invalidateMcpSuggestionIndex()

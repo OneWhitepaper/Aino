@@ -339,10 +339,9 @@ test.describe('chat interaction with mock backend', () => {
 
     await composer.click()
     await composer.type('please answer tersely')
-    // Since "running is not busy" (3bc52fb9df) the primary keeps the Send
-    // affordance mid-turn — steer is routed through the submit engine, not a
-    // separate labeled button. Queue remains the explicit secondary action.
-    await expect(primary).toHaveAttribute('aria-label', 'Send')
+    // A pending reply keeps redirect as the primary action while queue remains
+    // an explicit secondary action.
+    await expect(primary).toHaveAttribute('aria-label', 'Redirect the current run')
     await expect(dictation).toBeVisible()
     await expect(voice).toBeVisible()
     await expect(queue).toBeVisible()
@@ -354,7 +353,7 @@ test.describe('chat interaction with mock backend', () => {
 
     expect(controlLabels.indexOf('Voice dictation')).toBeLessThan(controlLabels.indexOf('Voice'))
     expect(controlLabels.indexOf('Voice')).toBeLessThan(controlLabels.indexOf('Queue message'))
-    expect(controlLabels.indexOf('Queue message')).toBeLessThan(controlLabels.indexOf('Send'))
+    expect(controlLabels.indexOf('Queue message')).toBeLessThan(controlLabels.indexOf('Redirect the current run'))
     await voice.click()
     const readReplies = page.getByRole('menuitemcheckbox', { name: 'Read replies aloud', exact: true })
     await expect(readReplies).toHaveAttribute('aria-checked', 'false')

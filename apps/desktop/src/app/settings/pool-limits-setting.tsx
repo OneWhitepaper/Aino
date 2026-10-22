@@ -5,27 +5,19 @@ import { ListRow } from '@/app/settings/primitives'
 import { SETTING_IDS, settingElementId } from '@/app/settings/settings-manifest'
 import { Input } from '@/components/ui/input'
 import { useI18n } from '@/i18n'
-import { $poolLimits, loadPoolLimits, savePoolLimits } from '@/store/pool-limits'
+import { $poolLimits, savePoolLimits } from '@/store/pool-limits'
 
-// Bounds imported from main's clamp module so the advertised input ranges
-// can never drift from what the pool actually enforces (review note on #92581).
 import { POOL_LIMITS_BOUNDS } from '../../../electron/pool-limits'
 
 const MAX_BACKENDS_MAX = POOL_LIMITS_BOUNDS.maxBackendsMax
 const IDLE_MS_MAX = POOL_LIMITS_BOUNDS.idleMsMax
 
-/** Settings → Advanced: warm-bot-backends count + backend idle timeout.
- *  Device-local (not profile-scoped): the pool is sized once per machine and
- *  changes apply live — main evicts/reaps to converge without a restart. */
+/** Device-local limits for speculative profile connections and idle retention. */
 export function PoolLimitsSetting() {
   const { t } = useI18n()
   const limits = useStore($poolLimits)
   const [maxDraft, setMaxDraft] = useState(String(limits.maxBackends))
   const [idleDraft, setIdleDraft] = useState(String(limits.idleMs))
-
-  useEffect(() => {
-    void loadPoolLimits()
-  }, [])
 
   useEffect(() => {
     setMaxDraft(String(limits.maxBackends))
@@ -70,7 +62,7 @@ export function PoolLimitsSetting() {
               className="w-20"
               inputMode="numeric"
               max={MAX_BACKENDS_MAX}
-              min={1}
+              min={POOL_LIMITS_BOUNDS.maxBackendsMin}
               onBlur={commitMax}
               onChange={event => setMaxDraft(event.target.value)}
               onKeyDown={event => {
@@ -83,7 +75,7 @@ export function PoolLimitsSetting() {
             />
           </div>
         }
-        description="How many bot backends stay running for instant switching. Higher = faster switches, more memory (~60MB per backend). Applies immediately."
+        description={t.settings.poolLimits.warmBotBackendsDesc}
         id={settingElementId(SETTING_IDS.advanced.warmBotBackends)}
         title={t.settings.poolLimits.warmBotBackendsTitle}
       />
@@ -95,7 +87,7 @@ export function PoolLimitsSetting() {
               className="w-28"
               inputMode="numeric"
               max={IDLE_MS_MAX}
-              min={60_000}
+              min={POOL_LIMITS_BOUNDS.idleMsMin}
               onBlur={commitIdle}
               onChange={event => setIdleDraft(event.target.value)}
               onKeyDown={event => {
@@ -109,7 +101,7 @@ export function PoolLimitsSetting() {
             <span className="text-[length:var(--conversation-caption-font-size)] text-(--ui-text-tertiary)">ms</span>
           </div>
         }
-        description="How long an unused remote bot connection stays cached before it is dropped. Local backends keep running while idle, since they run cron jobs and bot chats."
+        description={t.settings.poolLimits.backendIdleTimeoutDesc}
         id={settingElementId(SETTING_IDS.advanced.backendIdleTimeout)}
         title={t.settings.poolLimits.backendIdleTimeoutTitle}
       />

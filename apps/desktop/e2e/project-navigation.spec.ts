@@ -30,6 +30,8 @@ test.beforeAll(async () => {
   await waitForAppReady(fixture, 120_000)
 })
 
+// Playwright requires an object destructuring pattern even when no fixtures are used.
+// eslint-disable-next-line no-empty-pattern
 test.afterAll(async ({}, testInfo) => {
   const logs = fixture && path.join(fixture.sandbox.hermesHome, 'logs')
 
@@ -157,7 +159,7 @@ test('separates pinned, project and ordinary chats through real folder and sessi
     page.locator('[data-chat-surface]:visible').getByRole('button', { name: 'Select project', exact: true })
   ).toBeVisible()
   const ordinaryChat = await sendMessage('Ordinary conversation')
-  expect(ordinaryChat.cwd).toBeNull()
+  expect(ordinaryChat.cwd).toBe(realpathSync(sandbox.root))
   await expect(recentSection.getByText('Ordinary conversation', { exact: true })).toBeVisible()
   await expect(projectSection.getByText('Ordinary conversation', { exact: true })).toHaveCount(0)
 
@@ -707,7 +709,9 @@ test('restores a worktree conversation and its draft and tools after closing the
     await waitForAppReady({ ...fixture, ...reopened }, 120_000)
     const restored = reopened.page
     const restoredSurface = restored.locator('[data-chat-surface]:visible').last()
+    expect(storedSessions().find(session => session.id === sent.id)?.cwd).toBe(sent.cwd)
     await expect(restoredSurface.getByRole('button', { name: 'Work location', exact: true })).toHaveText('Worktree')
+    await expect(restoredSurface.getByRole('button', { name: 'work-location-project', exact: true })).toBeVisible()
     await expect(restoredSurface.locator('[contenteditable="true"]')).toHaveText('Keep this unfinished worktree draft')
     // Summary visibility is a window-local choice; its contents still follow
     // the restored chat when the user opens it in the new window.
@@ -730,6 +734,7 @@ test('restores a worktree conversation and its draft and tools after closing the
     expect(terminal.reviveBuffer).toContain(`aino-before-restart-${sent.cwd}`)
     const restoredInput = restored.locator('[data-terminal]:visible .xterm-helper-textarea')
     await expect(restoredInput).toHaveCount(1)
+    await expect(restored.locator('[data-terminal]:visible')).toHaveAttribute('aria-busy', 'false')
     await restoredInput.pressSequentially('printf "aino-after-restart-%s\\n" "$PWD"')
     await restoredInput.press('Enter')
     await expect

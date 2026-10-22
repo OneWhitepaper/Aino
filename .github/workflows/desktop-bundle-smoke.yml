@@ -364,7 +364,7 @@ jobs:
   validate:
     if: inputs.artifact-id == ''
     name: Require a supported native smoke target
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     timeout-minutes: 5
     env:
       TARGET: ${{ inputs.platform }}/${{ inputs.arch }}/${{ inputs.format }}

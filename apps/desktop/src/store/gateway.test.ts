@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { $poolLimits } from './pool-limits'
+
 // Connection lifecycle for registry-scoped secondary gateways:
 //
 //  1. Removing a connection must dispose its secondaries — remote/cloud
@@ -150,7 +152,9 @@ describe('ensureGatewayForProfile — secondary connect failure surfaces (#81094
 
     await expect(ensureGatewayForProfile('work')).rejects.toThrow('backend unreachable')
 
+    vi.useFakeTimers({ now: Date.now() + $poolLimits.get().idleMs + 1 })
     pruneSecondaryGateways(new Set())
+    vi.useRealTimers()
 
     expect(gatewayMocks.instances[0].close).toHaveBeenCalledTimes(1)
   })

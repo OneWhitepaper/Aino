@@ -14,7 +14,7 @@ import { assertLateLeaseAlerts, observeLateLeaseAlerts, verifyLateLeaseAcrossAcc
 import { launchGuardedPackagedDesktop, PACKAGED_PLATFORM_ORIGIN, packagedBackendEvidence, packagedExecutable, startPackagedTransport } from './platform-packaged-api'
 import { auditFixtureText, fixtureEnvironment, installLoopbackNodeGuard, installLoopbackPythonGuard, isExpectedBlockedThemeFontRequest, KNOWN_BLOCKED_THEME_FONT_URL, launchGuardedDesktop, type NativeState, type NativeTransportAudit, persistedFixtureText, startRealPlatformAPI } from './platform-real-api'
 import { verifyWebsiteWallet } from './platform-website-wallet'
-import { seedPlatformWorkspace, verifyPlatformWorkspace } from './platform-workspace-proof'
+import { seedPlatformWorkspace, stopFixtureGateway, verifyPlatformWorkspace } from './platform-workspace-proof'
 import { allowErrorBanners, expect, type Page, test } from './test'
 
 interface NativeWindow {
@@ -119,6 +119,20 @@ function pythonGuardPids(sandbox: ReturnType<typeof createSandbox>): Set<number>
 }
 
 function assertNewGuardedBackend(sandbox: ReturnType<typeof createSandbox>, priorGuardPids: Set<number>) {
+  const gatewayPidPath = path.join(sandbox.hermesHome, 'gateway.pid')
+
+  if (fs.existsSync(gatewayPidPath)) {
+    // Canonical owners survive viewer restarts; the current owner must still be
+    // a guarded process belonging to this isolated home, not a new app child.
+    const owner = JSON.parse(fs.readFileSync(gatewayPidPath, 'utf8')) as { pid: number; hermes_home: string }
+
+    expect(fs.realpathSync(owner.hermes_home)).toBe(fs.realpathSync(sandbox.hermesHome))
+    expect(pythonGuardPids(sandbox).has(owner.pid)).toBe(true)
+    expect(() => process.kill(owner.pid, 0)).not.toThrow()
+
+    return
+  }
+
   const ownershipPath = path.join(sandbox.userDataDir, 'backend-ownership.json')
   const ownership = JSON.parse(fs.readFileSync(ownershipPath, 'utf8')) as { backends?: Array<{ pid?: unknown }> }
 
@@ -147,7 +161,10 @@ function prepareNativePlatformEnvironment(
   const inherited = buildAppEnv(sandbox)
   const env: Record<string, string> = { ...fixtureEnvironment(), HOME: sandbox.root }
 
-  for (const key of ['HERMES_DESKTOP_USER_DATA_DIR', 'HERMES_DESKTOP_IGNORE_EXISTING', 'HERMES_DESKTOP_HERMES_ROOT', 'HERMES_DESKTOP_APP_NAME', 'HERMES_DESKTOP_SKIP_QUIT_CONFIRM']) { env[key] = inherited[key] }
+  for (const key of ['HERMES_DESKTOP_USER_DATA_DIR', 'HERMES_DESKTOP_IGNORE_EXISTING', 'HERMES_DESKTOP_HERMES_ROOT', 'HERMES_DESKTOP_APP_NAME', 'HERMES_DESKTOP_SKIP_QUIT_CONFIRM', 'HERMES_DESKTOP_SKIP_PROTOCOL_REGISTRATION', 'HERMES_DESKTOP_ISOLATED_BACKEND', 'HERMES_DESKTOP_PYTHON']) {
+    if (inherited[key]) { env[key] = inherited[key] }
+  }
+
   env.HERMES_HOME = sandbox.hermesHome
   env.HERMES_DESKTOP_CWD = path.dirname(api.info.fixture_path)
   env.PYTHONPATH = installLoopbackPythonGuard(sandbox.root)
@@ -271,7 +288,7 @@ test('native fixture guards load before real Electron main', async () => {
 
     for (const key of ['HERMES_DESKTOP_USER_DATA_DIR', 'HERMES_DESKTOP_IGNORE_EXISTING', 'HERMES_DESKTOP_HERMES_ROOT', 'HERMES_DESKTOP_APP_NAME', 'HERMES_DESKTOP_SKIP_QUIT_CONFIRM']) { env[key] = inherited[key] }
     env.PYTHONPATH = installLoopbackPythonGuard(sandbox.root)
-    const python = path.resolve(import.meta.dirname, '../../../.venv/bin/python')
+    const python = process.env.HERMES_DESKTOP_PYTHON || path.resolve(import.meta.dirname, '../../../.venv/bin/python')
 
     const pythonProof = execFileSync(python, ['-c', `import json, sitecustomize, subprocess
 spawned=[]
@@ -373,7 +390,7 @@ test('real website wallet uses an independent phone login', async ({ browserName
   let primaryError: unknown
 
   try {
-    const website = await verifyWebsiteWallet({ api, frontendDist: path.join(repoRoot, '../Aino-API/backend/internal/web/dist'), previousCodeAt: 0, screenshotPath: testInfo.outputPath('platform-website-wallet.png') })
+    const website = await verifyWebsiteWallet({ api, frontendDist: path.join(process.env.AINO_NATIVE_API_ROOT || path.resolve(repoRoot, '../Aino-API'), 'backend/internal/web/dist'), previousCodeAt: 0, screenshotPath: testInfo.outputPath('platform-website-wallet.png') })
     const state = await api.control<NativeState>('state')
     expect(website.accountId).toBe(String(state.user_id))
     expect(website.balance).toBe(Number(state.balance).toFixed(2))
@@ -458,7 +475,8 @@ test('real API workspace switch preserves platform account across native windows
         initial_account_id: initialAccount.account!.id,
         workspace_account_id: workspace.account_id,
         workspace_profile: workspace.profile,
-        distinct_guarded_backend: workspace.distinct_guarded_backend,
+        canonical_owner_verified: workspace.canonical_owner_verified,
+        profile_scope_verified: workspace.profile_scope_verified,
         peer_account_matches: workspace.peer_account_matches,
         peer_wallet_matches: workspace.peer_wallet_matches,
         hide_show_preserves_account: workspace.hide_show_preserves_account,
@@ -496,7 +514,7 @@ test('real API workspace switch preserves platform account across native windows
 
     try { await api?.close() } catch (error) { cleanupErrors.push(error) }
 
-    try { sandbox.cleanup() } catch (error) { cleanupErrors.push(error) }
+    try { stopFixtureGateway(sandbox); sandbox.cleanup() } catch (error) { cleanupErrors.push(error) }
   }
 
   if (primaryError !== undefined && cleanupErrors.length > 0) {
@@ -591,7 +609,7 @@ test('native compression ledger survives close and resume with a fresh binding',
 
     try { await api?.close() } catch (error) { cleanupErrors.push(error) }
 
-    try { sandbox.cleanup() } catch (error) { cleanupErrors.push(error) }
+    try { stopFixtureGateway(sandbox); sandbox.cleanup() } catch (error) { cleanupErrors.push(error) }
   }
 
   if (primaryError !== undefined && cleanupErrors.length > 0) {
@@ -683,7 +701,7 @@ for (const scenario of [
 
       try { await api?.close() } catch (error) { cleanupErrors.push(error) }
 
-      try { sandbox.cleanup() } catch (error) { cleanupErrors.push(error) }
+      try { stopFixtureGateway(sandbox); sandbox.cleanup() } catch (error) { cleanupErrors.push(error) }
     }
 
     if (primaryError !== undefined && cleanupErrors.length > 0) { throw new AggregateError([primaryError, ...cleanupErrors], 'Native edge fixture and cleanup failed') }
@@ -859,7 +877,7 @@ test('packaged default sandbox supports platform login tools and history restart
 
     try { await api?.close() } catch (error) { cleanupErrors.push(error) }
 
-    try { sandbox.cleanup() } catch (error) { cleanupErrors.push(error) }
+    try { stopFixtureGateway(sandbox); sandbox.cleanup() } catch (error) { cleanupErrors.push(error) }
   }
 
   if (primaryError !== undefined && cleanupErrors.length > 0) { throw new AggregateError([primaryError, ...cleanupErrors], 'Packaged fixture and cleanup failed') }
@@ -918,7 +936,14 @@ test('native late lease cannot revive the signed-out account after replacement l
   } catch (error) {
     primaryError = error
 
-    if (launched) { await launched.page.screenshot({ path: testInfo.outputPath('native-late-lease-error.png') }).catch(() => undefined) }
+    if (launched) {
+      await launched.page.screenshot({ path: testInfo.outputPath('native-late-lease-error.png') }).catch(() => undefined)
+      await testInfo.attach('late-lease-terminal-diagnostic', { contentType: 'application/json',
+        body: JSON.stringify(await launched.page.evaluate(() => ({
+          events: (window as unknown as { edgeTerminalEvents?: unknown[] }).edgeTerminalEvents,
+          metrics: [...document.querySelectorAll('[data-slot="aui_reply-metrics"]')].map(node => node.outerHTML)
+        })), null, 2) })
+    }
   } finally {
     if (api) {
       try { await api.control('faults', JSON.stringify({ hold_credential_response: false })) } catch (error) { cleanupErrors.push(error) }
@@ -928,7 +953,7 @@ test('native late lease cannot revive the signed-out account after replacement l
 
     try { await api?.close() } catch (error) { cleanupErrors.push(error) }
 
-    try { sandbox.cleanup() } catch (error) { cleanupErrors.push(error) }
+    try { stopFixtureGateway(sandbox); sandbox.cleanup() } catch (error) { cleanupErrors.push(error) }
   }
 
   if (primaryError !== undefined && cleanupErrors.length > 0) { throw new AggregateError([primaryError, ...cleanupErrors], 'Late lease and cleanup failed') }
@@ -996,7 +1021,7 @@ test('native inference failures: balance, rate limit and service recovery', asyn
 
     try { await api?.close() } catch (error) { cleanupErrors.push(error) }
 
-    try { sandbox.cleanup() } catch (error) { cleanupErrors.push(error) }
+    try { stopFixtureGateway(sandbox); sandbox.cleanup() } catch (error) { cleanupErrors.push(error) }
   }
 
   if (primaryError !== undefined && cleanupErrors.length > 0) { throw new AggregateError([primaryError, ...cleanupErrors], 'Inference fixture and cleanup failed') }
@@ -1145,7 +1170,7 @@ for (const sameSite of [true, false]) {
 
       for (const api of apis) { try { await api.close() } catch (error) { cleanupErrors.push(error) } }
 
-      for (const sandbox of sandboxes) { try { sandbox.cleanup() } catch (error) { cleanupErrors.push(error) } }
+      for (const sandbox of sandboxes) { try { stopFixtureGateway(sandbox); sandbox.cleanup() } catch (error) { cleanupErrors.push(error) } }
     }
 
     if (primaryError !== undefined && cleanupErrors.length > 0) { throw new AggregateError([primaryError, ...cleanupErrors], 'Isolation fixture and cleanup failed') }
@@ -1183,7 +1208,7 @@ test('desktop recharge reaches the same wallet through independent website login
 
     const website = await verifyWebsiteWallet({
       api,
-      frontendDist: path.join(repoRoot, '../Aino-API/backend/internal/web/dist'),
+      frontendDist: path.join(process.env.AINO_NATIVE_API_ROOT || path.resolve(repoRoot, '../Aino-API'), 'backend/internal/web/dist'),
       previousCodeAt: codeAt,
       screenshotPath: testInfo.outputPath('website-recharged-wallet.png')
     })
@@ -1242,7 +1267,7 @@ test('desktop recharge reaches the same wallet through independent website login
 
     try { await api?.close() } catch (error) { cleanupErrors.push(error) }
 
-    try { sandbox.cleanup() } catch (error) { cleanupErrors.push(error) }
+    try { stopFixtureGateway(sandbox); sandbox.cleanup() } catch (error) { cleanupErrors.push(error) }
   }
 
   if (primaryError !== undefined && cleanupErrors.length > 0) {
@@ -1399,7 +1424,7 @@ test('real API account, native managed lease, Python tool roundtrip and wallet',
     expect(fs.readFileSync(path.join(sandbox.hermesHome, 'config.yaml'), 'utf8')).toContain(byok.url)
     const byokAudit = await auditRenderer(customProvider, api)
     stage = 'website-wallet'
-    const website = await verifyWebsiteWallet({ api, frontendDist: path.join(repoRoot, '../Aino-API/backend/internal/web/dist'), previousCodeAt: thirdCodeAt, screenshotPath: testInfo.outputPath('platform-website-wallet.png') })
+    const website = await verifyWebsiteWallet({ api, frontendDist: path.join(process.env.AINO_NATIVE_API_ROOT || path.resolve(repoRoot, '../Aino-API'), 'backend/internal/web/dist'), previousCodeAt: thirdCodeAt, screenshotPath: testInfo.outputPath('platform-website-wallet.png') })
     expect(website.accountId).toBe(snapshot.account!.id)
     expect(website.balance).toBe(Number(afterBYOK.balance).toFixed(2))
     const transport = await assertNoBlockedTransport(sandbox, launchAudits)
@@ -1438,7 +1463,7 @@ test('real API account, native managed lease, Python tool roundtrip and wallet',
 
     try { await byok.close() } catch (error) { cleanupErrors.push(error) }
 
-    try { sandbox.cleanup() } catch (error) { cleanupErrors.push(error) }
+    try { stopFixtureGateway(sandbox); sandbox.cleanup() } catch (error) { cleanupErrors.push(error) }
   }
 
   if (primaryError !== undefined && cleanupErrors.length > 0) {

@@ -39,6 +39,7 @@ _REASON_TO_LAYER = {
     "managed_auth_unavailable": LAYER_AUTH, "managed_balance_unavailable": LAYER_BILLING,
     "auth": LAYER_AUTH, "auth_permanent": LAYER_AUTH, "billing": LAYER_BILLING, "billing_unverified": LAYER_BILLING,
     "loop_error": LAYER_GATEWAY, "interpreter_shutdown": LAYER_GATEWAY, "session_busy": LAYER_GATEWAY,
+    "gateway_connection": LAYER_GATEWAY, "host_error": LAYER_GATEWAY,
     "truncated": LAYER_PROVIDER, "empty_response": LAYER_PROVIDER, "invalid_response": LAYER_PROVIDER,
     "context_overflow": LAYER_PROVIDER,  # a bigger-window model IS the fix, so Switch provider applies
 }
@@ -55,7 +56,7 @@ _FREE_TIER_RETRYABLE_KINDS = {"rate_limited", "at_capacity", "outage"}
 # Kept in sync with ``classify_api_error``'s retryable=False verdicts.
 _NON_RETRYABLE_REASONS = {
     "auth", "auth_permanent", "billing", "billing_unverified", "content_policy_blocked",
-    "provider_policy_blocked", "model_not_found", "format_error", "ssl_cert_verification",
+    "provider_policy_blocked", "data_policy_denied", "model_not_found", "format_error", "ssl_cert_verification",
     "context_overflow", "interpreter_shutdown", "upstream_blocked",
 }
 
@@ -96,9 +97,10 @@ def _surface(layer: str, code: str, retryable: bool, provider: str = "", model: 
         # Clients name the failing provider in the card copy ("OpenCode Go did
         # not answer…"), not by its config slug.
         surface["provider_label"] = _provider_label(provider)
-    if layer == LAYER_AUTH and provider:
+    if layer == LAYER_AUTH and provider and not code.startswith("managed_"):
         # OAuth providers are fixed by signing in again; API-key providers by
-        # replacing the key. The client's one-click recovery needs to know which.
+        # replacing the key. Aino-managed grants use the existing account recovery,
+        # never the underlying provider's key/OAuth editor.
         surface["auth_kind"] = auth_kind(provider)
         if surface["auth_kind"] == "api_key" and (env_var := _api_key_env(provider)):
             surface["api_key_env"] = env_var

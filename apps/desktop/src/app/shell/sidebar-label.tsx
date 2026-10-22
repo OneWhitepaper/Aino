@@ -5,15 +5,10 @@ import { cn } from '@/lib/utils'
 interface SidebarPanelLabelProps extends React.ComponentProps<'span'> {
   dotClassName?: string
   tone?: 'accent' | 'neutral'
+  meta?: React.ReactNode
 }
 
-export function SidebarPanelLabel({
-  children,
-  className,
-  dotClassName,
-  tone = 'accent',
-  ...props
-}: SidebarPanelLabelProps) {
+export function SidebarPanelLabel({ children, className, dotClassName, tone = 'accent', meta, ...props }: SidebarPanelLabelProps) {
   return (
     <span
       className={cn(
@@ -27,6 +22,11 @@ export function SidebarPanelLabel({
         <span aria-hidden="true" className={cn('dither inline-block size-2 shrink-0 rounded-[1px]', dotClassName)} />
       )}
       <span className="min-w-0 truncate leading-none">{children}</span>
+      {meta && (
+        <span className="shrink-0 text-[0.6875rem] font-medium tracking-normal text-(--ui-text-quaternary)">
+          {meta}
+        </span>
+      )}
     </span>
   )
 }

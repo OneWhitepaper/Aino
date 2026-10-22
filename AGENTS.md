@@ -1,9 +1,8 @@
 # Hermes Agent - Development Guide
 
-For AI coding assistants and developers working on hermes-agent. This root file is a hub: what
-applies everywhere, then a routing table. Each area's `AGENTS.md` loads automatically when you work
-in that directory; read it before editing there. `python scripts/check` caps this file at 12k chars
-and every root-to-area chain at 30k, so it loads whole on 128k+ models: long form goes in the guide.
+Global rules and area routing for Hermes development. Read each area's `AGENTS.md` before editing
+there. `python scripts/check` caps this file at 12k characters and root-to-area chains at 30k;
+put longer explanations in the developer guide.
 
 **Never give up on the right solution.**
 
