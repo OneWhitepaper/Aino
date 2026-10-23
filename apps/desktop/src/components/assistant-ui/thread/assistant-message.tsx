@@ -1280,10 +1280,11 @@ const AssistantFooter: FC<MessageActionProps & { durationS?: number; metrics?: T
   metrics,
   ...props
 }) => {
-  const turnRunning = useAuiState(s => {
+  const footerState = useAuiState(s => {
     // The runtime projects this view's busy state (and excludes history pages).
     // A completed text segment can still precede live tools or a provider wait.
     let running = s.thread.isRunning
+    let continued = false
 
     for (let index = s.thread.messages.length - 1; index >= 0; index--) {
       const message = s.thread.messages[index]!
@@ -1293,18 +1294,23 @@ const AssistantFooter: FC<MessageActionProps & { durationS?: number; metrics?: T
       }
 
       if (message.id === s.message.id) {
-        return running
+        return running ? (continued ? 'live-continuation' : 'live-tail') : 'settled'
       }
 
       const role = responseMessageRole(message)
 
       if (role === 'user' || role === 'system') {
         running = false
+        continued = false
+      } else {
+        continued = true
       }
     }
 
-    return false
+    return 'settled'
   })
+
+  const turnRunning = footerState !== 'settled'
 
   return (
     <div
@@ -1312,7 +1318,13 @@ const AssistantFooter: FC<MessageActionProps & { durationS?: number; metrics?: T
       className="flex min-h-6 flex-col items-end gap-1 pr-(--message-text-indent) pl-(--message-text-indent)"
       data-slot="aui_assistant-footer"
       inert={turnRunning || undefined}
-      style={turnRunning ? { visibility: 'hidden' } : undefined}
+      // Only the live tail reserves footer space; a sealed paragraph's hidden
+      // controls must not leave a blank row before its continuing tools.
+      style={
+        turnRunning
+          ? { display: footerState === 'live-continuation' ? 'none' : undefined, visibility: 'hidden' }
+          : undefined
+      }
     >
       <BranchPickerPrimitive.Root
         className="inline-flex h-6 items-center gap-1 text-xs text-muted-foreground"
