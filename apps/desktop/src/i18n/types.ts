@@ -542,9 +542,7 @@ catalog: CatalogTranslations
     failedHint: string
     handoffLead: string
     links: {
-      discord: string
       github: string
-      portal: string
     }
 
     gatewayUnavailable: string

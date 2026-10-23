@@ -514,26 +514,24 @@ export const en: Translations = {
   ...enBilling,
 
   sendDiagnostics: {
-    title: 'Send diagnostics to Nous',
+    title: "Send diagnostics to Aino",
     privacyNotice:
-      'This uploads a debug bundle to Nous-internal storage (not a public paste). It includes system info (OS, versions, provider, which API keys are configured — never the keys themselves) and full agent, gateway, and desktop logs (up to 512 KB each), which likely contain conversation content, tool outputs, and file paths. Secrets are redacted before upload. The bundle is viewable only by Nous staff and allowlisted Discord moderators, and auto-deletes after 14 days.',
+      "This sends a private bundle to your Aino account service: system information, configuration status (never keys themselves), and agent, gateway and desktop logs (up to 512 KB each). Logs may contain conversations, tool output and file paths. Keys are redacted before upload, but other sensitive content may remain. Only authorized Aino administrators can read it. Access expires after 14 days; online data is purged within the next hour. Existing backups follow the deployment backup policy.",
     upload: 'Upload',
     uploading: 'Uploading…',
     cancel: 'Cancel',
     close: 'Close',
-    copyLink: 'Copy link',
-    uploadIdFallback: id => `No view link returned — quote upload ID ${id} to support`,
+    copyLink: "Copy diagnostic ID",
+    uploadIdFallback: id => "Diagnostic ID: " + id,
     doneTitle: 'Diagnostics sent',
     doneDescription:
-      'Your bundle was uploaded privately. Share the link below in your support thread so the team can see your logs.',
+      "Your bundle was uploaded privately to Aino. Quote this ID in your support report; do not post logs publicly.",
     failedTitle: 'Upload failed',
     failedHint:
-      'You can also run `hermes debug share --nous` from a terminal, or `hermes debug share --local` to print the report without uploading.',
-    handoffLead: 'Pick up the discussion in:',
+      "Sign in to Aino and retry. Update older runtimes first. For a local report without uploading, run `hermes debug share --local`.",
+    handoffLead: "Contact Aino through:",
     links: {
       github: 'GitHub Issues',
-      portal: 'Nous Portal Support',
-      discord: 'Discord'
     },
     gatewayUnavailable: 'Hermes gateway unavailable',
 

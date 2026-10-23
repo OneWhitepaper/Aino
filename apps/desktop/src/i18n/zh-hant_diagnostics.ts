@@ -85,25 +85,24 @@ export const zhHantDiagnostics = {
   },
 
   sendDiagnostics: {
-    title: '向 Nous 傳送診斷資訊',
+    title: "向 Aino 傳送診斷資訊",
     privacyNotice:
-      '這會將偵錯套件上傳到 Nous 內部儲存空間（並非公開貼上板）。內容包括系統資訊（作業系統、版本、服務商、已設定的 API 金鑰種類 — 絕不包含金鑰本身）以及完整的 agent、gateway 與桌面端日誌（每個最多 512 KB，很可能包含對話內容、工具輸出與檔案路徑）。上傳前會先遮罩機密資訊。僅 Nous 員工與獲准的 Discord 版主可檢視，14 天後自動刪除。',
+      "這會將私人診斷包上傳至你的 Aino 帳號服務。包含系統資訊、設定狀態（不含金鑰本身），以及智慧體、閘道和桌面日誌（每份最多 512 KB）。日誌可能包含對話、工具輸出和檔案路徑。上傳前會遮蔽金鑰，但仍可能含有其他敏感內容。僅授權的 Aino 管理員可查看。14 天後立即停止存取，隨後 1 小時內清除線上資料；既有備份依部署備份政策清理。",
     upload: '上傳',
     uploading: '上傳中…',
     cancel: '取消',
     close: '關閉',
-    copyLink: '複製連結',
-    uploadIdFallback: id => `未回傳檢視連結 — 請向支援人員提供上傳 ID ${id}`,
+    copyLink: "複製診斷編號",
+    uploadIdFallback: id => "診斷編號：" + id,
     doneTitle: '診斷資訊已傳送',
-    doneDescription: '偵錯套件已私密上傳。在您的支援討論串中分享以下連結，團隊即可檢視您的日誌。',
+    doneDescription:
+      "診斷包已私密上傳至 Aino。回報問題時提供此編號即可，請勿公開日誌正文。",
     failedTitle: '上傳失敗',
     failedHint:
-      '您也可以在終端機執行 `hermes debug share --nous`，或執行 `hermes debug share --local` 在不上傳的情況下檢視報告。',
-    handoffLead: '在以下位置繼續討論:',
+      "請登入 Aino 帳號後重試；舊版執行環境請先更新。只查看本機報告、不上傳，可執行 `hermes debug share --local`。",
+    handoffLead: "透過以下入口向 Aino 回報：",
     links: {
       github: 'GitHub Issues',
-      portal: 'Nous Portal 支援',
-      discord: 'Discord'
     }
   },
 

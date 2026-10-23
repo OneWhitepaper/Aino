@@ -7,6 +7,7 @@ import type {
   PlatformCheckoutInfo,
   PlatformCreateOrderInput,
   PlatformDevice,
+  PlatformDiagnosticReceipt,
   PlatformModel,
   PlatformOrder,
   PlatformOrderPage,
@@ -18,6 +19,7 @@ import type { PlatformUsagePage, PlatformUsageQuery } from '../shared/platform-c
 
 import { parsePlatformCheckoutInfo, parsePlatformWalletSummary } from './platform-billing-contract'
 import { parsePlatformDeviceId, parsePlatformDevices } from './platform-device-contract'
+import { parseDiagnosticReceipt, validateDiagnosticBundle } from './platform-diagnostics-contract'
 import { parsePlatformModel } from './platform-model-contract'
 import { parsePaymentQuote, parsePaymentQuoteInput, parsePlatformCreateOrderInput, parsePlatformOrder, parsePlatformOrderId, parsePlatformOrderPage, parsePlatformOrderQuery } from './platform-payment-contract'
 import type { PlatformTokenSet } from './platform-token-store'
@@ -45,6 +47,7 @@ interface AuthExchange {
   tempToken?: string
 }
 export interface PlatformClient {
+  uploadDiagnostics(accessToken: string, bundle: string): Promise<PlatformDiagnosticReceipt>
   listDevices(accessToken: string): Promise<PlatformDevice[]>
   revokeDevice(accessToken: string, deviceId: string): Promise<{ revoked: true }>
   quote(accessToken: string, input: PaymentQuoteInput): Promise<PaymentQuote>
@@ -191,9 +194,9 @@ export function createPlatformClient({
 }): PlatformClient {
   const origin = validatePlatformOrigin(rawOrigin, allowInsecureLoopback)
 
-  async function request(method: string, endpoint: string, body?: unknown, token?: string): Promise<unknown> {
+  async function request(method: string, endpoint: string, body?: unknown, token?: string, requestTimeoutMs = timeoutMs): Promise<unknown> {
     const controller = new AbortController()
-    const timer = setTimeout(() => controller.abort(), timeoutMs)
+    const timer = setTimeout(() => controller.abort(), requestTimeoutMs)
 
     try {
       const response = await fetchImpl(`${origin}/api/v1${endpoint}`, {
@@ -331,6 +334,10 @@ export function createPlatformClient({
 
   return {
     origin,
+    async uploadDiagnostics(token, bundle) {
+      // Bundles are much larger than account JSON; give slow links time without changing login deadlines.
+      return parseDiagnosticReceipt(await request('POST', '/desktop/diagnostics', { bundle_base64: validateDiagnosticBundle(bundle) }, token, 120_000))
+    },
     async listDevices(token) {
       return parsePlatformDevices(await request('GET', '/desktop/devices', undefined, token))
     },

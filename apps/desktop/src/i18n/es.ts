@@ -498,26 +498,24 @@ export const esOverrides = {
   },
   ...esNotices,
   sendDiagnostics: {
-    title: 'Enviar diagnóstico a Nous',
+    title: "Enviar diagnósticos a Aino",
     privacyNotice:
-      'Esto sube un paquete de depuración a un almacenamiento interno de Nous (no a un sitio público). Incluye información del sistema (SO, versiones, proveedor y qué claves API están configuradas, nunca las claves en sí) y los registros completos del agente, del gateway y de la app de escritorio (hasta 512 KB cada uno), que probablemente contengan contenido de conversaciones, salidas de herramientas y rutas de archivos. Los secretos se ocultan antes de subirlo. Solo el personal de Nous y los moderadores autorizados de Discord pueden ver el paquete, que se elimina automáticamente a los 14 días.',
+      "Se sube un paquete privado al servicio de tu cuenta Aino: información del sistema, estado de configuración (sin claves) y registros del agente, gateway y escritorio (hasta 512 KB cada uno). Pueden contener conversaciones, resultados de herramientas y rutas de archivos. Las claves se ocultan, pero pueden quedar otros datos sensibles. Solo administradores autorizados de Aino pueden leerlo. El acceso caduca a los 14 días y los datos en línea se borran en la hora siguiente. Las copias de seguridad existentes siguen la política del despliegue.",
     upload: 'Subir',
     uploading: 'Subiendo…',
     cancel: 'Cancelar',
     close: 'Cerrar',
-    copyLink: 'Copiar enlace',
-    uploadIdFallback: id => `No se devolvió un enlace para verlo: indica el ID de subida ${id} al equipo de soporte`,
+    copyLink: "Copiar ID de diagnóstico",
+    uploadIdFallback: id => "ID de diagnóstico: " + id,
     doneTitle: 'Diagnóstico enviado',
     doneDescription:
-      'Tu paquete se subió de forma privada. Comparte el enlace de abajo en tu hilo de soporte para que el equipo pueda ver tus registros.',
+      "El paquete se ha enviado de forma privada a Aino. Incluye este ID en tu informe; no publiques los registros.",
     failedTitle: 'Error al subir',
     failedHint:
-      'También puedes ejecutar `hermes debug share --nous` desde una terminal, o `hermes debug share --local` para mostrar el informe sin subirlo.',
-    handoffLead: 'Continúa la conversación en:',
+      "Inicia sesión en Aino y vuelve a intentarlo. Actualiza los entornos antiguos. Informe local sin envío: `hermes debug share --local`.",
+    handoffLead: "Contactar con Aino:",
     links: {
       github: 'Issues de GitHub',
-      portal: 'Soporte de Nous Portal',
-      discord: 'Discord'
     }
   },
   titlebar: {

@@ -2,6 +2,8 @@
 
 Date: 2026-10-23. Branch: `codex/aino-brand-completion`. Base: `3d375c1c767df53618cbd5eebde9673b85310af1`.
 
+Follow-up, 2026-10-24: [Aino private diagnostics](aino-private-diagnostics.md) replaces the desktop upload recipient with Aino. The scope and verification below describe the earlier branding-only commit; the private ingestion service is a subsequent change and is not yet deployed.
+
 ## Result and scope
 
 The Aino desktop and public repository entry points now use Aino-owned product names and actual Aino destinations. GitHub remains public. This is product branding on the existing Hermes runtime; it is not a runtime fork rewrite or removal of upstream authorship.
@@ -24,7 +26,7 @@ An existing translation bug also changed an interpolated custom name such as `He
 - `LICENSE`, `NOTICE.md`, upstream history and real author attribution are unchanged.
 - App IDs, signed identities, homes, stored sessions, credentials, schemas, protocols, IPC/RPC, `HERMES_*`, the `hermes` executable, package/module/SDK names and update feeds are unchanged.
 - System prompts, conversation history, model/provider identities, custom names, third-party libraries and actual external service endpoints are retained.
-- Nous Cloud recovery and the optional `diagnostics.share_nous` upload remain Nous services with the existing per-upload consent and access disclosures. Generic product feedback goes to Aino Issues; Aino maintainers do not acquire access to Nous-private bundles.
+- Nous Cloud recovery, the explicitly named legacy `diagnostics.share_nous` RPC and CLI `--nous` upload remain Nous services. At the branding-only checkpoint the desktop also used that flow; the subsequent private-diagnostics change routes the desktop to Aino. Generic product feedback goes to Aino Issues; Aino maintainers do not acquire access to Nous-private bundles.
 - The existing hosted plugin catalog and Skills Hub remain available at their real origins. No nonexistent Aino substitute was introduced.
 - Inherited developer/runtime documentation can retain Hermes terminology where it describes real interfaces. See [the full boundary](../aino-brand-boundary.md).
 
@@ -46,7 +48,7 @@ The existing stalled-bootstrap test previously waited five real minutes. Its tes
 
 ## Review decisions and limitations
 
-1. Generic Aino feedback uses Aino Issues; Nous-upload privacy and recipient remain factual. Relabeling the upload as Aino would misstate who receives the data.
+1. Generic Aino feedback uses Aino Issues. At this checkpoint there was no Aino ingestion service, so relabeling the Nous upload would have misstated its recipient. The follow-up adds the actual Aino service before changing the desktop label.
 2. Nous-specific recovery, catalog and Skills Hub retain real services. Inventing Aino hostnames would break those features.
 3. Product branding stops at the documented runtime, user-content and licensing boundaries. A global rename would risk compatibility and attribution.
 4. Implementation delegation returned an empty task payload twice; a separate final review attempt also returned an empty task payload. These attempts performed no implementation or review and are **not counted as independent approval**. Work continued in the parent with behavioral regressions, static checks and self-review; independent approval is still absent.

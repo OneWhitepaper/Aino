@@ -495,26 +495,24 @@ export const frOverrides = {
   },
   ...frNotices,
   sendDiagnostics: {
-    title: 'Envoyer les diagnostics à Nous',
+    title: "Envoyer les diagnostics à Aino",
     privacyNotice:
-      "Cela téléverse un paquet de débogage vers un stockage interne de Nous, et non vers un service de partage public. Il contient des informations système (système d'exploitation, versions, fournisseur et clés API configurées — jamais les clés elles-mêmes) ainsi que les journaux complets de l'agent, du gateway et du Desktop (jusqu'à 512 Ko chacun), susceptibles de contenir des conversations, des résultats d'outils et des chemins de fichiers. Les secrets sont expurgés avant l'envoi. Seuls le personnel de Nous et les modérateurs Discord autorisés peuvent consulter le paquet, qui est automatiquement supprimé après 14 jours.",
+      "Un paquet privé est envoyé au service de votre compte Aino : informations système, état de configuration (sans clés) et journaux de l’agent, de la passerelle et du bureau (512 Ko maximum chacun). Ils peuvent contenir conversations, résultats d’outils et chemins de fichiers. Les clés sont masquées, mais d’autres données sensibles peuvent subsister. Seuls les administrateurs Aino autorisés peuvent le lire. L’accès expire après 14 jours ; les données en ligne sont supprimées dans l’heure suivante. Les sauvegardes existantes suivent la politique du déploiement.",
     upload: 'Envoyer',
     uploading: 'Envoi en cours…',
     cancel: 'Annuler',
     close: 'Fermer',
-    copyLink: 'Copier le lien',
-    uploadIdFallback: id => `Aucun lien de consultation renvoyé — indiquez l'identifiant ${id} au support`,
+    copyLink: "Copier l’identifiant",
+    uploadIdFallback: id => "Identifiant du diagnostic : " + id,
     doneTitle: 'Diagnostics envoyés',
     doneDescription:
-      "Votre paquet a été téléversé de manière privée. Partagez le lien ci-dessous dans votre fil d'assistance afin que l'équipe puisse consulter vos journaux.",
+      "Le paquet a été envoyé à Aino de manière privée. Indiquez cet identifiant dans votre rapport ; ne publiez pas les journaux.",
     failedTitle: "Échec de l'envoi",
     failedHint:
-      'Vous pouvez également exécuter `hermes debug share --nous` dans un terminal, ou `hermes debug share --local` pour afficher le rapport sans le téléverser.',
-    handoffLead: 'Poursuivez la discussion sur :',
+      "Connectez-vous à Aino et réessayez. Mettez à jour les anciens environnements. Rapport local sans envoi : `hermes debug share --local`.",
+    handoffLead: "Contacter Aino :",
     links: {
       github: 'Issues GitHub',
-      portal: 'Assistance du portail Nous',
-      discord: 'Discord'
     }
   },
   titlebar: {

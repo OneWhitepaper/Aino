@@ -1,17 +1,5 @@
-// "Send Diagnostics" — the error card's consent-gated debug-bundle upload.
-//
-// Flow: an error card (or any surface) calls requestSendDiagnostics() with
-// optional error context → the modal host renders the privacy notice → the
-// user explicitly clicks Upload → diagnostics.share_nous runs backend-side
-// (collect + force-redact + Nous-S3 upload) → the modal shows the private
-// view link plus the support handoff (GitHub Issues · Nous Portal Support ·
-// Discord).
-//
-// Consent is per-upload and explicit — no "always allow", mirroring the CLI's
-// `hermes debug share --nous` confirmation contract. On a remote connection
-// the backend bundles ITS OWN logs (the runtime that owns the failure); the
-// local desktop.log is attached as a client-side extra so support sees both
-// halves in one bundle.
+// Explicit per-upload consent; reuse Hermes collection and native Aino account upload.
+// A remote gateway supplies its own redacted logs; account credentials stay in Electron.
 import { atom } from 'nanostores'
 
 import { translateNow } from '@/i18n'
@@ -20,7 +8,6 @@ import { $gateway } from '@/store/gateway'
 export interface SendDiagnosticsResult {
   expiresAt?: string
   uploadId?: string
-  viewUrl?: string
 }
 
 export interface SendDiagnosticsState {
@@ -53,12 +40,10 @@ export function dismissSendDiagnostics(): void {
   $sendDiagnostics.set(null)
 }
 
-interface ShareNousResponse {
-  error?: string
-  expires_at?: string
+interface CollectResponse {
   ok: boolean
-  upload_id?: string
-  view_url?: string
+  bundle_base64?: string
+  error?: string
 }
 
 /** Read the LOCAL desktop log via Electron so a remote backend's bundle still
@@ -76,7 +61,7 @@ async function collectLocalExtras(): Promise<Record<string, string>> {
 }
 
 // Bundle collection + upload legitimately takes a while (log reads + gzip +
-// S3 leg); the default WS timeout is too tight for slow disks/links.
+// upload); the default WS timeout is too tight for slow disks/links.
 const SHARE_TIMEOUT_MS = 120_000
 
 /** User confirmed — run the upload. Transitions consent → uploading → done/error. */
@@ -101,14 +86,24 @@ export async function confirmSendDiagnostics(): Promise<void> {
       throw new Error(translateNow('sendDiagnostics.gatewayUnavailable'))
     }
 
+    const diagnostics = window.hermesDesktop?.platformDiagnostics
+
+    if (!diagnostics) {
+      throw new Error(translateNow('sendDiagnostics.uploadFailed'))
+    }
+
+    const owner = await diagnostics.scope()
+
+    if (!stillCurrent()) { return }
+
     const extraFiles = await collectLocalExtras()
 
     if (!stillCurrent()) {
       return
     }
 
-    const response = await gateway.request<ShareNousResponse>(
-      'diagnostics.share_nous',
+    const response = await gateway.request<CollectResponse>(
+      'diagnostics.collect',
       {
         ...(current.errorContext ? { error_context: current.errorContext } : {}),
         ...(Object.keys(extraFiles).length ? { extra_files: extraFiles } : {})
@@ -120,17 +115,24 @@ export async function confirmSendDiagnostics(): Promise<void> {
       return
     }
 
-    if (!response.ok) {
+    if (!response.ok || !response.bundle_base64) {
       throw new Error(response.error || translateNow('sendDiagnostics.uploadFailed'))
     }
+
+    const receipt = await diagnostics.upload({
+      bundle_base64: response.bundle_base64,
+      expected_user_id: owner.user_id,
+      expected_generation: owner.generation
+    })
+
+    if (!stillCurrent()) { return }
 
     $sendDiagnostics.set({
       ...current,
       phase: 'done',
       result: {
-        expiresAt: response.expires_at,
-        uploadId: response.upload_id,
-        viewUrl: response.view_url
+        expiresAt: receipt.expires_at,
+        uploadId: receipt.id
       }
     })
   } catch (error) {

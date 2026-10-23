@@ -12250,56 +12250,13 @@
     "ru",
     "zh-hant"
   ],
-  "sendDiagnostics.cancel": [
-    "ru"
-  ],
-  "sendDiagnostics.close": [
-    "ru"
-  ],
-  "sendDiagnostics.copyLink": [
-    "ru"
-  ],
-  "sendDiagnostics.doneDescription": [
-    "ru"
-  ],
-  "sendDiagnostics.doneTitle": [
-    "ru"
-  ],
-  "sendDiagnostics.failedHint": [
-    "ru"
-  ],
-  "sendDiagnostics.failedTitle": [
-    "ru"
-  ],
   "sendDiagnostics.gatewayUnavailable": [
     "ar",
     "de",
     "es",
     "fr",
     "ja",
-    "ru",
     "zh-hant"
-  ],
-  "sendDiagnostics.handoffLead": [
-    "ru"
-  ],
-  "sendDiagnostics.links.discord": [
-    "ru"
-  ],
-  "sendDiagnostics.links.github": [
-    "ru"
-  ],
-  "sendDiagnostics.links.portal": [
-    "ru"
-  ],
-  "sendDiagnostics.privacyNotice": [
-    "ru"
-  ],
-  "sendDiagnostics.title": [
-    "ru"
-  ],
-  "sendDiagnostics.upload": [
-    "ru"
   ],
   "sendDiagnostics.uploadFailed": [
     "ar",
@@ -12307,14 +12264,7 @@
     "es",
     "fr",
     "ja",
-    "ru",
     "zh-hant"
-  ],
-  "sendDiagnostics.uploadIdFallback": [
-    "ru"
-  ],
-  "sendDiagnostics.uploading": [
-    "ru"
   ],
   "settings.account.accountIdLabel": [
     "de",

@@ -1,4 +1,4 @@
-"""diagnostics.share_nous RPC — Desktop "Send Diagnostics" upload path.
+"""Explicit legacy Nous upload and collect-only diagnostics RPCs.
 
 Contract pinned:
 * Reuses the CLI ``--nous`` pipeline (collect_share_bundle → build_nous_bundle
@@ -13,10 +13,44 @@ from __future__ import annotations
 
 import gzip
 import json
+import threading
+from concurrent.futures import ThreadPoolExecutor
+from types import SimpleNamespace
 
 import pytest
 
 from tui_gateway import server
+
+
+@pytest.mark.parametrize('method', ['diagnostics.collect', 'diagnostics.share_nous'])
+def test_diagnostic_collection_never_parks_the_rpc_reader(method, monkeypatch):
+    from hermes_cli import debug
+    from hermes_cli import diagnostics_upload
+    entered, release, delivered = threading.Event(), threading.Event(), threading.Event()
+    replies = []
+
+    def collect(**_):
+        entered.set()
+        assert release.wait(5), 'test did not release the synthetic collector'
+        return {'report': 'synthetic'}
+
+    def write(reply):
+        replies.append(reply)
+        delivered.set()
+        return True
+
+    monkeypatch.setattr(debug, 'collect_share_bundle', collect)
+    monkeypatch.setattr(diagnostics_upload, 'share_to_nous', lambda _: {'id': 'synthetic'})
+    with ThreadPoolExecutor(max_workers=1) as caller:
+        pending = caller.submit(server.dispatch, {'id': 'collection', 'method': method, 'params': {}},
+                                SimpleNamespace(write=write))
+        try:
+            assert entered.wait(2), 'collector did not start'
+            assert pending.result(timeout=2) is None, 'dispatch should return while collection continues'
+        finally:
+            release.set()
+    assert delivered.wait(2), 'collector did not deliver its response'
+    assert replies[0]['result']['ok'] is True
 
 
 def _handler():

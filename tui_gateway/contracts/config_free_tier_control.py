@@ -173,6 +173,20 @@ method("diagnostics.share_nous", params=DiagnosticsShareNousParams, result=Diagn
        doc="Upload a force-redacted debug bundle to Nous-internal diagnostics storage.")
 
 
+class DiagnosticsCollectParams(DiagnosticsShareNousParams):
+    profile: str | None = None
+
+
+class DiagnosticsCollectResult(Result):
+    ok: bool
+    bundle_base64: str | None = None
+    error: str | None = None
+
+
+method("diagnostics.collect", params=DiagnosticsCollectParams, result=DiagnosticsCollectResult,
+       doc="Collect a force-redacted gzip support bundle without uploading it.")
+
+
 # ── free tier ─────────────────────────────────────────────────────────────────────────────────
 
 

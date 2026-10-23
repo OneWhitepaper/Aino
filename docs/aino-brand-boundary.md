@@ -14,6 +14,7 @@ Aino is an independent, publicly developed product built on the Hermes Agent run
 | Getting started | <https://petoi.cn/guide.html> |
 | Releases and release-note requests | <https://github.com/OneWhitepaper/Aino/releases> and the Aino GitHub API |
 | Commit links and generic product feedback | Aino repository commits and Issues |
+| Desktop diagnostic upload | Authenticated Aino account service; private administrator access |
 | Detailed runtime references | Actual documentation files in the Aino repository |
 
 The renderer's existing translation overlay changes product labels while retaining compatibility code spans. Native product copy uses the existing identity exports. Neither layer rewrites user conversations, custom names, raw error evidence or system prompts.
@@ -47,7 +48,7 @@ These are deliberate compatibility boundaries, not a second product installed al
 Branding must never imply that Aino operates another provider's service:
 
 - Nous Portal/Nous Cloud login, billing, gateway recovery and provider support remain Nous-specific.
-- The optional **Send diagnostics to Nous** action still sends its bundle to Nous through `diagnostics.share_nous`, only after per-upload consent. Its recipient, content, access and retention disclosures stay intact. Aino maintainers do not gain access by receiving a private Nous view link; use the actual recipient's support channel for that bundle.
+- The desktop **Send diagnostics to Aino** action collects through `diagnostics.collect` and uploads through the existing native Aino account client, after per-upload consent. Aino-API stores private bundles and exposes them only to authorized administrators; there is no public view link or Nous fallback. The explicitly named legacy `diagnostics.share_nous` and CLI `hermes debug share --nous` still target Nous. See [private diagnostics](implementation/aino-private-diagnostics.md) for access and retention boundaries.
 - The existing upstream-hosted plugin catalog and Skills Hub remain available at their real service URLs. Submitting to that shared catalog still targets its actual upstream maintainers. This change does not create an Aino mirror or alter iframe trust policies.
 - Other providers, model families, external plugins, user-authored content and dependency licenses retain their names.
 

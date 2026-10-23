@@ -6,7 +6,9 @@ from pydantic import model_validator
 from .base import JsonValue, Params, Result
 from .common import ProfileParams
 from .canonical_sessions import CanonicalSessionParams
-from .config_free_tier_control import ConfigGetParams, ConfigGetResult, ConfigSetResult
+from .config_free_tier_control import (
+    ConfigGetParams, ConfigGetResult, ConfigSetResult, DiagnosticsCollectParams, DiagnosticsCollectResult,
+)
 from .groups_bot_relay import GroupsApproveResult, GroupsCreateResult, GroupsRetryResult, RoomMemberInput, RoomParams
 from .prompt_voice import AttachedImageResult, ImageAttachBytesParams
 from .profiles_vault_complete_foreign_subagents import ProfileCanonicalSession, ProfileRow, ProfilesListResult
@@ -99,6 +101,7 @@ class CanonicalBotDeliverResult(Result):
 
 
 for _name, _params, _result in (
+    ('diagnostics.collect', DiagnosticsCollectParams, DiagnosticsCollectResult),
     ('config.get', ConfigGetParams, CanonicalConfigGetResult),
     ('config.set', CanonicalConfigSetParams, ConfigSetResult),
     ('profiles.list', CanonicalProfilesParams, CanonicalProfilesResult),

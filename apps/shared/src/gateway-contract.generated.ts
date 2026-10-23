@@ -738,6 +738,17 @@ export interface DiagnosticsShareNousResult {
   expires_at?: string | null
   error?: string | null
 }
+export interface DiagnosticsCollectParams {
+  error_context?: string | null
+  extra_files?: Record<string, string> | null
+  log_lines?: number | null
+  profile?: string | null
+}
+export interface DiagnosticsCollectResult {
+  ok: boolean
+  bundle_base64?: string | null
+  error?: string | null
+}
 /** ``available`` = an identity exists AND the tier is on; whether inference runs on it is ``setup.runtime_check.free_tier_route``'s question. */
 export interface FreeTierStatusResult {
   has_guest: boolean
@@ -6275,6 +6286,8 @@ export interface RpcMethods {
   'delegation.pause': { params: DelegationPauseParams; result: DelegationPauseResult }
   /** Running subagent tree plus the spawn pause flag and limits. */
   'delegation.status': { params: ProfileParams; result: DelegationStatusResult }
+  /** Collect a force-redacted gzip support bundle without uploading it. */
+  'diagnostics.collect': { params: DiagnosticsCollectParams; result: DiagnosticsCollectResult }
   /** Upload a force-redacted debug bundle to Nous-internal diagnostics storage. */
   'diagnostics.share_nous': { params: DiagnosticsShareNousParams; result: DiagnosticsShareNousResult }
   /** Run the distro package install on the gateway host; progress streams as display.install.log/.done. */
@@ -6759,6 +6772,7 @@ export const RPC_METHODS = [
   'cron.manage',
   'delegation.pause',
   'delegation.status',
+  'diagnostics.collect',
   'diagnostics.share_nous',
   'display.install',
   'display.lease.acquire',
@@ -7002,6 +7016,7 @@ export interface CanonicalRpcMethods {
   'cron.status': { params: CronAdmissionParams; result: CronStatusResult }
   /** Admit one cron firing into the owning profile's durable FIFO. */
   'cron.submit': { params: CronRunParams; result: CronSubmitResult }
+  'diagnostics.collect': { params: DiagnosticsCollectParams; result: DiagnosticsCollectResult }
   'groups.approve': { params: CanonicalRoomApproveParams; result: GroupsApproveResult }
   /** Read one committed attachment for a live room viewer. */
   'groups.attachment.download': { params: GroupsAttachmentDownloadParams; result: RoomAttachmentBytes }
@@ -7075,6 +7090,7 @@ export const CANONICAL_RPC_METHODS = [
   'cron.recover',
   'cron.status',
   'cron.submit',
+  'diagnostics.collect',
   'groups.approve',
   'groups.attachment.download',
   'groups.attachment.upload',
