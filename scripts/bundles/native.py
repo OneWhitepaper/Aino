@@ -68,6 +68,8 @@ def stage_uv_cache(source: Path, destination: Path) -> None:
     beside sdist metadata.msgpack shards) ship: without them an offline
     rebuild falls back to wanting the sdist download and fails closed.
     """
+    source, destination = source.resolve(), destination.resolve()
+
     def ignore(directory: str, names: list[str]) -> set[str]:
         path = Path(directory)
         parts = path.relative_to(source).parts
@@ -80,7 +82,29 @@ def stage_uv_cache(source: Path, destination: Path) -> None:
             return {"src"}
         return set()
 
-    shutil.copytree(source, destination, ignore=ignore)
+    # uv's wheel index links into archive-v0. Following those links copies
+    # every wheel twice. Windows keeps its existing privilege-free layout.
+    shutil.copytree(source, destination, ignore=ignore, symlinks=os.name != "nt")
+    if os.name != "nt":
+        _relocate_cache_links(source, destination)
+
+
+def _relocate_cache_links(source: Path, destination: Path) -> None:
+    """A shipped index must resolve inside its cache, never on the builder."""
+    for directory, dirs, files in os.walk(destination):
+        for name in dirs + files:
+            link = Path(directory) / name
+            if not link.is_symlink():
+                continue
+            original = source / link.relative_to(destination)
+            target = original.resolve(strict=True)
+            if not target.is_relative_to(source):
+                raise ValueError(f"cache link escapes the build cache: {original}")
+            staged = destination / target.relative_to(source)
+            if not staged.exists():
+                raise FileNotFoundError(f"cache link target was not staged: {original}")
+            link.unlink()
+            link.symlink_to(os.path.relpath(staged, link.parent), target_is_directory=staged.is_dir())
 
 
 def stage_pm_runtime(root: Path, python: Path, repo: Path, *, offline: bool = False,
