@@ -39,6 +39,12 @@ The bundled payload contains:
 - A manifest, tool facts, the installed feature list, and build provenance.
 - Generated CLI launchers from the archived project's script declarations.
 
+The offline uv cache retains its shared wheel-index layout on macOS and Linux:
+index links resolve to one extracted wheel tree inside the payload, even after
+the app moves. Staging must not expand these links into duplicate directories.
+Windows retains its existing copied layout without requiring symlink privileges.
+The ready environment and offline rebuild inputs are both retained.
+
 `pm/lock.json` owns managed-tool pins. `pyproject.toml` and `uv.lock` own Python
 requirements. Native staging uses `--all-extras`, subject to platform markers,
 minus the extras `[tool.hermes] opt-in-extras` names (installed only when the
