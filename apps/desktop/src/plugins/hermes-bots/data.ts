@@ -1,3 +1,5 @@
+import { atom, host, queryClient, useQuery, useValue } from '@hermes/plugin-sdk'
+
 /**
  * Bot Mode's domain layer: the roster query, bot metadata storage, the
  * identity keys everything else is filed under, and needs-attention state.
@@ -5,9 +7,6 @@
  * Framework-light — useRoster is the one React binding — and it depends only
  * on routing.ts, for the owner descriptors it dispatches through.
  */
-
-import { atom, host, queryClient, useQuery, useValue } from '@hermes/plugin-sdk'
-
 import { botsText } from './i18n'
 import { displayName } from './labels'
 import {
@@ -1298,7 +1297,7 @@ export function newBotChat(bot: RosterRow) {
   if (typeof host.newChat !== 'function') {
     host.notify?.({
       kind: 'error',
-      message: pluginText('bot.openAnotherChatUnsupported', 'Update Hermes Desktop to open another Bot chat.')
+      message: pluginText('bot.openAnotherChatUnsupported', `Update Aino to open another Bot chat.`)
     })
 
     return
@@ -1309,7 +1308,7 @@ export function newBotChat(bot: RosterRow) {
   if (!route) {
     host.notify?.({
       kind: 'error',
-      message: pluginText('bot.openAnotherChatUnsupported', 'Update Hermes Desktop to open another Bot chat.')
+      message: pluginText('bot.openAnotherChatUnsupported', `Update Aino to open another Bot chat.`)
     })
 
     return

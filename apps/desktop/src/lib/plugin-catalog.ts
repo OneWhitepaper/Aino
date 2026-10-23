@@ -21,6 +21,7 @@
 import type { ConnectionState } from '@hermes/shared'
 import type { ReadableAtom } from 'nanostores'
 
+import { PRODUCT_NAME } from '@/lib/brand'
 import { isMissingRpcMethod } from '@/lib/gateway-rpc'
 import { BACKEND_BOOT_WAIT_TIMEOUT_MS, withTimeout } from '@/lib/with-timeout'
 import { activeGatewayProfileKey, requestGatewayForProfile } from '@/store/gateway'
@@ -137,7 +138,7 @@ export function sendWhenGatewayOpen<T>(
     })
   })
 
-  return withTimeout(opened, timeoutMs, 'Hermes backend did not connect', () => stop()).then(send)
+  return withTimeout(opened, timeoutMs, `${PRODUCT_NAME} backend did not connect`, () => stop()).then(send)
 }
 
 // The route lookup inside requestGatewayForProfile has no deadline of its own, so the

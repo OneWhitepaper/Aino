@@ -14,6 +14,7 @@ import {
   validateProviderCredential
 } from '@/hermes'
 import { translateNow } from '@/i18n'
+import { PRODUCT_NAME } from '@/lib/brand'
 import { isProviderSetupErrorMessage } from '@/lib/provider-setup-errors'
 import { evaluateRuntimeReadiness, type RuntimeReadinessResult } from '@/lib/runtime-readiness'
 import {
@@ -306,7 +307,7 @@ function shouldPreserveConfiguredOnBootRace(runtime: RuntimeReadinessResult, sta
 }
 
 function notifyReady(provider: string) {
-  notify({ kind: 'success', title: 'Hermes is ready', message: `${provider} connected.` })
+  notify({ kind: 'success', title: `${PRODUCT_NAME} is ready`, message: `${provider} connected.` })
 }
 
 // Human-friendly labels for tools auto-routed through the Nous Tool Gateway,
@@ -490,7 +491,7 @@ async function completeWithModelConfirm(
         return
       }
 
-      onFail(error instanceof Error ? error.message : 'Hermes could not save the selected model.')
+      onFail(error instanceof Error ? error.message : `${PRODUCT_NAME} could not save the selected model.`)
 
       return
     }
@@ -809,7 +810,7 @@ export async function refreshOnboarding(ctx: OnboardingContext, stillWanted?: ()
         kind: 'info',
         title: 'Runtime not ready',
         message:
-          'Hermes Desktop could not verify the running backend on startup. Some features may be unavailable until the gateway is reachable.'
+          `${PRODUCT_NAME} could not verify the running backend on startup. Some features may be unavailable until the gateway is reachable.`
       })
     }
 
@@ -1110,7 +1111,7 @@ export async function recheckExternalSignin(ctx: OnboardingContext) {
       provider,
       message:
         reason?.trim() ||
-        `Hermes still cannot reach ${provider.name}. Run \`${provider.cli_command}\` in a terminal first.`
+        `${PRODUCT_NAME} still cannot reach ${provider.name}. Run \`${provider.cli_command}\` in a terminal first.`
     })
   )
 }
@@ -1295,7 +1296,7 @@ export async function saveOnboardingLocalEndpoint(
     if (!runtime.ready) {
       const detail = (runtime.reason ?? '').trim()
 
-      return { ok: false, message: detail || `Saved, but Hermes still cannot reach ${resolvedUrl}.` }
+      return { ok: false, message: detail || `Saved, but ${PRODUCT_NAME} still cannot reach ${resolvedUrl}.` }
     }
 
     notifyReady('Local / custom endpoint')

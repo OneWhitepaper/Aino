@@ -5,6 +5,7 @@ import { useEffect, useReducer, useRef } from 'react'
 import { controlVariants } from '@/components/ui/control'
 import { Input } from '@/components/ui/input'
 import { useI18n } from '@/i18n'
+import { PRODUCT_NAME } from '@/lib/brand'
 import { CornerDownLeft } from '@/lib/icons'
 import { isSubmitEnter } from '@/lib/ime'
 import {
@@ -90,7 +91,7 @@ export function QuickEntryApp() {
 
     const offLateResult = api?.onLateResult(payload => {
       dispatch({
-        message: payload?.result?.message ?? 'Hermes could not deliver the prompt.',
+        message: payload?.result?.message ?? `${PRODUCT_NAME} could not deliver the prompt.`,
         ok: payload?.result?.ok === true,
         type: 'late-result'
       })

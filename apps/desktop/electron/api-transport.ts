@@ -1,3 +1,4 @@
+import http from 'node:http'
 /**
  * Shared HTTP transport policy for the Electron main process's Hermes REST
  * helpers (fetchJson / fetchPublicJson / downloadViaTokenToFile).
@@ -32,9 +33,9 @@
  *        the body went out — is NOT retried; the error surfaces to the
  *        caller. When in doubt, don't retry a non-idempotent request.
  */
-
-import http from 'node:http'
 import https from 'node:https'
+
+import { PRODUCT_NAME } from './product-identity'
 
 // JSON pool: many small concurrent calls (session lists, config, prompts).
 const HTTP_JSON_AGENT = new http.Agent({ keepAlive: true, maxSockets: 50 })
@@ -243,7 +244,7 @@ function htmlResponseError(url: string, statusCode: unknown, location?: unknown)
   }
 
   return new Error(
-    `Expected JSON from ${url} but got HTML (status ${statusCode}). The endpoint is likely missing on the Hermes backend.`
+    `Expected JSON from ${url} but got HTML (status ${statusCode}). The endpoint is likely missing on the ${PRODUCT_NAME} backend.`
   )
 }
 

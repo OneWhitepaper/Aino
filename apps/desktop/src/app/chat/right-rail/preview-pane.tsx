@@ -13,6 +13,7 @@ import { isElementInHiddenPane } from '@/components/pane-shell/pane-visibility'
 import { Tip } from '@/components/ui/tooltip'
 import { type Translations, useI18n } from '@/i18n'
 import { localizedPreviewError } from '@/i18n/preview-errors'
+import { PRODUCT_NAME } from '@/lib/brand'
 import { isDesktopFsRemoteMode, isReadFileErrorResult } from '@/lib/desktop-fs'
 import { guardGuestPointers } from '@/lib/guest-pointer-guard'
 import { isLoopbackPreviewUrl, openPreviewTargetInBrowser, remoteHtmlPreviewDocument } from '@/lib/local-preview'
@@ -201,7 +202,7 @@ function isModuleMimeError(message: string): boolean {
  */
 const PREVIEW_PRINT_GUARD_SCRIPT =
   '(function(){if(window.__hermesPrintGuard)return;window.__hermesPrintGuard=true;' +
-  'window.print=function(){console.warn("[Hermes] Printing is disabled in the in-app preview. ' +
+  `window.print=function(){console.warn("[${PRODUCT_NAME}] Printing is disabled in the in-app preview. ` +
   'Open the page in your browser to print.");};})()'
 
 function PreviewLoadError({

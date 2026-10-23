@@ -1,8 +1,35 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { extractReleaseHighlights, latestMergedPrTitles, updateNotesSource } from './update-notes'
+import {
+  extractReleaseHighlights,
+  fetchUpdateNoteItems,
+  latestMergedPrTitles,
+  updateNotesSource,
+  updateNotesUrl
+} from './update-notes'
+
+afterEach(() => vi.unstubAllGlobals())
 
 describe('update notes', () => {
+  it('loads notes from the product repository and links the exact release or comparison', async () => {
+    const fetchNotes = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ body: '## Highlights\n- **Offline cache sharing** — no duplicate trees.' })
+    })
+
+    vi.stubGlobal('fetch', fetchNotes)
+
+    const release = { kind: 'release', tag: 'v0.1.0+brand-test' } as const
+    expect(await fetchUpdateNoteItems(release, {})).toEqual(['Offline cache sharing'])
+    expect(fetchNotes.mock.calls[0][0]).toBe(
+      'https://api.github.com/repos/OneWhitepaper/Aino/releases/tags/v0.1.0%2Bbrand-test'
+    )
+    expect(updateNotesUrl(release, {})).toBe('https://github.com/OneWhitepaper/Aino/releases/tag/v0.1.0%2Bbrand-test')
+    expect(updateNotesUrl({ kind: 'prs' }, { currentSha: 'a'.repeat(40), targetSha: 'b'.repeat(40) })).toBe(
+      `https://github.com/OneWhitepaper/Aino/compare/${'a'.repeat(40)}...${'b'.repeat(40)}`
+    )
+  })
+
   it('summarizes a release as its highlight headlines, and falls back to the first bullet list', () => {
     const major = [
       '# Hermes Agent v0.22.0',

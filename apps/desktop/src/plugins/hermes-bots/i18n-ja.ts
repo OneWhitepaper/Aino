@@ -2,7 +2,7 @@ import type { BotsMessages } from './i18n-types'
 
 export const ja: BotsMessages = {
   editor: {
-    fullConfigHint: 'すべての設定を使うには新しいゲートウェイが必要です（Hermes 更新後に再起動してください）。',
+    fullConfigHint: 'すべての設定を使うには新しいゲートウェイが必要です（Aino 更新後に再起動してください）。',
     liveCapabilities: '機能（即時適用 — スキル、ツール、MCP）',
     editSoul: 'SOUL.md（人格 + エージェント間メッセージプロトコル）',
     remoteCapabilitiesHint:
@@ -43,8 +43,8 @@ export const ja: BotsMessages = {
     nameTakenHint: 'その名前は使用済みです。機能を設定する前に別の名前を選んでください。',
     nameFirstHint:
       '先にボットに名前を付けてください。このタブを開くと下書きプロファイルが作成されます（キャンセルすると破棄されます）。',
-    newerDesktop: 'スキルには新しい Hermes Desktop が必要です。',
-    newerGateway: '機能カタログには新しいゲートウェイが必要です（Hermes 更新後に再起動してください）。',
+    newerDesktop: 'スキルには新しい Aino が必要です。',
+    newerGateway: '機能カタログには新しいゲートウェイが必要です（Aino 更新後に再起動してください）。',
     emptySkillsHint: '「空のプロファイルを作成」が選択されているため、同梱スキルはインストールされません。',
     defaultToolsHint: 'すべて選択するか、何も選択しない場合は、既定のツールセット動作を維持します。',
     catalog: 'カタログ',
@@ -60,7 +60,7 @@ export const ja: BotsMessages = {
     lockedHint: '顔を固定しました。名前を変えても変化しません。',
     unlockedHint: '顔は名前に合わせて変わります。',
     noImageModel:
-      '画像モデルがありません。有効にした直後や Hermes 更新後の場合は、Ctrl+K →「ゲートウェイを再起動」で再起動してください。',
+      '画像モデルがありません。有効にした直後や Aino 更新後の場合は、Ctrl+K →「ゲートウェイを再起動」で再起動してください。',
     checkingImage: '画像バックエンドを確認中…',
     chooseImage: '画像を選択…',
     editDescription: (name, profile) => `${name}（${profile}）の外観と役割。`,
@@ -104,7 +104,7 @@ export const ja: BotsMessages = {
     staleWaiting: 'ゲートウェイの再接続を待っています…',
     gatewayError: 'ゲートウェイエラー',
     deleteDescription: (name, path) =>
-      `ボット${name}と関連するHermesプロファイル（${path}）を完全に削除します。この操作は取り消せません。`,
+      `ボット${name}と関連するAinoプロファイル（${path}）を完全に削除します。この操作は取り消せません。`,
     deletedProfile: name => `プロファイル${name}を削除しました`,
     deletedGroup: name => `グループ「${name}」を削除しました`,
     deleting: '削除中…',
@@ -133,7 +133,7 @@ export const ja: BotsMessages = {
     unavailable: '利用できません',
     retryNow: '今すぐ再試行',
     rosterUnavailable: reason =>
-      `名簿を取得できません: ${reason}。ゲートウェイが profiles.list より前の場合は、Hermes を更新してゲートウェイを再起動してください。`,
+      `名簿を取得できません: ${reason}。ゲートウェイが profiles.list より前の場合は、Aino を更新してゲートウェイを再起動してください。`,
     waitingForGateway: 'ゲートウェイ接続を待っています…（リモートは数秒かかることがあります。自動で再試行します）'
   },
   sections: {
@@ -201,16 +201,16 @@ export const ja: BotsMessages = {
     advanced: '詳細設定',
     advancedHint: '詳細設定 — モデル、スキル、ツールセット、SOUL.md',
     advancedFailed: '詳細設定に失敗しました',
-    openAnotherChatUnsupported: '別のボットチャットを開くには Hermes Desktop を更新してください。',
+    openAnotherChatUnsupported: '別のボットチャットを開くには Aino を更新してください。',
     updateGatewayTitle: 'このゲートウェイを更新してボットモードを使用',
     updateGatewayMessage: gateway => `${gateway} を更新してから、もう一度お試しください。`,
-    remoteConnectionsUnsupported: '他の接続上のボットとチャットするには Hermes Desktop を更新してください。',
+    remoteConnectionsUnsupported: '他の接続上のボットとチャットするには Aino を更新してください。',
     foreverChatTitle: 'このチャットはリセットされません',
     foreverChatMessage:
       'ボットチャットは一つの会話として続くため、代わりにコンテキストを圧縮します。このボットとの一時的なセッションには「セッション」モードを使ってください。',
-    openNeedsUpdateTitle: 'このボットは古い Hermes 上で動いています',
+    openNeedsUpdateTitle: 'このボットは古い Aino 上で動いています',
     openNeedsUpdateMessage: connectionLabel => `${connectionLabel} を更新してから、もう一度お試しください。`,
-    openUnreachableTitle: 'このボットが動いているコンピューターに Hermes が接続できませんでした',
+    openUnreachableTitle: 'このボットが動いているコンピューターに Aino が接続できませんでした',
     openUnreachableMessage: 'オンラインか確認して、もう一度お試しください。',
     openChatFailedTitle: botName => `${botName} のチャットを開けませんでした`,
     openChatFailedMessage: 'もう一度お試しください。',
@@ -236,7 +236,7 @@ export const ja: BotsMessages = {
     currentSuffix: '現在',
     titlePlaceholder: '受信トレイの振り分け',
     namePlaceholder: 'inbox-triage',
-    fullConfigUnsupported: '完全な設定には新しいゲートウェイが必要です（Hermes更新後に再起動してください）。',
+    fullConfigUnsupported: '完全な設定には新しいゲートウェイが必要です（Aino更新後に再起動してください）。',
     remoteCapabilitiesHint:
       'リモート機能には新しいデスクトップが必要です。モデルとSOULの変更は保存するまで保留されます。',
     soulConfigLabel: 'SOUL.md（ペルソナ + エージェント間メッセージングプロトコル）',
@@ -270,8 +270,8 @@ export const ja: BotsMessages = {
     capabilitiesNameTaken: 'その名前は使用中です。機能を設定する前に別の名前を選んでください。',
     capabilitiesNameHint:
       'まずボット名を入力してください。このタブを開くと下書きプロファイルが作成され、キャンセル時に破棄されます。',
-    skillsUnsupported: 'スキルには新しい Hermes Desktop が必要です。',
-    catalogUnsupported: '機能カタログには新しいゲートウェイが必要です（Hermes更新後に再起動してください）。',
+    skillsUnsupported: 'スキルには新しい Aino が必要です。',
+    catalogUnsupported: '機能カタログには新しいゲートウェイが必要です（Aino更新後に再起動してください）。',
     emptySkills: '「空で作成」が選択されています — 同梱スキルはインストールされません。',
     catalogFrom: source => `${source} のカタログ — 未チェックのスキルは作成後に無効になります。`,
     toolsetHint: 'すべて（またはなし）をチェックすると、既定のツールセット動作になります。',
@@ -312,7 +312,7 @@ export const ja: BotsMessages = {
     faceLocked: '顔を固定中 — 名前を変更しても変わりません。',
     faceFollowsName: '顔は名前に合わせて変わります。',
     noImageModel:
-      '画像モデルがありません。有効化またはHermes更新直後の場合は、ゲートウェイを再起動してください（Ctrl+K →「ゲートウェイを再起動」）。',
+      '画像モデルがありません。有効化またはAino更新直後の場合は、ゲートウェイを再起動してください（Ctrl+K →「ゲートウェイを再起動」）。',
     checkingImageBackend: '画像バックエンドを確認中…',
     chooseImage: '画像を選択…',
     petGalleryEmpty: 'ペット図鑑にペットがありません。`hermes pets` を実行して探してください。',
@@ -529,7 +529,7 @@ export const ja: BotsMessages = {
     notInstalledBody:
       'このボットに画面を与えるには、ゲートウェイホストに TigerVNC と Xfce コアが必要です。ホストで実行:',
     installHint:
-      'Hermes を実行しているユーザーとしてゲートウェイホスト上で実行されます。sudo は Hermes 経由で一度だけ求められます。',
+      'Aino を実行しているユーザーとしてゲートウェイホスト上で実行されます。sudo は Aino 経由で一度だけ求められます。',
     install: 'ホストにインストール',
     installing: 'インストール中…',
     installCancelled: 'インストールを中止しました: sudo パスワードが入力されませんでした。',
@@ -551,12 +551,12 @@ export const ja: BotsMessages = {
     portalStopped: '停止中',
     portalNotInstalled: 'ホストに未インストール',
     portalUnsupported: 'このホストでは利用できません',
-    portalUnavailable: 'Screen を使うにはボットの Hermes を更新してください',
-    portalUnavailableManaged: 'この管理された Hermes リリースではまだ Screen を利用できません',
+    portalUnavailable: 'Screen を使うにはボットの Aino を更新してください',
+    portalUnavailableManaged: 'この管理された Aino リリースではまだ Screen を利用できません',
     managedNotIncludedTitle: 'このボットには Screen が含まれていません',
     managedNotIncludedBody:
-      'Hermes Cloud では、メモリが 8 GB 以上のボットに Screen が含まれます。これより小さいボットにはインストールできません。',
-    unavailableTitle: 'Screen には新しい Hermes が必要です',
+      'Nous Cloud では、メモリが 8 GB 以上のボットに Screen が含まれます。これより小さいボットにはインストールできません。',
+    unavailableTitle: 'Screen には新しい Aino が必要です',
     autoOpenMenu: 'ボットが画面を使い始めたら Screen を開く',
     autoOpenOnToast: name => `${name} がデスクトップを使い始めると Screen が開きます`,
     autoOpenOffToast: name => `${name} の Screen は手動で開くまで閉じたままです`,
@@ -576,7 +576,7 @@ export const ja: BotsMessages = {
     handBack: '戻す',
     handBackForce: '強制的に戻す',
     handBackForceHint: 'もう存在しないビューア（再読み込み後など）が保持しているリースを解放します。',
-    openNeedsUpdate: 'ボットの画面を開くには Hermes Desktop を更新してください。',
+    openNeedsUpdate: 'ボットの画面を開くには Aino を更新してください。',
     youControl: 'あなたが操作中',
     otherControls: '別のビューアが操作中',
     agentControls: 'ボットが操作中',

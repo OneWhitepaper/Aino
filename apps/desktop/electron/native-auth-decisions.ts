@@ -1,4 +1,11 @@
 /**
+ * Decide the request body to hand to fetchJson (which JSON.stringifies it).
+ * Returns the object UNCHANGED — callers must NOT pre-stringify. A string here
+ * would be double-encoded downstream; this function exists to document and
+ * pin that contract at the one seam that got it wrong.
+ */
+import { readStatusCode } from './api-transport'
+/**
  * native-auth-decisions.ts
  *
  * Pure decision helpers extracted from main.ts for the RFC 8252 native-app
@@ -39,14 +46,7 @@
  * All six are trivial once named; the value is the test that pins the
  * contract so the god-file call sites can't drift back to the buggy shape.
  */
-
-/**
- * Decide the request body to hand to fetchJson (which JSON.stringifies it).
- * Returns the object UNCHANGED — callers must NOT pre-stringify. A string here
- * would be double-encoded downstream; this function exists to document and
- * pin that contract at the one seam that got it wrong.
- */
-import { readStatusCode } from './api-transport'
+import { PRODUCT_NAME } from './product-identity'
 
 export function resolveJsonBody<T>(body: T): T {
   return body
@@ -144,7 +144,7 @@ export interface AdvertisedAuthProvider {
 const PASSWORD_PROVIDER_NAMES = new Set(['basic'])
 
 const OAUTH_NOT_SIGNED_IN_MESSAGE =
-  'Remote Hermes gateway uses OAuth, but you are not signed in. ' +
+  `Remote ${PRODUCT_NAME} gateway uses OAuth, but you are not signed in. ` +
   'Open Settings → Gateway and click "Sign in", or switch back to Local.'
 
 const OAUTH_SESSION_EXPIRED_MESSAGE =

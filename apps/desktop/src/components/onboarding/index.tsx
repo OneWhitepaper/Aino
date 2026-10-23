@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input'
 import { Progress } from '@/components/ui/progress'
 import { getGlobalModelOptions } from '@/hermes'
 import { useI18n } from '@/i18n'
+import { PROVIDER_DOCS_URL } from '@/lib/docs'
 import { Check, ChevronDown, ChevronLeft, KeyRound, Loader2 } from '@/lib/icons'
 import { isSubmitEnter } from '@/lib/ime'
 import { isProviderSetupErrorMessage } from '@/lib/provider-setup-errors'
@@ -123,7 +124,7 @@ const API_KEY_OPTIONS: ApiKeyOption[] = [
     name: 'Local / custom endpoint',
     title: 'Local / custom endpoint',
     envKey: 'OPENAI_BASE_URL',
-    docsUrl: 'https://github.com/NousResearch/hermes-agent#bring-your-own-endpoint',
+    docsUrl: PROVIDER_DOCS_URL,
     placeholder: 'http://127.0.0.1:8000/v1'
   }
 ]

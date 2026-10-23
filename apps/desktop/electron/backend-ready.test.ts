@@ -17,7 +17,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 
-import { test } from 'vitest'
+import { test, vi } from 'vitest'
 
 import {
   DEFAULT_PORT_ANNOUNCE_TIMEOUT_MS,
@@ -354,26 +354,32 @@ test('a completion banner re-arms the deadline past the original timeout', async
   assert.equal(await p, 4455)
 })
 
-test(
-  'a stalled completion banner is capped, not waited out forever',
-  async () => {
-    // The banner says a repair is in progress but nothing ever resolves: the
-    // wait must still fail (bounded), and the message must carry that the
-    // completion was in progress — truthful and actionable instead of a bare
-    // 90s timeout that hides a multi-minute repair. The 5-minute grace is
-    // wall-clock, so this holds the wait past it with a long test budget.
+test('a stalled completion banner is capped, not waited out forever', async () => {
+  // The banner says a repair is in progress but nothing ever resolves: the
+  // wait must still fail (bounded), and the message must carry that the
+  // completion was in progress — truthful and actionable instead of a bare
+  // 90s timeout that hides a multi-minute repair. Advance the scheduled
+  // timer without waiting five real minutes or replacing the monotonic clock.
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+
+  try {
     const child = makeFakeChild()
     const wait = waitForDashboardPort(child, 20)
     wait.catch(() => {}) // mark handled; the assertion below re-awaits
 
     child.stdout.emit('data', 'hermes: finishing an interrupted source update...\n')
-    await assert.rejects(
+
+    const rejected = assert.rejects(
       wait,
-      /Timed out waiting for Hermes backend port announcement .* while an update completion was in progress/
+      /Timed out waiting for Aino backend port announcement .* while an update completion was in progress/
     )
-  },
-  6 * 60_000
-)
+
+    await vi.advanceTimersByTimeAsync(5 * 60_000 + 1)
+    await rejected
+  } finally {
+    vi.useRealTimers()
+  }
+})
 
 test('a banner already in the spawn-time tail also re-arms', async () => {
   // The dormant bufferedOutput gap (#60323): the banner was flushed before the

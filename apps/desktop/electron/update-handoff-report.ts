@@ -1,10 +1,10 @@
-// Report a detached update's result once, where boot passes the update gate.
-
 import path from 'node:path'
 
+// Report a detached update's result once, where boot passes the update gate.
 import type { Dialog, Shell } from 'electron'
 
 import { readAndConsumeHandoffResult } from './handoff-result'
+import { PRODUCT_NAME } from './product-identity'
 
 export interface HandoffReportHost {
   hermesHome: string
@@ -65,8 +65,8 @@ export function reportHandoffResult(host: HandoffReportHost): void {
       host.log(`[updates] detached update finished with warnings: ${result.warnings.join(' | ')}`)
       void host.dialog.showMessageBox({
         type: 'info',
-        title: 'Hermes update',
-        message: 'Hermes updated, but some follow-up steps need another try',
+        title: `${PRODUCT_NAME} update`,
+        message: `${PRODUCT_NAME} updated, but some follow-up steps need another try`,
         detail: `${result.warnings.join('\n')}\n\nHermes retries them on the next launch or the next update.`
       })
     } else if (result && result.ok && result.manual) {
@@ -76,7 +76,7 @@ export function reportHandoffResult(host: HandoffReportHost): void {
       host.log(`[updates] detached update finished with manual action (branch ${result.branch}): ${result.message}`)
       host.dialog.showMessageBox({
         type: 'warning',
-        title: 'Hermes update',
+        title: `${PRODUCT_NAME} update`,
         message: 'The update finished, but needs one more step',
         detail: result.message
       })
@@ -92,8 +92,8 @@ export function reportHandoffResult(host: HandoffReportHost): void {
       void host.dialog
         .showMessageBox({
           type: 'error',
-          title: 'Hermes update',
-          message: "Hermes couldn't finish updating",
+          title: `${PRODUCT_NAME} update`,
+          message: `${PRODUCT_NAME} couldn't finish updating`,
           detail:
             "You're still on the previous version and can keep using it. Try the update again, or open the update log to report the problem.\n\n" +
             `Details: ${result.message}`,

@@ -1,8 +1,8 @@
-// Checkout update policy and handoff execution. The shell supplies process and UI dependencies.
-
 import { existsSync, readFileSync } from 'node:fs'
+// Checkout update policy and handoff execution. The shell supplies process and UI dependencies.
 import * as path from 'node:path'
 
+import { PRODUCT_NAME } from '../product-identity'
 import {
   claimBridgeMarker,
   describeSkippedPrewrite,
@@ -228,7 +228,7 @@ export function createCheckoutStrategy(deps: CheckoutStrategyDeps): CheckoutStra
     }
 
     return refuse(
-      'The updater could not take the update lock, so nothing was changed. Hermes keeps running on the previous version — try the update again.',
+      `The updater could not take the update lock, so nothing was changed. ${PRODUCT_NAME} keeps running on the previous version — try the update again.`,
       'updater-spawn-failed'
     )
   }
@@ -256,7 +256,7 @@ export function createCheckoutStrategy(deps: CheckoutStrategyDeps): CheckoutStra
       }
 
       failure =
-        'The updater did not start, so nothing was changed. Hermes keeps running on the previous version — try the update again.\n\n' +
+        `The updater did not start, so nothing was changed. ${PRODUCT_NAME} keeps running on the previous version — try the update again.\n\n` +
         `Details: the hand-off script never took the update lock within ${Math.round((deps.handoffClaimTimeoutMs ?? HANDOFF_CLAIM_TIMEOUT_MS) / 1000)} s.`
     }
 
@@ -496,7 +496,7 @@ export function createCheckoutStrategy(deps: CheckoutStrategyDeps): CheckoutStra
     deps.emitUpdateProgress({
       stage: 'restart',
       message:
-        'Updating Hermes — this window will close and the updater will open. Don’t reopen Hermes yourself; it restarts automatically when the update finishes.',
+        `Updating ${PRODUCT_NAME} — this window will close and the updater will open. Don’t reopen ${PRODUCT_NAME} yourself; it restarts automatically when the update finishes.`,
       percent: 100
     })
     deps.repairMacUpdaterHelper(updater)
@@ -738,7 +738,7 @@ export function createCheckoutStrategy(deps: CheckoutStrategyDeps): CheckoutStra
     deps.emitUpdateProgress({
       stage: 'restart',
       message:
-        'Updating Hermes — this window will close. Don’t reopen Hermes yourself; it restarts automatically when the update finishes.',
+        `Updating ${PRODUCT_NAME} — this window will close. Don’t reopen ${PRODUCT_NAME} yourself; it restarts automatically when the update finishes.`,
       percent: 100
     })
 

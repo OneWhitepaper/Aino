@@ -1,3 +1,10 @@
+import {
+  type AppInstallerCheck,
+  parseCheckOutput,
+  type PayloadPythonRunner,
+  triggerAppInstallerUpdate,
+  win32AppInstallerFeedPath
+} from '../app-updater'
 // updater/app-installer.ts — the win32 out-of-store MSIX strategy.
 //
 // The OS App Installer owns the apply. The package was installed from an
@@ -10,14 +17,7 @@
 //
 // Pure-injectable: the impure pieces (python runner, shell, quit, relaunch
 // marker) are injected, so vitest covers the arm without a payload.
-
-import {
-  type AppInstallerCheck,
-  parseCheckOutput,
-  type PayloadPythonRunner,
-  triggerAppInstallerUpdate,
-  win32AppInstallerFeedPath
-} from '../app-updater'
+import { PRODUCT_NAME } from '../product-identity'
 
 import type { ChannelTarget } from './channel'
 import { channelPublicBase } from './channel-protocol'
@@ -156,7 +156,7 @@ export class AppInstallerStrategy {
 
     this.deps.emitUpdateProgress({
       stage: 'restart',
-      message: 'Applying the Hermes update — the window will close and the App Installer will finish.',
+      message: `Applying the ${PRODUCT_NAME} update — the window will close and the App Installer will finish.`,
       percent: 100
     })
 
@@ -171,7 +171,7 @@ export class AppInstallerStrategy {
             this.deps.emitUpdateProgress({
               stage: 'restart',
               percent: 100,
-              message: 'Automatic relaunch could not be registered. Reopen Hermes after App Installer finishes.'
+              message: `Automatic relaunch could not be registered. Reopen ${PRODUCT_NAME} after App Installer finishes.`
             })
         }
       },

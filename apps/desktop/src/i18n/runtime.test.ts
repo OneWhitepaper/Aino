@@ -4,7 +4,7 @@ import { fieldCopyForSchemaKey } from '@/app/settings/field-copy'
 import { applyProductBrand } from '@/lib/brand'
 
 import { TRANSLATIONS } from './catalog'
-import { setRuntimeI18nLocale, translateNow } from './runtime'
+import { setRuntimeI18nLocale, translateFrom, translateNow } from './runtime'
 import { zh } from './zh'
 
 describe('desktop i18n runtime translator', () => {
@@ -322,6 +322,12 @@ describe('desktop i18n runtime translator', () => {
     } finally {
       boot.ready = originalReady
     }
+  })
+
+  it('keeps custom names intact through the shared runtime translation boundary', () => {
+    const source = () => ({ notice: (name: string) => `${name} connected to Hermes Desktop` })
+
+    expect(translateFrom(source, 'en', 'notice', ['Hermes Studio'])).toBe('Hermes Studio connected to Aino')
   })
 
   it('returns the key when no locale can resolve a path', () => {

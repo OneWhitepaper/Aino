@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Codicon } from '@/components/ui/codicon'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useI18n } from '@/i18n'
+import { SESSION_STORAGE_RECOVERY_URL } from '@/lib/docs'
 import { openExternalLink } from '@/lib/external-link'
 import { AlertTriangle, ExternalLink } from '@/lib/icons'
 import { cn } from '@/lib/utils'
@@ -90,9 +91,6 @@ export function SidebarLoadErrorState({ onRetry }: { onRetry: () => void }) {
     </div>
   )
 }
-
-const SESSION_STORAGE_RECOVERY_URL =
-  'https://hermes-agent.nousresearch.com/docs/user-guide/session-storage-recovery#when-the-three-steps-do-not-work'
 
 interface SidebarStorageCorruptNoticeProps {
   openRecoveryGuide?: (url: string) => void

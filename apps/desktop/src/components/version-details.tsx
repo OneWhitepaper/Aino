@@ -3,6 +3,7 @@ import type { ReactNode } from 'react'
 
 import type { DesktopVersionInfo, RuntimeSource } from '@/global'
 import { useI18n } from '@/i18n'
+import { REPOSITORY_URL } from '@/lib/brand'
 import { distributionLabelKey } from '@/lib/distribution-label'
 import { ExternalLink } from '@/lib/external-link'
 import { shortVersion } from '@/lib/version-label'
@@ -93,7 +94,7 @@ export function VersionDetails({ version, channelAction }: { version: DesktopVer
           <dd className="break-all text-right">
             <ExternalLink
               className="break-all font-mono text-xs"
-              href={`https://github.com/NousResearch/hermes-agent/commit/${version.commit}`}
+              href={`${REPOSITORY_URL}/commit/${version.commit}`}
               native
             >
               {version.commit.slice(0, 14)}

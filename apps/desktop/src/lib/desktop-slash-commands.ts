@@ -1,4 +1,5 @@
 import { translateNow, type Translations } from '@/i18n'
+import { PRODUCT_NAME } from '@/lib/brand'
 import { peekCachedSlashCompletion } from '@/lib/slash-completion-cache'
 
 import desktopSlashRegistry from './desktop-slash-registry.json'
@@ -226,7 +227,7 @@ const DESKTOP_COMMAND_SPECS: readonly DesktopCommandSpec[] = [
     surface: action('handoff'),
     argumentMode: 'options'
   },
-  { name: '/profile', description: 'Switch the active Hermes profile', surface: action('profile') },
+  { name: '/profile', description: `Switch the active ${PRODUCT_NAME} profile`, surface: action('profile') },
   { name: '/title', description: 'Rename the current session', surface: action('title'), argumentMode: 'text' },
   { name: '/help', description: 'Show desktop slash commands', aliases: ['/commands'], surface: action('help') },
   {
@@ -902,11 +903,13 @@ export function desktopSlashDescription(command: string, fallback = '', localize
   const explicit = localized?.[canonical]?.trim()
   const key = `composer.commandDescs.${canonical}`
   const translated = translateNow(key)
+
   const description =
     explicit ||
     (translated !== key && translated.trim() ? translated : '') ||
     SPEC_BY_NAME.get(canonical)?.description ||
     fallback
+
   const usage = fallback.match(/\s+\(usage:\s+(.+)\)$/s)?.[0] ?? ''
 
   return description && description !== fallback ? `${description}${usage}` : description

@@ -1,5 +1,6 @@
 import { capabilityScoped, type ProfileScope } from '@/api/client'
 import { type McpOAuthFlow, mcpOAuthRpc } from '@/api/mcp'
+import { PRODUCT_NAME } from '@/lib/brand'
 
 import { isMissingRpcMethod } from './gateway-rpc'
 
@@ -30,7 +31,7 @@ export class McpOAuthCancelled extends Error {
 }
 
 const defaultSleep = (milliseconds: number) => new Promise<void>(resolve => window.setTimeout(resolve, milliseconds))
-const UPDATE_BACKEND = 'Update the Hermes backend to support Desktop MCP OAuth callbacks.'
+const UPDATE_BACKEND = `Update the ${PRODUCT_NAME} backend to support Desktop MCP OAuth callbacks.`
 
 /** Remote gateways require the Desktop callback bridge. An explicitly local
  *  gateway can host its own loopback listener when that capability is absent. */
@@ -49,7 +50,7 @@ export async function completeMcpDesktopOAuth({
 
   // A legacy null connection can resolve to a remote registry primary.
   if (!bridge && scope.connectionId !== 'local') {
-    throw new Error('Update Hermes Desktop to support MCP OAuth callbacks.')
+    throw new Error(`Update ${PRODUCT_NAME} to support MCP OAuth callbacks.`)
   }
 
   let listener: { id: string; redirectUri: string } | undefined

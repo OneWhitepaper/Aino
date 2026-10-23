@@ -1,3 +1,5 @@
+import { atom } from 'nanostores'
+
 /**
  * Quick Entry (renderer side) — the mini composer's own state, and the
  * primary window's bridge back into the real prompt-submit path.
@@ -14,8 +16,7 @@
  * bridge returns as the truth and caches it for the settings UI, same authority
  * split as keep-awake.
  */
-
-import { atom } from 'nanostores'
+import { PRODUCT_NAME } from '@/lib/brand'
 
 export interface QuickEntryState {
   enabled: boolean
@@ -197,7 +198,7 @@ export function quickEntryResultEvent(result: QuickEntrySubmitResult, submitId: 
 
   if (result.code === 'timeout') {
     return {
-      message: result.message || 'Hermes has not confirmed the prompt yet — it may still be delivered.',
+      message: result.message || `${PRODUCT_NAME} has not confirmed the prompt yet — it may still be delivered.`,
       submitId,
       type: 'submit-unknown'
     }

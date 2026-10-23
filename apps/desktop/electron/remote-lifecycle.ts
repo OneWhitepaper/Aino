@@ -29,7 +29,7 @@ import crypto from 'node:crypto'
 
 import { READY_IN_MERGED_OUTPUT_RE } from './backend-ready'
 import { parseRemoteProfileListing } from './connection-registry'
-import { PRODUCT_NAME } from './product-identity'
+import { PRODUCT_NAME, REPOSITORY_PATH, REPOSITORY_URL } from './product-identity'
 import { backendProfileArg } from './profile-id-guard'
 import { REMOTE_MARKER_GATE_PY } from './remote-update-marker-programs'
 import { assertBootstrapNotSuperseded, withRemoteTimeout } from './ssh-connection'
@@ -265,7 +265,7 @@ async function locateHermes(ssh, remoteHermesPath) {
 
   const err: any = new Error(
     `${PRODUCT_NAME} is not installed on the remote host (could not find a \`hermes\` executable). ` +
-      'Install it on the remote with:  curl -fsSL https://hermes-agent.nousresearch.com/install.sh | sh  ' +
+      `Install it on the remote with: curl -fsSL https://raw.githubusercontent.com/${REPOSITORY_PATH}/main/scripts/install.sh | HERMES_INSTALL_REPOSITORY_URL="${REPOSITORY_URL}.git" bash ` +
       `— or set the ${PRODUCT_NAME} path explicitly in the SSH connection settings.`
   )
 
@@ -410,7 +410,7 @@ async function readRemoteInstallId(ssh) {
   try {
     out = await ssh.exec(`if [ -f ${file} ]; then cat ${file}; fi`)
   } catch (cause) {
-    const error: any = new Error('Could not read the remote Hermes install id.')
+    const error: any = new Error(`Could not read the remote ${PRODUCT_NAME} install id.`)
     error.kind = 'transient-transport-error'
     error.cause = cause
     throw error
@@ -1252,7 +1252,7 @@ function remoteProfileMissingError(output) {
   const createCommand = match[2]?.trim()
 
   const err: any = new Error(
-    `The remote Hermes profile '${profile}' does not exist. ` +
+    `The remote ${PRODUCT_NAME} profile '${profile}' does not exist. ` +
       `Select an existing remote profile${createCommand ? ` or create it with: ${createCommand}` : '.'}`
   )
 

@@ -282,7 +282,7 @@ module.exports = {
     maintainer: 'OneWhitepaper',
     synopsis: light
       ? 'Remote-only Aino desktop client.'
-      : 'Aino desktop workspace built on the Hermes Agent runtime.',
+      : 'Aino AI workspace for conversations, projects and agent collaboration.',
     target: ['AppImage']
   }
 }

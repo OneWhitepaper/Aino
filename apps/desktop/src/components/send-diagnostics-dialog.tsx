@@ -21,12 +21,13 @@ import {
   DialogTitle
 } from '@/components/ui/dialog'
 import { useI18n } from '@/i18n'
+import { ISSUES_URL } from '@/lib/brand'
 import { ExternalLink as ExternalLinkAnchor, openExternalLink } from '@/lib/external-link'
 import { ExternalLink, Loader2Icon, Lock } from '@/lib/icons'
 import { $sendDiagnostics, confirmSendDiagnostics, dismissSendDiagnostics } from '@/store/send-diagnostics'
 
 const SUPPORT_LINKS = [
-  { key: 'github', url: 'https://github.com/NousResearch/hermes-agent/issues' },
+  { key: 'github', url: ISSUES_URL },
   { key: 'portal', url: 'https://portal.nousresearch.com/help' },
   { key: 'discord', url: 'https://discord.gg/NousResearch' }
 ] as const

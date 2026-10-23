@@ -1,3 +1,5 @@
+import { PRODUCT_NAME } from './product-identity'
+
 /**
  * Quick Entry — the global-hotkey mini composer.
  *
@@ -89,7 +91,7 @@ export function createQuickEntrySubmitRelay(options: {
           reconcilable.add(correlationId)
           resolve({
             code: 'timeout',
-            message: 'Hermes has not confirmed the prompt yet — it may still be delivered.',
+            message: `${PRODUCT_NAME} has not confirmed the prompt yet — it may still be delivered.`,
             ok: false,
             retryable: false
           })

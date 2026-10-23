@@ -182,15 +182,19 @@ test('a stale owner this window restarts is attached in its restart wait before 
   // there waits for an answer only this window can give. Awaiting the restart first deadlocked both.
   const { createStaleGatewayRestarter } = await import('./local-gateway')
   const endpoint = { profile_id: '/h', instance_id: 'old', authority_epoch: 1, runtime_protocol: 1, api_origin: 'http://127.0.0.1:1234', capabilities: ['session-authority-v1'], supervisor: 'none', code_sha: 'old' }
+
   let finishRestart = () => {}
   const restarted: string[] = []
+
   const restartStale = createStaleGatewayRestarter(owner => { restarted.push(owner)
 
  return new Promise<void>(resolve => { finishRestart = resolve }) }, () => undefined)
+
   const answers = [
     { code: 0, stdout: JSON.stringify({ state: 'ready', endpoint, client_code_sha: 'new' }) },
     { code: 6, stdout: JSON.stringify({ state: 'draining', reason_code: 'restart_wait', endpoint, client_code_sha: 'new' }) }
   ]
+
   const attached = ensureLocalGateway(async () => answers.shift()!, undefined, restartStale)
   const outcome = await Promise.race([attached, new Promise(resolve => setTimeout(() => resolve('blocked on the restart'), 500))])
   finishRestart()
@@ -206,7 +210,7 @@ test('an ensure child that never reached the protocol boundary is diagnosed from
   await expect(ensureLocalGateway(async () => ({ code: 1, stdout: '', stderr: "Error: Profile 'gone' does not exist.\n" }))).rejects.toThrow(/exit 1\): Error: Profile 'gone' does not exist\./)
   // A protocol outcome is never re-diagnosed: `incompatible` stays the gateway's own verdict.
   await expect(ensureLocalGateway(async () => ({ code: 3, stdout: '{"endpoint":null,"reason_code":"runtime_protocol","state":"incompatible"}', stderr: 'noise' }))).rejects.toThrow('Gateway incompatible (runtime_protocol)')
-  await expect(ensureLocalGateway(async () => ({ code: 0, stdout: '', stderr: '' }))).rejects.toThrow(/produced no result \(exit 0\)\. Update Hermes/)
+  await expect(ensureLocalGateway(async () => ({ code: 0, stdout: '', stderr: '' }))).rejects.toThrow(/produced no result \(exit 0\)\. Update Aino/)
 })
 
 test('private dial credential is one-use and bound to the requesting native window', () => {
@@ -251,6 +255,7 @@ test('a redial whose re-ensure comes back without a gateway endpoint names that,
   const { localGatewayDial } = await import('./local-gateway')
   const endpoint = { profile_id: '/h', control_home: null, instance_id: 'dead', authority_epoch: 1, runtime_protocol: 1, api_origin: 'http://127.0.0.1:1234', capabilities: ['session-authority-v1'], supervisor: 'none' }
   const mint = vi.fn(async () => { throw new Error('Gateway ticket control socket missing') })
+
   const ensure = vi.fn()
     .mockResolvedValueOnce({ baseUrl: 'http://127.0.0.1:1234', gatewayEndpoint: endpoint })
     .mockResolvedValueOnce({ baseUrl: 'http://127.0.0.1:1234' })

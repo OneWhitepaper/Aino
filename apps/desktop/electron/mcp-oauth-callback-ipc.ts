@@ -1,3 +1,4 @@
+import http from 'node:http'
 /**
  * mcp-oauth-callback-ipc.ts
  *
@@ -22,11 +23,11 @@
  *     gateway verifies `state` (constant-time) before redeeming anything;
  *   - the browser sees only a minimal "return to Hermes" page.
  */
-
-import http from 'node:http'
 import type { AddressInfo } from 'node:net'
 
 import { ipcMain } from 'electron'
+
+import { PRODUCT_NAME } from './product-identity'
 
 const DEFAULT_WAIT_TIMEOUT_MS = 5 * 60 * 1000
 const MAX_PENDING_LISTENERS = 8
@@ -35,7 +36,7 @@ const DONE_HTML =
   '<!doctype html><meta charset="utf-8"><title>Authorization received</title>' +
   '<body style="font:15px system-ui;margin:3rem;text-align:center">' +
   '<h2>&#10003; Authorization received</h2>' +
-  '<p>You can close this window and return to Hermes.</p>' +
+  `<p>You can close this window and return to ${PRODUCT_NAME}.</p>` +
   '<script>setTimeout(()=>window.close(),800)</script>'
 
 interface CallbackResult {

@@ -7,6 +7,8 @@
 // Advisory contract: older backends never send this — every consumer must
 // keep working when it is absent (legacy string-sniffing stays as fallback).
 
+import { PRODUCT_NAME } from './brand'
+
 export const ERROR_SURFACE_LAYERS = [
   'provider',
   'endpoint',
@@ -326,7 +328,7 @@ export function formatErrorDiagnostics(input: {
   const model = input.surface?.model || input.model
 
   const lines = [
-    '── Hermes error details ──',
+    `── ${PRODUCT_NAME} error details ──`,
     input.failedAt ? `time: ${new Date(input.failedAt * 1000).toISOString()}` : null,
     input.surface ? `layer: ${input.surface.layer}` : null,
     input.surface ? `code: ${input.surface.code}` : null,

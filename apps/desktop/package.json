@@ -3,7 +3,7 @@
   "productName": "Aino",
   "private": true,
   "version": "0.22.4",
-  "description": "Aino desktop workspace built on the Hermes Agent runtime.",
+  "description": "Aino AI workspace for conversations, projects and agent collaboration.",
   "author": "OneWhitepaper",
   "repository": {
     "type": "git",

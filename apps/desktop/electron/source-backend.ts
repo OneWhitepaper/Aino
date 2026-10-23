@@ -3,6 +3,7 @@ import path from 'node:path'
 
 import { buildDesktopBackendEnv } from './backend-env'
 import { execProbe, PROBE_TIMEOUT_MS } from './backend-probes'
+import { PRODUCT_NAME } from './product-identity'
 import { resolveInstallationLauncher } from './updater-process'
 
 export interface SourceBackend {
@@ -58,7 +59,7 @@ export async function resolveSourceInstallationBackend(
 
   return {
     kind: 'command',
-    label: `Hermes at ${root}`,
+    label: `${PRODUCT_NAME} at ${root}`,
     command,
     args: [...args],
     env,
@@ -93,7 +94,7 @@ export function createSourcePythonBackend(
 
   return {
     kind: 'python',
-    label: `Hermes source at ${root}`,
+    label: `${PRODUCT_NAME} source at ${root}`,
     command,
     args: ['-m', 'hermes_cli.main', ...args],
     // The backend runs in the user's workspace cwd, and the selected

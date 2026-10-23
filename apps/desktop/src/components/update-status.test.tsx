@@ -264,6 +264,10 @@ describe('VersionHero bundle banners', () => {
     expect(screen.getByText(en.updates.bundleOutOfSync)).toBeTruthy()
     expect(screen.queryByText(en.updates.bundleSwapPending)).toBeNull()
     expect(screen.queryByRole('button', { name: en.updates.bundleSwapPendingAction })).toBeNull()
+    const installer = screen.getByRole('link', { name: en.updates.bundleOutOfSyncAction })
+    expect(installer.getAttribute('href')).toBe('https://petoi.cn/download.html')
+    fireEvent.click(installer)
+    expect(window.hermesDesktop.openExternal).toHaveBeenCalledWith('https://petoi.cn/download.html')
   })
 
   it('a pending swap wins over the out-of-sync banner — restart, not reinstall', () => {

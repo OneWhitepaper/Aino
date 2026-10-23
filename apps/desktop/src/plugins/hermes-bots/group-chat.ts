@@ -1,3 +1,5 @@
+import { atom, host } from '@hermes/plugin-sdk'
+
 /**
  * The group-chat room store: the room atoms, the durable record in plugin
  * storage, the bounded cross-client projection that rides the default
@@ -8,9 +10,6 @@
  * updateGroupChat schedules it and the scheduler reads the same atom — one
  * store, one writer.
  */
-
-import { atom, host } from '@hermes/plugin-sdk'
-
 import { $botMeta, $lastRoster, botRosterKey } from './data'
 import { groupMemberReferencesConnection, markOrphanedGroupMemberDescriptor } from './hygiene'
 import { botsText } from './i18n'
@@ -1482,7 +1481,7 @@ export function groupSpeakerLabel(name?: null | string, group?: null | string) {
     // Exact key only: the bare `profile` key is a single-source record and
     // names whichever machine wrote it, never this connection's bot.
     const title = String(meta?.[trimmed]?.title || '').trim()
-    const label = title || (profile.toLowerCase() === 'default' ? 'Hermes' : profile)
+    const label = title || (profile.toLowerCase() === 'default' ? displayName({ name: 'default' }) : profile)
 
     // Another connection still exposes this name: keep them tellable apart.
     return rows.some(bot => bot.name === profile) ? `${label} · ${connection}` : label
@@ -1515,7 +1514,7 @@ export function groupSpeakerLabel(name?: null | string, group?: null | string) {
     return renamed
   }
 
-  return isDefault ? 'Hermes' : trimmed
+  return isDefault ? displayName({ name: 'default' }) : trimmed
 }
 
 /** Trim a room log + its watermarks to the retained window, keeping

@@ -6,9 +6,10 @@
  * caller keeps the commit changelog when nothing comes back.
  */
 
-const REPOSITORY = 'NousResearch/hermes-agent'
-const API = `https://api.github.com/repos/${REPOSITORY}`
-const SITE = `https://github.com/${REPOSITORY}`
+import { REPOSITORY_PATH, REPOSITORY_URL } from './brand'
+
+const API = `https://api.github.com/repos/${REPOSITORY_PATH}`
+const SITE = REPOSITORY_URL
 const MAX_ITEMS = 5
 // Recent merges move constantly; re-read them, but not on every dialog open.
 const PULLS_TTL_MS = 10 * 60_000

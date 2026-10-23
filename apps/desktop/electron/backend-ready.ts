@@ -1,5 +1,7 @@
 import fs from 'node:fs'
 
+import { PRODUCT_NAME } from './product-identity'
+
 // `hermes serve` announces HERMES_BACKEND_READY; the legacy `hermes dashboard`
 // backend announces HERMES_DASHBOARD_READY. Accept either so the desktop spawn
 // works against both the headless backend and old/dashboard runtimes.
@@ -120,7 +122,7 @@ function waitForDashboardPort(
           cleanup()
           reject(
             new Error(
-              `Timed out waiting for Hermes backend port announcement (${timeoutMs}ms)${deadline ? ' while an update completion was in progress' : ''}`
+              `Timed out waiting for ${PRODUCT_NAME} backend port announcement (${timeoutMs}ms)${deadline ? ' while an update completion was in progress' : ''}`
             )
           )
         },
@@ -168,7 +170,9 @@ function waitForDashboardPort(
 
     function onExit(code, signal) {
       cleanup()
-      reject(new Error(`Hermes backend: exited before port announcement (${signal || code})${describeOutputTail()}`))
+      reject(
+        new Error(`${PRODUCT_NAME} backend: exited before port announcement (${signal || code})${describeOutputTail()}`)
+      )
     }
 
     function onError(err) {
@@ -256,7 +260,9 @@ function waitForDashboardReadyFile(
 
     function onExit(code, signal) {
       cleanup()
-      reject(new Error(`Hermes backend: exited before port announcement (${signal || code})${describeOutputTail()}`))
+      reject(
+        new Error(`${PRODUCT_NAME} backend: exited before port announcement (${signal || code})${describeOutputTail()}`)
+      )
     }
 
     function onError(err) {
@@ -266,7 +272,7 @@ function waitForDashboardReadyFile(
 
     const timer = setTimeout(() => {
       cleanup()
-      reject(new Error(`Timed out waiting for Hermes backend port announcement (${timeoutMs}ms)`))
+      reject(new Error(`Timed out waiting for ${PRODUCT_NAME} backend port announcement (${timeoutMs}ms)`))
     }, timeoutMs)
 
     child.on('exit', onExit)

@@ -1,3 +1,4 @@
+import type { LoginAttempt } from './oauth-login-flights'
 /**
  * The embedded gateway sign-in window (cookie-mode OAuth).
  *
@@ -17,8 +18,7 @@
  * window reveals itself after `revealAfterMs` when auto-SSO did not finish.
  * `reveal()` promotes a hidden attempt when the user's own click joins it.
  */
-
-import type { LoginAttempt } from './oauth-login-flights'
+import { PRODUCT_NAME } from './product-identity'
 
 export interface OauthLoginWindowLike {
   destroy: () => void
@@ -115,7 +115,7 @@ export function startOauthLoginWindow<S>(
     try {
       win = deps.createWindow({
         session,
-        title: silent ? 'Connecting to Hermes Cloud agent…' : 'Sign in to Hermes gateway',
+        title: silent ? 'Connecting to Nous Cloud agent…' : `Sign in to ${PRODUCT_NAME} gateway`,
         // Silent windows start hidden: the auto-SSO chain normally finishes
         // in well under a second and never needs to be seen.
         show: !silent && !hiddenRecovery

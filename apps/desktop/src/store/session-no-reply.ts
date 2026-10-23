@@ -1,10 +1,11 @@
+import { PRODUCT_NAME } from '@/lib/brand'
 import { type ChatMessage, chatMessageText } from '@/lib/chat-messages'
 import type { ErrorSurface } from '@/lib/error-surface'
 
 // Raised only after the backend confirmed the turn is over and no reply reached
 // this window, so Retry cannot run the prompt twice.
 const NO_REPLY_SURFACE: ErrorSurface = { code: 'no_reply', layer: 'runtime', retryable: true }
-const NO_REPLY_ERROR = 'Hermes ended this turn without a reply.'
+const NO_REPLY_ERROR = `${PRODUCT_NAME} ended this turn without a reply.`
 
 export function turnHasReply(messages: ChatMessage[]): boolean {
   for (let index = messages.length - 1; index >= 0; index -= 1) {

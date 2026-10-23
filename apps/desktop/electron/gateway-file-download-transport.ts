@@ -10,6 +10,7 @@ import type {
 } from './gateway-file-download'
 import { destroyStalledBody, finalizeGatewayDownload, type StallWatchableBody } from './gateway-file-download'
 import { DEFAULT_FETCH_TIMEOUT_MS, resolveTimeoutMs } from './hardening'
+import { PRODUCT_NAME } from './product-identity'
 
 export interface GatewayDownloadOptions {
   bearer?: string
@@ -32,7 +33,7 @@ function downloadUrl(url: string): URL {
   }
 
   if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
-    throw new Error(`Unsupported Hermes backend URL protocol: ${parsed.protocol}`)
+    throw new Error(`Unsupported ${PRODUCT_NAME} backend URL protocol: ${parsed.protocol}`)
   }
 
   return parsed
@@ -77,7 +78,7 @@ export function downloadViaTokenToFile(
 
     request.on('error', reject)
     request.setTimeout(timeoutMs, (): void => {
-      request.destroy(new Error(`Timed out connecting to Hermes backend after ${timeoutMs}ms`))
+      request.destroy(new Error(`Timed out connecting to ${PRODUCT_NAME} backend after ${timeoutMs}ms`))
     })
     request.end()
   })
@@ -136,7 +137,7 @@ export function downloadViaOauthSessionToFile<S>(
 
       settled = true
       request.abort()
-      reject(new Error(`Timed out connecting to Hermes backend after ${timeoutMs}ms`))
+      reject(new Error(`Timed out connecting to ${PRODUCT_NAME} backend after ${timeoutMs}ms`))
     }, timeoutMs)
 
     request.on('response', (response: GatewayDownloadResponse): void => {

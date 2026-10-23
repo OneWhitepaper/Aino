@@ -8,5 +8,8 @@
   "primaryProtocol": "aino",
   "legacyProtocol": "hermes",
   "repositoryUrl": "https://github.com/OneWhitepaper/Aino",
+  "websiteUrl": "https://petoi.cn",
+  "downloadUrl": "https://petoi.cn/download.html",
+  "documentationUrl": "https://petoi.cn/guide.html",
   "upstreamRepositoryUrl": "https://github.com/NousResearch/hermes-agent"
 }

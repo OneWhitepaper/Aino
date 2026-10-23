@@ -359,7 +359,7 @@ describe('BootFailureOverlay', () => {
     )
 
     expect(screen.getByText(translateNow('boot.causes.permission'))).toBeTruthy()
-    const detail = document.querySelector('details pre')
+    const detail = screen.getByText((_, element) => element?.tagName === 'PRE' && element.textContent === raw)
     expect(detail?.textContent).toBe(raw)
     expect(detail?.closest('details')?.open).toBe(false)
   })
@@ -396,9 +396,7 @@ describe('BootFailureOverlay', () => {
       expect(screen.getByText(/reinstall the app to restore/i)).toBeTruthy()
 
       fireEvent.click(screen.getByRole('button', { name: /reinstall the app/i }))
-      await waitFor(() =>
-        expect(openExternal).toHaveBeenCalledWith('https://hermes-agent.nousresearch.com/docs/user-guide/desktop')
-      )
+      await waitFor(() => expect(openExternal).toHaveBeenCalledWith('https://petoi.cn/guide.html'))
     } finally {
       restore()
     }

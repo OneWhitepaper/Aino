@@ -1,3 +1,5 @@
+import { PRODUCT_NAME } from './product-identity'
+
 export type BackendConnectionAttempt<TConnection> = {
   generation: number
   promise: Promise<TConnection> | null
@@ -91,7 +93,7 @@ export function createBackendConnectionState<TProcess, TConnection>(): BackendCo
 
     assertCurrentAttempt(attempt: BackendConnectionAttempt<TConnection>): void {
       if (attempt.generation !== generation) {
-        throw new Error('Hermes backend start was superseded by a newer connection attempt.')
+        throw new Error(`${PRODUCT_NAME} backend start was superseded by a newer connection attempt.`)
       }
     },
 

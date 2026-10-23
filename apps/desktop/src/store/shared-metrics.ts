@@ -1,10 +1,12 @@
 import type { SharedMetricsConsentResult } from '@hermes/shared'
 import { atom } from 'nanostores'
 
+import { RUNTIME_DOCS_URL } from '@/lib/docs'
+
 import { recordOnboarding, setDesktopMetricsGate } from './desktop-metrics'
 
 /** Public page describing exactly what shared metrics contain and how consent windows work. */
-export const SHARED_METRICS_DOCS_URL = 'https://hermes-agent.nousresearch.com/docs/developer-guide/relay-shared-metrics'
+export const SHARED_METRICS_DOCS_URL = `${RUNTIME_DOCS_URL}/developer-guide/relay-shared-metrics.md`
 
 export type SharedMetricsConsent = SharedMetricsConsentResult
 

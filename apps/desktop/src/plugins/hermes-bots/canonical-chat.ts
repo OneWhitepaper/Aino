@@ -1,3 +1,4 @@
+import * as sdk from '@hermes/plugin-sdk'
 /**
  * The canonical Bot Chat: one bot, one forever-chat, resolved by exact title.
  *
@@ -7,8 +8,6 @@
  * plugin.tsx, which owns the workspace and group state a bot open competes
  * with.
  */
-
-import * as sdk from '@hermes/plugin-sdk'
 import { host } from '@hermes/plugin-sdk'
 import type { SessionListRow } from '@hermes/plugin-sdk'
 
@@ -123,7 +122,7 @@ async function openStoredBotChat(
 ): Promise<string> {
   if (!storedId || typeof host.openSession !== 'function') {
     throw new Error(
-      pluginText('bot.storedSessionOpenUnsupported', 'This Hermes Desktop version cannot open stored sessions')
+      pluginText('bot.storedSessionOpenUnsupported', `This Aino version cannot open stored sessions`)
     )
   }
 
@@ -237,7 +236,7 @@ export function notifyBotOpenFailure(error: unknown, bot: RosterRow, step: BotOp
   const detail = errorDetail(error)
 
   if (botModeGatewayNeedsUpdate(error)) {
-    const connectionLabel = bot.connectionLabel || bot.connectionId || 'Hermes'
+    const connectionLabel = bot.connectionLabel || bot.connectionId || 'Aino'
     host.notify?.({
       kind: 'error',
       title: b.openNeedsUpdateTitle,
@@ -667,7 +666,7 @@ export async function prepareBotSource(bot: RosterRow) {
 
   if (route && typeof host.requestProfile !== 'function') {
     throw new Error(
-      pluginText('bot.remoteConnectionsUnsupported', 'Update Hermes Desktop to chat with bots on other connections.')
+      pluginText('bot.remoteConnectionsUnsupported', `Update Aino to chat with bots on other connections.`)
     )
   }
 

@@ -8,6 +8,7 @@ import {
 } from './connection-config'
 import type { ConnectionRegistry } from './connection-registry'
 import { matchingConnectionId, type StoredRoute } from './connection-route-identity'
+import { PRODUCT_NAME } from './product-identity'
 
 type RouteSource = 'env' | 'profile' | 'registry' | 'settings'
 
@@ -126,7 +127,7 @@ export function resolveDesktopRemoteRoute({
     if (!envToken) {
       throw new Error(
         'HERMES_DESKTOP_REMOTE_URL is set but HERMES_DESKTOP_REMOTE_TOKEN is not. ' +
-          'Both must be provided to connect to a remote Hermes backend.'
+          `Both must be provided to connect to a remote ${PRODUCT_NAME} backend.`
       )
     }
 
