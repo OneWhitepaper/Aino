@@ -141,6 +141,38 @@ describe('macOS strategy', () => {
 })
 
 describe('native signature verification', () => {
+  it('keeps the gateway alive while a bundled update needs several minutes to prepare', async () => {
+    vi.useFakeTimers()
+    const native = Object.assign(new EventEmitter(), { checkForUpdates: vi.fn() })
+    const { deps, events } = fixture()
+    deps.prepareInstall = () => prepareMacInstall(native)
+
+    const outcome = new MacStrategy(deps).apply().then(
+      result => ({ ok: true, result }),
+      error => ({ ok: false, error })
+    )
+
+    await vi.advanceTimersByTimeAsync(7 * 60_000)
+    expect(events).not.toContain('stop')
+    expect(events).not.toContain('install')
+    native.emit('update-downloaded')
+
+    await expect(outcome).resolves.toMatchObject({ ok: true, result: { handedOff: true } })
+    expect(events.slice(-2)).toEqual(['stop', 'install'])
+  })
+
+  it('still bounds a native preparation that never becomes ready', async () => {
+    vi.useFakeTimers()
+    const native = Object.assign(new EventEmitter(), { checkForUpdates: vi.fn() })
+    const outcome = prepareMacInstall(native).catch(error => error)
+
+    await vi.advanceTimersByTimeAsync(15 * 60_000)
+
+    await expect(outcome).resolves.toEqual(new Error('macOS update verification timed out.'))
+    expect(native.listenerCount('error')).toBe(0)
+    expect(native.listenerCount('update-downloaded')).toBe(0)
+  })
+
   it('waits for native readiness and removes both listeners', async () => {
     const native = Object.assign(new EventEmitter(), { checkForUpdates: vi.fn() })
     let ready = false
