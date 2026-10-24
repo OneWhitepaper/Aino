@@ -227,7 +227,11 @@ function useRouteRequestNavigation(navigate: ReturnType<typeof useNavigate>): vo
 // The main window asks the backend whether first-run onboarding is due and opens it with main's
 // intro around it; every other window never runs it, so its first-run surfaces are free at once.
 // Settings' Run onboarding again opens its chat through the same opener.
-function FirstRunOnboarding({ request, open, gatewayOpen }: {
+function FirstRunOnboarding({
+  request,
+  open,
+  gatewayOpen
+}: {
   request: OnboardingRequest
   open: OnboardingResume
   gatewayOpen: boolean
@@ -318,7 +322,9 @@ function useRecoveryRequestToasts(): void {
 
 export function ContribWiring({ children }: { children: ReactNode }) {
   useEffect(() => {
-    if (!isMainWindow()) { markOnboardingDecided() }
+    if (!isMainWindow()) {
+      markOnboardingDecided()
+    }
   }, [])
 
   const queryClient = useQueryClient()
@@ -649,7 +655,6 @@ export function ContribWiring({ children }: { children: ReactNode }) {
     },
     [navigate, resumeSession]
   )
-
 
   // "New project" DRAG completion: the dialog created a project that was
   // dropped onto a chat zone (tab-strip slot / pane edge / pane center). Open
@@ -1291,7 +1296,9 @@ export function ContribWiring({ children }: { children: ReactNode }) {
   return (
     <ContribWiringContext.Provider value={api}>
       <AccountGate>
-        {!isAuxiliaryWindow() && <FirstRunOnboarding gatewayOpen={gatewayState === 'open'} open={adoptSessionRoute} request={requestGateway} />}
+        {!isAuxiliaryWindow() && (
+          <FirstRunOnboarding gatewayOpen={gatewayState === 'open'} open={adoptSessionRoute} request={requestGateway} />
+        )}
         <div
           className="contents"
           style={
@@ -1325,7 +1332,13 @@ export function ContribWiring({ children }: { children: ReactNode }) {
         <RemoteDisplayBanner />
         {!isAuxiliaryWindow() && <OnboardingEnd />}
         {!isAuxiliaryWindow() && <FreeTierSignInDialog onSelectModel={selectModel} />}
-        {!isAuxiliaryWindow() && <SharedMetricsConsentDialog enabled={gatewayState === 'open'} profile={activeGatewayProfile} requestGateway={requestGateway} />}
+        {!isAuxiliaryWindow() && (
+          <SharedMetricsConsentDialog
+            enabled={gatewayState === 'open'}
+            profile={activeGatewayProfile}
+            requestGateway={requestGateway}
+          />
+        )}
         {!isAuxiliaryWindow() && (
           <DesktopOnboardingOverlay
             enabled={gatewayState === 'open'}
@@ -1422,9 +1435,9 @@ export function ContribWiring({ children }: { children: ReactNode }) {
         {/* Petdex floating mascot — renders nothing unless installed + enabled.
       {/* Fallback modal when opening an external URL fails — carries the URL
           so a dead system-browser click is never silent. */}
-      <ExternalOpenFailedDialog />
+        <ExternalOpenFailedDialog />
 
-      {/* Petdex floating mascot — renders nothing unless installed + enabled.
+        {/* Petdex floating mascot — renders nothing unless installed + enabled.
           Never in the HUD: that window is the chat bar and nothing else. */}
         {!isHudWindow() && !isBrowserWindow() && <FloatingPet />}
 

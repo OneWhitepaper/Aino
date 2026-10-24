@@ -148,15 +148,23 @@ it('converges only after every call settles and the final call manifest arrives,
     </I18nProvider>
   )
 
-  await act(async () => { await vi.advanceTimersByTimeAsync(0) })
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(0)
+  })
 
   expect(screen.getByText('Partially settled 0.0001 USD')).toBeTruthy()
 
-  listUsage.mockResolvedValue({ ...page, total: 2, items: [
-    row,
-    { ...row, id: '2', desktop_call_id: billing.calls[1].call_id, desktop_purpose: billing.calls[1].purpose }
-  ] })
-  await act(async () => { await vi.advanceTimersByTimeAsync(2000) })
+  listUsage.mockResolvedValue({
+    ...page,
+    total: 2,
+    items: [
+      row,
+      { ...row, id: '2', desktop_call_id: billing.calls[1].call_id, desktop_purpose: billing.calls[1].purpose }
+    ]
+  })
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(2000)
+  })
   expect(screen.getByText('Partially settled 0.0002 USD')).toBeTruthy()
   expect(screen.queryByText('Charged 0.0002 USD')).toBeNull()
 
@@ -165,11 +173,15 @@ it('converges only after every call settles and the final call manifest arrives,
       <ReplyCost billing={{ ...billing, revision: billing.revision + 1 }} />
     </I18nProvider>
   )
-  await act(async () => { await vi.advanceTimersByTimeAsync(0) })
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(0)
+  })
   expect(screen.getByText('Charged 0.0002 USD')).toBeTruthy()
   expect(screen.queryByText(/Partially settled/)).toBeNull()
   const settledReads = listUsage.mock.calls.length
-  await act(async () => { await vi.advanceTimersByTimeAsync(120000) })
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(120000)
+  })
   expect(listUsage).toHaveBeenCalledTimes(settledReads)
 })
 

@@ -100,7 +100,9 @@ export function BotChatEmpty({ sessionId }: { sessionId: string }) {
           />
         </div>
 
-        <h2 className="mb-1 break-words text-[length:var(--aino-text-title)] font-semibold text-(--ui-text-primary)">{name}</h2>
+        <h2 className="mb-1 break-words text-[length:var(--aino-text-title)] font-semibold text-(--ui-text-primary)">
+          {name}
+        </h2>
 
         <p className="m-0 text-center leading-normal tracking-tight">{b.bot.chatEmpty}</p>
       </div>

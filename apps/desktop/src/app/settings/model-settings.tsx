@@ -457,7 +457,11 @@ function MainModelPicker({
                   type="password"
                   value={apiKeyDraft}
                 />
-                <Button disabled={!apiKeyDraft.trim() || activating} onClick={() => void activateApiKeyProvider()} size="sm">
+                <Button
+                  disabled={!apiKeyDraft.trim() || activating}
+                  onClick={() => void activateApiKeyProvider()}
+                  size="sm"
+                >
                   {activating && <Loader2 className="size-3.5 animate-spin" />}
                   {activating ? m.activating : m.activate}
                 </Button>
@@ -1037,6 +1041,7 @@ export function ModelSettings({
       if (result.notice) {
         showLargeModelNotice(result.notice)
       }
+
       setSwitchStaleAux(result.stale_aux ?? [])
       notify({ kind: 'success', title: m.mainAppliedTitle, message: m.mainAppliedMessage(model) })
 

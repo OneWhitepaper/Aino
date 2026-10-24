@@ -198,12 +198,16 @@ it.each([
 
   const bridge: PlatformModelsBridge = {
     owner: async () => {
-      if (stage === 'owner') {throw failure}
+      if (stage === 'owner') {
+        throw failure
+      }
 
       return { platform_origin: 'http://127.0.0.1:1234', user_id: '17' }
     },
     bind: async () => {
-      if (stage === 'bind') {throw failure}
+      if (stage === 'bind') {
+        throw failure
+      }
 
       return { ok: true, ready: true, model_id: 'fixture', billing_source: 'aino', expires_at: 'later' }
     },
@@ -213,7 +217,9 @@ it.each([
 
   Object.defineProperty(window, 'hermesDesktop', { configurable: true, value: { platformModels: bridge } })
   vi.mocked(requestGatewayForAgent).mockImplementation(async () => {
-    if (stage === 'ticket') {throw failure}
+    if (stage === 'ticket') {
+      throw failure
+    }
 
     return { managed_model_binding: 1, session_ticket: 'ticket' }
   })

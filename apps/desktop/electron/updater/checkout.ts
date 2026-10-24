@@ -495,8 +495,7 @@ export function createCheckoutStrategy(deps: CheckoutStrategyDeps): CheckoutStra
 
     deps.emitUpdateProgress({
       stage: 'restart',
-      message:
-        `Updating ${PRODUCT_NAME} — this window will close and the updater will open. Don’t reopen ${PRODUCT_NAME} yourself; it restarts automatically when the update finishes.`,
+      message: `Updating ${PRODUCT_NAME} — this window will close and the updater will open. Don’t reopen ${PRODUCT_NAME} yourself; it restarts automatically when the update finishes.`,
       percent: 100
     })
     deps.repairMacUpdaterHelper(updater)
@@ -737,8 +736,7 @@ export function createCheckoutStrategy(deps: CheckoutStrategyDeps): CheckoutStra
     deps.rememberLog(`[updates] launched posix hand-off: ${handoff.scriptPath} (${targetLabel}); quitting to hand off`)
     deps.emitUpdateProgress({
       stage: 'restart',
-      message:
-        `Updating ${PRODUCT_NAME} — this window will close. Don’t reopen ${PRODUCT_NAME} yourself; it restarts automatically when the update finishes.`,
+      message: `Updating ${PRODUCT_NAME} — this window will close. Don’t reopen ${PRODUCT_NAME} yourself; it restarts automatically when the update finishes.`,
       percent: 100
     })
 

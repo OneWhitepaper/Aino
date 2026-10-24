@@ -68,11 +68,8 @@ test('prefers an explicit source override, then the managed checkout', () => {
 })
 
 test('runtime version parsing reads the canonical Hermes declaration', () => {
-  assert.equal(
-    parseHermesVersion('"""module"""\n__version__ = "0.21.0"\n__release_date__ = "2026.8.31"\n'),
-    '0.21.0'
-  )
-  assert.equal(parseHermesVersion('__version__ = \'0.20.6\'\n'), '0.20.6')
+  assert.equal(parseHermesVersion('"""module"""\n__version__ = "0.21.0"\n__release_date__ = "2026.8.31"\n'), '0.21.0')
+  assert.equal(parseHermesVersion("__version__ = '0.20.6'\n"), '0.20.6')
   assert.equal(parseHermesVersion('# no version here\n'), null)
 })
 
@@ -84,8 +81,17 @@ test('an explicit linked worktree remains the update owner beside a regular chec
   const git = (args: string[]) =>
     execFileSync(
       'git',
-      ['-c', 'maintenance.auto=false', '-c', 'commit.gpgsign=false', '-c', 'user.name=Update Test',
-        '-c', 'user.email=update-test@example.invalid', ...args],
+      [
+        '-c',
+        'maintenance.auto=false',
+        '-c',
+        'commit.gpgsign=false',
+        '-c',
+        'user.name=Update Test',
+        '-c',
+        'user.email=update-test@example.invalid',
+        ...args
+      ],
       { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }
     ).trim()
 
@@ -113,10 +119,7 @@ test('an explicit linked worktree remains the update owner beside a regular chec
     assert.equal(updateRoot, worktreeRoot)
     assert.equal(findGitRoot(updateRoot), updateRoot)
     assert.equal(git(['-C', updateRoot, 'branch', '--show-current']), 'linked-runtime')
-    assert.equal(
-      resolveUpdateRoot({ ...options, overrideRoot: null, sourceRepoRoot: worktreeRoot }),
-      worktreeRoot
-    )
+    assert.equal(resolveUpdateRoot({ ...options, overrideRoot: null, sourceRepoRoot: worktreeRoot }), worktreeRoot)
     assert.equal(
       resolveUpdateRoot({ ...options, overrideRoot: null, sourceRepoRoot: worktreeRoot, actualPackaged: true }),
       sourceRoot

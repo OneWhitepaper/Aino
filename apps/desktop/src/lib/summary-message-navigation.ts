@@ -42,7 +42,9 @@ export async function navigateToSummaryMessage(
     return options.isCurrent() ? 'not-found' : 'stale'
   }
 
-  if (!node.hasAttribute('tabindex')) {node.tabIndex = -1}
+  if (!node.hasAttribute('tabindex')) {
+    node.tabIndex = -1
+  }
   node.scrollIntoView({ block: 'center', behavior: 'smooth' })
   node.focus({ preventScroll: true })
   node.dataset.summaryTarget = ''

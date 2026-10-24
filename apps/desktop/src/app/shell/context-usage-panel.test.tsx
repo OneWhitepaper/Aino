@@ -174,8 +174,12 @@ describe('ContextUsagePanel', () => {
   it('does not present missing occupancy as zero usage', () => {
     for (const compact of [false, true]) {
       const { unmount } = render(
-        <ContextUsagePanel breakdown={null} compact={compact} loading={false}
-          usage={{ calls: 0, context_max: 372_000, input: 0, output: 0, total: 0 }} />
+        <ContextUsagePanel
+          breakdown={null}
+          compact={compact}
+          loading={false}
+          usage={{ calls: 0, context_max: 372_000, input: 0, output: 0, total: 0 }}
+        />
       )
 
       expect(screen.queryByText('0 / 0')).toBeNull()

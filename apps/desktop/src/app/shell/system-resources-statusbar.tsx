@@ -107,13 +107,17 @@ export function useSystemResourcesStatusbarItem(): StatusbarItem {
   }, [shown])
 
   const hasGpu = Boolean(hardware?.gpu_name)
+
   const vramPercent =
     hardware?.vram_used_bytes != null && hardware.vram_total_bytes
       ? Math.round((hardware.vram_used_bytes / hardware.vram_total_bytes) * 100)
       : null
+
   const ramUsed = hardware ? hardware.ram_total_bytes - hardware.ram_available_bytes : null
+
   const ramPercent =
     hardware?.ram_total_bytes && ramUsed != null ? Math.round((ramUsed / hardware.ram_total_bytes) * 100) : null
+
   const label = hardware
     ? hasGpu
       ? `GPU ${hardware.gpu_util_percent ?? 0}%${
