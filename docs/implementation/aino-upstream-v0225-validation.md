@@ -183,7 +183,9 @@ initial broad run as an all-green first attempt.
   its minimal build sandbox also reported missing font configuration and a
   renderer font assertion. The probe now imports the existing desktop identity,
   carries a Nix-generated font configuration for the sandbox, and includes the
-  desktop log in timeout diagnostics. The production launcher and backend
+  desktop log in timeout diagnostics. It uses the already-built `hermesVenv`
+  for that import; review caught that the initial repair still selected the
+  bare interpreter. The production launcher and backend
   selection policy are unchanged. Hosted validation of this repair is pending.
 - The first hosted Python run reported one retry-passing lease file. Its
   subprocess was allowed to run for 45 seconds, but the test killed it after
