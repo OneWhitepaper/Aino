@@ -94,7 +94,8 @@ No parallel delegation manager, account manager, scheduler or model tool was add
 | Linux catalog lane | 29 files / 629 passed / zero failures, retries disabled; original five fixture failures reproduced before the repair |
 | Linux managed-lease contracts | Three passed with retries disabled after aligning the test's finish wait with its unchanged 45-second subprocess budget |
 | Hosted initial Python full suite | 6,668 files / 67,088 passed / five failed / 979 skipped. All five failures are the catalog fixture mismatch above; one lease file passed on retry and is recorded below. |
-| Hosted cross-platform source CI | In progress; the first catalog run exposed a Linux-only fixture pin mismatch, documented below |
+| Hosted initial source CI | macOS, Windows x64/arm64, JS/TS and static checks passed; Python/catalog blocked only by the five fixture failures above. Repair follow-up not yet run at this source freeze. |
+| Hosted PM bundles | darwin-arm64, darwin-x64, win32-x64 and win32-arm64 all passed |
 | Hosted Nix package checks | Initial desktop-backend probe failed; test-brand/font-environment repair awaiting hosted validation |
 | Hosted release/install/update E2E | Not run by the ordinary PR workflow; skipped jobs are not counted as passes |
 
@@ -198,6 +199,10 @@ initial broad run as an all-green first attempt.
 Private local logs use `/private/tmp/aino-v0225-*`; native screenshots and receipts
 are under `/private/tmp/aino-v0225-native-platform-results`. Those artifacts are
 not committed with synthetic account or credential data.
+
+This source-freeze record preserves the initial hosted results. Final checks on
+the repaired head are tracked in [PR #16](https://github.com/OneWhitepaper/Aino/pull/16)
+and its linked Actions runs; a later green run does not replace these failures.
 
 The accepted-upstream health check retains inherited findings in the report and
 still blocks new occurrences or worse metrics. Its exact baseline SHA above is
