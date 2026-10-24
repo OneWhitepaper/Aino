@@ -388,10 +388,12 @@ assert pathlib.Path(psutil.Process(pid).exe()).resolve()==pathlib.Path(sys.execu
 with urllib.request.urlopen(discovery.endpoint.api_origin+'/api/health',timeout=10) as response:
     assert response.status==200
     health=json.load(response)
+assert health.get('ok') is True and health.get('commit')==sys.argv[2], 'Health identity differs from NEW code'
 print(json.dumps({'pid':pid,'startTime':state['start_time'],'home':str(home),'commit':discovery.endpoint.code_sha,'health':health}))`;
 const output = execFileSync(path.join(payload, stamp.runtime.storePython), ['-B', '-c', script, home, commit], {
   cwd: payload, encoding: 'utf8', timeout: 110_000,
-  env: { ...process.env, PYTHONPATH: [stamp.runtime.repoDir, stamp.runtime.sitePackages].map(p => path.join(payload, p)).join(path.delimiter) },
+  env: { ...process.env, NO_PROXY: '127.0.0.1,localhost,::1', no_proxy: '127.0.0.1,localhost,::1',
+    PYTHONPATH: [stamp.runtime.repoDir, stamp.runtime.sitePackages].map(p => path.join(payload, p)).join(path.delimiter) },
 });
 process.stdout.write(output);
 NODE
