@@ -28,8 +28,17 @@ jobs:
   tag:
     name: Tag, draft, and start the canary build
     runs-on: ubuntu-latest
+    environment: release-signing
     # A dispatch from a feature branch would tag unmerged code as the canary.
     if: github.ref_name == github.event.repository.default_branch
+    outputs:
+      configured: ${{ steps.publication.outputs.configured }}
+    env:
+      CLOUDFLARE_R2_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_R2_ACCOUNT_ID }}
+      CLOUDFLARE_R2_ACCESS_KEY_ID: ${{ secrets.CLOUDFLARE_R2_ACCESS_KEY_ID }}
+      CLOUDFLARE_R2_SECRET_ACCESS_KEY: ${{ secrets.CLOUDFLARE_R2_SECRET_ACCESS_KEY }}
+      CLOUDFLARE_R2_BUCKET: ${{ vars.CLOUDFLARE_R2_BUCKET }}
+      CLOUDFLARE_R2_PUBLIC_URL: ${{ vars.CLOUDFLARE_R2_PUBLIC_URL }}
     steps:
       - uses: actions/checkout@f548e57e544e1ff5a4c46bf1e1b8685f8e4a348a # v7.0.1
         with:
@@ -38,7 +47,26 @@ jobs:
           # the tag math reads the full tag list
           fetch-tags: true
 
+      - name: Validate publication configuration
+        id: publication
+        run: |
+          # Environment-level vars are available here, after the job starts.
+          # Server/CDN downloads alone do not provision the R2 publisher.
+          if [ "$GITHUB_EVENT_NAME" = schedule ] && [ -z "$CLOUDFLARE_R2_PUBLIC_URL" ]; then
+            echo '::notice::Automatic canary publication is not configured for this repository; no tag, release, or prune was attempted.'
+            echo 'configured=false' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          python3 - <<'PY'
+          from hermes_cli.release_channels import public_base
+          from scripts.releases import r2
+          public_base(r2.required_env("CLOUDFLARE_R2_PUBLIC_URL"))
+          r2.credentials()
+          PY
+          echo 'configured=true' >> "$GITHUB_OUTPUT"
+
       - name: Tag and draft
+        if: steps.publication.outputs.configured == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -54,7 +82,7 @@ jobs:
     # Prune even when this run had nothing new to tag. The desktop build
     # runs in its own workflow run, so this does not wait on it — the
     # window is 14 days, far wider than any build.
-    if: always() && needs.tag.result != 'cancelled' && needs.tag.result != 'skipped'
+    if: always() && needs.tag.result == 'success' && needs.tag.outputs.configured == 'true'
     # Job-level so the R2 prune step can gate on `env` (a step `if` cannot
     # read `secrets`): an unprovisioned release-signing environment skips
     # the R2 prune instead of failing the canary run.

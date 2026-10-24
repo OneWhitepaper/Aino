@@ -143,6 +143,7 @@ test('separates pinned, project and ordinary chats through real folder and sessi
   mkdirSync(folder)
   await pickFolder(folder)
   await openFolder.click()
+  await expect(openFolder).toBeEnabled({ timeout: 60_000 })
   await expect(projects).toHaveAttribute('aria-expanded', 'true')
   await expect(sidebar.getByRole('button', { name: 'New session in sample-app', exact: true }).first()).toBeVisible()
   await expect(
@@ -204,6 +205,15 @@ test('separates pinned, project and ordinary chats through real folder and sessi
   ).toBeVisible()
   const createdChat = await sendMessage('Created project conversation')
   expect(createdChat.cwd).toBe(createdFolder)
+  const contextUsage = page.locator('[data-slot="composer-context-usage"]:visible')
+  await expect(contextUsage).toHaveAttribute('aria-label', /Context Usage.*\d+% Full/)
+  await contextUsage.click()
+  const contextDetails = page.locator('[data-slot="composer-context-details"]')
+  await expect(contextDetails).toContainText('/ 64k Tokens')
+  await expect(contextDetails).not.toContainText('Loading breakdown')
+  await expect(contextDetails).not.toContainText('No context data yet')
+  await page.screenshot({ path: testInfo.outputPath('project-context-usage.png') })
+  await page.keyboard.press('Escape')
   await plainNew.click()
   await expect(sidebar.getByRole('button', { name: 'Open Created project', exact: true })).toBeVisible()
 
