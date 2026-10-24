@@ -38,6 +38,7 @@
 
 set -euo pipefail
 
+# fresh-new independently installs and smokes NEW. It never records an upgrade pass.
 PHASE="all"
 MANIFEST_URL=""
 ARCH="arm64"
@@ -163,23 +164,25 @@ derive_app_bin() { # $1: .app path
 }
 
 phase_install() {
+  local side="${1:-old}"
+  case "$side" in old|new) ;; *) fail "invalid install side: $side" ;; esac
   stage_bundle_inputs
   require_manifest
   local old_tag old_version old_commit old_identity old_team old_zip
-  old_tag="$(manifest_side old tag)"; old_version="$(manifest_side old version)"
-  old_commit="$(manifest_side old commit)"; old_identity="$(manifest_side old identity)"
-  old_team="$(manifest_side old teamId)"
-  old_zip="$(manifest_side old artifact)"
-  step "installing OLD bundle $old_tag ($old_version, identity $old_identity, team $old_team)"
+  old_tag="$(manifest_side "$side" tag)"; old_version="$(manifest_side "$side" version)"
+  old_commit="$(manifest_side "$side" commit)"; old_identity="$(manifest_side "$side" identity)"
+  old_team="$(manifest_side "$side" teamId)"
+  old_zip="$(manifest_side "$side" artifact)"
+  step "installing $side bundle $old_tag ($old_version, identity $old_identity, team $old_team)"
 
   # Artifact bytes: the common resolver verified the remote sha256; we
   # re-verify the local file so the unzipped bundle provably IS the release.
   local got
   got="$(shasum -a 256 "$old_zip" | awk '{print $1}')"
   local want
-  want="$("$NODE_BIN" -e 'const m=require(process.argv[1]); console.log(m.old.artifact.sha256.toLowerCase())' "$MANIFEST")"
-  [ "$got" = "$want" ] || fail "OLD zip sha256 $got != manifest $want"
-  ok "OLD zip sha256 verified"
+  want="$("$NODE_BIN" -e 'const m=require(process.argv[1]); console.log(m[process.argv[2]].artifact.sha256.toLowerCase())' "$MANIFEST" "$side")"
+  [ "$got" = "$want" ] || fail "$side zip sha256 $got != manifest $want"
+  ok "$side zip sha256 verified"
 
   # Install into an ISOLATED .app location (not /Applications): unzip the
   # real release zip. No patching, no re-signing, no fakes.
@@ -188,13 +191,13 @@ phase_install() {
   unzip -q "$old_zip" -d "$WORK_ROOT/install-old"
   local found
   found="$(find "$WORK_ROOT/install-old" -maxdepth 2 -name '*.app' -type d | head -1)"
-  [ -n "$found" ] || fail "no .app inside the OLD release zip"
+  [ -n "$found" ] || fail "no .app inside the selected release zip"
   local old_app="$WORK_ROOT/apps/Hermes.app"
   mv "$found" "$old_app"
 
   local old_app_bin
   old_app_bin="$(derive_app_bin "$old_app")"
-  ok "OLD bundle installed at $old_app (executable: $(basename "$old_app_bin"))"
+  ok "$side bundle installed at $old_app (executable: $(basename "$old_app_bin"))"
 
   "$NODE_BIN" "$ASSETS/mac-bundled-verify.mjs" verify-app \
     --app "$old_app" \
@@ -204,8 +207,8 @@ phase_install() {
     --expect-identity "$old_identity" \
     --expect-team "$old_team" \
     --expect-arch "$ARCH" \
-    --out "$LOG_DIR/old-bundle-verify.json" 2>&1 | ts_prefix | tee "$LOG_DIR/old-bundle-verify.log"
-  ok "OLD bundle: codesign, identity, team, version, arch and stamp all match the manifest"
+    --out "$LOG_DIR/$side-bundle-verify.json" 2>&1 | ts_prefix | tee "$LOG_DIR/$side-bundle-verify.log"
+  ok "$side bundle: codesign, identity, team, version, arch and stamp all match the manifest"
 
   # Persist the installed paths for the update phase: the executable name
   # comes from the bundle's own Info.plist and both phases must agree.
@@ -432,9 +435,24 @@ NODE
   step "PASS: packaged $(manifest_side old tag) -> $new_tag via the real About -> Update now route"
 }
 
+phase_fresh_new() {
+  phase_install new
+  local app bin
+  app="$("$NODE_BIN" -e 'console.log(require(process.argv[1]).app)' "$INSTALL_RECEIPT")"
+  bin="$(derive_app_bin "$app")"
+  "$NODE_BIN" "$ASSETS/desktop-smoke.ts" --exe "$bin" \
+    --root "$app/Contents/Resources/agent-payload" --origin bundled \
+    --home "$WORK_ROOT/first-use-home" --user-data "$WORK_ROOT/first-use-user-data" \
+    --out "$LOG_DIR" --phase installed --expect-commit "$(manifest_side new commit)" \
+    --platform-account --tool-smoke \
+    2>&1 | ts_prefix | tee "$LOG_DIR/desktop-chat-installed.log"
+  ok "NEW fresh installation, native sign-in, chat and file tool passed (separate from upgrade acceptance)"
+}
+
 case "$PHASE" in
   install) phase_install ;;
   update)  phase_update ;;
+  fresh-new) phase_fresh_new ;;
   all)     phase_install; phase_update ;;
-  *) echo "error: --phase must be install, update or all" >&2; exit 1 ;;
+  *) echo "error: --phase must be install, update, fresh-new or all" >&2; exit 1 ;;
 esac

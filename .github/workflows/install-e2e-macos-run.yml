@@ -255,7 +255,7 @@ jobs:
   # run anywhere native coverage would be fake.
   bundled-e2e:
     name: packaged bundle (open-app-update)
-    if: inputs.install-method == 'packaged-app' && inputs.update-method == 'open-app-update'
+    if: inputs.install-method == 'packaged-app' && contains(fromJSON('["open-app-update", "install-new-only"]'), inputs.update-method)
     runs-on: ${{ inputs.bundle-arch == 'x64' && 'macos-15-intel' || 'macos-15' }}
     timeout-minutes: ${{ fromJSON(format('{0}', inputs.timeout-minutes)) }}
 
@@ -284,6 +284,7 @@ jobs:
           output: ${{ runner.temp }}/e2e-logs/recording.mkv
 
       - name: Install OLD signed bundle (${{ inputs.install-ref }})
+        if: inputs.update-method == 'open-app-update'
         run: |
           set -euo pipefail
           bash tests/install/macos-bundled-e2e.sh --phase install \
@@ -296,6 +297,7 @@ jobs:
           HERMES_E2E_LOG_DIR: ${{ runner.temp }}/e2e-logs
 
       - name: Update to NEW via About -> Update now (${{ inputs.bundle-arch }})
+        if: inputs.update-method == 'open-app-update'
         run: |
           set -euo pipefail
           bash tests/install/macos-bundled-e2e.sh --phase update \
@@ -305,6 +307,18 @@ jobs:
           BUNDLE_MANIFEST_SHA256: ${{ inputs.bundle-manifest-sha256 }}
           BUNDLE_ARCH: ${{ inputs.bundle-arch }}
           HERMES_E2E_LEGACY_RETRY: ${{ inputs.legacy-timeout-retry }}
+          HERMES_E2E_LOG_DIR: ${{ runner.temp }}/e2e-logs
+
+      - name: Verify NEW fresh installation (separate from upgrade)
+        if: inputs.update-method == 'install-new-only'
+        run: |
+          set -euo pipefail
+          bash tests/install/macos-bundled-e2e.sh --phase fresh-new \
+            --manifest-url "$BUNDLE_MANIFEST" --arch "$BUNDLE_ARCH"
+        env:
+          BUNDLE_MANIFEST: ${{ inputs.bundle-manifest-url }}
+          BUNDLE_MANIFEST_SHA256: ${{ inputs.bundle-manifest-sha256 }}
+          BUNDLE_ARCH: ${{ inputs.bundle-arch }}
           HERMES_E2E_LOG_DIR: ${{ runner.temp }}/e2e-logs
 
       - name: Collect native update diagnostics
