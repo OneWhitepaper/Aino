@@ -92,6 +92,8 @@ No parallel delegation manager, account manager, scheduler or model tool was add
 | Static guards | All eleven non-health checks passed again after the test-fixture repairs |
 | Occurrence-aware code health | Final integration commit: 24 retained allowed findings / zero unwaived blockers; exit zero |
 | Linux catalog lane | 29 files / 629 passed / zero failures, retries disabled; original five fixture failures reproduced before the repair |
+| Linux managed-lease contracts | Three passed with retries disabled after aligning the test's finish wait with its unchanged 45-second subprocess budget |
+| Hosted initial Python full suite | 6,668 files / 67,088 passed / five failed / 979 skipped. All five failures are the catalog fixture mismatch above; one lease file passed on retry and is recorded below. |
 | Hosted cross-platform source CI | In progress; the first catalog run exposed a Linux-only fixture pin mismatch, documented below |
 | Hosted Nix package checks | Initial desktop-backend probe failed; test-brand/font-environment repair awaiting hosted validation |
 | Hosted release/install/update E2E | Not run by the ordinary PR workflow; skipped jobs are not counted as passes |
@@ -182,6 +184,14 @@ initial broad run as an all-green first attempt.
   carries a Nix-generated font configuration for the sandbox, and includes the
   desktop log in timeout diagnostics. The production launcher and backend
   selection policy are unchanged. Hosted validation of this repair is pending.
+- The first hosted Python run reported one retry-passing lease file. Its
+  subprocess was allowed to run for 45 seconds, but the test killed it after
+  waiting only 25 seconds for the finished event. The fixture now derives its
+  waits from that existing run budget plus a bounded teardown allowance; its
+  normal-final, credential rotation, unchanged-prefix and no-leak assertions
+  remain intact. All three cases passed in a real Linux container with retries
+  disabled (13.4 seconds). This focused result does not erase the initial flake
+  or establish long-run timing stability; the hosted follow-up remains pending.
 
 ## Evidence and remaining boundaries
 
