@@ -28,7 +28,7 @@ function render(value: unknown, args: unknown[]): null | string {
   }
 
   if (typeof value === 'function') {
-    return applyProductBrand(String((value as (...args: unknown[]) => string)(...args)))
+    return applyProductBrand(String((value as (...args: unknown[]) => string)(...args)), args)
   }
 
   return null

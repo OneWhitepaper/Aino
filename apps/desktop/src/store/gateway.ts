@@ -378,7 +378,7 @@ async function requestOnPrimaryGateway<T>(
   const gateway = g.primaryGateway
 
   if (!gateway || !isOpen(gateway)) {
-    throw new Error('Hermes gateway unavailable')
+    throw new Error(`Aino gateway unavailable`)
   }
 
   return timeoutMs === undefined && signal === undefined
@@ -1168,7 +1168,7 @@ export async function requestGatewayForProfile<T>(
 
   try {
     if (!route.gateway) {
-      throw new Error(`Hermes gateway unavailable for profile "${route.key}"`)
+      throw new Error(`Aino gateway unavailable for profile "${route.key}"`)
     }
 
     const routedParams = route.scopeProfile ? { ...params, profile: route.key } : params
@@ -1729,7 +1729,7 @@ export async function openGatewayForAgent(
 
   if (await ridesPrimaryBackend(connectionId, profile)) {
     if (!isOpen(g.primaryGateway)) {
-      throw new Error('Hermes gateway unavailable')
+      throw new Error(`Aino gateway unavailable`)
     }
 
     return

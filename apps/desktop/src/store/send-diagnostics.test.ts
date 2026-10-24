@@ -2,206 +2,105 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { setRuntimeI18nLocale } from '@/i18n'
 import { $gateway } from '@/store/gateway'
-import {
-  $sendDiagnostics,
-  confirmSendDiagnostics,
-  dismissSendDiagnostics,
-  requestSendDiagnostics
-} from '@/store/send-diagnostics'
+import { $sendDiagnostics, confirmSendDiagnostics, dismissSendDiagnostics, requestSendDiagnostics } from '@/store/send-diagnostics'
 
-function stubGateway(
-  request: (method: string, params?: Record<string, unknown>, timeout?: number) => Promise<unknown>
-) {
-  const original = $gateway.get()
+const receipt = { id: '22c5a21b-bfaa-476e-92fd-3e408c6effb8', expires_at: '2026-11-07T00:00:00Z' }
+const originalDesktop = window.hermesDesktop
+const originalGateway = $gateway.get()
 
+function rig() {
+  const request = vi.fn().mockResolvedValue({ ok: true, bundle_base64: 'redacted-gzip' })
+  const scope = vi.fn().mockResolvedValue({ user_id: '17', generation: 4, origin: 'https://api.agentera.com.cn' })
+  const upload = vi.fn().mockResolvedValue(receipt)
+  Object.defineProperty(window, 'hermesDesktop', { configurable: true, value: {
+    platformDiagnostics: { scope, upload }, getRecentLogs: vi.fn().mockResolvedValue({ lines: ['synthetic boot'] })
+  } })
   $gateway.set({ request } as never)
 
-  return () => $gateway.set(original)
+  return { request, scope, upload }
 }
 
-function stubDesktopLogs(lines: null | string[]) {
-  const original = window.hermesDesktop
-
-  Object.defineProperty(window, 'hermesDesktop', {
-    configurable: true,
-    value: lines ? { getRecentLogs: async () => ({ lines, path: '/tmp/desktop.log' }) } : undefined
-  })
-
-  return () => Object.defineProperty(window, 'hermesDesktop', { configurable: true, value: original })
-}
-
-describe('send-diagnostics store', () => {
-  beforeEach(() => {
-    setRuntimeI18nLocale('zh')
-  })
-
+describe('Aino diagnostic consent and upload', () => {
+  beforeEach(() => setRuntimeI18nLocale('zh'))
   afterEach(() => {
+    dismissSendDiagnostics()
     setRuntimeI18nLocale('en')
-    $sendDiagnostics.set(null)
-    vi.restoreAllMocks()
+    Object.defineProperty(window, 'hermesDesktop', { configurable: true, value: originalDesktop })
+    $gateway.set(originalGateway)
   })
-
-  it('opens in consent phase without any network I/O', () => {
-    const request = vi.fn()
-    const restore = stubGateway(request)
-
-    try {
-      requestSendDiagnostics('layer: provider')
-
-      expect($sendDiagnostics.get()).toEqual({ errorContext: 'layer: provider', phase: 'consent' })
-      expect(request).not.toHaveBeenCalled()
-    } finally {
-      restore()
-    }
+  it('requires consent and uploads once under the captured account', async () => {
+    const f = rig()
+    requestSendDiagnostics('synthetic error')
+    expect(f.request).not.toHaveBeenCalled()
+    expect(f.upload).not.toHaveBeenCalled()
+    await confirmSendDiagnostics()
+    await confirmSendDiagnostics()
+    expect(f.request).toHaveBeenCalledExactlyOnceWith('diagnostics.collect', {
+      error_context: 'synthetic error', extra_files: { 'desktop.log': 'synthetic boot' }
+    }, 120_000)
+    expect(f.upload).toHaveBeenCalledExactlyOnceWith({ bundle_base64: 'redacted-gzip', expected_user_id: '17', expected_generation: 4 })
+    expect($sendDiagnostics.get()).toMatchObject({ phase: 'done', result: { uploadId: receipt.id } })
   })
-
-  it('uploads on confirm, attaching error context and the local desktop log', async () => {
-    const request = vi.fn().mockResolvedValue({
-      ok: true,
-      view_url: 'https://nas.example/view/x1',
-      upload_id: 'x1',
-      expires_at: '2026-09-05T00:00:00Z'
-    })
-
-    const restoreGateway = stubGateway(request)
-    const restoreDesktop = stubDesktopLogs(['boot ok', 'ws connected'])
-
-    try {
-      requestSendDiagnostics('layer: streaming\ncode: stream_drop')
-      await confirmSendDiagnostics()
-
-      expect(request).toHaveBeenCalledTimes(1)
-      const [method, params] = request.mock.calls[0]
-
-      expect(method).toBe('diagnostics.share_nous')
-      expect(params.error_context).toContain('stream_drop')
-      expect(params.extra_files['desktop.log']).toContain('ws connected')
-
-      const state = $sendDiagnostics.get()
-
-      expect(state?.phase).toBe('done')
-      expect(state?.result?.viewUrl).toBe('https://nas.example/view/x1')
-    } finally {
-      restoreDesktop()
-      restoreGateway()
-    }
+  it('does not collect for a signed-out account or missing native capability', async () => {
+    const f = rig()
+    f.scope.mockRejectedValue(new Error('authentication_required'))
+    requestSendDiagnostics()
+    await confirmSendDiagnostics()
+    expect($sendDiagnostics.get()?.phase).toBe('error')
+    expect(f.request).not.toHaveBeenCalled()
+    expect(f.upload).not.toHaveBeenCalled()
+    Object.defineProperty(window, 'hermesDesktop', { configurable: true, value: undefined })
+    requestSendDiagnostics()
+    await confirmSendDiagnostics()
+    expect($sendDiagnostics.get()?.phase).toBe('error')
+    expect(f.request).not.toHaveBeenCalled()
   })
-
-  it('omits extra_files when the desktop IPC is unavailable (browser dashboard)', async () => {
-    const request = vi.fn().mockResolvedValue({ ok: true, view_url: 'https://nas.example/view/x2' })
-    const restoreGateway = stubGateway(request)
-    const restoreDesktop = stubDesktopLogs(null)
-
-    try {
-      requestSendDiagnostics()
-      await confirmSendDiagnostics()
-
-      const [, params] = request.mock.calls[0]
-
-      expect(params.extra_files).toBeUndefined()
-      expect(params.error_context).toBeUndefined()
-      expect($sendDiagnostics.get()?.phase).toBe('done')
-    } finally {
-      restoreDesktop()
-      restoreGateway()
-    }
+  it('does not fall back to Nous on collection or Aino upload failure', async () => {
+    const f = rig()
+    f.request.mockResolvedValueOnce({ ok: false, error: 'collection failed' })
+    requestSendDiagnostics()
+    await confirmSendDiagnostics()
+    expect(f.upload).not.toHaveBeenCalled()
+    expect($sendDiagnostics.get()).toMatchObject({ phase: 'error', error: 'collection failed' })
+    f.upload.mockRejectedValueOnce(new Error('network_timeout'))
+    requestSendDiagnostics()
+    await confirmSendDiagnostics()
+    expect(f.request.mock.calls.map(c => c[0])).toEqual(['diagnostics.collect', 'diagnostics.collect'])
+    expect(f.upload).toHaveBeenCalledOnce()
+    expect($sendDiagnostics.get()).toMatchObject({ phase: 'error', error: 'network_timeout' })
   })
-
-  it('surfaces upload failures inline and keeps the dialog open', async () => {
-    const request = vi.fn().mockResolvedValue({ ok: false, error: 'NAS unavailable' })
-    const restoreGateway = stubGateway(request)
-    const restoreDesktop = stubDesktopLogs(null)
-
-    try {
-      requestSendDiagnostics()
-      await confirmSendDiagnostics()
-
-      const state = $sendDiagnostics.get()
-
-      expect(state?.phase).toBe('error')
-      expect(state?.error).toContain('NAS unavailable')
-    } finally {
-      restoreDesktop()
-      restoreGateway()
-    }
+  it('dismissal during collection prevents uploading', async () => {
+    const f = rig()
+    let resolve!: (value: unknown) => void
+    f.request.mockImplementation(() => new Promise(r => { resolve = r }))
+    requestSendDiagnostics()
+    const pending = confirmSendDiagnostics()
+    await vi.waitFor(() => expect(f.request).toHaveBeenCalled())
+    dismissSendDiagnostics()
+    resolve({ ok: true, bundle_base64: 'redacted-gzip' })
+    await pending
+    expect(f.upload).not.toHaveBeenCalled()
+    expect($sendDiagnostics.get()).toBeNull()
   })
-
-  it('uses Chinese fallback text when no gateway is available', async () => {
-    const original = $gateway.get()
+  it('ignores a late upload result after dismissal and a new dialog', async () => {
+    const f = rig()
+    let resolve!: (value: unknown) => void
+    f.upload.mockImplementation(() => new Promise(r => { resolve = r }))
+    requestSendDiagnostics()
+    const pending = confirmSendDiagnostics()
+    await vi.waitFor(() => expect(f.upload).toHaveBeenCalled())
+    dismissSendDiagnostics()
+    requestSendDiagnostics('fresh')
+    resolve(receipt)
+    await pending
+    expect($sendDiagnostics.get()).toEqual({ phase: 'consent', errorContext: 'fresh' })
+  })
+  it('localizes the gateway-unavailable error', async () => {
+    const f = rig()
     $gateway.set(null as never)
-
-    try {
-      requestSendDiagnostics()
-      await confirmSendDiagnostics()
-
-      expect($sendDiagnostics.get()).toMatchObject({ phase: 'error', error: 'Aino 网关不可用' })
-    } finally {
-      $gateway.set(original)
-    }
-  })
-
-  it('uses Chinese fallback text when the upload response has no error detail', async () => {
-    const request = vi.fn().mockResolvedValue({ ok: false })
-    const restoreGateway = stubGateway(request)
-    const restoreDesktop = stubDesktopLogs(null)
-
-    try {
-      requestSendDiagnostics()
-      await confirmSendDiagnostics()
-
-      expect($sendDiagnostics.get()).toMatchObject({ phase: 'error', error: '诊断信息上传失败' })
-    } finally {
-      restoreDesktop()
-      restoreGateway()
-    }
-  })
-
-  it('confirm is a no-op outside the consent phase (no double upload)', async () => {
-    const request = vi.fn().mockResolvedValue({ ok: true })
-    const restoreGateway = stubGateway(request)
-    const restoreDesktop = stubDesktopLogs(null)
-
-    try {
-      requestSendDiagnostics()
-      await confirmSendDiagnostics()
-      await confirmSendDiagnostics()
-
-      expect(request).toHaveBeenCalledTimes(1)
-    } finally {
-      restoreDesktop()
-      restoreGateway()
-    }
-  })
-
-  it('dismissal mid-upload is immediate and a stale completion cannot resurrect the dialog', async () => {
-    let resolveRequest: (value: unknown) => void = () => {}
-
-    const request = vi.fn().mockImplementation(() => new Promise(resolve => (resolveRequest = resolve)))
-
-    const restoreGateway = stubGateway(request as never)
-    const restoreDesktop = stubDesktopLogs(null)
-
-    try {
-      requestSendDiagnostics()
-      const pending = confirmSendDiagnostics()
-
-      // Wait for the request to actually start, then dismiss mid-flight.
-      await vi.waitFor(() => expect(request).toHaveBeenCalled())
-      dismissSendDiagnostics()
-      expect($sendDiagnostics.get()).toBeNull()
-
-      // The upload completes AFTER dismissal — it must not write back.
-      resolveRequest({ ok: true, view_url: 'https://nas.example/view/stale' })
-      await pending
-
-      expect($sendDiagnostics.get()).toBeNull()
-
-      // A NEW dialog opened after the stale completion is untouched by it.
-      requestSendDiagnostics('fresh')
-      expect($sendDiagnostics.get()?.phase).toBe('consent')
-    } finally {
-      restoreDesktop()
-      restoreGateway()
-    }
+    requestSendDiagnostics()
+    await confirmSendDiagnostics()
+    expect($sendDiagnostics.get()).toMatchObject({ phase: 'error', error: 'Aino 网关不可用' })
+    expect(f.upload).not.toHaveBeenCalled()
   })
 })

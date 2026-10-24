@@ -20,6 +20,7 @@ from tests.tui_gateway.managed_protocol_fixture import events_for
 
 _REPO = Path(__file__).resolve().parents[2]
 _HARNESS = _REPO / 'evals/ultra_delegation/harness.py'
+_RUN_BUDGET_SECONDS = 45
 _LOOPBACK_RUNNER = '''
 import runpy, socket, sys
 def local_only(event, args):
@@ -69,7 +70,7 @@ class _LeaseHarness:
                     rig.agent_requests.append(request)
                     if len(rig.agent_requests) == 1:
                         rig.first_request.set()
-                        if not rig.release.wait(timeout=45):
+                        if not rig.release.wait(timeout=_RUN_BUDGET_SECONDS):
                             return
                 self.send_response(200)
                 self.send_header('Content-Type', 'text/event-stream')
@@ -104,7 +105,7 @@ class _LeaseHarness:
                    XDG_CACHE_HOME=str(self.home / '.cache'))
         self.process = subprocess.Popen(
             [sys.executable, '-u', '-c', _LOOPBACK_RUNNER, str(_HARNESS),
-             'large', '--live', '--review-skill=none', '--budget=45',
+             'large', '--live', '--review-skill=none', f'--budget={_RUN_BUDGET_SECONDS}',
              f'--repo={_REPO}', f'--fixtures={_REPO / "evals/ultra_delegation/fixtures"}',
              f'--output-root={self.run.parent}', '--name=lease'],
             cwd=_REPO, env=env, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
@@ -127,9 +128,9 @@ class _LeaseHarness:
         self.send(self.lease)
         self.wait_stage('session_ready', timeout=15)
         assert not self.process.stdin.closed, 'starting the harness must not require stdin EOF'
-        # Agent/tool initialization shares the harness's 45-second run window;
+        # Agent/tool initialization shares the harness's run window;
         # this contract tests renewal after a real request, not startup speed.
-        assert self.first_request.wait(timeout=45), ''.join(self.lines)
+        assert self.first_request.wait(timeout=_RUN_BUDGET_SECONDS), ''.join(self.lines)
 
     def send(self, envelope):
         self.process.stdin.write(json.dumps(envelope) + '\n')
@@ -152,7 +153,8 @@ class _LeaseHarness:
                 'expires_at': (datetime.now(UTC) + timedelta(minutes=20)).isoformat()}
 
     def finish(self):
-        self.wait_stage('finished', timeout=25)
+        # Do not kill a valid run before its own budget; allow bounded teardown.
+        self.wait_stage('finished', timeout=_RUN_BUDGET_SECONDS + 15)
         returncode = self.process.wait(timeout=10)
         self.reader.join(timeout=5)
         report = json.loads((self.run / 'report.json').read_text())

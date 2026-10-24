@@ -5,13 +5,14 @@ import { downloadAgentFor, withRetry } from './api-transport'
 import { destroyStalledBody } from './gateway-file-download'
 import { DEFAULT_FETCH_TIMEOUT_MS, resolveTimeoutMs } from './hardening'
 import { nativeGatewayHttpHeaders } from './local-gateway'
+import { PRODUCT_NAME } from './product-identity'
 
 // Retry only the connection phase, never a save dialog or a partially saved body.
 export async function downloadViaTokenToFile(url, token, ctx, finalizeGatewayDownload, options: any = {}) {
   const parsed = new URL(url)
 
   if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
-    throw new Error(`Unsupported Hermes backend URL protocol: ${parsed.protocol}`)
+    throw new Error(`Unsupported ${PRODUCT_NAME} backend URL protocol: ${parsed.protocol}`)
   }
 
   const res: http.IncomingMessage = await withRetry(async () => {
@@ -31,7 +32,7 @@ export async function downloadViaTokenToFile(url, token, ctx, finalizeGatewayDow
       })
 
       req.on('error', reject)
-      req.setTimeout(timeoutMs, () => req.destroy(new Error(`Timed out connecting to Hermes backend after ${timeoutMs}ms`)))
+      req.setTimeout(timeoutMs, () => req.destroy(new Error(`Timed out connecting to ${PRODUCT_NAME} backend after ${timeoutMs}ms`)))
       req.end()
     })
   }, { method: 'GET' })

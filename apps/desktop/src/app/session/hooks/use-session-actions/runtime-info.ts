@@ -1,3 +1,5 @@
+import { mergeUsage } from '@hermes/shared'
+
 import { normalizePersonalityValue } from '@/lib/chat-runtime'
 import { platformModelStatePatch } from '@/lib/platform-session-model'
 import { requestDesktopOnboardingForCredentialWarning } from '@/store/onboarding'
@@ -218,7 +220,7 @@ export function applyRuntimeInfo(
       // session.info/session.resume is an authoritative session snapshot, not a
       // partial live tick. Clear a missing compression count so switching from
       // a counted session to an older/cold runtime cannot leak the old value.
-      setCurrentUsage(current => ({ ...current, ...info.usage, compressions: info.usage?.compressions }))
+      setCurrentUsage(current => ({ ...mergeUsage(current, info.usage), compressions: info.usage?.compressions }))
     }
   }
 

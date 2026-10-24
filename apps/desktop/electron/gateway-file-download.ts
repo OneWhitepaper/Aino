@@ -1,3 +1,4 @@
+import crypto from 'node:crypto'
 // Helpers for saving a gateway-hosted file to the local disk from the Electron
 // main process. Extracted from main.ts so the streaming, data-URL decoding, and
 // filename derivation are unit-testable without spinning up Electron.
@@ -10,11 +11,11 @@
 // user-selected destination only once the body has landed in full — so a large
 // download never has to be buffered whole in the native process, and a failed
 // one never touches a file that was already at the destination.
-
-import crypto from 'node:crypto'
 import fs from 'node:fs'
 import path from 'node:path'
 import { Readable } from 'node:stream'
+
+import { PRODUCT_NAME } from './product-identity'
 
 // Minimal shape of the response objects we consume. Both Node's
 // http.IncomingMessage and Electron net's IncomingMessage satisfy it.
@@ -425,7 +426,7 @@ export function destroyStalledBody(res: StallWatchableBody, idleMs: number): voi
 
   const arm = (): void => {
     stop()
-    timer = setTimeout(() => res.destroy(new Error(`Hermes backend download stalled: no data for ${idleMs}ms`)), idleMs)
+    timer = setTimeout(() => res.destroy(new Error(`${PRODUCT_NAME} backend download stalled: no data for ${idleMs}ms`)), idleMs)
   }
 
   const watch = (): void => {

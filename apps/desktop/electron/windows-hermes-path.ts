@@ -1,3 +1,5 @@
+import { PRODUCT_NAME } from './product-identity'
+
 /**
  * windows-hermes-path.ts
  *
@@ -25,8 +27,7 @@
  *
  * Kept in a standalone ts module (no Electron imports, dependencies passed
  * as parameters) so it can be unit-tested with `node --test` without
- * mocking Electron or the filesystem, same pattern as backend-probes.ts and
- * backend-command.ts.
+ * mocking Electron or the filesystem, same pattern as backend-probes.ts.
  */
 
 /**
@@ -165,14 +166,14 @@ export async function resolveVenvHermesCommand(
   // cwd at the checkout root, no PYTHONPATH.
   if (!(await canImportHermesCli(python, { cwd: directoryExists(root) ? root : undefined }))) {
     rememberLog?.(
-      `Ignoring venv Hermes at ${python}: runtime import probe failed (broken/partial venv); falling through to bootstrap.`
+      `Ignoring venv ${PRODUCT_NAME} at ${python}: runtime import probe failed (broken/partial venv); falling through to bootstrap.`
     )
 
     return null
   }
 
   return {
-    label: `existing Hermes Python at ${python}`,
+    label: `existing ${PRODUCT_NAME} Python at ${python}`,
     command: python,
     args: ['-m', 'hermes_cli.main', ...backendArgs],
     bootstrap: false,

@@ -323,3 +323,15 @@ export interface PlatformCheckoutInfo {
   }>
   help_text: string
 }
+
+export interface PlatformDiagnosticReceipt {
+  id: string
+  created_at: string
+  expires_at: string
+  size_bytes: number
+}
+
+export interface PlatformDiagnosticsBridge {
+  scope(): Promise<PlatformBillingScope>
+  upload(input: PlatformDeviceOwner & { bundle_base64: string }): Promise<PlatformDiagnosticReceipt>
+}

@@ -1,5 +1,5 @@
 name: "🔧 Setup / Installation Help"
-description: Having trouble installing or configuring Hermes? Ask here.
+description: Having trouble installing or configuring Aino? Ask here.
 title: "[Setup]: "
 labels: ["setup"]
 body:
@@ -9,11 +9,9 @@ body:
         Sorry you're having trouble! Please fill out the details below so we can help.
 
         **Quick checks first:**
-        - Run `hermes debug share` and paste the links in the Debug Report section below
-        - If you're in a chat session, you can use `/debug` instead — it does the same thing
-        - Try `hermes update` to get the latest version
-        - Check the [README troubleshooting section](https://github.com/NousResearch/hermes-agent#troubleshooting)
-        - For general questions, consider the [Nous Research Discord](https://discord.gg/NousResearch) for faster help
+        - Include the exact error shown by Aino in the Debug Report section below
+        - Check Settings → About for application updates
+        - For installation and configuration guidance, read the [Aino guide](https://petoi.cn/guide.html)
 
   - type: textarea
     id: description
@@ -21,8 +19,7 @@ body:
       label: What's Going Wrong?
       description: Describe what you're trying to do and where it fails.
       placeholder: |
-        I ran `hermes setup` and selected Nous Portal, but when I try to
-        start the gateway I get...
+        I installed Aino from the download page, but when I open it I see...
     validations:
       required: true
 
@@ -32,10 +29,10 @@ body:
       label: Steps Taken
       description: What did you do? Include the exact commands you ran.
       placeholder: |
-        1. Ran the install script: `curl -fsSL ... | bash`
-        2. Ran `hermes setup` and chose "Quick setup"
-        3. Selected OpenRouter, entered API key
-        4. Ran `hermes chat` and got error...
+        1. Downloaded the installer for my system and architecture
+        2. Installed and opened Aino
+        3. Selected a model or configured a provider
+        4. Started a conversation and saw the error...
     validations:
       required: true
 
@@ -44,10 +41,11 @@ body:
     attributes:
       label: Installation Method
       options:
-        - Install script (curl | bash)
-        - Manual clone + pip/uv install
-        - PowerShell installer (Windows)
-        - Docker
+        - macOS DMG / ZIP
+        - Windows installer
+        - Linux AppImage / DEB / RPM
+        - Source checkout (see CONTRIBUTING.md)
+        - Existing remote runtime
         - Other
     validations:
       required: true
@@ -70,26 +68,23 @@ body:
   - type: input
     id: hermes-version
     attributes:
-      label: Hermes Version
-      description: Output of `hermes version` (if install got that far)
-      placeholder: "2.1.0"
+      label: Aino Version
+      description: Application version from Settings → About, or `hermes version` for a source runtime
+      placeholder: "Version shown in Settings → About"
 
   - type: textarea
     id: debug-report
     attributes:
-      label: Debug Report
+      label: Debug Report (optional)
       description: |
-        Run `hermes debug share` from your terminal and paste the links it prints here.
-        This uploads your system info, config, and recent logs to a paste service automatically.
-
-        If you're in an interactive chat session, you can also use the `/debug` slash command — it does the same thing.
-
-        If the upload fails or install didn't get that far, run `hermes debug share --local` and paste the output directly.
-        If even that doesn't work, run `hermes doctor` and paste that output instead.
+        Paste relevant redacted error details from Aino. Remove credentials and private conversation content.
+        For source-runtime problems, include local diagnostic output if available.
+        The optional “Send diagnostics to Nous” action sends a separate private bundle to Nous;
+        an Aino issue does not give Aino maintainers access to that bundle.
       placeholder: |
-        Report   https://paste.rs/abc123
-        agent.log   https://paste.rs/def456
-        gateway.log   https://paste.rs/ghi789
+        Application version:
+        Connection type:
+        Error details:
       render: shell
 
   - type: textarea
@@ -107,6 +102,6 @@ body:
       label: What I've Already Tried
       description: List any fixes or workarounds you've already attempted.
       placeholder: |
-        - Ran `hermes update`
-        - Tried reinstalling with `pip install -e ".[all]"`
-        - Checked that OPENROUTER_API_KEY is set in ~/.hermes/.env
+        - Checked Settings → About for updates
+        - Reopened the application
+        - Checked the selected model and connection settings

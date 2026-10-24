@@ -184,7 +184,7 @@ _LONG_HANDLERS = frozenset({
     "browser.manage", "cli.exec", "complete.path", "complete.slash", "llm.oneshot", "model.options",
     "pet.cells", "pet.gallery", "pet.generate", "pet.hatch", "pet.info", "pet.select", "pet.thumb",
     "learning.frames", "plugins.manage", "plugins.catalog.lookup", "reload.mcp", "mcp.servers.test",
-    "mcp.servers.oauth.start",
+    "mcp.servers.oauth.start", "diagnostics.collect", "diagnostics.share_nous",
     "process.list", "profiles.configure", "profiles.create", "profiles.describe", "profiles.get_asset",
     "profiles.list", "profiles.set_asset", "bot_relay.roster.sync", "bot_relay.outbox.drain",
     "bot_relay.deliver", "bot_relay.reply", "image.generate", "projects.discover_repos",
@@ -1421,6 +1421,10 @@ def _get_usage(agent) -> dict:
             for _key, _val in (("avg_latency_s", _total_lat / _n), ("avg_tps", _avg_vel)):
                 if _val is not None and _val == _val and 0 < _val < 1e6:  # guard NaN/negative/absurd provider timings
                     usage[_key] = round(float(_val), 1)
+    # Window plans only: the desktop status bar's allowance (the canonical feed carries the same one).
+    from gateway.session_usage import plan_gauge
+    if (gauge := plan_gauge(agent)) is not None:
+        usage["plan_gauge"] = gauge
     # Live count of background/async subagents (CLI status bar ⛓ parity, same async_delegation registry).
     with contextlib.suppress(Exception):
         from tools.async_delegation import active_count as _async_active_count

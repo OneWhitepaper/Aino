@@ -12,7 +12,7 @@ import type { KeepAwakeMode } from '../electron/power-save'
 import type { UpdateHoldWire } from '../electron/update-hold-types'
 import type { UpdateRunReport } from '../electron/updater/update-metrics'
 import type { WindowSizeMode } from '../electron/window-size-types'
-import type { PlatformAccountBridge, PlatformBillingBridge, PlatformDevicesBridge, PlatformModelsBridge } from '../shared/platform-contract'
+import type { PlatformAccountBridge, PlatformBillingBridge, PlatformDevicesBridge, PlatformDiagnosticsBridge, PlatformModelsBridge } from '../shared/platform-contract'
 
 import type { WakeIndicatorState } from './lib/wake-indicator'
 import type {
@@ -39,6 +39,7 @@ declare global {
       platformModels: PlatformModelsBridge
       platformBilling?: PlatformBillingBridge
       platformDevices?: PlatformDevicesBridge
+      platformDiagnostics?: PlatformDiagnosticsBridge
       accountAdapter: 'legacy-development' | 'platform'
       // Resolve a backend connection. Omit `profile` (or pass the primary) for
       // the window's backend; pass a named profile to dial/reuse that profile's
@@ -927,6 +928,9 @@ export interface DesktopUpdateStatus {
   aheadOfRelease?: boolean
   /** Source stable: the checkout already contains the release, so installing it moves back. */
   rollback?: boolean
+  /** Source stable: `hermes update` would refuse the release (it predates the gateway runtime these
+   *  session stores use), so it is held instead of offered. */
+  held?: 'downgrade'
   targetSha?: string
   commits?: DesktopUpdateCommit[]
   dirty?: boolean

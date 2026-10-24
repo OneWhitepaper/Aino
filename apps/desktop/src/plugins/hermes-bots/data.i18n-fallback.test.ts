@@ -66,7 +66,7 @@ describe('Bot Mode non-reactive labels', () => {
 
     expect(hostMock.notify).toHaveBeenCalledWith({
       kind: 'error',
-      message: 'Update Hermes Desktop to open another Bot chat.'
+      message: 'Update Aino to open another Bot chat.'
     })
   })
 })

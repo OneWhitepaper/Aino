@@ -94,6 +94,13 @@ test('locateHermes throws a hermes-not-found error with an install hint', async 
     (err: any) => {
       assert.equal(err.kind, 'hermes-not-found')
       assert.match(err.message, /install/i)
+      assert.match(err.message, /raw\.githubusercontent\.com\/OneWhitepaper\/Aino\/main\/scripts\/install\.sh/)
+      assert.match(err.message, /HERMES_INSTALL_REPOSITORY_URL="https:\/\/github\.com\/OneWhitepaper\/Aino\.git" bash/)
+      assert.equal(
+        ssh.calls.some(cmd => cmd.includes('install.sh')),
+        false,
+        'recovery advice must not install automatically'
+      )
 
       return true
     }

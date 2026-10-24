@@ -1,3 +1,4 @@
+import { nativeLocaleCopy, type NativeLocaleCopy, normalizeNativeLocale } from './native-locale'
 /**
  * Visible renderer-load error page.
  *
@@ -21,8 +22,7 @@
  * a self-contained data: URL (no network, no file access), so `loadURL` can
  * never itself fail on a torn install.
  */
-
-import { nativeLocaleCopy, type NativeLocaleCopy, normalizeNativeLocale } from './native-locale'
+import { PRODUCT_NAME } from './product-identity'
 
 export interface RendererLoadErrorDetails {
   /** Chromium error code, e.g. -6 (ERR_FILE_NOT_FOUND) or its name. */
@@ -108,7 +108,7 @@ function missingAssetsList(
 export function buildRendererLoadErrorPage(details: RendererLoadErrorDetails = {}): string {
   const locale = normalizeNativeLocale(details.locale)
   const copy = nativeLocaleCopy(locale).rendererLoadError
-  const appName = escapeHtml(details.appName || 'Hermes')
+  const appName = escapeHtml(details.appName || PRODUCT_NAME)
 
   const code =
     details.errorCode === undefined || details.errorCode === null ? '' : ` (${escapeHtml(details.errorCode)})`

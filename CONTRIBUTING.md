@@ -1,6 +1,8 @@
-# Contributing to Hermes Agent
+# Contributing to Aino
 
-Thank you for contributing to Hermes Agent! This guide covers everything you need: setting up your dev environment, understanding the architecture, deciding what to build, and getting your PR merged.
+This is the Aino contribution guide. Product changes and reports target the public [Aino repository](https://github.com/OneWhitepaper/Aino). See [README.md](README.md) for Aino downloads and [the brand boundary](docs/aino-brand-boundary.md) for retained runtime interfaces. The detailed engineering guidance below is inherited from Hermes; real upstream catalog/community services remain identified as such.
+
+Thank you for contributing to Aino! This guide covers everything you need: setting up your dev environment, understanding the architecture, deciding what to build, and getting your PR merged.
 
 ---
 
@@ -24,10 +26,10 @@ A quick search before you build saves your time and keeps the PR queue clean —
 
 - **Search both open *and* merged PRs and issues** for your topic or error symptom — the duplicate-check in the PR template fires at review time, after you've already done the work:
   ```bash
-  gh search issues --repo NousResearch/hermes-agent "<your terms>"
-  gh search prs --repo NousResearch/hermes-agent --state all "<your terms>"
+  gh search issues --repo OneWhitepaper/Aino "<your terms>"
+  gh search prs --repo OneWhitepaper/Aino --state all "<your terms>"
   ```
-  Or use the web UI: [issues](https://github.com/NousResearch/hermes-agent/issues?q=) · [PRs (all states)](https://github.com/NousResearch/hermes-agent/pulls?q=is%3Apr).
+  Or use the web UI: [issues](https://github.com/OneWhitepaper/Aino/issues?q=) · [PRs (all states)](https://github.com/OneWhitepaper/Aino/pulls?q=is%3Apr).
 - **The issue tracker can lag the code.** Many requested features are already implemented in-tree, so also search the source (`search_files`, or your editor's grep) for the capability before proposing it.
 - **If an open PR already addresses it**, consider reviewing or improving that one instead of opening a competing duplicate.
 - **For larger work**, comment on the issue to signal you're working on it, so others don't start the same thing.
@@ -292,7 +294,7 @@ hermes-agent/
 │   ├── skill_tools.py            # Skill search, load, manage
 │   └── environments/             # Terminal execution backends
 │       ├── base.py                   # BaseEnvironment ABC
-│       ├── local.py, docker.py, ssh.py, singularity.py, modal.py, daytona.py
+│       ├── local.py, docker.py, ssh.py, modal.py, daytona.py
 │
 ├── gateway/                  # Messaging gateway
 │   ├── run.py                    # GatewayRunner facade (~5.5k LOC); phases in run_*.py (startup, inbound, turn, busy, ...)
@@ -1018,7 +1020,7 @@ test(tools): add unit tests for file_operations
 
 ## Reporting Issues
 
-- Use [GitHub Issues](https://github.com/NousResearch/hermes-agent/issues)
+- Use [GitHub Issues](https://github.com/OneWhitepaper/Aino/issues)
 - Include: OS, Python version, Hermes version (`hermes --version`), full error traceback
 - Include steps to reproduce
 - Check existing issues before creating duplicates
@@ -1028,7 +1030,7 @@ test(tools): add unit tests for file_operations
 
 ## Community
 
-- **Discord**: [discord.gg/NousResearch](https://discord.gg/NousResearch) — for questions, showcasing projects, and sharing skills
+- **Product help**: [Aino Issues](https://github.com/OneWhitepaper/Aino/issues) — for Aino questions and reproducible product problems
 - **GitHub Discussions**: For design proposals and architecture discussions
 - **Skills Hub**: Upload specialized skills to a registry and share them with the community
 

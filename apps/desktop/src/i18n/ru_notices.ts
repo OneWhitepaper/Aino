@@ -4,6 +4,24 @@ import { ruSessionCommands } from './ru_session_commands'
 
 // Shell notices (remote-display toast, butterbar, keep-awake offer), spread into ru.ts.
 export const ruNotices = {
+  sendDiagnostics: {
+    title: 'Отправить диагностику в Aino',
+    privacyNotice: 'Закрытый пакет отправляется в сервис вашей учётной записи Aino. Он содержит сведения о системе, состояние настроек (без самих ключей) и журналы агента, шлюза и приложения (до 512 КБ каждый). Журналы могут содержать переписку, вывод инструментов и пути к файлам. Ключи скрываются, но другие конфиденциальные данные могут остаться. Доступ есть только у уполномоченных администраторов Aino. Через 14 дней доступ прекращается, в течение следующего часа данные удаляются из рабочей базы. Существующие резервные копии подчиняются политике хранения развёртывания.',
+    upload: 'Отправить',
+    uploading: 'Отправка…',
+    cancel: 'Отмена',
+    close: 'Закрыть',
+    copyLink: 'Копировать ID диагностики',
+    uploadIdFallback: id => `ID диагностики: ${id}`,
+    doneTitle: 'Диагностика отправлена',
+    doneDescription: 'Пакет отправлен в Aino в закрытом режиме. Укажите этот ID в обращении; не публикуйте журналы.',
+    failedTitle: 'Ошибка отправки',
+    failedHint: 'Войдите в Aino и повторите попытку. Сначала обновите устаревшую среду выполнения. Для локального отчёта без отправки: `hermes debug share --local`.',
+    handoffLead: 'Связаться с Aino:',
+    links: { github: 'GitHub Issues' },
+    gatewayUnavailable: 'Шлюз Aino недоступен',
+    uploadFailed: 'Не удалось отправить диагностику'
+  },
   remoteDisplayBanner: {
     message: reason =>
       `Включён программный рендеринг — обнаружен удалённый дисплей (${reason}). GPU-ускорение отключено, чтобы избежать мерцания.`
@@ -46,5 +64,5 @@ export const ruNotices = {
   }
 } satisfies Pick<
   TranslationOverrides,
-  'remoteDisplayBanner' | 'butterbar' | 'promptNotices' | 'keepAwakeOffer' | 'billingBlock'
+  'sendDiagnostics' | 'remoteDisplayBanner' | 'butterbar' | 'promptNotices' | 'keepAwakeOffer' | 'billingBlock'
 >

@@ -1,3 +1,4 @@
+import http from 'node:http'
 /**
  * native-oauth-login.ts
  *
@@ -24,8 +25,6 @@
  *   - the browser sees only a minimal "you can close this window" HTML page,
  *     never the tokens.
  */
-
-import http from 'node:http'
 import type { AddressInfo } from 'node:net'
 
 import {
@@ -37,6 +36,7 @@ import {
   parseLoopbackCallback,
   parseTokenResponse
 } from './native-oauth'
+import { PRODUCT_NAME } from './product-identity'
 
 // Loopback login must complete inside this window (user opens browser,
 // authenticates, gets redirected back). Matches the server-side pending TTL.
@@ -48,7 +48,7 @@ const DEFAULT_LOGIN_TIMEOUT_MS = 5 * 60 * 1000
 const DONE_HTML =
   '<!doctype html><meta charset="utf-8"><title>Signed in</title>' +
   '<body style="font:15px system-ui;margin:3rem;text-align:center">' +
-  '<h2>&#10003; Signed in to Hermes</h2>' +
+  `<h2>&#10003; Signed in to ${PRODUCT_NAME}</h2>` +
   '<p>You can close this window and return to the app.</p>' +
   '<script>setTimeout(()=>window.close(),800)</script>'
 

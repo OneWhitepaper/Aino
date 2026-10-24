@@ -1,56 +1,59 @@
-# Aino brand boundary
+# Aino brand and compatibility boundary
 
-This document records the first Aino white-label boundary so future upstream
-syncs and product work have an explicit contract.
+Aino is an independent, publicly developed product built on the Hermes Agent runtime. This document defines product identity without changing the runtime's compatibility interfaces or removing upstream attribution.
 
-## What is Aino in this phase
+## Aino-owned entry points
 
-- The desktop product name is **Aino**.
-- Packaged desktop identity is `com.ablankpaper.aino`; installers, executable
-  names, native About panels, window titles, and protocol registration use the
-  Aino identity.
-- The renderer applies an Aino label overlay to product-facing translations.
-  Locale source files remain upstream-shaped so syncing translations does not
-  create a large conflict surface.
-- The current mark is a small vector Aino monogram. It is deliberately
-  replaceable when a final visual identity is approved.
+`apps/desktop/brand.json` is the existing authority for the desktop's product name, application identity and public website/download/guide routes. Renderer and Electron identity modules consume it. Repository-specific links derive from its Aino repository URL.
 
-## Data isolation
+| Entry point | Destination or identity |
+| --- | --- |
+| Product, windows, tray and default notifications | Aino |
+| Website | <https://petoi.cn/> |
+| Download | <https://petoi.cn/download.html> |
+| Getting started | <https://petoi.cn/guide.html> |
+| Releases and release-note requests | <https://github.com/OneWhitepaper/Aino/releases> and the Aino GitHub API |
+| Commit links and generic product feedback | Aino repository commits and Issues |
+| Desktop diagnostic upload | Authenticated Aino account service; private administrator access |
+| Detailed runtime references | Actual documentation files in the Aino repository |
 
-Aino is treated as a separate application by default:
+The renderer's existing translation overlay changes product labels while retaining compatibility code spans. Native product copy uses the existing identity exports. Neither layer rewrites user conversations, custom names, raw error evidence or system prompts.
 
-| Scope                                                | Aino default                                                | Compatibility override                                            |
-| ---------------------------------------------------- | ----------------------------------------------------------- | ----------------------------------------------------------------- |
-| Electron app state                                   | OS app-data directory for `Aino`                            | `HERMES_DESKTOP_USER_DATA_DIR` for tests/dev sandboxes            |
-| Agent config, sessions, skills, plugins, credentials | `~/.aino` (macOS/Linux) or `%LOCALAPPDATA%\\aino` (Windows) | Explicit `HERMES_HOME` (or its Windows user-level registry value) |
+Root landing pages describe Aino's actual desktop installation and support flow. They do not present the upstream Hermes installation scripts as an Aino download. Source-build and remote-install guidance continues to use the real `hermes` command; a remote installer hint explicitly selects the Aino source repository using the installer's existing override.
 
-There is no silent copy of Hermes credentials, sessions, or plugins. A future
-import/migration flow must be explicit, previewable, and reversible.
+## Installed identity and data
 
-## What remains Hermes-compatible
+The existing stable application identity stays `com.ablankpaper.aino`. Signed identities, variant IDs, update channels, protocol registrations and user-data migration rules are unchanged by brand completion.
 
-The following are runtime interfaces, not product branding, and remain unchanged
-in this phase:
+| Scope | Default | Existing compatibility behavior |
+| --- | --- | --- |
+| Electron application state | The OS application-data directory for Aino | Explicit desktop user-data overrides remain supported |
+| Agent state for the desktop | `~/.aino` on macOS/Linux or `%LOCALAPPDATA%\aino` on Windows | Explicit `HERMES_HOME` remains authoritative; supported legacy-runtime discovery can reuse an existing usable Hermes runtime only before an Aino root exists |
 
-- Python packages/modules and the `hermes` CLI command;
-- `HERMES_HOME`, `hermes_cli`, `@hermes/plugin-sdk`, and gateway/RPC names;
-- `hermes-media` and legacy `hermes://` deep links (Aino links are accepted too);
-- backend state schemas, profile names, session formats, and update hand-off
-  files;
-- MIT license text and Nous Research/upstream attribution.
+No new credential copy, data migration or account merge is introduced. An existing installation's resolved paths are not renamed for appearance. Source/CLI and remote runtime paths continue to follow their existing configuration; changing a displayed name does not change them.
 
-## Upstream and release policy
+## Interfaces that remain Hermes-compatible
 
-`upstream` remains the Nous Research repository and is fetch-only. Aino changes
-land on purpose-named branches (`aino/<purpose>`), then can be synchronized with
-upstream manually. The desktop package points at the OneWhitepaper/Aino repository;
-release/update infrastructure should be treated as a separate follow-up before
-publishing production installers.
+- Python distribution/module names and the `hermes` executable;
+- `HERMES_HOME`, other existing configuration/environment interfaces and `@hermes/*` packages;
+- IPC/RPC methods, session/state schemas, profile routing and authentication headers;
+- `hermes-media`, legacy `hermes://` links and existing Aino protocol aliases;
+- installed launchers, signed package identities, update hand-off files and process-discovery contracts;
+- upstream references and historical technical documentation describing these real interfaces.
 
-The GitHub owner migration keeps the existing application IDs, publisher metadata,
-and contributor credit intact. Application IDs identify installed software, not
-the GitHub account used to fetch its source.
+These are deliberate compatibility boundaries, not a second product installed alongside Aino. Aino's project metadata points to its own public repository, while upstream history and the fetch-only upstream remote remain intact.
 
-This boundary is intentionally narrower than a repository-wide Hermes rename.
-Internal renaming, data migration, protocol migration, and a final logo are
-separate proposals that require their own compatibility and acceptance plans.
+## Third-party services retain their real identity
+
+Branding must never imply that Aino operates another provider's service:
+
+- Nous Portal/Nous Cloud login, billing, gateway recovery and provider support remain Nous-specific.
+- The desktop **Send diagnostics to Aino** action collects through `diagnostics.collect` and uploads through the existing native Aino account client, after per-upload consent. Aino-API stores private bundles and exposes them only to authorized administrators; there is no public view link or Nous fallback. The explicitly named legacy `diagnostics.share_nous` and CLI `hermes debug share --nous` still target Nous. See [private diagnostics](implementation/aino-private-diagnostics.md) for access and retention boundaries.
+- The existing upstream-hosted plugin catalog and Skills Hub remain available at their real service URLs. Submitting to that shared catalog still targets its actual upstream maintainers. This change does not create an Aino mirror or alter iframe trust policies.
+- Other providers, model families, external plugins, user-authored content and dependency licenses retain their names.
+
+## Public source, licensing and releases
+
+The GitHub repository stays public. [LICENSE](../LICENSE) and [NOTICE.md](../NOTICE.md) preserve Nous Research's copyright, MIT permissions and source attribution. Product branding is not a claim that the runtime and dependencies were authored entirely by Aino.
+
+Source changes are developed on purpose-named `codex/` branches. A merge into main is not an installer publication. Build, native acceptance, signing/notarization and update-feed publication continue through the existing release pipeline; the website's installed downloads change only when a release is actually published.

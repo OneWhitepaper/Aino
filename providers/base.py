@@ -65,6 +65,9 @@ class ProviderProfile:
     # session_managed means a connected client supplies short-lived credentials;
     # it is a runtime profile, not a persistent provider-setup option.
     auth_type: str = "api_key"   # api_key|oauth_device_code|oauth_external|copilot|aws_sdk|session_managed
+    # None preserves transport defaults (external-process clients default to non-streaming).
+    # True opts a streaming-capable process client in; False disables streaming for this provider.
+    supports_streaming: bool | None = field(default=None, kw_only=True)
     supports_health_check: bool = True  # False → doctor skips /models probe for this provider
     # False → fetch_models returns None without a network call (catalog comes from an SDK/subprocess).
     supports_model_listing: bool = True

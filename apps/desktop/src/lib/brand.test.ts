@@ -41,4 +41,14 @@ describe('Aino product brand overlay', () => {
     expect(branded.nested.message(3)).toBe('3 Aino tasks')
     expect(branded.suggestions('My Custom Voice')).toEqual(['My Custom Voice: Aino', 'Use `hermes tools`'])
   })
+
+  it('preserves interpolated user and provider names while branding the surrounding chrome', () => {
+    const branded = brandTranslationTree({
+      label: (name: string) => `${name}: Hermes Desktop`,
+      help: (name: string) => [`${name} uses Hermes Agent`, 'Run `hermes tools`']
+    })
+
+    expect(branded.label('Hermes Studio')).toBe('Hermes Studio: Aino')
+    expect(branded.help('Hermes-3 model')).toEqual(['Hermes-3 model uses Aino Agent', 'Run `hermes tools`'])
+  })
 })

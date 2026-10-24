@@ -700,8 +700,10 @@ from their root base tokens; do not multiply the global tokens or nest CSS zoom.
   receipt does not establish that its background children completed.
   The turn pair owns the user-to-assistant gap. The reply footer
   appears only after its turn stops running, including gaps
-  between text and tool calls. Pending footers reserve their layout space but
-  remain hidden and inert; earlier completed replies keep their controls.
+  between text and tool calls. Only the live tail's pending footer reserves
+  layout space. A hidden footer before continuing response messages has no
+  footprint; its controls stay mounted and return when the turn stops.
+  Pending footers remain hidden and inert; earlier completed replies keep their controls.
   Manual and automatic context compression share one neutral status row after
   the latest conversation records, above the composer. It stays visible for
   idle manual compression and pending background work, follows its own session,

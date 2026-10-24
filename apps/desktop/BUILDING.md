@@ -10,7 +10,7 @@ commands package the current desktop build; they do not stage a fresh runtime.
 | Windows x64 / ARM64, sideload | Signed per-architecture MSIX packages, combined into a universal `.msixbundle`; `.appinstaller` descriptor | Windows App Installer |
 | Windows x64 / ARM64, Store | Store-identity MSIX packages and a separate Store bundle | Microsoft Store |
 | Windows x64 / ARM64, unsigned download | Bundled ZIP built with `--windows-zip` | External replacement; no App Installer feed |
-| macOS ARM64 / x64 | Signed, notarized `Hermes.app` in DMG and ZIP artifacts | `electron-updater` with Squirrel.Mac |
+| macOS ARM64 / x64 | Signed, notarized `Aino.app` (or the selected Aino variant) in DMG and ZIP artifacts | `electron-updater` with Squirrel.Mac |
 | Linux x64 / ARM64 | Native AppImage candidates; DEB/RPM repackaged from the admitted payload | External replacement; automated Linux release publication remains disabled |
 
 The current MSIX manifest requires Windows 11 22H2 (`10.0.22621.0`).

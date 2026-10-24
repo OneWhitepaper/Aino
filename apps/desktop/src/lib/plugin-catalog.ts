@@ -21,6 +21,7 @@
 import type { ConnectionState } from '@hermes/shared'
 import type { ReadableAtom } from 'nanostores'
 
+import { PRODUCT_NAME } from '@/lib/brand'
 import { isMissingRpcMethod } from '@/lib/gateway-rpc'
 import { BACKEND_BOOT_WAIT_TIMEOUT_MS, withTimeout } from '@/lib/with-timeout'
 import { activeGatewayProfileKey, requestGatewayForProfile } from '@/store/gateway'
@@ -48,6 +49,8 @@ export interface PluginCatalogEntry {
   subdir?: string
   /** The description's first sentence: what the plugin does, in one line. */
   summary?: string
+  /** official / verified / community; badges the install dialog. */
+  tier?: string
 }
 
 export type PluginCatalogLookupError = 'invalid_name' | 'unavailable' | 'unknown'
@@ -71,7 +74,7 @@ function asEntry(raw: unknown): null | PluginCatalogEntry {
   const row = raw as Record<string, unknown>
 
   // A field that is not a string reads as absent.
-  const text = (field: 'description' | 'name' | 'repo' | 'sha' | 'subdir'): string | undefined => {
+  const text = (field: 'description' | 'name' | 'repo' | 'sha' | 'subdir' | 'tier'): string | undefined => {
     const value = row[field]
 
     return typeof value === 'string' ? value : undefined
@@ -89,7 +92,8 @@ function asEntry(raw: unknown): null | PluginCatalogEntry {
     repo,
     sha: text('sha') || undefined,
     subdir: text('subdir') || undefined,
-    summary: firstSentence(text('description') ?? '')
+    summary: firstSentence(text('description') ?? ''),
+    tier: text('tier') || undefined
   }
 }
 
@@ -137,7 +141,7 @@ export function sendWhenGatewayOpen<T>(
     })
   })
 
-  return withTimeout(opened, timeoutMs, 'Hermes backend did not connect', () => stop()).then(send)
+  return withTimeout(opened, timeoutMs, `${PRODUCT_NAME} backend did not connect`, () => stop()).then(send)
 }
 
 // The route lookup inside requestGatewayForProfile has no deadline of its own, so the

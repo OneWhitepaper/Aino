@@ -23,6 +23,7 @@ from gateway.platforms.event import MessageType
 from plugins.platforms.telegram import adapter as tg_adapter
 from plugins.platforms.telegram.adapter import TelegramAdapter
 from plugins.platforms.telegram.update_admission import DEFAULT_MAX_CONCURRENT_UPDATES, PerChatUpdateProcessor
+from tests.waiting import async_wait_until
 
 
 class NoNetwork(BaseRequest):
@@ -416,6 +417,8 @@ async def _check_error_cancel_before_entry(monkeypatch, adapter, app, delivered)
         assert "111:10" in adapter._inflight_update_ids
         await app.process_update(update(app.bot))
         await app.stop()
+        await async_wait_until(lambda: not adapter._inflight_update_ids, timeout=2,
+                               what="cancelled error-handler admission released")
     assert len(scheduled) == 1 and not effects
     assert not adapter._inflight_update_ids and not adapter._seen_update_ids
     # The cancelled PTB task never awaited the callback coroutine: it must be closed too.

@@ -1,3 +1,5 @@
+import { PRODUCT_NAME } from './product-identity'
+
 // Multiplex-only, Desktop half: ONE `hermes serve` per HOST serves every
 // profile, so a local profile never gets a backend process of its own.
 //
@@ -55,7 +57,7 @@ export class SecondLocalBackendError extends Error {
 
   constructor(poolKey: string) {
     super(
-      `Refusing to start a second local Hermes backend for "${poolKey}": one backend serves every profile on this host. ` +
+      `Refusing to start a second local ${PRODUCT_NAME} backend for "${poolKey}": one backend serves every profile on this host. ` +
         'Set HERMES_DESKTOP_ISOLATED_BACKEND=1 for a private backend.'
     )
     this.name = 'SecondLocalBackendError'

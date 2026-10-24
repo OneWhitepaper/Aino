@@ -205,10 +205,10 @@ jobs:
 
       - name: Ratchet the PR against the base branch tip
         run: |
-          # Approved import of stable Hermes v0.22.4. The checker retains every
+          # Approved import of stable Hermes v0.22.5. The checker retains every
           # base finding and exempts only occurrences not regressed vs this SHA.
           # Once main contains the release, the normal main ratchet applies.
-          UPSTREAM=4d04303818b61bf3aa09278af48356315515965b
+          UPSTREAM=bf0203a794a07aac3ff764972ab9087baa4e4f4e
           if git merge-base --is-ancestor "$UPSTREAM" HEAD && ! git merge-base --is-ancestor "$UPSTREAM" HEAD^1; then
             python -m scripts.code_health --base HEAD^1 --accepted-upstream "$UPSTREAM" --json > code-health-report.json
           else

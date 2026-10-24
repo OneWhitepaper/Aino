@@ -6,6 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import type { DesktopRosterAgent } from '@/global'
 import { getProfiles, type ProfileScope, profileScopeKey } from '@/hermes'
 import { useI18n } from '@/i18n'
+import { PRODUCT_NAME } from '@/lib/brand'
 import { cn } from '@/lib/utils'
 import { activeGatewayConnectionId } from '@/store/gateway'
 import { $activeGatewayProfile, normalizeProfileKey } from '@/store/profile'
@@ -127,7 +128,7 @@ export function useCapabilityScope({
 
     return (profilesData?.profiles ?? []).map(p => ({
       key: p.name,
-      label: p.is_default ? 'Hermes (default)' : p.name,
+      label: p.is_default ? `${PRODUCT_NAME} (default)` : p.name,
       value: p.name
     }))
   }, [multiConnection, profilesData, rosterData])

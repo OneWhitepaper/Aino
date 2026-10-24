@@ -8,6 +8,8 @@ import sys
 import tempfile
 import time
 
+from hermes_cli.desktop_identity import DESKTOP_PRODUCT_NAME
+
 
 def _processes_under(home: Path) -> list[int]:
     """PIDs whose environment or cwd binds them to this throwaway HOME (Linux /proc)."""
@@ -60,6 +62,7 @@ with tempfile.TemporaryDirectory(prefix="hermes-desktop-backend-") as temporary:
         "WLR_BACKENDS": "headless",
         "WLR_RENDERER": "pixman",
         "WLR_NO_HARDWARE_CURSORS": "1",
+        "FONTCONFIG_FILE": os.environ["FONTCONFIG_FILE"],
         "LANG": "C.UTF-8",
         "TZ": "UTC",
     }
@@ -81,13 +84,13 @@ with tempfile.TemporaryDirectory(prefix="hermes-desktop-backend-") as temporary:
                 assert child.poll() is None, output
                 # Desktop attaches to `hermes gateway ensure` (the daemon serves the dashboard), so
                 # readiness is Desktop's own attach line, not a spawned `hermes serve` sentinel.
-                if "[backend] Hermes gateway is ready" in output:
-                    assert f"[backend] using existing Hermes CLI at {expected}" in output, output
+                if f"[backend] {DESKTOP_PRODUCT_NAME} gateway is ready" in output:
+                    assert f"[backend] using existing {DESKTOP_PRODUCT_NAME} CLI at {expected}" in output, output
                     print("PASS: packaged desktop selected its pinned backend over the mutable install")
                     break
                 time.sleep(0.1)
             else:
-                raise AssertionError(f"Desktop did not start its backend:\n{log_path.read_text()}")
+                raise AssertionError(f"Desktop did not start its backend:\n{output}")
         finally:
             os.killpg(child.pid, signal.SIGTERM)
             try:

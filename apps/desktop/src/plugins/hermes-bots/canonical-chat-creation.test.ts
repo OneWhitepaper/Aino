@@ -276,7 +276,7 @@ describe('the lazy row is materialized before anything else touches it', () => {
     expect(hostMock.notify).toHaveBeenCalledWith(
       expect.objectContaining({
         kind: 'error',
-        title: 'This bot lives on an older Hermes',
+        title: 'This bot lives on an older Aino',
         message: 'Update Remote gateway, then try again.'
       })
     )
@@ -294,7 +294,7 @@ describe('the lazy row is materialized before anything else touches it', () => {
     const { prepareBotSource } = await loadModule()
 
     await expect(prepareBotSource({ name: 'ops', sourceScoped: true } as RosterRow)).rejects.toThrow(
-      'Update Hermes Desktop to chat with bots on other connections.'
+      'Update Aino to chat with bots on other connections.'
     )
   })
 

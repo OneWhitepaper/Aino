@@ -1,6 +1,7 @@
 import { atom, computed, type ReadableAtom } from 'nanostores'
 
 import { translateNow } from '@/i18n'
+import { PRODUCT_NAME } from '@/lib/brand'
 
 import { $clarifyRequest, $clarifyRequests } from './clarify'
 import { isSessionGone, isSessionGoneForBackgroundPolling, markSessionGone } from './runtime-gone'
@@ -374,7 +375,7 @@ export async function answerApproval(
   }
 
   if (!gateway) {
-    throw new Error('Hermes gateway is not connected')
+    throw new Error(`${PRODUCT_NAME} gateway is not connected`)
   }
 
   const params = {

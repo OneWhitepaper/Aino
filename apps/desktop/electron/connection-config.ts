@@ -1,3 +1,20 @@
+// Bare + prefixed variants of the session cookies the gateway may set,
+// depending on its deploy shape (HTTPS direct → __Host-, behind a path prefix
+// → __Secure-, loopback HTTP → bare). Mirrors
+// hermes_cli/dashboard_auth/cookies.py.
+//
+// Two cookies are in play (see that module):
+//   - hermes_session_at: the OAuth access token. Short-lived (~15 min); its
+//     Max-Age tracks the access-token TTL, so the cookie jar drops it the
+//     instant the AT expires.
+//   - hermes_session_rt: the OAuth refresh token. Long-lived (24h rotating,
+//     reuse-detected — Portal NAS #293 / hermes #37247). When the AT cookie
+//     has lapsed but the RT cookie is still present, the gateway middleware
+//     transparently rotates a fresh AT on the next authenticated request
+//     (POST /api/auth/ws-ticket), so the session is still LIVE even with no
+//     AT cookie. A liveness check that looked only at the AT cookie would
+//     force a needless full re-login every ~15 min — hence cookiesHaveLiveSession.
+import { readStatusCode } from './api-transport'
 /**
  * connection-config.ts
  *
@@ -17,25 +34,8 @@
  *     `?ticket=` minted at POST /api/auth/ws-ticket. The gateway advertises
  *     this via the public `/api/status` field `auth_required: true`.
  */
-
-// Bare + prefixed variants of the session cookies the gateway may set,
-// depending on its deploy shape (HTTPS direct → __Host-, behind a path prefix
-// → __Secure-, loopback HTTP → bare). Mirrors
-// hermes_cli/dashboard_auth/cookies.py.
-//
-// Two cookies are in play (see that module):
-//   - hermes_session_at: the OAuth access token. Short-lived (~15 min); its
-//     Max-Age tracks the access-token TTL, so the cookie jar drops it the
-//     instant the AT expires.
-//   - hermes_session_rt: the OAuth refresh token. Long-lived (24h rotating,
-//     reuse-detected — Portal NAS #293 / hermes #37247). When the AT cookie
-//     has lapsed but the RT cookie is still present, the gateway middleware
-//     transparently rotates a fresh AT on the next authenticated request
-//     (POST /api/auth/ws-ticket), so the session is still LIVE even with no
-//     AT cookie. A liveness check that looked only at the AT cookie would
-//     force a needless full re-login every ~15 min — hence cookiesHaveLiveSession.
-import { readStatusCode } from './api-transport'
 import { sharesHostBackend } from './host-backend-singleton'
+import { PRODUCT_NAME } from './product-identity'
 import { profileCollectionRoute, profileRouteSuffix } from './profile-routes'
 
 const AT_COOKIE_VARIANTS = ['__Host-hermes_session_at', '__Secure-hermes_session_at', 'hermes_session_at']
@@ -129,7 +129,7 @@ export function gatewayTicketTransportMessage(error: unknown): string {
 
   if (['ETIMEDOUT', 'ETIMEOUT', 'ENETUNREACH', 'EHOSTUNREACH', 'EAI_AGAIN', 'ENOTFOUND'].includes(code)) {
     return (
-      'Could not reach the remote Hermes gateway while refreshing its WebSocket ticket: ' +
+      `Could not reach the remote ${PRODUCT_NAME} gateway while refreshing its WebSocket ticket: ` +
       'the connection timed out or the host could not be resolved. ' +
       'Check your network/VPN path and the gateway URL, then reconnect.'
     )
@@ -137,13 +137,13 @@ export function gatewayTicketTransportMessage(error: unknown): string {
 
   if (code === 'ECONNREFUSED') {
     return (
-      'Could not reach the remote Hermes gateway while refreshing its WebSocket ticket: ' +
+      `Could not reach the remote ${PRODUCT_NAME} gateway while refreshing its WebSocket ticket: ` +
       'the connection was refused. The gateway process is likely down or listening on another port. ' +
       'Start the gateway (or fix its URL), then reconnect.'
     )
   }
 
-  return 'Could not reach the remote Hermes gateway while refreshing its WebSocket ticket. Try reconnecting.'
+  return `Could not reach the remote ${PRODUCT_NAME} gateway while refreshing its WebSocket ticket. Try reconnecting.`
 }
 
 function gatewayTicketFailure(error, authMessage, transportMessage) {

@@ -1,15 +1,25 @@
+import { gaugeScope, gaugeTitle, PAYMENT_PAUSE_REASON } from '@hermes/shared'
+import { useStore } from '@nanostores/react'
 import { useQuery } from '@tanstack/react-query'
 
 import { en } from '@/i18n/en'
 import type { Translations } from '@/i18n/types'
 import { fmtDate } from '@/lib/time'
+import { formatPercentUsed, formatResetsIn } from '@/lib/usage-percent'
 import { FREE_TIER_MODEL } from '@/store/free-tier'
 import { openFreeTierSignIn } from '@/store/free-tier-sign-in'
 
 import type { BillingRefusal, BillingResult } from './api'
 import { useBillingApi } from './api'
 import { resolveRefusal } from './errors'
-import type { BillingStateResponse, SubscriptionStateResponse, SubscriptionTierOption, UsageModelData } from './types'
+import type {
+  BillingStateResponse,
+  PlanUsage,
+  SubscriptionStateResponse,
+  SubscriptionTierOption,
+  UsageModelData
+} from './types'
+import { $stepUpInFlight } from './use-step-up'
 
 export const EMPTY_BILLING_VALUE = '—'
 export const FALLBACK_PORTAL_BILLING_URL = 'https://portal.nousresearch.com/billing'
@@ -138,13 +148,14 @@ export type BillingPlanTierView =
 export interface BillingUsageRowView {
   bar?: {
     label: string
-    state: 'danger' | 'neutral' | 'ok'
-    tone: 'cap' | 'subscription' | 'topup'
+    state: 'danger' | 'neutral' | 'ok' | 'warn'
+    tone: 'cap' | 'subscription' | 'topup' | 'window'
     track?: 'danger'
     value: number
   }
   caption: string
-  id: 'monthly_cap' | 'subscription_credits' | 'topup_credits'
+  /** `window_<server id>` for a usage-window allowance. */
+  id: 'monthly_cap' | 'subscription_credits' | 'topup_credits' | `window_${string}`
   title: string
   value: string
 }
@@ -165,14 +176,19 @@ export interface BillingView {
   tiers: BillingPlanTierView[]
   /** One-time top-up section row. */
   topupRow?: BillingAccountRowView
+  /** Usage-window plan name for the Usage section; absent on every other plan. */
+  usagePlanName?: string
   usageRows: BillingUsageRowView[]
 }
 
 export function useBillingState(enabled = true) {
   const api = useBillingApi()
+  // Paused while a Remote Spending approval swaps this terminal's login (see $stepUpInFlight).
+  const pausedForStepUp = useStore($stepUpInFlight)
 
   return useQuery({
     ...BILLING_QUERY_OPTIONS,
+    ...(pausedForStepUp ? { refetchInterval: false, refetchOnWindowFocus: false } : {}),
     enabled,
     queryFn: () => api.fetchBillingState(),
     queryKey: ['billing', 'state']
@@ -193,7 +209,8 @@ export function useSubscriptionState(enabled = true) {
 export function deriveBillingView(
   stateResult?: BillingResult<BillingStateResponse>,
   subscriptionResult?: BillingResult<SubscriptionStateResponse>,
-  copy: BillingCopy = en.billing
+  copy: BillingCopy = en.billing,
+  windowCopy: Translations['settings']['billing'] = en.settings.billing
 ): BillingView {
   if (!stateResult) {
     return {
@@ -270,8 +287,22 @@ export function deriveBillingView(
     ],
     tiers,
     topupRow: buyCreditsRow(billing, copy),
-    usageRows: deriveUsageRows(billing, subscription, copy)
+    usagePlanName: windowPlanName(billing, subscription),
+    usageRows: deriveUsageRows(billing, subscription, copy, windowCopy)
   }
+}
+
+function windowPlanName(
+  billing: BillingStateResponse,
+  subscription: null | SubscriptionStateResponse
+): string | undefined {
+  const planUsage = subscription?.plan_usage ?? billing.plan_usage
+
+  if (planUsage?.kind !== 'usage_window') {
+    return undefined
+  }
+
+  return planUsage.plan ?? subscription?.current?.tier_name ?? undefined
 }
 
 export function buildManageSubscriptionUrl(
@@ -728,44 +759,56 @@ function autoReloadRow(billing: BillingStateResponse, copy: BillingCopy): Billin
   }
 }
 
+// health: allow CC -- usage-window plans: allowance rows beside the dollar rows; this row builder was over target on main
 function deriveUsageRows(
   billing: BillingStateResponse,
   subscription: null | SubscriptionStateResponse,
-  copy: BillingCopy
+  copy: BillingCopy,
+  windowCopy: Translations['settings']['billing']
 ): BillingUsageRowView[] {
   const rows: BillingUsageRowView[] = []
   const current = subscription?.current
-  const remaining = parseAmount(current?.credits_remaining)
-  const monthly = parseAmount(current?.monthly_credits)
   const usage = subscription?.usage ?? billing.usage
+  const planUsage = subscription?.plan_usage ?? billing.plan_usage
 
-  // Remaining can go slightly negative (usage settles after credits hit zero).
-  // A raw "-$0.79 left" reads as broken — clamp to $0 and name the overage.
-  const subscriptionValue =
-    remaining != null && monthly != null
-      ? remaining < 0
-        ? `${copy.usage.left(formatMoney(0), formatMoney(monthly))} · ${copy.usage.over(formatMoney(Math.abs(remaining)))}`
-        : copy.usage.left(formatMoney(remaining), formatMoney(monthly))
-      : (usage?.subscription_remaining_display ?? usage?.plan_bar?.remaining_display ?? EMPTY_BILLING_VALUE)
+  // A usage-window plan shows each allowance as percent used. Those gauges replace
+  // the subscription-credits row; the top-up balance still follows below.
+  if (planUsage?.kind === 'usage_window') {
+    rows.push(...deriveWindowRows(planUsage, windowCopy))
+  } else {
+    const remaining = parseAmount(current?.credits_remaining)
+    const monthly = parseAmount(current?.monthly_credits)
 
-  const remainingFraction = remaining != null && monthly != null && monthly > 0 ? remaining / monthly : null
+    // Remaining can go slightly negative (usage settles after credits hit zero).
+    // A raw "-$0.79 left" reads as broken — clamp to $0 and name the overage.
+    const subscriptionValue =
+      remaining != null && monthly != null
+        ? remaining < 0
+          ? `${copy.usage.left(formatMoney(0), formatMoney(monthly))} · ${copy.usage.over(formatMoney(Math.abs(remaining)))}`
+          : copy.usage.left(formatMoney(remaining), formatMoney(monthly))
+        : (usage?.subscription_remaining_display ?? usage?.plan_bar?.remaining_display ?? EMPTY_BILLING_VALUE)
 
-  rows.push({
-    bar:
-      remainingFraction != null
-        ? {
-            label: copy.usage.subscriptionRemaining,
-            state: remainingFraction <= 0.1 ? 'danger' : 'ok',
-            tone: 'subscription',
-            track: remaining != null && remaining <= 0 ? 'danger' : undefined,
-            value: clamp01(remainingFraction)
-          }
-        : undefined,
-    caption: copy.usage.resets(formatBillingDate(current?.cycle_ends_at ?? usage?.renews_at)),
-    id: 'subscription_credits',
-    title: copy.usage.subscriptionCredits,
-    value: subscriptionValue
-  })
+    const remainingFraction = remaining != null && monthly != null && monthly > 0 ? remaining / monthly : null
+
+    rows.push({
+      bar:
+        remainingFraction != null
+          ? {
+              label: copy.usage.subscriptionRemaining,
+              state: remainingFraction <= 0.1 ? 'danger' : 'ok',
+              tone: 'subscription',
+              track: remaining != null && remaining <= 0 ? 'danger' : undefined,
+              value: clamp01(remainingFraction)
+            }
+          : undefined,
+      caption: copy.usage.resets(
+        formatBillingDate(current?.cycle_ends_at ?? usage?.renews_at)
+      ),
+      id: 'subscription_credits',
+      title: copy.usage.subscriptionCredits,
+      value: subscriptionValue
+    })
+  }
 
   const topupValue = topupCreditsValue(billing, usage)
 
@@ -805,6 +848,61 @@ function deriveUsageRows(
   }
 
   return rows
+}
+
+/**
+ * Window gauges → usage rows: one per server allowance, in the server's order (today, week, month,
+ * top-tier today; a new allowance just appears). Known ids keep their translated titles; any other id
+ * shows the server's title. Mirrors the CLI/TUI `/usage` block and the portal: `NN% used` +
+ * `resets in …`, the bar fills as the allowance is used, coloured by the gateway's `style`
+ * (green → yellow → red). A used-up top-tier allowance says credits cover the rest only when the
+ * server says they pay (`credits_pay`: Keep going on credits is on AND a top-up balance is left; with
+ * the setting on and $0 the next request is refused too); otherwise the other included models still work.
+ */
+function deriveWindowRows(
+  planUsage: PlanUsage,
+  b: Translations['settings']['billing']
+): BillingUsageRowView[] {
+  const copy = b.state.usage.window
+  const words = { day: copy.today, month: copy.month, top_tier: copy.topTier, week: copy.week }
+
+  return (planUsage.gauges ?? []).map(gauge => {
+    const title = gaugeTitle(gauge, words)
+    const left = clamp01(gauge.left_fraction)
+    const used = 1 - left
+
+    // Under a minute away (or already past, from a stale poll): still a reset, never "Included usage".
+    const resets =
+      formatResetsIn(gauge.resets_at_ms) ??
+      (typeof gauge.resets_at_ms === 'number' && gauge.resets_at_ms > 0 ? '1m' : null)
+
+    const paused = Boolean(planUsage.paused_reason)
+    const exhausted = left <= 0
+
+    return {
+      bar: {
+        label: copy.barLabel(title),
+        state: gauge.style === 'red' ? 'danger' : gauge.style === 'yellow' ? 'warn' : 'ok',
+        tone: 'window',
+        track: exhausted ? 'danger' : undefined,
+        value: used
+      },
+      caption: paused
+        ? planUsage.paused_reason === PAYMENT_PAUSE_REASON
+          ? copy.captionPaused
+          : copy.captionPausedOther
+        : gaugeScope(gauge) === 'top_tier' && exhausted
+          ? planUsage.credits_pay === true
+            ? copy.captionTopTierUsedUp
+            : copy.captionTopTierUsedUpKeepGoingOff
+          : resets
+            ? copy.captionResetsIn(resets)
+            : copy.captionIncluded,
+      id: `window_${gauge.label}`,
+      title,
+      value: copy.valueUsed(formatPercentUsed(used))
+    }
+  })
 }
 
 function displayBalance(billing: BillingStateResponse): string {

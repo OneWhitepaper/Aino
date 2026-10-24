@@ -350,6 +350,29 @@ export function registerPlatformIpc({
     }
   })
 
+  ipc.handle('aino:platform-diagnostics:scope', event => {
+    try {
+      authorize(event)
+
+      return { ok: true, value: auth.billingScope(auth.snapshot().account?.id || '') }
+    } catch (error) {
+      return { ok: false, error: safeIpcError(error) }
+    }
+  })
+  ipc.handle('aino:platform-diagnostics:upload', async (event, input) => {
+    try {
+      authorize(event)
+      const source = record(input)
+
+      return { ok: true, value: await auth.uploadDiagnostics(field(source, 'bundle_base64', 11_184_812), {
+        expected_user_id: field(source, 'expected_user_id', 128),
+        expected_generation: source.expected_generation as number
+      }) }
+    } catch (error) {
+      return { ok: false, error: safeIpcError(error) }
+    }
+  })
+
   if (bindingController) {
     ipc.handle('aino:platform-models:owner', (event, revision) => {
       try {

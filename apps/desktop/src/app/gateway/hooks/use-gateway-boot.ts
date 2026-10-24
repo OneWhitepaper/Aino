@@ -16,6 +16,7 @@ import { shouldApplyPostBootProgressError } from '@/components/boot-failure-reau
 import type { DesktopBootProgress, HermesConnection, HermesWindowState } from '@/global'
 import { HermesGateway } from '@/hermes'
 import { translateNow } from '@/i18n'
+import { PRODUCT_NAME } from '@/lib/brand'
 import { desktopDefaultCwd } from '@/lib/desktop-fs'
 import {
   decideLivenessForceClose,
@@ -1044,7 +1045,7 @@ export function useGatewayBoot({
     configureGatewayRegistry({
       onServerRequest: request => {
         if (!callbacksRef.current.handleServerRequest(request)) {
-          request.fail(JSON_RPC_METHOD_NOT_FOUND, `Hermes Desktop cannot answer ${request.method}`)
+          request.fail(JSON_RPC_METHOD_NOT_FOUND, `${PRODUCT_NAME} cannot answer ${request.method}`)
         }
       },
       // The primary socket has no secondary entry to carry registry identity.
@@ -1239,7 +1240,7 @@ export function useGatewayBoot({
         activeGateway()?.close()
 
         if (!(await ensureActiveGatewayOpen({ explicit: true }))) {
-          throw new Error('Hermes gateway is not connected')
+          throw new Error(`${PRODUCT_NAME} gateway is not connected`)
         }
 
         return

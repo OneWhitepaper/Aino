@@ -67,16 +67,11 @@ import { runAppInstallerChecker } from './appinstaller-checker'
 import { installApplicationMenuAfterFirstWindow } from './application-menu-startup'
 import { stopBackendChild as stopBackendChildImpl, waitForBackendExit } from './backend-child'
 import {
-  type BackendOutputTail,
-  claimDecision,
   execText,
   isPidOnlyStartMarker,
-  pidOnlyStartMarker,
-  probeStartMarker,
   processStartMarker,
   REAP_PROBE_TIMEOUT_MS
 } from './backend-claim'
-import { dashboardFallbackArgs } from './backend-command'
 import { createBackendConnectionState } from './backend-connection-state'
 import { assertDescriptorStillOwned, forgetFailedDescriptor } from './backend-descriptor-cache'
 import { BackendDialClaims } from './backend-dial-claim'
@@ -84,7 +79,6 @@ import { buildDesktopBackendEnv, profileBackendParentEnv } from './backend-env'
 import { isReauthRequiredError, waitForHermesReady } from './backend-health'
 import {
   backendCommandMatches,
-  type BackendOwnershipEntry,
   createBackendOwnership,
   createBackendShutdownCoordinator
 } from './backend-ownership'
@@ -92,7 +86,6 @@ import { canImportHermesCli, PROBE_TIMEOUT_MS, shouldTrustHermesOverride, verify
 import { recycleOwnedBackend } from './backend-recycle'
 import { isPidAliveWindows, waitForBackendRelease } from './backend-release-gate'
 import { createInstalledRuntimeGate } from './backend-resolution'
-import { createBackendServeSupportResolver } from './backend-serve-support'
 import { desktopBackendSpawnEnv } from './backend-spawn-env'
 import {
   isHostKeyChangedBootFailure,
@@ -135,6 +128,8 @@ import {
 import { CHALLENGE_PARTITION } from './challenge-window'
 import { registerChallengeWindowIpc } from './challenge-window-ipc'
 import { provisionCliLinks } from './cli-provision'
+import { readClipboardImagePng } from './clipboard-image'
+import { registerClipboardTextIpc } from './clipboard-ipc'
 import { closeStopFailureMessage, finishWindowsCloseStop, type RuntimeLock } from './close-stop-kill'
 import { shouldAttemptCloudBootCascade } from './cloud-boot-cascade'
 import { discoverWithTeamFallback } from './cloud-discovery'
@@ -411,7 +406,6 @@ import {
 } from './oauth-rest-request'
 import { wireOauthSessionResponse } from './oauth-session-response'
 import { listWindowsProcesses, reapPackageRootedProcesses } from './package-process-reap'
-import { createParentStartMarkerResolver } from './parent-process-identity'
 import {
   bundledPayload,
   installIdForRoot,
@@ -1289,7 +1283,7 @@ function acquireSingleInstanceLock(): boolean {
 const isPrimaryInstance: boolean = acquireSingleInstanceLock()
 
 if (!isPrimaryInstance) {
-  console.error('[hermes] another Hermes Desktop instance holds the single-instance lock; exiting')
+  console.error(`[hermes] another ${PRODUCT_NAME} instance holds the single-instance lock; exiting`)
   app.exit(0)
 }
 
@@ -1859,18 +1853,6 @@ const localBackendLifecycle = createLocalBackendLifecycle<ChildProcess>({
   }
 })
 
-function spawnOwnedBackend(...args: Parameters<typeof spawn>): ChildProcess {
-  const child = localBackendLifecycle.spawn((): ChildProcess => spawn(...args))
-  child.once('exit', (): boolean => localBackendLifecycle.release(child))
-  child.once('error', (): void => {
-    if (!child.pid) {
-      localBackendLifecycle.release(child)
-    }
-  })
-
-  return child
-}
-
 const remoteLiveness = new RemoteLivenessTracker()
 
 // Pooled remotes are probed on the renderer reconnect cadence (minutes apart),
@@ -1912,7 +1894,7 @@ let desktopLogFlushPromise = Promise.resolve()
 // Land a spawn failure in desktop.log.
 function logPoolSpawnFailure(label: string, error: unknown): void {
   rememberLog(
-    `Hermes backend for profile ${label} failed to start: ${error instanceof Error ? error.message : String(error)}`
+    `${PRODUCT_NAME} backend for profile ${label} failed to start: ${error instanceof Error ? error.message : String(error)}`
   )
 }
 
@@ -2801,7 +2783,7 @@ async function waitForUpdateToFinish() {
 
         await advanceBootProgress(
           'backend.update-wait',
-          'An update is still running — Hermes will start automatically when it finishes. Its progress is in logs/update.log.',
+          `An update is still running — ${PRODUCT_NAME} will start automatically when it finishes. Its progress is in logs/update.log.`,
           12
         )
 
@@ -2854,7 +2836,7 @@ async function waitForUpdateToFinish() {
       log: rememberLog
     })
   ) {
-    await advanceBootProgress('backend.update-restart', 'Restarting Hermes to load the updated app…', 14)
+    await advanceBootProgress('backend.update-restart', `Restarting ${PRODUCT_NAME} to load the updated app…`, 14)
     // Park while the scheduled exit lands so this stale build never starts a
     // backend; the failsafe below only runs if the exit somehow does not.
     await new Promise(resolve => setTimeout(resolve, BUNDLE_SWAP_RELAUNCH_FAILSAFE_MS))
@@ -2932,21 +2914,6 @@ async function unwrapWindowsVenvHermesCommand(command, backendArgs) {
     basename: p => path.basename(p),
     rememberLog
   })
-}
-
-// Does the resolved runtime understand the `serve` subcommand? The desktop
-// spawns `hermes serve`; runtimes older than serve only have `dashboard`. We
-// detect support so getBackendArgsForRuntime() can route old runtimes through
-// the legacy `dashboard --no-open` form instead of crashing on an unknown
-// subcommand (would brick every user mid-upgrade — #54568 follow-up).
-// Fast-path / probe / cache strategy: see backend-serve-support.ts header.
-const backendSupportsServe = createBackendServeSupportResolver(HERMES_HOME, rememberLog)
-
-// Given a resolved backend whose args target `serve`, return the args the
-// runtime actually understands: unchanged when `serve` is supported, or
-// rewritten to `dashboard --no-open` for older runtimes.
-async function getBackendArgsForRuntime(backend) {
-  return (await backendSupportsServe(backend)) ? backend.args : dashboardFallbackArgs(backend.args)
 }
 
 function normalizeExecutablePathForCompare(commandPath) {
@@ -3851,7 +3818,7 @@ function killHermesOwnedVenvDaemons(updateRoot) {
     const pid = Number(holder?.ProcessId)
 
     if (Number.isInteger(pid) && pid > 0) {
-      rememberLog(`[updates] stopping Hermes-owned venv daemon (hindsight) PID ${pid} before hand-off`)
+      rememberLog(`[updates] stopping ${PRODUCT_NAME}-owned venv daemon (hindsight) PID ${pid} before hand-off`)
 
       try {
         forceKillProcessTree(pid)
@@ -3896,7 +3863,7 @@ function killExternalVenvHolders(updateRoot) {
 
     if (Number.isInteger(pid) && pid > 0) {
       rememberLog(
-        `[updates] stopping external Hermes venv holder (autostart gateway/dashboard) PID ${pid} before hand-off`
+        `[updates] stopping external ${PRODUCT_NAME} venv holder (autostart gateway/dashboard) PID ${pid} before hand-off`
       )
 
       try {
@@ -4057,10 +4024,6 @@ function writeBackendOwnership(contents) {
     }
   }
 }
-
-// execText and processStartMarker moved to backend-claim.ts (#93608) so the
-// claim/probe policy is testable — including on Windows CI with real
-// PowerShell — without booting Electron. main.ts calls through the module.
 
 async function backendCommandForPid(pid) {
   try {
@@ -4228,76 +4191,6 @@ const backendOwnership = createBackendOwnership({
     }
   }
 })
-
-const desktopParentStartMarker = createParentStartMarkerResolver({
-  load: () => processStartMarker(process.pid),
-  onError: error => {
-    const detail = error instanceof Error ? error.message : String(error)
-
-    rememberLog(
-      `Could not resolve the Desktop process start marker; starting the backend with PID-only parent tracking: ${detail}`
-    )
-  }
-})
-
-async function claimBackendChild(
-  child: ChildProcess & { hermesBackendIdentity?: BackendOwnershipEntry },
-  command: string,
-  profile: string,
-  nonce: string,
-  outputTail: BackendOutputTail | null = null
-): Promise<BackendOwnershipEntry> {
-  // Probe/claim policy lives in backend-claim.ts (#93608): a marker probe
-  // that fails against a LIVE child degrades to PID-only identity — matching
-  // createParentStartMarkerResolver — instead of killing a healthy backend
-  // over a flaky Get-Process (PS 5.1 cold starts, #87169). Only a child that
-  // actually died keeps the fail-closed throw, now carrying its stderr tail.
-  const probe = await probeStartMarker(child.pid)
-  const decision = claimDecision(child.exitCode === null && !child.killed, probe)
-
-  if (decision.action === 'fail') {
-    await localBackendLifecycle.stop(child)
-    throw new Error(
-      `Hermes backend (PID ${child.pid}) died before its identity could be recorded: ${decision.reason}${outputTail?.describe() ?? ''}`
-    )
-  }
-
-  let startMarker
-
-  if (decision.action === 'degrade') {
-    startMarker = pidOnlyStartMarker(child.pid)
-    rememberLog(
-      `WARNING: process start marker probe failed for live Hermes backend PID ${child.pid}; ` +
-        `claiming with PID-only identity instead of stopping it: ${decision.reason}`
-    )
-  } else {
-    startMarker = decision.startMarker
-  }
-
-  try {
-    const identity = await backendOwnership.claim({
-      command,
-      nonce,
-      pid: child.pid,
-      profile,
-      startMarker,
-      // Record the spawning Electron so reapOrphans can tell an orphaned
-      // backend (parent gone) from one owned by a live instance — a live
-      // parent's backend is never reaped (#87295).
-      parentPid: process.pid,
-      parentStartMarker: await desktopParentStartMarker()
-    })
-
-    child.hermesBackendIdentity = identity
-
-    return identity
-  } catch (error) {
-    await localBackendLifecycle.stop(child)
-    throw new Error(
-      `Could not persist ownership for the Hermes backend: ${error.message}${outputTail?.describe() ?? ''}`
-    )
-  }
-}
 
 function reapOrphanedBackendsOnce() {
   if (!backendOrphanReapPromise) {
@@ -5076,12 +4969,12 @@ async function resolveHermesBackend(backendArgs: string[]): Promise<ResolvedHerm
     } else if (!isWindowsBinaryPathInWsl(hermesOverride, { isWsl: IS_WSL })) {
       hermesCommand = hermesOverride
     } else {
-      rememberLog(`Ignoring Windows Hermes override under WSL: ${hermesOverride}`)
+      rememberLog(`Ignoring Windows ${PRODUCT_NAME} override under WSL: ${hermesOverride}`)
     }
 
     if (hermesCommand) {
       if (looksLikeDesktopAppBinary(hermesCommand)) {
-        rememberLog(`Ignoring desktop app executable on PATH while resolving Hermes CLI: ${hermesCommand}`)
+        rememberLog(`Ignoring desktop app executable on PATH while resolving ${PRODUCT_NAME} CLI: ${hermesCommand}`)
         hermesCommand = null
       } else {
         const unwrapped: Awaited<ReturnType<typeof unwrapWindowsVenvHermesCommand>> =
@@ -5098,7 +4991,7 @@ async function resolveHermesBackend(backendArgs: string[]): Promise<ResolvedHerm
           (await verifyHermesCli(hermesCommand, { shell: shellForProbe }))
         ) {
           return {
-            label: `existing Hermes CLI at ${hermesCommand}`,
+            label: `existing ${PRODUCT_NAME} CLI at ${hermesCommand}`,
             command: hermesCommand,
             args: backendArgs,
             bootstrap: false,
@@ -5110,7 +5003,7 @@ async function resolveHermesBackend(backendArgs: string[]): Promise<ResolvedHerm
         }
 
         rememberLog(
-          `Ignoring existing Hermes CLI at ${hermesCommand}: --version probe failed; falling through to bootstrap.`
+          `Ignoring existing ${PRODUCT_NAME} CLI at ${hermesCommand}: --version probe failed; falling through to bootstrap.`
         )
       }
     }
@@ -5134,7 +5027,7 @@ async function resolveHermesBackend(backendArgs: string[]): Promise<ResolvedHerm
   if (activeBackend && !bootstrapRepairRequested) {
     if (!activeRuntime.hasValidMarker) {
       rememberLog(
-        `[bootstrap] Active Hermes runtime at ${ACTIVE_HERMES_ROOT} is usable but the bootstrap marker is missing or stale; skipping first-run bootstrap.`
+        `[bootstrap] Active ${PRODUCT_NAME} runtime at ${ACTIVE_HERMES_ROOT} is usable but the bootstrap marker is missing or stale; skipping first-run bootstrap.`
       )
     }
 
@@ -5157,14 +5050,14 @@ async function resolveHermesBackend(backendArgs: string[]): Promise<ResolvedHerm
       )
 
       if (userBackend) {
-        rememberLog(`[boot] Using Hermes install at ${userInstall.root} (published launcher ${userInstall.launcher})`)
+        rememberLog(`[boot] Using ${PRODUCT_NAME} install at ${userInstall.root} (published launcher ${userInstall.launcher})`)
 
         return userBackend
       }
 
-      rememberLog(`[bootstrap] Hermes install at ${userInstall.root} (from ${userInstall.launcher}) is not usable`)
+      rememberLog(`[bootstrap] ${PRODUCT_NAME} install at ${userInstall.root} (from ${userInstall.launcher}) is not usable`)
     } else {
-      rememberLog(`[bootstrap] no usable Hermes install at ${ACTIVE_HERMES_ROOT} and no published user-bin launcher`)
+      rememberLog(`[bootstrap] no usable ${PRODUCT_NAME} install at ${ACTIVE_HERMES_ROOT} and no published user-bin launcher`)
     }
   }
 
@@ -5180,7 +5073,7 @@ async function resolveHermesBackend(backendArgs: string[]): Promise<ResolvedHerm
   //    is a recoverable state the GUI can drive through.
   return {
     kind: 'bootstrap-needed',
-    label: 'Hermes Agent not installed yet; bootstrap required',
+    label: `${PRODUCT_NAME} Agent not installed yet; bootstrap required`,
     command: null,
     args: backendArgs,
     bootstrap: true,
@@ -5243,7 +5136,7 @@ async function ensureRuntime(
     rememberLog('[bootstrap] REFUSING installer on a bundled install; payload missing or damaged — reinstall the app')
 
     const bundledError: Error & { isBootstrapFailure?: boolean } = new Error(
-      'This app bundles its own Hermes runtime, but the runtime files are missing or damaged. Reinstall Hermes Desktop to restore it.'
+      `This app bundles its own ${PRODUCT_NAME} runtime, but the runtime files are missing or damaged. Reinstall ${PRODUCT_NAME} to restore it.`
     )
 
     bundledError.isBootstrapFailure = true
@@ -5252,11 +5145,11 @@ async function ensureRuntime(
   }
 
   if (backend.kind === 'bootstrap-needed') {
-    rememberLog('[bootstrap] no Hermes install found; starting first-launch bootstrap')
+    rememberLog(`[bootstrap] no ${PRODUCT_NAME} install found; starting first-launch bootstrap`)
 
     if (await handOffWindowsBootstrapRecovery('bootstrap-needed')) {
       const handoffError: Error & { isBootstrapFailure?: boolean; bootstrapHandedOff?: boolean } = new Error(
-        'Hermes recovery was handed off to Hermes Setup. The desktop will restart when recovery completes.'
+        `${PRODUCT_NAME} recovery was handed off to ${PRODUCT_NAME} Setup. The desktop will restart when recovery completes.`
       )
 
       handoffError.isBootstrapFailure = true
@@ -5320,7 +5213,7 @@ async function ensureRuntime(
     bootstrapAbortController = null
 
     if (bootstrapResult.cancelled) {
-      const cancelledError = new Error('Hermes install was cancelled.') as any
+      const cancelledError = new Error(`${PRODUCT_NAME} install was cancelled.`) as any
       cancelledError.isBootstrapFailure = true
       cancelledError.bootstrapCancelled = true
       bootstrapFailure = cancelledError
@@ -5400,7 +5293,7 @@ function fetchJson(url, token, options: any = {}) {
         const timeoutMs = resolveTimeoutMs(options.timeoutMs, DEFAULT_FETCH_TIMEOUT_MS)
 
         if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
-          reject(new Error(`Unsupported Hermes backend URL protocol: ${parsed.protocol}`))
+          reject(new Error(`Unsupported ${PRODUCT_NAME} backend URL protocol: ${parsed.protocol}`))
 
           return
         }
@@ -5476,7 +5369,7 @@ function fetchJson(url, token, options: any = {}) {
 
         req.on('error', reject)
         req.setTimeout(timeoutMs, () => {
-          req.destroy(new Error(`Timed out connecting to Hermes backend after ${timeoutMs}ms`))
+          req.destroy(new Error(`Timed out connecting to ${PRODUCT_NAME} backend after ${timeoutMs}ms`))
         })
 
         // From here the request goes on the wire: a later transport error can no
@@ -5520,7 +5413,7 @@ function fetchPublicJson(url, options: any = {}) {
         const timeoutMs = resolveTimeoutMs(options.timeoutMs, DEFAULT_FETCH_TIMEOUT_MS)
 
         if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
-          reject(new Error(`Unsupported Hermes backend URL protocol: ${parsed.protocol}`))
+          reject(new Error(`Unsupported ${PRODUCT_NAME} backend URL protocol: ${parsed.protocol}`))
 
           return
         }
@@ -5581,7 +5474,7 @@ function fetchPublicJson(url, options: any = {}) {
 
         req.on('error', reject)
         req.setTimeout(timeoutMs, () => {
-          req.destroy(new Error(`Timed out connecting to Hermes backend after ${timeoutMs}ms`))
+          req.destroy(new Error(`Timed out connecting to ${PRODUCT_NAME} backend after ${timeoutMs}ms`))
         })
 
         // Past this point the request is on the wire — see fetchJson.
@@ -6930,7 +6823,7 @@ function fetchJsonViaOauthSession(url, options: any = {}) {
       }
 
       if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
-        reject(new Error(`Unsupported Hermes backend URL protocol: ${parsed.protocol}`))
+        reject(new Error(`Unsupported ${PRODUCT_NAME} backend URL protocol: ${parsed.protocol}`))
 
         return
       }
@@ -6973,7 +6866,7 @@ function fetchJsonViaOauthSession(url, options: any = {}) {
           // already finished
         }
 
-        reject(new Error(`Timed out connecting to Hermes backend after ${timeoutMs}ms`))
+        reject(new Error(`Timed out connecting to ${PRODUCT_NAME} backend after ${timeoutMs}ms`))
       }, timeoutMs)
 
       request.on('response', (res: Electron.IncomingMessage): void => {
@@ -7375,7 +7268,7 @@ async function discoverCloudAgents(org?: string) {
 
   if (!(await hasLivePortalSession())) {
     const err = new Error(
-      'You are not signed in to Hermes Cloud. Open Settings → Gateway, choose Hermes Cloud, and sign in.'
+      'You are not signed in to Nous Cloud. Open Settings → Gateway, choose Nous Cloud, and sign in.'
     ) as any
 
     err.needsCloudLogin = true
@@ -7426,7 +7319,7 @@ async function discoverCloudAgents(org?: string) {
       // recover it) — surface it as a re-login, not a generic failure.
       if (error && error.statusCode === 401) {
         const err = new Error(
-          'Your Hermes Cloud session has expired. Open Settings → Gateway and sign in again.'
+          'Your Nous Cloud session has expired. Open Settings → Gateway and sign in again.'
         ) as any
 
         err.needsCloudLogin = true
@@ -7521,7 +7414,7 @@ async function cloudAgentSilentSignIn(dashboardUrl, { background = false } = {})
   // interactive prompt rather than a silent cascade. Discovery already gates on
   // this, but a selection can arrive after the session lapsed.
   if (!(await hasLivePortalSession())) {
-    const err = new Error('Your Hermes Cloud session has expired. Sign in to Hermes Cloud again.') as any
+    const err = new Error('Your Nous Cloud session has expired. Sign in to Nous Cloud again.') as any
     err.needsCloudLogin = true
     throw err
   }
@@ -8859,7 +8752,7 @@ async function buildRemoteConnection(
 
   if (!token) {
     throw new Error(
-      'Remote Hermes gateway is selected, but no session token is saved. ' +
+      `Remote ${PRODUCT_NAME} gateway is selected, but no session token is saved. ` +
         'Open Settings → Gateway and save a token, or switch back to Local.'
     )
   }
@@ -9955,7 +9848,7 @@ async function testDesktopConnectionConfig(input: any = {}) {
             return {
               reachable: false,
               sshError: 'update-required',
-              error: 'Update Hermes on the remote host before connecting with Desktop SSH.'
+              error: `Update ${PRODUCT_NAME} on the remote host before connecting with Desktop SSH.`
             }
           }
 
@@ -11460,7 +11353,7 @@ async function startHermes(requestedProfile?: string) {
   // otherwise SIGTERMs the running instance's live backend (#87295).
   if (!isPrimaryInstance) {
     rememberLog('[boot] non-primary instance: skipping backend machinery')
-    throw new Error('Hermes Desktop is already running in another window.')
+    throw new Error(`${PRODUCT_NAME} is already running in another window.`)
   }
 
   await reapOrphanedBackendsOnce()
@@ -11490,7 +11383,7 @@ async function startHermes(requestedProfile?: string) {
   // E2E: simulate a boot failure without breaking the real backend. The boot
   // progresses a few steps, then fails with the given error message.
   if (BOOT_FAKE_ERROR) {
-    await advanceBootProgress('backend.resolve', 'Resolving Hermes backend', 8)
+    await advanceBootProgress('backend.resolve', `Resolving ${PRODUCT_NAME} backend`, 8)
     const error = new Error(BOOT_FAKE_ERROR) as any
     error.isBootstrapFailure = true
     bootstrapFailure = error
@@ -11543,7 +11436,7 @@ async function startHermes(requestedProfile?: string) {
       // remotes and Apply invalidated this attempt), bail before probing.
       backendConnectionState.assertCurrentAttempt(connectionAttempt)
 
-      await advanceBootProgress('backend.remote', `Connecting to remote Hermes backend at ${remote.baseUrl}`, 24)
+      await advanceBootProgress('backend.remote', `Connecting to remote ${PRODUCT_NAME} backend at ${remote.baseUrl}`, 24)
       await waitForRemoteHermes(remote)
 
       // Second async boundary: the health probe itself can outlive the
@@ -11552,7 +11445,7 @@ async function startHermes(requestedProfile?: string) {
 
       updateBootProgress({
         phase: 'backend.ready',
-        message: 'Remote Hermes backend is ready',
+        message: `Remote ${PRODUCT_NAME} backend is ready`,
         progress: 94,
         running: true,
         error: null
@@ -11561,7 +11454,7 @@ async function startHermes(requestedProfile?: string) {
       return createPrimaryRemoteConnection(remote, hermesLog.slice(-80), getWindowState())
     }
 
-    await advanceBootProgress('backend.resolve', 'Resolving Hermes backend', 8)
+    await advanceBootProgress('backend.resolve', `Resolving ${PRODUCT_NAME} backend`, 8)
     // Resolve for the desktop's primary profile so a per-profile remote
     // override on the active profile is honored (falls back to env / global).
 
@@ -11601,7 +11494,7 @@ async function startHermes(requestedProfile?: string) {
       ensureLocalRuntime: backend =>
         ensureRuntime(backend, () => backendConnectionState.assertCurrentAttempt(connectionAttempt)),
       prepareLocalBackend: async () => {
-        await advanceBootProgress('backend.runtime', 'Resolving Hermes runtime', 28)
+        await advanceBootProgress('backend.runtime', `Resolving ${PRODUCT_NAME} runtime`, 28)
 
         return resolveHermesBackend(backendArgs)
       },
@@ -11659,8 +11552,8 @@ async function startHermes(requestedProfile?: string) {
     backendConnectionState.assertCurrentAttempt(connectionAttempt)
 
     backendStartFailure = null
-    rememberLog('[backend] Hermes gateway is ready')
-    updateBootProgress({ phase: 'backend.ready', message: 'Hermes gateway is ready', progress: 94, running: true, error: null })
+    rememberLog(`[backend] ${PRODUCT_NAME} gateway is ready`)
+    updateBootProgress({ phase: 'backend.ready', message: `${PRODUCT_NAME} gateway is ready`, progress: 94, running: true, error: null })
     bootstrapRepairAttempt = 0
 
     // The primary descriptor names its own profile: a profile-less descriptor
@@ -13690,7 +13583,7 @@ function createWindow() {
         const exit = details?.exitCode === undefined ? '' : `, exit code ${String(details.exitCode)}`
         rememberLog(`[renderer:main] renderer terminated while live (reason=${reason}${exit}); surfacing recovery page`)
         void loadRendererLoadErrorPage(mainWindow, {
-          title: 'Hermes desktop UI was terminated',
+          title: `${PRODUCT_NAME} desktop UI was terminated`,
           errorDescription:
             `The desktop UI process was terminated unexpectedly (reason: ${reason}${exit}). ` +
             'Your sessions and the background gateway are unaffected — reload to continue.',
@@ -16055,23 +15948,14 @@ ipcMain.handle('hermes:selectPaths', async (_event, options: any = {}) => {
   return result.filePaths
 })
 
-ipcMain.handle('hermes:writeClipboard', (_event, text) => {
-  clipboard.writeText(String(text || ''))
-
-  return true
-})
+// Clipboard text read/write for the renderer (clipboard-ipc.ts).
+registerClipboardTextIpc(ipcMain, clipboard)
 
 // Save dialogs: the path picker (profile export) and /save's main-process write (save-text-file.ts).
 registerSaveDialogIpc(ipcMain, {
   defaultDir: () => app.getPath('documents'),
   showSaveDialog: options => dialog.showSaveDialog(mainWindow, options)
 })
-
-// Paired reader for the GUI terminal's paste chord: the renderer's
-// navigator.clipboard.readText() throws "Document is not focused" whenever a
-// portaled overlay has focus, and there's no way to route a read through the
-// canvas. The main process has no such gate.
-ipcMain.handle('hermes:readClipboard', () => clipboard.readText())
 
 ipcMain.handle('hermes:saveGatewayFile', (_event, payload) => saveGatewayFile(payload))
 
@@ -16158,10 +16042,12 @@ ipcMain.handle('hermes:savePastedText', async (_event, payload) => {
 })
 
 ipcMain.handle('hermes:saveClipboardImage', async () => {
-  const image = clipboard.readImage()
+  // Electron 44 removed clipboard.readImage(); PNG bytes now arrive through
+  // clipboard.read() + ClipboardItem.getType('image/png') as a Blob.
+  const png = await readClipboardImagePng(clipboard)
 
-  if (image && !image.isEmpty()) {
-    return writeComposerImage(image.toPNG(), '.png')
+  if (png) {
+    return writeComposerImage(png, '.png')
   }
 
   // WSL2/WSLg doesn't bridge clipboard *images* from the Windows host to the
@@ -16515,7 +16401,7 @@ ipcMain.handle('hermes:quick-entry:submit', (event, payload) => {
   }
 
   if (!mainWindow || mainWindow.isDestroyed()) {
-    return { code: 'no-primary', message: 'The primary Hermes window is unavailable.', ok: false, retryable: true }
+    return { code: 'no-primary', message: `The primary ${PRODUCT_NAME} window is unavailable.`, ok: false, retryable: true }
   }
 
   const target =
@@ -17107,7 +16993,7 @@ async function runDesktopUninstall(mode: string): Promise<DesktopUninstallResult
     return {
       ok: false,
       error: 'agent-missing',
-      message: `Can't run the uninstaller: no Hermes agent venv at ${VENV_ROOT}.`
+      message: `Can't run the uninstaller: no ${PRODUCT_NAME} agent venv at ${VENV_ROOT}.`
     }
   }
 

@@ -41,7 +41,7 @@ export function SettingsSystemControls({
   const activeGatewayProfile = useStore($activeGatewayProfile)
   const gatewayRestarting = useStore($gatewayRestarting)
   const [gatewayMenuOpen, setGatewayMenuOpen] = useState(false)
-  const gatewayScope = `${activeConnectionId ?? ''}\0${activeGatewayProfile}`
+  const gatewayScope = { connectionId: activeConnectionId, profile: activeGatewayProfile }
   const { inferenceStatus, statusSnapshot } = useStatusSnapshot(gatewayState, requestGateway, gatewayScope)
 
   const gatewayOpen = gatewayState === 'open'

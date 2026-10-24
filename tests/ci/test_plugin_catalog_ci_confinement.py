@@ -8,6 +8,7 @@ flows that must keep passing.
 """
 
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -32,12 +33,11 @@ def _step(name_prefix: str) -> str:
             if step.get("name", "").startswith(name_prefix):
                 # The workflow expands ${{ github.base_ref }} before bash sees it.
                 text = step["run"].replace("${{ github.base_ref }}", "main")
-                # Import-admission tests substitute a fixture commit for the
-                # reviewed release pin; normal cases exercise the real pin.
-                return text.replace(
-                    "4d04303818b61bf3aa09278af48356315515965b",
-                    os.environ.get("CATALOG_CI_UPSTREAM", "4d04303818b61bf3aa09278af48356315515965b"),
-                )
+                # Substitute only the reviewed-release assignment, so a release
+                # bump cannot silently disconnect the fixture's commit graph.
+                if upstream := os.environ.get("CATALOG_CI_UPSTREAM"):
+                    text = re.sub(r"(?m)^UPSTREAM=[0-9a-f]{40}$", f"UPSTREAM={upstream}", text)
+                return text
     raise LookupError(name_prefix)
 
 

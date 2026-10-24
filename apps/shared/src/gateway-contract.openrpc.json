@@ -223,6 +223,24 @@
       }
     },
     {
+      "name": "billing.keep_going_on_credits",
+      "summary": "Window plans: turn 'Keep going on credits' on/off (billing:manage).",
+      "params": [
+        {
+          "name": "params",
+          "schema": {
+            "$ref": "#/components/schemas/BillingKeepGoingOnCreditsParams"
+          }
+        }
+      ],
+      "result": {
+        "name": "result",
+        "schema": {
+          "$ref": "#/components/schemas/BillingMutationResult"
+        }
+      }
+    },
+    {
       "name": "billing.state",
       "summary": "Read-only billing view (no scope); the Nous free tier is answered locally without a portal call.",
       "params": [
@@ -907,6 +925,24 @@
       }
     },
     {
+      "name": "diagnostics.collect",
+      "summary": "Collect a force-redacted gzip support bundle without uploading it.",
+      "params": [
+        {
+          "name": "params",
+          "schema": {
+            "$ref": "#/components/schemas/DiagnosticsCollectParams"
+          }
+        }
+      ],
+      "result": {
+        "name": "result",
+        "schema": {
+          "$ref": "#/components/schemas/DiagnosticsCollectResult"
+        }
+      }
+    },
+    {
       "name": "diagnostics.share_nous",
       "summary": "Upload a force-redacted debug bundle to Nous-internal diagnostics storage.",
       "params": [
@@ -1147,7 +1183,7 @@
         {
           "name": "params",
           "schema": {
-            "$ref": "#/components/schemas/ProfileParams"
+            "$ref": "#/components/schemas/FreeTierClaimNudgeParams"
           }
         }
       ],
@@ -6831,6 +6867,30 @@
         "title": "BillingChargeStatusResult",
         "type": "object"
       },
+      "BillingKeepGoingOnCreditsParams": {
+        "additionalProperties": false,
+        "properties": {
+          "profile": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Profile"
+          },
+          "enabled": {
+            "default": false,
+            "title": "Enabled",
+            "type": "boolean"
+          }
+        },
+        "title": "BillingKeepGoingOnCreditsParams",
+        "type": "object"
+      },
       "BillingMonthlyCap": {
         "additionalProperties": false,
         "properties": {
@@ -7430,6 +7490,18 @@
             ],
             "default": null
           },
+          "keep_going_on_credits": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Keep Going On Credits"
+          },
           "portal_url": {
             "anyOf": [
               {
@@ -7458,6 +7530,17 @@
             "anyOf": [
               {
                 "$ref": "#/components/schemas/UsageModel"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "plan_usage": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PlanUsage"
               },
               {
                 "type": "null"
@@ -12694,6 +12777,11 @@
             "default": false,
             "title": "Server Requests",
             "type": "boolean"
+          },
+          "desktop_local": {
+            "default": false,
+            "title": "Desktop Local",
+            "type": "boolean"
           }
         },
         "title": "ClientCapabilitiesParams",
@@ -17463,6 +17551,102 @@
         "title": "DelegationStatusResult",
         "type": "object"
       },
+      "DiagnosticsCollectParams": {
+        "additionalProperties": false,
+        "properties": {
+          "error_context": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Error Context"
+          },
+          "extra_files": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Extra Files"
+          },
+          "log_lines": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Log Lines"
+          },
+          "profile": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Profile"
+          }
+        },
+        "title": "DiagnosticsCollectParams",
+        "type": "object"
+      },
+      "DiagnosticsCollectResult": {
+        "additionalProperties": false,
+        "properties": {
+          "ok": {
+            "title": "Ok",
+            "type": "boolean"
+          },
+          "bundle_base64": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Bundle Base64"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Error"
+          }
+        },
+        "required": [
+          "ok"
+        ],
+        "title": "DiagnosticsCollectResult",
+        "type": "object"
+      },
       "DiagnosticsShareNousParams": {
         "additionalProperties": false,
         "properties": {
@@ -18880,7 +19064,7 @@
       },
       "ErrorSurface": {
         "additionalProperties": true,
-        "description": "``agent/error_surface.py::_surface`` \u2014 advisory {layer, code, retryable} (+ identity, + auth hint,\n+ ``resets_at`` epoch seconds when the provider named when its limit lifts).",
+        "description": "``agent/error_surface.py::_surface`` \u2014 advisory {layer, code, retryable} (+ identity, + auth hint,\n+ ``resets_at`` epoch seconds when the provider named when its limit lifts, + ``usage_limit`` on a\nusage-window plan's limit).",
         "properties": {
           "layer": {
             "title": "Layer",
@@ -18929,6 +19113,17 @@
             ],
             "default": null,
             "title": "Resets At"
+          },
+          "usage_limit": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/UsageLimit"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
           }
         },
         "required": [
@@ -19304,6 +19499,34 @@
         "title": "FreeTierChallengeResultParams",
         "type": "object"
       },
+      "FreeTierClaimNudgeParams": {
+        "additionalProperties": false,
+        "properties": {
+          "profile": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Profile"
+          },
+          "kind": {
+            "default": "trial",
+            "enum": [
+              "trial",
+              "connector"
+            ],
+            "title": "Kind",
+            "type": "string"
+          }
+        },
+        "title": "FreeTierClaimNudgeParams",
+        "type": "object"
+      },
       "FreeTierClaimNudgeResult": {
         "additionalProperties": false,
         "properties": {
@@ -19483,6 +19706,18 @@
             ],
             "default": null,
             "title": "Nudge Due In"
+          },
+          "connector_nudge_due_in": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Connector Nudge Due In"
           }
         },
         "required": [
@@ -25280,6 +25515,32 @@
             "default": null,
             "title": "Unavailable Models"
           },
+          "plan_usage": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PlanUsage"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "usage_levels": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Usage Levels"
+          },
           "limit": {
             "anyOf": [
               {
@@ -28091,6 +28352,162 @@
         "title": "PingResult",
         "type": "object"
       },
+      "PlanGauge": {
+        "additionalProperties": false,
+        "description": "``gateway/session_usage.py::plan_gauge``: a window plan's allowance for the status bar.",
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "used_bp": {
+            "title": "Used Bp",
+            "type": "integer"
+          },
+          "resets_at_ms": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Resets At Ms"
+          }
+        },
+        "required": [
+          "id",
+          "label",
+          "used_bp"
+        ],
+        "title": "PlanGauge",
+        "type": "object"
+      },
+      "PlanUsage": {
+        "additionalProperties": false,
+        "description": "``hermes_cli/model_picker_usage.py::PickerUsage.to_payload`` \u2014 usage-window plan chrome.",
+        "properties": {
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "plan": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Plan"
+          },
+          "gauges": {
+            "items": {
+              "$ref": "#/components/schemas/PlanUsageGauge"
+            },
+            "title": "Gauges",
+            "type": "array"
+          },
+          "top_tier_model_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Top Tier Model Ids",
+            "type": "array"
+          },
+          "featured_model_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Featured Model Ids",
+            "type": "array"
+          },
+          "paused_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Paused Reason"
+          },
+          "credits_pay": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Credits Pay"
+          }
+        },
+        "required": [
+          "kind"
+        ],
+        "title": "PlanUsage",
+        "type": "object"
+      },
+      "PlanUsageGauge": {
+        "additionalProperties": false,
+        "description": "One server allowance on ``ModelOptionProvider.plan_usage``, in the server's order. ``label`` is the\nserver's id (``day`` / ``week`` / ``month`` / ``top_tier`` have client words; any other id shows\n``title``). ``scope``: which models a full one stops (``all`` / ``top_tier``).",
+        "properties": {
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "left_fraction": {
+            "title": "Left Fraction",
+            "type": "number"
+          },
+          "style": {
+            "title": "Style",
+            "type": "string"
+          },
+          "resets_at_ms": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Resets At Ms"
+          },
+          "scope": {
+            "default": "all",
+            "title": "Scope",
+            "type": "string"
+          },
+          "title": {
+            "default": "",
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "label",
+          "left_fraction",
+          "style"
+        ],
+        "title": "PlanUsageGauge",
+        "type": "object"
+      },
       "PlatformOwner": {
         "additionalProperties": false,
         "properties": {
@@ -28179,6 +28596,11 @@
           },
           "subdir": {
             "title": "Subdir",
+            "type": "string"
+          },
+          "tier": {
+            "default": "community",
+            "title": "Tier",
             "type": "string"
           }
         },
@@ -34882,7 +35304,7 @@
       },
       "RoomDriverStatus": {
         "additionalProperties": false,
-        "description": "``HostedRoomService.status(room_id)``; ``pending_actions`` rows are ``{kind: retry, task_id}``\nor the driver's approval action (``kind: approval`` + run/session/approval context).",
+        "description": "``HostedRoomService.status(room_id)``; ``pending_actions`` rows are ``{kind: retry, task_id}``\nor the driver's approval action (``kind: approval`` + run/session/approval context).\n``member_activity`` lists live tasks in admission order (absent from older gateways).",
         "properties": {
           "running": {
             "title": "Running",
@@ -34909,6 +35331,13 @@
               "type": "object"
             },
             "title": "Pending Actions",
+            "type": "array"
+          },
+          "member_activity": {
+            "items": {
+              "$ref": "#/components/schemas/RoomMemberActivity"
+            },
+            "title": "Member Activity",
             "type": "array"
           },
           "peer_routes": {
@@ -35280,6 +35709,26 @@
           }
         },
         "title": "RoomMember",
+        "type": "object"
+      },
+      "RoomMemberActivity": {
+        "additionalProperties": false,
+        "description": "One live room task: ``status`` is ``queued``, ``running`` or ``stopping``.",
+        "properties": {
+          "member_id": {
+            "title": "Member Id",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "member_id",
+          "status"
+        ],
+        "title": "RoomMemberActivity",
         "type": "object"
       },
       "RoomMemberInput": {
@@ -39824,6 +40273,17 @@
             ],
             "default": null,
             "title": "Fallback Model"
+          },
+          "plan_gauge": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PlanGauge"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
           }
         },
         "required": [
@@ -40504,6 +40964,17 @@
             ],
             "default": null,
             "title": "Reply Non Aino Model Calls"
+          },
+          "plan_gauge": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PlanGauge"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
           }
         },
         "title": "SessionUsagePayload",
@@ -40732,6 +41203,17 @@
             "default": null,
             "title": "Cost Status"
           },
+          "plan_gauge": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PlanGauge"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
           "credits_lines": {
             "anyOf": [
               {
@@ -40746,6 +41228,18 @@
             ],
             "default": null,
             "title": "Credits Lines"
+          },
+          "credits_usage_window": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Credits Usage Window"
           }
         },
         "title": "SessionUsageResult",
@@ -44368,6 +44862,17 @@
               }
             ],
             "default": null
+          },
+          "plan_usage": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PlanUsage"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
           }
         },
         "required": [
@@ -46519,6 +47024,17 @@
             ],
             "default": null,
             "title": "Cost Status"
+          },
+          "plan_gauge": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PlanGauge"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
           }
         },
         "title": "Usage",
@@ -46577,6 +47093,116 @@
         ],
         "title": "UsageBarKind",
         "type": "string"
+      },
+      "UsageLimit": {
+        "additionalProperties": false,
+        "description": "``agent/plan_limits.py::LimitHit`` \u2014 a usage-window plan's limit: what ran out, when it resets, and\nthe one-click ways on (switch to a recommended model, use / add credits).",
+        "properties": {
+          "gauge_id": {
+            "title": "Gauge Id",
+            "type": "string"
+          },
+          "scope": {
+            "title": "Scope",
+            "type": "string"
+          },
+          "limit_name": {
+            "title": "Limit Name",
+            "type": "string"
+          },
+          "resets_at_ms": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Resets At Ms"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "suggestions": {
+            "items": {
+              "$ref": "#/components/schemas/UsageLimitSuggestion"
+            },
+            "title": "Suggestions",
+            "type": "array"
+          },
+          "credits": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/UsageLimitCredits"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "current_model": {
+            "default": "",
+            "title": "Current Model",
+            "type": "string"
+          }
+        },
+        "required": [
+          "gauge_id",
+          "scope",
+          "limit_name",
+          "message"
+        ],
+        "title": "UsageLimit",
+        "type": "object"
+      },
+      "UsageLimitCredits": {
+        "additionalProperties": false,
+        "description": "``agent/plan_limits.py::CreditsOption`` \u2014 ``use_credits`` (turn on Keep going), ``add_credits``, or\n``add_credits_and_keep_going`` (both: Keep going is off and there is no balance).",
+        "properties": {
+          "action": {
+            "title": "Action",
+            "type": "string"
+          }
+        },
+        "required": [
+          "action"
+        ],
+        "title": "UsageLimitCredits",
+        "type": "object"
+      },
+      "UsageLimitSuggestion": {
+        "additionalProperties": false,
+        "description": "``agent/plan_limits.py::ModelSuggestion`` \u2014 a recommended model that still works past the limit.",
+        "properties": {
+          "model": {
+            "title": "Model",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "note": {
+            "title": "Note",
+            "type": "string"
+          },
+          "provider": {
+            "default": "nous",
+            "title": "Provider",
+            "type": "string"
+          }
+        },
+        "required": [
+          "model",
+          "label",
+          "note"
+        ],
+        "title": "UsageLimitSuggestion",
+        "type": "object"
       },
       "UsageModel": {
         "additionalProperties": false,
@@ -49105,6 +49731,24 @@
         "name": "result",
         "schema": {
           "$ref": "#/components/schemas/CronSubmitResult"
+        }
+      }
+    },
+    {
+      "name": "diagnostics.collect",
+      "summary": "",
+      "params": [
+        {
+          "name": "params",
+          "schema": {
+            "$ref": "#/components/schemas/DiagnosticsCollectParams"
+          }
+        }
+      ],
+      "result": {
+        "name": "result",
+        "schema": {
+          "$ref": "#/components/schemas/DiagnosticsCollectResult"
         }
       }
     },

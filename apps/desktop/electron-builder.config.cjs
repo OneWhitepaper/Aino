@@ -154,6 +154,8 @@ module.exports = {
     icon: 'assets/icon.icns',
     // The afterSign hook owns notarization, including keychain-profile builds.
     notarize: false,
+    // Electron 44 no longer supports macOS 11 or 12.
+    minimumSystemVersion: '13.0',
     // The packaged client reads this generated app-update.yml by default.
     publish: channelRequest?.receiverCandidate
       ? [{ provider: 'generic', url: `${channelRequest.publicBase}/releases/darwin/stable/`, channel: 'stable' }]
@@ -282,7 +284,7 @@ module.exports = {
     maintainer: 'OneWhitepaper',
     synopsis: light
       ? 'Remote-only Aino desktop client.'
-      : 'Aino desktop workspace built on the Hermes Agent runtime.',
+      : 'Aino AI workspace for conversations, projects and agent collaboration.',
     target: ['AppImage']
   }
 }

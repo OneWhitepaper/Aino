@@ -22,6 +22,7 @@ interface RetainedAccount {
 }
 
 export interface PlatformAuth {
+  uploadDiagnostics(bundle: string, owner: PlatformDeviceOwner): ReturnType<PlatformClient['uploadDiagnostics']>
   listDevices(owner: PlatformDeviceOwner): ReturnType<PlatformClient['listDevices']>
   revokeDevice(deviceId: string, owner: PlatformDeviceOwner): ReturnType<PlatformClient['revokeDevice']>
   quote(input: Parameters<PlatformClient['quote']>[1], expectedUserId: string): ReturnType<PlatformClient['quote']>
@@ -389,6 +390,7 @@ export function createPlatformAuth({
   }
 
   const api: PlatformAuth = {
+    uploadDiagnostics: (bundle, owner) => deviceOperation(owner, token => client.uploadDiagnostics(token, bundle), false),
     listDevices: owner => deviceOperation(owner, token => client.listDevices(token), true),
     revokeDevice: (id, owner) => deviceOperation(owner, token => client.revokeDevice(token, id), false),
     quote: (input, owner) => paymentOperation(owner, token => client.quote(token, input), true),

@@ -1,12 +1,12 @@
+import path from 'node:path'
+
 // Desktop wiring of an update hold (R8 D3): the marker probe the boot and
 // pool-backend gates share, the blocked boot screen's state, and its three IPC
 // ways out. The judgement itself lives in update-marker-gate.ts; main.ts keeps
 // only the call sites.
-
-import path from 'node:path'
-
 import type { IpcMain, IpcMainInvokeEvent } from 'electron'
 
+import { PRODUCT_NAME } from './product-identity'
 import { type UpdateGateDeps, waitForUpdateClearance, type WaitForUpdateClearanceOptions } from './update-gate'
 import type { UpdateHoldWire } from './update-hold-types'
 import { cachedCreateTimeProbe } from './update-marker'
@@ -199,7 +199,7 @@ export function registerUpdateHoldIpc(ipc: IpcMain, host: UpdateHoldIpcHost) {
     }
 
     const hold = host.currentHold()
-    host.log(`[updates] user quit Hermes from the update-hold screen${hold ? ` (hold ${hold.holdId})` : ''}`)
+    host.log(`[updates] user quit ${PRODUCT_NAME} from the update-hold screen${hold ? ` (hold ${hold.holdId})` : ''}`)
     host.quit()
 
     return { ok: true }

@@ -4,4 +4,9 @@
  * (bundled installs with a damaged payload) and any future doc links point
  * at the same place.
  */
-export const DESKTOP_DOCS_URL = 'https://hermes-agent.nousresearch.com/docs/user-guide/desktop'
+import { DOCUMENTATION_URL, REPOSITORY_URL } from './brand'
+
+export const DESKTOP_DOCS_URL = DOCUMENTATION_URL
+export const RUNTIME_DOCS_URL = `${REPOSITORY_URL}/blob/main/website/docs`
+export const PROVIDER_DOCS_URL = `${RUNTIME_DOCS_URL}/integrations/providers.md`
+export const SESSION_STORAGE_RECOVERY_URL = `${RUNTIME_DOCS_URL}/user-guide/session-storage-recovery.md#when-the-three-steps-do-not-work`

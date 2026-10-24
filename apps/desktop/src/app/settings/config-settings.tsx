@@ -40,6 +40,8 @@ import { PanelEmpty } from '../overlays/panel'
 import { ConfigField } from './config-field'
 import { CONFIG_SUBPAGES, configSubpageForField } from './config-subpages'
 import { DELEGATION_ROUTE_COMPANION_KEY, DelegationRouteRow } from './delegation-route-row'
+import { DelegationRoutingSlot } from './delegation/routing-section'
+import { SubagentModelGate } from './delegation/subagent-model-gate'
 import {
   clearsEnabledToolsets,
   diffConfig,
@@ -493,7 +495,9 @@ function ConfigSettingsInner({
       {entries.map(([key, field]) => (
         <div className="scroll-mt-6" data-settings-row="" id={`setting-field-${key}`} key={key}>
           {key === 'delegation.model' ? (
-            <DelegationRouteRow config={config} onConfigChange={updateConfig} scope={writeScope ?? scopeProfile} />
+            <SubagentModelGate scope={writeScope ?? scopeProfile}>
+              <DelegationRouteRow config={config} onConfigChange={updateConfig} scope={writeScope ?? scopeProfile} />
+            </SubagentModelGate>
           ) : (
             <ConfigField
               descriptionExtra={
@@ -535,7 +539,9 @@ function ConfigSettingsInner({
     groupedFields.set(id, entries)
   }
 
-  const extraControls: Record<string, ReactNode> = {}
+  const extraControls: Record<string, ReactNode> = {
+    delegation: <DelegationRoutingSlot readScope={scopeProfile} sectionId={activeSectionId} subpage={subpage} writeScope={writeScope} />
+  }
 
   if (showDesktopSettings) {
     extraControls.desktop = (
@@ -572,7 +578,9 @@ function ConfigSettingsInner({
   const inlineModelFields = activeSectionId === 'model' && subpage === undefined
   const groupContent = new Map<string, ReactNode>()
 
-  for (const group of CONFIG_SUBPAGES[activeSectionId] ?? []) {
+  const visibleGroups = (CONFIG_SUBPAGES[activeSectionId] ?? []).filter(group => subpage === undefined || group.id === subpage)
+
+  for (const group of visibleGroups) {
     const entries = groupedFields.get(group.id) ?? []
     const extra = extraControls[group.id]
 

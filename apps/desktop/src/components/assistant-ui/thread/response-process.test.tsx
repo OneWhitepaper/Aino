@@ -163,3 +163,60 @@ it.each([false, true])(
     expect(within(container).getByText('Partial output').closest('[hidden]')).toBeNull()
   }
 )
+
+it('removes the hidden footer footprint when tools continue after the last progress paragraph', async () => {
+  const narration = {
+    ...assistantMessage(),
+    id: 'progress',
+    content: [{ type: 'text', text: progress }],
+    metadata: { custom: { interim: true } }
+  } as ThreadMessage
+
+  const continuation = {
+    ...assistantMessage(),
+    id: 'tools',
+    content: [tool],
+    status: { type: 'running' }
+  } as ThreadMessage
+
+  const { container, rerender } = render(<Transcript messages={[userMessage(), narration, continuation]} />)
+  const footer = container.querySelector('[data-slot="aui_assistant-footer"]') as HTMLElement
+  expect(footer).not.toBeNull()
+  expect(getComputedStyle(footer).display).toBe('none')
+  expect(within(container).getByText(progress).closest('[hidden]')).toBeNull()
+  expect(within(container).getByRole('button', { name: 'Read canvas.ts' })).toBeTruthy()
+
+  rerender(
+    <Transcript
+      messages={[
+        userMessage(),
+        narration,
+        { ...continuation, status: { type: 'complete', reason: 'stop' } } as ThreadMessage
+      ]}
+    />
+  )
+  expect(container.querySelector('[data-slot="aui_assistant-footer"]')).toBe(footer)
+  await waitFor(() => expect(getComputedStyle(footer).display).not.toBe('none'))
+  expect(footer.getAttribute('aria-hidden')).toBeNull()
+  expect(within(footer).getByRole('button', { name: 'Copy' })).toBeTruthy()
+})
+
+it('reserves the live tail footer without hiding a preceding completed reply', () => {
+  const current = {
+    ...assistantMessage(),
+    id: 'current',
+    status: { type: 'running' }
+  } as ThreadMessage
+
+  const { container } = render(
+    <Transcript messages={[userMessage(), assistantMessage(), userMessage('next'), current]} />
+  )
+
+  const footers = [...container.querySelectorAll<HTMLElement>('[data-slot="aui_assistant-footer"]')]
+  expect(footers).toHaveLength(2)
+  expect(footers[0].getAttribute('aria-hidden')).toBeNull()
+  expect(getComputedStyle(footers[0]).display).not.toBe('none')
+  expect(footers[1].getAttribute('aria-hidden')).toBe('true')
+  expect(getComputedStyle(footers[1]).visibility).toBe('hidden')
+  expect(getComputedStyle(footers[1]).display).not.toBe('none')
+})

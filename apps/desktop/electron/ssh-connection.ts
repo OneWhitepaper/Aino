@@ -1,3 +1,4 @@
+import { spawn } from 'node:child_process'
 /**
  * ssh-connection.ts
  *
@@ -28,8 +29,6 @@
  * timeout is treated as connection-dead so the caller does a full reconnect
  * rather than retrying in place.
  */
-
-import { spawn } from 'node:child_process'
 import crypto from 'node:crypto'
 import fs from 'node:fs'
 import net from 'node:net'
@@ -37,6 +36,7 @@ import os from 'node:os'
 import path from 'node:path'
 
 import { platformDefaultHermesHome } from './data-paths'
+import { PRODUCT_NAME } from './product-identity'
 import { type ControlMasterHolders, sharedControlMasterHolders } from './ssh-control-master-holders'
 
 const DEFAULT_CONNECT_TIMEOUT_MS = 15_000
@@ -479,7 +479,7 @@ function sshErrorMessage(kind, conn, stderr?) {
 
       return (
         `Tailscale SSH requires an interactive browser check for ${host}. ` +
-        `Hermes Desktop runs SSH non-interactively. In Terminal, run ` +
+        `${PRODUCT_NAME} runs SSH non-interactively. In Terminal, run ` +
         `\`ssh${portArg} ${host} true\`, complete the browser check, then retry. ` +
         `If checks recur, use a key-authenticated OpenSSH route or adjust the tailnet SSH check policy.`
       )

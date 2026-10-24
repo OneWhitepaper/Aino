@@ -9,6 +9,7 @@ import { triggerHaptic } from '@/lib/haptics'
 import { Bell, Play, Volume2 } from '@/lib/icons'
 import { cn } from '@/lib/utils'
 import { $completionSoundVariantId, setCompletionSoundVariantId } from '@/store/completion-sound'
+import { $hapticsMuted, setHapticsMuted } from '@/store/haptics'
 import {
   $nativeNotifyPrefs,
   NATIVE_NOTIFICATION_KINDS,
@@ -36,6 +37,7 @@ interface NotificationsSettingsProps {
 export function NotificationsSettings({ subpage }: NotificationsSettingsProps = {}) {
   const { t } = useI18n()
   const prefs = useStore($nativeNotifyPrefs)
+  const muted = useStore($hapticsMuted)
   const completionSoundVariantId = useStore($completionSoundVariantId)
   const copy = t.settings.notifications
   const showAlerts = subpage === undefined || subpage === 'alerts'
@@ -84,6 +86,13 @@ export function NotificationsSettings({ subpage }: NotificationsSettingsProps = 
         <>
           {subpage === undefined && <SectionHeading icon={Volume2} title={copy.completionSoundTitle} />}
           <SettingsGroup>
+            <ToggleRow
+              checked={muted}
+              description={copy.muteSoundsDesc}
+              id={settingElementId(SETTING_IDS.notifications.muteSounds)}
+              label={copy.muteSoundsTitle}
+              onChange={setHapticsMuted}
+            />
             <ListRow
               action={
                 <div className="flex flex-wrap items-center justify-end gap-2">

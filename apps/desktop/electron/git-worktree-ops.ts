@@ -1,12 +1,12 @@
+import fs from 'node:fs'
 // Git-driven worktree operations for the desktop "Start work" flow: spin up a
 // fresh worktree the lightest way (`git worktree add -b`), list real worktrees,
 // and remove them. Git is the source of truth; the renderer just drives these.
-
-import fs from 'node:fs'
 import path from 'node:path'
 
 import { resolveRequestedPathForIpc } from './hardening'
 import { execGit } from './no-console-git'
+import { PRODUCT_NAME } from './product-identity'
 
 function runGit(gitBin, args, cwd): Promise<string> {
   return execGit(gitBin, args, { cwd, timeoutMs: 30_000 }).then(result => {
@@ -212,7 +212,7 @@ async function ensureGitRepo(gitBin, dir) {
         '-c',
         'user.email=hermes@localhost',
         '-c',
-        'user.name=Hermes',
+        `user.name=${PRODUCT_NAME}`,
         'commit',
         '--allow-empty',
         '-m',
