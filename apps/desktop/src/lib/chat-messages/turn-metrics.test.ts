@@ -80,9 +80,11 @@ describe('reply metrics hydration', () => {
     expect(mixed.turnMetrics).toMatchObject({ duration_s: 4, non_aino_model_calls: true, billing: { source: 'aino' } })
     expect(malformed.turnMetrics).toEqual({ duration_s: 5 })
     expect(chatMessagesEquivalent(external, { ...external, turnMetrics: { ...external.turnMetrics } })).toBe(true)
-    expect(chatMessagesEquivalent(external, {
-      ...external,
-      turnMetrics: { duration_s: 3 }
-    })).toBe(false)
+    expect(
+      chatMessagesEquivalent(external, {
+        ...external,
+        turnMetrics: { duration_s: 3 }
+      })
+    ).toBe(false)
   })
 })

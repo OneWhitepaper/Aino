@@ -1,6 +1,5 @@
 'use client'
 
-
 import { AccentSwatch } from '@/components/ui/accent-swatch'
 import { Button } from '@/components/ui/button'
 import { useI18n } from '@/i18n'
@@ -26,19 +25,21 @@ export function AccentPickerCard({ onContinue }: AccentPickerCardProps) {
   return (
     <div className="grid gap-3">
       <div className="flex flex-wrap items-center gap-2.5 p-1" role="group">
-        {accentsFor(renderedMode === 'dark').filter(swatch => swatch.id === 'mono').map(swatch => {
-          const value = swatch.id === 'nous' ? null : swatch.id
+        {accentsFor(renderedMode === 'dark')
+          .filter(swatch => swatch.id === 'mono')
+          .map(swatch => {
+            const value = swatch.id === 'nous' ? null : swatch.id
 
-          return (
-            <AccentSwatch
-              active={staged?.value === value}
-              hex={swatch.hex}
-              key={swatch.id}
-              name={swatch.name}
-              onPick={() => look.stage(value)}
-            />
-          )
-        })}
+            return (
+              <AccentSwatch
+                active={staged?.value === value}
+                hex={swatch.hex}
+                key={swatch.id}
+                name={swatch.name}
+                onPick={() => look.stage(value)}
+              />
+            )
+          })}
       </div>
       <div>
         <Button className={CARD_ACTION_CLASS} disabled={!staged} onClick={() => look.commit(onContinue)} size="sm">

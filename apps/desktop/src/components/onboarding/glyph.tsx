@@ -147,12 +147,7 @@ export function HackeryButton({
   onClick: () => void
 }) {
   return (
-    <Button
-      disabled={disabled}
-      onClick={onClick}
-      size="lg"
-      type="button"
-    >
+    <Button disabled={disabled} onClick={onClick} size="lg" type="button">
       {loading ? <Loader2 className="size-3 animate-spin" /> : null}
       {label}
     </Button>

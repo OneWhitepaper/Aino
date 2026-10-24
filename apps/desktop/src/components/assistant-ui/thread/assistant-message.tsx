@@ -1189,7 +1189,9 @@ const ErrorRecoveryActions: FC = () => {
           {copy.errorOpenBillingSettings}
         </button>
       )}
-      {recovery === null && plan.switchProvider && inRouter && <SwitchProviderAction label={switchProviderLabel(copy, surface)} />}
+      {recovery === null && plan.switchProvider && inRouter && (
+        <SwitchProviderAction label={switchProviderLabel(copy, surface)} />
+      )}
       {plan.diagnostics && (
         <>
           {localFolders && (

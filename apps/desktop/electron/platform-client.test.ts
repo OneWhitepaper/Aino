@@ -48,9 +48,17 @@ describe('platform client', () => {
   })
 
   it('reads exact wallet balances separately from subscriptions and only configured desktop payment methods', async () => {
-    const summary = { currency: 'USD', balance: '1234567890.12345678', available_balance: '1234567890.12345678',
-      frozen_balance: '2.00000000', payment_enabled: false, updated_at: '2026-09-16T00:00:00Z',
-      active_subscriptions: [{ id: '7', name: 'Fixture quota', expires_at: '2026-10-16T00:00:00Z', remaining: null, unit: 'USD' }] }
+    const summary = {
+      currency: 'USD',
+      balance: '1234567890.12345678',
+      available_balance: '1234567890.12345678',
+      frozen_balance: '2.00000000',
+      payment_enabled: false,
+      updated_at: '2026-09-16T00:00:00Z',
+      active_subscriptions: [
+        { id: '7', name: 'Fixture quota', expires_at: '2026-10-16T00:00:00Z', remaining: null, unit: 'USD' }
+      ]
+    }
 
     const seen: string[] = []
 
@@ -58,9 +66,18 @@ describe('platform client', () => {
       seen.push(`${req.method} ${req.url}`)
       expect(req.headers.authorization).toBe('Bearer wallet-access')
 
-      const data = req.url === '/api/v1/desktop/billing-summary' ? summary : { balance_disabled: false, help_text: '',
-        methods: { alipay: { payment_type: 'alipay', currency: 'CNY', single_min: 0.01, single_max: 500 },
-          stripe: { payment_type: 'stripe', currency: 'USD', single_min: 1, single_max: 500 } }, stripe_publishable_key: 'not-for-desktop' }
+      const data =
+        req.url === '/api/v1/desktop/billing-summary'
+          ? summary
+          : {
+              balance_disabled: false,
+              help_text: '',
+              methods: {
+                alipay: { payment_type: 'alipay', currency: 'CNY', single_min: 0.01, single_max: 500 },
+                stripe: { payment_type: 'stripe', currency: 'USD', single_min: 1, single_max: 500 }
+              },
+              stripe_publishable_key: 'not-for-desktop'
+            }
 
       res.setHeader('content-type', 'application/json')
       res.end(JSON.stringify({ code: 0, message: 'ok', data }))
@@ -73,7 +90,16 @@ describe('platform client', () => {
     expect(wallet.active_subscriptions[0].remaining).toBeNull()
     const checkout = await client.checkoutInfo('wallet-access')
     expect(checkout.payment_enabled).toBe(false)
-    expect(checkout.methods).toEqual([{ id: 'alipay', display_name: '', currency: 'CNY', min_amount: '0.01000000', max_amount: '500.00000000', available: false }])
+    expect(checkout.methods).toEqual([
+      {
+        id: 'alipay',
+        display_name: '',
+        currency: 'CNY',
+        min_amount: '0.01000000',
+        max_amount: '500.00000000',
+        available: false
+      }
+    ])
     expect(checkout).not.toHaveProperty('stripe_publishable_key')
     expect(seen.every(request => request.startsWith('GET '))).toBe(true)
   })
@@ -91,21 +117,58 @@ describe('platform client', () => {
       expect(url.searchParams.has('user_id')).toBe(false)
       expect(req.headers.authorization).toBe('Bearer fixture-access')
       res.setHeader('content-type', 'application/json')
-      res.end(JSON.stringify({ code: 0, message: 'ok', data: { page: 1, page_size: 50, total: 1, items: [{
-        id: 42, request_id: 'server-request', model: 'fixture-model', session_id: null, desktop_turn_id: turn,
-        desktop_call_id: 'cbec3bce-4de2-4fbe-a6ee-5ab3e7d990cb', desktop_purpose: 'chat',
-        actual_cost_decimal: '0.00000001', actual_cost: 999, settlement_status: 'settled', currency: 'USD',
-        created_at: '2026-09-16T00:00:00Z', input_tokens: 125, output_tokens: 20, cache_read_tokens: 60, api_key: { key: 'fixture-secret' }
-      }] } }))
+      res.end(
+        JSON.stringify({
+          code: 0,
+          message: 'ok',
+          data: {
+            page: 1,
+            page_size: 50,
+            total: 1,
+            items: [
+              {
+                id: 42,
+                request_id: 'server-request',
+                model: 'fixture-model',
+                session_id: null,
+                desktop_turn_id: turn,
+                desktop_call_id: 'cbec3bce-4de2-4fbe-a6ee-5ab3e7d990cb',
+                desktop_purpose: 'chat',
+                actual_cost_decimal: '0.00000001',
+                actual_cost: 999,
+                settlement_status: 'settled',
+                currency: 'USD',
+                created_at: '2026-09-16T00:00:00Z',
+                input_tokens: 125,
+                output_tokens: 20,
+                cache_read_tokens: 60,
+                api_key: { key: 'fixture-secret' }
+              }
+            ]
+          }
+        })
+      )
     })
 
     const client = createPlatformClient({ origin, allowInsecureLoopback: true })
-    const page = await client.listUsage('fixture-access', { page: 1, page_size: 50, desktop_turn_id: turn, model: 'fixture-model', timezone: 'Asia/Shanghai', start_date: '2026-09-16' })
+    const page = await client.listUsage('fixture-access', {
+      page: 1,
+      page_size: 50,
+      desktop_turn_id: turn,
+      model: 'fixture-model',
+      timezone: 'Asia/Shanghai',
+      start_date: '2026-09-16'
+    })
     expect(page.items[0].actual_cost_decimal).toBe('0.00000001')
     expect(page.items[0]).not.toHaveProperty('api_key')
     expect(page.items[0]).not.toHaveProperty('actual_cost')
     expect(page.items[0].id).toBe('42')
-    expect(page.items[0]).toMatchObject({ input_tokens: 125, output_tokens: 20, cache_read_tokens: 60, cache_creation_tokens: null })
+    expect(page.items[0]).toMatchObject({
+      input_tokens: 125,
+      output_tokens: 20,
+      cache_read_tokens: 60,
+      cache_creation_tokens: null
+    })
   })
   it('uses the B2 credential route and connection/device scope', async () => {
     let observed: unknown
@@ -181,10 +244,19 @@ describe('platform client', () => {
 
     const origin = await serve((_req, res) => {
       res.setHeader('content-type', 'application/json')
-      res.end(JSON.stringify({ code: 0, message: 'ok', data: {
-        id: 17, email: '', phone_bound: true,
-        auth_bindings: { phone: { subject_hint: '+86 139****0000' } }, ...names
-      } }))
+      res.end(
+        JSON.stringify({
+          code: 0,
+          message: 'ok',
+          data: {
+            id: 17,
+            email: '',
+            phone_bound: true,
+            auth_bindings: { phone: { subject_hint: '+86 139****0000' } },
+            ...names
+          }
+        })
+      )
     })
 
     const client = createPlatformClient({ origin, allowInsecureLoopback: true })
@@ -192,7 +264,10 @@ describe('platform client', () => {
     for (const fields of [{ username: '' }, { display_name: '', username: '' }]) {
       names = fields
       await expect(client.profile('fixture-access')).resolves.toEqual({
-        id: '17', display_name: '', phone_masked: '+86 139****0000', email: ''
+        id: '17',
+        display_name: '',
+        phone_masked: '+86 139****0000',
+        email: ''
       })
     }
   })
@@ -202,15 +277,30 @@ describe('platform client', () => {
 
     const origin = await serve((_req, res) => {
       res.setHeader('content-type', 'application/json')
-      res.end(JSON.stringify({ code: 0, message: 'ok', data: {
-        id: 17, email: '', phone_bound: true,
-        auth_bindings: { phone: { subject_hint: '+86 139****0000' } }, ...names
-      } }))
+      res.end(
+        JSON.stringify({
+          code: 0,
+          message: 'ok',
+          data: {
+            id: 17,
+            email: '',
+            phone_bound: true,
+            auth_bindings: { phone: { subject_hint: '+86 139****0000' } },
+            ...names
+          }
+        })
+      )
     })
 
     const client = createPlatformClient({ origin, allowInsecureLoopback: true })
 
-    for (const fields of [{ username: 42 }, { username: {} }, { username: false }, { display_name: [], username: 'Ada' }, {}]) {
+    for (const fields of [
+      { username: 42 },
+      { username: {} },
+      { username: false },
+      { display_name: [], username: 'Ada' },
+      {}
+    ]) {
       names = fields
       await expect(client.profile('fixture-access')).rejects.toMatchObject({ code: 'invalid_response' })
     }

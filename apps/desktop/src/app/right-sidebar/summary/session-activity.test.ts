@@ -25,6 +25,7 @@ it('retains exact child outcomes across parent continuations but releases them w
       content: JSON.stringify({ status: 'dispatched', subagent_ids: ['good', 'bad'] })
     }
   ]
+
   const history = summaryHistoryActivity(toChatMessages(raw), raw).delegations
 
   upsertSubagent('owner', { subagent_id: 'delegate-tool:dispatch:0', goal: 'Review', status: 'completed' })

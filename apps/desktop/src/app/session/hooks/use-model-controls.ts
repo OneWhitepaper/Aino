@@ -86,7 +86,11 @@ function isCurrentDraftScope(scopeKey: string): boolean {
   )
 }
 
-function modelSwitchPath(sessionId: null | string, primary: boolean, nextProvider: string): 'blocked' | 'managed' | 'byok' {
+function modelSwitchPath(
+  sessionId: null | string,
+  primary: boolean,
+  nextProvider: string
+): 'blocked' | 'managed' | 'byok' {
   if (platformHistoryOwner(sessionId) !== null) {
     return 'blocked'
   }

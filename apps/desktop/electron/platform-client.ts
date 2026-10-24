@@ -21,7 +21,15 @@ import { parsePlatformCheckoutInfo, parsePlatformWalletSummary } from './platfor
 import { parsePlatformDeviceId, parsePlatformDevices } from './platform-device-contract'
 import { parseDiagnosticReceipt, validateDiagnosticBundle } from './platform-diagnostics-contract'
 import { parsePlatformModel } from './platform-model-contract'
-import { parsePaymentQuote, parsePaymentQuoteInput, parsePlatformCreateOrderInput, parsePlatformOrder, parsePlatformOrderId, parsePlatformOrderPage, parsePlatformOrderQuery } from './platform-payment-contract'
+import {
+  parsePaymentQuote,
+  parsePaymentQuoteInput,
+  parsePlatformCreateOrderInput,
+  parsePlatformOrder,
+  parsePlatformOrderId,
+  parsePlatformOrderPage,
+  parsePlatformOrderQuery
+} from './platform-payment-contract'
 import type { PlatformTokenSet } from './platform-token-store'
 import { parsePlatformUsagePage, parsePlatformUsageQuery } from './platform-usage-contract'
 
@@ -194,7 +202,13 @@ export function createPlatformClient({
 }): PlatformClient {
   const origin = validatePlatformOrigin(rawOrigin, allowInsecureLoopback)
 
-  async function request(method: string, endpoint: string, body?: unknown, token?: string, requestTimeoutMs = timeoutMs): Promise<unknown> {
+  async function request(
+    method: string,
+    endpoint: string,
+    body?: unknown,
+    token?: string,
+    requestTimeoutMs = timeoutMs
+  ): Promise<unknown> {
     const controller = new AbortController()
     const timer = setTimeout(() => controller.abort(), requestTimeoutMs)
 
@@ -336,15 +350,27 @@ export function createPlatformClient({
     origin,
     async uploadDiagnostics(token, bundle) {
       // Bundles are much larger than account JSON; give slow links time without changing login deadlines.
-      return parseDiagnosticReceipt(await request('POST', '/desktop/diagnostics', { bundle_base64: validateDiagnosticBundle(bundle) }, token, 120_000))
+      return parseDiagnosticReceipt(
+        await request(
+          'POST',
+          '/desktop/diagnostics',
+          { bundle_base64: validateDiagnosticBundle(bundle) },
+          token,
+          120_000
+        )
+      )
     },
     async listDevices(token) {
       return parsePlatformDevices(await request('GET', '/desktop/devices', undefined, token))
     },
     async revokeDevice(token, deviceId) {
-      const data = object(await request('DELETE', `/desktop/devices/${parsePlatformDeviceId(deviceId)}`, undefined, token))
+      const data = object(
+        await request('DELETE', `/desktop/devices/${parsePlatformDeviceId(deviceId)}`, undefined, token)
+      )
 
-      if (data.revoked !== true) { throw new PlatformClientError('invalid_response') }
+      if (data.revoked !== true) {
+        throw new PlatformClientError('invalid_response')
+      }
 
       return { revoked: true }
     },
@@ -354,9 +380,18 @@ export function createPlatformClient({
     async createOrder(token, input) {
       const { amount, ...intent } = parsePlatformCreateOrderInput(input)
 
-      const data = object(await request('POST', '/payment/orders', {
-        ...intent, amount_decimal: amount, payment_source: 'aino_desktop'
-      }, token))
+      const data = object(
+        await request(
+          'POST',
+          '/payment/orders',
+          {
+            ...intent,
+            amount_decimal: amount,
+            payment_source: 'aino_desktop'
+          },
+          token
+        )
+      )
 
       return parsePlatformOrderId(data.order_id, 'invalid_response')
     },
@@ -364,7 +399,9 @@ export function createPlatformClient({
       const id = parsePlatformOrderId(orderId)
       const order = parsePlatformOrder(await request('GET', `/payment/orders/${id}`, undefined, token), now())
 
-      if (order.order_id !== id) { throw new PlatformClientError('invalid_response') }
+      if (order.order_id !== id) {
+        throw new PlatformClientError('invalid_response')
+      }
 
       return order
     },
@@ -497,7 +534,9 @@ export function createPlatformClient({
       return data.map(parsePlatformModel)
     },
     async listUsage(token, input) {
-      const query = new URLSearchParams(Object.entries(parsePlatformUsageQuery(input)).map(([key, value]) => [key, String(value)]))
+      const query = new URLSearchParams(
+        Object.entries(parsePlatformUsageQuery(input)).map(([key, value]) => [key, String(value)])
+      )
 
       return parsePlatformUsagePage(await request('GET', `/usage?${query}`, undefined, token))
     },

@@ -257,22 +257,24 @@ export const zhOverrides = {
       diskFull: '磁盘空间已满，Aino 无法启动。',
       portInUse: 'Aino 需要的网络端口正被其他程序占用。',
       installMissing: 'Aino 安装文件不完整，请选择“修复安装”。'
+    },
+    updateHold: {
+      description: 'Hermes 正在等待更新结束，避免加载仍在修改的文件。等待解除后会自动启动。',
+      heldUnknown: '更新程序已退出，但其启动的进程仍占用 Hermes 安装目录。',
+
+      unverified: '更新助手暂时无法确认哪个进程占用了安装目录，Hermes 会继续检查。',
+
+      recoveryHint:
+        '通常等待几分钟即可恢复。如果仍未恢复，请退出 Hermes，结束残留的 git 或 hermes 进程（或重启电脑），然后重新打开。',
+
+      confirmTitle: '更新仍占用安装目录，是否继续启动 Hermes？',
+
+      confirmBody:
+        '残留的更新进程可能仍在修改文件。现在启动可能加载尚未完成更新的安装内容，导致应用无法工作，直到重新更新。Hermes 会记录此选择，并保留更新标记。',
+
+      startAnywayRefused: '启动前安装目录的占用状态发生了变化，请核对后重试。'
     }
-  ,
-"updateHold":{"description":"Hermes 正在等待更新结束，避免加载仍在修改的文件。等待解除后会自动启动。",
-"heldUnknown":"更新程序已退出，但其启动的进程仍占用 Hermes 安装目录。",
-
-"unverified":"更新助手暂时无法确认哪个进程占用了安装目录，Hermes 会继续检查。",
-
-"recoveryHint":"通常等待几分钟即可恢复。如果仍未恢复，请退出 Hermes，结束残留的 git 或 hermes 进程（或重启电脑），然后重新打开。",
-
-"confirmTitle":"更新仍占用安装目录，是否继续启动 Hermes？",
-
-"confirmBody":"残留的更新进程可能仍在修改文件。现在启动可能加载尚未完成更新的安装内容，导致应用无法工作，直到重新更新。Hermes 会记录此选择，并保留更新标记。",
-
-"startAnywayRefused":"启动前安装目录的占用状态发生了变化，请核对后重试。",
-},
-},
+  },
 
   notifications: {
     sharedProfileWarning:
@@ -383,24 +385,23 @@ export const zhOverrides = {
   },
 
   sendDiagnostics: {
-    title: "向 Aino 发送诊断信息",
+    title: '向 Aino 发送诊断信息',
     privacyNotice:
-      "这会将私有诊断包上传至你的 Aino 账号服务。包含系统信息、配置状态（不含密钥本身），以及智能体、网关和桌面端日志（每份最多 512 KB）。日志可能包含对话、工具输出和文件路径。上传前会脱敏密钥，但仍可能含有其他敏感内容。仅授权的 Aino 管理员可查看。14 天后立即停止访问，随后 1 小时内清除在线数据；已有备份按部署备份策略清理。",
+      '这会将私有诊断包上传至你的 Aino 账号服务。包含系统信息、配置状态（不含密钥本身），以及智能体、网关和桌面端日志（每份最多 512 KB）。日志可能包含对话、工具输出和文件路径。上传前会脱敏密钥，但仍可能含有其他敏感内容。仅授权的 Aino 管理员可查看。14 天后立即停止访问，随后 1 小时内清除在线数据；已有备份按部署备份策略清理。',
     upload: '上传',
     uploading: '上传中…',
     cancel: '取消',
     close: '关闭',
-    copyLink: "复制诊断编号",
-    uploadIdFallback: id => "诊断编号：" + id,
+    copyLink: '复制诊断编号',
+    uploadIdFallback: id => '诊断编号：' + id,
     doneTitle: '诊断信息已发送',
-    doneDescription:
-      "诊断包已私密上传至 Aino。反馈问题时提供此编号即可，请勿公开日志正文。",
+    doneDescription: '诊断包已私密上传至 Aino。反馈问题时提供此编号即可，请勿公开日志正文。',
     failedTitle: '上传失败',
     failedHint:
-      "请登录 Aino 账号后重试；旧版运行时请先更新。仅查看本地报告、不上传，可运行 `hermes debug share --local`。",
-    handoffLead: "通过以下入口向 Aino 反馈：",
+      '请登录 Aino 账号后重试；旧版运行时请先更新。仅查看本地报告、不上传，可运行 `hermes debug share --local`。',
+    handoffLead: '通过以下入口向 Aino 反馈：',
     links: {
-      github: 'GitHub Issues',
+      github: 'GitHub Issues'
     },
     gatewayUnavailable: 'Hermes 网关不可用',
 
@@ -780,11 +781,16 @@ export const zhOverrides = {
         installUncertain: 'Hermes 已停止等待安装结果，但插件可能仍在安装。关闭此窗口并刷新插件列表，然后再尝试安装。',
         desktopFailed: '桌面插件安装失败',
         missingEnv: (_name, vars) => `缺少环境变量：${vars}。请在设置 → 密钥中添加。`,
-        verified: '已验证', unverified: '未验证', reviewedByNous: '已由 Nous 审核。',
+        verified: '已验证',
+        unverified: '未验证',
+        reviewedByNous: '已由 Nous 审核。',
         installsAndEnables: profile => `安装到 ${profile}，并立即启用。`,
-        installsOnly: profile => `安装到 ${profile}。`, advanced: '高级', versionLabel: '版本',
+        installsOnly: profile => `安装到 ${profile}。`,
+        advanced: '高级',
+        versionLabel: '版本',
         reviewedPin: sha => (sha ? `已审核的固定提交 ${sha}` : '已审核的固定提交'),
-        latestCommit: '最新提交', nothingToInstall: '此包在这里没有可安装的内容。'
+        latestCommit: '最新提交',
+        nothingToInstall: '此包在这里没有可安装的内容。'
       },
       errors: {
         desktopUnavailable: '桌面插件不可用',
@@ -1017,10 +1023,9 @@ export const zhOverrides = {
         ember: { label: '余烬', description: '温暖的深红与青铜色——锻造氛围' },
         mono: { label: '单色', description: '简洁的灰度界面——极简且专注' },
         slate: { label: '石板', description: '冷调石板蓝——专注开发者主题' },
-        cyberpunk: { label: '赛博朋克', description: '黑底霓虹绿——矩阵终端风格' }
-      ,
-"classic":{"label":"经典","description":"经典终端风格配色"},
-},
+        cyberpunk: { label: '赛博朋克', description: '黑底霓虹绿——矩阵终端风格' },
+        classic: { label: '经典', description: '经典终端风格配色' }
+      },
 
       themeImportErrors: {
         invalidJson: '主题文件不是有效的 JSON。',
@@ -1291,10 +1296,9 @@ export const zhOverrides = {
         echoTranscripts: '将语音消息的原始 🎙️ 转写文本发回聊天。',
         elevenlabs: {
           languageCode: '可选的 ISO-639-3 语言代码。留空让 ElevenLabs 自动检测。'
-        }
-      ,
-"streaming":"说话时实时显示转写文字（支持 OpenAI、xAI、ElevenLabs）；发生错误时回退到录音转写。",
-},
+        },
+        streaming: '说话时实时显示转写文字（支持 OpenAI、xAI、ElevenLabs）；发生错误时回退到录音转写。'
+      },
       tts: {
         xai: {
           voiceId: 'xAI 语音 ID（例如 eve）或自定义语音 ID。',
@@ -1341,10 +1345,9 @@ export const zhOverrides = {
           description: '移除应用、智能体和所有用户数据——配置、聊天记录、定时任务、密钥和日志。',
           consequence: '全部内容——聊天图形界面、Hermes 智能体以及你的所有配置、聊天记录、密钥和日志'
         }
-      }
-    ,
-"managedBody":"此安装由系统管理，Hermes 无法自行移除。",
-},
+      },
+      managedBody: '此安装由系统管理，Hermes 无法自行移除。'
+    },
     poolLimits: {
       warmBotBackendsAria: '保持预热的档案连接数',
       warmBotBackendsTitle: '保持预热的档案连接数',
@@ -2554,8 +2557,8 @@ export const zhOverrides = {
     archive: '归档',
     skillArchivedTitle: '技能已归档',
     skillArchivedMessage: '可通过 hermes curator restore 恢复。',
-  // The catalog moved to its own capabilities page; its copy lives under the
-  // top-level catalog keys above.
+    // The catalog moved to its own capabilities page; its copy lives under the
+    // top-level catalog keys above.
     tabPlugins: '插件',
     plugins: {
       agentTitle: 'Agent 插件',
@@ -3984,7 +3987,6 @@ export const zhOverrides = {
 
     recent: '最近'
   },
-
 
   composer: {
     message: '消息',
@@ -5761,12 +5763,9 @@ export const zhOverrides = {
       securityHeading: '安全',
       scan: { passed: '扫描通过', warnings: '扫描发现警告', failed: '扫描未通过' },
       requirementsLabel: '要求',
-      credentialsHeading: '凭据'
-    ,
-"phase":{"python_packages":"正在安装 Python 依赖包…",
-"loading_tools":"正在加载工具…",
-},
-},
+      credentialsHeading: '凭据',
+      phase: { python_packages: '正在安装 Python 依赖包…', loading_tools: '正在加载工具…' }
+    },
     mcpSetup: {
       installTitle: '添加 MCP 服务器',
       enableTitle: '启用 MCP 服务器',
@@ -5979,18 +5978,17 @@ export const zhOverrides = {
           count: count => `${count} 个命令`,
           past: '已运行',
           present: '正在运行'
-        }
-      ,
-"search":{count: (count: number) => count + " 次查询", past: "已搜索", present: "正在搜索"},
+        },
+        search: { count: (count: number) => count + ' 次查询', past: '已搜索', present: '正在搜索' },
 
-"read":{count: (count: number) => count + " 个网页", past: "已读取", present: "正在读取"},
+        read: { count: (count: number) => count + ' 个网页', past: '已读取', present: '正在读取' },
 
-"browse":{count: (count: number) => count + " 个网页", past: "已打开", present: "正在打开"},
+        browse: { count: (count: number) => count + ' 个网页', past: '已打开', present: '正在打开' },
 
-"interact":{count: (count: number) => count + " 次浏览器操作", past: "已执行", present: "正在执行"},
+        interact: { count: (count: number) => count + ' 次浏览器操作', past: '已执行', present: '正在执行' },
 
-"analyze":{count: (count: number) => count + " 张图片", past: "已分析", present: "正在分析"},
-}
+        analyze: { count: (count: number) => count + ' 张图片', past: '已分析', present: '正在分析' }
+      }
     },
     markdown: {
       alerts: {
@@ -6722,18 +6720,18 @@ export const zhOverrides = {
       hintDestructive: { label: '破坏性', long: '无法在此处撤销该更改。' },
       hintIdempotent: { label: '可重复', long: '重复运行与运行一次的效果相同。' },
       hintOpenWorld: { label: '外部', long: '会访问此应用之外的内容。' }
+    },
+    accounts: {
+      aliasHint: '使用小写字母、数字和连字符，最多 32 个字符，例如 work 或 home。',
+      aliasInvalid: '请使用小写字母、数字和连字符，并以字母或数字开头。',
+
+      aliasTaken: '此名称已被使用。',
+
+      renameGone: '此账户已不存在，可能已被移除或在重新连接后被替换。',
+
+      removeBody: 'Hermes 将停止使用此账户，其他账户仍保持连接。'
     }
-  ,
-"accounts":{"aliasHint":"使用小写字母、数字和连字符，最多 32 个字符，例如 work 或 home。",
-"aliasInvalid":"请使用小写字母、数字和连字符，并以字母或数字开头。",
-
-"aliasTaken":"此名称已被使用。",
-
-"renameGone":"此账户已不存在，可能已被移除或在重新连接后被替换。",
-
-"removeBody":"Hermes 将停止使用此账户，其他账户仍保持连接。",
-},
-},
+  },
 
   platformRechargeErrors: {
     conflict: '较早的请求已创建订单。请关闭此窗口，在订单历史中打开原订单，不要重复付款。',

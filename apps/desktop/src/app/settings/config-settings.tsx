@@ -540,7 +540,14 @@ function ConfigSettingsInner({
   }
 
   const extraControls: Record<string, ReactNode> = {
-    delegation: <DelegationRoutingSlot readScope={scopeProfile} sectionId={activeSectionId} subpage={subpage} writeScope={writeScope} />
+    delegation: (
+      <DelegationRoutingSlot
+        readScope={scopeProfile}
+        sectionId={activeSectionId}
+        subpage={subpage}
+        writeScope={writeScope}
+      />
+    )
   }
 
   if (showDesktopSettings) {
@@ -578,7 +585,9 @@ function ConfigSettingsInner({
   const inlineModelFields = activeSectionId === 'model' && subpage === undefined
   const groupContent = new Map<string, ReactNode>()
 
-  const visibleGroups = (CONFIG_SUBPAGES[activeSectionId] ?? []).filter(group => subpage === undefined || group.id === subpage)
+  const visibleGroups = (CONFIG_SUBPAGES[activeSectionId] ?? []).filter(
+    group => subpage === undefined || group.id === subpage
+  )
 
   for (const group of visibleGroups) {
     const entries = groupedFields.get(group.id) ?? []

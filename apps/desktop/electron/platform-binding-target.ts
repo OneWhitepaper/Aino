@@ -20,7 +20,9 @@ export interface ManagedGatewayDescriptor {
 }
 
 function bindingProfile(descriptor: ManagedGatewayDescriptor, profile: string): string {
-  const shared = descriptor.gatewayEndpoint || descriptor.sharedRemote ||
+  const shared =
+    descriptor.gatewayEndpoint ||
+    descriptor.sharedRemote ||
     (descriptor.mode !== 'local' && descriptor.remoteKind !== 'ssh')
 
   return shared ? profile || 'default' : 'default'
@@ -93,7 +95,9 @@ export async function resolvePlatformBindingTarget(input: {
           ? buildGatewayWsUrlWithTicket(descriptor.baseUrl, await input.mintTicket(descriptor.baseUrl, headers))
           : descriptor.wsUrl
 
-      if (!wsUrl) {throw new Error('Native gateway ticket dial unavailable')}
+      if (!wsUrl) {
+        throw new Error('Native gateway ticket dial unavailable')
+      }
 
       if (input.readConfiguration() !== configuration || input.readIdentity(descriptor.baseUrl) !== identity) {
         throw new Error('binding_cancelled')

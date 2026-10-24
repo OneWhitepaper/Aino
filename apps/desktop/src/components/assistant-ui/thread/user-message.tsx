@@ -497,10 +497,7 @@ export const UserMessage: FC<{
           // it. No negative margin: -mt-* pulls the row up into the sticky box,
           // where the sticky-prompt clip hides its top even at rest. Image refs
           // render as thumbnails, file refs as chips; no border.
-          <UserMessageAttachments
-            attachmentRefs={attachmentRefs}
-            chipOnlyTurn={chipOnlyTurn}
-          />
+          <UserMessageAttachments attachmentRefs={attachmentRefs} chipOnlyTurn={chipOnlyTurn} />
         }
         durableRowId={durableRowId}
         messageId={messageId}

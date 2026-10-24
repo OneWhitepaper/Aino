@@ -47,13 +47,20 @@ function persistedRowIds(message: SessionMessage): number[] {
 function persistedImageRefs(text: string) {
   const suffix = /\n\n((?:\[Image attached(?: at)?: [^\n]+\]\n)+)((?:\[screenshot\](?:\n|$))+)$/.exec(text)
 
-  if (!suffix) { return extractImageRefs(text) }
+  if (!suffix) {
+    return extractImageRefs(text)
+  }
   const paths = [...suffix[1].matchAll(/^\[Image attached(?: at)?: (.+)\]$/gm)].map(match => match[1])
 
-  if (paths.length !== suffix[2].split('[screenshot]').length - 1) { return extractImageRefs(text) }
+  if (paths.length !== suffix[2].split('[screenshot]').length - 1) {
+    return extractImageRefs(text)
+  }
   const extracted = extractImageRefs(text.slice(0, suffix.index))
 
-  return { cleanedText: extracted.cleanedText, refs: [...extracted.refs, ...paths.map(path => `@image:${formatRefValue(path)}`)] }
+  return {
+    cleanedText: extracted.cleanedText,
+    refs: [...extracted.refs, ...paths.map(path => `@image:${formatRefValue(path)}`)]
+  }
 }
 
 // Gateway routing note for Discord turns (gateway/run_inbound.py::discord_triggering_note).
@@ -470,6 +477,7 @@ export function toChatMessages(messages: SessionMessage[]): ChatMessage[] {
 
     const rowIds = persistedRowIds(message)
     const rowId = rowIds[0]
+
     if (message.role === 'assistant') {
       nearestAssistant = message
     } else if (message.role === 'user' || message.role === 'system') {

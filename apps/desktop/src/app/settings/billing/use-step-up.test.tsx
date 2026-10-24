@@ -109,6 +109,7 @@ describe('useStepUpFlow', () => {
       const before = result.current.message
       await act(() => language.setLocale('zh'))
       const copy = TRANSLATIONS.zh.billing
+
       const title =
         status === 'refusal'
           ? copy.refusal.sessionLoggedOutTitle

@@ -1156,11 +1156,23 @@ export function LocalFilePreview({
   const closeAction = onClose ? { label: t.common.close, onClick: onClose } : undefined
 
   if (state.error) {
-    return <PreviewEmptyState body={localizedPreviewError(t, state.error)} primaryAction={closeAction} title={t.preview.unavailable} />
+    return (
+      <PreviewEmptyState
+        body={localizedPreviewError(t, state.error)}
+        primaryAction={closeAction}
+        title={t.preview.unavailable}
+      />
+    )
   }
 
   if (pdfError) {
-    return <PreviewEmptyState body={localizedPreviewError(t, pdfError)} primaryAction={closeAction} title={t.preview.unavailable} />
+    return (
+      <PreviewEmptyState
+        body={localizedPreviewError(t, pdfError)}
+        primaryAction={closeAction}
+        title={t.preview.unavailable}
+      />
+    )
   }
 
   if (

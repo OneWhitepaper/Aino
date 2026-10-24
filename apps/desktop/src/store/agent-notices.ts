@@ -129,9 +129,10 @@ export function noticeAccent(payload: AgentNoticePayload | undefined): string | 
  *   instead of stacking, and a key-matched `notification.clear` can dismiss it.
  */
 export function noticeToToast(payload: AgentNoticePayload | undefined): NotificationInput | null {
-  const text = payload?.code === 'auxiliary_billing_override' && payload.billing_source
-    ? translateNow('notifications.auxiliaryBillingSource', payload.billing_source)
-    : payload?.text?.trim()
+  const text =
+    payload?.code === 'auxiliary_billing_override' && payload.billing_source
+      ? translateNow('notifications.auxiliaryBillingSource', payload.billing_source)
+      : payload?.text?.trim()
 
   // A window plan's limit line is said by the refused turn's error card (same
   // sentence, with Open billing / Retry at reset); a toast would say it twice.
