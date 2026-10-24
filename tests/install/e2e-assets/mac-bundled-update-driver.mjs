@@ -42,7 +42,7 @@ const { values } = parseArgs({
     'mock-url': { type: 'string' },
     'platform-account-env': { type: 'string' },
     'close-timeout-ms': { type: 'string', default: '420000' },
-    'retry-legacy-verification-timeout': { type: 'boolean', default: false },
+    'retry-legacy-verification-timeout': { type: 'boolean', default: process.env.HERMES_E2E_LEGACY_RETRY === 'true' },
   },
 });
 
