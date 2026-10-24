@@ -93,6 +93,7 @@ No parallel delegation manager, account manager, scheduler or model tool was add
 | Occurrence-aware code health | Final integration commit: 24 retained allowed findings / zero unwaived blockers; exit zero |
 | Linux catalog lane | 29 files / 629 passed / zero failures, retries disabled; original five fixture failures reproduced before the repair |
 | Hosted cross-platform source CI | In progress; the first catalog run exposed a Linux-only fixture pin mismatch, documented below |
+| Hosted Nix package checks | Initial desktop-backend probe failed; test-brand/font-environment repair awaiting hosted validation |
 | Hosted release/install/update E2E | Not run by the ordinary PR workflow; skipped jobs are not counted as passes |
 
 These are separate results; a passing focused rerun does not rewrite a failing
@@ -173,6 +174,14 @@ initial broad run as an all-green first attempt.
   The first broad container attempt also lacked the PM-installed `uv` directory
   on PATH; supplying the actual toolchain path resolved its setup errors without
   modifying the tests or dependency policy.
+- The first Nix package build completed, but its headless desktop-backend probe
+  did not observe readiness. The probe still matched literal Hermes log lines
+  although the retained Aino branding now renders the existing product name;
+  its minimal build sandbox also reported missing font configuration and a
+  renderer font assertion. The probe now imports the existing desktop identity,
+  carries a Nix-generated font configuration for the sandbox, and includes the
+  desktop log in timeout diagnostics. The production launcher and backend
+  selection policy are unchanged. Hosted validation of this repair is pending.
 
 ## Evidence and remaining boundaries
 

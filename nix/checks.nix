@@ -1073,6 +1073,10 @@ json.dump(sorted(leaf_paths(DEFAULT_CONFIG)), sys.stdout, indent=2)
         # A pre-existing CLI install must not override the package's backend.
         desktop-backend = pkgs.runCommand "hermes-desktop-backend" {
           nativeBuildInputs = [ hermes-agent.python pkgs.cage ];
+          # The build sandbox has neither a host font configuration nor fonts.
+          FONTCONFIG_FILE = pkgs.makeFontsConf {
+            fontDirectories = [ pkgs.dejavu_fonts ];
+          };
         } ''
           python3 ${./tests/desktop-backend.py} \
             ${self'.packages.desktop}/bin/hermes-desktop ${hermes-agent}/bin/hermes
