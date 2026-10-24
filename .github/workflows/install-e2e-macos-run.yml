@@ -47,6 +47,10 @@ on:
         type: choice
         options: [arm64, x64]
         default: arm64
+      legacy-timeout-retry:
+        description: Diagnostic only; records a legacy timeout and clicks the existing retry once
+        type: boolean
+        default: false
       timeout-minutes:
         type: number
         default: 60
@@ -102,6 +106,10 @@ on:
         required: false
         type: string
         default: arm64
+      legacy-timeout-retry:
+        description: Diagnostic only; records a legacy timeout and clicks the existing retry once
+        type: boolean
+        default: false
       timeout-minutes:
         description: 'Job timeout. App-update legs do a full Electron build.'
         required: false
@@ -284,6 +292,7 @@ jobs:
           BUNDLE_MANIFEST: ${{ inputs.bundle-manifest-url }}
           BUNDLE_MANIFEST_SHA256: ${{ inputs.bundle-manifest-sha256 }}
           BUNDLE_ARCH: ${{ inputs.bundle-arch }}
+          HERMES_E2E_LEGACY_RETRY: ${{ inputs.legacy-timeout-retry }}
           HERMES_E2E_LOG_DIR: ${{ runner.temp }}/e2e-logs
 
       - name: Update to NEW via About -> Update now (${{ inputs.bundle-arch }})
@@ -295,6 +304,7 @@ jobs:
           BUNDLE_MANIFEST: ${{ inputs.bundle-manifest-url }}
           BUNDLE_MANIFEST_SHA256: ${{ inputs.bundle-manifest-sha256 }}
           BUNDLE_ARCH: ${{ inputs.bundle-arch }}
+          HERMES_E2E_LEGACY_RETRY: ${{ inputs.legacy-timeout-retry }}
           HERMES_E2E_LOG_DIR: ${{ runner.temp }}/e2e-logs
 
       - name: Collect native update diagnostics

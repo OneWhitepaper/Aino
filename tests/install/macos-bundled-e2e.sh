@@ -42,6 +42,7 @@ PHASE="all"
 MANIFEST_URL=""
 ARCH="arm64"
 UPDATE_WATCH_TIMEOUT_MS=900000
+if [ "${HERMES_E2E_LEGACY_RETRY:-false}" = true ]; then UPDATE_WATCH_TIMEOUT_MS=1800000; fi
 
 while [ "$#" -gt 0 ]; do
   case "$1" in
@@ -308,12 +309,14 @@ phase_update() {
   # ── the real user trigger ─────────────────────────────────────────────
   step "launching the OLD app and clicking About -> Update now"
   local rc=0
+  local retry_args=()
+  if [ "${HERMES_E2E_LEGACY_RETRY:-false}" = true ]; then retry_args+=(--retry-legacy-verification-timeout); fi
   (cd "$WORK_ROOT" && "$NODE_BIN" "$ASSETS/mac-bundled-update-driver.mjs" \
     --app-bin "$old_app_bin" \
     --old-sha "$(manifest_side old commit)" --chat-out "$LOG_DIR" --mock-url "$HERMES_E2E_MOCK_URL" \
     --platform-account-env "$account_env" \
     --shots "$LOG_DIR/shots" \
-    --close-timeout-ms 420000 2>&1 | ts_prefix | tee "$LOG_DIR/app-update.log") || rc=$?
+    --close-timeout-ms 420000 "${retry_args[@]}" 2>&1 | ts_prefix | tee "$LOG_DIR/app-update.log") || rc=$?
   log_group "in-app update (Playwright) transcript" "$LOG_DIR/app-update.log"
   [ "$rc" -eq 0 ] || fail "in-app update driver exited $rc; transcript above"
 

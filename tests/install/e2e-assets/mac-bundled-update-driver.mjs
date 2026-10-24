@@ -31,7 +31,7 @@ import { writeMockProviderConfig } from '../../../tests-js/scripts/mock-provider
 const require = createRequire(import.meta.url);
 const { observeProcessClose } = require('./process-close.cjs');
 const { prepareWindowForInput } = require('./window-input.cjs');
-const { pickAppWindow, openAbout, waitForUpdate } = require('./update-ui.cjs');
+const { pickAppWindow, openAbout, waitForUpdate, waitForMacUpdateClose } = require('./update-ui.cjs');
 
 const { values } = parseArgs({
   options: {
@@ -42,6 +42,7 @@ const { values } = parseArgs({
     'mock-url': { type: 'string' },
     'platform-account-env': { type: 'string' },
     'close-timeout-ms': { type: 'string', default: '420000' },
+    'retry-legacy-verification-timeout': { type: 'boolean', default: false },
   },
 });
 
@@ -112,7 +113,11 @@ await shot(page, '05-updating-overlay');
 // Squirrel.Mac swaps the bundle and relaunches. Wait for the native close
 // (never the renderer's close event) and exit WITHOUT killing anything —
 // observeProcessClose released our pipes, so ShipIt's relaunch survives.
-await waitForProcessClose(Number(values['close-timeout-ms']));
+const outcome = await waitForMacUpdateClose(page, waitForProcessClose, {
+  timeoutMs: Number(values['close-timeout-ms']),
+  allow: values['retry-legacy-verification-timeout'], log, shot,
+});
+fs.writeFileSync(path.join(values['chat-out'], 'apply-attempts.json'), JSON.stringify(outcome, null, 2) + '\n');
 log('old Electron process closed — Squirrel.Mac owns the swap and relaunch');
 fs.writeFileSync(path.join(values['chat-out'], 'old-exited'), new Date().toISOString() + '\n');
 process.exit(0);
