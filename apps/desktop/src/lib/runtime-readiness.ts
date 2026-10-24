@@ -46,12 +46,11 @@ export interface RuntimeReadinessResult {
    *  tier. Undefined when the check did not answer (older backend, transport
    *  fallback) — never read it as "not free tier". */
   freeTier?: boolean
-  /** Passed through from `setup.runtime_check`: the model the route resolved
-   *  to. Undefined when the check did not answer. */
+  /** Model resolved by the profile check or the desktop's Aino default. */
   model?: string
   ready: boolean
   reason: null | string
-  source: 'fallback' | 'runtime_check' | 'setup_status'
+  source: 'fallback' | 'platform_model' | 'runtime_check' | 'setup_status'
 }
 
 export type RuntimeReadinessDisplay = 'checking' | 'needs_setup' | 'ready' | 'unavailable'
@@ -195,7 +194,7 @@ export function runtimeReadinessDisplay(status: RuntimeReadinessResult | null): 
   // Credentials exist but runtime resolution failed. Calling that "needs
   // setup" sends users back through onboarding for provider/quota failures
   // that setup cannot repair; the reason tooltip carries the specific cause.
-  return status.checksDisagree ? 'unavailable' : 'needs_setup'
+  return status.checksDisagree || status.source === 'platform_model' ? 'unavailable' : 'needs_setup'
 }
 
 export async function evaluateRuntimeReadiness(

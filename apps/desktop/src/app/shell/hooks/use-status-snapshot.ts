@@ -1,13 +1,17 @@
 import { useEffect, useState } from 'react'
 
-import { getStatus } from '@/hermes'
+import { getStatus, type ProfileScope } from '@/hermes'
 import { translateNow } from '@/i18n'
 import { type I18nContextValue, useI18n } from '@/i18n'
-import { evaluateRuntimeReadiness, type RuntimeReadinessResult } from '@/lib/runtime-readiness'
+import { evaluateModelDefaultReadiness } from '@/lib/model-default'
+import { platformDefaultScope } from '@/lib/platform-model-scope'
+import { type RuntimeReadinessResult } from '@/lib/runtime-readiness'
 import { $freeTierStatus, refreshFreeTierStatus, setFreeTierRoute } from '@/store/free-tier'
+import { $gatewayManagedCapabilities, managedModelRouteCapabilityFrom } from '@/store/gateway-managed-capability'
 import { $setupReadyTick } from '@/store/live-sync'
 import { dismissNotification, notify } from '@/store/notifications'
 import { $desktopOnboarding } from '@/store/onboarding'
+import { platformModelCatalog } from '@/store/platform-models'
 import type { StatusResponse } from '@/types/hermes'
 
 // Statusbar health is ambient chrome, not live data — nothing the user acts on
@@ -24,12 +28,14 @@ type GatewayRequester = <T = unknown>(method: string, params?: Record<string, un
 export function useStatusSnapshot(
   gatewayState: string | undefined,
   requestGateway: GatewayRequester,
-  gatewayScope: string = ''
+  scope?: ProfileScope
 ): { inferenceStatus: RuntimeReadinessResult | null; statusSnapshot: StatusResponse | null } {
   const { t }: I18nContextValue = useI18n()
   const warningMessage: string = t.notifications.sharedProfileWarning
   const [statusSnapshot, setStatusSnapshot] = useState<StatusResponse | null>(null)
   const [inferenceStatus, setInferenceStatus] = useState<RuntimeReadinessResult | null>(null)
+  const { key: gatewayScope, route: { connectionId, profile } } = platformDefaultScope(scope)
+  const catalog = platformModelCatalog()
 
   useEffect(() => {
     let cancelled = false
@@ -41,6 +47,9 @@ export function useStatusSnapshot(
     // lifetime is exactly this run's — the same run that clears the status on
     // entry — so the two can never disagree.
     let readinessAnswered = false
+    let readinessGeneration = 0
+    let readinessPending = false
+    const route = { connectionId, profile }
 
     const publishInferenceStatus = (next: RuntimeReadinessResult | null): void => {
       readinessAnswered = next !== null
@@ -101,19 +110,29 @@ export function useStatusSnapshot(
       // its write happens inside the store, so hand it this run's liveness: a
       // reply that lands after a source/profile switch must not repaint the
       // shared atom the new run already answered.
+      const generation = ++readinessGeneration
+      readinessPending = true
+      const current = () => !cancelled && generation === readinessGeneration
+
       const [inferenceResult] = await Promise.allSettled([
-        evaluateRuntimeReadiness(requestGateway, { defaultReason: translateNow('desktop.providerCredentialRequired') }),
-        refreshFreeTierStatus(requestGateway, () => !cancelled)
+        evaluateModelDefaultReadiness(requestGateway, route, { defaultReason: translateNow('desktop.providerCredentialRequired') }),
+        refreshFreeTierStatus(requestGateway, current)
       ])
 
-      if (cancelled || inferenceResult.status !== 'fulfilled') {
+      if (!current()) {
+        return
+      }
+
+      readinessPending = false
+
+      if (inferenceResult.status !== 'fulfilled') {
         return
       }
 
       const inference = inferenceResult.value
 
       if (inference.source !== 'fallback') {
-        // runtime_check/setup_status returned an authoritative boolean.
+        // The desktop model default or profile checks returned a verdict.
         // A fallback means both RPCs failed or returned no boolean, so it
         // is a transient/unknown transport state, not proof that inference
         // became unconfigured. Keep the last authoritative result instead
@@ -183,6 +202,28 @@ export function useStatusSnapshot(
     // outside the status tick so it neither resets nor waits on the timer.
     const unsubscribeSetupReady = $setupReadyTick.listen(() => void refreshReadiness())
 
+    // Aino account authority and socket capabilities are independent of provider
+    // onboarding. Retire old verdicts before checking the new owner/route, even
+    // when the login window has left this window unfocused.
+    const invalidateReadiness = () => {
+      publishInferenceStatus(null)
+      void refreshReadiness()
+    }
+
+    const unsubscribeAccount = catalog.account.listen(invalidateReadiness)
+
+    const unsubscribeCapability = $gatewayManagedCapabilities.listen((next, previous) => {
+      if (managedModelRouteCapabilityFrom(next, route) !== managedModelRouteCapabilityFrom(previous, route)) {
+        invalidateReadiness()
+      }
+    })
+
+    const unsubscribeCatalog = catalog.state.listen(next => {
+      if (!readinessPending && (next.phase === 'ready' || next.phase === 'error')) {
+        invalidateReadiness()
+      }
+    })
+
     // An OAuth sign-in updates backend readiness, but ambient polling is
     // skipped while the window is unfocused — so a stale credential failure can
     // linger indefinitely if the user stays in the browser after completing the
@@ -214,6 +255,9 @@ export function useStatusSnapshot(
       cancelled = true
       unsubscribeOnboarding()
       unsubscribeSetupReady()
+      unsubscribeAccount()
+      unsubscribeCapability()
+      unsubscribeCatalog()
       document.removeEventListener('visibilitychange', onReturn)
       window.removeEventListener('focus', onReturn)
 
@@ -225,7 +269,7 @@ export function useStatusSnapshot(
         window.clearTimeout(timer)
       }
     }
-  }, [gatewayScope, gatewayState, requestGateway, warningMessage])
+  }, [catalog, connectionId, gatewayScope, gatewayState, profile, requestGateway, warningMessage])
 
   return { inferenceStatus, statusSnapshot }
 }
