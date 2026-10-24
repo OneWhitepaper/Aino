@@ -134,7 +134,7 @@ jobs:
       tag-has-desktop: ${{ inputs.tag-has-desktop }}
       leg-id: ${{ inputs.leg-id }}
       runner: macos-latest
-      timeout-minutes: ${{ inputs.timeout-minutes }}
+      timeout-minutes: ${{ fromJSON(format('{0}', inputs.timeout-minutes)) }}
 
   # ---- arm 2: the published dmg, then Playwright drives the app ------------
   gui-e2e:
@@ -146,7 +146,7 @@ jobs:
       && contains(fromJSON('["open-app-update", "hermes-desktop-app-update", "hermes-update", "installer-script", "installer-script+desktop"]'), inputs.update-method)
       && (inputs.dmg-url != '' || github.repository == 'NousResearch/hermes-agent')
     runs-on: macos-latest
-    timeout-minutes: ${{ inputs.timeout-minutes }}
+    timeout-minutes: ${{ fromJSON(format('{0}', inputs.timeout-minutes)) }}
     env:
       DMG_URL: ${{ inputs.dmg-url || (github.repository == 'NousResearch/hermes-agent' && 'https://hermes-assets.nousresearch.com/Hermes-Setup.dmg' || '') }}
 
@@ -249,7 +249,7 @@ jobs:
     name: packaged bundle (open-app-update)
     if: inputs.install-method == 'packaged-app' && inputs.update-method == 'open-app-update'
     runs-on: ${{ inputs.bundle-arch == 'x64' && 'macos-15-intel' || 'macos-15' }}
-    timeout-minutes: ${{ inputs.timeout-minutes }}
+    timeout-minutes: ${{ fromJSON(format('{0}', inputs.timeout-minutes)) }}
 
     steps:
       - uses: actions/checkout@f548e57e544e1ff5a4c46bf1e1b8685f8e4a348a # v7.0.1
