@@ -145,6 +145,8 @@ module.exports = {
     unpack: ['**/*.node', '**/prebuilds/**', 'dist/**']
   },
   mac: {
+    // Legacy installed clients buffer the upgrade ZIP before Squirrel swaps it.
+    compression: 'maximum',
     // macOS 26 masks every icon into its own squircle: the layered Icon
     // Composer package lets the system do that with the ring following the
     // outline, while `assets/icon.icns` stays the artwork for macOS <= 15.

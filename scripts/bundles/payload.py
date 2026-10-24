@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import shutil
@@ -141,6 +142,60 @@ def relativize_links(root: Path) -> int:
     return sum(_relativize_bin_links(root, root / name / "bin") for name in ("venv", "pm-runtime"))
 
 
+def share_wheel_files(root: Path) -> int:
+    """Keep the offline cache independent while the immutable venv shares identical bytes.
+
+    Only installed paths with the same wheel-relative name, mode and SHA-256
+    qualify. Rebuilding the writable per-install venv cannot remove the cache.
+    This runs before signing; it never rewrites an already sealed application.
+    """
+    root = root.resolve()
+    archive = root / "uv-cache/archive-v0"
+    if os.name == "nt" or not archive.is_dir():
+        return 0
+    candidates = _wheel_candidates(archive)
+    return sum(_share_site_file(file, site, candidates)
+               for site in (root / "venv/lib").glob("python*/site-packages")
+               for file in _regular_files(site))
+
+
+def _regular_files(root: Path):
+    for directory, dirs, files in os.walk(root):
+        dirs[:] = [name for name in dirs if not (Path(directory) / name).is_symlink()]
+        for name in files:
+            file = Path(directory) / name
+            if not file.is_symlink():
+                yield file
+
+
+def _wheel_candidates(archive: Path) -> dict[str, list[Path]]:
+    candidates: dict[str, list[Path]] = {}
+    for wheel in archive.iterdir():
+        if not wheel.is_dir() or wheel.is_symlink():
+            continue
+        for file in _regular_files(wheel):
+            candidates.setdefault(file.relative_to(wheel).as_posix(), []).append(file)
+    return candidates
+
+
+def _share_site_file(file: Path, site: Path, candidates: dict[str, list[Path]]) -> int:
+    stat = file.stat()
+    matches = [candidate for candidate in candidates.get(file.relative_to(site).as_posix(), [])
+               if candidate.stat().st_size == stat.st_size and candidate.stat().st_mode == stat.st_mode]
+    if not matches:
+        return 0
+    with file.open("rb") as stream:
+        digest = hashlib.file_digest(stream, "sha256").digest()
+    for candidate in matches:
+        with candidate.open("rb") as stream:
+            if hashlib.file_digest(stream, "sha256").digest() != digest:
+                continue
+        file.unlink()
+        file.symlink_to(os.path.relpath(candidate, file.parent))
+        return 1
+    return 0
+
+
 def _relativize_bin_links(root: Path, directory: Path) -> int:
     count = 0
     if not directory.is_dir():
@@ -175,11 +230,13 @@ def _relativize_bin_links(root: Path, directory: Path) -> int:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("action", choices=["relocate", "rehash"])
+    parser.add_argument("action", choices=["relocate", "rehash", "share-wheels"])
     parser.add_argument("payload", type=Path)
     args = parser.parse_args()
     if args.action == "rehash":
         print(f"rehashed {rehash_tools(args.payload)} payload tools")
+    elif args.action == "share-wheels":
+        print(f"shared {share_wheel_files(args.payload)} immutable wheel files")
     else:
         relativize_links(args.payload)
 
