@@ -10,7 +10,7 @@
 # dev:mock flow writes) with a real, chat-capable backend.
 #
 # Usage (sourced from a driver):
-#   mock_start <workroot>      start, write config into $HERMES_HOME
+#   mock_start <workroot> [account-env-file] start, write provider config
 #   mock_stop                  kill the background server
 #
 # Requires: ASSETS (e2e-assets dir), LOG_DIR, HERMES_HOME, ok/fail helpers.
@@ -50,7 +50,7 @@ mock_start() {
   # Bare `node file.ts` type-stripping works on node >=22.18 (the images
   # ship 22.22+; the installed managed node is >=26) - same contract as
   # the repo's own `dev:mock` script.
-  node "$ASSETS/mock-provider.mjs" "$MOCK_URLFILE" "$prior_url" > "$LOG_DIR/mock.log" 2>&1 &
+  node "$ASSETS/mock-provider.mjs" "$MOCK_URLFILE" "$prior_url" "${2:-}" > "$LOG_DIR/mock.log" 2>&1 &
   echo $! > "$MOCK_PIDFILE"
 
   local _i

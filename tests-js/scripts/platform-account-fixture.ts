@@ -136,6 +136,7 @@ export async function signInPlatformFixture(page: Page) {
   await page.getByRole('checkbox', { name: 'Agree to the user agreement and privacy policy', exact: true }).check()
   await page.getByRole('checkbox', { name: 'Keep me signed in on this device', exact: true }).uncheck()
   await page.getByRole('button', { name: 'Send code', exact: true }).click()
+  await expect(page.getByRole('textbox', { name: 'Verification code', exact: true })).toBeVisible()
   await page.getByRole('textbox', { name: 'Verification code', exact: true }).fill('246810')
   await page.getByRole('button', { name: 'Sign in', exact: true }).click()
   await expect(page.getByRole('button', { name: 'My account · Native member', exact: true })).toBeVisible({ timeout: 120_000 })

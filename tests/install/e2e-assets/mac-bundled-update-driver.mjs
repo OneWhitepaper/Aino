@@ -25,6 +25,8 @@ import { _electron } from '@playwright/test';
 import { createRequire } from 'node:module';
 import { runUpdateWindowChat } from './update-window-chat.mjs';
 import { updateWindowEnvironment } from './smoke-env.mjs';
+import { signInPlatformFixture } from '../../../tests-js/scripts/platform-account-fixture.ts';
+import { writeMockProviderConfig } from '../../../tests-js/scripts/mock-provider-config.ts';
 
 const require = createRequire(import.meta.url);
 const { observeProcessClose } = require('./process-close.cjs');
@@ -38,6 +40,7 @@ const { values } = parseArgs({
     'old-sha': { type: 'string' },
     'chat-out': { type: 'string' },
     'mock-url': { type: 'string' },
+    'platform-account-env': { type: 'string' },
     'close-timeout-ms': { type: 'string', default: '420000' },
   },
 });
@@ -62,12 +65,18 @@ const launchEnv = updateWindowEnvironment(
   path.resolve(path.dirname(appBin), '..', 'Resources', 'agent-payload'),
   'bundled',
 );
+if (values['platform-account-env']) {
+  Object.assign(launchEnv, JSON.parse(fs.readFileSync(values['platform-account-env'], 'utf8')));
+  writeMockProviderConfig(launchEnv.HERMES_HOME, values['mock-url'], 'language: en');
+}
 const app = await _electron.launch({
   executablePath: appBin,
   cwd: path.dirname(appBin),
   // Inherit the driver env: HERMES_HOME / HOME / updates feed config must
   // reach the main process exactly as a user's double-click would.
   env: launchEnv,
+  chromiumSandbox: true,
+  args: [`--user-data-dir=${launchEnv.HERMES_DESKTOP_USER_DATA_DIR}`],
   timeout: 120_000,
 });
 const child = app.process();
@@ -79,6 +88,7 @@ fs.writeFileSync(path.join(values['chat-out'], 'old-pid'), `${oldPid}\n`);
 const page = await pickAppWindow(app, log);
 
 await prepareWindowForInput(app, page);
+if (values['platform-account-env']) await signInPlatformFixture(page);
 
 await runUpdateWindowChat(app, page, {
   mockUrl: values['mock-url'], outDir: values['chat-out'],

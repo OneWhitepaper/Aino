@@ -18,6 +18,38 @@
 name: install-e2e macos leg
 
 on:
+  workflow_dispatch:
+    inputs:
+      commit:
+        description: Exact NEW artifact commit (driver scripts come from the dispatched ref)
+        type: string
+        required: true
+      install-method:
+        type: string
+        default: packaged-app
+      update-method:
+        type: string
+        default: open-app-update
+      install-ref:
+        type: string
+        default: v0.1.0
+      leg-id:
+        type: string
+        default: aino-signed-upgrade
+      bundle-manifest-url:
+        description: HTTPS OLD/NEW ZIP transition manifest
+        type: string
+        required: true
+      bundle-manifest-sha256:
+        type: string
+        required: true
+      bundle-arch:
+        type: choice
+        options: [arm64, x64]
+        default: arm64
+      timeout-minutes:
+        type: number
+        default: 60
   workflow_call:
     inputs:
       commit:
@@ -222,7 +254,7 @@ jobs:
     steps:
       - uses: actions/checkout@f548e57e544e1ff5a4c46bf1e1b8685f8e4a348a # v7.0.1
         with:
-          ref: ${{ inputs.commit || github.sha }}
+          ref: ${{ github.event_name == 'workflow_dispatch' && github.sha || inputs.commit || github.sha }}
 
       - name: Set up driver tools only
         uses: ./.github/actions/setup-pm

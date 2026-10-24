@@ -90,11 +90,12 @@ export function predictSmokeHermesHome(
   return resolveDesktopHermesHome({ home, env: effective, platform, directoryExists: (): boolean => false, readWindowsHome: (): null => null })
 }
 
-/** A predicted home must be empty before the driver seeds it: the smoke tests a
- * fresh install, and a non-empty home means the prediction is wrong or the run
- * is dirty. Never wipe — a wrong prediction should fail loudly, not delete data. */
-function requireEmptyHermesHome(home: string): void {
-  if (!fs.existsSync(home)) {
+/** Fresh installs require an empty home. Only an upgrade may reuse the exact
+ * isolated home supplied by its caller; never seed another existing profile. */
+function assertSmokeHermesHome(home: string, options: SmokeOptions): void {
+  const ownUpgrade = options.phase === 'new' && path.resolve(home) === path.resolve(options.home)
+
+  if (ownUpgrade || !fs.existsSync(home)) {
     return
   }
   const entries = fs.readdirSync(home)
@@ -315,7 +316,7 @@ function assertResolvedIdentity(identity: ChatIdentity, options: SmokeOptions, p
 
 export type LaunchElectron = (launch: Parameters<typeof _electron.launch>[0]) => Promise<ElectronApplication>
 
-async function prepareAccountFixture(enabled: boolean | undefined, out: string, env: SmokeEnvironment) {
+export async function prepareAccountFixture(enabled: boolean | undefined, out: string, env: SmokeEnvironment) {
   if (!enabled) { return undefined }
   const account = await startPlatformServer()
   try {
@@ -372,7 +373,7 @@ export async function runInstalledDesktopSmoke(options: SmokeOptions, launchApp:
     predictedHome = bundleEnv ? predictSmokeHermesHome(launch.env, bundleEnv) : undefined
 
     // Check before the driver creates its sandbox folders inside this home.
-    if (predictedHome) { requireEmptyHermesHome(predictedHome) }
+    if (predictedHome) { assertSmokeHermesHome(predictedHome, options) }
 
     fs.mkdirSync(options.home, { recursive: true })
     fs.mkdirSync(options['user-data'], { recursive: true })
