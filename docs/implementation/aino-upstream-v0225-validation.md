@@ -90,8 +90,10 @@ No parallel delegation manager, account manager, scheduler or model tool was add
 | Native compression/resume | Passed; all three native scenarios passed in 7.9 minutes |
 | Native Chinese settings and routing placement | Two passed; actual label geometry stays on one line and routing/defaults remain in the subagent group after the main-model controls |
 | Static guards | All eleven non-health checks passed again after the test-fixture repairs |
-| Occurrence-aware code health | Reviewed staged tree: 24 retained allowed findings / zero unwaived blockers; final committed-tree check pending |
-| Hosted native CI | Pending |
+| Occurrence-aware code health | Final integration commit: 24 retained allowed findings / zero unwaived blockers; exit zero |
+| Linux catalog lane | 29 files / 629 passed / zero failures, retries disabled; original five fixture failures reproduced before the repair |
+| Hosted cross-platform source CI | In progress; the first catalog run exposed a Linux-only fixture pin mismatch, documented below |
+| Hosted release/install/update E2E | Not run by the ordinary PR workflow; skipped jobs are not counted as passes |
 
 These are separate results; a passing focused rerun does not rewrite a failing
 initial broad run as an all-green first attempt.
@@ -160,6 +162,17 @@ initial broad run as an all-green first attempt.
   packaged-build restrictions are retained. Its old immediate-parent text lookup
   was also stale after the settings-row refactor; it now measures the visible
   label through the actual accessible controls. Both final native cases passed.
+- The first hosted catalog run passed 624 tests and failed five import-admission
+  cases. Their Linux-only fixture still substituted the previous release's SHA,
+  leaving the new workflow pin absent from the fixture commit graph. The helper
+  now substitutes the existing `UPSTREAM` assignment instead of matching an old
+  release hash. The production workflow, exact reviewed pin and rejection cases
+  remain unchanged. Local macOS skips did not establish Linux coverage. A real
+  Linux arm64 container reproduced all five failures, then passed the entire
+  29-file catalog lane (629 tests) with retries disabled after the fixture fix.
+  The first broad container attempt also lacked the PM-installed `uv` directory
+  on PATH; supplying the actual toolchain path resolved its setup errors without
+  modifying the tests or dependency policy.
 
 ## Evidence and remaining boundaries
 
@@ -169,9 +182,9 @@ not committed with synthetic account or credential data.
 
 The accepted-upstream health check retains inherited findings in the report and
 still blocks new occurrences or worse metrics. Its exact baseline SHA above is
-also recorded in the hosted lint/contributor/catalog workflows. Before the real
-merge commit exists, a temporary two-parent commit validates the staged tree
-without moving a branch; final committed ancestry must be checked again.
+also recorded in the hosted lint/contributor/catalog workflows. Both the staged
+two-parent tree and the real integration commit were checked; the committed-tree
+command exited zero with 24 retained allowed findings and no unwaived blockers.
 
 An independent read-only review was attempted, but the collaboration tool
 delivered an empty task to the reviewer, which returned no review. The integration
