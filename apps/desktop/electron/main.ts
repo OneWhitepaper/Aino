@@ -67,16 +67,11 @@ import { runAppInstallerChecker } from './appinstaller-checker'
 import { installApplicationMenuAfterFirstWindow } from './application-menu-startup'
 import { stopBackendChild as stopBackendChildImpl, waitForBackendExit } from './backend-child'
 import {
-  type BackendOutputTail,
-  claimDecision,
   execText,
   isPidOnlyStartMarker,
-  pidOnlyStartMarker,
-  probeStartMarker,
   processStartMarker,
   REAP_PROBE_TIMEOUT_MS
 } from './backend-claim'
-import { dashboardFallbackArgs } from './backend-command'
 import { createBackendConnectionState } from './backend-connection-state'
 import { assertDescriptorStillOwned, forgetFailedDescriptor } from './backend-descriptor-cache'
 import { BackendDialClaims } from './backend-dial-claim'
@@ -84,7 +79,6 @@ import { buildDesktopBackendEnv, profileBackendParentEnv } from './backend-env'
 import { isReauthRequiredError, waitForHermesReady } from './backend-health'
 import {
   backendCommandMatches,
-  type BackendOwnershipEntry,
   createBackendOwnership,
   createBackendShutdownCoordinator
 } from './backend-ownership'
@@ -92,7 +86,6 @@ import { canImportHermesCli, PROBE_TIMEOUT_MS, shouldTrustHermesOverride, verify
 import { recycleOwnedBackend } from './backend-recycle'
 import { isPidAliveWindows, waitForBackendRelease } from './backend-release-gate'
 import { createInstalledRuntimeGate } from './backend-resolution'
-import { createBackendServeSupportResolver } from './backend-serve-support'
 import { desktopBackendSpawnEnv } from './backend-spawn-env'
 import {
   isHostKeyChangedBootFailure,
@@ -135,6 +128,8 @@ import {
 import { CHALLENGE_PARTITION } from './challenge-window'
 import { registerChallengeWindowIpc } from './challenge-window-ipc'
 import { provisionCliLinks } from './cli-provision'
+import { readClipboardImagePng } from './clipboard-image'
+import { registerClipboardTextIpc } from './clipboard-ipc'
 import { closeStopFailureMessage, finishWindowsCloseStop, type RuntimeLock } from './close-stop-kill'
 import { shouldAttemptCloudBootCascade } from './cloud-boot-cascade'
 import { discoverWithTeamFallback } from './cloud-discovery'
@@ -411,7 +406,6 @@ import {
 } from './oauth-rest-request'
 import { wireOauthSessionResponse } from './oauth-session-response'
 import { listWindowsProcesses, reapPackageRootedProcesses } from './package-process-reap'
-import { createParentStartMarkerResolver } from './parent-process-identity'
 import {
   bundledPayload,
   installIdForRoot,
@@ -1859,18 +1853,6 @@ const localBackendLifecycle = createLocalBackendLifecycle<ChildProcess>({
   }
 })
 
-function spawnOwnedBackend(...args: Parameters<typeof spawn>): ChildProcess {
-  const child = localBackendLifecycle.spawn((): ChildProcess => spawn(...args))
-  child.once('exit', (): boolean => localBackendLifecycle.release(child))
-  child.once('error', (): void => {
-    if (!child.pid) {
-      localBackendLifecycle.release(child)
-    }
-  })
-
-  return child
-}
-
 const remoteLiveness = new RemoteLivenessTracker()
 
 // Pooled remotes are probed on the renderer reconnect cadence (minutes apart),
@@ -2932,21 +2914,6 @@ async function unwrapWindowsVenvHermesCommand(command, backendArgs) {
     basename: p => path.basename(p),
     rememberLog
   })
-}
-
-// Does the resolved runtime understand the `serve` subcommand? The desktop
-// spawns `hermes serve`; runtimes older than serve only have `dashboard`. We
-// detect support so getBackendArgsForRuntime() can route old runtimes through
-// the legacy `dashboard --no-open` form instead of crashing on an unknown
-// subcommand (would brick every user mid-upgrade — #54568 follow-up).
-// Fast-path / probe / cache strategy: see backend-serve-support.ts header.
-const backendSupportsServe = createBackendServeSupportResolver(HERMES_HOME, rememberLog)
-
-// Given a resolved backend whose args target `serve`, return the args the
-// runtime actually understands: unchanged when `serve` is supported, or
-// rewritten to `dashboard --no-open` for older runtimes.
-async function getBackendArgsForRuntime(backend) {
-  return (await backendSupportsServe(backend)) ? backend.args : dashboardFallbackArgs(backend.args)
 }
 
 function normalizeExecutablePathForCompare(commandPath) {
@@ -4058,10 +4025,6 @@ function writeBackendOwnership(contents) {
   }
 }
 
-// execText and processStartMarker moved to backend-claim.ts (#93608) so the
-// claim/probe policy is testable — including on Windows CI with real
-// PowerShell — without booting Electron. main.ts calls through the module.
-
 async function backendCommandForPid(pid) {
   try {
     const command = IS_WINDOWS ? 'powershell.exe' : 'ps'
@@ -4228,76 +4191,6 @@ const backendOwnership = createBackendOwnership({
     }
   }
 })
-
-const desktopParentStartMarker = createParentStartMarkerResolver({
-  load: () => processStartMarker(process.pid),
-  onError: error => {
-    const detail = error instanceof Error ? error.message : String(error)
-
-    rememberLog(
-      `Could not resolve the Desktop process start marker; starting the backend with PID-only parent tracking: ${detail}`
-    )
-  }
-})
-
-async function claimBackendChild(
-  child: ChildProcess & { hermesBackendIdentity?: BackendOwnershipEntry },
-  command: string,
-  profile: string,
-  nonce: string,
-  outputTail: BackendOutputTail | null = null
-): Promise<BackendOwnershipEntry> {
-  // Probe/claim policy lives in backend-claim.ts (#93608): a marker probe
-  // that fails against a LIVE child degrades to PID-only identity — matching
-  // createParentStartMarkerResolver — instead of killing a healthy backend
-  // over a flaky Get-Process (PS 5.1 cold starts, #87169). Only a child that
-  // actually died keeps the fail-closed throw, now carrying its stderr tail.
-  const probe = await probeStartMarker(child.pid)
-  const decision = claimDecision(child.exitCode === null && !child.killed, probe)
-
-  if (decision.action === 'fail') {
-    await localBackendLifecycle.stop(child)
-    throw new Error(
-      `${PRODUCT_NAME} backend (PID ${child.pid}) died before its identity could be recorded: ${decision.reason}${outputTail?.describe() ?? ''}`
-    )
-  }
-
-  let startMarker
-
-  if (decision.action === 'degrade') {
-    startMarker = pidOnlyStartMarker(child.pid)
-    rememberLog(
-      `WARNING: process start marker probe failed for live ${PRODUCT_NAME} backend PID ${child.pid}; ` +
-        `claiming with PID-only identity instead of stopping it: ${decision.reason}`
-    )
-  } else {
-    startMarker = decision.startMarker
-  }
-
-  try {
-    const identity = await backendOwnership.claim({
-      command,
-      nonce,
-      pid: child.pid,
-      profile,
-      startMarker,
-      // Record the spawning Electron so reapOrphans can tell an orphaned
-      // backend (parent gone) from one owned by a live instance — a live
-      // parent's backend is never reaped (#87295).
-      parentPid: process.pid,
-      parentStartMarker: await desktopParentStartMarker()
-    })
-
-    child.hermesBackendIdentity = identity
-
-    return identity
-  } catch (error) {
-    await localBackendLifecycle.stop(child)
-    throw new Error(
-      `Could not persist ownership for the ${PRODUCT_NAME} backend: ${error.message}${outputTail?.describe() ?? ''}`
-    )
-  }
-}
 
 function reapOrphanedBackendsOnce() {
   if (!backendOrphanReapPromise) {
@@ -16055,23 +15948,14 @@ ipcMain.handle('hermes:selectPaths', async (_event, options: any = {}) => {
   return result.filePaths
 })
 
-ipcMain.handle('hermes:writeClipboard', (_event, text) => {
-  clipboard.writeText(String(text || ''))
-
-  return true
-})
+// Clipboard text read/write for the renderer (clipboard-ipc.ts).
+registerClipboardTextIpc(ipcMain, clipboard)
 
 // Save dialogs: the path picker (profile export) and /save's main-process write (save-text-file.ts).
 registerSaveDialogIpc(ipcMain, {
   defaultDir: () => app.getPath('documents'),
   showSaveDialog: options => dialog.showSaveDialog(mainWindow, options)
 })
-
-// Paired reader for the GUI terminal's paste chord: the renderer's
-// navigator.clipboard.readText() throws "Document is not focused" whenever a
-// portaled overlay has focus, and there's no way to route a read through the
-// canvas. The main process has no such gate.
-ipcMain.handle('hermes:readClipboard', () => clipboard.readText())
 
 ipcMain.handle('hermes:saveGatewayFile', (_event, payload) => saveGatewayFile(payload))
 
@@ -16158,10 +16042,12 @@ ipcMain.handle('hermes:savePastedText', async (_event, payload) => {
 })
 
 ipcMain.handle('hermes:saveClipboardImage', async () => {
-  const image = clipboard.readImage()
+  // Electron 44 removed clipboard.readImage(); PNG bytes now arrive through
+  // clipboard.read() + ClipboardItem.getType('image/png') as a Blob.
+  const png = await readClipboardImagePng(clipboard)
 
-  if (image && !image.isEmpty()) {
-    return writeComposerImage(image.toPNG(), '.png')
+  if (png) {
+    return writeComposerImage(png, '.png')
   }
 
   // WSL2/WSLg doesn't bridge clipboard *images* from the Windows host to the

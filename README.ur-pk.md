@@ -36,6 +36,8 @@ Settings → About میں نصب شدہ ورژن اور اپ ڈیٹس دیکھی
 
 مطابقت کے لیے `hermes` کمانڈ، اندرونی API اور ڈیٹا فارمیٹس برقرار ہیں۔ [برانڈ اور مطابقت کی حدود](docs/aino-brand-boundary.md) اور [رن ٹائم کی تکنیکی دستاویزات](website/docs/user-guide/configuration.md) دیکھیں۔
 
+دوسرے ایجنٹس سے درآمد کے لیے پہلے `hermes plugins install agent-importers` چلائیں، پھر `hermes import-agent <source> --dry-run` سے پیش نظارہ دیکھیں۔ [درآمد کی رہنمائی](website/docs/user-guide/import-from-other-agents.md) ملاحظہ کریں۔
+
 ## اوپن سورس اور اعتراف
 
 یہ GitHub ریپوزٹری عوامی رہے گی۔ Aino، Nous Research کے [Hermes Agent](https://github.com/NousResearch/hermes-agent) پر مبنی ہے۔ اصل حقوق اور لائسنس کے نوٹس [LICENSE](LICENSE) اور [NOTICE.md](NOTICE.md) میں محفوظ ہیں۔ بیرونی فراہم کنندگان اور اجزا کے حقیقی نام اور لائسنس برقرار ہیں۔

@@ -36,6 +36,8 @@ Clona [este repositorio](https://github.com/OneWhitepaper/Aino) y sigue [CONTRIB
 
 El comando `hermes`, las API y los formatos internos se conservan por compatibilidad. Consulta los [límites de marca y compatibilidad](docs/aino-brand-boundary.md). La [documentación técnica del motor](website/docs/user-guide/configuration.md) conserva referencias heredadas cuando describen interfaces reales.
 
+Para importar datos de otros agentes, instala el complemento oficial con `hermes plugins install agent-importers` y revisa la vista previa con `hermes import-agent <source> --dry-run`. Consulta la [guía de importación](website/docs/user-guide/import-from-other-agents.md).
+
 ## Código abierto y atribución
 
 El repositorio sigue siendo público. Aino deriva de [Hermes Agent](https://github.com/NousResearch/hermes-agent), de Nous Research. Los avisos originales se conservan en [LICENSE](LICENSE) y [NOTICE.md](NOTICE.md). Los servicios y componentes de terceros mantienen sus propios nombres y licencias.

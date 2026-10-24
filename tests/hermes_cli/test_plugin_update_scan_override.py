@@ -149,7 +149,7 @@ def _subdir_install(tmp_path, monkeypatch):
     return repo, plugin, target
 
 
-def test_subdirectory_update_asks_before_a_caution_scan_and_never_accepts_dangerous(tmp_path, monkeypatch):
+def test_subdirectory_update_asks_before_a_caution_scan_and_never_accepts_dangerous(tmp_path, monkeypatch, admission_env):
     """The re-clone path used to accept a caution verdict without asking, because replacing the tree and
     accepting the scan were one ``force``. Now it follows the git-pull rule: caution needs ``force``,
     dangerous is refused even with it, and a refusal leaves the installed tree and record alone."""

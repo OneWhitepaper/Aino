@@ -49,6 +49,8 @@ export interface PluginCatalogEntry {
   subdir?: string
   /** The description's first sentence: what the plugin does, in one line. */
   summary?: string
+  /** official / verified / community; badges the install dialog. */
+  tier?: string
 }
 
 export type PluginCatalogLookupError = 'invalid_name' | 'unavailable' | 'unknown'
@@ -72,7 +74,7 @@ function asEntry(raw: unknown): null | PluginCatalogEntry {
   const row = raw as Record<string, unknown>
 
   // A field that is not a string reads as absent.
-  const text = (field: 'description' | 'name' | 'repo' | 'sha' | 'subdir'): string | undefined => {
+  const text = (field: 'description' | 'name' | 'repo' | 'sha' | 'subdir' | 'tier'): string | undefined => {
     const value = row[field]
 
     return typeof value === 'string' ? value : undefined
@@ -90,7 +92,8 @@ function asEntry(raw: unknown): null | PluginCatalogEntry {
     repo,
     sha: text('sha') || undefined,
     subdir: text('subdir') || undefined,
-    summary: firstSentence(text('description') ?? '')
+    summary: firstSentence(text('description') ?? ''),
+    tier: text('tier') || undefined
   }
 }
 

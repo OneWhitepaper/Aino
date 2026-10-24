@@ -45,6 +45,8 @@ Read [CONTRIBUTING.md](CONTRIBUTING.md) for environment setup and checks, and [D
 
 The runtime's command remains `hermes`; examples such as `hermes model`, `hermes setup` and `hermes desktop` are compatibility interfaces, not another product to install. The desktop defaults to Aino's data location, while explicit homes and supported legacy runtime discovery retain their documented behavior. See [the brand and compatibility boundary](docs/aino-brand-boundary.md).
 
+Agent imports use the existing official `agent-importers` plugin: install it with `hermes plugins install agent-importers`, then preview an import with `hermes import-agent <source> --dry-run`. See [Import from Other Agents](website/docs/user-guide/import-from-other-agents.md).
+
 Detailed runtime references live in this fork's [manual](website/docs/getting-started/quickstart.md), [configuration guide](website/docs/user-guide/configuration.md), [provider guide](website/docs/integrations/providers.md) and [developer architecture](website/docs/developer-guide/architecture.md). These inherited references can retain Hermes command, module and API names. They are not instructions to replace Aino with the upstream distribution.
 
 ## Open source and attribution

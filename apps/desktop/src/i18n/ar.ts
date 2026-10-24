@@ -13,6 +13,10 @@ import { arSettings } from './ar_settings'
 import { defineLocale, type TranslationOverrides } from './define-locale'
 
 export const arOverrides = {
+  connectorOffer: {
+    heading: 'الاحتفاظ بالتطبيقات المتصلة',
+    body: 'سجّل الدخول بحساب Nous مجاني للاحتفاظ بالتطبيقات التي ربطتها، مثل Gmail أو Slack، في حسابك.'
+  },
 
   catalog: {
     add: 'إضافة',
@@ -39,6 +43,7 @@ export const arOverrides = {
     installing: 'جارٍ التثبيت…',
     installComplete: (name: string) => `تم تثبيت «${name}»`,
     destinationChanged: 'تغيرت وجهة التثبيت. أغلق هذا الحوار وافتح رابط التثبيت مجددًا.',
+    install: 'تثبيت',
     installed: 'المثبتة',
     searchSkills: 'البحث في المهارات',
     searchPlugins: 'البحث في الإضافات',

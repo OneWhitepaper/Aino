@@ -47,6 +47,8 @@ cd Aino
 
 详细技术资料位于本仓库的[配置指南](website/docs/user-guide/configuration.md)、[模型服务商指南](website/docs/integrations/providers.md)和[开发架构](website/docs/developer-guide/architecture.md)。继承的运行时文档仍可能使用 Hermes 的命令、模块或 API 名称，这不代表要求把 Aino 替换成上游发行版。
 
+从其他智能体迁移时，复用官方 `agent-importers` 插件：先运行 `hermes plugins install agent-importers`，再用 `hermes import-agent <source> --dry-run` 预览。详见[迁移指南](website/docs/user-guide/import-from-other-agents.md)。
+
 ## 开源与来源
 
 GitHub 仓库继续公开。Aino 是基于 Nous Research 的 [Hermes Agent](https://github.com/NousResearch/hermes-agent) 开发的独立产品。原始版权、许可与贡献者署名保留在 [LICENSE](LICENSE) 和 [NOTICE.md](NOTICE.md) 中。第三方模型、依赖和托管服务保留其真实名称、许可及服务条款。

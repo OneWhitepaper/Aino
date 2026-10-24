@@ -1,3 +1,4 @@
+import { mergeUsage } from '@hermes/shared'
 import { useCallback, useRef } from 'react'
 
 import { createPlatformDraft } from '@/api/platform-session-binding'
@@ -310,12 +311,7 @@ export function useSessionActions({
       setSelectedStoredSessionId(null)
       selectedStoredSessionIdRef.current = null
       setMessages([])
-      setCurrentUsage({
-        calls: 0,
-        input: 0,
-        output: 0,
-        total: 0
-      })
+      setCurrentUsage({ calls: 0, input: 0, output: 0, total: 0 })
       setSessionStartedAt(null)
       setTurnStartedAt(null)
       // The composer's model/effort/fast is sticky UI state (persisted in
@@ -1293,7 +1289,7 @@ export function useSessionActions({
               }
 
               if (usage) {
-                setCurrentUsage(current => ({ ...current, ...usage, compressions: usage.compressions }))
+                setCurrentUsage(current => ({ ...mergeUsage(current, usage), compressions: usage.compressions }))
               }
 
               publishDegradedWarmCache()

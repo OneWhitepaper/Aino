@@ -15,6 +15,10 @@ import { zhHantFirstRun } from './zh-hant_first_run'
 import { zhHantSettings } from './zh-hant_settings'
 
 export const zhHantOverrides = {
+  connectorOffer: {
+    heading: '保留已連接的應用程式',
+    body: '登入免費的 Nous 帳戶，即可將 Gmail、Slack 等已連接的應用程式保留在你的帳戶中。'
+  },
 
   catalog: {
     add: '新增',
@@ -41,6 +45,7 @@ export const zhHantOverrides = {
     installing: '正在安裝…',
     installComplete: (name: string) => `已安裝「${name}」`,
     destinationChanged: '安裝目標已變更。請關閉此對話框並重新開啟安裝連結。',
+    install: '安裝',
     installed: '已安裝',
     searchSkills: '搜尋技能',
     searchPlugins: '搜尋外掛',

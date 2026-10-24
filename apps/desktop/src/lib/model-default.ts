@@ -100,6 +100,13 @@ export async function evaluateModelDefaultReadiness(
           source: 'platform_model'
         }
       }
+
+      // A configured default is an explicit provider check, so retain its actual failure
+      // rather than replacing it with the first-launch credential instructions.
+      return evaluateRuntimeReadiness(requestGateway, {
+        ...options,
+        requestedProvider: options.requestedProvider ?? (resolved.provider || undefined)
+      })
     } catch (error) {
       if (error instanceof PlatformSelectionError) {
         return {
