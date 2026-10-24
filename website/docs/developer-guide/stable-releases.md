@@ -342,6 +342,14 @@ branch, and a manual dispatch starts one at any time. Runs queue with
 `cancel-in-progress: false`. If `main` has no new commits, the run resumes an
 unpublished canary or does nothing. Historical `-canary.` identities are
 unsupported.
+
+Aino's server/CDN downloads do not provision this R2 publication channel. The
+workflow reads the existing R2 configuration from `release-signing`. When
+`CLOUDFLARE_R2_PUBLIC_URL` is unset, a scheduled run explicitly reports that
+automatic publication is inactive and creates no tag or release and performs no
+pruning. Manual runs require the complete publication configuration before any
+of those mutations. An inactive scheduled run is not a successful publication.
+
 If a process stops after pushing the canary tag, rerunning the command verifies
 the exact remote tag object, repairs the missing draft, and redispatches until the
 protected canary head receipts that tag.
@@ -369,7 +377,7 @@ build. Source checkouts are separate: `main` is their only valid channel.
 
 `--build-commit` prints its deterministic downloads-page URL before dispatch,
 including in dry runs:
-`https://hermes-assets.nousresearch.com/releases/commit/<full-sha>/index.html`.
+`https://petoi.cn/releases/commit/<full-sha>/index.html`.
 `CLOUDFLARE_R2_PUBLIC_URL` overrides the public origin. After admission, the
 commit summary runs even when a build or assembly job fails; it lists only
 receipt-backed existing downloads and marks missing binaries as not built.
