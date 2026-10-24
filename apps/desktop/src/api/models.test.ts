@@ -7,6 +7,7 @@ afterEach(() => {
   setApiRequestConnection(null)
   setApiRequestProfile(null)
   Reflect.deleteProperty(window, 'hermesDesktop')
+  vi.useRealTimers()
   vi.restoreAllMocks()
 })
 
@@ -31,3 +32,25 @@ it.each(['local', 'captured-remote'])(
     )
   }
 )
+
+it('keeps the configured model when the bounded backend probe returns its fallback', async () => {
+  vi.useFakeTimers()
+  const assignment = { model: 'configured-model', provider: 'custom', effective_context_length: 64_000 }
+
+  const api = vi.fn(({ timeoutMs }: { timeoutMs: number }) => new Promise((resolve, reject) => {
+    const timeout = setTimeout(() => reject(new Error('backend request timed out')), timeoutMs)
+
+    // The backend probe may spend its full five-second budget before returning
+    // the configured assignment; delivery still needs a small transport margin.
+    setTimeout(() => {
+      clearTimeout(timeout)
+      resolve(assignment)
+    }, 5_100)
+  }))
+
+  Object.defineProperty(window, 'hermesDesktop', { configurable: true, value: { api } })
+
+  const result = getGlobalModelInfo().then(value => ({ value }), error => ({ error }))
+  await vi.advanceTimersByTimeAsync(5_100)
+  await expect(result).resolves.toEqual({ value: assignment })
+})

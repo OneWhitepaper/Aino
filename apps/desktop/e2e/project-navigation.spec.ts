@@ -6,7 +6,12 @@ import { DatabaseSync } from 'node:sqlite'
 import { receivedUserTexts } from '../../../tests-js/scripts/mock-server'
 
 import { buildAppEnv, launchDesktop, type MockBackendFixture, setupMockBackend, waitForAppReady } from './fixtures'
-import { expect, test } from './test'
+import { stopFixtureGateway } from './platform-workspace-proof'
+import { expect as baseExpect, test } from './test'
+
+// These real gateway workflows can spend five seconds probing model metadata
+// before returning a fallback; assertions must leave time for that response.
+const expect = baseExpect.configure({ timeout: 30_000 })
 
 let fixture: MockBackendFixture
 const rendererErrors: string[] = []
@@ -39,7 +44,11 @@ test.afterAll(async ({}, testInfo) => {
     cpSync(logs, testInfo.outputPath('backend-logs'), { recursive: true })
   }
 
-  await fixture?.cleanup()
+  try {
+    if (fixture) {stopFixtureGateway(fixture.sandbox)}
+  } finally {
+    await fixture?.cleanup()
+  }
 })
 
 function storedSessions(): Array<{ id: string; cwd: string | null }> {
@@ -143,6 +152,7 @@ test('separates pinned, project and ordinary chats through real folder and sessi
   mkdirSync(folder)
   await pickFolder(folder)
   await openFolder.click()
+  await expect(openFolder).toBeEnabled()
   await expect(projects).toHaveAttribute('aria-expanded', 'true')
   await expect(sidebar.getByRole('button', { name: 'New session in sample-app', exact: true }).first()).toBeVisible()
   await expect(
@@ -204,6 +214,15 @@ test('separates pinned, project and ordinary chats through real folder and sessi
   ).toBeVisible()
   const createdChat = await sendMessage('Created project conversation')
   expect(createdChat.cwd).toBe(createdFolder)
+  const contextUsage = page.locator('[data-slot="composer-context-usage"]:visible')
+  await expect(contextUsage).toHaveAttribute('aria-label', /Context Usage.*\d+% Full/)
+  await contextUsage.click()
+  const contextDetails = page.locator('[data-slot="composer-context-details"]')
+  await expect(contextDetails).toContainText('/ 64k Tokens')
+  await expect(contextDetails).not.toContainText('Loading breakdown')
+  await expect(contextDetails).not.toContainText('No context data yet')
+  await page.screenshot({ path: testInfo.outputPath('project-context-usage.png') })
+  await page.keyboard.press('Escape')
   await plainNew.click()
   await expect(sidebar.getByRole('button', { name: 'Open Created project', exact: true })).toBeVisible()
 

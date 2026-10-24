@@ -32,6 +32,7 @@ import {
   setApiRequestProfile,
   setSttLease,
   speakText,
+  STARTUP_REQUEST_TIMEOUT_MS,
   transcribeAudio,
   triggerCronJob
 } from './hermes'
@@ -472,19 +473,19 @@ describe('Hermes REST helpers', () => {
     expect(call.timeoutMs).toBeUndefined()
   })
 
-  it('bounds the live model metadata probe so a dead provider cannot hold the settings page', async () => {
+  it('bounds the model metadata response while leaving time for the backend fallback', async () => {
     api.mockResolvedValue({})
     api.mockClear()
 
     await getGlobalModelInfo()
 
-    // /api/model/info resolves the live context window by probing the
-    // configured provider; it carries its own short budget rather than the
-    // 60s startup timeout so Model Settings degrades instead of hanging
-    // when the provider backend is unreachable (#63214).
+    // The backend can spend five seconds probing before returning its fallback.
+    // Leave transport time for that response while remaining below the startup
+    // budget so a dead provider cannot hold Model Settings hostage (#63214).
     const call = api.mock.calls[0]?.[0] as { path: string; timeoutMs?: number }
     expect(call.path).toBe('/api/model/info')
-    expect(call.timeoutMs).toBe(5_000)
+    expect(call.timeoutMs).toBeGreaterThan(5_000)
+    expect(call.timeoutMs).toBeLessThan(STARTUP_REQUEST_TIMEOUT_MS)
   })
 
   // Explicit profile/connection writes (deleting a profile) carry the foreground
