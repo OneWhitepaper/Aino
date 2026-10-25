@@ -4,8 +4,10 @@ import path from 'node:path'
 import { execFileSync, spawnSync } from 'node:child_process'
 import { parseArgs } from 'node:util'
 import { fileURLToPath } from 'node:url'
+import { setTimeout as delay } from 'node:timers/promises'
 import { OUT_OF_STORE_PUBLISHER, channelBuildRequest } from '../../../scripts/msix-shared.mjs'
 import { codesignTeam, channelStampAssertions } from './mac-bundled-manifest.cjs'
+import { runCommand } from '../../../apps/desktop/scripts/notarize.mjs'
 
 const identityModule = fileURLToPath(new URL('../../../apps/desktop/product-identity.cjs', import.meta.url))
 
@@ -84,7 +86,22 @@ export function verifyMacMetadata(plist, stamp, { commit, tag, channelRequest })
   return version
 }
 
-function verifyMac(app, commit, tag, arch, channelRequest) {
+export async function validateMacTicket(app, { run = runCommand, sleep = delay, log = console.warn } = {}) {
+  const delays = [15000, 30000, 60000]
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await run('/usr/bin/xcrun', ['stapler', 'validate', app], { timeout: 120000 })
+    } catch (error) {
+      const output = `${error.stdout ?? ''}\n${error.stderr ?? ''}\n${error.message}`
+      // A lost CloudKit connection says nothing about the ticket's validity.
+      if (error.code !== 68 || !/NSURLErrorDomain\s+Code=-1005\b/.test(output) || attempt === delays.length) throw error
+      log(`${output}\n[bundle smoke] Apple ticket lookup disconnected; retry ${attempt + 1}/${delays.length} in ${delays[attempt] / 1000}s`)
+      await sleep(delays[attempt])
+    }
+  }
+}
+
+async function verifyMac(app, commit, tag, arch, channelRequest) {
   const expected = bundleIdentity(commit, tag, channelRequest)
 
   execFileSync('/usr/bin/codesign', ['--verify', '--deep', '--strict', '--verbose=2', app], { stdio: 'inherit' })
@@ -104,7 +121,9 @@ function verifyMac(app, commit, tag, arch, channelRequest) {
   const archs = execFileSync('/usr/bin/lipo', ['-archs', exe], { encoding: 'utf8' }).trim().split(/\s+/)
   const native = { arm64: 'arm64', x64: 'x86_64' }[arch]
   if (archs.length !== 1 || archs[0] !== native) throw new Error(`Expected native ${arch}, got ${archs}`)
-  execFileSync('/usr/bin/xcrun', ['stapler', 'validate', app], { stdio: 'inherit' })
+  const ticket = await validateMacTicket(app)
+  process.stdout.write(ticket.stdout)
+  process.stderr.write(ticket.stderr)
   execFileSync('/usr/sbin/spctl', ['-a', '-vv', '-t', 'exec', app], { stdio: 'inherit' })
   const root = childPath(app, 'Contents/Resources/agent-payload')
   return { app, exe, root, arch, version, bundleIdentifier: expected.appId, teamIdentifier: signedTeam, stamp }
@@ -134,7 +153,7 @@ function prepareDirectories(work, out) {
   fs.mkdirSync(canonical[1], { recursive: true })
 }
 
-function main() {
+async function main() {
   const [command, ...args] = process.argv.slice(2)
   const { values } = parseArgs({ args, options: Object.fromEntries(
     ['commit', 'tag', 'platform', 'format', 'stamp', 'app', 'arch', 'out', 'work', 'channel-request'].map(key => [key, { type: 'string' }])) })
@@ -152,7 +171,7 @@ function main() {
     prepare: () => prepareDirectories(values.work, values.out),
   }
   if (!commands[command]) throw new Error(`Unknown command: ${command}`)
-  const result = commands[command]()
+  const result = await commands[command]()
   if (result !== undefined) {
     const text = JSON.stringify(result, null, 2) + '\n'
     if (values.out && command !== 'prepare') fs.writeFileSync(values.out, text)
@@ -160,4 +179,4 @@ function main() {
   }
 }
 
-if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) main()
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) await main()
