@@ -515,6 +515,7 @@ from fastapi import HTTPException
 from hermes_cli.web_server_sessions import _open_session_db_at_path
 
 phase = sys.argv[2]
+progress_delay = float(sys.argv[3])
 original = ssr.connect_tracked
 
 class SlowConnection:
@@ -528,7 +529,7 @@ class SlowConnection:
         return getattr(self._conn, name)
     def set_progress_handler(self, handler, n):
         def slow():
-            time.sleep(0.01)
+            time.sleep(progress_delay)
             return handler() if handler is not None else 0
         return self._conn.set_progress_handler(slow, 5)
     def close(self):
@@ -582,7 +583,8 @@ def test_browse_budget_interrupt_during_begin_raises_budget_error_without_writin
 
 @pytest.mark.platforms("linux", "macos")
 @pytest.mark.parametrize("phase", ["ddl"])
-def test_slow_browse_reconcile_gives_up_inside_its_budget_and_boot_waits_it_out(tmp_path, phase):
+@pytest.mark.parametrize("progress_delay", [0.01, 0.1], ids=["warm", "cold"])
+def test_slow_browse_reconcile_gives_up_inside_its_budget_and_boot_waits_it_out(tmp_path, phase, progress_delay):
     """R2-2: the busy timeout bounds lock contention, not SQL execution. A slow DDL must be
     interrupted at the browse budget (rolled back, retryable 503), and gateway boot's wait must
     outlast that budget, so a slow browse never turns into a startup refusal. (The integrity scan
@@ -602,17 +604,20 @@ def test_slow_browse_reconcile_gives_up_inside_its_budget_and_boot_waits_it_out(
     home = _profile_home(tmp_path)
     path = _lagging_store_with_history(home, rows=400)
     before = _file_state(path)
-    browse = subprocess.Popen([sys.executable, "-c", _SLOW_BROWSE, str(path), phase], env=os.environ,
+    browse = subprocess.Popen([sys.executable, "-c", _SLOW_BROWSE, str(path), phase, str(progress_delay)], env=os.environ,
                               stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
-    assert browse.stdout.readline().strip() == "started"
-    assert browse.stdout.readline().strip() == "slowed", "the slow phase never ran under the lock"
     booting = ProfileOwnership()
     try:
+        assert browse.stdout.readline().strip() == "started"
+        assert browse.stdout.readline().strip() == "slowed", "the slow phase never ran under the lock"
         bootstrap._reserve_waiting_out_browse_reconcile(booting, [home])  # default wait: must not raise
         assert booting.owns(home)
+        out = browse.communicate(timeout=60)[0]
     finally:
         booting.close()
-    out = browse.communicate(timeout=60)[0]
+        if browse.poll() is None:
+            browse.kill()
+        browse.communicate(timeout=60)
     result = next(line for line in out.splitlines() if line.startswith("RESULT"))
     _, status, elapsed, *detail = result.split(" ", 3)
     assert status == "503", out

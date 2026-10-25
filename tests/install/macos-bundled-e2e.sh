@@ -38,10 +38,12 @@
 
 set -euo pipefail
 
+# fresh-new independently installs and smokes NEW. It never records an upgrade pass.
 PHASE="all"
 MANIFEST_URL=""
 ARCH="arm64"
 UPDATE_WATCH_TIMEOUT_MS=900000
+if [ "${HERMES_E2E_LEGACY_RETRY:-false}" = true ]; then UPDATE_WATCH_TIMEOUT_MS=1800000; fi
 
 while [ "$#" -gt 0 ]; do
   case "$1" in
@@ -162,23 +164,25 @@ derive_app_bin() { # $1: .app path
 }
 
 phase_install() {
+  local side="${1:-old}"
+  case "$side" in old|new) ;; *) fail "invalid install side: $side" ;; esac
   stage_bundle_inputs
   require_manifest
   local old_tag old_version old_commit old_identity old_team old_zip
-  old_tag="$(manifest_side old tag)"; old_version="$(manifest_side old version)"
-  old_commit="$(manifest_side old commit)"; old_identity="$(manifest_side old identity)"
-  old_team="$(manifest_side old teamId)"
-  old_zip="$(manifest_side old artifact)"
-  step "installing OLD bundle $old_tag ($old_version, identity $old_identity, team $old_team)"
+  old_tag="$(manifest_side "$side" tag)"; old_version="$(manifest_side "$side" version)"
+  old_commit="$(manifest_side "$side" commit)"; old_identity="$(manifest_side "$side" identity)"
+  old_team="$(manifest_side "$side" teamId)"
+  old_zip="$(manifest_side "$side" artifact)"
+  step "installing $side bundle $old_tag ($old_version, identity $old_identity, team $old_team)"
 
   # Artifact bytes: the common resolver verified the remote sha256; we
   # re-verify the local file so the unzipped bundle provably IS the release.
   local got
   got="$(shasum -a 256 "$old_zip" | awk '{print $1}')"
   local want
-  want="$("$NODE_BIN" -e 'const m=require(process.argv[1]); console.log(m.old.artifact.sha256.toLowerCase())' "$MANIFEST")"
-  [ "$got" = "$want" ] || fail "OLD zip sha256 $got != manifest $want"
-  ok "OLD zip sha256 verified"
+  want="$("$NODE_BIN" -e 'const m=require(process.argv[1]); console.log(m[process.argv[2]].artifact.sha256.toLowerCase())' "$MANIFEST" "$side")"
+  [ "$got" = "$want" ] || fail "$side zip sha256 $got != manifest $want"
+  ok "$side zip sha256 verified"
 
   # Install into an ISOLATED .app location (not /Applications): unzip the
   # real release zip. No patching, no re-signing, no fakes.
@@ -187,13 +191,13 @@ phase_install() {
   unzip -q "$old_zip" -d "$WORK_ROOT/install-old"
   local found
   found="$(find "$WORK_ROOT/install-old" -maxdepth 2 -name '*.app' -type d | head -1)"
-  [ -n "$found" ] || fail "no .app inside the OLD release zip"
+  [ -n "$found" ] || fail "no .app inside the selected release zip"
   local old_app="$WORK_ROOT/apps/Hermes.app"
   mv "$found" "$old_app"
 
   local old_app_bin
   old_app_bin="$(derive_app_bin "$old_app")"
-  ok "OLD bundle installed at $old_app (executable: $(basename "$old_app_bin"))"
+  ok "$side bundle installed at $old_app (executable: $(basename "$old_app_bin"))"
 
   "$NODE_BIN" "$ASSETS/mac-bundled-verify.mjs" verify-app \
     --app "$old_app" \
@@ -203,8 +207,8 @@ phase_install() {
     --expect-identity "$old_identity" \
     --expect-team "$old_team" \
     --expect-arch "$ARCH" \
-    --out "$LOG_DIR/old-bundle-verify.json" 2>&1 | ts_prefix | tee "$LOG_DIR/old-bundle-verify.log"
-  ok "OLD bundle: codesign, identity, team, version, arch and stamp all match the manifest"
+    --out "$LOG_DIR/$side-bundle-verify.json" 2>&1 | ts_prefix | tee "$LOG_DIR/$side-bundle-verify.log"
+  ok "$side bundle: codesign, identity, team, version, arch and stamp all match the manifest"
 
   # Persist the installed paths for the update phase: the executable name
   # comes from the bundle's own Info.plist and both phases must agree.
@@ -249,7 +253,8 @@ phase_update() {
   # $HERMES_HOME/config.yaml; the feed base URL below is appended after.
   # shellcheck source=../e2e-assets/mock-provider.sh
   source "$ASSETS/mock-provider.sh"
-  PATH="$(dirname "$HERMES_E2E_NODE"):$PATH" mock_start "$WORK_ROOT"
+  local account_env="$WORK_ROOT/account-env.json"
+  PATH="$(dirname "$HERMES_E2E_NODE"):$PATH" mock_start "$WORK_ROOT" "$account_env"
 
   # ── the controlled loopback feed ──────────────────────────────────────
   step "building the loopback feed from the REAL NEW signed zip"
@@ -310,6 +315,7 @@ phase_update() {
   (cd "$WORK_ROOT" && "$NODE_BIN" "$ASSETS/mac-bundled-update-driver.mjs" \
     --app-bin "$old_app_bin" \
     --old-sha "$(manifest_side old commit)" --chat-out "$LOG_DIR" --mock-url "$HERMES_E2E_MOCK_URL" \
+    --platform-account-env "$account_env" \
     --shots "$LOG_DIR/shots" \
     --close-timeout-ms 420000 2>&1 | ts_prefix | tee "$LOG_DIR/app-update.log") || rc=$?
   log_group "in-app update (Playwright) transcript" "$LOG_DIR/app-update.log"
@@ -352,36 +358,50 @@ phase_update() {
     --out "$LOG_DIR/new-bundle-verify.json" 2>&1 | ts_prefix | tee "$LOG_DIR/new-bundle-verify.log"
   ok "NEW bundle: codesign, identity ($new_identity), team ($new_team), version $new_version, stamp commit $new_commit"
 
-  # ── old processes are gone, new backend healthy ───────────────────────
-  if pgrep -f "$old_app_bin" | grep -qvw "$new_pid"; then
-    fail "old bundle processes still running after the update"
-  fi
-  ok "no stale bundle processes"
-
+  # The watcher already proved OLD exited. Discover the canonical gateway
+  # through its private control identity, rather than scanning argv or
+  # assuming that a detached gateway is an Electron child.
   step "probing the relaunched app's backend health"
-  local backend_pid backend_port health
-  backend_pid="$(ps -axo pid=,ppid=,command= | awk -v p="$new_pid" '$2==p && /serve/ && /hermes/ {print $1; exit}')"
-  if [ -n "$backend_pid" ]; then
-    backend_port="$(lsof -nP -a -p "$backend_pid" -iTCP -sTCP:LISTEN | awk 'NR>1{sub(".*:","",$9); print $9; exit}')"
-  fi
-  if [ -z "${backend_port:-}" ]; then
-    # Fallback: the newest listening 127.0.0.1 port owned by any descendant
-    # of the relaunched app (helper wrappers can reparent the backend).
-    backend_port="$(lsof -nP -iTCP -sTCP:LISTEN 2>/dev/null | awk '/127\.0\.0\.1/ {print $1, $2, $9}' \
-      | while read -r _ pid addr; do
-          if ps -o ppid= -p "$pid" 2>/dev/null | grep -qw "$new_pid" || [ "$pid" = "$new_pid" ]; then
-            printf '%s\n' "${addr##*:}"; break
-          fi
-        done)"
-  fi
-  [ -n "$backend_port" ] || fail "could not discover the relaunched backend's listening port"
-  for _ in $(seq 1 30); do
-    health="$(curl -fsS "http://127.0.0.1:$backend_port/api/health" 2>/dev/null)" && break
-    sleep 2
-  done
-  [ -n "${health:-}" ] || fail "backend /api/health never answered on 127.0.0.1:$backend_port"
-  printf '%s\n' "$health" | ts_prefix | tee "$LOG_DIR/backend-health.json"
-  ok "backend healthy on 127.0.0.1:$backend_port"
+  "$NODE_BIN" --input-type=module - "$old_app" "$HERMES_HOME" "$new_commit" <<'NODE' | tee "$LOG_DIR/backend-health.json"
+import fs from 'node:fs';
+import path from 'node:path';
+import { execFileSync } from 'node:child_process';
+const [app, home, commit] = process.argv.slice(2);
+const resources = path.join(app, 'Contents/Resources');
+const stamp = JSON.parse(fs.readFileSync(path.join(resources, 'install-stamp.json'), 'utf8'));
+const payload = path.join(resources, 'agent-payload');
+const script = `import json,pathlib,sys,time,urllib.request,psutil
+from hermes_cli.gateway_runtime import discover_gateway_endpoint
+from gateway.status import get_process_start_time,get_running_pid_identity_strict,read_runtime_status
+home=pathlib.Path(sys.argv[1]).resolve()
+deadline=time.monotonic()+90
+while True:
+    discovery=discover_gateway_endpoint(home,timeout=2)
+    if discovery.state=='ready' or time.monotonic()>=deadline:
+        break
+    time.sleep(0.5)
+assert discovery.state=='ready' and discovery.endpoint is not None, discovery.state
+assert discovery.endpoint.code_sha==sys.argv[2], 'Gateway did not restart on NEW code'
+identity=get_running_pid_identity_strict(home/'gateway.pid')
+assert identity is not None
+pid,_=identity
+state=read_runtime_status(home/'gateway_state.json')
+assert state['pid']==pid and state['start_time']==get_process_start_time(pid)
+assert pathlib.Path(state['hermes_home']).resolve()==home
+assert pathlib.Path(psutil.Process(pid).exe()).resolve()==pathlib.Path(sys.executable).resolve()
+with urllib.request.urlopen(discovery.endpoint.api_origin+'/api/health',timeout=10) as response:
+    assert response.status==200
+    health=json.load(response)
+assert health.get('ok') is True and health.get('commit')==sys.argv[2], 'Health identity differs from NEW code'
+print(json.dumps({'pid':pid,'startTime':state['start_time'],'home':str(home),'commit':discovery.endpoint.code_sha,'health':health}))`;
+const output = execFileSync(path.join(payload, stamp.runtime.storePython), ['-B', '-c', script, home, commit], {
+  cwd: payload, encoding: 'utf8', timeout: 110_000,
+  env: { ...process.env, NO_PROXY: '127.0.0.1,localhost,::1', no_proxy: '127.0.0.1,localhost,::1',
+    PYTHONPATH: [stamp.runtime.repoDir, stamp.runtime.sitePackages].map(p => path.join(payload, p)).join(path.delimiter) },
+});
+process.stdout.write(output);
+NODE
+  ok "NEW canonical gateway identity and health verified without starting one"
 
   # ── user state survived ───────────────────────────────────────────────
   preserve_after_upgrade
@@ -409,14 +429,30 @@ phase_update() {
     --root "$old_app/Contents/Resources/agent-payload" --origin bundled \
     --home "$HERMES_HOME" --user-data "$HERMES_DESKTOP_USER_DATA_DIR" \
     --out "$LOG_DIR" --phase new --expect-commit "$new_commit" --mock-url "$HERMES_E2E_MOCK_URL" \
+    --platform-account --tool-smoke \
     2>&1 | ts_prefix | tee "$LOG_DIR/desktop-chat-new.log"
 
   step "PASS: packaged $(manifest_side old tag) -> $new_tag via the real About -> Update now route"
 }
 
+phase_fresh_new() {
+  phase_install new
+  local app bin
+  app="$("$NODE_BIN" -e 'console.log(require(process.argv[1]).app)' "$INSTALL_RECEIPT")"
+  bin="$(derive_app_bin "$app")"
+  "$NODE_BIN" "$ASSETS/desktop-smoke.ts" --exe "$bin" \
+    --root "$app/Contents/Resources/agent-payload" --origin bundled \
+    --home "$WORK_ROOT/first-use-home" --user-data "$WORK_ROOT/first-use-user-data" \
+    --out "$LOG_DIR" --phase installed --expect-commit "$(manifest_side new commit)" \
+    --platform-account --tool-smoke \
+    2>&1 | ts_prefix | tee "$LOG_DIR/desktop-chat-installed.log"
+  ok "NEW fresh installation, native sign-in, chat and file tool passed (separate from upgrade acceptance)"
+}
+
 case "$PHASE" in
   install) phase_install ;;
   update)  phase_update ;;
+  fresh-new) phase_fresh_new ;;
   all)     phase_install; phase_update ;;
-  *) echo "error: --phase must be install, update or all" >&2; exit 1 ;;
+  *) echo "error: --phase must be install, update, fresh-new or all" >&2; exit 1 ;;
 esac

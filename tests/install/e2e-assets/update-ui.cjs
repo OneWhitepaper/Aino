@@ -145,4 +145,19 @@ async function readManualUpdateCommand(page) {
   return command
 }
 
-module.exports = { assertStagedBranch, pickAppWindow, openAbout, readManualUpdateCommand, waitForUpdate }
+// Diagnostic only: a recovered legacy timeout must never count as a single-click pass.
+async function waitForMacUpdateClose(page, waitForClose, { timeoutMs, allow = false, log, shot }) {
+  try {
+    await waitForClose(timeoutMs)
+    return { applyAttempts: 1, verificationTimeoutObserved: false }
+  } catch (error) {
+    if (!allow || !await page.getByText('macOS update verification timed out.', { exact: true }).isVisible()) throw error
+    await shot(page, '06-legacy-verification-timeout')
+    log('legacy verification timeout observed; diagnostic uses the existing Try again button once')
+    await page.getByRole('button', { name: 'Try again', exact: true }).click({ timeout: 10_000 })
+    await waitForClose(timeoutMs)
+    return { applyAttempts: 2, verificationTimeoutObserved: true }
+  }
+}
+
+module.exports = { waitForMacUpdateClose, assertStagedBranch, pickAppWindow, openAbout, readManualUpdateCommand, waitForUpdate }

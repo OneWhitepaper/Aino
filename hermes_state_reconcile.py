@@ -232,8 +232,11 @@ def _apply_additive_schema(path: Path, budget: _Budget | None = None) -> None:
     budget.check()
     with closing(connect_tracked(path, tracking_path=path, timeout=budget.busy_timeout(),
                                  isolation_level=None)) as conn:
-        _reapply_durability_barriers(conn)
         budget.arm(conn)
+        # macOS PRAGMAs can parse a cold schema while gateway.lock is held.
+        # Their best-effort helpers swallow interruption, so check the budget before DDL.
+        _reapply_durability_barriers(conn)
+        budget.check()
         try:
             conn.execute('BEGIN IMMEDIATE')
             cursor = conn.cursor()

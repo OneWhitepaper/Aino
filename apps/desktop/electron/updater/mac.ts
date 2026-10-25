@@ -112,8 +112,8 @@ export interface NativeMacUpdater {
   checkForUpdates(): void
 }
 
-/** Download completion alone does not mean Squirrel accepted the signature. */
-export function prepareMacInstall(native: NativeMacUpdater, timeoutMs: number = 120_000): Promise<void> {
+/** Bundled payload extraction and signature checks can take several minutes on supported Macs. */
+export function prepareMacInstall(native: NativeMacUpdater, timeoutMs: number = 15 * 60_000): Promise<void> {
   return new Promise<void>((resolve: () => void, reject: (error: Error) => void): void => {
     const cleanup = (): void => {
       clearTimeout(timer)
