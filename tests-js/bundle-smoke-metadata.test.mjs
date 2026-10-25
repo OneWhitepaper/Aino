@@ -1,15 +1,52 @@
-import { expect, test } from 'vitest'
+import { expect, test, vi } from 'vitest'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { execFileSync, spawnSync } from 'node:child_process'
-import { bundleIdentity, verifyBundleStamp, verifyMacMetadata } from '../tests/install/e2e-assets/bundle-smoke-metadata.mjs'
+import { bundleIdentity, validateMacTicket, verifyBundleStamp, verifyMacMetadata } from '../tests/install/e2e-assets/bundle-smoke-metadata.mjs'
 
 import { stampAssertions } from '../tests/install/e2e-assets/mac-bundled-manifest.cjs'
 import { randomBytes } from 'node:crypto'
 import { buildStampPayload } from '../apps/desktop/scripts/write-build-stamp.mjs'
 
 const commit = 'a'.repeat(40)
+
+const disconnectedTicketLookup = () => Object.assign(new Error('stapler validate failed'), {
+  code: 68,
+  stderr: 'Error Domain=NSURLErrorDomain Code=-1005 "The network connection was lost."\nThe validate action failed! Error 68.'
+})
+
+test('ticket admission recovers a disconnected Apple lookup without changing the validation command', async () => {
+  const result = { stdout: 'The validate action worked!\n', stderr: '' }
+  const run = vi.fn().mockRejectedValueOnce(disconnectedTicketLookup())
+    .mockRejectedValueOnce(disconnectedTicketLookup()).mockResolvedValue(result)
+  const sleep = vi.fn(async () => {}), log = vi.fn()
+  expect(await validateMacTicket('/fixture/Aino.app', { run, sleep, log })).toBe(result)
+  expect(run.mock.calls).toEqual(Array.from({ length: 3 }, () => [
+    '/usr/bin/xcrun', ['stapler', 'validate', '/fixture/Aino.app'], { timeout: 120000 }
+  ]))
+  expect(sleep.mock.calls).toEqual([[15000], [30000]])
+  expect(log).toHaveBeenCalledTimes(2)
+})
+
+test('ticket admission rejects invalid tickets immediately and never admits exhausted network failures', async () => {
+  for (const error of [
+    Object.assign(new Error('Record not found'), { code: 65 }),
+    Object.assign(new Error('Ticket does not match this app'), { code: 68 }),
+    Object.assign(new Error('NSURLErrorDomain Code=-1005'), { code: 1 })
+  ]) {
+    const run = vi.fn().mockRejectedValue(error), sleep = vi.fn(async () => {}), log = vi.fn()
+    await expect(validateMacTicket('/fixture/Aino.app', { run, sleep, log })).rejects.toBe(error)
+    expect(run).toHaveBeenCalledTimes(1)
+    expect(sleep).not.toHaveBeenCalled()
+    expect(log).not.toHaveBeenCalled()
+  }
+  const error = disconnectedTicketLookup()
+  const run = vi.fn().mockRejectedValue(error), sleep = vi.fn(async () => {}), log = vi.fn()
+  await expect(validateMacTicket('/fixture/Aino.app', { run, sleep, log })).rejects.toBe(error)
+  expect(run).toHaveBeenCalledTimes(4)
+  expect(sleep.mock.calls).toEqual([[15000], [30000], [60000]])
+})
 
 test('Linux AppImage provenance uses the production external update owner', () => {
   const env = { HERMES_DESKTOP_VARIANT: 'bundled', HERMES_PAYLOAD_TAG: 'v0.1.0' }
