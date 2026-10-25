@@ -14,7 +14,7 @@
 import path from 'node:path'
 import fs from 'node:fs'
 import { copyFile, mkdir, readdir } from 'node:fs/promises'
-import { archToString } from 'builder-util'
+import { Arch } from 'builder-util'
 import { runPython } from '../../../scripts/build/python.mjs'
 
 import { assertPackagedBackendReadyArtifact, resolvePackagedAsarPath } from './backend-ready-artifact.mjs'
@@ -85,7 +85,7 @@ export default async function afterPack(context) {
     if (fs.existsSync(payload)) {
       runPython([
         path.resolve(import.meta.dirname, '../../../scripts/bundles/payload.py'), 'share-wheels', payload], { stdio: 'inherit' })
-      console.log(`[after-pack] selected native slices in ${thinPayloadBinaries(payload, archToString(context.arch))} payload binaries`)
+      console.log(`[after-pack] selected native slices in ${thinPayloadBinaries(payload, Arch[context.arch])} payload binaries`)
       const entitlements = path.join(import.meta.dirname, '..', 'electron', 'entitlements.mac.inherit.plist')
       const { identity, keychain } = await resolveSigningIdentity(context.packager)
       const nested = signNestedChromium(payload, { entitlements, identity, keychain })

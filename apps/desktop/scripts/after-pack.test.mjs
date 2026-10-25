@@ -5,6 +5,7 @@ import {
 } from './backend-ready-artifact.mjs'
 import { mkdtemp, mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { createRequire } from 'node:module'
+import { execFileSync } from 'node:child_process'
 import os from 'node:os'
 import path from 'node:path'
 import { Platform, PlatformPackager } from 'app-builder-lib'
@@ -19,6 +20,15 @@ async function configuredHook(context) {
   const hook = await import(new URL(`../${builderConfig.afterPack}`, import.meta.url).href)
   await hook.default(context)
 }
+
+it('loads the configured afterPack hook in native Node before packaging', () => {
+  const hookUrl = new URL(`../${builderConfig.afterPack}`, import.meta.url).href
+  // Vitest rewrites ESM imports; electron-builder loads this module in Node.
+  const output = execFileSync(process.execPath, ['--input-type=module', '-e',
+    `const hook = await import(${JSON.stringify(hookUrl)}); process.stdout.write(typeof hook.default)`
+  ], { encoding: 'utf8' })
+  expect(output).toBe('function')
+})
 
 // The afterPack readiness guard reads the packaged bundle's unpacked main;
 // every fixture here packs a valid dual-token matcher so the tests keep
