@@ -78,7 +78,7 @@ export async function resolveModelDefault(scope: ProfileScope, managedRoute?: Pl
   return { model, provider, platform }
 }
 
-/** Desktop defaults can use session-bound Aino authority without a profile API key. */
+/** Aino inference can be available without a profile API key or a chosen default. */
 export async function evaluateModelDefaultReadiness(
   requestGateway: RuntimeReadinessRequester,
   scope: ProfileScope,
@@ -109,11 +109,18 @@ export async function evaluateModelDefaultReadiness(
       })
     } catch (error) {
       if (error instanceof PlatformSelectionError) {
+        const state = catalog.state.get()
+
+        // Default resolution rejects an absent/unavailable default even when another
+        // authorized model is selectable. Health must not turn that choice into an outage.
+        const selectionAvailable = error.code === 'model_unavailable' && state.phase === 'ready' &&
+          state.models.some(model => model.state === 'available')
+
         return {
           checksDisagree: false,
           freeTier: false,
-          ready: false,
-          reason: error.message,
+          ready: selectionAvailable,
+          reason: selectionAvailable ? null : error.message,
           source: 'platform_model'
         }
       }
