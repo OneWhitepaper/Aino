@@ -4,9 +4,10 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { platformAccountActions } from '@/api/platform'
 import { getGlobalModelInfo, getStatus } from '@/hermes'
 import { setRuntimeI18nLocale } from '@/i18n'
+import { resolveModelDefault } from '@/lib/model-default'
 import { runtimeReadinessDisplay, type RuntimeReadinessRequester } from '@/lib/runtime-readiness'
 import { clearGatewayManagedCapabilities, recordGatewayReadyCapability } from '@/store/gateway-managed-capability'
-import { platformModelCatalog } from '@/store/platform-models'
+import { platformModelCatalog, readPlatformDefault } from '@/store/platform-models'
 import { deferred } from '@/test/deferred'
 import { platformModel, platformSnapshot } from '@/test/platform-model'
 
@@ -92,6 +93,29 @@ it('recognizes a first-install Aino default without configuring a provider or is
   }))
   expect(getGlobalModelInfo).toHaveBeenCalledWith({ connectionId: 'local', profile: 'default' })
 })
+
+it.each(['no-default', 'unavailable-default'] as const)(
+  'keeps selectable Aino inference ready without inventing a default: %s', async defaultState => {
+    const platform = installPlatform()
+    const selectable = { ...platformModel('selectable'), is_default: false }
+    platform.list.mockResolvedValue(defaultState === 'no-default'
+      ? [selectable]
+      : [{ ...platformModel('unavailable-default'), state: 'quota_exhausted' }, selectable])
+    await platform.load()
+
+    const { result } = renderHook(() => useStatusSnapshot('open', requestGateway, scope))
+
+    await waitFor(() => expect(result.current.inferenceStatus).toMatchObject({
+      ready: true, reason: null, source: 'platform_model'
+    }))
+    expect(runtimeReadinessDisplay(result.current.inferenceStatus)).toBe('ready')
+    expect(result.current.inferenceStatus?.model).toBeUndefined()
+
+    // Health is not a model choice: the user must still pick a model before a new chat.
+    await expect(resolveModelDefault(scope)).rejects.toMatchObject({ code: 'model_unavailable' })
+    expect(readPlatformDefault('user-a', scope, 'development', 'http://127.0.0.1:7001')).toBeNull()
+  }
+)
 
 it('refreshes on Aino login while unfocused and retires its readiness immediately on logout', async () => {
   const platform = installPlatform()
