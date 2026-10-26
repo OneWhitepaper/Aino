@@ -214,10 +214,7 @@ export function createPlatformRuntimeBindingController(options: {
           managed_model_binding?: number
           binding_revision?: number
           managed_model_context_window?: boolean
-        }>(
-          'session.claim_managed_model',
-          { ...params, session_ticket: input.session_ticket }
-        )
+        }>('session.claim_managed_model', { ...params, session_ticket: input.session_ticket })
 
         check()
 
@@ -294,21 +291,22 @@ export function createPlatformRuntimeBindingController(options: {
               return
             }
 
-            const renewed = await retained.rpc.request<{ bound?: boolean; model_id?: string; binding_revision?: number }>(
-              'session.renew_managed_model',
-              {
-                ...params,
-                binding_revision: revision,
-                model: next.model.model,
-                api_mode: next.model.api_mode,
-                capabilities: next.model.capabilities,
-                ...(supportsContextWindow ? { context_window: next.model.context_window } : {}),
-                credential_id: next.credential_id,
-                api_key: next.api_key,
-                base_url: next.base_url,
-                expires_at: next.expires_at
-              }
-            )
+            const renewed = await retained.rpc.request<{
+              bound?: boolean
+              model_id?: string
+              binding_revision?: number
+            }>('session.renew_managed_model', {
+              ...params,
+              binding_revision: revision,
+              model: next.model.model,
+              api_mode: next.model.api_mode,
+              capabilities: next.model.capabilities,
+              ...(supportsContextWindow ? { context_window: next.model.context_window } : {}),
+              credential_id: next.credential_id,
+              api_key: next.api_key,
+              base_url: next.base_url,
+              expires_at: next.expires_at
+            })
 
             if (!stillOwned()) {
               return
@@ -412,11 +410,19 @@ export async function openPlatformGateway(wsUrl: string, headers: Record<string,
       const native = parsed.searchParams.has('native_dial')
       const ticket = native ? parsed.searchParams.get('ticket') : null
 
-      if (native && !ticket) {throw new Error('Native gateway requires a fresh private ticket')}
+      if (native && !ticket) {
+        throw new Error('Native gateway requires a fresh private ticket')
+      }
 
-      if (ticket) {parsed.searchParams.delete('ticket')}
+      if (ticket) {
+        parsed.searchParams.delete('ticket')
+      }
 
-      return new WebSocket(parsed.toString(), native ? [CANONICAL_GATEWAY_PROTOCOL, `hermes-gateway-ticket.${ticket}`] : undefined, { headers })
+      return new WebSocket(
+        parsed.toString(),
+        native ? [CANONICAL_GATEWAY_PROTOCOL, `hermes-gateway-ticket.${ticket}`] : undefined,
+        { headers }
+      )
     }
   })
 

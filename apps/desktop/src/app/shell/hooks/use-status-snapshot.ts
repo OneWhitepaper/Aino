@@ -34,7 +34,10 @@ export function useStatusSnapshot(
   const warningMessage: string = t.notifications.sharedProfileWarning
   const [statusSnapshot, setStatusSnapshot] = useState<StatusResponse | null>(null)
   const [inferenceStatus, setInferenceStatus] = useState<RuntimeReadinessResult | null>(null)
-  const { key: gatewayScope, route: { connectionId, profile } } = platformDefaultScope(scope)
+  const {
+    key: gatewayScope,
+    route: { connectionId, profile }
+  } = platformDefaultScope(scope)
   const catalog = platformModelCatalog()
 
   useEffect(() => {
@@ -115,7 +118,9 @@ export function useStatusSnapshot(
       const current = () => !cancelled && generation === readinessGeneration
 
       const [inferenceResult] = await Promise.allSettled([
-        evaluateModelDefaultReadiness(requestGateway, route, { defaultReason: translateNow('desktop.providerCredentialRequired') }),
+        evaluateModelDefaultReadiness(requestGateway, route, {
+          defaultReason: translateNow('desktop.providerCredentialRequired')
+        }),
         refreshFreeTierStatus(requestGateway, current)
       ])
 

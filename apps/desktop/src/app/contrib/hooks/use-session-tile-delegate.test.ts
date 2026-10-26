@@ -14,9 +14,7 @@ import { $activeSessionId, setSessionOwnerHint, setSessions } from '@/store/sess
 import { $sessionTiles, sessionTileDelegate } from '@/store/session-states'
 import type { SessionInfo } from '@/types/hermes'
 
-import {
-  clearSingleFlightSessionResumeState
-} from '../../session/hooks/use-prompt-actions/single-flight-resume'
+import { clearSingleFlightSessionResumeState } from '../../session/hooks/use-prompt-actions/single-flight-resume'
 
 import { useSessionTileDelegate } from './use-session-tile-delegate'
 
@@ -593,7 +591,14 @@ describe('useSessionTileDelegate resumeTile', () => {
     const updateSessionState = vi.fn()
 
     vi.mocked(requestGatewayForProfile).mockResolvedValueOnce({
-      info: { cwd: '/repo/.worktrees/restored', fast: true, model: 'gpt-5', provider: 'openai', reasoning_effort: 'high', running: false },
+      info: {
+        cwd: '/repo/.worktrees/restored',
+        fast: true,
+        model: 'gpt-5',
+        provider: 'openai',
+        reasoning_effort: 'high',
+        running: false
+      },
       session_id: 'runtime-model'
     } as never)
 

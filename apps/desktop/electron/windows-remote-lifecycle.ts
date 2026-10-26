@@ -638,7 +638,9 @@ async function connectWindowsRemote(deps) {
   const inspection = await helper(ssh, runtime, 'inspect', [runtime.hermesPath])
 
   if (!inspection.supported) {
-    const error: any = new Error(`Update ${PRODUCT_NAME} on the remote Windows host before connecting with Desktop SSH.`)
+    const error: any = new Error(
+      `Update ${PRODUCT_NAME} on the remote Windows host before connecting with Desktop SSH.`
+    )
     error.kind = 'update-required'
     throw error
   }

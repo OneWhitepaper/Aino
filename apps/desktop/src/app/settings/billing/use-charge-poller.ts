@@ -303,10 +303,7 @@ function timeoutOutcome(portalUrl?: null | string): ChargeFlowOutcome {
   }
 }
 
-function renderChargeFailed(
-  reason: null | string | undefined,
-  copy = runtimeTranslations().billing.charge
-): string {
+function renderChargeFailed(reason: null | string | undefined, copy = runtimeTranslations().billing.charge): string {
   switch ((reason || '').trim()) {
     case 'authentication_required':
       return copy.authenticationRequired

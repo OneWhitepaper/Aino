@@ -488,9 +488,9 @@ export function useSessionActions({
             return null
           }
 
-        if (createIntentRef.current === createIntent) {
-          createIntentRef.current = null
-        }
+          if (createIntentRef.current === createIntent) {
+            createIntentRef.current = null
+          }
 
           resetViewSync()
           activeSessionIdRef.current = created.session_id
@@ -882,10 +882,7 @@ export function useSessionActions({
           // so the right rail kept showing the previous session's tree when a
           // Project "+" created a session while the main chat was occupied
           // (#76696). Split/side tiles deliberately stay isolated.
-          const runtimeInfo = applyRuntimeInfo(
-            created.info,
-            backgroundRuntimeOptions(capturedRoute, requestedProfile)
-          )
+          const runtimeInfo = applyRuntimeInfo(created.info, backgroundRuntimeOptions(capturedRoute, requestedProfile))
 
           updateSessionState(created.session_id, state => ({ ...state, ...runtimeInfo, isUnsentDraft: true }), stored)
 

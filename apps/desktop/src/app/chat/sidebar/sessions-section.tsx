@@ -641,7 +641,11 @@ export function SidebarSessionsSection({
           : 'sessions'
 
   return (
-    <SidebarGroup className={cn(rootClassName, DROP_TARGET_RING)} data-sidebar-section={sectionKind} {...sessionDropTargetProps(pinned)}>
+    <SidebarGroup
+      className={cn(rootClassName, DROP_TARGET_RING)}
+      data-sidebar-section={sectionKind}
+      {...sessionDropTargetProps(pinned)}
+    >
       <SidebarSectionHeader
         action={headerAction}
         collapsible={collapsible}

@@ -106,7 +106,13 @@ export function PageSearchShell({
             )}
             data-aino-page-header=""
           >
-            <div className={cn('flex min-w-0 items-center justify-start', tabsAlign === 'start' && 'col-start-2 row-start-1 justify-end', searchHidden && tabsAlign === 'start' && 'hidden')}>
+            <div
+              className={cn(
+                'flex min-w-0 items-center justify-start',
+                tabsAlign === 'start' && 'col-start-2 row-start-1 justify-end',
+                searchHidden && tabsAlign === 'start' && 'hidden'
+              )}
+            >
               {!searchHidden && onSearchChange && (
                 <SearchField
                   containerClassName="max-w-[45vw]"
@@ -118,13 +124,26 @@ export function PageSearchShell({
               )}
             </div>
             {hasTabs ? (
-              <div className={cn('flex min-w-0 items-center', tabsAlign === 'start' ? 'col-start-1 row-start-1 justify-start' : 'justify-center')} data-tour="page-tabs">
+              <div
+                className={cn(
+                  'flex min-w-0 items-center',
+                  tabsAlign === 'start' ? 'col-start-1 row-start-1 justify-start' : 'justify-center'
+                )}
+                data-tour="page-tabs"
+              >
                 <ShellTabs activeTab={activeTab} align={tabsAlign} onTabChange={onTabChange} tabs={tabs!} />
               </div>
             ) : (
               <span />
             )}
-            <div className={cn('flex min-w-0 items-center justify-end', tabsAlign === 'start' && 'col-start-3 row-start-1')}>{searchTrailingAction}</div>
+            <div
+              className={cn(
+                'flex min-w-0 items-center justify-end',
+                tabsAlign === 'start' && 'col-start-3 row-start-1'
+              )}
+            >
+              {searchTrailingAction}
+            </div>
           </div>
         )}
         {filters ? <div className="flex flex-wrap items-center gap-x-2 gap-y-1 px-3 pb-2">{filters}</div> : null}

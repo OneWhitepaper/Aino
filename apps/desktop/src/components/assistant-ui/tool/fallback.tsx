@@ -654,12 +654,13 @@ function ToolEntry({ part }: ToolEntryProps) {
   // `opacity-0` (yet still clickable) button straddling the caret/duration made
   // the disclosure caret hard to hit. Copy now lives in the expanded body's
   // top-right, where it can't fight the caret for the right edge.
-  const trailing = !embedded && isPending ? (
-    <span className="flex shrink-0 items-center gap-1.5">
-      <TimelineTimestamp className={SCAFFOLD_META_CLASS} completedAt={completedAt} timestamp={timestamp} />
-      <ToolRunningMeta seconds={elapsed} toolCallId={toolCallId} />
-    </span>
-  ) : undefined
+  const trailing =
+    !embedded && isPending ? (
+      <span className="flex shrink-0 items-center gap-1.5">
+        <TimelineTimestamp className={SCAFFOLD_META_CLASS} completedAt={completedAt} timestamp={timestamp} />
+        <ToolRunningMeta seconds={elapsed} toolCallId={toolCallId} />
+      </span>
+    ) : undefined
 
   // Once a turn has settled, a hover/focus-revealed dismiss lets the user clear
   // a completed/failed row that would otherwise sit at the tail of the chat.
