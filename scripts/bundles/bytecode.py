@@ -12,10 +12,10 @@ stall on first launch. Baking turns that into a warm read:
   source validation and never rewritten, so staging-repack mtimes
   cannot invalidate it and a stale source cannot trigger a rewrite
   into the sealed tree;
-* the baked pycs are chmodded read-only BEFORE packaging, so no
-  incidental write can touch them; the dirs stay writable because
-  in-place rebuilds rmtree the tree, and asserted coverage means no
-  cache-miss write can target them;
+* baked pycs are read-only except on macOS, where Squirrel needs owner-write
+  permission to remove quarantine during an update. Unchecked hashes and
+  complete coverage still keep normal imports from rewriting signed caches;
+  cache directories stay writable for in-place payload rebuilds;
 * the runtime's sys.pycache_prefix redirect is dropped when the baked
   marker is present (the prefix relocates READS too — see
   scripts/build/launcher_wrapper.py), so imports read the source-
@@ -30,6 +30,8 @@ invalid test data) are counted and skipped, not failed.
 
 import subprocess
 from pathlib import Path
+
+from hermes_platform.host.facts import os_family
 
 MARKER = ".hermes-baked-pycache"
 
@@ -74,9 +76,27 @@ def _uncovered(root: Path) -> tuple[list[Path], int]:
     return missing, unparseable
 
 
+def prepare_bytecode_permissions(root: Path) -> int:
+    """Keep sealed caches compatible with the platform's native installer.
+
+    Squirrel removes quarantine from every extracted file before replacing
+    the app. Read-only pycs make that fail with EACCES and roll back the update.
+    Only permissions change; unchecked-hash bytecode remains byte-identical.
+    """
+    mode = 0o644 if os_family() == "darwin" else 0o444
+    count = 0
+    for source_root in _import_roots(root):
+        for cache in source_root.rglob("__pycache__"):
+            for pyc in cache.iterdir():
+                if pyc.is_file():
+                    pyc.chmod(mode)
+                    count += 1
+    return count
+
+
 def bake_bytecode(root: Path, python: Path) -> dict:
-    """Compile every payload module with the staged interpreter and seal the
-    caches read-only. ``root`` is the payload root; ``python`` MUST be the
+    """Compile every payload module with the staged interpreter and prepare
+    sealed caches. ``root`` is the payload root; ``python`` MUST be the
     payload's own staged interpreter binary."""
     root = Path(root).resolve()
     python = Path(python).resolve()
@@ -95,16 +115,6 @@ def bake_bytecode(root: Path, python: Path) -> dict:
                              f"({sample}…): a fresh install would cold-compile them "
                              "every launch")
         total += sum(1 for _ in source_root.rglob("__pycache__/*.pyc"))
-    # Pycs are read-only BEFORE packaging so a stale-source rewrite (which
-    # unchecked-hash never triggers anyway) or any incidental write can never
-    # touch them and the macOS signature never observes a pyc change. The
-    # __pycache__ DIRS stay writable: in-place payload rebuilds rmtree the
-    # tree (native._prepare_native), and complete asserted coverage plus
-    # unchecked-hash means no cache-miss write can ever target these dirs.
-    for source_root in _import_roots(root):
-        for cache in source_root.rglob("__pycache__"):
-            for pyc in cache.iterdir():
-                if pyc.is_file():
-                    pyc.chmod(0o444)
+    prepare_bytecode_permissions(root)
     (root / MARKER).write_text("unchecked-hash\n", encoding="utf-8")
     return {"modules": total, "marker": str(root / MARKER)}
