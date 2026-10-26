@@ -362,39 +362,15 @@ phase_update() {
   # through its private control identity, rather than scanning argv or
   # assuming that a detached gateway is an Electron child.
   step "probing the relaunched app's backend health"
-  "$NODE_BIN" --input-type=module - "$old_app" "$HERMES_HOME" "$new_commit" <<'NODE' | tee "$LOG_DIR/backend-health.json"
+  "$NODE_BIN" --input-type=module - "$old_app" "$HERMES_HOME" "$new_commit" "$ASSETS/bundled-gateway-health.py" <<'NODE' | tee "$LOG_DIR/backend-health.json"
 import fs from 'node:fs';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
-const [app, home, commit] = process.argv.slice(2);
+const [app, home, commit, probe] = process.argv.slice(2);
 const resources = path.join(app, 'Contents/Resources');
 const stamp = JSON.parse(fs.readFileSync(path.join(resources, 'install-stamp.json'), 'utf8'));
 const payload = path.join(resources, 'agent-payload');
-const script = `import json,pathlib,sys,time,urllib.request,psutil
-from hermes_cli.gateway_runtime import discover_gateway_endpoint
-from gateway.status import get_process_start_time,get_running_pid_identity_strict,read_runtime_status
-home=pathlib.Path(sys.argv[1]).resolve()
-deadline=time.monotonic()+90
-while True:
-    discovery=discover_gateway_endpoint(home,timeout=2)
-    if discovery.state=='ready' or time.monotonic()>=deadline:
-        break
-    time.sleep(0.5)
-assert discovery.state=='ready' and discovery.endpoint is not None, discovery.state
-assert discovery.endpoint.code_sha==sys.argv[2], 'Gateway did not restart on NEW code'
-identity=get_running_pid_identity_strict(home/'gateway.pid')
-assert identity is not None
-pid,_=identity
-state=read_runtime_status(home/'gateway_state.json')
-assert state['pid']==pid and state['start_time']==get_process_start_time(pid)
-assert pathlib.Path(state['hermes_home']).resolve()==home
-assert pathlib.Path(psutil.Process(pid).exe()).resolve()==pathlib.Path(sys.executable).resolve()
-with urllib.request.urlopen(discovery.endpoint.api_origin+'/api/health',timeout=10) as response:
-    assert response.status==200
-    health=json.load(response)
-assert health.get('ok') is True and health.get('commit')==sys.argv[2], 'Health identity differs from NEW code'
-print(json.dumps({'pid':pid,'startTime':state['start_time'],'home':str(home),'commit':discovery.endpoint.code_sha,'health':health}))`;
-const output = execFileSync(path.join(payload, stamp.runtime.storePython), ['-B', '-c', script, home, commit], {
+const output = execFileSync(path.join(payload, stamp.runtime.storePython), ['-B', probe, home, commit], {
   cwd: payload, encoding: 'utf8', timeout: 110_000,
   env: { ...process.env, NO_PROXY: '127.0.0.1,localhost,::1', no_proxy: '127.0.0.1,localhost,::1',
     PYTHONPATH: [stamp.runtime.repoDir, stamp.runtime.sitePackages].map(p => path.join(payload, p)).join(path.delimiter) },
