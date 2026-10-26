@@ -25,6 +25,7 @@ import { _electron } from '@playwright/test';
 import { createRequire } from 'node:module';
 import { runUpdateWindowChat } from './update-window-chat.mjs';
 import { updateWindowEnvironment } from './smoke-env.mjs';
+import { prepareNativeLaunchEnvironment } from './mac-native-launch-env.mjs';
 import { signInPlatformFixture } from '../../../tests-js/scripts/platform-account-fixture.ts';
 import { writeMockProviderConfig } from '../../../tests-js/scripts/mock-provider-config.ts';
 
@@ -41,6 +42,7 @@ const { values } = parseArgs({
     'chat-out': { type: 'string' },
     'mock-url': { type: 'string' },
     'platform-account-env': { type: 'string' },
+    'native-env-state': { type: 'string' },
     'close-timeout-ms': { type: 'string', default: '420000' },
     'retry-legacy-verification-timeout': { type: 'boolean', default: process.env.HERMES_E2E_LEGACY_RETRY === 'true' },
   },
@@ -69,6 +71,10 @@ const launchEnv = updateWindowEnvironment(
 if (values['platform-account-env']) {
   Object.assign(launchEnv, JSON.parse(fs.readFileSync(values['platform-account-env'], 'utf8')));
   writeMockProviderConfig(launchEnv.HERMES_HOME, values['mock-url'], 'language: en');
+}
+if (values['native-env-state']) {
+  if (process.platform !== 'darwin' || process.env.GITHUB_ACTIONS !== 'true') throw new Error('Native relaunch sandbox is CI-only');
+  prepareNativeLaunchEnvironment(launchEnv, values['native-env-state']);
 }
 const app = await _electron.launch({
   executablePath: appBin,

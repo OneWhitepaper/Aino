@@ -1,7 +1,7 @@
 """Baked bytecode: staging contract and launcher marker behavior."""
 
-import os
 import sys
+import stat
 from pathlib import Path
 
 import pytest
@@ -22,7 +22,7 @@ def _make_payload(root: Path) -> Path:
     return root
 
 
-def test_bake_produces_readonly_unchecked_hash_pycs(tmp_path):
+def test_bake_produces_unchecked_hash_pycs(tmp_path):
     root = _make_payload(tmp_path)
     result = bake_bytecode(root, Path(sys.executable))
     assert (root / MARKER).read_text().strip() == "unchecked-hash"
@@ -31,9 +31,46 @@ def test_bake_produces_readonly_unchecked_hash_pycs(tmp_path):
     # hash-based (bit0) and unchecked (bit1 clear). Timestamp pycs would be 0;
     # checked-hash would be 3.
     assert pyc.read_bytes()[4:8] == b"\x01\x00\x00\x00"
-    # read-only before packaging: a cache-miss write cannot land
-    assert not os.access(pyc, os.W_OK) or pyc.stat().st_mode & 0o222 == 0
     assert result["modules"] >= 3
+
+
+@pytest.mark.platforms("not macos")
+def test_baked_caches_remain_readonly_outside_macos(tmp_path):
+    root = _make_payload(tmp_path)
+    bake_bytecode(root, Path(sys.executable))
+    pyc = next((root / "hermes-agent/pkg/__pycache__").glob("mod*.pyc"))
+    assert pyc.stat().st_mode & 0o222 == 0
+
+
+@pytest.mark.platforms("macos")
+def test_macos_updater_can_remove_quarantine_without_rewriting_bytecode(tmp_path):
+    import subprocess
+
+    root = _make_payload(tmp_path)
+    bake_bytecode(root, Path(sys.executable))
+    pyc = next((root / "hermes-agent/pkg/__pycache__").glob("mod*.pyc"))
+    packaged_mode = stat.S_IMODE(pyc.stat().st_mode)
+    # Archive extraction writes quarantine before restoring the packaged mode.
+    pyc.chmod(packaged_mode | stat.S_IWUSR)
+    subprocess.run(
+        ["/usr/bin/xattr", "-w", "com.apple.quarantine",
+         "0083;00000000;AinoUpdateTest;", str(pyc)], check=True,
+    )
+    pyc.chmod(packaged_mode)
+    removal = subprocess.run(
+        ["/usr/bin/xattr", "-d", "com.apple.quarantine", str(pyc)],
+        capture_output=True, text=True, check=False,
+    )
+    assert removal.returncode == 0, removal.stderr
+    before = pyc.read_bytes()
+    (root / "hermes-agent/pkg/mod.py").write_text("X = 9999\n")
+    value = subprocess.check_output(
+        [sys.executable, "-I", "-c",
+         "import sys; sys.path.insert(0,sys.argv[1]); from pkg.mod import X; print(X)",
+         str(root / "hermes-agent")], text=True,
+    )
+    assert value.strip() == "1"
+    assert pyc.read_bytes() == before
 
 
 def test_bake_fails_closed_on_uncompilable_module(tmp_path):
