@@ -78,6 +78,7 @@ export const SystemMessage: FC = () => {
 
   if (modelSwitch) {
     const { model, previous_model: previousModel } = modelSwitch
+
     const label = model
       ? previousModel
         ? t.assistant.thread.modelChangedFrom(previousModel, model)

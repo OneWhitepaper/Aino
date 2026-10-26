@@ -73,11 +73,7 @@ import {
 } from '../overlays/panel'
 import type { SetStatusbarItemGroup } from '../shell/statusbar-controls'
 
-import {
-  localizedBlueprintCopy,
-  localizedBlueprintDisplayDefaults,
-  localizedBlueprintField
-} from './blueprint-copy'
+import { localizedBlueprintCopy, localizedBlueprintDisplayDefaults, localizedBlueprintField } from './blueprint-copy'
 import { BlueprintSlotControl, blueprintSlotHelp, cleanBlueprintFieldError, initialBlueprintValues } from './blueprints'
 import { mutateAndRefreshCronJobs, refreshCronJobs, triggerAndRefreshCronJobs } from './cron-actions'
 import {

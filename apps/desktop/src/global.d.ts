@@ -12,7 +12,13 @@ import type { KeepAwakeMode } from '../electron/power-save'
 import type { UpdateHoldWire } from '../electron/update-hold-types'
 import type { UpdateRunReport } from '../electron/updater/update-metrics'
 import type { WindowSizeMode } from '../electron/window-size-types'
-import type { PlatformAccountBridge, PlatformBillingBridge, PlatformDevicesBridge, PlatformDiagnosticsBridge, PlatformModelsBridge } from '../shared/platform-contract'
+import type {
+  PlatformAccountBridge,
+  PlatformBillingBridge,
+  PlatformDevicesBridge,
+  PlatformDiagnosticsBridge,
+  PlatformModelsBridge
+} from '../shared/platform-contract'
 
 import type { WakeIndicatorState } from './lib/wake-indicator'
 import type {
@@ -44,10 +50,7 @@ declare global {
       // Resolve a backend connection. Omit `profile` (or pass the primary) for
       // the window's backend; pass a named profile to dial/reuse that profile's
       // cached gateway descriptor.
-      getConnection: (
-        profile?: string | null,
-        options?: { priority?: 'foreground' }
-      ) => Promise<HermesConnection>
+      getConnection: (profile?: string | null, options?: { priority?: 'foreground' }) => Promise<HermesConnection>
       // Registry-scoped backend resolution: dial (connectionId, profile). An
       // empty/local connectionId delegates to the legacy getConnection path.
       getConnectionFor?: (payload: {

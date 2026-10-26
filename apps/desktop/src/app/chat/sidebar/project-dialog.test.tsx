@@ -46,9 +46,16 @@ vi.mock('@/i18n', () => ({
 // interactions under test.
 // vi.mock factories are hoisted above the rest of the file, so the atom must
 // be created inside vi.hoisted to exist by the time the factory runs.
-const { $newProjectDropPlacement, $projectDialog, addProjectFolders, createProject, enterProject, pickProjectFolder, pickProjectFolders } =
-  vi.hoisted(() => {
-    const { atom } = require('nanostores') as typeof Nanostores
+const {
+  $newProjectDropPlacement,
+  $projectDialog,
+  addProjectFolders,
+  createProject,
+  enterProject,
+  pickProjectFolder,
+  pickProjectFolders
+} = vi.hoisted(() => {
+  const { atom } = require('nanostores') as typeof Nanostores
 
   return {
     // Where a "New project" DRAG armed its drop (null = plain click).

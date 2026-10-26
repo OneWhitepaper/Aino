@@ -806,8 +806,7 @@ export async function refreshOnboarding(ctx: OnboardingContext, stillWanted?: ()
         id: 'runtime-not-ready',
         kind: 'info',
         title: 'Runtime not ready',
-        message:
-          `${PRODUCT_NAME} could not verify the running backend on startup. Some features may be unavailable until the gateway is reachable.`
+        message: `${PRODUCT_NAME} could not verify the running backend on startup. Some features may be unavailable until the gateway is reachable.`
       })
     }
 

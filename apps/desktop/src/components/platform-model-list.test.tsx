@@ -26,7 +26,14 @@ function LocationProbe() {
 function installPlatform(models: () => Promise<ReturnType<typeof platformModel>[]>, signedIn = true) {
   const snapshot = signedIn
     ? platformSnapshot()
-    : { revision: 2, phase: 'signed_out' as const, account: null, mode: 'development' as const, remember_state: 'none' as const, error: null }
+    : {
+        revision: 2,
+        phase: 'signed_out' as const,
+        account: null,
+        mode: 'development' as const,
+        remember_state: 'none' as const,
+        error: null
+      }
 
   Object.defineProperty(window, 'hermesDesktop', {
     configurable: true,
@@ -134,13 +141,7 @@ it('offers the existing custom-model picker when the catalog is empty', async ()
   await installPlatform(async () => [])
   const chooseCustom = vi.fn()
 
-  render(
-    <PlatformModelList
-      managedCapability="supported"
-      onChooseCustom={chooseCustom}
-      onSelect={() => undefined}
-    />
-  )
+  render(<PlatformModelList managedCapability="supported" onChooseCustom={chooseCustom} onSelect={() => undefined} />)
 
   fireEvent.click(await screen.findByRole('button', { name: 'Choose custom model' }))
 
@@ -169,11 +170,7 @@ it.each([
 
   render(
     <MemoryRouter initialEntries={['/chat']}>
-      <PlatformModelList
-        managedCapability="supported"
-        onChooseCustom={chooseCustom}
-        onSelect={() => undefined}
-      />
+      <PlatformModelList managedCapability="supported" onChooseCustom={chooseCustom} onSelect={() => undefined} />
       <LocationProbe />
     </MemoryRouter>
   )
@@ -192,13 +189,7 @@ it('offers custom models for an unavailable catalog row', async () => {
   ])
   const chooseCustom = vi.fn()
 
-  render(
-    <PlatformModelList
-      managedCapability="supported"
-      onChooseCustom={chooseCustom}
-      onSelect={() => undefined}
-    />
-  )
+  render(<PlatformModelList managedCapability="supported" onChooseCustom={chooseCustom} onSelect={() => undefined} />)
 
   const recovery = await screen.findByRole('group', { name: 'Unavailable Fixture recovery' })
   fireEvent.click(recovery.querySelector<HTMLButtonElement>('button[data-action="custom"]')!)
@@ -210,13 +201,7 @@ it('offers custom models when the connection cannot bind Aino models', async () 
   await installPlatform(async () => [platformModel()])
   const chooseCustom = vi.fn()
 
-  render(
-    <PlatformModelList
-      managedCapability="unsupported"
-      onChooseCustom={chooseCustom}
-      onSelect={() => undefined}
-    />
-  )
+  render(<PlatformModelList managedCapability="unsupported" onChooseCustom={chooseCustom} onSelect={() => undefined} />)
 
   fireEvent.click(await screen.findByRole('button', { name: 'Choose custom model' }))
 

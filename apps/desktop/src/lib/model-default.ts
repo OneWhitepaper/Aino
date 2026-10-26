@@ -48,7 +48,12 @@ export async function resolveModelDefault(scope: ProfileScope, managedRoute?: Pl
     throw new PlatformSelectionError('platform_account_changed')
   }
 
-  const preferredId = readPlatformDefault(currentAccount.account.id, capturedScope, currentAccount.mode, owner.platform_origin)
+  const preferredId = readPlatformDefault(
+    currentAccount.account.id,
+    capturedScope,
+    currentAccount.mode,
+    owner.platform_origin
+  )
 
   const state = catalog.state.get()
   const managedSupported = managedModelRouteCapability(managedRoute ?? capturedScope.route) === 'supported'
@@ -113,7 +118,9 @@ export async function evaluateModelDefaultReadiness(
 
         // Default resolution rejects an absent/unavailable default even when another
         // authorized model is selectable. Health must not turn that choice into an outage.
-        const selectionAvailable = error.code === 'model_unavailable' && state.phase === 'ready' &&
+        const selectionAvailable =
+          error.code === 'model_unavailable' &&
+          state.phase === 'ready' &&
           state.models.some(model => model.state === 'available')
 
         return {

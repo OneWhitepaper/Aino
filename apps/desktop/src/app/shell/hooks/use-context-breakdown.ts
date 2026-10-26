@@ -100,16 +100,22 @@ export function useContextBreakdown({ busy, enabled, requestGateway, refreshKey,
   const [generation, setGeneration] = useState(0)
 
   useEffect(() => {
-    if (!sessionId) {return}
+    if (!sessionId) {
+      return
+    }
 
     const listener = (id: string, next: number) => {
-      if (id === sessionId) {setGeneration(next)}
+      if (id === sessionId) {
+        setGeneration(next)
+      }
     }
 
     invalidationListeners.add(listener)
     setGeneration(invalidationGenerations.get(sessionId) ?? 0)
 
-    return () => { invalidationListeners.delete(listener) }
+    return () => {
+      invalidationListeners.delete(listener)
+    }
   }, [sessionId])
 
   useEffect(() => {
@@ -141,7 +147,9 @@ export function useContextBreakdown({ busy, enabled, requestGateway, refreshKey,
       try {
         const breakdown = await requestGateway<ContextBreakdown>('session.context_breakdown', { session_id: runtimeId })
 
-        if (cancelled) {return}
+        if (cancelled) {
+          return
+        }
 
         // Empty metadata can precede lazy initialization. Missing capacity alone
         // must not discard measured occupancy or restored historical details.
@@ -154,7 +162,9 @@ export function useContextBreakdown({ busy, enabled, requestGateway, refreshKey,
         setFetched({ breakdown, requestGateway, refreshKey, sessionId: runtimeId })
         setLoading(false)
       } catch {
-        if (!cancelled) {scheduleRetry()}
+        if (!cancelled) {
+          scheduleRetry()
+        }
       }
     }
 
@@ -163,12 +173,21 @@ export function useContextBreakdown({ busy, enabled, requestGateway, refreshKey,
     return () => {
       cancelled = true
 
-      if (timer !== undefined) {clearTimeout(timer)}
+      if (timer !== undefined) {
+        clearTimeout(timer)
+      }
     }
   }, [busy, enabled, generation, requestGateway, requestVersion, refreshKey, sessionId])
 
   return {
-    breakdown: !busy && fetched && fetched.sessionId === sessionId && fetched.requestGateway === requestGateway && fetched.refreshKey === refreshKey ? fetched.breakdown : null,
+    breakdown:
+      !busy &&
+      fetched &&
+      fetched.sessionId === sessionId &&
+      fetched.requestGateway === requestGateway &&
+      fetched.refreshKey === refreshKey
+        ? fetched.breakdown
+        : null,
     loading,
     refetch
   }

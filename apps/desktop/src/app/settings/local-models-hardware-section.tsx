@@ -28,41 +28,41 @@ export function LocalModelsHardwareSection({ hardware }: LocalModelsHardwareSect
     <SettingsSection icon={Monitor} title={copy.hardwareTitle}>
       {hardware ? (
         <div className="flex flex-wrap items-center gap-x-5 gap-y-1 py-1 text-[length:var(--conversation-caption-font-size)] text-muted-foreground">
-            {hardware.gpu_name && (
-              <span className="inline-flex items-center gap-1.5">
-                <Zap className="size-3.5" />
-                {hardware.gpu_name}
-              </span>
-            )}
+          {hardware.gpu_name && (
+            <span className="inline-flex items-center gap-1.5">
+              <Zap className="size-3.5" />
+              {hardware.gpu_name}
+            </span>
+          )}
 
-            {hardware.uma ? (
+          {hardware.uma ? (
+            <span className="inline-flex items-center gap-1.5">
+              <Package className="size-3.5" />
+              {gbLabel(hardware.vram_total_bytes)} {copy.unifiedMemory}
+            </span>
+          ) : (
+            <>
+              <span className="inline-flex items-center gap-1.5">
+                <Cpu className="size-3.5" />
+                {copy.vram(gbLabel(hardware.vram_total_bytes))}
+              </span>
               <span className="inline-flex items-center gap-1.5">
                 <Package className="size-3.5" />
-                {gbLabel(hardware.vram_total_bytes)} {copy.unifiedMemory}
+                {copy.ram(gbLabel(hardware.ram_total_bytes))}
               </span>
-            ) : (
-              <>
-                <span className="inline-flex items-center gap-1.5">
-                  <Cpu className="size-3.5" />
-                  {copy.vram(gbLabel(hardware.vram_total_bytes))}
-                </span>
-                <span className="inline-flex items-center gap-1.5">
-                  <Package className="size-3.5" />
-                  {copy.ram(gbLabel(hardware.ram_total_bytes))}
-                </span>
-              </>
-            )}
-            {hardware.storage_total_bytes != null && (
-              <Tip label={hardware.storage_path}>
-                <span className="inline-flex items-center gap-1.5">
-                  <FolderOpen className="size-3.5 shrink-0" />
-                  {copy.storage(
-                    storageLabel(hardware.storage_total_bytes),
-                    storageLabel(hardware.storage_available_bytes)
-                  )}
-                </span>
-              </Tip>
-            )}
+            </>
+          )}
+          {hardware.storage_total_bytes != null && (
+            <Tip label={hardware.storage_path}>
+              <span className="inline-flex items-center gap-1.5">
+                <FolderOpen className="size-3.5 shrink-0" />
+                {copy.storage(
+                  storageLabel(hardware.storage_total_bytes),
+                  storageLabel(hardware.storage_available_bytes)
+                )}
+              </span>
+            </Tip>
+          )}
         </div>
       ) : (
         <p className="py-1 text-[length:var(--conversation-caption-font-size)] text-muted-foreground">

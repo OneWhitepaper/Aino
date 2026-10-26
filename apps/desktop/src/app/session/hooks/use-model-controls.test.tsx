@@ -47,6 +47,7 @@ vi.mock('@/store/session-states', async importOriginal => {
 
 vi.mock('@/i18n', async importOriginal => {
   const { en } = await import('@/i18n/en')
+
   return {
     ...(await importOriginal<Record<string, unknown>>()),
     useI18n: () => ({ t: en })
@@ -312,7 +313,9 @@ describe('useModelControls', () => {
     setCurrentModel('old')
     setCurrentProvider('xai')
     const refusal = Object.assign(new Error('model_resolution_failed'), { data: { reason: 'model_resolution_failed' } })
-    const requestGateway = vi.fn(async () => { throw refusal })
+    const requestGateway = vi.fn(async () => {
+      throw refusal
+    })
     let controls!: Controls
 
     render(<Harness onReady={value => (controls = value)} requestGateway={requestGateway} />)
@@ -745,7 +748,14 @@ describe('useModelControls', () => {
         tileState = update(tileState)
       }
     }
-    SessionStates.$sessionStates.set({ 'runtime-b': { ...createClientSessionState('stored-b'), model: 'gpt-6.1-sol', provider: 'openai-codex', reasoningEffortWire: 'max' } })
+    SessionStates.$sessionStates.set({
+      'runtime-b': {
+        ...createClientSessionState('stored-b'),
+        model: 'gpt-6.1-sol',
+        provider: 'openai-codex',
+        reasoningEffortWire: 'max'
+      }
+    })
     $activeSessionId.set('runtime-a')
     const requestGateway = vi.fn(async () => ({ key: 'model', value: 'gpt-6.1-luna' }) as never)
     const { result } = renderHook(() => useModelControls({ queryClient: new QueryClient(), requestGateway }))

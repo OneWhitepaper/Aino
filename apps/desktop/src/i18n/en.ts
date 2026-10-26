@@ -517,24 +517,24 @@ export const en: Translations = {
   ...enBilling,
 
   sendDiagnostics: {
-    title: "Send diagnostics to Aino",
+    title: 'Send diagnostics to Aino',
     privacyNotice:
-      "This sends a private bundle to your Aino account service: system information, configuration status (never keys themselves), and agent, gateway and desktop logs (up to 512 KB each). Logs may contain conversations, tool output and file paths. Keys are redacted before upload, but other sensitive content may remain. Only authorized Aino administrators can read it. Access expires after 14 days; online data is purged within the next hour. Existing backups follow the deployment backup policy.",
+      'This sends a private bundle to your Aino account service: system information, configuration status (never keys themselves), and agent, gateway and desktop logs (up to 512 KB each). Logs may contain conversations, tool output and file paths. Keys are redacted before upload, but other sensitive content may remain. Only authorized Aino administrators can read it. Access expires after 14 days; online data is purged within the next hour. Existing backups follow the deployment backup policy.',
     upload: 'Upload',
     uploading: 'Uploading…',
     cancel: 'Cancel',
     close: 'Close',
-    copyLink: "Copy diagnostic ID",
-    uploadIdFallback: id => "Diagnostic ID: " + id,
+    copyLink: 'Copy diagnostic ID',
+    uploadIdFallback: id => 'Diagnostic ID: ' + id,
     doneTitle: 'Diagnostics sent',
     doneDescription:
-      "Your bundle was uploaded privately to Aino. Quote this ID in your support report; do not post logs publicly.",
+      'Your bundle was uploaded privately to Aino. Quote this ID in your support report; do not post logs publicly.',
     failedTitle: 'Upload failed',
     failedHint:
-      "Sign in to Aino and retry. Update older runtimes first. For a local report without uploading, run `hermes debug share --local`.",
-    handoffLead: "Contact Aino through:",
+      'Sign in to Aino and retry. Update older runtimes first. For a local report without uploading, run `hermes debug share --local`.',
+    handoffLead: 'Contact Aino through:',
     links: {
-      github: 'GitHub Issues',
+      github: 'GitHub Issues'
     },
     gatewayUnavailable: 'Hermes gateway unavailable',
 
@@ -1886,12 +1886,11 @@ export const en: Translations = {
       },
       keepGoingOnCredits: {
         title: 'Keep going on credits',
-        description:
-          'Use your credits when included usage runs out. Off: Hermes waits for the reset.',
+        description: 'Use your credits when included usage runs out. Off: Hermes waits for the reset.',
         approveInBrowser: 'Approve Remote Spending in your browser to change this. It applies as soon as you approve.',
         openAgain: 'Open again',
         cancel: 'Cancel',
-        approvedRetry: 'Remote Spending is approved, but the change didn\'t save.',
+        approvedRetry: "Remote Spending is approved, but the change didn't save.",
         tryAgain: 'Try again'
       },
       autoReload: {
@@ -1985,7 +1984,7 @@ export const en: Translations = {
             captionResetsIn: duration => `Resets in ${duration}`,
             captionIncluded: 'Included usage',
             valueUsed: percent => `${percent} used`
-          },
+          }
         },
         planCard: {
           freeTier: 'Free',
@@ -5698,18 +5697,37 @@ export const en: Translations = {
           count: count => `${count} command${count === 1 ? '' : 's'}`,
           past: 'Ran',
           present: 'Running'
+        },
+        search: {
+          count: (count: number) => count + ' ' + (count === 1 ? 'query' : 'queries'),
+          past: 'Searched',
+          present: 'Searching'
+        },
+
+        read: {
+          count: (count: number) => count + ' ' + (count === 1 ? 'page' : 'pages'),
+          past: 'Read',
+          present: 'Reading'
+        },
+
+        browse: {
+          count: (count: number) => count + ' ' + (count === 1 ? 'page' : 'pages'),
+          past: 'Opened',
+          present: 'Opening'
+        },
+
+        interact: {
+          count: (count: number) => count + ' ' + (count === 1 ? 'browser action' : 'browser actions'),
+          past: 'Performed',
+          present: 'Performing'
+        },
+
+        analyze: {
+          count: (count: number) => count + ' ' + (count === 1 ? 'image' : 'images'),
+          past: 'Analyzed',
+          present: 'Analyzing'
         }
-      ,
-"search":{count: (count: number) => count + " " + (count === 1 ? "query" : "queries"), past: "Searched", present: "Searching"},
-
-"read":{count: (count: number) => count + " " + (count === 1 ? "page" : "pages"), past: "Read", present: "Reading"},
-
-"browse":{count: (count: number) => count + " " + (count === 1 ? "page" : "pages"), past: "Opened", present: "Opening"},
-
-"interact":{count: (count: number) => count + " " + (count === 1 ? "browser action" : "browser actions"), past: "Performed", present: "Performing"},
-
-"analyze":{count: (count: number) => count + " " + (count === 1 ? "image" : "images"), past: "Analyzed", present: "Analyzing"},
-}
+      }
     },
     markdown: {
       alerts: {

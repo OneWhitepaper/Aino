@@ -350,7 +350,10 @@ export async function selectReviewFile(file: HermesReviewFile): Promise<void> {
   const ctx = reviewCtx()
 
   const ownsSelection = () =>
-    seq === reviewSelectionSeq && $reviewSelectedPath.get() === file.path && repoCwd() === intentCwd && (!ctx || reviewContextIsCurrent(ctx))
+    seq === reviewSelectionSeq &&
+    $reviewSelectedPath.get() === file.path &&
+    repoCwd() === intentCwd &&
+    (!ctx || reviewContextIsCurrent(ctx))
 
   if (!ctx) {
     if (ownsSelection()) {
@@ -456,7 +459,9 @@ export function openReview(scopeCwd: null | string = null, scopeTarget = 'main',
   $reviewOpen.set(true)
   recordFeatureUse('review_pane')
 
-  if (refresh) {void refreshReview()}
+  if (refresh) {
+    void refreshReview()
+  }
   void refreshShipInfo()
 }
 
@@ -602,7 +607,9 @@ async function afterMutation(ctx: { cwd: string; sourceKey: string }): Promise<v
 }
 
 export async function stageReviewFile(path: null | string, scopeCwd?: null | string): Promise<void> {
-  if ($reviewScope.get() !== 'uncommitted') {return}
+  if ($reviewScope.get() !== 'uncommitted') {
+    return
+  }
   const ctx = reviewCtx(scopeCwd)
 
   if (!ctx) {
@@ -614,7 +621,9 @@ export async function stageReviewFile(path: null | string, scopeCwd?: null | str
 }
 
 export async function unstageReviewFile(path: null | string, scopeCwd?: null | string): Promise<void> {
-  if ($reviewScope.get() !== 'uncommitted') {return}
+  if ($reviewScope.get() !== 'uncommitted') {
+    return
+  }
   const ctx = reviewCtx(scopeCwd)
 
   if (!ctx) {
@@ -626,7 +635,9 @@ export async function unstageReviewFile(path: null | string, scopeCwd?: null | s
 }
 
 export async function revertReviewFile(path: null | string, scopeCwd?: null | string): Promise<void> {
-  if ($reviewScope.get() !== 'uncommitted') {return}
+  if ($reviewScope.get() !== 'uncommitted') {
+    return
+  }
   const ctx = reviewCtx(scopeCwd)
 
   if (!ctx) {

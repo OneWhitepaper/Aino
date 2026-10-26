@@ -502,24 +502,24 @@ export const frOverrides = {
   },
   ...frNotices,
   sendDiagnostics: {
-    title: "Envoyer les diagnostics à Aino",
+    title: 'Envoyer les diagnostics à Aino',
     privacyNotice:
-      "Un paquet privé est envoyé au service de votre compte Aino : informations système, état de configuration (sans clés) et journaux de l’agent, de la passerelle et du bureau (512 Ko maximum chacun). Ils peuvent contenir conversations, résultats d’outils et chemins de fichiers. Les clés sont masquées, mais d’autres données sensibles peuvent subsister. Seuls les administrateurs Aino autorisés peuvent le lire. L’accès expire après 14 jours ; les données en ligne sont supprimées dans l’heure suivante. Les sauvegardes existantes suivent la politique du déploiement.",
+      'Un paquet privé est envoyé au service de votre compte Aino : informations système, état de configuration (sans clés) et journaux de l’agent, de la passerelle et du bureau (512 Ko maximum chacun). Ils peuvent contenir conversations, résultats d’outils et chemins de fichiers. Les clés sont masquées, mais d’autres données sensibles peuvent subsister. Seuls les administrateurs Aino autorisés peuvent le lire. L’accès expire après 14 jours ; les données en ligne sont supprimées dans l’heure suivante. Les sauvegardes existantes suivent la politique du déploiement.',
     upload: 'Envoyer',
     uploading: 'Envoi en cours…',
     cancel: 'Annuler',
     close: 'Fermer',
-    copyLink: "Copier l’identifiant",
-    uploadIdFallback: id => "Identifiant du diagnostic : " + id,
+    copyLink: 'Copier l’identifiant',
+    uploadIdFallback: id => 'Identifiant du diagnostic : ' + id,
     doneTitle: 'Diagnostics envoyés',
     doneDescription:
-      "Le paquet a été envoyé à Aino de manière privée. Indiquez cet identifiant dans votre rapport ; ne publiez pas les journaux.",
+      'Le paquet a été envoyé à Aino de manière privée. Indiquez cet identifiant dans votre rapport ; ne publiez pas les journaux.',
     failedTitle: "Échec de l'envoi",
     failedHint:
-      "Connectez-vous à Aino et réessayez. Mettez à jour les anciens environnements. Rapport local sans envoi : `hermes debug share --local`.",
-    handoffLead: "Contacter Aino :",
+      'Connectez-vous à Aino et réessayez. Mettez à jour les anciens environnements. Rapport local sans envoi : `hermes debug share --local`.',
+    handoffLead: 'Contacter Aino :',
     links: {
-      github: 'Issues GitHub',
+      github: 'Issues GitHub'
     }
   },
   titlebar: {
@@ -4305,18 +4305,27 @@ export const frOverrides = {
       failed: 'Échec de la mise à jour du backend.',
       noReturn:
         "Le backend ne s'est pas reconnecté. La mise à jour n'est peut-être pas terminée — vérifiez l'hôte du backend."
+    },
+    desktopBridgeUnavailable: 'La connexion au bureau est indisponible.',
+
+    starting: 'Démarrage de la mise à jour…',
+
+    backendApplied: 'La mise à jour du service a été appliquée.',
+
+    backendNoReturn: 'Le service ne s’est pas reconnecté.',
+
+    changelog: {
+      groups: {
+        new: 'Nouveautés',
+        fixed: 'Corrections',
+        faster: 'Performances',
+        improved: 'Améliorations',
+        other: 'Autres améliorations'
+      },
+      fallbackItem: 'Améliorations et corrections',
+      fallbackLabel: 'Dans cette mise à jour'
     }
-  ,
-"desktopBridgeUnavailable":"La connexion au bureau est indisponible.",
-
-"starting":"Démarrage de la mise à jour…",
-
-"backendApplied":"La mise à jour du service a été appliquée.",
-
-"backendNoReturn":"Le service ne s’est pas reconnecté.",
-
-"changelog":{"groups":{"new":"Nouveautés","fixed":"Corrections","faster":"Performances","improved":"Améliorations","other":"Autres améliorations"},"fallbackItem":"Améliorations et corrections","fallbackLabel":"Dans cette mise à jour"},
-},
+  },
   install: {
     stageStates: {
       pending: 'En attente',
@@ -5414,18 +5423,22 @@ export const frOverrides = {
           pending: 'Modification du fichier en cours',
           pendingAction: 'Modification en cours'
         }
+      },
+      runSummary: {
+        search: { count: (count: number) => count + ' requêtes', past: 'Recherché', present: 'Recherche' },
+        read: { count: (count: number) => count + ' pages', past: 'Lu', present: 'Lecture' },
+
+        browse: { count: (count: number) => count + ' pages', past: 'Ouvert', present: 'Ouverture' },
+
+        interact: {
+          count: (count: number) => count + ' actions du navigateur',
+          past: 'Effectué',
+          present: 'Exécution'
+        },
+
+        analyze: { count: (count: number) => count + ' images', past: 'Analysé', present: 'Analyse' }
       }
-    ,
-"runSummary":{"search":{count: (count: number) => count + " requêtes", past: "Recherché", present: "Recherche"},
-"read":{count: (count: number) => count + " pages", past: "Lu", present: "Lecture"},
-
-"browse":{count: (count: number) => count + " pages", past: "Ouvert", present: "Ouverture"},
-
-"interact":{count: (count: number) => count + " actions du navigateur", past: "Effectué", present: "Exécution"},
-
-"analyze":{count: (count: number) => count + " images", past: "Analysé", present: "Analyse"},
-},
-}
+    }
   },
   prompts: {
     gatewayDisconnected: "La Gateway Hermes n'est pas connectée",

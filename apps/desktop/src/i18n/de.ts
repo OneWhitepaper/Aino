@@ -502,24 +502,23 @@ export const deOverrides = {
   },
   ...deNotices,
   sendDiagnostics: {
-    title: "Diagnosedaten an Aino senden",
+    title: 'Diagnosedaten an Aino senden',
     privacyNotice:
-      "Ein privates Paket wird an deinen Aino-Kontodienst hochgeladen: Systeminformationen, Konfigurationsstatus (keine Schlüssel) und Agent-, Gateway- und Desktop-Protokolle (je bis 512 KB). Diese können Gespräche, Werkzeugausgaben und Dateipfade enthalten. Schlüssel werden geschwärzt; andere sensible Inhalte können verbleiben. Nur autorisierte Aino-Administratoren erhalten Zugriff. Der Zugriff endet nach 14 Tagen; Onlinedaten werden innerhalb der folgenden Stunde gelöscht. Bestehende Sicherungen folgen der Backup-Richtlinie der Bereitstellung.",
+      'Ein privates Paket wird an deinen Aino-Kontodienst hochgeladen: Systeminformationen, Konfigurationsstatus (keine Schlüssel) und Agent-, Gateway- und Desktop-Protokolle (je bis 512 KB). Diese können Gespräche, Werkzeugausgaben und Dateipfade enthalten. Schlüssel werden geschwärzt; andere sensible Inhalte können verbleiben. Nur autorisierte Aino-Administratoren erhalten Zugriff. Der Zugriff endet nach 14 Tagen; Onlinedaten werden innerhalb der folgenden Stunde gelöscht. Bestehende Sicherungen folgen der Backup-Richtlinie der Bereitstellung.',
     upload: 'Hochladen',
     uploading: 'Wird hochgeladen…',
     cancel: 'Abbrechen',
     close: 'Schließen',
-    copyLink: "Diagnose-ID kopieren",
-    uploadIdFallback: id => "Diagnose-ID: " + id,
+    copyLink: 'Diagnose-ID kopieren',
+    uploadIdFallback: id => 'Diagnose-ID: ' + id,
     doneTitle: 'Diagnosedaten gesendet',
-    doneDescription:
-      "Privat an Aino übertragen. Nenne diese ID im Supportbericht; veröffentliche keine Protokolle.",
+    doneDescription: 'Privat an Aino übertragen. Nenne diese ID im Supportbericht; veröffentliche keine Protokolle.',
     failedTitle: 'Hochladen fehlgeschlagen',
     failedHint:
-      "Melde dich bei Aino an und versuche es erneut. Aktualisiere ältere Laufzeiten. Ein rein lokaler Bericht: `hermes debug share --local`.",
-    handoffLead: "Aino kontaktieren:",
+      'Melde dich bei Aino an und versuche es erneut. Aktualisiere ältere Laufzeiten. Ein rein lokaler Bericht: `hermes debug share --local`.',
+    handoffLead: 'Aino kontaktieren:',
     links: {
-      github: 'GitHub Issues',
+      github: 'GitHub Issues'
     }
   },
   titlebar: {
@@ -4296,18 +4295,27 @@ export const deOverrides = {
       failed: 'Backend-Update fehlgeschlagen.',
       noReturn:
         'Das Backend kam nicht wieder online. Das Update wurde möglicherweise nicht abgeschlossen — prüfen Sie den Backend-Host.'
+    },
+    desktopBridgeUnavailable: 'Die Desktop-Verbindung ist nicht verfügbar.',
+
+    starting: 'Aktualisierung wird gestartet…',
+
+    backendApplied: 'Backend-Aktualisierung angewendet.',
+
+    backendNoReturn: 'Das Backend ist nicht wieder online.',
+
+    changelog: {
+      groups: {
+        new: 'Neu',
+        fixed: 'Behoben',
+        faster: 'Schneller',
+        improved: 'Verbessert',
+        other: 'Weitere Verbesserungen'
+      },
+      fallbackItem: 'Verbesserungen und Fehlerbehebungen',
+      fallbackLabel: 'In diesem Update'
     }
-  ,
-"desktopBridgeUnavailable":"Die Desktop-Verbindung ist nicht verfügbar.",
-
-"starting":"Aktualisierung wird gestartet…",
-
-"backendApplied":"Backend-Aktualisierung angewendet.",
-
-"backendNoReturn":"Das Backend ist nicht wieder online.",
-
-"changelog":{"groups":{"new":"Neu","fixed":"Behoben","faster":"Schneller","improved":"Verbessert","other":"Weitere Verbesserungen"},"fallbackItem":"Verbesserungen und Fehlerbehebungen","fallbackLabel":"In diesem Update"},
-},
+  },
   install: {
     stageStates: {
       pending: 'Ausstehend',
@@ -5407,18 +5415,18 @@ export const deOverrides = {
           pending: 'Bearbeitet Datei',
           pendingAction: 'Bearbeitet'
         }
+      },
+      runSummary: {
+        search: { count: (count: number) => count + ' Suchanfragen', past: 'Gesucht', present: 'Suche' },
+        read: { count: (count: number) => count + ' Seiten', past: 'Gelesen', present: 'Lese' },
+
+        browse: { count: (count: number) => count + ' Seiten', past: 'Geöffnet', present: 'Öffne' },
+
+        interact: { count: (count: number) => count + ' Browseraktionen', past: 'Ausgeführt', present: 'Ausführung' },
+
+        analyze: { count: (count: number) => count + ' Bilder', past: 'Analysiert', present: 'Analyse' }
       }
-    ,
-"runSummary":{"search":{count: (count: number) => count + " Suchanfragen", past: "Gesucht", present: "Suche"},
-"read":{count: (count: number) => count + " Seiten", past: "Gelesen", present: "Lese"},
-
-"browse":{count: (count: number) => count + " Seiten", past: "Geöffnet", present: "Öffne"},
-
-"interact":{count: (count: number) => count + " Browseraktionen", past: "Ausgeführt", present: "Ausführung"},
-
-"analyze":{count: (count: number) => count + " Bilder", past: "Analysiert", present: "Analyse"},
-},
-}
+    }
   },
   prompts: {
     gatewayDisconnected: 'Das Hermes-Gateway ist nicht verbunden',

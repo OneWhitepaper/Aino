@@ -26,14 +26,23 @@ export interface PlatformAuth {
   listDevices(owner: PlatformDeviceOwner): ReturnType<PlatformClient['listDevices']>
   revokeDevice(deviceId: string, owner: PlatformDeviceOwner): ReturnType<PlatformClient['revokeDevice']>
   quote(input: Parameters<PlatformClient['quote']>[1], expectedUserId: string): ReturnType<PlatformClient['quote']>
-  createOrder(input: Parameters<PlatformClient['createOrder']>[1], expectedUserId: string): ReturnType<PlatformClient['getOrder']>
+  createOrder(
+    input: Parameters<PlatformClient['createOrder']>[1],
+    expectedUserId: string
+  ): ReturnType<PlatformClient['getOrder']>
   getOrder(orderId: string, expectedUserId: string): ReturnType<PlatformClient['getOrder']>
-  listOrders(input: Parameters<PlatformClient['listOrders']>[1], expectedUserId: string): ReturnType<PlatformClient['listOrders']>
+  listOrders(
+    input: Parameters<PlatformClient['listOrders']>[1],
+    expectedUserId: string
+  ): ReturnType<PlatformClient['listOrders']>
   cancelOrder(orderId: string, expectedUserId: string): ReturnType<PlatformClient['getOrder']>
   billingScope(expectedUserId: string): PlatformBillingScope
   walletSummary(expectedUserId: string): ReturnType<PlatformClient['walletSummary']>
   checkoutInfo(expectedUserId: string): ReturnType<PlatformClient['checkoutInfo']>
-  listUsage(input: Parameters<PlatformClient['listUsage']>[1], expectedUserId: string): ReturnType<PlatformClient['listUsage']>
+  listUsage(
+    input: Parameters<PlatformClient['listUsage']>[1],
+    expectedUserId: string
+  ): ReturnType<PlatformClient['listUsage']>
   models(): ReturnType<PlatformClient['models']>
   modelLease(input: PlatformLeaseInput): ReturnType<PlatformClient['modelLease']>
   initialize(): Promise<PlatformAccountSnapshot>
@@ -60,7 +69,11 @@ export interface PlatformAuth {
     phone: string
     captcha_proof?: PlatformCaptchaProof
   }): ReturnType<PlatformClient['requestBindingCode']>
-  submitStepUp(input: { totp_code: string; expected_user_id?: string; expected_generation?: number }): Promise<PlatformAccountSnapshot>
+  submitStepUp(input: {
+    totp_code: string
+    expected_user_id?: string
+    expected_generation?: number
+  }): Promise<PlatformAccountSnapshot>
   bindPhone(input: { phone: string; challenge_id: string; code: string }): Promise<PlatformAccountSnapshot>
   logout(): Promise<PlatformAccountSnapshot>
 }
@@ -353,7 +366,11 @@ export function createPlatformAuth({
     }
   }
 
-  async function paymentOperation<T>(owner: string, operation: (token: string) => Promise<T>, repeatSafe: boolean): Promise<T> {
+  async function paymentOperation<T>(
+    owner: string,
+    operation: (token: string) => Promise<T>,
+    repeatSafe: boolean
+  ): Promise<T> {
     api.billingScope(owner)
 
     const value = await authenticated(token => {
@@ -375,7 +392,11 @@ export function createPlatformAuth({
     }
   }
 
-  async function deviceOperation<T>(owner: PlatformDeviceOwner, operation: (token: string) => Promise<T>, repeatSafe: boolean) {
+  async function deviceOperation<T>(
+    owner: PlatformDeviceOwner,
+    operation: (token: string) => Promise<T>,
+    repeatSafe: boolean
+  ) {
     checkDeviceOwner(owner)
 
     const result = await authenticated(token => {
@@ -390,7 +411,8 @@ export function createPlatformAuth({
   }
 
   const api: PlatformAuth = {
-    uploadDiagnostics: (bundle, owner) => deviceOperation(owner, token => client.uploadDiagnostics(token, bundle), false),
+    uploadDiagnostics: (bundle, owner) =>
+      deviceOperation(owner, token => client.uploadDiagnostics(token, bundle), false),
     listDevices: owner => deviceOperation(owner, token => client.listDevices(token), true),
     revokeDevice: (id, owner) => deviceOperation(owner, token => client.revokeDevice(token, id), false),
     quote: (input, owner) => paymentOperation(owner, token => client.quote(token, input), true),
@@ -398,7 +420,9 @@ export function createPlatformAuth({
       const scope = api.billingScope(owner)
       const id = await paymentOperation(owner, token => client.createOrder(token, input), false)
 
-      if (scope.generation !== generation) { throw new PlatformClientError('auth_attempt_superseded') }
+      if (scope.generation !== generation) {
+        throw new PlatformClientError('auth_attempt_superseded')
+      }
 
       return api.getOrder(id, owner)
     },
@@ -408,14 +432,18 @@ export function createPlatformAuth({
       const scope = api.billingScope(owner)
       await paymentOperation(owner, token => client.cancelOrder(token, id), false)
 
-      if (scope.generation !== generation) { throw new PlatformClientError('auth_attempt_superseded') }
+      if (scope.generation !== generation) {
+        throw new PlatformClientError('auth_attempt_superseded')
+      }
 
       return api.getOrder(id, owner)
     },
     billingScope(expectedUserId) {
       requireTokens()
 
-      if (current.account?.id !== expectedUserId) { throw new PlatformClientError('platform_account_changed') }
+      if (current.account?.id !== expectedUserId) {
+        throw new PlatformClientError('platform_account_changed')
+      }
 
       return { origin: client.origin, user_id: expectedUserId, generation }
     },
@@ -430,7 +458,9 @@ export function createPlatformAuth({
       return authenticated(token => client.checkoutInfo(token), true)
     },
     listUsage(input, expectedUserId) {
-      if (api.snapshot().account?.id !== expectedUserId) { throw new PlatformClientError('platform_account_changed') }
+      if (api.snapshot().account?.id !== expectedUserId) {
+        throw new PlatformClientError('platform_account_changed')
+      }
 
       return authenticated(token => client.listUsage(token, input), true)
     },
@@ -569,8 +599,11 @@ export function createPlatformAuth({
     async submitStepUp(input) {
       try {
         if (input.expected_user_id !== undefined || input.expected_generation !== undefined) {
-          await deviceOperation({ expected_user_id: input.expected_user_id!, expected_generation: input.expected_generation! },
-            token => client.submitStepUp(token, input.totp_code), false)
+          await deviceOperation(
+            { expected_user_id: input.expected_user_id!, expected_generation: input.expected_generation! },
+            token => client.submitStepUp(token, input.totp_code),
+            false
+          )
         } else {
           await authenticated(token => client.submitStepUp(token, input.totp_code), false)
         }

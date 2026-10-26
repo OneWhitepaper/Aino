@@ -45,14 +45,9 @@ describe('activity rail copy', () => {
   })
 
   it('localizes session, preview, and action status labels', () => {
-    const tasks = buildRailTasks(
-      ['missing-session'],
-      [],
-      preview,
-      {
-        action: { status: action(), updatedAt: 200 }
-      }
-    )
+    const tasks = buildRailTasks(['missing-session'], [], preview, {
+      action: { status: action(), updatedAt: 200 }
+    })
 
     expect(tasks).toEqual(
       expect.arrayContaining([

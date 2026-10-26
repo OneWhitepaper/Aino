@@ -193,6 +193,7 @@ describe('foreground tile retention vs. the live-work pruner (#93892)', () => {
   it('keeps a pre-warmed socket for the configured idle retention window', async () => {
     const startedAt = Date.now()
     vi.useFakeTimers({ now: startedAt })
+
     try {
       $poolLimits.set({ ...POOL_LIMITS_DEFAULTS, idleMs: 60_000 })
       await openGatewayForAgent('local', 'bot')
@@ -211,6 +212,7 @@ describe('foreground tile retention vs. the live-work pruner (#93892)', () => {
 
   it('reclaims the least-recently-active idle socket when the connection cap is lowered', async () => {
     vi.useFakeTimers({ now: Date.now() })
+
     try {
       await openGatewayForAgent('local', 'bot-a')
       vi.setSystemTime(Date.now() + SECONDARY_MIN_LIFETIME_MS + 1_000)
@@ -227,6 +229,7 @@ describe('foreground tile retention vs. the live-work pruner (#93892)', () => {
 
   it('never reclaims a foreground-bound route to satisfy the connection cap', async () => {
     vi.useFakeTimers({ now: Date.now() })
+
     try {
       await openGatewayForAgent('local', 'bot-a')
       vi.setSystemTime(Date.now() + SECONDARY_MIN_LIFETIME_MS + 1_000)

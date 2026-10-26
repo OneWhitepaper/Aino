@@ -260,6 +260,11 @@ export function GatewayConnectingOverlay() {
   }
 
   return (
-    <ConnectingOverlayView decoding={phase === 'live' && (previewing || connecting)} onExit={onExit} phase={phase} starting={introStarting} />
+    <ConnectingOverlayView
+      decoding={phase === 'live' && (previewing || connecting)}
+      onExit={onExit}
+      phase={phase}
+      starting={introStarting}
+    />
   )
 }
