@@ -113,6 +113,9 @@ cleanup() {
   if [ -n "$WATCHER_PID" ]; then kill "$WATCHER_PID" 2>/dev/null || true; fi
   if [ -n "$SERVE_PID" ]; then kill "$SERVE_PID" 2>/dev/null || true; fi
   if declare -F mock_stop >/dev/null 2>&1; then mock_stop 2>/dev/null || true; fi
+  if [ -f "$WORK_ROOT/native-launch-env.json" ]; then
+    "$NODE_BIN" "$ASSETS/mac-native-launch-env.mjs" restore "$WORK_ROOT/native-launch-env.json"
+  fi
 }
 trap cleanup EXIT
 
@@ -316,6 +319,7 @@ phase_update() {
     --app-bin "$old_app_bin" \
     --old-sha "$(manifest_side old commit)" --chat-out "$LOG_DIR" --mock-url "$HERMES_E2E_MOCK_URL" \
     --platform-account-env "$account_env" \
+    --native-env-state "$WORK_ROOT/native-launch-env.json" \
     --shots "$LOG_DIR/shots" \
     --close-timeout-ms 420000 2>&1 | ts_prefix | tee "$LOG_DIR/app-update.log") || rc=$?
   log_group "in-app update (Playwright) transcript" "$LOG_DIR/app-update.log"
