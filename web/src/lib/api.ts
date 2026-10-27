@@ -2,6 +2,7 @@ import {
   buildHermesWebSocketUrl,
   type ModelOptionProvider,
   type ModelOptionsResult,
+  type SharedMetricsConsentResult,
 } from "@hermes/shared";
 import { createDashboardSessionMutations } from "./session-mutations";
 
@@ -652,7 +653,7 @@ export const api = {
     ),
   getSharedMetricsConsent: (profile = getManagementProfile()) =>
     fetchJSON<SharedMetricsConsent>(appendProfileParam("/api/shared-metrics/consent", profile)),
-  saveSharedMetricsConsent: (answer: { enabled: boolean; send: boolean }, profile = getManagementProfile()) =>
+  saveSharedMetricsConsent: (answer: { enabled: boolean; send: boolean; recipient: "aino" }, profile = getManagementProfile()) =>
     fetchJSON<SharedMetricsConsent>(appendProfileParam("/api/shared-metrics/consent", profile), {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
@@ -1994,13 +1995,10 @@ export interface PlatformStatus {
   updated_at: string;
 }
 
-/** One profile's shared-metrics answer; `reask` = a pre-fix "off" asked once more. */
-export interface SharedMetricsConsent {
-  enabled: boolean;
-  send: boolean;
-  decided: boolean;
+/** Older dashboard backends omit the named statistics recipient. */
+export interface SharedMetricsConsent extends Omit<SharedMetricsConsentResult, "recipient"> {
   managed: boolean;
-  reask?: boolean;
+  recipient?: "aino";
 }
 
 export interface StatusResponse {

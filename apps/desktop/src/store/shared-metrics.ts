@@ -1,12 +1,12 @@
 import type { SharedMetricsConsentResult } from '@hermes/shared'
 import { atom } from 'nanostores'
 
-import { RUNTIME_DOCS_URL } from '@/lib/docs'
+import { REPOSITORY_URL } from '@/lib/brand'
 
 import { recordOnboarding, setDesktopMetricsGate } from './desktop-metrics'
 
 /** Public page describing exactly what shared metrics contain and how consent windows work. */
-export const SHARED_METRICS_DOCS_URL = `${RUNTIME_DOCS_URL}/developer-guide/relay-shared-metrics.md`
+export const SHARED_METRICS_DOCS_URL = `${REPOSITORY_URL}/blob/main/docs/implementation/aino-usage-statistics.md`
 
 export type SharedMetricsConsent = SharedMetricsConsentResult
 
@@ -35,7 +35,12 @@ export function sharedMetricsProfileRequester(
 }
 
 function isConsent(value: unknown): value is SharedMetricsConsent {
-  return typeof value === 'object' && value !== null && typeof (value as SharedMetricsConsent).decided === 'boolean'
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    typeof (value as SharedMetricsConsent).decided === 'boolean' &&
+    (value as SharedMetricsConsent).recipient === 'aino'
+  )
 }
 
 /**
@@ -61,7 +66,11 @@ export async function saveSharedMetricsConsent(
   flags: { enabled: boolean; send: boolean },
   { firstRun = false }: { firstRun?: boolean } = {}
 ): Promise<SharedMetricsConsent> {
-  const consent = await request<SharedMetricsConsent>('shared_metrics.set', { ...flags, first_run: firstRun })
+  const consent = await request<SharedMetricsConsent>('shared_metrics.set', {
+    ...flags,
+    first_run: firstRun,
+    recipient: 'aino'
+  })
 
   if (!isConsent(consent)) {
     throw new Error('Unexpected shared_metrics.set response')

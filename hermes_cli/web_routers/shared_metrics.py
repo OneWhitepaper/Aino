@@ -8,9 +8,9 @@ two config.yaml keys (``telemetry.shared_metrics.enabled`` / ``.send``), read an
 from __future__ import annotations
 
 import asyncio
-from typing import Optional
+from typing import Literal, Optional
 
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from hermes_cli.web_routers._common import config_write_scope, scoped_to_thread
@@ -21,6 +21,7 @@ router = APIRouter()
 class ConsentAnswer(BaseModel):
     enabled: bool
     send: bool = False
+    recipient: Literal["aino"] | None = None
 
 
 def _read_consent() -> dict:
@@ -39,6 +40,9 @@ async def get_shared_metrics_consent(profile: Optional[str] = None):
 @router.put("/api/shared-metrics/consent")
 async def put_shared_metrics_consent(body: ConsentAnswer, profile: Optional[str] = None):
     from hermes_cli.observability.shared_metrics_consent import save_consent
+
+    if body.enabled and body.send and body.recipient != "aino":
+        raise HTTPException(status_code=400, detail="Explicit Aino usage-statistics consent is required; update the client.")
 
     def _write() -> dict:
         with config_write_scope(profile):

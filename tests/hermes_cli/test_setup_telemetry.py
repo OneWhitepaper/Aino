@@ -29,7 +29,7 @@ def test_setup_telemetry_one_answer_sets_both_keys(monkeypatch):
     setup_telemetry(config)
     assert config["telemetry"]["shared_metrics"]["enabled"] is False
     assert config["telemetry"]["shared_metrics"]["send"] is False
-    assert asked == ["Send shared metrics to Nous?"] * 2
+    assert asked == ["Send shared metrics to Aino?"] * 2
 
 
 def test_setup_telemetry_defaults_a_collect_only_profile_to_no(monkeypatch):
@@ -115,7 +115,7 @@ def test_no_answer_survives_the_callers_later_config_save(monkeypatch):
     setup_telemetry(config)
     save_config(config)  # what the wizard and `hermes tools` do afterwards
 
-    assert read_raw_config()["telemetry"]["shared_metrics"] == {"enabled": False, "send": False, "offer_version": 2}
+    assert read_raw_config()["telemetry"]["shared_metrics"] == {"enabled": False, "send": False, "offer_version": 2, "recipient": "aino"}
 
 
 def test_chat_offer_asks_an_undecided_profile_once(monkeypatch):
@@ -135,8 +135,8 @@ def test_chat_offer_asks_an_undecided_profile_once(monkeypatch):
     consent.offer_consent_before_chat(argparse.Namespace())
 
     assert len(asked) == 1
-    assert asked[0][1] == ["Share with Nous", "No thanks"]
-    assert consent.consent_state(read_raw_config()) == {"enabled": True, "send": True, "decided": True, "reask": False}
+    assert asked[0][1] == ["Share with Aino", "No thanks"]
+    assert consent.consent_state(read_raw_config()) == {"enabled": True, "send": True, "decided": True, "reask": False, "recipient": "aino"}
 
 
 def test_offer_drops_keys_typed_before_it_appeared(monkeypatch):
@@ -154,8 +154,7 @@ def test_offer_drops_keys_typed_before_it_appeared(monkeypatch):
 
 def test_unseen_no_thanks_is_asked_once_more_and_then_settled(monkeypatch):
     """A pre-fix "No thanks" is re-offered with the reason; Esc on the re-ask keeps it for good,
-    while a pre-fix opt-in (sharing, or the collect-only answer the offer no longer has) was a
-    deliberate pick and is never re-asked."""
+    while an existing Aino opt-in and a collect-only answer stay decided."""
     from hermes_cli.config import read_raw_config, save_config
     from hermes_cli.observability import shared_metrics_consent as consent
 
@@ -167,7 +166,7 @@ def test_unseen_no_thanks_is_asked_once_more_and_then_settled(monkeypatch):
     monkeypatch.delenv("HERMES_NONINTERACTIVE", raising=False)
 
     for send in (True, False):
-        save_config({"telemetry": {"shared_metrics": {"enabled": True, "send": send}}}, strip_defaults=False)
+        save_config({"telemetry": {"shared_metrics": {"enabled": True, "send": send, "recipient": "aino"}}}, strip_defaults=False)
         consent.offer_consent_before_chat(argparse.Namespace())
     assert shown == []
 
@@ -176,7 +175,7 @@ def test_unseen_no_thanks_is_asked_once_more_and_then_settled(monkeypatch):
     consent.offer_consent_before_chat(argparse.Namespace())
 
     assert len(shown) == 1 and shown[0].startswith(consent._REASK_NOTE)
-    assert consent.consent_state(read_raw_config()) == {"enabled": False, "send": False, "decided": True, "reask": False}
+    assert consent.consent_state(read_raw_config()) == {"enabled": False, "send": False, "decided": True, "reask": False, "recipient": "aino"}
 
 
 def test_every_cli_promise_that_pre_opt_in_data_stays_local_names_the_install_note():

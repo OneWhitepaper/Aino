@@ -290,6 +290,7 @@ class SharedMetricsConsentResult(Result):
     send: bool
     decided: bool
     reask: bool = False
+    recipient: Literal["aino"]
 
 
 method("shared_metrics.status", params=ProfileParams, result=SharedMetricsConsentResult,
@@ -302,6 +303,7 @@ class SharedMetricsSetParams(ProfileParams):
     enabled: bool
     send: bool = False
     first_run: bool = False
+    recipient: Literal["aino"] | None = None
 
 
 method("shared_metrics.set", params=SharedMetricsSetParams, result=SharedMetricsConsentResult,

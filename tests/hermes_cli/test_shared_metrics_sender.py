@@ -974,12 +974,14 @@ class TestCompression:
             captured["headers"] = {k.lower(): v for k, v in request.headers.items()}
             return FakeConn()
 
-        original = urllib.request.urlopen
-        urllib.request.urlopen = fake_urlopen
+        from types import SimpleNamespace
+
+        original = urllib.request.build_opener
+        urllib.request.build_opener = lambda *_handlers: SimpleNamespace(open=fake_urlopen)
         try:
             mod._post(ENDPOINT, payload, timeout=5)
         finally:
-            urllib.request.urlopen = original
+            urllib.request.build_opener = original
         return captured
 
     def test_large_payloads_are_gzipped(self):

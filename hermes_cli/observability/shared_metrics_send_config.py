@@ -8,11 +8,11 @@ from urllib.parse import urlparse
 
 logger = logging.getLogger(__name__)
 
-#: Production ingest endpoint. Overridable through config only — deliberately NOT by an
-#: environment variable: AGENTS.md reserves HERMES_* for secrets, and an inherited variable
-#: could silently redirect consented metrics to any host with nothing visible in config.
-#: Tests and the staging E2E write this key into a throwaway profile instead.
-DEFAULT_ENDPOINT = "https://telemetry.nousresearch.com/v1/telemetry"
+#: Consent names Aino's receiver. Loopback overrides support isolated transport tests;
+#: neither an inherited environment variable nor a config edit can authorize another recipient.
+DEFAULT_ENDPOINT = "https://api.agentera.com.cn/api/v1/desktop/shared-metrics"
+RECIPIENT = "aino"
+LEGACY_ENDPOINT = "https://telemetry.nousresearch.com/v1/telemetry"
 
 _LOCAL_HOSTS = frozenset({"localhost", "127.0.0.1", "::1", "[::1]"})
 
@@ -34,14 +34,14 @@ class SendConfig:
 
 
 def _endpoint_is_safe(endpoint: str) -> bool:
-    """Reject plaintext destinations unless they are loopback (so tests can use local HTTP)."""
+    """Aino consent permits the declared receiver or an isolated loopback test server."""
+    if endpoint == DEFAULT_ENDPOINT:
+        return True
     try:
         parsed = urlparse(endpoint)
     except ValueError:
         return False
-    if parsed.scheme == "https":
-        return True
-    return parsed.scheme == "http" and (parsed.hostname or "") in _LOCAL_HOSTS
+    return parsed.scheme in {"http", "https"} and (parsed.hostname or "") in _LOCAL_HOSTS
 
 
 def resolve_send_config(config: dict | None) -> SendConfig:
@@ -77,11 +77,17 @@ def resolve_send_config(config: dict | None) -> SendConfig:
     if not isinstance(endpoint, str) or not endpoint.strip():
         endpoint = DEFAULT_ENDPOINT
     endpoint = endpoint.strip()
+    if endpoint == LEGACY_ENDPOINT:
+        endpoint = DEFAULT_ENDPOINT
+
+    # Consent belongs to a recipient. A Nous opt-in cannot authorize Aino.
+    if shared.get("recipient") != RECIPIENT:
+        return SendConfig(enabled=enabled, send=False, endpoint=endpoint)
 
     if send_requested and not _endpoint_is_safe(endpoint):
         logger.error(
-            "Refusing to send shared metrics to %r: telemetry must use https "
-            "(or a localhost http endpoint for testing).",
+            "Refusing to send shared metrics to %r: Aino consent permits only its https "
+            "endpoint (or a loopback endpoint for testing).",
             endpoint,
         )
         return SendConfig(enabled=enabled, send=False, endpoint=endpoint)

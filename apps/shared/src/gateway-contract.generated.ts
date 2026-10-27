@@ -842,6 +842,7 @@ export interface SharedMetricsConsentResult {
   send: boolean
   decided: boolean
   reask?: boolean
+  recipient: 'aino'
 }
 /** ``send`` is ignored unless ``enabled``; ``first_run`` marks the Desktop first-run answer. */
 export interface SharedMetricsSetParams {
@@ -849,6 +850,7 @@ export interface SharedMetricsSetParams {
   enabled: boolean
   send?: boolean
   first_run?: boolean
+  recipient?: 'aino' | null
 }
 /** ``command`` is the raw typed name (no leading ``/``, no args); the backend canonicalizes it against the published registry. ``session_id`` scopes the count to that session's profile. */
 export interface SharedMetricsSlashCommandParams {

@@ -28,6 +28,12 @@ class Ingest(BaseHTTPRequestHandler):
     received: list = []
     script: list = []
 
+    def do_GET(self):
+        type(self).received.append({"method": "GET"})
+        self.send_response(202)
+        self.send_header("Content-Length", "0")
+        self.end_headers()
+
     def do_POST(self):
         length = int(self.headers.get("Content-Length") or 0)
         raw = self.rfile.read(length)
@@ -156,6 +162,15 @@ def _sender(store, server):
 
 
 class TestRealTransport:
+    def test_redirect_cannot_acknowledge_a_package_at_another_destination(self, store, server):
+        _add(store, "pkg-redirect")
+        Ingest.script = [(302, {}, {"Location": _endpoint(server) + "/another-recipient"})]
+        outcome = _sender(store, server).send_pending()
+
+        assert outcome.sent == 0
+        assert outcome.deferred == 1
+        assert len(Ingest.received) == 1
+
     def test_a_package_is_delivered_and_marked_sent(self, store, server):
         _add(store, "pkg-1")
         outcome = _sender(store, server).send_pending()
