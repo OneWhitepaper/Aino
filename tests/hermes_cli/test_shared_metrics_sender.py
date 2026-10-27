@@ -914,6 +914,27 @@ class TestConsentRevocation:
         assert len(posts) == 1, f"kept sending after consent was revoked: {posts}"
         assert outcome.sent == 1
 
+    def test_revoking_consent_during_retry_backoff_stops_the_next_attempt(self, store):
+        _add_package(store, "pkg-retry", "2026-08-26")
+        consented = {"value": True}
+        transport = FakeTransport(FakeResponse(503), FakeResponse(202))
+
+        def revoke_during_backoff(_seconds):
+            consented["value"] = False
+
+        outcome = SharedMetricsSender(
+            store, ENDPOINT, post=transport, sleep=revoke_during_backoff,
+            now=lambda: NOW, consent_check=lambda: consented["value"],
+        ).send_pending()
+
+        assert len(transport.calls) == 1, "a retry must not transmit after sharing is turned off"
+        assert outcome.sent == 0
+        assert outcome.deferred == 1
+        with store._connection() as connection:
+            assert connection.execute(
+                "SELECT closed_at FROM send_consent_windows WHERE recipient='aino'"
+            ).fetchone()[0] is not None
+
     def test_no_send_at_all_when_consent_is_already_false(self, store):
         _add_package(store, "pkg-1", "2026-08-26")
         posts = []

@@ -11,7 +11,9 @@ selected profile. The destination is `https://api.agentera.com.cn/api/v1/desktop
 The request contains a random, profile-scoped installation ID; it carries no Aino account token.
 Selecting Share with Aino restores that declared destination. Configuration cannot redirect this
 consent to another remote receiver; loopback overrides are reserved for isolated tests. HTTP
-redirects are refused and remain pending in the existing retry queue.
+redirects are refused and remain pending in the existing retry queue. Each network attempt,
+including a retry after backoff, rechecks the current consent; turning sharing off prevents
+any later attempt. A request already in flight cannot be recalled.
 This ID permits linking that profile's daily counts, so these are pseudonymous counts, not a
 claim of complete anonymity. Existing network access logs follow the deployment's logging policy.
 

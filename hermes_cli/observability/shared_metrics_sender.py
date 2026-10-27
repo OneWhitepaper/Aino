@@ -436,6 +436,9 @@ class SharedMetricsSender:
             return "deferred"
 
         for attempt in range(1, self._max_attempts + 1):
+            if not self._still_consented():
+                self._reconcile(send_enabled=False)
+                return defer(_FAILURE_BACKOFF_SECONDS, "sharing disabled")
             # Renew before EVERY external POST so a lapsed claimant yields even before anyone
             # reclaims. The ingest key is minute-prefixed: duplicates are distinct objects.
             if not self._renew_claim(package_id, token):
