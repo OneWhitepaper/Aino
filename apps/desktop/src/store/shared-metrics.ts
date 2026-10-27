@@ -6,7 +6,7 @@ import { REPOSITORY_URL } from '@/lib/brand'
 import { recordOnboarding, setDesktopMetricsGate } from './desktop-metrics'
 
 /** Public page describing exactly what shared metrics contain and how consent windows work. */
-export const SHARED_METRICS_DOCS_URL = `${REPOSITORY_URL}/blob/main/docs/implementation/aino-usage-statistics.md`
+export const SHARED_METRICS_DOCS_URL = `${REPOSITORY_URL}/blob/54f3e7c2049eaee24f0d8eb47fc0efd5e4d2e789/docs/implementation/aino-usage-statistics.md`
 
 export type SharedMetricsConsent = SharedMetricsConsentResult
 

@@ -4,7 +4,7 @@ import { api, type SharedMetricsConsent } from '@/lib/api'
 import { useProfileScope } from '@/contexts/useProfileScope'
 import { useI18n } from '@/i18n'
 
-const DOCS_URL = 'https://github.com/OneWhitepaper/Aino/blob/main/docs/implementation/aino-usage-statistics.md'
+const DOCS_URL = 'https://github.com/OneWhitepaper/Aino/blob/54f3e7c2049eaee24f0d8eb47fc0efd5e4d2e789/docs/implementation/aino-usage-statistics.md'
 const STORAGE_KEY = 'sharedMetricsOfferDismissed'
 
 /**

@@ -78,14 +78,16 @@ that a real user's counters have been uploaded. Keep those statuses explicit dur
   The original memory threshold and 20,000-lookup test remain unchanged. The repaired full Go unit
   suite passes 23,870 test/subtest results, with 18 skipped and no failures; the complete integration
   suite passes 14,643 results with 16 skipped. These totals include nested Go subtests.
-- The isolated, statistics-only candidate passes 29 runtime test files (539 tests, one skipped),
+- The isolated, statistics-only candidate passes 29 runtime test files (540 tests, one skipped),
   all 397 API frontend files (3,020 tests), desktop consent tests, and desktop TypeScript checks.
   An initial desktop invocation from the repository root lacked its workspace aliases; the same
   suite was then run through the desktop workspace configuration.
 
-The running development desktop shows the Aino copy but refuses sharing through an older gateway
-that lacks the new capability. Its existing pending-approval conversation was not interrupted to
-reload that gateway. The canonical adapter was verified in isolated profiles instead. Production
-API deployment, database migration, privacy-document publication and matching runtime distribution
-remain rollout steps. No real user statistics were uploaded and no production configuration was
-changed during this verification.
+The production API and migration were deployed at revision `22d4b315d`. An isolated desktop
+profile enabled sharing through the canonical gateway; the existing sender uploaded one package
+containing only the synthetic `hermes.client.active=1` counter. The admin page displayed it as
+usage statistics with no account binding. Turning sharing off prevented the second package from
+being sent. Only the synthetic record was expired for the test: the admin read was denied and the
+existing production purge function removed it. The hourly timer was covered by integration tests,
+not by waiting an hour in production. No real user statistics or logs were uploaded, and no paid
+model calls were made. Matching installer distribution remains a separate rollout step.
