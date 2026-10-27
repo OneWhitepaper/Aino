@@ -27,7 +27,7 @@ function backend(initial: SharedMetricsConsent) {
 
     if (method === 'shared_metrics.set') {
       const enabled = params?.enabled === true
-      stored = { enabled, send: enabled && params?.send === true, decided: true }
+      stored = { enabled, send: enabled && params?.send === true, decided: true, recipient: 'aino' }
     }
 
     return stored as T
@@ -50,8 +50,15 @@ afterEach(() => {
 })
 
 describe('SharedMetricsConsentDialog', () => {
+  it('does not offer Aino sharing when an older runtime cannot identify its recipient', async () => {
+    const requestGateway = async <T,>() => ({ enabled: true, send: true, decided: false }) as T
+    render(<SharedMetricsConsentDialog enabled profile="default" requestGateway={requestGateway} />)
+    $sharedMetricsDetailsOpen.set(true)
+    await waitFor(() => expect($sharedMetricsConsent.get()).toBeNull())
+    expect(screen.queryByRole('dialog')).toBeNull()
+  })
   it('never blocks launch: an undecided profile becomes a composer offer, not a modal', async () => {
-    const undecided = backend({ enabled: false, send: false, decided: false })
+    const undecided = backend({ enabled: false, send: false, decided: false, recipient: 'aino' })
 
     const { unmount } = render(
       <SharedMetricsConsentDialog enabled profile="default" requestGateway={undecided.requestGateway} />
@@ -62,14 +69,14 @@ describe('SharedMetricsConsentDialog', () => {
     unmount()
 
     // An answer given in `hermes setup` is the same config keys: no offer at all.
-    const answered = backend({ enabled: false, send: false, decided: true })
+    const answered = backend({ enabled: false, send: false, decided: true, recipient: 'aino' })
     render(<SharedMetricsConsentDialog enabled profile="work" requestGateway={answered.requestGateway} />)
     await waitFor(() => expect($sharedMetricsConsent.get()?.decided).toBe(true))
     expect(sharedMetricsOfferPending($sharedMetricsConsent.get())).toBe(false)
   })
 
   it('details decide nothing when closed and record a chosen answer as both opt-ins', async () => {
-    const { calls, requestGateway } = backend({ enabled: false, send: false, decided: false })
+    const { calls, requestGateway } = backend({ enabled: false, send: false, decided: false, recipient: 'aino' })
 
     render(<SharedMetricsConsentDialog enabled profile="havoc" requestGateway={requestGateway} />)
     await waitFor(() => expect(sharedMetricsOfferPending($sharedMetricsConsent.get())).toBe(true))
@@ -96,6 +103,7 @@ describe('SharedMetricsConsentDialog', () => {
       enabled: false,
       send: false,
       first_run: true,
+      recipient: 'aino',
       profile: 'havoc'
     })
   })

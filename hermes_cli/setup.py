@@ -513,7 +513,7 @@ def setup_tools(config: dict, first_install: bool = False):
 
 
 _SEND_CONSENT_EXPLAINER = (
-    "", "Sharing uploads each daily package to the Nous telemetry",
+    "", "Sharing uploads each daily package to the Aino telemetry",
     "service. Packages carry your profile-scoped install ID, a",
     "stable random UUID that identifies this profile across days",
     "(it contains no personal information and is reset by deleting",
@@ -527,7 +527,7 @@ _SEND_CONSENT_EXPLAINER = (
 
 
 def setup_telemetry(config: dict):
-    """Turn shared metrics on (collect and send to Nous) or off: one answer sets both keys."""
+    """Turn shared metrics on (collect and send to Aino) or off: one answer sets both keys."""
     print_header("Shared Metrics")
     _info("Shared metrics contain only bounded counters: activity, session length,",
           "outcomes, error classes (with a fixed-list reason when a memory write or",
@@ -548,12 +548,12 @@ def setup_telemetry(config: dict):
     from hermes_cli.observability.shared_metrics_consent import save_consent
 
     shared_metrics = _sub_dict(_sub_dict(config, "telemetry"), "shared_metrics")
-    sharing = shared_metrics.get("enabled") is True and shared_metrics.get("send") is True
+    sharing = shared_metrics.get("enabled") is True and shared_metrics.get("send") is True and shared_metrics.get("recipient") == "aino"
     # One answer for both keys: off also withdraws send consent and stops collection.
-    share = prompt_yes_no("Send shared metrics to Nous?", default=sharing)
+    share = prompt_yes_no("Send shared metrics to Aino?", default=sharing)
     save_consent(share, share, config)
     if share:
-        print_success("Shared metrics sent to Nous once a day.")
+        print_success("Shared metrics sent to Aino once a day.")
     else:
         print_info("Shared metrics off.")
 

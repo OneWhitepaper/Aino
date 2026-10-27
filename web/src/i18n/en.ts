@@ -113,12 +113,12 @@ export const en: Translations = {
     multiplexStandaloneBanner:
       "Your gateway serves only one profile. Not served: {profiles}. Why: {reason}. Fix: hermes gateway migrate --multiplex",
     dismiss: "Dismiss",
-    sharedMetricsTitle: "Help improve Hermes?",
+    sharedMetricsTitle: "Help improve Aino?",
     sharedMetricsBody:
-      "Shared metrics are bounded counters, never prompts, files, paths or error text. Sharing sends them to Nous once a day.",
+      "Aino receives aggregate counts at api.agentera.com.cn daily, without account tokens or conversation text. Aino administrators can read them for 14 days; online data is purged within an hour of expiry. Backups follow deployment retention. Details:",
     sharedMetricsReaskBody:
-      "Asking once more: an earlier version could save \"No thanks\" before you saw this question.",
-    sharedMetricsShare: "Share with Nous",
+      "The statistics recipient is now Aino. Your previous choice does not authorize Aino. Details:",
+    sharedMetricsShare: "Share with Aino",
     sharedMetricsOff: "No thanks",
     sharedMetricsDetails: "Details",
     sharedMetricsSaveFailed: "Couldn't save your choice",

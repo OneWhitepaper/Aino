@@ -122,7 +122,7 @@ def consented_day(home: Path) -> bool:
     try:
         with SharedMetricsStore(root / "metrics.sqlite3", root / "outbox")._connection() as connection:
             row = connection.execute(
-                "SELECT 1 FROM send_consent_windows WHERE closed_at IS NULL AND opened_at <= ? LIMIT 1",
+                "SELECT 1 FROM send_consent_windows WHERE recipient = 'aino' AND closed_at IS NULL AND opened_at <= ? LIMIT 1",
                 (_today_start(),),
             ).fetchone()
     except sqlite3.Error:  # a busy store: try again on a later start

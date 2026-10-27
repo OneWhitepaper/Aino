@@ -65,7 +65,7 @@ export function SharedMetricsSettings() {
     const previous = consent
 
     setBusy(true)
-    setConsent({ ...flags, send: flags.enabled && flags.send, decided: true })
+    setConsent({ ...flags, send: flags.enabled && flags.send, decided: true, recipient: 'aino' })
 
     try {
       const saved = await saveSharedMetricsConsent(request, flags)

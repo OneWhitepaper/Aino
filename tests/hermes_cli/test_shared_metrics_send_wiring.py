@@ -74,7 +74,7 @@ def runtime():
 
 
 def _config(**shared):
-    return {"telemetry": {"shared_metrics": shared}}
+    return {"telemetry": {"shared_metrics": {"recipient": "aino", **shared}}}
 
 
 @pytest.fixture
@@ -118,11 +118,11 @@ class TestOptIn:
     def test_uses_the_resolved_endpoint(self, runtime, monkeypatch, capture_sender):
         _set_config(
             monkeypatch,
-            _config(enabled=True, send=True, endpoint="https://staging.test/v1"),
+            _config(enabled=True, send=True, endpoint="http://127.0.0.1:8099/v1"),
         )
         runtime._export()
         runtime._join_send_thread(timeout=2)
-        assert capture_sender["endpoints"] == ["https://staging.test/v1"]
+        assert capture_sender["endpoints"] == ["http://127.0.0.1:8099/v1"]
 
     def test_export_still_runs_when_sending_is_off(self, runtime, monkeypatch, capture_sender):
         _set_config(monkeypatch, _config(enabled=True))

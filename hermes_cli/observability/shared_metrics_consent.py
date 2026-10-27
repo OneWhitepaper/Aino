@@ -2,7 +2,7 @@
 
 Every surface reads and writes the same two keys in the profile's config.yaml:
 ``telemetry.shared_metrics.enabled`` (collect) and ``.send`` (upload daily). The offer has two
-answers, and each sets both keys: "Share with Nous" turns both on, "No thanks" turns both off. The
+answers, and each sets both keys: "Share with Aino" turns both on, "No thanks" turns both off. The
 question counts as answered once either key is written explicitly; the shipped defaults are not an
 answer. Every answer also writes ``offer_version``. A "No thanks" without it predates the type-ahead
 fix (an Enter pressed during startup could save it unseen), so that profile is asked once more, with
@@ -22,26 +22,30 @@ import os
 import sys
 from typing import Any
 
+from .shared_metrics_send_config import DEFAULT_ENDPOINT, RECIPIENT, resolve_send_config
+
 logger = logging.getLogger(__name__)
 
 # (label, enabled, send): the offer's two answers, in the order every surface shows them.
 OFFER_CHOICES = (
-    ("Share with Nous", True, True),
+    ("Share with Aino", True, True),
     ("No thanks", False, False),
 )
 _NO_THANKS = len(OFFER_CHOICES) - 1
-DOCS_URL = "https://hermes-agent.nousresearch.com/docs/developer-guide/relay-shared-metrics"
+DOCS_URL = "https://github.com/OneWhitepaper/Aino/blob/54f3e7c2049eaee24f0d8eb47fc0efd5e4d2e789/docs/implementation/aino-usage-statistics.md"
 _OFFER_DESCRIPTION = "\n".join((
     "Shared metrics are bounded counters: activity, outcomes, error classes (with a",
     "fixed-list reason when a memory write, compression, update or install fails),",
     "model routes, token totals, feature use and coarse machine facts. Never prompts,",
-    "files, paths, setting values or error text. Sharing sends them to Nous once a",
+    "files, paths, setting values or error text. Sharing sends them to Aino once a",
     "day. Apart from a one-time install note, data from before you opt in is never",
     "sent.",
+    "Aino administrators can read these counts. Online retention is 14 days;",
+    "expired records are removed within an hour. Backups follow deployment retention.",
     f"Details: {DOCS_URL}",
     "Change it any time: hermes setup telemetry",
 ))
-_REASK_NOTE = "Asking once more: an earlier version could save \"No thanks\" before you saw this question."
+_REASK_NOTE = "The statistics recipient is now Aino. Your earlier choice does not authorize Aino; please choose again."
 
 
 def _section(cfg: Any) -> dict:
@@ -56,18 +60,20 @@ OFFER_VERSION = 2
 
 def consent_state(raw_cfg: Any) -> dict:
     """``{enabled, send, decided, reask}`` from a RAW config mapping (no defaults merged). ``reask``:
-    an "off" answer from before ``OFFER_VERSION`` that may never have been seen; it reads undecided
-    so every surface offers it once more. An opt-in was always a deliberate pick and stays, including
-    a collect-only answer from before the offer dropped that choice."""
+    an "off" answer from before ``OFFER_VERSION`` that may never have been seen, or an opt-in for
+    another recipient; both need a fresh answer. A prior collect-only answer stays local."""
     section = _section(raw_cfg)
     enabled = section.get("enabled") is True
     answered = "enabled" in section or "send" in section
     reask = answered and not enabled and section.get("offer_version") != OFFER_VERSION
+    recipient_changed = enabled and section.get("send") is True and section.get("recipient") != RECIPIENT
+    reask = reask or recipient_changed
     return {
         "enabled": enabled,
-        "send": enabled and section.get("send") is True,
+        "send": resolve_send_config(raw_cfg).send,
         "decided": answered and not reask,
         "reask": reask,
+        "recipient": RECIPIENT,
     }
 
 
@@ -87,6 +93,10 @@ def set_answer(target: dict, enabled: bool, send: bool) -> None:
         section = telemetry["shared_metrics"] = {}
     section["enabled"], section["send"] = enabled, enabled and send
     section["offer_version"] = OFFER_VERSION
+    section["recipient"] = RECIPIENT
+    # The visible choice names this receiver, regardless of a previous custom destination.
+    if enabled and send:
+        section["endpoint"] = DEFAULT_ENDPOINT
 
 
 def save_consent(enabled: bool, send: bool, config: dict | None = None) -> None:
@@ -130,7 +140,7 @@ def offer_consent(config: dict | None = None, *, reask: bool = False) -> bool:
     # answer it ("No thanks") before it was ever on screen, so the user was never really asked.
     flush_stdin()
     idx = curses_radiolist(
-        "Help improve Hermes?", [label for label, _, _ in OFFER_CHOICES], selected=_NO_THANKS, cancel_returns=-1,
+        "Help improve Aino?", [label for label, _, _ in OFFER_CHOICES], selected=_NO_THANKS, cancel_returns=-1,
         description=f"{_REASK_NOTE}\n{_OFFER_DESCRIPTION}" if reask else _OFFER_DESCRIPTION,
     )
     if idx < 0 and reask:
@@ -142,7 +152,7 @@ def offer_consent(config: dict | None = None, *, reask: bool = False) -> bool:
         return False
     _, enabled, send = OFFER_CHOICES[idx]
     save_consent(enabled, send, config)
-    outcome = "sent to Nous once a day" if send else "off"
+    outcome = "sent to Aino once a day" if send else "off"
     print_success(f"Shared metrics {outcome}. Change it any time with `hermes setup telemetry`.")
     return True
 
