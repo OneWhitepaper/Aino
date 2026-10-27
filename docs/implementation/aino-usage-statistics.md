@@ -16,6 +16,9 @@ including a retry after backoff, rechecks the current consent; turning sharing o
 any later attempt. A request already in flight cannot be recalled.
 This ID permits linking that profile's daily counts, so these are pseudonymous counts, not a
 claim of complete anonymity. Existing network access logs follow the deployment's logging policy.
+Nous connector correlation headers retain their original, legacy Nous consent gate. Choosing Aino
+replaces that grant; it does not authorize sending conversation, turn or tool-call IDs to Nous.
+Connector authentication and operation continue independently of these optional correlation headers.
 
 The package contains model/tool usage, token totals, timings, coarse machine facts and bounded
 feature/error categories. It contains no conversation messages, files, paths, API keys or error

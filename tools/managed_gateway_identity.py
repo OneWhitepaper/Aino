@@ -1,8 +1,9 @@
 """Caller identity for requests to the first-party gateways: who is calling, and which turn asked.
 
 ``user_agent()`` goes on every request. The correlation headers name the conversation, turn and tool
-call, so they go only to connector routes and only when the profile has opted in to sending
-telemetry. The gateway strips every ``x-nous-`` header before it calls a vendor.
+call, so they go only to connector routes under the original Nous telemetry consent.
+Aino statistics consent cannot authorize them. The gateway strips every ``x-nous-`` header
+before it calls a vendor.
 """
 
 from __future__ import annotations
@@ -79,9 +80,16 @@ def user_agent() -> str:
 
 def _send_consented() -> bool:
     from hermes_cli.config import read_raw_config_readonly
-    from hermes_cli.observability.shared_metrics_send_config import resolve_send_config
+    from hermes_cli.observability.shared_metrics_consent import _section
+    from hermes_cli.observability.shared_metrics_send_config import LEGACY_ENDPOINT
 
-    return resolve_send_config(read_raw_config_readonly() or {}).send is True
+    shared = _section(read_raw_config_readonly())
+    # Legacy consent named Nous. A new named recipient or custom collector is a different grant.
+    return (
+        shared.get("enabled") is True and shared.get("send") is True
+        and shared.get("recipient") is None
+        and shared.get("endpoint", LEGACY_ENDPOINT) == LEGACY_ENDPOINT
+    )
 
 
 def _conversation_id() -> Optional[str]:
