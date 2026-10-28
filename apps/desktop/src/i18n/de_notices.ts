@@ -11,9 +11,9 @@ export const deNotices = {
   butterbar: {
     goTo: (index, total) => `Hinweis ${index} von ${total} anzeigen`,
     legal: {
-      before: 'Die Nutzung von Hermes Agent unterliegt unseren ',
+      before: 'Die Nutzung des kostenlosen Nous-Dienstes unterliegt dessen ',
       terms: 'Nutzungsbedingungen',
-      between: ' und unserer ',
+      between: ' und ',
       privacy: 'Datenschutzerklärung',
       after: '.'
     }

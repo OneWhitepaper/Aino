@@ -1,4 +1,4 @@
-"""Transmit exported shared-metrics packages to the Nous telemetry service.
+"""Transmit exported shared-metrics packages to the consented Aino telemetry service.
 
 Sender side of the ingest contract (telemetry repo ``CONTRACT.md``): ``202`` durably stored,
 mark sent; ``400`` permanently malformed, never retry; ``429`` keep, retry after
@@ -89,11 +89,16 @@ class _Response:
     body: str
 
 
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
+
+
 def _post(endpoint: str, payload: bytes, *, timeout: int) -> _Response:
     """POST one package. Raises on transport failure; never on HTTP status."""
     headers = {
         "Content-Type": "application/json",
-        "User-Agent": "hermes-agent-shared-metrics/1",
+        "User-Agent": "aino-agent-shared-metrics/1",
     }
     body = payload
     if len(payload) > GZIP_THRESHOLD_BYTES:
@@ -103,7 +108,8 @@ def _post(endpoint: str, payload: bytes, *, timeout: int) -> _Response:
 
     request = urllib.request.Request(endpoint, data=body, headers=headers, method="POST")
     try:
-        with urllib.request.urlopen(request, timeout=timeout) as response:
+        # Only the configured, consented receiver may acknowledge this package.
+        with urllib.request.build_opener(_NoRedirect()).open(request, timeout=timeout) as response:
             return _Response(
                 response.status,
                 response.headers.get("Retry-After"),
@@ -159,15 +165,23 @@ def reconcile_send_consent(
     data = marks.get("data")
 
     open_row = connection.execute(
-        "SELECT rowid FROM send_consent_windows WHERE closed_at IS NULL"
+        "SELECT rowid, recipient FROM send_consent_windows WHERE closed_at IS NULL"
     ).fetchone()
+
+    # Preserve the old audit intervals, but never reuse their permission for a new recipient.
+    if open_row is not None and open_row[1] != "aino":
+        connection.execute(
+            "UPDATE send_consent_windows SET closed_at = MIN(last_confirmed_at, ?) WHERE rowid = ?",
+            (raw_stamp, open_row[0]),
+        )
+        open_row = None
 
     if send_enabled:
         if open_row is None:
             opened = max(x for x in (obs, data) if x is not None)
             connection.execute(
-                "INSERT INTO send_consent_windows(opened_at, last_confirmed_at)"
-                " VALUES (?, ?)",
+                "INSERT INTO send_consent_windows(opened_at, last_confirmed_at, recipient)"
+                " VALUES (?, ?, 'aino')",
                 (opened, opened),
             )
         else:
@@ -196,7 +210,7 @@ def reconcile_send_consent(
 #: package running past it waits for the next reconcile heartbeat (fail-closed).
 CONSENT_GATE_SQL = """EXISTS (
     SELECT 1 FROM send_consent_windows w
-    WHERE package_outbox.period_start >= w.opened_at
+    WHERE w.recipient = 'aino' AND package_outbox.period_start >= w.opened_at
       AND package_outbox.period_end <=
           CASE WHEN w.closed_at IS NULL THEN w.last_confirmed_at
                ELSE w.closed_at END
@@ -422,6 +436,9 @@ class SharedMetricsSender:
             return "deferred"
 
         for attempt in range(1, self._max_attempts + 1):
+            if not self._still_consented():
+                self._reconcile(send_enabled=False)
+                return defer(_FAILURE_BACKOFF_SECONDS, "sharing disabled")
             # Renew before EVERY external POST so a lapsed claimant yields even before anyone
             # reclaims. The ingest key is minute-prefixed: duplicates are distinct objects.
             if not self._renew_claim(package_id, token):
@@ -440,6 +457,8 @@ class SharedMetricsSender:
                         sent_at=_isoformat(self._now()), last_error=None,
                     )
                     return "sent"
+                if 300 <= response.status < 400:
+                    return defer(_FAILURE_BACKOFF_SECONDS, "redirect refused")
                 if response.status in _PERMANENT_STATUSES:
                     logger.warning(
                         "Telemetry package %s rejected with HTTP %s; not retrying",

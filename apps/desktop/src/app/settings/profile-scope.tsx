@@ -1,6 +1,7 @@
 import { useStore } from '@nanostores/react'
 import { useEffect } from 'react'
 
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useI18n } from '@/i18n'
 import { cn } from '@/lib/utils'
 import { $activeGatewayProfile, $profiles, normalizeProfileKey, profileLabel, refreshProfiles } from '@/store/profile'
@@ -12,10 +13,8 @@ import {
 } from '@/store/settings-scope'
 import type { ProfileInfo } from '@/types/hermes'
 
-// Settings-chip label: the Bot Mode title the Bots roster shows when set
-// (ui_meta['hermes-bots'].title), else the app-wide profileLabel
-// (display_name → slug). Scoped to this selector on purpose — the profile
-// rail and Profiles page keep naming profiles by display_name.
+// Settings chips share the Agent Hub name-first presentation. Canonical names
+// remain the fallback for profiles that have no friendly label.
 export function settingsScopeLabel(profile: Pick<ProfileInfo, 'bot_title' | 'display_name' | 'name'>): string {
   return (profile.bot_title ?? '').trim() || profileLabel(profile)
 }
@@ -47,7 +46,7 @@ export function ScopeChip({ active, label, onSelect }: { active: boolean; label:
  *  ($settingsScopeOverride) so the selection persists across pages. Hidden with
  *  fewer than two profiles, so single-profile users never see it and every
  *  request keeps its unscoped default shape. */
-export function SettingsProfileScope({ className }: { className?: string }) {
+export function SettingsProfileScope({ className, compact = false }: { className?: string; compact?: boolean }) {
   const { t } = useI18n()
   const scope = t.settings.profileScope
   const override = useStore($settingsScopeOverride)
@@ -71,20 +70,35 @@ export function SettingsProfileScope({ className }: { className?: string }) {
   }
 
   return (
-    <div className={cn('grid gap-2', className)}>
+    <div className={cn('grid gap-2', compact && 'grid-cols-[auto_minmax(9rem,1fr)] items-center', className)}>
       <div className="text-[length:var(--conversation-caption-font-size)] font-medium text-(--ui-text-secondary)">
         {scope.appliesTo}
       </div>
-      <div className="flex flex-wrap gap-1.5">
-        {profiles.map(profile => (
-          <ScopeChip
-            active={normalizeProfileKey(profile.name) === selected}
-            key={profile.name}
-            label={settingsScopeLabel(profile)}
-            onSelect={() => setSettingsScope(profile.name)}
-          />
-        ))}
-      </div>
+      {compact ? (
+        <Select onValueChange={setSettingsScope} value={selected}>
+          <SelectTrigger aria-label={scope.appliesTo} className="min-w-36">
+            <SelectValue>{selectedName}</SelectValue>
+          </SelectTrigger>
+          <SelectContent>
+            {profiles.map(profile => (
+              <SelectItem key={profile.name} value={normalizeProfileKey(profile.name)}>
+                {settingsScopeLabel(profile)}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      ) : (
+        <div className="flex flex-wrap gap-1.5">
+          {profiles.map(profile => (
+            <ScopeChip
+              active={normalizeProfileKey(profile.name) === selected}
+              key={profile.name}
+              label={settingsScopeLabel(profile)}
+              onSelect={() => setSettingsScope(profile.name)}
+            />
+          ))}
+        </div>
+      )}
       {/* Note truth table (override × non-default target, per the store's
           $settingsScopeEditsNonDefault): non-default target → loud accented
           note whether or not an override is set (the bot-active misdirect);

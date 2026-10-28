@@ -114,7 +114,7 @@ afterEach(() => {
 // 34600757569, 34601269252). Same pattern as chat/index.test.tsx.
 void import('./index')
 
-async function renderMessaging(locale: 'en' | 'zh' = 'en') {
+async function renderMessaging(locale: 'en' | 'zh' = 'en', openFirst = true) {
   let result: ReturnType<typeof render>
   await act(async () => {
     result = render(
@@ -125,6 +125,16 @@ async function renderMessaging(locale: 'en' | 'zh' = 'en') {
       </I18nProvider>
     )
   })
+
+  if (openFirst) {
+    const card = result!.container.querySelector<HTMLButtonElement>('.messaging-platform-card')
+
+    if (card) {
+      await act(async () => {
+        fireEvent.click(card)
+      })
+    }
+  }
 
   return result!
 }
@@ -142,9 +152,12 @@ describe('MessagingView runtime metadata localization', () => {
       ]
     })
 
-    await renderMessaging('zh')
+    await renderMessaging('zh', false)
 
-    expect(await screen.findByText('在 Telegram 私聊、群组和话题中使用 Hermes。')).toBeTruthy()
+    expect(await screen.findByRole('button', { name: '电报（Telegram）' })).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: '电报（Telegram）' }))
+    expect(screen.getByRole('heading', { name: '电报（Telegram）' })).toBeTruthy()
+    expect(screen.getAllByText('在 Telegram 私聊、群组和话题中使用 Aino。').length).toBeGreaterThan(0)
     expect(screen.queryByText(englishDescription)).toBeNull()
   })
 
@@ -154,9 +167,37 @@ describe('MessagingView runtime metadata localization', () => {
       platforms: [platform({ description: pluginDescription, id: 'custom-relay', name: 'Custom Relay' })]
     })
 
-    await renderMessaging('zh')
+    await renderMessaging('zh', false)
 
     expect((await screen.findAllByText(pluginDescription)).length).toBeGreaterThan(0)
+    expect(screen.getByRole('button', { name: 'Custom Relay' })).toBeTruthy()
+  })
+
+  it('searches Chinese names and original brands while saving with the canonical platform id', async () => {
+    getMessagingPlatforms.mockResolvedValue({
+      platforms: [
+        platform({ id: 'dingtalk', name: 'DingTalk' }),
+        platform({ id: 'wecom_callback', name: 'WeCom (app)' })
+      ]
+    })
+
+    await renderMessaging('zh', false)
+
+    expect(await screen.findByRole('button', { name: '钉钉' })).toBeTruthy()
+    const search = screen.getByRole('textbox')
+
+    fireEvent.change(search, { target: { value: '企业微信' } })
+    fireEvent.click(screen.getByRole('button', { name: '企业微信（应用）' }))
+    expect(screen.getByRole('heading', { name: '企业微信（应用）' })).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: '关闭' }))
+    expect(screen.queryByRole('button', { name: '钉钉' })).toBeNull()
+    fireEvent.change(search, { target: { value: 'WeCom' } })
+    expect(screen.getByRole('button', { name: '企业微信（应用）' })).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: '企业微信（应用）' }))
+    fireEvent.click(screen.getByRole('switch'))
+    await waitFor(() =>
+      expect(updateMessagingPlatform).toHaveBeenCalledWith('wecom_callback', { enabled: true }, 'default')
+    )
   })
 })
 
@@ -177,7 +218,9 @@ describe('MessagingView profile scope', () => {
 
 describe('MessagingView status filter', () => {
   const rowNames = (container: HTMLElement) =>
-    [...container.querySelectorAll('ul > li > button')].map(row => row.querySelector('.truncate')?.textContent)
+    [...container.querySelectorAll('ul > li > button')].map(
+      row => row.querySelector('.messaging-platform-name')?.textContent
+    )
 
   it('offers a tab only for tones some platform is in, and narrows the list to that tone', async () => {
     getMessagingPlatforms.mockResolvedValue({
@@ -188,14 +231,32 @@ describe('MessagingView status filter', () => {
       ]
     })
 
-    const { container } = await renderMessaging()
+    const { container } = await renderMessaging('en', false)
 
     await waitFor(() => expect(rowNames(container)).toHaveLength(3))
     expect(screen.queryByRole('button', { name: 'Errors' })).toBeNull()
 
-    fireEvent.click(screen.getAllByRole('button', { name: 'Needs attention' })[0])
+    fireEvent.click(screen.getAllByRole('button', { name: /Needs attention/ })[0])
 
     expect(rowNames(container)).toEqual(['Slack'])
+  })
+
+  it('returns to all platforms when the selected detailed connection state disappears', async () => {
+    const failed = platform({ enabled: true, id: 'discord', name: 'Discord', state: 'startup_failed' })
+    const idle = platform({ id: 'teams', name: 'Microsoft Teams' })
+    getMessagingPlatforms.mockResolvedValue({ platforms: [failed, idle] })
+    const { container } = await renderMessaging('en', false)
+
+    fireEvent.click(screen.getByText('Filter by connection state'))
+    fireEvent.click(screen.getByRole('button', { name: 'Errors' }))
+    expect(rowNames(container)).toEqual(['Discord'])
+
+    getMessagingPlatforms.mockResolvedValue({
+      platforms: [{ ...failed, state: 'connected' }, idle]
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh' }))
+
+    await waitFor(() => expect(rowNames(container)).toEqual(['Discord', 'Microsoft Teams']))
   })
 })
 
@@ -617,5 +678,66 @@ describe('MessagingView Telegram quick setup', () => {
     } finally {
       $settingsScopeOverride.set(null)
     }
+  })
+})
+
+describe('MessagingView platform directory', () => {
+  it('opens runtime plugin credentials only after choosing its configuration', async () => {
+    getMessagingPlatforms.mockResolvedValue({
+      platforms: [
+        platform({
+          id: 'custom-hub',
+          name: 'Custom Hub',
+          env_vars: [
+            {
+              key: 'CUSTOM_HUB_TOKEN',
+              prompt: 'Plugin token',
+              description: 'Credential supplied by the plugin.',
+              required: true,
+              is_password: true,
+              is_set: false,
+              advanced: false,
+              redacted_value: '',
+              url: null
+            }
+          ]
+        })
+      ]
+    })
+
+    await renderMessaging('en', false)
+    expect(screen.queryByLabelText('Plugin token')).toBeNull()
+    fireEvent.click(await screen.findByRole('button', { name: 'Custom Hub' }))
+    expect(await screen.findByRole('dialog', { name: 'Custom Hub' })).toBeTruthy()
+    expect(screen.getByLabelText('Plugin token')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+  })
+
+  it('includes a connected platform with pending approvals in the attention directory', async () => {
+    getMessagingPlatforms.mockResolvedValue({
+      platforms: [
+        platform({ id: 'custom-hub', name: 'Custom Hub', state: 'connected', configured: true, enabled: true }),
+        platform({ id: 'other', name: 'Other Platform' })
+      ]
+    })
+    getPairing.mockResolvedValue({
+      approved: [],
+      pending: [
+        {
+          platform: 'custom-hub',
+          user_id: 'user-7',
+          user_name: 'Pending User',
+          request_id: 'request-7'
+        }
+      ]
+    })
+
+    await renderMessaging('en', false)
+    fireEvent.click(screen.getAllByRole('button', { name: /Needs attention/ })[0])
+    expect(screen.getByRole('button', { name: 'Custom Hub' })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Other Platform' })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Custom Hub' }))
+    expect(await screen.findByRole('button', { name: 'Approve' })).toBeTruthy()
   })
 })

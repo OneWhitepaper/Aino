@@ -1,4 +1,21 @@
 export interface CatalogTranslations {
+  startHere: string
+  featuredHint: string
+  browseHint: string
+  installedHint: string
+  installedKind: (kind: string) => string
+  howToUse: string
+  usageHint: string
+  capabilityGuide: string
+  capabilityGuideDescription: string
+  contentLabels: Record<string, string>
+  descriptions: Record<string, string>
+  originalDescription: string
+  skillInstructions: string
+  pageTitle: string
+  pageDescription: string
+  enable: string
+  disable: string
   add: string
   added: string
   discover: string

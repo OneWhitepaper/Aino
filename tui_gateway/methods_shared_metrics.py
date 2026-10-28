@@ -61,6 +61,8 @@ def _(rid, params: dict) -> dict:
     the setup-completed metric. Answers the stored ``{enabled, send, decided, reask}``."""
     enabled = params.get("enabled") is True
     send = enabled and params.get("send") is True
+    if send and params.get("recipient") != "aino":
+        return _err(rid, 5096, "Explicit Aino usage-statistics consent is required; update the client.")
     from hermes_cli.observability.shared_metrics_consent import set_answer
     try:
         cfg = _load_cfg_raw()

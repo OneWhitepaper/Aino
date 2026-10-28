@@ -14,6 +14,7 @@ import { skillSearchTerms } from '../skills/skills-data'
 import { CatalogAlert } from './catalog-alert'
 import { CatalogBrowser } from './catalog-browser'
 import { type CatalogEntry, parseCatalog } from './catalog-data'
+import { catalogDisplayLabel } from './catalog-localization'
 
 interface SkillCatalogProps {
   skills: SkillInfo[]
@@ -46,8 +47,14 @@ function ScopedSkillCatalog({
 }: SkillCatalogProps) {
   const { t } = useI18n()
   const h = t.skills.hub
+
   // "Try …" nudges from the user's own skills: search reads categories, not just names.
-  const searchHints = useMemo(() => (skills.length ? skillSearchTerms(skills).map(term => t.common.tryHint(term)) : undefined), [skills, t])
+  const searchHints = useMemo(
+    () =>
+      skills.length ? skillSearchTerms(skills).map(term => t.common.tryHint(catalogDisplayLabel(term, t))) : undefined,
+    [skills, t]
+  )
+
   const mounted = useRef(true)
   const pending = useRef(new Set<string>())
   const [installing, setInstalling] = useState<ReadonlySet<string>>(new Set())

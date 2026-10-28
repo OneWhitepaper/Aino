@@ -11,6 +11,7 @@ import { arDiagnostics } from './ar_diagnostics'
 import { arFirstRun } from './ar_first_run'
 import { arSettings } from './ar_settings'
 import { defineLocale, type TranslationOverrides } from './define-locale'
+import { messagingDirectory } from './messaging-directory'
 
 export const arOverrides = {
   connectorOffer: {
@@ -19,6 +20,23 @@ export const arOverrides = {
   },
 
   catalog: {
+    enable: 'تفعيل',
+    disable: 'تعطيل',
+    originalDescription: 'الوصف الأصلي',
+    skillInstructions: 'تعليمات المهارة',
+    startHere: 'ابدأ من هنا',
+    featuredHint: 'تعرّف على وظيفة المهارة ثم أضفها عند الحاجة.',
+    browseHint: 'تصفّح حسب الغرض وراجع التفاصيل قبل الإضافة.',
+    installedHint: 'أدر الإمكانات المفعّلة في مساحة العمل. تسري التغييرات على الجلسات الجديدة.',
+    installedKind: (kind: string) => `المثبّتة: ${kind}`,
+    howToUse: 'طريقة الاستخدام',
+    usageHint: 'راجع تعليمات المهارة أو وثائق المصدر لمعرفة طريقة الاستخدام والخطوات.',
+    capabilityGuide: 'حول هذه الإمكانات',
+    capabilityGuideDescription:
+      'توفر المهارات الإرشادات والمعرفة؛ وتوسّع الإضافات الوظائف؛ وتربط الموصلات الخدمات الخارجية؛ وتحدد مجموعات الأدوات الأدوات المتاحة في مساحة العمل.',
+
+    pageTitle: 'المهارات والأدوات',
+    pageDescription: 'أضف المعرفة وسير العمل والقدرات الخارجية إلى وكلائك.',
     add: 'إضافة',
     added: 'تمت الإضافة',
     discover: 'اكتشف',
@@ -109,7 +127,7 @@ export const arOverrides = {
   skills: arCapabilities.skills,
   agents: arCapabilities.agents,
   commandCenter: arCommandCenter.commandCenter,
-  messaging: arCommandCenter.messaging,
+  messaging: { ...arCommandCenter.messaging, directory: messagingDirectory['ar'] },
   profiles: arCommandCenter.profiles,
   modelAssignment: arSettings.modelAssignment,
   cron: arCommandCenter.cron,

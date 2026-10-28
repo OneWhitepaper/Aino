@@ -5,10 +5,14 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 
 import { PageLoader } from '@/components/page-loader'
 import { Button } from '@/components/ui/button'
+import { Codicon } from '@/components/ui/codicon'
+import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
 import { useI18n } from '@/i18n'
+import { Book, Layers3, Package, Plug } from '@/lib/icons'
 import { queryClient } from '@/lib/query-client'
 import { invalidateSlashCompletions } from '@/lib/slash-completion-cache'
 import { useStoreSelector } from '@/lib/use-session-slice'
+import { cn } from '@/lib/utils'
 import { $gateway } from '@/store/gateway'
 import { OFFICIAL_SKILLS_KEY } from '@/store/hub-actions'
 
@@ -18,7 +22,6 @@ import { PanelEmpty } from '../overlays/panel'
 import { PageSearchShell } from '../page-search-shell'
 import type { SetStatusbarItemGroup } from '../shell/statusbar-controls'
 
-import { syncCatalogArcs } from './catalog/catalog-arc'
 import { prefetchCatalogWhenIdle } from './catalog/catalog-data'
 import { ConnectorsTab } from './connectors/connectors-tab'
 import { PluginsTab } from './plugins/plugins-tab'
@@ -74,6 +77,7 @@ export function CapabilitiesView({
   const gateway = useStoreSelector($gateway, g => (mode === 'connectors' ? g : null))
 
   const [query, setQuery] = useState('')
+  const [guideOpen, setGuideOpen] = useState(false)
 
   const scope = useCapabilityScope({ fixedConnection, fixedProfile })
 
@@ -99,7 +103,6 @@ export function CapabilitiesView({
   // Plugins is small enough to warm from any tab. Skills (~100k rows) only
   // loads when asked for: an idle parse of it would still block the page.
   useEffect(() => (mode === 'plugins' ? undefined : prefetchCatalogWhenIdle('plugins')), [mode])
-  useEffect(syncCatalogArcs, [])
 
   // Rotating placeholder nudges from the user's own data — teach that search
   // understands tool names, not just titles.
@@ -162,7 +165,14 @@ export function CapabilitiesView({
       />
     ),
     toolsets: () => (
-      <ToolsetsTab hints={toolsetHints} key={`toolsets-${scope.key}`} onQueryChange={setQuery} profile={scope.profile} query={query} toolsets={toolsets ?? []} />
+      <ToolsetsTab
+        hints={toolsetHints}
+        key={`toolsets-${scope.key}`}
+        onQueryChange={setQuery}
+        profile={scope.profile}
+        query={query}
+        toolsets={toolsets ?? []}
+      />
     )
   } satisfies Record<CapabilityMode, () => React.ReactNode>
 
@@ -170,19 +180,51 @@ export function CapabilitiesView({
     <PageSearchShell
       {...props}
       activeTab={mode}
+      className={cn('capabilities-view', embedded && 'capabilities-view-embedded', props.className)}
+      heading={
+        !embedded && (
+          <header className="capabilities-heading">
+            <div>
+              <h1>{t.catalog.pageTitle}</h1>
+              <p>{t.catalog.pageDescription}</p>
+            </div>
+            <CapabilityScopeSelector scope={scope} />
+          </header>
+        )
+      }
       onTabChange={id => setMode(id as CapabilityMode)}
       // Every tab renders the shared CapabilitySearch beside its own results.
       searchHidden
+      searchTrailingAction={
+        !embedded && (
+          <Button onClick={() => setGuideOpen(true)} size="xs" variant="text">
+            <Codicon name="question" />
+            {t.catalog.capabilityGuide}
+          </Button>
+        )
+      }
       tabs={[
-        { id: 'skills', label: t.skills.tabSkills, meta: skills?.length ?? null },
-        { id: 'plugins', label: t.skills.tabPlugins },
-        { id: 'connectors', label: t.connectorsPage.title },
-        { id: 'toolsets', label: t.skills.tabToolsets, meta: toolsets ? visibleToolsetCount(toolsets) : null }
+        { id: 'skills', label: t.skills.tabSkills, icon: Book, meta: skills?.length ?? null },
+        { id: 'plugins', label: t.skills.tabPlugins, icon: Package },
+        { id: 'connectors', label: t.connectorsPage.title, icon: Plug },
+        {
+          id: 'toolsets',
+          label: t.skills.tabToolsets,
+          icon: Layers3,
+          meta: toolsets ? visibleToolsetCount(toolsets) : null
+        }
       ]}
       tabsAlign="start"
+      tabsVariant="section"
     >
+      <Dialog onOpenChange={setGuideOpen} open={guideOpen}>
+        <DialogContent>
+          <DialogTitle>{t.catalog.capabilityGuide}</DialogTitle>
+          <p className="text-sm leading-relaxed text-(--ui-text-secondary)">{t.catalog.capabilityGuideDescription}</p>
+        </DialogContent>
+      </Dialog>
       <div className="flex h-full flex-col">
-        {mode !== 'plugins' && <CapabilityScopeSelector scope={scope} />}
+        {embedded && mode !== 'plugins' && <CapabilityScopeSelector scope={scope} />}
         <div className="flex min-h-0 flex-1 flex-col">{loadGate ?? tabContent[mode]()}</div>
       </div>
     </PageSearchShell>

@@ -68,11 +68,11 @@ export const arBoot = {
   butterbar: {
     goTo: (index, total) => `عرض الإشعار ${index} من ${total}`,
     legal: {
-      before: 'يخضع استخدام Hermes Agent لـ',
+      before: 'يخضع استخدام خدمة Nous المجانية لـ',
       terms: 'شروط الخدمة',
       between: ' و',
       privacy: 'سياسة الخصوصية',
-      after: ' الخاصة بنا.'
+      after: ' الخاصة بها.'
     }
   },
   promptNotices: {

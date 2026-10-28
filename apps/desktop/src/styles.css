@@ -151,6 +151,16 @@
   --font-sans: var(--dt-font-sans);
   --font-mono: var(--dt-font-mono);
 
+  /* Named utilities and shared primitives use the same Aino type ladder. */
+  --text-xs: var(--aino-text-caption);
+  --text-xs--line-height: 1.5;
+  --text-sm: var(--aino-text-ui);
+  --text-sm--line-height: 1.5;
+  --text-base: var(--aino-text-body);
+  --text-base--line-height: var(--aino-line-height);
+  --text-lg: var(--aino-text-title);
+  --text-lg--line-height: 1.4;
+
   --spacing-mul: var(--dt-spacing-mul, 1);
 
   --radius-xs: calc(var(--radius-scalar) * 0.125rem);
@@ -496,11 +506,6 @@
 
     --composer-shell-pad-block-end: 0.625rem;
     --message-text-indent: 0.75rem;
-    --conversation-text-base-size: 0.8125rem;
-    --conversation-tool-base-size: 0.6875rem;
-    --conversation-caption-base-size: 0.75rem;
-    --conversation-base-line-height: 1.125rem;
-    --conversation-caption-base-line-height: 1rem;
     --conversation-text-font-size: var(--conversation-text-base-size);
     --conversation-tool-font-size: var(--conversation-tool-base-size);
     --conversation-caption-font-size: var(--conversation-caption-base-size);
@@ -527,7 +532,7 @@
     /* Paragraph spacing — vertical gap between prose paragraphs, both inside a
        markdown block and between consecutive prose parts. Single knob; tweak
        freely. */
-    --paragraph-gap: 0.7rem;
+    --paragraph-gap: 0.75rem;
 
     --composer-width: 100%;
     --composer-control-size: 1.5rem;
@@ -802,7 +807,7 @@
     background: var(--ui-chat-surface-background);
     color: var(--dt-foreground);
     font-family: var(--dt-font-sans);
-    font-size: 0.8125rem;
+    font-size: var(--aino-text-ui);
     line-height: var(--dt-line-height, 1.55);
     letter-spacing: var(--dt-letter-spacing, 0);
     -webkit-user-select: none;
@@ -2101,7 +2106,7 @@ body.guest-pointer-lock :is(webview, iframe) {
   gap: 0;
   padding-left: 0;
   color: var(--aino-landing-secondary);
-  font-size: var(--aino-text-caption);
+  font-size: var(--aino-text-label);
   font-weight: 500;
   line-height: 1.25rem;
   letter-spacing: 0;
@@ -2136,7 +2141,7 @@ body.guest-pointer-lock :is(webview, iframe) {
   padding-block: 0;
   padding-right: 0.5rem;
   color: var(--aino-landing-muted);
-  font-size: 0.75rem;
+  font-size: var(--aino-text-caption);
   line-height: 1.35;
 }
 
@@ -2164,12 +2169,12 @@ body.guest-pointer-lock :is(webview, iframe) {
 
 [data-tour='sessions-sidebar'] [data-sidebar-session-row] .aino-sidebar-session-label {
   color: var(--aino-landing-primary);
-  font-size: 0.8125rem;
+  font-size: var(--aino-text-ui);
 }
 
 [data-tour='sessions-sidebar'] [data-sidebar-session-row] [data-sidebar-session-actions] {
   color: var(--aino-landing-muted);
-  font-size: 0.6875rem;
+  font-size: var(--aino-text-caption);
 }
 
 [data-tour='sessions-sidebar'] [data-sidebar-session-row] [data-sidebar-session-lead],
@@ -2189,7 +2194,7 @@ body.guest-pointer-lock :is(webview, iframe) {
 
 [data-tour='sessions-sidebar'] [data-sidebar-date-divider] > span:first-child {
   color: var(--aino-landing-muted);
-  font-size: 0.6875rem;
+  font-size: var(--aino-text-caption);
   font-weight: 600;
   line-height: 1rem;
   letter-spacing: 0;
@@ -2578,7 +2583,7 @@ body:not(:has([data-settings-workspace])):has([data-chat-surface][data-conversat
   min-height: 3.5rem;
   padding-left: 0;
   padding-top: 0.125rem;
-  font-size: 0.875rem;
+  font-size: var(--conversation-text-font-size);
 }
 
 [data-chat-surface][data-home-layout] [data-slot='composer-rich-input']:is(:empty, [data-empty])::before {
@@ -2598,9 +2603,6 @@ body:not(:has([data-settings-workspace])):has([data-chat-surface][data-conversat
   --composer-control-size: 1.75rem;
   --composer-row-gap: 0.25rem;
   --composer-shell-pad-block-end: 1.25rem;
-  --conversation-text-font-size: var(--aino-text-body);
-  --conversation-tool-font-size: var(--aino-text-ui);
-  --conversation-line-height: 1.5rem;
   --conversation-turn-gap: 1.25rem;
   --turn-block-gap: 0.75rem;
   --conversation-glyph-size: 0.875rem;
@@ -2612,7 +2614,6 @@ body:not(:has([data-settings-workspace])):has([data-chat-surface][data-conversat
   --disclosure-caret-rest: 0;
   --dt-line-height: 1.6;
   --message-text-indent: 0rem;
-  --paragraph-gap: 0.75rem;
   --thread-last-message-clearance: 2rem;
   --thread-viewport-height: 100%;
   background: var(--aino-landing-surface);
@@ -2685,8 +2686,8 @@ body:not(:has([data-settings-workspace])):has([data-chat-surface][data-conversat
   min-height: var(--composer-input-min-height);
   padding: 0.125rem 0.25rem;
   color: var(--aino-landing-primary);
-  font-size: 0.875rem;
-  line-height: 1.55;
+  font-size: var(--conversation-text-font-size);
+  line-height: var(--aino-line-height);
 }
 
 [data-chat-surface][data-conversation-layout] [data-slot='composer-leading-controls'] {
@@ -2779,23 +2780,6 @@ body:not(:has([data-settings-workspace])):has([data-chat-surface][data-conversat
   font-weight: 400;
 }
 
-/* Scale with the reading size while keeping a distinct document hierarchy. */
-[data-chat-surface][data-conversation-layout] .aui-md h1 {
-  font-size: 1.5333em;
-}
-
-[data-chat-surface][data-conversation-layout] .aui-md h2 {
-  font-size: 1.2em;
-}
-
-[data-chat-surface][data-conversation-layout] .aui-md h3 {
-  font-size: 1em;
-}
-
-[data-chat-surface][data-conversation-layout] .aui-md :is(h4, h5, h6) {
-  font-size: 1em;
-}
-
 [data-chat-surface][data-conversation-layout] .aui-md th {
   color: var(--ui-text-secondary);
   font-size: 0.8125rem;
@@ -2867,8 +2851,7 @@ body:not(:has([data-settings-workspace])):has([data-chat-surface][data-conversat
 }
 
 [data-chat-surface][data-conversation-layout] [data-slot='aui_response-process-header'] {
-  border-bottom: 1px solid var(--ui-stroke-tertiary);
-  padding-bottom: 0.375rem;
+  padding-bottom: 0;
 }
 
 [data-chat-surface][data-conversation-layout] [data-tool-title-target='file'] {
@@ -2978,24 +2961,12 @@ body:not(:has([data-settings-workspace])):has([data-chat-surface][data-conversat
 }
 
 [data-chat-surface][data-conversation-layout] [data-slot='aui_assistant-footer'] {
-  align-items: flex-start;
   padding-top: 0.5rem;
   padding-inline: 0;
 }
 
 [data-chat-surface][data-conversation-layout] [data-slot='aui_assistant-actions-row'] {
   justify-content: flex-start;
-}
-
-[data-chat-surface][data-conversation-layout] [data-slot='aui_msg-actions'] {
-  justify-content: flex-start;
-  opacity: 1;
-  pointer-events: auto;
-}
-
-[data-chat-surface][data-conversation-layout] button[data-slot='aui_msg-reactions']:not([data-reacted]) {
-  opacity: 0.8;
-  pointer-events: auto;
 }
 
 [data-chat-surface][data-conversation-layout] [data-slot='aui_msg-actions'] button:not(:disabled) {
@@ -3007,6 +2978,18 @@ body:not(:has([data-settings-workspace])):has([data-chat-surface][data-conversat
 [data-chat-surface][data-conversation-layout] button[data-slot='aui_msg-reactions']:is(:hover, :focus-visible) {
   color: var(--ui-text-primary);
   opacity: 1;
+}
+
+@media (hover: none) {
+  [data-slot='aui_msg-actions'] {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  button[data-slot='aui_msg-reactions']:not([data-reacted]) {
+    opacity: 0.8;
+    pointer-events: auto;
+  }
 }
 
 @media (max-width: 52rem) {
@@ -4992,3 +4975,15 @@ html[data-hud-window] [data-slot='popover-content'] {
 
 /* Keep the Aino surface contract after general rules in the compiled cascade. */
 @import './styles/aino-theme.css';
+/* The workspace inspector reuses CodeEditor while giving long persona files
+   the same readable scale as other configuration content. */
+[data-workspaces-page] .workspace-soul-editor .cm-content,
+[data-workspaces-page] .workspace-soul-editor .cm-line,
+[data-workspaces-page] .workspace-soul-editor .cm-scroller {
+  font-size: var(--aino-text-ui);
+  line-height: 1.8;
+}
+
+[data-workspaces-page] .workspace-soul-editor > div {
+  padding: 1rem;
+}

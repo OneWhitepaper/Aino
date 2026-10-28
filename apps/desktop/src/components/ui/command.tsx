@@ -51,7 +51,7 @@ function CommandInput({ className, right, ...props }: CommandInputProps) {
       >
         <CommandPrimitive.Input
           className={cn(
-            'h-4 w-full bg-transparent text-xs leading-none text-foreground outline-none placeholder:text-(--ui-text-tertiary) disabled:cursor-not-allowed disabled:opacity-50',
+            'h-5 w-full bg-transparent text-[length:var(--aino-text-ui)] leading-5 text-foreground outline-none placeholder:text-(--ui-text-tertiary) disabled:cursor-not-allowed disabled:opacity-50',
             className
           )}
           data-slot="command-input"

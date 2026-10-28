@@ -3,7 +3,7 @@ import { useState } from 'react'
 import type { CatalogKind } from './catalog-data'
 import { type CatalogFacets, type CatalogSort, EMPTY_FACETS } from './catalog-query'
 
-type ListFacet = 'sources' | 'categories' | 'tags'
+type ListFacet = 'sources' | 'tags'
 
 const toggled = (list: string[], value: string) =>
   list.includes(value) ? list.filter(item => item !== value) : [...list, value]
@@ -31,11 +31,11 @@ export function useCatalogFilters(kind: CatalogKind, onChange: () => void) {
       onChange()
     },
     toggleSource: toggle('sources'),
-    toggleCategory: toggle('categories'),
     toggleTag: toggle('tags'),
     toggleInstalled: () => update(current => ({ ...current, installedOnly: !current.installedOnly })),
-    // Cards and "See all" drill into one category rather than toggling it.
-    chooseCategory: (value: string) => update(current => ({ ...current, categories: [value], tags: [] })),
+    // Category navigation replaces the previous choice and drops unrelated tags.
+    chooseCategory: (value: string | null) =>
+      update(current => ({ ...current, categories: value === null ? [] : [value], tags: [] })),
     clear: () => update(() => EMPTY_FACETS)
   }
 }

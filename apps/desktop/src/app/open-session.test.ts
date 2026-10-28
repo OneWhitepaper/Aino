@@ -159,6 +159,18 @@ describe('openSession', () => {
     expect(navigate).not.toHaveBeenCalled()
   })
 
+  it.each(['ordinary-chat', null])('keeps the Sessions surface when a bot opens over %s', selected => {
+    const scope = { workspaceMode: 'bots' as const, workspaceOwnerKey: 'bot:local::default' }
+    $selectedStoredSessionId.set(selected)
+    focusOpenSession.mockReturnValue(null)
+
+    openSession('bot-chat', navigate, 'in-place', scope)
+
+    expect(navigate).not.toHaveBeenCalled()
+    expect(openSessionTile).toHaveBeenCalledWith('bot-chat', 'center', undefined, undefined, scope)
+    expect($selectedStoredSessionId.get()).toBe(selected)
+  })
+
   it('threads an exact Bot owner into a new session tile', () => {
     const scope = { workspaceMode: 'bots' as const, workspaceOwnerKey: 'connection-a::default' }
     focusOpenSession.mockReturnValue(null)

@@ -341,6 +341,22 @@ export function mergeServerMeta(roster: RosterRow[], fetchedAt = 0) {
   }
 }
 
+/** Save authored text, including an explicit clear, on the bot's own backend. */
+export async function updateBotDescription(bot: RosterRow, description: string): Promise<void> {
+  const result = await requestForBot<{ applied?: { description?: boolean } }>(bot, 'profiles.configure', {
+    name: bot.name,
+    description: description.trim()
+  })
+
+  if (result.applied?.description !== true) {
+    throw new Error(
+      pluginText('avatar.savedLocallyDescriptionFailed', 'Could not save the bot description. Please try again.')
+    )
+  }
+
+  queryClient.invalidateQueries({ queryKey: ROSTER_KEY })
+}
+
 /** Clone a bot: profile (config/skills/SOUL/memory via clone_from) + look.
  *  Name is "<base>-2", "-3", … — first free slot against the live roster. */
 export async function duplicateBot(bot: RosterRow, roster: RosterRow[]) {
@@ -453,7 +469,11 @@ export async function deleteBot(bot: RosterRow) {
     })
 
     if (result?.blocked || result?.code !== 0) {
-      throw new Error(result?.hint || result?.output || pluginText('bot.deleteFailed', `Could not delete profile ${bot.name}.`, bot.name))
+      throw new Error(
+        result?.hint ||
+          result?.output ||
+          pluginText('bot.deleteFailed', `Could not delete profile ${bot.name}.`, bot.name)
+      )
     }
   }
 

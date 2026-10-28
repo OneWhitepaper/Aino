@@ -2,6 +2,9 @@ import '../catalog/catalog-discovery.css'
 
 import type { ReactNode } from 'react'
 
+import { cn } from '@/lib/utils'
+
+import { PAGE_INSET_X, PAGE_MAX_W } from '../../layout-constants'
 import { CatalogCard, type CatalogCardVariant } from '../catalog/catalog-card'
 import type { CatalogEntry, CatalogKind } from '../catalog/catalog-data'
 import { CatalogDeveloper } from '../catalog/catalog-developer'
@@ -56,40 +59,45 @@ const entryFor = (item: CatalogSurfaceItem, category: string): CatalogEntry => (
   search: ''
 })
 
-const noop = () => {}
-
 /** The catalog page for a capability that isn't a registry feed: the same
  *  headings, cards and developer banner, laid out as the board's feature row
  *  and small-banner lists. State and actions stay with the caller. */
-export function CatalogSurface({ sections, kind, actions }: { sections: CatalogSurfaceSection[]; kind: CatalogKind; actions?: ReactNode }) {
+export function CatalogSurface({
+  sections,
+  kind,
+  actions
+}: {
+  sections: CatalogSurfaceSection[]
+  kind: CatalogKind
+  actions?: ReactNode
+}) {
   return (
-    <div className="capabilities-scroll">
-      <div className="catalog-discovery">
-        {sections.filter(section => section.items.length).map(section => (
-          <section data-catalog-section={section.id} key={section.id}>
-            <header className="catalog-section-heading">
-              <div>
-                <h2>{section.label}</h2>
-                {section.blurb && <p>{section.blurb}</p>}
+    <div className="@container/catalog capabilities-scroll">
+      <div className={cn('capabilities-sections mx-auto w-full py-6', PAGE_INSET_X, PAGE_MAX_W)}>
+        {sections
+          .filter(section => section.items.length)
+          .map(section => (
+            <section data-catalog-section={section.id} key={section.id}>
+              <header className="catalog-section-heading">
+                <div>
+                  <h2>{section.label}</h2>
+                  {section.blurb && <p>{section.blurb}</p>}
+                </div>
+              </header>
+              <div className={section.layout === 'feature' ? 'catalog-feature-row' : 'catalog-banner-list'}>
+                {section.items.map((item, index) => (
+                  <CatalogCard
+                    accentIndex={index}
+                    action={item.action}
+                    entry={entryFor(item, section.id)}
+                    key={item.id}
+                    onOpen={item.onOpen}
+                    variant={VARIANT[section.layout]}
+                  />
+                ))}
               </div>
-            </header>
-            <div className={section.layout === 'feature' ? 'catalog-feature-row' : 'catalog-banner-list'}>
-              {section.items.map((item, index) => (
-                <CatalogCard
-                  accentIndex={index}
-                  action={item.action}
-                  entry={entryFor(item, section.id)}
-                  key={item.id}
-                  onCategory={noop}
-                  onOpen={item.onOpen}
-                  onSearch={noop}
-                  onTag={noop}
-                  variant={VARIANT[section.layout]}
-                />
-              ))}
-            </div>
-          </section>
-        ))}
+            </section>
+          ))}
         <CatalogDeveloper actions={actions} kind={kind} />
       </div>
     </div>

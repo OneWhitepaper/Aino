@@ -48,9 +48,36 @@ one-off at the call site.
 
 - **Chat is the home surface.** The transcript and composer stay primary; tools,
   previews, files, review, and terminal complement the conversation.
+- **Workspace cards preview before switching.** The overview shows profiles as
+  cards beside an inspector. Selecting a card only changes the inspected profile;
+  the explicit switch action alone reuses the existing profile activation flow.
+  Selection styling and the current-workspace badge describe separate states.
+  Closing the inspector does not switch profiles or reopen it on a roster refresh.
+  Model settings, capabilities, profile menus and SOUL.md editing retain their
+  existing routes and persistence. Narrow containers stack the inspector below
+  the overview. ProfileGlyph's large size and SegmentedControl's underline variant
+  reuse the shared primitives; their existing compact defaults stay unchanged.
+  The page heading owns the New workspace action; the compact search belongs
+  above the card grid. Cards keep a readable column width even when only one
+  workspace exists. The inspector groups model settings, the existing SOUL.md
+  editor and storage details; advanced browsing stays below the overview.
+  Its restrained green selection and actions derive from the existing semantic
+  color tokens, including dark mode. The default workspace uses the Aino mark;
+  named workspaces retain ProfileGlyph and their configured identity colors.
 - **Pages are durable destinations.** Chat, Settings, Skills, Messaging, and
   Artifacts remain in shell chrome. Do not hide a distinct product noun inside
   an unrelated page.
+- **Capabilities is a directory, not a billboard.** Keep the four existing
+  Skills, Plugins, Connectors and Tools destinations. The page identity and
+  configuration target sit above their tabs; the configuration target never
+  switches the active workspace. Skills and Plugins reuse the existing
+  installed facet for Discover / Installed, with the existing search, view
+  preference, category/source facets and advanced tag/sort controls. Categories
+  use a scrollable side rail, compact recommendations precede uniform neutral
+  cards, and details reuse the accessible dialog as a right-side drawer.
+  Original names, authors, installation identifiers, editor/archive actions and
+  profile/connection routing stay authoritative. Connectors and toolsets keep
+  their existing management flows and shared presentation primitives.
 - **Route overlays are short tasks.** Command Center, Cron, Profiles, Agents,
   and Starmap render as `OverlayView` cards and return to the previous route on
   close. Settings is a full-page workspace with its own navigation and return
@@ -229,10 +256,15 @@ zoom and native Glass keep their independent settings. Stored theme assets are n
 deleted when upgrading.
 
 The approved reply style is also the system type and density ladder: 15px
-body copy at 1.6 line height, 13px controls and activity, 12px supporting
+body copy at 1.6 line height, 14px controls, navigation and activity, 13px group labels, 12px supporting
 metadata, and 18px section/dialog headings. Conversation size aliases resolve
 from these existing Aino roles; routes and body portals do not carry separate
-size palettes. Compact navigation and dense data can retain their explicit UI
+size palettes. Named Tailwind utilities (`text-xs`, `text-sm`, `text-base`,
+`text-lg`) resolve to the same caption/UI/body/title roles. Project names,
+recent-session titles, model and reasoning selectors use the 14px UI role;
+timestamps and other secondary metadata use the 12px caption role. Do not
+shrink primary actionable labels to caption size or introduce 9–11px microcopy.
+Compact navigation and dense data can retain their explicit UI
 or caption role. The existing bubble fill and shared table-header fill carry
 the faint semantic blue; status, syntax and diff colors keep their meaning.
 User bubbles still consume `--dt-user-bubble` and the existing
@@ -489,7 +521,7 @@ blurred backdrop.
 ## Form controls
 
 - **`controlVariants`** (`src/components/ui/control.ts`) is the shared shape for
-  `Input` / `Textarea` / `SelectTrigger`: 8px corners, 13px normal UI text and
+  `Input` / `Textarea` / `SelectTrigger`: 8px corners, 14px normal UI text and
   padding-driven size. New text-entry controls compose it. Fields have neutral
   fill/hairlines, accent-only focus and a semantic invalid state; grouped fields
   inherit the same font size as bare controls. No page-specific control overrides.
@@ -554,6 +586,33 @@ blurred backdrop.
   Search and saved field links resolve to the owning child before highlighting.
 - **Rows:** `ListRow` (settings `primitives.tsx`) for label/description/action
   rows. Flat, flush-left; no per-row indentation that fights flush headers.
+- **Messaging:** platform cards open the existing configuration in a shared
+  `Dialog`; they do not change the active workspace. Domestic platforms lead,
+  runtime/plugin platforms remain discoverable, and gateway health is separate
+  from each platform's state. Keep scope selection, connection-state filters,
+  advanced fields, pairing approvals and QR setup available. Saving credentials
+  and enabling a platform retain their separate backend operations; retain
+  restart/hot-serve feedback and guard unsaved credential edits on close.
+- **Capabilities:** reuse `CatalogBrowser`, its filter state and capability actions.
+  Primary sections use the shared Radix `Tabs` navigation size: line icons,
+  14px labels, separate count badges and an active paper segment on a quiet track.
+  The primitive owns the selection appearance; do not layer text underlines or
+  the legacy route-tab fill onto it. The existing dropdown handles narrow panes.
+  Search, discovery/installed selection, view controls and filters share one toolbar;
+  a quiet category/source rail leads to compact cards or flat installed-skill rows.
+  Categories are single-choice navigation: another category replaces the previous
+  one, and clicking the current category or All clears it. Sources and tags retain
+  their existing multi-select filter behavior.
+  Standalone toolset search and card sections share `PAGE_INSET_X` and
+  `PAGE_MAX_W`, with space above the first section; the rail-owned catalog's
+  zero inner padding must not flatten a standalone page's gutters.
+  Skill details open in the existing dialog as a right drawer with overview and
+  usage tabs; usage retains the full original instructions and existing editing
+  actions. Plugin list mode keeps its existing master/detail management panel,
+  including configuration, updates, uninstall and Agent/Desktop controls. All
+  categories, profile routing, source links and keyboard focus behavior remain
+  available. Narrow windows wrap the heading, scroll categories horizontally and
+  keep the detail body scrollable; use existing palette, controls and type roles.
 - **No dividers between rows** unless the list genuinely needs them; prefer
   spacing. When you do need one, it's a single `--ui-stroke-tertiary` hairline.
 
@@ -624,6 +683,9 @@ inline-edit composers.
 It does not resize the sidebar, settings, toolbars, media, or pane geometry.
 Conversation size and line-height tokens are derived inside the transcript/editor
 from their root base tokens; do not multiply the global tokens or nest CSS zoom.
+`aino-theme.css` owns those base tokens through the existing 15/14/12px roles;
+the inner transcript/editor derives scaled values from them. Do not override only
+the final aliases on an outer chat surface: inner scopes recalculate them.
 
 ## Chat, tools & boot surfaces
 
@@ -640,7 +702,7 @@ from their root base tokens; do not multiply the global tokens or nest CSS zoom.
   between groups; do not derive them from private reasoning or invent them for
   historical turns without public updates. Adjacent activity rows use compact
   spacing; public paragraphs retain the larger stage gap. Expanded reasoning is a bounded,
-  scrollable detail at 13px, distinct from the 15px public prose. Its disclosure
+  scrollable detail at 14px, distinct from the 15px public prose. Its disclosure
   identity is independent from the removed aggregate activity fold.
   Expanded terminal details reuse the shared code surface as a bounded Shell
   panel: original command, non-wrapping output, copy, and a bottom status line.
@@ -654,7 +716,7 @@ from their root base tokens; do not multiply the global tokens or nest CSS zoom.
   and result counts live in the existing detail disclosure. Public paragraphs
   use regular weight and comfortable line height; compact tool rows use
   regular weight and the shared line-height and glyph columns. At the normal
-  desktop scale, prose and user bubbles are 15px, activity is 13px with a 24px
+  desktop scale, prose and user bubbles are 15px, activity is 14px with a 24px
   line height, and glyphs are 14px in a 16px cell. Prose uses 1.6 line height;
   headings scale from the reading size (23/18/15px for h1/h2/h3 at that scale).
   The approved reply presentation uses a faint semantic-blue user bubble and
@@ -666,14 +728,21 @@ from their root base tokens; do not multiply the global tokens or nest CSS zoom.
   border and retain their copy, scrolling and expansion controls. Markdown
   tables keep declared alignment, horizontal scrolling and column resizing;
   visual styling never guesses numeric columns or rewrites model content.
+  Reply diagnostics start collapsed behind the existing usage disclosure;
+  token totals, context, throughput, cache and session timing remain available
+  there, including zero values and totals-only history. Duration (unless already
+  in the process header), cost status and the billing-detail action share one
+  quiet, wrapping footer with the existing message actions. Pointer hover and
+  keyboard focus reveal those actions without changing their footprint; touch
+  inputs keep them visible. Non-Aino model disclosures stay visible.
   Expanded reply metrics use one light, wrapping detail surface. The existing
   compact billing list pairs model/amount above purpose/status/time; its
   statuses, full amounts, retry conditions and account-history table are unchanged.
   These are one presentation system, not per-answer modes or length-based rules.
   Activity rows use the existing 4px scaffold gap, prose/stages use 12px, and
   the reply footer has 8px clearance. Hidden process parts contribute no
-  inter-block margin. The completed process header has one quiet bottom rule;
-  nested thinking/tool headers do not introduce further dividers.
+  inter-block margin. Process headers group through spacing, without a full-width
+  rule; nested thinking/tool headers do not introduce dividers.
   Mockup screenshot pixels must not be
   copied into CSS sizes without accounting for capture density. Questions, approvals, failures, file edits, generated outputs and
   registered tool interfaces retain their own surfaces. The live label follows

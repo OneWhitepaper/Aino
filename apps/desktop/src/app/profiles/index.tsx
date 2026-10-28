@@ -1,11 +1,18 @@
+import './workspaces.css'
+
 import { useStore } from '@nanostores/react'
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router'
 
+import ainoLogo from '@/assets/aino-account/logo.png'
 import { CodeEditor } from '@/components/chat/code-editor'
 import { PageLoader } from '@/components/page-loader'
+import { ActionsContextMenu } from '@/components/ui/actions-menu'
 import { Button } from '@/components/ui/button'
+import { Codicon } from '@/components/ui/codicon'
 import { ProfileGlyph } from '@/components/ui/profile-glyph'
+import { RowButton } from '@/components/ui/row-button'
+import { SearchField } from '@/components/ui/search-field'
 import { SegmentedControl } from '@/components/ui/segmented-control'
 import { getProfileSoul, type ProfileInfo, updateProfileSoul } from '@/hermes'
 import { useI18n } from '@/i18n'
@@ -27,19 +34,7 @@ import {
 import { setSettingsScope } from '@/store/settings-scope'
 
 import { useRefreshHotkey } from '../hooks/use-refresh-hotkey'
-import {
-  PanelAddButton,
-  PanelBody,
-  PanelDetail,
-  PanelEmpty,
-  PanelHeader,
-  PanelList,
-  PanelListRow,
-  type PanelMenuItem,
-  PanelMeta,
-  PanelPill,
-  PanelSectionLabel
-} from '../overlays/panel'
+import { PanelEmpty, type PanelMenuItem, PanelRowMenu, renderPanelMenuItems } from '../overlays/panel'
 import { navigateToWorkspacePage, SETTINGS_ROUTE } from '../routes'
 
 import { CreateProfileDialog } from './create-profile-dialog'
@@ -61,7 +56,8 @@ function ProfilesManager() {
   const activeProfile = useStore($activeGatewayProfile)
   const profiles = useStore($profiles)
   const [loaded, setLoaded] = useState(false)
-  const [selectedName, setSelectedName] = useState<null | string>(null)
+  // undefined chooses the initial workspace; null is an explicitly closed inspector.
+  const [selectedName, setSelectedName] = useState<null | string | undefined>(undefined)
   const [query, setQuery] = useState('')
   const [createOpen, setCreateOpen] = useState(false)
   const [pendingRename, setPendingRename] = useState<null | ProfileInfo>(null)
@@ -87,34 +83,36 @@ function ProfilesManager() {
       return
     }
 
-    setSelectedName(current =>
-      current && profiles.some(profile => profile.name === current)
-        ? current
-        : (profiles.find(profile => normalizeProfileKey(profile.name) === normalizeProfileKey(activeProfile))?.name ??
-          profiles[0]?.name ??
-          null)
-    )
+    setSelectedName(current => {
+      if (current === null || (current && profiles.some(profile => profile.name === current))) {
+        return current
+      }
+
+      return (
+        profiles.find(profile => normalizeProfileKey(profile.name) === normalizeProfileKey(activeProfile))?.name ??
+        profiles[0]?.name ??
+        null
+      )
+    })
   }, [activeProfile, loaded, profiles])
 
-  const selected = useMemo(() => {
-    return profiles.find(p => p.name === selectedName) ?? profiles[0] ?? null
-  }, [profiles, selectedName])
+  const selected = useMemo(
+    () => profiles.find(profile => profile.name === selectedName) ?? null,
+    [profiles, selectedName]
+  )
 
   const visibleProfiles = useMemo(() => {
     const q = normalize(query)
 
-    if (!q) {
-      return profiles
-    }
-
     return profiles.filter(
-      profile => profile.name.toLowerCase().includes(q) || (profile.model ?? '').toLowerCase().includes(q)
+      profile =>
+        !q ||
+        normalize(profileLabel(profile)).includes(q) ||
+        profile.name.toLowerCase().includes(q) ||
+        (profile.model ?? '').toLowerCase().includes(q)
     )
   }, [profiles, query])
 
-  // The shared Create/Rename dialogs own the createProfile / renameProfile /
-  // updateProfileSoul calls; the panel just selects the resulting profile and
-  // re-pulls the list.
   const selectAndRefresh = useCallback(
     async (name: string) => {
       setSelectedName(name)
@@ -126,77 +124,89 @@ function ProfilesManager() {
   return (
     <section
       aria-label={t.sidebar.nav.profiles}
-      className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden p-4 sm:p-5"
+      className="workspace-manager"
       data-aino-page-shell=""
       data-workspaces-page=""
     >
-      <PanelHeader subtitle={loaded ? p.count(profiles.length) : undefined} title={t.sidebar.nav.profiles} />
-      <p className="mb-4 text-xs leading-relaxed text-muted-foreground">{p.workspaceDesc}</p>
-      {!loaded ? (
-        <PageLoader label={p.loading} />
-      ) : profiles.length === 0 ? (
-        <PanelEmpty
-          action={
-            <Button onClick={() => setCreateOpen(true)} size="sm">
-              {p.newProfile}
-            </Button>
-          }
-          description={p.createDesc}
-          icon="organization"
-          title={p.noProfiles}
-        />
-      ) : (
-        <>
-          <PanelBody>
-            <PanelList
-              onSearchChange={setQuery}
-              searchLabel={p.search}
-              searchPlaceholder={p.search}
-              searchValue={query}
-            >
-              {visibleProfiles.map(profile => (
-                <ProfileRow
-                  active={selected?.name === profile.name}
-                  current={normalizeProfileKey(profile.name) === normalizeProfileKey(activeProfile)}
-                  key={profile.name}
-                  menuItems={
-                    profile.is_default
-                      ? // Renaming the default profile sets a presentation-only
-                        // display name (the canonical id stays "default").
-                        [{ icon: 'edit', label: p.renameMenu, onSelect: () => setPendingRename(profile) }]
-                      : [
-                          { icon: 'edit', label: p.renameMenu, onSelect: () => setPendingRename(profile) },
-                          {
-                            icon: 'trash',
-                            label: t.common.delete,
-                            onSelect: () => setPendingDelete(profile),
-                            tone: 'danger'
-                          }
-                        ]
-                  }
-                  onSelect={() => setSelectedName(profile.name)}
-                  profile={profile}
+      <header className="workspace-header">
+        <div className="min-w-0">
+          <div className="workspace-heading">
+            <h2>{t.sidebar.nav.profiles}</h2>
+            {loaded && <span className="workspace-count">{p.count(profiles.length)}</span>}
+          </div>
+          <p>{p.workspaceDesc}</p>
+        </div>
+        <Button onClick={() => setCreateOpen(true)} size="sm">
+          <Codicon name="add" />
+          {p.newProfile}
+        </Button>
+      </header>
+      <div className="workspace-layout" data-inspecting={selected !== null}>
+        <div className="workspace-overview-pane">
+          {!loaded ? (
+            <PageLoader label={p.loading} />
+          ) : profiles.length === 0 ? (
+            <PanelEmpty description={p.createDesc} icon="organization" title={p.noProfiles} />
+          ) : (
+            <>
+              <div className="workspace-toolbar">
+                <h3>{p.workspaceListTitle}</h3>
+                <SearchField
+                  containerClassName="workspace-search"
+                  onChange={setQuery}
+                  placeholder={p.search}
+                  value={query}
+                  variant="box"
                 />
-              ))}
-              <PanelAddButton label={p.newProfile} onClick={() => setCreateOpen(true)} />
-              <div className="mt-auto border-t border-(--ui-stroke-tertiary) pt-2">
-                <WorkspaceControls />
               </div>
-            </PanelList>
-
-            {selected ? (
-              <ProfileDetail
-                current={normalizeProfileKey(selected.name) === normalizeProfileKey(activeProfile)}
-                key={selected.name}
-                profile={selected}
-              />
-            ) : (
-              <PanelEmpty description={p.selectPrompt} icon="account" />
-            )}
-          </PanelBody>
-        </>
-      )}
-
+              <div className="workspace-grid">
+                {visibleProfiles.map(profile => (
+                  <ProfileRow
+                    active={selected?.name === profile.name}
+                    current={normalizeProfileKey(profile.name) === normalizeProfileKey(activeProfile)}
+                    key={profile.name}
+                    menuItems={
+                      profile.is_default
+                        ? [{ icon: 'edit', label: p.renameMenu, onSelect: () => setPendingRename(profile) }]
+                        : [
+                            { icon: 'edit', label: p.renameMenu, onSelect: () => setPendingRename(profile) },
+                            {
+                              icon: 'trash',
+                              label: t.common.delete,
+                              onSelect: () => setPendingDelete(profile),
+                              tone: 'danger'
+                            }
+                          ]
+                    }
+                    onSelect={() => setSelectedName(profile.name)}
+                    profile={profile}
+                  />
+                ))}
+              </div>
+              {visibleProfiles.length === 0 && <PanelEmpty icon="search" title={t.catalog.noResults} />}
+              <p className="workspace-preview-hint">
+                <Codicon name="info" size="0.875rem" />
+                {p.previewHint}
+              </p>
+            </>
+          )}
+          <footer className="workspace-footer">
+            <p className="workspace-help">
+              <Codicon name="layers" size="1rem" />
+              <span>{p.workspaceHint}</span>
+            </p>
+            <WorkspaceControls />
+          </footer>
+        </div>
+        {selected && (
+          <ProfileDetail
+            current={normalizeProfileKey(selected.name) === normalizeProfileKey(activeProfile)}
+            key={selected.name}
+            onClose={() => setSelectedName(null)}
+            profile={selected}
+          />
+        )}
+      </div>
       <RenameProfileDialog
         currentName={pendingRename?.name ?? ''}
         isDefault={pendingRename?.is_default ?? false}
@@ -204,18 +214,16 @@ function ProfilesManager() {
         onRenamed={selectAndRefresh}
         open={pendingRename !== null}
       />
-
       <CreateProfileDialog
         onClose={() => setCreateOpen(false)}
         onCreated={selectAndRefresh}
         open={createOpen}
         profiles={profiles}
       />
-
       <DeleteProfileDialog
         onClose={() => setPendingDelete(null)}
         onDeleted={async () => {
-          setSelectedName(null)
+          setSelectedName(undefined)
           await refresh()
         }}
         open={pendingDelete !== null}
@@ -225,44 +233,92 @@ function ProfilesManager() {
   )
 }
 
-function ProfileRow({
-  active,
-  current,
-  menuItems,
-  onSelect,
-  profile
-}: {
+function WorkspaceGlyph({ profile }: { profile: ProfileInfo }) {
+  const colors = useStore($profileColors)
+
+  return profile.is_default ? (
+    <span aria-hidden="true" className="workspace-brand-glyph">
+      <img alt="" src={ainoLogo} />
+    </span>
+  ) : (
+    <ProfileGlyph
+      aria-hidden="true"
+      color={resolveProfileColor(profile.name, colors)}
+      isDefault={false}
+      name={profileLabel(profile)}
+      size="lg"
+    />
+  )
+}
+
+interface ProfileRowProps {
   active: boolean
   current: boolean
   menuItems: PanelMenuItem[]
   onSelect: () => void
   profile: ProfileInfo
-}) {
+}
+
+function ProfileRow({ active, current, menuItems, onSelect, profile }: ProfileRowProps) {
   const { t } = useI18n()
-  const colors = useStore($profileColors)
+  const p = t.profiles
+  const label = profileLabel(profile)
 
   return (
-    <PanelListRow
-      active={active}
-      lead={
-        <ProfileGlyph
-          aria-hidden="true"
-          color={resolveProfileColor(profile.name, colors)}
-          isDefault={profile.is_default}
-          name={profile.name}
-        />
-      }
-      menuItems={menuItems}
-      menuLabel={profileLabel(profile)}
-      meta={current ? t.profiles.currentBadge : undefined}
-      onSelect={onSelect}
-      rowKey={profile.name}
-      title={profileLabel(profile)}
-    />
+    <ActionsContextMenu ariaLabel={label} contentClassName="w-40" items={renderPanelMenuItems(menuItems)}>
+      <div className="workspace-card" data-active={active} data-panel-row={profile.name}>
+        <RowButton
+          aria-current={current ? 'true' : undefined}
+          aria-label={label}
+          aria-pressed={active}
+          className="workspace-card-select"
+          onClick={onSelect}
+        >
+          <span className="workspace-card-top">
+            <WorkspaceGlyph profile={profile} />
+            {current && (
+              <span className="workspace-current-badge">
+                <Codicon name="check" size="0.75rem" />
+                {p.currentBadge}
+              </span>
+            )}
+          </span>
+          <span className="workspace-card-title">
+            <span className="truncate">{label}</span>
+            {profile.is_default && <span className="workspace-default-badge">{p.defaultBadge}</span>}
+          </span>
+          <dl className="workspace-card-facts">
+            <div className="min-w-0">
+              <dt className="sr-only">{p.modelLabel}</dt>
+              <dd title={profile.model ?? undefined}>
+                <Codicon name="hubot" size="0.8125rem" />
+                <span className="truncate">{profile.model ?? p.notSet}</span>
+              </dd>
+            </div>
+            <div className="shrink-0">
+              <dt className="sr-only">{p.skillsLabel}</dt>
+              <dd>
+                <Codicon name="extensions" size="0.8125rem" />
+                <span>{p.skills(profile.skill_count)}</span>
+              </dd>
+            </div>
+          </dl>
+        </RowButton>
+        <div className="workspace-card-menu">
+          <PanelRowMenu items={menuItems} label={label} />
+        </div>
+      </div>
+    </ActionsContextMenu>
   )
 }
 
-function ProfileDetail({ current, profile }: { current: boolean; profile: ProfileInfo }) {
+interface ProfileDetailProps {
+  current: boolean
+  onClose: () => void
+  profile: ProfileInfo
+}
+
+function ProfileDetail({ current, onClose, profile }: ProfileDetailProps) {
   const { t } = useI18n()
   const p = t.profiles
   const navigate = useNavigate()
@@ -270,28 +326,32 @@ function ProfileDetail({ current, profile }: { current: boolean; profile: Profil
   const [capabilitiesVisited, setCapabilitiesVisited] = useState(false)
 
   return (
-    <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-4">
-      <header className="flex shrink-0 flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0">
-          <div className="flex flex-wrap items-center gap-2">
-            <h3 className="text-[0.95rem] font-semibold tracking-tight text-foreground">{profileLabel(profile)}</h3>
-            {profile.is_default && <PanelPill tone="good">{p.defaultBadge}</PanelPill>}
-            {current && <PanelPill tone="good">{p.currentBadge}</PanelPill>}
-            {profile.has_env && <PanelPill tone="muted">.env</PanelPill>}
+    <aside aria-label={profileLabel(profile)} className="workspace-inspector">
+      <header className="workspace-inspector-heading">
+        <div className="flex min-w-0 items-center gap-3">
+          <WorkspaceGlyph profile={profile} />
+          <div className="min-w-0">
+            <h3>{profileLabel(profile)}</h3>
+            <div className="workspace-inspector-meta">{profile.is_default && <span>{p.defaultBadge}</span>}</div>
           </div>
-          <p
-            className="mt-1 truncate font-mono text-[0.66rem] text-muted-foreground/55"
-            title={displayPath(profile.path)}
-          >
-            {displayPath(profile.path)}
-          </p>
         </div>
-        <Button disabled={current} onClick={() => selectProfile(profile.name)} size="sm" variant="outline">
-          {current ? p.currentBadge : p.switchToProfile(profileLabel(profile))}
+        <Button aria-label={t.common.close} onClick={onClose} size="icon-sm" variant="ghost">
+          <Codicon name="close" />
         </Button>
       </header>
-
+      {current ? (
+        <p className="workspace-current-status">
+          <Codicon name="check" size="0.8125rem" />
+          {p.currentBadge}
+        </p>
+      ) : (
+        <Button className="w-full shrink-0" onClick={() => selectProfile(profile.name)} size="sm">
+          <Codicon name="arrow-swap" />
+          {p.switchToProfile(profileLabel(profile))}
+        </Button>
+      )}
       <SegmentedControl
+        className="w-full shrink-0"
         onChange={value => {
           setSection(value)
 
@@ -304,38 +364,45 @@ function ProfileDetail({ current, profile }: { current: boolean; profile: Profil
           { id: 'capabilities', label: p.capabilities }
         ]}
         value={section}
+        variant="underline"
       />
-
-      <div className={section === 'overview' ? 'flex min-h-0 flex-1 flex-col' : 'hidden'}>
-        <PanelDetail>
-          <PanelMeta
-            rows={[
-              {
-                label: p.modelLabel,
-                value: profile.model ? (
-                  <span className="font-mono">
-                    {profile.model}
-                    {profile.provider ? <span className="text-muted-foreground/55"> · {profile.provider}</span> : null}
-                  </span>
-                ) : (
-                  <span className="text-muted-foreground/55">{p.notSet}</span>
-                )
-              },
-              { label: p.skillsLabel, value: profile.skill_count }
-            ]}
-          />
-          <Button
-            onClick={() => {
-              setSettingsScope(profile.name)
-              navigateToWorkspacePage(navigate, `${SETTINGS_ROUTE}?tab=config:model`)
-            }}
-            size="sm"
-            variant="outline"
-          >
-            {p.configureModel}
-          </Button>
-          <SoulEditor profileName={profile.name} />
-        </PanelDetail>
+      <div className={section === 'overview' ? 'workspace-detail-overview' : 'hidden'}>
+        <section className="workspace-model">
+          <div className="workspace-section-heading">
+            <h4>{p.modelLabel}</h4>
+            <Button
+              onClick={() => {
+                setSettingsScope(profile.name)
+                navigateToWorkspacePage(navigate, SETTINGS_ROUTE + '?tab=config:model')
+              }}
+              size="sm"
+              variant="outline"
+            >
+              {p.configureModel}
+            </Button>
+          </div>
+          <div className="workspace-model-value">
+            <span className="workspace-model-glyph">
+              <Codicon name="hubot" />
+            </span>
+            <div className="min-w-0">
+              <p className="truncate" title={profile.model ?? undefined}>
+                {profile.model ?? p.notSet}
+              </p>
+              {profile.provider && <p className="workspace-provider">{profile.provider}</p>}
+            </div>
+          </div>
+        </section>
+        <SoulEditor profileName={profile.name} />
+        <details className="workspace-storage">
+          <summary className="flex cursor-pointer items-center gap-2">
+            <Codicon name="folder" size="0.875rem" />
+            {p.storageLocation}
+            <Codicon name="chevron-down" size="0.75rem" />
+          </summary>
+          <p className="mt-2 break-all font-mono text-[0.6875rem]">{displayPath(profile.path)}</p>
+          {profile.has_env && <p className="mt-1">.env</p>}
+        </details>
       </div>
       {capabilitiesVisited && (
         <div className={section === 'capabilities' ? 'min-h-0 flex-1 overflow-hidden' : 'hidden'}>
@@ -344,7 +411,7 @@ function ProfileDetail({ current, profile }: { current: boolean; profile: Profil
           </Suspense>
         </div>
       )}
-    </div>
+    </aside>
   )
 }
 
@@ -408,11 +475,13 @@ function SoulEditor({ profileName }: { profileName: string }) {
   }
 
   return (
-    <section className="space-y-2">
+    <section className="workspace-soul" data-workspace-soul="">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <div>
-          <PanelSectionLabel className="text-[0.7rem] tracking-[0.14em]">SOUL.md</PanelSectionLabel>
-          <p className="text-xs text-muted-foreground">{missing ? p.soulMissing : p.soulDesc}</p>
+          <h4 className="text-sm font-medium text-foreground">{p.soulTitle}</h4>
+          <p className="mt-2 text-xs leading-relaxed text-(--ui-text-tertiary)">
+            {missing ? p.soulMissing : p.soulDesc}
+          </p>
         </div>
         {dirty && <span className="text-[0.65rem] text-muted-foreground">{p.unsavedChanges}</span>}
       </div>
@@ -420,8 +489,9 @@ function SoulEditor({ profileName }: { profileName: string }) {
       {loading ? (
         <PageLoader className="min-h-44" label={p.loadingSoul} />
       ) : (
-        <div className="min-h-48">
+        <div className="workspace-soul-surface">
           <CodeEditor
+            className="workspace-soul-editor rounded-(--aino-radius-panel)"
             filePath="SOUL.md"
             framed
             initialValue={content}
@@ -439,7 +509,8 @@ function SoulEditor({ profileName }: { profileName: string }) {
         </div>
       )}
 
-      <div className="flex justify-end">
+      <div className="workspace-editor-footer">
+        <span>{p.soulApplyHint}</span>
         <Button disabled={!dirty || saving || loading} onClick={() => void handleSave()} size="sm">
           <Save />
           {saving ? p.saving : p.saveSoul}

@@ -22,7 +22,7 @@ function installGatewayMock(initial: SharedMetricsConsent) {
   requestGateway.mockImplementation(async (method: string, params?: Record<string, unknown>) => {
     if (method === 'shared_metrics.set') {
       const enabled = params?.enabled === true
-      stored = { enabled, send: enabled && params?.send === true, decided: true }
+      stored = { enabled, send: enabled && params?.send === true, decided: true, recipient: 'aino' }
     }
 
     return stored
@@ -31,7 +31,7 @@ function installGatewayMock(initial: SharedMetricsConsent) {
 
 beforeEach(() => {
   $activeGatewayProfile.set('havoc')
-  $sharedMetricsConsent.set({ enabled: false, send: false, decided: false })
+  $sharedMetricsConsent.set({ enabled: false, send: false, decided: false, recipient: 'aino' })
 })
 
 afterEach(() => {
@@ -43,7 +43,7 @@ afterEach(() => {
 
 describe('SharedMetricsConsentStrip', () => {
   it('offers two answers, and sharing sets both opt-ins on the focused profile', async () => {
-    installGatewayMock({ enabled: false, send: false, decided: false })
+    installGatewayMock({ enabled: false, send: false, decided: false, recipient: 'aino' })
 
     render(<SharedMetricsConsentStrip />)
 
@@ -61,6 +61,7 @@ describe('SharedMetricsConsentStrip', () => {
         enabled: true,
         send: true,
         first_run: true,
+        recipient: 'aino',
         profile: 'havoc'
       })
     )

@@ -29,10 +29,12 @@ import { I18nProvider } from '@/i18n'
 
 import type * as DataModule from './data'
 import type * as RoutingModule from './routing'
+import type { RosterRow } from './types'
 
 const mocks = vi.hoisted(() => ({
   botChatOwnsWorkspace: vi.fn(() => false),
   paneVisibility: vi.fn(),
+  selectedRosterBot: vi.fn(() => null as RosterRow | null),
   sessionOwnsWorkspace: vi.fn(() => false),
   setWorkspaceScope: vi.fn(),
   undismissPane: vi.fn()
@@ -58,7 +60,12 @@ vi.mock('@hermes/plugin-sdk', async importOriginal => {
 vi.mock('./avatar', () => ({ startFaceClock: vi.fn(), stopFaceClock: vi.fn() }))
 vi.mock('./relay', () => ({ startBotRelay: vi.fn(), stopBotRelay: vi.fn() }))
 vi.mock('./session-sweep', () => ({ startHideSweepScheduler: vi.fn() }))
-vi.mock('./canonical-chat', () => ({ openBotCanonicalChat: vi.fn() }))
+vi.mock('./canonical-chat', () => ({
+  isStaleBotChatTile: () => () => false,
+  notifyBotOpenFailure: vi.fn(),
+  openBotCanonicalChat: vi.fn(),
+  prepareBotSource: vi.fn(async () => undefined)
+}))
 vi.mock('./chat-empty', () => ({ BotChatEmpty: () => null }))
 vi.mock('./hygiene', () => ({ annotateOrphanedGroupChatMembers: () => ({ changed: false, rooms: {} }) }))
 vi.mock('./cron', () => ({ bindProfileSync: () => () => undefined, RoutinesPane: () => null }))
@@ -66,7 +73,7 @@ vi.mock('./roster-pane', () => ({
   botChatOwnsWorkspace: mocks.botChatOwnsWorkspace,
   BotsPane: () => null,
   releaseStaleOpenBotChat: vi.fn(),
-  selectedRosterBot: () => null,
+  selectedRosterBot: mocks.selectedRosterBot,
   sessionOwnsWorkspace: mocks.sessionOwnsWorkspace
 }))
 vi.mock('./group-chat', async () => {
@@ -163,6 +170,7 @@ beforeEach(() => {
   vi.clearAllMocks()
   mocks.botChatOwnsWorkspace.mockReturnValue(false)
   mocks.sessionOwnsWorkspace.mockReturnValue(false)
+  mocks.selectedRosterBot.mockReturnValue(null)
 })
 
 afterEach(() => {
@@ -357,6 +365,52 @@ describe('the Scheduled jobs pane', () => {
 
     expect(harness.find('routines')).toBeUndefined()
   })
+})
+
+describe('entering Agent Hub', () => {
+  it.each([false, true])(
+    'opens the selected canonical chat after roster hydration (cancelled: %s)',
+    async cancelled => {
+      const store = paneStores()
+      const harness = recordingContext()
+      const { $lastRoster } = await import('./data')
+      const { $openBotChat, $selectedRosterKey } = await import('./bot-state')
+      const { openBotCanonicalChat } = await import('./canonical-chat')
+
+      $lastRoster.set([])
+      $openBotChat.set(null)
+      $selectedRosterKey.set('')
+      vi.mocked(openBotCanonicalChat).mockResolvedValue({ registryId: 'canonical-chat', openedId: 'canonical-tip' })
+      plugin.register(harness.ctx)
+      store('hermes-bots:pane').set(true)
+      await settle()
+      expect($openBotChat.get()).toBeNull()
+
+      if (cancelled) {
+        store('hermes-bots:pane').set(false)
+      }
+
+      const bot = { name: 'writer', connectionId: 'local' }
+      mocks.selectedRosterBot.mockReturnValue(bot)
+      $lastRoster.set([bot])
+      $selectedRosterKey.set('local::writer')
+      await settle()
+
+      if (cancelled) {
+        expect($openBotChat.get()).toBeNull()
+      } else {
+        await vi.waitFor(() =>
+          expect($openBotChat.get()).toEqual({
+            key: 'local::writer',
+            openedRegistryId: 'canonical-chat',
+            openedSessionId: 'canonical-tip'
+          })
+        )
+      }
+
+      harness.dispose()
+    }
+  )
 })
 
 describe('returning to Sessions', () => {

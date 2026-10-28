@@ -1189,7 +1189,9 @@ const ErrorRecoveryActions: FC = () => {
           {copy.errorOpenBillingSettings}
         </button>
       )}
-      {recovery === null && plan.switchProvider && inRouter && <SwitchProviderAction label={switchProviderLabel(copy, surface)} />}
+      {recovery === null && plan.switchProvider && inRouter && (
+        <SwitchProviderAction label={switchProviderLabel(copy, surface)} />
+      )}
       {plan.diagnostics && (
         <>
           {localFolders && (
@@ -1236,15 +1238,12 @@ const AssistantActionBar: FC<MessageActionProps & { durationS?: number }> = ({
   )
 
   return (
-    <div
-      className="relative flex w-full shrink-0 items-center justify-end gap-1.5"
-      data-slot="aui_assistant-actions-row"
-    >
+    <div className="relative flex shrink-0 items-center gap-1.5" data-slot="aui_assistant-actions-row">
       <ActionBarPrimitive.Root
         className={
           // AssistantFooter owns turn visibility; a thread-wide hide here
           // would also collapse the footers of earlier completed replies.
-          'relative flex flex-row items-center justify-end gap-1.5 py-1.5 opacity-0 pointer-events-none group-hover:pointer-events-auto group-hover:opacity-100 focus-within:pointer-events-auto focus-within:opacity-100'
+          'relative flex flex-row flex-wrap items-center gap-1.5 py-0.5 opacity-0 pointer-events-none group-hover:pointer-events-auto group-hover:opacity-100 focus-within:pointer-events-auto focus-within:opacity-100'
         }
         data-slot="aui_msg-actions"
       >
@@ -1432,7 +1431,7 @@ const AssistantFooter: FC<MessageActionProps & { durationS?: number; metrics?: T
   return (
     <div
       aria-hidden={turnRunning || undefined}
-      className="flex min-h-6 flex-col items-end gap-1 pr-(--message-text-indent) pl-(--message-text-indent)"
+      className="flex min-h-6 flex-wrap items-start gap-x-4 gap-y-1 pr-(--message-text-indent) pl-(--message-text-indent)"
       data-slot="aui_assistant-footer"
       inert={turnRunning || undefined}
       // Only the live tail reserves footer space; a sealed paragraph's hidden
@@ -1444,7 +1443,7 @@ const AssistantFooter: FC<MessageActionProps & { durationS?: number; metrics?: T
       }
     >
       <BranchPickerPrimitive.Root
-        className="inline-flex h-6 items-center gap-1 text-xs text-muted-foreground"
+        className="inline-flex h-6 basis-full items-center gap-1 text-xs text-muted-foreground"
         hideWhenSingleBranch
       >
         <BranchPickerPrimitive.Previous className="grid size-6 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:cursor-default disabled:opacity-35">

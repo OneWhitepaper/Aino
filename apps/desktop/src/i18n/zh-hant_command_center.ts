@@ -307,6 +307,10 @@ export const zhHantCommandCenter = {
   },
 
   profiles: {
+    workspaceListTitle: '我的工作區',
+    previewHint: '點選卡片查看設定，不會立即切換。',
+    workspaceHint: '每個工作區都有獨立的設定與對話。專案資料夾仍在左側「專案」中管理。',
+    soulApplyHint: '修改將於新對話中生效',
     close: '關閉設定檔',
     nameHint: '小寫字母、數字、連字號和底線。必須以字母或數字開頭。',
     title: '設定檔',
@@ -394,6 +398,8 @@ export const zhHantCommandCenter = {
     modelLabel: '模型',
     skillsLabel: '技能',
     notSet: '未設定',
+    storageLocation: '工作區位置',
+    soulTitle: '人格與行為',
     soulDesc: '內建於此設定檔的系統提示詞與角色指令。',
     soulMissing: '此設定檔尚無 SOUL.md 檔案。在下方輸入指令並儲存即可建立。config.yaml 中的人格預設需另外管理。',
     soulOptional: '選填',

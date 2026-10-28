@@ -1,21 +1,26 @@
 import type { ReactNode } from 'react'
 
+import { Badge } from '@/components/ui/badge'
 import { SearchField } from '@/components/ui/search-field'
-import { ResponsiveTabs } from '@/components/ui/tab-dropdown'
+import { ResponsiveTabs, TabDropdown, tabMetaContent } from '@/components/ui/tab-dropdown'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import type { IconComponent } from '@/lib/icons'
 import { cn } from '@/lib/utils'
 
-// Tabs are data, not nodes: the shell owns their presentation so every page
-// gets the same behavior — a centered TextTab row on wide viewports that
-// collapses into a dropdown when the header can't fit both search and tabs.
+// Tabs are data, not nodes: the shell owns text or segmented presentation and
+// collapses either into the existing dropdown when the header runs out of room.
 export interface PageShellTab {
   id: string
   label: string
+  icon?: IconComponent
   /** Count badge. `null` = still loading (renders a skeleton); `undefined` = no badge. */
   meta?: string | number | null
 }
 
 interface PageSearchShellProps extends React.ComponentProps<'section'> {
   children: ReactNode
+  /** Optional page identity, above the existing tab row. */
+  heading?: ReactNode
   tabs?: PageShellTab[]
   activeTab?: string
   onTabChange?: (id: string) => void
@@ -30,22 +35,73 @@ interface PageSearchShellProps extends React.ComponentProps<'section'> {
   /** Hide the search field when there's nothing to search (empty dataset). */
   searchHidden?: boolean
   tabsAlign?: 'center' | 'start'
+  tabsVariant?: 'text' | 'section'
   /** Right-aligned control in the header's trailing cell (e.g. a refresh button)
    *  so mouse users get a visible affordance for the refresh hotkey. */
   searchTrailingAction?: ReactNode
+}
+
+const headerLayouts = {
+  center: {
+    grid: 'grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]',
+    search: '',
+    tabs: 'justify-center',
+    trailing: ''
+  },
+  start: {
+    grid: 'grid-cols-[minmax(0,1fr)_auto_auto] px-6 pt-[calc(var(--titlebar-height)+1.5rem)]',
+    search: 'col-start-2 row-start-1 justify-end',
+    tabs: 'col-start-1 row-start-1 justify-start',
+    trailing: 'col-start-3 row-start-1'
+  }
 }
 
 function ShellTabs({
   tabs,
   activeTab,
   onTabChange,
-  align
+  align,
+  variant
 }: {
   tabs: PageShellTab[]
   activeTab?: string
   onTabChange?: (id: string) => void
   align?: 'center' | 'start'
+  variant: 'text' | 'section'
 }) {
+  if (variant === 'section') {
+    return (
+      <>
+        <div className="hidden min-w-0 @min-[640px]:flex">
+          <TabsList size="navigation">
+            {tabs.map(({ id, label, icon: Icon, meta }) => (
+              <TabsTrigger data-tour={`tab-${id}`} key={id} size="navigation" value={id}>
+                {Icon && <Icon aria-hidden />}
+                {label}
+                {meta !== undefined && (
+                  <Badge className="tabular-nums" size="xs" variant="muted">
+                    {tabMetaContent(meta)}
+                  </Badge>
+                )}
+              </TabsTrigger>
+            ))}
+          </TabsList>
+        </div>
+        <div className="@min-[640px]:hidden">
+          <TabDropdown
+            align={align}
+            items={tabs.map(tab => ({
+              ...tab,
+              active: tab.id === activeTab,
+              onSelect: () => onTabChange?.(tab.id)
+            }))}
+            variant="navigation"
+          />
+        </div>
+      </>
+    )
+  }
+
   return (
     <ResponsiveTabs
       onChange={id => onTabChange?.(id)}
@@ -58,6 +114,7 @@ function ShellTabs({
 
 export function PageSearchShell({
   children,
+  heading,
   className,
   tabs,
   activeTab,
@@ -69,12 +126,21 @@ export function PageSearchShell({
   searchValue,
   searchHidden = false,
   tabsAlign = 'center',
+  tabsVariant = 'text',
   searchTrailingAction,
   ...props
 }: PageSearchShellProps) {
   const hasTabs = (tabs?.length ?? 0) > 0
+  const currentTab = activeTab ?? tabs?.[0]?.id ?? ''
+  const layout = headerLayouts[tabsAlign]
 
-  return (
+  const content = (
+    <div className="min-h-0 flex-1 overflow-hidden bg-(--ui-chat-surface-background)" data-aino-page-content="">
+      {children}
+    </div>
+  )
+
+  const page = (
     <section
       {...props}
       className={cn('flex h-full min-w-0 flex-col overflow-hidden bg-(--ui-chat-surface-background)', className)}
@@ -96,17 +162,20 @@ export function PageSearchShell({
         (see app-shell.tsx), so window dragging still works here.
       */}
       <div className="shrink-0">
+        {heading}
         {(hasTabs || !searchHidden) && (
           <div
-            className={cn(
-              'grid items-center gap-3 px-3 pb-2 pt-[calc(var(--titlebar-height)+0.5rem)]',
-              tabsAlign === 'start'
-                ? 'grid-cols-[minmax(0,1fr)_auto_auto] px-6 pt-[calc(var(--titlebar-height)+1.5rem)]'
-                : 'grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]'
-            )}
+            className={cn('grid items-center gap-3 px-3 pb-2 pt-[calc(var(--titlebar-height)+0.5rem)]', layout.grid)}
             data-aino-page-header=""
+            data-tabs-variant={tabsVariant}
           >
-            <div className={cn('flex min-w-0 items-center justify-start', tabsAlign === 'start' && 'col-start-2 row-start-1 justify-end', searchHidden && tabsAlign === 'start' && 'hidden')}>
+            <div
+              className={cn(
+                'flex min-w-0 items-center justify-start',
+                layout.search,
+                searchHidden && tabsAlign === 'start' && 'hidden'
+              )}
+            >
               {!searchHidden && onSearchChange && (
                 <SearchField
                   containerClassName="max-w-[45vw]"
@@ -118,20 +187,38 @@ export function PageSearchShell({
               )}
             </div>
             {hasTabs ? (
-              <div className={cn('flex min-w-0 items-center', tabsAlign === 'start' ? 'col-start-1 row-start-1 justify-start' : 'justify-center')} data-tour="page-tabs">
-                <ShellTabs activeTab={activeTab} align={tabsAlign} onTabChange={onTabChange} tabs={tabs!} />
+              <div className={cn('flex min-w-0 items-center', layout.tabs)} data-tour="page-tabs">
+                <ShellTabs
+                  activeTab={currentTab}
+                  align={tabsAlign}
+                  onTabChange={onTabChange}
+                  tabs={tabs!}
+                  variant={tabsVariant}
+                />
               </div>
             ) : (
               <span />
             )}
-            <div className={cn('flex min-w-0 items-center justify-end', tabsAlign === 'start' && 'col-start-3 row-start-1')}>{searchTrailingAction}</div>
+            <div className={cn('flex min-w-0 items-center justify-end', layout.trailing)}>{searchTrailingAction}</div>
           </div>
         )}
         {filters ? <div className="flex flex-wrap items-center gap-x-2 gap-y-1 px-3 pb-2">{filters}</div> : null}
       </div>
-      <div className="min-h-0 flex-1 overflow-hidden bg-(--ui-chat-surface-background)" data-aino-page-content="">
-        {children}
-      </div>
+      {tabsVariant === 'section' && hasTabs ? (
+        <TabsContent asChild value={currentTab}>
+          {content}
+        </TabsContent>
+      ) : (
+        content
+      )}
     </section>
+  )
+
+  return tabsVariant === 'section' && hasTabs ? (
+    <Tabs asChild className="gap-0" onValueChange={id => onTabChange?.(id)} value={currentTab}>
+      {page}
+    </Tabs>
+  ) : (
+    page
   )
 }

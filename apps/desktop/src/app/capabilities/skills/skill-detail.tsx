@@ -55,12 +55,15 @@ export function SkillDetail({
       {contentQuery.isLoading ? (
         <PageLoader className="h-40" label={t.skills.loading} />
       ) : parsed ? (
-        <pre
-          className="overflow-auto whitespace-pre-wrap wrap-break-word font-mono text-[0.68rem] leading-relaxed text-(--ui-text-secondary)"
-          data-selectable-text="true"
-        >
-          {parsed.body.trim() || t.skills.noDescription}
-        </pre>
+        <section className="space-y-2">
+          <h4 className="text-xs font-medium">{t.catalog.skillInstructions}</h4>
+          <pre
+            className="overflow-auto whitespace-pre-wrap wrap-break-word font-mono text-[0.68rem] leading-relaxed text-(--ui-text-secondary)"
+            data-selectable-text="true"
+          >
+            {parsed.body.trim() || t.skills.noDescription}
+          </pre>
+        </section>
       ) : null}
     </>
   )

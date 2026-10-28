@@ -21,19 +21,18 @@ export function ReplyMetrics({ metrics, durationS }: ReplyMetricsProps) {
   const duration = metrics?.duration_s ?? durationS
   const durationInProcessHeader = process.enabled && !!process.answerMessageId && durationS !== undefined
 
-  const items = [
+  const elapsed =
     duration !== undefined && !durationInProcessHeader
       ? `${copy.duration} ${formatElapsed(Math.round(duration))}`
-      : null,
+      : null
+
+  const details = [
     metrics?.total_tokens !== undefined ? `${copy.tokens} ${compactNumber(metrics.total_tokens)} token` : null,
     metrics?.context_percent !== undefined
       ? `${copy.context} ${metrics.context_estimated ? '~' : ''}${Math.round(metrics.context_percent)}%`
       : null,
     metrics?.tokens_per_second !== undefined ? `${Math.round(metrics.tokens_per_second)} token/s` : null,
-    metrics?.cache_hit_pct !== undefined ? `${copy.cache} ${Math.round(metrics.cache_hit_pct)}%` : null
-  ].filter((item): item is string => item !== null)
-
-  const details = [
+    metrics?.cache_hit_pct !== undefined ? `${copy.cache} ${Math.round(metrics.cache_hit_pct)}%` : null,
     metrics?.session_elapsed_s !== undefined
       ? `${copy.sessionElapsed} ${formatElapsed(Math.round(metrics.session_elapsed_s))}`
       : null,
@@ -44,59 +43,39 @@ export function ReplyMetrics({ metrics, durationS }: ReplyMetricsProps) {
       : null
   ].filter((item): item is string => item !== null)
 
-  if (!items.length && !details.length && !metrics?.billing && !metrics?.non_aino_model_calls) {
+  if (!elapsed && !details.length && !metrics?.billing && !metrics?.non_aino_model_calls) {
     return null
   }
 
-  const line = (
-    <span className="flex min-w-0 flex-wrap gap-x-1.5">
-      {!items.length && details.length > 0 && <span>{copy.details}</span>}
-      {items.map((item, index) => (
-        <span className="whitespace-nowrap" key={item}>
-          {index > 0 ? '\u00b7 ' : ''}
-          {item}
-        </span>
-      ))}
-    </span>
-  )
-
-  const className = 'w-full min-w-0 text-[0.75rem] leading-5 text-muted-foreground tabular-nums'
-
-  const nonAinoModelCalls = metrics?.non_aino_model_calls ? <div>{copy.nonAinoModelCalls}</div> : null
-
-  if (!details.length) {
-    return (
-      <div className={className} data-slot="aui_reply-metrics">
-        {line}
-        {metrics?.billing && <ReplyCost billing={metrics.billing} />}
-        {nonAinoModelCalls}
-      </div>
-    )
-  }
-
   return (
-    <div className={className} data-slot="aui_reply-metrics">
-      <details className="group/reply-metrics">
-        <summary
-          aria-label={copy.details}
-          className="flex w-fit max-w-full cursor-pointer list-none items-start gap-1.5 rounded-sm hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring [&::-webkit-details-marker]:hidden"
-          data-slot="disclosure-toggle"
-        >
-          {line}
-          <span className="flex h-5 shrink-0 items-center" data-slot="disclosure-caret">
-            <DisclosureCaret className="group-open/reply-metrics:rotate-90" open={false} />
-          </span>
-        </summary>
-        <div className="my-1.5 flex flex-wrap gap-x-6 gap-y-2 rounded-md bg-(--ui-bg-quinary) px-3 py-2.5">
-          {details.map(detail => (
-            <span className="min-w-0 flex-auto [overflow-wrap:anywhere]" key={detail}>
-              {detail}
+    <div
+      className="flex min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-1 text-[length:var(--aino-text-caption)] leading-5 text-muted-foreground tabular-nums"
+      data-slot="aui_reply-metrics"
+    >
+      {elapsed && <span className="whitespace-nowrap">{elapsed}</span>}
+      {details.length > 0 && (
+        <details className="group/reply-metrics min-w-0 max-w-full open:basis-full">
+          <summary
+            aria-label={copy.details}
+            className="flex w-fit max-w-full cursor-pointer list-none items-center gap-1 rounded-sm hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring [&::-webkit-details-marker]:hidden"
+            data-slot="disclosure-toggle"
+          >
+            <span>{copy.details}</span>
+            <span className="flex h-5 shrink-0 items-center" data-slot="disclosure-caret">
+              <DisclosureCaret className="group-open/reply-metrics:rotate-90" open={false} />
             </span>
-          ))}
-        </div>
-      </details>
+          </summary>
+          <div className="my-1.5 flex flex-wrap gap-x-6 gap-y-1 rounded-md bg-(--ui-bg-quinary) px-3 py-2">
+            {details.map(detail => (
+              <span className="min-w-0 [overflow-wrap:anywhere]" key={detail}>
+                {detail}
+              </span>
+            ))}
+          </div>
+        </details>
+      )}
       {metrics?.billing && <ReplyCost billing={metrics.billing} />}
-      {nonAinoModelCalls}
+      {metrics?.non_aino_model_calls && <span className="basis-full">{copy.nonAinoModelCalls}</span>}
     </div>
   )
 }

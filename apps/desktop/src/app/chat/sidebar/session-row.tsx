@@ -137,7 +137,7 @@ interface SessionRowFiguresProps {
 
 function SessionRowFigures({ head, sep, showAge, figures, absoluteAge, age, timestampDate }: SessionRowFiguresProps) {
   return (
-    <span className="pointer-events-none whitespace-nowrap text-[0.625rem] leading-none text-(--ui-text-tertiary)">
+    <span className="pointer-events-none whitespace-nowrap text-[length:var(--aino-text-caption)] leading-4 text-(--ui-text-tertiary)">
       {head}
       {/* The figures own their tail: the separator goes with it. */}
       <span className={cn('inline-block text-right', TAIL_HIDES)}>

@@ -5,15 +5,17 @@
   --aino-radius-row: 0.5rem;
   --aino-radius-panel: 1rem;
   --aino-text-caption: 0.75rem;
-  --aino-text-ui: 0.8125rem;
+  --aino-text-label: 0.8125rem;
+  --aino-text-ui: 0.875rem;
   --aino-text-body: 0.9375rem;
   --aino-text-title: 1.125rem;
   --aino-line-height: 1.6;
-  --conversation-text-font-size: var(--aino-text-body);
-  --conversation-tool-font-size: var(--aino-text-ui);
-  --conversation-caption-font-size: var(--aino-text-caption);
-  --conversation-caption-line-height: 1.25rem;
-  --conversation-line-height: 1.5rem;
+  /* Base roles are shared; transcript/editor scopes apply the user's scale once. */
+  --conversation-text-base-size: var(--aino-text-body);
+  --conversation-tool-base-size: var(--aino-text-ui);
+  --conversation-caption-base-size: var(--aino-text-caption);
+  --conversation-base-line-height: calc(var(--aino-text-body) * var(--aino-line-height));
+  --conversation-caption-base-line-height: 1.25rem;
   --ui-bg-primary: color-mix(in srgb, var(--ui-base) 10%, transparent);
   --ui-bg-secondary: color-mix(in srgb, var(--ui-base) 7%, transparent);
   --ui-bg-tertiary: color-mix(in srgb, var(--ui-base) 5%, transparent);
@@ -187,19 +189,19 @@
   background: var(--aino-surface-bg) !important;
 }
 
-[data-aino-page-header] [data-tour='page-tabs'] [data-tour^='tab-'] {
+[data-aino-page-header]:not([data-tabs-variant='section']) [data-tour='page-tabs'] [data-tour^='tab-'] {
   border: 0 !important;
   border-radius: var(--aino-radius-control);
   color: var(--ui-text-tertiary);
   text-decoration: none;
 }
 
-[data-aino-page-header] [data-tour='page-tabs'] [data-tour^='tab-']:hover {
+[data-aino-page-header]:not([data-tabs-variant='section']) [data-tour='page-tabs'] [data-tour^='tab-']:hover {
   background: var(--aino-surface-hover) !important;
   color: var(--aino-surface-ink);
 }
 
-[data-aino-page-header] [data-tour='page-tabs'] [data-tour^='tab-'][data-active='true'] {
+[data-aino-page-header]:not([data-tabs-variant='section']) [data-tour='page-tabs'] [data-tour^='tab-'][data-active='true'] {
   background: var(--aino-surface-active) !important;
   color: var(--aino-surface-ink);
   box-shadow: none;
@@ -220,7 +222,7 @@
 
 [data-aino-sidebar] [data-sidebar='menu-button'] {
   min-height: 2.5625rem;
-  font-size: var(--aino-text-body);
+  font-size: var(--aino-text-ui);
   border: 0 !important;
   border-radius: var(--aino-radius-control) !important;
   box-shadow: none !important;

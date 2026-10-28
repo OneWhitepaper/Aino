@@ -115,7 +115,9 @@ export function ComposerProjectSelector({ cwd, label }: ComposerProjectSelectorP
           size="inline"
           variant="ghost"
         >
-          <span className="max-w-56 truncate text-xs font-normal">{label || t.statusStack.coding.selectProject}</span>
+          <span className="max-w-56 truncate text-[length:var(--aino-text-ui)] font-normal">
+            {label || t.statusStack.coding.selectProject}
+          </span>
           <Codicon name="chevron-down" size="0.75rem" />
         </Button>
       </DropdownMenuTrigger>

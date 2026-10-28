@@ -71,7 +71,7 @@ export const zhHantBoot = {
   butterbar: {
     goTo: (index, total) => `顯示第 ${index} 則通知，共 ${total} 則`,
     legal: {
-      before: '使用 Hermes Agent 即表示受我們的',
+      before: '使用 Nous 免費服務即表示受其',
       terms: '服務條款',
       between: '和',
       privacy: '隱私權政策',

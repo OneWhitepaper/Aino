@@ -512,9 +512,9 @@ interface MarkdownTextSurfaceProps {
 // Headings shrink to chat scale rather than the prose default (h1≈xl). Kept
 // table-driven so adding/tweaking levels is one row.
 const HEADING_SIZES: Record<'h1' | 'h2' | 'h3' | 'h4', string> = {
-  h1: 'text-[1.25em] tracking-tight',
-  h2: 'text-[1.15em] tracking-tight',
-  h3: 'text-[1.075em]',
+  h1: 'text-[1.5333em] tracking-tight',
+  h2: 'text-[1.2em] tracking-tight',
+  h3: 'text-[1em]',
   h4: 'text-[1em]'
 }
 

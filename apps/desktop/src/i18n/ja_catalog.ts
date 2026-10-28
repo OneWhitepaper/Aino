@@ -1,6 +1,23 @@
 import type { TranslationOverrides } from './define-locale'
 
 export const jaCatalog = {
+  enable: '有効にする',
+  disable: '無効にする',
+  originalDescription: '元の説明',
+  skillInstructions: 'スキルの手順',
+  startHere: 'ここから始める',
+  featuredHint: 'スキルの用途を確認し、必要に応じて追加します。',
+  browseHint: '用途から探し、詳細を確認してから追加できます。',
+  installedHint: 'このワークスペースの有効状態を管理します。変更は新しいセッションに適用されます。',
+  installedKind: (kind: string) => `インストール済みの${kind}`,
+  howToUse: '使い方',
+  usageHint: '使い方と手順はスキルの指示や提供元のドキュメントを確認してください。',
+  capabilityGuide: '各機能について',
+  capabilityGuideDescription:
+    'スキルは手順と知識、プラグインは機能の拡張、コネクターは外部サービスへの接続、ツールセットはワークスペースで使うツールを提供します。',
+
+  pageTitle: 'スキルとツール',
+  pageDescription: 'エージェントに知識、ワークフロー、外部機能を追加します。',
   add: '追加',
   added: '追加済み',
   discover: '見つける',
@@ -19,14 +36,12 @@ export const jaCatalog = {
   listView: 'リスト表示',
   cardView: 'カード表示',
   installTitle: (name: string) => `「${name}」をインストールしますか？`,
-  installDescription:
-    'このスキルは新しいセッションで利用できます。信頼できる提供元からのみインストールしてください。',
+  installDescription: 'このスキルは新しいセッションで利用できます。信頼できる提供元からのみインストールしてください。',
   installTo: 'インストール先',
   thisComputer: 'このコンピューター',
   installing: 'インストール中…',
   installComplete: (name: string) => `「${name}」をインストールしました`,
-  destinationChanged:
-    'インストール先が変更されました。このダイアログを閉じ、インストールリンクを開き直してください。',
+  destinationChanged: 'インストール先が変更されました。このダイアログを閉じ、インストールリンクを開き直してください。',
   install: 'インストール',
   installed: 'インストール済み',
   searchSkills: 'スキルを検索',
@@ -65,14 +80,12 @@ export const jaCatalog = {
 
 export const jaSkillDeepLink = {
   installTitle: (name: string) => `「${name}」をインストールしますか？`,
-  installDescription:
-    'このスキルは新しいセッションで利用できます。信頼できる提供元からのみインストールしてください。',
+  installDescription: 'このスキルは新しいセッションで利用できます。信頼できる提供元からのみインストールしてください。',
   installTo: 'インストール先',
   thisComputer: 'このコンピューター',
   installing: 'インストール中…',
   installComplete: (name: string) => `「${name}」をインストールしました`,
-  destinationChanged:
-    'インストール先が変更されました。このダイアログを閉じ、インストールリンクを開き直してください。',
+  destinationChanged: 'インストール先が変更されました。このダイアログを閉じ、インストールリンクを開き直してください。',
   installed: 'インストール済み',
   source: '提供元'
 } satisfies TranslationOverrides['skillDeepLink']

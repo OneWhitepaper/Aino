@@ -41,8 +41,7 @@ import {
   $workspaceMode,
   $workspaceOwnerKey,
   setWorkspaceScope as publishWorkspaceScope,
-  setWorkspaceOwnerLabel,
-  type WorkspaceNewSessionTarget
+  setWorkspaceOwnerLabel
 } from '@/components/pane-shell/workspace-scope'
 import { onGatewayEvent } from '@/contrib/events'
 import { registry } from '@/contrib/registry'
@@ -121,6 +120,7 @@ import {
 } from './profile-request'
 import { sessionsHost } from './sessions'
 import { desktopSettings } from './settings'
+import { switchWorkspaceScope } from './workspace-navigation'
 
 /** Pane, status bar and titlebar slots; see `./areas` for the mount rules. */
 export { PANES_AREA, STATUSBAR_AREAS, TITLEBAR_AREAS } from './areas'
@@ -1269,11 +1269,7 @@ export const host = {
   setWorkspaceOwnerLabel,
 
   /** Switch the visible main-pane workspace without unregistering retained panes. */
-  setWorkspaceScope: (
-    mode: WorkspaceMode,
-    ownerKey: null | string = null,
-    newSessionTarget: WorkspaceNewSessionTarget | null = null
-  ): boolean => publishWorkspaceScope(mode, ownerKey, newSessionTarget),
+  setWorkspaceScope: switchWorkspaceScope,
 
   /** Start a fresh chat draft, optionally pointed at another profile (its
    *  backend spins up in the background — same door the sidebar's per-profile

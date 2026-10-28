@@ -174,6 +174,8 @@ describe('ProfilesView', () => {
 
     await renderProfilesView()
     await browseProfile(NAMED_PROFILE)
+    expect(screen.getByRole('button', { name: NAMED_PROFILE, pressed: true })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'default', current: true })).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'Capabilities' }))
 
     expect((await screen.findByTestId('capabilities-scope')).textContent).toBe(NAMED_PROFILE)
@@ -186,6 +188,28 @@ describe('ProfilesView', () => {
 
     fireEvent.click(screen.getByRole('button', { name: `Switch to ${NAMED_PROFILE}` }))
     expect(selectProfile).toHaveBeenCalledExactlyOnceWith(NAMED_PROFILE)
+  })
+
+  it('closes the workspace preview without switching or reopening after a roster refresh', async () => {
+    vi.mocked(selectProfile).mockClear()
+    mockProfiles([makeProfile('default', true), makeProfile(NAMED_PROFILE)])
+    activeGateway.set('default')
+
+    await renderProfilesView()
+    await browseProfile(NAMED_PROFILE)
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }))
+
+    expect(screen.queryByRole('heading', { name: NAMED_PROFILE })).toBeNull()
+    expect(selectProfile).not.toHaveBeenCalled()
+    expect(activeGateway.get()).toBe('default')
+
+    act(() => $profiles.set([...$profiles.get(), makeProfile('imported')]))
+    expect(screen.queryByRole('heading', { name: NAMED_PROFILE })).toBeNull()
+    expect(screen.getByRole('button', { name: NAMED_PROFILE, pressed: false })).toBeTruthy()
+
+    await browseProfile(NAMED_PROFILE)
+    expect(screen.getByRole('heading', { name: NAMED_PROFILE })).toBeTruthy()
+    expect(selectProfile).not.toHaveBeenCalled()
   })
 
   it('opens model settings for the browsed workspace without changing the active chat profile', async () => {

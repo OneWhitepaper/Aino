@@ -42,6 +42,7 @@ const {
   newSessionInProfile,
   prewarmProfileBackend,
   prewarmProfilePick,
+  profileLabel,
   refreshProfiles,
   selectProfile
 } = await import('./profile')
@@ -94,6 +95,21 @@ afterEach(() => {
   vi.unstubAllGlobals()
   $connection.set(null)
   $poolLimits.set({ ...POOL_LIMITS_DEFAULTS })
+})
+
+describe('profile presentation names', () => {
+  it('uses the bot name across profile surfaces without changing its identity', () => {
+    const bot = { ...profile('u90ae-u4ef6-u52a9-u624b'), bot_title: '邮件助手', display_name: 'Legacy label' }
+
+    expect(profileLabel(bot)).toBe('邮件助手')
+    expect(bot.name).toBe('u90ae-u4ef6-u52a9-u624b')
+    expect(profileLabel({ ...profile('default', true), bot_title: 'Aino' })).toBe('Aino')
+  })
+
+  it('retains existing display names and identifier fallbacks for profiles without a bot name', () => {
+    expect(profileLabel({ ...profile('writer'), display_name: '写作助手', bot_title: '  ' })).toBe('写作助手')
+    expect(profileLabel(profile('writer'))).toBe('writer')
+  })
 })
 
 describe('ensureGatewayProfile → $connection sync (#46651)', () => {

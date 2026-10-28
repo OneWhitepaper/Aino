@@ -1,6 +1,5 @@
 import {
   SiApple,
-  SiBilibili,
   SiDiscord,
   SiGmail,
   SiHomeassistant,
@@ -12,9 +11,13 @@ import {
   SiWechat,
   SiWhatsapp
 } from '@icons-pack/react-simple-icons'
+import { IconBrandDingtalk, IconBrandSlack } from '@tabler/icons-react'
 import type { ComponentPropsWithoutRef, ComponentType, SVGProps } from 'react'
 import { forwardRef, memo } from 'react'
 
+import feishuLogo from '@/assets/messaging/feishu.ico'
+import wecomLogo from '@/assets/messaging/wecom.ico'
+import yuanbaoLogo from '@/assets/messaging/yuanbao.ico'
 import { AvatarChip } from '@/components/ui/avatar-chip'
 import { Globe, Link as LinkIcon, MessageSquareText } from '@/lib/icons'
 
@@ -34,14 +37,8 @@ function PhotonIcon(props: React.SVGProps<SVGSVGElement>) {
   )
 }
 
-// We render simpleicons.org brand glyphs for platforms whose owners publish a
-// usable mark (telegram, discord, matrix, ...). A few brands — Slack, Dingtalk,
-// Feishu, WeCom — have been removed from Simple Icons at the brand owner's
-// request, so we fall back to a colored letter monogram for those.
-//
-// `iconColor` is the brand's hex from simpleicons.org so we can paint each
-// glyph in its native color on top of a soft tint. The fallback monogram uses
-// the same hex to keep visual consistency.
+// Brand glyphs share AvatarChip's treatment; official marks cover platforms
+// absent from Simple Icons. Unknown plugins keep the existing monogram fallback.
 type IconKind = 'brand' | 'generic'
 
 interface PlatformIconSpec {
@@ -49,13 +46,17 @@ interface PlatformIconSpec {
   color: string
   kind: IconKind
   monogram?: string
+  image?: string
 }
 
 const PLATFORM_ICONS: Record<string, PlatformIconSpec> = {
   telegram: { Icon: SiTelegram, color: '#26A5E4', kind: 'brand' },
   discord: { Icon: SiDiscord, color: '#5865F2', kind: 'brand' },
-  // Slack removed from Simple Icons by Salesforce request — letter monogram.
-  slack: { color: '#4A154B', kind: 'brand', monogram: 'S' },
+  slack: { Icon: IconBrandSlack, color: '#4A154B', kind: 'brand' },
+  dingtalk: { Icon: IconBrandDingtalk, color: '#2382ef', kind: 'brand' },
+  feishu: { image: feishuLogo, color: '#3675ed', kind: 'brand' },
+  wecom: { image: wecomLogo, color: '#3c80ec', kind: 'brand' },
+  wecom_callback: { image: wecomLogo, color: '#3c80ec', kind: 'brand' },
   mattermost: { Icon: SiMattermost, color: '#0058CC', kind: 'brand' },
   matrix: { Icon: SiMatrix, color: '#000000', kind: 'brand' },
   signal: { Icon: SiSignal, color: '#3A76F0', kind: 'brand' },
@@ -69,7 +70,7 @@ const PLATFORM_ICONS: Record<string, PlatformIconSpec> = {
   api_server: { Icon: Globe, color: '#64748B', kind: 'generic' },
   weixin: { Icon: SiWechat, color: '#07C160', kind: 'brand' },
   qqbot: { Icon: SiQq, color: '#EB1923', kind: 'brand' },
-  yuanbao: { Icon: SiBilibili, color: '#FB7299', kind: 'brand' }
+  yuanbao: { image: yuanbaoLogo, color: '#f16476', kind: 'brand' }
 }
 
 interface PlatformAvatarProps extends Omit<ComponentPropsWithoutRef<'span'>, 'children'> {
@@ -95,7 +96,11 @@ export const PlatformAvatar = memo(
         name={platformName}
         ref={ref}
         {...rest}
-      />
+      >
+        {PLATFORM_ICONS[platformId]?.image ? (
+          <img alt="" className="size-[64%] object-contain" src={PLATFORM_ICONS[platformId].image} />
+        ) : undefined}
+      </AvatarChip>
     )
   })
 )

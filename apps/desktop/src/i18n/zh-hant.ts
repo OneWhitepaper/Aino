@@ -1,5 +1,6 @@
 import { defineLocale, type TranslationOverrides } from './define-locale'
 import { introZhHant } from './intro-zh-hant'
+import { messagingDirectory } from './messaging-directory'
 import { zh } from './zh'
 import { zhHantArtifacts } from './zh-hant_artifacts'
 import { zhHantAssistant } from './zh-hant_assistant'
@@ -21,6 +22,23 @@ export const zhHantOverrides = {
   },
 
   catalog: {
+    enable: '啟用',
+    disable: '停用',
+    originalDescription: '原始說明',
+    skillInstructions: '技能使用說明',
+    startHere: '從這裡開始',
+    featuredHint: '先瞭解技能，再按需新增',
+    browseHint: '依用途瀏覽，可先查看詳情，再決定是否新增。',
+    installedHint: '管理目前工作區的啟用狀態，變更將於新對話中生效。',
+    installedKind: (kind: string) => `已安裝${kind}`,
+    howToUse: '如何使用',
+    usageHint: '使用方式與操作步驟以技能指令或來源文件為準。',
+    capabilityGuide: '瞭解這些能力',
+    capabilityGuideDescription:
+      '技能提供任務步驟與知識；外掛程式擴充功能；連接器連結外部服務；工具集控制目前工作區可呼叫的工具。',
+
+    pageTitle: '技能與工具',
+    pageDescription: '為你的智慧體新增知識、工作流程與外部能力。',
     add: '新增',
     added: '已新增',
     discover: '探索',
@@ -112,7 +130,7 @@ export const zhHantOverrides = {
     consentTitle: '分享使用統計？',
     dialogTitle: '使用統計',
     consentBody:
-      'Hermes 可以統計你的使用方式：工作階段長度、執行了哪些模型和工具，以及何時發生失敗。它絕不記錄你的訊息、檔案、路徑或錯誤文字。',
+      'Aino 可以統計你的使用方式：工作階段長度、執行了哪些模型和工具，以及何時發生失敗。它絕不記錄你的訊息、檔案、路徑或錯誤文字。',
     whatIsCollected: '統計哪些內容',
     collectedActivity: '工作階段：長度、結果、錯誤類型、每日活躍時間',
     collectedModels: '模型：使用哪些模型、token 總量',
@@ -120,19 +138,19 @@ export const zhHantOverrides = {
     collectedMilestones: '設定：完成了哪些步驟、提供方連線、技能、外掛和排程工作的數量',
     collectedReliability: '應用程式健康狀態：當機、啟動與回覆速度、更新、訊息平台連線',
     collectedUsage: '代理品質：未成功的編輯、損壞的工具呼叫、卡住的迴圈、每個任務的成本',
-    collectedMachine: '機器：作業系統、記憶體範圍、GPU 類型、Hermes 版本、本機模型使用情況',
+    collectedMachine: '機器：作業系統、記憶體範圍、GPU 類型、Aino 版本、本機模型使用情況',
     sending:
-      '如果你選擇分享，Hermes 每天傳送一次統計資料給 Nous，並附帶此設定檔的隨機 ID。除了一則 Hermes 已安裝的一次性記錄之外，你同意之前的統計資料永遠不會被傳送。你可以隨時在設定中變更。',
+      '同意後，Aino 每日將彙總計數傳送至 api.agentera.com.cn，附帶隨機設定檔 ID，不含帳號權杖。Aino 管理員可讀取。14 天後停止存取，隨後 1 小時內清除線上資料；備份依部署保留政策清理。除安裝記錄外，不傳送本次同意之前的資料。可隨時在設定中關閉。',
     readDocs: '查看完整說明',
-    share: '與 Nous 分享',
+    share: '與 Aino 分享',
     off: '不用了',
     saveFailed: '無法儲存你的選擇',
-    sendLabel: '與 Nous 分享使用統計',
+    sendLabel: '與 Aino 分享使用統計',
     sendDesc: '僅限計數，每天傳送一次，並附帶此設定檔的隨機 ID。絕不包含你的訊息、檔案、路徑或錯誤文字。',
-    unavailable: '請更新 Hermes 後端以變更此設定。',
+    unavailable: '請更新 Aino 後端以變更此設定。',
     stripBody: '僅限計數，絕不包含你的訊息或檔案。',
-    stripReaskBody: '再次詢問：舊版本可能在你看到此問題之前就已儲存了「不用了」。',
-    stripChoices: { share: '與 Nous 分享', off: '不用了' },
+    stripReaskBody: '統計接收方已變更為 Aino。之前的選擇不代表同意向 Aino 分享，請重新選擇。',
+    stripChoices: { share: '與 Aino 分享', off: '不用了' },
     stripDetails: '詳細資訊'
   },
   firstRun: zhHantFirstRun,
@@ -155,7 +173,7 @@ export const zhHantOverrides = {
   starmap: zhHantCapabilities.starmap,
   agents: zhHantCapabilities.agents,
   commandCenter: zhHantCommandCenter.commandCenter,
-  messaging: zhHantCommandCenter.messaging,
+  messaging: { ...zhHantCommandCenter.messaging, directory: messagingDirectory['zh-hant'] },
   profiles: zhHantCommandCenter.profiles,
   modelAssignment: {
     saveFailed: 'Hermes 未儲存該模型變更。',

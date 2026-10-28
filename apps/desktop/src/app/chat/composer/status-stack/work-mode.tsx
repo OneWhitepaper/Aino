@@ -101,7 +101,7 @@ export function ComposerWorkMode({ cwd, projectId, worktrees }: ComposerWorkMode
           variant="ghost"
         >
           <Codicon name={current?.isMain ? 'device-desktop' : 'worktree'} size="0.875rem" />
-          <span className="truncate text-xs font-normal">
+          <span className="truncate text-[length:var(--aino-text-ui)] font-normal">
             {current ? (current.isMain ? localLabel : s.worktreeWork) : s.workLocation}
           </span>
           <Codicon name="chevron-down" size="0.75rem" />

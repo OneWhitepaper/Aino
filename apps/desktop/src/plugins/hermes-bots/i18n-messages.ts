@@ -62,7 +62,8 @@ export type BotsMessages = {
     noImageModel: string
     checkingImage: string
     chooseImage: string
-    editDescription: (name: string, profile: string) => string
+    editDescription: (name: string) => string
+    internalIdLabel: string
     nameTaken: (name: string) => string
     nameTakenOn: (name: string, target: string) => string
     currentConnection: (name: string) => string

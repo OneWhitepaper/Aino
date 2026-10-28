@@ -50,7 +50,7 @@ const ROW_CLASS = [
 ].join(' ')
 
 const GROUP_HEADER_CLASS =
-  'select-none px-2 pb-0.5 text-[0.625rem] font-semibold uppercase tracking-wider text-(--ui-text-tertiary)'
+  'select-none px-2 pb-0.5 text-[length:var(--aino-text-caption)] font-medium text-(--ui-text-tertiary)'
 
 // Completion metadata deliberately keeps the stable English ids emitted by
 // the gateway. Only the visible heading is localized here; changing the id

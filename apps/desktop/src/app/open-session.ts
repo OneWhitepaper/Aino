@@ -106,6 +106,10 @@ export function openSessionFromPicker(
   openSession(storedSessionId, navigate, resolved, workspaceScope)
 }
 
+function scopedOpenIntent(intent: OpenSessionIntent, mode: WorkspaceMode, targetsPrimary: boolean): OpenSessionIntent {
+  return mode === 'bots' && intent === 'in-place' && !targetsPrimary ? 'stack' : intent
+}
+
 /**
  * @param navigate Required for `in-place` (route into main when not on screen).
  *   `tab` / `window` ignore it — pass a no-op when you don't have a router handle.
@@ -128,7 +132,13 @@ export function openSession(
   setSessionTileWorkspaceScope(storedSessionId, workspaceScope)
   const botWorkspaceScope = workspaceScope.workspaceMode === 'bots' ? workspaceScope : undefined
 
-  let resolved: OpenSessionIntent = intent
+  // Bot chats have their own owner-scoped tabs. Keep the Sessions surface
+  // (including an unsent draft) intact when opening a different bot chat.
+  let resolved = scopedOpenIntent(
+    intent,
+    workspaceScope.workspaceMode,
+    $selectedStoredSessionId.get() === storedSessionId
+  )
 
   if (resolved === 'window') {
     if (canOpenSessionWindow()) {
@@ -142,9 +152,8 @@ export function openSession(
   }
 
   if (resolved === 'main') {
-    // Canonical relationship chats explicitly own the main workspace. Route
-    // even when the session is already open as a tile; resumeSession removes
-    // that redundant tile when the main surface binds.
+    // An explicit main open replaces the primary workspace, even if the
+    // session is already a tile; resumeSession removes that redundant tile.
     navigate(sessionRoute(storedSessionId))
 
     return

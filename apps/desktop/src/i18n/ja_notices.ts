@@ -11,7 +11,7 @@ export const jaNotices = {
   butterbar: {
     goTo: (index, total) => `お知らせ ${index} / ${total} を表示`,
     legal: {
-      before: 'Hermes Agent のご利用には',
+      before: 'Nous の無料サービスには同社の',
       terms: '利用規約',
       between: 'および',
       privacy: 'プライバシーポリシー',

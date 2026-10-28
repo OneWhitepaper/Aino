@@ -17,6 +17,7 @@ interface SegmentedControlProps<T extends string> {
   /** `equal` (default) gives every option the widest option's width; `content`
    *  sizes each option to its own label, for filters with uneven labels/counts. */
   sizing?: 'equal' | 'content'
+  variant?: 'pill' | 'underline'
 }
 
 /**
@@ -30,12 +31,15 @@ export function SegmentedControl<T extends string>({
   onChange,
   options,
   sizing = 'equal',
+  variant = 'pill',
   value
 }: SegmentedControlProps<T>) {
   return (
     <div
       className={cn(
-        'inline-grid w-fit grid-flow-col gap-0.5 rounded-(--aino-radius-row) bg-(--ui-bg-tertiary) p-0.5',
+        variant === 'underline'
+          ? 'flex w-fit gap-5 border-b border-(--ui-stroke-tertiary)'
+          : 'inline-grid w-fit grid-flow-col gap-0.5 rounded-(--aino-radius-row) bg-(--ui-bg-tertiary) p-0.5',
         sizing === 'equal' ? 'auto-cols-fr' : 'auto-cols-max',
         disabled && 'opacity-50',
         className
@@ -48,8 +52,15 @@ export function SegmentedControl<T extends string>({
           <button
             aria-pressed={active}
             className={cn(
-              'flex min-w-0 cursor-pointer items-center justify-center gap-1 rounded-(--aino-radius-control) px-2.5 py-1 text-xs font-medium whitespace-nowrap transition-colors disabled:cursor-default',
-              active ? 'bg-(--ui-bg-elevated) text-foreground shadow-xs' : 'text-muted-foreground hover:text-foreground'
+              'flex min-w-0 cursor-pointer items-center justify-center gap-1 text-[length:var(--aino-text-ui)] font-medium whitespace-nowrap transition-colors disabled:cursor-default',
+              variant === 'underline'
+                ? 'border-b-2 border-transparent py-3'
+                : 'rounded-(--aino-radius-control) px-2.5 py-1',
+              active
+                ? variant === 'underline'
+                  ? 'border-(--ui-text-secondary) text-foreground'
+                  : 'bg-(--ui-bg-elevated) text-foreground shadow-xs'
+                : 'text-muted-foreground hover:text-foreground'
             )}
             disabled={disabled}
             key={id}

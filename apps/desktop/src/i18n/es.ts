@@ -20,8 +20,28 @@ import { esSharedMetrics } from './es_shared_metrics'
 import { esThemePicker } from './es_theme_picker'
 import { esUpdateChannel } from './es_update_channel'
 import { introEs } from './intro-es'
+import { messagingDirectory } from './messaging-directory'
 
 export const esOverrides = {
+  catalog: {
+    enable: 'Activar',
+    disable: 'Desactivar',
+    originalDescription: 'Descripción original',
+    skillInstructions: 'Instrucciones de la habilidad',
+    startHere: 'Empieza aquí',
+    featuredHint: 'Conoce la función de cada habilidad y añádela cuando la necesites.',
+    browseHint: 'Explora por uso y consulta los detalles antes de añadir.',
+    installedHint: 'Gestiona las capacidades activas de este espacio. Los cambios se aplican a nuevas sesiones.',
+    installedKind: (kind: string) => `Instalados: ${kind}`,
+    howToUse: 'Cómo usar',
+    usageHint: 'Consulta las instrucciones de la habilidad o la documentación de origen para conocer los pasos.',
+    capabilityGuide: 'Acerca de estas capacidades',
+    capabilityGuideDescription:
+      'Las habilidades aportan instrucciones y conocimientos; los complementos amplían funciones; los conectores enlazan servicios externos; los conjuntos de herramientas controlan las herramientas disponibles en este espacio.',
+
+    pageTitle: 'Habilidades y herramientas',
+    pageDescription: 'Añade conocimientos, flujos de trabajo y capacidades externas a tus agentes.'
+  },
   connectorOffer: {
     heading: 'Conservar las aplicaciones conectadas',
     body: 'Inicia sesión con una cuenta gratuita de Nous para conservar las aplicaciones conectadas, como Gmail o Slack, en tu cuenta.'
@@ -505,24 +525,24 @@ export const esOverrides = {
   },
   ...esNotices,
   sendDiagnostics: {
-    title: "Enviar diagnósticos a Aino",
+    title: 'Enviar diagnósticos a Aino',
     privacyNotice:
-      "Se sube un paquete privado al servicio de tu cuenta Aino: información del sistema, estado de configuración (sin claves) y registros del agente, gateway y escritorio (hasta 512 KB cada uno). Pueden contener conversaciones, resultados de herramientas y rutas de archivos. Las claves se ocultan, pero pueden quedar otros datos sensibles. Solo administradores autorizados de Aino pueden leerlo. El acceso caduca a los 14 días y los datos en línea se borran en la hora siguiente. Las copias de seguridad existentes siguen la política del despliegue.",
+      'Se sube un paquete privado al servicio de tu cuenta Aino: información del sistema, estado de configuración (sin claves) y registros del agente, gateway y escritorio (hasta 512 KB cada uno). Pueden contener conversaciones, resultados de herramientas y rutas de archivos. Las claves se ocultan, pero pueden quedar otros datos sensibles. Solo administradores autorizados de Aino pueden leerlo. El acceso caduca a los 14 días y los datos en línea se borran en la hora siguiente. Las copias de seguridad existentes siguen la política del despliegue.',
     upload: 'Subir',
     uploading: 'Subiendo…',
     cancel: 'Cancelar',
     close: 'Cerrar',
-    copyLink: "Copiar ID de diagnóstico",
-    uploadIdFallback: id => "ID de diagnóstico: " + id,
+    copyLink: 'Copiar ID de diagnóstico',
+    uploadIdFallback: id => 'ID de diagnóstico: ' + id,
     doneTitle: 'Diagnóstico enviado',
     doneDescription:
-      "El paquete se ha enviado de forma privada a Aino. Incluye este ID en tu informe; no publiques los registros.",
+      'El paquete se ha enviado de forma privada a Aino. Incluye este ID en tu informe; no publiques los registros.',
     failedTitle: 'Error al subir',
     failedHint:
-      "Inicia sesión en Aino y vuelve a intentarlo. Actualiza los entornos antiguos. Informe local sin envío: `hermes debug share --local`.",
-    handoffLead: "Contactar con Aino:",
+      'Inicia sesión en Aino y vuelve a intentarlo. Actualiza los entornos antiguos. Informe local sin envío: `hermes debug share --local`.',
+    handoffLead: 'Contactar con Aino:',
     links: {
-      github: 'Issues de GitHub',
+      github: 'Issues de GitHub'
     }
   },
   titlebar: {
@@ -2879,6 +2899,7 @@ export const esOverrides = {
     }
   },
   messaging: {
+    directory: messagingDirectory['es'],
     search: 'Buscar mensajería...',
     statusFilter: {
       all: 'Todos',
@@ -3190,6 +3211,10 @@ export const esOverrides = {
     }
   },
   profiles: {
+    workspaceListTitle: 'Mis espacios de trabajo',
+    previewHint: 'Selecciona una tarjeta para ver los ajustes sin cambiar de espacio de trabajo.',
+    workspaceHint: 'Cada espacio conserva sus ajustes y conversaciones. Gestiona las carpetas en Proyectos.',
+    soulApplyHint: 'Los cambios se aplican a las conversaciones nuevas.',
     close: 'Cerrar perfiles',
     nameHint: 'Letras minúsculas, dígitos, guiones y guiones bajos. Debe empezar con una letra o dígito.',
     title: 'Perfiles',
@@ -3296,6 +3321,8 @@ export const esOverrides = {
     modelLabel: 'Modelo',
     skillsLabel: 'Skills',
     notSet: 'Sin definir',
+    storageLocation: 'Ubicación del espacio de trabajo',
+    soulTitle: 'Personalidad y comportamiento',
     soulDesc: 'El prompt de sistema y las instrucciones de persona integrados en este perfil.',
     soulOptional: 'opcional',
     soulPlaceholder: mode =>
@@ -4287,18 +4314,27 @@ export const esOverrides = {
       failed: 'Falló la actualización del backend.',
       noReturn:
         'El backend no volvió a estar disponible. Puede que la actualización no se haya completado; revisa el host del backend.'
+    },
+    desktopBridgeUnavailable: 'La conexión con el escritorio no está disponible.',
+
+    starting: 'Iniciando actualización…',
+
+    backendApplied: 'Actualización del servicio aplicada.',
+
+    backendNoReturn: 'El servicio no volvió a conectarse.',
+
+    changelog: {
+      groups: {
+        new: 'Novedades',
+        fixed: 'Correcciones',
+        faster: 'Rendimiento',
+        improved: 'Mejoras',
+        other: 'Otras mejoras'
+      },
+      fallbackItem: 'Mejoras y correcciones',
+      fallbackLabel: 'En esta actualización'
     }
-  ,
-"desktopBridgeUnavailable":"La conexión con el escritorio no está disponible.",
-
-"starting":"Iniciando actualización…",
-
-"backendApplied":"Actualización del servicio aplicada.",
-
-"backendNoReturn":"El servicio no volvió a conectarse.",
-
-"changelog":{"groups":{"new":"Novedades","fixed":"Correcciones","faster":"Rendimiento","improved":"Mejoras","other":"Otras mejoras"},"fallbackItem":"Mejoras y correcciones","fallbackLabel":"En esta actualización"},
-},
+  },
   install: {
     stageStates: {
       pending: 'Pendiente',
@@ -5395,18 +5431,22 @@ export const esOverrides = {
           pending: 'Escribir archivo',
           pendingAction: 'Escribiendo'
         }
+      },
+      runSummary: {
+        search: { count: (count: number) => count + ' consultas', past: 'Buscado', present: 'Buscando' },
+        read: { count: (count: number) => count + ' páginas', past: 'Leído', present: 'Leyendo' },
+
+        browse: { count: (count: number) => count + ' páginas', past: 'Abierto', present: 'Abriendo' },
+
+        interact: {
+          count: (count: number) => count + ' acciones del navegador',
+          past: 'Realizado',
+          present: 'Realizando'
+        },
+
+        analyze: { count: (count: number) => count + ' imágenes', past: 'Analizado', present: 'Analizando' }
       }
-    ,
-"runSummary":{"search":{count: (count: number) => count + " consultas", past: "Buscado", present: "Buscando"},
-"read":{count: (count: number) => count + " páginas", past: "Leído", present: "Leyendo"},
-
-"browse":{count: (count: number) => count + " páginas", past: "Abierto", present: "Abriendo"},
-
-"interact":{count: (count: number) => count + " acciones del navegador", past: "Realizado", present: "Realizando"},
-
-"analyze":{count: (count: number) => count + " imágenes", past: "Analizado", present: "Analizando"},
-},
-}
+    }
   },
   prompts: {
     gatewayDisconnected: 'Hermes está sin conexión ahora mismo. Reconéctate y vuelve a enviarlo.',

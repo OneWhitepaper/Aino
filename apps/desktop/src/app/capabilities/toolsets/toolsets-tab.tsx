@@ -7,9 +7,11 @@ import { useI18n } from '@/i18n'
 import { isDesktopToolsetVisible } from '@/lib/desktop-toolsets'
 import { queryClient } from '@/lib/query-client'
 import { invalidateSlashCompletions } from '@/lib/slash-completion-cache'
+import { cn } from '@/lib/utils'
 import { notify, notifyError } from '@/store/notifications'
 import type { ToolsetInfo } from '@/types/hermes'
 
+import { PAGE_INSET_X, PAGE_MAX_W } from '../../layout-constants'
 import { asText, toolNames, toolsetDisplayLabel } from '../../settings/helpers'
 import { CatalogSwitch } from '../catalog/catalog-switch'
 import { CapabilityEmpty } from '../primitives'
@@ -131,14 +133,16 @@ export function ToolsetsTab({ hints, onQueryChange, profile, query, toolsets }: 
   // Same search row as every other Capabilities tab; it stays put when a query
   // empties the list.
   const search = (
-    <header className="catalog-search-header shrink-0">
-      <CapabilitySearch
-        hints={hints}
-        onChange={onQueryChange}
-        placeholder={t.skills.searchToolsets}
-        scope={t.skills.tabToolsets}
-        value={query}
-      />
+    <header className="shrink-0 border-b border-(--ui-stroke-secondary) py-3.5">
+      <div className={cn('mx-auto w-full', PAGE_INSET_X, PAGE_MAX_W)}>
+        <CapabilitySearch
+          hints={hints}
+          onChange={onQueryChange}
+          placeholder={t.skills.searchToolsets}
+          scope={t.skills.tabToolsets}
+          value={query}
+        />
+      </div>
     </header>
   )
 

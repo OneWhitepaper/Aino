@@ -13,6 +13,7 @@ import type { SkillInfo } from '@/types/hermes'
 
 import { DetailPane, ListStripMenu, type ListStripMenuToggle } from '../../master-detail'
 import { CatalogAlert } from '../catalog/catalog-alert'
+import { catalogDisplayName } from '../catalog/catalog-localization'
 import { CatalogSwitch } from '../catalog/catalog-switch'
 import { SkillCatalog } from '../catalog/skill-catalog'
 import { UpdateSkillsButton } from '../catalog/update-skills-button'
@@ -259,7 +260,10 @@ function ScopedSkillsTab({
         query={query}
         renderInstalledAction={skill => (
           <CatalogSwitch
-            aria-label={skill.name}
+            aria-label={catalogDisplayName({
+              name: skill.name,
+              source: skill.provenance === 'bundled' ? 'built-in' : ''
+            })}
             checked={skill.enabled}
             disabled={controlsDisabled}
             onCheckedChange={enabled => void applyEnabled([skill], enabled)}

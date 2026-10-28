@@ -31,11 +31,11 @@ export function CatalogAddButton({ name, installed, installing, disabled, onInst
       aria-label={label}
       disabled={disabled || installing || installed}
       onClick={onInstall}
-      size={labeled ? 'xs' : 'icon-xs'}
-      variant={labeled ? 'outline' : 'ghost'}
+      size="xs"
+      variant={installed ? 'text' : 'outline'}
     >
       {installing ? <Loader2 className="animate-spin text-(--ui-text-tertiary)" /> : installed ? <Check /> : <Plus />}
-      {labeled && (installing ? t.catalog.installing : installed ? t.catalog.installed : t.catalog.install)}
+      {installing ? t.catalog.installing : installed ? t.catalog.added : labeled ? t.catalog.install : t.catalog.add}
     </Button>
   )
 

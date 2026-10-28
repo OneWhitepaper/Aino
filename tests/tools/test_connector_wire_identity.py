@@ -101,6 +101,32 @@ def test_session_header_is_the_conversation_root(monkeypatch):
         reset_conversation_context(token)
 
 
+def test_aino_statistics_consent_does_not_authorize_nous_connector_correlation():
+    from hermes_cli.observability.shared_metrics_consent import save_consent
+
+    save_consent(True, True)
+    transport = _Transport(_Response(200, {"schemas": {}}))
+    client = _client(transport, call=CallRef(turn_id="private-turn", tool_call_id="private-call"))
+    client.schemas(["GMAIL_SEND_EMAIL"])
+
+    headers = transport.sent[0]["headers"]
+    assert headers["Authorization"] == "Bearer t"
+    assert headers["User-Agent"].startswith("hermes-agent/")
+    assert not any(key.startswith("x-nous-hermes-") or key == "x-request-id" for key in headers)
+
+
+def test_custom_statistics_receiver_does_not_authorize_nous_connector_correlation():
+    from hermes_cli.config import atomic_config_write, read_raw_config_readonly
+
+    _consent(True)
+    config = read_raw_config_readonly()
+    config["telemetry"]["shared_metrics"]["endpoint"] = "https://metrics.example.test/ingest"
+    atomic_config_write(get_config_path(), config)
+
+    headers = connector_headers(CallRef(turn_id="private-turn", tool_call_id="private-call"))
+    assert set(headers) == {"User-Agent"}
+
+
 def test_gateway_request_id_is_logged_on_failure_and_success(caplog):
     transport = _Transport(
         _Response(200, {"schemas": {}}, request_id="ok-id"),

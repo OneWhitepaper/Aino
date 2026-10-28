@@ -2,7 +2,7 @@ export const deSharedMetrics = {
   consentTitle: 'Nutzungsstatistiken teilen?',
   dialogTitle: 'Nutzungsstatistiken',
   consentBody:
-    'Hermes kann zählen, wie Sie es nutzen: Sitzungsdauer, welche Modelle und Tools laufen und wann etwas fehlschlägt. Ihre Nachrichten, Dateien, Pfade oder Fehlertexte werden nie aufgezeichnet.',
+    'Aino kann zählen, wie Sie es nutzen: Sitzungsdauer, welche Modelle und Tools laufen und wann etwas fehlschlägt. Ihre Nachrichten, Dateien, Pfade oder Fehlertexte werden nie aufgezeichnet.',
   whatIsCollected: 'Was gezählt wird',
   collectedActivity: 'Sitzungen: Dauer, Ergebnis, Fehlertyp, aktive Zeit pro Tag',
   collectedModels: 'Modelle: welche, Token-Summen',
@@ -13,20 +13,19 @@ export const deSharedMetrics = {
   collectedReliability: 'App-Zustand: Abstürze, Start- und Antwortgeschwindigkeit, Updates, Messaging-Verbindungen',
   collectedUsage:
     'Agentenqualität: verfehlte Bearbeitungen, fehlerhafte Tool-Aufrufe, festgefahrene Schleifen, Kosten pro Aufgabe',
-  collectedMachine: 'Gerät: Betriebssystem, RAM-Bereich, GPU-Typ, Hermes-Version, Nutzung lokaler Modelle',
+  collectedMachine: 'Gerät: Betriebssystem, RAM-Bereich, GPU-Typ, Aino-Version, Nutzung lokaler Modelle',
   sending:
-    'Wenn Sie teilen, sendet Hermes Statistiken einmal täglich mit einer zufälligen ID für dieses Profil an Nous. Abgesehen von einem einmaligen Hinweis, dass Hermes installiert wurde, werden Statistiken von vor Ihrer Zustimmung nie gesendet. Sie können das jederzeit in den Einstellungen ändern.',
+    'Aino sendet zusammengefasste Zähler einmal täglich an api.agentera.com.cn, mit einer zufälligen Profil-ID und ohne Kontotoken. Aino-Administratoren können sie lesen. Zugriff endet nach 14 Tagen; Online-Daten werden innerhalb einer Stunde gelöscht. Backups folgen der Aufbewahrungsrichtlinie. Außer einer einmaligen Installationsnotiz werden keine Daten vor der neuen Zustimmung gesendet. In Einstellungen jederzeit abschaltbar.',
   readDocs: 'Alle Details lesen',
-  share: 'Mit Nous teilen',
+  share: 'Mit Aino teilen',
   off: 'Nein, danke',
   saveFailed: 'Ihre Auswahl konnte nicht gespeichert werden',
-  sendLabel: 'Nutzungsstatistiken mit Nous teilen',
+  sendLabel: 'Nutzungsstatistiken mit Aino teilen',
   sendDesc:
     'Nur Zählwerte, einmal täglich mit einer zufälligen ID für dieses Profil gesendet. Niemals Ihre Nachrichten, Dateien, Pfade oder Fehlertexte.',
-  unavailable: 'Aktualisieren Sie das Hermes-Backend, um diese Einstellung zu ändern.',
+  unavailable: 'Aktualisieren Sie das Aino-Backend, um diese Einstellung zu ändern.',
   stripBody: 'Nur Zählwerte. Niemals Ihre Nachrichten oder Dateien.',
-  stripReaskBody:
-    'Wir fragen noch einmal: Eine frühere Version konnte „Nein danke“ speichern, bevor Sie diese Frage gesehen haben.',
-  stripChoices: { share: 'Mit Nous teilen', off: 'Nein danke' },
+  stripReaskBody: 'Der Empfänger ist jetzt Aino. Ihre frühere Auswahl gilt nicht für Aino; bitte wählen Sie erneut.',
+  stripChoices: { share: 'Mit Aino teilen', off: 'Nein danke' },
   stripDetails: 'Details'
 }

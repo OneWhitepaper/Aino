@@ -2,6 +2,7 @@
 import { defineFieldCopy } from '@/app/settings/field-copy'
 
 import { defineLocale, type TranslationOverrides } from './define-locale'
+import { messagingDirectory } from './messaging-directory'
 import { ruBoot } from './ru_boot'
 import { ruCatalog, ruSkillDeepLink } from './ru_catalog'
 import { ruClarify } from './ru_clarify'
@@ -1877,6 +1878,7 @@ export const ruOverrides = {
     }
   },
   messaging: {
+    directory: messagingDirectory['ru'],
     search: 'Поиск в сообщениях...',
     statusFilter: {
       all: 'Все',
@@ -2146,6 +2148,10 @@ export const ruOverrides = {
     }
   },
   profiles: {
+    workspaceListTitle: 'Мои рабочие пространства',
+    previewHint: 'Выберите карточку для просмотра настроек без переключения пространства.',
+    workspaceHint: 'У каждого пространства свои настройки и беседы. Папки находятся в разделе «Проекты».',
+    soulApplyHint: 'Изменения применяются к новым беседам.',
     close: 'Закрыть профили',
     nameHint: 'Строчные буквы, цифры, дефисы и подчёркивания. Должно начинаться с буквы или цифры.',
     title: 'Профили',
@@ -2204,6 +2210,8 @@ export const ruOverrides = {
     modelLabel: 'Модель',
     skillsLabel: 'Навыки',
     notSet: 'Не задано',
+    storageLocation: 'Расположение рабочего пространства',
+    soulTitle: 'Личность и поведение',
     soulDesc: 'Системный промпт и инструкции по персоне, встроенные в этот профиль.',
     soulMissing:
       'В этом профиле ещё нет файла SOUL.md. Введите инструкции ниже и сохраните, чтобы создать его. Настройки персонажей в config.yaml управляются отдельно.',
@@ -3927,18 +3935,18 @@ export const ruOverrides = {
         web_extract: { done: 'Веб-страница прочитана', pending: 'Читаю веб-страницу', pendingAction: 'Читаю' },
         web_search: { done: 'Поиск в вебе выполнен', pending: 'Ищу в вебе', pendingAction: 'Ищу' },
         write_file: { done: 'Файл изменён', pending: 'Изменяю файл', pendingAction: 'Изменяю' }
+      },
+      runSummary: {
+        search: { count: (count: number) => count + ' запросов', past: 'Поиск выполнен', present: 'Поиск' },
+        read: { count: (count: number) => count + ' страниц', past: 'Прочитано', present: 'Чтение' },
+
+        browse: { count: (count: number) => count + ' страниц', past: 'Открыто', present: 'Открытие' },
+
+        interact: { count: (count: number) => count + ' действий браузера', past: 'Выполнено', present: 'Выполнение' },
+
+        analyze: { count: (count: number) => count + ' изображений', past: 'Проанализировано', present: 'Анализ' }
       }
-    ,
-"runSummary":{"search":{count: (count: number) => count + " запросов", past: "Поиск выполнен", present: "Поиск"},
-"read":{count: (count: number) => count + " страниц", past: "Прочитано", present: "Чтение"},
-
-"browse":{count: (count: number) => count + " страниц", past: "Открыто", present: "Открытие"},
-
-"interact":{count: (count: number) => count + " действий браузера", past: "Выполнено", present: "Выполнение"},
-
-"analyze":{count: (count: number) => count + " изображений", past: "Проанализировано", present: "Анализ"},
-},
-}
+    }
   },
   prompts: {
     gatewayDisconnected: 'Шлюз Hermes не подключён',

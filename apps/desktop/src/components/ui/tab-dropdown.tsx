@@ -45,11 +45,13 @@ function TabDropdownIcon({ icon: Icon, indent }: { icon: IconComponent; indent?:
 export function TabDropdown({
   align = 'center',
   className,
-  items
+  items,
+  variant = 'text'
 }: {
   align?: 'center' | 'end' | 'start'
   className?: string
   items: TabDropdownItem[]
+  variant?: 'text' | 'navigation'
 }) {
   const active = items.find(item => item.active) ?? items[0]
 
@@ -57,7 +59,12 @@ export function TabDropdown({
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <button
-          className="flex h-7 cursor-pointer items-center gap-1.5 px-1 text-[length:var(--conversation-caption-font-size)] font-medium text-foreground [-webkit-app-region:no-drag]"
+          className={cn(
+            'flex cursor-pointer items-center font-medium text-foreground [-webkit-app-region:no-drag]',
+            variant === 'navigation'
+              ? 'h-10 gap-2 rounded-xl bg-(--ui-bg-tertiary) px-3 text-[length:var(--aino-text-ui)]'
+              : 'h-7 gap-1.5 px-1 text-[length:var(--conversation-caption-font-size)]'
+          )}
           type="button"
         >
           {active?.icon && <TabDropdownIcon icon={active.icon} indent={active.indent} />}

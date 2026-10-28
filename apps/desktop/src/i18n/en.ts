@@ -1,3 +1,4 @@
+import { enMessaging } from './en_messaging'
 const accountErrors: Record<string, string> = {
   INVALID_PHONE: 'Enter a valid phone number.',
   PHONE_REGION_UNSUPPORTED: 'Phone numbers from this region are not supported.',
@@ -38,6 +39,7 @@ import { enNotices } from './en_notices'
 import { enNotifications } from './en_notifications'
 import { enOnboarding } from './en_onboarding'
 import { enPluginUpdate } from './en_plugin_update'
+import { enProfiles } from './en_profiles'
 import { enProjects } from './en_projects'
 import { enSharedMetrics } from './en_shared_metrics'
 import { enThemePicker } from './en_theme_picker'
@@ -517,24 +519,24 @@ export const en: Translations = {
   ...enBilling,
 
   sendDiagnostics: {
-    title: "Send diagnostics to Aino",
+    title: 'Send diagnostics to Aino',
     privacyNotice:
-      "This sends a private bundle to your Aino account service: system information, configuration status (never keys themselves), and agent, gateway and desktop logs (up to 512 KB each). Logs may contain conversations, tool output and file paths. Keys are redacted before upload, but other sensitive content may remain. Only authorized Aino administrators can read it. Access expires after 14 days; online data is purged within the next hour. Existing backups follow the deployment backup policy.",
+      'This sends a private bundle to your Aino account service: system information, configuration status (never keys themselves), and agent, gateway and desktop logs (up to 512 KB each). Logs may contain conversations, tool output and file paths. Keys are redacted before upload, but other sensitive content may remain. Only authorized Aino administrators can read it. Access expires after 14 days; online data is purged within the next hour. Existing backups follow the deployment backup policy.',
     upload: 'Upload',
     uploading: 'Uploading…',
     cancel: 'Cancel',
     close: 'Close',
-    copyLink: "Copy diagnostic ID",
-    uploadIdFallback: id => "Diagnostic ID: " + id,
+    copyLink: 'Copy diagnostic ID',
+    uploadIdFallback: id => 'Diagnostic ID: ' + id,
     doneTitle: 'Diagnostics sent',
     doneDescription:
-      "Your bundle was uploaded privately to Aino. Quote this ID in your support report; do not post logs publicly.",
+      'Your bundle was uploaded privately to Aino. Quote this ID in your support report; do not post logs publicly.',
     failedTitle: 'Upload failed',
     failedHint:
-      "Sign in to Aino and retry. Update older runtimes first. For a local report without uploading, run `hermes debug share --local`.",
-    handoffLead: "Contact Aino through:",
+      'Sign in to Aino and retry. Update older runtimes first. For a local report without uploading, run `hermes debug share --local`.',
+    handoffLead: 'Contact Aino through:',
     links: {
-      github: 'GitHub Issues',
+      github: 'GitHub Issues'
     },
     gatewayUnavailable: 'Hermes gateway unavailable',
 
@@ -1886,12 +1888,11 @@ export const en: Translations = {
       },
       keepGoingOnCredits: {
         title: 'Keep going on credits',
-        description:
-          'Use your credits when included usage runs out. Off: Hermes waits for the reset.',
+        description: 'Use your credits when included usage runs out. Off: Hermes waits for the reset.',
         approveInBrowser: 'Approve Remote Spending in your browser to change this. It applies as soon as you approve.',
         openAgain: 'Open again',
         cancel: 'Cancel',
-        approvedRetry: 'Remote Spending is approved, but the change didn\'t save.',
+        approvedRetry: "Remote Spending is approved, but the change didn't save.",
         tryAgain: 'Try again'
       },
       autoReload: {
@@ -1985,7 +1986,7 @@ export const en: Translations = {
             captionResetsIn: duration => `Resets in ${duration}`,
             captionIncluded: 'Included usage',
             valueUsed: percent => `${percent} used`
-          },
+          }
         },
         planCard: {
           freeTier: 'Free',
@@ -2970,205 +2971,7 @@ export const en: Translations = {
     }
   },
 
-  messaging: {
-    search: 'Search messaging...',
-    statusFilter: {
-      all: 'All',
-      bad: 'Errors',
-      good: 'Connected',
-      muted: 'Inactive',
-      warn: 'Needs attention'
-    },
-    loading: 'Loading messaging platforms...',
-    loadFailed: 'Messaging platforms failed to load',
-    states: {
-      connected: 'Connected',
-      connecting: 'Connecting',
-      disabled: 'Disabled',
-      fatal: 'Error',
-      gateway_stopped: 'Messaging gateway stopped',
-      not_configured: 'Needs setup',
-      pending_restart: 'Restart needed',
-      retrying: 'Retrying',
-      startup_failed: 'Startup failed'
-    },
-    unknown: 'Unknown',
-    hintPendingRestart: 'Restart the gateway from the status bar to apply this change.',
-    sharedListenerUrl: 'Served on the shared gateway listener at',
-    hintGatewayStopped: 'Start the gateway from the status bar to connect.',
-    credentialsSet: 'Credentials set',
-    needsSetup: 'Needs setup',
-    gatewayStopped: 'Messaging gateway stopped',
-    getCredentials: 'Get your credentials',
-    openSetupGuide: 'Open setup guide',
-    required: 'Required',
-    recommended: 'Recommended',
-    advanced: count => `Advanced (${count})`,
-    noTokenNeeded: 'This platform does not need a token here. Use the setup guide above, then enable it below.',
-    enabled: 'Enabled',
-    disabled: 'Disabled',
-    unsavedChanges: 'Unsaved changes',
-    saving: 'Saving...',
-    saveChanges: 'Save changes',
-    saved: 'Saved',
-    replaceValue: 'Replace current value',
-    openDocs: 'Open docs',
-    clearField: key => `Clear ${key}`,
-    addListEntry: 'Add another',
-    removeListEntry: 'Remove',
-    listEntryPlaceholder: 'Enter an ID',
-    enableAria: name => `Enable ${name}`,
-    disableAria: name => `Disable ${name}`,
-    platformEnabled: name => `${name} enabled`,
-    platformDisabled: name => `${name} disabled`,
-    restartToApply: 'This change takes effect after a gateway restart.',
-    setupSaved: name => `${name} setup saved`,
-    restartToReconnect: 'New credentials take effect after a gateway restart.',
-    appliedLive: 'Applied to the running gateway.',
-    connectingLive: 'The running gateway is connecting with the new credentials.',
-    keyCleared: key => `${key} cleared`,
-    setupUpdated: name => `${name} setup was updated.`,
-    failedUpdate: name => `Failed to update ${name}`,
-    failedSave: name => `Failed to save ${name}`,
-    failedClear: key => `Failed to clear ${key}`,
-    pendingRequests: count => `Pending requests (${count})`,
-    pendingAria: count => `${count} pending pairing ${count === 1 ? 'request' : 'requests'}`,
-    approvedUsers: count => `Approved users (${count})`,
-    approve: 'Approve',
-    approving: 'Approving...',
-    revoke: 'Revoke',
-    revoking: 'Revoking...',
-    revokeAria: name => `Revoke ${name}`,
-    revokeTitle: 'Revoke access',
-    revokeDesc: (name: string) => `${name} will lose access and stop being recognized on their next message.`,
-    approvedUser: name => `${name} approved`,
-    approvedHint: 'They are recognized automatically on their next message.',
-    revokedUser: name => `${name} revoked`,
-    failedApprove: name => `Failed to approve ${name}`,
-    failedRevoke: name => `Failed to revoke ${name}`,
-    pairingLockedOut: 'Too many failed approvals — this platform is locked out. Try again later.',
-    waitingSince: minutes => (minutes < 1 ? 'just now' : `${minutes}m ago`),
-    restartNeeded: 'Saved. Restart the messaging gateway so the new settings take effect.',
-    restartNow: 'Restart now',
-    restarting: 'Restarting…',
-    restartFailedManual: "Hermes couldn't restart to apply your messaging settings",
-    restartFailedManualDetail: 'Try Restart again; if it still fails, open the logs and send diagnostics.',
-    restartAgain: 'Restart again',
-    openLogs: 'Open logs',
-    telegramQr: {
-      title: 'Choose how to connect your Telegram bot',
-      subtitle: 'Both options connect a bot you control and save its credentials only to this Hermes installation.',
-      quickSetup: 'Quick setup',
-      recommended: 'Recommended',
-      quickHelp:
-        'Scan a QR code and confirm in Telegram. Hermes creates the bot and detects your Telegram user ID automatically.',
-      createWithQr: 'Create with QR',
-      starting: 'Starting…',
-      replaceWarning:
-        'Telegram credentials are already configured. A new QR setup or bot token will replace the current bot when you save.',
-      scanHint: 'Scan with the Telegram app on your phone, or open the link on this computer.',
-      waiting: 'Waiting for Telegram…',
-      expiresIn: remaining => `Expires in ${remaining}`,
-      expired: 'Expired',
-      openTelegram: 'Open Telegram',
-      ready: 'Bot created',
-      allowedUsers: 'Allowed users',
-      ownerDetected: 'Owner detected',
-      addAtLeastOne: 'Add at least one Telegram user ID.',
-      userIdPlaceholder: 'Telegram user ID',
-      add: 'Add',
-      numericOnly: 'Allowed Telegram user IDs must be numeric.',
-      saveAndRestart: 'Save and restart',
-      applying: 'Saving…',
-      pairingExpired: 'Telegram pairing expired. Start a new QR setup to try again.',
-      stillWaiting: detail => `Still waiting for Telegram. Retrying after: ${detail}`,
-      savedRestarting: 'Telegram saved; gateway restarting…',
-      savedRestartFailed: detail => `Telegram saved; gateway restart failed${detail}`
-    },
-    fieldCopy: {
-      TELEGRAM_BOT_TOKEN: {
-        label: 'Bot token',
-        help: 'Create a bot with @BotFather, then paste the token it gives you.',
-        placeholder: 'Paste Telegram bot token'
-      },
-      TELEGRAM_ALLOWED_USERS: {
-        label: 'Allowed Telegram user IDs',
-        help: 'Recommended. Numeric IDs from @userinfobot, one per box. Without this, anyone can DM your bot.'
-      },
-      TELEGRAM_PROXY: { label: 'Proxy URL', help: 'Only needed on networks where Telegram is blocked.' },
-      DISCORD_BOT_TOKEN: {
-        label: 'Bot token',
-        help: 'Create an application in the Discord Developer Portal, add a bot, then paste its token.'
-      },
-      DISCORD_ALLOWED_USERS: {
-        label: 'Allowed Discord user IDs',
-        help: 'Recommended. Discord user IDs, one per box.'
-      },
-      DISCORD_REPLY_TO_MODE: { label: 'Reply style', help: 'first, all, or off.' },
-      DISCORD_ALLOW_ALL_USERS: {
-        label: 'Allow all Discord users',
-        help: 'Development only. When true, anyone can DM the bot without an allowlist.'
-      },
-      DISCORD_HOME_CHANNEL: {
-        label: 'Home channel ID',
-        help: 'Channel where the bot sends proactive messages (cron output, reminders).'
-      },
-      DISCORD_HOME_CHANNEL_NAME: {
-        label: 'Home channel name',
-        help: 'Display name for the home channel in logs and status output.'
-      },
-      BLUEBUBBLES_ALLOW_ALL_USERS: {
-        label: 'Allow all iMessage users',
-        help: 'When true, skip the BlueBubbles allowlist.'
-      },
-      MATTERMOST_ALLOW_ALL_USERS: { label: 'Allow all Mattermost users' },
-      MATTERMOST_HOME_CHANNEL: { label: 'Home channel' },
-      QQ_ALLOW_ALL_USERS: { label: 'Allow all QQ users' },
-      QQBOT_HOME_CHANNEL: { label: 'QQ home channel', help: 'Default channel or group for cron delivery.' },
-      QQBOT_HOME_CHANNEL_NAME: { label: 'QQ home channel name' },
-      SLACK_BOT_TOKEN: {
-        label: 'Slack bot token',
-        help: 'Use the bot token from OAuth & Permissions after installing your Slack app.',
-        placeholder: 'Paste Slack bot token'
-      },
-      SLACK_APP_TOKEN: {
-        label: 'Slack app token',
-        help: 'Use the app-level token required for Socket Mode.',
-        placeholder: 'Paste Slack app token'
-      },
-      SLACK_ALLOWED_USERS: { label: 'Allowed Slack user IDs', help: 'Recommended. Slack user IDs, one per box.' },
-      MATTERMOST_URL: { label: 'Server URL', placeholder: 'https://mattermost.example.com' },
-      MATTERMOST_TOKEN: { label: 'Bot token' },
-      MATTERMOST_ALLOWED_USERS: {
-        label: 'Allowed user IDs',
-        help: 'Recommended. Mattermost user IDs, one per box.'
-      },
-      MATRIX_HOMESERVER: { label: 'Homeserver URL', placeholder: 'https://matrix.org' },
-      MATRIX_ACCESS_TOKEN: { label: 'Access token' },
-      MATRIX_USER_ID: { label: 'Bot user ID', placeholder: '@hermes:example.org' },
-      MATRIX_ALLOWED_USERS: {
-        label: 'Allowed Matrix user IDs',
-        help: 'Recommended. User IDs in @user:server format, one per box.'
-      },
-      SIGNAL_HTTP_URL: {
-        label: 'Signal bridge URL',
-        placeholder: 'http://127.0.0.1:8080',
-        help: 'URL of a running signal-cli REST bridge.'
-      },
-      SIGNAL_ACCOUNT: { label: 'Phone number', help: 'The number registered with your signal-cli bridge.' },
-      SIGNAL_ALLOWED_USERS: { label: 'Allowed Signal users', help: 'Recommended. Signal identifiers, one per box.' },
-      WHATSAPP_ENABLED: {
-        label: 'Enable WhatsApp bridge',
-        help: 'Set automatically by the toggle below. Leave alone unless you know you need it.'
-      },
-      WHATSAPP_MODE: { label: 'Bridge mode' },
-      WHATSAPP_ALLOWED_USERS: {
-        label: 'Allowed WhatsApp users',
-        help: 'Recommended. Phone numbers or WhatsApp IDs, one per box.'
-      }
-    },
-    platformIntro: {}
-  },
+  messaging: enMessaging,
 
   webhooks: {
     search: 'Search webhooks...',
@@ -3236,181 +3039,7 @@ export const en: Translations = {
     }
   },
 
-  profiles: {
-    close: 'Close profiles',
-    nameHint: 'Lowercase letters, digits, hyphens, and underscores. Must start with a letter or digit.',
-    title: 'Profiles',
-    count: count => `${count} ${count === 1 ? 'profile' : 'profiles'}`,
-    search: 'Search profiles...',
-    loading: 'Loading profiles...',
-    newProfile: 'New profile',
-    importProfile: 'Import profile…',
-    exportProfile: 'Export profile…',
-    imported: 'Profile imported',
-    exported: 'Profile exported',
-    failedImport: 'Failed to import profile',
-    failedExport: 'Failed to export profile',
-    allProfiles: 'All profiles',
-    showAllProfiles: 'Show all profiles',
-    switchToProfile: name => `Switch to ${name}`,
-    switchToConnection: name => `Switch to ${name}`,
-    switchConnectionFailed: name => `Could not connect to ${name}`,
-    manageProfiles: 'Manage profiles…',
-    connectGateway: 'Manage gateways…',
-    fleet: {
-      allOnGateway: 'All profiles on this gateway',
-      gateway: gateway => `Profiles on ${gateway}`,
-      gatewayUnreachable: gateway => `${gateway} · unreachable`,
-      onGateway: (name, gateway) => `${name} · ${gateway}`,
-      switchTo: (name, gateway) => `Switch to ${name} on ${gateway}`,
-      deleteOn: gateway => ` on ${gateway}`,
-      localDevice: 'This device (local backend — installs Hermes if missing, otherwise opens a fresh session)',
-      switchDeviceTitle: 'Switch to This device?',
-      switchDeviceDesc:
-        'This opens a fresh session on this computer. The conversation you are in stays on the other gateway.',
-      switchDeviceConfirm: 'Switch',
-      installDeviceTitle: 'Switch to This device?',
-      installDeviceDesc:
-        'This will install Hermes locally, then open a fresh session on this computer. Nothing is installed until you confirm.',
-      installDeviceConfirm: 'Install locally',
-      connectExistingInstead: 'Connect to existing instead'
-    },
-    status: {
-      unread: (count: number) => (count === 1 ? '1 unread session' : `${count} unread sessions`),
-      needsInput: (count: number) =>
-        count === 1 ? '1 session needs your answer' : `${count} sessions need your answer`,
-      working: (count: number) => (count === 1 ? '1 session running' : `${count} sessions running`)
-    },
-    remoteOverride: {
-      menuItem: 'Connect to a remote host…',
-      badge: (host: string) => `Runs on ${host}`,
-      title: (profile: string) => `Connect ${profile} to a remote host`,
-      description: 'Sessions in this profile will run on the remote Hermes you point it at, instead of this computer.',
-      urlLabel: 'Remote address',
-      urlPlaceholder: 'https://hermes.example.com',
-      urlInvalid: 'Enter a full address starting with http:// or https://',
-      tokenLabel: 'Access token',
-      tokenPlaceholder: 'Paste the remote session token',
-      tokenSavedHint: 'A token is already saved. Leave blank to keep it.',
-      plainTextOptIn:
-        'This computer has no secure key storage, so the token would be saved unencrypted on disk. Save it anyway.',
-      collisionWarning: (label: string) =>
-        `A gateway named “${label}” already exists in Settings. This profile connection is separate and will not change it.`,
-      confirmTitle: 'Connect this profile to a remote host?',
-      confirmNote: (profile: string, host: string) =>
-        `New chats in ${profile} will run on ${host}. That computer will run commands and read files there, not on this one. Only connect to a host you trust.`,
-      confirmBack: 'Back',
-      connect: 'Connect',
-      connecting: 'Connecting…',
-      disconnect: 'Remove remote connection',
-      savedTitle: 'Profile connected',
-      savedMessage: (profile: string, host: string) => `${profile} now runs on ${host}`,
-      removedTitle: 'Remote connection removed',
-      removedMessage: (profile: string) => `${profile} now runs on this computer`,
-      removeFailed: 'Could not remove the remote connection',
-      authFailedTitle: 'Remote host rejected the saved token',
-      authFailedMessage: (profile: string, host: string) =>
-        `${host} refused the token saved for ${profile}. It may have been changed on the remote side.`,
-      updateToken: 'Enter new token…'
-    },
-    actions: 'Actions',
-    color: 'Color…',
-    colorFor: 'Color',
-    openInNewWindow: 'Open in new window',
-    setAsDefault: 'Set as default',
-    defaultProfile: 'Default profile',
-    defaultSet: name => `${name} is now the default`,
-    defaultDescription: 'Used when Hermes opens and for new chats. Existing sessions stay in their profiles.',
-    failedSetDefault: 'Could not set the default profile',
-    setColor: color => `Set color ${color}`,
-    autoColor: 'Auto',
-    noProfiles: 'No profiles yet.',
-    selectPrompt: 'Select a profile to view its details.',
-    refresh: 'Refresh profiles',
-    refreshing: 'Refreshing profiles',
-    default: 'default',
-    skills: count => `${count} ${count === 1 ? 'skill' : 'skills'}`,
-    env: 'env',
-    defaultBadge: 'Default',
-    rename: 'Rename',
-    renameMenu: 'Rename…',
-    exportMenu: 'Export…',
-    editSoul: 'Edit SOUL.md…',
-    copySetup: 'Copy setup',
-    copying: 'Copying...',
-    modelLabel: 'Model',
-    skillsLabel: 'Skills',
-    notSet: 'Not set',
-    soulDesc: 'The system prompt and persona instructions baked into this profile.',
-    soulMissing:
-      'No SOUL.md file exists for this profile yet. Add instructions below and save to create one. Personality presets in config.yaml are managed separately.',
-    soulOptional: 'optional',
-    soulPlaceholder: mode => `The system prompt / persona for this profile.\nLeave blank to keep the ${mode} default.`,
-    soulPlaceholderCloned: 'cloned',
-    soulPlaceholderEmpty: 'empty',
-    unsavedChanges: 'Unsaved changes',
-    loadingSoul: 'Loading SOUL.md...',
-    emptySoul: 'Empty SOUL.md — start writing the persona...',
-    saving: 'Saving...',
-    saveSoul: 'Save SOUL.md',
-    deleteTitle: 'Delete profile?',
-    deleteDescPrefix: 'This will delete ',
-    deleteDescMid: ' and remove its ',
-    deleteDescSuffix: ' directory. This cannot be undone.',
-    deleting: 'Deleting...',
-    createDesc: 'Profiles are independent Hermes environments: separate config, skills, and SOUL.md.',
-    nameLabel: 'Name',
-    cloneFrom: 'Clone from',
-    cloneFromNone: 'None (blank)',
-    cloneFromDesc: 'Copies config, skills, and SOUL.md from the selected source profile.',
-    cloneFromDefault: 'Clone from default',
-    cloneFromDefaultDesc: 'Copy config, skills, and SOUL.md from your default profile.',
-    invalidName: hint => `Invalid name. ${hint}`,
-    nameRequired: 'Name is required.',
-    creating: 'Creating...',
-    createAction: 'Create profile',
-    renameTitle: 'Rename profile',
-    renameDescPrefix: 'Renaming updates the profile directory and any wrapper scripts in ',
-    renameDescSuffix: '.',
-    displayNameTitle: 'Name this agent',
-    displayNameDesc: 'Sets a display name shown across the app. The internal profile ID stays "default".',
-    displayNameLabel: 'Display name',
-    newNameLabel: 'New name',
-    renaming: 'Renaming...',
-    created: 'Profile created',
-    renamed: 'Profile renamed',
-    deleted: 'Profile deleted',
-    setupCopied: 'Setup command copied',
-    soulSaved: 'SOUL.md saved',
-    failedLoad: 'Failed to load profiles',
-    failedDelete: 'Failed to delete profile',
-    failedCopy: 'Failed to copy setup command',
-    failedLoadSoul: 'Failed to load SOUL.md',
-    failedSaveSoul: 'Failed to save SOUL.md',
-    failedCreate: 'Failed to create profile',
-    failedRename: 'Failed to rename profile',
-    workspaceDesc: 'Each workspace holds one agent’s independent configuration, skills, memory, and conversations.',
-
-    currentBadge: 'Current workspace',
-
-    overview: 'Overview',
-
-    capabilities: 'Capabilities',
-
-    configureModel: 'Configure model',
-
-    archiveFilter: 'Hermes profile',
-
-    advanced: 'Advanced workspaces',
-
-    switchProfileFailed: name => `Failed to switch to profile "${name}"`,
-
-    openProfileFailed: name => `Failed to open profile "${name}"`,
-
-    profileNameRequired: 'Profile name required',
-
-    defaultProfileDeleteBlocked: 'The default profile cannot be deleted.'
-  },
+  profiles: enProfiles,
 
   modelAssignment: {
     saveFailed: 'Hermes did not save that model change.',
@@ -5698,18 +5327,37 @@ export const en: Translations = {
           count: count => `${count} command${count === 1 ? '' : 's'}`,
           past: 'Ran',
           present: 'Running'
+        },
+        search: {
+          count: (count: number) => count + ' ' + (count === 1 ? 'query' : 'queries'),
+          past: 'Searched',
+          present: 'Searching'
+        },
+
+        read: {
+          count: (count: number) => count + ' ' + (count === 1 ? 'page' : 'pages'),
+          past: 'Read',
+          present: 'Reading'
+        },
+
+        browse: {
+          count: (count: number) => count + ' ' + (count === 1 ? 'page' : 'pages'),
+          past: 'Opened',
+          present: 'Opening'
+        },
+
+        interact: {
+          count: (count: number) => count + ' ' + (count === 1 ? 'browser action' : 'browser actions'),
+          past: 'Performed',
+          present: 'Performing'
+        },
+
+        analyze: {
+          count: (count: number) => count + ' ' + (count === 1 ? 'image' : 'images'),
+          past: 'Analyzed',
+          present: 'Analyzing'
         }
-      ,
-"search":{count: (count: number) => count + " " + (count === 1 ? "query" : "queries"), past: "Searched", present: "Searching"},
-
-"read":{count: (count: number) => count + " " + (count === 1 ? "page" : "pages"), past: "Read", present: "Reading"},
-
-"browse":{count: (count: number) => count + " " + (count === 1 ? "page" : "pages"), past: "Opened", present: "Opening"},
-
-"interact":{count: (count: number) => count + " " + (count === 1 ? "browser action" : "browser actions"), past: "Performed", present: "Performing"},
-
-"analyze":{count: (count: number) => count + " " + (count === 1 ? "image" : "images"), past: "Analyzed", present: "Analyzing"},
-}
+      }
     },
     markdown: {
       alerts: {

@@ -121,9 +121,7 @@ async function openStoredBotChat(
   { background = false }: OpenStoredBotChatOptions = {}
 ): Promise<string> {
   if (!storedId || typeof host.openSession !== 'function') {
-    throw new Error(
-      pluginText('bot.storedSessionOpenUnsupported', `This Aino version cannot open stored sessions`)
-    )
+    throw new Error(pluginText('bot.storedSessionOpenUnsupported', `This Aino version cannot open stored sessions`))
   }
 
   const { bot, name, route } = botOwner(owner)
@@ -317,7 +315,12 @@ async function findExistingCanonicalChat(owner: RosterRow | string): Promise<Can
     const message = typeof (error as RpcErrorLike)?.message === 'string' ? (error as { message: string }).message : ''
     const detail = message ? ` (${message})` : ''
     throw new Error(
-      pluginText('bot.registryCheckFailed', `Could not check ${name}'s Bot Chat registry${detail} — not starting a new chat`, name, message)
+      pluginText(
+        'bot.registryCheckFailed',
+        `Could not check ${name}'s Bot Chat registry${detail} — not starting a new chat`,
+        name,
+        message
+      )
     )
   }
 
@@ -426,7 +429,7 @@ export function createCanonicalChat(
           }
         : {}),
       profile: name,
-      intent: 'main',
+      intent: 'in-place',
       keepAllProfilesScope: route ? true : false,
       workspaceMode: 'bots',
       workspaceOwnerKey: botWorkspaceOwnerKey(bot),

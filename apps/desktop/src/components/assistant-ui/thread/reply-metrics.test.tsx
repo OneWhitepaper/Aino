@@ -8,6 +8,54 @@ import { ResponseProcess } from './response-group'
 
 afterEach(cleanup)
 
+it('keeps technical diagnostics in the disclosure while retaining every measured value', () => {
+  const view = render(
+    <I18nProvider configClient={null} initialLocale="en">
+      <ReplyMetrics
+        durationS={30}
+        metrics={{
+          total_tokens: 320,
+          context_percent: 18,
+          context_estimated: true,
+          tokens_per_second: 47,
+          cache_hit_pct: 92,
+          session_elapsed_s: 120,
+          input_tokens: 240,
+          output_tokens: 80,
+          context_used: 180,
+          context_max: 1000
+        }}
+      />
+    </I18nProvider>
+  )
+
+  const details = view.container.querySelector('details')!
+  expect(details).not.toBeNull()
+  expect(details.open).toBe(false)
+  const summary = details.querySelector('summary')!
+  expect(summary.textContent).not.toMatch(/token|18%|92%/)
+
+  for (const value of ['320', '~18%', '47 token/s', '92%', '240', '80', '180 / 1k']) {
+    expect(details.textContent).toContain(value)
+  }
+
+  expect(view.container.textContent).toContain('30s')
+})
+
+it('offers the disclosure for totals-only history and preserves measured zero values', () => {
+  const view = render(
+    <I18nProvider configClient={null} initialLocale="en">
+      <ReplyMetrics metrics={{ total_tokens: 0, context_percent: 0, cache_hit_pct: 0 }} />
+    </I18nProvider>
+  )
+
+  const details = view.container.querySelector('details')
+  expect(details).not.toBeNull()
+  expect(details!.querySelector('summary')?.textContent?.trim()).toBeTruthy()
+  expect(details!.textContent).toContain('0 token')
+  expect(details!.textContent).toContain('0%')
+})
+
 it('keeps usage details accessible when the process header already shows the duration', () => {
   const view = render(
     <I18nProvider configClient={null} initialLocale="en">

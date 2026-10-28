@@ -3,6 +3,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-li
 import { useState } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { I18nProvider } from '@/i18n'
 import { queryClient } from '@/lib/query-client'
 
 import { PageSearchShell } from '../../page-search-shell'
@@ -21,7 +22,7 @@ afterEach(() => {
   $catalogCardView.set(true)
 })
 
-function setup(kind: CatalogKind) {
+function setup(kind: CatalogKind, onToggle?: () => void) {
   const entries = parseCatalog(
     kind,
     ['alpha', 'beta'].map(name => ({
@@ -53,6 +54,11 @@ function setup(kind: CatalogKind) {
             onInstall={onInstall}
             onQueryChange={setQuery}
             query={query}
+            renderInstalledAction={entry =>
+              onToggle && entry.name === 'beta' ? (
+                <button aria-checked="true" aria-label="Enable beta" onClick={onToggle} role="switch" />
+              ) : null
+            }
           />
         </PageSearchShell>
       </QueryClientProvider>
@@ -66,6 +72,73 @@ const card = (name: string) =>
   screen.getAllByRole('article').find(article => within(article).queryByRole('button', { name }))!
 
 describe.each(['skills', 'plugins'] as const)('%s catalog layouts', kind => {
+  it('replaces the previous category and clears the current category when clicked again', () => {
+    setup(kind)
+    const memory = screen.getByRole('button', { name: 'Memory' })
+    const voice = screen.getByRole('button', { name: 'Voice' })
+    const all = screen.getByRole('button', { name: 'All categories' })
+
+    fireEvent.click(memory)
+    expect(memory.getAttribute('aria-pressed')).toBe('true')
+    expect(voice.getAttribute('aria-pressed')).toBe('false')
+    expect(screen.getAllByRole('article')).toHaveLength(1)
+    expect(card('alpha')).toBeTruthy()
+
+    fireEvent.click(voice)
+    expect(voice.getAttribute('aria-pressed')).toBe('true')
+    expect(memory.getAttribute('aria-pressed')).toBe('false')
+    expect(all.getAttribute('aria-pressed')).toBe('false')
+    expect(screen.getAllByRole('article')).toHaveLength(1)
+    expect(card('beta')).toBeTruthy()
+
+    fireEvent.click(voice)
+    expect(voice.getAttribute('aria-pressed')).toBe('false')
+    expect(all.getAttribute('aria-pressed')).toBe('true')
+    expect(screen.getAllByRole('article')).toHaveLength(2)
+
+    fireEvent.click(memory)
+    fireEvent.click(all)
+    expect(memory.getAttribute('aria-pressed')).toBe('false')
+    expect(all.getAttribute('aria-pressed')).toBe('true')
+    expect(screen.getAllByRole('article')).toHaveLength(2)
+  })
+
+  it('lets the installed list toggle a capability without opening its details', () => {
+    const onToggle = vi.fn()
+    const { container, onInstall } = setup(kind, onToggle)
+    fireEvent.click(screen.getByRole('button', { name: 'Installed 1' }))
+    fireEvent.click(screen.getByRole('button', { name: 'List view' }))
+    const row = container.querySelector('[data-catalog-list] [data-entry-id]')!
+    fireEvent.click(within(row as HTMLElement).getByRole('switch', { name: 'Enable beta' }))
+    expect(onToggle).toHaveBeenCalledOnce()
+    expect(onInstall).not.toHaveBeenCalled()
+    expect(screen.queryByRole('dialog')).toBeNull()
+  })
+
+  if (kind === 'skills') {
+    it('opens list details only on request and keeps installation separate', () => {
+      const { entries, onInstall } = setup(kind)
+      fireEvent.click(screen.getByRole('button', { name: 'List view' }))
+      expect(screen.queryByRole('heading', { name: 'alpha' })).toBeNull()
+      fireEvent.click(screen.getByRole('button', { name: 'Add alpha' }))
+      expect(onInstall).toHaveBeenCalledExactlyOnceWith(entries[0])
+      expect(screen.queryByRole('dialog')).toBeNull()
+      fireEvent.click(screen.getByRole('button', { name: 'alpha' }))
+      expect(screen.getByRole('dialog', { name: 'alpha' })).toBeTruthy()
+    })
+  }
+
+  it('browses installed entries without installing or changing their state', async () => {
+    const { onInstall } = setup(kind)
+    fireEvent.click(screen.getByRole('button', { name: 'Installed 1' }))
+    await waitFor(() => expect(screen.getAllByRole('article')).toHaveLength(1))
+    expect(within(card('beta')).getByRole('button', { name: 'beta' })).toBeTruthy()
+    expect(onInstall).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByRole('button', { name: kind === 'skills' ? 'Discover Skills' : 'Discover Plugins' }))
+    await waitFor(() => expect(screen.getAllByRole('article')).toHaveLength(2))
+    expect(onInstall).not.toHaveBeenCalled()
+  })
+
   it('defaults to cards, with installed entries marked added', () => {
     const { container } = setup(kind)
 
@@ -114,7 +187,14 @@ describe.each(['skills', 'plugins'] as const)('%s catalog layouts', kind => {
 
     expect(container.querySelector(`[data-catalog-list="${kind}"]`)).not.toBeNull()
     expect(screen.queryByRole('article')).toBeNull()
-    expect(screen.getByRole('heading', { name: 'alpha' })).toBeTruthy()
+
+    if (kind === 'plugins') {
+      expect(screen.getByRole('heading', { name: 'alpha' })).toBeTruthy()
+    } else {
+      expect(screen.queryByRole('heading', { name: 'alpha' })).toBeNull()
+    }
+
+    expect(screen.getByRole('button', { name: 'alpha' })).toBeTruthy()
     expect(screen.queryByRole('heading', { name: 'beta' })).toBeNull()
     expect(screen.getByRole('button', { name: /^Memory/, pressed: true })).toBeTruthy()
     expect(screen.getByRole('textbox', { name: 'Search catalog' })).toBe(search)
@@ -137,4 +217,105 @@ it('shares the saved layout choice when moving between Skills and Plugins', () =
   expect(container.querySelector('[data-catalog-list="plugins"]')).not.toBeNull()
   fireEvent.click(screen.getByRole('button', { name: 'Card view' }))
   expect($catalogCardView.get()).toBe(true)
+})
+
+describe('Chinese catalog presentation', () => {
+  it('searches Chinese descriptions while preserving names and installation targets', async () => {
+    const [entry] = parseCatalog('skills', [
+      {
+        name: 'Apple Notes',
+        identifier: 'apple-notes',
+        installIdentifier: 'official/apple-notes',
+        source: 'built-in',
+        category: 'apple',
+        categoryLabel: 'Apple',
+        description: 'Manage Apple Notes via memo CLI: create, search, edit.'
+      }
+    ])
+
+    queryClient.setQueryData(['public-catalog', 'skills'], [entry])
+    const onInstall = vi.fn()
+
+    function Harness() {
+      const [query, setQuery] = useState('')
+
+      return (
+        <I18nProvider configClient={null} initialLocale="zh">
+          <QueryClientProvider client={queryClient}>
+            <PageSearchShell onSearchChange={setQuery} searchPlaceholder="搜索技能" searchValue={query}>
+              <CatalogBrowser
+                isInstalled={() => false}
+                kind="skills"
+                onInstall={onInstall}
+                onQueryChange={setQuery}
+                query={query}
+              />
+            </PageSearchShell>
+          </QueryClientProvider>
+        </I18nProvider>
+      )
+    }
+
+    render(<Harness />)
+    expect(screen.getByRole('button', { name: 'Apple Notes' })).toBeTruthy()
+    expect(screen.getByText(/创建、搜索和编辑/)).toBeTruthy()
+    expect(screen.getByText('内置')).toBeTruthy()
+    fireEvent.change(screen.getAllByRole('textbox')[0], { target: { value: '备忘录' } })
+    await waitFor(() => expect(screen.getAllByRole('article')).toHaveLength(1))
+    fireEvent.click(screen.getByRole('button', { name: '添加 Apple Notes' }))
+    expect(onInstall).toHaveBeenCalledExactlyOnceWith(entry)
+    fireEvent.click(screen.getByRole('button', { name: 'Apple Notes' }))
+    expect(within(screen.getByRole('dialog')).getByText(/创建、搜索和编辑/)).toBeTruthy()
+    expect(entry.description).toBe('Manage Apple Notes via memo CLI: create, search, edit.')
+    expect(entry.installIdentifier).toBe('official/apple-notes')
+  })
+})
+
+it('shows the built-in agent under the Aino brand without changing its installation identity', async () => {
+  const entries = parseCatalog('skills', [
+    {
+      name: 'hermes-agent',
+      source: 'built-in',
+      installIdentifier: 'official/hermes-agent',
+      category: 'autonomous-ai-agents'
+    },
+    { name: 'hermes-agent', source: 'GitHub', identifier: 'someone/hermes-agent', category: 'research' }
+  ])
+
+  queryClient.setQueryData(['public-catalog', 'skills'], entries)
+  const onInstall = vi.fn()
+
+  function Harness() {
+    const [query, setQuery] = useState('')
+
+    return (
+      <QueryClientProvider client={queryClient}>
+        <PageSearchShell onSearchChange={setQuery} searchPlaceholder="Search" searchValue={query}>
+          <CatalogBrowser
+            isInstalled={() => false}
+            kind="skills"
+            onInstall={onInstall}
+            onQueryChange={setQuery}
+            query={query}
+          />
+        </PageSearchShell>
+      </QueryClientProvider>
+    )
+  }
+
+  render(<Harness />)
+  expect(screen.getByRole('button', { name: 'Aino Agent' })).toBeTruthy()
+  expect(screen.getByRole('button', { name: 'hermes-agent' })).toBeTruthy()
+  fireEvent.change(screen.getAllByRole('textbox')[0], { target: { value: 'Aino Agent' } })
+  await waitFor(() => expect(screen.getAllByRole('article')).toHaveLength(1))
+  fireEvent.click(screen.getByRole('button', { name: 'Add Aino Agent' }))
+  expect(onInstall).toHaveBeenCalledExactlyOnceWith(entries[0])
+  fireEvent.click(screen.getByRole('button', { name: 'Aino Agent' }))
+  expect(screen.getByRole('dialog', { name: 'Aino Agent' })).toBeTruthy()
+  fireEvent.click(screen.getByRole('button', { name: 'Close' }))
+  await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+  fireEvent.click(screen.getByRole('button', { name: 'List view' }))
+  expect(screen.getByRole('button', { name: 'Aino Agent' })).toBeTruthy()
+  expect(entries[0].name).toBe('hermes-agent')
+  expect(entries[0].installIdentifier).toBe('official/hermes-agent')
 })

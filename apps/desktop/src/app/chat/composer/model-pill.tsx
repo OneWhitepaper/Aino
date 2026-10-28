@@ -34,8 +34,8 @@ import type { ChatBarState } from './types'
 const UNKNOWN_TIER = atom('')
 
 const PILL = cn(
-  'h-(--composer-control-size) min-w-0 shrink gap-1 rounded-md px-2 text-xs font-normal',
-  'text-(--ui-text-tertiary) hover:bg-(--chrome-action-hover) hover:text-foreground'
+  'h-(--composer-control-size) min-w-0 shrink gap-1 rounded-md px-2 text-[length:var(--aino-text-ui)] font-normal',
+  'text-(--ui-text-secondary) hover:bg-(--chrome-action-hover) hover:text-foreground'
 )
 
 interface ModelPillContentProps {

@@ -8,6 +8,23 @@ const resultWord = (count: number) => {
 }
 
 export const ruCatalog = {
+  enable: 'Включить',
+  disable: 'Отключить',
+  originalDescription: 'Исходное описание',
+  skillInstructions: 'Инструкции навыка',
+  startHere: 'Начните здесь',
+  featuredHint: 'Изучите назначение навыка и добавьте его при необходимости.',
+  browseHint: 'Ищите по назначению и изучайте сведения перед добавлением.',
+  installedHint: 'Управляйте возможностями рабочего пространства. Изменения применяются к новым сеансам.',
+  installedKind: (kind: string) => `Установлено: ${kind}`,
+  howToUse: 'Как использовать',
+  usageHint: 'Способы применения и шаги описаны в инструкциях навыка или документации источника.',
+  capabilityGuide: 'Об этих возможностях',
+  capabilityGuideDescription:
+    'Навыки содержат инструкции и знания; плагины расширяют функции; коннекторы подключают внешние сервисы; наборы инструментов определяют доступные инструменты рабочего пространства.',
+
+  pageTitle: 'Навыки и инструменты',
+  pageDescription: 'Добавляйте агентам знания, рабочие процессы и внешние возможности.',
   add: 'Добавить',
   added: 'Добавлено',
   discover: 'Открывайте новое',
@@ -64,8 +81,7 @@ export const ruCatalog = {
   pinned: 'Проверенный коммит',
   snapshotHint: 'Из каталога Hermes. При просмотре нет обращений к исходным репозиториям.',
   installHint: 'Проверьте исходный код перед установкой. Изменения применяются к новым сессиям.',
-  results: (count: number) =>
-    `${count.toLocaleString('ru')} ${resultWord(count)}`,
+  results: (count: number) => `${count.toLocaleString('ru')} ${resultWord(count)}`,
   back: 'Назад к результатам'
 } satisfies TranslationOverrides['catalog']
 

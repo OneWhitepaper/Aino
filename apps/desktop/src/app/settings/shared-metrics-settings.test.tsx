@@ -26,7 +26,7 @@ function backend(initial: SharedMetricsConsent) {
     async (_connection: unknown, _profile: unknown, method: string, params: Record<string, unknown> = {}) => {
       if (method === 'shared_metrics.set') {
         const enabled = params.enabled === true
-        stored = { enabled, send: enabled && params.send === true, decided: true }
+        stored = { enabled, send: enabled && params.send === true, decided: true, recipient: 'aino' }
       }
 
       return stored
@@ -46,7 +46,7 @@ afterEach(() => {
 
 describe('SharedMetricsSettings', () => {
   it('is one switch: on shares (both opt-ins), off clears both', async () => {
-    backend({ enabled: false, send: false, decided: true })
+    backend({ enabled: false, send: false, decided: true, recipient: 'aino' })
 
     render(<SharedMetricsSettings />)
 
@@ -68,7 +68,7 @@ describe('SharedMetricsSettings', () => {
   })
 
   it('reads a retired collect-only answer as not sharing', async () => {
-    backend({ enabled: true, send: false, decided: true })
+    backend({ enabled: true, send: false, decided: true, recipient: 'aino' })
 
     render(<SharedMetricsSettings />)
 

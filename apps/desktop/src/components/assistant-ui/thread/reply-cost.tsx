@@ -36,20 +36,25 @@ export function ReplyCost({ billing }: ReplyCostProps) {
           : copy.pending
 
   return (
-    <div className="flex flex-wrap items-center gap-x-2 text-xs text-muted-foreground tabular-nums">
+    <div className="flex min-w-0 flex-wrap items-center gap-x-2 text-[length:var(--aino-text-caption)] text-muted-foreground tabular-nums">
       <span>
         {label}
         {amount !== undefined ? ` ${amount} USD` : ''}
       </span>
       {exhausted && (
-        <Button onClick={retry} size="xs" variant="link">
+        <Button
+          className="text-[length:var(--aino-text-caption)] font-normal"
+          onClick={retry}
+          size="inline"
+          variant="link"
+        >
           {copy.retry}
         </Button>
       )}
       {available && (
         <Dialog key={`${billing.user_id}:${billing.session_id}:${billing.turn_id}`}>
           <DialogTrigger asChild>
-            <Button size="xs" variant="link">
+            <Button className="text-[length:var(--aino-text-caption)] font-normal" size="inline" variant="link">
               {copy.details}
             </Button>
           </DialogTrigger>

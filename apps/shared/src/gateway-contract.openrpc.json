@@ -42089,12 +42089,18 @@
             "default": false,
             "title": "Reask",
             "type": "boolean"
+          },
+          "recipient": {
+            "const": "aino",
+            "title": "Recipient",
+            "type": "string"
           }
         },
         "required": [
           "enabled",
           "send",
-          "decided"
+          "decided",
+          "recipient"
         ],
         "title": "SharedMetricsConsentResult",
         "type": "object"
@@ -42381,6 +42387,19 @@
             "default": false,
             "title": "First Run",
             "type": "boolean"
+          },
+          "recipient": {
+            "anyOf": [
+              {
+                "const": "aino",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Recipient"
           }
         },
         "required": [

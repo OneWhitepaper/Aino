@@ -20,8 +20,28 @@ import { deThemePicker } from './de_theme_picker'
 import { deUpdateChannel } from './de_update_channel'
 import { defineLocale, type TranslationOverrides } from './define-locale'
 import { introDe } from './intro-de'
+import { messagingDirectory } from './messaging-directory'
 
 export const deOverrides = {
+  catalog: {
+    enable: 'Aktivieren',
+    disable: 'Deaktivieren',
+    originalDescription: 'Originalbeschreibung',
+    skillInstructions: 'Skill-Anweisungen',
+    startHere: 'Hier beginnen',
+    featuredHint: 'Erst den Zweck eines Skills kennenlernen und ihn bei Bedarf hinzufügen.',
+    browseHint: 'Nach Zweck suchen und vor dem Hinzufügen die Details prüfen.',
+    installedHint: 'Aktivierte Funktionen in diesem Arbeitsbereich verwalten. Änderungen gelten für neue Sitzungen.',
+    installedKind: (kind: string) => `Installiert: ${kind}`,
+    howToUse: 'Verwendung',
+    usageHint: 'Verwendung und Schritte stehen in den Skill-Anweisungen oder der Quelldokumentation.',
+    capabilityGuide: 'Über diese Funktionen',
+    capabilityGuideDescription:
+      'Skills liefern Anleitungen und Wissen; Plugins erweitern Funktionen; Konnektoren verbinden externe Dienste; Toolsets steuern die verfügbaren Werkzeuge im Arbeitsbereich.',
+
+    pageTitle: 'Fähigkeiten und Werkzeuge',
+    pageDescription: 'Ergänze deine Agenten um Wissen, Arbeitsabläufe und externe Funktionen.'
+  },
   connectorOffer: {
     heading: 'Verbundene Apps behalten',
     body: 'Melde dich mit einem kostenlosen Nous-Konto an, um verbundene Apps wie Gmail oder Slack in deinem Konto zu behalten.'
@@ -502,24 +522,23 @@ export const deOverrides = {
   },
   ...deNotices,
   sendDiagnostics: {
-    title: "Diagnosedaten an Aino senden",
+    title: 'Diagnosedaten an Aino senden',
     privacyNotice:
-      "Ein privates Paket wird an deinen Aino-Kontodienst hochgeladen: Systeminformationen, Konfigurationsstatus (keine Schlüssel) und Agent-, Gateway- und Desktop-Protokolle (je bis 512 KB). Diese können Gespräche, Werkzeugausgaben und Dateipfade enthalten. Schlüssel werden geschwärzt; andere sensible Inhalte können verbleiben. Nur autorisierte Aino-Administratoren erhalten Zugriff. Der Zugriff endet nach 14 Tagen; Onlinedaten werden innerhalb der folgenden Stunde gelöscht. Bestehende Sicherungen folgen der Backup-Richtlinie der Bereitstellung.",
+      'Ein privates Paket wird an deinen Aino-Kontodienst hochgeladen: Systeminformationen, Konfigurationsstatus (keine Schlüssel) und Agent-, Gateway- und Desktop-Protokolle (je bis 512 KB). Diese können Gespräche, Werkzeugausgaben und Dateipfade enthalten. Schlüssel werden geschwärzt; andere sensible Inhalte können verbleiben. Nur autorisierte Aino-Administratoren erhalten Zugriff. Der Zugriff endet nach 14 Tagen; Onlinedaten werden innerhalb der folgenden Stunde gelöscht. Bestehende Sicherungen folgen der Backup-Richtlinie der Bereitstellung.',
     upload: 'Hochladen',
     uploading: 'Wird hochgeladen…',
     cancel: 'Abbrechen',
     close: 'Schließen',
-    copyLink: "Diagnose-ID kopieren",
-    uploadIdFallback: id => "Diagnose-ID: " + id,
+    copyLink: 'Diagnose-ID kopieren',
+    uploadIdFallback: id => 'Diagnose-ID: ' + id,
     doneTitle: 'Diagnosedaten gesendet',
-    doneDescription:
-      "Privat an Aino übertragen. Nenne diese ID im Supportbericht; veröffentliche keine Protokolle.",
+    doneDescription: 'Privat an Aino übertragen. Nenne diese ID im Supportbericht; veröffentliche keine Protokolle.',
     failedTitle: 'Hochladen fehlgeschlagen',
     failedHint:
-      "Melde dich bei Aino an und versuche es erneut. Aktualisiere ältere Laufzeiten. Ein rein lokaler Bericht: `hermes debug share --local`.",
-    handoffLead: "Aino kontaktieren:",
+      'Melde dich bei Aino an und versuche es erneut. Aktualisiere ältere Laufzeiten. Ein rein lokaler Bericht: `hermes debug share --local`.',
+    handoffLead: 'Aino kontaktieren:',
     links: {
-      github: 'GitHub Issues',
+      github: 'GitHub Issues'
     }
   },
   titlebar: {
@@ -2887,6 +2906,7 @@ export const deOverrides = {
     }
   },
   messaging: {
+    directory: messagingDirectory['de'],
     search: 'Messaging durchsuchen...',
     statusFilter: {
       all: 'Alle',
@@ -3200,6 +3220,11 @@ export const deOverrides = {
     }
   },
   profiles: {
+    workspaceListTitle: 'Meine Arbeitsbereiche',
+    previewHint: 'Wählen Sie eine Karte, um Einstellungen anzusehen, ohne den Arbeitsbereich zu wechseln.',
+    workspaceHint:
+      'Arbeitsbereiche haben eigene Einstellungen und Unterhaltungen. Projektordner werden unter Projekte verwaltet.',
+    soulApplyHint: 'Änderungen gelten für neue Unterhaltungen.',
     close: 'Profile schließen',
     nameHint:
       'Kleinbuchstaben, Ziffern, Bindestriche und Unterstriche. Muss mit einem Buchstaben oder einer Ziffer beginnen.',
@@ -3308,6 +3333,8 @@ export const deOverrides = {
     modelLabel: 'Modell',
     skillsLabel: 'Skills',
     notSet: 'Nicht gesetzt',
+    storageLocation: 'Speicherort des Arbeitsbereichs',
+    soulTitle: 'Persönlichkeit und Verhalten',
     soulDesc: 'Die System-Prompt- und Personen-Anweisungen, die in diesem Profil fest eingebacken sind.',
     soulOptional: 'optional',
     soulPlaceholder: mode =>
@@ -4296,18 +4323,27 @@ export const deOverrides = {
       failed: 'Backend-Update fehlgeschlagen.',
       noReturn:
         'Das Backend kam nicht wieder online. Das Update wurde möglicherweise nicht abgeschlossen — prüfen Sie den Backend-Host.'
+    },
+    desktopBridgeUnavailable: 'Die Desktop-Verbindung ist nicht verfügbar.',
+
+    starting: 'Aktualisierung wird gestartet…',
+
+    backendApplied: 'Backend-Aktualisierung angewendet.',
+
+    backendNoReturn: 'Das Backend ist nicht wieder online.',
+
+    changelog: {
+      groups: {
+        new: 'Neu',
+        fixed: 'Behoben',
+        faster: 'Schneller',
+        improved: 'Verbessert',
+        other: 'Weitere Verbesserungen'
+      },
+      fallbackItem: 'Verbesserungen und Fehlerbehebungen',
+      fallbackLabel: 'In diesem Update'
     }
-  ,
-"desktopBridgeUnavailable":"Die Desktop-Verbindung ist nicht verfügbar.",
-
-"starting":"Aktualisierung wird gestartet…",
-
-"backendApplied":"Backend-Aktualisierung angewendet.",
-
-"backendNoReturn":"Das Backend ist nicht wieder online.",
-
-"changelog":{"groups":{"new":"Neu","fixed":"Behoben","faster":"Schneller","improved":"Verbessert","other":"Weitere Verbesserungen"},"fallbackItem":"Verbesserungen und Fehlerbehebungen","fallbackLabel":"In diesem Update"},
-},
+  },
   install: {
     stageStates: {
       pending: 'Ausstehend',
@@ -5407,18 +5443,18 @@ export const deOverrides = {
           pending: 'Bearbeitet Datei',
           pendingAction: 'Bearbeitet'
         }
+      },
+      runSummary: {
+        search: { count: (count: number) => count + ' Suchanfragen', past: 'Gesucht', present: 'Suche' },
+        read: { count: (count: number) => count + ' Seiten', past: 'Gelesen', present: 'Lese' },
+
+        browse: { count: (count: number) => count + ' Seiten', past: 'Geöffnet', present: 'Öffne' },
+
+        interact: { count: (count: number) => count + ' Browseraktionen', past: 'Ausgeführt', present: 'Ausführung' },
+
+        analyze: { count: (count: number) => count + ' Bilder', past: 'Analysiert', present: 'Analyse' }
       }
-    ,
-"runSummary":{"search":{count: (count: number) => count + " Suchanfragen", past: "Gesucht", present: "Suche"},
-"read":{count: (count: number) => count + " Seiten", past: "Gelesen", present: "Lese"},
-
-"browse":{count: (count: number) => count + " Seiten", past: "Geöffnet", present: "Öffne"},
-
-"interact":{count: (count: number) => count + " Browseraktionen", past: "Ausgeführt", present: "Ausführung"},
-
-"analyze":{count: (count: number) => count + " Bilder", past: "Analysiert", present: "Analyse"},
-},
-}
+    }
   },
   prompts: {
     gatewayDisconnected: 'Das Hermes-Gateway ist nicht verbunden',

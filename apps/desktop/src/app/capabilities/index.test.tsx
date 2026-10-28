@@ -131,6 +131,30 @@ afterEach(() => {
 // all 11 tests (2× in a row on PR #93612, plus a main run the same hour).
 // Give this file headroom; the tests are not slow individually.
 describe('CapabilitiesView toolset management', { timeout: 60_000 }, () => {
+  it('switches embedded capability sections through accessible tabs while preserving the toolset view', async () => {
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter>
+          <CapabilitiesView embedded />
+        </MemoryRouter>
+      </QueryClientProvider>
+    )
+    const skills = await screen.findByRole('tab', { name: /^Skills/ })
+    const tools = await screen.findByRole('tab', { name: /^Tools/ })
+    expect(skills.getAttribute('aria-selected')).toBe('true')
+    expect(screen.getAllByRole('tab')).toHaveLength(4)
+
+    fireEvent.mouseDown(tools, { button: 0, ctrlKey: false })
+    expect(await screen.findByRole('switch', { name: 'Turn Web Search toolset off' })).toBeTruthy()
+    expect(tools.getAttribute('aria-selected')).toBe('true')
+    expect(skills.getAttribute('aria-selected')).toBe('false')
+    expect(screen.getByRole('tabpanel').getAttribute('aria-labelledby')).toBe(tools.id)
+
+    fireEvent.mouseDown(skills, { button: 0, ctrlKey: false })
+    expect(skills.getAttribute('aria-selected')).toBe('true')
+    expect(tools.getAttribute('aria-selected')).toBe('false')
+  })
+
   it('renders a switch for each toolset and toggles it off', async () => {
     await renderSkills()
 
@@ -258,6 +282,9 @@ describe('CapabilitiesView toolset management', { timeout: 60_000 }, () => {
       )
     })
 
+    expect(getSkillContent).not.toHaveBeenCalled()
+    fireEvent.click(await screen.findByRole('button', { name: 'web-research' }))
+    fireEvent.click(screen.getByRole('button', { name: 'How to use' }))
     await waitFor(() => expect(getSkillContent).toHaveBeenCalled())
     expect(getSkillContent.mock.calls[0][0]).toBe('web-research')
     expect(await screen.findByText(/Deep research steps/)).toBeTruthy()

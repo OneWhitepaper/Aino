@@ -10,6 +10,7 @@ import { CheckCircle2 } from '@/lib/icons'
 import { fmtDateTime, relativeTime } from '@/lib/time'
 
 import { type CatalogEntry, catalogLabel } from './catalog-data'
+import { catalogDisplayLabel } from './catalog-localization'
 
 /** Trust tiers read at a glance (same tones as the installed-plugin pill); the rest stay muted. */
 const SOURCE_TONE: Record<string, 'default' | 'success'> = { official: 'default', verified: 'success' }
@@ -29,19 +30,31 @@ interface CatalogMetadataProps {
 interface CatalogChip {
   id: string
   label: string
+  sourceLabel?: string
   hint?: string
   quiet?: boolean
   onClick?: () => void
 }
 
 /** Source and version, leading the card footer. Stars sit opposite them. */
-export function CatalogHeaderMeta({ entry }: { entry: CatalogEntry }) {
+export function CatalogHeaderMeta({ entry, compact }: { entry: CatalogEntry; compact?: boolean }) {
+  const { t } = useI18n()
+
+  if (compact) {
+    return (
+      <span className="catalog-source-meta">
+        <span>{catalogDisplayLabel(entry.source, t)}</span>
+        {entry.version && <span> · v{entry.version}</span>}
+      </span>
+    )
+  }
+
   return (
     <span className="flex min-w-0 items-center justify-start gap-1">
       {entry.source && (
         <Badge className="max-w-full" size="xs" variant={SOURCE_TONE[entry.source] ?? 'muted'}>
           {entry.source === 'verified' && <CheckCircle2 aria-hidden className="size-3 shrink-0" />}
-          <span className="truncate">{catalogLabel(entry.source)}</span>
+          <span className="truncate">{catalogDisplayLabel(entry.source, t)}</span>
         </Badge>
       )}
       {entry.version && (
@@ -54,7 +67,9 @@ export function CatalogHeaderMeta({ entry }: { entry: CatalogEntry }) {
 }
 
 export function CatalogRating({ entry }: { entry: CatalogEntry }) {
-  if (entry.stars === null || entry.stars <= 0) {return null}
+  if (entry.stars === null || entry.stars <= 0) {
+    return null
+  }
 
   return (
     <span className="flex shrink-0 items-center gap-0.5 text-[0.65rem] text-(--ui-text-tertiary)">
@@ -76,7 +91,8 @@ export function CatalogMetadata({ entry, onCategory, onTag, onSearch, onOpen, li
   const primary: CatalogChip[] = [
     {
       id: 'category',
-      label: catalogLabel(entry.categoryLabel),
+      sourceLabel: entry.categoryLabel,
+      label: catalogDisplayLabel(entry.categoryLabel, t),
       onClick: onCategory ? () => onCategory(entry.category) : undefined
     },
     ...entry.platforms.map(value => ({
@@ -93,10 +109,12 @@ export function CatalogMetadata({ entry, onCategory, onTag, onSearch, onOpen, li
     { id: 'middleware', label: c.middleware, values: entry.middleware ?? [] }
   ]
 
-  const primaryLabels = new Set(primary.map(chip => chip.label.trim().toLowerCase()))
+  const primaryLabels = new Set(primary.map(chip => (chip.sourceLabel ?? chip.label).trim().toLowerCase()))
 
   for (const chip of primary) {
-    const matchingTag = tags.find(tag => tag.trim().toLowerCase() === chip.label.trim().toLowerCase())
+    const matchingTag = tags.find(
+      tag => tag.trim().toLowerCase() === (chip.sourceLabel ?? chip.label).trim().toLowerCase()
+    )
 
     if (matchingTag && onTag && (chip.quiet || !chip.onClick)) {
       chip.onClick = () => onTag(matchingTag)
@@ -109,7 +127,11 @@ export function CatalogMetadata({ entry, onCategory, onTag, onSearch, onOpen, li
       .map(group => ({ id: group.id, label: `${group.label} ${group.values.length}`, quiet: true, onClick: onOpen })),
     ...tags
       .filter(value => !primaryLabels.has(value.trim().toLowerCase()))
-      .map(value => ({ id: `tag:${value}`, label: value, onClick: onTag ? () => onTag(value) : undefined })),
+      .map(value => ({
+        id: `tag:${value}`,
+        label: catalogDisplayLabel(value, t),
+        onClick: onTag ? () => onTag(value) : undefined
+      })),
     ...entry.requirements.map(value => ({
       id: `env:${value}`,
       label: value,

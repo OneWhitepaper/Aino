@@ -65,12 +65,14 @@ import {
   sweepGroupChatMembersForRemovedConnection,
   updateGroupChat
 } from './group-chat'
+import { openGroupChat } from './group-chat-view'
 import { groupWorkspaceOwnerKey } from './group-membership'
+import { groupOpenOrigin } from './group-panes'
 import { annotateOrphanedGroupChatMembers } from './hygiene'
 import { BOTS_LOCALES } from './i18n'
 import { displayName, rosterConnectionLabel } from './labels'
 import { startBotRelay, stopBotRelay } from './relay'
-import { $activityToasts } from './roster-actions'
+import { $activityToasts, openRosterBot } from './roster-actions'
 import {
   botChatOwnsWorkspace,
   BotsPane,
@@ -589,6 +591,45 @@ export default {
       let unregisterRoutines: null | (() => void) = null
       // Armed by each Bots-tab entry, spent by the first registration after it.
       let restoreDismissedOnRegister = true
+      let entryGeneration: null | number = null
+
+      const openSelectedChat = () => {
+        if (entryGeneration === null || !$botsPaneVisible.get()) {
+          return
+        }
+
+        if (entryGeneration !== getBotOpenGeneration()) {
+          entryGeneration = null
+
+          return
+        }
+
+        const group = $groupChatWorkspace.get()
+        const selected = selectedRosterBot($lastRoster.get(), $selectedRosterKey.get())
+
+        if (!group && !selected) {
+          return
+        }
+
+        entryGeneration = null
+
+        if (group) {
+          openGroupChat(group, groupOpenOrigin(group))
+        } else if (selected) {
+          void openRosterBot(selected)
+        }
+      }
+
+      // Visibility is published during a layout mutation; open through the
+      // existing row action once it settles, including a cold roster entry.
+      const scheduleSelectedChat = () => {
+        if (entryGeneration !== null) {
+          setTimeout(openSelectedChat, 0)
+        }
+      }
+
+      const stopEntrySelection = $selectedRosterKey.listen(scheduleSelectedChat)
+      const stopEntryRoster = $lastRoster.listen(scheduleSelectedChat)
 
       const syncRoutinesPane = () => {
         if (botChatOwnsWorkspace()) {
@@ -618,22 +659,15 @@ export default {
 
         if (visible) {
           restoreDismissedOnRegister = true
+          entryGeneration = getBotOpenGeneration()
+          scheduleSelectedChat()
 
           const group = $groupChatWorkspace.get()
           const selected = selectedRosterBot($lastRoster.get(), $selectedRosterKey.get())
 
-          // Owner routing only. With neither a group nor a selected bot there
-          // is no bot-owned surface to scope, so leave the workspace on
-          // whatever the user was already looking at — the roster-hydration
-          // effect in BotsPane scopes it the moment a real owner exists.
-          //
-          // This is where the Bots home used to claim the center and refuse a
-          // new chat with "Select a Bot or group first." Deleting the home
-          // deleted the dead end it was apologizing for: with nothing selected
-          // the center is an ordinary session and `+` works there. The refusal
-          // itself still stands for the cases that remain — a group room, and
-          // a selected row too orphaned to route (setBotsWorkspaceOwner's
-          // blocked target).
+          // Publish routing now; the deferred row action fronts the actual
+          // conversation after this layout mutation. An empty roster keeps
+          // the ordinary session usable until a real owner is selected.
           if (group) {
             setBotsWorkspaceOwner(
               groupWorkspaceOwnerKey(group),
@@ -644,6 +678,7 @@ export default {
             setBotsWorkspaceOwner(botWorkspaceOwnerKey(selected), selected)
           }
         } else {
+          entryGeneration = null
           // Strand any owner wake still dialing. Its SDK open will fail the
           // workspace token too; this plugin generation prevents that expected
           // cancellation from showing an error after the user deliberately
@@ -759,6 +794,9 @@ export default {
         // the listeners need explicit teardown or they survive plugin disable.
         ctx.onDispose(() => {
           stopSidebarSync()
+          stopEntrySelection()
+          stopEntryRoster()
+          entryGeneration = null
           stopGroupSync()
           stopFocusSync?.()
           stopReclaimSync?.()

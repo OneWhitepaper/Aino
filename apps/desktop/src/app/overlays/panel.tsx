@@ -242,7 +242,7 @@ export interface PanelMenuItem {
 
 // Bridge PanelMenuItem[] → the shared actions-menu render fn, so a panel row's
 // kebab and its right-click menu render from one source.
-function renderPanelMenuItems(items: PanelMenuItem[]) {
+export function renderPanelMenuItems(items: PanelMenuItem[]) {
   return (kit: MenuKit) =>
     items.map(item =>
       renderActionItem(kit, {

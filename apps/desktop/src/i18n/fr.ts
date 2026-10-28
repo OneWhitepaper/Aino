@@ -20,8 +20,28 @@ import { frSharedMetrics } from './fr_shared_metrics'
 import { frThemePicker } from './fr_theme_picker'
 import { frUpdateChannel } from './fr_update_channel'
 import { introFr } from './intro-fr'
+import { messagingDirectory } from './messaging-directory'
 
 export const frOverrides = {
+  catalog: {
+    enable: 'Activer',
+    disable: 'Désactiver',
+    originalDescription: 'Description originale',
+    skillInstructions: 'Instructions de la compétence',
+    startHere: 'Commencer ici',
+    featuredHint: 'Découvrez le rôle d’une compétence, puis ajoutez-la selon vos besoins.',
+    browseHint: 'Parcourez par usage et consultez les détails avant d’ajouter.',
+    installedHint: 'Gérez les capacités actives de cet espace. Les modifications s’appliquent aux nouvelles sessions.',
+    installedKind: (kind: string) => `Installés : ${kind}`,
+    howToUse: 'Utilisation',
+    usageHint: 'Consultez les instructions de la compétence ou la documentation source pour connaître les étapes.',
+    capabilityGuide: 'À propos de ces capacités',
+    capabilityGuideDescription:
+      'Les compétences apportent des instructions et des connaissances ; les extensions ajoutent des fonctions ; les connecteurs relient des services externes ; les ensembles d’outils définissent les outils disponibles dans cet espace.',
+
+    pageTitle: 'Compétences et outils',
+    pageDescription: 'Ajoutez des connaissances, des processus et des capacités externes à vos agents.'
+  },
   connectorOffer: {
     heading: 'Conserver les applications connectées',
     body: 'Connectez-vous avec un compte Nous gratuit pour conserver les applications connectées, comme Gmail ou Slack, sur votre compte.'
@@ -502,24 +522,24 @@ export const frOverrides = {
   },
   ...frNotices,
   sendDiagnostics: {
-    title: "Envoyer les diagnostics à Aino",
+    title: 'Envoyer les diagnostics à Aino',
     privacyNotice:
-      "Un paquet privé est envoyé au service de votre compte Aino : informations système, état de configuration (sans clés) et journaux de l’agent, de la passerelle et du bureau (512 Ko maximum chacun). Ils peuvent contenir conversations, résultats d’outils et chemins de fichiers. Les clés sont masquées, mais d’autres données sensibles peuvent subsister. Seuls les administrateurs Aino autorisés peuvent le lire. L’accès expire après 14 jours ; les données en ligne sont supprimées dans l’heure suivante. Les sauvegardes existantes suivent la politique du déploiement.",
+      'Un paquet privé est envoyé au service de votre compte Aino : informations système, état de configuration (sans clés) et journaux de l’agent, de la passerelle et du bureau (512 Ko maximum chacun). Ils peuvent contenir conversations, résultats d’outils et chemins de fichiers. Les clés sont masquées, mais d’autres données sensibles peuvent subsister. Seuls les administrateurs Aino autorisés peuvent le lire. L’accès expire après 14 jours ; les données en ligne sont supprimées dans l’heure suivante. Les sauvegardes existantes suivent la politique du déploiement.',
     upload: 'Envoyer',
     uploading: 'Envoi en cours…',
     cancel: 'Annuler',
     close: 'Fermer',
-    copyLink: "Copier l’identifiant",
-    uploadIdFallback: id => "Identifiant du diagnostic : " + id,
+    copyLink: 'Copier l’identifiant',
+    uploadIdFallback: id => 'Identifiant du diagnostic : ' + id,
     doneTitle: 'Diagnostics envoyés',
     doneDescription:
-      "Le paquet a été envoyé à Aino de manière privée. Indiquez cet identifiant dans votre rapport ; ne publiez pas les journaux.",
+      'Le paquet a été envoyé à Aino de manière privée. Indiquez cet identifiant dans votre rapport ; ne publiez pas les journaux.',
     failedTitle: "Échec de l'envoi",
     failedHint:
-      "Connectez-vous à Aino et réessayez. Mettez à jour les anciens environnements. Rapport local sans envoi : `hermes debug share --local`.",
-    handoffLead: "Contacter Aino :",
+      'Connectez-vous à Aino et réessayez. Mettez à jour les anciens environnements. Rapport local sans envoi : `hermes debug share --local`.',
+    handoffLead: 'Contacter Aino :',
     links: {
-      github: 'Issues GitHub',
+      github: 'Issues GitHub'
     }
   },
   titlebar: {
@@ -2894,6 +2914,7 @@ export const frOverrides = {
     }
   },
   messaging: {
+    directory: messagingDirectory['fr'],
     search: 'Rechercher dans la messagerie...',
     statusFilter: {
       all: 'Tous',
@@ -3205,6 +3226,10 @@ export const frOverrides = {
     }
   },
   profiles: {
+    workspaceListTitle: 'Mes espaces de travail',
+    previewHint: 'Sélectionnez une carte pour voir les réglages sans changer d’espace de travail.',
+    workspaceHint: 'Chaque espace conserve ses réglages et conversations. Gérez les dossiers dans Projets.',
+    soulApplyHint: 'Les modifications s’appliquent aux nouvelles conversations.',
     close: 'Fermer les profils',
     nameHint: 'Lettres minuscules, chiffres, tirets et underscores. Doit commencer par une lettre ou un chiffre.',
     title: 'Profils',
@@ -3311,6 +3336,8 @@ export const frOverrides = {
     modelLabel: 'Modèle',
     skillsLabel: 'Skills',
     notSet: 'Non défini',
+    storageLocation: 'Emplacement de l’espace de travail',
+    soulTitle: 'Personnalité et comportement',
     soulDesc: "L'invite système et les instructions de persona intégrées dans ce profil.",
     soulOptional: 'facultatif',
     soulPlaceholder: mode =>
@@ -4305,18 +4332,27 @@ export const frOverrides = {
       failed: 'Échec de la mise à jour du backend.',
       noReturn:
         "Le backend ne s'est pas reconnecté. La mise à jour n'est peut-être pas terminée — vérifiez l'hôte du backend."
+    },
+    desktopBridgeUnavailable: 'La connexion au bureau est indisponible.',
+
+    starting: 'Démarrage de la mise à jour…',
+
+    backendApplied: 'La mise à jour du service a été appliquée.',
+
+    backendNoReturn: 'Le service ne s’est pas reconnecté.',
+
+    changelog: {
+      groups: {
+        new: 'Nouveautés',
+        fixed: 'Corrections',
+        faster: 'Performances',
+        improved: 'Améliorations',
+        other: 'Autres améliorations'
+      },
+      fallbackItem: 'Améliorations et corrections',
+      fallbackLabel: 'Dans cette mise à jour'
     }
-  ,
-"desktopBridgeUnavailable":"La connexion au bureau est indisponible.",
-
-"starting":"Démarrage de la mise à jour…",
-
-"backendApplied":"La mise à jour du service a été appliquée.",
-
-"backendNoReturn":"Le service ne s’est pas reconnecté.",
-
-"changelog":{"groups":{"new":"Nouveautés","fixed":"Corrections","faster":"Performances","improved":"Améliorations","other":"Autres améliorations"},"fallbackItem":"Améliorations et corrections","fallbackLabel":"Dans cette mise à jour"},
-},
+  },
   install: {
     stageStates: {
       pending: 'En attente',
@@ -5414,18 +5450,22 @@ export const frOverrides = {
           pending: 'Modification du fichier en cours',
           pendingAction: 'Modification en cours'
         }
+      },
+      runSummary: {
+        search: { count: (count: number) => count + ' requêtes', past: 'Recherché', present: 'Recherche' },
+        read: { count: (count: number) => count + ' pages', past: 'Lu', present: 'Lecture' },
+
+        browse: { count: (count: number) => count + ' pages', past: 'Ouvert', present: 'Ouverture' },
+
+        interact: {
+          count: (count: number) => count + ' actions du navigateur',
+          past: 'Effectué',
+          present: 'Exécution'
+        },
+
+        analyze: { count: (count: number) => count + ' images', past: 'Analysé', present: 'Analyse' }
       }
-    ,
-"runSummary":{"search":{count: (count: number) => count + " requêtes", past: "Recherché", present: "Recherche"},
-"read":{count: (count: number) => count + " pages", past: "Lu", present: "Lecture"},
-
-"browse":{count: (count: number) => count + " pages", past: "Ouvert", present: "Ouverture"},
-
-"interact":{count: (count: number) => count + " actions du navigateur", past: "Effectué", present: "Exécution"},
-
-"analyze":{count: (count: number) => count + " images", past: "Analysé", present: "Analyse"},
-},
-}
+    }
   },
   prompts: {
     gatewayDisconnected: "La Gateway Hermes n'est pas connectée",

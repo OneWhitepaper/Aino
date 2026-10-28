@@ -20,6 +20,7 @@ import { jaProjects } from './ja_projects'
 import { jaSharedMetrics } from './ja_shared_metrics'
 import { jaThemePicker } from './ja_theme_picker'
 import { jaUpdateChannel } from './ja_update_channel'
+import { messagingDirectory } from './messaging-directory'
 
 export const jaOverrides = {
   connectorOffer: {
@@ -195,24 +196,23 @@ export const jaOverrides = {
   ...jaNotices,
 
   sendDiagnostics: {
-    title: "Aino に診断情報を送信",
+    title: 'Aino に診断情報を送信',
     privacyNotice:
-      "非公開の診断パッケージを Aino アカウントのサービスに送信します。システム情報、設定状況（キー自体は含まない）、エージェント・ゲートウェイ・デスクトップのログ（各最大 512 KB）を含みます。ログには会話、ツール出力、ファイルパスが含まれる場合があります。キーは伏せられますが、他の機密情報が残る可能性があります。閲覧できるのは許可された Aino 管理者のみです。14 日後にアクセスが無効となり、その後 1 時間以内にオンラインデータを削除します。既存のバックアップには運用環境の保存方針が適用されます。",
+      '非公開の診断パッケージを Aino アカウントのサービスに送信します。システム情報、設定状況（キー自体は含まない）、エージェント・ゲートウェイ・デスクトップのログ（各最大 512 KB）を含みます。ログには会話、ツール出力、ファイルパスが含まれる場合があります。キーは伏せられますが、他の機密情報が残る可能性があります。閲覧できるのは許可された Aino 管理者のみです。14 日後にアクセスが無効となり、その後 1 時間以内にオンラインデータを削除します。既存のバックアップには運用環境の保存方針が適用されます。',
     upload: 'アップロード',
     uploading: 'アップロード中…',
     cancel: 'キャンセル',
     close: '閉じる',
-    copyLink: "診断 ID をコピー",
-    uploadIdFallback: id => "診断 ID: " + id,
+    copyLink: '診断 ID をコピー',
+    uploadIdFallback: id => '診断 ID: ' + id,
     doneTitle: '診断情報を送信しました',
-    doneDescription:
-      "Aino に非公開で送信しました。問い合わせ時はこの ID を伝え、ログ本文は公開しないでください。",
+    doneDescription: 'Aino に非公開で送信しました。問い合わせ時はこの ID を伝え、ログ本文は公開しないでください。',
     failedTitle: 'アップロードに失敗しました',
     failedHint:
-      "Aino にログインして再試行してください。古い実行環境は更新してください。送信せずローカルで確認するには `hermes debug share --local` を実行します。",
-    handoffLead: "Aino への問い合わせ先：",
+      'Aino にログインして再試行してください。古い実行環境は更新してください。送信せずローカルで確認するには `hermes debug share --local` を実行します。',
+    handoffLead: 'Aino への問い合わせ先：',
     links: {
-      github: 'GitHub Issues',
+      github: 'GitHub Issues'
     }
   },
 
@@ -1741,6 +1741,7 @@ export const jaOverrides = {
   },
 
   messaging: {
+    directory: messagingDirectory['ja'],
     search: 'メッセージングを検索...',
     statusFilter: {
       all: 'すべて',
@@ -1928,6 +1929,10 @@ export const jaOverrides = {
   },
 
   profiles: {
+    workspaceListTitle: 'マイワークスペース',
+    previewHint: 'カードを選択すると設定を確認できます。ワークスペースは切り替わりません。',
+    workspaceHint: '各ワークスペースの設定と会話は独立しています。フォルダーは「プロジェクト」で管理します。',
+    soulApplyHint: '変更は新しい会話から適用されます。',
     close: 'プロファイルを閉じる',
     nameHint: '小文字、数字、ハイフン、アンダースコア。文字または数字で始める必要があります。',
     title: 'プロファイル',
@@ -2020,6 +2025,8 @@ export const jaOverrides = {
     modelLabel: 'モデル',
     skillsLabel: 'スキル',
     notSet: '未設定',
+    storageLocation: 'ワークスペースの場所',
+    soulTitle: '人格と振る舞い',
     soulDesc: 'このプロファイルに組み込まれたシステムプロンプトとペルソナの指示。',
     soulMissing:
       'このプロファイルにはまだ SOUL.md がありません。下に指示を入力して保存すると作成できます。config.yaml のペルソナ設定は別途管理されます。',
@@ -3914,18 +3921,17 @@ export const jaOverrides = {
           count: count => `${count} 件のコマンド`,
           past: '実行完了',
           present: '実行中'
-        }
-      ,
-"search":{count: (count: number) => count + " 件の検索", past: "検索済み", present: "検索中"},
+        },
+        search: { count: (count: number) => count + ' 件の検索', past: '検索済み', present: '検索中' },
 
-"read":{count: (count: number) => count + " ページ", past: "読取済み", present: "読取中"},
+        read: { count: (count: number) => count + ' ページ', past: '読取済み', present: '読取中' },
 
-"browse":{count: (count: number) => count + " ページ", past: "表示済み", present: "表示中"},
+        browse: { count: (count: number) => count + ' ページ', past: '表示済み', present: '表示中' },
 
-"interact":{count: (count: number) => count + " 件のブラウザー操作", past: "実行済み", present: "実行中"},
+        interact: { count: (count: number) => count + ' 件のブラウザー操作', past: '実行済み', present: '実行中' },
 
-"analyze":{count: (count: number) => count + " 枚の画像", past: "解析済み", present: "解析中"},
-}
+        analyze: { count: (count: number) => count + ' 枚の画像', past: '解析済み', present: '解析中' }
+      }
     }
   },
 

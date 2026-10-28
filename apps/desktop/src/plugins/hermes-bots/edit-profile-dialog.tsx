@@ -29,7 +29,8 @@ import { editedLook, type EditProfileLook } from './edit-profile-look'
 import { useBots } from './i18n'
 import { displayName } from './labels'
 import { AdvancedProfileConfig, applyAdvancedConfig, emptyAdvancedState } from './profile-config'
-import { botRosterMeta, requestForBot } from './routing'
+import { updateBotDescription } from './profile-ops'
+import { botRosterMeta } from './routing'
 import type { AvatarAppearance, RosterRow } from './types'
 
 // ── edit profile dialog ──────────────────────────────────────────────────────
@@ -115,6 +116,7 @@ export function EditProfileDialog({ bot, open, onClose }: EditProfileDialogProps
 
     setBusy(true)
     let advancedFailed = false
+    let descriptionFailed = false
 
     const look = editedLook(opened, { shape, color, image, title })
     const persistence = look ? await saveBotMeta(bot, look) : null
@@ -141,13 +143,9 @@ export function EditProfileDialog({ bot, open, onClose }: EditProfileDialogProps
 
     if (desc !== (bot.description || '').trim()) {
       try {
-        await requestForBot(bot, 'cli.exec', {
-          argv: ['profile', 'describe', bot.name, '--text', desc]
-        })
-        queryClient.invalidateQueries({
-          queryKey: ROSTER_KEY
-        })
+        await updateBotDescription(bot, desc)
       } catch (err) {
+        descriptionFailed = true
         host.notifyError(err, b.avatar.savedLocallyDescriptionFailed)
       }
     }
@@ -174,18 +172,20 @@ export function EditProfileDialog({ bot, open, onClose }: EditProfileDialogProps
       }
     }
 
-    if (!advancedFailed && !lookFailed) {
-      host.notify({
-        kind: 'success',
-        message: b.bot.updated(
-          displayName(bot, {
-            title
-          })
-        )
-      })
+    setBusy(false)
+
+    if (advancedFailed || lookFailed || descriptionFailed) {
+      return
     }
 
-    setBusy(false)
+    host.notify({
+      kind: 'success',
+      message: b.bot.updated(
+        displayName(bot, {
+          title
+        })
+      )
+    })
     onClose()
   }
 
@@ -208,7 +208,7 @@ export function EditProfileDialog({ bot, open, onClose }: EditProfileDialogProps
       >
         <DialogHeader>
           <DialogTitle>{b.bot.editTitle}</DialogTitle>
-          <DialogDescription>{b.editor.editDescription(displayName(bot, null), bot.name)}</DialogDescription>
+          <DialogDescription>{b.editor.editDescription(displayName(bot, meta))}</DialogDescription>
         </DialogHeader>
         <div className="grid gap-4">
           <div className="flex justify-center py-1">
@@ -254,7 +254,11 @@ export function EditProfileDialog({ bot, open, onClose }: EditProfileDialogProps
             {b.bot.advancedHint}
           </Button>
           {advanced ? (
-            <div>
+            <div className="grid gap-4">
+              {labeled(
+                b.editor.internalIdLabel,
+                <code className="break-all text-xs text-(--ui-text-tertiary)">{bot.name}</code>
+              )}
               <AdvancedProfileConfig bot={bot} setState={setAdv} state={adv} />
             </div>
           ) : null}

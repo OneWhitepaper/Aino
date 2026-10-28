@@ -1,12 +1,31 @@
 import type { TranslationOverrides } from './define-locale'
+import { zhCatalogContent } from './zh_catalog_content'
 
 export const zhCatalog = {
+  ...zhCatalogContent,
+  startHere: '从这里开始',
+  featuredHint: '先了解技能，再按需添加',
+  browseHint: '按用途浏览，可先查看详情，再决定是否添加。',
+  installedHint: '管理当前工作区的启用状态，更改将在新会话中生效。',
+  installedKind: (kind: string) => `已安装${kind}`,
+  howToUse: '如何使用',
+  usageHint: '使用方式与操作步骤以技能指令或来源文档为准。',
+  capabilityGuide: '了解这些能力',
+  capabilityGuideDescription:
+    '技能提供任务步骤与知识；插件扩展功能；连接器连接外部服务；工具集控制当前工作区可调用的工具。',
+  originalDescription: '原文与完整说明',
+  skillInstructions: '技能原始指令',
+  pageTitle: '技能与工具',
+  pageDescription: '为你的智能体添加知识、工作流程和外部能力。',
+  discoverKind: kind => `发现${kind}`,
+  enable: '启用',
+  disable: '停用',
   add: '添加',
   added: '已添加',
   discover: '发现',
   featured: '精选',
   explorePlugins: '探索插件',
-  exploreSkills: '探索技能',
+  exploreSkills: '浏览技能',
   mostStarred: '星标最多',
   newest: '最新发布',
   recentlyUpdated: '最近更新',
@@ -27,11 +46,11 @@ export const zhCatalog = {
   destinationChanged: '安装目标已更改。请关闭此对话框并重新打开安装链接。',
   install: '安装',
   installed: '已安装',
-  searchSkills: '搜索技能',
+  searchSkills: '搜索技能、用途或名称',
   searchPlugins: '搜索插件',
   allSources: '所有来源',
   allCategories: '所有分类',
-  about: '简介',
+  about: '概览',
   author: '作者',
   source: '来源',
   category: '分类',
@@ -50,7 +69,7 @@ export const zhCatalog = {
   noResults: '没有匹配项',
   tryAnother: '请尝试其他搜索或清除筛选条件。',
   clearFilters: '清除筛选条件',
-  filters: '筛选条件',
+  filters: '筛选',
   loadFailed: '无法加载目录',
   retry: '重试',
   more: '显示更多',
@@ -59,24 +78,39 @@ export const zhCatalog = {
   installHint: '安装前请检查源代码。更改将在新会话中生效。',
   results: (count: number) => `${count.toLocaleString('zh')} 个结果`,
   back: '返回结果',
+  tier: '来源类型',
+  previousSlide: '上一项精选',
+  nextSlide: '下一项精选',
+  slideOf: (index: number, count: number) => '第 ' + index + ' 项，共 ' + count + ' 项',
+  tierLabels: { official: '官方', verified: '已验证', community: '社区' },
+  moreToExplore: '更多内容',
+  skillsFor: (category: string) => '适用于' + category + '的技能。',
   tiers: {
-    official: { blurb: '由 Nous Research 构建和维护。' },
-    verified: { blurb: '由集成服务的开发公司提供，并经 Nous 验证。' }
+    official: { title: '官方插件', blurb: '由 Nous Research 构建和维护。' },
+    verified: { title: '已验证插件', blurb: '由集成服务的开发公司提供，并经 Nous 验证。' }
   },
   moreToExploreBlurb: '探索目录中更多小众内容。',
   developer: {
+    heading: '开发者模式',
+    title: '为 Aino 扩展能力',
+    submit: '提交扩展',
+    docs: '开发文档',
     pitch: '构建了工具、连接器、插件或 Mod？',
     pitchFollowUp: '想构建却不知道如何入手？'
   },
   toolsets: {
+    mostUsed: '常用工具集',
+    essentials: '基础工具集',
+    toolCount: (count: number) => count + ' 个工具',
+    callCount: (count: string) => count + ' 次调用',
     mostUsedBlurb: '此工作区最常使用的工具集。',
     essentialsBlurb: '大多数 Hermes 工作依赖的工具集。',
     themes: {
-      work: { blurb: '操作浏览器和桌面、编辑文件、运行代码并安排任务。' },
-      create: { blurb: '查看图像和视频、转录语音并生成媒体。' },
-      recall: { blurb: '搜索 Hermes 的记忆、技能和历史记录。' },
-      connect: { blurb: '连接账户、其他智能体、智能家居及网页以外的搜索服务。' },
-      more: { blurb: '此工作区可启用的其他所有工具。' }
+      work: { label: '浏览、办公与自动化', blurb: '操作浏览器和桌面、编辑文件、运行代码并安排任务。' },
+      create: { label: '图像、音频与创作', blurb: '查看图像和视频、转录语音并生成媒体。' },
+      recall: { label: '记忆与知识', blurb: '搜索 Hermes 的记忆、技能和历史记录。' },
+      connect: { label: '连接与集成', blurb: '连接账户、其他智能体、智能家居及网页以外的搜索服务。' },
+      more: { label: '更多工具', blurb: '此工作区可启用的其他所有工具。' }
     }
   }
 } satisfies TranslationOverrides['catalog']

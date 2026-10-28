@@ -1,4 +1,5 @@
 import { zhBilling } from './zh_billing_surface'
+import { zhMessaging } from './zh_messaging'
 import { zhSummary } from './zh_summary_surface'
 
 const accountErrors: Record<string, string> = {
@@ -257,22 +258,24 @@ export const zhOverrides = {
       diskFull: '磁盘空间已满，Aino 无法启动。',
       portInUse: 'Aino 需要的网络端口正被其他程序占用。',
       installMissing: 'Aino 安装文件不完整，请选择“修复安装”。'
+    },
+    updateHold: {
+      description: 'Hermes 正在等待更新结束，避免加载仍在修改的文件。等待解除后会自动启动。',
+      heldUnknown: '更新程序已退出，但其启动的进程仍占用 Hermes 安装目录。',
+
+      unverified: '更新助手暂时无法确认哪个进程占用了安装目录，Hermes 会继续检查。',
+
+      recoveryHint:
+        '通常等待几分钟即可恢复。如果仍未恢复，请退出 Hermes，结束残留的 git 或 hermes 进程（或重启电脑），然后重新打开。',
+
+      confirmTitle: '更新仍占用安装目录，是否继续启动 Hermes？',
+
+      confirmBody:
+        '残留的更新进程可能仍在修改文件。现在启动可能加载尚未完成更新的安装内容，导致应用无法工作，直到重新更新。Hermes 会记录此选择，并保留更新标记。',
+
+      startAnywayRefused: '启动前安装目录的占用状态发生了变化，请核对后重试。'
     }
-  ,
-"updateHold":{"description":"Hermes 正在等待更新结束，避免加载仍在修改的文件。等待解除后会自动启动。",
-"heldUnknown":"更新程序已退出，但其启动的进程仍占用 Hermes 安装目录。",
-
-"unverified":"更新助手暂时无法确认哪个进程占用了安装目录，Hermes 会继续检查。",
-
-"recoveryHint":"通常等待几分钟即可恢复。如果仍未恢复，请退出 Hermes，结束残留的 git 或 hermes 进程（或重启电脑），然后重新打开。",
-
-"confirmTitle":"更新仍占用安装目录，是否继续启动 Hermes？",
-
-"confirmBody":"残留的更新进程可能仍在修改文件。现在启动可能加载尚未完成更新的安装内容，导致应用无法工作，直到重新更新。Hermes 会记录此选择，并保留更新标记。",
-
-"startAnywayRefused":"启动前安装目录的占用状态发生了变化，请核对后重试。",
-},
-},
+  },
 
   notifications: {
     sharedProfileWarning:
@@ -383,24 +386,23 @@ export const zhOverrides = {
   },
 
   sendDiagnostics: {
-    title: "向 Aino 发送诊断信息",
+    title: '向 Aino 发送诊断信息',
     privacyNotice:
-      "这会将私有诊断包上传至你的 Aino 账号服务。包含系统信息、配置状态（不含密钥本身），以及智能体、网关和桌面端日志（每份最多 512 KB）。日志可能包含对话、工具输出和文件路径。上传前会脱敏密钥，但仍可能含有其他敏感内容。仅授权的 Aino 管理员可查看。14 天后立即停止访问，随后 1 小时内清除在线数据；已有备份按部署备份策略清理。",
+      '这会将私有诊断包上传至你的 Aino 账号服务。包含系统信息、配置状态（不含密钥本身），以及智能体、网关和桌面端日志（每份最多 512 KB）。日志可能包含对话、工具输出和文件路径。上传前会脱敏密钥，但仍可能含有其他敏感内容。仅授权的 Aino 管理员可查看。14 天后立即停止访问，随后 1 小时内清除在线数据；已有备份按部署备份策略清理。',
     upload: '上传',
     uploading: '上传中…',
     cancel: '取消',
     close: '关闭',
-    copyLink: "复制诊断编号",
-    uploadIdFallback: id => "诊断编号：" + id,
+    copyLink: '复制诊断编号',
+    uploadIdFallback: id => '诊断编号：' + id,
     doneTitle: '诊断信息已发送',
-    doneDescription:
-      "诊断包已私密上传至 Aino。反馈问题时提供此编号即可，请勿公开日志正文。",
+    doneDescription: '诊断包已私密上传至 Aino。反馈问题时提供此编号即可，请勿公开日志正文。',
     failedTitle: '上传失败',
     failedHint:
-      "请登录 Aino 账号后重试；旧版运行时请先更新。仅查看本地报告、不上传，可运行 `hermes debug share --local`。",
-    handoffLead: "通过以下入口向 Aino 反馈：",
+      '请登录 Aino 账号后重试；旧版运行时请先更新。仅查看本地报告、不上传，可运行 `hermes debug share --local`。',
+    handoffLead: '通过以下入口向 Aino 反馈：',
     links: {
-      github: 'GitHub Issues',
+      github: 'GitHub Issues'
     },
     gatewayUnavailable: 'Hermes 网关不可用',
 
@@ -780,11 +782,16 @@ export const zhOverrides = {
         installUncertain: 'Hermes 已停止等待安装结果，但插件可能仍在安装。关闭此窗口并刷新插件列表，然后再尝试安装。',
         desktopFailed: '桌面插件安装失败',
         missingEnv: (_name, vars) => `缺少环境变量：${vars}。请在设置 → 密钥中添加。`,
-        verified: '已验证', unverified: '未验证', reviewedByNous: '已由 Nous 审核。',
+        verified: '已验证',
+        unverified: '未验证',
+        reviewedByNous: '已由 Nous 审核。',
         installsAndEnables: profile => `安装到 ${profile}，并立即启用。`,
-        installsOnly: profile => `安装到 ${profile}。`, advanced: '高级', versionLabel: '版本',
+        installsOnly: profile => `安装到 ${profile}。`,
+        advanced: '高级',
+        versionLabel: '版本',
         reviewedPin: sha => (sha ? `已审核的固定提交 ${sha}` : '已审核的固定提交'),
-        latestCommit: '最新提交', nothingToInstall: '此包在这里没有可安装的内容。'
+        latestCommit: '最新提交',
+        nothingToInstall: '此包在这里没有可安装的内容。'
       },
       errors: {
         desktopUnavailable: '桌面插件不可用',
@@ -1017,10 +1024,9 @@ export const zhOverrides = {
         ember: { label: '余烬', description: '温暖的深红与青铜色——锻造氛围' },
         mono: { label: '单色', description: '简洁的灰度界面——极简且专注' },
         slate: { label: '石板', description: '冷调石板蓝——专注开发者主题' },
-        cyberpunk: { label: '赛博朋克', description: '黑底霓虹绿——矩阵终端风格' }
-      ,
-"classic":{"label":"经典","description":"经典终端风格配色"},
-},
+        cyberpunk: { label: '赛博朋克', description: '黑底霓虹绿——矩阵终端风格' },
+        classic: { label: '经典', description: '经典终端风格配色' }
+      },
 
       themeImportErrors: {
         invalidJson: '主题文件不是有效的 JSON。',
@@ -1291,10 +1297,9 @@ export const zhOverrides = {
         echoTranscripts: '将语音消息的原始 🎙️ 转写文本发回聊天。',
         elevenlabs: {
           languageCode: '可选的 ISO-639-3 语言代码。留空让 ElevenLabs 自动检测。'
-        }
-      ,
-"streaming":"说话时实时显示转写文字（支持 OpenAI、xAI、ElevenLabs）；发生错误时回退到录音转写。",
-},
+        },
+        streaming: '说话时实时显示转写文字（支持 OpenAI、xAI、ElevenLabs）；发生错误时回退到录音转写。'
+      },
       tts: {
         xai: {
           voiceId: 'xAI 语音 ID（例如 eve）或自定义语音 ID。',
@@ -1341,10 +1346,9 @@ export const zhOverrides = {
           description: '移除应用、智能体和所有用户数据——配置、聊天记录、定时任务、密钥和日志。',
           consequence: '全部内容——聊天图形界面、Hermes 智能体以及你的所有配置、聊天记录、密钥和日志'
         }
-      }
-    ,
-"managedBody":"此安装由系统管理，Hermes 无法自行移除。",
-},
+      },
+      managedBody: '此安装由系统管理，Hermes 无法自行移除。'
+    },
     poolLimits: {
       warmBotBackendsAria: '保持预热的档案连接数',
       warmBotBackendsTitle: '保持预热的档案连接数',
@@ -2554,8 +2558,8 @@ export const zhOverrides = {
     archive: '归档',
     skillArchivedTitle: '技能已归档',
     skillArchivedMessage: '可通过 hermes curator restore 恢复。',
-  // The catalog moved to its own capabilities page; its copy lives under the
-  // top-level catalog keys above.
+    // The catalog moved to its own capabilities page; its copy lives under the
+    // top-level catalog keys above.
     tabPlugins: '插件',
     plugins: {
       agentTitle: 'Agent 插件',
@@ -3006,199 +3010,7 @@ export const zhOverrides = {
     }
   },
 
-  messaging: {
-    search: '搜索消息平台…',
-    statusFilter: {
-      all: '全部',
-      bad: '错误',
-      good: '已连接',
-      muted: '未启用',
-      warn: '需要关注'
-    },
-    loading: '正在加载消息平台…',
-    loadFailed: '消息平台加载失败',
-    states: {
-      connected: '已连接',
-      connecting: '连接中',
-      disabled: '已禁用',
-      fatal: '错误',
-      gateway_stopped: '消息网关已停止',
-      not_configured: '需要设置',
-      pending_restart: '需要重启',
-      retrying: '重试中',
-      startup_failed: '启动失败'
-    },
-    unknown: '未知',
-    hintPendingRestart: '在状态栏重启网关以应用此更改。',
-    sharedListenerUrl: '通过共享网关监听器提供，地址为',
-    hintGatewayStopped: '在状态栏启动网关以建立连接。',
-    credentialsSet: '凭据已设置',
-    needsSetup: '需要设置',
-    gatewayStopped: '消息网关已停止',
-    getCredentials: '获取你的凭据',
-    openSetupGuide: '打开设置指南',
-    required: '必填',
-    recommended: '推荐',
-    advanced: count => `高级 (${count})`,
-    noTokenNeeded: '此平台无需在此填写令牌。请按上方设置指南操作，然后在下方启用。',
-    enabled: '已启用',
-    disabled: '已禁用',
-    unsavedChanges: '有未保存的更改',
-    saving: '保存中…',
-    saveChanges: '保存更改',
-    saved: '已保存',
-    replaceValue: '替换当前值',
-    openDocs: '打开文档',
-    clearField: key => `清除 ${key}`,
-    addListEntry: '再添加一个',
-    removeListEntry: '移除',
-    listEntryPlaceholder: '输入 ID',
-    enableAria: name => `启用 ${name}`,
-    disableAria: name => `禁用 ${name}`,
-    platformEnabled: name => `${name} 已启用`,
-    platformDisabled: name => `${name} 已禁用`,
-    restartToApply: '此更改将在网关重启后生效。',
-    setupSaved: name => `${name} 设置已保存`,
-    restartToReconnect: '新凭据将在网关重启后生效。',
-    appliedLive: '已应用到正在运行的网关。',
-    connectingLive: '正在运行的网关正在使用新凭据连接。',
-    keyCleared: key => `${key} 已清除`,
-    setupUpdated: name => `${name} 设置已更新。`,
-    failedUpdate: name => `更新 ${name} 失败`,
-    failedSave: name => `保存 ${name} 失败`,
-    failedClear: key => `清除 ${key} 失败`,
-    pendingRequests: count => `待处理请求（${count}）`,
-    pendingAria: count => `${count} 条待处理配对请求`,
-    approvedUsers: count => `已批准用户（${count}）`,
-    approve: '批准',
-    approving: '批准中…',
-    revoke: '撤销',
-    revoking: '撤销中…',
-    revokeAria: name => `撤销 ${name}`,
-    revokeTitle: '撤销访问权限',
-    revokeDesc: name => `${name} 将失去访问权限，下次发送消息时不再被识别。`,
-    approvedUser: name => `已批准 ${name}`,
-    approvedHint: '对方下次发送消息时会被自动识别。',
-    revokedUser: name => `已撤销 ${name}`,
-    failedApprove: name => `批准 ${name} 失败`,
-    failedRevoke: name => `撤销 ${name} 失败`,
-    pairingLockedOut: '批准失败次数过多，该平台已被暂时锁定，请稍后再试。',
-    waitingSince: minutes => (minutes < 1 ? '刚刚' : `${minutes} 分钟前`),
-    restartNeeded: '已保存。请重启消息网关以应用新设置。',
-    restartNow: '立即重启',
-    restarting: '正在重启…',
-    restartFailedManual: '网关重启失败 — 请手动重启并检查网关日志。',
-    telegramQr: {
-      title: '选择连接 Telegram 机器人的方式',
-      subtitle: '两种方式都会连接一个由你控制的机器人，凭据仅保存在此 Hermes 安装中。',
-      quickSetup: '快速设置',
-      recommended: '推荐',
-      quickHelp: '扫描二维码并在 Telegram 中确认。Hermes 会自动创建机器人并识别你的 Telegram 用户 ID。',
-      createWithQr: '通过二维码创建',
-      starting: '正在启动…',
-      replaceWarning: 'Telegram 凭据已配置。保存后，新的二维码设置或机器人令牌将替换当前机器人。',
-      scanHint: '用手机上的 Telegram 应用扫描，或在这台电脑上打开链接。',
-      waiting: '等待 Telegram 确认…',
-      expiresIn: remaining => `${remaining} 后过期`,
-      expired: '已过期',
-      openTelegram: '打开 Telegram',
-      ready: '机器人已创建',
-      allowedUsers: '允许的用户',
-      ownerDetected: '已识别所有者',
-      addAtLeastOne: '请至少添加一个 Telegram 用户 ID。',
-      userIdPlaceholder: 'Telegram 用户 ID',
-      add: '添加',
-      numericOnly: '允许的 Telegram 用户 ID 必须是数字。',
-      saveAndRestart: '保存并重启',
-      applying: '正在保存…',
-      pairingExpired: 'Telegram 配对已过期。请重新开始二维码设置。',
-      stillWaiting: detail => `仍在等待 Telegram。出错后重试：${detail}`,
-      savedRestarting: 'Telegram 已保存；网关正在重启…',
-      savedRestartFailed: detail => `Telegram 已保存；网关重启失败${detail}`
-    },
-    fieldCopy: {
-      TELEGRAM_BOT_TOKEN: {
-        label: '机器人令牌',
-        help: '用 @BotFather 创建一个机器人，然后粘贴它给你的令牌。',
-        placeholder: '粘贴 Telegram 机器人令牌'
-      },
-      TELEGRAM_ALLOWED_USERS: {
-        label: '允许的 Telegram 用户 ID',
-        help: '推荐。来自 @userinfobot 的数字 ID（每格一个）。不设置则任何人都能私信你的机器人。'
-      },
-      TELEGRAM_PROXY: { label: '代理 URL', help: '仅在 Telegram 被屏蔽的网络中需要。' },
-      DISCORD_BOT_TOKEN: { label: '机器人令牌', help: '在 Discord 开发者门户创建应用，添加机器人，然后粘贴其令牌。' },
-      DISCORD_ALLOWED_USERS: { label: '允许的 Discord 用户 ID', help: '推荐。Discord 用户 ID（每格一个）。' },
-      DISCORD_REPLY_TO_MODE: { label: '回复方式', help: 'first、all 或 off。' },
-      DISCORD_ALLOW_ALL_USERS: {
-        label: '允许所有 Discord 用户',
-        help: '仅用于开发。为 true 时，任何人都可以私信机器人，不需要允许列表。'
-      },
-      DISCORD_HOME_CHANNEL: { label: '主页频道 ID', help: '机器人主动发送消息的频道（cron 输出、提醒等）。' },
-      DISCORD_HOME_CHANNEL_NAME: { label: '主页频道名称', help: '日志和状态输出中显示的主页频道名称。' },
-      BLUEBUBBLES_ALLOW_ALL_USERS: { label: '允许所有 iMessage 用户', help: '为 true 时跳过 BlueBubbles 允许列表。' },
-      MATTERMOST_ALLOW_ALL_USERS: { label: '允许所有 Mattermost 用户' },
-      MATTERMOST_HOME_CHANNEL: { label: '主页频道' },
-      QQ_ALLOW_ALL_USERS: { label: '允许所有 QQ 用户' },
-      QQBOT_HOME_CHANNEL: { label: 'QQ 主页频道', help: 'cron 投递的默认频道或群组。' },
-      QQBOT_HOME_CHANNEL_NAME: { label: 'QQ 主页频道名称' },
-      SLACK_BOT_TOKEN: {
-        label: 'Slack 机器人令牌',
-        help: '安装 Slack 应用后，在 OAuth & Permissions 中找到机器人令牌。',
-        placeholder: '粘贴 Slack 机器人令牌'
-      },
-      SLACK_APP_TOKEN: {
-        label: 'Slack 应用令牌',
-        help: 'Socket Mode 需要应用级令牌。',
-        placeholder: '粘贴 Slack 应用令牌'
-      },
-      SLACK_ALLOWED_USERS: { label: '允许的 Slack 用户 ID', help: '推荐。Slack 用户 ID（每格一个）。' },
-      MATTERMOST_URL: { label: '服务器 URL', placeholder: 'https://mattermost.example.com' },
-      MATTERMOST_TOKEN: { label: '机器人令牌' },
-      MATTERMOST_ALLOWED_USERS: { label: '允许的用户 ID', help: '推荐。Mattermost 用户 ID（每格一个）。' },
-      MATRIX_HOMESERVER: { label: '主服务器 URL（Homeserver）', placeholder: 'https://matrix.org' },
-      MATRIX_ACCESS_TOKEN: { label: '访问令牌' },
-      MATRIX_USER_ID: { label: '机器人用户 ID', placeholder: '@hermes:example.org' },
-      MATRIX_ALLOWED_USERS: { label: '允许的 Matrix 用户 ID', help: '推荐。@user:server 格式的用户 ID（每格一个）。' },
-      SIGNAL_HTTP_URL: {
-        label: 'Signal 桥接 URL',
-        placeholder: 'http://127.0.0.1:8080',
-        help: '运行中的 signal-cli REST 桥接的 URL。'
-      },
-      SIGNAL_ACCOUNT: { label: '电话号码', help: '在 signal-cli 桥接中注册的号码。' },
-      SIGNAL_ALLOWED_USERS: { label: '允许的 Signal 用户', help: '推荐。Signal 标识符（每格一个）。' },
-      WHATSAPP_ENABLED: { label: '启用 WhatsApp 桥接', help: '由下方开关自动设置。除非确知需要，否则请勿改动。' },
-      WHATSAPP_MODE: { label: '桥接模式' },
-      WHATSAPP_ALLOWED_USERS: { label: '允许的 WhatsApp 用户', help: '推荐。电话号码或 WhatsApp ID（每格一个）。' }
-    },
-    platformIntro: {
-      telegram:
-        '在 Telegram 中，与 @BotFather 对话，运行 /newbot，复制它给你的令牌。然后从 @userinfobot 获取你的数字用户 ID。',
-      discord:
-        '打开 Discord 开发者门户，创建应用，添加机器人，然后复制其令牌。用正确的权限范围把机器人邀请到你的服务器。',
-      slack: '创建 Slack 应用，启用 Socket Mode，安装到你的工作区，然后复制机器人令牌和应用级令牌。',
-      mattermost: '在你的 Mattermost 服务器上，创建机器人账户或个人访问令牌，然后在此粘贴服务器 URL 和令牌。',
-      matrix: '用机器人账户登录你的主服务器（homeserver），然后复制访问令牌、用户 ID 和主服务器 URL。',
-      signal: '在可访问的位置运行 signal-cli REST 桥接，然后把 Hermes 指向该 URL 和已注册的电话号码。',
-      whatsapp: '启动 Hermes 自带的 WhatsApp 桥接，首次运行时扫描二维码，然后启用该平台。',
-      bluebubbles:
-        '在装有 iMessage 的 Mac 上运行 BlueBubbles Server，暴露其 API，然后用服务器密码把 Hermes 指向该 URL。',
-      homeassistant: '在 Home Assistant 中打开你的个人资料并创建长期访问令牌。把它连同你的 HA URL 一起粘贴到这里。',
-      email: '使用专用邮箱。对于 Gmail/Workspace，创建应用专用密码并使用 imap.gmail.com / smtp.gmail.com。',
-      sms: '从 Twilio 控制台获取你的 Account SID 和访问令牌，以及一个可发送短信的电话号码。',
-      dingtalk: '在开发者控制台创建钉钉应用，然后在此复制 Client ID(App key) 和 Client Secret。',
-      feishu: '创建飞书 / Lark 应用，配置机器人能力，复制 App ID、应用密钥和事件加密密钥。',
-      wecom: '在企业微信中添加群机器人，复制其 Webhook 密钥作为 WECOM_BOT_ID。仅可发送——双向请用企业微信（应用）选项。',
-      wecom_callback: '设置一个企业微信自建应用，暴露其回调 URL，并提供 corp ID、secret、agent ID 和 AES key。',
-      weixin:
-        '运行 `hermes gateway setup`，选择 Weixin，然后使用个人微信账号扫描并确认二维码。Hermes 会通过腾讯 iLink Bot API 连接并保存凭据。',
-      qqbot: '在 QQ 开放平台 (q.qq.com) 注册一个应用，复制 App ID 和 Client Secret。',
-      api_server:
-        '把 Hermes 暴露为兼容 OpenAI 的 API。设置一个鉴权密钥，然后把 Open WebUI / LobeChat 等指向 host:port。',
-      webhook: '运行一个 HTTP 服务器，供其他工具（GitHub、GitLab、自定义应用）POST。用密钥验证签名。'
-    },
-    restartFailedManualDetail: '请再次尝试重启；若仍然失败，请打开日志并发送诊断信息。'
-  },
+  messaging: zhMessaging,
 
   webhooks: {
     search: '搜索 Webhook…',
@@ -3267,6 +3079,10 @@ export const zhOverrides = {
   },
 
   profiles: {
+    workspaceListTitle: '我的工作区',
+    previewHint: '点击卡片查看设置，不会立即切换。',
+    workspaceHint: '每个工作区都有独立的配置与会话。项目文件夹仍在左侧「项目」中管理。',
+    soulApplyHint: '修改将在新对话中生效',
     close: '关闭工作区',
     nameHint: '小写字母、数字、连字符和下划线。必须以字母或数字开头。',
     title: '工作区',
@@ -3361,7 +3177,9 @@ export const zhOverrides = {
     modelLabel: '模型',
     skillsLabel: '技能',
     notSet: '未设置',
-    soulDesc: '内置于此工作区的系统提示词与人格指令。',
+    storageLocation: '工作区位置',
+    soulTitle: '角色与工作方式',
+    soulDesc: '告诉它如何与你协作，让每次对话更合拍。',
     soulMissing: '此配置档案尚无 SOUL.md 文件。在下方输入指令并保存即可创建。config.yaml 中的人格预设需单独管理。',
     soulOptional: '可选',
     soulPlaceholder: mode => `此工作区的系统提示词 / 人格说明。\n留空则保留${mode}默认值。`,
@@ -3408,7 +3226,7 @@ export const zhOverrides = {
     failedSaveSoul: '保存 SOUL.md 失败',
     failedCreate: '创建工作区失败',
     failedRename: '重命名工作区失败',
-    workspaceDesc: '每个工作区保存一位智能体的独立配置、技能、记忆和会话。',
+    workspaceDesc: '为不同的工作方式，保留各自的模型、技能与记忆。',
 
     currentBadge: '当前工作区',
 
@@ -3984,7 +3802,6 @@ export const zhOverrides = {
 
     recent: '最近'
   },
-
 
   composer: {
     message: '消息',
@@ -5761,12 +5578,9 @@ export const zhOverrides = {
       securityHeading: '安全',
       scan: { passed: '扫描通过', warnings: '扫描发现警告', failed: '扫描未通过' },
       requirementsLabel: '要求',
-      credentialsHeading: '凭据'
-    ,
-"phase":{"python_packages":"正在安装 Python 依赖包…",
-"loading_tools":"正在加载工具…",
-},
-},
+      credentialsHeading: '凭据',
+      phase: { python_packages: '正在安装 Python 依赖包…', loading_tools: '正在加载工具…' }
+    },
     mcpSetup: {
       installTitle: '添加 MCP 服务器',
       enableTitle: '启用 MCP 服务器',
@@ -5979,18 +5793,17 @@ export const zhOverrides = {
           count: count => `${count} 个命令`,
           past: '已运行',
           present: '正在运行'
-        }
-      ,
-"search":{count: (count: number) => count + " 次查询", past: "已搜索", present: "正在搜索"},
+        },
+        search: { count: (count: number) => count + ' 次查询', past: '已搜索', present: '正在搜索' },
 
-"read":{count: (count: number) => count + " 个网页", past: "已读取", present: "正在读取"},
+        read: { count: (count: number) => count + ' 个网页', past: '已读取', present: '正在读取' },
 
-"browse":{count: (count: number) => count + " 个网页", past: "已打开", present: "正在打开"},
+        browse: { count: (count: number) => count + ' 个网页', past: '已打开', present: '正在打开' },
 
-"interact":{count: (count: number) => count + " 次浏览器操作", past: "已执行", present: "正在执行"},
+        interact: { count: (count: number) => count + ' 次浏览器操作', past: '已执行', present: '正在执行' },
 
-"analyze":{count: (count: number) => count + " 张图片", past: "已分析", present: "正在分析"},
-}
+        analyze: { count: (count: number) => count + ' 张图片', past: '已分析', present: '正在分析' }
+      }
     },
     markdown: {
       alerts: {
@@ -6722,18 +6535,18 @@ export const zhOverrides = {
       hintDestructive: { label: '破坏性', long: '无法在此处撤销该更改。' },
       hintIdempotent: { label: '可重复', long: '重复运行与运行一次的效果相同。' },
       hintOpenWorld: { label: '外部', long: '会访问此应用之外的内容。' }
+    },
+    accounts: {
+      aliasHint: '使用小写字母、数字和连字符，最多 32 个字符，例如 work 或 home。',
+      aliasInvalid: '请使用小写字母、数字和连字符，并以字母或数字开头。',
+
+      aliasTaken: '此名称已被使用。',
+
+      renameGone: '此账户已不存在，可能已被移除或在重新连接后被替换。',
+
+      removeBody: 'Hermes 将停止使用此账户，其他账户仍保持连接。'
     }
-  ,
-"accounts":{"aliasHint":"使用小写字母、数字和连字符，最多 32 个字符，例如 work 或 home。",
-"aliasInvalid":"请使用小写字母、数字和连字符，并以字母或数字开头。",
-
-"aliasTaken":"此名称已被使用。",
-
-"renameGone":"此账户已不存在，可能已被移除或在重新连接后被替换。",
-
-"removeBody":"Hermes 将停止使用此账户，其他账户仍保持连接。",
-},
-},
+  },
 
   platformRechargeErrors: {
     conflict: '较早的请求已创建订单。请关闭此窗口，在订单历史中打开原订单，不要重复付款。',

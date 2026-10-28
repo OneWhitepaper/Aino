@@ -95,7 +95,7 @@ export interface UpstreamTranslations extends NoticeTranslations {
     custom: (label: string) => string[]
   }
   connectors: ConnectorCardTranslations
-catalog: CatalogTranslations
+  catalog: CatalogTranslations
   connectorsPage: {
     title: string
     searchPlaceholder: (count: number) => string
@@ -2653,6 +2653,29 @@ catalog: CatalogTranslations
   }
 
   messaging: {
+    directory: {
+      statusFilters: string
+      title: string
+      subtitle: string
+      common: string
+      commonHint: string
+      more: string
+      moreHint: string
+      integrations: string
+      integrationsHint: string
+      all: string
+      configured: string
+      attention: string
+      configure: string
+      sendOnly: string
+      privacy: string
+      noMatches: string
+      noMatchesHint: string
+      showAll: string
+      discardTitle: string
+      discardHint: string
+      discard: string
+    }
     search: string
     statusFilter: Record<'all' | 'bad' | 'good' | 'muted' | 'warn', string>
     loading: string
@@ -2912,6 +2935,8 @@ catalog: CatalogTranslations
     modelLabel: string
     skillsLabel: string
     notSet: string
+    storageLocation: string
+    soulTitle: string
     soulDesc: string
     soulMissing: string
     soulOptional: string
@@ -2961,6 +2986,10 @@ catalog: CatalogTranslations
     failedRename: string
 
     workspaceDesc: string
+    workspaceListTitle: string
+    previewHint: string
+    workspaceHint: string
+    soulApplyHint: string
 
     currentBadge: string
 

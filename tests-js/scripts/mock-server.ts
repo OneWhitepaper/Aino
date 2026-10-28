@@ -38,6 +38,9 @@ export interface MockServerOptions {
   /** Choose distinct replies from the latest input without replaying history. */
   replyForPrompt?: (prompt: string) => string
 
+  /** Optional provider usage for UI journeys that inspect measured reply diagnostics. */
+  streamUsage?: { prompt_tokens: number; completion_tokens: number; total_tokens: number }
+
   /** Extra ids listed by GET /v1/models beside `mock-model` (a pickable second model). */
   extraModels?: string[]
 
@@ -974,7 +977,7 @@ export function startMockServer(options: MockServerOptions = {}): Promise<MockSe
               resolveHeldStreamStarted?.()
 
               return heldStreamReleased
-            } : undefined)
+            } : undefined, options.streamUsage)
           } else {
             if (holdThisCompletion) {
               heldCompletionCount++
@@ -1060,6 +1063,7 @@ function streamTextResponse(
   model: string,
   text: string,
   waitForRelease?: () => Promise<void>,
+  usage?: MockServerOptions['streamUsage'],
 ): void {
   res.writeHead(200, {
     'Content-Type': 'text/event-stream',
@@ -1073,6 +1077,13 @@ function streamTextResponse(
   const sendChunk = (): void => {
     if (i >= words.length) {
       res.write(sseChunk(model, {}, 'stop'))
+
+      if (usage) {
+        res.write(`data: ${JSON.stringify({
+          id: 'mock-completion', object: 'chat.completion.chunk', created: 0, model, choices: [], usage,
+        })}\n\n`)
+      }
+
       res.write('data: [DONE]\n\n')
       res.end()
 

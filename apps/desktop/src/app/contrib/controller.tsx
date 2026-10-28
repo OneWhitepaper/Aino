@@ -51,16 +51,7 @@ import { registry } from '@/contrib/registry'
 import { discoverRuntimePlugins } from '@/contrib/runtime-loader'
 import { LocalizedTabTitle, translateNow } from '@/i18n'
 import { newSessionTitle, sessionTitle as storedSessionTitle } from '@/lib/chat-runtime'
-import {
-  Download,
-  FileText,
-  LayoutDashboard,
-  PanelTop,
-  SlidersHorizontal,
-  Upload,
-  Users,
-  Zap
-} from '@/lib/icons'
+import { Download, FileText, LayoutDashboard, PanelTop, SlidersHorizontal, Upload, Users, Zap } from '@/lib/icons'
 import { type KeybindContribution, KEYBINDS_AREA } from '@/lib/keybinds/actions'
 import { readKey, writeKey } from '@/lib/storage'
 import { TRANSCRIPT_DIRECTIVE_AREA, type TranscriptDirectiveContribution } from '@/lib/transcript-directives'
@@ -85,13 +76,7 @@ import {
 import { $profiles } from '@/store/profile'
 import { $profileRailVisible } from '@/store/profile-rail-prefs'
 import { runExportProfileFlow, runImportProfileFlow } from '@/store/profile-share'
-import {
-  $reviewOpen,
-  $reviewRepoCwd,
-  closeReview,
-  restoreReview,
-  REVIEW_PANE_ID
-} from '@/store/review'
+import { $reviewOpen, $reviewRepoCwd, closeReview, restoreReview, REVIEW_PANE_ID } from '@/store/review'
 import {
   $cronSessions,
   $messagingSessions,
@@ -947,12 +932,12 @@ export function ContribController() {
               Visibility preserves terminal/session lifecycles and restores the
               user's layout instantly when they return to chat. */}
           <div
-            aria-hidden={settingsPage}
             className={
               settingsPage
                 ? 'pointer-events-none invisible absolute inset-0 flex min-h-0 min-w-0'
                 : 'relative flex min-h-0 min-w-0 flex-1'
             }
+            inert={settingsPage}
           >
             <WindowTitlebarContext.Provider value={view === 'chat' && !isAuxiliaryWindow()}>
               <SummaryWorkspace>

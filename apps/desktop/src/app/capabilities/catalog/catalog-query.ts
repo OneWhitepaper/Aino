@@ -1,8 +1,11 @@
 import { sortCatalogPlugins } from '@hermes/shared'
 
+import type { Translations } from '@/i18n'
+
 import { PLUGIN_TIER_ORDER, pluginTier } from './catalog-curation'
 import type { CatalogEntry, CatalogKind } from './catalog-data'
 import type { FacetRow } from './catalog-filters'
+import { catalogSearchText } from './catalog-localization'
 
 export type CatalogSort = 'discover' | 'stars' | 'newest' | 'updated' | 'name'
 
@@ -16,7 +19,8 @@ export interface CatalogFacets {
 export const EMPTY_FACETS: CatalogFacets = { sources: [], categories: [], tags: [], installedOnly: false }
 
 /** Facet value an entry files under: the normalized tier for plugins, the registry for skills. */
-export const facetSource = (entry: CatalogEntry, kind: CatalogKind) => (kind === 'plugins' ? pluginTier(entry) : entry.source)
+export const facetSource = (entry: CatalogEntry, kind: CatalogKind) =>
+  kind === 'plugins' ? pluginTier(entry) : entry.source
 
 /** Source facet rows; for plugins, the tiers present, in trust order. */
 export function catalogSources(entries: CatalogEntry[], kind: CatalogKind) {
@@ -36,7 +40,8 @@ export function catalogCategories(entries: CatalogEntry[]) {
   return [...values].sort((a, b) => categoryRank(a) - categoryRank(b) || a[1].label.localeCompare(b[1].label))
 }
 
-const categoryRank = (row: [string, { label: string }]) => (row[0] === 'other' || row[1].label.toLowerCase() === 'other' ? 1 : 0)
+const categoryRank = (row: [string, { label: string }]) =>
+  row[0] === 'other' || row[1].label.toLowerCase() === 'other' ? 1 : 0
 
 /** The most common tags plus whatever is selected; search covers the long tail. */
 export function catalogTags(entries: CatalogEntry[], selected: string[], limit: number): FacetRow[] {
@@ -60,7 +65,8 @@ export function filterCatalog(
   facets: CatalogFacets,
   query: string,
   isInstalled: (entry: CatalogEntry) => boolean,
-  kind: CatalogKind
+  kind: CatalogKind,
+  translations?: Translations
 ) {
   const { sources, categories, tags, installedOnly } = facets
 
@@ -70,7 +76,9 @@ export function filterCatalog(
       (!categories.length || categories.includes(entry.category)) &&
       (!tags.length || tags.some(tag => entry.tags.includes(tag))) &&
       (!installedOnly || isInstalled(entry)) &&
-      (!query || entry.search.includes(query))
+      (!query ||
+        entry.search.includes(query) ||
+        Boolean(translations && catalogSearchText(entry, translations).includes(query)))
   )
 }
 

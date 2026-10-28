@@ -531,6 +531,7 @@ class SharedMetricsStore:
                     add_column_if_missing(connection, "package_outbox", column, f"{column} {declaration}")
             for statement in _CREATE_CONSENT_TABLES_SQL:
                 connection.execute(statement)
+            add_column_if_missing(connection, "send_consent_windows", "recipient", "recipient TEXT")
             connection.execute(
                 "INSERT INTO telemetry_state(key, value) VALUES ('schema_version', ?)"
                 " ON CONFLICT(key) DO UPDATE SET value = excluded.value",

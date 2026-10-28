@@ -384,6 +384,10 @@ export const arCommandCenter = {
     platformIntro: {}
   },
   profiles: {
+    workspaceListTitle: 'مساحات عملي',
+    previewHint: 'اختر بطاقة لعرض الإعدادات دون تبديل مساحة العمل.',
+    workspaceHint: 'لكل مساحة عمل إعدادات ومحادثات مستقلة. تُدار مجلدات المشاريع ضمن المشاريع.',
+    soulApplyHint: 'تُطبّق التغييرات على المحادثات الجديدة.',
     close: 'إغلاق',
     nameHint: 'اسم الملف الشخصي',
     title: 'الملفات الشخصية',
@@ -470,6 +474,8 @@ export const arCommandCenter = {
     modelLabel: 'النموذج',
     skillsLabel: 'المهارات',
     notSet: 'غير مضبوط',
+    storageLocation: 'موقع مساحة العمل',
+    soulTitle: 'الشخصية والسلوك',
     soulDesc: 'الموجّه (prompt) النظامي وتعليمات الشخصية المضمّنة في هذا الملف الشخصي.',
     soulMissing:
       'لا يوجد ملف SOUL.md لهذا الملف الشخصي بعد. أضف التعليمات أدناه واحفظ لإنشائه. تُدار إعدادات الشخصية في config.yaml بشكل منفصل.',

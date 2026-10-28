@@ -44,11 +44,10 @@ export function normalizeProfileKey(name: string | null | undefined): string {
   return value || 'default'
 }
 
-// Presentation-only label: the display_name from profile.yaml when set (e.g. a
-// renamed default profile), else the canonical name. Never used for
-// comparison or routing — canonical `name` remains the identity everywhere.
-export function profileLabel(profile: Pick<ProfileInfo, 'display_name' | 'name'>): string {
-  return (profile.display_name ?? '').trim() || profile.name
+// Use the same friendly name as Agent Hub across profile surfaces. This is
+// presentation only: comparisons, routes and persistence keep canonical `name`.
+export function profileLabel(profile: Pick<ProfileInfo, 'bot_title' | 'display_name' | 'name'>): string {
+  return (profile.bot_title ?? '').trim() || (profile.display_name ?? '').trim() || profile.name
 }
 
 // The profile the running local backend is actually scoped to (mirrors

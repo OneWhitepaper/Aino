@@ -14,7 +14,7 @@ from hermes_cli.observability.shared_metrics_send_config import (
 
 
 def _config(**shared):
-    return {"telemetry": {"shared_metrics": shared}}
+    return {"telemetry": {"shared_metrics": {"recipient": "aino", **shared}}}
 
 
 class TestDefaults:
