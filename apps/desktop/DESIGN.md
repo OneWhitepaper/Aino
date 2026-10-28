@@ -22,6 +22,36 @@ This doc contains two kinds of content, maintained differently:
 When a rule and the code disagree, fix whichever is wrong rather than forking a
 one-off at the call site.
 
+## Approved Aino interface direction (2026-10-28)
+
+Aino adopts the reviewed AionUi-inspired presentation across every app-owned
+surface. The reference was reviewed at AionUi commit `11cd2a9a20d1e033157636efc570b41384c66d85`;
+it is visual grounding, not a dependency or a source of application state.
+Existing Aino/Hermes components, routes, feature ownership and capabilities remain
+canonical. Do not replace them with prototype handlers or remove capabilities
+that the mockup does not show.
+
+- The default primary rail is 260px, resizable and persisted through the existing
+  layout store. Pale neutral navigation, soft selected rows, white reading and
+  management surfaces, hairline seams and restrained shadows form one hierarchy.
+- Use the existing system sans stack and remembered font preference. UI and
+  reading base roles are 14px, supporting copy 12–13px, section titles 18px and
+  page titles 24px. Conversation scale is still applied exactly once. Code,
+  terminal content, and embedded user documents retain their own typography.
+- Controls and rows use 8px corners, cards 14px, menus 12px, floating panels 16px, and the
+  composer 24px. Native circles (avatars, radio controls, send) remain circles.
+- `styles/aino-theme.css` owns shared surface/type roles; `aino-chat.css` owns
+  home/transcript geometry; `aino-workbench.css` owns file/preview chrome.
+  Extend existing primitives before styling a caller. Menus, tooltips, dialogs,
+  alerts, empty/error/loading states, account/onboarding and auxiliary windows
+  inherit the same contract, including dark mode and native translucency.
+- Preserve every operation, scroll region, keyboard/focus owner, portal layer,
+  route, saved layout and profile/connection boundary. File tabs, source/preview,
+  edits, save, split, review, terminals and external open keep existing handlers.
+  Workspace selection still previews; only the explicit switch action activates it.
+- Native OS file pickers and third-party embedded documents keep their native
+  presentation. Only app-owned surrounding chrome is themed.
+
 ## Principles
 
 1. **Flat, not boxed.** No card-in-card. Settings forms use outlined groups and
@@ -61,8 +91,8 @@ one-off at the call site.
   above the card grid. Cards keep a readable column width even when only one
   workspace exists. The inspector groups model settings, the existing SOUL.md
   editor and storage details; advanced browsing stays below the overview.
-  Its restrained green selection and actions derive from the existing semantic
-  color tokens, including dark mode. The default workspace uses the Aino mark;
+  Its neutral selection and actions derive from the shared surface
+  roles, including dark mode. The default workspace uses the Aino mark;
   named workspaces retain ProfileGlyph and their configured identity colors.
 - **Pages are durable destinations.** Chat, Settings, Skills, Messaging, and
   Artifacts remain in shell chrome. Do not hide a distinct product noun inside
@@ -255,7 +285,7 @@ Brightness remains per profile and follows peer windows; CLI/TUI skins, typograp
 zoom and native Glass keep their independent settings. Stored theme assets are not
 deleted when upgrading.
 
-The approved reply style is also the system type and density ladder: 15px
+The approved reply style is also the system type and density ladder: 14px
 body copy at 1.6 line height, 14px controls, navigation and activity, 13px group labels, 12px supporting
 metadata, and 18px section/dialog headings. Conversation size aliases resolve
 from these existing Aino roles; routes and body portals do not carry separate
@@ -476,7 +506,7 @@ trigger within 300ms opens instantly. The cooldown starts on close, so a
 hover a second later waits again. Once triggered, entrance has no animation.
 Exit fades over 100ms and moves 0.125rem toward the anchor; reduced motion
 disables the exit animation. `OverflowTip` stays on its own longer delay
-(list titles must not trail while scanning). Bubbles use a 0.25rem radius.
+(list titles must not trail while scanning). Tooltips use the shared 8px control radius.
 
 **Tooltip placement.** Choose intent through `placement`: `control` above (default), `toolbar` below, `row` to the right, and `left-rail` / `right-rail` inward. Explicit `side` and `align` override the preference. Radix flips and shifts for collisions, keeps the arrow attached, and hides detached triggers. Controls and toolbars use their owning pane as a boundary; row descriptions and rails may extend into the window. Use `boundary="viewport"` for an intentional escape. Short labels size to content; descriptions wrap within 24rem and the available space, in one rounded bubble.
 
@@ -542,7 +572,7 @@ blurred backdrop.
 
 ## Layout
 
-- **Navigation rail:** new layouts open at 264px. Existing saved widths remain
+- **Navigation rail:** new layouts open at 260px. Existing saved widths remain
   authoritative, and the supported 245px minimum is unchanged. A quiet gray rail
   continues into its portion of the native titlebar, with one continuous hairline at the content boundary.
   The tree sash owns the divider and its resize target; panes do not add
@@ -595,7 +625,7 @@ blurred backdrop.
   restart/hot-serve feedback and guard unsaved credential edits on close.
 - **Capabilities:** reuse `CatalogBrowser`, its filter state and capability actions.
   Primary sections use the shared Radix `Tabs` navigation size: line icons,
-  14px labels, separate count badges and an active paper segment on a quiet track.
+  14px labels, separate count badges and a fine active underline on an open track.
   The primitive owns the selection appearance; do not layer text underlines or
   the legacy route-tab fill onto it. The existing dropdown handles narrow panes.
   Search, discovery/installed selection, view controls and filters share one toolbar;
@@ -683,7 +713,7 @@ inline-edit composers.
 It does not resize the sidebar, settings, toolbars, media, or pane geometry.
 Conversation size and line-height tokens are derived inside the transcript/editor
 from their root base tokens; do not multiply the global tokens or nest CSS zoom.
-`aino-theme.css` owns those base tokens through the existing 15/14/12px roles;
+`aino-theme.css` owns those base tokens through the existing 14/14/12px roles;
 the inner transcript/editor derives scaled values from them. Do not override only
 the final aliases on an outer chat surface: inner scopes recalculate them.
 
@@ -702,7 +732,7 @@ the final aliases on an outer chat surface: inner scopes recalculate them.
   between groups; do not derive them from private reasoning or invent them for
   historical turns without public updates. Adjacent activity rows use compact
   spacing; public paragraphs retain the larger stage gap. Expanded reasoning is a bounded,
-  scrollable detail at 14px, distinct from the 15px public prose. Its disclosure
+  scrollable detail at 14px, separated from public prose by its bounded surface. Its disclosure
   identity is independent from the removed aggregate activity fold.
   Expanded terminal details reuse the shared code surface as a bounded Shell
   panel: original command, non-wrapping output, copy, and a bottom status line.
@@ -716,9 +746,9 @@ the final aliases on an outer chat surface: inner scopes recalculate them.
   and result counts live in the existing detail disclosure. Public paragraphs
   use regular weight and comfortable line height; compact tool rows use
   regular weight and the shared line-height and glyph columns. At the normal
-  desktop scale, prose and user bubbles are 15px, activity is 14px with a 24px
+  desktop scale, prose and user bubbles are 14px, activity is 14px with a 24px
   line height, and glyphs are 14px in a 16px cell. Prose uses 1.6 line height;
-  headings scale from the reading size (23/18/15px for h1/h2/h3 at that scale).
+  headings scale from the reading size (22/18/14px for h1/h2/h3 at that scale).
   The approved reply presentation uses a faint semantic-blue user bubble and
   table header and continuous unboxed prose. Disclosure carets sit immediately
   after their label, with width reserved while hidden. They appear on that
@@ -790,14 +820,13 @@ the final aliases on an outer chat surface: inner scopes recalculate them.
   voice menu and send controls do not fork by home/conversation layout. A
   default model remains visible by name, and projects have one entry at the
   top of the input instead of a second fixed workspace button below it.
-  The v2 home order is title and subtitle → project selector above the input →
+  The home order is localized heading and subtitle → project selector above the input →
   composer controls → the four existing quick tasks. The centered composition
-  caps at 916px; the composer uses 22px corners, and quick tasks use 15px corners.
+  caps at 744px; the composer uses 24px corners, and quick tasks use 14px corners.
   The reserved slot and actual composer share one height, and the editor scrolls
   above its controls for long drafts. Task columns respond to the available chat
-  pane width, and short windows use a more compact composer and spacing. The serif `AINO AGENT` heading is the only serif UI treatment.
-  No decorative logo appears above it, and no duplicate app identity is added
-  above the sidebar's titlebar → Sessions/Agent Hub switch → navigation ordering.
+  pane width, and short windows use a more compact composer and spacing. The heading uses the same sans family as the UI. The sidebar carries the existing
+  Aino mark, while the Sessions/Agent Hub switch and all navigation remain available.
   Existing routes, section order, dynamic account/model/copy and action paths stay
   unchanged. Avatars, radios and send controls remain circular; compact checkboxes
   retain their intentional small square geometry.

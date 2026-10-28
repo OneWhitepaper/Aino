@@ -71,10 +71,10 @@ export function PanelHeader({ actions, subtitle, title }: PanelHeaderProps) {
     // layout space, so header actions would otherwise slide right up against it.
     // Reserve clearance (button footprint from the card edge + a small gap) on
     // the right whenever actions are present.
-    <header className={cn('mb-3 flex shrink-0 items-start justify-between gap-3', actions ? 'pr-8' : undefined)}>
+    <header className={cn('mb-6 flex shrink-0 items-start justify-between gap-4', actions ? 'pr-8' : undefined)} data-aino-panel-header="">
       <div className="min-w-0">
-        <h2 className="text-sm font-semibold text-foreground">{title}</h2>
-        {subtitle ? <p className="truncate text-xs text-muted-foreground/80">{subtitle}</p> : null}
+        <h2 className="text-[length:var(--aino-text-page-title)] font-semibold tracking-tight text-foreground">{title}</h2>
+        {subtitle ? <p className="mt-2 text-[length:var(--aino-text-ui)] leading-relaxed text-muted-foreground">{subtitle}</p> : null}
       </div>
       {actions ? <div className="flex shrink-0 items-center gap-1.5">{actions}</div> : null}
     </header>
@@ -187,7 +187,7 @@ export function PanelListRow({
   const row = (
     <div
       className={cn(
-        'group/row row-hover relative flex h-7 w-full items-center rounded-md text-[0.78rem] hover:text-foreground',
+        'group/row row-hover relative flex h-7 w-full items-center rounded-md text-[length:var(--aino-text-label)] hover:text-foreground',
         active ? 'bg-(--ui-row-active-background) text-foreground' : 'text-(--ui-text-secondary)'
       )}
       data-active={active}
@@ -205,7 +205,7 @@ export function PanelListRow({
           ) : null)}
         <span className="min-w-0 flex-1 truncate font-medium text-foreground/85">{title}</span>
       </RowButton>
-      {meta ? <span className="shrink-0 pr-2 text-[0.62rem] tabular-nums text-muted-foreground/45">{meta}</span> : null}
+      {meta ? <span className="shrink-0 pr-2 text-[length:var(--aino-text-caption)] tabular-nums text-(--ui-text-secondary)">{meta}</span> : null}
       {menuItems ? (
         <div className="shrink-0 pr-1">
           <PanelRowMenu items={menuItems} label={menuLabel} />
@@ -307,7 +307,7 @@ export function PanelEmpty({ action, description, icon = 'inbox', title }: Panel
         <Codicon className="text-muted-foreground/50" name={icon} size="1.25rem" />
         {title ? <p className="text-[length:var(--aino-text-body)] font-medium text-foreground/90">{title}</p> : null}
         {description ? (
-          <p className="max-w-sm text-xs leading-relaxed text-muted-foreground/70">{description}</p>
+          <p className="max-w-sm text-[length:var(--aino-text-label)] leading-relaxed text-(--ui-text-secondary)">{description}</p>
         ) : null}
         {action ? <div className="mt-2">{action}</div> : null}
       </div>
@@ -317,7 +317,7 @@ export function PanelEmpty({ action, description, icon = 'inbox', title }: Panel
 
 export function PanelSectionLabel({ children, className }: { children: ReactNode; className?: string }) {
   return (
-    <div className={cn('text-[0.6rem] font-medium uppercase tracking-wider text-muted-foreground/50', className)}>
+    <div className={cn('text-[length:var(--aino-text-caption)] font-medium tracking-normal text-(--ui-text-secondary)', className)}>
       {children}
     </div>
   )
@@ -331,10 +331,10 @@ export interface PanelMetaRow {
 
 export function PanelMeta({ className, rows }: { className?: string; rows: PanelMetaRow[] }) {
   return (
-    <dl className={cn('grid grid-cols-[5rem_1fr] gap-x-2 gap-y-1 text-[0.7rem]', className)}>
+    <dl className={cn('grid grid-cols-[5rem_1fr] gap-x-2 gap-y-1 text-[length:var(--aino-text-caption)]', className)}>
       {rows.map((row, i) => (
         <div className="contents" key={typeof row.label === 'string' ? row.label : i}>
-          <dt className="truncate text-muted-foreground/55">{row.label}</dt>
+          <dt className="truncate text-(--ui-text-secondary)">{row.label}</dt>
           <dd className="min-w-0 break-words text-foreground/85">{row.value}</dd>
         </div>
       ))}
@@ -348,7 +348,7 @@ export function PanelBlock({ children, className }: { children: ReactNode; class
   return (
     <pre
       className={cn(
-        'max-h-48 overflow-auto whitespace-pre-wrap break-words rounded bg-foreground/5 p-2.5 text-[0.68rem] leading-relaxed text-foreground/80',
+        'max-h-48 overflow-auto whitespace-pre-wrap break-words rounded bg-foreground/5 p-2.5 text-[length:var(--aino-text-caption)] leading-relaxed text-foreground/80',
         className
       )}
     >
@@ -370,7 +370,7 @@ export function PanelPill({ children, tone = 'muted' }: { children: ReactNode; t
   return (
     <span
       className={cn(
-        'inline-flex items-center rounded-full px-1.5 py-0.5 text-[0.62rem] font-medium capitalize',
+        'inline-flex items-center rounded-full px-1.5 py-0.5 text-[length:var(--aino-text-caption)] font-medium capitalize',
         PILL_TONE[tone]
       )}
     >

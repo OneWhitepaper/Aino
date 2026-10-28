@@ -1,6 +1,6 @@
 /* Aino capability directory: the approved compact catalog, using the shared palette and controls. */
 [data-catalog-results] {
-  --catalog-text-meta: 0.6875rem;
+  --catalog-text-meta: var(--aino-text-caption);
   container-type: inline-size;
 }
 .catalog-search-header {
@@ -35,6 +35,9 @@
   flex-shrink: 0;
 }
 .catalog-workspace {
+  width: 100%;
+  max-width: 1088px;
+  margin-inline: auto;
   display: flex;
   flex: 1;
   min-width: 0;
@@ -87,8 +90,8 @@
   white-space: nowrap;
 }
 .catalog-filter-chips > button[aria-pressed='true'] {
-  color: var(--ui-green);
-  background: color-mix(in srgb, var(--ui-green) 9%, var(--ui-bg-elevated));
+  color: var(--ui-text-primary);
+  background: var(--ui-row-active-background);
   font-weight: 500;
 }
 .catalog-rail-hint {
@@ -168,15 +171,15 @@
   flex-direction: column;
   overflow: hidden;
   border: 1px solid var(--ui-stroke-secondary);
-  border-radius: 9px;
+  border-radius: var(--aino-radius-card);
   background: var(--ui-bg-elevated);
 }
 .catalog-card-body {
   display: flex;
   align-items: flex-start;
   gap: 12px;
-  padding: 15px 14px 11px;
-  min-height: 100px;
+  padding: 18px 18px 16px;
+  min-height: 128px;
   min-width: 0;
 }
 .catalog-card-icon {
@@ -186,7 +189,7 @@
   width: 35px;
   height: 35px;
   flex-shrink: 0;
-  border-radius: 9px;
+  border-radius: var(--aino-radius-card);
   background: color-mix(in srgb, var(--catalog-accent) 9%, var(--ui-bg-elevated));
   color: color-mix(in srgb, var(--catalog-accent) 65%, var(--ui-text-secondary));
 }
@@ -224,8 +227,8 @@
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  min-height: 35px;
-  margin: auto 14px 0;
+  min-height: 40px;
+  margin: auto 18px 0;
   padding: 5px 0;
   border-top: 1px solid var(--ui-stroke-tertiary);
 }
@@ -336,7 +339,7 @@
   scroll-snap-type: x mandatory;
   overscroll-behavior-x: contain;
   scrollbar-width: none;
-  border-radius: 9px;
+  border-radius: var(--aino-radius-card);
 }
 .catalog-featured-track::-webkit-scrollbar {
   display: none;
@@ -417,7 +420,7 @@
   border-radius: 0;
 }
 .catalog-detail {
-  --catalog-text-meta: 0.6875rem;
+  --catalog-text-meta: var(--aino-text-caption);
   display: flex;
   flex-direction: column;
   min-height: 0;

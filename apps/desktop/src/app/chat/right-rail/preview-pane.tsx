@@ -1440,7 +1440,7 @@ export function PreviewPane({
 
   return (
     <aside
-      className="relative flex h-full w-full min-w-0 flex-col overflow-hidden bg-transparent text-muted-foreground"
+      className="aino-preview-surface relative flex h-full w-full min-w-0 flex-col overflow-hidden bg-transparent text-muted-foreground"
       onKeyDown={onPaneKeyDown}
       // Buttons 3/4 are a mouse's back/forward. Chromium delivers them to
       // the renderer as a normal mouse event inside the app's own chrome (the

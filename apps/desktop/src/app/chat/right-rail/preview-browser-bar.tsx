@@ -149,7 +149,7 @@ export function PreviewBrowserBar({
   }
 
   return (
-    <div className="flex min-h-(--titlebar-height) shrink-0 items-center gap-1 border-b border-border/60 bg-background px-1.5 py-1">
+    <div className="flex min-h-8 shrink-0 items-center gap-1 border-b border-border/60 bg-background px-1.5 py-1" data-preview-toolbar="">
       <PaneStripGlyph
         disabled={!canGoBack}
         icon={<Codicon name="arrow-left" size="0.8125rem" />}

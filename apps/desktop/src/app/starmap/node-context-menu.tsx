@@ -128,7 +128,7 @@ export function NodeContextMenu({ onClose, onNodeRemoved, target }: NodeContextM
             <span aria-hidden style={{ left: target.x, position: 'fixed', top: target.y }} />
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start" onCloseAutoFocus={e => e.preventDefault()} side="bottom">
-            <DropdownMenuLabel className="truncate text-[0.68rem] font-normal text-muted-foreground">
+            <DropdownMenuLabel className="truncate text-[length:var(--aino-text-caption)] font-normal text-muted-foreground">
               {target.label}
             </DropdownMenuLabel>
             <DropdownMenuItem

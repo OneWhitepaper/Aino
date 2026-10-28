@@ -45,12 +45,12 @@ export interface ErrorStateProps {
 // Dialog callers can pass DialogTitle/DialogDescription for accessibility.
 export function ErrorState({ children, className, description, icon, title }: ErrorStateProps) {
   return (
-    <div className={cn('grid gap-5', className)}>
+    <div className={cn('grid gap-5 text-[length:var(--aino-text-ui)]', className)} data-aino-error-state="">
       <div className="flex flex-col items-center gap-3 text-center">
         {icon ?? <ErrorIcon />}
 
         {typeof title === 'string' ? (
-          <h2 className="text-center text-xl font-semibold tracking-tight">{title}</h2>
+          <h2 className="text-center text-[length:var(--aino-text-title)] font-semibold tracking-tight">{title}</h2>
         ) : (
           title
         )}

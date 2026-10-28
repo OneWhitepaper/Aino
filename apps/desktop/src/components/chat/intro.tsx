@@ -25,7 +25,7 @@ type IntroCopyRecord = IntroCopy & {
 }
 
 export type IntroProps = {
-  /** Render the Figma-aligned landing surface (the default for new chats). */
+  /** Render the landing surface around the existing live composer. */
   home?: boolean
   onInsertPrompt?: (text: string) => void
   onPickFiles?: () => void
@@ -280,6 +280,7 @@ export function Intro({ home, onInsertPrompt, onPickFiles, personality, seed }: 
 
   if (showHome) {
     const homeCopy = t.home
+    const headline = locale === 'en' || locale === 'zh' ? copy.headline : AGENT_NAME
     const subtitle = locale === 'en' || locale === 'zh' ? copy.body : homeCopy.subtitle
 
     const actions: Array<{
@@ -322,7 +323,7 @@ export function Intro({ home, onInsertPrompt, onPickFiles, personality, seed }: 
     return (
       <section className="aino-home-layout" data-home-layout="" data-slot="aui_intro" ref={homeLayoutRef}>
         <div className="aino-home-content" ref={homeContentRef}>
-          <h1 className="aino-home-title">{WORDMARK}</h1>
+          <h1 className="aino-home-title">{headline}</h1>
           <p className="aino-home-subtitle">{subtitle}</p>
 
           {/* The real composer is positioned over this reserved slot by ChatView.

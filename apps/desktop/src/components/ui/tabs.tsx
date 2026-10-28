@@ -15,10 +15,13 @@ function TabsList({ className, size = 'default', ...props }: TabsListProps) {
   return (
     <TabsPrimitive.List
       className={cn(
-        'inline-flex items-center justify-center bg-(--ui-bg-tertiary) p-1 text-muted-foreground',
-        size === 'navigation' ? 'h-11 w-fit gap-1 rounded-xl' : 'h-9 rounded-(--aino-radius-control)',
+        'inline-flex items-center justify-center text-muted-foreground',
+        size === 'navigation'
+          ? 'h-11 w-fit gap-5 bg-transparent'
+          : 'h-9 rounded-(--aino-radius-control) bg-(--ui-bg-tertiary) p-1',
         className
       )}
+      data-size={size}
       data-slot="tabs-list"
       {...props}
     />
@@ -33,12 +36,13 @@ function TabsTrigger({ className, size = 'default', ...props }: TabsTriggerProps
   return (
     <TabsPrimitive.Trigger
       className={cn(
-        'inline-flex items-center justify-center rounded-(--aino-radius-control) font-medium whitespace-nowrap transition-colors outline-none focus-visible:bg-background focus-visible:text-foreground focus-visible:ring-[0.1875rem] focus-visible:ring-ring/35 disabled:pointer-events-none disabled:opacity-50 data-[state=active]:bg-(--ui-bg-elevated) data-[state=active]:text-foreground data-[state=active]:shadow-xs [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0',
+        'inline-flex items-center justify-center font-medium whitespace-nowrap transition-colors outline-none focus-visible:bg-background focus-visible:text-foreground focus-visible:ring-[0.1875rem] focus-visible:ring-ring/35 disabled:pointer-events-none disabled:opacity-50 data-[state=active]:text-foreground [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0',
         size === 'navigation'
-          ? 'h-9 cursor-pointer gap-2 px-3.5 text-[length:var(--aino-text-ui)] hover:text-foreground'
-          : 'h-7 gap-1.5 px-3 text-sm',
+          ? 'h-full cursor-pointer gap-2 border-b-2 border-transparent px-0.5 text-[length:var(--aino-text-ui)] hover:text-foreground data-[state=active]:border-(--ui-text-primary)'
+          : 'h-7 gap-1.5 rounded-(--aino-radius-control) px-3 text-sm data-[state=active]:bg-(--ui-bg-elevated) data-[state=active]:shadow-xs',
         className
       )}
+      data-size={size}
       data-slot="tabs-trigger"
       {...props}
     />

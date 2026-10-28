@@ -980,14 +980,14 @@ export function StarMap({
       </div>
 
       {/* Legend — bottom-left, one entry per line like a conventional key. */}
-      <div className="pointer-events-none absolute bottom-2 left-2 flex flex-col gap-1 text-[0.62rem] text-muted-foreground">
+      <div className="pointer-events-none absolute bottom-2 left-2 flex flex-col gap-1 text-[length:var(--aino-text-caption)] text-muted-foreground">
         <span className="flex items-center gap-1.5">
           <span className="inline-block size-2 rounded-full bg-[var(--theme-primary)]/80" /> {t.starmap.skill}
         </span>
         <span className="flex items-center gap-1.5">
           <span className="inline-block size-2 rotate-45" style={{ backgroundColor: memoryColor }} /> {t.starmap.memory}
         </span>
-        <span className="text-[0.58rem] text-muted-foreground/65">{t.starmap.legendAge}</span>
+        <span className="text-[length:var(--aino-text-caption)] text-muted-foreground/65">{t.starmap.legendAge}</span>
         <RevealLabel axis={timeAxis} revealStore={revealStore} />
       </div>
     </div>

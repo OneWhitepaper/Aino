@@ -1,0 +1,58 @@
+/* Presentation of app-owned workbench chrome. Editors, terminal canvases,
+   embedded websites and user documents retain their own content styles. */
+.aino-preview-surface {
+  border-inline: 1px solid var(--ui-stroke-tertiary);
+  background: var(--ui-editor-surface-background);
+  color: var(--ui-text-primary);
+  font-family: var(--dt-font-sans);
+}
+
+[data-preview-toolbar] {
+  min-width: 0;
+  background: var(--ui-editor-surface-background);
+  color: var(--ui-text-secondary);
+  font-size: var(--aino-text-caption);
+}
+
+[data-preview-toolbar] [data-slot='button'][aria-pressed='true'] {
+  background: var(--ui-row-active-background);
+  color: var(--ui-text-primary);
+}
+
+[data-preview-markdown] {
+  padding: clamp(1.25rem, 3vw, 2.25rem);
+  line-height: 1.8;
+}
+
+[data-zone-tabstrip]:has([data-tree-tab^='preview-tile:']) {
+  --pane-tab-active-accent: transparent;
+  --pane-tab-active-bg: var(--ui-bg-elevated);
+  --pane-tab-strip-bg: var(--ui-bg-chrome);
+  border-bottom: 1px solid var(--ui-stroke-tertiary);
+}
+
+[data-zone-tabstrip]:has([data-tree-tab^='preview-tile:']) [data-tree-tab] {
+  border-radius: 0.625rem 0.625rem 0 0;
+  font-family: var(--dt-font-sans);
+}
+
+[data-file-browser] [data-project-tree] {
+  padding-inline: 0.625rem;
+}
+
+[data-file-browser] [data-file-browser-header] {
+  border-bottom: 1px solid var(--ui-stroke-tertiary);
+  margin-bottom: 0.375rem;
+}
+
+[data-file-browser] [data-sidebar-label-tone] {
+  color: var(--ui-text-primary);
+  font-size: var(--aino-text-ui);
+  font-weight: 500;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .aino-preview-surface *, [data-file-browser] * {
+    transition-duration: 0s !important;
+  }
+}

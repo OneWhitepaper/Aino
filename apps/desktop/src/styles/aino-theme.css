@@ -4,11 +4,15 @@
   --aino-radius-control: 0.5rem;
   --aino-radius-row: 0.5rem;
   --aino-radius-panel: 1rem;
+  --aino-radius-menu: 0.75rem;
+  --aino-radius-card: 0.875rem;
+  --aino-radius-composer: 1.5rem;
   --aino-text-caption: 0.75rem;
   --aino-text-label: 0.8125rem;
   --aino-text-ui: 0.875rem;
-  --aino-text-body: 0.9375rem;
+  --aino-text-body: 0.875rem;
   --aino-text-title: 1.125rem;
+  --aino-text-page-title: 1.5rem;
   --aino-line-height: 1.6;
   /* Base roles are shared; transcript/editor scopes apply the user's scale once. */
   --conversation-text-base-size: var(--aino-text-body);
@@ -63,20 +67,20 @@
    ThemeProvider seeds. Glass continues to own the *-surface-background aliases. */
 :root:not(.dark) {
   --ui-base: #303236;
-  --ui-bg-chrome: #fcfcfc;
-  --ui-bg-sidebar: #f3f3f4;
-  --ui-bg-editor: #f8f9fa;
+  --ui-bg-chrome: #f3f4f6;
+  --ui-bg-sidebar: #f3f4f6;
+  --ui-bg-editor: #f8f9fb;
   --ui-bg-input: var(--ui-bg-editor);
   --ui-bg-elevated: #fff;
   --ui-text-primary: var(--ui-base);
   --ui-text-secondary: #61666d;
   --ui-text-tertiary: #858a92;
   --ui-text-quaternary: color-mix(in srgb, var(--ui-text-tertiary) 72%, var(--ui-bg-elevated));
-  --ui-stroke-primary: #e1e4e8;
+  --ui-stroke-primary: #e3e5e9;
   --ui-stroke-secondary: var(--ui-stroke-primary);
-  --ui-stroke-tertiary: #e7e8ea;
+  --ui-stroke-tertiary: #ebedf0;
   --ui-stroke-quaternary: color-mix(in srgb, var(--ui-stroke-tertiary) 60%, transparent);
-  --ui-row-active-background: #e5e6e8;
+  --ui-row-active-background: #e9eaf0;
   --ui-row-hover-background: color-mix(in srgb, var(--ui-row-active-background) 55%, transparent);
   --ui-bg-tertiary: color-mix(in srgb, var(--ui-row-active-background) 65%, var(--ui-bg-sidebar));
   --ui-bg-quaternary: var(--ui-bg-editor);
@@ -102,11 +106,27 @@
   --aino-landing-surface: var(--ui-chat-surface-background);
   --aino-landing-title: var(--ui-text-primary);
   --aino-landing-workspace: var(--ui-bg-quaternary);
-  --shadow-aino-landing-composer: var(--shadow-nous);
+  --shadow-aino-landing-composer: 0 1px 2px color-mix(in srgb, var(--ui-base) 3%, transparent);
   --aino-landing-font: var(--dt-font-sans);
-  --aino-band-row2: 2.75rem;
+  --aino-band-row2: 2.25rem;
   --ui-chat-bubble-background: color-mix(in srgb, var(--ui-blue) 4%, var(--aino-surface-control));
   --aino-table-header-background: color-mix(in srgb, var(--ui-blue) 3%, var(--aino-surface-bg));
+}
+
+/* Opaque content keeps the pale canvas distinct from the navigation rail.
+   Native Glass still owns its transparent surface aliases. */
+:root:not([data-hermes-glass]),
+:root[data-hermes-glass][data-hermes-glass-scope='sidebar'] {
+  --ui-chat-surface-background: var(--ui-bg-editor);
+  --ui-editor-surface-background: var(--ui-bg-elevated);
+}
+
+/* Sidebar material must not make modal text reveal the underlying transcript.
+   Whole-window Glass retains its existing raised-surface treatment. */
+:root[data-hermes-glass][data-hermes-glass-scope='sidebar'] [data-glass-raised] {
+  --ui-chat-surface-background: var(--ui-bg-elevated);
+  --ui-editor-surface-background: var(--ui-bg-elevated);
+  --ui-sidebar-surface-background: var(--ui-bg-sidebar);
 }
 
 /* One rail-tone layer over the native material, not another field tint on
@@ -141,16 +161,16 @@
    renderers cannot drift from their parent page. */
 
 /* Durable pages use the same type face and paper as the landing chat.  The
-   surface token remains transparent when Glass is enabled, so native material
-   behavior is preserved. */
+   surface token remains transparent for whole-window Glass; sidebar-only
+   material keeps the content opaque. */
 :is([data-aino-page-shell], [data-aino-settings]) {
-  background: var(--aino-surface-bg) !important;
+  background: var(--ui-editor-surface-background) !important;
   color: var(--aino-surface-ink);
   font-family: var(--aino-landing-font);
 }
 
 :is([data-aino-page-shell], [data-aino-settings]) [data-aino-page-content] {
-  background: var(--aino-surface-bg) !important;
+  background: var(--ui-editor-surface-background) !important;
 }
 
 :is([data-aino-page-content], [data-aino-settings-content], [data-aino-overlay-main]) {
@@ -186,7 +206,7 @@
 /* Page headers are a single quiet seam, not a second title bar. */
 [data-aino-page-header] {
   border-bottom-color: var(--aino-surface-stroke) !important;
-  background: var(--aino-surface-bg) !important;
+  background: var(--ui-editor-surface-background) !important;
 }
 
 [data-aino-page-header]:not([data-tabs-variant='section']) [data-tour='page-tabs'] [data-tour^='tab-'] {
@@ -220,8 +240,20 @@
   font-family: var(--aino-landing-font);
 }
 
+.aino-sidebar-brand {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 3.75rem;
+  padding-inline: 0.625rem;
+  font-size: 1rem;
+  font-weight: 600;
+  letter-spacing: -0.025em;
+}
+
 [data-aino-sidebar] [data-sidebar='menu-button'] {
-  min-height: 2.5625rem;
+  min-height: 2.125rem;
   font-size: var(--aino-text-ui);
   border: 0 !important;
   border-radius: var(--aino-radius-control) !important;
@@ -284,8 +316,12 @@
   font-weight: 600;
 }
 
+[data-aino-settings] [data-aino-overlay-nav] {
+  background: var(--ui-bg-sidebar) !important;
+}
+
 [data-aino-settings] [data-aino-overlay-main] {
-  background: var(--aino-surface-bg) !important;
+  background: var(--ui-editor-surface-background) !important;
 }
 
 [data-aino-settings] [data-settings-profile-controls],
@@ -296,8 +332,64 @@
 /* Settings groups keep labels, values and controls on readable, ruled rows. */
 [data-settings-group] {
   border: 1px solid var(--ui-stroke-secondary);
-  border-radius: var(--aino-radius-row);
+  border-radius: var(--aino-radius-card);
+  background: var(--ui-editor-surface-background);
   padding-inline: 1rem;
+}
+
+[data-settings-row] > div {
+  padding-block: 1rem;
+}
+
+[data-aino-breadcrumb-header] nav {
+  flex-wrap: wrap;
+  row-gap: 0.5rem;
+}
+
+[data-aino-breadcrumb-header] [aria-current='page'],
+[data-settings-section-heading][data-page='true'] {
+  font-size: var(--aino-text-page-title);
+  font-weight: 600;
+  letter-spacing: -0.025em;
+  line-height: 1.4;
+}
+
+[data-aino-settings] [data-aino-overlay-nav] [data-tour^='nav-'] {
+  height: auto;
+  min-height: 2.25rem;
+  margin-block: 0.125rem;
+}
+
+[data-aino-panel-header] {
+  padding-block: 0.5rem;
+}
+
+/* The settings body shares a readable column while its own scrollport and
+   narrow-screen navigation retain their existing layout ownership. */
+[data-aino-settings] [data-aino-settings-content] > div {
+  width: 100%;
+  max-width: 56rem;
+  margin-inline: auto;
+}
+
+[data-aino-settings-content] > div > [data-settings-section-heading]:first-child,
+[data-aino-settings-content] > div > :first-child > [data-settings-section-heading]:first-child {
+  font-size: var(--aino-text-page-title);
+  font-weight: 600;
+  letter-spacing: -0.025em;
+  line-height: 1.4;
+}
+
+/* Directory cards and panels share a surface role; their individual actions,
+   disclosures and owner routing stay in the existing feature components. */
+[data-catalog-card], .workspace-card {
+  border-color: var(--ui-stroke-secondary);
+  border-radius: var(--aino-radius-card);
+}
+
+[data-slot='bots-roster'] [data-slot='row-button'] {
+  border-radius: var(--aino-radius-control);
+  font-size: var(--aino-text-ui);
 }
 
 [data-settings-group] > [data-settings-row] ~ [data-settings-row] {

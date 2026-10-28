@@ -1,0 +1,690 @@
+/* ── Aino landing surface ────────────────────────────────────────────────
+   The empty chat keeps the real Thread + ChatBar mounted. This surface only
+   supplies the landing copy and quick-action affordances; the composer itself
+   is repositioned below so every send/attachment/voice path remains the same
+   implementation as a normal chat. */
+.aino-home-layout {
+  container-type: inline-size;
+  display: grid;
+  width: 100%;
+  min-width: 0;
+  height: 100%;
+  /* The reference leaves slightly more breathing room below the composition.
+     Flexible tracks collapse when content needs the space in shorter panes. */
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 7fr) auto minmax(0, 9fr);
+  justify-items: center;
+  /* This surface already reserves the real composer in its measured slot. */
+  padding-bottom: 0;
+  pointer-events: auto;
+  text-align: center;
+}
+
+.aino-home-content {
+  grid-row: 2;
+  display: flex;
+  width: min(46.5rem, 100%);
+  min-width: 0;
+  flex-direction: column;
+  align-items: center;
+  font-family: var(--aino-landing-font);
+}
+
+.aino-home-title {
+  margin: 0;
+  color: var(--aino-landing-title);
+  font-family: var(--aino-landing-font);
+  font-size: clamp(1.375rem, 3cqi, 1.5rem);
+  font-weight: 600;
+  line-height: 1.25;
+  letter-spacing: -0.025em;
+  text-wrap: balance;
+}
+
+.aino-home-subtitle {
+  max-width: 100%;
+  margin: 1rem 0 0;
+  color: var(--aino-landing-muted);
+  font-size: var(--aino-text-ui);
+  line-height: 1.8;
+  white-space: normal;
+}
+
+/* Reserve the live composer beneath the introduction. The actual ChatBar is
+   absolutely docked over this slot by the home-layout selectors below. */
+.aino-home-composer-slot {
+  width: 100%;
+  height: var(--aino-home-composer-height);
+  flex: 0 0 var(--aino-home-composer-height);
+  margin-top: 1.5rem;
+}
+
+.aino-home-actions {
+  display: grid;
+  width: 100%;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+  margin-top: 2rem;
+}
+
+.aino-home-action {
+  min-width: 0;
+  min-height: 4rem;
+  justify-content: flex-start;
+  gap: 0.75rem;
+  padding: 0.875rem 1rem;
+  border: 1px solid var(--aino-landing-stroke);
+  border-radius: var(--aino-radius-card);
+  color: var(--aino-landing-primary);
+  background: var(--ui-bg-elevated);
+  box-shadow: none;
+  text-align: start;
+}
+
+.aino-home-action:hover,
+.aino-home-action:focus-visible {
+  border-color: var(--ui-stroke-secondary);
+  background: var(--ui-control-hover-background);
+  color: var(--ui-text-primary);
+}
+
+.aino-home-action-icon {
+  width: 1.3125rem;
+  height: 1.3125rem;
+  flex: 0 0 auto;
+  color: var(--aino-landing-muted);
+}
+
+.aino-home-action-copy {
+  display: grid;
+  min-width: 0;
+  gap: 0.125rem;
+}
+
+.aino-home-action-title,
+.aino-home-action-description {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-wrap: balance;
+}
+
+.aino-home-action-title {
+  color: var(--aino-landing-primary);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  line-height: 1.5;
+}
+
+.aino-home-action-description {
+  color: var(--aino-landing-muted);
+  font-size: var(--aino-text-caption);
+  font-weight: 400;
+  line-height: 1.25;
+}
+
+/* On the landing page the composer is the same live component, simply moved
+   into the visual slot from the design. Keep the selector scoped to the main
+   chat surface so HUD, pop-out, tiles, and regular sessions are untouched. */
+[data-chat-surface][data-home-layout] {
+  --aino-home-composer-height: 9rem;
+  --composer-width: 46.5rem;
+  --composer-control-gap: 0.5rem;
+  --composer-control-primary-size: 1.75rem;
+  --composer-control-size: 1.75rem;
+  background: var(--aino-landing-surface);
+  font-family: var(--aino-landing-font);
+}
+
+[data-chat-surface][data-home-layout] [data-slot='aui_thread-content'] {
+  /* Keep the flowing landing content on the same 16px inset as the live
+     composer whenever the window is narrower than the approved composition. */
+  width: calc(100% - 2rem);
+  padding-inline: 0;
+}
+
+/* Home reserves the composer inside the intro. The ordinary empty-state
+   wrapper's bottom-composer clearance would otherwise shift this slot twice. */
+[data-chat-surface][data-home-layout] [data-slot='aui_empty-placeholder'] {
+  padding-top: 0;
+}
+
+[data-chat-surface][data-home-layout] [data-slot='composer-dock'] {
+  /* Keep the live composer in ordinary absolute layout. CSS anchor positioning
+     leaves this long-lived element in a stale Chromium paint layer when the
+     home screen becomes a conversation, making correct DOM bounds invisible
+     and non-interactive. Responsive offsets below follow the slot without
+     putting the composer itself into that experimental paint path. */
+  top: var(--aino-home-composer-top, clamp(16rem, 34vh, 20rem));
+  bottom: auto;
+  width: calc(min(var(--composer-width), calc(100% - 2rem)) + 10px);
+}
+
+[data-chat-surface][data-home-layout] [data-slot='composer-root'] {
+  --composer-fill: var(--ui-bg-elevated);
+  border-radius: var(--aino-radius-composer);
+}
+
+[data-chat-surface][data-home-layout] [data-slot='composer-surface'] {
+  height: var(--aino-home-composer-height);
+  min-height: var(--aino-home-composer-height);
+  border-radius: var(--aino-radius-composer);
+  background: var(--ui-bg-elevated);
+  border-color: var(--aino-landing-composer-stroke) !important;
+  box-shadow: var(--shadow-aino-landing-composer);
+}
+
+[data-chat-surface][data-home-layout] .coding-status-bar {
+  min-height: 2.5rem;
+  padding-inline: 1.25rem;
+  background: var(--ui-bg-editor);
+  border-bottom-color: var(--ui-stroke-tertiary);
+}
+
+[data-chat-surface][data-home-layout] [data-slot='composer-fade'] {
+  height: 100%;
+  min-height: 0;
+  gap: 0;
+  padding: 1.25rem 1.25rem 1rem;
+}
+
+[data-chat-surface][data-home-layout] [data-slot='composer-layout'] {
+  min-height: 0;
+  flex: 1 1 auto;
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr) 1.75rem;
+  grid-template-areas:
+    'input input'
+    'menu controls';
+  column-gap: 0.625rem;
+  row-gap: 0;
+}
+
+[data-chat-surface][data-home-layout] [data-slot='composer-input-cell'] {
+  align-self: stretch;
+  padding-inline: 0.25rem;
+}
+
+/* The rich editor already scrolls itself, but its unbounded wrapper otherwise
+   keeps the editor's 150px max-content height when a long draft is entered.
+   Constrain that wrapper to the first grid row so text stops above the fixed
+   control row instead of painting underneath it. */
+[data-chat-surface][data-home-layout] [data-slot='composer-input-cell'] > div {
+  height: 100%;
+}
+
+[data-chat-surface][data-home-layout] [data-slot='composer-leading-controls'] {
+  align-self: end;
+  transform: none;
+  translate: none;
+}
+
+[data-chat-surface][data-home-layout] [data-slot='composer-context-menu'] {
+  border-radius: 9999px;
+  background: var(--aino-landing-control);
+}
+
+[data-chat-surface][data-home-layout] [data-slot='composer-trailing-controls'] {
+  align-self: end;
+}
+
+[data-chat-surface][data-home-layout] [data-slot='composer-rich-input'] {
+  color: var(--aino-landing-primary);
+  height: 100%;
+  min-height: 3.5rem;
+  padding-left: 0;
+  padding-top: 0.125rem;
+  font-size: var(--conversation-text-font-size);
+}
+
+[data-chat-surface][data-home-layout] [data-slot='composer-rich-input']:is(:empty, [data-empty])::before {
+  color: var(--aino-landing-placeholder) !important;
+}
+
+/* ── Focused conversation ────────────────────────────────────────────────
+   Keep the existing Thread, message actions, and live ChatBar intact; this
+   layer changes only their placement and paint after the landing screen has
+   become a conversation. The dock is an in-flow flex child here, so the
+   transcript can never cover or intercept the bottom composer. */
+[data-chat-surface][data-conversation-layout] {
+  --composer-width: 780px;
+  --composer-input-min-height: 1.75rem;
+  --composer-control-gap: 0.5rem;
+  --composer-control-primary-size: 1.75rem;
+  --composer-control-size: 1.75rem;
+  --composer-row-gap: 0.25rem;
+  --composer-shell-pad-block-end: 1.25rem;
+  --conversation-turn-gap: 1.25rem;
+  --turn-block-gap: 0.75rem;
+  --conversation-glyph-size: 0.875rem;
+  --conversation-glyph-cell: 1rem;
+  --conversation-glyph-gap: 0.5rem;
+  --conversation-activity-size: 0.375rem;
+  --scaffold-block-gap: 0.25rem;
+  --tool-row-gap: 0rem;
+  --disclosure-caret-rest: 0;
+  --dt-line-height: 1.6;
+  --message-text-indent: 0rem;
+  --thread-last-message-clearance: 2rem;
+  --thread-viewport-height: 100%;
+  background: var(--aino-landing-surface);
+  font-family: var(--aino-landing-font);
+}
+
+[data-chat-surface][data-conversation-layout] [data-slot='composer-bounds'] {
+  z-index: 0;
+}
+
+[data-chat-surface][data-conversation-layout] [data-slot='aui_thread-content'] {
+  width: calc(100% - 2rem);
+  padding-top: 2rem;
+  padding-inline: 0;
+}
+
+[data-chat-surface][data-conversation-layout] [data-slot='composer-dock']:not([data-popped-out]) {
+  position: relative;
+  bottom: auto;
+  left: auto;
+  flex: 0 0 auto;
+  align-self: center;
+  translate: none;
+}
+
+[data-chat-surface][data-conversation-layout] [data-slot='composer-root']:not([data-popped-out]) {
+  --composer-fill: color-mix(in srgb, var(--ui-bg-elevated) 96%, var(--ui-chat-surface-background));
+  border-radius: var(--aino-radius-composer);
+}
+
+[data-chat-surface][data-conversation-layout]
+  [data-slot='composer-root']:not([data-popped-out])
+  > .pointer-events-none {
+  display: none;
+}
+
+[data-chat-surface][data-conversation-layout] [data-slot='composer-surface'] {
+  min-height: 6.75rem;
+  border-color: var(--aino-landing-composer-stroke) !important;
+  box-shadow: var(--shadow-aino-landing-composer);
+}
+
+[data-chat-surface][data-conversation-layout] [data-slot='composer-fade'] {
+  min-height: 0;
+  height: 100%;
+  gap: 0;
+  padding: 0.75rem 1rem;
+}
+
+[data-chat-surface][data-conversation-layout] [data-slot='composer-layout'] {
+  flex: 1 1 auto;
+  min-height: 0;
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-rows: minmax(var(--composer-input-min-height), 1fr) 1.75rem;
+  grid-template-areas:
+    'input input'
+    'menu controls';
+  column-gap: 0.75rem;
+  row-gap: 0.25rem;
+}
+
+[data-chat-surface][data-conversation-layout] [data-slot='composer-input-cell'],
+[data-chat-surface][data-conversation-layout] [data-slot='composer-input-cell'] > div {
+  height: 100%;
+}
+
+[data-chat-surface][data-conversation-layout] [data-slot='composer-rich-input'] {
+  width: 100%;
+  height: 100%;
+  min-height: var(--composer-input-min-height);
+  padding: 0.125rem 0.25rem;
+  color: var(--aino-landing-primary);
+  font-size: var(--conversation-text-font-size);
+  line-height: var(--aino-line-height);
+}
+
+[data-chat-surface][data-conversation-layout] [data-slot='composer-leading-controls'] {
+  align-self: end;
+  translate: none;
+}
+
+[data-chat-surface][data-conversation-layout] [data-slot='composer-context-menu'] {
+  border-radius: 9999px;
+  background: var(--aino-landing-control);
+}
+
+[data-chat-surface][data-conversation-layout] [data-slot='composer-trailing-controls'] {
+  align-self: end;
+}
+
+/* Keep the message row full-width so checkpoint/edit behaviour is unchanged;
+   only its live message stack shrinks to a right-aligned content bubble. */
+[data-chat-surface][data-conversation-layout] [data-slot='aui_user-message-root'] {
+  --human-msg-line-height: 1.6;
+  align-items: flex-end;
+  /* The turn pair already owns the gap before the assistant's response. */
+  padding-bottom: 0;
+}
+
+[data-chat-surface][data-conversation-layout] [data-slot='aui_user-bubble-actions'] {
+  display: flex;
+  width: fit-content;
+  max-width: min(78%, 42rem);
+  align-self: flex-end;
+}
+
+.aino-user-actions-row {
+  display: none;
+}
+
+[data-chat-surface][data-conversation-layout] [data-slot='aui_user-corner-action'][data-action='restore'],
+[data-chat-surface][data-conversation-layout] .aui-user-legacy-timestamp {
+  display: none;
+}
+
+[data-chat-surface][data-conversation-layout] [data-slot='aui_user-actions-row'] {
+  display: flex;
+  color: var(--aino-landing-muted);
+}
+
+[data-chat-surface][data-conversation-layout] [data-slot='aui_user-actions-row'] [data-slot='timeline-timestamp'] {
+  color: var(--aino-landing-muted);
+  font-size: 0.75rem;
+  line-height: 1.5rem;
+}
+
+[data-chat-surface][data-conversation-layout] [data-slot='aui_user-actions-row'] button {
+  color: var(--ui-text-tertiary);
+}
+
+[data-chat-surface][data-conversation-layout] [data-slot='aui_user-actions-row'] button :is(svg, .codicon) {
+  width: var(--conversation-glyph-size);
+  height: var(--conversation-glyph-size);
+  font-size: var(--conversation-glyph-size);
+}
+
+[data-chat-surface][data-conversation-layout] .composer-human-message {
+  border: 1px solid
+    color-mix(in srgb, var(--dt-user-bubble-border) calc(100% - var(--user-bubble-keep, 100%)), transparent);
+  border-radius: 1rem;
+  background: var(--dt-user-bubble);
+  box-shadow: none;
+  padding: 0.625rem 0.875rem;
+  font-size: var(--conversation-text-font-size);
+  font-weight: 400;
+}
+
+[data-chat-surface][data-conversation-layout] [data-slot='aui_user-attachments'] {
+  width: min(78%, 42rem);
+  justify-content: flex-end;
+  align-self: flex-end;
+}
+
+[data-chat-surface][data-conversation-layout] [data-slot='aui_assistant-message-root'] {
+  overflow: visible;
+}
+
+[data-chat-surface][data-conversation-layout] [data-slot='aui_assistant-message-content'] {
+  padding-left: 0;
+  line-height: var(--dt-line-height);
+}
+
+[data-chat-surface][data-conversation-layout] [data-slot='aui_assistant-message-content'] .aui-md {
+  font-weight: 400;
+}
+
+[data-chat-surface][data-conversation-layout] .aui-md th {
+  color: var(--ui-text-secondary);
+  font-size: 0.8125rem;
+  font-weight: 500;
+}
+
+[data-chat-surface][data-conversation-layout] .aui-md .aui-md-table {
+  border-radius: 0.5rem;
+  border-color: var(--ui-stroke-tertiary);
+}
+
+[data-chat-surface][data-conversation-layout] .aui-md .aui-md-table thead {
+  background: var(--aino-table-header-background);
+  color: var(--ui-text-secondary);
+}
+
+[data-chat-surface][data-conversation-layout] .aui-md .aui-md-table :is(th, td) {
+  padding: 0.375rem 0.875rem;
+  line-height: 1.375rem;
+  font-variant-numeric: tabular-nums;
+}
+
+[data-chat-surface][data-conversation-layout] .aui-md .aui-md-table tbody tr:not(:last-child) {
+  border-bottom: 1px solid var(--ui-stroke-tertiary);
+}
+
+/* The label and caret stay together; independent actions keep their own slot. */
+[data-chat-surface][data-conversation-layout] [data-slot='disclosure-toggle'] {
+  border-radius: 0.25rem;
+}
+
+[data-slot='disclosure-caret'] {
+  opacity: var(--disclosure-caret-rest);
+  transition: opacity 150ms;
+}
+
+[data-slot='disclosure-toggle']:is(:hover, :focus-visible) > [data-slot='disclosure-caret'] {
+  opacity: 0.8;
+}
+
+@media (hover: none) {
+  [data-slot='disclosure-caret'] {
+    opacity: 0.8;
+  }
+}
+
+[data-chat-surface][data-conversation-layout] [data-slot='disclosure-toggle']:focus-visible {
+  outline: 2px solid var(--ui-stroke-primary);
+  outline-offset: 2px;
+}
+
+[data-chat-surface][data-conversation-layout] [data-slot='code-card'] {
+  border: 1px solid var(--ui-stroke-tertiary);
+  border-radius: 0.5rem;
+}
+
+[data-chat-surface][data-conversation-layout] [data-slot='code-card-body'] {
+  font-size: 0.75rem;
+  line-height: 1.25rem;
+}
+
+[data-chat-surface][data-conversation-layout] [data-slot='code-card-body'] pre {
+  padding: 0.625rem 0.75rem;
+}
+
+/* Each sealed assistant message continues the same reading column. */
+[data-chat-surface][data-conversation-layout] [data-slot='aui_response-group'] {
+  gap: var(--turn-block-gap);
+}
+
+[data-chat-surface][data-conversation-layout] [data-slot='aui_response-process-header'] {
+  padding-bottom: 0;
+}
+
+[data-chat-surface][data-conversation-layout] [data-tool-title-target='file'] {
+  text-decoration: underline;
+  text-decoration-color: var(--conversation-scaffold-meta);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.2em;
+}
+
+[data-chat-surface][data-conversation-layout] [data-tool-title-target='command'] {
+  font-family: var(--dt-font-mono);
+  font-size: 0.93em;
+}
+
+[data-chat-surface][data-conversation-layout] [data-tool-run-details] {
+  padding-left: 0;
+}
+
+[data-chat-surface][data-conversation-layout] [data-tool-row]:not([data-file-edit]) > [data-tool-details] {
+  width: calc(100% - var(--conversation-glyph-cell) - var(--conversation-glyph-gap));
+  margin: 0.375rem 0 0.5rem calc(var(--conversation-glyph-cell) + var(--conversation-glyph-gap));
+  border: 1px solid var(--ui-stroke-tertiary);
+  border-radius: 0.5rem;
+  background: var(--ui-bg-quinary);
+  padding: 0.625rem 0.75rem;
+}
+
+[data-chat-surface][data-conversation-layout] [data-tool-row][data-terminal-tool] > [data-tool-details] {
+  width: 100%;
+  margin: 0;
+  border: 0;
+  background: transparent;
+  padding: 0.375rem 0 0.5rem;
+}
+
+[data-chat-surface][data-conversation-layout]
+  [data-tool-row][data-tool-status='error']:not([data-file-edit], [data-terminal-tool])
+  > [data-tool-details] {
+  border-color: color-mix(in srgb, var(--ui-red) 22%, var(--ui-stroke-tertiary));
+  background: color-mix(in srgb, var(--ui-red) 4%, var(--aino-landing-surface));
+}
+
+[data-chat-surface][data-conversation-layout] [data-slot='delegate-detail'] {
+  margin: 0.375rem 0 0.5rem calc(var(--conversation-glyph-cell) + var(--conversation-glyph-gap));
+  border-left: 1px solid var(--ui-stroke-tertiary);
+  border-radius: 0 0.5rem 0.5rem 0;
+  background: var(--ui-bg-quinary);
+  padding: 0.625rem 0.75rem;
+}
+
+[data-chat-surface][data-conversation-layout] [data-slot='aui_thinking-disclosure'] {
+  margin-bottom: 0;
+  padding-bottom: 0;
+  border-bottom: 0;
+  color: var(--conversation-scaffold-text);
+  opacity: 1;
+}
+
+/* Thinking is a compact activity row. The shared block gap separates it from
+   the answer; expanding it reveals the existing preview below the toggle. */
+[data-chat-surface][data-conversation-layout] [data-slot='aui_thinking-header'] {
+  width: 100%;
+  padding-bottom: 0;
+  border-bottom: 0;
+  color: var(--conversation-scaffold-text);
+}
+
+[data-chat-surface][data-conversation-layout] [data-slot='aui_thinking-header'] [data-slot='aui_thinking-label'] {
+  color: var(--conversation-scaffold-text);
+  font-size: var(--conversation-tool-font-size);
+  font-weight: 400;
+  line-height: var(--conversation-line-height);
+}
+
+[data-chat-surface][data-conversation-layout]
+  [data-slot='aui_thinking-header']
+  [data-slot='aui_thinking-label'].shimmer {
+  color: var(--conversation-scaffold-text);
+}
+
+[data-chat-surface][data-conversation-layout] [data-slot='aui_thinking-header'] .codicon {
+  font-size: var(--conversation-glyph-size) !important;
+}
+
+[data-chat-surface][data-conversation-layout] [data-slot='aui_thinking-body'] {
+  margin-top: 0.375rem;
+  margin-left: calc(var(--conversation-glyph-cell) / 2);
+  border-left: 1px solid var(--ui-stroke-tertiary);
+  padding: 0.125rem 0 0.25rem calc(var(--conversation-glyph-gap) + var(--conversation-glyph-cell) / 2);
+  color: var(--ui-text-secondary);
+  font-size: 0.8125rem;
+  line-height: 1.65;
+}
+
+[data-chat-surface][data-conversation-layout] [data-slot='aui_thinking-body'] [data-slot='aui_reasoning-text'] {
+  color: inherit !important;
+  font-size: inherit;
+  line-height: inherit;
+}
+
+[data-chat-surface][data-conversation-layout]
+  [data-slot='aui_thinking-body']
+  [data-slot='aui_reasoning-text']
+  :is(p, li, blockquote, h1, h2, h3, h4, h5, h6) {
+  color: inherit;
+  line-height: inherit;
+}
+
+[data-chat-surface][data-conversation-layout] [data-slot='aui_assistant-footer'] {
+  padding-top: 0.5rem;
+  padding-inline: 0;
+}
+
+[data-chat-surface][data-conversation-layout] [data-slot='aui_assistant-actions-row'] {
+  justify-content: flex-start;
+}
+
+[data-chat-surface][data-conversation-layout] [data-slot='aui_msg-actions'] button:not(:disabled) {
+  color: var(--ui-text-secondary);
+  opacity: 1;
+}
+
+[data-chat-surface][data-conversation-layout] [data-slot='aui_msg-actions'] button:is(:hover, :focus-visible),
+[data-chat-surface][data-conversation-layout] button[data-slot='aui_msg-reactions']:is(:hover, :focus-visible) {
+  color: var(--ui-text-primary);
+  opacity: 1;
+}
+
+@media (hover: none) {
+  [data-slot='aui_msg-actions'] {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  button[data-slot='aui_msg-reactions']:not([data-reacted]) {
+    opacity: 0.8;
+    pointer-events: auto;
+  }
+}
+
+@media (max-width: 52rem) {
+  [data-chat-surface][data-conversation-layout] {
+    --conversation-turn-gap: 1rem;
+  }
+
+  [data-chat-surface][data-conversation-layout] [data-slot='aui_thread-content'] {
+    padding-top: 1.75rem;
+  }
+
+  [data-chat-surface][data-conversation-layout] [data-slot='aui_user-bubble-actions'],
+  [data-chat-surface][data-conversation-layout] [data-slot='aui_user-attachments'] {
+    max-width: 88%;
+  }
+}
+
+@media (max-height: 48rem) {
+  [data-chat-surface][data-home-layout] {
+    --aino-home-composer-height: 8.5rem;
+  }
+
+  .aino-home-composer-slot {
+    margin-top: 1.5rem;
+  }
+
+  .aino-home-action {
+    min-height: 4rem;
+  }
+}
+
+@container (max-width: 48rem) {
+  .aino-home-actions {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 38rem) {
+  .aino-home-content {
+    width: min(100%, calc(100vw - 2rem));
+  }
+}
+
+@container (max-width: 22rem) {
+  .aino-home-actions {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

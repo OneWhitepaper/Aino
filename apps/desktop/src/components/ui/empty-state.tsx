@@ -18,7 +18,7 @@ export function EmptyState({
       <div>
         <div className="text-[length:var(--aino-text-body)] font-medium">{title}</div>
         {description && (
-          <div className="mt-1 text-[length:var(--aino-text-caption)] leading-relaxed text-muted-foreground">
+          <div className="mx-auto mt-2 max-w-sm text-[length:var(--aino-text-label)] leading-relaxed text-muted-foreground">
             {description}
           </div>
         )}

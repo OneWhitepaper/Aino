@@ -1,6 +1,6 @@
 [data-catalog-card] {
   border-color: var(--ui-stroke-secondary);
-  border-radius: 9px;
+  border-radius: var(--aino-radius-card);
   background: var(--ui-bg-elevated);
   transition:
     border-color 0.12s ease,

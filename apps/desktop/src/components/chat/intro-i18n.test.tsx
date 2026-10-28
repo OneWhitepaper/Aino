@@ -3,6 +3,7 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { I18nProvider, TRANSLATIONS } from '@/i18n'
+import { AGENT_NAME } from '@/lib/brand'
 
 import { Intro } from './intro'
 import introCopyJsonl from './intro-copy.jsonl?raw'
@@ -37,7 +38,7 @@ describe('empty chat intro localization', () => {
       </I18nProvider>
     )
 
-    expect(screen.getByRole('heading', { name: 'AINO AGENT' })).toBeTruthy()
+    expect(screen.getByRole('heading', { level: 1 }).textContent).toMatch(/[\u4e00-\u9fff]/u)
     fireEvent.click(screen.getByRole('button', { name: '分析文档' }))
     expect(onPickFiles).toHaveBeenCalledTimes(1)
 
@@ -59,7 +60,7 @@ describe('empty chat intro localization', () => {
     const records = raw
       .trim()
       .split('\n')
-      .map(line => JSON.parse(line) as { personality: string; body: string })
+      .map(line => JSON.parse(line) as { personality: string; body: string; headline: string })
 
     const neutral = records.filter(record => record.personality === 'none')
     const helpful = records.filter(record => record.personality === 'helpful')
@@ -87,7 +88,7 @@ describe('empty chat intro localization', () => {
 
     rerender(view(1, 'helpful'))
     expect(subtitle()).toBe(helpful[1].body)
-    expect(screen.getByRole('heading', { name: 'AINO AGENT' })).toBeTruthy()
+    expect(screen.getByRole('heading', { level: 1 }).textContent).toBe(helpful[1].headline)
   })
 
   it.each(['ja', 'zh-hant'] as const)('keeps the localized home subtitle when %s has no copy pool', locale => {
@@ -98,5 +99,6 @@ describe('empty chat intro localization', () => {
     )
 
     expect(container.querySelector('.aino-home-subtitle')?.textContent).toBe(TRANSLATIONS[locale].home.subtitle)
+    expect(screen.getByRole('heading', { level: 1 }).textContent).toBe(AGENT_NAME)
   })
 })

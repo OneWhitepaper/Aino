@@ -31,7 +31,7 @@ import { $showAllProfiles, setShowAllProfiles } from './profile'
 import type { PullRequestBucket } from './pull-requests'
 import type { SessionStatusBucket } from './session-dot-state'
 
-export const SIDEBAR_DEFAULT_WIDTH = 264
+export const SIDEBAR_DEFAULT_WIDTH = 260
 // Preserve existing narrow user layouts when the default grows.
 export const SIDEBAR_MIN_WIDTH = 245
 export const SIDEBAR_MAX_WIDTH = 360

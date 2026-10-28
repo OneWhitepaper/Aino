@@ -1,7 +1,5 @@
 .workspace-manager {
-  --workspace-accent: color-mix(in srgb, var(--ui-green) 58%, var(--ui-text-primary));
-  --aino-action-bg: var(--workspace-accent);
-  --aino-action-hover: color-mix(in srgb, var(--workspace-accent) 88%, var(--ui-text-primary));
+  --workspace-accent: var(--ui-text-primary);
   container: workspaces / inline-size;
   display: flex;
   height: 100%;
@@ -27,7 +25,7 @@
   gap: 0.75rem;
 }
 .workspace-heading h2 {
-  font-size: 1.625rem;
+  font-size: var(--aino-text-page-title);
   font-weight: 600;
   letter-spacing: -0.04em;
 }
@@ -91,8 +89,8 @@
   min-width: 0;
   overflow: hidden;
   border: 1px solid var(--ui-stroke-tertiary);
-  border-radius: var(--aino-radius-panel);
-  background: var(--ui-row-open-background);
+  border-radius: var(--aino-radius-card);
+  background: var(--ui-bg-elevated);
   transition:
     border-color 100ms,
     background-color 100ms;
@@ -102,8 +100,8 @@
   background: var(--ui-row-hover-background);
 }
 .workspace-card[data-active='true'] {
-  border-color: color-mix(in srgb, var(--workspace-accent) 40%, var(--ui-stroke-tertiary));
-  background: color-mix(in srgb, var(--workspace-accent) 4%, var(--ui-row-open-background));
+  border-color: var(--ui-stroke-primary);
+  background: var(--ui-row-active-background);
 }
 .workspace-card-select {
   display: flex;

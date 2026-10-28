@@ -77,7 +77,7 @@ export function SectionHeading({
   }
 
   return (
-    <div className="mb-2.5 flex items-center gap-2 pt-2 text-[length:var(--aino-text-title)] font-medium">
+    <div className="mb-4 flex items-center gap-2 pt-2 text-[length:var(--aino-text-title)] font-medium" data-page={page || undefined} data-settings-section-heading="">
       {showTitle && (
         <>
           <Icon className="size-4 shrink-0 text-muted-foreground" />
@@ -194,7 +194,7 @@ export function ListRow({
             {wide && action && <div className="flex shrink-0 items-center gap-2">{action}</div>}
           </div>
           {description && (
-            <div className="mt-1 text-[length:var(--conversation-caption-font-size)] leading-(--conversation-caption-line-height) text-(--ui-text-tertiary)">
+            <div className="mt-1 text-[length:var(--aino-text-label)] leading-relaxed text-(--ui-text-secondary)">
               {description}
             </div>
           )}

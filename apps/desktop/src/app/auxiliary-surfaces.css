@@ -38,7 +38,7 @@
 .aino-quick-entry-label {
   color: var(--ui-text-secondary);
   flex-shrink: 0;
-  font-size: 0.6875rem;
+  font-size: var(--aino-text-caption);
   user-select: none;
 }
 
@@ -64,7 +64,7 @@
   color: var(--ui-text-primary);
   display: inline-flex;
   font-family: var(--aino-landing-font);
-  font-size: 0.6875rem;
+  font-size: var(--aino-text-caption);
   font-weight: 500;
   line-height: 1;
   pointer-events: none;

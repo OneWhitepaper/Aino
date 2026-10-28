@@ -309,7 +309,7 @@ function DialogDescription({ className, ...props }: React.ComponentProps<typeof 
   return (
     <DialogPrimitive.Description
       className={cn(
-        'text-[length:var(--conversation-caption-font-size)] leading-(--conversation-caption-line-height) text-(--ui-text-tertiary)',
+        'text-[length:var(--aino-text-ui)] leading-relaxed text-(--ui-text-secondary)',
         className
       )}
       data-slot="dialog-description"

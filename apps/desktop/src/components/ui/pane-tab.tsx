@@ -30,10 +30,8 @@ const TAB_VERTICAL =
 
 const TAB_ACTIVE = 'h-full text-foreground [--tab-bg:var(--pane-tab-active-bg,var(--ui-editor-surface-background))]'
 
-// Horizontal only: the active tab is the sole seam on the strip — a
-// theme-primary underline drawn as an inset shadow in its own last pixel row,
-// so it costs no layout and can't shift the tab.
-const TAB_ACTIVE_UNDERLINE = 'shadow-[inset_0_-2px_0_var(--pane-tab-active-accent,var(--theme-primary))]'
+// Selection uses the active paper surface; the strip owns the hairline.
+const TAB_ACTIVE_SURFACE = 'shadow-none'
 
 // Inactive = gutter, defaulting to the shared chrome surface so a strip that
 // sets no vars still matches the sidebar/titlebar instead of falling through to
@@ -44,7 +42,7 @@ const TAB_IDLE =
 
 // A tab riding a multi-tab selection: an accent wash over whatever surface the
 // tab sits on. A background-image gradient (not a shadow) so it stacks cleanly
-// over `--tab-bg` without fighting the active underline / hover shadows.
+// over `--tab-bg` without fighting the active surface / hover shadows.
 const TAB_SELECTED =
   '[background-image:linear-gradient(color-mix(in_srgb,var(--ui-accent)_14%,transparent),color-mix(in_srgb,var(--ui-accent)_14%,transparent))] text-foreground'
 
@@ -111,7 +109,7 @@ export const PaneTab = React.forwardRef<HTMLDivElement, PaneTabProps>(function P
         !vertical && onClose && showCloseButton && TAB_CLOSEABLE,
         edge,
         active
-          ? cn(TAB_ACTIVE, !vertical && TAB_ACTIVE_UNDERLINE)
+          ? cn(TAB_ACTIVE, !vertical && TAB_ACTIVE_SURFACE)
           : cn(TAB_IDLE, edge && `${edge}-(--ui-stroke-tertiary)`),
         selected && TAB_SELECTED,
         className
@@ -226,7 +224,7 @@ export const PaneTabLabel = React.forwardRef<HTMLElement, PaneTabLabelProps>(fun
   const label = (
     <span
       className={cn(
-        'block min-w-0 truncate text-[9px] font-medium tracking-wide uppercase group-data-[closeable]/tab:text-clip',
+        'block min-w-0 truncate text-[length:var(--aino-text-label)] font-normal tracking-normal normal-case group-data-[closeable]/tab:text-clip',
         className
       )}
       data-slot="pane-tab-label"

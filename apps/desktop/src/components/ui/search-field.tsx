@@ -76,7 +76,7 @@ export function SearchField({
         // instead of shrinking to fit its context.
         'inline-flex min-w-0 max-w-full items-center gap-1.5 transition-[color,border-color,opacity]',
         boxed
-          ? 'w-full gap-2 rounded-full border border-(--ui-stroke-tertiary) bg-(--ui-bg-quinary) px-3.5 py-2 hover:border-(--ui-stroke-secondary) focus-within:border-(--ui-stroke-secondary)'
+          ? 'w-full gap-2 rounded-(--aino-radius-control) border border-(--ui-stroke-tertiary) bg-(--ui-bg-quinary) px-3.5 py-2 hover:border-(--ui-stroke-secondary) focus-within:border-(--ui-stroke-secondary)'
           : cn(
               'border-b border-transparent px-0.5',
               // Recede until the user reaches for it.

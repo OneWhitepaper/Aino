@@ -20,6 +20,7 @@ import { FileDiffPanel } from '@/components/chat/diff-lines'
 import { chunkTextLines, useFixedRowWindow } from '@/components/chat/fixed-row-window'
 import { LazyShiki as ShikiHighlighter } from '@/components/chat/shiki-highlighter'
 import { PageLoader } from '@/components/page-loader'
+import { Button } from '@/components/ui/button'
 import { Tip } from '@/components/ui/tooltip'
 import { translateNow, useI18n } from '@/i18n'
 import { localizedPreviewError } from '@/i18n/preview-errors'
@@ -547,24 +548,25 @@ export function PreviewModeSwitcher({
   return (
     // Fixed height so the header is byte-identical between read and edit modes —
     // swapping the trailing controls must never move the body below it.
-    <div className="flex h-7 shrink-0 items-center justify-end gap-3 border-b border-border/40 px-3">
+    <div
+      className="flex h-8 shrink-0 items-center gap-1 border-b border-(--ui-stroke-tertiary) px-2"
+      data-preview-toolbar=""
+    >
       {showModes &&
         modes.map(mode => (
-          <button
-            className={cn(
-              'text-[0.625rem] font-bold underline-offset-4 transition-colors',
-              mode === active
-                ? 'text-foreground underline decoration-current/30'
-                : 'text-muted-foreground hover:text-foreground'
-            )}
+          <Button
+            aria-pressed={mode === active}
+            className={cn(mode === active && 'bg-(--ui-row-active-background) text-foreground')}
             key={mode}
             onClick={() => onSelect(mode)}
+            size="xs"
             type="button"
+            variant="ghost"
           >
             {label[mode]}
-          </button>
+          </Button>
         ))}
-      {trailing && <div className="flex items-center gap-1.5">{trailing}</div>}
+      {trailing && <div className="ml-auto flex items-center gap-1.5">{trailing}</div>}
     </div>
   )
 }
@@ -586,23 +588,14 @@ function EditControls({
 
   return (
     <>
-      <button
-        className="flex items-center gap-1 rounded-md px-1.5 text-[0.625rem] font-bold text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-        onClick={onCancel}
-        type="button"
-      >
+      <Button onClick={onCancel} size="xs" type="button" variant="ghost">
         <X className="size-3" />
         {t.common.cancel}
-      </button>
-      <button
-        className="flex items-center gap-1 rounded-md bg-primary px-2 py-0.5 text-[0.625rem] font-bold text-primary-foreground shadow-xs transition-opacity hover:opacity-90 disabled:opacity-50"
-        disabled={!dirty || saving}
-        onClick={onSave}
-        type="button"
-      >
+      </Button>
+      <Button disabled={!dirty || saving} onClick={onSave} size="xs" type="button">
         <Check className="size-3" />
         {saving ? t.common.saving : t.common.save}
-      </button>
+      </Button>
     </>
   )
 }
