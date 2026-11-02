@@ -65,7 +65,16 @@ def test_alias_switch_carries_the_profiles_canonical_identity(install_profile):
     assert (result.target_provider, result.api_mode, result.api_key) == ("testgw", "anthropic_messages", KEY)
 
     user = {"testgw": {"name": "Configured", "base_url": "https://cfg.example.test/v1", "key_env": "TESTGW_API_KEY"}}
-    assert resolve_provider_full("testgw-alias", user_providers=user).source == "user-config"
+    (get_hermes_home() / "config.yaml").write_text(yaml.safe_dump({"providers": user}), encoding="utf-8")
+    for name in ("testgw", "testgw-alias"):
+        configured = resolve_provider_full(name, user_providers=user)
+        assert (configured.id, configured.source, configured.base_url) == (
+            "testgw", "user-config", "https://cfg.example.test/v1")
+        selected = switch_model("test-model", current_provider="openrouter", current_model="m",
+                                explicit_provider=name, user_providers=user, custom_providers=[])
+        assert selected.success, selected.error_message
+        assert (selected.target_provider, selected.base_url, selected.api_key) == (
+            "custom:testgw", "https://cfg.example.test/v1", KEY)
 
 
 def test_runtime_endpoint_profile_is_a_known_provider_but_placeholders_are_not(install_profile):

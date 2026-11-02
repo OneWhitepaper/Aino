@@ -15,7 +15,7 @@ from typing import Any, NamedTuple, Optional
 
 from hermes_cli.providers import (
     LLAMACPP_ALIASES, ProviderDef, custom_provider_aliases, determine_api_mode, get_label,
-    host_mandated_api_mode, is_aggregator, normalize_provider, resolve_provider_full)
+    host_mandated_api_mode, is_aggregator, is_builtin_provider_id, normalize_provider, resolve_provider_full)
 from hermes_cli.model_normalize import normalize_model_for_provider
 from agent.models_dev import (
     ModelCapabilities, ModelInfo, get_model_capabilities, get_model_info, list_provider_models)
@@ -1122,6 +1122,11 @@ def _config_declares_model(
     """A model declared in the user's ``providers:``/``custom_providers:`` config is accepted even
     when the remote /v1/models does not list it (cloud/aliased models). Custom entries match by
     slug alias or by base_url."""
+    if is_builtin_provider_id(target_provider):
+        from hermes_cli.providers import resolve_user_provider
+        if user_providers and resolve_user_provider(target_provider, user_providers) is not None:
+            return False
+        custom_providers = []
     if user_providers:
         from hermes_cli.config import is_provider_enabled
         cfg = user_providers.get(target_provider)
@@ -1458,7 +1463,7 @@ def _creds_for_switched_provider(st: _Switch) -> Optional[ModelSwitchResult]:
     "openai" from scratch (or hop to an aggregator), so use the pdef's endpoint directly."""
     user_pdef = None
     explicit_norm = st.explicit_provider.strip().lower()
-    if st.explicit_provider and st.user_providers:
+    if st.explicit_provider and st.user_providers and not is_builtin_provider_id(explicit_norm):
         from hermes_cli.providers import resolve_user_provider
         user_pdef = (resolve_user_provider(explicit_norm, st.user_providers)
                      or resolve_user_provider(st.target_provider, st.user_providers))
@@ -1654,7 +1659,7 @@ def _validate_switch(st: _Switch) -> Optional[ModelSwitchResult]:
         headers = {} if st.suppress_ollama_headers else (st.validation_headers or _get_ollama_request_headers())
     else:
         headers = st.validation_headers or (
-            _extra_headers_from_config(st.user_providers.get(st.target_provider))
+            _extra_headers_from_config(st.user_providers.get(st.target_provider), st.target_provider)
             if st.user_providers and st.target_provider in st.user_providers else None)
     # A ``providers.<key>`` endpoint is the user's own: validate it as a custom endpoint (an id its
     # listing lacks is soft-accepted) whether the slug arrived as ``custom:<key>`` or the bare key
@@ -1905,8 +1910,10 @@ def persist_model_selection(result: ModelSwitchResult, config_path: Any = None) 
         pass
 
 
-def _extra_headers_from_config(entry: Any) -> dict[str, str]:
+def _extra_headers_from_config(entry: Any, provider: str = "") -> dict[str, str]:
     if not isinstance(entry, dict):
+        return {}
+    if is_builtin_provider_id(provider) and any(entry.get(key) for key in ("api", "url", "base_url")):
         return {}
     from hermes_cli.config import normalize_extra_headers
     return normalize_extra_headers(entry.get("extra_headers"))

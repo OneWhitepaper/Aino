@@ -15,6 +15,7 @@ mocked; no network, no credentials needed.
 
 from unittest.mock import patch
 
+from hermes_cli.config import get_compatible_custom_providers
 from hermes_cli.model_switch import switch_model
 
 _SETTINGS_ONLY = {"request_timeout_seconds": 3600, "stale_timeout_seconds": 300}
@@ -29,7 +30,7 @@ _RUNTIME_CODEX = {
 _ACCEPTED = {"accepted": True, "persist": True, "recognized": True, "message": None}
 
 
-def _run(raw_input, user_providers, validation=_ACCEPTED):
+def _run(raw_input, user_providers, validation=_ACCEPTED, *, explicit_provider="openai-codex"):
     """Drive PATH A (explicit ``--provider``) with everything hermetic except,
     by default, the real ``validate_requested_model`` (overridden per test)."""
     with patch("hermes_cli.model_switch.resolve_alias", return_value=None), \
@@ -49,9 +50,9 @@ def _run(raw_input, user_providers, validation=_ACCEPTED):
             current_model="gpt-5.4",
             current_base_url="",
             current_api_key="",
-            explicit_provider="openai-codex",
+            explicit_provider=explicit_provider,
             user_providers=user_providers,
-            custom_providers=[],
+            custom_providers=get_compatible_custom_providers({"providers": user_providers}),
         )
     return result, validate
 
@@ -66,14 +67,21 @@ def test_settings_only_block_keeps_builtin_validation_routing():
     assert validate.call_args[0][1] == "openai-codex"
 
 
-def test_endpoint_block_still_routes_custom_validation():
-    """A block declaring its own endpoint stays on the custom branch (pins the
-    legit case the guard must not break)."""
-    result, validate = _run("gpt-5.6-luna", {"openai-codex": dict(_WITH_ENDPOINT)})
+def test_explicit_custom_endpoint_still_routes_custom_validation():
+    """A saved endpoint sharing a built-in id uses its explicit custom identity."""
+    result, validate = _run("gpt-5.6-luna", {"openai-codex": dict(_WITH_ENDPOINT)},
+                            explicit_provider="custom:openai-codex")
 
     assert result.success is True
     assert validate.call_count == 1
     assert validate.call_args[0][1] == "custom:openai-codex"
+
+
+def test_builtin_identity_keeps_builtin_validation_with_a_saved_endpoint():
+    result, validate = _run("gpt-5.6-luna", {"openai-codex": dict(_WITH_ENDPOINT)})
+
+    assert result.success is True
+    assert validate.call_args[0][1] == "openai-codex"
 
 
 def test_settings_only_block_codex_switch_succeeds_without_listing():

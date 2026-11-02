@@ -136,17 +136,17 @@ class TestFireworksAuxiliary:
         client, _model, kwargs = self._resolve("fireworks")
         assert client is not None
         headers = kwargs.get("default_headers", {})
-        assert headers["HTTP-Referer"] == "https://hermes-agent.nousresearch.com"
-        assert headers["X-Title"] == "Hermes Agent"
+        assert headers["HTTP-Referer"] == "https://petoi.cn"
+        assert headers["X-Title"] == "Aino Agent"
         assert kwargs["base_url"] == "https://api.fireworks.ai/inference/v1"
 
-    def test_client_sends_hermes_user_agent(self, monkeypatch):
+    def test_client_sends_aino_user_agent(self, monkeypatch):
         """The profile's User-Agent survives the generic default_headers
         fallback and reaches OpenAI client construction."""
         monkeypatch.setenv("FIREWORKS_API_KEY", "fw_test_key")
         _client, _model, kwargs = self._resolve("fireworks")
         headers = kwargs.get("default_headers", {})
-        assert headers["User-Agent"].startswith("HermesAgent/")
+        assert headers["User-Agent"].startswith("AinoAgent/")
 
 
 class TestFireworksModelMetadata:

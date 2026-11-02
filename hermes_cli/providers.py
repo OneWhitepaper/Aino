@@ -459,9 +459,9 @@ def is_builtin_provider_id(name: str) -> bool:
     raw = str(name or "").strip().lower()
     if not raw or raw in {"custom", "lmstudio"} or raw.startswith("custom:") or normalize_provider(raw) != raw:
         return False
-    from hermes_cli.auth import PROVIDER_REGISTRY
-    from hermes_cli.models_catalog_static import CANONICAL_PROVIDERS
-    return raw in PROVIDER_REGISTRY or raw in HERMES_OVERLAYS or any(p.slug == raw for p in CANONICAL_PROVIDERS)
+    from hermes_cli.auth import BUILTIN_PROVIDER_IDS
+    from providers import provider_source
+    return raw in BUILTIN_PROVIDER_IDS or raw in HERMES_OVERLAYS or provider_source(raw) == "bundled"
 
 
 def resolve_custom_provider(name: str, custom_providers: Optional[list[dict[str, Any]]]) -> Optional[ProviderDef]:

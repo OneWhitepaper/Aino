@@ -54,7 +54,8 @@ def provider_owns_route(provider: Any, base_url: Any, config: Any = None) -> Opt
     host (a proxy, a LAN server) — nothing here can say whose it is. Offline: the registry lookup
     never fetches the models.dev catalog.
     """
-    from hermes_cli.providers import get_provider, normalize_provider, resolve_custom_provider, resolve_user_provider
+    from hermes_cli.providers import (
+        get_provider, is_builtin_provider_id, normalize_provider, resolve_custom_provider, resolve_user_provider)
     from utils import base_url_hostname
 
     host = base_url_hostname(str(base_url or ""))
@@ -69,11 +70,13 @@ def provider_owns_route(provider: Any, base_url: Any, config: Any = None) -> Opt
     cfg = config if isinstance(config, dict) else {}
     user_pdef = resolve_user_provider(raw, cfg.get("providers") or {}) or resolve_custom_provider(
         raw, cfg.get("custom_providers"))
-    if user_pdef is not None and user_pdef.base_url:
+    if user_pdef is not None and user_pdef.base_url and not is_builtin_provider_id(raw):
         return base_url_hostname(user_pdef.base_url) == host
     pdef = get_provider(canonical, allow_network=False)
     if pdef is not None and pdef.base_url and base_url_hostname(pdef.base_url) == host:
         return True
+    if user_pdef is not None and user_pdef.base_url and base_url_hostname(user_pdef.base_url) == host:
+        return False
     if pdef is None and user_pdef is None:
         return True
     from agent.model_metadata import _infer_provider_from_url
