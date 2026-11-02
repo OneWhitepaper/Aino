@@ -329,8 +329,12 @@ export async function startRealPlatformAPI(apiRoot: string) {
   fs.mkdirSync(runtimeHome, { mode: 0o700 })
 
   // Compilation may use the existing Go caches, but the service itself gets no
-  // host HOME. Resolve Docker's non-secret endpoint before launching so the
-  // disposable fixture can reach its owned containers without HOME discovery.
+  // host HOME. Resolve the toolchain caches and Docker's non-secret endpoint
+  // before launching the fixture with its isolated HOME.
+  const goEnvironment = JSON.parse(execFileSync('go', ['env', '-json', 'GOCACHE', 'GOPATH'], {
+    cwd: path.join(apiRoot, 'backend'), encoding: 'utf8'
+  })) as Record<'GOCACHE' | 'GOPATH', string>
+
   const dockerHost = execFileSync('docker', ['context', 'inspect', '--format', '{{ .Endpoints.docker.Host }}'], { encoding: 'utf8' }).trim()
 
   if (!dockerHost.startsWith('unix://')) { throw new Error('Native fixture requires an explicit Unix Docker endpoint') }
@@ -339,8 +343,8 @@ export async function startRealPlatformAPI(apiRoot: string) {
     ...fixtureEnvironment(),
     HOME: runtimeHome,
     CI: 'true',
-    GOCACHE: '/Users/zizimutou/Library/Caches/go-build',
-    GOPATH: '/Users/zizimutou/go',
+    GOCACHE: goEnvironment.GOCACHE,
+    GOPATH: goEnvironment.GOPATH,
     DOCKER_HOST: dockerHost
   }
 
