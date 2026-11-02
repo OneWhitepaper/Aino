@@ -114,8 +114,8 @@ def test_plugins_hub_uses_cached_failed_check_fn_verdict(monkeypatch):
     def check_fn():
         return False
 
-    assert tools_registry._check_fn_cached(check_fn) is False
     _patch_minimal_hub_dependencies(monkeypatch, check_fn=check_fn)
+    assert tools_registry._check_fn_cached(check_fn) is False
 
     payload = _web_server_dashboard._merged_plugins_hub(force_refresh=True)
 
