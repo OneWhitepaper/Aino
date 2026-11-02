@@ -73,7 +73,7 @@ export function renderRosterContent({
   return (
     <>
       {staleNotice ? (
-        <div className="mx-2.5 mb-1 rounded-md bg-(--chrome-action-hover) px-2 py-1.5 text-[0.6875rem] text-(--ui-text-tertiary)">
+        <div className="mx-2.5 mb-1 rounded-md bg-(--chrome-action-hover) px-2 py-1.5 text-[length:var(--aino-text-caption)] text-(--ui-text-tertiary)">
           {staleNotice}
         </div>
       ) : null}
@@ -141,7 +141,7 @@ export function renderRosterContent({
                 ref={hiddenSectionRef}
               >
                 {hasRosterConstraint ? (
-                  <div className="flex w-full items-center gap-1 px-2 py-1.5 text-[0.6875rem] font-medium text-(--ui-text-tertiary)">
+                  <div className="flex w-full items-center gap-1 px-2 py-1.5 text-[length:var(--aino-text-caption)] font-medium text-(--ui-text-tertiary)">
                     <Codicon name="eye-closed" />
                     <span>Hidden</span>
                     <span className="text-(--ui-text-quaternary)">{matchingHiddenBots.length}</span>
@@ -149,7 +149,7 @@ export function renderRosterContent({
                 ) : (
                   <RowButton
                     aria-expanded={hiddenExpanded}
-                    className="flex w-full items-center gap-1 rounded-md px-2 py-1.5 text-left text-[0.6875rem] font-medium text-(--ui-text-tertiary) transition-colors hover:bg-(--chrome-action-hover) hover:text-foreground"
+                    className="flex w-full items-center gap-1 rounded-md px-2 py-1.5 text-left text-[length:var(--aino-text-caption)] font-medium text-(--ui-text-tertiary) transition-colors hover:bg-(--chrome-action-hover) hover:text-foreground"
                     onClick={() => $showHiddenBots.set(!hiddenExpanded)}
                   >
                     <DisclosureCaret open={hiddenExpanded} />
@@ -165,7 +165,7 @@ export function renderRosterContent({
                       matchingHiddenBots.map((bot: RosterRow) => renderBotRow(bot, 'hidden:'))
                     )
                   ) : (
-                    <div className="px-2 py-2 text-xs text-(--ui-text-quaternary)">{b.roster.noHiddenMatch}</div>
+                    <div className="px-2 py-2 text-[length:var(--aino-text-caption)] text-(--ui-text-tertiary)">{b.roster.noHiddenMatch}</div>
                   )
                 ) : null}
               </div>

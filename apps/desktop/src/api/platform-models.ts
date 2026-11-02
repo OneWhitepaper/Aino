@@ -28,11 +28,16 @@ function safeBindingCode(error: unknown): string | null {
   }
 
   const record = error as { code?: unknown; data?: unknown }
-  const data = record.data && typeof record.data === 'object' ? (record.data as { code?: unknown; error?: unknown }) : null
+
+  const data =
+    record.data && typeof record.data === 'object' ? (record.data as { code?: unknown; error?: unknown }) : null
+
   const nested = data?.error && typeof data.error === 'object' ? (data.error as { code?: unknown }) : null
   const candidates = [record.code, data?.code, nested?.code]
 
-  return candidates.find((code): code is string => typeof code === 'string' && SAFE_PLATFORM_BINDING_CODES.has(code)) ?? null
+  return (
+    candidates.find((code): code is string => typeof code === 'string' && SAFE_PLATFORM_BINDING_CODES.has(code)) ?? null
+  )
 }
 
 function bindingFailure(error: unknown): BindPlatformModelResult {
@@ -72,12 +77,17 @@ export async function bindPlatformModel(
     (<T>(method: string, params?: Record<string, unknown>, timeoutMs?: number) =>
       requestGatewayForAgent<T>(input.connection_id || null, input.profile, method, params, timeoutMs))
 
-  let ticket: { managed_model_binding?: number; session_ticket?: string }
+  let ticket: { managed_model_binding?: number; managed_image_binding?: number; session_ticket?: string }
 
   try {
-    ticket = await requestOwner<{ managed_model_binding?: number; session_ticket?: string }>(
+    ticket = await requestOwner<typeof ticket>(
       'session.managed_model_ticket',
-      { session_id: input.session_id, model_id: input.model_id, owner },
+      {
+        session_id: input.session_id,
+        model_id: input.model_id,
+        ...(input.purpose === 'image' ? { purpose: 'image' } : {}),
+        owner
+      },
       10_000
     )
   } catch (error) {
@@ -88,7 +98,9 @@ export async function bindPlatformModel(
     return bindingFailure(error)
   }
 
-  if (ticket.managed_model_binding !== 1 || !ticket.session_ticket) {
+  const supported = input.purpose === 'image' ? ticket.managed_image_binding === 1 : ticket.managed_model_binding === 1
+
+  if (!supported || !ticket.session_ticket) {
     return { ok: false, error: { code: 'unsupported_gateway' } }
   }
 

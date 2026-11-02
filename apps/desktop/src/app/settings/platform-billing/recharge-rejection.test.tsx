@@ -11,6 +11,7 @@ afterEach(() => {
   cleanup()
   localStorage.clear()
   vi.unstubAllGlobals()
+  vi.useRealTimers()
 })
 
 function fixture() {
@@ -87,8 +88,10 @@ function fixture() {
 
   const submit = async (amount: string) => {
     fireEvent.change(await screen.findByRole('textbox'), { target: { value: amount } })
-    fireEvent.click(screen.getByRole('button', { name: 'Get quote' }))
-    fireEvent.click(await screen.findByRole('button', { name: 'Confirm order' }))
+    await waitFor(() =>
+      expect((screen.getByRole('button', { name: 'Proceed to payment' }) as HTMLButtonElement).disabled).toBe(false)
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Proceed to payment' }))
   }
 
   return { mount, submit, createOrder, getOrder, quote, order }
@@ -96,15 +99,50 @@ function fixture() {
 
 const failure = (code: string) => Object.assign(new Error(code), { code })
 
-it('corrects a rejected create after restart and retains the corrected request through an unknown result', async () => {
+it('retries a failed corrected preview after the original amount was rejected', async () => {
   const f = fixture()
+  f.createOrder.mockRejectedValueOnce(failure('INVALID_AMOUNT')).mockResolvedValue(f.order)
+  f.mount()
+  await f.submit('20')
+  await screen.findByRole('alert')
+  f.quote.mockRejectedValueOnce(failure('network_error'))
+  fireEvent.change(screen.getByRole('textbox'), { target: { value: '10' } })
+  await waitFor(() => expect(f.quote).toHaveBeenCalledTimes(2))
+  await screen.findByRole('alert')
+  fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
+  await waitFor(() =>
+    expect((screen.getByRole('button', { name: 'Proceed to payment' }) as HTMLButtonElement).disabled).toBe(false)
+  )
+  expect(f.createOrder).toHaveBeenCalledTimes(1)
+  fireEvent.click(screen.getByRole('button', { name: 'Proceed to payment' }))
+  await screen.findByText(f.order.out_trade_no)
+  expect(f.createOrder.mock.calls.map(([input]) => input.amount)).toEqual(['20', '10'])
+})
+
+it('corrects a rejected create after restart and retains the corrected request through an unknown result', async () => {
+  vi.useFakeTimers({ shouldAdvanceTime: true })
+  const f = fixture()
+  let rejectFirst!: (error: Error) => void
   f.createOrder
-    .mockRejectedValueOnce(failure('INVALID_AMOUNT'))
+    .mockImplementationOnce(
+      () =>
+        new Promise((_, reject) => {
+          rejectFirst = reject
+        })
+    )
     .mockRejectedValueOnce(failure('network_error'))
     .mockResolvedValue(f.order)
   const first = f.mount()
   await f.submit('20')
+  await waitFor(() => expect(f.createOrder).toHaveBeenCalledTimes(1))
+  expect(screen.queryByRole('textbox')).toBeNull()
+  await act(async () => rejectFirst(failure('INVALID_AMOUNT')))
   await screen.findByRole('alert')
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(500)
+  })
+  expect(screen.getByRole('alert')).toBeTruthy()
+  expect(f.quote).toHaveBeenCalledTimes(1)
   expect(screen.getByRole('textbox')).toBeTruthy()
   first.unmount()
   const reopened = f.mount()

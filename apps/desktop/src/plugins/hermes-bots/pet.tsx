@@ -185,7 +185,7 @@ export function PetTab({ image, onImage }: PetTabProps) {
 
   return (
     <div className="grid w-full gap-2">
-      <div className="text-center text-[0.65rem] text-(--ui-text-quaternary)">{b.avatar.pickPet}</div>
+      <div className="text-center text-[length:var(--aino-text-caption)] text-(--ui-text-tertiary)">{b.avatar.pickPet}</div>
       <Input
         className="h-7 text-xs"
         onChange={event => {
@@ -210,7 +210,7 @@ export function PetTab({ image, onImage }: PetTabProps) {
         </Button>
       ) : null}
       {filtered.length === 0 ? (
-        <div className="py-3 text-center text-xs text-(--ui-text-quaternary)">{b.avatar.petNoMatch}</div>
+        <div className="py-3 text-center text-xs text-(--ui-text-tertiary)">{b.avatar.petNoMatch}</div>
       ) : (
         <div
           className="overflow-y-auto"
@@ -249,14 +249,14 @@ export function PetTab({ image, onImage }: PetTabProps) {
                 }}
               >
                 <PetThumb size={40} slug={pet.slug} spriteUrl={pet.spritesheetUrl} />
-                <span className="w-full truncate text-center text-[0.6rem] text-(--ui-text-tertiary)">
+                <span className="w-full truncate text-center text-[length:var(--aino-text-caption)] text-(--ui-text-tertiary)">
                   {pet.displayName}
                 </span>
               </RowButton>
             ))}
           </div>
           {limit < ranked.length ? (
-            <div className="py-2 text-center text-[0.65rem] text-(--ui-text-quaternary)">
+            <div className="py-2 text-center text-[length:var(--aino-text-caption)] text-(--ui-text-tertiary)">
               {b.avatar.petScrollMore(limit, ranked.length)}
             </div>
           ) : null}

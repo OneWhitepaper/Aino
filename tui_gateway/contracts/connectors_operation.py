@@ -120,6 +120,18 @@ class CatalogServerError(Payload):
     error: str
 
 
+class McpInstallConfig(Payload):
+    """Non-secret configuration displayed before installing a custom MCP server."""
+
+    url: str | None = None
+    command: str | None = None
+    args: list[str] | None = None
+    auth: Literal["none", "oauth"] | None = None
+    timeout: float | None = None
+    transport: Literal["http", "stdio"] | None = None
+    env_keys: list[str] | None = None
+
+
 class ConnectionOperationTarget(Payload):
     """``Target.snapshot``: the link minted up front rides here, never in the model result. ``extra``
     keys a leg records (``tools``, ``hint``) are typed here as they appear."""
@@ -141,6 +153,7 @@ class ConnectionOperationTarget(Payload):
     attempt: str | None = None
     # Present only on an MCP install that is waiting for credentials.
     required_env: list[ConnectionTargetEnvField] | None = None
+    mcp_config: McpInstallConfig | None = None
     tools: list[str] | None = None
     hint: str | None = None
     # Catalog rows (kind ``plugin`` / ``skill``) only; field set agreed in CATALOG-ROW-CONTRACT.md.

@@ -239,7 +239,7 @@ export function publishWorkspaceGeometry(): () => void {
     if (titlebar) {
       const r = rail?.getBoundingClientRect()
       const bar = titlebar.getBoundingClientRect()
-      const layout = rail?.closest('[data-slot="summary-workspace-main"]')?.getBoundingClientRect()
+      const layout = rail?.closest('[data-slot="layout-tree-root"]')?.getBoundingClientRect()
 
       const side =
         r && r.width > 0 && Math.abs(r.top - bar.bottom) <= 1

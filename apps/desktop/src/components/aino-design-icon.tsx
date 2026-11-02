@@ -7,7 +7,7 @@ export interface AinoDesignIconProps extends Omit<React.ComponentProps<'span'>, 
 }
 
 /**
- * Exact single-colour vector exported from the approved Aino Figma frame.
+ * Single-colour SVG asset shared by the approved Aino interface.
  * A mask preserves the source path while letting active, hover, and dark-mode
  * states continue to inherit the surrounding control's semantic colour.
  */

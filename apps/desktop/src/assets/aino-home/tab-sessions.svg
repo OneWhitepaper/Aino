@@ -1,11 +1,1 @@
-<svg preserveAspectRatio="none" overflow="visible" style="display: block;" width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
-<g id="Icon" clip-path="url(#clip0_0_98)">
-<path id="Vector" d="M9.33333 5.83333C9.33333 6.14275 9.21042 6.4395 8.99162 6.65829C8.77283 6.87708 8.47609 7 8.16667 7H3.983C3.67361 7.00007 3.37691 7.12303 3.15817 7.34183L1.87367 8.62633C1.81574 8.68424 1.74195 8.72368 1.66162 8.73966C1.58129 8.75563 1.49802 8.74743 1.42235 8.71609C1.34667 8.68475 1.28199 8.63167 1.23648 8.56357C1.19097 8.49547 1.16668 8.41541 1.16667 8.3335V2.33333C1.16667 2.02391 1.28958 1.72717 1.50838 1.50838C1.72717 1.28958 2.02391 1.16667 2.33333 1.16667H8.16667C8.47609 1.16667 8.77283 1.28958 8.99162 1.50838C9.21042 1.72717 9.33333 2.02391 9.33333 2.33333V5.83333Z" stroke="#2B7FFF" stroke-width="0.875" stroke-linecap="round" stroke-linejoin="round"/>
-<path id="Vector_2" d="M11.6667 5.25C11.9761 5.25 12.2728 5.37292 12.4916 5.59171C12.7104 5.8105 12.8333 6.10725 12.8333 6.41667V12.4168C12.8333 12.4987 12.809 12.5788 12.7635 12.6469C12.718 12.715 12.6533 12.7681 12.5777 12.7994C12.502 12.8308 12.4187 12.839 12.3384 12.823C12.258 12.807 12.1843 12.7676 12.1263 12.7097L10.8418 11.4252C10.6231 11.2064 10.3264 11.0834 10.017 11.0833H5.83333C5.52391 11.0833 5.22717 10.9604 5.00838 10.7416C4.78958 10.5228 4.66667 10.2261 4.66667 9.91667V9.33333" stroke="#2B7FFF" stroke-width="0.875" stroke-linecap="round" stroke-linejoin="round"/>
-</g>
-<defs>
-<clipPath id="clip0_0_98">
-<rect width="14" height="14" fill="white"/>
-</clipPath>
-</defs>
-</svg>
+<svg xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 48 48" fill="none"><path d="M44 6H4V36H13V41L23 36H44V6Z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"></path><path d="M14 19.5V22.5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"></path><path d="M24 19.5V22.5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"></path><path d="M34 19.5V22.5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"></path></svg>

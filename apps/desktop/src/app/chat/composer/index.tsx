@@ -13,7 +13,6 @@ import {
 
 import { useTourMarker } from '@/app/chat/tour-marker'
 import type { GatewayRequester } from '@/app/contrib/types'
-import { useHudComposerDrag } from '@/app/hud/composer-drag'
 import { useBusyInputMode } from '@/app/session/hooks/use-busy-input-mode'
 import { composerFloatingStrip, composerInputBacking } from '@/components/chat/composer-dock'
 import { useSetupChatView } from '@/components/onboarding/first-run/assembly'
@@ -32,7 +31,6 @@ import { draftRetry } from '@/store/composer-draft-retry'
 import { browseBackward, browseForward, deriveUserHistory, isBrowsingHistory } from '@/store/composer-input-history'
 import { POPOUT_WIDTH_REM } from '@/store/composer-popout'
 import { parkQueuedPrompts } from '@/store/composer-queue'
-import { $hudMode } from '@/store/hud'
 import { $showsAdvancedChrome } from '@/store/interface-mode'
 import { $chatOnboardingSolo } from '@/store/onboarding-intro'
 import { sessionBlockingPrompt } from '@/store/prompts'
@@ -46,7 +44,7 @@ import { $autoSpeakReplies } from '@/store/voice-prefs'
 import { ComposerApprovalMode } from './approval-mode-menu'
 import { AttachmentList } from './attachments'
 import { deriveBusySubmitState } from './busy-submit-state'
-import { ComposerDockGlow, QueuedEditBanner } from './chat-bar-parts'
+import { ComposerDockGlow, ComposerDragRegion, QueuedEditBanner } from './chat-bar-parts'
 import {
   acceptsTriggerCompletion,
   COMPOSER_FADE_BACKGROUND,
@@ -71,6 +69,7 @@ import { useComposerBranch } from './hooks/use-composer-branch'
 import { useComposerDraft } from './hooks/use-composer-draft'
 import { useComposerDrop } from './hooks/use-composer-drop'
 import { useComposerEscCancel } from './hooks/use-composer-esc-cancel'
+import { useComposerHud } from './hooks/use-composer-hud'
 import { useComposerMetrics } from './hooks/use-composer-metrics'
 import { useComposerPlaceholder } from './hooks/use-composer-placeholder'
 import { useComposerPopout } from './hooks/use-composer-popout'
@@ -109,6 +108,7 @@ import { ComposerStatusStack } from './status-stack'
 import { CodingStatusRow } from './status-stack/coding-row'
 import { StatusDrawerContent, StatusDrawerToggle } from './status-stack/drawer'
 import { SuggestionPills } from './suggestion-pills'
+import { TaskPauseNotice } from './task-pause-notice'
 import { extractClipboardImageBlobs, openDirectiveScope } from './text-utils'
 import { ComposerTriggerPopover } from './trigger-popover'
 import type { ChatBarProps } from './types'
@@ -154,14 +154,7 @@ export function ChatBar({
   const bindingProject = useStore($projectBindingSessions).has(sessionId ?? '')
   const historyOwner = usePlatformHistoryOwner(sessionId)
   const disabled = disabledProp || bindingProject || historyOwner !== null
-  const hudMode = useStore($hudMode)
-  const hudWindowing = window.hermesDesktop?.hud?.windowing
-  const hudNativeDrag = hudMode && hudWindowing?.nativeDrag === true
-
-  const { grabbing: hudGrabbing, onPointerDown: onHudDragPointerDown } = useHudComposerDrag(hudMode && !hudNativeDrag, {
-    controlDrag: hudWindowing?.controlDrag === true,
-    workspaceTransfer: hudWindowing?.workspaceTransfer === true
-  })
+  const { hudMode, hudNativeDrag, hudGrabbing, onHudDragPointerDown } = useComposerHud()
 
   // Voice-stop interception + contributed middleware wrap every send.
   const { onSubmit, voiceStopRef } = useMiddlewareSubmit(onSubmitProp, sessionId)
@@ -265,7 +258,13 @@ export function ChatBar({
   )
 
   const at = useAtCompletions({ gateway: gateway ?? null, sessionId: sessionId ?? null, cwd: cwd ?? null })
-  const slash = useSlashCompletions({ gateway: gateway ?? null, sessionId: sessionId ?? null, profile: profile ?? null })
+
+  const slash = useSlashCompletions({
+    gateway: gateway ?? null,
+    sessionId: sessionId ?? null,
+    profile: profile ?? null
+  })
+
   const emoji = useEmojiCompletions()
 
   const { t } = useI18n()
@@ -1423,15 +1422,7 @@ export function ChatBar({
               element's hover/cursor — grab cursor + a diagonal hatch (/////)
               appear when you hover the draggable margin, never over the input.
               The hatch pattern + opacity ladder live in styles.css. */}
-            {popoutAllowed && (
-              <div
-                aria-hidden
-                className={cn('pointer-events-auto absolute inset-0', dragging ? 'cursor-grabbing' : 'cursor-grab')}
-                data-dragging={dragging ? '' : undefined}
-                data-slot="composer-drag-region"
-                onDoubleClick={handleComposerToggle}
-              />
-            )}
+            {popoutAllowed && <ComposerDragRegion dragging={dragging} onToggle={handleComposerToggle} />}
             <div className="relative w-full rounded-[inherit]">
               {!hudMode && !guidedChat && (
                 <StatusDrawerToggle
@@ -1489,6 +1480,13 @@ export function ChatBar({
                     additions beside the "+" menu and before the controls.
                     All four render nothing until something contributes. */}
                   <ContribSlot area={COMPOSER_AREAS.top} />
+                  <TaskPauseNotice
+                    disabled={disabled || busy}
+                    gateway={gateway}
+                    onSubmit={onSubmitProp}
+                    profile={profile}
+                    sessionId={sessionId}
+                  />
                   <RestoredDraftNotice
                     freshDraft={activeQueueSessionKey === null}
                     onUndone={clearDraft}

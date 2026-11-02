@@ -1,12 +1,13 @@
 import { beforeAll, beforeEach, describe, expect, it } from 'vitest'
 
 import { findGroupOfPane, group, type LayoutNode, split } from '@/components/pane-shell/tree/model'
-import { $collapsedTreeSides, $hiddenTreePanes, $layoutTree } from '@/components/pane-shell/tree/store'
+import { $collapsedTreeSides, $hiddenTreePanes, $layoutTree, setTreeGroupMinimized } from '@/components/pane-shell/tree/store'
 import { registry } from '@/contrib/registry'
 import {
   $fileBrowserOpen,
   $leftSideOpen,
   $panesFlipped,
+  $rightSideOpen,
   $sidebarOpen,
   setFileBrowserOpen,
   setSidebarOpen,
@@ -30,7 +31,11 @@ beforeAll(() => {
   const placements = { sessions: 'left', files: 'right', terminal: 'right', [BROWSER]: 'main', workspace: 'main' }
 
   for (const [id, placement] of Object.entries(placements)) {
-    registry.register({ id, area: 'panes', title: id, data: { placement }, render: () => null })
+    registry.register({
+      id, area: 'panes', title: id,
+      data: { placement, ...(['files', 'terminal'].includes(id) ? { toolPanel: true } : {}) },
+      render: () => null
+    })
   }
 })
 
@@ -109,6 +114,37 @@ describe('positional right-side toggle', () => {
     expect($collapsedTreeSides.get().has('right')).toBe(false)
     expect(Boolean(groupOf('files')?.minimized)).toBe(false)
     expect($fileBrowserOpen.get()).toBe(true)
+  })
+
+  it.each([false, true])('reports and restores a hidden nested Files tool group (flipped: %s)', flipped => {
+    $panesFlipped.set(flipped)
+    const workspace = split('column', [group(['workspace']), group(['files', 'terminal'], { id: 'tools', toolPanel: true })])
+
+    $layoutTree.set(split('row', [
+      ...(flipped ? [workspace, group(['sessions'])] : [group(['sessions']), workspace])
+    ]))
+    const open = flipped ? $leftSideOpen : $rightSideOpen
+    const toggle = flipped ? toggleLeftSide : toggleRightSide
+
+    expect(open.get()).toBe(true)
+
+    setTreeGroupMinimized('tools', true)
+    expect($fileBrowserOpen.get()).toBe(true)
+    expect(open.get()).toBe(false)
+
+    toggle()
+    expect(groupOf('files')?.minimized).toBe(false)
+    expect(open.get()).toBe(true)
+  })
+
+  it('keeps the semantic fallback for a nested Files group mixed with the main conversation', () => {
+    $panesFlipped.set(false)
+    $layoutTree.set(split('row', [
+      group(['sessions']),
+      split('column', [group(['workspace', 'files'], { id: 'mixed', toolPanel: true }), group(['terminal'])])
+    ]))
+    setTreeGroupMinimized('mixed', true)
+    expect($rightSideOpen.get()).toBe($fileBrowserOpen.get())
   })
 })
 

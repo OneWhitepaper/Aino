@@ -6,6 +6,20 @@ export function PlatformModelDetails({ model }: { model: PlatformModel }) {
   const { t } = useI18n()
   const c = t.platformModels
   const p = model.pricing
+  const image = model.purpose === 'image'
+
+  if (image) {
+    return (
+      <div className="space-y-2 pt-2 text-xs text-muted-foreground">
+        <p className="break-words">{model.display_name}</p>
+        <p>{t.settings.model.imageGeneration.billingRules}</p>
+        <dl className="grid grid-cols-[minmax(0,1fr)_auto] gap-3">
+          <dt>{t.settings.model.imageGeneration.title}</dt>
+          <dd>{model.capabilities.image_generation === true ? c.supported : c.unsupportedCapability}</dd>
+        </dl>
+      </div>
+    )
+  }
 
   const fields = [
     [c.input, p.input],

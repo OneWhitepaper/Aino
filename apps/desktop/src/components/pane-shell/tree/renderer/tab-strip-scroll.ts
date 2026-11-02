@@ -68,7 +68,9 @@ export function useActiveTabVisible(
       return
     }
 
-    const tab = scroller.querySelector<HTMLElement>(`[data-tree-tab="${CSS.escape(activeId)}"]`)
+    const tab =
+      scroller.querySelector<HTMLElement>(`[data-tree-tab="${CSS.escape(activeId)}"]`) ??
+      scroller.querySelector<HTMLElement>('[data-slot="pane-tab"][data-active="true"]')
 
     if (!tab) {
       return

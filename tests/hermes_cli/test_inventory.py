@@ -222,7 +222,7 @@ def test_explicit_only_filters_ambient_credentials_but_keeps_current_and_custom_
         patch("hermes_cli.config.read_raw_config", return_value={}),
         patch(
             "hermes_cli.auth.is_provider_explicitly_configured",
-            side_effect=lambda slug: slug == "gemini",
+            side_effect=lambda slug, **kwargs: slug == "gemini",
         ),
     ):
         payload = build_models_payload(ctx, explicit_only=True)

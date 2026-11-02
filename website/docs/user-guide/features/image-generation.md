@@ -29,10 +29,45 @@ Prices are FAL's pricing at time of writing; check [fal.ai](https://fal.ai/) for
 
 ## Setup
 
+### Aino desktop account
+
+In Aino desktop, open **Settings → Models → Image generation** and choose an
+Aino built-in image model from the account catalog. Desktop shows only this
+account catalog; it does not show the upstream image-provider marketplace.
+Selecting a model saves the Aino image provider and model together in one
+profile-scoped write. The main conversation model
+remains independent: it understands the request and calls the existing
+`image_generate` tool. Both Aino and individually configured conversation models
+can use Aino image generation. Sign in once; no additional API key is required.
+
+The API administrator must publish an image entry in the desktop catalog with
+`api_mode: images_generations` and `capabilities.image_generation: true`. The
+account API must support image-purpose desktop credentials before this option
+can run. A model configured only in the upstream channel is not automatically
+published to desktop users.
+
+The initial Aino provider supports text-to-image through the synchronous Images
+API. Generated images use the existing preview, download and local image cache.
+Charges follow the account's image billing rules and appear in account usage;
+token prices are not substituted for image prices. Failed or timed-out requests
+are not automatically resubmitted. Check account usage before retrying.
+
+The API administrator manages **Text models** and **Image models** separately,
+including their own catalog entries and default model. Switching between the
+management tabs preserves both catalogs; neither default can select the other
+purpose. Image models remain subject to group permissions, model allowlists and
+existing image billing rules.
+
+Nous and other runtime image providers remain available to existing CLI
+configurations with their existing credentials and billing; they are hidden
+from the desktop image settings. A failed Aino authorization never silently switches to another paid
+provider. Changes that enable a previously unavailable tool take effect in a new
+conversation, preserving the current conversation's cached tool definition.
+
 :::tip Nous Subscribers
 If you have a paid [Nous Portal](https://portal.nousresearch.com) subscription, you can use image generation through the **[Tool Gateway](tool-gateway.md)** without a FAL API key. Your model selection persists across both paths. New installs can run `hermes setup --portal` to log in and turn on every gateway tool at once; existing installs can pick **Nous Subscription** as the image-gen backend via `hermes tools`.
 
-The **Nous Subscription** row is the only managed row. Its model picker spans every gateway the subscription runs — the FAL catalog above, native **Krea 3** (`krea-3`) and **Krea 2** (`krea-2-medium`, `krea-2-large`, `krea-2-medium-turbo`) and any Nous Portal image models — each model listed once, and the model you pick decides which gateway serves the request. Free tool-pool accounts see the FAL models only; Krea and Portal models are paid-subscription. With Krea 3 selected, `image_url` is a picture to edit (up to 4 reference images in total; an edit keeps the picture's own framing) and `image_generate` offers `thinking` (`fast` or `high`) and `resolution` (`1K` or `2K`). With a Krea 2 model selected, it offers Krea's `creativity` setting and its `intensity`, `complexity` and `movement` sliders (-100 to 100) instead.
+The **Nous Subscription** row is the Nous-managed row. Its model picker spans every gateway the subscription runs — the FAL catalog above, native **Krea 3** (`krea-3`) and **Krea 2** (`krea-2-medium`, `krea-2-large`, `krea-2-medium-turbo`) and any Nous Portal image models — each model listed once, and the model you pick decides which gateway serves the request. Free tool-pool accounts see the FAL models only; Krea and Portal models are paid-subscription. With Krea 3 selected, `image_url` is a picture to edit (up to 4 reference images in total; an edit keeps the picture's own framing) and `image_generate` offers `thinking` (`fast` or `high`) and `resolution` (`1K` or `2K`). With a Krea 2 model selected, it offers Krea's `creativity` setting and its `intensity`, `complexity` and `movement` sliders (-100 to 100) instead.
 
 If the managed gateway returns `HTTP 4xx` for a specific model, that model isn't yet proxied on the portal side — the agent will tell you so, with remediation steps (switch to FAL.ai in `hermes tools` with your own `FAL_KEY` for direct access, or pick a different model).
 :::

@@ -229,6 +229,9 @@ export const zhHantAssistant = {
     },
     themePicker: zhHantThemePicker,
     tool: {
+      collapseDetails: '收合詳細資訊',
+      moreActions: '執行記錄操作',
+      hideRecord: '隱藏這筆記錄',
       copyCode: '複製程式碼',
       renderingImage: '正在渲染圖片',
       copyOutput: '複製輸出',

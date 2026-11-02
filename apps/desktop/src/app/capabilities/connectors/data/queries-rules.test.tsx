@@ -8,19 +8,23 @@ import { noteFreeTierTurnComplete } from '@/store/free-tier-sign-in'
 import { setPrimaryGateway, setPrimaryGatewayConnectionId } from '@/store/gateway'
 
 import { useHostedConnectors } from './queries'
+import { ConnectorRpcError } from './rpc'
 
 const row = { connected: false, connector: 'notion', enabled: true, gateway_disabled_tools: [] }
 
-function gateway(listed: object[]) {
-  const request = vi.fn(
-    async (method: string) =>
-      ({
-        'connectors.accounts': { accounts: [] },
-        'connectors.catalog': { connectors: [] },
-        'connectors.list': { available: true, connectors: [...listed] },
-        'connectors.policy.get': { effective: { mode: 'unrestricted' }, layers: [] }
-      })[method]
-  )
+function gateway(listed: object[], listError?: ConnectorRpcError) {
+  const request = vi.fn(async (method: string) => {
+    if (method === 'connectors.list' && listError) {
+      throw listError
+    }
+
+    return {
+      'connectors.accounts': { accounts: [] },
+      'connectors.catalog': { connectors: [] },
+      'connectors.list': { available: true, connectors: [...listed] },
+      'connectors.policy.get': { effective: { mode: 'unrestricted' }, layers: [] }
+    }[method]
+  })
 
   // SAFETY: the page's queries call only `request` on the primary socket.
   setPrimaryGateway({ request } as never)
@@ -47,6 +51,27 @@ afterEach(() => {
 })
 
 describe('connector rules on the Connectors page', () => {
+  it('keeps the original sign-in requirement authoritative', async () => {
+    const request = gateway([row], new ConnectorRpcError('Sign in required', 4032, 'NEEDS_NOUS_AUTH'))
+    const { result } = mount()
+
+    await waitFor(() => expect(result.current.phase).toBe('signedOut'))
+    expect(result.current.rows).toEqual([])
+    expect(asked(request, 'connectors.policy.get')).toBe(false)
+  })
+
+  it('loads hosted apps and their account policy by default', async () => {
+    const request = gateway([row])
+    const { result } = mount()
+
+    await waitFor(() => expect(result.current.phase).toBe('ready'))
+    await waitFor(() => expect(asked(request, 'connectors.policy.get')).toBe(true))
+    expect(asked(request, 'connectors.list')).toBe(true)
+    expect(asked(request, 'connectors.catalog')).toBe(true)
+    expect(asked(request, 'connectors.accounts')).toBe(true)
+    expect(result.current.listSlugs.has('notion')).toBe(true)
+  })
+
   it('are not asked for while the list is empty (no identity yet)', async () => {
     const request = gateway([])
     const { result } = mount()

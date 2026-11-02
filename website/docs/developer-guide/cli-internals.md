@@ -112,6 +112,17 @@ weeks, months and years. The combined timeout is capped below the native signed
 unit limits cannot overflow subprocess polling. Zero/unknown/infinite phase
 limits use the bounded fallback. This does not change active-turn drain settings.
 
+## Provider configuration in model pickers
+
+`auth_provider_config.py` owns explicit provider configuration evidence;
+`auth.is_provider_explicitly_configured` remains the public entry point. Normal
+CLI resolution accepts shell credentials. Explicit-only chat inventories pass
+`include_process_env=False`: only saved profile or administrator credentials, deliberate account
+logins and user-selected routes count. Configuration evidence uses the effective
+user layer without defaults, so the bundled MoA example does not configure its
+providers for every user. Current selections, configured custom endpoints and
+managed local models retain their existing inventory routes.
+
 ## Nous sign-in
 
 Every Nous sign-in is the plain device-code login. Sign-in completion is one function,

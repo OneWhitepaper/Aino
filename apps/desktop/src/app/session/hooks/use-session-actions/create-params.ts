@@ -28,7 +28,7 @@ import {
   getCurrentModelSource
 } from '@/store/session'
 
-// `session.create` params from the current profile + sticky-UI model/effort/fast,
+// `session.create` params from the current draft's owner and model/effort/fast,
 // ensuring the gateway is on that profile first. Shared by the primary send path
 // and the "open in split" tile path; `cwd` is the one thing that differs (the
 // live composer cwd for a send, the resolved new-session cwd for a fresh tile).
@@ -41,7 +41,9 @@ import {
 // provider only ride when the composer source is 'manual', except an Aino
 // default: it must carry its managed-billing identity into draft binding.
 // Other default-sourced values mirror Settings → Model and must not pin the
-// new chat.
+// new chat. Independent tiles pass `defaults` to resolve their own Settings
+// without inheriting or changing the occupied conversation's selection; Bot
+// tabs retain their existing false path with no composer overrides.
 function resolveCreateProfile(
   capturedRoute: ReturnType<typeof resolveNewChatOwnerRoute>,
   requestedProfile?: string
@@ -55,12 +57,43 @@ function resolveCreateProfile(
   return profile
 }
 
+async function capturePlatformCreateAuthority(
+  catalog: ReturnType<typeof platformModelCatalog>,
+  platformOwner: string,
+  platformOrigin: string,
+  generation: number,
+  enforceGeneration: boolean
+): Promise<PlatformDraftAuthority> {
+  const accountBridge = window.hermesDesktop?.platformAccount
+
+  if (accountBridge) {
+    // A picker can precede a missed IPC account publication. Refresh before
+    // capturing draft authority so the native revision and owner agree.
+    await platformAccountActions(accountBridge).refresh()
+  }
+
+  await catalog.load()
+  const authoritativeOwner = catalog.owner.state.get().owner
+  const account = catalog.account.get()
+
+  if (
+    (enforceGeneration && generation !== getComposerSelectionGeneration()) ||
+    !authoritativeOwner || account?.phase !== 'signed_in' || account.account?.id !== authoritativeOwner.user_id ||
+    !platformOwner || !platformOrigin || platformOwner !== authoritativeOwner.user_id ||
+    platformOrigin !== authoritativeOwner.platform_origin
+  ) {
+    throw new PlatformSelectionError('platform_account_changed')
+  }
+
+  return { account, owner: authoritativeOwner }
+}
+
 export async function desktopSessionCreateParams(
   cwd: string,
   capturedRoute = resolveNewChatOwnerRoute(),
   requestedProfile?: string,
   legacyProfileIntent = false,
-  includeComposerSelection = true
+  includeComposerSelection: boolean | 'defaults' = true
 ): Promise<{
   params: Record<string, unknown>
   platformAuthority: PlatformDraftAuthority | null
@@ -76,7 +109,7 @@ export async function desktopSessionCreateParams(
   let platformAuthority: PlatformDraftAuthority | null = null
 
   const selection = {
-    effort: $currentReasoningEffort.get().trim(),
+    effort: includeComposerSelection === true ? $currentReasoningEffort.get().trim() : '',
     fast: $currentFastMode.get(),
     serviceTier: $currentServiceTier.get().trim(),
     model: $currentModel.get().trim(),
@@ -93,12 +126,12 @@ export async function desktopSessionCreateParams(
     ? { connectionId: capturedRoute.connectionId, profile }
     : platformDefaultScope(profile).route
 
-  if (includeComposerSelection && selectionSource !== 'manual') {
+  if (includeComposerSelection && (includeComposerSelection === 'defaults' || selectionSource !== 'manual')) {
     // A persisted default or a live session's footer is not billing authority.
     // Resolve the captured owner directly, even before background effects run.
     const resolved = await resolveModelDefault(scope, managedRoute)
 
-    if (generation !== getComposerSelectionGeneration()) {
+    if (includeComposerSelection === true && generation !== getComposerSelectionGeneration()) {
       throw new Error(translateNow('desktop.modelSwitchFailed'))
     }
 
@@ -136,34 +169,11 @@ export async function desktopSessionCreateParams(
   const catalog = platformModelCatalog()
 
   if (selection.provider === 'aino') {
-    const accountBridge = window.hermesDesktop?.platformAccount
-
-    if (accountBridge) {
-      // A picker can precede a missed IPC account publication. Refresh before
-      // capturing draft authority so the native revision and owner agree.
-      await platformAccountActions(accountBridge).refresh()
-    }
-
-    await catalog.load()
-    const authoritativeOwner = catalog.owner.state.get().owner
-    const account = catalog.account.get()
-
-    if (
-      generation !== getComposerSelectionGeneration() ||
-      !authoritativeOwner ||
-      account?.phase !== 'signed_in' ||
-      account.account?.id !== authoritativeOwner.user_id ||
-      !platformOwner ||
-      !platformOrigin ||
-      platformOwner !== authoritativeOwner.user_id ||
-      platformOrigin !== authoritativeOwner.platform_origin
-    ) {
-      throw new PlatformSelectionError('platform_account_changed')
-    }
-
-    platformOwner = authoritativeOwner.user_id
-    platformOrigin = authoritativeOwner.platform_origin
-    platformAuthority = { account, owner: authoritativeOwner }
+    platformAuthority = await capturePlatformCreateAuthority(
+      catalog, platformOwner, platformOrigin, generation, includeComposerSelection === true
+    )
+    platformOwner = platformAuthority.owner.user_id
+    platformOrigin = platformAuthority.owner.platform_origin
   }
 
   const modelParams = platformCreateOverrides(

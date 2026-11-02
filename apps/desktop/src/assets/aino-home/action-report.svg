@@ -1,7 +1,1 @@
-<svg preserveAspectRatio="none" overflow="visible" style="display: block;" width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-<g id="Icon">
-<path id="Vector" d="M3.33333 14V10" stroke="#99A1AF" stroke-linecap="round" stroke-linejoin="round"/>
-<path id="Vector_2" d="M8 14V2" stroke="#99A1AF" stroke-linecap="round" stroke-linejoin="round"/>
-<path id="Vector_3" d="M12.6667 14V6" stroke="#99A1AF" stroke-linecap="round" stroke-linejoin="round"/>
-</g>
-</svg>
+<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 48 48" fill="none"><path d="M6 6V42H42" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"></path><path d="M14 30V34" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"></path><path d="M22 22V34" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"></path><path d="M30 6V34" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"></path><path d="M38 14V34" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"></path></svg>

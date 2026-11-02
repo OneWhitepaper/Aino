@@ -111,7 +111,8 @@ def _fetch_manifest_with_fallback(
     data = _fetch_manifest(primary_url, timeout)
     if data is not None:
         return data
-    for url in fallback_urls:
+    # A private catalog is its own authority; failure must not silently contact upstream.
+    for url in fallback_urls if primary_url == DEFAULT_CATALOG_URL else ():
         if not url or url == primary_url:
             continue
         data = _fetch_manifest(url, timeout)

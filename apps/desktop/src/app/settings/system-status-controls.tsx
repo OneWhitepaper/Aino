@@ -4,14 +4,13 @@ import { useState } from 'react'
 import type { CommandCenterSection } from '@/app/command-center'
 import { GatewayMenuPanel } from '@/app/shell/gateway-menu-panel'
 import { useStatusSnapshot } from '@/app/shell/hooks/use-status-snapshot'
+import { StatusDot } from '@/components/status-dot'
 import { Button } from '@/components/ui/button'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
-import { GlyphSpinner } from '@/components/ui/glyph-spinner'
 import { Tip } from '@/components/ui/tooltip'
 import { useI18n } from '@/i18n'
-import { Activity, AlertCircle, ChevronDown, Command } from '@/lib/icons'
+import { ChevronDown, Command } from '@/lib/icons'
 import { runtimeReadinessDisplay, type RuntimeReadinessRequester } from '@/lib/runtime-readiness'
-import { cn } from '@/lib/utils'
 import { $activeConnectionId } from '@/store/connections'
 import { $activeGatewayProfile } from '@/store/profile'
 import { $gatewayState } from '@/store/session'
@@ -25,8 +24,8 @@ interface SettingsSystemControlsProps {
 
 /**
  * The two pieces of ambient system chrome that belong to Settings rather than
- * the chat statusbar: the command-center entry point and the live gateway
- * health menu. The menu body stays shared with the chat-era status control so
+ * the chat statusbar: the live gateway health and command-center entry point.
+ * The menu body stays shared with the chat-era status control so
  * reconnect, restart, logs, and platform state cannot drift between surfaces.
  */
 export function SettingsSystemControls({
@@ -60,59 +59,43 @@ export function SettingsSystemControls({
       ? copy.gatewayConnecting
       : copy.gatewayOffline
 
-  const gatewayClassName = inferenceReady
-    ? undefined
-    : gatewayOpen || gatewayConnecting
-      ? 'text-amber-600 hover:text-amber-600'
-      : 'text-destructive hover:text-destructive'
+  const gatewayTone = gatewayRestarting
+    ? 'warn'
+    : inferenceReady
+      ? 'good'
+      : gatewayOpen || gatewayConnecting
+        ? 'warn'
+        : 'bad'
 
   const gatewayAccessibleDetail = gatewayRestarting ? copy.gatewayRestarting : gatewayDetail
 
-  return (
-    <div className="flex min-w-0 flex-1 flex-col items-stretch gap-0.5 max-[47.5rem]:flex-none max-[47.5rem]:flex-row max-[47.5rem]:items-center max-[47.5rem]:gap-1">
-      <Tip label={copy.openCommandCenter}>
-        <Button
-          aria-label={copy.openCommandCenter}
-          className="w-full min-w-0 justify-start text-(--ui-text-secondary) hover:text-foreground max-[47.5rem]:w-auto max-[47.5rem]:flex-none max-[47.5rem]:px-2"
-          data-settings-command-center=""
-          onClick={onOpenCommandCenter}
-          size="sm"
-          type="button"
-          variant="ghost"
-        >
-          <Command />
-          <span className="truncate max-[47.5rem]:hidden">{copy.openCommandCenter}</span>
-        </Button>
-      </Tip>
+  const gatewayDisplay = gatewayRestarting
+    ? 'restarting'
+    : gatewayOpen
+      ? readinessDisplay
+      : gatewayConnecting
+        ? 'connecting'
+        : 'offline'
 
+  return (
+    <div className="settings-system-controls">
       <DropdownMenu onOpenChange={setGatewayMenuOpen} open={gatewayMenuOpen}>
         <DropdownMenuTrigger asChild>
           <Button
             aria-label={`${copy.gateway}: ${gatewayAccessibleDetail}`}
-            className={cn(
-              'w-full min-w-0 justify-start text-(--ui-text-secondary) data-[state=open]:bg-(--ui-control-active-background) data-[state=open]:text-foreground max-[47.5rem]:w-auto max-[47.5rem]:flex-none max-[47.5rem]:px-2',
-              !gatewayRestarting && gatewayClassName
-            )}
+            className="settings-runtime-control"
+            data-runtime-status={gatewayDisplay}
             data-settings-gateway=""
             size="sm"
             type="button"
             variant="ghost"
           >
-            {gatewayRestarting ? (
-              <GlyphSpinner ariaLabel={copy.gatewayRestarting} />
-            ) : inferenceReady ? (
-              <Activity />
-            ) : (
-              <AlertCircle />
-            )}
-            <span className="truncate max-[47.5rem]:hidden">{copy.gateway}</span>
-            <span className="truncate text-muted-foreground/80 max-[47.5rem]:hidden">
-              {gatewayRestarting ? copy.gatewayRestarting : gatewayDetail}
-            </span>
-            <ChevronDown className="ml-auto opacity-60 max-[47.5rem]:hidden" />
+            <StatusDot className="settings-runtime-dot" data-runtime-status={gatewayDisplay} tone={gatewayTone} />
+            <span className="truncate">{gatewayAccessibleDetail}</span>
+            <ChevronDown aria-hidden="true" className="settings-runtime-chevron size-3 opacity-60" />
           </Button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="start" className="w-72 p-0" side="top" sideOffset={8}>
+        <DropdownMenuContent align="end" className="w-72 p-0" side="bottom" sideOffset={8}>
           <GatewayMenuPanel
             gatewayState={gatewayState}
             inferenceStatus={inferenceStatus}
@@ -122,6 +105,20 @@ export function SettingsSystemControls({
           />
         </DropdownMenuContent>
       </DropdownMenu>
+      <span aria-hidden="true" className="settings-system-controls-separator" />
+      <Tip label={copy.openCommandCenter}>
+        <Button
+          aria-label={copy.openCommandCenter}
+          className="settings-command-center-control"
+          data-settings-command-center=""
+          onClick={onOpenCommandCenter}
+          size="icon-sm"
+          type="button"
+          variant="ghost"
+        >
+          <Command aria-hidden="true" />
+        </Button>
+      </Tip>
     </div>
   )
 }

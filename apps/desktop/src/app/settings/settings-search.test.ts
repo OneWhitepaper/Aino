@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
+import { TRANSLATIONS } from '@/i18n'
 import { Settings2, Wrench } from '@/lib/icons'
 import type { ConfigFieldSchema, HermesConfigRecord } from '@/types/hermes'
 
@@ -7,7 +8,8 @@ import {
   buildConfigSearchEntries,
   buildCredentialSearchEntries,
   credentialSettingsView,
-  filterSettingsSearchEntries
+  filterSettingsSearchEntries,
+  settingsSearchTargetQuery
 } from './settings-search'
 import { envVar } from './test-utils'
 
@@ -28,6 +30,15 @@ const searchCopy = {
 }
 
 describe('settings search index', () => {
+  it.each(['third-party', 'custom-endpoints', 'local'] as const)(
+    'preserves a direct %s model-service destination',
+    providerView => {
+      const query = new URLSearchParams(settingsSearchTargetQuery({ view: 'providers', providerView }))
+      expect(query.get('tab')).toBe('providers')
+      expect(query.get('pview')).toBe(providerView)
+    }
+  )
+
   it('builds config results from renderable schema fields with exact deep links', () => {
     const schema: Record<string, ConfigFieldSchema> = {
       'display.personality': { type: 'select' },
@@ -86,6 +97,38 @@ describe('settings search index', () => {
     expect(filterSettingsSearchEntries(entries, 'structured crawler')).toHaveLength(1)
     expect(filterSettingsSearchEntries(entries, 'future_crawl')[0]?.id).toBe('credential:FUTURE_CRAWLER_API_KEY')
     expect(filterSettingsSearchEntries(entries, 'gateway traffic')[0]?.id).toBe('credential:FUTURE_GATEWAY_URL')
+  })
+
+  it('uses the approved page copy while keeping old labels and descriptions searchable', () => {
+    const copy = {
+      ...searchCopy,
+      configPages: {
+        ...TRANSLATIONS.en.settings.configPages,
+        fields: {
+          'display.personality': { label: 'Reply style', description: 'Set the default tone for new conversations.' }
+        }
+      }
+    }
+
+    const schema: Record<string, ConfigFieldSchema> = {
+      'display.personality': { type: 'select' },
+      'tts.edge.voice': { type: 'string' }
+    }
+
+    const entries = buildConfigSearchEntries(schema, { display: { personality: 'default' } }, copy)
+    const personality = entries.find(entry => entry.target.field === 'display.personality')!
+    expect(personality.label).toBe('Reply style')
+    expect(personality.description).toBe('Set the default tone for new conversations.')
+    expect(personality.target).toEqual({ field: 'display.personality', view: 'config:chat' })
+
+    for (const query of ['Reply style', 'default tone', 'Personality', 'Hermes sounds']) {
+      expect(filterSettingsSearchEntries(entries, query)).toContain(personality)
+    }
+
+    expect(entries.find(entry => entry.target.field === 'tts.edge.voice')).toMatchObject({
+      label: 'Edge voice',
+      description: 'Voice used by Edge TTS.'
+    })
   })
 
   it('shares the Tools and Settings category boundary with the rendered page', () => {

@@ -29,6 +29,11 @@ export function summaryEnvironmentState({
   return { cwd: trimmedCwd, kind: 'ready', projectName }
 }
 
+function hasMeasuredContext(usage: UsageStats): boolean {
+  return usage.context_source !== 'unknown' && usage.context_used != null &&
+    (usage.context_used > 0 || (usage.context_source === 'provider_usage' && (usage.context_max ?? 0) > 0))
+}
+
 export function summaryContextUsage(
   usage: UsageStats,
   breakdown: ContextBreakdown | null,
@@ -42,10 +47,7 @@ export function summaryContextUsage(
   // snapshot can still carry the previous model's window. Occupancy keeps its
   // measured provenance, while an all-zero initialization placeholder cannot
   // override useful estimates from the backend.
-  const hasUsage =
-    usage.context_source !== 'unknown' &&
-    usage.context_used != null &&
-    (usage.context_used > 0 || (usage.context_max ?? 0) > 0)
+  const hasUsage = hasMeasuredContext(usage)
 
   const hasBreakdownUsage =
     breakdown &&

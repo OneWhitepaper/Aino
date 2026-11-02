@@ -1,8 +1,286 @@
 import { defineFieldCopy } from '@/app/settings/field-copy'
 
+import { configPagesFor } from './config-pages'
 import type { TranslationOverrides } from './define-locale'
 import { zhHantDelegationRouting } from './zh-hant_delegation_routing'
 import { zhHantUpdateChannel } from './zh-hant_update_channel'
+
+const configPageFieldLabels: Record<string, string> = defineFieldCopy({
+  model: '預設模型',
+  modelContextLength: '主要模型上下文視窗（token）',
+  fallbackProviders: '備用模型',
+  toolsets: '已啟用工具集',
+  timezone: '時區',
+  display: {
+    personality: '人格',
+    showReasoning: '推理區塊'
+  },
+  desktop: {
+    repoScanEnabled: '自動探索程式碼儲存庫',
+    repoScanRoots: '程式碼儲存庫掃描根目錄',
+    repoScanExcludePaths: '排除的程式碼儲存庫路徑'
+  },
+  agent: {
+    maxTurns: '最大代理步數',
+    imageInputMode: '圖片附件',
+    apiMaxRetries: 'API 重試次數',
+    serviceTier: '服務層級',
+    toolUseEnforcement: '工具使用強制'
+  },
+  terminal: {
+    cwd: '工作目錄',
+    backend: '執行後端',
+    timeout: '指令逾時',
+    persistentShell: '持久化 Shell',
+    envPassthrough: '環境變數傳遞',
+    dockerImage: 'Docker 映像',
+    singularityImage: 'Singularity 映像',
+    modalImage: 'Modal 映像',
+    daytonaImage: 'Daytona 映像'
+  },
+  fileReadMaxChars: '檔案讀取上限',
+  toolOutput: {
+    maxBytes: '終端機輸出上限',
+    maxLines: '檔案頁面上限',
+    maxLineLength: '行長上限'
+  },
+  codeExecution: {
+    mode: '程式碼執行模式'
+  },
+  approvals: {
+    mode: '批准模式',
+    timeout: '批准逾時',
+    mcpReloadConfirm: '確認 MCP 重新載入'
+  },
+  commandAllowlist: '指令允許清單',
+  security: {
+    redactSecrets: '遮蔽密鑰',
+    allowPrivateUrls: '允許私有 URL'
+  },
+  browser: {
+    allowPrivateUrls: '瀏覽器私有 URL',
+    autoLocalForPrivateUrls: '私有 URL 使用本機瀏覽器',
+    useRealProfile: '使用我的真實瀏覽器設定檔'
+  },
+  checkpoints: {
+    enabled: '檔案檢查點',
+    maxSnapshots: '檢查點上限'
+  },
+  voice: {
+    maxRecordingSeconds: '最長錄音時間',
+    autoTts: '朗讀回覆',
+    voiceChatMode: '語音聊天模式',
+    gptLive: {
+      voice: 'GPT-Live 音色',
+      instructions: 'GPT-Live 人設'
+    }
+  },
+  stt: {
+    enabled: '語音轉文字',
+    provider: '語音轉文字提供方',
+    echoTranscripts: '回傳轉寫文字',
+    local: {
+      model: '本機轉寫模型',
+      language: '轉寫語言'
+    },
+    openai: {
+      model: 'OpenAI STT 模型'
+    },
+    groq: {
+      model: 'Groq STT 模型'
+    },
+    mistral: {
+      model: 'Mistral STT 模型'
+    },
+    elevenlabs: {
+      modelId: 'ElevenLabs STT 模型',
+      languageCode: 'ElevenLabs 語言',
+      tagAudioEvents: '標記音訊事件',
+      diarize: '說話者分離'
+    }
+  },
+  tts: {
+    provider: '文字轉語音提供方',
+    edge: {
+      voice: 'Edge 語音'
+    },
+    openai: {
+      model: 'OpenAI TTS 模型',
+      voice: 'OpenAI 語音'
+    },
+    elevenlabs: {
+      voiceId: 'ElevenLabs 語音',
+      modelId: 'ElevenLabs 模型'
+    },
+    deepinfra: {
+      model: 'DeepInfra TTS 模型',
+      voice: 'DeepInfra 語音'
+    },
+    xai: {
+      voiceId: 'xAI (Grok) 語音',
+      language: 'xAI 語言',
+      speed: '播放速度',
+      autoSpeechTags: '自動語音標籤',
+      optimizeStreamingLatency: '串流延遲最佳化',
+      sampleRate: '取樣率',
+      bitRate: '位元率'
+    },
+    minimax: {
+      model: 'MiniMax TTS 模型',
+      voiceId: 'MiniMax 語音'
+    },
+    mistral: {
+      model: 'Mistral TTS 模型',
+      voiceId: 'Mistral 語音'
+    },
+    gemini: {
+      model: 'Gemini TTS 模型',
+      voice: 'Gemini 語音'
+    },
+    neutts: {
+      model: 'NeuTTS 模型',
+      device: 'NeuTTS 裝置'
+    },
+    kittentts: {
+      model: 'KittenTTS 模型',
+      voice: 'KittenTTS 語音'
+    },
+    piper: {
+      voice: 'Piper 語音'
+    }
+  },
+  memory: {
+    memoryEnabled: '持久記憶',
+    userProfileEnabled: '使用者設定檔',
+    memoryCharLimit: '記憶預算',
+    userCharLimit: '設定檔預算',
+    provider: '記憶提供方'
+  },
+  context: {
+    engine: '上下文引擎'
+  },
+  compression: {
+    enabled: '自動壓縮',
+    threshold: '壓縮閾值',
+    codexGpt55Autoraise: 'Codex 壓縮自動提高',
+    targetRatio: '壓縮目標',
+    protectLastN: '保護最近訊息'
+  },
+  auxiliary: {
+    compression: {
+      timeout: '壓縮模型逾時（秒）'
+    }
+  },
+  delegation: {
+    model: '子代理模型',
+    provider: '子代理提供方',
+    maxIterations: '子代理輪次上限',
+    maxConcurrentChildren: '平行子代理',
+    childTimeoutSeconds: '子代理逾時',
+    reasoningEffort: '子代理推理強度'
+  },
+  updates: {
+    nonInteractiveLocalChanges: '應用程式內更新的本機變更'
+  }
+})
+
+const configPageFieldDescriptions: Record<string, string> = defineFieldCopy({
+  model: '除非你在輸入框選擇其他模型，否則新聊天會使用此模型。',
+  modelContextLength:
+    '僅覆寫主聊天模型偵測到的上下文視窗（以 token 計）。保留 0 會使用所選模型偵測到的值。不影響輔助模型/MoA 模型。',
+  fallbackProviders: '預設模型失敗時要嘗試的備用 provider:model 項目。',
+  display: {
+    personality: '新工作階段的預設助手風格。',
+    showReasoning: '後端提供推理內容時顯示該區塊。'
+  },
+  desktop: {
+    repoScanEnabled: '掃描本機資料夾，並在「專案」中顯示 Git 程式碼儲存庫。',
+    repoScanRoots: '要掃描的資料夾。留空時不主動掃描磁碟，已關聯對話的專案仍會顯示。',
+    repoScanExcludePaths: '探索程式碼儲存庫時略過這些資料夾及其子目錄。'
+  },
+  timezone: 'Hermes 需要本機時間上下文時使用。留空則使用系統時區。',
+  agent: {
+    imageInputMode: '控制圖片附件如何傳送給模型。',
+    maxTurns: 'Hermes 停止一次執行前的工具呼叫輪次上限。'
+  },
+  terminal: {
+    cwd: '工具與終端機操作的預設專案資料夾。',
+    persistentShell: '僅適用於 SSH：保留指令中匯出的環境變數；關閉後每條指令使用登入環境。工作目錄始終保留。',
+    envPassthrough: '填寫允許傳入工具的環境變數名稱，不要填寫值。修改後需重新啟動執行服務，並重新建立既有執行環境。',
+    dockerImage: '執行後端為 Docker 時使用的容器映像。',
+    singularityImage: '執行後端為 Singularity 時使用的映像。',
+    modalImage: '執行後端為 Modal 時使用的映像。',
+    daytonaImage: '執行後端為 Daytona 時使用的映像。'
+  },
+  codeExecution: {
+    mode: '專案模式使用工作階段目錄和專案 Python；獨立模式使用暫存目錄和執行環境 Python。此選項不改變檔案存取權限。'
+  },
+  fileReadMaxChars: 'Hermes 單次檔案讀取可讀取的最大字元數。',
+  approvals: {
+    mode: 'Hermes 如何處理需要明確批准的指令。',
+    timeout: '批准提示逾時前等待的時間。'
+  },
+  security: {
+    redactSecrets: '盡可能從模型可見內容中隱藏偵測到的密鑰。'
+  },
+  checkpoints: {
+    enabled: '在檔案編輯前建立可回復的快照。'
+  },
+  memory: {
+    memoryEnabled: '儲存有助於未來工作階段的持久記憶。',
+    userProfileEnabled: '維護一份精簡的使用者偏好設定檔。'
+  },
+  context: {
+    engine: '長對話接近上下文上限時的管理策略。'
+  },
+  compression: {
+    enabled: '對話變大時摘要較早的上下文。',
+    codexGpt55Autoraise: '為支援的 ChatGPT Codex OAuth 模型將壓縮閾值提高到 85%。'
+  },
+  auxiliary: {
+    compression: {
+      timeout: '每次呼叫輔助壓縮模型的等待秒數（預設 120）。本機模型較慢時請調高。'
+    }
+  },
+  browser: {
+    useRealProfile:
+      '本機瀏覽會使用你的真實登入狀態。Hermes 會將預設瀏覽器的設定（Cookie、登入資訊與偏好）複製成受管理的快照，再以內建的 Chromium 驅動它——不會直接開啟你正在使用的設定檔，且每次執行都會從目前的設定檔重新整理副本。設定雲端瀏覽器後端時，也允許代理視需要開啟本機真實設定檔工作階段。僅支援 Chromium 系瀏覽器（Chrome、Edge、Brave、Brave Origin、Chromium）；若預設瀏覽器並非 Chromium 系，會顯示明確錯誤。預設關閉。'
+  },
+  voice: {
+    autoTts: '自動朗讀助手回覆。',
+    voiceChatMode:
+      'chained：語音轉文字 → Hermes → 文字轉語音，使用下方的提供方。gpt-live：由全雙工 OpenAI 語音模型（gpt-live-1）負責聆聽與說話，並將每個實際請求交給 Hermes——由你選擇的任意模型使用完整工具集作答。需要 OpenAI API 金鑰；語音層每分鐘收費 $0.05。',
+    gptLive: {
+      voice: 'GPT-Live 模式使用的音色，可填入自訂音色 ID。',
+      instructions: '附加至即時語音人設的句子（語氣、語速、語言）。Hermes 會保留自己的系統提示詞。'
+    }
+  },
+  stt: {
+    enabled: '啟用本機或提供方支援的語音轉寫。',
+    echoTranscripts: '將語音訊息的原始 🎙️ 轉寫文字傳回聊天。',
+    elevenlabs: {
+      languageCode: '可選的 ISO-639-3 語言代碼。留空讓 ElevenLabs 自動偵測。'
+    }
+  },
+  tts: {
+    xai: {
+      voiceId: 'xAI 音色 ID（例如 eve）或自訂音色 ID。',
+      language: '口語語言代碼（例如 en、pt-BR），或填入 "auto" 自動偵測。',
+      speed: '播放速度。0.7 = 較慢，1.0 = 正常，1.5 = 較快。',
+      autoSpeechTags: '合成前讓 LLM 在文稿中插入富有表現力的音訊標籤（例如 [laughing]、[sighs]）。',
+      optimizeStreamingLatency: '延遲與品質的權衡。0 = 最佳品質，2 = 最低延遲。',
+      sampleRate: '音訊取樣率（Hz）。越高音質越好、檔案越大。',
+      bitRate: 'MP3 位元率（bps）。僅在編碼為 mp3 時生效。'
+    },
+    neutts: {
+      device: 'NeuTTS 的本機推論裝置。'
+    }
+  },
+  updates: {
+    nonInteractiveLocalChanges:
+      'Hermes 從應用程式內更新自身時，保留本機原始碼變更（stash）或丟棄（discard）。終端機更新一律會詢問。'
+  }
+})
 
 export const zhHantSettings = {
   language: {
@@ -16,6 +294,7 @@ export const zhHantSettings = {
   },
 
   settings: {
+    configPages: configPagesFor('zh-hant', configPageFieldLabels, configPageFieldDescriptions),
     subpages: {
       appearanceTheme: '主題',
       appearanceTypography: '字體與縮放',
@@ -117,7 +396,7 @@ export const zhHantSettings = {
         '未使用的設定檔連線在關閉前保留的時間。只會中斷閒置 socket，不會停止共用 Hermes 閘道或其背景工作。'
     },
     nav: {
-      providers: '提供方',
+      providers: '模型服務',
       providerAccounts: '帳號',
       providerApiKeys: 'API 金鑰',
       providerCustomEndpoints: '自訂端點',
@@ -126,6 +405,7 @@ export const zhHantSettings = {
       apiKeys: '工具與金鑰',
       keybinds: '鍵盤快捷鍵',
       keysTools: '工具',
+      keysCredentials: '金鑰',
       keysSettings: '設定',
       mcp: 'MCP',
       archivedChats: '已封存聊天',
@@ -447,281 +727,8 @@ export const zhHantSettings = {
         turnOffFailed: '無法關閉寵物。'
       }
     },
-    fieldLabels: defineFieldCopy({
-      model: '預設模型',
-      modelContextLength:
-        '僅覆寫主聊天模型偵測到的上下文視窗（以 token 計）。保留 0 會使用所選模型偵測到的值。不影響輔助模型/MoA 模型。',
-      fallbackProviders: '備用模型',
-      toolsets: '已啟用工具集',
-      timezone: '時區',
-      display: {
-        personality: '人格',
-        showReasoning: '推理區塊'
-      },
-      desktop: {
-        repoScanEnabled: '自動探索程式碼儲存庫',
-        repoScanRoots: '程式碼儲存庫掃描根目錄',
-        repoScanExcludePaths: '排除的程式碼儲存庫路徑'
-      },
-      agent: {
-        maxTurns: '最大代理步數',
-        imageInputMode: '圖片附件',
-        apiMaxRetries: 'API 重試次數',
-        serviceTier: '服務層級',
-        toolUseEnforcement: '工具使用強制'
-      },
-      terminal: {
-        cwd: '工作目錄',
-        backend: '執行後端',
-        timeout: '指令逾時',
-        persistentShell: '持久化 Shell',
-        envPassthrough: '環境變數傳遞',
-        dockerImage: 'Docker 映像',
-        singularityImage: 'Singularity 映像',
-        modalImage: 'Modal 映像',
-        daytonaImage: 'Daytona 映像'
-      },
-      fileReadMaxChars: '檔案讀取上限',
-      toolOutput: {
-        maxBytes: '終端機輸出上限',
-        maxLines: '檔案頁面上限',
-        maxLineLength: '行長上限'
-      },
-      codeExecution: {
-        mode: '程式碼執行模式'
-      },
-      approvals: {
-        mode: '批准模式',
-        timeout: '批准逾時',
-        mcpReloadConfirm: '確認 MCP 重新載入'
-      },
-      commandAllowlist: '指令允許清單',
-      security: {
-        redactSecrets: '遮蔽密鑰',
-        allowPrivateUrls: '允許私有 URL'
-      },
-      browser: {
-        allowPrivateUrls: '瀏覽器私有 URL',
-        autoLocalForPrivateUrls: '私有 URL 使用本機瀏覽器',
-        useRealProfile: '使用我的真實瀏覽器設定檔'
-      },
-      checkpoints: {
-        enabled: '檔案檢查點',
-        maxSnapshots: '檢查點上限'
-      },
-      voice: {
-        maxRecordingSeconds: '最長錄音時間',
-        autoTts: '朗讀回覆',
-        voiceChatMode: '語音聊天模式',
-        gptLive: {
-          voice: 'GPT-Live 音色',
-          instructions: 'GPT-Live 人設'
-        }
-      },
-      stt: {
-        enabled: '語音轉文字',
-        provider: '語音轉文字提供方',
-        echoTranscripts: '回傳轉寫文字',
-        local: {
-          model: '本機轉寫模型',
-          language: '轉寫語言'
-        },
-        openai: {
-          model: 'OpenAI STT 模型'
-        },
-        groq: {
-          model: 'Groq STT 模型'
-        },
-        mistral: {
-          model: 'Mistral STT 模型'
-        },
-        elevenlabs: {
-          modelId: 'ElevenLabs STT 模型',
-          languageCode: 'ElevenLabs 語言',
-          tagAudioEvents: '標記音訊事件',
-          diarize: '說話者分離'
-        }
-      },
-      tts: {
-        provider: '文字轉語音提供方',
-        edge: {
-          voice: 'Edge 語音'
-        },
-        openai: {
-          model: 'OpenAI TTS 模型',
-          voice: 'OpenAI 語音'
-        },
-        elevenlabs: {
-          voiceId: 'ElevenLabs 語音',
-          modelId: 'ElevenLabs 模型'
-        },
-        deepinfra: {
-          model: 'DeepInfra TTS 模型',
-          voice: 'DeepInfra 語音'
-        },
-        xai: {
-          voiceId: 'xAI (Grok) 語音',
-          language: 'xAI 語言',
-          speed: '播放速度',
-          autoSpeechTags: '自動語音標籤',
-          optimizeStreamingLatency: '串流延遲最佳化',
-          sampleRate: '取樣率',
-          bitRate: '位元率'
-        },
-        minimax: {
-          model: 'MiniMax TTS 模型',
-          voiceId: 'MiniMax 語音'
-        },
-        mistral: {
-          model: 'Mistral TTS 模型',
-          voiceId: 'Mistral 語音'
-        },
-        gemini: {
-          model: 'Gemini TTS 模型',
-          voice: 'Gemini 語音'
-        },
-        neutts: {
-          model: 'NeuTTS 模型',
-          device: 'NeuTTS 裝置'
-        },
-        kittentts: {
-          model: 'KittenTTS 模型',
-          voice: 'KittenTTS 語音'
-        },
-        piper: {
-          voice: 'Piper 語音'
-        }
-      },
-      memory: {
-        memoryEnabled: '持久記憶',
-        userProfileEnabled: '使用者設定檔',
-        memoryCharLimit: '記憶預算',
-        userCharLimit: '設定檔預算',
-        provider: '記憶提供方'
-      },
-      context: {
-        engine: '上下文引擎'
-      },
-      compression: {
-        enabled: '自動壓縮',
-        threshold: '壓縮閾值',
-        codexGpt55Autoraise: 'Codex 壓縮自動提高',
-        targetRatio: '壓縮目標',
-        protectLastN: '保護最近訊息'
-      },
-      auxiliary: {
-        compression: {
-          timeout: '壓縮模型逾時（秒）'
-        }
-      },
-      delegation: {
-        model: '子代理模型',
-        provider: '子代理提供方',
-        maxIterations: '子代理輪次上限',
-        maxConcurrentChildren: '平行子代理',
-        childTimeoutSeconds: '子代理逾時',
-        reasoningEffort: '子代理推理強度'
-      },
-      updates: {
-        nonInteractiveLocalChanges: '應用程式內更新的本機變更'
-      }
-    }),
-    fieldDescriptions: defineFieldCopy({
-      model: '除非你在輸入框選擇其他模型，否則新聊天會使用此模型。',
-      modelContextLength: '保留 0 會使用所選模型偵測到的上下文視窗。',
-      fallbackProviders: '預設模型失敗時要嘗試的備用 provider:model 項目。',
-      display: {
-        personality: '新工作階段的預設助手風格。',
-        showReasoning: '後端提供推理內容時顯示該區塊。'
-      },
-      desktop: {
-        repoScanEnabled: '掃描本機資料夾，並在「專案」中顯示 Git 程式碼儲存庫。',
-        repoScanRoots: '要掃描的資料夾。留空時掃描主目錄。',
-        repoScanExcludePaths: '探索程式碼儲存庫時略過這些資料夾及其子目錄。'
-      },
-      timezone: 'Hermes 需要本機時間上下文時使用。留空則使用系統時區。',
-      agent: {
-        imageInputMode: '控制圖片附件如何傳送給模型。',
-        maxTurns: 'Hermes 停止一次執行前的工具呼叫輪次上限。'
-      },
-      terminal: {
-        cwd: '工具與終端機操作的預設專案資料夾。',
-        persistentShell: '後端支援時，在指令之間保留 Shell 狀態。',
-        envPassthrough: '傳入工具執行的環境變數。',
-        dockerImage: '執行後端為 Docker 時使用的容器映像。',
-        singularityImage: '執行後端為 Singularity 時使用的映像。',
-        modalImage: '執行後端為 Modal 時使用的映像。',
-        daytonaImage: '執行後端為 Daytona 時使用的映像。'
-      },
-      codeExecution: {
-        mode: '程式碼執行被限制在目前專案中的嚴格程度。'
-      },
-      fileReadMaxChars: 'Hermes 單次檔案讀取可讀取的最大字元數。',
-      approvals: {
-        mode: 'Hermes 如何處理需要明確批准的指令。',
-        timeout: '批准提示逾時前等待的時間。'
-      },
-      security: {
-        redactSecrets: '盡可能從模型可見內容中隱藏偵測到的密鑰。'
-      },
-      checkpoints: {
-        enabled: '在檔案編輯前建立可回復的快照。'
-      },
-      memory: {
-        memoryEnabled: '儲存有助於未來工作階段的持久記憶。',
-        userProfileEnabled: '維護一份精簡的使用者偏好設定檔。'
-      },
-      context: {
-        engine: '長對話接近上下文上限時的管理策略。'
-      },
-      compression: {
-        enabled: '對話變大時摘要較早的上下文。',
-        codexGpt55Autoraise: '為支援的 ChatGPT Codex OAuth 模型將壓縮閾值提高到 85%。'
-      },
-      auxiliary: {
-        compression: {
-          timeout: '每次呼叫輔助壓縮模型的等待秒數（預設 120）。本機模型較慢時請調高。'
-        }
-      },
-      browser: {
-        useRealProfile:
-          '本機瀏覽會使用你的真實登入狀態。Hermes 會將預設瀏覽器的設定（Cookie、登入資訊與偏好）複製成受管理的快照，再以內建的 Chromium 驅動它——不會直接開啟你正在使用的設定檔，且每次執行都會從目前的設定檔重新整理副本。設定雲端瀏覽器後端時，也允許代理視需要開啟本機真實設定檔工作階段。僅支援 Chromium 系瀏覽器（Chrome、Edge、Brave、Brave Origin、Chromium）；若預設瀏覽器並非 Chromium 系，會顯示明確錯誤。預設關閉。'
-      },
-      voice: {
-        autoTts: '自動朗讀助手回覆。',
-        voiceChatMode:
-          'chained：語音轉文字 → Hermes → 文字轉語音，使用下方的提供方。gpt-live：由全雙工 OpenAI 語音模型（gpt-live-1）負責聆聽與說話，並將每個實際請求交給 Hermes——由你選擇的任意模型使用完整工具集作答。需要 OpenAI API 金鑰；語音層每分鐘收費 $0.05。',
-        gptLive: {
-          voice: 'GPT-Live 模式使用的音色，可填入自訂音色 ID。',
-          instructions: '附加至即時語音人設的句子（語氣、語速、語言）。Hermes 會保留自己的系統提示詞。'
-        }
-      },
-      stt: {
-        enabled: '啟用本機或提供方支援的語音轉寫。',
-        echoTranscripts: '將語音訊息的原始 🎙️ 轉寫文字傳回聊天。',
-        elevenlabs: {
-          languageCode: '可選的 ISO-639-3 語言代碼。留空讓 ElevenLabs 自動偵測。'
-        }
-      },
-      tts: {
-        xai: {
-          voiceId: 'xAI 音色 ID（例如 eve）或自訂音色 ID。',
-          language: '口語語言代碼（例如 en、pt-BR），或填入 "auto" 自動偵測。',
-          speed: '播放速度。0.7 = 較慢，1.0 = 正常，1.5 = 較快。',
-          autoSpeechTags: '合成前讓 LLM 在文稿中插入富有表現力的音訊標籤（例如 [laughing]、[sighs]）。',
-          optimizeStreamingLatency: '延遲與品質的權衡。0 = 最佳品質，2 = 最低延遲。',
-          sampleRate: '音訊取樣率（Hz）。越高音質越好、檔案越大。',
-          bitRate: 'MP3 位元率（bps）。僅在編碼為 mp3 時生效。'
-        },
-        neutts: {
-          device: 'NeuTTS 的本機推論裝置。'
-        }
-      },
-      updates: {
-        nonInteractiveLocalChanges:
-          'Hermes 從應用程式內更新自身時，保留本機原始碼變更（stash）或丟棄（discard）。終端機更新一律會詢問。'
-      }
-    }),
+    fieldLabels: configPageFieldLabels,
+    fieldDescriptions: configPageFieldDescriptions,
     uninstallSection: {
       dangerZone: '危險操作',
       checkingInstalled: '正在檢查已安裝內容…',
@@ -905,7 +912,59 @@ export const zhHantSettings = {
       couldNotSave: '無法儲存憑證。',
       remove: '移除',
       getKey: '取得金鑰',
-      saving: '儲存中'
+      saving: '儲存中',
+      toolPageIntro:
+        '這裡用來連接網頁搜尋、語音及外部記憶等選用服務，不是聊天模型的 API 金鑰設定。不使用的服務可以留空；開啟項目可查看用途。外部服務可能會處理相關請求或依用量收費。',
+      toolServices: {
+        porcupine: {
+          label: '語音喚醒金鑰（Porcupine）',
+          description: '只有在「語音」設定中選擇 Porcupine 作為喚醒引擎時才需要。預設引擎不需要此金鑰。'
+        },
+        retaindbApiKey: {
+          label: 'RetainDB 記憶服務金鑰',
+          description: '用來連接 RetainDB 外部記憶服務。只有選擇並啟用 RetainDB 作為記憶服務時才需要。'
+        },
+        retaindbBaseUrl: {
+          label: 'RetainDB 服務網址',
+          description: '只有連接自架的 RetainDB 時才需要修改；使用 RetainDB 雲端服務時保留預設值即可。'
+        },
+        searxngUrl: {
+          label: '自架網頁搜尋網址（SearXNG）',
+          description: '填入你部署的 SearXNG 服務網址。不需要 API 金鑰；只負責網頁搜尋，不負責擷取網頁內容。'
+        },
+        supermemoryApiKey: {
+          label: 'Supermemory 記憶服務金鑰',
+          description: '用來連接 Supermemory 外部記憶服務。安裝並啟用對應外掛，再選擇它作為記憶服務後才會使用。'
+        },
+        tavilyApiKey: {
+          label: 'Tavily 網頁搜尋金鑰',
+          description:
+            '用於 Tavily 網頁搜尋和網頁內容擷取。選擇 Tavily 後可不填金鑰試用；填入後可依帳號額度使用，費用依服務商規則。'
+        },
+        toolGatewayDomain: {
+          label: '上游工具閘道網域（進階）',
+          description: '這是 Hermes 上游託管工具閘道的相容設定，不是 Aino-API 網址。只有連接自訂上游閘道時才需要填寫。'
+        },
+        toolGatewayScheme: {
+          label: '上游工具閘道通訊協定（進階）',
+          description: '設定上游工具閘道使用的通訊協定，通常是 HTTPS。一般使用者不需要修改。'
+        },
+        toolGatewayUrl: {
+          label: '上游工具閘道網址（進階）',
+          description:
+            '直接指定 Hermes 上游工具閘道的完整網址，並覆寫自動產生的網址。這不是 Aino-API 網址，一般使用者請留空。'
+        },
+        toolGatewayToken: {
+          label: '上游工具閘道權杖（進階）',
+          description:
+            '用於 Hermes 上游工具閘道的存取權杖。通常由上游登入流程管理，不是 Aino 帳號權杖，一般使用者不需要填寫。'
+        },
+        voiceOpenaiKey: {
+          label: 'OpenAI 語音服務金鑰',
+          description:
+            '用於 OpenAI 語音轉文字和文字轉語音，不影響一般文字聊天。語音呼叫可能產生費用；設定允許時也可能重用 OPENAI_API_KEY。'
+        }
+      }
     },
     envActions: {
       actions: '動作',
@@ -1090,6 +1149,42 @@ export const zhHantSettings = {
       importConfirmMany: count => `將 ${count} 個伺服器加入 mcp.json`
     },
     model: {
+      pages: {
+        description: '管理預設模型，以及不同任務使用的模型。',
+        auxiliaryTask: '任務',
+        auxiliaryPurpose: '用途',
+        auxiliaryModel: '使用模型',
+        moaReferences: '參考模型',
+        moaEnableDescription: '啟用後，符合現有模型路由條件的任務可使用此方案。'
+      },
+      defaultMain: {
+        appliedLabel: '目前生效的預設模型',
+        applied: '已套用',
+        unconfigured: '尚未選擇預設模型',
+        title: '預設主要模型',
+        description: '為新對話選擇一個預設模型來源。',
+        sourceLabel: '模型來源',
+        builtIn: 'Aino 內建模型',
+        thirdParty: '第三方服務',
+        builtInDescription: '使用 Aino 帳號額度，無需另外設定 API 金鑰。',
+        thirdPartyDescription: '使用已連線的模型服務，由對應服務商計費。',
+        unchanged: '與目前預設設定一致',
+        pending: '尚未套用 · 目前預設模型保持不變',
+        apply: '套用為預設',
+        scopeHint: '適用於新對話；既有對話仍可在輸入框中切換模型。手動選擇會繼續沿用。',
+        defaultsTitle: '預設參數',
+        defaultsDescription: '沿用現有參數設定，僅在模型支援時生效。',
+        reasoningDescription: '控制回答前的分析深度',
+        speedDescription: '更快回應可能使用不同服務級別',
+        chooseBuiltIn: '選擇 Aino 內建模型',
+        selectionTitle: '選擇 Aino 內建模型',
+        selectionDescription: '確認選擇後，按一下頁面「套用為預設」生效。',
+        confirmSelection: '確認選擇',
+        configureConnection: '設定連線',
+        connection: 'API 金鑰',
+        connectionSaved: '已設定此服務 · 可選擇模型',
+        ainoConnected: 'Aino 帳號已連線 · 使用 Aino 額度'
+      },
       setupProviderFallback: '提供方',
       setUpProvider: name => `設定 ${name}`,
       staleAuxBefore: (count: number, names: string) => `${count} 個輔助任務（${names}）仍由 `,

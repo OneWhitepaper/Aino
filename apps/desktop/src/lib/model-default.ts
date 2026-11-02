@@ -1,4 +1,5 @@
 import { getGlobalModelInfo, type ProfileScope } from '@/hermes'
+import { platformModelSupportsPurpose } from '@/lib/platform-model-purpose'
 import { type PlatformDefaultScope, platformDefaultScope } from '@/lib/platform-model-scope'
 import {
   evaluateRuntimeReadiness,
@@ -8,6 +9,18 @@ import {
 } from '@/lib/runtime-readiness'
 import { managedModelRouteCapability } from '@/store/gateway-managed-capability'
 import { platformModelCatalog, PlatformSelectionError, readPlatformDefault } from '@/store/platform-models'
+
+import type { PlatformModel } from '../../shared/platform-contract'
+
+/** The saved preference is usable only while the catalog authorizes that model. */
+export function availablePlatformDefault(models: readonly PlatformModel[], preferredId: string | null) {
+  const chatModels = models.filter(model => platformModelSupportsPurpose(model, 'chat'))
+
+  return (
+    chatModels.find(model => model.state === 'available' && model.id === preferredId) ||
+    chatModels.find(model => model.is_default && model.state === 'available')
+  )
+}
 
 async function loadDefaultModelInputs(scope: ProfileScope, catalog: ReturnType<typeof platformModelCatalog>) {
   const result = await getGlobalModelInfo(scope)
@@ -48,16 +61,18 @@ export async function resolveModelDefault(scope: ProfileScope, managedRoute?: Pl
     throw new PlatformSelectionError('platform_account_changed')
   }
 
-  const preferredId = readPlatformDefault(currentAccount.account.id, capturedScope, currentAccount.mode, owner.platform_origin)
+  const preferredId = readPlatformDefault(
+    currentAccount.account.id,
+    capturedScope,
+    currentAccount.mode,
+    owner.platform_origin
+  )
 
   const state = catalog.state.get()
   const managedSupported = managedModelRouteCapability(managedRoute ?? capturedScope.route) === 'supported'
 
   const platformDefault =
-    managedSupported && state.phase === 'ready'
-      ? state.models.find(model => model.state === 'available' && model.id === preferredId) ||
-        state.models.find(model => model.is_default && model.state === 'available')
-      : undefined
+    managedSupported && state.phase === 'ready' ? availablePlatformDefault(state.models, preferredId) : undefined
 
   if (account?.phase === 'signed_in' && managedSupported && !platformDefault) {
     throw new PlatformSelectionError('model_unavailable')
@@ -113,8 +128,10 @@ export async function evaluateModelDefaultReadiness(
 
         // Default resolution rejects an absent/unavailable default even when another
         // authorized model is selectable. Health must not turn that choice into an outage.
-        const selectionAvailable = error.code === 'model_unavailable' && state.phase === 'ready' &&
-          state.models.some(model => model.state === 'available')
+        const selectionAvailable =
+          error.code === 'model_unavailable' &&
+          state.phase === 'ready' &&
+          state.models.some(model => model.state === 'available' && platformModelSupportsPurpose(model, 'chat'))
 
         return {
           checksDisagree: false,

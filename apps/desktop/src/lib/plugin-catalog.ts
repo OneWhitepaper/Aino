@@ -21,7 +21,7 @@
 import type { ConnectionState } from '@hermes/shared'
 import type { ReadableAtom } from 'nanostores'
 
-import { PRODUCT_NAME } from '@/lib/brand'
+import { PRODUCT_NAME, REPOSITORY_URL } from '@/lib/brand'
 import { isMissingRpcMethod } from '@/lib/gateway-rpc'
 import { BACKEND_BOOT_WAIT_TIMEOUT_MS, withTimeout } from '@/lib/with-timeout'
 import { activeGatewayProfileKey, requestGatewayForProfile } from '@/store/gateway'
@@ -29,9 +29,9 @@ import { $gatewayState } from '@/store/session'
 
 export const CATALOG_ORIGIN = 'https://hermes-agent.nousresearch.com'
 export const PLUGIN_CATALOG_URL = `${CATALOG_ORIGIN}/docs/api/plugins.json`
-export const PLUGIN_CATALOG_DOCS_URL = `${CATALOG_ORIGIN}/docs/user-guide/features/plugin-catalog`
-export const SKILLS_DOCS_URL = `${CATALOG_ORIGIN}/docs/skills/`
-export const SUBMIT_MOD_URL = 'https://github.com/NousResearch/hermes-agent/compare'
+export const PLUGIN_CATALOG_DOCS_URL = `${REPOSITORY_URL}/blob/main/website/docs/user-guide/features/plugin-catalog.md`
+export const SKILLS_DOCS_URL = `${REPOSITORY_URL}/tree/main/optional-skills`
+export const SUBMIT_MOD_URL = `${REPOSITORY_URL}/compare`
 
 /** Catalog names are directory names under `plugin-catalog/`; anything else is not a lookup key. */
 export const PLUGIN_CATALOG_NAME_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/
@@ -207,7 +207,7 @@ export async function lookupPluginCatalogEntry(
   try {
     reply = await request('plugins.catalog.lookup', { name: trimmed })
   } catch (error) {
-    // Only a backend that predates the method falls back; an unreachable one can't run the install either.
+    // Only a backend that predates the method falls back; an unreachable one cannot run the install either.
     return isMissingRpcMethod(error) ? lookupFromFeed(trimmed, fetchImpl) : { ok: false, error: 'unavailable' }
   }
 

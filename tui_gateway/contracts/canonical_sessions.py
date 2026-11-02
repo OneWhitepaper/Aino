@@ -4,7 +4,7 @@ Reuse upstream authority-only value shapes; these overrides do not widen METHODS
 """
 from typing import Literal
 
-from pydantic import RootModel
+from pydantic import RootModel, StrictInt
 
 from .base import JsonValue, Params, Result
 from .common import ProfileParams, TranscriptMessage
@@ -208,6 +208,12 @@ class CanonicalModelOverride(Params):
     reasoning: str | None = None
 
 
+class CanonicalContinuation(Params):
+    admission_id: str
+    execution_generation: StrictInt
+    revision: StrictInt
+
+
 class CanonicalSubmitParams(CanonicalSessionParams):
     text: str
     submission_id: str | None = None
@@ -234,6 +240,9 @@ class CanonicalSubmitParams(CanonicalSessionParams):
     # The submitter answers the clarify tool's whole batch in one ``clarify`` server request (main's
     # batch panel); without it the turn's viewers get one ``clarify.request`` card per question.
     clarify_batch: bool = False
+    # Explicit resume after Stop: authorize a new turn only while this interrupted
+    # admission remains the session's latest work at these settled fences.
+    continuation_of: CanonicalContinuation | None = None
 
 
 class CanonicalVoiceStopped(Result):

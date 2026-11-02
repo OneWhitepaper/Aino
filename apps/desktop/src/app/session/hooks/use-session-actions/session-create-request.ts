@@ -1,8 +1,31 @@
-import { requestGatewayForAgent } from '@/store/gateway'
+import { requestGatewayForAgent, retainGatewayForAgent } from '@/store/gateway'
 import type { AgentProfileRoute } from '@/store/profile'
 import type { SessionCreateResponse } from '@/types/hermes'
 
 type RequestGateway = <T>(method: string, params?: Record<string, unknown>) => Promise<T>
+
+export async function retainSessionCreateOwner(
+  route: AgentProfileRoute | null,
+  managedProfileOnly: boolean,
+  profile: string
+) {
+  return route || managedProfileOnly
+    ? await retainGatewayForAgent(route?.connectionId ?? null, profile, { spawnPriority: 'foreground' })
+    : () => undefined
+}
+
+export function sessionCreateOwnerRequest(
+  route: AgentProfileRoute | null,
+  managedProfileOnly: boolean,
+  profile: string,
+  requestGateway: RequestGateway
+): RequestGateway {
+  return route || managedProfileOnly
+    ? (method, payload) => requestGatewayForAgent(
+        route?.connectionId ?? null, profile, method, payload, undefined, undefined, { spawnPriority: 'foreground' }
+      )
+    : requestGateway
+}
 
 /** A backend predating a `session.create` field rejects the whole create at
  *  admission (`tui_gateway/contracts/registry.py::validate_params`, code 4000,

@@ -1,6 +1,9 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
+
+import type * as Hermes from '@/hermes'
+import { $settingsScopeOverride } from '@/store/settings-scope'
 
 // Radix Select calls scrollIntoView / pointer-capture APIs jsdom lacks.
 beforeAll(() => {
@@ -11,8 +14,9 @@ beforeAll(() => {
 
 const getGlobalModelOptions = vi.fn()
 
-vi.mock('@/hermes', () => ({
-  getGlobalModelOptions: () => getGlobalModelOptions()
+vi.mock('@/hermes', async original => ({
+  ...(await original<typeof Hermes>()),
+  getGlobalModelOptions: (...args: unknown[]) => getGlobalModelOptions(...args)
 }))
 
 // Load once at module scope so no test's 15s budget pays the heavy transform
@@ -31,6 +35,7 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup()
+  $settingsScopeOverride.set(null)
   vi.clearAllMocks()
 })
 
@@ -69,6 +74,17 @@ const CHAIN = [
 ]
 
 describe('FallbackModelsField', () => {
+  it('loads provider inventories for the workspace being edited and refreshes after scope changes', async () => {
+    $settingsScopeOverride.set('research')
+    renderField(CHAIN)
+    await waitFor(() => expect(getGlobalModelOptions).toHaveBeenCalledWith(undefined, 'research'))
+
+    await act(async () => {
+      $settingsScopeOverride.set('writing')
+    })
+    await waitFor(() => expect(getGlobalModelOptions).toHaveBeenCalledWith(undefined, 'writing'))
+  })
+
   it('renders each {provider, model} entry as its own row (never "[object Object]")', async () => {
     await renderField(CHAIN)
 

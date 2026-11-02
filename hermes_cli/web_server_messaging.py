@@ -228,7 +228,7 @@ def _restart_gateway_after_whatsapp_onboarding(profile: Optional[str] = None) ->
 
 
 _TELEGRAM_ONBOARDING_DEFAULT_URL = "https://setup.hermes-agent.nousresearch.com"
-_TELEGRAM_ONBOARDING_USER_AGENT = f"HermesDashboard/{get_version_info().base_version}"
+_TELEGRAM_ONBOARDING_USER_AGENT = f"AinoDashboard/{get_version_info().base_version}"
 
 
 @dataclass

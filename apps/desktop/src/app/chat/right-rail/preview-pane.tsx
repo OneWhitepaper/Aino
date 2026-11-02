@@ -72,6 +72,7 @@ import {
 import { type ConsoleEntry } from './preview-console-state'
 import { previewConsoleState } from './preview-console-store'
 import { LocalFilePreview, PreviewEmptyState, PreviewModeSwitcher } from './preview-file'
+import { canRenderHtmlPreview, FilePreviewActions } from './preview-file-actions'
 import { usePreviewGuestOffscreen } from './preview-guest-offscreen'
 import { type PreviewInputEvent, registerPreviewInput, toWebviewInputSpace } from './preview-input'
 import { PREVIEW_BROWSER_ATTR, registerPreviewNav } from './preview-nav'
@@ -316,11 +317,7 @@ export function PreviewPane({
   // The mode lives on the store tab, so only a tab-backed pane can flip it. A
   // remote HTML file whose data URL failed validation arrives as a source-only
   // transient target; it has no rendered path to offer.
-  const canRenderHtmlFile =
-    Boolean(tabId) &&
-    target.kind === 'file' &&
-    target.previewKind === 'html' &&
-    (!target.transient || Boolean(target.dataUrl))
+  const canRenderHtmlFile = canRenderHtmlPreview(target, tabId)
 
   const selectRenderMode = (next: PreviewRenderMode) => {
     if (tabId) {
@@ -1490,8 +1487,9 @@ export function PreviewPane({
         {canRenderHtmlFile && renderMode !== 'source' && (
           <PreviewModeSwitcher
             active="rendered"
-            modes={['rendered', 'source']}
+            modes={['source', 'rendered']}
             onSelect={mode => selectRenderMode(mode === 'source' ? 'source' : 'preview')}
+            trailing={<FilePreviewActions filePath={target.path || target.source} target={target} />}
           />
         )}
 
@@ -1560,6 +1558,7 @@ export function PreviewPane({
                 onClose={onClose}
                 onSelectRendered={canRenderHtmlFile ? () => selectRenderMode('preview') : undefined}
                 reloadKey={localReloadKey}
+                tabId={tabId}
                 target={target}
               />
             ))}

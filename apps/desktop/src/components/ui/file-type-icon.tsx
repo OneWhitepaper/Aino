@@ -11,9 +11,9 @@ export interface FileTypeIconProps extends Omit<ToolIconProps, 'name'> {
 /**
  * Icon for a file or code language, resolved through the one mapping shared
  * with code blocks (`codiconForFilename` / `codiconForLanguage`). Renders via
- * `ToolIcon`, so it uses a filled glyph when one exists and falls back to the
- * outline codicon font otherwise. Pass a `path` for file rows or a `language`
- * for fenced code.
+ * `ToolIcon`, sharing application glyphs while retaining specialized editor
+ * and language names through the Codicon fallback. Pass a `path` for file rows
+ * or a `language` for fenced code.
  */
 export function FileTypeIcon({ language, path, ...props }: FileTypeIconProps) {
   const name = path ? codiconForFilename(path) : codiconForLanguage(language)

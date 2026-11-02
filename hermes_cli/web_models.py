@@ -513,6 +513,8 @@ class ToolsetProviderSelect(BaseModel):
 class ToolsetModelSelect(BaseModel):
     model: str
     provider: Optional[str] = None
+    activate: bool = False
+    quality: Optional[Literal['auto', 'low', 'medium', 'high', 'xhigh', 'max']] = None
     profile: Optional[str] = None
 
 class ToolsetEnvUpdate(BaseModel):

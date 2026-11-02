@@ -3,6 +3,59 @@ import type { DelegationRoutingTranslations } from './types_delegation_routing'
 
 // Settings → Model; `Translations.settings.model`.
 export interface ModelSettingsTranslations {
+  imageGeneration: {
+    title: string
+    description: string
+    unavailable: string
+    billingRules: string
+    qualityTitle: string
+    qualityHint: string
+    qualityDefault: string
+    qualityUnavailable: string
+    qualityRuntimeUnavailable: string
+    qualityUnsupported: string
+    qualitySaved: string
+    qualitySavedHint: string
+    runtimeUnavailable: string
+    loadFailed: string
+    qualityLabels: { auto: string; low: string; medium: string; high: string; xhigh: string; max: string }
+  }
+  defaultMain: {
+    appliedLabel: string
+    applied: string
+    unconfigured: string
+    title: string
+    description: string
+    sourceLabel: string
+    builtIn: string
+    thirdParty: string
+    builtInDescription: string
+    thirdPartyDescription: string
+    unchanged: string
+    pending: string
+    apply: string
+    scopeHint: string
+    defaultsTitle: string
+    defaultsDescription: string
+    reasoningDescription: string
+    speedDescription: string
+    chooseBuiltIn: string
+    selectionTitle: string
+    selectionDescription: string
+    confirmSelection: string
+    configureConnection: string
+    connection: string
+    connectionSaved: string
+    ainoConnected: string
+  }
+  pages: {
+    description: string
+    auxiliaryTask: string
+    auxiliaryPurpose: string
+    auxiliaryModel: string
+    moaReferences: string
+    moaEnableDescription: string
+  }
   setupProviderFallback: string
   setUpProvider: (name: string) => string
   apiKeyPlaceholder: (keyEnv: string) => string

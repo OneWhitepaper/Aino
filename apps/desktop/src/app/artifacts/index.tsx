@@ -1,3 +1,5 @@
+import './artifacts.css'
+
 import type * as React from 'react'
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router'
@@ -297,6 +299,12 @@ export function ArtifactsView({ setStatusbarItemGroup: _setStatusbarItemGroup, .
     <PageSearchShell
       {...props}
       activeTab={kindFilter}
+      className={cn('artifacts-view', props.className)}
+      heading={
+        <header className="artifacts-heading">
+          <h1>{t.sidebar.nav.artifacts}</h1>
+        </header>
+      }
       onSearchChange={setQuery}
       onTabChange={id => setKindFilter(id as typeof kindFilter)}
       searchHidden={counts.all === 0}
@@ -323,6 +331,8 @@ export function ArtifactsView({ setStatusbarItemGroup: _setStatusbarItemGroup, .
         { id: 'file', label: a.tabFiles, meta: artifacts ? counts.file : null },
         { id: 'link', label: a.tabLinks, meta: artifacts ? counts.link : null }
       ]}
+      tabsAlign="start"
+      tabsVariant="section"
     >
       {!artifacts ? (
         <PageLoader label={a.indexing} />
@@ -334,8 +344,8 @@ export function ArtifactsView({ setStatusbarItemGroup: _setStatusbarItemGroup, .
           </div>
         </div>
       ) : (
-        <div className="h-full overflow-y-auto [scrollbar-gutter:stable]">
-          <div className="flex flex-col gap-3 px-3 pb-2">
+        <div className="h-full overflow-y-auto [scrollbar-gutter:stable_both-edges]">
+          <div className="artifacts-results-content flex flex-col gap-6">
             {visibleImageArtifacts.length > 0 && (
               <section className="flex flex-col">
                 <div className="sticky top-0 z-10 -mx-3 flex h-7 items-center gap-3 overflow-x-auto bg-background px-3">

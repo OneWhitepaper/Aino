@@ -46,7 +46,6 @@ import { type ChatMessage, chatMessageText } from '@/lib/chat-messages'
 import { isMessagingSource } from '@/lib/session-source'
 import { activateWakeIndicator } from '@/lib/wake-indicator'
 import { playWakeSound } from '@/lib/wake-sound'
-import { $billingSettingsRequest } from '@/store/billing-block'
 import { $desktopBoot } from '@/store/boot'
 import { requestVoiceConversationStart } from '@/store/composer'
 import { $activeConnectionId } from '@/store/connections'
@@ -261,10 +260,8 @@ function FirstRunOnboarding({ request, open, gatewayOpen }: {
 // request navigates or recycles the backend.
 function useRecoveryRequestToasts(): void {
   const navigate = useNavigate()
-  const billingSettingsRequest = useStore($billingSettingsRequest)
   const backendRestartRequest = useStore($backendRestartRequest)
   const cronReviewRequest = useStore($cronReviewRequest)
-  const billingSettingsSeenRef = useRef(0)
   const backendRestartSeenRef = useRef(0)
   const cronReviewSeenRef = useRef(0)
 
@@ -288,19 +285,6 @@ function useRecoveryRequestToasts(): void {
         .catch(err => notifyError(err, translateNow('notifications.errors.restartHermesFailed')))
     }
   }, [backendRestartRequest])
-
-  // eslint-disable-next-line no-restricted-syntax -- one-shot request-seen sentinel, not an atom mirror
-  useEffect(() => {
-    if (billingSettingsRequest === billingSettingsSeenRef.current) {
-      return
-    }
-
-    billingSettingsSeenRef.current = billingSettingsRequest
-
-    if (billingSettingsRequest > 0) {
-      navigate(`${SETTINGS_ROUTE}?tab=billing`)
-    }
-  }, [billingSettingsRequest, navigate])
 
   // eslint-disable-next-line no-restricted-syntax -- one-shot request-seen sentinel, not an atom mirror
   useEffect(() => {

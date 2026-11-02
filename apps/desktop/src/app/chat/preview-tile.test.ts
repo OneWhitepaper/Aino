@@ -105,14 +105,14 @@ const fileTarget = (path: string) =>
 // inert body) instead of Minimize — so it has to come through the mirror, not
 // just be declared on the tile.
 describe('preview tiles keep a live page alive across Hide', () => {
-  it('registers a Browser tab with lifecycleKeepAlive while a text peek stays evictable', () => {
+  it('keeps browser and editable file bodies mounted across Hide', () => {
     openPreview({ kind: 'url', label: 'Browser', source: 'https://example.com', url: 'https://example.com' })
     openPreview(fileTarget('/tmp/a.ts'))
 
     const browserId = $previewTabs.get().find(tab => tab.target.kind === 'url')!.id
 
     expect(paneDataOf(`preview-tile:${browserId}`)?.lifecycleKeepAlive).toBe(true)
-    expect(paneDataOf('preview-tile:file:/tmp/a.ts')?.lifecycleKeepAlive).toBeFalsy()
+    expect(paneDataOf('preview-tile:file:/tmp/a.ts')?.lifecycleKeepAlive).toBe(true)
   })
 })
 

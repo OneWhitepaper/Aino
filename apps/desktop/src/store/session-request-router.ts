@@ -121,7 +121,8 @@ async function withRoutedTurnLease<T>(
   profile: string,
   method: string,
   params: Record<string, unknown>,
-  request: () => Promise<T>
+  request: () => Promise<T>,
+  bindingOwner?: SessionOwnerScope
 ): Promise<T> {
   const sessionId = promptSessionId(method, params)
 
@@ -134,11 +135,17 @@ async function withRoutedTurnLease<T>(
   try {
     if (window.hermesDesktop?.platformModels) {
       const { preparePlatformSessionRequest } = await import('@/api/platform-session-binding')
-      await preparePlatformSessionRequest(connectionId ? { connectionId, profile } : profile, method, params,
-        (name, payload, timeout) => connectionId
-          ? requestGatewayForAgent(connectionId, profile, name, payload, timeout)
-          : requestGatewayForProfile(profile, name, payload, timeout))
+      await preparePlatformSessionRequest(
+        bindingOwner ?? (connectionId ? { connectionId, profile } : profile),
+        method,
+        params,
+        (name, payload, timeout) =>
+          connectionId
+            ? requestGatewayForAgent(connectionId, profile, name, payload, timeout)
+            : requestGatewayForProfile(profile, name, payload, timeout)
+      )
     }
+
     const result = await request()
     resetBackgroundPollingGuardAfterRebind(method, params, result)
 
@@ -163,6 +170,7 @@ async function requestWithRebindGuard<T>(
     const { preparePlatformSessionRequest } = await import('@/api/platform-session-binding')
     await preparePlatformSessionRequest(null, method, params, ambientRequest)
   }
+
   const result = await request()
   resetBackgroundPollingGuardAfterRebind(method, params, result)
 
@@ -221,10 +229,16 @@ export function requestForSessionProfile<T>(
 
     const profile = normKey(ownerProfile.profile)
 
-    return withRoutedTurnLease(connectionId, profile, method, routedParams, () =>
-      timeoutMs === undefined && signal === undefined
-        ? requestGatewayForAgent<T>(connectionId, profile, method, routedParams)
-        : requestGatewayForAgent<T>(connectionId, profile, method, routedParams, timeoutMs, signal)
+    return withRoutedTurnLease(
+      connectionId,
+      profile,
+      method,
+      routedParams,
+      () =>
+        timeoutMs === undefined && signal === undefined
+          ? requestGatewayForAgent<T>(connectionId, profile, method, routedParams)
+          : requestGatewayForAgent<T>(connectionId, profile, method, routedParams, timeoutMs, signal),
+      { ...ownerProfile, connectionId, profile }
     )
   }
 
@@ -236,7 +250,12 @@ export function requestForSessionProfile<T>(
     // for a deadline (the plugin host bridge in contrib/wiring is the only one
     // that does).
     if (signal !== undefined) {
-      return requestWithRebindGuard(method, params, () => ambientRequest<T>(method, params, timeoutMs, signal), ambientRequest)
+      return requestWithRebindGuard(
+        method,
+        params,
+        () => ambientRequest<T>(method, params, timeoutMs, signal),
+        ambientRequest
+      )
     }
 
     if (timeoutMs !== undefined) {

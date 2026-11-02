@@ -1,5 +1,4 @@
 import { useStore } from '@nanostores/react'
-import { Puzzle } from 'lucide-react'
 import { type ReactNode, useEffect, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router'
 
@@ -19,7 +18,7 @@ import {
 import { DisclosureCaret } from '@/components/ui/disclosure-caret'
 import { Input } from '@/components/ui/input'
 import { useI18n } from '@/i18n'
-import { AlertTriangle, Loader2 } from '@/lib/icons'
+import { AlertTriangle, AppWindow, Loader2 } from '@/lib/icons'
 import { cn } from '@/lib/utils'
 import { COMMIT_SHA_RE } from '@/store/agent-plugins'
 import {
@@ -209,7 +208,7 @@ function InstallHeader({
     <DialogHeader>
       <div className="flex items-start gap-3">
         <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-(--ui-bg-quinary) text-(--ui-text-secondary)">
-          <Puzzle className="size-4" />
+          <AppWindow className="size-4" />
         </span>
         <div className="min-w-0 space-y-1">
           <div className="flex flex-wrap items-center gap-2">

@@ -24,9 +24,11 @@ it('retires only the persisted summary pane while retaining custom workspace and
   const tree = $layoutTree.get()!
   expect(allPaneIds(tree)).not.toContain('summary')
   expect(registry.getArea('panes').some(pane => pane.id === 'summary')).toBe(false)
-  expect(findGroupOfPane(tree, 'files')).toMatchObject({ ...files, panes: ['files'] })
+  const tools = findGroupOfPane(tree, 'files')!
+  expect(tools).toMatchObject({ id: files.id, active: 'files', toolPanel: true })
+  expect(tools.panes).toEqual(expect.arrayContaining(['files', 'review', 'terminal']))
   expect(findGroupOfPane(tree, 'workspace')).toEqual(chat)
-  expect(findGroupOfPane(tree, 'terminal')).toEqual(terminal)
+  expect(findGroupOfPane(tree, 'terminal')).toBe(tools)
   expect($terminals.get()).toBe(tabs)
   expect($activeTerminalId.get()).toBe('live-shell')
 }, 30_000)

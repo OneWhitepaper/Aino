@@ -3,39 +3,48 @@
   height: 100%;
   min-height: 0;
   overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
 }
 .messaging-page-content {
   width: 100%;
-  max-width: 68rem;
+  max-width: 1088px;
   margin-inline: auto;
-  padding-top: calc(var(--titlebar-height) + 1.5rem);
-  padding-bottom: 2rem;
+  padding: calc(var(--titlebar-height) + 40px) 32px 32px;
 }
 .messaging-page-heading {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 2rem;
-  margin-bottom: 1.6rem;
+  gap: 24px;
+  margin-bottom: 24px;
 }
 .messaging-page-heading h1 {
   font-size: var(--aino-text-page-title);
   font-weight: 600;
-  letter-spacing: -0.04em;
+  letter-spacing: -0.025em;
   line-height: 1.4;
   color: var(--ui-text-primary);
 }
 .messaging-page-heading p {
-  margin-top: 0.5rem;
-  font-size: var(--aino-text-body);
+  margin-top: 8px;
+  font-size: var(--aino-text-label);
   line-height: 1.7;
   color: var(--ui-text-secondary);
+}
+.messaging-heading-actions {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 12px;
 }
 .messaging-profile-scope {
   max-width: 24rem;
   grid-template-columns: auto minmax(9rem, 1fr);
   align-items: center;
-  gap: 0.5rem 0.75rem;
+  gap: 8px 12px;
 }
 .messaging-profile-scope > p {
   grid-column: 1/-1;
@@ -45,193 +54,165 @@
 .messaging-gateway-strip {
   display: flex;
   align-items: center;
-  gap: 0.55rem;
-  padding-bottom: 1.35rem;
-  margin-bottom: 1.4rem;
-  border-bottom: 1px solid var(--ui-stroke-tertiary);
+  gap: 7px;
   font-size: var(--aino-text-caption);
-  color: var(--ui-text-secondary);
+  color: var(--ui-text-tertiary);
 }
 .messaging-catalog-toolbar {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-  margin-bottom: 1.8rem;
+  flex-direction: column;
+  gap: 22px;
+  margin-bottom: 22px;
 }
 .messaging-directory-tabs {
   justify-content: flex-start;
-  gap: 1rem;
-}
-.messaging-directory-tabs [data-active='true'] {
-  text-decoration-color: var(--ui-accent);
+  min-height: 48px;
+  border-bottom: 1px solid var(--ui-stroke-secondary);
+  gap: 24px;
 }
 .messaging-search-tools {
   display: flex;
   align-items: center;
-  gap: 0.35rem;
+  gap: 14px;
   min-width: 0;
 }
 .messaging-search {
-  width: 16rem;
+  width: 270px;
   max-width: 100%;
-  border-radius: var(--aino-radius-control);
-  padding: 0.35rem 0.65rem;
 }
-.messaging-status-filters {
-  margin: -0.9rem 0 1.4rem;
-  font-size: var(--aino-text-caption);
+.messaging-result-count {
+  margin-inline-start: auto;
+  white-space: nowrap;
   color: var(--ui-text-tertiary);
-}
-.messaging-status-filters summary {
-  cursor: pointer;
-  width: max-content;
-}
-.messaging-status-filters > div {
-  margin-top: 0.5rem;
-}
-.messaging-platform-section {
-  margin-bottom: 1.8rem;
-}
-.messaging-section-heading {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-  margin-bottom: 0.85rem;
-}
-.messaging-section-heading h2 {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  font-size: var(--aino-text-body);
-  font-weight: 600;
-  color: var(--ui-text-secondary);
-}
-.messaging-section-heading h2 span {
   font-size: var(--aino-text-caption);
-  font-weight: 400;
-  color: var(--ui-text-tertiary);
-}
-.messaging-section-heading p {
-  font-size: var(--aino-text-caption);
-  color: var(--ui-text-tertiary);
 }
 .messaging-platform-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 0.75rem;
+  gap: 16px;
   padding: 0;
   list-style: none;
 }
 .messaging-platform-card {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  grid-template-rows: auto minmax(3rem, 1fr) auto;
-  align-items: center;
+  display: flex;
+  flex-direction: column;
   width: 100%;
-  min-height: 11.25rem;
-  gap: 0.875rem 0.625rem;
-  padding: 1.125rem;
+  min-height: 180px;
+  height: 100%;
+  padding: 18px 17px 12px;
   text-align: start;
   background: var(--ui-bg-elevated);
-  border: 1px solid var(--ui-stroke-tertiary);
+  border: 1px solid var(--ui-stroke-secondary);
   border-radius: var(--aino-radius-card);
-  transition:
-    background 150ms,
-    border-color 150ms;
+  transition: border-color 150ms;
 }
 .messaging-platform-card:hover {
-  background: var(--chrome-action-hover);
-  border-color: var(--ui-stroke-secondary);
+  border-color: var(--ui-stroke-primary);
 }
 .messaging-platform-card:focus-visible {
   outline: 2px solid var(--ui-accent);
   outline-offset: 3px;
 }
 .messaging-platform-card[data-tone='bad'] {
-  border-color: color-mix(in srgb, var(--ui-red) 28%, var(--ui-stroke-tertiary));
+  border-color: color-mix(in srgb, var(--ui-red) 28%, var(--ui-stroke-secondary));
+}
+.messaging-platform-identity {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  min-width: 0;
+  gap: 10px;
 }
 .messaging-platform-avatar {
-  width: 2.65rem !important;
-  height: 2.65rem !important;
-  border-radius: 0.75rem !important;
+  width: 34px;
+  height: 34px;
+  border-radius: var(--aino-radius-control);
   flex-shrink: 0;
 }
 .messaging-platform-avatar > svg {
-  width: 1.5rem !important;
-  height: 1.5rem !important;
+  width: 22px;
+  height: 22px;
 }
-.messaging-platform-avatar [data-monogram] {
-  font-size: 1.1rem;
-}
-.messaging-platform-copy {
-  display: contents;
+.messaging-platform-avatar > img {
+  width: 85%;
+  height: 85%;
 }
 .messaging-platform-name {
-  grid-column: 2 / -1;
-  grid-row: 1;
+  min-width: 0;
+  flex: 1;
   color: var(--ui-text-primary);
-  font-size: var(--aino-text-body);
-  font-weight: 600;
+  font-size: var(--aino-text-ui);
+  font-weight: 500;
   line-height: 1.5;
   overflow-wrap: anywhere;
 }
-.messaging-platform-description {
-  grid-column: 1 / -1;
-  grid-row: 2;
+.messaging-platform-badge {
+  flex-shrink: 0;
+  padding: 2px 5px;
+  border-radius: 4px;
+  background: var(--ui-bg-quaternary);
+  color: var(--ui-text-tertiary);
   font-size: var(--aino-text-caption);
+  line-height: 1.4;
+}
+.messaging-platform-card[data-tone='good'] .messaging-platform-badge {
+  background: color-mix(in srgb, var(--ui-green) 7%, transparent);
+  color: var(--ui-green);
+}
+.messaging-platform-description {
+  display: block;
+  flex: 1;
+  min-height: 3.4em;
+  margin-block: 16px 18px;
+  font-size: var(--aino-text-label);
   color: var(--ui-text-secondary);
-  line-height: 1.65;
+  line-height: 1.7;
+}
+.messaging-platform-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  gap: 8px;
+  border-top: 1px solid var(--ui-stroke-tertiary);
+  padding-top: 11px;
 }
 .messaging-platform-meta {
-  grid-column: 1 / -1;
-  grid-row: 3;
-  min-width: 0;
-  min-height: 2.75rem;
-  border-top: 1px solid var(--ui-stroke-tertiary);
-  padding-top: 0.75rem;
-  padding-inline-end: 4.5rem;
   display: flex;
+  min-width: 0;
   flex-wrap: wrap;
   align-items: center;
-  gap: 0.4rem;
-  margin-top: 0.2rem;
+  gap: 5px;
   color: var(--ui-text-tertiary);
   font-size: var(--aino-text-caption);
   line-height: 1.5;
 }
 .messaging-pending-count {
-  border-radius: 0.3rem;
-  padding: 0.15rem 0.35rem;
+  border-radius: 4px;
+  padding: 2px 5px;
   background: color-mix(in srgb, var(--ui-yellow) 10%, transparent);
   color: var(--ui-yellow);
 }
 .messaging-send-only {
   border-inline-start: 1px solid var(--ui-stroke-secondary);
-  padding-inline-start: 0.5rem;
+  padding-inline-start: 8px;
 }
 .messaging-configure-action {
-  grid-column: 3;
-  grid-row: 3;
-  align-self: end;
-  margin-top: 0.75rem;
-  justify-self: end;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 0.3rem;
+  gap: 4px;
   flex-shrink: 0;
-  min-height: 2rem;
-  padding: 0.25rem 0.65rem;
+  min-height: 28px;
+  padding: 4px 10px;
   border: 1px solid var(--ui-stroke-secondary);
   border-radius: var(--aino-radius-control);
   color: var(--ui-text-secondary);
   font-size: var(--aino-text-caption);
 }
 .messaging-configure-action svg {
-  width: 0.8rem;
-  height: 0.8rem;
+  width: 12px;
+  height: 12px;
   color: var(--ui-text-tertiary);
 }
 .messaging-page-footer {
@@ -262,7 +243,7 @@
   margin-bottom: 1.3rem;
 }
 .messaging-config-dialog {
-  max-width: 40.25rem;
+  max-width: 36rem;
   max-height: calc(100dvh - 5rem);
 }
 .messaging-dialog-layout {
@@ -284,7 +265,7 @@
   min-width: 0;
 }
 .messaging-dialog-heading [data-slot='dialog-title'] {
-  font-size: 1.2rem;
+  font-size: var(--aino-text-title);
   overflow-wrap: anywhere;
 }
 .messaging-dialog-heading [data-slot='dialog-description'] {
@@ -298,7 +279,7 @@
   flex-shrink: 0;
   padding: 0.7rem 1.8rem;
   border-block: 1px solid var(--ui-stroke-tertiary);
-  background: var(--ui-bg-quinary);
+  background: var(--ui-bg-elevated);
   color: var(--ui-text-tertiary);
   font-size: var(--aino-text-caption);
 }
@@ -389,7 +370,7 @@
   flex-shrink: 0;
   padding: 1.1rem 1.8rem;
   border-top: 1px solid var(--ui-stroke-tertiary);
-  background: var(--ui-bg-quinary);
+  background: var(--ui-bg-elevated);
 }
 .messaging-dialog-footer > label {
   margin-inline-end: auto;
@@ -407,29 +388,17 @@
 .messaging-cancel-button {
   order: 1;
 }
-@media (max-width: 1100px) {
-  .messaging-platform-card {
-    padding: 1rem;
-    gap: 0.7rem;
-  }
-  .messaging-platform-avatar {
-    width: 2.3rem !important;
-    height: 2.3rem !important;
-  }
-  .messaging-platform-meta {
-    gap: 0.3rem;
-  }
-  .messaging-search {
-    width: 13rem;
-  }
-  .messaging-directory-tabs {
-    gap: 0.5rem;
-  }
-}
 @container messaging (max-width: 700px) {
+  .messaging-page-content {
+    padding: calc(var(--titlebar-height) + 24px) 20px 24px;
+  }
   .messaging-page-heading {
     flex-wrap: wrap;
     gap: 1rem;
+  }
+  .messaging-heading-actions {
+    width: 100%;
+    justify-content: flex-start;
   }
   .messaging-profile-scope {
     width: 100%;
@@ -443,17 +412,16 @@
     grid-template-columns: minmax(0, 1fr);
   }
   .messaging-catalog-toolbar {
-    align-items: flex-start;
-    flex-wrap: wrap;
+    align-items: stretch;
   }
   .messaging-search-tools {
-    flex: 1;
+    flex-wrap: wrap;
   }
   .messaging-search {
     width: 100%;
   }
-  .messaging-section-heading p {
-    display: none;
+  .messaging-result-count {
+    margin-inline-start: 0;
   }
 }
 @media (max-width: 480px) {
@@ -478,6 +446,8 @@
   }
 }
 
-@container messaging (min-width: 701px) and (max-width: 1030px) {
-  .messaging-platform-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+@container messaging (min-width: 701px) and (max-width: 900px) {
+  .messaging-platform-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }

@@ -86,7 +86,7 @@ export function CheckList({ items, onToggle, columns = 2 }: CheckListProps) {
           <Checkbox checked={item.enabled} onCheckedChange={value => onToggle(item.name, Boolean(value))} />
           <span className="truncate">{item.name}</span>
           {item.tool_count ? (
-            <span className="shrink-0 text-[0.6rem] text-(--ui-text-quaternary)">{`${item.tool_count}`}</span>
+            <span className="shrink-0 text-[length:var(--aino-text-caption)] text-(--ui-text-tertiary)">{`${item.tool_count}`}</span>
           ) : null}
         </label>
       ))}
@@ -464,7 +464,7 @@ export function AdvancedProfileConfig({ bot, state, setState }: AdvancedProfileC
                       <span className="min-w-0">
                         <span>{m.name}</span>
                         {m.fromCatalog && !needsSetup ? (
-                          <span className="ml-1.5 text-[0.65rem] text-(--ui-text-quaternary)">
+                          <span className="ml-1.5 text-[length:var(--aino-text-caption)] text-(--ui-text-tertiary)">
                             {m.installed ? b.bot.catalogInstalled : b.bot.catalog}
                           </span>
                         ) : null}
@@ -472,7 +472,7 @@ export function AdvancedProfileConfig({ bot, state, setState }: AdvancedProfileC
                           <McpSetupButton entry={m} onDone={() => toggleMcp(m.name, true)} profile={backendScope} />
                         ) : null}
                         {m.description ? (
-                          <div className="truncate text-[0.65rem] leading-4 text-(--ui-text-quaternary)">
+                          <div className="truncate text-[length:var(--aino-text-caption)] leading-4 text-(--ui-text-tertiary)">
                             {m.description}
                           </div>
                         ) : null}

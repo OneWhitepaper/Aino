@@ -5,6 +5,7 @@ import { useI18n } from '@/i18n'
 import { notifyError } from '@/store/notifications'
 
 import { ToggleRow } from './primitives'
+import { SETTING_IDS, settingElementId } from './settings-manifest'
 
 export function MinimizeToTraySetting() {
   const { t } = useI18n()
@@ -91,6 +92,7 @@ export function MinimizeToTraySetting() {
           status?.enabled && !status.available && !saving ? c.minimizeToTrayUnavailable : c.minimizeToTrayDesc
         }
         disabled={!status || saving}
+        id={settingElementId(SETTING_IDS.appearance.minimizeToTray)}
         label={c.minimizeToTrayTitle}
         onChange={enabled => void save(enabled)}
       />

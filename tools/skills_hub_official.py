@@ -32,13 +32,13 @@ def _entry_provider(entry: dict) -> str:
 
 
 class OptionalSkillSource(SkillSource):
-    """Skills from the repo's ``optional-skills/`` directory: official (Nous-maintained) but not
+    """Skills from Aino's ``optional-skills/`` directory: bundled but not
     activated by default — absent from the system prompt and not copied to ~/.hermes/skills/ at
     setup. Discoverable via the Skills Hub as source "official" with "builtin" trust."""
 
     SOURCE_ID = "official"
     TRUST_LEVEL = "builtin"
-    OFFICIAL_REPO = "NousResearch/hermes-agent"
+    OFFICIAL_REPO = "OneWhitepaper/Aino"
     OPTIONAL_SKILLS_PREFIX = "optional-skills"
 
     _parse_frontmatter = staticmethod(_parse_frontmatter)
@@ -212,7 +212,7 @@ class OptionalSkillSource(SkillSource):
                         dirs[rel_dir] = True
             return dirs or None
 
-        self._remote_dirs = _memo_json("official_optional_dirs", compute,
+        self._remote_dirs = _memo_json("official_optional_dirs_aino", compute,
                                        valid=lambda c: isinstance(c, dict) and bool(c)) or {}
         return self._remote_dirs
 

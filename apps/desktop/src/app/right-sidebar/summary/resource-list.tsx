@@ -74,7 +74,7 @@ export function SummaryResourceList({ items, session }: { items: SummaryResource
         }
 
         if (preview) {
-          openPreview(preview)
+          openPreview(preview, session.storedId, session.runtimeId, session.scope.profile)
         }
       }
     } catch (error) {
@@ -102,11 +102,14 @@ export function SummaryResourceList({ items, session }: { items: SummaryResource
         return (
           <Tip key={item.id} label={item.target.startsWith('data:') ? item.label : item.target}>
             {informational ? (
-              <div className="flex min-w-0 items-center gap-2 py-1.5">{content}</div>
+              <div className="flex min-w-0 items-center gap-2 py-1.5" data-slot="summary-resource-row">
+                {content}
+              </div>
             ) : (
               <Button
                 aria-label={`${t.summary.sources.open}: ${item.label}`}
                 className="min-w-0 justify-start text-left"
+                data-slot="summary-resource-row"
                 disabled={!summarySessionIsCurrent(session)}
                 onClick={() => void open(item)}
                 size="sm"

@@ -4,7 +4,7 @@ import { atom } from 'nanostores'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { type SessionView, SessionViewProvider } from '@/app/chat/session-view'
-import { McpSetupPending, McpSetupTool } from '@/components/assistant-ui/mcp-setup-tool'
+import { McpSetupOffer, McpSetupPending, McpSetupTool } from '@/components/assistant-ui/mcp-setup-tool'
 import { I18nProvider } from '@/i18n'
 import {
   $connectionRequests,
@@ -109,6 +109,115 @@ afterEach(() => {
 })
 
 describe('the MCP setup card', () => {
+  it('shows the exact custom HTTP endpoint and authorization before approval, then opens only the offered OAuth link', async () => {
+    const rpc = vi.fn().mockResolvedValue({ status: 'ok', settled: false })
+    const openExternal = vi.fn()
+    // SAFETY: the approval flow uses only request and the explicit browser action.
+    setPrimaryGateway({ request: rpc } as never)
+    window.hermesDesktop = { openExternal } as never
+
+    const target = {
+      ...LINEAR,
+      mcpConfig: { url: 'https://mcp.example.test/my-tools', auth: 'oauth' as const }
+    }
+
+    const request = { ...REQUEST, targets: [target] }
+    setConnectionRequest(request)
+
+    const card = (current: ConnectionRequest) => (
+      <I18nProvider configClient={null} initialLocale="zh">
+        <McpSetupOffer action="install" owner={{ connectionId: null, profile: 'default' }} request={current} />
+      </I18nProvider>
+    )
+
+    const { rerender } = render(card(request))
+
+    expect(screen.getByText('https://mcp.example.test/my-tools')).toBeTruthy()
+    expect(screen.getByText('OAuth')).toBeTruthy()
+    expect(rpc).not.toHaveBeenCalled()
+    expect(openExternal).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByRole('button', { name: '安装' }))
+    await waitFor(() =>
+      expect(rpc).toHaveBeenCalledWith('connection.respond', {
+        op_id: 'operation-1',
+        owner: { session_id: SESSION_ID, type: 'session' },
+        result: { targets: [{ name: 'linear', status: 'approved' }] }
+      })
+    )
+    expect(openExternal).not.toHaveBeenCalled()
+
+    const initiated = {
+      ...request,
+      seq: 1,
+      targets: [{ ...target, state: 'initiated' as const, connectUrl: 'https://oauth.example.test/authorize' }]
+    }
+
+    rerender(card(initiated))
+    expect(screen.getAllByText('正在等待浏览器…')).toHaveLength(2)
+    fireEvent.click(screen.getByRole('button', { name: '在浏览器中打开' }))
+    expect(openExternal).toHaveBeenCalledExactlyOnceWith('https://oauth.example.test/authorize')
+
+    rerender(
+      card({
+        ...initiated,
+        seq: 2,
+        settled: true,
+        targets: [{ ...target, state: 'connected', tools: ['mcp_linear_search'] }]
+      })
+    )
+    expect(screen.getByText('已安装 Linear · 1 个工具')).toBeTruthy()
+  })
+
+  it('shows the exact local command and argument boundaries before the user permits a process to run', () => {
+    const target = {
+      ...LINEAR,
+      mcpConfig: { command: 'npx', args: ['-y', '@example/server', '/a folder/documents'] }
+    }
+
+    render(
+      <I18nProvider configClient={null} initialLocale="en">
+        <McpSetupOffer action="install" owner={null} request={{ ...REQUEST, targets: [target] }} />
+      </I18nProvider>
+    )
+
+    expect(screen.getByText('npx')).toBeTruthy()
+    expect(screen.getByText('["-y","@example/server","/a folder/documents"]')).toBeTruthy()
+    expect(screen.getByText(/runs a local process on your machine/)).toBeTruthy()
+  })
+
+  it.each([
+    { tools: [], discovery_error: null, expected: 'Loading its tools…' },
+    { tools: ['old-tool'], discovery_error: 'discovery timed out', expected: 'Authorized. Tools unavailable.' }
+  ])(
+    'does not report a ready server before successful tool discovery: $expected',
+    ({ discovery_error, expected, tools }) => {
+      const { container } = renderTool({
+        settled_by: 'continue',
+        status: 'settled',
+        targets: [{ action: 'install', kind: 'mcp', name: 'linear', state: 'connected', tools, discovery_error }]
+      })
+
+      expect(screen.getByText(expected)).toBeTruthy()
+      expect(screen.queryByText(/Installed Linear/)).toBeNull()
+      expect(container.querySelector('[class*="text-emerald"]')).toBeNull()
+    }
+  )
+
+  it('announces discovery as loading tools instead of waiting for an authorization browser', () => {
+    render(
+      <I18nProvider configClient={null} initialLocale="en">
+        <McpSetupOffer
+          action="install"
+          owner={null}
+          request={{ ...REQUEST, targets: [{ ...LINEAR, state: 'connected' }] }}
+        />
+      </I18nProvider>
+    )
+
+    expect(screen.getByRole('status').textContent).toBe('Loading its tools…')
+    expect(screen.queryByText(/Waiting for your browser/)).toBeNull()
+  })
+
   it('opens required details from the row action and sends the approved environment', async () => {
     const rpc = vi.fn().mockResolvedValue({ status: 'ok', settled: false })
 

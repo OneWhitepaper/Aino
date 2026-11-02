@@ -1006,7 +1006,7 @@ export function CreateAgentDialog({ open, onClose, onConfigureModel, roster }: C
                         onToggle={(name, enabled) => toggleCap('skills', name, enabled)}
                       />
                     </div>
-                    <div className="text-[length:var(--aino-text-caption)] leading-4 text-(--ui-text-quaternary)">
+                    <div className="text-[length:var(--aino-text-caption)] leading-4 text-(--ui-text-tertiary)">
                       {b.bot.catalogFrom(caps.source)}
                     </div>
                     <HubSkillsSection
@@ -1043,7 +1043,7 @@ export function CreateAgentDialog({ open, onClose, onConfigureModel, roster }: C
                       onToggle={(name, enabled) => toggleCap('toolsets', name, enabled)}
                     />
                   </div>
-                  <div className="text-[length:var(--aino-text-caption)] leading-4 text-(--ui-text-quaternary)">
+                  <div className="text-[length:var(--aino-text-caption)] leading-4 text-(--ui-text-tertiary)">
                     {b.bot.toolsetHint}
                   </div>
                 </div>
@@ -1074,7 +1074,7 @@ export function CreateAgentDialog({ open, onClose, onConfigureModel, roster }: C
                             <span className="min-w-0">
                               <span>{m.name}</span>
                               {m.fromCatalog && !needsSetup ? (
-                                <span className="ml-1.5 text-[length:var(--aino-text-caption)] text-(--ui-text-quaternary)">
+                                <span className="ml-1.5 text-[length:var(--aino-text-caption)] text-(--ui-text-tertiary)">
                                   {m.installed ? b.bot.catalogInstalled : b.bot.catalog}
                                 </span>
                               ) : null}
@@ -1110,7 +1110,7 @@ export function CreateAgentDialog({ open, onClose, onConfigureModel, roster }: C
                                 />
                               ) : null}
                               {m.description ? (
-                                <div className="truncate text-[length:var(--aino-text-caption)] leading-4 text-(--ui-text-quaternary)">
+                                <div className="truncate text-[length:var(--aino-text-caption)] leading-4 text-(--ui-text-tertiary)">
                                   {m.description}
                                 </div>
                               ) : null}
@@ -1120,7 +1120,7 @@ export function CreateAgentDialog({ open, onClose, onConfigureModel, roster }: C
                       })}
                     </div>
                   </div>
-                  <div className="text-[length:var(--aino-text-caption)] leading-4 text-(--ui-text-quaternary)">
+                  <div className="text-[length:var(--aino-text-caption)] leading-4 text-(--ui-text-tertiary)">
                     {b.bot.mcpHint}
                   </div>
                 </div>
@@ -1495,7 +1495,7 @@ export function CreateGroupChatDialog({ open, roster, onClose, onCreated }: Crea
                     />
                     <div className="min-w-0 flex-1">
                       <div className="truncate text-xs text-foreground">{displayName(bot, meta)}</div>
-                      <div className="truncate text-[length:var(--aino-text-caption)] text-(--ui-text-quaternary)">
+                      <div className="truncate text-[length:var(--aino-text-caption)] text-(--ui-text-tertiary)">
                         {[
                           currentGroups.length
                             ? `@${botHandle(bot.name, bot)} · in ${currentGroups.map(group => `“${group}”`).join(', ')}`

@@ -19,6 +19,7 @@ from unittest.mock import patch
 
 from hermes_cli.model_switch import switch_model
 from hermes_cli.providers import host_mandated_api_mode
+from providers import get_provider_profile
 
 _MOCK_VALIDATION = {
     "accepted": True,
@@ -115,7 +116,7 @@ def test_stale_chat_overridden_on_meta_direct():
         runtime_base_url="https://api.meta.ai/v1",
     )
     assert result.success, f"switch_model failed: {result.error_message}"
-    assert result.target_provider == "meta"
+    assert get_provider_profile(result.target_provider).name == get_provider_profile("meta").name
     assert result.new_model == "muse-spark-1.2"
     assert result.api_mode == "codex_responses"
 

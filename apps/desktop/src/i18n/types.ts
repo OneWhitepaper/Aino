@@ -1,5 +1,7 @@
 import type { ErrorCodeKey } from '@/lib/error-surface'
 import type { TipId } from '@/lib/tips/catalog'
+
+import type { AppearancePageCopy } from './appearance-page'
 // health: allow FILE_LINES -- the copy contract for the usage-window plan keys every locale adds (allowance gauges, Large/Free tags, the limit card)
 // Desktop i18n type contract.
 //
@@ -7,7 +9,8 @@ import type { TipId } from '@/lib/tips/catalog'
 // surface. Fully translated locale files may satisfy this interface directly;
 // partial locales should use `defineLocale()` so missing desktop-only strings
 // fall back to English while new keys remain type-checked.
-
+import type { ToolPanelCopy } from './tool-panel'
+import type { AccountPageTranslations } from './types_account_page'
 import type { AppTourTranslations } from './types_app_tour'
 import type { BillingTranslations } from './types_billing'
 import type { BillingSurfaceTranslations } from './types_billing_surface'
@@ -15,6 +18,7 @@ import type { BootTranslations } from './types_boot'
 import type { CatalogTranslations } from './types_catalog'
 import type { CatalogInstallTranslations } from './types_catalog_install'
 import type { ClarifyCopy } from './types_clarify'
+import type { ConfigPagesCopy } from './types_config_pages'
 import type { ConnectorAccountsTranslations, ConnectorCardTranslations } from './types_connectors'
 import type { GatewayGroupOpenCopy, SkillDeepLinkCopy } from './types_deep_links'
 import type { ExternalOpenFailedCopy } from './types_external_open'
@@ -31,6 +35,7 @@ import type { SummaryTranslations } from './types_summary_surface'
 import type { ThemePickerCopy } from './types_theme_picker'
 import type { UninstallSectionTranslations } from './types_uninstall_section'
 import type { UpdateChannelCopy } from './types_update_channel'
+import type { WorkspacePageCopy } from './workspace-page'
 
 /** The locales compiled into the app (`TRANSLATIONS`). */
 export type BundledLocale = 'en' | 'zh' | 'zh-hant' | 'ja' | 'ar' | 'ru' | 'fr' | 'de' | 'es'
@@ -85,6 +90,10 @@ interface ModeOptionCopy {
 }
 
 export interface UpstreamTranslations extends NoticeTranslations {
+  toolPanel: ToolPanelCopy
+  appearancePage: AppearancePageCopy
+  workspacePage: WorkspacePageCopy
+  accountPage: AccountPageTranslations
   /** Shared-metrics consent: first-run dialog + Settings › Safety toggles. */
   sharedMetrics: SharedMetricsTranslations
   appTour: AppTourTranslations
@@ -604,6 +613,7 @@ export interface UpstreamTranslations extends NoticeTranslations {
   }
 
   settings: {
+    configPages: ConfigPagesCopy
     subpages: Record<string, string>
     closeSettings: string
     exportConfig: string
@@ -633,6 +643,7 @@ export interface UpstreamTranslations extends NoticeTranslations {
       apiKeys: string
       keybinds: string
       keysTools: string
+      keysCredentials: string
       keysSettings: string
       mcp: string
       archivedChats: string
@@ -1185,6 +1196,20 @@ export interface UpstreamTranslations extends NoticeTranslations {
       remove: string
       getKey: string
       saving: string
+      toolPageIntro: string
+      toolServices: {
+        porcupine: { label: string; description: string }
+        retaindbApiKey: { label: string; description: string }
+        retaindbBaseUrl: { label: string; description: string }
+        searxngUrl: { label: string; description: string }
+        supermemoryApiKey: { label: string; description: string }
+        tavilyApiKey: { label: string; description: string }
+        toolGatewayDomain: { label: string; description: string }
+        toolGatewayScheme: { label: string; description: string }
+        toolGatewayUrl: { label: string; description: string }
+        toolGatewayToken: { label: string; description: string }
+        voiceOpenaiKey: { label: string; description: string }
+      }
     }
     envActions: {
       actions: string
@@ -1249,7 +1274,6 @@ export interface UpstreamTranslations extends NoticeTranslations {
       duplicateSsh: (label: string) => string
       sameBackendHint: (label: string) => string
       localAddHint: string
-      cloudAddHint: string
       save: string
       saving: string
       cancel: string
@@ -4262,8 +4286,13 @@ export interface UpstreamTranslations extends NoticeTranslations {
           tool_definitions: string
         }
         empty: string
+        detailsUnavailable: string
+        unavailable: string
+        retry: string
+        pendingDetails: string
         loading: string
         percentFull: (percent: number) => string
+        compactTitle: string
         title: string
         tokenSummary: (used: string, max: string) => string
 
@@ -4528,6 +4557,8 @@ export interface UpstreamTranslations extends NoticeTranslations {
   }
 
   zones: {
+    sidebarModeMenu: string
+    sidebarSessionsDescription: string
     showTabStrip: string
     hideTabStrip: string
     showStripTab: (title: string) => string
@@ -4838,6 +4869,9 @@ export interface UpstreamTranslations extends NoticeTranslations {
       gatewayDisconnected: string
     }
     tool: {
+      collapseDetails: string
+      moreActions: string
+      hideRecord: string
       copyCode: string
       renderingImage: string
       copyOutput: string
@@ -5468,6 +5502,7 @@ export interface UpstreamTranslations extends NoticeTranslations {
     notCharged: string
     purposes: {
       chat: string
+      image: string
       title: string
       compression: string
       vision: string
@@ -5570,6 +5605,8 @@ export interface UpstreamTranslations extends NoticeTranslations {
   }
 
   home: {
+    hints: { referenceFiles: string; commandsAndSkills: string; newLine: string }
+    footnote: string
     subtitle: string
     placeholder: string
     workspace: string

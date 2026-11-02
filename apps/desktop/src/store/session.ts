@@ -25,9 +25,9 @@ export type ComposerModelSource = '' | 'default' | 'manual'
 
 const WORKSPACE_CWD_KEY = 'hermes.desktop.workspace-cwd'
 
-// The composer's model/effort/fast is sticky UI state, NOT the profile default
-// (that lives in Settings → Model). Persisting it in localStorage makes a pick
-// follow across Cmd+N and app restarts instead of snapping back to the default.
+// The composer caches this conversation or unsent draft's selection, NOT the
+// profile default (that lives in Settings → Model). New Chat clears model and
+// reasoning overrides before resolving that draft's owner and Settings default.
 // Model/provider/source are scoped to the remote (connection, profile) owner so
 // a provider authenticated on one profile cannot contaminate another profile's
 // session.create. Local/single-backend users retain the historical bare keys.
@@ -1489,6 +1489,12 @@ function rescopeComposerSelection(nextScope: string | null, preserveLegacyLocalS
     return
   }
 
+  const followFreshDefault =
+    $freshDraftReady.get() &&
+    !$activeSessionId.get() &&
+    !$selectedStoredSessionId.get() &&
+    $currentModelSource.get() === 'default'
+
   // Electron resolves an explicit local/default route through the registry
   // bridge after boot may have already painted that same local backend from the
   // legacy bare scope. This promotion preserves the user's existing intent.
@@ -1506,6 +1512,17 @@ function rescopeComposerSelection(nextScope: string | null, preserveLegacyLocalS
     : null
 
   composerSelectionScope = nextScope
+
+  if (followFreshDefault) {
+    // A delayed owner/descriptor publication still belongs to the fresh draft.
+    // Its Settings intent must not restore an older conversation's saved pick.
+    markComposerSelectionDefault()
+    setCurrentModel('')
+    setCurrentProvider('')
+    setCurrentPlatformOwner('')
+
+    return
+  }
 
   if (previous) {
     persistString(composerSelectionKey(COMPOSER_MODEL_KEY)!, previous.model || null)

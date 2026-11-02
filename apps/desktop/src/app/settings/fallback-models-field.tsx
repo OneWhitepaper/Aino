@@ -1,3 +1,5 @@
+import './fallback-models-field.css'
+
 import { useStore } from '@nanostores/react'
 import { useQuery } from '@tanstack/react-query'
 import { useEffect, useRef, useState } from 'react'
@@ -8,7 +10,9 @@ import { getGlobalModelOptions } from '@/hermes'
 import { useI18n } from '@/i18n'
 import { Plus, X } from '@/lib/icons'
 import { cn } from '@/lib/utils'
+import { $activeConnectionId } from '@/store/connections'
 import { $customModels, withCustomModels } from '@/store/custom-models'
+import { $settingsRequestProfile } from '@/store/settings-scope'
 
 import { CONTROL_TEXT } from './constants'
 import { ModelSelect } from './model-select'
@@ -79,9 +83,12 @@ export function FallbackModelsField({
   const { t } = useI18n()
   const m = t.settings.model
 
+  const scopeProfile = useStore($settingsRequestProfile)
+  const connectionId = useStore($activeConnectionId)
+
   const modelOptions = useQuery({
-    queryKey: ['model-options', 'global'],
-    queryFn: () => getGlobalModelOptions()
+    queryKey: ['model-options', 'global', connectionId, scopeProfile],
+    queryFn: () => getGlobalModelOptions(undefined, scopeProfile)
   })
 
   const customModels = useStore($customModels)
@@ -122,16 +129,25 @@ export function FallbackModelsField({
     commit(rows.map((entry, i) => (i === index ? { ...entry, ...patch } : entry)))
 
   return (
-    <div className="grid w-full gap-1.5">
-      {rows.length === 0 && <p className="text-xs text-muted-foreground">{m.fallbackEmpty}</p>}
+    <div className="fallback-models-field">
+      <div aria-hidden="true" className="fallback-models-heading">
+        <span>#</span>
+        <span>{m.provider}</span>
+        <span>{m.model}</span>
+        <span />
+      </div>
+      {rows.length === 0 && <p className="fallback-models-empty">{m.fallbackEmpty}</p>}
       {rows.map((entry, index) => {
         const providerRow = providers.find(provider => provider.slug === entry.provider)
 
         return (
-          <div className="flex flex-wrap items-center gap-2" key={index}>
-            <span className="w-4 shrink-0 text-center font-mono text-[0.7rem] text-muted-foreground">{index + 1}</span>
+          <div className="fallback-models-row" key={index}>
+            <span className="fallback-models-order">{index + 1}</span>
             <Select onValueChange={provider => updateRow(index, { provider, model: '' })} value={entry.provider}>
-              <SelectTrigger className={cn('min-w-36', CONTROL_TEXT)}>
+              <SelectTrigger
+                aria-label={`${m.provider} ${index + 1}`}
+                className={cn('fallback-models-provider', CONTROL_TEXT)}
+              >
                 <SelectValue placeholder={m.provider} />
               </SelectTrigger>
               <SelectContent>
@@ -143,7 +159,8 @@ export function FallbackModelsField({
               </SelectContent>
             </Select>
             <ModelSelect
-              className="min-w-52 flex-1"
+              aria-label={`${m.model} ${index + 1}`}
+              className="fallback-models-model"
               models={providerRow?.models ?? []}
               onValueChange={model => updateRow(index, { model })}
               provider={providerRow}
@@ -152,6 +169,7 @@ export function FallbackModelsField({
             />
             <Button
               aria-label={t.common.remove}
+              className="fallback-models-remove"
               onClick={() => commit(rows.filter((_, i) => i !== index))}
               size="icon-xs"
               variant="ghost"
@@ -161,7 +179,7 @@ export function FallbackModelsField({
           </div>
         )
       })}
-      <div>
+      <div className="fallback-models-add">
         <Button onClick={() => commit([...rows, { provider: '', model: '' }])} size="sm" variant="textStrong">
           <Plus className="size-3.5" />
           {m.fallbackAdd}

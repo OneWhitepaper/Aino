@@ -5,6 +5,25 @@ import type { LocalHardware } from '@/types/hermes'
 import { hardwareMeters, summaryContextUsage, summaryEnvironmentState } from './summary-data'
 
 describe('summary data helpers', () => {
+  it('restores historical occupancy instead of treating cold zero placeholders as a measurement', () => {
+    const usage = { calls: 0, input: 0, output: 0, total: 0, context_used: 0, context_max: 1_000_000 }
+
+    const recovered = {
+      categories: [],
+      context_max: 0,
+      context_used: 74_867,
+      context_percent: 0,
+      estimated_total: 0,
+      context_source: 'provider_usage'
+    }
+
+    expect(summaryContextUsage(usage, recovered)).toMatchObject({ context_used: 74_867, context_percent: 7 })
+    expect(summaryContextUsage({ ...usage, context_source: 'provider_usage' }, recovered)).toMatchObject({
+      context_used: 0,
+      context_percent: 0
+    })
+  })
+
   it('does not expose a previous workspace while ownership is changing', () => {
     expect(
       summaryEnvironmentState({ cwd: '/old', cwdOwner: 'old', projectName: 'Old', selectedSession: 'new' })

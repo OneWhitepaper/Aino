@@ -1,5 +1,6 @@
 // Canonical local authority wire adapter. Remote legacy transports keep their
 // existing protocol; unsupported explicit semantics fail before network admission.
+import { acknowledgeTaskPause, beginTaskPause, clearOwnerTaskPauses, clearTaskPause, observeTaskPause, taskPauseKey } from '@/store/task-pause'
 
 export const CANONICAL_GATEWAY_PROTOCOL = 'hermes-gateway-v1'
 
@@ -234,10 +235,16 @@ const VALUE_OPERATIONS = new Set(['rename', 'archive', 'model', 'reasoning', 'wo
 const MUTATION_METHODS = new Set(['session.title', 'session.archive', 'session.compress', 'session.rewind', 'session.model', ...BRANCH_METHODS])
 
 export class CanonicalDesktopProtocol {
+  clearTaskPauses(): void { clearOwnerTaskPauses(this) }
+
+  taskPauseKey(sessionId: string, profile?: unknown): string {
+    return taskPauseKey(this, sessionId, canonicalProfile(profile))
+  }
   private creates = new Map<string, string>()
   private revisions = new Map<string, number>()
   private mutations = new Map<string, Record<string, unknown>>()
   private generations = new Map<string, number>()
+  private completedGenerations = new Map<string, number>()
   private prompts = new Map<string, Record<string, unknown>>()
   // admission_id → generation of a turn the authority recovered as `unknown`
   // (owner died mid-turn). Only these rows may be acknowledged, and only with
@@ -381,7 +388,11 @@ export class CanonicalDesktopProtocol {
   private preparePayload(method: string, params: Record<string, unknown>): Record<string, unknown> {
     const mutation = this.prepareMutation(method, params)
 
-    if (mutation) { return mutation }
+    if (mutation) {
+      if (typeof params.session_id === 'string') { clearTaskPause(this.taskPauseKey(params.session_id, params.profile)) }
+
+      return mutation
+    }
 
     if (method === 'prompt.submit') { this.retireMutations(canonicalSessionKey(params.session_id, params.profile)) }
 
@@ -400,24 +411,41 @@ export class CanonicalDesktopProtocol {
     }
 
     if (method === 'session.interrupt' || method === 'session.redirect' || method === 'session.steer') {
-      const generation = params.execution_generation ?? this.generations.get(canonicalSessionKey(params.session_id, params.profile))
-
-      if (typeof generation !== 'number') { throw new Error('Session execution identity unavailable; reconnect before controlling this turn') }
-
-      return { ...params, session_id: params.session_id, execution_generation: generation }
+      return this.prepareTurnControl(method, params)
     }
 
     if (method === 'prompt.resolve_unknown') {
-      const lost = this.unknownAdmissions.get(canonicalSessionKey(params.admission_id, params.profile))
-
-      if (!lost || lost.session_id !== params.session_id || lost.profile !== canonicalProfile(params.profile)) { throw new Error('Admission is not an unknown lost turn; reopen the session before acknowledging') }
-
-      return { session_id: params.session_id, admission_id: params.admission_id, execution_generation: lost.generation }
+      return this.prepareUnknownAdmission(params)
     }
 
     if (method === 'approval.respond' || method === 'clarify.respond') { return this.preparePromptResponse(method, params) }
 
+    if (method === 'prompt.submit' && !params.continuation_of && typeof params.session_id === 'string') {
+      clearTaskPause(this.taskPauseKey(params.session_id, params.profile))
+    }
+
     return canonicalProducerFrame(method, params)
+  }
+
+  private prepareUnknownAdmission(params: Record<string, unknown>): Record<string, unknown> {
+    const lost = this.unknownAdmissions.get(canonicalSessionKey(params.admission_id, params.profile))
+
+    if (!lost || lost.session_id !== params.session_id || lost.profile !== canonicalProfile(params.profile)) { throw new Error('Admission is not an unknown lost turn; reopen the session before acknowledging') }
+
+    return { session_id: params.session_id, admission_id: params.admission_id, execution_generation: lost.generation }
+  }
+
+  private prepareTurnControl(method: string, params: Record<string, unknown>): Record<string, unknown> {
+    const owner = canonicalSessionKey(params.session_id, params.profile)
+    const generation = params.execution_generation ?? this.generations.get(owner)
+
+    if (typeof generation !== 'number') { throw new Error('Session execution identity unavailable; reconnect before controlling this turn') }
+
+    if (method === 'session.interrupt' && this.completedGenerations.get(owner) !== generation) {
+      beginTaskPause(this.taskPauseKey(String(params.session_id), params.profile), generation, this.revisions.get(owner))
+    }
+
+    return { ...params, session_id: params.session_id, execution_generation: generation }
   }
 
   // Metadata, branch and typed slash directives that travel as canonical `session.mutate`; null otherwise.
@@ -615,6 +643,9 @@ export class CanonicalDesktopProtocol {
 
     this.adoptEventRevision(event.type, sid, profile, payload)
 
+    if (event.type === 'message.complete' && typeof generation === 'number') { this.completedGenerations.set(owner, generation) }
+    observeTaskPause(this.taskPauseKey(sid, profile), event.type, generation, payload)
+
     // A pick deferred during a turn asked at the boundary (a guarded target): keep the owner's token, so
     // the user's confirmed resend of that target carries it exactly like an idle pick's confirmation.
     if (event.type === 'session.updated' && payload.operation === 'model' && payload.status === 'confirmation_required'
@@ -622,15 +653,21 @@ export class CanonicalDesktopProtocol {
       this.modelConfirmations.set(this.modelConfirmationKey({ session_id: sid, profile }, payload.payload as Record<string, unknown>), { token: payload.confirm, sent: false })
     }
 
-    if (typeof payload.prompt_id === 'string') {
-      if (event.type.endsWith('.settled')) { this.prompts.delete(canonicalSessionKey(payload.prompt_id, profile));
+    this.adoptPromptEvent(event.type, sid, profile, payload)
+  }
 
- return }
+  private adoptPromptEvent(type: string, sid: string, profile: string, payload: Record<string, unknown>) {
+    if (typeof payload.prompt_id !== 'string') { return }
 
-      if (event.type === 'approval.request' || event.type === 'clarify.request') {
-        payload.request_id = payload.prompt_id
-        this.prompts.set(canonicalSessionKey(payload.prompt_id, profile), { ...payload, session_id: sid, profile })
-      }
+    if (type.endsWith('.settled')) {
+      this.prompts.delete(canonicalSessionKey(payload.prompt_id, profile))
+
+      return
+    }
+
+    if (type === 'approval.request' || type === 'clarify.request') {
+      payload.request_id = payload.prompt_id
+      this.prompts.set(canonicalSessionKey(payload.prompt_id, profile), { ...payload, session_id: sid, profile })
     }
   }
 
@@ -644,6 +681,10 @@ export class CanonicalDesktopProtocol {
 
     if (method === 'session.create') {
       for (const [key, id] of this.creates) { if (id === params.request_id) { this.creates.delete(key) } }
+    }
+
+    if (method === 'session.interrupt' && typeof params.session_id === 'string') {
+      acknowledgeTaskPause(this.taskPauseKey(params.session_id, params.profile), value.execution_generation)
     }
 
     if (method === 'prompt.submit' || method === 'prompt.resolve_unknown') { return this.admissionReceipt(method, params, value) }

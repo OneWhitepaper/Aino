@@ -8,20 +8,17 @@ import { SessionStatusDot } from '@/app/chat/session-status-dot'
 import { PALETTE_AREA, type PaletteContribution, paletteToggle } from '@/app/command-palette/contrib'
 import { SidebarIdentityFooter } from '@/app/shell/sidebar-identity-footer'
 import { type StatusbarItem } from '@/app/shell/statusbar-controls'
-import { SummaryWorkspace } from '@/app/shell/summary-workspace'
 import { TITLEBAR_HEIGHT } from '@/app/shell/titlebar'
 import tabSessionsIcon from '@/assets/aino-home/tab-sessions.svg'
 import { AinoDesignIcon } from '@/components/aino-design-icon'
 import { InlinePreviewDirective } from '@/components/assistant-ui/inline-preview-directive'
 import { IdleMount } from '@/components/idle-mount'
 import { $layoutEditMode, toggleLayoutEditMode } from '@/components/pane-shell/edit-mode'
-import { allPaneIds, findGroupOfPane, movePane, setActivePane } from '@/components/pane-shell/tree/model'
+import { allPaneIds, findGroupOfPane } from '@/components/pane-shell/tree/model'
 import { LayoutTreeRoot } from '@/components/pane-shell/tree/renderer'
 import { WindowTitlebarContext } from '@/components/pane-shell/tree/renderer/header-placement'
 import {
-  $activePresetId,
   $layoutTree,
-  $userPlacedPanes,
   activateTreePane,
   bindPaneVisibility,
   declareDefaultTree,
@@ -30,12 +27,12 @@ import {
   isPaneVisible,
   markCollapsePane,
   paneRootSide,
-  persistTree,
   registerLayoutResetHandler,
   registerPaneCloser,
   registerPaneOpener,
   removeTreePane,
   resetLayoutTree,
+  restoreTreePane,
   revealTreePane,
   setStripTabHidden,
   targetZoneTabStripVisible,
@@ -43,6 +40,7 @@ import {
   toggleTargetZoneTabStrip
 } from '@/components/pane-shell/tree/store'
 import { $workspaceOwnerLabels, workspaceOwnerTitle } from '@/components/pane-shell/workspace-scope'
+import { Codicon } from '@/components/ui/codicon'
 import { SidebarProvider } from '@/components/ui/sidebar'
 import { discoverBundledPlugins } from '@/contrib/plugins'
 import { Slot } from '@/contrib/react/slot'
@@ -53,18 +51,14 @@ import { LocalizedTabTitle, translateNow } from '@/i18n'
 import { newSessionTitle, sessionTitle as storedSessionTitle } from '@/lib/chat-runtime'
 import { Download, FileText, LayoutDashboard, PanelTop, SlidersHorizontal, Upload, Users, Zap } from '@/lib/icons'
 import { type KeybindContribution, KEYBINDS_AREA } from '@/lib/keybinds/actions'
-import { readKey, writeKey } from '@/lib/storage'
 import { TRANSCRIPT_DIRECTIVE_AREA, type TranscriptDirectiveContribution } from '@/lib/transcript-directives'
 import { setYoloEnabled } from '@/lib/yolo-session'
 import { $connectionsRegistry } from '@/store/connection-registry-state'
 import { watchDeadSessionPrune } from '@/store/dead-session-prune'
-import { $interfaceMode, setModeContext, toggleSimpleMode } from '@/store/interface-mode'
+import { $interfaceMode, modeLayout, setModeContext, toggleSimpleMode } from '@/store/interface-mode'
 import {
   $fileBrowserOpen,
   $sidebarOpen,
-  FILE_BROWSER_DEFAULT_WIDTH,
-  FILE_BROWSER_MAX_WIDTH,
-  FILE_BROWSER_MIN_WIDTH,
   fileBrowserSide,
   setFileBrowserOpen,
   setSidebarOpen,
@@ -94,6 +88,7 @@ import { isAuxiliaryWindow, isBrowserWindow, isHudWindow } from '@/store/windows
 
 import { BrowserPopoutShell } from '../chat/browser-popout-shell'
 import type { SessionDragPayload } from '../chat/composer/inline-refs'
+import { PreviewCloseConfirm } from '../chat/preview-close-confirm'
 import { watchPreviewTiles } from '../chat/preview-tile'
 import { watchRouteTiles } from '../chat/route-tile'
 import { startSessionDrag } from '../chat/session-drag'
@@ -110,6 +105,7 @@ import { AppContextMenu } from '../context-menu/app-context-menu'
 import { HudShell } from '../hud/hud-shell'
 import { $terminalTakeover, setTerminalTakeover } from '../right-sidebar/store'
 import { terminalPaletteToggle } from '../right-sidebar/terminal/reveal-focus'
+import { closeUnifiedFilesTab, migrateToolPanelLayout } from '../right-sidebar/tool-panel-actions'
 import { $workspaceIsPage, appViewForPath, WORKSPACE_PAGE_HEADER_AREA } from '../routes'
 import { Butterbar } from '../shell/butterbar'
 import { TermsButterbar } from '../shell/terms-butterbar'
@@ -211,6 +207,7 @@ registry.registerMany([
       tabLead: () => <AinoDesignIcon className="size-3.5" src={tabSessionsIcon} />,
       tabTitle: () => <LocalizedTabTitle select={t => t.sidebar.sessions} />,
       tabTitleText: () => translateNow('sidebar.sessions'),
+      sidebarDescription: () => translateNow('zones.sidebarSessionsDescription'),
       width: `${SIDEBAR_DEFAULT_WIDTH}px`,
       minWidth: `${SIDEBAR_MIN_WIDTH}px`,
       maxWidth: `${SIDEBAR_MAX_WIDTH}px`
@@ -247,12 +244,14 @@ registry.registerMany([
     // header (the sash floors it at COLLAPSED_ZONE_PX and folds the zone to
     // its rail there). A real floor left a sliver of unusable terminal.
     data: {
-      placement: 'bottom',
-      dock: { pane: 'workspace', pos: 'bottom' },
+      placement: 'right',
+      toolPanel: true,
+      dock: { pane: 'files', pos: 'center' },
       height: '20vh',
       maxHeight: '80vh',
       lifecycleKeepAlive: true,
       selfManagedTabs: true,
+      tabLead: () => <Codicon name="terminal" size="0.875rem" />,
       tabTitle: () => <LocalizedTabTitle select={t => t.sidebar.terminal} />,
       tabTitleText: () => translateNow('sidebar.terminal')
     },
@@ -265,12 +264,14 @@ registry.registerMany([
     // dock: re-adoption target after a stale dismissal (see sessions).
     data: {
       placement: 'right',
+      toolPanel: true,
       collapsible: true,
       dock: { pane: 'workspace', pos: 'right' },
       revealAliases: ['file-browser'],
-      width: FILE_BROWSER_DEFAULT_WIDTH,
-      minWidth: FILE_BROWSER_MIN_WIDTH,
-      maxWidth: FILE_BROWSER_MAX_WIDTH,
+      width: 'clamp(22rem, 38vw, 42rem)',
+      minWidth: '20rem',
+      maxWidth: '72vw',
+      tabLead: () => <Codicon name="folder-opened" size="0.875rem" />,
       tabTitle: () => <LocalizedTabTitle select={t => t.sidebar.files} />,
       tabTitleText: () => translateNow('sidebar.files')
     },
@@ -284,11 +285,13 @@ registry.registerMany([
     // like the other chrome toggles; its zone collapses while hidden.
     data: {
       placement: 'right',
+      toolPanel: true,
       collapsible: true,
       revealAliases: [REVIEW_PANE_ID],
-      width: FILE_BROWSER_DEFAULT_WIDTH,
-      minWidth: FILE_BROWSER_MIN_WIDTH,
-      maxWidth: FILE_BROWSER_MAX_WIDTH,
+      width: 'clamp(22rem, 38vw, 42rem)',
+      minWidth: '20rem',
+      maxWidth: '72vw',
+      tabLead: () => <Codicon name="git-pull-request" size="0.875rem" />,
       tabTitle: () => <LocalizedTabTitle select={t => t.sidebar.review} />,
       tabTitleText: () => translateNow('sidebar.review')
     },
@@ -446,34 +449,14 @@ if ($layoutTree.get() && allPaneIds($layoutTree.get()!).includes('summary')) {
   removeTreePane('summary')
 }
 
-// Migrate the old default and the legacy navigation tab once. Future custom
-// placements remain user-owned; no other pane or size preference is reset.
-const TERMINAL_WORKSPACE_MIGRATION = 'aino.desktop.terminalWorkspace.v1'
-
-if (!isAuxiliaryWindow() && !readKey(TERMINAL_WORKSPACE_MIGRATION)) {
-  const tree = $layoutTree.get()
-  const workspace = tree && findGroupOfPane(tree, 'workspace')
-  const terminal = tree && findGroupOfPane(tree, 'terminal')
-  const legacyNavigationTab = terminal?.panes.includes('sessions') || terminal?.panes.includes('hermes-bots:pane')
-  const oldDefault = $activePresetId.get() === 'default' && !$userPlacedPanes.get().has('terminal')
-
-  if (tree && workspace && (legacyNavigationTab || oldDefault)) {
-    let next = movePane(tree, 'terminal', { groupId: workspace.id, pos: 'bottom' })
-
-    // Removing the active terminal must not activate the adjacent Agent Hub
-    // tab and change the user's workspace as a side effect of migration.
-    if (terminal?.active === 'terminal' && terminal.panes.includes('sessions')) {
-      next = setActivePane(next, terminal.id, 'sessions')
-    }
-
-    if (next !== tree) {
-      $layoutTree.set(next)
-      persistTree()
-    }
-  }
-
-  writeKey(TERMINAL_WORKSPACE_MIGRATION, '1')
+// Logs is summon-only. Remove its stale saved slot before classifying tool
+// groups, otherwise an unregistered Logs tenant would strand Terminal.
+if ($layoutTree.get() && allPaneIds($layoutTree.get()!).includes('logs')) {
+  removeTreePane('logs')
 }
+
+migrateToolPanelLayout()
+modeLayout.onRestore(() => queueMicrotask(migrateToolPanelLayout))
 
 // Bundled plugins load AFTER core, so a same-id contribution from a plugin
 // deliberately overrides the core default (last writer wins). Third-party
@@ -677,13 +660,10 @@ const syncLogsPane = (open: boolean) => {
       id: 'logs',
       area: 'panes',
       title: translateNow('sidebar.logs'),
-      // Same tool-panel sizing rule as the terminal above — no minHeight, so
-      // the sash floors it at COLLAPSED_ZONE_PX and folds the zone to its rail
-      // rather than leaving a sliver. dock: its OWN zone beside the terminal —
-      // never a tab in the terminal's strip.
       data: {
-        placement: 'bottom',
-        dock: { pane: 'terminal', pos: 'right' },
+        placement: 'right',
+        toolPanel: true,
+        dock: { pane: 'terminal', pos: 'center' },
         height: '20vh',
         maxHeight: '80vh',
         tabTitle: () => <LocalizedTabTitle select={t => t.sidebar.logs} />,
@@ -693,7 +673,7 @@ const syncLogsPane = (open: boolean) => {
     })
     // Summoning logs is explicit intent — front it (un-dismisses if a ✕ close
     // left a dismissal record behind).
-    revealTreePane('logs')
+    restoreTreePane('logs')
   } else {
     unregisterLogsPane?.()
     unregisterLogsPane = null
@@ -820,9 +800,13 @@ registerPaneOpener('sessions', () => {
     setSidebarOpen(true)
   }
 })
-registerPaneCloser('files', () =>
+registerPaneCloser('files', () => {
+  if (closeUnifiedFilesTab()) {
+    return
+  }
+
   paneRootSide('files') === fileBrowserSide() ? setFileBrowserOpen(false) : dismissTreePane('files')
-)
+})
 
 // ---------------------------------------------------------------------------
 
@@ -940,9 +924,7 @@ export function ContribController() {
             inert={settingsPage}
           >
             <WindowTitlebarContext.Provider value={view === 'chat' && !isAuxiliaryWindow()}>
-              <SummaryWorkspace>
-                <LayoutTreeRoot />
-              </SummaryWorkspace>
+              <LayoutTreeRoot />
             </WindowTitlebarContext.Provider>
           </div>
 
@@ -954,6 +936,7 @@ export function ContribController() {
 
           {/* "Close running tab?" — the busy/input-blocked tile close gate. */}
           {!settingsPage && <SessionTileCloseConfirm />}
+          {!settingsPage && <PreviewCloseConfirm />}
           <Butterbar />
           <TermsButterbar />
         </div>

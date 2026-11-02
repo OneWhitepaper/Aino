@@ -6,6 +6,7 @@ import { getGlobalModelOptions } from '@/hermes'
 import {
   catalogProviderMatches,
   customDefaultSupersedesPick,
+  findCatalogProvider,
   moaPickRemoved,
   modelOptionsQueryKey,
   requestModelOptions
@@ -229,6 +230,38 @@ describe('catalogProviderMatches', () => {
     expect(catalogProviderMatches(cloudflare, 'custom:cloudflare')).toBe(true)
     expect(catalogProviderMatches(cloudflare, 'openrouter')).toBe(false)
   })
+
+  it('keeps namespaced custom display names from shadowing official route identities', () => {
+    const custom = {
+      aliases: ['custom:deepseek'],
+      models: ['custom-model'],
+      name: 'deepseek',
+      slug: 'custom:deepseek'
+    }
+
+    const official = { models: ['official-model'], name: 'DeepSeek', slug: 'deepseek' }
+
+    expect(catalogProviderMatches(custom, 'deepseek')).toBe(false)
+    expect(catalogProviderMatches(custom, 'custom:deepseek')).toBe(true)
+    expect(catalogProviderMatches(official, 'deepseek')).toBe(true)
+    expect(catalogProviderMatches(official, 'custom:deepseek')).toBe(false)
+
+    for (const providers of [
+      [custom, official],
+      [official, custom]
+    ]) {
+      expect(findCatalogProvider(providers, 'deepseek')).toBe(official)
+      expect(findCatalogProvider(providers, 'custom:deepseek')).toBe(custom)
+    }
+  })
+
+  it('resolves an explicit route before another provider display name', () => {
+    const displayMatch = { models: ['display-model'], name: 'deepseek', slug: 'different-provider' }
+    const routeMatch = { models: ['official-model'], name: 'DeepSeek', slug: 'deepseek' }
+
+    expect(findCatalogProvider([displayMatch, routeMatch], 'deepseek')).toBe(routeMatch)
+    expect(findCatalogProvider([displayMatch, routeMatch], 'DeepSeek')).toBe(routeMatch)
+  })
 })
 
 describe('moaPickRemoved', () => {
@@ -267,11 +300,29 @@ describe('moaPickRemoved', () => {
 })
 
 describe('customDefaultSupersedesPick', () => {
+  const legacyProviders = [
+    { aliases: ['nvidia', 'custom:nvidia'], models: ['fixture-model'], name: 'NVIDIA', slug: 'nvidia' }
+  ]
+
   it('flags a bare pick the default has migrated to its custom-provider form (#81922)', () => {
     // The wire payload for `nvidia` builds the NATIVE provider and drops the
     // custom entry's extra_body; `custom:nvidia` is the same endpoint.
-    expect(customDefaultSupersedesPick('nvidia', 'custom:nvidia')).toBe(true)
-    expect(customDefaultSupersedesPick('  NVIDIA ', 'Custom:NVIDIA')).toBe(true)
+    expect(customDefaultSupersedesPick('nvidia', 'custom:nvidia', legacyProviders)).toBe(true)
+    expect(customDefaultSupersedesPick('  NVIDIA ', 'Custom:NVIDIA', legacyProviders)).toBe(true)
+  })
+
+  it('keeps an official provider distinct from a custom connection with the same key and name', () => {
+    const providers = [
+      { aliases: ['custom:deepseek'], models: ['custom-model'], name: 'deepseek', slug: 'custom:deepseek' },
+      { models: ['official-model'], name: 'DeepSeek', slug: 'deepseek' }
+    ]
+
+    expect(customDefaultSupersedesPick('deepseek', 'custom:deepseek', providers)).toBe(false)
+  })
+
+  it('requires catalog proof before treating a bare pick as a stale custom alias', () => {
+    expect(customDefaultSupersedesPick('nvidia', 'custom:nvidia')).toBe(false)
+    expect(customDefaultSupersedesPick('nvidia', 'custom:nvidia', [])).toBe(false)
   })
 
   it('keeps a pick that already names the custom entry, or a different provider', () => {

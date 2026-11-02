@@ -148,6 +148,18 @@ class OpenAIImageGenProvider(StaticImageGenProvider):
         # images.edit() accepts up to 16 source images.
         return {"modalities": ["text", "image"], "max_reference_images": 16}
 
+    def _endpoint(self):
+        return _resolve_endpoint()
+
+    def _model(self):
+        return _resolve_model()
+
+    def _client(self, openai, base_url, api_key):
+        return _build_client(openai, base_url, api_key)
+
+    def _api_failure(self, exc, verb):
+        return f"{self.label} image {verb} failed: {exc}"
+
     def generate(
         self, prompt: str, aspect_ratio: str = DEFAULT_ASPECT_RATIO, *,
         image_url: Optional[str] = None, reference_image_urls: Optional[list[str]] = None,
@@ -157,7 +169,7 @@ class OpenAIImageGenProvider(StaticImageGenProvider):
         aspect = resolve_aspect_ratio(aspect_ratio)
         if not prompt:
             return prompt_required_error("openai", aspect)
-        base_url, api_key = _resolve_endpoint()
+        base_url, api_key = self._endpoint()
         if not api_key:
             return error_factory("openai", aspect)(
                 "OPENAI_API_KEY not set (or the variable named by image_gen.openai.key_env is empty). "
@@ -165,15 +177,15 @@ class OpenAIImageGenProvider(StaticImageGenProvider):
                 "to add the key.",
                 "auth_required")
 
-        openai, err = import_openai("openai", aspect)
+        openai, err = import_openai(self.provider_id, aspect)
         if err:
             return err
-        tier_id, meta = _resolve_model()
+        tier_id, meta = self._model()
         size = size_for(aspect)
         sources = collect_source_images(image_url, reference_image_urls, limit=16)
         is_edit = bool(sources)
-        fail = error_factory("openai", aspect, model=tier_id, prompt=prompt)
-        client = _build_client(openai, base_url, api_key)
+        fail = error_factory(self.provider_id, aspect, model=tier_id, prompt=prompt)
+        client = self._client(openai, base_url, api_key)
 
         # gpt-image-2 returns b64_json unconditionally and REJECTS
         # ``response_format`` as an unknown parameter. Don't send it.
@@ -191,19 +203,21 @@ class OpenAIImageGenProvider(StaticImageGenProvider):
         try:
             response = call(**request)
         except Exception as exc:
-            logger.debug("OpenAI image %s failed", verb, exc_info=True)
-            return fail(f"OpenAI image {'editing' if is_edit else 'generation'} failed: {exc}", "api_error")
+            logger.debug("%s image %s failed", self.label, verb, exc_info=self.provider_id != "aino")
+            return fail(self._api_failure(exc, 'editing' if is_edit else 'generation'), "api_error")
+        finally:
+            client.close()
 
         # gpt-image bills per text/image token; the tier id is a Hermes label, the API model prices.
         # Recorded before extraction/save: the tokens are billed whether or not an image came back.
-        record_token_usage(getattr(response, "usage", None), model=meta["api_model"], provider="openai")
+        record_token_usage(getattr(response, "usage", None), model=meta["api_model"], provider=self.provider_id)
         data = getattr(response, "data", None) or []
         if not data:
-            return fail("OpenAI returned no image data", "empty_response")
+            return fail(f"{self.label} returned no image data", "empty_response")
         first = data[0]
         image_ref, err = materialize_image(
             getattr(first, "b64_json", None), getattr(first, "url", None),
-            prefix=f"openai_{tier_id}", label="OpenAI", provider="openai",
+            prefix=f"{self.provider_id}_{tier_id}", label=self.label, provider=self.provider_id,
             model=tier_id, prompt=prompt, aspect=aspect, log=logger)
         if err:
             return err
@@ -211,7 +225,7 @@ class OpenAIImageGenProvider(StaticImageGenProvider):
         if getattr(first, "revised_prompt", None):
             extra["revised_prompt"] = first.revised_prompt
         return success_response(
-            image=image_ref, model=tier_id, prompt=prompt, aspect_ratio=aspect, provider="openai",
+            image=image_ref, model=tier_id, prompt=prompt, aspect_ratio=aspect, provider=self.provider_id,
             modality="image" if is_edit else "text", extra=extra)
 
 

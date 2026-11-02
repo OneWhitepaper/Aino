@@ -1378,6 +1378,11 @@ providers:
 
 Each entry accepts: `api` (the endpoint base URL — `base_url`/`url` are accepted aliases), `name` (optional display name; defaults to the dict key), `key_env` or inline `api_key` or `key_cmd` (see below), `transport` (`chat_completions` / `anthropic_messages` / `codex_responses`), `default_model`, `models`, `context_length`, `discover_models`, `extra_body`, `extra_headers`, `session_affinity_header` (name of a header that carries the conversation id, for session-aware proxies; off unless set), `ssl_ca_cert` / `ssl_verify`, `catalog_provider` (see below), and `enabled: false` to hide an entry without deleting it.
 
+When a saved endpoint uses a built-in provider's exact id, select it with the explicit
+`custom:` namespace: `custom:deepseek` selects `providers.deepseek`, while `deepseek` selects
+the official DeepSeek API and its own credential. The model picker lists both independently.
+A provider block without an endpoint remains metadata for the built-in provider.
+
 #### Command-minted credentials (`key_cmd`)
 
 Vision, thinking, and native local-model capability probes materialize the same

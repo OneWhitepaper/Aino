@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { platformAccountActions } from '@/api/platform'
@@ -77,6 +77,117 @@ afterEach(() => {
   vi.clearAllMocks()
 })
 
+it('searches built-in and custom models together while previewing without a switch', async () => {
+  Object.defineProperty(window, 'hermesDesktop', {
+    configurable: true,
+    value: {
+      platformAccount: {
+        status: async () => platformSnapshot(),
+        capabilities: async () => ({}),
+        onChanged: () => () => undefined
+      },
+      platformModels: { list: async () => [platformModel()] }
+    }
+  })
+  await platformAccountActions(window.hermesDesktop.platformAccount).refresh()
+  recordGatewayReadyCapability({ profile: 'default' }, { type: 'gateway.ready', payload: { managed_model_binding: 1 } })
+  const select = vi.fn()
+  renderPanel(select)
+
+  await screen.findByText('Fixture Model', { selector: '.aino-model-menu-name' })
+  const custom = await screen.findByText(/Gemini 3\.1 Pro/i)
+  fireEvent.pointerMove(custom.closest('[role="menuitem"]')!, { pointerType: 'mouse' })
+  expect(select).not.toHaveBeenCalled()
+  expect(screen.getByRole('complementary', { name: /model details/i }).textContent).toMatch(/Gemini 3\.1 Pro/i)
+  const input = screen.getByRole('textbox', { name: 'Search models' })
+  expect(screen.getAllByRole('textbox')).toHaveLength(1)
+  fireEvent.keyDown(input, { key: 'ArrowDown' })
+  fireEvent.pointerMove(custom.closest('[role="menuitem"]')!, { pointerType: 'mouse' })
+  expect(screen.getByRole('complementary', { name: /model details/i }).textContent).toMatch(/Gemini 3\.1 Pro/i)
+  fireEvent.change(input, { target: { value: 'fixture' } })
+  expect(screen.queryByText(/Gemini 3\.1 Pro/i, { selector: '[data-model-menu-name]' })).toBeNull()
+  expect(screen.getByText('Fixture Model', { selector: '.aino-model-menu-name' })).toBeDefined()
+  fireEvent.keyDown(input, { key: 'Enter' })
+  await vi.waitFor(() =>
+    expect(select).toHaveBeenCalledWith({ model: 'catalog-a', provider: 'aino', sessionId: 'runtime-1' })
+  )
+})
+
+it('opens custom model details from the keyboard without selecting that model', async () => {
+  const select = vi.fn()
+  const { content } = renderPanel(select)
+  const row = (await content.findByText(/Gemini 3\.1 Pro/i)).closest('[role="menuitem"]')!
+  const inspect = within(row as HTMLElement).getByRole('button')
+  fireEvent.keyDown(inspect, { key: 'Enter' })
+  expect(select).not.toHaveBeenCalled()
+  fireEvent.click(inspect)
+  expect(screen.getByRole('complementary', { name: 'Model details' }).textContent).toMatch(/Gemini 3\.1 Pro/i)
+  expect(select).not.toHaveBeenCalled()
+})
+
+it('hides unconfigured providers and their remembered custom models from search', async () => {
+  getGlobalModelOptions.mockResolvedValue({
+    providers: [
+      { ...GOOGLE_PROVIDER, authenticated: false },
+      { ...DEEPSEEK_PROVIDER, authenticated: true },
+      { models: ['local-test'], name: 'Local endpoint', slug: 'custom:local', is_user_defined: true }
+    ]
+  })
+  $customModels.set([{ provider: 'google', model: 'remembered-custom-model' }])
+  const { content } = renderPanel()
+
+  await content.findByText('DeepSeek Chat')
+  expect(content.queryByText('Google', { exact: true })).toBeNull()
+  expect(content.queryByText(/Gemini 3\.1 Pro/i)).toBeNull()
+  expect(content.getByText(/local.?test/i)).toBeDefined()
+  const input = screen.getByRole('textbox', { name: 'Search models' })
+  fireEvent.change(input, { target: { value: 'remembered-custom-model' } })
+  expect(content.queryByText('Google', { exact: true })).toBeNull()
+  expect(content.queryByRole('menuitem', { name: /remembered-custom-model.*Google/ })).toBeNull()
+  expect(content.getByRole('menuitem', { name: 'Configure custom models' })).toBeDefined()
+})
+
+it('lists Aino models once when the managed catalog also has a provider row', async () => {
+  Object.defineProperty(window, 'hermesDesktop', {
+    configurable: true,
+    value: {
+      platformAccount: {
+        status: async () => platformSnapshot(),
+        capabilities: async () => ({}),
+        onChanged: () => () => undefined
+      },
+      platformModels: { list: async () => [platformModel()] }
+    }
+  })
+  await platformAccountActions(window.hermesDesktop.platformAccount).refresh()
+  getGlobalModelOptions.mockResolvedValue({
+    providers: [{ models: ['catalog-a'], name: 'Aino', slug: 'aino' }, DEEPSEEK_PROVIDER]
+  })
+  recordGatewayReadyCapability({ profile: 'default' }, { type: 'gateway.ready', payload: { managed_model_binding: 1 } })
+  const { content } = renderPanel()
+
+  await content.findByText('Fixture Model', { selector: '.aino-model-menu-name' })
+  await content.findByText('DeepSeek Chat')
+  expect(content.queryByText('Aino', { selector: '.group\\/label span', exact: true })).toBeNull()
+  expect(content.queryByText('Catalog A', { selector: '[data-model-menu-name]' })).toBeNull()
+})
+
+it('keeps the current provider recovery row when its saved credential is unavailable', async () => {
+  $currentProvider.set('google')
+  $currentModel.set('gemini-3.1-pro')
+  getGlobalModelOptions.mockResolvedValue({
+    providers: [
+      { ...GOOGLE_PROVIDER, models: [], authenticated: false, source: 'configured-current' },
+      DEEPSEEK_PROVIDER
+    ]
+  })
+  const { content } = renderPanel()
+
+  const currentRow = (await content.findByText(/Gemini 3\.1 Pro/i)).closest('[role="menuitem"]')
+  expect(currentRow?.querySelector('.codicon-check')).not.toBeNull()
+  expect(content.queryByText('Google', { exact: true })).toBeNull()
+})
+
 it('uses exact ready evidence for Aino without disabling the dropdown custom catalog', async () => {
   Object.defineProperty(window, 'hermesDesktop', {
     configurable: true,
@@ -95,7 +206,6 @@ it('uses exact ready evidence for Aino without disabling the dropdown custom cat
   renderPanel(select)
 
   expect(screen.getByRole('status').textContent).toContain('does not support Aino models')
-  fireEvent.click(screen.getByRole('button', { name: 'Custom models' }))
   fireEvent.click(await screen.findByText(/Gemini 3\.1 Pro/i))
   expect(select).toHaveBeenCalledWith({ model: 'gemini-3.1-pro', provider: 'google', sessionId: 'runtime-1' })
 })
@@ -122,7 +232,7 @@ it('leaves non-reasoning cleanup to the shared managed selection path', async ()
   const { content, requestGateway } = renderPanel(select)
 
   await act(async () => {
-    fireEvent.click(await content.findByRole('option', { name: /Fixture Model/ }))
+    fireEvent.click(await content.findByRole('menuitem', { name: /Fixture Model/ }))
   })
 
   expect($currentReasoningEffort.get()).toBe('high')
@@ -130,6 +240,7 @@ it('leaves non-reasoning cleanup to the shared managed selection path', async ()
 })
 
 it('exposes the existing live reasoning controls for a verified reasoning-capable Aino model', async () => {
+  const origin = 'http://127.0.0.1:7001'
   const reasoningModel = { ...platformModel(), capabilities: { ...platformModel().capabilities, reasoning: true } }
   Object.defineProperty(window, 'hermesDesktop', {
     configurable: true,
@@ -139,17 +250,48 @@ it('exposes the existing live reasoning controls for a verified reasoning-capabl
         capabilities: async () => ({}),
         onChanged: () => () => undefined
       },
-      platformModels: { list: async () => [reasoningModel] }
+      platformModels: {
+        list: async () => [reasoningModel],
+        owner: async () => ({ user_id: 'user-a', platform_origin: origin })
+      }
     }
   })
   await platformAccountActions(window.hermesDesktop.platformAccount).refresh()
+  await platformModelCatalog().load()
   recordGatewayReadyCapability({ profile: 'default' }, { type: 'gateway.ready', payload: { managed_model_binding: 1 } })
   $currentProvider.set('aino')
   $currentModel.set('catalog-a')
   $currentPlatformOwner.set('user-a')
-  renderPanel()
+  $currentPlatformOrigin.set(origin)
+  const { requestGateway } = renderPanel()
 
-  expect(await screen.findByText('Reasoning')).toBeTruthy()
+  const options = await screen.findByRole('menuitem', { name: /Effort/ })
+  expect(options.getAttribute('aria-disabled')).not.toBe('true')
+  fireEvent.keyDown(options, { key: 'ArrowRight' })
+  fireEvent.click(await screen.findByRole('menuitemradio', { name: 'High' }))
+  await vi.waitFor(() => expect(requestGateway).toHaveBeenCalledWith('config.set', expect.anything()))
+})
+
+it('opens details on a narrow surface and returns to the model list with Escape', async () => {
+  const width = window.innerWidth
+  Object.defineProperty(window, 'innerWidth', { configurable: true, value: 600 })
+
+  try {
+    const select = vi.fn()
+    const { content } = renderPanel(select)
+    const row = (await content.findByText(/Gemini 3\.1 Pro/i)).closest('[role="menuitem"]')!
+    fireEvent.click(within(row as HTMLElement).getByRole('button'))
+    const detail = screen.getByRole('complementary', { name: 'Model details' })
+    expect(detail.parentElement?.getAttribute('data-detail-open')).toBe('true')
+    expect(select).not.toHaveBeenCalled()
+    fireEvent.keyDown(detail, { key: 'Escape' })
+    expect(detail.parentElement?.hasAttribute('data-detail-open')).toBe(false)
+    const input = screen.getByRole('textbox', { name: 'Search models' })
+    expect(input).toBe(input.ownerDocument.activeElement)
+    expect(select).not.toHaveBeenCalled()
+  } finally {
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: width })
+  }
 })
 
 it.each([false, true])('uses verified Aino capability for the direct reasoning menu: %s', async reasoning => {
@@ -181,6 +323,46 @@ it.each([false, true])('uses verified Aino capability for the direct reasoning m
   expect(screen.queryAllByRole('menuitemradio').length > 0).toBe(reasoning)
 })
 
+it.each(['different-user', 'different-origin'])(
+  'keeps Aino detail options disabled for a session from %s',
+  async mismatch => {
+    const origin = 'http://127.0.0.1:7001'
+    Object.defineProperty(window, 'hermesDesktop', {
+      configurable: true,
+      value: {
+        platformAccount: {
+          status: async () => platformSnapshot(),
+          capabilities: async () => ({}),
+          onChanged: () => () => undefined
+        },
+        platformModels: {
+          list: async () => [
+            { ...platformModel(), capabilities: { ...platformModel().capabilities, reasoning: true } }
+          ],
+          owner: async () => ({ user_id: 'user-a', platform_origin: origin })
+        }
+      }
+    })
+    await platformAccountActions(window.hermesDesktop.platformAccount).refresh()
+    await platformModelCatalog().load()
+    recordGatewayReadyCapability(
+      { profile: 'default' },
+      { type: 'gateway.ready', payload: { managed_model_binding: 1 } }
+    )
+    $currentProvider.set('aino')
+    $currentModel.set('catalog-a')
+    $currentPlatformOwner.set(mismatch === 'different-user' ? 'old-user' : 'user-a')
+    $currentPlatformOrigin.set(mismatch === 'different-origin' ? 'https://old.example' : origin)
+    const { requestGateway } = renderPanel()
+
+    const options = await screen.findByRole('menuitem', { name: /Effort/ })
+    expect(options.getAttribute('aria-disabled')).toBe('true')
+    fireEvent.keyDown(options, { key: 'ArrowRight' })
+    expect(screen.queryByRole('menuitemradio', { name: 'High' })).toBeNull()
+    expect(requestGateway).not.toHaveBeenCalledWith('config.set', expect.anything())
+  }
+)
+
 function renderPanel(onSelectModel = vi.fn(), onClose = vi.fn(), Panel = ModelMenuPanel) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
 
@@ -201,14 +383,20 @@ function renderPanel(onSelectModel = vi.fn(), onClose = vi.fn(), Panel = ModelMe
       <DropdownMenu open>
         <DropdownMenuContent>
           <ModelMenuCloseContext.Provider value={onClose}>
-            <Panel onFollowDefaultModel={onClose} onSelectModel={onSelectModel} requestGateway={requestGateway as never} />
+            <Panel
+              onFollowDefaultModel={onClose}
+              onSelectModel={onSelectModel}
+              requestGateway={requestGateway as never}
+            />
           </ModelMenuCloseContext.Provider>
         </DropdownMenuContent>
       </DropdownMenu>
     </QueryClientProvider>
   )
 
-  return { onSelectModel, content, requestGateway }
+  const list = content.baseElement.querySelector('.aino-model-menu-list')
+
+  return { onSelectModel, content: list ? { ...content, ...within(list as HTMLElement) } : content, requestGateway }
 }
 
 it('awaits custom dropdown picks, rejects duplicates and keeps a failed pick open', async () => {
@@ -346,7 +534,7 @@ describe('ModelMenuPanel search', () => {
   it('Enter in the search field commits the first match', async () => {
     const { content, onSelectModel } = renderPanel()
 
-    await content.findByText('DeepSeek')
+    await content.findByText('DeepSeek Chat')
 
     const input = screen.getByRole('textbox', { name: 'Search models' })
     fireEvent.change(input, { target: { value: 'gemini' } })
@@ -370,7 +558,7 @@ describe('ModelMenuPanel search', () => {
   it('Enter on an id nothing lists selects it as a custom model', async () => {
     const { content, onSelectModel } = renderPanel()
 
-    await content.findByText('DeepSeek')
+    await content.findByText('DeepSeek Chat')
 
     const input = screen.getByRole('textbox', { name: 'Search models' })
     fireEvent.change(input, { target: { value: 'zzz-no-such-model' } })
@@ -395,7 +583,7 @@ describe('ModelMenuPanel search', () => {
   it('a query that still matches catalog rows offers no custom model', async () => {
     const { content } = renderPanel()
 
-    await content.findByText('DeepSeek')
+    await content.findByText('DeepSeek Chat')
 
     const input = screen.getByRole('textbox', { name: 'Search models' })
     fireEvent.change(input, { target: { value: 'gemini' } })
@@ -409,7 +597,7 @@ describe('ModelMenuPanel search', () => {
   it('arrows move the selection without leaving the input; Enter commits the stepped row', async () => {
     const { content, onSelectModel } = renderPanel()
 
-    await content.findByText('DeepSeek')
+    await content.findByText('DeepSeek Chat')
 
     const input = screen.getByRole('textbox', { name: 'Search models' })
     fireEvent.change(input, { target: { value: 'gemini' } })
@@ -434,7 +622,7 @@ describe('ModelMenuPanel search', () => {
   it('keeps model rows hit-testable before any pointer movement (#123040)', async () => {
     const { content, onSelectModel } = renderPanel()
 
-    await content.findByText('DeepSeek')
+    await content.findByText('DeepSeek Chat')
 
     const row = rowWithText(content, /Gemini 3\.1 Pro/i)!.closest('[role="menuitem"]')!
 
@@ -456,7 +644,7 @@ describe('ModelMenuPanel search', () => {
   it('hovering a model row leaves focus in the search field and arrows still drive the list (#53980)', async () => {
     const { content, onSelectModel } = renderPanel()
 
-    await content.findByText('DeepSeek')
+    await content.findByText('DeepSeek Chat')
 
     const input = screen.getByRole('textbox', { name: 'Search models' })
     input.focus()
@@ -489,7 +677,7 @@ describe('ModelMenuPanel search', () => {
     $currentModel.set('gemini-3.1-pro')
     const { content, onSelectModel } = renderPanel()
 
-    await content.findByText('DeepSeek')
+    await content.findByText('DeepSeek Chat')
 
     const input = screen.getByRole('textbox', { name: 'Search models' })
     fireEvent.keyDown(input, { key: 'Enter' })
@@ -519,73 +707,59 @@ describe('ModelMenuPanel search', () => {
   })
 })
 
-describe('ModelMenuPanel provider collapse', () => {
-  it('expands provider models when header is clicked again', async () => {
+describe('ModelMenuPanel configured model rows', () => {
+  it('shows concrete models without collapsible provider headers', async () => {
     const { content } = renderPanel()
 
-    const header = await content.findByText('DeepSeek')
-    // Collapse
-    fireEvent.click(header)
-    expect(content.queryByText('DeepSeek V4 Pro')).toBeNull()
-    // Expand
-    fireEvent.click(header)
-    await vi.waitFor(() => {
-      expect(content.queryByText('DeepSeek V4 Pro')).not.toBeNull()
-    })
+    await content.findByText('DeepSeek Chat')
+    expect(content.getByText('DeepSeek V4 Pro')).toBeDefined()
+    expect(content.queryByText('DeepSeek', { exact: true })).toBeNull()
+    expect(content.queryByText('Google', { exact: true })).toBeNull()
   })
 
-  it('collapses the active provider too (no forced auto-expand)', async () => {
+  it('keeps the active model visible despite saved provider collapse preferences', async () => {
     $currentProvider.set('deepseek')
     $currentModel.set('deepseek-v4-pro')
-    const { content } = renderPanel()
+    $collapsedProviders.set(['deepseek'])
+    const { content, onSelectModel } = renderPanel()
 
-    const header = await content.findByText('DeepSeek')
-    fireEvent.click(header)
-
-    // The current provider is collapsible like any other — clicking its header
-    // hides its models rather than forcing them to stay open.
-    await vi.waitFor(() => {
-      expect(content.queryByText('DeepSeek V4 Pro')).toBeNull()
-    })
+    const row = (await content.findByText('DeepSeek V4 Pro')).closest('[role="menuitem"]')!
+    expect(row.querySelector('.codicon-check')).not.toBeNull()
+    expect(content.getByText('DeepSeek Chat')).toBeDefined()
+    expect($collapsedProviders.get()).toEqual(['deepseek'])
+    fireEvent.click(row)
+    expect(onSelectModel).not.toHaveBeenCalled()
   })
 
-  it('bypasses collapse when search is active', async () => {
+  it('filters the visible model rows without restoring provider headers', async () => {
+    $collapsedProviders.set(['deepseek'])
     const { content } = renderPanel()
 
-    const header = await content.findByText('DeepSeek')
-    fireEvent.click(header)
-    expect(content.queryByText('DeepSeek V4 Pro')).toBeNull()
-
-    // Type in the search bar (auto-focused by DropdownMenuSearch)
+    await content.findByText('DeepSeek Chat')
     const input = screen.getByRole('textbox', { name: 'Search models' })
-    expect(input).not.toBeNull()
     fireEvent.change(input, { target: { value: 'deepseek' } })
 
-    // Should show models — search bypasses collapse. The matched letters render
-    // inside a <mark>, splitting the label across nodes, so match on the row
-    // span's composed textContent instead of a single text node. Badge chips
-    // (#51833) add a wrapper span whose composed textContent matches too, so
-    // require a leaf span.
-    await vi.waitFor(() => {
-      expect(
-        content.queryByText(
-          (_, element) =>
-            element?.tagName === 'SPAN' &&
-            !element.querySelector('span') &&
-            (element.textContent ?? '').startsWith('DeepSeek V4 Pro')
-        )
-      ).not.toBeNull()
-    })
+    await content.findByRole('menuitem', { name: /DeepSeek V4 Pro/i })
+    expect(content.queryByRole('menuitem', { name: /Gemini 3\.1 Pro/i })).toBeNull()
+    expect(content.queryByRole('menuitem', { name: /^DeepSeek$/ })).toBeNull()
   })
 
-  it('toggles collapse via keyboard Enter on header', async () => {
-    const { content } = renderPanel()
+  it('uses the visible rows for keyboard selection despite saved provider collapse preferences', async () => {
+    $collapsedProviders.set(['deepseek'])
+    const { content, onSelectModel } = renderPanel()
 
-    const header = await content.findByText('DeepSeek')
-    // Radix DropdownMenuItem fires onSelect on Enter from the onKeyDown handler
-    fireEvent.keyDown(header.closest('[role="menuitem"]') ?? header, { key: 'Enter' })
+    await content.findByText('DeepSeek Chat')
+    const input = screen.getByRole('textbox', { name: 'Search models' })
+    fireEvent.keyDown(input, { key: 'ArrowDown' })
+    fireEvent.keyDown(input, { key: 'Enter' })
 
-    expect(content.queryByText('DeepSeek V4 Pro')).toBeNull()
+    await vi.waitFor(() => {
+      expect(onSelectModel).toHaveBeenCalledWith({
+        model: 'deepseek-v4-pro',
+        provider: 'deepseek',
+        sessionId: 'runtime-1'
+      })
+    })
   })
 
   // The collapsed-providers set is a global presentation preference
@@ -604,7 +778,7 @@ describe('ModelMenuPanel provider collapse', () => {
     // Profile A: both providers present, render + unmount.
     getGlobalModelOptions.mockResolvedValueOnce({ providers: MOCK_PROVIDERS })
     const a = renderPanel()
-    await a.content.findByText('DeepSeek')
+    await a.content.findByText('DeepSeek Chat')
     a.content.unmount()
 
     // Profile B: google is not in the catalog (simulates a profile whose
@@ -612,7 +786,7 @@ describe('ModelMenuPanel provider collapse', () => {
     // must survive — pruning it would lose state across a profile switch.
     getGlobalModelOptions.mockResolvedValueOnce({ providers: [DEEPSEEK_PROVIDER, MOA_PROVIDER] })
     const b = renderPanel()
-    await b.content.findByText('DeepSeek')
+    await b.content.findByText('DeepSeek Chat')
 
     expect($collapsedProviders.get()).toEqual(['deepseek', 'google'])
   })
@@ -624,7 +798,7 @@ describe('ModelMenuPanel provider collapse', () => {
     // First load: both providers present.
     getGlobalModelOptions.mockResolvedValueOnce({ providers: MOCK_PROVIDERS })
     const a = renderPanel()
-    await a.content.findByText('DeepSeek')
+    await a.content.findByText('DeepSeek Chat')
     a.content.unmount()
 
     // Refresh Models returns a catalog that drops google (revoked key,
@@ -633,7 +807,7 @@ describe('ModelMenuPanel provider collapse', () => {
     // single refresh.
     getGlobalModelOptions.mockResolvedValueOnce({ providers: [DEEPSEEK_PROVIDER, MOA_PROVIDER] })
     const b = renderPanel()
-    await b.content.findByText('DeepSeek')
+    await b.content.findByText('DeepSeek Chat')
 
     expect($collapsedProviders.get()).toContain('google')
     expect($collapsedProviders.get()).toContain('deepseek')
@@ -660,7 +834,7 @@ describe('ModelMenuPanel provider collapse', () => {
 
     await content.findByText(/GLM 4.5 Air/i)
 
-    fireEvent.click(await content.findByText('Refresh models'))
+    fireEvent.click(await content.findByRole('menuitem', { name: 'Refresh models' }))
 
     await vi.waitFor(() => {
       expect(getGlobalModelOptions).toHaveBeenCalledTimes(2)
@@ -689,7 +863,7 @@ describe('ModelMenuPanel provider collapse', () => {
     const { content, onSelectModel } = renderPanel()
 
     await content.findAllByText(/GLM 4.5 Air/i)
-    fireEvent.click(await content.findByText('Refresh models'))
+    fireEvent.click(await content.findByRole('menuitem', { name: 'Refresh models' }))
 
     await vi.waitFor(() => {
       expect(getGlobalModelOptions).toHaveBeenCalledTimes(2)
@@ -719,14 +893,24 @@ describe('ModelMenuPanel provider collapse', () => {
 
     const checked = items.filter(item => item?.querySelector('.codicon-check'))
     expect(checked).toHaveLength(1)
-    expect(checked[0]?.closest('[role="group"]')?.textContent).toContain('智谱2')
-    expect(
-      items.find(item => !item?.querySelector('.codicon-check'))?.closest('[role="group"]')?.textContent
-    ).toContain('OpenRouter')
+    fireEvent.pointerMove(checked[0]!, { pointerType: 'mouse' })
+    expect(within(screen.getByRole('complementary')).getByText('智谱2')).toBeDefined()
+
+    const other = items.find(item => !item?.querySelector('.codicon-check'))!
+    fireEvent.pointerMove(other, { pointerType: 'mouse' })
+    expect(within(screen.getByRole('complementary')).getByText('OpenRouter')).toBeDefined()
 
     const input = screen.getByRole('textbox', { name: 'Search models' })
     fireEvent.keyDown(input, { key: 'Enter' })
     expect(onSelectModel).not.toHaveBeenCalled()
+    fireEvent.click(other)
+    await vi.waitFor(() =>
+      expect(onSelectModel).toHaveBeenCalledWith({
+        model: 'glm-4.5-air',
+        provider: 'openrouter',
+        sessionId: 'runtime-1'
+      })
+    )
   })
 })
 
@@ -745,7 +929,7 @@ describe('ModelMenuPanel pinned draft', () => {
 
     setCurrentModelSource('default')
     const unpinned = renderPanel(vi.fn(), vi.fn())
-    await unpinned.content.findByText('Refresh models')
+    await unpinned.content.findByRole('menuitem', { name: 'Refresh models' })
     expect(unpinned.content.queryByText('Use Settings default')).toBeNull()
     cleanup()
 
@@ -753,7 +937,7 @@ describe('ModelMenuPanel pinned draft', () => {
     $activeSessionId.set('runtime-1')
     setCurrentModelSource('manual')
     const live = renderPanel(vi.fn(), vi.fn())
-    await live.content.findByText('Refresh models')
+    await live.content.findByRole('menuitem', { name: 'Refresh models' })
     expect(live.content.queryByText('Use Settings default')).toBeNull()
   })
 })

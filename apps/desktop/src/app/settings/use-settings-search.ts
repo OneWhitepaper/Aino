@@ -111,11 +111,11 @@ export function useSettingsSearchCatalog(enabled: boolean) {
     configQuery.isFetching || schemaQuery.isFetching || configQuery.isError || schemaQuery.isError
       ? []
       : buildConfigSearchEntries(schemaQuery.data?.fields, configQuery.data, {
+          configPages: t.settings.configPages,
           fieldDescriptions: t.settings.fieldDescriptions,
           fieldLabels: t.settings.fieldLabels,
           sections: t.settings.sections
         })
-
 
   const credentialEntries = buildCredentialSearchEntries(
     envVarsFetching || envVarsError ? null : envVars,

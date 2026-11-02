@@ -19,6 +19,7 @@ vi.mock('@/components/pane-shell/tree/store', () => ({
   $collapsedTreeSides: atom(new Set()),
   $hiddenTreePanes: atom(new Set()),
   $layoutTree: atom(null),
+  restoreTreePane: vi.fn(),
   closeFocusedSessionTab: () => closeFocusedSessionTab(),
   closeFocusedToolTab: () => closeFocusedToolTab()
 }))

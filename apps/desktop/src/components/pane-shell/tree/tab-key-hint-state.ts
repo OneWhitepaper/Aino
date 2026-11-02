@@ -29,9 +29,18 @@ export function useTabKeyHints() {
       }
     }
 
+    // The OS can consume the modifier's keyup (for example after a native
+    // menu). A plain pointer event is fresh evidence that it is no longer held.
+    const reconcilePointer = (event: PointerEvent) => {
+      if (!(isMacPlatform() ? event.metaKey : event.ctrlKey)) {
+        clear()
+      }
+    }
+
     window.addEventListener('keydown', sync, true)
     window.addEventListener('keyup', sync, true)
     window.addEventListener('blur', clear)
+    window.addEventListener('pointerdown', reconcilePointer, true)
     const stopCapture = $capture.listen(clear)
 
     return () => {
@@ -40,6 +49,7 @@ export function useTabKeyHints() {
       window.removeEventListener('keydown', sync, true)
       window.removeEventListener('keyup', sync, true)
       window.removeEventListener('blur', clear)
+      window.removeEventListener('pointerdown', reconcilePointer, true)
     }
   }, [])
 }

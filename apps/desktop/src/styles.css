@@ -2092,31 +2092,6 @@ body.guest-pointer-lock :is(webview, iframe) {
    small-caps headings, dense one-pixel row gaps, and a different active band.
    Keep the existing row components (and therefore all their actions, DnD and
    status subscriptions), but give their chrome one scoped visual contract. */
-[data-tour='sessions-sidebar'] [data-sidebar-section-header] {
-  padding-inline: 0.5rem;
-  color: var(--aino-landing-secondary);
-}
-
-[data-tour='sessions-sidebar'] [data-sidebar-section-header] > button:hover,
-[data-tour='sessions-sidebar'] [data-sidebar-section-header] > button:focus-visible {
-  background: var(--ui-row-hover-background);
-}
-
-[data-tour='sessions-sidebar'] [data-sidebar-section-label] {
-  gap: 0;
-  padding-left: 0;
-  color: var(--aino-landing-secondary);
-  font-size: var(--aino-text-label);
-  font-weight: 500;
-  line-height: 1.25rem;
-  letter-spacing: 0;
-  text-transform: none;
-}
-
-[data-tour='sessions-sidebar'] [data-sidebar-section-label] > .dither {
-  display: none;
-}
-
 /* Search results live in the titlebar contribution slot, outside the sidebar
    tree that normally supplies the Aino section-label treatment. Keep the
    neutral heading variant on the primitive so portalled labels do not fall
@@ -2130,79 +2105,6 @@ body.guest-pointer-lock :is(webview, iframe) {
   line-height: 1.25rem;
   letter-spacing: 0;
   text-transform: none;
-}
-
-[data-tour='sessions-sidebar'] [data-sidebar-section-content] {
-  gap: 0.1875rem;
-}
-
-[data-tour='sessions-sidebar'] [data-sidebar-pinned-hint] {
-  min-height: 0;
-  padding-block: 0;
-  padding-right: 0.5rem;
-  color: var(--aino-landing-muted);
-  font-size: var(--aino-text-caption);
-  line-height: 1.35;
-}
-
-[data-tour='sessions-sidebar'] [data-sidebar-pinned-hint] > span:first-child {
-  color: var(--aino-landing-muted);
-}
-
-[data-tour='sessions-sidebar'] [data-sidebar-session-row] {
-  border-radius: var(--aino-radius-row);
-}
-
-[data-tour='sessions-sidebar'] [data-sidebar-session-row]:hover {
-  background: var(--aino-landing-control);
-}
-
-[data-tour='sessions-sidebar'] [data-sidebar-session-row][data-selected='true'] {
-  background: var(--aino-landing-session-active);
-  box-shadow: none;
-}
-
-[data-tour='sessions-sidebar'] [data-sidebar-session-row][data-selected='true'] .aino-sidebar-session-label {
-  color: var(--aino-landing-primary);
-  font-weight: 500;
-}
-
-[data-tour='sessions-sidebar'] [data-sidebar-session-row] .aino-sidebar-session-label {
-  color: var(--aino-landing-primary);
-  font-size: var(--aino-text-ui);
-}
-
-[data-tour='sessions-sidebar'] [data-sidebar-session-row] [data-sidebar-session-actions] {
-  color: var(--aino-landing-muted);
-  font-size: var(--aino-text-caption);
-}
-
-[data-tour='sessions-sidebar'] [data-sidebar-session-row] [data-sidebar-session-lead],
-[data-tour='sessions-sidebar'] [data-sidebar-session-row] [data-reorder-handle] {
-  color: var(--aino-landing-muted);
-}
-
-[data-tour='sessions-sidebar']
-  [data-sidebar-session-row][data-selected='true']
-  :is([data-sidebar-session-lead], [data-reorder-handle]) {
-  color: var(--aino-landing-accent);
-}
-
-[data-tour='sessions-sidebar'] [data-sidebar-date-divider] {
-  color: var(--aino-landing-muted);
-}
-
-[data-tour='sessions-sidebar'] [data-sidebar-date-divider] > span:first-child {
-  color: var(--aino-landing-muted);
-  font-size: var(--aino-text-caption);
-  font-weight: 600;
-  line-height: 1rem;
-  letter-spacing: 0;
-  text-transform: none;
-}
-
-[data-tour='sessions-sidebar'] [data-sidebar-date-divider] > span[aria-hidden='true'] {
-  background: var(--aino-landing-stroke);
 }
 
 /* The approved frame splits the native titlebar at the sidebar edge and keeps

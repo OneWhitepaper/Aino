@@ -150,7 +150,7 @@ function deriveTheme(mode: 'light' | 'dark'): DesktopTheme {
     name: `${DEFAULT_SKIN_NAME}-${mode}`,
     label: `${seed.label} ${mode === 'light' ? 'Light' : 'Dark'}`,
     description: `${seed.label} ${mode} palette`,
-    colors: mode === 'dark' ? seed.colors : synthLightColors(seed)
+    colors: paletteFor(seed, mode)
   }
 }
 
@@ -243,6 +243,7 @@ function applyTheme(theme: DesktopTheme, mode: 'light' | 'dark', chatFontFamily 
     '--dt-input': c.input,
     '--dt-ring': c.ring,
     '--dt-muted': c.muted,
+    '--dt-muted-foreground': c.mutedForeground,
     '--dt-midground-foreground': c.midgroundForeground ?? readableInk(midground),
     // A LOUD fill of the brand colour, for the rare surface that has to read as
     // the app speaking rather than as chrome. `primary` alone can't do that job:

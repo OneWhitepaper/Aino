@@ -9,6 +9,7 @@
 import { useStore } from '@nanostores/react'
 import { type PointerEvent as ReactPointerEvent, useCallback, useMemo, useRef, useSyncExternalStore } from 'react'
 
+import { $workspaceIsPage, workspacePageKeepsPane } from '@/app/routes'
 import { beginSashDrag, endSashDrag } from '@/components/pane-shell/geometry'
 import { useContributions } from '@/contrib/react/use-contributions'
 import { guardGuestPointers } from '@/lib/guest-pointer-guard'
@@ -30,6 +31,7 @@ import {
   setTreeGroupMinimized,
   setTreeSplitWeights
 } from '../store'
+import { $maximizedToolGroup, containsMaximizedToolGroup } from '../tool-panel-view'
 
 import {
   allFixedAbsorberIndex,
@@ -40,6 +42,7 @@ import {
   fixedTrackSize,
   MIN_PANE_PX,
   MINIMIZED_TRACK,
+  narrowToolPaneIds,
   paneChrome,
   type PaneSizing,
   resolveCssPx,
@@ -107,6 +110,7 @@ export function TreeSplit({
   const containerRef = useRef<HTMLDivElement>(null)
   const panes = useContributions('panes')
   const hiddenPanes = useStore($hiddenTreePanes)
+  const workspacePage = useStore($workspaceIsPage)
   const narrow = useStore($narrowViewport)
   // Scoped to THIS subtree's panes: a sash drag writes size overrides on every
   // pointermove, but only the splits whose subtree actually resized should
@@ -115,6 +119,7 @@ export function TreeSplit({
   const editMode = useStore($layoutEditMode)
   const revealsHidden = useStore($layoutEditRevealsHidden)
   const collapsedSides = useStore($collapsedTreeSides)
+  const maximizedToolGroup = useStore($maximizedToolGroup)
   const horizontal = node.orientation === 'row'
   const axis = node.orientation
 
@@ -138,13 +143,17 @@ export function TreeSplit({
   // placeholder flash — when a chrome toggle hides it, or when the viewport
   // is narrow and the pane is collapsible (edge overlay instead).
   const paneFor = (id: string) => panes.find(p => p.id === id)
+  const narrowTools = narrowToolPaneIds(node, paneFor)
 
   // Layout-edit mode (in Advanced) forces toggle-hidden panes (terminal off,
   // review/preview closed) visible so they're rearrangeable — only truly-absent
   // (unregistered) or narrow-collapsed panes stay gone. Restores itself on exit
   // (render-only).
   const paneGone = (id: string) =>
-    !paneFor(id) || (!revealsHidden && hiddenPanes.has(id)) || (narrow && Boolean(paneChrome(paneFor(id)).collapsible))
+    !paneFor(id) ||
+    (!revealsHidden && hiddenPanes.has(id)) ||
+    (workspacePage && !editMode && !workspacePageKeepsPane(id)) ||
+    (narrow && (narrowTools.has(id) || Boolean(paneChrome(paneFor(id)).collapsible)))
 
   const trackCtx: TrackContext = { paneFor, paneGone, overrides }
 
@@ -155,7 +164,11 @@ export function TreeSplit({
   // EMPTY zones only exist in editor-authored trees (normalize prunes them on
   // every structural op) — they take space in edit mode as drop targets.
   const isEmptyZone = (child: LayoutNode) => child.type === 'group' && child.panes.length === 0
-  const isCollapsed = (child: LayoutNode) => subtreeGone(child, trackCtx) || (isEmptyZone(child) && !editMode)
+
+  const isCollapsed = (child: LayoutNode) =>
+    (workspacePage && !editMode && !allPaneIds(child).some(workspacePageKeepsPane)) ||
+    subtreeGone(child, trackCtx) ||
+    (isEmptyZone(child) && !editMode)
 
   // Min/max clamps come from a direct GROUP child's panes (the same clamps
   // the app's Pane props express). Floors apply to every zone; caps only when
@@ -678,12 +691,25 @@ export function TreeSplit({
   // subtree, so resolve them ONCE here instead of per read below.
   const tracks = node.children.map((child, i) => {
     const minimized = isMinimized(child)
-    const collapsed = isCollapsed(child) || sideGone(i)
-    const track = minimized || collapsed ? null : fixedTrackSize(child, axis, trackCtx)
-    const sizing = minimized || collapsed ? null : sizingFor(child, track)
+
+    const maximizedBranch = Boolean(maximizedToolGroup && containsMaximizedToolGroup(child, maximizedToolGroup))
+
+    const maximizeHidden = Boolean(
+      maximizedToolGroup && containsMaximizedToolGroup(node, maximizedToolGroup) && !maximizedBranch
+    )
+
+    const collapsed = maximizeHidden || isCollapsed(child) || sideGone(i)
+    const track = minimized || collapsed || maximizedBranch ? null : fixedTrackSize(child, axis, trackCtx)
+    const sizing = minimized || collapsed || maximizedBranch ? null : sizingFor(child, track)
+
     // Narrow-collapse UNMOUNTS (the edge overlay owns the live instance) — but
     // only for panes the breakpoint collapsed, not ones a chrome toggle hid.
-    const narrowCollapsed = narrow && collapsed && allPaneIds(child).some(id => !hiddenPanes.has(id))
+    const narrowCollapsed =
+      narrow &&
+      collapsed &&
+      allPaneIds(child).some(
+        id => !hiddenPanes.has(id) && (narrowTools.has(id) || Boolean(paneChrome(paneFor(id)).collapsible))
+      )
 
     return { child, collapsed, minimized, narrowCollapsed, sizing, track }
   })
@@ -862,11 +888,7 @@ function Sash({
         // width stays ~8px so the sash is no harder to hit. A tool sash is
         // offset by the terminal rail's stable h-9 strip and straddles its
         // lower edge, keeping the upper seam visually quiet.
-        horizontal
-          ? 'inset-y-0 left-0 w-[8px]'
-          : toolZone
-            ? 'inset-x-0 top-9 h-[8px]'
-            : 'inset-x-0 top-0 h-[8px]',
+        horizontal ? 'inset-y-0 left-0 w-[8px]' : toolZone ? 'inset-x-0 top-9 h-[8px]' : 'inset-x-0 top-0 h-[8px]',
         disabled ? 'pointer-events-none' : horizontal ? 'cursor-col-resize' : 'cursor-row-resize'
       )}
       // Lets shell-level CSS start the resting hairline below the unified top

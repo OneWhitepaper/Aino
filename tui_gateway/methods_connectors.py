@@ -111,14 +111,15 @@ def _connector_params(rid, params, model):
     return request, session, error
 
 
-def _session_connector_gate(rid, session, action):
+def _session_connector_gate(rid, session, action, *, hosted=True):
     import model_tools
     from tools.connectors import connectors_available
 
     agent = session.get("agent")
     enabled = agent.enabled_toolsets if agent is not None else _load_enabled_toolsets(_resolve_agent_platform(_session_source(session)))
     disabled = agent.disabled_toolsets if agent is not None else None
-    if "manage_connections" not in model_tools._select_tool_names(enabled, disabled, quiet_mode=True) or not connectors_available():
+    if ("manage_connections" not in model_tools._select_tool_names(enabled, disabled, quiet_mode=True)
+            or hosted and not connectors_available()):
         if action == "status":
             return enabled, disabled, _ok(rid, {"available": False, "connectors": []})
         return enabled, disabled, _connector_rpc_error(
@@ -137,7 +138,13 @@ def _session_connector_rpc(rid, request, session, action):
     from tui_gateway.contracts.connectors import ConnectorErrorReason
 
     sid = request.owner.session_id
-    enabled, disabled, error = _session_connector_gate(rid, session, action)
+    operation = None
+    if action == "connect":
+        operation = live.current(session["session_key"], profile_home=session.get("profile_home"))
+    # Only known local targets on this session's operation can skip the hosted service gate.
+    targets = [operation.target(name) for name in request.connectors] if operation is not None else []
+    hosted = not targets or any(target is None or target.kind not in {"mcp", "plugin", "skill"} for target in targets)
+    enabled, disabled, error = _session_connector_gate(rid, session, action, hosted=hosted)
     if error:
         return error
     if not _connector_owner_matches(sid, session, session.get("profile_home")):
@@ -145,8 +152,6 @@ def _session_connector_rpc(rid, request, session, action):
     args = {"action": "reconnect" if action == "connect" and request.reconnect else action}
     if action == "connect":
         args["connectors"] = request.connectors
-    if action == "connect":
-        operation = live.current(session["session_key"], profile_home=session.get("profile_home"))
         if operation is None:
             return _connector_rpc_error(
                 rid, 4004, ConnectorErrorReason.unknown_operation, "No open connection operation for this session."

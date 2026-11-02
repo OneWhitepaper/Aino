@@ -880,8 +880,8 @@ _PROVIDERS_WITHOUT_VISION: frozenset = frozenset({"kimi-coding", "kimi-coding-cn
 
 # OpenRouter app attribution (always sent). `X-Title` is what the dashboard reads.
 _OR_HEADERS_BASE = {
-    "HTTP-Referer": "https://hermes-agent.nousresearch.com",
-    "X-Title": "Hermes Agent",
+    "HTTP-Referer": "https://petoi.cn",
+    "X-Title": "Aino Agent",
     "X-OpenRouter-Categories": "productivity,cli-agent",
 }
 
@@ -948,9 +948,9 @@ def build_nvidia_nim_headers(base_url: str | None) -> dict:
 from hermes_cli.version_info import get_version_info
 
 _AI_GATEWAY_HEADERS = {
-    "HTTP-Referer": "https://hermes-agent.nousresearch.com",
-    "X-Title": "Hermes Agent",
-    "User-Agent": f"HermesAgent/{get_version_info().base_version}",
+    "HTTP-Referer": "https://petoi.cn",
+    "X-Title": "Aino Agent",
+    "User-Agent": f"AinoAgent/{get_version_info().base_version}",
 }
 
 # Nous Portal attribution extra_body. Tags come from agent.portal_tags so the client= marker

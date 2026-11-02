@@ -35,8 +35,9 @@ def current_usage_metadata():
     snapshot = scope.calls.snapshot()
     outside_aino = snapshot.pop("non_aino_model_calls", False)
     metadata = {"non_aino_model_calls": True} if outside_aino else {}
-    if scope.source == "aino":
-        metadata["billing"] = {"source": scope.source, "user_id": scope.user_id,
-                               "session_id": scope.session_id, "turn_id": scope.turn_id,
+    owner = (scope.user_id, scope.session_id) if scope.source == "aino" else scope.calls.managed_owner()
+    if owner is not None:
+        metadata["billing"] = {"source": "aino", "user_id": owner[0],
+                               "session_id": owner[1], "turn_id": scope.turn_id,
                                "status": "pending", **snapshot}
     return metadata

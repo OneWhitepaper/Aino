@@ -18,16 +18,20 @@ class ManagedCapabilities(Result):
     tools: bool
     vision: bool
     reasoning: bool
+    image_generation: bool = False
+    image_quality_options: list[Literal['auto', 'low', 'medium', 'high', 'xhigh', 'max']] = Field(default_factory=list)
 
 
 class ManagedModelTicketParams(SessionParams):
     owner: PlatformOwner
     model_id: str
+    purpose: Literal['chat', 'image'] = 'chat'
 
 
 class ManagedModelTicketResult(Result):
     session_ticket: str
     managed_model_binding: int
+    managed_image_binding: int = 1
 
 
 class ClaimManagedModelParams(ManagedModelTicketParams):
@@ -38,6 +42,7 @@ class ClaimManagedModelResult(Result):
     binding_revision: int
     managed_model_binding: int
     managed_model_context_window: bool = False
+    managed_image_binding: int = 1
 
 
 class BindManagedModelParams(ManagedModelTicketParams):
@@ -47,7 +52,7 @@ class BindManagedModelParams(ManagedModelTicketParams):
     base_url: str
     expires_at: str
     model: str
-    api_mode: Literal["chat_completions", "responses", "anthropic_messages"]
+    api_mode: Literal["chat_completions", "responses", "anthropic_messages", 'images_generations']
     capabilities: ManagedCapabilities
     context_window: int | None = Field(default=None, gt=0, strict=True)
 
@@ -60,6 +65,7 @@ class BindManagedModelResult(Result):
 
 class ClearManagedModelParams(SessionParams):
     binding_revision: int
+    purpose: Literal['chat', 'image'] = 'chat'
 
 
 class ClearManagedModelResult(Result):

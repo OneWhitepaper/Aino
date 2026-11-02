@@ -87,9 +87,8 @@ def connectors_available(
 ) -> bool:
     """Fail closed so availability failures do not become model-visible errors.
 
-    The one gate for the connectors surface, and the tool's ``check_fn``: outside it the tool is
-    not in the schema at all, so the model never narrates a gateway 404 to a user the portal has
-    not enabled. Free-tier identities are always in, and so is a user with no identity who may get
+    This gate belongs only to hosted connectors. Local MCP management remains independent.
+    Free-tier identities are always in, and so is a user with no identity who may get
     one; accounts are in only when the portal says so via the token claim."""
     try:
         resolved_loader = config_loader or load_config

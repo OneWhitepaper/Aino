@@ -392,6 +392,8 @@ async def get_toolset_config(name: str, profile: Optional[str] = None):
                         # Key written to tts.provider; doubles as the config section
                         # (tts.<key>.*) holding the provider's voice/model settings.
                         row["tts_provider"] = prov["tts_provider"]
+                    if name == "image_gen" and prov.get("image_gen_plugin_name"):
+                        row["image_gen_plugin_name"] = prov["image_gen_plugin_name"]
                     providers.append(row)
             payload = {
                 "name": name, "has_category": cat is not None, "providers": providers,
@@ -456,7 +458,10 @@ async def get_toolset_models(
             for model_id, meta in catalog.items()]
         return {
             "name": name, "has_models": bool(models), "provider": row.get("name"),
-            "plugin": plugin, "models": models, "current": current, "default": default_model}
+            "plugin": plugin, "models": models, "current": current, "default": default_model,
+            **({"quality_configurable": True,
+                "quality": section_cfg.get("quality") if isinstance(section_cfg, dict) else None}
+               if name == "image_gen" else {})}
 
     return await asyncio.to_thread(_read) or _no_models(name)
 
@@ -465,13 +470,18 @@ async def get_toolset_models(
 async def select_toolset_model(
     name: str, body: ToolsetModelSelect, profile: Optional[str] = None):
     """Persist a backend model selection (``image_gen.model`` /
-    ``video_gen.model``), validated against the resolved backend's catalog."""
+    ``video_gen.model``), validated against the resolved backend's catalog.
+    Explicit activation commits the named provider in the same config write."""
     section = _MODEL_CATALOG_TOOLSETS.get(name)
     if section is None:
         raise _bad_request(f"Toolset has no model catalog: {name}")
     model_id = (body.model or "").strip()
     if not model_id:
         raise _bad_request("model is required")
+    if body.activate and not body.provider:
+        raise _bad_request("provider is required for activation")
+    if "quality" in body.model_fields_set and name != "image_gen":
+        raise _bad_request("quality selection is only supported for image generation")
 
     def _run():
         with config_write_scope(body.profile or profile):
@@ -482,10 +492,26 @@ async def select_toolset_model(
                 raise _bad_request(f"No model-capable backend is active for {name}")
 
             catalog, _default = _toolset_model_catalog(name, plugin, config)
-            if model_id not in catalog:
+            accepted = model_id in catalog
+            if not accepted and name == "image_gen" and row.get("image_gen_plugin_name"):
+                from agent.image_gen_registry import get_provider
+                backend = get_provider(plugin)
+                accepted = bool(backend and backend.accepts_model_selection(model_id))
+            if not accepted:
                 raise _bad_request(f"Unknown model {model_id!r} for backend {plugin!r}")
 
+            if body.activate:
+                from hermes_cli.tools_config import apply_provider_selection
+                try:
+                    apply_provider_selection(name, body.provider, config)
+                except KeyError as exc:
+                    raise _bad_request(str(exc).strip('"'))
             _dict_section(config, section)["model"] = model_id
+            if "quality" in body.model_fields_set:
+                if body.quality is None:
+                    _dict_section(config, section).pop("quality", None)
+                else:
+                    _dict_section(config, section)["quality"] = body.quality
             save_config(config)
         return plugin
 

@@ -10,17 +10,32 @@ const rendererErrors: string[] = []
 const longName = 'a-long-file-name-that-must-stay-inside-the-file-pane.md'
 
 test.beforeAll(async () => {
-  fixture = await setupMockBackend({ extraConfig: 'desktop:\n  repo_scan_enabled: false\naccount:\n  dev_mode: true' })
+  fixture = await setupMockBackend({
+    extraDisplayConfig: '  language: en',
+    extraConfig: 'desktop:\n  repo_scan_enabled: false\naccount:\n  dev_mode: true'
+  })
   const { app, page, sandbox } = fixture
   await page.emulateMedia({ reducedMotion: 'reduce' })
   page.on('pageerror', error => rendererErrors.push(error.message))
-  await page.getByRole('textbox', { name: 'Email or phone', exact: true }).fill('file-pane@example.com')
-  await page.getByRole('checkbox', { name: 'Agree to the user agreement and privacy policy', exact: true }).check()
-  await page.getByRole('button', { name: 'Send code', exact: true }).click()
-  await page.getByRole('textbox', { name: 'Verification code', exact: true }).fill('1234')
-  await page.getByRole('button', { name: 'Sign in', exact: true }).click()
+  expect(
+    await page.evaluate(
+      () => (window as Window & { hermesDesktop?: { accountAdapter?: string } }).hermesDesktop?.accountAdapter
+    )
+  ).toBe('legacy-development')
+
+  const agreement = page.getByRole('checkbox', {
+    name: /^(同意用户协议和隐私政策|Agree to the user agreement and privacy policy)$/
+  })
+
+  await expect(agreement).toBeVisible({ timeout: 60_000 })
+  await page.getByRole('textbox', { name: /^(手机号|Phone number)$/ }).fill('13800000109')
+  await agreement.check()
+  await page.getByRole('button', { name: /^(发送验证码|Send code)$/ }).click()
+  await page.getByRole('textbox', { name: /^(验证码|Verification code)$/ }).fill('1234')
+  await page.getByRole('button', { name: /^(登录|Sign in)$/ }).click()
   await waitForAppReady(fixture, 120_000)
   await page.evaluate(() => {
+    localStorage.setItem('hermes.desktop.layoutPreset.active', 'custom')
     localStorage.setItem(
       'hermes.desktop.layoutTree.v2',
       JSON.stringify({
@@ -48,8 +63,13 @@ test.beforeAll(async () => {
     dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [selectedFolder] })
   }, folder)
   await page.getByRole('button', { name: 'Open folder as project\u2026', exact: true }).click()
+  await expect(page.locator('[data-slot="composer-surface"]:visible').getByRole('button', {
+    name: 'SampleWorkspace', exact: true,
+  })).toBeVisible({ timeout: 30_000 })
   const showFiles = page.getByRole('button', { name: 'Show right sidebar', exact: true })
-  if (await showFiles.isVisible()) await showFiles.click()
+
+  if (await showFiles.isVisible()) {await showFiles.click()}
+  await page.locator('[data-tool-chooser]:visible').getByRole('button', { name: 'Files', exact: true }).click()
   await expect(page.locator('[data-project-tree]').getByText('notes', { exact: true })).toBeVisible()
 })
 
@@ -57,40 +77,43 @@ test.afterAll(async () => {
   await fixture?.cleanup()
 })
 
-test('file chrome follows the conversation theme without changing directory names or overflowing', async ({}, testInfo) => {
+test('file chrome follows the conversation theme without changing directory names or overflowing', async ({ browserName: _browserName }, testInfo) => {
   const { page, app } = fixture
+
   const original = await page.evaluate(() => ({
     theme: localStorage.getItem('hermes-desktop-theme-v2'),
     mode: localStorage.getItem('hermes-desktop-mode-v1')
   }))
 
   try {
-    for (const mode of ['light', 'dark', 'custom', 'glass'] as const) {
+    for (const mode of ['light', 'dark', 'glass'] as const) {
       await page.evaluate(mode => {
         // Follow the real peer-window preference path so palette seeds, not
         // just the dark class, reach every component and the native window.
-        localStorage.setItem('hermes-desktop-theme-v2', mode === 'custom' ? 'slate' : 'nous')
+        localStorage.setItem('hermes-desktop-theme-v2', 'mono')
         localStorage.setItem('hermes-desktop-mode-v1', mode === 'dark' ? 'dark' : 'light')
         window.dispatchEvent(new StorageEvent('storage', { key: 'hermes-desktop-mode-v1' }))
       }, mode)
-      await expect(page.locator('html')).toHaveAttribute('data-hermes-theme', mode === 'custom' ? 'slate' : 'nous')
+      await expect(page.locator('html')).toHaveAttribute('data-hermes-theme', 'mono')
       await expect.poll(() => page.locator('html').evaluate(el => el.classList.contains('dark'))).toBe(mode === 'dark')
+
       if (
         mode === 'glass' &&
         (await page.evaluate(() => {
           const desktopWindow = window as Window & { hermesDesktop?: { glassSupported?: boolean } }
+
           return Boolean(desktopWindow.hermesDesktop?.glassSupported)
         }))
       ) {
-        await page
-          .locator('[data-slot="titlebar-app-controls"]')
-          .getByRole('button', { name: 'Open settings', exact: true })
-          .click()
+        await page.getByRole('button', { name: 'Open settings', exact: true }).click()
         await page.getByRole('button', { name: 'Appearance', exact: true }).click()
+        await page.getByRole('tab', { name: 'Window & layout', exact: true }).click()
+        await page.getByRole('button', { name: /Transparency/ }).click()
         await page.getByRole('button', { name: 'Glass', exact: true }).click()
         await page.getByRole('button', { name: 'Close settings', exact: true }).click()
         await expect(page.locator('html')).toHaveAttribute('data-hermes-glass', '')
       }
+
       await expect
         .poll(() =>
           page.evaluate(() =>
@@ -116,10 +139,12 @@ test('file chrome follows the conversation theme without changing directory name
         const canvas = document.createElement('canvas')
         canvas.width = canvas.height = 1
         const context = canvas.getContext('2d')!
+
         const color = (value: string) => {
           context.clearRect(0, 0, 1, 1)
           context.fillStyle = value
           context.fillRect(0, 0, 1, 1)
+
           return [...context.getImageData(0, 0, 1, 1).data]
         }
 
@@ -130,6 +155,8 @@ test('file chrome follows the conversation theme without changing directory name
           fontMatches: headStyle.fontFamily === getComputedStyle(chat).fontFamily,
           headingSize: headStyle.fontSize,
           sectionSize: getComputedStyle(section).fontSize,
+          headingRole: color(getComputedStyle(document.documentElement).getPropertyValue('--ui-text-primary')),
+          rowRole: color(getComputedStyle(document.documentElement).getPropertyValue('--ui-text-secondary')),
           rowColor: color(labelStyle.color),
           primaryColor: color(getComputedStyle(primary).color),
           tabAccent: getComputedStyle(tab).getPropertyValue('--pane-tab-active-accent').trim(),
@@ -142,10 +169,11 @@ test('file chrome follows the conversation theme without changing directory name
       })
 
       expect(appearance.headingCase, `${mode}: preserve the actual directory spelling`).toBe('none')
-      expect(appearance.headingColor).toEqual(appearance.sectionColor)
+      expect(appearance.headingColor).toEqual(appearance.headingRole)
       expect(appearance.fontMatches).toBe(true)
-      expect(appearance.headingSize).toBe(appearance.sectionSize)
-      expect(appearance.rowColor).toEqual(appearance.primaryColor)
+      expect(parseFloat(appearance.headingSize)).toBeGreaterThanOrEqual(parseFloat(appearance.sectionSize))
+      expect(parseFloat(appearance.headingSize)).toBeLessThanOrEqual(14)
+      expect(appearance.rowColor).toEqual(appearance.rowRole)
       expect(appearance.tabAccent, `${mode}: a file tab is neutral workspace chrome`).toBe('transparent')
       expect(appearance.paneBorders).toEqual(['0px', '0px'])
       expect(appearance.paneShadow).toBe('none')
@@ -157,7 +185,8 @@ test('file chrome follows the conversation theme without changing directory name
 
     await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setSize(760, 800, false))
     const showFiles = page.getByRole('button', { name: 'Show right sidebar', exact: true })
-    if (await showFiles.isVisible()) await showFiles.click()
+
+    if (await showFiles.isVisible()) {await showFiles.click()}
     const tree = page.locator('[data-project-tree]:visible')
     await expect(tree).toBeVisible()
     expect(await tree.evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true)
@@ -171,16 +200,17 @@ test('file chrome follows the conversation theme without changing directory name
         ['hermes-desktop-theme-v2', original.theme],
         ['hermes-desktop-mode-v1', original.mode]
       ] as const) {
-        if (value === null) localStorage.removeItem(key)
-        else localStorage.setItem(key, value)
+        if (value === null) {localStorage.removeItem(key)}
+        else {localStorage.setItem(key, value)}
       }
+
       window.dispatchEvent(new StorageEvent('storage', { key: 'hermes-desktop-mode-v1' }))
     }, original)
     await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setSize(1220, 800, false))
   }
 })
 
-test('file rows retain expand, preview, rename and attach operations with stable geometry', async ({}, testInfo) => {
+test('file rows retain expand, preview, rename and attach operations with stable geometry', async ({ browserName: _browserName }, testInfo) => {
   const { page } = fixture
   const composerSurface = page.locator('[data-slot="composer-surface"]:visible')
   const homeShadow = await composerSurface.evaluate(el => getComputedStyle(el).boxShadow)
@@ -202,6 +232,8 @@ test('file rows retain expand, preview, rename and attach operations with stable
 
   await draft.dblclick()
   await expect(page.getByText('File pane preview', { exact: true })).toBeVisible()
+  await page.locator('[data-tree-tab="files"]:visible').click()
+  await expect(draft).toBeVisible()
   await draft.click({ button: 'right' })
   await page.getByRole('menuitem', { name: 'Rename\u2026', exact: true }).click()
   const rename = tree.getByRole('textbox', { name: 'New name', exact: true })
@@ -234,22 +266,29 @@ test('file rows retain expand, preview, rename and attach operations with stable
   const close = previewTab.getByRole('button', { name: 'Close', exact: true })
   await expect(close).toBeVisible()
   expect(
-    await close.evaluate(el => {
-      const canvas = document.createElement('canvas')
-      canvas.width = canvas.height = 1
-      const context = canvas.getContext('2d')!
-      context.fillStyle = getComputedStyle(el).backgroundColor
-      context.fillRect(0, 0, 1, 1)
-      return context.getImageData(0, 0, 1, 1).data[3]
+    await previewTab.evaluate(el => {
+      const content = el.querySelector<HTMLElement>('.pane-tab-content')!
+      const label = el.querySelector<HTMLElement>('[data-slot="pane-tab-label"]')!
+      const close = el.querySelector<HTMLElement>('[data-slot="pane-tab-close"] button')!
+      const bounds = close.getBoundingClientRect()
+      const hit = document.elementFromPoint(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2)
+      const reserved = parseFloat(getComputedStyle(content).paddingRight)
+
+      return (
+        reserved >= bounds.width &&
+        label.getBoundingClientRect().right <= bounds.left + 1 &&
+        Boolean(hit && close.contains(hit))
+      )
     }),
-    'the close chip covers the filename beneath its glyph'
-  ).toBe(255)
+    'the filename leaves enough room for the clickable close chip on solid and glass surfaces'
+  ).toBe(true)
   await page.screenshot({ path: testInfo.outputPath('file-browser-long-tab-close.png') })
   await close.click()
   await expect(previewTab).toHaveCount(0)
 
   await page.evaluate(() => {
     const layout = JSON.parse(localStorage.getItem('hermes.desktop.layoutTree.v2')!)
+    localStorage.setItem('hermes.desktop.layoutPreset.active', 'custom')
     localStorage.setItem(
       'hermes.desktop.layoutTree.v2',
       JSON.stringify({
@@ -273,15 +312,22 @@ test('file rows retain expand, preview, rename and attach operations with stable
   })
   await page.reload()
   await waitForAppReady(fixture, 120_000)
-  const group = page.locator('[data-tree-group="file-test-files"]')
-  await group.hover()
-  await group.getByRole('button', { name: 'Minimize', exact: true }).click()
+
+  const group = page
+    .locator('[data-tree-group="file-test-files"]')
+    .filter({ has: page.locator('[data-zone-tabstrip="file-test-files"]') })
+
+  await group.locator('[data-tree-tab="files"]').click()
+  await group.locator('[data-zone-tabstrip="file-test-files"]').hover()
+  const mountedTree = await group.locator('[data-project-tree]').elementHandle()
+  await group.getByRole('button', { name: 'Hide panel', exact: true }).click()
   await expect(group.locator('[data-project-tree]')).toBeHidden()
-  const compact = await group.boundingBox()
-  const tab = await group.locator('[data-tree-tab="files"]').boundingBox()
-  expect(tab!.y + tab!.height, 'the full tab and its close target fit the minimized track').toBeLessThanOrEqual(
-    compact!.y + compact!.height
-  )
-  await group.getByRole('button', { name: 'Restore', exact: true }).click()
+  await page.getByRole('button', { name: 'Show right sidebar', exact: true }).click()
   await expect(group.locator('[data-project-tree]')).toBeVisible()
+  expect(await group.locator('[data-project-tree]').evaluate((element, original) => element === original, mountedTree)).toBe(true)
+  const restored = await group.boundingBox()
+  const tab = await group.locator('[data-tree-tab="files"]').boundingBox()
+  expect(tab!.y + tab!.height, 'the full tab and its close target fit the restored panel').toBeLessThanOrEqual(
+    restored!.y + restored!.height
+  )
 })

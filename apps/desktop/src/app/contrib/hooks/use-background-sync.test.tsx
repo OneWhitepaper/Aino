@@ -2,6 +2,7 @@ import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { createClientSessionState } from '@/lib/chat-runtime'
+import { rotateFreshDraftKey } from '@/store/composer'
 import { $sidebarShowArchived } from '@/store/layout'
 import { $changeEventsAvailable, $cronChangeTick, $sessionsChangeTick } from '@/store/live-sync'
 import { $onBattery } from '@/store/power'
@@ -93,6 +94,39 @@ describe('useBackgroundSync profile-scoped session refresh', () => {
       release({ sessions: [] })
     })
     expect(request).toHaveBeenCalledTimes(2)
+  })
+
+  it('resolves defaults again when New Chat replaces an already open unsent draft', async () => {
+    const refreshCurrentModel = vi.fn()
+    const refreshHermesConfig = vi.fn()
+    renderHook(() =>
+      useBackgroundSync({
+        activeConnectionId: 'local',
+        activeGatewayProfile: 'default',
+        activeIsMessaging: false,
+        activeSessionId: null,
+        activeStoredSessionId: null,
+        freshDraftReady: true,
+        gatewayState: 'open',
+        refreshActiveTranscript: noop,
+        refreshCronJobs: noop,
+        refreshCurrentModel,
+        refreshHermesConfig,
+        refreshMessagingSessions: noop,
+        refreshSessions: noop,
+        requestGateway
+      })
+    )
+    await act(async () => undefined)
+    refreshCurrentModel.mockClear()
+    refreshHermesConfig.mockClear()
+
+    await act(async () => {
+      rotateFreshDraftKey()
+    })
+
+    expect(refreshCurrentModel).toHaveBeenCalledTimes(1)
+    expect(refreshHermesConfig).toHaveBeenCalledTimes(1)
   })
 
   it('refreshes the session list after the active gateway profile changes', async () => {

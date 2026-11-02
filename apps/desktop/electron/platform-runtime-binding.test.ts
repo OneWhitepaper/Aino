@@ -53,6 +53,7 @@ async function rig(options: {
   remote?: boolean
   allow?: boolean
   legacyGateway?: boolean
+  imageGateway?: boolean
 } = {}) {
   const received: Array<Record<string, unknown>> = []
   const credentials: Record<string, unknown>[] = []
@@ -76,6 +77,8 @@ async function rig(options: {
   let claims = 0
   let activeRevision = 0
   let bound: Record<string, unknown> | undefined
+  const purposeBindings = new Map<string, Record<string, unknown>>()
+  const revisions = new Map<string, number>()
   let valid = true
   let secret = 'fixture-inference-secret'
 
@@ -115,7 +118,7 @@ async function rig(options: {
       return send({ id: 17, username: 'Fixture', email: '', phone_bound: false })
     }
 
-    if (req.url === '/api/v1/desktop/models') {
+    if (req.url === '/api/v1/desktop/models?include_images=true') {
       return send([model])
     }
 
@@ -128,13 +131,19 @@ async function rig(options: {
 
       credentials.push(JSON.parse(body))
 
+      const purpose = credentials.at(-1)?.purpose === 'image' ? 'image' : 'chat'
+
+      const leasedModel = purpose === 'image' ? { ...model, purpose, api_mode: 'images_generations',
+        capabilities: { tools: false, vision: false, reasoning: false, image_generation: true } } : model
+
       const reply = () =>
         send({
           credential_id: 'lease-1',
           api_key: secret,
           base_url: origin + '/v1',
           expires_at: new Date(Date.now() + 3600_000).toISOString(),
-          model
+          model: leasedModel,
+          ...(purpose === 'image' ? { purpose } : {})
         })
 
       if (options.delayLeaseAt === credentials.length) {
@@ -153,6 +162,8 @@ async function rig(options: {
 
   const wss = new WebSocketServer({ server })
   wss.on('connection', (socket, req) => {
+    const socketPurposes = new Set<string>()
+
     if (req.url !== '/api/ws?token=fixture-gateway') {
       return socket.close(1008)
     }
@@ -161,6 +172,7 @@ async function rig(options: {
       for (const line of raw.toString().trim().split('\n')) {
         const req = JSON.parse(line)
         const p = req.params
+        const purpose = p.purpose ?? 'chat'
         received.push({ method: req.method, ...p })
         const reply = (result: unknown) => socket.send(JSON.stringify({ jsonrpc: '2.0', id: req.id, result }) + '\n')
 
@@ -174,13 +186,16 @@ async function rig(options: {
             continue
           }
 
+          revisions.set(purpose, ++claims)
+          socketPurposes.add(purpose)
           reply({
             managed_model_binding: 1,
-            binding_revision: ++claims,
+            binding_revision: claims,
+            ...(options.imageGateway ? { managed_image_binding: 1 } : {}),
             ...(!options.legacyGateway ? { managed_model_context_window: true } : {})
           })
         } else if (req.method === 'session.bind_managed_model' || req.method === 'session.renew_managed_model') {
-          if (p.binding_revision !== claims) {
+          if (p.binding_revision !== revisions.get(purpose)) {
             reject()
 
             continue
@@ -188,10 +203,12 @@ async function rig(options: {
 
           activeRevision = p.binding_revision
           bound = p
+          purposeBindings.set(purpose, p)
           reply({ bound: true, model_id: p.model_id, binding_revision: activeRevision })
         } else if (req.method === 'session.clear_managed_model') {
-          if (p.binding_revision === activeRevision) {
+          if (p.binding_revision === purposeBindings.get(purpose)?.binding_revision) {
             bound = undefined
+            purposeBindings.delete(purpose)
           }
 
           reply({ cleared: true })
@@ -202,6 +219,8 @@ async function rig(options: {
     })
     socket.on('close', () => {
       bound = undefined
+
+      for (const purpose of socketPurposes) { purposeBindings.delete(purpose) }
     })
   })
   await new Promise<void>(r => server.listen(0, '127.0.0.1', r))
@@ -279,6 +298,7 @@ async function rig(options: {
       valid = false
     },
     binding: () => bound,
+    purposeBinding: (purpose: string) => purposeBindings.get(purpose),
     secret
   }
 }
@@ -312,7 +332,7 @@ it('keeps binding compatible with gateways that do not accept context metadata',
 
 it('uses real auth HTTP and shared WebSocket serialization without exposing the lease in public results', async () => {
   const f = await rig()
-  expect(await f.controller.list()).toEqual([model])
+  expect(await f.controller.list()).toEqual([{ ...model, purpose: 'chat', capabilities: { ...model.capabilities, image_generation: false } }])
   const response = await f.controller.bind(f.input, f.window)
   expect(response).toMatchObject({ ok: true, ready: true, model_id: model.id, billing_source: 'aino' })
   expect(f.credentials[0]).toMatchObject({
@@ -432,4 +452,83 @@ it('keeps model IPC restricted to the registered main frame and strips extra ren
   expect(JSON.stringify(result)).not.toContain(f.secret)
   ipc.unregisterWindow(f.window)
   expect(await invoke(event, f.input)).toMatchObject({ ok: false })
+})
+
+it('keeps image bind, renewal and clear isolated from the retained chat socket', async () => {
+  const f = await rig({ imageGateway: true })
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] })
+  expect((await f.controller.bind(f.input, f.window)).ok).toBe(true)
+  const chat = f.purposeBinding('chat')
+  const imageInput = { ...f.input, purpose: 'image' as const }
+  const result = await f.controller.bind(imageInput, f.window)
+  expect(result).toMatchObject({ ok: true, ready: true })
+  expect(f.purposeBinding('chat')).toBe(chat)
+  expect(f.purposeBinding('image')).toMatchObject({ purpose: 'image', api_mode: 'images_generations', api_key: f.secret })
+  expect(f.credentials).toHaveLength(2)
+  expect(f.credentials[0]).not.toHaveProperty('purpose')
+  expect(f.credentials[1]).toMatchObject({ purpose: 'image' })
+  expect(JSON.stringify(result)).not.toContain(f.secret)
+  await vi.advanceTimersByTimeAsync(20 * 60_000)
+  await vi.waitFor(() => expect(f.received.filter(row => row.method === 'session.renew_managed_model')).toHaveLength(2))
+  expect(f.received.filter(row => row.method === 'session.renew_managed_model' && row.purpose === 'image')).toHaveLength(1)
+  f.controller.clear(imageInput, f.window)
+  await vi.waitFor(() => expect(f.purposeBinding('image')).toBeUndefined())
+  expect(f.purposeBinding('chat')).toBeTruthy()
+})
+
+it('refuses image binding before obtaining a secret when the gateway lacks its capability', async () => {
+  const f = await rig()
+  expect(await f.controller.bind({ ...f.input, purpose: 'image' }, f.window)).toMatchObject({ ok: false, error: { code: 'unsupported_gateway' } })
+  expect(f.credentials).toHaveLength(0)
+})
+
+it('whitelists image purpose through existing model IPC and clears only its image socket', async () => {
+  const f = await rig({ imageGateway: true })
+  const handlers = new Map<string, (...args: any[]) => any>()
+
+  const ipc = registerPlatformIpc({
+    ipc: { handle: (name, handler) => { handlers.set(name, handler) } }, auth: f.auth,
+    captcha: { acquire: async () => ({}) }, bindingController: f.controller,
+    fromWebContents: sender => sender === f.window.webContents ? f.window : null,
+    trustedRendererUrl: f.window.webContents.mainFrame.url
+  })
+
+  cleanup.push(() => ipc.dispose())
+  ipc.registerWindow(f.window)
+  const event = { sender: f.window.webContents, senderFrame: f.window.webContents.mainFrame }
+  const bind = handlers.get('aino:platform-models:bind')!
+  expect((await bind(event, f.input)).ok).toBe(true)
+  const result = await bind(event, { ...f.input, purpose: 'image', api_key: 'renderer-key' })
+  expect(result).toMatchObject({ ok: true, ready: true })
+  expect(f.purposeBinding('image')).toMatchObject({ purpose: 'image', api_key: f.secret })
+  expect(JSON.stringify(result)).not.toContain(f.secret)
+  const before = f.credentials.length
+  expect(await bind(event, { ...f.input, purpose: 'other' })).toMatchObject({ ok: false, error: { code: 'invalid_platform_input' } })
+  expect(f.credentials).toHaveLength(before)
+  await handlers.get('aino:platform-models:clear')!(event, { ...f.input, purpose: 'image' })
+  await vi.waitFor(() => expect(f.purposeBinding('image')).toBeUndefined())
+  expect(f.purposeBinding('chat')).toBeTruthy()
+})
+
+it('clearing a pending image lease prevents its late bind and leaves chat running', async () => {
+  const f = await rig({ imageGateway: true, delayLeaseAt: 2 })
+  expect((await f.controller.bind(f.input, f.window)).ok).toBe(true)
+  const chat = f.purposeBinding('chat')
+  const imageInput = { ...f.input, purpose: 'image' as const }
+  const pending = f.controller.bind(imageInput, f.window)
+  await f.leaseReady
+  f.controller.clear(imageInput, f.window)
+  f.releaseLease()
+  expect(await pending).toMatchObject({ ok: false, error: { code: 'binding_cancelled' } })
+  expect(f.received.some(row => row.method === 'session.bind_managed_model' && row.purpose === 'image')).toBe(false)
+  expect(f.purposeBinding('chat')).toBe(chat)
+})
+
+it('logging out revokes both chat and image authority without persisting or returning secrets', async () => {
+  const f = await rig({ imageGateway: true })
+  expect((await f.controller.bind(f.input, f.window)).ok).toBe(true)
+  expect((await f.controller.bind({ ...f.input, purpose: 'image' }, f.window)).ok).toBe(true)
+  await f.auth.logout()
+  await vi.waitFor(() => expect([f.purposeBinding('chat'), f.purposeBinding('image')]).toEqual([undefined, undefined]))
+  expect(JSON.stringify(f.auth.snapshot())).not.toContain(f.secret)
 })

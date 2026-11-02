@@ -410,12 +410,65 @@ export const emberTheme: DesktopTheme = {
   }
 }
 
-/** Clean grayscale. Matches the CLI mono skin and dashboard mono theme. */
+/** Fixed Aino desktop palette. The legacy mono key keeps saved profiles compatible. */
 export const monoTheme: DesktopTheme = {
   name: 'mono',
-  label: 'Mono',
-  description: 'Clean grayscale — minimal and focused',
-  ...THEME_PRESET_PALETTES.mono
+  label: 'Aino',
+  description: 'Quiet neutral surfaces with a muted lavender accent',
+  colors: {
+    background: '#ffffff',
+    foreground: '#252831',
+    card: '#ffffff',
+    cardForeground: '#252831',
+    muted: '#f9fafb',
+    mutedForeground: '#8b909b',
+    popover: '#ffffff',
+    popoverForeground: '#252831',
+    primary: '#7583b2',
+    primaryForeground: '#ffffff',
+    secondary: '#eff0f6',
+    secondaryForeground: '#454d5f',
+    accent: '#eff0f6',
+    accentForeground: '#454d5f',
+    border: '#e5e6eb',
+    input: '#e5e6eb',
+    ring: '#7583b2',
+    midground: '#7583b2',
+    midgroundForeground: '#ffffff',
+    destructive: '#b94a3a',
+    destructiveForeground: '#ffffff',
+    sidebarBackground: '#f2f3f5',
+    sidebarBorder: '#e5e6eb',
+    userBubble: '#e9efff',
+    userBubbleBorder: '#e9efff'
+  },
+  darkColors: {
+    background: '#202126',
+    foreground: '#e6e7ed',
+    card: '#202126',
+    cardForeground: '#e6e7ed',
+    muted: '#1b1c20',
+    mutedForeground: '#9096a5',
+    popover: '#25262c',
+    popoverForeground: '#e6e7ed',
+    primary: '#a2accf',
+    primaryForeground: '#202126',
+    secondary: '#323648',
+    secondaryForeground: '#b1b5c2',
+    accent: '#323648',
+    accentForeground: '#e6e7ed',
+    border: '#383a43',
+    input: '#383a43',
+    ring: '#a2accf',
+    midground: '#a2accf',
+    midgroundForeground: '#202126',
+    destructive: '#e28379',
+    destructiveForeground: '#202126',
+    sidebarBackground: '#25262c',
+    sidebarBorder: '#383a43',
+    userBubble: '#323648',
+    userBubbleBorder: '#323648'
+  }
 }
 
 /** Neon green on black. Matches the CLI cyberpunk skin and dashboard theme. */

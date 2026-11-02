@@ -453,6 +453,11 @@ def test_cold_context_reuses_profile_anchor_a_b_a_without_rereading_history(
             assert usage["context_source"] == source
             assert usage["context_estimated"] is (source != "provider_usage")
             assert usage["model"] == model
+            categories = {category["id"]: category["tokens"] for category in usage["categories"]}
+            assert set(categories) == {"system_prompt", "conversation"}
+            assert categories["conversation"] == estimate_messages_tokens_rough(
+                first["history"] if sid == "cold-a" else second["history"])
+            assert usage["estimated_total"] == sum(categories.values())
         assert reads.count(str(launch_db.db_path)) == 1
         assert reads.count(str(pdb.db_path)) == 1
     finally:
@@ -486,6 +491,8 @@ def test_cold_context_rejects_stale_anchor_and_preserves_compute_host_authority(
     stale = _rpc(server, "session.context_breakdown", {"session_id": SESSION_ID})["result"]
     assert stale["context_source"] == "unknown"
     assert stale["context_used"] == 0
+    assert next(category["tokens"] for category in stale["categories"]
+                if category["id"] == "conversation") > 0
 
     session.update(_compute_host_active=True, _metadata_mirror={"model": "host-model", "usage": {
         "context_used": 470, "context_max": 1_000, "context_percent": 47,
@@ -501,3 +508,28 @@ def test_cold_context_rejects_stale_anchor_and_preserves_compute_host_authority(
     session["agent"] = None
     session["_compute_host_active"] = False
     assert _rpc(server, "session.context_breakdown", {"session_id": SESSION_ID})["result"] == mirrored
+
+
+def test_cold_unpriced_history_reports_categories_without_a_second_history_read(server, launch_db, monkeypatch):
+    from agent.model_metadata import estimate_messages_tokens_rough, estimate_tokens_rough
+
+    history = _seed(launch_db, turns=1)
+    prompt = "persisted system guidance"
+    launch_db.update_system_prompt(SESSION_KEY, prompt)
+    session = _register(server, history)
+    session["agent"] = None
+
+    def no_second_history_read(*args, **kwargs):
+        raise AssertionError("category estimates must reuse the hydrated transcript")
+
+    monkeypatch.setattr(SessionDB, "get_messages_as_conversation", no_second_history_read)
+    response = _rpc(server, "session.context_breakdown", {"session_id": SESSION_ID})
+
+    assert "error" not in response, response
+    breakdown = response["result"]
+    categories = {category["id"]: category["tokens"] for category in breakdown["categories"]}
+    assert categories == {"system_prompt": estimate_tokens_rough(prompt),
+                          "conversation": estimate_messages_tokens_rough(history)}
+    assert breakdown["estimated_total"] == sum(categories.values())
+    assert breakdown["context_source"] == "unknown"
+    assert server._session_usage_snapshot(session) == {}

@@ -3,12 +3,42 @@
 per-TUI sidecar ``config.set`` — never refused, never inference."""
 import asyncio
 import json
+from types import SimpleNamespace
+from unittest.mock import patch
 
 import hermes_yaml as yaml
 import pytest
 
 from tests.gateway.test_session_busy_controls import owner, admissions, settled
 from tests.gateway.fixtures.local_recovery_probe import rpc, websocket
+
+
+def test_approval_mode_changes_persist_for_the_owning_profile(tmp_path):
+    from gateway.session_tui_config import _set_approval_mode
+
+    config_path = tmp_path / 'config.yaml'
+    config_path.write_text(yaml.safe_dump({'approvals': {'mode': 'off'}}))
+    connection = SimpleNamespace(authority=SimpleNamespace(profile_id=str(tmp_path)))
+
+    for mode in ('manual', 'smart', 'off'):
+        assert _set_approval_mode(connection, mode) == {'key': 'approvals.mode', 'value': mode}
+        saved = yaml.safe_load(config_path.read_text())
+        assert saved['approvals']['mode'] == mode
+
+
+def test_approval_mode_write_refusal_keeps_the_command_failure_detail(tmp_path):
+    from gateway.session_tui_config import _set_approval_mode
+    from hermes_cli.approval_mode import ApprovalModeResult
+    from hermes_state_runtime import RuntimeStoreError
+
+    connection = SimpleNamespace(authority=SimpleNamespace(profile_id=str(tmp_path)))
+    failure = ApprovalModeResult(False, 'off', False, 'Failed to save approval mode: config is read-only')
+
+    with patch('hermes_cli.approval_mode.run_approval_mode_command', return_value=failure):
+        with pytest.raises(RuntimeStoreError, match='storage_unavailable') as raised:
+            _set_approval_mode(connection, 'manual')
+
+    assert raised.value.detail == failure.message
 
 
 def _display(home):

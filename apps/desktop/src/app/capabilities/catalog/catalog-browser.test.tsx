@@ -9,7 +9,7 @@ import { queryClient } from '@/lib/query-client'
 import { PageSearchShell } from '../../page-search-shell'
 
 import { CatalogBrowser } from './catalog-browser'
-import { type CatalogKind, parseCatalog } from './catalog-data'
+import { type CatalogKind, catalogQueryKey, parseCatalog } from './catalog-data'
 import { $catalogCardView } from './store'
 
 beforeEach(() => {
@@ -39,7 +39,7 @@ function setup(kind: CatalogKind, onToggle?: () => void) {
     }))
   )
 
-  queryClient.setQueryData(['public-catalog', kind], entries)
+  queryClient.setQueryData(catalogQueryKey(kind), entries)
   const onInstall = vi.fn()
 
   function Harness() {
@@ -74,6 +74,7 @@ const card = (name: string) =>
 describe.each(['skills', 'plugins'] as const)('%s catalog layouts', kind => {
   it('replaces the previous category and clears the current category when clicked again', () => {
     setup(kind)
+    fireEvent.click(screen.getByRole('button', { name: /^Filters/ }))
     const memory = screen.getByRole('button', { name: 'Memory' })
     const voice = screen.getByRole('button', { name: 'Voice' })
     const all = screen.getByRole('button', { name: 'All categories' })
@@ -180,7 +181,9 @@ describe.each(['skills', 'plugins'] as const)('%s catalog layouts', kind => {
     const { container } = setup(kind)
     const search = screen.getByRole<HTMLInputElement>('textbox', { name: 'Search catalog' })
     fireEvent.change(search, { target: { value: 'workflow' } })
+    fireEvent.click(screen.getByRole('button', { name: /^Filters/ }))
     fireEvent.click(screen.getByRole('button', { name: /^Memory/, pressed: false }))
+    fireEvent.click(screen.getByRole('button', { name: /^Filters/ }))
     await waitFor(() => expect(screen.getAllByRole('article')).toHaveLength(1))
 
     fireEvent.click(screen.getByRole('button', { name: 'List view' }))
@@ -196,13 +199,17 @@ describe.each(['skills', 'plugins'] as const)('%s catalog layouts', kind => {
 
     expect(screen.getByRole('button', { name: 'alpha' })).toBeTruthy()
     expect(screen.queryByRole('heading', { name: 'beta' })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: /^Filters/ }))
     expect(screen.getByRole('button', { name: /^Memory/, pressed: true })).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: /^Filters/ }))
     expect(screen.getByRole('textbox', { name: 'Search catalog' })).toBe(search)
     expect(search.value).toBe('workflow')
 
     fireEvent.click(screen.getByRole('button', { name: 'Card view' }))
     expect(screen.getAllByRole('article')).toHaveLength(1)
+    fireEvent.click(screen.getByRole('button', { name: /^Filters/ }))
     expect(screen.getByRole('button', { name: /^Memory/, pressed: true })).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: /^Filters/ }))
     expect(screen.queryByRole('dialog')).toBeNull()
   })
 })
@@ -233,7 +240,7 @@ describe('Chinese catalog presentation', () => {
       }
     ])
 
-    queryClient.setQueryData(['public-catalog', 'skills'], [entry])
+    queryClient.setQueryData(catalogQueryKey('skills'), [entry])
     const onInstall = vi.fn()
 
     function Harness() {
@@ -282,7 +289,7 @@ it('shows the built-in agent under the Aino brand without changing its installat
     { name: 'hermes-agent', source: 'GitHub', identifier: 'someone/hermes-agent', category: 'research' }
   ])
 
-  queryClient.setQueryData(['public-catalog', 'skills'], entries)
+  queryClient.setQueryData(catalogQueryKey('skills'), entries)
   const onInstall = vi.fn()
 
   function Harness() {

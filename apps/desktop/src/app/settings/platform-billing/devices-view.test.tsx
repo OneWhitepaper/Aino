@@ -77,6 +77,8 @@ it('suppresses old account results and confirms a scoped revoke with explicit TO
   await screen.findByText(device.device_id)
   await act(async () => release([{ ...device, device_id: 'old-device-should-not-paint' }]))
   expect(screen.queryByText('old-device-should-not-paint')).toBeNull()
+  expect(screen.getByText('Device authorizations').closest('details')!.open).toBe(false)
+  fireEvent.click(screen.getByText('Device authorizations'))
   fireEvent.click(screen.getByRole('button', { name: 'Revoke' }))
   expect(revoke).not.toHaveBeenCalled()
   fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Revoke' }))
@@ -111,6 +113,7 @@ it('loads only while visible and leaves recent-auth failures recoverable without
   visible = true
   fireEvent(window.document, new Event('visibilitychange'))
   await screen.findByText(device.device_id)
+  fireEvent.click(screen.getByText('Device authorizations'))
   fireEvent.click(screen.getByRole('button', { name: 'Revoke' }))
   fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Revoke' }))
   await screen.findByText('Sign out and sign in again before revoking this authorization.')

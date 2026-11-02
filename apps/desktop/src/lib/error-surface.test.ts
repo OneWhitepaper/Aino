@@ -215,7 +215,7 @@ describe('usage-window refusal', () => {
     expect(body).not.toBe(errorCardText(en.assistant.thread, plain).body)
   })
 
-  it('an older backend (no structured limit): Open billing, Retry and the model menu; no diagnostics', () => {
+  it('an older backend (no structured limit): choose a model and retry; no diagnostics', () => {
     const surface = parseErrorSurface({
       code: 'usage_window',
       layer: 'billing',
@@ -224,17 +224,16 @@ describe('usage-window refusal', () => {
     })!
 
     const plan = errorRecoveryPlan(surface)
-    expect(plan.openBilling && plan.retry && plan.switchProvider).toBe(true)
-    expect(plan.switchToModel || plan.useCredits).toBe(false)
+    expect(plan.retry && plan.switchProvider).toBe(true)
+    expect(plan.switchToModel).toBe(false)
     expect(plan.diagnostics).toBe(false)
     expect(surface.resetsAt).toBe(1_800_000_000)
     // Every other billing failure keeps today's card.
     const plain = errorRecoveryPlan(parseErrorSurface({ code: 'billing', layer: 'billing', retryable: false }))
-    expect(plain.openBilling).toBe(false)
     expect(plain.diagnostics).toBe(true)
   })
 
-  it('with a structured limit: one-click Switch to <model> and Use credits, no provider menu', () => {
+  it('with a structured limit: one-click Switch to <model>, no billing controls', () => {
     const surface = parseErrorSurface({
       code: 'usage_window',
       layer: 'billing',
@@ -257,10 +256,10 @@ describe('usage-window refusal', () => {
       ]
     })
     const plan = errorRecoveryPlan(surface)
-    expect(plan.switchToModel && plan.useCredits && plan.retry).toBe(true)
-    expect(plan.openBilling || plan.switchProvider || plan.diagnostics).toBe(false)
+    expect(plan.switchToModel && plan.retry).toBe(true)
+    expect(plan.switchProvider || plan.diagnostics).toBe(false)
 
-    // No balance: Add credits (Billing) instead of Use credits.
+    // Without a recommended model, the user can choose another provider.
     const add = errorRecoveryPlan(
       parseErrorSurface({
         code: 'usage_window',
@@ -270,10 +269,10 @@ describe('usage-window refusal', () => {
       })
     )
 
-    expect(add.openBilling).toBe(true)
-    expect(add.useCredits || add.switchToModel || add.switchProvider).toBe(false)
+    expect(add.switchProvider).toBe(true)
+    expect(add.switchToModel).toBe(false)
 
-    // Keep going off and no balance: both steps live on the Billing page, so Open billing (not Use credits).
+    // The legacy combined credit action also falls back to provider selection.
     const both = errorRecoveryPlan(
       parseErrorSurface({
         code: 'usage_window',
@@ -283,8 +282,8 @@ describe('usage-window refusal', () => {
       })
     )
 
-    expect(both.openBilling).toBe(true)
-    expect(both.useCredits || both.switchToModel || both.switchProvider).toBe(false)
+    expect(both.switchProvider).toBe(true)
+    expect(both.switchToModel).toBe(false)
   })
 
   it('falls back to its own table body when an older backend sent no sentence', () => {
@@ -328,7 +327,6 @@ describe('out of credits (not a window plan)', () => {
         parseErrorSurface({ code: 'billing', layer: 'billing', provider, retryable: false })!
       )
 
-      expect(plan.openBilling).toBe(false)
       expect(plan.switchProvider && plan.diagnostics).toBe(true)
     }
   })

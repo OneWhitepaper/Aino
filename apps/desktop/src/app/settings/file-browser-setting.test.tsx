@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
 
 import { en } from '@/i18n/en'
@@ -62,15 +62,16 @@ describe('File Browser setting', () => {
 
     act(() => $interfaceMode.set('simple'))
     const toggle = fileBrowserSwitch()
+    const row = toggle.closest<HTMLElement>('[data-settings-row]')!
 
-    expect(screen.getByText(content => content.includes(note))).toBeTruthy()
+    expect(within(row).getByText(content => content.includes(note))).toBeTruthy()
 
     // Simple shadows the preference: the click is a session reveal, not a new default.
     fireEvent.click(toggle)
     expect(toggle.getAttribute('aria-checked')).toBe('true')
 
     act(() => $interfaceMode.set('advanced'))
-    expect(screen.queryByText(content => content.includes(note))).toBeNull()
+    expect(within(row).queryByText(content => content.includes(note))).toBeNull()
     expect(toggle.getAttribute('aria-checked')).toBe('false')
   })
 })

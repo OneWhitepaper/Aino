@@ -49,6 +49,8 @@ class Target:
     alias: Optional[str] = None
     # The existing account a reconnect repairs, by id: an unnamed account, which no alias can address.
     repair_id: Optional[str] = None
+    # The exact non-secret configuration the user reviews before a custom MCP install.
+    mcp_config: Optional[dict[str, Any]] = None
 
     @property
     def resolved(self) -> bool:
@@ -73,6 +75,8 @@ class Target:
             out["attempt"] = self.attempt
         if self.required_env:
             out["required_env"] = self.required_env
+        if self.mcp_config is not None:
+            out["mcp_config"] = self.mcp_config
         out.update(self.extra)
         return out
 

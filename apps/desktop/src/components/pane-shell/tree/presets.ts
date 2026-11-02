@@ -15,6 +15,7 @@ import { asLayoutIntent, type Tiered } from '@/store/interface-mode'
 import { allPaneIds, findGroupOfPane, isLayoutNode, type LayoutNode } from './model'
 import { stripPresetLivePanes, stripPresetResting } from './preset-tree'
 import { $dismissedPanes, $hiddenTreePanes, $layoutTree, applyTree, markActivePreset } from './store'
+import { consolidateRestoredToolPanels } from './tool-panel-policy'
 
 export const LAYOUTS_AREA = 'layouts'
 
@@ -223,5 +224,8 @@ export function applyLayoutPreset(id: string, tree: LayoutNode) {
     return
   }
 
-  asLayoutIntent(() => applyTree(geometry, id, specs.get(id)?.resting))
+  const panes = registry.getArea('panes')
+  const paneFor = (paneId: string) => panes.find(pane => pane.id === paneId)
+  const unified = consolidateRestoredToolPanels(geometry, paneFor, ['focus', 'quad', 'terminal-deck'].includes(id))
+  asLayoutIntent(() => applyTree(unified, id, specs.get(id)?.resting))
 }

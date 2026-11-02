@@ -282,7 +282,6 @@ it('keeps the reopened ModelPill menu when exit animation retains its pending se
     )
     const trigger = screen.getByRole('button')
     fireEvent.pointerDown(trigger, { button: 0, ctrlKey: false })
-    fireEvent.click(await screen.findByRole('button', { name: 'Custom models' }))
     const content = screen.getByRole('menu')
     const search = content.querySelector('input')
     fireEvent.click(await screen.findByText(/byok.*new/i))
@@ -326,7 +325,6 @@ it('accepts a bare custom dropdown slug against canonical backend identity and c
     </QueryClientProvider>
   )
 
-  fireEvent.click(screen.getByRole('button', { name: 'Custom models' }))
   fireEvent.click(await screen.findByText(/byok.*new/i))
   await waitFor(() => expect(close).toHaveBeenCalledOnce())
   expect([$currentProvider.get(), $currentModel.get()]).toEqual(['custom:test', 'byok-new'])
@@ -341,7 +339,6 @@ it('accepts a bare custom dropdown slug against canonical backend identity and c
       <PickerHarness client={client} close={close} />
     </QueryClientProvider>
   )
-  fireEvent.click(screen.getByRole('button', { name: 'Custom models' }))
   fireEvent.click(await screen.findByText(/byok.*new/i))
   await waitFor(() => expect(notices.notify).toHaveBeenCalled())
   const beforeRetry = clear.mock.calls.length
@@ -368,7 +365,6 @@ it.each(['navigate', 'reopen'] as const)(
     )
 
     const view = render(picker('first'))
-    fireEvent.click(screen.getByRole('button', { name: 'Custom models' }))
     fireEvent.click(await screen.findByText(/byok.*new/i))
     await waitFor(() => expect(clear).toHaveBeenCalled())
 
@@ -473,8 +469,13 @@ it.each(['dropdown', 'dialog'] as const)('applies a managed model with one selec
     </QueryClientProvider>
   )
 
-  fireEvent.click(screen.getByRole('button', { name: 'Aino models' }))
-  fireEvent.click((await screen.findAllByRole('option', { name: /Fixture Model/i }))[0])
+  if (picker === 'dialog') {
+    fireEvent.click(screen.getByRole('button', { name: 'Aino models' }))
+  }
+
+  fireEvent.click(
+    (await screen.findAllByRole(picker === 'dropdown' ? 'menuitem' : 'option', { name: /Fixture Model/i }))[0]
+  )
 
   await waitFor(() => expect($sessionStates.get()['runtime-a'].platformModel?.status).toBe('ready'))
   expect([$currentProvider.get(), $currentModel.get()]).toEqual(['aino', 'catalog-a'])

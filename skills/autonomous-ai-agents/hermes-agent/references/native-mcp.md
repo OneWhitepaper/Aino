@@ -25,6 +25,34 @@ Install the MCP SDK:
 python -c "import pm; pm.sync_venv(['mcp'], explicit=True)"
 ```
 
+## Aino Desktop: install through the conversation
+
+When `manage_connections` is available, use its existing confirmation card instead of editing
+`mcp_servers` or running another app's plugin CLI. Local and custom MCP installation does not
+require a Nous account. Propose a user-provided URL or JSON with:
+
+```json
+{
+  "action": "install",
+  "connectors": [{
+    "name": "example",
+    "mcp": true,
+    "config": {"url": "https://mcp.example.com/mcp", "auth": "oauth", "timeout": 120}
+  }]
+}
+```
+
+Use `command` plus `args` for stdio. Optional environment variables must be matching references
+(`"env": {"EXAMPLE_KEY": "${EXAMPLE_KEY}"}`); the user enters missing secrets on the card.
+Do not put credentials in the URL, command arguments or chat. The card reviews the source
+before any process or connection starts, and cannot overwrite existing or plugin-owned servers.
+
+The user approves, then explicitly opens the browser authorization when offered. An authorization
+URL or `initiated` state is still pending; do not claim it is saved or ready. Readiness requires
+`connected`, discovered tools and no `discovery_error`. Cancellation before commit saves no new
+server. Reuse the existing retry action for failure or expired authorization. Adding an MCP
+server does not install another application's plugin skills or authorize its account.
+
 ## Quick Start
 
 Add MCP servers to `~/.hermes/config.yaml` under the `mcp_servers` key:

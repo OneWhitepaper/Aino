@@ -1,16 +1,19 @@
-import { useEffect, useReducer, useState } from 'react'
+import { useEffect, useReducer, useRef, useState } from 'react'
 
 import type { ContextBreakdown } from '@/types/hermes'
 
 interface ContextBreakdownOptions {
   busy: boolean
   enabled: boolean
-  requestGateway: <T = unknown>(method: string, params?: Record<string, unknown>) => Promise<T>
+  identityKey?: string
+  requestGateway: <T = unknown>(method: string, params?: Record<string, unknown>, timeoutMs?: number) => Promise<T>
   refreshKey?: string
   sessionId: null | string
+  suspended?: boolean
 }
 
 const INITIALIZATION_RETRY_DELAYS_MS = [500, 1000, 2000]
+const LIVE_REFRESH_INTERVAL_MS = 2_000
 
 /** The composer's session context breakdown, fetched as soon as the
  *  gauge is on screen rather than when its popover opens.
@@ -23,10 +26,11 @@ const INITIALIZATION_RETRY_DELAYS_MS = [500, 1000, 2000]
  *  hasn't spoken yet. It is a read-only chars/4 pass: no provider call, no
  *  prompt-cache impact.
  *
- *  Refetches when the focused session changes and when a turn ends (the
- *  transcript just grew). Held keyed by the session it describes so switching
- *  sessions drops the previous numbers instead of painting them under the new
- *  session's name.
+ *  Usage events refresh category estimates at most once every two seconds
+ *  during a turn, and a turn ending refreshes immediately. Keep the previous
+ *  categories visible during same-owner/model refreshes; session, owner, model
+ *  and explicit invalidations still discard them immediately. No token delta
+ *  starts its own timer or estimates category values in the renderer.
  *
  *  Two events change the transcript WITHOUT a busy toggle, so the refetch
  *  must be driven explicitly:
@@ -48,14 +52,74 @@ const INITIALIZATION_RETRY_DELAYS_MS = [500, 1000, 2000]
  *  meter goes dark honestly rather than showing numbers known to be
  *  stale. */
 
-/** A breakdown the backend computed from a live agent carries a real
- *  context_max (the compressor's context_length). Zero means the
- *  `agent is None` branch answered from empty metadata — not data. */
+/** Cold runtimes can restore occupancy without a known model window. Only a
+ * payload with no capacity, occupancy or categories is uninitialized. */
 function isZeroedBreakdown(breakdown: ContextBreakdown): boolean {
   return !(breakdown.context_max > 0 || breakdown.context_used > 0 || breakdown.categories.length > 0)
 }
 
 const RETRY_DELAYS_MS = INITIALIZATION_RETRY_DELAYS_MS
+
+/** A prompt-size estimate is useful context, but it must never hold the composer
+ *  in a loading state forever when the gateway is reconnecting or the backend is
+ *  rebuilding a large session. The request is retried from the popover after a
+ *  timeout, so a slow backend does not create an unbounded queue of work. */
+export const CONTEXT_BREAKDOWN_TIMEOUT_MS = 5_000
+
+type ContextBreakdownRequester = ContextBreakdownOptions['requestGateway']
+
+/** Composer and statusbar can mount together for the same focused session. Keep
+ * one in-flight estimate per gateway/session so both surfaces share the same
+ * backend walk instead of starting duplicate prompt builds. WeakMap keeps a
+ * disconnected gateway from retaining session keys indefinitely. */
+const pendingBreakdowns = new WeakMap<ContextBreakdownRequester, Map<string, Promise<ContextBreakdown>>>()
+
+function requestContextBreakdown(
+  requestGateway: ContextBreakdownRequester,
+  sessionId: string,
+  revision: string
+): Promise<ContextBreakdown> {
+  let bySession = pendingBreakdowns.get(requestGateway)
+
+  if (!bySession) {
+    bySession = new Map()
+    pendingBreakdowns.set(requestGateway, bySession)
+  }
+
+  const key = JSON.stringify([sessionId, revision])
+  const existing = bySession.get(key)
+
+  if (existing) {
+    return existing
+  }
+
+  let timeout: ReturnType<typeof setTimeout>
+
+  const raw = new Promise<ContextBreakdown>((resolve, reject) => {
+    timeout = setTimeout(() => reject(new Error('context_breakdown_timeout')), CONTEXT_BREAKDOWN_TIMEOUT_MS)
+    void requestGateway<ContextBreakdown>(
+      'session.context_breakdown',
+      { session_id: sessionId },
+      CONTEXT_BREAKDOWN_TIMEOUT_MS
+    ).then(resolve, reject)
+  })
+
+  const request = raw.finally(() => {
+    clearTimeout(timeout)
+
+    if (bySession?.get(key) === request) {
+      bySession.delete(key)
+
+      if (!bySession.size) {
+        pendingBreakdowns.delete(requestGateway)
+      }
+    }
+  })
+
+  bySession.set(key, request)
+
+  return request
+}
 
 /** Per-session invalidation generations. `invalidateContextBreakdown` bumps
  *  the generation for one session and notifies subscribers; the hook
@@ -87,35 +151,76 @@ export function _resetContextBreakdownInvalidationsForTests(): void {
   invalidationGenerations.clear()
 }
 
-export function useContextBreakdown({ busy, enabled, requestGateway, refreshKey, sessionId }: ContextBreakdownOptions) {
+export function useContextBreakdown({
+  busy,
+  enabled,
+  refreshKey,
+  identityKey = refreshKey,
+  requestGateway,
+  sessionId,
+  suspended = false
+}: ContextBreakdownOptions) {
   const [fetched, setFetched] = useState<{
     breakdown: ContextBreakdown
+    generation: number
     requestGateway: ContextBreakdownOptions['requestGateway']
-    refreshKey?: string
+    requestVersion: number
+    identityKey?: string
     sessionId: string
   } | null>(null)
 
   const [loading, setLoading] = useState(false)
+  const [unavailable, setUnavailable] = useState(false)
   const [requestVersion, refetch] = useReducer(version => version + 1, 0)
   const [generation, setGeneration] = useState(0)
 
+  const lastRead = useRef<{
+    requestGateway: ContextBreakdownOptions['requestGateway']
+    sessionId: string
+    identityKey?: string
+    startedAt: number
+  } | null>(null)
+
   useEffect(() => {
-    if (!sessionId) {return}
+    if (!sessionId) {
+      return
+    }
 
     const listener = (id: string, next: number) => {
-      if (id === sessionId) {setGeneration(next)}
+      if (id === sessionId) {
+        setGeneration(next)
+      }
     }
 
     invalidationListeners.add(listener)
     setGeneration(invalidationGenerations.get(sessionId) ?? 0)
 
-    return () => { invalidationListeners.delete(listener) }
+    return () => {
+      invalidationListeners.delete(listener)
+    }
   }, [sessionId])
 
   useEffect(() => {
-    if (!enabled || !sessionId || busy) {
+    if (!busy || !sessionId) {
+      return
+    }
+
+    const pending = pendingBreakdowns.get(requestGateway)
+
+    for (const key of pending?.keys() ?? []) {
+      if (JSON.parse(key)[0] === sessionId) {
+        pending?.delete(key)
+      }
+    }
+  }, [busy, requestGateway, sessionId])
+
+  // This ref records RPC start times for throttling, never mirrored atom state.
+  // eslint-disable-next-line no-restricted-syntax
+  useEffect(() => {
+    if (!enabled || !sessionId || suspended) {
       setFetched(null)
       setLoading(false)
+      setUnavailable(false)
 
       return
     }
@@ -125,6 +230,7 @@ export function useContextBreakdown({ busy, enabled, requestGateway, refreshKey,
     let timer: ReturnType<typeof setTimeout> | undefined
     const runtimeId = sessionId
     setLoading(true)
+    setUnavailable(false)
 
     const scheduleRetry = () => {
       const delay = RETRY_DELAYS_MS[retry++]
@@ -134,14 +240,23 @@ export function useContextBreakdown({ busy, enabled, requestGateway, refreshKey,
       } else {
         setFetched(null)
         setLoading(false)
+        setUnavailable(true)
       }
     }
 
     async function fetchBreakdown() {
-      try {
-        const breakdown = await requestGateway<ContextBreakdown>('session.context_breakdown', { session_id: runtimeId })
+      lastRead.current = { requestGateway, sessionId: runtimeId, identityKey, startedAt: Date.now() }
 
-        if (cancelled) {return}
+      try {
+        const breakdown = await requestContextBreakdown(
+          requestGateway,
+          runtimeId,
+          JSON.stringify([identityKey, refreshKey, generation, requestVersion, busy])
+        )
+
+        if (cancelled) {
+          return
+        }
 
         // Empty metadata can precede lazy initialization. Missing capacity alone
         // must not discard measured occupancy or restored historical details.
@@ -151,25 +266,67 @@ export function useContextBreakdown({ busy, enabled, requestGateway, refreshKey,
           return
         }
 
-        setFetched({ breakdown, requestGateway, refreshKey, sessionId: runtimeId })
+        setFetched({ breakdown, generation, requestGateway, requestVersion, identityKey, sessionId: runtimeId })
         setLoading(false)
-      } catch {
-        if (!cancelled) {scheduleRetry()}
+      } catch (error) {
+        if (cancelled) {
+          return
+        }
+
+        // A timeout means the backend did not answer this read in time. Stop
+        // showing an endless spinner and let the existing popover retry affordance
+        // initiate a fresh request. Initialization/transport failures retain their
+        // bounded retry ladder because those often recover within a short delay.
+        if (error instanceof Error && error.message === 'context_breakdown_timeout') {
+          setFetched(null)
+          setLoading(false)
+          setUnavailable(true)
+
+          return
+        }
+
+        scheduleRetry()
       }
     }
 
-    void fetchBreakdown()
+    const previous = lastRead.current
+
+    const delay =
+      busy &&
+      previous?.requestGateway === requestGateway &&
+      previous.sessionId === runtimeId &&
+      previous.identityKey === identityKey
+        ? Math.max(0, LIVE_REFRESH_INTERVAL_MS - (Date.now() - previous.startedAt))
+        : 0
+
+    if (delay) {
+      timer = setTimeout(() => void fetchBreakdown(), delay)
+    } else {
+      void fetchBreakdown()
+    }
 
     return () => {
       cancelled = true
 
-      if (timer !== undefined) {clearTimeout(timer)}
+      if (timer !== undefined) {
+        clearTimeout(timer)
+      }
     }
-  }, [busy, enabled, generation, requestGateway, requestVersion, refreshKey, sessionId])
+  }, [busy, enabled, generation, identityKey, requestGateway, requestVersion, refreshKey, sessionId, suspended])
 
   return {
-    breakdown: !busy && fetched && fetched.sessionId === sessionId && fetched.requestGateway === requestGateway && fetched.refreshKey === refreshKey ? fetched.breakdown : null,
+    breakdown:
+      !suspended &&
+      fetched &&
+      fetched.sessionId === sessionId &&
+      fetched.requestGateway === requestGateway &&
+      fetched.identityKey === identityKey &&
+      fetched.generation === generation &&
+      fetched.requestVersion === requestVersion
+        ? fetched.breakdown
+        : null,
     loading,
-    refetch
+    refetch,
+    unavailable
   }
 }

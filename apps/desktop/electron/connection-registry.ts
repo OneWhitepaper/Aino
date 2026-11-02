@@ -62,7 +62,7 @@ export interface RegistryConnection {
    * normalizeRemoteHeaders. Optional and additive — v2 registries written
    * before this field keep loading unchanged. */
   headers?: Record<string, unknown>
-  /** cloud: portal org slug/id the instance was discovered under. */
+  /** Legacy hosted-connection org slug/id. */
   org?: string
   /** Cloud instance name, separate from the user-editable label. */
   name?: string

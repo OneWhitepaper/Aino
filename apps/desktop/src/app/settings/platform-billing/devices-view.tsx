@@ -1,3 +1,5 @@
+import './account-wallet.css'
+
 import { useCallback, useEffect, useRef, useState } from 'react'
 
 import { platformBillingQueryKey } from '@/api/platform'
@@ -5,7 +7,7 @@ import { Button } from '@/components/ui/button'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { Input } from '@/components/ui/input'
 import { useI18n } from '@/i18n'
-import { Monitor, RefreshCw } from '@/lib/icons'
+import { ChevronRight, Monitor, RefreshCw } from '@/lib/icons'
 import { queryClient } from '@/lib/query-client'
 
 import type {
@@ -14,7 +16,7 @@ import type {
   PlatformDevice,
   PlatformDevicesBridge
 } from '../../../../shared/platform-contract'
-import { ListRowSkeleton, SettingsGroup, SettingsSection } from '../primitives'
+import { ListRowSkeleton, Pill, SettingsGroup } from '../primitives'
 
 export interface PlatformDevicesProps {
   scope: PlatformBillingScope
@@ -203,82 +205,92 @@ function DeviceList({ scope, bridge, accountBridge }: PlatformDevicesProps & { b
     error === 'RECENT_AUTH_REQUIRED' || error === 'not_authenticated' || error === 'refresh_token_revoked'
 
   return (
-    <SettingsSection
-      aside={
-        <Button disabled={loading || busy} onClick={() => void read()} size="sm" variant="ghost">
-          <RefreshCw />
-          {copy.refresh}
-        </Button>
-      }
-      icon={Monitor}
-      title={copy.title}
-    >
-      {loading && !devices && (
-        <SettingsGroup aria-busy="true" aria-label={t.common.loading} role="status">
-          <ListRowSkeleton />
-          <ListRowSkeleton />
-        </SettingsGroup>
-      )}
-      {revoked && (
-        <p className="mb-3 text-sm" role="status">
-          {copy.success}
-        </p>
-      )}
-      {error && (
-        <p className="mb-3 text-sm text-destructive" role="alert">
-          {reauthenticate
-            ? copy.reauthenticate
-            : error === 'STEP_UP_REQUIRED'
-              ? copy.stepUp
-              : t.settings.account.platformError(error)}
-        </p>
-      )}
-      {stepUp && (
-        <form
-          className="mb-4 grid gap-3"
-          onSubmit={event => {
-            event.preventDefault()
-            void verify()
-          }}
-        >
-          <Input
-            aria-label={copy.code}
-            autoComplete="one-time-code"
-            disabled={busy}
-            inputMode="numeric"
-            maxLength={64}
-            onChange={event => setCode(event.target.value)}
-            value={code}
-          />
-          <div className="flex flex-wrap gap-2">
-            <Button disabled={busy || !code.trim() || !accountBridge} size="sm" type="submit">
-              {copy.verify}
-            </Button>
-            <Button
+    <details className="account-devices">
+      <summary>
+        <Monitor aria-hidden="true" />
+        <span className="account-devices-heading">
+          <span>{copy.title}</span>
+          <span>{t.accountPage.devicesDescription}</span>
+        </span>
+        <ChevronRight aria-hidden="true" className="account-devices-chevron" />
+      </summary>
+      <div className="account-devices-body">
+        <div className="account-devices-toolbar">
+          <span>{t.accountPage.deviceIdentifier}</span>
+          <Button disabled={loading || busy} onClick={() => void read()} size="sm" variant="ghost">
+            <RefreshCw />
+            {copy.refresh}
+          </Button>
+        </div>
+        {loading && !devices && (
+          <SettingsGroup aria-busy="true" aria-label={t.common.loading} role="status">
+            <ListRowSkeleton />
+            <ListRowSkeleton />
+          </SettingsGroup>
+        )}
+        {revoked && (
+          <p className="mb-3 text-sm" role="status">
+            {copy.success}
+          </p>
+        )}
+        {error && (
+          <p className="mb-3 text-sm text-destructive" role="alert">
+            {reauthenticate
+              ? copy.reauthenticate
+              : error === 'STEP_UP_REQUIRED'
+                ? copy.stepUp
+                : t.settings.account.platformError(error)}
+          </p>
+        )}
+        {stepUp && (
+          <form
+            className="mb-4 grid gap-3"
+            onSubmit={event => {
+              event.preventDefault()
+              void verify()
+            }}
+          >
+            <Input
+              aria-label={copy.code}
+              autoComplete="one-time-code"
               disabled={busy}
-              onClick={() => {
-                setStepUp(null)
-                setCode('')
-                setError(null)
-              }}
-              size="sm"
-              type="button"
-              variant="ghost"
-            >
-              {t.common.cancel}
-            </Button>
-          </div>
-        </form>
-      )}
-      {devices?.length === 0 && <p className="text-sm text-muted-foreground">{copy.empty}</p>}
-      {devices && devices.length > 0 && (
-        <SettingsGroup role="list">
-          {devices.map(device => (
-            <div className="min-w-0 py-3" data-settings-row="" key={device.device_id} role="listitem">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <span className="min-w-0 text-sm [overflow-wrap:anywhere]">{device.device_id}</span>
-                <div className="flex shrink-0 items-center gap-3">
-                  <span className="text-xs text-muted-foreground">{device.revoked ? copy.revoked : copy.active}</span>
+              inputMode="numeric"
+              maxLength={64}
+              onChange={event => setCode(event.target.value)}
+              value={code}
+            />
+            <div className="flex flex-wrap gap-2">
+              <Button disabled={busy || !code.trim() || !accountBridge} size="sm" type="submit">
+                {copy.verify}
+              </Button>
+              <Button
+                disabled={busy}
+                onClick={() => {
+                  setStepUp(null)
+                  setCode('')
+                  setError(null)
+                }}
+                size="sm"
+                type="button"
+                variant="ghost"
+              >
+                {t.common.cancel}
+              </Button>
+            </div>
+          </form>
+        )}
+        {devices?.length === 0 && <p className="text-sm text-muted-foreground">{copy.empty}</p>}
+        {devices && devices.length > 0 && (
+          <div className="account-devices-list" role="list">
+            {devices.map(device => (
+              <div className="account-device" key={device.device_id} role="listitem">
+                <div className="account-device-main">
+                  <div className="account-device-identity">
+                    <span>{device.device_id}</span>
+                    <Pill tone={device.revoked ? 'muted' : 'success'}>
+                      {device.revoked ? copy.revoked : copy.active}
+                    </Pill>
+                  </div>
                   <Button
                     disabled={device.revoked || busy || loading || !!stepUp}
                     onClick={() => {
@@ -291,28 +303,30 @@ function DeviceList({ scope, bridge, accountBridge }: PlatformDevicesProps & { b
                     {copy.revoke}
                   </Button>
                 </div>
+                <div className="account-device-times">
+                  <span>
+                    {copy.lastUsed}: {new Date(device.last_used_at).toLocaleString(locale)}
+                  </span>
+                  <span>
+                    {copy.expires}: {new Date(device.expires_at).toLocaleString(locale)}
+                  </span>
+                </div>
               </div>
-              <p className="mt-1 text-xs text-muted-foreground [overflow-wrap:anywhere]">
-                {copy.lastUsed}: {new Date(device.last_used_at).toLocaleString(locale)}
-              </p>
-              <p className="mt-1 text-xs text-muted-foreground [overflow-wrap:anywhere]">
-                {copy.expires}: {new Date(device.expires_at).toLocaleString(locale)}
-              </p>
-            </div>
-          ))}
-        </SettingsGroup>
-      )}
-      {selected && (
-        <ConfirmDialog
-          confirmLabel={copy.revoke}
-          description={copy.confirmDescription}
-          destructive
-          onClose={() => setSelected(null)}
-          onConfirm={revoke}
-          open
-          title={copy.confirmTitle}
-        />
-      )}
-    </SettingsSection>
+            ))}
+          </div>
+        )}
+        {selected && (
+          <ConfirmDialog
+            confirmLabel={copy.revoke}
+            description={copy.confirmDescription}
+            destructive
+            onClose={() => setSelected(null)}
+            onConfirm={revoke}
+            open
+            title={copy.confirmTitle}
+          />
+        )}
+      </div>
+    </details>
   )
 }

@@ -41,6 +41,10 @@ def test_the_connection_card_drives_the_sessions_open_operation(tmp_path):
     assert probe(tmp_path, 'connection_card')['card']
 
 
+def test_local_mcp_retry_does_not_require_hosted_services(tmp_path):
+    assert probe(tmp_path, 'local_retry')['local_retry']
+
+
 @pytest.mark.platforms("posix")
 def test_exec_quick_and_plugin_commands_run_for_a_controlling_viewer(tmp_path):
     assert probe(tmp_path, 'commands')['commands']

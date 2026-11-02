@@ -1001,7 +1001,9 @@ class TurnRunner(GatewayTurnProgressMixin, GatewaySessionAgentMixin):
             metrics_state = begin_reply_metrics(self, agent, agent_history)
             billing_token = begin_managed_usage(agent) if managed or metrics_state is not None else None
             try:
-                with notification_turn(agent, muted=ctx.mute_notification_reply, session_id=ctx.session_id or ""):
+                from tui_gateway.managed_image_runtime import conversation_image_scope
+                with notification_turn(agent, muted=ctx.mute_notification_reply, session_id=ctx.session_id or ""), \
+                        conversation_image_scope(owner=self._approval_owner):
                     result = agent.run_conversation(api_message, **kwargs)
                 if managed:
                     result.update(current_usage_metadata())

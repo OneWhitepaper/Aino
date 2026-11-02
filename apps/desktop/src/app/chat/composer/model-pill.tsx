@@ -13,6 +13,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from '@/compon
 import { GlyphSpinner } from '@/components/ui/glyph-spinner'
 import { releaseTypingFocus } from '@/components/ui/keyboard-first'
 import { Tip } from '@/components/ui/tooltip'
+import { useResizeObserver } from '@/hooks/use-resize-observer'
 import { useI18n } from '@/i18n'
 import { ChevronDown } from '@/lib/icons'
 import { formatModelPillLabel, providerDisplayName } from '@/lib/model-status-label'
@@ -34,9 +35,28 @@ import type { ChatBarState } from './types'
 const UNKNOWN_TIER = atom('')
 
 const PILL = cn(
-  'h-(--composer-control-size) min-w-0 shrink gap-1 rounded-md px-2 text-[length:var(--aino-text-ui)] font-normal',
+  'h-(--composer-control-size) min-w-0 shrink gap-1 rounded-md px-2 text-[length:var(--aino-text-caption)] font-normal',
   'text-(--ui-text-secondary) hover:bg-(--chrome-action-hover) hover:text-foreground'
 )
+
+function useModelMenuAlignment() {
+  const [content, setContent] = useState<HTMLDivElement | null>(null)
+  const [alignOffset, setAlignOffset] = useState(0)
+
+  const measure = useCallback(() => {
+    const layout = content?.querySelector<HTMLElement>('.aino-model-menu-layout')
+    const list = layout?.querySelector<HTMLElement>('.aino-model-menu-list')
+    const listWidth = list?.offsetWidth ?? 0
+
+    // Align the list, while Radix still measures both cards for edge avoidance.
+    // A single-card menu (including narrow details) needs no horizontal offset.
+    setAlignOffset(layout && listWidth > 0 ? listWidth - layout.offsetWidth : 0)
+  }, [content])
+
+  useResizeObserver(measure, { current: content })
+
+  return { alignOffset, contentRef: setContent }
+}
 
 interface ModelPillContentProps {
   compact: boolean
@@ -123,11 +143,20 @@ export function ModelPill({
   const runtimeId = useStore(view.$runtimeId)
   const restoreSelection = useRef<(() => void) | null>(null)
   const [menuState, setMenuState] = useState({ open: false, instance: 0 })
+  const menuAlignment = useModelMenuAlignment()
   const menuStateRef = useRef(menuState)
   const readOpenInstance = useCallback(() => menuStateRef.current.instance, [])
 
   const setMenuOpen = useCallback((next: boolean) => {
     const previous = menuStateRef.current
+
+    if (next && !previous.open) {
+      const focused = window.document.activeElement
+
+      if (focused instanceof HTMLElement && focused.dataset.slot === RICH_INPUT_SLOT) {
+        focused.blur()
+      }
+    }
 
     if (next !== previous.open) {
       const current = { open: next, instance: previous.instance + 1 }
@@ -275,6 +304,7 @@ export function ModelPill({
       </Tip>
       <DropdownMenuContent
         align="end"
+        alignOffset={menuAlignment.alignOffset}
         className="w-72 p-0"
         onCloseAutoFocus={event => {
           if (restoreSelection.current) {
@@ -286,6 +316,7 @@ export function ModelPill({
         onInteractOutside={() => {
           restoreSelection.current = null
         }}
+        ref={menuAlignment.contentRef}
         side="top"
         sideOffset={8}
       >

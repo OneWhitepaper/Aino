@@ -1,0 +1,88 @@
+.config-page-field-help {
+  display: block;
+  margin-top: 0.5rem;
+  color: var(--ui-text-secondary);
+  font-size: var(--aino-text-caption);
+  line-height: 1.65;
+}
+
+.config-page-mode-list {
+  display: grid;
+  gap: 0.625rem;
+  margin-top: 0.875rem;
+}
+
+.config-page-mode-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6875rem;
+  padding: 0.875rem;
+  border: 1px solid var(--ui-stroke-tertiary);
+  border-radius: var(--aino-radius-control);
+  background: var(--ui-editor-surface-background);
+  cursor: pointer;
+}
+
+.config-page-mode-option:has(input:checked) {
+  border-color: var(--ui-accent);
+  background: var(--ui-row-active-background);
+}
+
+.config-page-mode-option:has(input:focus-visible) {
+  outline: 2px solid var(--ui-accent);
+  outline-offset: 2px;
+}
+
+.config-page-mode-option input {
+  flex: 0 0 auto;
+  width: 0.875rem;
+  height: 0.875rem;
+  margin-top: 0.1875rem;
+  accent-color: var(--aino-action-bg);
+}
+
+.config-page-mode-option strong {
+  font-size: var(--aino-text-ui);
+  font-weight: 500;
+  line-height: 1.5;
+}
+
+.config-page-mode-description {
+  display: block;
+  margin-top: 0.25rem;
+  color: var(--ui-text-secondary);
+  font-size: var(--aino-text-caption);
+  line-height: 1.65;
+}
+
+.config-page-percentage {
+  margin-top: 0.875rem;
+}
+
+.config-page-percentage-controls {
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+}
+
+.config-page-percentage-slider {
+  flex: 1;
+  min-width: 3rem;
+}
+
+.config-page-percentage-number {
+  flex: 0 0 7.5rem;
+  max-width: 50%;
+  font-variant-numeric: tabular-nums;
+}
+
+.config-page-number-error {
+  margin: 0.5rem 0 0;
+  color: var(--destructive);
+  font-size: var(--aino-text-caption);
+  line-height: 1.5;
+}
+
+.config-page-list-editor {
+  margin-top: 0.75rem;
+}

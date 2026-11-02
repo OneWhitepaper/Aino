@@ -67,7 +67,7 @@ describe('vision_analyze activity image', () => {
     $connection.set({ mode: 'local' } as never)
     renderVisionRow()
 
-    const toggle = screen.getByRole('button', { expanded: false })
+    const toggle = screen.getByRole('button', { expanded: false, name: 'Analyzed image' })
 
     fireEvent.click(toggle)
 
@@ -86,7 +86,7 @@ describe('vision_analyze activity image', () => {
     $connection.set({ mode: 'remote', profile: 'wsl-work' } as never)
     renderVisionRow()
 
-    fireEvent.click(screen.getByRole('button', { expanded: false }))
+    fireEvent.click(screen.getByRole('button', { expanded: false, name: 'Analyzed image' }))
 
     const img = await screen.findByRole('img')
 
@@ -105,7 +105,7 @@ describe('vision_analyze activity image', () => {
     readFileDataUrl.mockRejectedValueOnce(new Error('ENOENT'))
     renderVisionRow()
 
-    fireEvent.click(screen.getByRole('button', { expanded: false }))
+    fireEvent.click(screen.getByRole('button', { expanded: false, name: 'Analyzed image' }))
 
     expect(await screen.findByText(/Couldn't load/)).toBeTruthy()
     expect(screen.queryByRole('img')).toBeNull()

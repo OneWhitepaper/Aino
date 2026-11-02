@@ -9,6 +9,8 @@ import type { CustomEndpointsResponse } from '@/types/hermes'
 const getCustomEndpoints = vi.fn()
 const saveCustomEndpoint = vi.fn()
 const validateCustomEndpoint = vi.fn()
+const deleteCustomEndpoint = vi.fn()
+const confirm = vi.fn()
 const notify = vi.fn()
 const notifyError = vi.fn()
 const triggerHaptic = vi.fn()
@@ -24,7 +26,7 @@ vi.mock('@/store/profile', () => ({
 vi.mock('@/hermes', async importOriginal => ({
   ...(await importOriginal<Record<string, unknown>>()),
   activateCustomEndpoint: vi.fn(),
-  deleteCustomEndpoint: vi.fn(),
+  deleteCustomEndpoint: (...args: unknown[]) => deleteCustomEndpoint(...args),
   getCustomEndpoints: (...args: unknown[]) => getCustomEndpoints(...args),
   getProfiles: async () => ({ profiles: (await import('@/store/profile')).$profiles.get() }),
   saveCustomEndpoint: (...args: unknown[]) => saveCustomEndpoint(...args),
@@ -32,6 +34,7 @@ vi.mock('@/hermes', async importOriginal => ({
   validateCustomEndpoint: (...args: unknown[]) => validateCustomEndpoint(...args)
 }))
 vi.mock('@/lib/haptics', () => ({ triggerHaptic: (...args: unknown[]) => triggerHaptic(...args) }))
+vi.mock('@/store/confirm', () => ({ confirm: (...args: unknown[]) => confirm(...args) }))
 vi.mock('@/store/notifications', () => ({
   notify: (...args: unknown[]) => notify(...args),
   notifyError: (...args: unknown[]) => notifyError(...args)
@@ -67,6 +70,7 @@ const savedResponse: CustomEndpointsResponse = {
 }
 
 beforeEach(() => {
+  confirm.mockResolvedValue(true)
   $activeGatewayProfile.set('default')
   $settingsScopeOverride.set(null)
   $profiles.set([])
@@ -99,6 +103,7 @@ describe('CustomEndpointsSettings', () => {
     fireEvent.change(screen.getByRole('textbox', { name: '名称' }), { target: { value: 'Fixture Ω' } })
     fireEvent.change(screen.getByRole('textbox', { name: '端点 URL' }), { target: { value: 'http://fixture.test/v1' } })
     fireEvent.change(screen.getByRole('combobox', { name: '默认模型' }), { target: { value: 'fixture-model' } })
+    fireEvent.click(screen.getByText('高级设置'))
     fireEvent.click(screen.getByRole('button', { name: 'Responses API' }))
     await act(() => language.setLocale('zh-hant'))
     expect((screen.getByRole('textbox', { name: '名稱' }) as HTMLInputElement).value).toBe('Fixture Ω')
@@ -139,6 +144,7 @@ describe('CustomEndpointsSettings', () => {
     fireEvent.change(screen.getByPlaceholderText('http://127.0.0.1:8081/v1'), {
       target: { value: 'https://responses-gateway.example.com/v1' }
     })
+    fireEvent.click(screen.getByText('Advanced settings'))
     fireEvent.click(screen.getByRole('button', { name: 'Responses API' }))
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: 'Test' }))
@@ -207,8 +213,99 @@ describe('CustomEndpointsSettings', () => {
 
     render(<CustomEndpointsSettings />)
 
-    await screen.findByText('Profile A')
+    await screen.findByDisplayValue('model-a')
+    expect(screen.getByRole<HTMLInputElement>('textbox', { name: 'Name' }).value).toBe('Profile A')
+    expect(screen.getByRole<HTMLInputElement>('textbox', { name: 'Endpoint URL' }).value).toBe(
+      'http://profile-a.test/v1'
+    )
+    expect(screen.queryByRole('combobox', { name: 'Provider' })).toBeNull()
+    fireEvent.click(screen.getByText('Advanced settings'))
     expect(screen.getByRole('button', { name: 'Anthropic Messages' }).getAttribute('aria-pressed')).toBe('true')
+  })
+
+  it('preserves an existing key and default model when editing a non-default custom connection', async () => {
+    const response: CustomEndpointsResponse = {
+      current: { base_url: '', model: 'builtin-model', provider: 'aino' },
+      endpoints: [{ ...savedResponse.endpoints[0], has_api_key: true, is_current: false }]
+    }
+
+    getCustomEndpoints.mockResolvedValue(response)
+    saveCustomEndpoint.mockResolvedValue({ ...response, ok: true, id: 'profile-a-endpoint' })
+    const onMainModelChanged = vi.fn()
+    render(<CustomEndpointsSettings onMainModelChanged={onMainModelChanged} />)
+
+    await screen.findByDisplayValue('model-a')
+    expect(screen.getByRole<HTMLInputElement>('textbox', { name: 'Endpoint URL' }).value).toBe(
+      'http://profile-a.test/v1'
+    )
+    expect(screen.getByLabelText<HTMLInputElement>('API Key').value).toBe('')
+    fireEvent.change(screen.getByRole('textbox', { name: 'Name' }), { target: { value: 'Updated connection' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+
+    await waitFor(() => expect(saveCustomEndpoint).toHaveBeenCalledOnce())
+    expect(saveCustomEndpoint).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: 'profile-a-endpoint',
+        name: 'Updated connection',
+        api_key: undefined,
+        make_default: false
+      }),
+      'default'
+    )
+    expect(onMainModelChanged).not.toHaveBeenCalled()
+  })
+
+  it('publishes the authoritative custom default route and model after saving a same-named connection', async () => {
+    const endpoint = {
+      ...savedResponse.endpoints[0],
+      id: 'deepseek',
+      name: 'deepseek',
+      model: 'saved-alias',
+      models: ['saved-alias']
+    }
+
+    getCustomEndpoints.mockResolvedValue({ ...savedResponse, endpoints: [endpoint] })
+    saveCustomEndpoint.mockResolvedValue({
+      ...savedResponse,
+      id: 'deepseek',
+      endpoints: [endpoint],
+      current: { base_url: endpoint.base_url, model: 'resolved-model', provider: 'custom:deepseek' }
+    })
+    const onMainModelChanged = vi.fn()
+    render(<CustomEndpointsSettings onMainModelChanged={onMainModelChanged} />)
+
+    await screen.findByDisplayValue('saved-alias')
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+
+    await waitFor(() => expect(onMainModelChanged).toHaveBeenCalledWith('custom:deepseek', 'resolved-model'))
+    expect(onMainModelChanged).toHaveBeenCalledOnce()
+    expect(saveCustomEndpoint).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'deepseek', model: 'saved-alias', make_default: true }),
+      'default'
+    )
+  })
+
+  it('blocks saving an edited configuration while its deletion is pending', async () => {
+    getCustomEndpoints.mockResolvedValue(savedResponse)
+    let finish!: (response: CustomEndpointsResponse) => void
+    deleteCustomEndpoint.mockReturnValue(new Promise(resolve => (finish = resolve)))
+    const onMainModelChanged = vi.fn()
+    render(<CustomEndpointsSettings onMainModelChanged={onMainModelChanged} />)
+
+    await screen.findByDisplayValue('model-a')
+    fireEvent.change(screen.getByRole('textbox', { name: 'Name' }), { target: { value: 'Edited connection' } })
+    fireEvent.click(screen.getAllByRole('button', { name: 'Delete endpoint' })[0])
+    await waitFor(() => expect(deleteCustomEndpoint).toHaveBeenCalledWith('profile-a-endpoint', 'default'))
+
+    const save = screen.getByRole<HTMLButtonElement>('button', { name: 'Save' })
+    expect(save.disabled).toBe(true)
+    fireEvent.click(save)
+    expect(saveCustomEndpoint).not.toHaveBeenCalled()
+    await act(async () => finish({ ...emptyResponse, ok: true }))
+
+    expect(screen.getByRole<HTMLInputElement>('textbox', { name: 'Name' }).value).toBe('')
+    expect(onMainModelChanged).not.toHaveBeenCalled()
+    expect(saveCustomEndpoint).not.toHaveBeenCalled()
   })
 
   it('drops a pending save completion after its profile-scoped view unmounts', async () => {

@@ -449,6 +449,21 @@ def custom_provider_aliases(display_name: str, provider_key: str = "") -> frozen
     return frozenset(aliases)
 
 
+def is_builtin_provider_id(name: str) -> bool:
+    """Whether the exact id names a built-in route rather than a legacy alias.
+
+    Saved endpoints that reuse that id are addressed as ``custom:<id>``. Alias keys such as
+    ``providers.openai`` keep their existing override semantics (``openai`` aliases OpenRouter).
+    LM Studio is a local server whose endpoint configuration belongs to that same route.
+    """
+    raw = str(name or "").strip().lower()
+    if not raw or raw in {"custom", "lmstudio"} or raw.startswith("custom:") or normalize_provider(raw) != raw:
+        return False
+    from hermes_cli.auth import PROVIDER_REGISTRY
+    from hermes_cli.models_catalog_static import CANONICAL_PROVIDERS
+    return raw in PROVIDER_REGISTRY or raw in HERMES_OVERLAYS or any(p.slug == raw for p in CANONICAL_PROVIDERS)
+
+
 def resolve_custom_provider(name: str, custom_providers: Optional[list[dict[str, Any]]]) -> Optional[ProviderDef]:
     """Resolve a provider from the user's config.yaml ``custom_providers`` list. A stored bare
     ``"custom"`` (corrupt state from a prior model-switch bug) falls back to the first valid entry
@@ -536,14 +551,14 @@ def _llamacpp_pdef() -> Optional[ProviderDef]:
 
 def resolve_provider_full(name: str, user_providers: Optional[dict[str, Any]] = None,
                           custom_providers: Optional[list[dict[str, Any]]] = None) -> Optional[ProviderDef]:
-    """Full resolution chain: user ``providers.<raw name>`` -> lossy-alias registry id -> built-in
-    (models.dev + overlays) -> user providers (canonical, then raw) -> ``custom_providers`` ->
-    managed llamacpp -> models.dev directly. User-defined ``providers.<name>`` is tried FIRST on
-    the raw (pre-alias) name: a configured ``providers.openai`` pointing at api.openai.com must not
-    be hijacked by the legacy "openai" -> "openrouter" alias."""
+    """Resolve exact built-in ids independently from saved ``custom:<id>`` endpoints.
+
+    User-defined raw names otherwise retain precedence over lossy aliases: ``providers.openai``
+    pointing at api.openai.com must not be hijacked by the legacy "openai" -> "openrouter" alias.
+    """
     canonical = normalize_provider(name)
     raw = name.strip().lower()
-    if user_providers:
+    if user_providers and not is_builtin_provider_id(raw):
         user_pdef = resolve_user_provider(raw, user_providers)
         if user_pdef is not None:
             return user_pdef
@@ -553,7 +568,7 @@ def resolve_provider_full(name: str, user_providers: Optional[dict[str, Any]] = 
             return pdef
     pdef = get_provider(canonical)
     if pdef is not None:
-        if pdef.source == "plugin-profile" and user_providers:
+        if pdef.source == "plugin-profile" and user_providers and not is_builtin_provider_id(raw):
             user_pdef = resolve_user_provider(pdef.id, user_providers)
             if user_pdef is not None:
                 return user_pdef

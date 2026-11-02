@@ -4,6 +4,7 @@ import { PageLoader } from '@/components/page-loader'
 import { StatusDot, type StatusTone } from '@/components/status-dot'
 import { Button } from '@/components/ui/button'
 import { EmptyState } from '@/components/ui/empty-state'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { SearchField } from '@/components/ui/search-field'
 import { ResponsiveTabs } from '@/components/ui/tab-dropdown'
 import type { MessagingPlatformInfo } from '@/hermes'
@@ -12,7 +13,6 @@ import { localizedMessagingPlatformDescription, localizedMessagingPlatformName }
 import { ChevronRight, RefreshCw, ShieldLock } from '@/lib/icons'
 import { platformStatusTone } from '@/lib/platform-status'
 
-import { PAGE_INSET_X } from '../layout-constants'
 import { PageSearchShell } from '../page-search-shell'
 import { SettingsProfileScope } from '../settings/profile-scope'
 
@@ -43,25 +43,13 @@ export function matchesDirectoryFilter(
   return filter === 'all' || platformStatusTone(platform) === filter
 }
 
-function groupPlatforms(platforms: MessagingPlatformInfo[]) {
+function orderedPlatforms(platforms: MessagingPlatformInfo[]) {
   return [
-    {
-      id: 'common' as const,
-      hint: 'commonHint' as const,
-      platforms: platforms
-        .filter(p => COMMON_ORDER.includes(p.id))
-        .sort((a, b) => COMMON_ORDER.indexOf(a.id) - COMMON_ORDER.indexOf(b.id))
-    },
-    {
-      id: 'more' as const,
-      hint: 'moreHint' as const,
-      platforms: platforms.filter(p => !COMMON_ORDER.includes(p.id) && !INTEGRATION_PLATFORMS.has(p.id))
-    },
-    {
-      id: 'integrations' as const,
-      hint: 'integrationsHint' as const,
-      platforms: platforms.filter(p => INTEGRATION_PLATFORMS.has(p.id))
-    }
+    ...platforms
+      .filter(p => COMMON_ORDER.includes(p.id))
+      .sort((a, b) => COMMON_ORDER.indexOf(a.id) - COMMON_ORDER.indexOf(b.id)),
+    ...platforms.filter(p => !COMMON_ORDER.includes(p.id) && !INTEGRATION_PLATFORMS.has(p.id)),
+    ...platforms.filter(p => INTEGRATION_PLATFORMS.has(p.id))
   ]
 }
 
@@ -120,20 +108,32 @@ export function MessagingDirectory({
   return (
     <PageSearchShell {...props} searchHidden>
       <div className="messaging-page-scroll">
-        <div className={'messaging-page-content ' + PAGE_INSET_X}>
+        <div className="messaging-page-content">
           <header className="messaging-page-heading">
             <div>
               <h1>{copy.title}</h1>
               <p>{copy.subtitle}</p>
             </div>
-            <SettingsProfileScope className="messaging-profile-scope" compact />
-          </header>
-          {platforms.length > 0 && (
-            <div className="messaging-gateway-strip">
-              <StatusDot tone={gatewayRunning ? 'good' : 'muted'} />
-              <span>{gatewayRunning ? t.commandCenter.gatewayRunning : m.gatewayStopped}</span>
+            <div className="messaging-heading-actions">
+              {platforms.length > 0 && (
+                <div className="messaging-gateway-strip">
+                  <StatusDot tone={gatewayRunning ? 'good' : 'muted'} />
+                  <span>{gatewayRunning ? t.commandCenter.gatewayRunning : m.gatewayStopped}</span>
+                </div>
+              )}
+              <Button
+                aria-label={t.common.refresh}
+                disabled={refreshing}
+                onClick={onRefresh}
+                size="sm"
+                variant="outline"
+              >
+                <RefreshCw className={refreshing ? 'animate-spin' : undefined} />
+                {t.common.refresh}
+              </Button>
+              <SettingsProfileScope className="messaging-profile-scope" compact />
             </div>
-          )}
+          </header>
           {notice}
           <div className="messaging-catalog-toolbar">
             <ResponsiveTabs
@@ -150,51 +150,37 @@ export function MessagingDirectory({
                 value={query}
                 variant="box"
               />
-              <Button
-                aria-label={t.common.refresh}
-                disabled={refreshing}
-                onClick={onRefresh}
-                size="icon-sm"
-                variant="ghost"
-              >
-                <RefreshCw className={refreshing ? 'animate-spin' : undefined} />
-              </Button>
+              <span className="messaging-result-count">{t.catalog.results(visiblePlatforms.length)}</span>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button size="sm" variant="outline">
+                    {copy.statusFilters}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent align="end" className="w-auto max-w-[calc(100vw-2rem)] p-3" variant="menu">
+                  <ResponsiveTabs
+                    onChange={id => onFilter(id as DirectoryFilter)}
+                    tabs={[{ id: 'all', label: m.statusFilter.all }, ...toneTabs]}
+                    value={filter}
+                    wideClassName="justify-start"
+                  />
+                </PopoverContent>
+              </Popover>
             </div>
           </div>
-          <details className="messaging-status-filters">
-            <summary>{copy.statusFilters}</summary>
-            <ResponsiveTabs
-              onChange={id => onFilter(id as DirectoryFilter)}
-              tabs={[{ id: 'all', label: m.statusFilter.all }, ...toneTabs]}
-              value={filter}
-              wideClassName="justify-start"
-            />
-          </details>
           <div className="messaging-directory">
             {loading && <PageLoader label={m.loading} />}
-            {groupPlatforms(visiblePlatforms).map(group =>
-              group.platforms.length ? (
-                <section className="messaging-platform-section" key={group.id}>
-                  <header className="messaging-section-heading">
-                    <h2>
-                      {copy[group.id]} <span>{group.platforms.length}</span>
-                    </h2>
-                    <p>{copy[group.hint]}</p>
-                  </header>
-                  <ul className="messaging-platform-grid">
-                    {group.platforms.map(platform => (
-                      <li key={platform.id}>
-                        <PlatformCard
-                          onSelect={() => onSelect(platform.id)}
-                          pendingCount={pendingCounts[platform.id] ?? 0}
-                          platform={platform}
-                        />
-                      </li>
-                    ))}
-                  </ul>
-                </section>
-              ) : null
-            )}
+            <ul className="messaging-platform-grid">
+              {orderedPlatforms(visiblePlatforms).map(platform => (
+                <li key={platform.id}>
+                  <PlatformCard
+                    onSelect={() => onSelect(platform.id)}
+                    pendingCount={pendingCounts[platform.id] ?? 0}
+                    platform={platform}
+                  />
+                </li>
+              ))}
+            </ul>
             {!loading && !visiblePlatforms.length && (
               <div className="messaging-empty">
                 <EmptyState
@@ -242,12 +228,17 @@ function PlatformCard({
 
   return (
     <button aria-label={name} className="messaging-platform-card" data-tone={tone} onClick={onSelect} type="button">
-      <PlatformAvatar className="messaging-platform-avatar" platformId={platform.id} platformName={platform.name} />
-      <span className="messaging-platform-copy">
+      <span className="messaging-platform-identity">
+        <PlatformAvatar className="messaging-platform-avatar" platformId={platform.id} platformName={platform.name} />
         <span className="messaging-platform-name">{name}</span>
-        <span className="messaging-platform-description">
-          {localizedMessagingPlatformDescription(locale, platform.id, platform.description)}
+        <span className="messaging-platform-badge">
+          {platform.configured ? m.directory.configured : m.states.not_configured}
         </span>
+      </span>
+      <span className="messaging-platform-description">
+        {localizedMessagingPlatformDescription(locale, platform.id, platform.description)}
+      </span>
+      <span className="messaging-platform-footer">
         <span className="messaging-platform-meta">
           <StatusDot tone={tone} />
           <span>{platform.state ? m.states[platform.state] || platform.state.replace(/_/g, ' ') : m.unknown}</span>
@@ -258,10 +249,10 @@ function PlatformCard({
           )}
           {platform.id === 'wecom' && <span className="messaging-send-only">{m.directory.sendOnly}</span>}
         </span>
-      </span>
-      <span aria-hidden="true" className="messaging-configure-action">
-        {m.directory.configure}
-        <ChevronRight />
+        <span aria-hidden="true" className="messaging-configure-action">
+          {m.directory.configure}
+          <ChevronRight />
+        </span>
       </span>
     </button>
   )

@@ -1,5 +1,13 @@
 import type { ModelOptionProvider, ModelOptionsResult, ModelPricing } from '@hermes/shared'
-import { DEFAULT_REASONING_EFFORT, planBlocks, sectionAt, splitRecommended, usageLevel, usageTag } from '@hermes/shared'
+import {
+  DEFAULT_REASONING_EFFORT,
+  modelSearchText,
+  planBlocks,
+  sectionAt,
+  splitRecommended,
+  usageLevel,
+  usageTag
+} from '@hermes/shared'
 import { useStore } from '@nanostores/react'
 import { useQuery } from '@tanstack/react-query'
 import {
@@ -15,7 +23,9 @@ import {
   useState
 } from 'react'
 
+import { getApiRequestConnection } from '@/api/client'
 import { PlanLimitLine, UsageLevelTag } from '@/components/model-picker'
+import { PlatformModelList, type PlatformModelListProps } from '@/components/platform-model-list'
 import { ProviderStatusChip } from '@/components/provider-status-chip'
 import { Badge } from '@/components/ui/badge'
 import { Codicon } from '@/components/ui/codicon'
@@ -36,6 +46,8 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Tip, TipHintLabel } from '@/components/ui/tooltip'
 import type { HermesGateway } from '@/hermes'
 import { useI18n } from '@/i18n'
+import { modelMenuPreviewCopy } from '@/i18n/model-menu-preview'
+import { modelSourceCopy } from '@/i18n/model-source'
 import { triggerHaptic } from '@/lib/haptics'
 import { isSubmitEnter } from '@/lib/ime'
 import { catalogProviderMatches, modelOptionsQueryKey, requestModelOptions } from '@/lib/model-options'
@@ -62,6 +74,7 @@ import {
   effectiveVisibleKeys,
   type ModelFamily,
   modelVisibilityKey,
+  openCustomModelConfig,
   seedKnownModels,
   setModelVisibilityOpen
 } from '@/store/model-visibility'
@@ -70,7 +83,11 @@ import { $collapsedProviders, toggleCollapsedProvider } from '@/store/provider-c
 import { $defaultReasoningEffort } from '@/store/session'
 import type { LocalModelLoadProgress, LocalRuntimeJob } from '@/types/hermes'
 
+import type { PlatformModel } from '../../../shared/platform-contract'
+import { isCustomModelProvider } from '../settings/model-provider-source'
+
 import { type FastControl, ModelEditSubmenu, resolveFastControl } from './model-edit-submenu'
+import { ModelMenuPreviewContext } from './model-menu-preview'
 import { ModelMenuRowIcon, useModelMenuRowDecoration } from './model-menu-row-decorations'
 
 // Lets the host dropdown (model-pill, a kanban field trigger, …) hand the panel
@@ -176,6 +193,12 @@ export interface ModelMenuController {
 }
 
 interface ModelCatalogMenuProps {
+  /** The composer adds its account catalog to the same search and keyboard list. */
+  platformSection?: {
+    models: readonly PlatformModel[]
+    disabled: boolean
+    props: PlatformModelListProps
+  }
   disabled?: boolean
   controller: ModelMenuController
   /** Rows appended under the catalog (Refresh Models, Edit Models, …). */
@@ -206,6 +229,7 @@ interface ProviderGroup {
 }
 
 type KbRow =
+  | { key: string; kind: 'aino'; model: PlatformModel }
   | { key: string; kind: 'custom'; provider: ModelOptionProvider; slug: string }
   | { family: ModelFamily; key: string; kind: 'family'; provider: ModelOptionProvider }
   | { key: string; kind: 'moa'; preset: string }
@@ -247,52 +271,21 @@ function useDownloadRows(owner: LocalModelsOwner, localModelsEnabled: boolean) {
  * can never drift apart.
  */
 // health: allow CC -- usage-window plans: section headings and the limit line in the existing list render; this component was over target on main
-export function ModelCatalogMenu({
-  disabled = false,
-  controller,
-  footer,
-  header,
+function catalogHasVisibleList(hidden: boolean, groups: number, downloads: number, favorites: number) {
+  return !hidden && (groups > 0 || downloads > 0 || favorites > 0)
+}
+
+function shouldOfferCustomModel(slugEntry: boolean, hasList: boolean, hasPlatformMatches: boolean, moaPresets: number) {
+  return slugEntry || (!hasList && !hasPlatformMatches && moaPresets === 0)
+}
+
+function useModelCatalogSources({
   gateway,
-  includeMoa = false,
-  ownerConnectionId,
   profile = 'default',
   request,
-  sessionId = null
-}: ModelCatalogMenuProps): ReactElement {
-  const { t } = useI18n()
-  const copy = t.shell.modelMenu
-  const copyPicker = t.modelPicker
-  const closeMenu = useContext(ModelMenuCloseContext)
-  const readOpenInstance = useContext(ModelMenuOpenInstanceContext)
-  const [search, setSearch] = useState('')
-  const selecting = useRef(false)
-  const selectionEpoch = useRef(0)
-  const [pending, setPending] = useState(false)
-  useLayoutEffect(() => {
-    selectionEpoch.current += 1
-
-    return () => {
-      selectionEpoch.current += 1
-    }
-  }, [sessionId, ownerConnectionId, profile])
-  // "Add custom model…" turns the search box into slug entry: the catalog
-  // steps aside until something is typed, and the placeholder says what to
-  // type. Typing a slug without this works too; the row just makes it findable.
-  const [slugEntry, setSlugEntry] = useState(false)
-  const searchRef = useRef<HTMLInputElement>(null)
-  const collapsedProviders = useStoreCollapsed()
-  const defaultEffort = useDefaultEffort()
-  // Which models the user curated in Edit Models. Read HERE rather than taken
-  // as a prop: it's one global preference, so every surface that shows a
-  // catalog must show the same shortlist. A per-caller opt-in is how the board
-  // and the composer would end up disagreeing about what "my models" means.
-  const visibleModels = useStore($visibleModels)
-  const customModels = useStore($customModels)
-  // Favorite models, same reasoning as the shortlist above: one global
-  // preference owned by the catalog, so the composer pill, session tiles and
-  // the kanban override all show the same Favorites section.
-  const favoriteKeys = useStore($favoriteModels)
-
+  sessionId = null,
+  ownerConnectionId
+}: Pick<ModelCatalogMenuProps, 'gateway' | 'profile' | 'request' | 'sessionId' | 'ownerConnectionId'>) {
   const modelOptions = useQuery({
     queryKey: modelOptionsQueryKey(profile, sessionId, ownerConnectionId),
     // Gateway-first even with no session: a connected (possibly remote)
@@ -330,6 +323,66 @@ export function ModelCatalogMenu({
   // starts or ends. Each row selects its own percent scalar.
   const downloads = useDownloadRows(owner, localModelsEnabled)
 
+  return { modelOptions, loading, localModelsEnabled, owner, loadingModels, downloads }
+}
+
+export function ModelCatalogMenu({
+  platformSection,
+  disabled = false,
+  controller,
+  footer,
+  header,
+  gateway,
+  includeMoa = false,
+  ownerConnectionId,
+  profile = 'default',
+  request,
+  sessionId = null
+}: ModelCatalogMenuProps): ReactElement {
+  const { t, locale } = useI18n()
+  const copy = t.shell.modelMenu
+  const copyPicker = t.modelPicker
+  const sourceCopy = modelSourceCopy(locale)
+  const closeMenu = useContext(ModelMenuCloseContext)
+  const previewContext = useContext(ModelMenuPreviewContext)
+  const readOpenInstance = useContext(ModelMenuOpenInstanceContext)
+  const [search, setSearch] = useState('')
+  const selecting = useRef(false)
+  const selectionEpoch = useRef(0)
+  const [pending, setPending] = useState(false)
+  useLayoutEffect(() => {
+    selectionEpoch.current += 1
+
+    return () => {
+      selectionEpoch.current += 1
+    }
+  }, [sessionId, ownerConnectionId, profile])
+  // "Add custom model…" turns the search box into slug entry: the catalog
+  // steps aside until something is typed, and the placeholder says what to
+  // type. Typing a slug without this works too; the row just makes it findable.
+  const [slugEntry, setSlugEntry] = useState(false)
+  const searchRef = useRef<HTMLInputElement>(null)
+  const collapsedProviders = useStoreCollapsed()
+  const defaultEffort = useDefaultEffort()
+  // Which models the user curated in Edit Models. Read HERE rather than taken
+  // as a prop: it's one global preference, so every surface that shows a
+  // catalog must show the same shortlist. A per-caller opt-in is how the board
+  // and the composer would end up disagreeing about what "my models" means.
+  const visibleModels = useStore($visibleModels)
+  const customModels = useStore($customModels)
+  // Favorite models, same reasoning as the shortlist above: one global
+  // preference owned by the catalog, so the composer pill, session tiles and
+  // the kanban override all show the same Favorites section.
+  const favoriteKeys = useStore($favoriteModels)
+
+  const { modelOptions, loading, localModelsEnabled, owner, loadingModels, downloads } = useModelCatalogSources({
+    gateway,
+    profile,
+    request,
+    sessionId,
+    ownerConnectionId
+  })
+
   const error = queryErrorMessage(modelOptions.error)
 
   const providers = modelOptions.data?.providers
@@ -347,18 +400,29 @@ export function ModelCatalogMenu({
         providers?.filter(
           provider =>
             provider.slug.toLowerCase() !== 'moa' &&
+            (provider.authenticated !== false || provider.source === 'configured-current') &&
+            // The managed catalog already owns Aino rows, including account
+            // availability. A runtime hint must not create a second group.
+            (!platformSection || provider.slug !== 'aino') &&
             // Strict --local gate: staged local models exist on disk, but
             // without the flag the GUI doesn't offer them.
             (localModelsEnabled || provider.slug !== LOCAL_PROVIDER_SLUG)
         ) ?? [],
         customModels
       ),
-    [providers, localModelsEnabled, customModels]
+    [providers, localModelsEnabled, customModels, platformSection]
   )
 
   const current = controller.current
 
   const q = normalize(search)
+
+  const hasPlatformMatches = (platformSection?.models ?? []).some(model =>
+    foldIncludes(
+      modelSearchText(`${model.display_name} ${model.model} ${model.provider_label}`),
+      modelSearchText(search)
+    )
+  )
 
   // In-flight downloads render inside the Local provider group when it
   // exists, else as their own trailing 'Local' group (first download —
@@ -423,15 +487,16 @@ export function ModelCatalogMenu({
   // section below it (MoA, custom slug) would sit under two separators.
   // Favorites count: a catalog whose every curated family is starred has
   // groups but no group rows, and the section must still paint.
-  const hasList = !hideCatalog && (groups.length > 0 || shownDownloads.length > 0 || favoriteRows.length > 0)
+  const hasList = catalogHasVisibleList(hideCatalog, groups.length, shownDownloads.length, favoriteRows.length)
 
   // A typed id no provider lists is still a model to the backend. Offer it as
   // a row per configured provider (the current one first) so a slug the
   // catalog lacks is one Enter away, then remember it as a normal row. While
   // the query still matches catalog rows the section stays out of the way
   // unless the user asked for it via "Add custom model…".
-  const customSlug =
-    slugEntry || (!hasList && shownMoaPresets.length === 0) ? customModelCandidate(search, pickerProviders) : null
+  const customSlug = shouldOfferCustomModel(slugEntry, hasList, hasPlatformMatches, shownMoaPresets.length)
+    ? customModelCandidate(search, pickerProviders)
+    : null
 
   const customProviders = useMemo(
     () =>
@@ -540,6 +605,18 @@ export function ModelCatalogMenu({
   // collapse, filter, presets), so the selection can never sit on a hidden row.
   const kbRows = useMemo<KbRow[]>(
     () => [
+      ...(platformSection?.disabled
+        ? []
+        : (platformSection?.models ?? [])
+            .filter(
+              model =>
+                model.state === 'available' &&
+                foldIncludes(
+                  modelSearchText(`${model.display_name} ${model.model} ${model.provider_label}`),
+                  modelSearchText(search)
+                )
+            )
+            .map((model): KbRow => ({ key: `aino:${model.id}`, kind: 'aino', model }))),
       ...favoriteRows.map(({ family, provider }): KbRow => ({
         family,
         key: `${provider.slug}:${family.id}`,
@@ -547,7 +624,7 @@ export function ModelCatalogMenu({
         provider
       })),
       ...groups.flatMap(group =>
-        collapsedProviders.includes(group.provider.slug) && !search
+        !previewContext && collapsedProviders.includes(group.provider.slug) && !search
           ? []
           : group.families.map((family): KbRow => ({
               family,
@@ -566,7 +643,17 @@ export function ModelCatalogMenu({
           }))
         : [])
     ],
-    [favoriteRows, groups, collapsedProviders, search, shownMoaPresets, customSlug, customProviders]
+    [
+      platformSection,
+      favoriteRows,
+      groups,
+      collapsedProviders,
+      search,
+      shownMoaPresets,
+      customSlug,
+      customProviders,
+      previewContext
+    ]
   )
 
   // The row the arrows (or a Shift+Enter star) last put the highlight on,
@@ -578,12 +665,14 @@ export function ModelCatalogMenu({
   // deliberate click works even before the pointer has moved (#123040).
 
   const rowIsCurrent = (row: KbRow) =>
-    row.kind === 'moa'
-      ? current.provider === 'moa' && row.preset === current.model
-      : row.kind === 'custom'
-        ? false
-        : catalogProviderMatches(row.provider, current.provider) &&
-          (row.family.id === current.model || row.family.fastId === current.model)
+    row.kind === 'aino'
+      ? current.provider === 'aino' && current.model === row.model.id
+      : row.kind === 'moa'
+        ? current.provider === 'moa' && row.preset === current.model
+        : row.kind === 'custom'
+          ? false
+          : catalogProviderMatches(row.provider, current.provider) &&
+            (row.family.id === current.model || row.family.fastId === current.model)
 
   const autoIndex = q ? (kbRows.length > 0 ? 0 : -1) : kbRows.findIndex(row => rowIsCurrent(row))
 
@@ -598,7 +687,14 @@ export function ModelCatalogMenu({
 
     const from = kbIndex >= 0 ? kbIndex : delta === 1 ? -1 : 0
 
-    setKbOverride(kbRows[(from + delta + kbRows.length) % kbRows.length].key)
+    const next = kbRows[(from + delta + kbRows.length) % kbRows.length]
+    setKbOverride(next.key)
+
+    if (next.kind === 'aino') {
+      previewContext?.onPreview({ kind: 'aino', model: next.model })
+    } else if (next.kind === 'family') {
+      previewContext?.onPreview({ kind: 'custom', family: next.family, provider: next.provider })
+    }
   }
 
   const commitKbRow = () => {
@@ -609,6 +705,16 @@ export function ModelCatalogMenu({
     const row = kbIndex >= 0 ? kbRows[kbIndex] : undefined
 
     if (!row) {
+      return
+    }
+
+    if (row.kind === 'aino') {
+      const item = Array.from(
+        platformRef.current?.querySelectorAll<HTMLElement>('[data-platform-model-id]') ?? []
+      ).find(element => element.dataset.platformModelId === row.model.id)
+
+      item?.click()
+
       return
     }
 
@@ -669,6 +775,22 @@ export function ModelCatalogMenu({
   const keyboardSubRef = useRef<null | { key: string; trigger: HTMLElement }>(null)
 
   const openActiveSubmenu = (): boolean => {
+    if (previewContext && kbIndex >= 0) {
+      const row = kbRows[kbIndex]
+
+      if (row.kind === 'aino') {
+        previewContext.onInspect({ kind: 'aino', model: row.model })
+
+        return true
+      }
+
+      if (row.kind === 'family') {
+        previewContext.onInspect({ kind: 'custom', family: row.family, provider: row.provider })
+
+        return true
+      }
+    }
+
     const trigger = listRef.current?.querySelector<HTMLElement>('[data-kb-active]')
 
     if (!trigger || !kbActiveKey) {
@@ -729,12 +851,16 @@ export function ModelCatalogMenu({
   // the top (their Recommended picks); the current row stays highlighted and is scrolled to once the
   // user arrows or searches. Every other account keeps opening on the current model.
   const listRef = useRef<HTMLDivElement>(null)
+  const platformRef = useRef<HTMLDivElement>(null)
   const opensAtTop = Boolean(providers?.some(p => p.plan_usage))
   const followKb = !opensAtTop || kbOverride !== null || Boolean(q)
 
   useEffect(() => {
     if (followKb) {
-      listRef.current?.querySelector('[data-kb-active]')?.scrollIntoView({ block: 'nearest' })
+      const row =
+        platformRef.current?.querySelector('[data-kb-active]') ?? listRef.current?.querySelector('[data-kb-active]')
+
+      row?.scrollIntoView({ block: 'nearest' })
     }
   }, [followKb, kbActiveKey])
 
@@ -787,216 +913,295 @@ export function ModelCatalogMenu({
 
       {!hideCatalog && <DropdownMenuSeparator className="mx-0" />}
 
-      {hideCatalog ? null : loading ? (
-        <DropdownMenuGroup className="py-1">
-          {Array.from({ length: 4 }, (_, index) => (
-            <DropdownMenuItem
-              className={dropdownMenuRow}
-              disabled
-              key={index}
-              onSelect={event => event.preventDefault()}
-            >
-              <Skeleton className="h-4 w-full" />
-            </DropdownMenuItem>
-          ))}
-        </DropdownMenuGroup>
-      ) : error ? (
-        <DropdownMenuItem className={dropdownMenuRow} disabled>
-          {error}
-        </DropdownMenuItem>
-      ) : groups.length === 0 &&
-        favoriteRows.length === 0 &&
-        moaPresets.length === 0 &&
-        shownDownloads.length === 0 &&
-        !customSlug ? (
-        <DropdownMenuItem className={dropdownMenuRow} disabled>
-          {copy.noModels}
-        </DropdownMenuItem>
-      ) : hasList ? (
-        <div className="max-h-[max(150px,30dvh)] overflow-y-auto py-0.5" ref={listRef}>
-          {/* Favorites first — the shortcut the star exists for. The section
+      <div className={previewContext ? 'aino-model-menu-scroll' : undefined}>
+        {!hideCatalog && platformSection && (
+          <div ref={platformRef}>
+            <PlatformModelList
+              {...platformSection.props}
+              activeId={kbActiveKey?.startsWith('aino:') ? kbActiveKey.slice(5) : undefined}
+              key={`${ownerConnectionId ?? ''}:${profile}:${sessionId ?? ''}`}
+              searchValue={search}
+            />
+          </div>
+        )}
+
+        {hideCatalog ? null : loading || error ? (
+          <ModelCatalogStatus error={error} loading={loading} />
+        ) : groups.length === 0 &&
+          favoriteRows.length === 0 &&
+          moaPresets.length === 0 &&
+          shownDownloads.length === 0 &&
+          !customSlug &&
+          !hasPlatformMatches ? (
+          <DropdownMenuItem className={dropdownMenuRow} disabled>
+            {copy.noModels}
+          </DropdownMenuItem>
+        ) : hasList ? (
+          <div className="max-h-[max(150px,30dvh)] overflow-y-auto py-0.5" ref={listRef}>
+            {/* Favorites first — the shortcut the star exists for. The section
               paints nothing with no favorites, and nothing while searching,
               where every match is listed in its provider's place instead. */}
-          {favoriteRows.length > 0 ? (
-            <DropdownMenuGroup className="py-0.5">
-              <DropdownMenuLabel className={catalogGroupLabel}>{copy.favorites}</DropdownMenuLabel>
-              {favoriteRows.map(({ family, provider }, index) => (
-                <Fragment key={`${provider.slug}:${family.id}`}>
-                  {favoritesSpanProviders && favoriteRows[index - 1]?.provider.slug !== provider.slug ? (
-                    <DropdownMenuLabel className={favoriteProviderLabel}>{provider.name}</DropdownMenuLabel>
-                  ) : null}
-                  <ModelFamilyRow
-                    controller={controller}
-                    current={current}
-                    defaultEffort={defaultEffort}
-                    disabled={disabled || pending}
-                    family={family}
-                    favorite
-                    kbProps={kbRowProps(`${provider.slug}:${family.id}`)}
-                    loadingModels={loadingModels}
-                    onSelect={selectFamily}
-                    onSubOpenChange={handleSubOpenChange}
-                    provider={provider}
-                    search={search}
-                  />
-                </Fragment>
-              ))}
-            </DropdownMenuGroup>
-          ) : null}
-          {groups.map(group => {
-            const slug = group.provider.slug
+            {favoriteRows.length > 0 ? (
+              <DropdownMenuGroup className="py-0.5">
+                <DropdownMenuLabel className={catalogGroupLabel}>{copy.favorites}</DropdownMenuLabel>
+                {favoriteRows.map(({ family, provider }, index) => (
+                  <Fragment key={`${provider.slug}:${family.id}`}>
+                    {favoritesSpanProviders && favoriteRows[index - 1]?.provider.slug !== provider.slug ? (
+                      <DropdownMenuLabel className={favoriteProviderLabel}>{provider.name}</DropdownMenuLabel>
+                    ) : null}
+                    <ModelFamilyRow
+                      controller={controller}
+                      current={current}
+                      defaultEffort={defaultEffort}
+                      disabled={disabled || pending}
+                      family={family}
+                      favorite
+                      kbProps={kbRowProps(`${provider.slug}:${family.id}`)}
+                      loadingModels={loadingModels}
+                      onSelect={selectFamily}
+                      onSubOpenChange={handleSubOpenChange}
+                      provider={provider}
+                      search={search}
+                    />
+                  </Fragment>
+                ))}
+              </DropdownMenuGroup>
+            ) : null}
+            {groups.map((group, groupIndex) => {
+              const slug = group.provider.slug
+              const previous = groups[groupIndex - 1]?.provider
+              const customSource = isCustomModelProvider(group.provider)
 
-            // Collapsed when the user stored it (and not while searching, which
-            // spans every model regardless of collapse state).
-            const collapsed = collapsedProviders.includes(slug) && !search
+              const showSourceLabel =
+                previewContext &&
+                slug !== LOCAL_PROVIDER_SLUG &&
+                (!previous || previous.slug === LOCAL_PROVIDER_SLUG || isCustomModelProvider(previous) !== customSource)
 
-            return (
-              <DropdownMenuGroup className="py-0.5" key={slug}>
-                <DropdownMenuItem
-                  className={cn(
-                    catalogGroupLabel,
-                    'group/label flex w-full cursor-pointer items-center gap-1 !bg-transparent focus:!bg-transparent'
+              // Collapsed when the user stored it (and not while searching, which
+              // spans every model regardless of collapse state).
+              const collapsed = !previewContext && collapsedProviders.includes(slug) && !search
+
+              return (
+                <DropdownMenuGroup className="py-0.5" key={slug}>
+                  {showSourceLabel && (
+                    <DropdownMenuLabel className={catalogGroupLabel}>
+                      {customSource ? sourceCopy.customSource : sourceCopy.providerSource}
+                    </DropdownMenuLabel>
                   )}
+                  {previewContext ? (
+                    slug === LOCAL_PROVIDER_SLUG && (
+                      <DropdownMenuLabel className={catalogGroupLabel}>{group.provider.name}</DropdownMenuLabel>
+                    )
+                  ) : (
+                    <DropdownMenuItem
+                      className={cn(
+                        catalogGroupLabel,
+                        'group/label flex w-full cursor-pointer items-center gap-1 !bg-transparent focus:!bg-transparent'
+                      )}
+                      onSelect={event => {
+                        event.preventDefault()
+                        toggleCollapsedProvider(slug)
+                      }}
+                      textValue=""
+                    >
+                      <span className="truncate">
+                        <HighlightMatches foldSeparators query={search} text={group.provider.name} />
+                      </span>
+                      <DisclosureCaret
+                        className="shrink-0 text-(--ui-text-tertiary) opacity-0 transition group-hover/label:opacity-100"
+                        open={!collapsed}
+                        size="0.625rem"
+                      />
+                      <ProviderStatusChip className="ml-auto mr-0.5" provider={group.provider} />
+                    </DropdownMenuItem>
+                  )}
+                  {/* Window plans past an allowance: one line saying what happens next (pay as you go
+                    or wait for the reset) instead of a note on every row. */}
+                  {!collapsed && !search ? <PlanLimitLine className="px-2 pb-1" provider={group.provider} /> : null}
+                  {!collapsed &&
+                    group.families.map((family, familyIdx) => (
+                      <Fragment key={`${group.provider.slug}:${family.id}`}>
+                        {!previewContext && !search && sectionTitle(group, familyIdx, copyPicker) ? (
+                          <DropdownMenuLabel className="px-2 pb-0.5 pt-1.5 text-[length:var(--aino-text-caption)] font-medium text-(--ui-text-tertiary)">
+                            {sectionTitle(group, familyIdx, copyPicker)}
+                          </DropdownMenuLabel>
+                        ) : null}
+                        <ModelFamilyRow
+                          controller={controller}
+                          current={current}
+                          defaultEffort={defaultEffort}
+                          disabled={disabled || pending}
+                          family={family}
+                          favorite={favoriteSet.has(favoriteModelKey(group.provider.slug, family.id))}
+                          kbProps={kbRowProps(`${group.provider.slug}:${family.id}`)}
+                          loadingModels={loadingModels}
+                          onSelect={selectFamily}
+                          onSubOpenChange={handleSubOpenChange}
+                          provider={group.provider}
+                          search={search}
+                        />
+                      </Fragment>
+                    ))}
+                  {!collapsed &&
+                    slug === LOCAL_PROVIDER_SLUG &&
+                    shownDownloads.map(job => (
+                      <DownloadingModelRow jobId={job.jobId} key={job.jobId} owner={owner} target={job.target} />
+                    ))}
+                </DropdownMenuGroup>
+              )
+            })}
+            {!hasLocalGroup && shownDownloads.length > 0 && (
+              <DropdownMenuGroup className="py-0.5" key="local-downloads">
+                <DropdownMenuLabel className={catalogGroupLabel}>{copyPicker.localDownloadsHeading}</DropdownMenuLabel>
+                {shownDownloads.map(job => (
+                  <DownloadingModelRow jobId={job.jobId} key={job.jobId} owner={owner} target={job.target} />
+                ))}
+              </DropdownMenuGroup>
+            )}
+          </div>
+        ) : null}
+
+        {!hideCatalog && shownMoaPresets.length > 0 ? (
+          <div>
+            {hasList ? <DropdownMenuSeparator className="mx-0" /> : null}
+            <DropdownMenuLabel className={dropdownMenuSectionLabel}>MoA presets</DropdownMenuLabel>
+            {shownMoaPresets.map(preset => {
+              const isCurrentMoa = current.provider === 'moa' && current.model === preset
+
+              return (
+                <DropdownMenuItem
+                  disabled={disabled || pending}
+                  key={`moa:${preset}`}
                   onSelect={event => {
                     event.preventDefault()
-                    toggleCollapsedProvider(slug)
+                    void selectMoaPreset(preset)
                   }}
-                  textValue=""
+                  {...kbRowProps(`moa:${preset}`)}
                 >
-                  <span className="truncate">
-                    <HighlightMatches foldSeparators query={search} text={group.provider.name} />
+                  <span className="min-w-0 flex-1 truncate">
+                    MoA: <HighlightMatches foldSeparators query={search} text={preset} />
                   </span>
-                  <DisclosureCaret
-                    className="shrink-0 text-(--ui-text-tertiary) opacity-0 transition group-hover/label:opacity-100"
-                    open={!collapsed}
-                    size="0.625rem"
-                  />
-                  <ProviderStatusChip className="ml-auto mr-0.5" provider={group.provider} />
+                  {isCurrentMoa ? <Codicon className="ml-auto text-foreground" name="check" size="0.75rem" /> : null}
                 </DropdownMenuItem>
-                {/* Window plans past an allowance: one line saying what happens next (pay as you go
-                    or wait for the reset) instead of a note on every row. */}
-                {!collapsed && !search ? <PlanLimitLine className="px-2 pb-1" provider={group.provider} /> : null}
-                {!collapsed &&
-                  group.families.map((family, familyIdx) => (
-                    <Fragment key={`${group.provider.slug}:${family.id}`}>
-                      {!search && sectionTitle(group, familyIdx, copyPicker) ? (
-                        <DropdownMenuLabel className="px-2 pb-0.5 pt-1.5 text-[length:var(--aino-text-caption)] font-medium text-(--ui-text-tertiary)">
-                          {sectionTitle(group, familyIdx, copyPicker)}
-                        </DropdownMenuLabel>
-                      ) : null}
-                      <ModelFamilyRow
-                        controller={controller}
-                        current={current}
-                        defaultEffort={defaultEffort}
-                        disabled={disabled || pending}
-                        family={family}
-                        favorite={favoriteSet.has(favoriteModelKey(group.provider.slug, family.id))}
-                        kbProps={kbRowProps(`${group.provider.slug}:${family.id}`)}
-                        loadingModels={loadingModels}
-                        onSelect={selectFamily}
-                        onSubOpenChange={handleSubOpenChange}
-                        provider={group.provider}
-                        search={search}
-                      />
-                    </Fragment>
-                  ))}
-                {!collapsed &&
-                  slug === LOCAL_PROVIDER_SLUG &&
-                  shownDownloads.map(job => (
-                    <DownloadingModelRow jobId={job.jobId} key={job.jobId} owner={owner} target={job.target} />
-                  ))}
-              </DropdownMenuGroup>
-            )
-          })}
-          {!hasLocalGroup && shownDownloads.length > 0 && (
-            <DropdownMenuGroup className="py-0.5" key="local-downloads">
-              <DropdownMenuLabel className={catalogGroupLabel}>{copyPicker.localDownloadsHeading}</DropdownMenuLabel>
-              {shownDownloads.map(job => (
-                <DownloadingModelRow jobId={job.jobId} key={job.jobId} owner={owner} target={job.target} />
-              ))}
-            </DropdownMenuGroup>
-          )}
-        </div>
-      ) : null}
+              )
+            })}
+          </div>
+        ) : null}
 
-      {!hideCatalog && shownMoaPresets.length > 0 ? (
-        <div>
-          {hasList ? <DropdownMenuSeparator className="mx-0" /> : null}
-          <DropdownMenuLabel className={dropdownMenuSectionLabel}>MoA presets</DropdownMenuLabel>
-          {shownMoaPresets.map(preset => {
-            const isCurrentMoa = current.provider === 'moa' && current.model === preset
-
-            return (
+        {customSlug && customProviders.length > 0 ? (
+          <div>
+            {hasList || shownMoaPresets.length > 0 ? <DropdownMenuSeparator className="mx-0" /> : null}
+            <DropdownMenuLabel className={dropdownMenuSectionLabel}>{copyPicker.customModel}</DropdownMenuLabel>
+            {customProviders.map(provider => (
               <DropdownMenuItem
-                disabled={disabled || pending}
-                key={`moa:${preset}`}
+                key={`custom:${provider.slug}`}
                 onSelect={event => {
                   event.preventDefault()
-                  void selectMoaPreset(preset)
+                  void selectCustom(customSlug, provider)
                 }}
-                {...kbRowProps(`moa:${preset}`)}
+                {...kbRowProps(`custom:${provider.slug}`)}
               >
                 <span className="min-w-0 flex-1 truncate">
-                  MoA: <HighlightMatches foldSeparators query={search} text={preset} />
+                  {customSlug}
+                  <span className="text-(--ui-text-tertiary)"> {provider.name}</span>
                 </span>
-                {isCurrentMoa ? <Codicon className="ml-auto text-foreground" name="check" size="0.75rem" /> : null}
               </DropdownMenuItem>
-            )
-          })}
-        </div>
-      ) : null}
+            ))}
+          </div>
+        ) : null}
+      </div>
 
-      {customSlug && customProviders.length > 0 ? (
-        <div>
-          {hasList || shownMoaPresets.length > 0 ? <DropdownMenuSeparator className="mx-0" /> : null}
-          <DropdownMenuLabel className={dropdownMenuSectionLabel}>{copyPicker.customModel}</DropdownMenuLabel>
-          {customProviders.map(provider => (
-            <DropdownMenuItem
-              key={`custom:${provider.slug}`}
-              onSelect={event => {
-                event.preventDefault()
-                void selectCustom(customSlug, provider)
-              }}
-              {...kbRowProps(`custom:${provider.slug}`)}
-            >
-              <span className="min-w-0 flex-1 truncate">
-                {customSlug}
-                <span className="text-(--ui-text-tertiary)"> {provider.name}</span>
-              </span>
-            </DropdownMenuItem>
-          ))}
-        </div>
-      ) : null}
-
-      {/* Curation belongs to the catalog, not to one host: wherever you can
-          pick a model you can say which models you want, and the shortlist is
-          the same everywhere because it's one stored preference. It shares the
-          host footer's group rather than opening a second one, so a host that
-          contributes rows (the composer's Refresh Models) keeps the single
-          trailing block it has always rendered. */}
-      <DropdownMenuSeparator className="mx-0" />
-      {footer}
-      <DropdownMenuItem
-        className={cn(dropdownMenuRow, 'text-(--ui-text-tertiary)', slugEntry && 'text-foreground')}
-        onSelect={event => {
-          event.preventDefault()
+      <ModelCatalogMenuFooter
+        footer={footer}
+        onAddCustom={() => {
           setSearch('')
           setKbOverride(null)
           setSlugEntry(true)
           // Radix hands focus back to the row after onSelect; refocus after.
           window.setTimeout(() => searchRef.current?.focus(), 0)
         }}
-      >
-        <Codicon name="add" size="0.75rem" />
-        {copyPicker.addCustomModelAction}
-      </DropdownMenuItem>
-      <DropdownMenuItem
-        className={cn(dropdownMenuRow, 'text-(--ui-text-tertiary)')}
-        onSelect={() => setModelVisibilityOpen(true)}
-      >
-        <Codicon name="settings-gear" size="0.75rem" />
-        {copy.editModels}
-      </DropdownMenuItem>
+        onConfigureCustom={() => {
+          const target = { connectionId: ownerConnectionId || getApiRequestConnection() || 'local', profile }
+          closeMenu()
+          // Let the closing menu restore focus before the dialog takes it.
+          window.setTimeout(() => openCustomModelConfig(target), 0)
+        }}
+        slugEntry={slugEntry}
+      />
+    </>
+  )
+}
+
+interface ModelCatalogMenuFooterProps {
+  footer?: ReactNode
+  onAddCustom: () => void
+  onConfigureCustom: () => void
+  slugEntry: boolean
+}
+
+function ModelCatalogStatus({ error, loading }: { error: null | string; loading: boolean }) {
+  return loading ? (
+    <DropdownMenuGroup className="py-1">
+      {Array.from({ length: 4 }, (_, index) => (
+        <DropdownMenuItem className={dropdownMenuRow} disabled key={index} onSelect={event => event.preventDefault()}>
+          <Skeleton className="h-4 w-full" />
+        </DropdownMenuItem>
+      ))}
+    </DropdownMenuGroup>
+  ) : (
+    <DropdownMenuItem className={dropdownMenuRow} disabled>
+      {error}
+    </DropdownMenuItem>
+  )
+}
+
+/** Curation shares the host footer so every catalog keeps the same shortlist. */
+function ModelCatalogMenuFooter({ footer, onAddCustom, onConfigureCustom, slugEntry }: ModelCatalogMenuFooterProps) {
+  const { t, locale } = useI18n()
+  const previewContext = useContext(ModelMenuPreviewContext)
+  const previewCopy = modelMenuPreviewCopy(locale)
+  const copy = t.shell.modelMenu
+  const copyPicker = t.modelPicker
+
+  return (
+    <>
+      <DropdownMenuSeparator className="mx-0" />
+      <div className={previewContext ? 'aino-model-menu-footer' : undefined}>
+        {footer}
+        {!previewContext && (
+          <DropdownMenuItem
+            aria-label={copyPicker.addCustomModelAction}
+            className={cn(dropdownMenuRow, 'text-(--ui-text-tertiary)', slugEntry && 'text-foreground')}
+            onSelect={event => {
+              event.preventDefault()
+              onAddCustom()
+            }}
+          >
+            <Codicon name="add" size="0.75rem" />
+            {copyPicker.addCustomModelAction}
+          </DropdownMenuItem>
+        )}
+        <DropdownMenuItem
+          aria-label={copy.editModels}
+          className={cn(dropdownMenuRow, 'text-(--ui-text-tertiary)')}
+          onSelect={() => setModelVisibilityOpen(true)}
+        >
+          <Codicon name="settings-gear" size="0.75rem" />
+          {previewContext ? previewCopy.manage : copy.editModels}
+        </DropdownMenuItem>
+        {previewContext && (
+          <DropdownMenuItem
+            className={cn(dropdownMenuRow, 'aino-model-menu-configure')}
+            onSelect={event => {
+              event.preventDefault()
+              onConfigureCustom()
+            }}
+          >
+            <Codicon name="settings-gear" size="0.875rem" />
+            {previewCopy.configureCustom}
+          </DropdownMenuItem>
+        )}
+      </div>
     </>
   )
 }
@@ -1088,6 +1293,9 @@ function ModelFamilyRow({
   const copyPicker = t.modelPicker
   const closeMenu = useContext(ModelMenuCloseContext)
   const showPricing = useStore($showModelPricing)
+  const previewContext = useContext(ModelMenuPreviewContext)
+  const RowTrigger = previewContext ? DropdownMenuItem : DropdownMenuSubTrigger
+  const preview = { kind: 'custom' as const, family, provider }
 
   const rowKey = `${provider.slug}:${family.id}`
 
@@ -1174,7 +1382,7 @@ function ModelFamilyRow({
 
   return (
     <DropdownMenuSub onOpenChange={open => onSubOpenChange?.(open, rowKey)}>
-      <DropdownMenuSubTrigger
+      <RowTrigger
         disabled={disabled}
         onClick={event => {
           // Shift-click stars, the same gesture that pins a chat row in the
@@ -1189,42 +1397,56 @@ function ModelFamilyRow({
 
           activate()
         }}
+        onFocus={() => previewContext?.onPreview(preview)}
         onKeyDown={event => {
           if (event.key === 'Enter' || event.key === ' ') {
             activate()
           }
         }}
+        onPointerMove={() => previewContext?.onPreview(preview)}
+        onSelect={previewContext ? event => event.preventDefault() : undefined}
         {...kbProps}
-        className={cn(kbProps.className, 'group/model')}
+        className={cn(kbProps.className, 'group/model', previewContext && 'aino-model-menu-row')}
+        data-current={isCurrent || undefined}
+        data-model-menu-name={previewContext ? family.id : undefined}
       >
         {/* The star IS the favorite control: filled when starred, a quiet
             outline otherwise. Its click never reaches the row, so starring
             neither selects the model nor closes the menu. Not a tab stop —
             the search field owns keyboard focus (Shift+Enter stars). */}
-        <Tip label={<TipHintLabel hint={favorite ? undefined : copy.favoriteShortcut} text={favoriteLabel} />}>
-          <button
-            aria-label={favoriteLabel}
-            aria-pressed={favorite}
-            className={cn(
-              '-mx-0.5 grid size-4 shrink-0 place-items-center rounded-sm transition-colors duration-100 hover:text-foreground hover:transition-none',
-              favorite
-                ? 'text-(--ui-text-secondary)'
-                : 'text-(--ui-text-quaternary) group-hover/model:text-(--ui-text-tertiary) group-hover/model:transition-none group-data-[kb-active]/model:text-(--ui-text-tertiary)'
-            )}
-            onClick={event => {
-              event.preventDefault()
-              event.stopPropagation()
-              toggleFavorite()
-            }}
-            tabIndex={-1}
-            type="button"
-          >
-            <Codicon name={favorite ? 'star-full' : 'star-empty'} size="0.75rem" />
-          </button>
-        </Tip>
+        {!previewContext && (
+          <Tip label={<TipHintLabel hint={favorite ? undefined : copy.favoriteShortcut} text={favoriteLabel} />}>
+            <button
+              aria-label={favoriteLabel}
+              aria-pressed={favorite}
+              className={cn(
+                '-mx-0.5 grid size-4 shrink-0 place-items-center rounded-sm transition-colors duration-100 hover:text-foreground hover:transition-none',
+                favorite
+                  ? 'text-(--ui-text-secondary)'
+                  : 'text-(--ui-text-quaternary) group-hover/model:text-(--ui-text-tertiary) group-hover/model:transition-none group-data-[kb-active]/model:text-(--ui-text-tertiary)'
+              )}
+              onClick={event => {
+                event.preventDefault()
+                event.stopPropagation()
+                toggleFavorite()
+              }}
+              tabIndex={-1}
+              type="button"
+            >
+              <Codicon name={favorite ? 'star-full' : 'star-empty'} size="0.75rem" />
+            </button>
+          </Tip>
+        )}
         <span className={cn('flex min-w-0 flex-1 items-center gap-1.5', limit.tone)}>
-          {decoration.icon !== undefined ? <ModelMenuRowIcon icon={decoration.icon} /> : null}
-          <span className="min-w-0 truncate">
+          {decoration.icon !== undefined ? (
+            <ModelMenuRowIcon icon={decoration.icon} />
+          ) : previewContext ? (
+            <Codicon name="database" size="1rem" />
+          ) : null}
+          <span
+            className={cn('min-w-0 truncate', previewContext && 'aino-model-menu-name')}
+            data-model-menu-name={previewContext ? '' : undefined}
+          >
             <HighlightMatches foldSeparators query={search} text={name} />
           </span>
           {tag ? <ModelChip>{tag}</ModelChip> : null}
@@ -1250,30 +1472,48 @@ function ModelFamilyRow({
         ) : null}
         {showPricing && pricing && !rowLevel ? <ModelPrice pricing={pricing} /> : null}
         {rowLevel ? <UsageLevelTag level={usageTag(provider, family.id)} /> : null}
-        {settings.map(setting => (
-          <ModelChip key={setting} setting>
-            {setting}
-          </ModelChip>
-        ))}
+        {!previewContext &&
+          settings.map(setting => (
+            <ModelChip key={setting} setting>
+              {setting}
+            </ModelChip>
+          ))}
         {isCurrent ? <Codicon className="text-foreground" name="check" size="0.75rem" /> : null}
-      </DropdownMenuSubTrigger>
-      <ModelEditSubmenu
-        canDisableReasoning={caps?.can_disable_reasoning ?? undefined}
-        defaultEffort={defaultEffort}
-        effort={effEffort}
-        effortWire={isCurrent ? current.effortWire : undefined}
-        fastControl={fastControl}
-        isActive={isCurrent}
-        model={family.id}
-        onSelectModel={nextModel => controller.select(nextModel, provider.slug)}
-        onSetOptions={patch =>
-          controller.setOptions(patch, { isActive: isCurrent, model: family.id, provider: provider.slug })
-        }
-        provider={provider.slug}
-        reasoning={caps?.reasoning ?? true}
-        serviceTier={effTier}
-        ultrafastSupported={controller.allowSpeed !== false && (caps?.ultrafast ?? false)}
-      />
+        {previewContext && (
+          <button
+            aria-label={`${t.platformModels.details}: ${name}`}
+            className="aino-model-menu-details-button"
+            onClick={event => {
+              event.preventDefault()
+              event.stopPropagation()
+              previewContext.onInspect(preview)
+            }}
+            onKeyDown={event => event.stopPropagation()}
+            type="button"
+          >
+            <Codicon name="chevron-right" size="0.75rem" />
+          </button>
+        )}
+      </RowTrigger>
+      {!previewContext && (
+        <ModelEditSubmenu
+          canDisableReasoning={caps?.can_disable_reasoning ?? undefined}
+          defaultEffort={defaultEffort}
+          effort={effEffort}
+          effortWire={isCurrent ? current.effortWire : undefined}
+          fastControl={fastControl}
+          isActive={isCurrent}
+          model={family.id}
+          onSelectModel={nextModel => controller.select(nextModel, provider.slug)}
+          onSetOptions={patch =>
+            controller.setOptions(patch, { isActive: isCurrent, model: family.id, provider: provider.slug })
+          }
+          provider={provider.slug}
+          reasoning={caps?.reasoning ?? true}
+          serviceTier={effTier}
+          ultrafastSupported={controller.allowSpeed !== false && (caps?.ultrafast ?? false)}
+        />
+      )}
     </DropdownMenuSub>
   )
 }

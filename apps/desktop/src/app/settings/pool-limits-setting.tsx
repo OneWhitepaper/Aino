@@ -11,23 +11,34 @@ import { POOL_LIMITS_BOUNDS } from '../../../electron/pool-limits'
 
 const MAX_BACKENDS_MAX = POOL_LIMITS_BOUNDS.maxBackendsMax
 const IDLE_MS_MAX = POOL_LIMITS_BOUNDS.idleMsMax
+const MILLISECONDS_PER_MINUTE = 60_000
+
+interface PoolLimitsSettingProps {
+  presentation?: 'page'
+}
 
 /** Device-local limits for speculative profile connections and idle retention. */
-export function PoolLimitsSetting() {
+export function PoolLimitsSetting({ presentation }: PoolLimitsSettingProps = {}) {
   const { t } = useI18n()
   const limits = useStore($poolLimits)
+  const minutes = presentation === 'page'
+  const divisor = minutes ? MILLISECONDS_PER_MINUTE : 1
+  const idleValue = String(limits.idleMs / divisor)
+  const pageCopy = t.settings.configPages
+  const maxCopy = minutes ? pageCopy.fields['local.maxBackends'] : undefined
+  const idleCopy = minutes ? pageCopy.fields['local.idleMs'] : undefined
   const [maxDraft, setMaxDraft] = useState(String(limits.maxBackends))
-  const [idleDraft, setIdleDraft] = useState(String(limits.idleMs))
+  const [idleDraft, setIdleDraft] = useState(idleValue)
 
   useEffect(() => {
     setMaxDraft(String(limits.maxBackends))
-    setIdleDraft(String(limits.idleMs))
-  }, [limits])
+    setIdleDraft(idleValue)
+  }, [idleValue, limits])
 
   const commitMax = () => {
     const parsed = Number(maxDraft)
 
-    if (!Number.isFinite(parsed) || parsed === limits.maxBackends) {
+    if (!maxDraft.trim() || !Number.isFinite(parsed) || parsed === limits.maxBackends) {
       setMaxDraft(String(limits.maxBackends))
 
       return
@@ -39,17 +50,19 @@ export function PoolLimitsSetting() {
   }
 
   const commitIdle = () => {
-    const parsed = Number(idleDraft)
+    const parsed = Number(idleDraft) * divisor
 
-    if (!Number.isFinite(parsed) || parsed === limits.idleMs) {
-      setIdleDraft(String(limits.idleMs))
+    // Compare the untouched presentation string first: a minute fraction can
+    // round-trip to a neighboring millisecond due to floating-point arithmetic.
+    if (!idleDraft.trim() || idleDraft === idleValue || !Number.isFinite(parsed) || parsed === limits.idleMs) {
+      setIdleDraft(idleValue)
 
       return
     }
 
     void savePoolLimits({ idleMs: parsed })
       .then(() => undefined)
-      .catch(() => setIdleDraft(String($poolLimits.get().idleMs)))
+      .catch(() => setIdleDraft(String($poolLimits.get().idleMs / divisor)))
   }
 
   return (
@@ -58,7 +71,7 @@ export function PoolLimitsSetting() {
         action={
           <div className="flex items-center gap-2">
             <Input
-              aria-label={t.settings.poolLimits.warmBotBackendsAria}
+              aria-label={maxCopy?.label ?? t.settings.poolLimits.warmBotBackendsAria}
               className="w-20"
               inputMode="numeric"
               max={MAX_BACKENDS_MAX}
@@ -70,24 +83,25 @@ export function PoolLimitsSetting() {
                   event.currentTarget.blur()
                 }
               }}
+              suffix={minutes ? pageCopy.units.connections : undefined}
               type="number"
               value={maxDraft}
             />
           </div>
         }
-        description={t.settings.poolLimits.warmBotBackendsDesc}
+        description={maxCopy?.description ?? t.settings.poolLimits.warmBotBackendsDesc}
         id={settingElementId(SETTING_IDS.advanced.warmBotBackends)}
-        title={t.settings.poolLimits.warmBotBackendsTitle}
+        title={maxCopy?.label ?? t.settings.poolLimits.warmBotBackendsTitle}
       />
       <ListRow
         action={
           <div className="flex items-center gap-2">
             <Input
-              aria-label={t.settings.poolLimits.backendIdleTimeoutAria}
+              aria-label={idleCopy?.label ?? t.settings.poolLimits.backendIdleTimeoutAria}
               className="w-28"
               inputMode="numeric"
-              max={IDLE_MS_MAX}
-              min={POOL_LIMITS_BOUNDS.idleMsMin}
+              max={IDLE_MS_MAX / divisor}
+              min={POOL_LIMITS_BOUNDS.idleMsMin / divisor}
               onBlur={commitIdle}
               onChange={event => setIdleDraft(event.target.value)}
               onKeyDown={event => {
@@ -95,15 +109,19 @@ export function PoolLimitsSetting() {
                   event.currentTarget.blur()
                 }
               }}
+              step={minutes ? 'any' : undefined}
+              suffix={minutes ? pageCopy.units.minutes : undefined}
               type="number"
               value={idleDraft}
             />
-            <span className="text-[length:var(--conversation-caption-font-size)] text-(--ui-text-tertiary)">ms</span>
+            {!minutes && (
+              <span className="text-[length:var(--conversation-caption-font-size)] text-(--ui-text-tertiary)">ms</span>
+            )}
           </div>
         }
-        description={t.settings.poolLimits.backendIdleTimeoutDesc}
+        description={idleCopy?.description ?? t.settings.poolLimits.backendIdleTimeoutDesc}
         id={settingElementId(SETTING_IDS.advanced.backendIdleTimeout)}
-        title={t.settings.poolLimits.backendIdleTimeoutTitle}
+        title={idleCopy?.label ?? t.settings.poolLimits.backendIdleTimeoutTitle}
       />
     </>
   )

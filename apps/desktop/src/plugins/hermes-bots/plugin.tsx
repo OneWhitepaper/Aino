@@ -91,7 +91,7 @@ import { loadBotSections } from './user-sections'
 
 const tabBotsMask = `url(${JSON.stringify(tabBotsIcon)})`
 
-/** The exact Figma vector lives with the bundled plugin so the plugin fence
+/** The approved Agent Hub glyph lives with the bundled plugin so the plugin fence
  * remains honest: this module imports only its own assets and the public SDK. */
 function BotsTabIcon() {
   return (
@@ -522,6 +522,7 @@ export default {
         tabLead: () => <BotsTabIcon />,
         tabTitle: () => <LocalizedTabTitle select={() => pluginText('roster.title', 'Agent Hub')} />,
         tabTitleText: () => pluginText('roster.title', 'Agent Hub'),
+        sidebarDescription: () => pluginText('roster.modeDescription', 'Bots, group chats and collaboration'),
         dock: {
           pane: 'sessions',
           pos: 'center',
@@ -531,9 +532,8 @@ export default {
       render: () => <BotsPane />
     })
 
-    // Routines — its OWN tiling pane splitting the workspace's right edge
-    // (NOT the collapsible right sidebar; placement 'right' is that sidebar's
-    // role and hides the pane until "Show Right Sidebar").
+    // Bot schedules share the Files / Review tool tabs. Keeping the enforced
+    // center dock also repairs a saved legacy schedule column on registration.
     //
     // Registered ONLY while Bot Mode is on screen: the pane exists while the
     // Bots pane is visible (its zone's active tab, or a lone pane in a
@@ -554,18 +554,16 @@ export default {
         data: {
           tabTitle: () => <LocalizedTabTitle select={t => t.cron.title} />,
           tabTitleText: () => translateNow('cron.title'),
-          placement: 'main',
-          // Repair persisted layouts that stranded Cronjobs in the Bots tab strip.
+          placement: 'right',
+          toolPanel: true,
           dock: {
-            pane: 'workspace',
-            pos: 'right',
+            pane: 'files',
+            pos: 'center',
             enforce: true
           },
-          // A bot's schedule is glanceable, not something you sit in — it
-          // arrives as the right edge's vertical tab and takes no width off the
-          // chat until the user opens it.
-          defaultCollapsed: true,
-          width: '250px'
+          width: 'clamp(22rem, 38vw, 42rem)',
+          minWidth: '20rem',
+          maxWidth: '72vw'
         },
         render: () => <RoutinesPane />
       })
@@ -573,8 +571,7 @@ export default {
       // The pane's ✕ remembers a Close across launches, and nothing else ever
       // shows this pane again — it only comes back by being registered here.
       // Entering Bot Mode is the user asking for their bot's chrome, so a
-      // remembered Close is dropped and the pane returns the way it first
-      // arrived: as the collapsed right-edge tab (#102224). Only on ENTRY:
+      // remembered Close is dropped and the shared tool tab returns. Only on ENTRY:
       // the pane also re-registers whenever a bot chat regains the workspace
       // inside one Bots session (a group room and back), and a ✕ from that
       // same session must survive those.

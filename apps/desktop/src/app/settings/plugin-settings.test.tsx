@@ -1,5 +1,6 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { useState } from 'react'
+import { MemoryRouter } from 'react-router'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { createPluginContext } from '@/contrib/plugin'
@@ -155,5 +156,28 @@ describe('Settings ▸ Plugins', () => {
 
     await waitFor(() => expect(screen.getByText('No plugin has settings yet.')).toBeTruthy())
     expect(screen.getByRole('link', { name: /Manage plugins/ }).getAttribute('href')).toBe('#/capabilities?tab=plugins')
+  })
+
+  it('keeps contributed status controls usable in Plugins and removes them when their plugin is disabled', async () => {
+    const onOpen = vi.fn()
+    const ctx = createPluginContext('status-test', dispose => disposers.push(dispose))
+
+    ctx.register({
+      area: 'statusBar.right',
+      id: 'status',
+      render: () => <button onClick={onOpen}>Open plugin status</button>
+    })
+
+    render(
+      <MemoryRouter>
+        <Harness />
+      </MemoryRouter>
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open plugin status' }))
+    expect(onOpen).toHaveBeenCalledOnce()
+    disposers.splice(0).forEach(dispose => dispose())
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'Open plugin status' })).toBeNull())
+    expect(screen.getByRole('link', { name: /Manage plugins/ })).toBeTruthy()
   })
 })

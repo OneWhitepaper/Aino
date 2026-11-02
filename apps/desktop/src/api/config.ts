@@ -15,7 +15,14 @@ import type {
   StatusResponse
 } from '@/types/hermes'
 
-import { capabilityScoped, hermesApi, type ProfileScope, profileScoped, STARTUP_REQUEST_TIMEOUT_MS } from './client'
+import {
+  capabilityScoped,
+  hermesApi,
+  hermesApiAs,
+  type ProfileScope,
+  profileScoped,
+  STARTUP_REQUEST_TIMEOUT_MS
+} from './client'
 
 type ConfigReadOrigin = { connectionId?: string; priority?: 'foreground'; profile?: string }
 
@@ -170,9 +177,9 @@ export function getHermesConfigDefaults(): Promise<HermesConfigRecord> {
   })
 }
 
-export function getHermesConfigSchema(profile?: null | string): Promise<ConfigSchemaResponse> {
+export function getHermesConfigSchema(profile?: ProfileScope): Promise<ConfigSchemaResponse> {
   return hermesApi<ConfigSchemaResponse>({
-    ...profileScoped(profile),
+    ...capabilityScoped(profile),
     path: '/api/config/schema'
   })
 }
@@ -202,11 +209,13 @@ export function saveHermesConfigRecord(config: HermesConfigRecord, profile?: Pro
   })
 }
 
-export function getEnvVars(profile?: null | string): Promise<Record<string, EnvVarInfo>> {
-  return hermesApi<Record<string, EnvVarInfo>>({
-    ...profileScoped(profile),
-    path: '/api/env'
-  })
+export function getEnvVars(profile?: ProfileScope): Promise<Record<string, EnvVarInfo>> {
+  const requested = capabilityScoped(profile)
+
+  return hermesApiAs<Record<string, EnvVarInfo>>(
+    { connectionId: requested.connectionId ?? null, profile: requested.profile ?? null },
+    { path: '/api/env', priority: requested.priority }
+  )
 }
 
 // `providerSetup`: the caller is connecting a model provider, so shared metrics count the save as a
@@ -263,19 +272,19 @@ export function validateProviderCredential(
   })
 }
 
-export function getCustomEndpoints(profile?: null | string): Promise<CustomEndpointsResponse> {
+export function getCustomEndpoints(profile?: ProfileScope): Promise<CustomEndpointsResponse> {
   return hermesApi<CustomEndpointsResponse>({
-    ...profileScoped(profile),
+    ...capabilityScoped(profile),
     path: '/api/providers/custom-endpoints'
   })
 }
 
 export function saveCustomEndpoint(
   endpoint: CustomEndpointUpdate,
-  profile?: null | string
+  profile?: ProfileScope
 ): Promise<CustomEndpointsResponse> {
   return hermesApi<CustomEndpointsResponse>({
-    ...profileScoped(profile),
+    ...capabilityScoped(profile),
     path: '/api/providers/custom-endpoints',
     method: 'POST',
     body: endpoint
@@ -284,10 +293,10 @@ export function saveCustomEndpoint(
 
 export function validateCustomEndpoint(
   endpoint: CustomEndpointUpdate,
-  profile?: null | string
+  profile?: ProfileScope
 ): Promise<CustomEndpointValidationResponse> {
   return hermesApi<CustomEndpointValidationResponse>({
-    ...profileScoped(profile),
+    ...capabilityScoped(profile),
     path: '/api/providers/custom-endpoints/validate',
     method: 'POST',
     body: endpoint
@@ -296,18 +305,18 @@ export function validateCustomEndpoint(
 
 export function activateCustomEndpoint(
   id: string,
-  profile?: null | string
+  profile?: ProfileScope
 ): Promise<{ ok: boolean; provider: string; model: string }> {
   return hermesApi<{ ok: boolean; provider: string; model: string }>({
-    ...profileScoped(profile),
+    ...capabilityScoped(profile),
     path: `/api/providers/custom-endpoints/${encodeURIComponent(id)}/activate`,
     method: 'POST'
   })
 }
 
-export function deleteCustomEndpoint(id: string, profile?: null | string): Promise<CustomEndpointsResponse> {
+export function deleteCustomEndpoint(id: string, profile?: ProfileScope): Promise<CustomEndpointsResponse> {
   return hermesApi<CustomEndpointsResponse>({
-    ...profileScoped(profile),
+    ...capabilityScoped(profile),
     path: `/api/providers/custom-endpoints/${encodeURIComponent(id)}`,
     method: 'DELETE'
   })

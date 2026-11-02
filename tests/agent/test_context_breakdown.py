@@ -1,6 +1,7 @@
 """Tests for live session context breakdown."""
 
 from unittest.mock import MagicMock, patch
+from types import SimpleNamespace
 
 from agent.context_breakdown import compute_session_context_breakdown
 
@@ -27,7 +28,10 @@ def _make_agent(
         context_length=context_length,
         last_prompt_tokens=last_prompt_tokens,
     )
-    return agent, {"stable": stable, "context": context, "volatile": volatile}
+    parts = {"stable": stable, "context": context, "volatile": volatile}
+    agent._cached_system_prompt = "\n\n".join(part for part in parts.values() if part)
+    agent._cached_system_prompt_parts = parts
+    return agent, parts
 
 def test_breakdown_includes_major_categories():
     stable = (
@@ -92,6 +96,39 @@ def test_empty_transcript_still_reports_the_conversation_category():
     # "not configured" is exactly what their absence communicates.
     assert "mcp" not in categories
     assert "skills" not in categories
+
+
+def test_breakdown_reads_cached_prompt_and_attributes_volatile_skills_without_rebuilding():
+    from agent.model_metadata import estimate_tokens_rough
+
+    skills = "<available_skills>demo: frozen skill description</available_skills>"
+    parts = {"stable": "frozen identity", "context": "project rules",
+             "volatile": f"{skills}\n\nfrozen timestamp"}
+    prompt = "\n\n".join(parts.values())
+    agent = SimpleNamespace(
+        model="test", tools=[], _cached_system_prompt=prompt, _cached_system_prompt_parts=parts,
+        _memory_store=None, context_compressor=None, _frozen_workspace_snapshot=("cwd", "workspace"))
+
+    with patch("agent.system_prompt.build_system_prompt_parts", side_effect=AssertionError("UI read rebuilt prompt")):
+        data = compute_session_context_breakdown(agent, [])
+
+    categories = {item["id"]: item["tokens"] for item in data["categories"]}
+    assert categories["skills"] == estimate_tokens_rough(skills)
+    assert categories["rules"] == estimate_tokens_rough(parts["context"])
+    assert categories["system_prompt"] == estimate_tokens_rough("frozen identity\n\nfrozen timestamp")
+    assert agent._cached_system_prompt == prompt
+    assert agent._frozen_workspace_snapshot == ("cwd", "workspace")
+
+
+def test_restored_or_unbuilt_prompt_statistics_never_construct_a_new_prompt():
+    skills = "<available_skills>demo: persisted skill</available_skills>"
+    agent = SimpleNamespace(model="test", tools=[], _memory_store=None, context_compressor=None)
+    with patch("agent.system_prompt.build_system_prompt_parts", side_effect=AssertionError("UI read rebuilt prompt")):
+        empty = compute_session_context_breakdown(agent, [])
+        agent._cached_system_prompt = f"stored identity\n\n{skills}"
+        restored = compute_session_context_breakdown(agent, [])
+    assert [(category["id"], category["tokens"]) for category in empty["categories"]] == [("conversation", 0)]
+    assert {category["id"] for category in restored["categories"]} == {"system_prompt", "skills", "conversation"}
 
 # ── /context renderers (pure functions over the payload) ────────────────────
 

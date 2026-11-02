@@ -1,7 +1,16 @@
+import './account-wallet.css'
+
 import { useEffect, useId, useRef, useState } from 'react'
 
 import { Button } from '@/components/ui/button'
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle
+} from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Loader } from '@/components/ui/loader'
 import { SegmentedControl } from '@/components/ui/segmented-control'
@@ -11,6 +20,7 @@ import { ExternalLink, RefreshCw } from '@/lib/icons'
 import type { PaymentQuote, PlatformBillingBridge, PlatformBillingScope } from '../../../../shared/platform-contract'
 
 import { PaymentQr } from './payment-qr'
+import { finalRechargeQuote, liveRechargeCheckout } from './recharge-order-state'
 import { formatUsageAmount } from './usage-view'
 import { useCheckoutExpiry } from './use-checkout-expiry'
 import { useRecharge } from './use-recharge'
@@ -50,7 +60,28 @@ export function RechargeView({ open, onOpenChange, bridge, scope, orderId, onCre
   const allowed = Boolean(flow.info?.payment_enabled && !flow.info.balance_disabled && method)
   const input = { amount, payment_type: method?.id ?? ('alipay' as const), order_type: 'balance' as const }
   const order = flow.order
+  const methodId = method?.id
+  const validAmount = /^\d{1,12}(\.\d{1,8})?$/.test(amount) && /[1-9]/.test(amount)
+  const showForm = !order && (!flow.intent || flow.intent.rejected)
+  const { quoteInput } = flow
   const notified = useRef(new Set<string>())
+
+  useEffect(() => {
+    if (!open || !allowed || !showForm || !validAmount || !methodId || flow.error) {
+      return
+    }
+
+    const controller = new AbortController()
+
+    const timer = setTimeout(() => {
+      void quoteInput({ amount, payment_type: methodId, order_type: 'balance' }, controller.signal)
+    }, 400)
+
+    return () => {
+      clearTimeout(timer)
+      controller.abort()
+    }
+  }, [allowed, amount, flow.error, methodId, open, quoteInput, showForm, validAmount])
 
   const creditedOrder =
     open && flow.credited && order ? `${scope.origin}:${scope.user_id}:${scope.generation}:${order.order_id}` : null
@@ -67,28 +98,12 @@ export function RechargeView({ open, onOpenChange, bridge, scope, orderId, onCre
     open && order?.status === 'PENDING'
   )
 
-  const checkoutLive =
-    order?.status === 'PENDING' &&
-    !order.confirmation_required &&
-    !order.payment_unknown &&
-    order.checkout &&
-    !checkoutExpired
-
-  const finalQuote: PaymentQuote | null =
-    order?.requested_amount && order.fee_amount !== null
-      ? {
-          requested_amount: order.requested_amount,
-          pay_amount: order.pay_amount,
-          payment_currency: order.payment_currency,
-          credit_amount: order.credit_amount,
-          credit_currency: order.credit_currency,
-          fee_amount: order.fee_amount
-        }
-      : null
+  const checkoutLive = liveRechargeCheckout(order, checkoutExpired)
+  const finalQuote = finalRechargeQuote(order)
 
   return (
     <Dialog onOpenChange={onOpenChange} open={open}>
-      <DialogContent>
+      <DialogContent bodyClassName="account-recharge-dialog-body" className="account-recharge-dialog">
         <DialogHeader>
           <DialogTitle>{copy.title}</DialogTitle>
           <DialogDescription>{copy.description}</DialogDescription>
@@ -98,23 +113,23 @@ export function RechargeView({ open, onOpenChange, bridge, scope, orderId, onCre
             {t.platformRechargeErrors[ERROR_MESSAGES[flow.error]] ?? copy.error}
           </p>
         )}
-        {flow.error && !flow.order && !flow.intent && (
+        {flow.error && showForm && (
           <Button disabled={flow.busy} onClick={flow.refresh} size="sm" variant="outline">
             <RefreshCw />
-            {copy.refresh}
+            {t.common.retry}
           </Button>
         )}
         {flow.busy && !flow.info && !order && <Loader />}
         {order ? (
-          <div className="grid min-w-0 gap-4">
-            <p className="text-sm font-medium" role="status">
+          <div className="account-recharge-order grid min-w-0 gap-4">
+            <p className="account-recharge-status" data-status={order.status} role="status">
               {order.status === 'COMPLETED'
                 ? flow.credited
                   ? copy.success
                   : copy.confirmingBalance
                 : copy.status[order.status]}
             </p>
-            <dl className="grid grid-cols-[minmax(0,1fr)_minmax(0,auto)] gap-x-4 gap-y-2 text-sm">
+            <dl className="account-recharge-quote grid grid-cols-[minmax(0,1fr)_minmax(0,auto)] gap-x-4 gap-y-2 text-sm">
               <dt className="text-muted-foreground">{copy.orderId}</dt>
               <dd className="text-right [overflow-wrap:anywhere]">{order.out_trade_no}</dd>
               <dt className="text-muted-foreground">{copy.payAmount}</dt>
@@ -185,10 +200,13 @@ export function RechargeView({ open, onOpenChange, bridge, scope, orderId, onCre
         ) : flow.info ? (
           allowed ? (
             <form
-              className="grid gap-4"
+              className="account-recharge-form grid gap-4"
               onSubmit={event => {
                 event.preventDefault()
-                void flow.quoteInput(input)
+
+                if (flow.quote && !flow.busy && !flow.quoting) {
+                  void flow.submit(input, flow.quote)
+                }
               }}
             >
               <label className="grid gap-2 text-sm" htmlFor={amountId}>
@@ -206,8 +224,13 @@ export function RechargeView({ open, onOpenChange, bridge, scope, orderId, onCre
                 />
               </label>
               <SegmentedControl
+                className="account-recharge-methods"
                 disabled={flow.busy}
                 onChange={id => {
+                  if (id === methodId) {
+                    return
+                  }
+
                   setSelected(id)
                   flow.clearQuote()
                 }}
@@ -218,21 +241,20 @@ export function RechargeView({ open, onOpenChange, bridge, scope, orderId, onCre
                 {copy.range}: {formatUsageAmount(method.min_amount)}
                 {/[1-9]/.test(method.max_amount) ? ` - ${formatUsageAmount(method.max_amount)}` : '+'} {method.currency}
               </p>
-              {flow.quote ? (
-                <>
-                  <QuoteDetails quote={flow.quote} />
-                  <Button disabled={flow.busy} onClick={() => void flow.submit(input, flow.quote!)} type="button">
-                    {copy.create}
-                  </Button>
-                </>
-              ) : (
-                <Button
-                  disabled={flow.busy || !/^\d{1,12}(\.\d{1,8})?$/.test(amount) || !/[1-9]/.test(amount)}
-                  type="submit"
-                >
+              {flow.quote && <QuoteDetails quote={flow.quote} />}
+              {validAmount && !flow.quote && !flow.error && (
+                <p className="text-xs text-muted-foreground" role="status">
                   {copy.quote}
-                </Button>
+                </p>
               )}
+              <DialogFooter>
+                <Button disabled={flow.busy} onClick={() => onOpenChange(false)} type="button" variant="outline">
+                  {t.common.cancel}
+                </Button>
+                <Button disabled={flow.busy || flow.quoting || !flow.quote} type="submit">
+                  {copy.create}
+                </Button>
+              </DialogFooter>
               {flow.info.help_text && (
                 <p className="text-xs whitespace-pre-wrap text-muted-foreground">{flow.info.help_text}</p>
               )}
@@ -251,7 +273,7 @@ function QuoteDetails({ quote }: { quote: PaymentQuote }) {
   const copy = t.platformRecharge
 
   return (
-    <dl className="grid grid-cols-[minmax(0,1fr)_minmax(0,auto)] gap-x-4 gap-y-2 text-sm">
+    <dl className="account-recharge-quote grid grid-cols-[minmax(0,1fr)_minmax(0,auto)] gap-x-4 gap-y-2 text-sm">
       <dt className="text-muted-foreground">{copy.payAmount}</dt>
       <dd className="text-right tabular-nums [overflow-wrap:anywhere]">
         {formatUsageAmount(quote.pay_amount)} {quote.payment_currency}

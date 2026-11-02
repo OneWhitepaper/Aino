@@ -47,6 +47,7 @@ vi.mock('@/store/session-states', async importOriginal => {
 
 vi.mock('@/i18n', async importOriginal => {
   const { en } = await import('@/i18n/en')
+
   return {
     ...(await importOriginal<Record<string, unknown>>()),
     useI18n: () => ({ t: en })
@@ -262,7 +263,7 @@ describe('useModelControls', () => {
     })
   })
 
-  it('sends an active primary-session picker change without a scope flag so the gateway decides persistence', async () => {
+  it('limits an active primary-session picker change to that conversation', async () => {
     $activeSessionId.set('session-1')
     const requestGateway = vi.fn(async () => ({ key: 'model', value: 'claude-sonnet-4.6' }) as never)
     let controls!: Controls
@@ -276,13 +277,10 @@ describe('useModelControls', () => {
       })
     ).resolves.toBe(true)
 
-    // No hardcoded --global (#90235): resolve_persist_behavior on the gateway
-    // owns the policy — session-only unless model.persist_switch_by_default
-    // is set or no default has ever been configured (#86414's first pick).
     expect(requestGateway).toHaveBeenCalledWith('config.set', {
       session_id: 'session-1',
       key: 'model',
-      value: 'claude-sonnet-4.6 --provider anthropic'
+      value: 'claude-sonnet-4.6 --provider anthropic --session'
     })
     expect(requestGateway).not.toHaveBeenCalledWith('slash.exec', expect.anything())
   })
@@ -312,7 +310,11 @@ describe('useModelControls', () => {
     setCurrentModel('old')
     setCurrentProvider('xai')
     const refusal = Object.assign(new Error('model_resolution_failed'), { data: { reason: 'model_resolution_failed' } })
-    const requestGateway = vi.fn(async () => { throw refusal })
+
+    const requestGateway = vi.fn(async () => {
+      throw refusal
+    })
+
     let controls!: Controls
 
     render(<Harness onReady={value => (controls = value)} requestGateway={requestGateway} />)
@@ -383,7 +385,7 @@ describe('useModelControls', () => {
       confirm_expensive_model: true,
       key: 'model',
       session_id: 'session-1',
-      value: 'muse-spark-1.2-contributor --provider opencode-go'
+      value: 'muse-spark-1.2-contributor --provider opencode-go --session'
     })
     expect($currentModel.get()).toBe('muse-spark-1.2-contributor')
     expect($currentProvider.get()).toBe('opencode-go')
@@ -745,7 +747,14 @@ describe('useModelControls', () => {
         tileState = update(tileState)
       }
     }
-    SessionStates.$sessionStates.set({ 'runtime-b': { ...createClientSessionState('stored-b'), model: 'gpt-6.1-sol', provider: 'openai-codex', reasoningEffortWire: 'max' } })
+    SessionStates.$sessionStates.set({
+      'runtime-b': {
+        ...createClientSessionState('stored-b'),
+        model: 'gpt-6.1-sol',
+        provider: 'openai-codex',
+        reasoningEffortWire: 'max'
+      }
+    })
     $activeSessionId.set('runtime-a')
     const requestGateway = vi.fn(async () => ({ key: 'model', value: 'gpt-6.1-luna' }) as never)
     const { result } = renderHook(() => useModelControls({ queryClient: new QueryClient(), requestGateway }))
@@ -916,7 +925,12 @@ describe('useModelControls', () => {
     setCurrentProvider('nvidia')
     setCurrentModelSource('manual')
 
-    const { result } = renderHook(() => useModelControls({ queryClient: new QueryClient(), requestGateway: vi.fn() }))
+    const queryClient = new QueryClient()
+    queryClient.setQueryData(modelOptionsQueryKey('default'), {
+      providers: [{ aliases: ['nvidia', 'custom:nvidia'], models: ['z-ai/glm-5.2'], name: 'NVIDIA', slug: 'nvidia' }]
+    })
+    const requestGateway = vi.fn()
+    const { result } = renderHook(() => useModelControls({ queryClient, requestGateway }))
 
     await act(() => result.current.refreshCurrentModel())
 
@@ -925,6 +939,83 @@ describe('useModelControls', () => {
     // 'default' means the next session.create omits the override entirely, so
     // the gateway resolves config.yaml's custom entry (with its extra_body).
     expect(getCurrentModelSource()).toBe('default')
+    expect(requestGateway).not.toHaveBeenCalled()
+  })
+
+  it('keeps a manually chosen official provider when a same-named custom connection is the default', async () => {
+    vi.mocked(getGlobalModelInfo).mockResolvedValue({ model: 'custom-model', provider: 'custom:deepseek' })
+    setCurrentModel('official-model')
+    setCurrentProvider('deepseek')
+    setCurrentModelSource('manual')
+    const queryClient = new QueryClient()
+
+    const requestGateway = vi.fn(
+      async () =>
+        ({
+          model: 'custom-model',
+          provider: 'custom:deepseek',
+          providers: [
+            { aliases: ['custom:deepseek'], models: ['custom-model'], name: 'deepseek', slug: 'custom:deepseek' },
+            { models: ['official-model'], name: 'DeepSeek', slug: 'deepseek' }
+          ]
+        }) as never
+    )
+
+    const { result } = renderHook(() => useModelControls({ queryClient, requestGateway }))
+
+    await act(() => result.current.refreshCurrentModel())
+
+    expect($currentProvider.get()).toBe('deepseek')
+    expect($currentModel.get()).toBe('official-model')
+    expect(getCurrentModelSource()).toBe('manual')
+    expect(requestGateway).toHaveBeenCalledOnce()
+    expect(requestGateway).toHaveBeenCalledWith('model.options', { explicit_only: true, profile: 'default' })
+  })
+
+  it('keeps a bare manual pick when custom alias identity cannot be loaded', async () => {
+    vi.mocked(getGlobalModelInfo).mockResolvedValue({ model: 'custom-model', provider: 'custom:deepseek' })
+    setCurrentModel('official-model')
+    setCurrentProvider('deepseek')
+    setCurrentModelSource('manual')
+
+    const requestGateway = vi.fn(async () => {
+      throw new Error('owner-catalog-unavailable')
+    })
+
+    const { result } = renderHook(() => useModelControls({ queryClient: new QueryClient(), requestGateway }))
+
+    await act(() => result.current.refreshCurrentModel())
+
+    expect($currentProvider.get()).toBe('deepseek')
+    expect($currentModel.get()).toBe('official-model')
+    expect(getCurrentModelSource()).toBe('manual')
+  })
+
+  it('preserves a newer explicit choice while legacy custom alias proof is loading', async () => {
+    vi.mocked(getGlobalModelInfo).mockResolvedValue({ model: 'custom-model', provider: 'custom:deepseek' })
+    setCurrentModel('initial-model')
+    setCurrentProvider('deepseek')
+    setCurrentModelSource('manual')
+
+    const catalog = deferred<{
+      providers: { aliases: string[]; models: string[]; name: string; slug: string }[]
+    }>()
+
+    const requestGateway = vi.fn(() => catalog.promise as never)
+    const { result } = renderHook(() => useModelControls({ queryClient: new QueryClient(), requestGateway }))
+    const refresh = result.current.refreshCurrentModel()
+    await waitFor(() => expect(requestGateway).toHaveBeenCalledOnce())
+    await act(() => result.current.selectModel({ model: 'new-explicit-model', provider: 'deepseek' }))
+    catalog.resolve({
+      providers: [
+        { aliases: ['deepseek', 'custom:deepseek'], models: ['custom-model'], name: 'DeepSeek', slug: 'deepseek' }
+      ]
+    })
+    await act(() => refresh)
+
+    expect($currentProvider.get()).toBe('deepseek')
+    expect($currentModel.get()).toBe('new-explicit-model')
+    expect(getCurrentModelSource()).toBe('manual')
   })
 
   it('keeps a manual pick of a different provider while the default is a custom entry', async () => {
@@ -933,13 +1024,15 @@ describe('useModelControls', () => {
     setCurrentProvider('anthropic')
     setCurrentModelSource('manual')
 
-    const { result } = renderHook(() => useModelControls({ queryClient: new QueryClient(), requestGateway: vi.fn() }))
+    const requestGateway = vi.fn()
+    const { result } = renderHook(() => useModelControls({ queryClient: new QueryClient(), requestGateway }))
 
     await act(() => result.current.refreshCurrentModel())
 
     expect($currentModel.get()).toBe('claude-sonnet-4-6')
     expect($currentProvider.get()).toBe('anthropic')
     expect(getCurrentModelSource()).toBe('manual')
+    expect(requestGateway).not.toHaveBeenCalled()
   })
 
   it('keeps a manual custom:* pick without consulting the profile default', async () => {

@@ -5,6 +5,7 @@ import { type NodeApi, type NodeRendererProps, type RowRendererProps, Tree, type
 
 import { TreeSkeleton } from '@/components/chat/skeletons'
 import { Codicon } from '@/components/ui/codicon'
+import { DisclosureCaret } from '@/components/ui/disclosure-caret'
 import { markRightPanePerf } from '@/debug/right-pane-events'
 import { useResizeObserver } from '@/hooks/use-resize-observer'
 import { cn } from '@/lib/utils'
@@ -43,6 +44,7 @@ interface ProjectTreeProps {
   onLoadChildren: (id: string) => void | Promise<void>
   onNodeOpenChange: (id: string, open: boolean) => void
   onPreviewFile?: (path: string) => void
+  onKeepFile?: (path: string) => void
   openState: Record<string, boolean>
 }
 
@@ -55,6 +57,7 @@ export function ProjectTree({
   onLoadChildren,
   onNodeOpenChange,
   onPreviewFile,
+  onKeepFile,
   openState
 }: ProjectTreeProps) {
   markRightPanePerf('project-tree-render')
@@ -210,6 +213,7 @@ export function ProjectTree({
               {...props}
               onAttachFile={onActivateFile}
               onAttachFolder={onActivateFolder}
+              onKeepFile={onKeepFile}
               onPreviewFile={onPreviewFile}
               relativeTo={cwd}
             />
@@ -279,15 +283,26 @@ function ProjectTreeRow({
   onAttachFile,
   onAttachFolder,
   onPreviewFile,
+  onKeepFile,
   relativeTo,
   style
 }: NodeRendererProps<TreeNode> & {
   onAttachFile: (path: string) => void
   onAttachFolder: (path: string) => void
   onPreviewFile?: (path: string) => void
+  onKeepFile?: (path: string) => void
   relativeTo?: null | string
 }) {
   const renamingPath = useStore($renamingPath)
+  const previewTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  useEffect(
+    () => () => {
+      if (previewTimer.current) {
+        clearTimeout(previewTimer.current)
+      }
+    },
+    []
+  )
   const path = node.data?.id ?? ''
   const changeStore = useMemo(() => repoChangeKindForPath(path), [path])
   const changeKind: RepoChangeKind | undefined = useStore(changeStore)
@@ -308,7 +323,7 @@ function ProjectTreeRow({
       aria-expanded={isFolder ? node.isOpen : undefined}
       aria-selected={node.isSelected}
       className={cn(
-        'group/row row-hover flex h-full select-none items-center gap-2 rounded-lg px-2 text-[length:var(--aino-text-ui)] font-normal leading-5 text-(--ui-text-primary)',
+        'group/row row-hover flex h-full select-none items-center gap-1.5 rounded-md px-2 text-xs font-normal leading-5 text-(--ui-text-secondary)',
         node.isSelected && 'bg-(--aino-surface-active)',
         isPlaceholder && 'pointer-events-none italic text-muted-foreground/70'
       )}
@@ -333,13 +348,25 @@ function ProjectTreeRow({
           node.toggle()
         } else {
           node.select()
+
+          if (previewTimer.current) {
+            clearTimeout(previewTimer.current)
+          }
+
+          if (!event.metaKey && !event.ctrlKey && !event.altKey) {
+            previewTimer.current = setTimeout(() => onPreviewFile?.(node.data.id), 220)
+          }
         }
       }}
       onDoubleClick={event => {
         event.stopPropagation()
 
+        if (previewTimer.current) {
+          clearTimeout(previewTimer.current)
+        }
+
         if (!isFolder && !isPlaceholder && $renamingPath.get() !== node.data.id) {
-          onPreviewFile?.(node.data.id)
+          ;(onKeepFile ?? onPreviewFile)?.(node.data.id)
         }
       }}
       onDragStart={event => {
@@ -362,8 +389,9 @@ function ProjectTreeRow({
       }}
       title={node.data.id}
     >
-      {/* No chevron column — the folder icon (open/closed) already carries the
-          expand state, so the extra glyph was pure noise. */}
+      <span aria-hidden className="flex w-2.5 shrink-0 items-center justify-center text-(--ui-text-tertiary)">
+        {isFolder && !isPlaceholder ? <DisclosureCaret open={node.isOpen} /> : null}
+      </span>
       <span aria-hidden className="flex w-3.5 shrink-0 items-center justify-center text-(--ui-text-secondary)">
         {isPlaceholder && !isErrorPlaceholder ? (
           <Codicon name="loading" size="0.75rem" spinning />
@@ -376,11 +404,7 @@ function ProjectTreeRow({
         )}
       </span>
       {editing ? (
-        <InlineRenameInput
-          className="text-[length:var(--aino-text-ui)] leading-5"
-          name={node.data.name}
-          path={node.data.id}
-        />
+        <InlineRenameInput className="text-xs leading-5" name={node.data.name} path={node.data.id} />
       ) : (
         // Git decoration (VS Code-style): tint changed files; the explicit color
         // wins over the row's hover/selected text color, so it persists.

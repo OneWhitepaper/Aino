@@ -5,6 +5,50 @@ import { jaDelegationRouting } from './ja_delegation_routing'
 import type { ModelSettingsTranslations } from './types_model_settings'
 
 export const jaModelSettings: TranslationOverride<ModelSettingsTranslations> = {
+  imageGeneration: {
+    billingRules: '画像生成の料金規則に基づいて課金されます。利用状況はマイアカウントで確認できます。',
+    unavailable: 'Aino の画像生成を利用できません。実行環境を更新し、プラットフォームの画像モデルを確認してください。',
+    title: '画像生成',
+    description:
+      'Aino アカウントで画像を生成します。画像モデルはテキストモデルと別に管理され、選択は新しい会話に適用されます。'
+  },
+  pages: {
+    description: '既定のモデルと、各タスクで使用するモデルを管理します。',
+    auxiliaryTask: 'タスク',
+    auxiliaryPurpose: '用途',
+    auxiliaryModel: '使用モデル',
+    moaReferences: '参照モデル',
+    moaEnableDescription: '有効なプリセットは、既存のモデルルーティングで使用できます。'
+  },
+  defaultMain: {
+    appliedLabel: '現在のデフォルトモデル',
+    applied: '適用済み',
+    unconfigured: 'デフォルトモデルが未選択です',
+    title: 'デフォルトのメインモデル',
+    description: '新しいセッションで使うモデルの提供元を選択します。',
+    sourceLabel: 'モデルの提供元',
+    builtIn: 'Aino 内蔵モデル',
+    thirdParty: '外部サービス',
+    builtInDescription: '別途 API キーを設定せずに Aino アカウントの残高を使用します。',
+    thirdPartyDescription: '接続済みのモデルサービスを使用し、その提供元が課金します。',
+    unchanged: '現在のデフォルト設定と同じです',
+    pending: '未適用 · 現在のデフォルトは変更されていません',
+    apply: 'デフォルトに適用',
+    scopeHint:
+      '新しいセッションに適用されます。既存のチャットでも入力欄からモデルを切り替えられます。手動の選択は引き続き使用されます。',
+    defaultsTitle: 'デフォルトのパラメータ',
+    defaultsDescription: 'モデルが対応している場合に既存のパラメータ設定が適用されます。',
+    reasoningDescription: '回答前の分析の深さを調整します',
+    speedDescription: '高速応答では別のサービス階層が使われることがあります',
+    chooseBuiltIn: 'Aino 内蔵モデルを選択',
+    selectionTitle: 'Aino 内蔵モデルを選択',
+    selectionDescription: '選択を確定した後、ページの「デフォルトに適用」を押してください。',
+    confirmSelection: '選択を確定',
+    configureConnection: '接続を設定',
+    connection: 'API キー',
+    connectionSaved: 'サービス設定済み · モデルを選択できます',
+    ainoConnected: 'Aino アカウントに接続済み · Aino 残高を使用'
+  },
   moaTitle: 'エージェント混合（Mixture of Agents）',
   moaPreset: 'プリセット',
   moaDescription:

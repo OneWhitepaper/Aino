@@ -14,7 +14,7 @@ import threading as _threading
 from dataclasses import dataclass, field
 from typing import Any, List, Optional
 from agent.command_token_source import build_command_token_provider, materialize_probe_api_key
-from hermes_cli.providers import custom_provider_aliases, custom_provider_slug, get_label
+from hermes_cli.providers import custom_provider_aliases, custom_provider_slug, get_label, is_builtin_provider_id
 from utils import base_url_host_matches
 
 # Log-record parity with the origin module.
@@ -852,10 +852,11 @@ def _lap_builtin_rows(b: _PickerBuild, data: dict, user_providers: dict) -> None
         if not (_any_env(env_vars, _scoped_key_env) or _raw_pool_usable(hermes_id, for_picker=b.for_picker)):
             continue
         model_ids = _live_or_curated_ids(hermes_id, b.curated, non_blocking=b.non_blocking_catalogs)
-        # A providers.<built-in>.models block extends the discovered catalog; section 3 cannot
-        # emit it later because this row owns the slug.
+        # Metadata-only provider blocks extend the official catalog; configured endpoints have
+        # their own custom identity and model list in section 3.
         configured = user_providers.get(hermes_id) if isinstance(user_providers, dict) else None
-        configured_models = _declared_model_ids(configured.get("models")) if isinstance(configured, dict) else []
+        configured_models = (_declared_model_ids(configured.get("models"))
+                             if isinstance(configured, dict) and not _entry_base_url(configured) else [])
         model_ids = list(dict.fromkeys([*configured_models, *model_ids]))
         pinfo = get_provider_info(mdev_id)
         display_name = pconfig.name if pconfig and pconfig.name else (pinfo.name if pinfo else mdev_id)
@@ -940,10 +941,10 @@ def _lap_overlay_rows(b: _PickerBuild, data: dict, user_providers: dict) -> None
         else:
             model_ids = _live_or_curated_ids(hermes_slug, b.curated, hermes_slug, pid,
                                              non_blocking=b.non_blocking_catalogs)
-        # A providers.<overlay>.models block extends the row exactly as it does for built-in rows
-        # (section 1); section 3 never emits it because this row owns the slug (#27989).
+        # Metadata-only blocks extend the official row like section 1; endpoint-backed blocks
+        # remain separate custom configurations.
         configured = user_providers.get(hermes_slug) or user_providers.get(pid) if isinstance(user_providers, dict) else None
-        if isinstance(configured, dict):
+        if isinstance(configured, dict) and not _entry_base_url(configured):
             model_ids = list(dict.fromkeys([*_declared_model_ids(configured.get("models")), *model_ids]))
         b.add_builtin_row(
             hermes_slug, get_label(hermes_slug), b.current_provider in (hermes_slug, pid), model_ids, "hermes")
@@ -999,10 +1000,14 @@ def _lap_user_provider_rows(b: _PickerBuild, user_providers: dict) -> None:
     from hermes_cli.config import coerce_provider_id, is_provider_enabled
     ep_groups: dict[tuple, dict] = {}
     for ep_name, ep_cfg in user_providers.items():
-        if not isinstance(ep_cfg, dict) or not is_provider_enabled(ep_cfg) or ep_name.lower() in b.seen_slugs:
+        if not isinstance(ep_cfg, dict) or not is_provider_enabled(ep_cfg):
             continue
         display_name = coerce_provider_id(ep_cfg.get("name")) or ep_name
         api_url = _entry_base_url(ep_cfg, ("base_url", "api", "url"))
+        collision = bool(api_url) and is_builtin_provider_id(ep_name)
+        route_slug = custom_provider_slug(ep_name, ep_name) if collision else ep_name
+        if route_slug.lower() in b.seen_slugs:
+            continue
         inline_api_key, key_env, cred_identity = _entry_credentials(ep_cfg, "key_env", "api_key_env")
         headers = _extra_headers_from_config(ep_cfg)
         group_key = (_norm_url(api_url), cred_identity, _entry_api_mode(ep_cfg), tuple(sorted(headers.items())))
@@ -1011,7 +1016,7 @@ def _lap_user_provider_rows(b: _PickerBuild, user_providers: dict) -> None:
             # slug = first ep_name encountered; probe key from the first member (inline api_key,
             # else key_env through the per-profile secret scope).
             ep_groups[group_key] = {
-                "slug": ep_name, "name": _group_display_name(display_name), "api_url": api_url, "models": [],
+                "slug": route_slug, "name": _group_display_name(display_name), "api_url": api_url, "models": [],
                 "has_explicit_models": False,
                 "api_key": inline_api_key or _scoped_key_env(key_env),
                 "headers": headers, "api_mode": ep_cfg.get("api_mode"),
@@ -1020,7 +1025,8 @@ def _lap_user_provider_rows(b: _PickerBuild, user_providers: dict) -> None:
         # ``default_model`` is the legacy key; ``model`` matches custom_providers.
         _absorb_entry_models(grp, ep_cfg, ep_cfg.get("default_model", "") or ep_cfg.get("model", ""))
         grp["raw_names"].append(display_name)
-        grp["aliases"].update(custom_provider_aliases(display_name, str(ep_name)))
+        grp["aliases"].update(alias for alias in custom_provider_aliases(display_name, str(ep_name))
+                              if not is_builtin_provider_id(alias))
 
     for grp in ep_groups.values():
         ep_name, display_name, api_url = grp["slug"], grp["name"], grp["api_url"]

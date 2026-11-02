@@ -26,6 +26,8 @@ import {
   type UpdateTarget
 } from '@/store/updates'
 
+import { CompactUpdateStatus } from './update-status-compact'
+
 const RELEASE_NOTES_URL = RELEASES_URL
 const INSTALLER_URL = DOWNLOAD_URL
 
@@ -225,24 +227,31 @@ function relativeTime(ms: number | undefined, u: Translations['updates']): strin
  */
 export function VersionHero({
   renderHeading,
+  variant = 'default',
   version
 }: {
   renderHeading?: (heading: string) => ReactNode
+  variant?: 'default' | 'compact'
   version: DesktopVersionInfo | null
 }): ReactElement {
   const { t } = useI18n()
   const u = t.updates
 
   return (
-    <div className="flex flex-col items-center gap-3 pt-6 pb-2 text-center">
-      <BrandMark className="size-16" />
+    <div
+      className={cn(
+        'flex flex-col items-center gap-3 pt-6 pb-2 text-center',
+        variant === 'compact' && 'about-version-hero'
+      )}
+    >
+      <BrandMark className="about-version-mark size-16" />
       <div>
         {renderHeading ? (
           renderHeading(u.appName)
         ) : (
-          <h2 className="text-lg font-semibold tracking-tight">{u.appName}</h2>
+          <h2 className="about-version-name text-lg font-semibold tracking-tight">{u.appName}</h2>
         )}
-        <p className="mt-1 text-xs text-muted-foreground">
+        <p className="about-version-label mt-1 text-xs text-muted-foreground">
           {version?.appVersion ? u.version(shortVersion(version.appVersion)) : u.versionUnavailable}
           {version?.channel
             ? ` · ${Object.entries(u.channels).find(([name]: [string, string]): boolean => name === version.channel)?.[1] ?? version.channel}`
@@ -328,10 +337,12 @@ function UpdateActions({ target, u, view }: UpdateActionsProps): ReactElement | 
  */
 export function UpdateStatusCard({
   showReleaseNotes = true,
-  target
+  target,
+  variant = 'default'
 }: {
   showReleaseNotes?: boolean
   target: UpdateTarget
+  variant?: 'default' | 'compact'
 }): ReactElement {
   const { t } = useI18n()
   const u = t.updates
@@ -358,6 +369,19 @@ export function UpdateStatusCard({
     setJustChecked(Boolean(next))
   }
 
+  if (variant === 'compact') {
+    return (
+      <CompactUpdateStatus
+        apply={apply}
+        checking={checking}
+        onCheck={handleCheck}
+        status={status}
+        target={target}
+        view={view}
+      />
+    )
+  }
+
   return (
     <div
       className={cn(
@@ -368,11 +392,7 @@ export function UpdateStatusCard({
       )}
     >
       <div className="flex items-start gap-2">
-        {view.tone === 'available' ? (
-          <Codicon className="mt-0.5 size-4 shrink-0 text-primary" name="cloud-download" size="1rem" />
-        ) : view.tone === 'error' || view.tone === 'unsupported' ? null : (
-          <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
-        )}
+        <UpdateStatusIcon tone={view.tone} />
         <div className="min-w-0">
           <p className="font-medium">{view.line}</p>
           {view.error && <p className="mt-1 text-xs text-muted-foreground">{view.error}</p>}
@@ -418,5 +438,15 @@ export function UpdateStatusCard({
         </div>
       )}
     </div>
+  )
+}
+
+function UpdateStatusIcon({ tone }: { tone: UpdateStatusTone }) {
+  if (tone === 'available') {
+    return <Codicon className="mt-0.5 size-4 shrink-0 text-primary" name="cloud-download" size="1rem" />
+  }
+
+  return tone === 'error' || tone === 'unsupported' ? null : (
+    <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
   )
 }

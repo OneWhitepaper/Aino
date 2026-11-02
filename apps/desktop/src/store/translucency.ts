@@ -186,9 +186,9 @@ const measureRailEdge = (): void => {
     if (railObserver && rail) {
       railObserver.observe(rail)
 
-      // Summary animation moves a fixed-width right rail by resizing its
-      // workspace. The rail itself has no ResizeObserver notification then.
-      const workspace = rail.closest('[data-slot="summary-workspace-main"]')
+      // The rail can move when its containing layout resizes without its own
+      // fixed width changing. Chat-local tools do not define this boundary.
+      const workspace = rail.closest('[data-slot="layout-tree-root"]')
 
       if (workspace) {
         railObserver.observe(workspace)

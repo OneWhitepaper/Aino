@@ -12,10 +12,8 @@ function selectScope(id: HermesReviewScope) {
   void refreshReview()
 }
 
-/** Scope switcher row under the Review header. Label + tabs + icons can't share
- *  the 28px header in a pane that narrows to 10rem, so the tabs get their own
- *  row; below their natural width it collapses to the app's narrow-width tab
- *  dropdown rather than ellipsizing every option. */
+/** The panel tab already names Review. Keep its scope controls directly below
+ *  that shared tab strip; narrow panels reuse the existing scope dropdown. */
 export function ReviewScopeRow() {
   const { t } = useI18n()
   const c = t.statusStack.coding
@@ -28,14 +26,14 @@ export function ReviewScopeRow() {
   ]
 
   return (
-    <div className="@container shrink-0 px-2 pb-1.5" data-suppress-pane-reveal-side="">
+    <div className="@container shrink-0 px-3 pt-3 pb-2" data-suppress-pane-reveal-side="">
       <SegmentedControl<HermesReviewScope>
-        className="hidden w-full auto-cols-[minmax(0,auto)] @[13.5rem]:grid [&>button]:px-2"
+        className="hidden w-full auto-cols-fr @[15rem]:grid"
         onChange={selectScope}
         options={options}
         value={scope}
       />
-      <div className="flex h-[1.5625rem] items-center pl-1.5 @[13.5rem]:hidden">
+      <div className="flex min-h-7 items-center @[15rem]:hidden">
         <TabDropdown
           align="start"
           items={options.map(option => ({

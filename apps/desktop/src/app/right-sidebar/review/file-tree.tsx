@@ -65,8 +65,8 @@ const STATUS_GLYPH: Record<string, { icon: string; tone: string }> = {
   A: { icon: 'diff-added', tone: 'text-(--ui-green)' },
   C: { icon: 'diff-added', tone: 'text-(--ui-green)' },
   D: { icon: 'diff-removed', tone: 'text-(--ui-red)' },
-  M: { icon: 'diff-modified', tone: 'text-amber-500/85' },
-  R: { icon: 'diff-renamed', tone: 'text-sky-500/85' },
+  M: { icon: 'diff-modified', tone: 'text-(--ui-yellow)' },
+  R: { icon: 'diff-renamed', tone: 'text-(--ui-blue)' },
   U: { icon: 'warning', tone: 'text-(--ui-red)' },
   '?': { icon: 'diff-added', tone: 'text-muted-foreground/60' }
 }
@@ -99,10 +99,10 @@ const ROW_INSTANT = { duration: 0 } as const
 // hundreds of thousands of DOM nodes.
 const HEAVY_LIST_CAP = 60
 
-// Uniform row height (h-6 = 1.5rem). Every review row is this exact height, so
+// Uniform row height (h-8 = 2rem). Every review row is this exact height, so
 // the virtualizer's size estimate is exact and per-row measurement just keeps
 // it honest under app zoom.
-const ROW_HEIGHT = 24
+const ROW_HEIGHT = 32
 
 // Rows mounted above and below the viewport while scrolling.
 const OVERSCAN_ROWS = 12
@@ -163,7 +163,7 @@ export function ReviewFileTree() {
 
   return (
     <div
-      className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-1 py-1"
+      className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-2 py-2"
       data-suppress-pane-reveal-side=""
       ref={scrollerRef}
     >
@@ -259,10 +259,8 @@ function VirtualizedReviewList({
   )
 }
 
-// Depth-0 rows align their icon to the panel header's dither glyph: the tree
-// body has px-1 (4px) and the header glyph sits at px-2.5 (10px) + the label's
-// pl-2 (8px) = 18px, so the base inset is 18 − 4 = 14px.
-const ROW_BASE_INSET = 14
+// The body supplies the outer gutter; shallow rows keep a small inner inset.
+const ROW_BASE_INSET = 8
 
 function rowStyle(depth: number): CSSProperties {
   return { paddingLeft: `${depth * INDENT + ROW_BASE_INSET}px` }
@@ -290,7 +288,7 @@ function ReviewDirRow({
   return (
     <>
       <div
-        className="group/review-row row-hover flex h-6 select-none items-center gap-1.5 rounded-(--aino-radius-row) pr-1.5 text-xs text-(--ui-text-secondary) hover:text-foreground"
+        className="group/review-row row-hover flex h-8 select-none items-center gap-2 rounded-(--aino-radius-row) pr-2 text-[length:var(--aino-text-label)] text-(--ui-text-secondary) hover:text-foreground"
         onClick={toggle}
         style={rowStyle(depth)}
       >
@@ -302,7 +300,13 @@ function ReviewDirRow({
         <span className="min-w-0 flex-1 truncate" title={node.name}>
           {node.name}
         </span>
-        {!open && <DiffCount added={node.added} className="text-[0.64rem] leading-4" removed={node.removed} />}
+        {!open && (
+          <DiffCount
+            added={node.added}
+            className="text-[length:var(--aino-text-caption)] leading-4"
+            removed={node.removed}
+          />
+        )}
       </div>
       {!leaf && open && node.children && <ReviewNodeList animate={animate} depth={depth + 1} nodes={node.children} />}
     </>
@@ -394,7 +398,7 @@ function ReviewFileRow({ node, depth }: { node: ReviewTreeNode; depth: number })
       <div
         aria-selected={selected}
         className={cn(
-          'group/review-row row-hover flex h-6 select-none items-center gap-1.5 rounded-(--aino-radius-row) pr-1.5 text-xs text-(--ui-text-secondary) hover:text-foreground',
+          'group/review-row row-hover flex h-8 select-none items-center gap-2 rounded-(--aino-radius-row) pr-2 text-[length:var(--aino-text-label)] text-(--ui-text-secondary) hover:text-foreground',
           selected && 'bg-(--ui-row-active-background) text-foreground'
         )}
         draggable
@@ -419,7 +423,10 @@ function ReviewFileRow({ node, depth }: { node: ReviewTreeNode; depth: number })
             {node.name}
           </span>
           {node.dir && (
-            <span className="min-w-0 shrink-[9999] truncate text-[0.68rem] text-(--ui-text-tertiary)" title={node.dir}>
+            <span
+              className="min-w-0 shrink-[9999] truncate text-[length:var(--aino-text-caption)] text-(--ui-text-tertiary)"
+              title={node.dir}
+            >
               {node.dir}
             </span>
           )}
@@ -429,7 +436,6 @@ function ReviewFileRow({ node, depth }: { node: ReviewTreeNode; depth: number })
           <Tip label={file.staged ? c.unstage : c.stage}>
             <Button
               aria-label={file.staged ? c.unstage : c.stage}
-              className="size-4 rounded text-muted-foreground/70 hover:text-foreground"
               onClick={event => {
                 event.stopPropagation()
                 void (file.staged ? unstageReviewFile(file.path) : stageReviewFile(file.path))
@@ -443,7 +449,7 @@ function ReviewFileRow({ node, depth }: { node: ReviewTreeNode; depth: number })
           <Tip label={c.revert}>
             <Button
               aria-label={c.revert}
-              className="size-4 rounded text-muted-foreground/70 hover:text-(--ui-red)"
+              className="hover:text-(--ui-red)"
               onClick={event => {
                 event.stopPropagation()
                 requestRevert(file.path)
@@ -458,7 +464,7 @@ function ReviewFileRow({ node, depth }: { node: ReviewTreeNode; depth: number })
 
         <DiffCount
           added={node.added}
-          className="text-[0.64rem] leading-4 group-hover/review-row:hidden"
+          className="text-[length:var(--aino-text-caption)] leading-4 group-hover/review-row:hidden"
           removed={node.removed}
         />
         {file.staged && (
@@ -497,8 +503,14 @@ function ReviewFileContextMenu({
     <ContextMenu>
       <ContextMenuTrigger asChild>{children}</ContextMenuTrigger>
       <ContextMenuContent>
-        <ContextMenuItem onSelect={onOpenChanges}>{c.openChanges}</ContextMenuItem>
-        <ContextMenuItem onSelect={onOpenFile}>{c.openFile}</ContextMenuItem>
+        <ContextMenuItem onSelect={onOpenChanges}>
+          <Codicon name="diff" />
+          {c.openChanges}
+        </ContextMenuItem>
+        <ContextMenuItem onSelect={onOpenFile}>
+          <Codicon name="file" />
+          {c.openFile}
+        </ContextMenuItem>
         <ContextMenuSeparator />
         <ContextMenuItem
           onSelect={() =>
@@ -507,29 +519,42 @@ function ReviewFileContextMenu({
             )
           }
         >
+          <Codicon name={file.staged ? 'dash' : 'add'} />
           {file.staged ? c.unstage : c.stage}
         </ContextMenuItem>
         <ContextMenuItem onSelect={() => requestRevert(file.path)} variant="destructive">
+          <Codicon name="discard" />
           {c.revert}
         </ContextMenuItem>
         <ContextMenuSeparator />
-        <ContextMenuItem onSelect={() => revealFileInTree(dragPath)}>{m.revealInSidebar}</ContextMenuItem>
+        <ContextMenuItem onSelect={() => revealFileInTree(dragPath)}>
+          <Codicon name="list-tree" />
+          {m.revealInSidebar}
+        </ContextMenuItem>
         {localFs && (
           <ContextMenuItem onSelect={() => void revealFile(dragPath)}>
+            <Codicon name="folder-opened" />
             {pickRevealLabel(m.revealFinder, m.revealExplorer, m.revealFileManager)}
           </ContextMenuItem>
         )}
         <ContextMenuSeparator />
-        <ContextMenuItem onSelect={() => void copyFilePath(dragPath)}>{m.copyPath}</ContextMenuItem>
+        <ContextMenuItem onSelect={() => void copyFilePath(dragPath)}>
+          <Codicon name="copy" />
+          {m.copyPath}
+        </ContextMenuItem>
         {cwd && (
           <ContextMenuItem onSelect={() => void copyFilePath(toRelativePath(dragPath, cwd))}>
+            <Codicon name="copy" />
             {m.copyRelativePath}
           </ContextMenuItem>
         )}
         {shouldOfferRemoteFileDownload(false) && (
           <>
             <ContextMenuSeparator />
-            <ContextMenuItem onSelect={() => void downloadRemoteFile(dragPath)}>{m.download}</ContextMenuItem>
+            <ContextMenuItem onSelect={() => void downloadRemoteFile(dragPath)}>
+              <Codicon name="cloud-download" />
+              {m.download}
+            </ContextMenuItem>
           </>
         )}
       </ContextMenuContent>

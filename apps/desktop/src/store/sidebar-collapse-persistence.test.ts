@@ -136,11 +136,11 @@ describe('sidebar collapse persistence', () => {
     }
   })
 
-  it('explicit open restores hidden strip tabs and minimized groups only on that physical side', async () => {
+  it('explicit sidebar open restores its tabs on either physical side without exposing the tool group', async () => {
     for (const flipped of [false, true]) {
       window.localStorage.clear()
       reload()
-      const { layout, tree, bind } = await loadStores()
+      const { layout, tree } = await loadStores()
       const { findGroup, group, split } = await import('@/components/pane-shell/tree/model')
       const { registry } = await import('@/contrib/registry')
 
@@ -157,14 +157,15 @@ describe('sidebar collapse persistence', () => {
         const main = group(['workspace'])
         const other = group(['files', 'review'], { id: 'other' })
         tree.declareDefaultTree(split('row', flipped ? [other, main, sidebar] : [sidebar, main, other]))
-        bind()
-        tree.bindTreeSideVisibility('right', layout.$fileBrowserOpen, layout.setFileBrowserOpen)
+        layout.$panesFlipped.set(flipped)
+        tree.bindTreeSideVisibility(flipped ? 'right' : 'left', layout.$sidebarOpen, layout.setSidebarOpen)
+        tree.bindTreeSideVisibility(flipped ? 'left' : 'right', layout.$fileBrowserOpen, layout.setFileBrowserOpen)
         layout.setFileBrowserOpen(true)
         tree.setStripTabHidden('sessions', true)
         tree.setStripTabHidden('review', true)
         tree.setTreeGroupMinimized('sidebar', true)
         tree.setTreeGroupMinimized('other', true)
-        const open = flipped ? layout.setFileBrowserOpen : layout.setSidebarOpen
+        const open = layout.setSidebarOpen
 
         open(true) // already true: must not depend on a nanostores notification
         expect(tree.isStripTabHidden('sessions')).toBe(false)
@@ -177,7 +178,7 @@ describe('sidebar collapse persistence', () => {
         open(true)
         expect(tree.$layoutTree.get()).toBe(restored)
         tree.setStripTabHidden('sessions', true)
-        const toggle = flipped ? layout.toggleFileBrowserOpen : layout.toggleSidebarOpen
+        const toggle = layout.toggleSidebarOpen
         toggle()
         toggle()
         expect(tree.isStripTabHidden('sessions')).toBe(true) // ordinary toggles preserve the tab choice

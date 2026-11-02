@@ -157,6 +157,32 @@ describe('TreeGroup', () => {
       }
     })
 
+    it('updates a mounted zone when the global tab-strip preference changes', () => {
+      const originalDefault = $tabStripDefault.get()
+
+      try {
+        act(() => setTabStripDefault('always'))
+        mountCrowdedStrip(800, 'left')
+        render(
+          <TreeGroup
+            leftEdge
+            node={{ ...terminalGroup(false), panes: paneIds, tabStrip: undefined }}
+            rightEdge
+            topEdge
+          />
+        )
+        expect(container!.querySelector('[data-zone-tabstrip]')).not.toBeNull()
+
+        act(() => setTabStripDefault('never'))
+        expect(container!.querySelector('[data-zone-tabstrip]')).toBeNull()
+
+        act(() => setTabStripDefault('always'))
+        expect(container!.querySelector('[data-zone-tabstrip]')).not.toBeNull()
+      } finally {
+        act(() => setTabStripDefault(originalDefault))
+      }
+    })
+
     it('renders page controls inside their own panel in the normal tab space', () => {
       mountCrowdedStrip(800)
       act(() => {

@@ -27,6 +27,7 @@ interface DockHint {
 }
 
 export interface PaneMirror<T> {
+  toolPanel?: boolean
   /** Reactive source list. */
   source: ReadableAtom<T[]>
   /** Extra atoms whose changes should re-sync (e.g. titles living elsewhere). */
@@ -77,6 +78,8 @@ export interface PaneMirror<T> {
   /** Most retained tiles kept at once; the longest-retained is disposed
    *  first. Required with `retain`: every retained body costs memory. */
   retainLimit?: number
+  /** Unsaved documents cannot be evicted by the bounded guest cache. */
+  retainProtected?: (key: string) => boolean
 }
 
 /** Build a `watch*` fn: syncs once, then re-syncs on every source/also change.
@@ -110,6 +113,7 @@ export function paneMirror<T>(cfg: PaneMirror<T>): () => void {
       area: 'panes',
       title,
       data: {
+        toolPanel: cfg.toolPanel,
         tabLead: cfg.tabLead ? () => cfg.tabLead!(key) : undefined,
         tabTitle: cfg.tabTitle ? () => cfg.tabTitle!(key) : undefined,
         dock,
@@ -119,7 +123,7 @@ export function paneMirror<T>(cfg: PaneMirror<T>): () => void {
         // Every mirrored tile is a full workspace surface docked beside main —
         // and closeable, which is what keeps its tab when it lands in a zone of
         // its own (see strip-visibility.ts).
-        placement: 'main',
+        placement: cfg.toolPanel ? 'right' : 'main',
         tabDrag: cfg.tabDrag
           ? (event: ReactPointerEvent<HTMLElement>, onTap: () => void) => cfg.tabDrag!(key, event, onTap)
           : undefined, // returns boolean (handled) — see PaneChrome.tabDrag
@@ -186,7 +190,9 @@ export function paneMirror<T>(cfg: PaneMirror<T>): () => void {
       dispose(key)
     }
 
-    for (const key of [...parked].slice(0, Math.max(0, parked.size - (cfg.retainLimit ?? 0)))) {
+    const evictable = [...parked].filter(key => !cfg.retainProtected?.(key))
+
+    for (const key of evictable.slice(0, Math.max(0, evictable.length - (cfg.retainLimit ?? 0)))) {
       dispose(key)
     }
 

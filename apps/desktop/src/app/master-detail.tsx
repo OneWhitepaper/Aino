@@ -114,7 +114,10 @@ export function MasterDetail({
   const [list, ...rest] = Children.toArray(children)
 
   return (
-    <div className="flex h-full min-h-0 flex-col" data-aino-master-detail="">
+    <div
+      className="flex h-full min-h-0 flex-col bg-(--ui-editor-surface-background) text-[length:var(--aino-text-label)]"
+      data-aino-master-detail=""
+    >
       <div
         className={cn(
           'grid min-h-0 flex-1 grid-cols-1',
@@ -153,7 +156,10 @@ export function MasterDetail({
 
 export function ListColumn({ children, header }: { children: ReactNode; header?: ReactNode }) {
   return (
-    <aside className="flex min-h-0 flex-col p-2" data-aino-list-column="">
+    <aside
+      className="flex min-h-0 min-w-0 flex-col bg-(--ui-sidebar-surface-background) px-2.5 py-3 border-r border-(--ui-stroke-tertiary) max-sm:border-r-0 max-sm:border-b"
+      data-aino-list-column=""
+    >
       {header}
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain [scrollbar-gutter:stable]">{children}</div>
     </aside>
@@ -175,16 +181,16 @@ export function DetailColumn({
   return (
     <main className="flex min-h-0 flex-col overflow-hidden" data-aino-detail-column="">
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain [scrollbar-gutter:stable]">
-        <div className="mx-auto max-w-2xl space-y-5 px-5 py-4">{children}</div>
+        <div className="mx-auto max-w-3xl space-y-6 px-6 py-6">{children}</div>
       </div>
       {footer && (
-        <div className="mx-auto w-full max-w-2xl shrink-0 px-5 pb-3 pt-1.5 text-right text-[0.65rem] text-muted-foreground/50">
+        <div className="mx-auto w-full max-w-3xl shrink-0 px-6 pb-3 pt-1.5 text-right text-[length:var(--aino-text-caption)] text-muted-foreground/50">
           {footer}
         </div>
       )}
       {actionBar && (
         <footer className="shrink-0 bg-(--ui-chat-surface-background) px-5 py-2.5">
-          <div className="mx-auto flex max-w-2xl flex-wrap items-center gap-2">{actionBar}</div>
+          <div className="mx-auto flex max-w-3xl flex-wrap items-center gap-2">{actionBar}</div>
         </footer>
       )}
     </main>
@@ -462,7 +468,7 @@ export function CapRow({
         // Row height is already fixed (h-8/h-11), so skipped rows keep their
         // exact size and scrollbar geometry never jumps.
         'group/row row-hover flex w-full shrink-0 items-center rounded-md [content-visibility:auto] hover:text-foreground',
-        subtitle ? 'h-11' : 'h-8',
+        subtitle ? 'min-h-12 py-1' : 'min-h-8',
         active ? 'bg-(--ui-row-active-background) text-foreground' : 'text-(--ui-text-secondary)'
       )}
       data-active={active}
@@ -470,26 +476,26 @@ export function CapRow({
       id={rowId}
     >
       <RowButton
-        className="flex h-full min-w-0 flex-1 cursor-pointer items-center gap-2 rounded-md pl-2 pr-1.5 text-left"
+        className="flex h-auto min-w-0 flex-1 self-stretch cursor-pointer items-center gap-2 rounded-md pl-2 pr-1.5 text-left"
         onClick={onSelect}
       >
         <span className="min-w-0 flex-1">
           <span
             className={cn(
-              'block truncate text-[0.78rem]',
+              'block truncate text-[length:var(--aino-text-label)]',
               enabled ? 'font-medium text-foreground/85' : 'font-normal text-muted-foreground/60'
             )}
           >
             {title}
           </span>
           {subtitle != null && (
-            <span className="flex min-w-0 items-center gap-1 text-[0.62rem] text-muted-foreground/50">
+            <span className="flex min-w-0 items-center gap-1 text-[length:var(--aino-text-caption)] text-(--ui-text-tertiary)">
               {typeof subtitle === 'string' ? <span className="truncate">{subtitle}</span> : subtitle}
             </span>
           )}
         </span>
         {meta != null && (
-          <span className="shrink-0 rounded bg-(--ui-bg-quinary) px-1 py-px text-[0.6rem] tabular-nums leading-3.5 text-(--ui-text-tertiary)">
+          <span className="shrink-0 rounded bg-(--ui-bg-quinary) px-1 py-px text-[length:var(--aino-text-caption)] tabular-nums leading-4 text-(--ui-text-tertiary)">
             {meta}
           </span>
         )}

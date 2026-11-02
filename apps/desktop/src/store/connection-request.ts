@@ -99,6 +99,8 @@ export interface ConnectionTarget {
   requiredEnv: SetupField[]
   instructions: string | null
   discoveryError: string | null
+  /** Non-secret source and launch parameters reviewed before a custom MCP install. */
+  mcpConfig?: ConnectionOperationTarget['mcp_config']
   /** Present on `plugin` and `skill` rows only. */
   catalog?: CatalogEntry
 }
@@ -267,7 +269,8 @@ export function parseConnectionTarget(entry: ConnectionOperationTarget): Connect
     alias: entry.alias ?? null,
     requiredEnv: envFields(entry.required_env),
     instructions: entry.instructions ?? null,
-    discoveryError: entry.discovery_error ?? null
+    discoveryError: entry.discovery_error ?? null,
+    mcpConfig: entry.mcp_config ?? null
   }
 }
 
@@ -350,7 +353,8 @@ function mergeLiveTarget(target: ConnectionTarget, live: ConnectionOperationTarg
     alias: live.alias === undefined ? target.alias : live.alias,
     requiredEnv: live.required_env ? envFields(live.required_env) : target.requiredEnv,
     instructions: live.instructions === undefined ? target.instructions : live.instructions,
-    discoveryError: live.discovery_error === undefined ? target.discoveryError : live.discovery_error
+    discoveryError: live.discovery_error === undefined ? target.discoveryError : live.discovery_error,
+    mcpConfig: live.mcp_config === undefined ? target.mcpConfig : live.mcp_config
   }
 
   return sameTarget(next, target) ? target : next
@@ -364,6 +368,7 @@ const sameTarget = (next: ConnectionTarget, target: ConnectionTarget): boolean =
   next.detail === target.detail &&
   next.instructions === target.instructions &&
   next.discoveryError === target.discoveryError &&
+  JSON.stringify(next.mcpConfig) === JSON.stringify(target.mcpConfig) &&
   next.state === target.state &&
   next.tools.length === target.tools.length &&
   next.tools.every((tool, index) => tool === target.tools[index]) &&

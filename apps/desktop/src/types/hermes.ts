@@ -1297,6 +1297,8 @@ export interface ToolProvider {
    *  provider's voice/model settings (tts.<key>.*). Absent on other toolsets
    *  and older backends. */
   tts_provider?: string
+  /** Stable image-generation plugin identity; independent of the display name. */
+  image_gen_plugin_name?: string
   /** Web toolset only: capabilities this backend can serve. Search-only
    *  providers (ddgs, brave-free) report ['search']. */
   capabilities?: WebCapability[]
@@ -1368,6 +1370,8 @@ export interface ToolsetModelsResponse {
   models: ToolsetModel[]
   current: string | null
   default: string | null
+  quality?: string | null
+  quality_configurable?: boolean
 }
 
 /** Shape of `GET /api/tools/computer-use/status`.

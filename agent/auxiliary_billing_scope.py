@@ -27,6 +27,32 @@ _PURPOSES = {"title_generation": "title", "compression": "compression", "vision"
              "delegation": "delegation", "chat": "chat", **{task: task for task in _DETAILED_TASKS}}
 
 
+def _image_request_model(request):
+    """Read the SDK's multipart model without trusting a caller-supplied model hint."""
+    from email import policy
+    from email.parser import BytesParser
+
+    content_type = request.headers.get("content-type", "")
+    if content_type.split(";", 1)[0].strip().lower() != "multipart/form-data":
+        body = json.loads(request.content)
+        return body.get("model") if isinstance(body, dict) else None
+    envelope = BytesParser(policy=policy.default).parsebytes(
+        b"Content-Type: " + content_type.encode("ascii") + b"\r\n\r\n" + request.read())
+    if not envelope.is_multipart() or envelope.defects:
+        return None
+    models = [part for part in envelope.iter_parts()
+              if part.get_param("name", header="content-disposition") == "model"]
+    if len(models) != 1:
+        return None
+    model = models[0]
+    if model.get_filename() is not None or model.is_multipart() or model.defects:
+        return None
+    try:
+        return model.get_payload(decode=True).decode("utf-8")
+    except (AttributeError, UnicodeDecodeError):
+        return None
+
+
 @dataclass(frozen=True, eq=False)
 class ManagedCredential:
     get_key: Callable[[], str] = field(repr=False)
@@ -59,9 +85,18 @@ class ManagedCredential:
         if ((target.scheme, target.netloc) != (allowed.scheme, allowed.netloc)
                 or not target.path.startswith(allowed.path.rstrip("/") + "/")):
             raise RuntimeError("managed_credential_destination_mismatch")
+        image_request = self.api_mode == "images_generations"
+        image_paths = {allowed.path.rstrip("/") + "/images/" + operation
+                       for operation in ("generations", "edits")}
+        if image_request and (request.method != "POST" or target.path not in image_paths):
+            raise RuntimeError("managed_credential_destination_mismatch")
         if request.method == "POST":
-            body = json.loads(request.content)
-            if not isinstance(body, dict) or body.get("model") != self.model:
+            if image_request:
+                model = _image_request_model(request)
+            else:
+                body = json.loads(request.content)
+                model = body.get("model") if isinstance(body, dict) else None
+            if model != self.model:
                 raise RuntimeError("managed_model_identity_mismatch")
         scope = self.scope or billing_scope.get()
         if scope is None:

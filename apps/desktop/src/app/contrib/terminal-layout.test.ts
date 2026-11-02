@@ -2,14 +2,7 @@ import { beforeAll, describe, expect, it, vi } from 'vitest'
 
 import { $terminalTakeover, setTerminalTakeover } from '@/app/right-sidebar/store'
 import { $activeTerminalId, $terminals } from '@/app/right-sidebar/terminal/terminals'
-import {
-  allPaneIds,
-  findGroupOfPane,
-  findParentSplit,
-  group,
-  type LayoutNode,
-  split
-} from '@/components/pane-shell/tree/model'
+import { allPaneIds, findGroupOfPane, group, type LayoutNode, split } from '@/components/pane-shell/tree/model'
 import {
   $hiddenTreePanes,
   $layoutTree,
@@ -44,25 +37,23 @@ beforeAll(async () => {
 }, 30_000)
 
 describe('terminal workspace integration', () => {
-  it('docks below the chat without taking height from navigation or the right panes', () => {
+  it('shares the default tool host and preserves a custom mixed navigation group', () => {
     const defaultTree = registry.getArea('layouts').find(layout => layout.id === 'default')!.data as LayoutNode
 
-    for (const tree of [defaultTree, $layoutTree.get()!]) {
+    for (const tree of [defaultTree]) {
       const terminal = findGroupOfPane(tree, 'terminal')!
-      const parent = findParentSplit(tree, terminal.id)!
-
-      expect(parent.orientation).toBe('column')
-      expect(allPaneIds(parent)).toContain('workspace')
-      expect(allPaneIds(parent)).not.toContain('sessions')
-      expect(allPaneIds(parent)).not.toContain('files')
-      expect(allPaneIds(parent.children.at(-1)!)).toContain('terminal')
+      expect(terminal).toBe(findGroupOfPane(tree, 'files'))
+      expect(terminal).toBe(findGroupOfPane(tree, 'review'))
+      expect(terminal.toolPanel).toBe(true)
+      expect(terminal.panes).not.toContain('workspace')
+      expect(terminal.panes).not.toContain('sessions')
       expect(allPaneIds(tree)).toEqual(expect.arrayContaining(['files', 'review', 'sessions', 'terminal', 'workspace']))
     }
 
     expect(findGroupOfPane($layoutTree.get()!, 'sessions')).toMatchObject({
       id: 'saved-navigation',
-      active: 'sessions',
-      panes: ['sessions', 'hermes-bots:pane'],
+      active: 'terminal',
+      panes: ['sessions', 'hermes-bots:pane', 'terminal'],
       tabStrip: 'always'
     })
     const terminalContribution = registry.getArea('panes').find(pane => pane.id === 'terminal')

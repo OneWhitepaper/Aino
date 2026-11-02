@@ -741,6 +741,55 @@ describe('quickstart completion navigation', () => {
     })
     await waitFor((): void => expect(routeProbe).toHaveBeenCalledWith('/'))
   })
+
+  it('does not navigate when quickstart finishes while its section is folded', async () => {
+    const routeProbe = vi.fn()
+
+    function Probe() {
+      const loc = useLocation()
+      routeProbe(loc.pathname)
+
+      return null
+    }
+
+    const running: LocalRuntimeJob = {
+      done_bytes: 0,
+      detail: '',
+      error: null,
+      job_id: 'folded-run',
+      kind: 'quickstart',
+      model_id: 'qwen3.8-27b',
+      phase: 'downloading',
+      status: 'running',
+      target: 'Qwen3.8 27B',
+      total_bytes: null
+    }
+
+    const done: LocalRuntimeJob = { ...running, phase: 'done', status: 'done' }
+
+    queryClient.setQueryData(localModelsKey(localModelsOwner(), 'jobs'), [running])
+
+    const tree = (visible: boolean) => (
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={['/settings']}>
+          <I18nProvider>
+            <LocalModelsSettings embedded visible={visible} />
+          </I18nProvider>
+          <Probe />
+        </MemoryRouter>
+      </QueryClientProvider>
+    )
+
+    const view = render(tree(true))
+    await act(async () => {})
+    view.rerender(tree(false))
+
+    await act(async () => {
+      queryClient.setQueryData(localModelsKey(localModelsOwner(), 'jobs'), [done])
+    })
+
+    expect(routeProbe).not.toHaveBeenCalledWith('/')
+  })
 })
 
 describe('quickstart finalization', (): void => {

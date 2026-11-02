@@ -418,6 +418,15 @@ export function enumOptionsFor(
 ): string[] | undefined {
   let opts = dynamicOptions ?? (key === 'display.personality' ? personalityOptions(config) : ENUM_OPTIONS[key])
 
+  if (key === 'context.engine') {
+    // Older running backends returned only these placeholders. New schemas
+    // always include compressor and discover actual plugin names per profile.
+    const legacySchema = !dynamicOptions?.includes('compressor')
+    const discovered = dynamicOptions?.filter(name => !legacySchema || (name !== 'default' && name !== 'custom'))
+
+    opts = [...new Set(['compressor', ...(discovered ?? [])])]
+  }
+
   // Merge in user-defined command-type providers so custom local TTS/STT
   // backends declared in config.yaml are selectable, not just the built-ins.
   // The `includes` guard keeps the list duplicate-free should the display list

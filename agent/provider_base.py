@@ -64,3 +64,7 @@ class CatalogProviderBase(ProviderBase):
         """Id of the first catalog entry, or None when the catalog is empty."""
         models = self.list_models()
         return models[0].get("id") if models else None
+
+    def accepts_model_selection(self, model_id: str) -> bool:
+        """Validate a saved selection; account-backed catalogs may validate opaque ids."""
+        return any(row.get("id") == model_id for row in self.list_models() if isinstance(row, dict))

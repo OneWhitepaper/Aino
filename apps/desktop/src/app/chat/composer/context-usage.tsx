@@ -76,12 +76,21 @@ export function ComposerContextUsage({ enabled, requestGateway }: ComposerContex
     }
   }, [catalog, catalogState.phase, enabled, provider, visible])
 
-  const { breakdown, loading, refetch } = useContextBreakdown({
-    busy: busy || compacting,
+  const { breakdown, loading, refetch, unavailable } = useContextBreakdown({
+    busy,
     enabled: enabled && visible,
-    refreshKey: JSON.stringify([provider, model, usage.context_max, fallbackContextMax]),
+    identityKey: JSON.stringify([provider, model]),
+    refreshKey: JSON.stringify([
+      provider,
+      model,
+      usage.context_max,
+      usage.context_percent,
+      usage.context_used,
+      fallbackContextMax
+    ]),
     requestGateway,
-    sessionId
+    sessionId,
+    suspended: compacting
   })
 
   const resolvedUsage = summaryContextUsage(usage, breakdown, fallbackContextMax)
@@ -111,7 +120,7 @@ export function ComposerContextUsage({ enabled, requestGateway }: ComposerContex
           : copy.empty
 
   const label = `${copy.title} · ${status}`
-  const panelProps = { breakdown, compacting, loading, usage: resolvedUsage }
+  const panelProps = { breakdown, compacting, loading, unavailable, onRetry: refetch, usage: resolvedUsage }
 
   const retryUnavailable = () => {
     if (!breakdown && !loading && enabled && visible && !busy && !compacting) {
@@ -130,11 +139,16 @@ export function ComposerContextUsage({ enabled, requestGateway }: ComposerContex
       }}
       open={open}
     >
-      <Tip label={<ContextUsagePanel {...panelProps} compact />} side="top" variant="card">
+      <Tip
+        className="context-usage-tooltip"
+        label={<ContextUsagePanel {...panelProps} compact />}
+        side="top"
+        variant="card"
+      >
         <PopoverTrigger asChild>
           <Button aria-label={label} data-slot="composer-context-usage" size="icon-xs" type="button" variant="ghost">
             <Progress
-              animated={compacting || loading}
+              animated={compacting}
               aria-label={copy.title}
               destructive={percent !== null && percent >= 95}
               indeterminate={compacting || percent === null}

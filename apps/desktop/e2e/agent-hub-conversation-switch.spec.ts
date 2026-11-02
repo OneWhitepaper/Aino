@@ -8,6 +8,13 @@ let fixture: MockBackendFixture
 const reply = (text: string) =>
   fixture.page.locator('[data-slot=aui_assistant-message-content]:visible').getByText(text, { exact: true })
 
+async function selectSidebarMode(name: 'Aino' | 'Agent Hub') {
+  const { page } = fixture
+
+  await page.locator('[data-sidebar-mode-header] button').click()
+  await page.getByRole('menuitemradio', { name: new RegExp(`^${name}(?:\\s|$)`) }).click()
+}
+
 test.beforeAll(async () => {
   fixture = await setupMockBackend({
     extraDisplayConfig: '  language: zh',
@@ -43,7 +50,7 @@ test('switches the main transcript with Agent Hub and restores the ordinary chat
   const draft = '保留在普通会话中的未发送草稿'
 
   await input.fill(draft)
-  await page.getByRole('tab', { name: /^Agent Hub$/i }).click()
+  await selectSidebarMode('Agent Hub')
   await expect(page.getByRole('button', { name: /@hermes/ })).toBeVisible()
   await expect(page.getByRole('heading', { name: 'Aino', exact: true })).toBeVisible({ timeout: 30_000 })
   await expect(page).toHaveURL(sessionUrl)
@@ -57,14 +64,14 @@ test('switches the main transcript with Agent Hub and restores the ordinary chat
   await expect(page.getByRole('button', { name: '停止', exact: true })).toHaveCount(0)
   await page.screenshot({ path: test.info().outputPath('agent-hub-chat.png') })
 
-  await page.getByRole('tab', { name: '会话', exact: true }).click()
+  await selectSidebarMode('Aino')
   await expect(page).toHaveURL(sessionUrl)
   await expect(reply(SESSION_REPLY)).toBeVisible()
   await expect(reply(BOT_REPLY)).not.toBeVisible()
   await expect(input).toHaveText(draft)
   await page.screenshot({ path: test.info().outputPath('ordinary-chat-restored.png') })
 
-  await page.getByRole('tab', { name: /^Agent Hub$/i }).click()
+  await selectSidebarMode('Agent Hub')
   await expect(reply(BOT_REPLY)).toBeVisible()
   await expect(reply(SESSION_REPLY)).not.toBeVisible()
 })
@@ -80,7 +87,7 @@ test('persists the default bot name and description after reopening and reloadin
     return page.getByRole('dialog', { name: '编辑机器人', exact: true })
   }
 
-  await page.getByRole('tab', { name: /^Agent Hub$/i }).click()
+  await selectSidebarMode('Agent Hub')
   let editor = await openEditor()
 
   await editor.getByRole('textbox').first().fill('Aino 验收助手')
@@ -103,7 +110,7 @@ test('persists the default bot name and description after reopening and reloadin
   await expect(editor).not.toBeVisible()
   await page.reload()
   await waitForAppReady(fixture, 120_000)
-  await page.getByRole('tab', { name: /^Agent Hub$/i }).click()
+  await selectSidebarMode('Agent Hub')
   await expect(page.getByRole('button', { name: /^Aino · @hermes/ })).toBeVisible()
   editor = await openEditor()
   await expect(editor.getByRole('textbox').first()).toHaveValue('Aino')
@@ -116,7 +123,7 @@ test('shows a Chinese bot name in workspace navigation and keeps its ID in advan
   const { page } = fixture
   const internalId = 'u90ae-u4ef6-u52a9-u624b'
 
-  await page.getByRole('tab', { name: /^Agent Hub$/i }).click()
+  await selectSidebarMode('Agent Hub')
   await page.getByRole('button', { name: '新建机器人或群聊', exact: true }).click()
   await page.getByRole('menuitem', { name: '新建机器人', exact: true }).click()
   const create = page.getByRole('dialog', { name: '新建机器人', exact: true })
@@ -137,7 +144,7 @@ test('shows a Chinese bot name in workspace navigation and keeps its ID in advan
   await editor.getByRole('button', { name: /^高级/ }).click()
   await expect(editor.getByText(internalId, { exact: true })).toBeVisible()
   await editor.getByRole('button', { name: '取消', exact: true }).click()
-  await page.getByRole('tab', { name: '会话', exact: true }).click()
+  await selectSidebarMode('Aino')
   await page.getByRole('button', { name: '工作区', exact: true }).click()
   const workspaces = page.getByRole('region', { name: '工作区', exact: true })
   const mailCard = workspaces.locator(`[data-panel-row="${internalId}"] [data-slot=row-button]`)

@@ -3,7 +3,6 @@
 import type { CatalogPluginPresence, PluginsManageResult } from '@hermes/shared'
 import { useStore } from '@nanostores/react'
 import { useQuery } from '@tanstack/react-query'
-import { Puzzle } from 'lucide-react'
 import { useEffect } from 'react'
 
 import { useSessionView } from '@/app/chat/session-view'
@@ -12,6 +11,7 @@ import { useConnectionOwner } from '@/components/assistant-ui/use-connection-own
 import { Button } from '@/components/ui/button'
 import { Chip } from '@/components/ui/chip'
 import { useI18n } from '@/i18n'
+import { AppWindow } from '@/lib/icons'
 import { lookupPluginCatalogEntry } from '@/lib/plugin-catalog'
 import { cn } from '@/lib/utils'
 import { $agentPlugins, $agentPluginsProfile, loadAgentPlugins } from '@/store/agent-plugins'
@@ -46,7 +46,7 @@ async function openInstall(name: string, title: string, profile: string): Promis
 
 const PLUGIN_ICON = (
   <span className="grid size-7 shrink-0 place-items-center rounded-full bg-background text-muted-foreground">
-    <Puzzle className="size-4" />
+    <AppWindow className="size-4" />
   </span>
 )
 

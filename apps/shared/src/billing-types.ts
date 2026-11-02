@@ -16,9 +16,9 @@
  *
  * Detection is backend-only (`agent/error_classifier.py` →
  * `FailoverReason.billing`), so every surface renders from this one signal and
- * never re-classifies free-form error text. `is_nous` routes recovery: Nous is
- * the managed route with in-app billing (desktop Settings → Billing, TUI
- * `/topup`), while third-party providers deep-link to `billing_url`.
+ * never re-classifies free-form error text. `is_nous` marks the managed route:
+ * Desktop returns users to model selection, the TUI retains its `/topup`
+ * command, and third-party providers deep-link to `billing_url`.
  */
 export type { BillingBlock } from './gateway-contract.generated.js'
 import type { PlanUsage } from './gateway-contract.generated.js'

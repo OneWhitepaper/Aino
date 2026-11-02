@@ -1,0 +1,50 @@
+.approval-mode-menu {
+  width: 20rem;
+  max-width: calc(100vw - 1rem);
+  padding: 0.375rem;
+}
+
+.approval-mode-menu .approval-mode-heading {
+  padding: 0.375rem 0.625rem;
+  font-size: var(--aino-text-caption);
+  line-height: 1rem;
+  font-weight: 400;
+  color: var(--ui-text-tertiary);
+}
+
+.approval-mode-menu .approval-mode-option {
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.375rem 0.625rem;
+}
+
+.approval-mode-icon {
+  color: var(--ui-text-secondary);
+}
+
+.approval-mode-copy {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+  gap: 0.125rem;
+}
+
+.approval-mode-name {
+  font-size: var(--aino-text-label);
+  font-weight: 500;
+  line-height: 1.125rem;
+}
+
+.approval-mode-description {
+  font-size: var(--aino-text-caption);
+  line-height: 1rem;
+  color: var(--ui-text-tertiary);
+}
+
+.approval-mode-menu .approval-mode-option[data-approval-mode='off'],
+.approval-mode-menu .approval-mode-option[data-approval-mode='off'] .approval-mode-description,
+.approval-mode-menu .approval-mode-option[data-approval-mode='off'] svg,
+.approval-mode-trigger-warning[data-slot] {
+  color: var(--ui-orange);
+}

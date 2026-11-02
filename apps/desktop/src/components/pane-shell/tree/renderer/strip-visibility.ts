@@ -10,7 +10,7 @@
  */
 
 import type { Contribution } from '@/contrib/types'
-import { effectiveTabStripMode } from '@/store/tabstrip-prefs'
+import { effectiveTabStripMode, type TabStripDefault } from '@/store/tabstrip-prefs'
 
 import type { TabStripMode } from '../model'
 
@@ -105,6 +105,8 @@ export function resolveTabStripVisible(zone: StripZone): boolean {
 export function tabStripVisibleForZone(zone: {
   /** The zone's ACTIVE pane. */
   active: string
+  /** Renderers pass the subscribed default; non-reactive callers read storage's atom. */
+  defaultMode?: TabStripDefault
   isCollapsePane: (id: string) => boolean
   /** The zone's own choice, before the app default applies. */
   mode: TabStripMode | undefined
@@ -114,7 +116,7 @@ export function tabStripVisibleForZone(zone: {
 }): boolean {
   return resolveTabStripVisible({
     headerVeto: paneChrome(zone.paneFor(zone.active)).headerVeto,
-    mode: effectiveTabStripMode(zone.mode),
+    mode: effectiveTabStripMode(zone.mode, zone.defaultMode),
     shown: zone.shown.map(id => {
       const chrome = paneChrome(zone.paneFor(id))
 

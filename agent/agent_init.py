@@ -607,10 +607,10 @@ _SESSION_STATE: dict[str, Any] = {
     "_codex_reasoning_replay_rejected": False,
     "_memory_write_origin": "assistant_tool",
     "_memory_write_context": "foreground",
-    # Cached system prompt (built once, rebuilt on compression) + its cross-session-stable
-    # prefix, kept separately only to place an early cache marker.
+    # Cache the cross-session prefix and attribution tiers until compression rebuilds them.
     "_cached_system_prompt": None,
     "_cached_system_prompt_static": None,
+    "_cached_system_prompt_parts": None,
     # skills.auto_load rendered ONCE per agent: every rebuild (model switch, compression,
     # static-prefix restoration) reuses these exact bytes instead of re-reading config/skills.
     "_auto_load_skills_resolved": False,

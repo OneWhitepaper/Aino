@@ -60,7 +60,7 @@ describe('lookupPluginCatalogEntry', () => {
     expect(request).not.toHaveBeenCalled()
   })
 
-  it('falls back to the direct feed only when the backend predates the lookup', async () => {
+  it('falls back to the direct feed when the backend predates catalog lookup', async () => {
     const feed = [{ name: 'weather', repo: 'https://github.com/x/weather', sha: SHA, subdir: '' }]
     const fetchImpl = vi.fn<typeof fetch>(async () => new Response(JSON.stringify(feed)))
 

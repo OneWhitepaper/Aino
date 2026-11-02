@@ -1,3 +1,7 @@
+import { mergeTranslations } from '@hermes/shared/i18n'
+
+import { accountPage } from './account-page'
+import { appearancePage } from './appearance-page'
 import { arArtifacts } from './ar_artifacts'
 import { arAssistant } from './ar_assistant'
 import { arBoot } from './ar_boot'
@@ -11,9 +15,25 @@ import { arDiagnostics } from './ar_diagnostics'
 import { arFirstRun } from './ar_first_run'
 import { arSettings } from './ar_settings'
 import { defineLocale, type TranslationOverrides } from './define-locale'
+import { homeGuidance } from './home-guidance'
 import { messagingDirectory } from './messaging-directory'
+import { runtimeFeatureCopy } from './runtime-feature-copy'
+import { toolPanel } from './tool-panel'
+import { workspacePage } from './workspace-page'
 
-export const arOverrides = {
+const arBaseOverrides = {
+  appearancePage: appearancePage.ar,
+  home: homeGuidance.ar,
+  toolPanel: toolPanel['ar'],
+  workspacePage: workspacePage.ar,
+  accountPage: accountPage['ar'],
+  platformRecharge: {
+    description: 'تُحسب المبالغ تلقائيًا بعد الإدخال. راجع مبلغ الدفع والمبلغ الذي سيُضاف إلى الرصيد قبل الدفع.',
+    quote: 'جارٍ حساب المبالغ…',
+    create: 'المتابعة للدفع',
+    payAmount: 'المبلغ المطلوب دفعه',
+    creditAmount: 'المبلغ المضاف إلى الرصيد'
+  },
   connectorOffer: {
     heading: 'الاحتفاظ بالتطبيقات المتصلة',
     body: 'سجّل الدخول بحساب Nous مجاني للاحتفاظ بالتطبيقات التي ربطتها، مثل Gmail أو Slack، في حسابك.'
@@ -171,5 +191,10 @@ export const arOverrides = {
     }
   }
 } satisfies TranslationOverrides
+
+export const arOverrides = mergeTranslations<typeof arBaseOverrides & TranslationOverrides>(
+  arBaseOverrides,
+  runtimeFeatureCopy['ar']
+)
 
 export const ar = defineLocale(arOverrides)

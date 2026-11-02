@@ -36,7 +36,7 @@ function firstBillingLine(text: string): string {
  * gateway forwards the structured descriptor built by `agent/billing_links.py`;
  * we cache it per-session (drives the in-chat banner) AND raise one sticky,
  * billing-specific toast — never the generic "Hermes error" — with a smart CTA
- * (Nous → in-app Settings → Billing, other providers → their billing page).
+ * (managed providers → model selection, other providers → their billing page).
  */
 function surfaceBillingBlock(sessionId: string, raw: unknown): void {
   if (!raw || typeof raw !== 'object') {
@@ -53,7 +53,7 @@ function surfaceBillingBlock(sessionId: string, raw: unknown): void {
 
   const ctaCopy = {
     addCredits: translateNow('billingBlock.addCredits'),
-    openBilling: translateNow('billingBlock.openBilling')
+    chooseModel: translateNow('desktop.chooseModel')
   }
 
   notify({

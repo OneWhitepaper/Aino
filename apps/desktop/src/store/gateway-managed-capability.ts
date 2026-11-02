@@ -10,6 +10,7 @@ export interface ManagedModelRoute {
 
 /** Exact socket-ready evidence. An open socket is not capability evidence. */
 export const $gatewayManagedCapabilities = atom<Record<string, ManagedModelRouteCapability>>({})
+export const $gatewayManagedImageCapabilities = atom<Record<string, ManagedModelRouteCapability>>({})
 
 function routeKey(route: ManagedModelRoute): string {
   return registryBackendScopeKey(route.connectionId, route.profile)
@@ -17,6 +18,10 @@ function routeKey(route: ManagedModelRoute): string {
 
 export function managedModelRouteCapability(route: ManagedModelRoute): ManagedModelRouteCapability {
   return managedModelRouteCapabilityFrom($gatewayManagedCapabilities.get(), route)
+}
+
+export function managedImageRouteCapability(route: ManagedModelRoute): ManagedModelRouteCapability {
+  return managedModelRouteCapabilityFrom($gatewayManagedImageCapabilities.get(), route)
 }
 
 export function managedModelRouteCapabilityFrom(
@@ -39,19 +44,24 @@ export function recordGatewayReadyCapability(route: ManagedModelRoute, event: Ga
     ...$gatewayManagedCapabilities.get(),
     [key]: supported ? 'supported' : 'unsupported'
   })
+  $gatewayManagedImageCapabilities.set({
+    ...$gatewayManagedImageCapabilities.get(),
+    [key]: (payload as { managed_image_binding?: unknown }).managed_image_binding === 1 ? 'supported' : 'unsupported'
+  })
 }
 
 export function resetGatewayManagedCapability(route: ManagedModelRoute): void {
   const key = routeKey(route)
-  const current = $gatewayManagedCapabilities.get()
 
-  if (!(key in current)) {
-    return
+  for (const capabilities of [$gatewayManagedCapabilities, $gatewayManagedImageCapabilities]) {
+    const current = capabilities.get()
+
+    if (key in current) {
+      const next = { ...current }
+      delete next[key]
+      capabilities.set(next)
+    }
   }
-
-  const next = { ...current }
-  delete next[key]
-  $gatewayManagedCapabilities.set(next)
 }
 
 export function recordGatewayCapabilityState(route: ManagedModelRoute, state: ConnectionState): void {
@@ -62,4 +72,5 @@ export function recordGatewayCapabilityState(route: ManagedModelRoute, state: Co
 
 export function clearGatewayManagedCapabilities(): void {
   $gatewayManagedCapabilities.set({})
+  $gatewayManagedImageCapabilities.set({})
 }

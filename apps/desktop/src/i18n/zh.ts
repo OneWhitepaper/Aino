@@ -1,5 +1,12 @@
+import { accountPage } from './account-page'
+import { appearancePage } from './appearance-page'
+import { configPagesFor } from './config-pages'
+import { homeGuidance } from './home-guidance'
+import { toolPanel } from './tool-panel'
+import { workspacePage } from './workspace-page'
 import { zhBilling } from './zh_billing_surface'
 import { zhMessaging } from './zh_messaging'
+import { sidebarMode } from './zh_sidebar_mode'
 import { zhSummary } from './zh_summary_surface'
 
 const accountErrors: Record<string, string> = {
@@ -40,7 +47,289 @@ import { zhSharedMetrics } from './zh_shared_metrics'
 import { zhThemePicker } from './zh_theme_picker'
 import { zhUpdateChannel } from './zh_update_channel'
 
+const configPageFieldLabels: Record<string, string> = defineFieldCopy({
+  model: '默认模型',
+  modelContextLength: '主模型上下文窗口（token）',
+  fallbackProviders: '备用模型',
+  toolsets: '启用的工具集',
+  timezone: '时区',
+  display: {
+    personality: '人格',
+    showReasoning: '推理过程块'
+  },
+  desktop: {
+    repoScanEnabled: '自动发现代码仓库',
+    repoScanRoots: '代码仓库扫描根目录',
+    repoScanExcludePaths: '排除的代码仓库路径'
+  },
+  agent: {
+    maxTurns: '最大智能体步数',
+    imageInputMode: '图片附件',
+    apiMaxRetries: 'API 重试次数',
+    serviceTier: '服务等级',
+    toolUseEnforcement: '工具调用强制'
+  },
+  terminal: {
+    cwd: '工作目录',
+    backend: '执行后端',
+    timeout: '命令超时',
+    persistentShell: '持久化 Shell',
+    envPassthrough: '环境变量透传',
+    dockerImage: 'Docker 镜像',
+    singularityImage: 'Singularity 镜像',
+    modalImage: 'Modal 镜像',
+    daytonaImage: 'Daytona 镜像'
+  },
+  fileReadMaxChars: '文件读取上限',
+  toolOutput: {
+    maxBytes: '终端输出上限',
+    maxLines: '文件分页上限',
+    maxLineLength: '行长度上限'
+  },
+  codeExecution: {
+    mode: '代码执行模式'
+  },
+  approvals: {
+    mode: '审批模式',
+    timeout: '审批超时',
+    mcpReloadConfirm: '确认 MCP 重载'
+  },
+  commandAllowlist: '命令白名单',
+  security: {
+    redactSecrets: '隐去密钥',
+    allowPrivateUrls: '允许私有 URL'
+  },
+  browser: {
+    allowPrivateUrls: '浏览器私有 URL',
+    autoLocalForPrivateUrls: '私有 URL 使用本地浏览器',
+    useRealProfile: '使用真实浏览器配置'
+  },
+  checkpoints: {
+    enabled: '文件检查点',
+    maxSnapshots: '检查点上限'
+  },
+  voice: {
+    maxRecordingSeconds: '最长录音时长',
+    autoTts: '朗读回复',
+    voiceChatMode: '语音聊天模式',
+    gptLive: {
+      voice: 'GPT-Live 音色',
+      instructions: 'GPT-Live 人设'
+    }
+  },
+  stt: {
+    enabled: '语音转文字',
+    provider: '语音转文字提供方',
+    echoTranscripts: '回显转写文本',
+    local: {
+      model: '本地转写模型',
+      language: '转写语言'
+    },
+    openai: {
+      model: 'OpenAI STT 模型'
+    },
+    groq: {
+      model: 'Groq STT 模型'
+    },
+    mistral: {
+      model: 'Mistral STT 模型'
+    },
+    elevenlabs: {
+      modelId: 'ElevenLabs STT 模型',
+      languageCode: 'ElevenLabs 语言',
+      tagAudioEvents: '标记音频事件',
+      diarize: '说话人区分'
+    }
+  },
+  tts: {
+    provider: '文字转语音提供方',
+    edge: {
+      voice: 'Edge 语音'
+    },
+    openai: {
+      model: 'OpenAI TTS 模型',
+      voice: 'OpenAI 语音'
+    },
+    elevenlabs: {
+      voiceId: 'ElevenLabs 语音',
+      modelId: 'ElevenLabs 模型'
+    },
+    xai: {
+      voiceId: 'xAI (Grok) 语音',
+      language: 'xAI 语言',
+      speed: '播放速度',
+      autoSpeechTags: '自动语音标签',
+      optimizeStreamingLatency: '流式延迟优化',
+      sampleRate: '采样率',
+      bitRate: '比特率'
+    },
+    minimax: {
+      model: 'MiniMax TTS 模型',
+      voiceId: 'MiniMax 语音'
+    },
+    mistral: {
+      model: 'Mistral TTS 模型',
+      voiceId: 'Mistral 语音'
+    },
+    gemini: {
+      model: 'Gemini TTS 模型',
+      voice: 'Gemini 语音'
+    },
+    neutts: {
+      model: 'NeuTTS 模型',
+      device: 'NeuTTS 设备'
+    },
+    kittentts: {
+      model: 'KittenTTS 模型',
+      voice: 'KittenTTS 语音'
+    },
+    piper: {
+      voice: 'Piper 语音'
+    },
+    deepinfra: {
+      model: 'DeepInfra TTS 模型',
+      voice: 'DeepInfra 语音'
+    }
+  },
+  memory: {
+    memoryEnabled: '持久记忆',
+    userProfileEnabled: '用户画像',
+    memoryCharLimit: '记忆预算',
+    userCharLimit: '画像预算',
+    provider: '记忆提供方'
+  },
+  context: {
+    engine: '上下文引擎'
+  },
+  compression: {
+    enabled: '自动压缩',
+    threshold: '压缩阈值',
+    codexGpt55Autoraise: 'Codex 压缩自动提高',
+    targetRatio: '压缩目标',
+    protectLastN: '保护最近消息'
+  },
+  auxiliary: {
+    compression: {
+      timeout: '压缩模型超时（秒）'
+    }
+  },
+  delegation: {
+    model: '子智能体模型',
+    provider: '子智能体提供方',
+    maxIterations: '子智能体轮次上限',
+    maxConcurrentChildren: '并行子智能体',
+    childTimeoutSeconds: '子智能体超时',
+    reasoningEffort: '子智能体推理强度'
+  },
+  updates: {
+    nonInteractiveLocalChanges: '应用内更新本地更改'
+  }
+})
+
+const configPageFieldDescriptions: Record<string, string> = defineFieldCopy({
+  model: '用于新对话，除非你在输入框中选择其他模型。',
+  modelContextLength:
+    '仅覆盖主聊天模型检测到的上下文窗口（以 token 计）。保持为 0 则使用所选模型检测到的值。不影响辅助模型/MoA 模型。',
+  fallbackProviders: '默认模型失败时尝试的备用“提供方:模型”条目。',
+  display: {
+    personality: '新会话的默认助手风格。',
+    showReasoning: '当后端提供推理内容时予以显示。'
+  },
+  desktop: {
+    repoScanEnabled: '扫描本地文件夹，并在“项目”中显示 Git 代码仓库。',
+    repoScanRoots: '要扫描的文件夹。留空时不主动扫描磁盘，已有关联对话的项目仍会显示。',
+    repoScanExcludePaths: '发现代码仓库时跳过这些文件夹及其子目录。'
+  },
+  timezone: '当 Hermes 需要本地时间上下文时使用。留空则使用系统时区。',
+  browser: {
+    useRealProfile:
+      '本地浏览会使用你的真实登录信息。Hermes 会将默认浏览器的配置文件（Cookie、登录信息、偏好设置）复制到受管理的快照中，并使用随附的 Chromium 驱动该快照——不会直接打开你的实时配置文件，每次运行都会从中刷新副本。即使已配置云端浏览器后端，也允许智能体按需打开本地真实配置文件会话。仅支持 Chromium 浏览器（Chrome、Edge、Brave、Brave Origin、Chromium）；如果默认浏览器不是 Chromium，会显示明确的错误信息。默认关闭。'
+  },
+  agent: {
+    imageInputMode: '控制图片附件如何发送给模型。',
+    maxTurns: 'Hermes 停止一次运行前工具调用轮次的上限。'
+  },
+  terminal: {
+    cwd: '工具与终端操作的默认项目目录。',
+    persistentShell: '仅适用于 SSH：保留命令中导出的环境变量；关闭后每条命令使用登录环境。工作目录始终保留。',
+    envPassthrough: '填写允许传入工具的环境变量名称，不要填写值。修改后需重启运行服务，并重新创建已有执行环境。',
+    dockerImage: '使用 Docker 执行后端时采用的容器镜像。',
+    singularityImage: '使用 Singularity 执行后端时采用的镜像。',
+    modalImage: '使用 Modal 执行后端时采用的镜像。',
+    daytonaImage: '使用 Daytona 执行后端时采用的镜像。'
+  },
+  codeExecution: {
+    mode: '项目模式使用会话目录和项目 Python；独立模式使用临时目录和运行时 Python。此选项不改变文件访问权限。'
+  },
+  fileReadMaxChars: 'Hermes 单次文件读取可读取的最大字符数。',
+  approvals: {
+    mode: 'Hermes 如何处理需要显式审批的命令。',
+    timeout: '审批提示在超时前等待的时长。'
+  },
+  security: {
+    redactSecrets: '尽可能从模型可见内容中隐藏检测到的密钥。'
+  },
+  checkpoints: {
+    enabled: '在文件编辑前创建可回滚的快照。'
+  },
+  memory: {
+    memoryEnabled: '保存有助于未来会话的持久记忆。',
+    userProfileEnabled: '维护一份精简的用户偏好画像。'
+  },
+  context: {
+    engine: '在接近上下文上限时管理长对话的策略。'
+  },
+  compression: {
+    enabled: '当对话变大时对较早的上下文进行摘要。',
+    codexGpt55Autoraise: '为受支持的 ChatGPT Codex OAuth 模型将压缩阈值提高到 85%。'
+  },
+  auxiliary: {
+    compression: {
+      timeout: '每次调用辅助压缩模型的等待秒数（默认 120）。本地模型较慢时请调高。'
+    }
+  },
+  voice: {
+    autoTts: '自动朗读助手回复。',
+    voiceChatMode:
+      'chained：语音转文字 → Hermes → 文字转语音，使用下方的提供商。gpt-live：一个全双工的 OpenAI 语音模型（gpt-live-1）负责听和说，并把每个实际请求交给 Hermes——由你选择的任意模型带着完整工具集作答。需要 OpenAI API 密钥；语音层按每分钟 $0.05 计费。',
+    gptLive: {
+      voice: 'GPT-Live 模式使用的音色，可填写自定义音色 ID。',
+      instructions: '附加到实时语音人设的句子（语气、语速、语言）。Hermes 保留自己的系统提示词。'
+    }
+  },
+  stt: {
+    enabled: '启用本地或提供方支持的语音转写。',
+    echoTranscripts: '将语音消息的原始 🎙️ 转写文本发回聊天。',
+    elevenlabs: {
+      languageCode: '可选的 ISO-639-3 语言代码。留空让 ElevenLabs 自动检测。'
+    },
+    streaming: '说话时实时显示转写文字（支持 OpenAI、xAI、ElevenLabs）；发生错误时回退到录音转写。'
+  },
+  tts: {
+    xai: {
+      voiceId: 'xAI 语音 ID（例如 eve）或自定义语音 ID。',
+      language: '语音语言代码（例如 en、pt-BR），或使用“auto”自动检测。',
+      speed: '播放速度。0.7 = 较慢，1.0 = 正常，1.5 = 较快。',
+      autoSpeechTags: '让 LLM 在合成前将富有表现力的音频标签（[laughing]、[sighs]）插入脚本。',
+      optimizeStreamingLatency: '延迟与质量的权衡。0 = 最高质量，2 = 最低延迟。',
+      sampleRate: '音频采样率（Hz）。数值越高质量越好，文件越大。',
+      bitRate: 'MP3 比特率（bps）。仅在编解码器为 mp3 时适用。'
+    },
+    neutts: {
+      device: 'NeuTTS 的本地推理设备。'
+    }
+  },
+  updates: {
+    nonInteractiveLocalChanges:
+      'Hermes 从应用内更新时（无终端提示），保留本地源码修改（暂存）或丢弃（放弃）。通过终端更新时始终会询问。'
+  }
+})
+
 export const zhOverrides = {
+  appearancePage: appearancePage.zh,
+  toolPanel: toolPanel['zh'],
+  workspacePage: workspacePage.zh,
+  accountPage: accountPage['zh'],
   connectorOffer: {
     heading: '保留已连接的应用',
     body: '登录免费的 Nous 账户，即可将 Gmail、Slack 等已连接的应用保留在你的账户中。'
@@ -569,6 +858,7 @@ export const zhOverrides = {
   },
 
   settings: {
+    configPages: configPagesFor('zh', configPageFieldLabels, configPageFieldDescriptions),
     subpages: {
       appearanceTheme: '主题',
       appearanceTypography: '字体与缩放',
@@ -636,15 +926,16 @@ export const zhOverrides = {
       missing: '该插件没有设置页面，可能已被禁用或卸载。'
     },
     nav: {
-      providers: '提供方',
+      providers: '模型服务',
       providerAccounts: '账号',
       providerApiKeys: 'API 密钥',
       providerCustomEndpoints: '自定义端点',
       providerLocalModels: '本地模型',
-      gateway: '网关',
+      gateway: '运行服务',
       apiKeys: '工具与密钥',
       keybinds: '键盘快捷键',
       keysTools: '工具',
+      keysCredentials: '密钥',
       keysSettings: '设置',
       mcp: 'MCP',
       archivedChats: '已归档对话',
@@ -817,7 +1108,7 @@ export const zhOverrides = {
     searchPlaceholder: {
       about: '关于 Hermes Desktop',
       config: '搜索设置…',
-      gateway: '网关连接…',
+      gateway: '搜索运行服务…',
       keys: '搜索 API 密钥…',
       mcp: '搜索 MCP 服务器…',
       sessions: '搜索已归档会话…'
@@ -1043,282 +1334,8 @@ export const zhOverrides = {
 
       noInstalledThemesMatch: query => `没有匹配“${query}”的已安装主题。`
     },
-    fieldLabels: defineFieldCopy({
-      model: '默认模型',
-      modelContextLength:
-        '仅覆盖主聊天模型检测到的上下文窗口（以 token 计）。保持为 0 则使用所选模型检测到的值。不影响辅助模型/MoA 模型。',
-      fallbackProviders: '备用模型',
-      toolsets: '启用的工具集',
-      timezone: '时区',
-      display: {
-        personality: '人格',
-        showReasoning: '推理过程块'
-      },
-      desktop: {
-        repoScanEnabled: '自动发现代码仓库',
-        repoScanRoots: '代码仓库扫描根目录',
-        repoScanExcludePaths: '排除的代码仓库路径'
-      },
-      agent: {
-        maxTurns: '最大智能体步数',
-        imageInputMode: '图片附件',
-        apiMaxRetries: 'API 重试次数',
-        serviceTier: '服务等级',
-        toolUseEnforcement: '工具调用强制'
-      },
-      terminal: {
-        cwd: '工作目录',
-        backend: '执行后端',
-        timeout: '命令超时',
-        persistentShell: '持久化 Shell',
-        envPassthrough: '环境变量透传',
-        dockerImage: 'Docker 镜像',
-        singularityImage: 'Singularity 镜像',
-        modalImage: 'Modal 镜像',
-        daytonaImage: 'Daytona 镜像'
-      },
-      fileReadMaxChars: '文件读取上限',
-      toolOutput: {
-        maxBytes: '终端输出上限',
-        maxLines: '文件分页上限',
-        maxLineLength: '行长度上限'
-      },
-      codeExecution: {
-        mode: '代码执行模式'
-      },
-      approvals: {
-        mode: '审批模式',
-        timeout: '审批超时',
-        mcpReloadConfirm: '确认 MCP 重载'
-      },
-      commandAllowlist: '命令白名单',
-      security: {
-        redactSecrets: '隐去密钥',
-        allowPrivateUrls: '允许私有 URL'
-      },
-      browser: {
-        allowPrivateUrls: '浏览器私有 URL',
-        autoLocalForPrivateUrls: '私有 URL 使用本地浏览器',
-        useRealProfile: '使用真实浏览器配置'
-      },
-      checkpoints: {
-        enabled: '文件检查点',
-        maxSnapshots: '检查点上限'
-      },
-      voice: {
-        maxRecordingSeconds: '最长录音时长',
-        autoTts: '朗读回复',
-        voiceChatMode: '语音聊天模式',
-        gptLive: {
-          voice: 'GPT-Live 音色',
-          instructions: 'GPT-Live 人设'
-        }
-      },
-      stt: {
-        enabled: '语音转文字',
-        provider: '语音转文字提供方',
-        echoTranscripts: '回显转写文本',
-        local: {
-          model: '本地转写模型',
-          language: '转写语言'
-        },
-        openai: {
-          model: 'OpenAI STT 模型'
-        },
-        groq: {
-          model: 'Groq STT 模型'
-        },
-        mistral: {
-          model: 'Mistral STT 模型'
-        },
-        elevenlabs: {
-          modelId: 'ElevenLabs STT 模型',
-          languageCode: 'ElevenLabs 语言',
-          tagAudioEvents: '标记音频事件',
-          diarize: '说话人区分'
-        }
-      },
-      tts: {
-        provider: '文字转语音提供方',
-        edge: {
-          voice: 'Edge 语音'
-        },
-        openai: {
-          model: 'OpenAI TTS 模型',
-          voice: 'OpenAI 语音'
-        },
-        elevenlabs: {
-          voiceId: 'ElevenLabs 语音',
-          modelId: 'ElevenLabs 模型'
-        },
-        xai: {
-          voiceId: 'xAI (Grok) 语音',
-          language: 'xAI 语言',
-          speed: '播放速度',
-          autoSpeechTags: '自动语音标签',
-          optimizeStreamingLatency: '流式延迟优化',
-          sampleRate: '采样率',
-          bitRate: '比特率'
-        },
-        minimax: {
-          model: 'MiniMax TTS 模型',
-          voiceId: 'MiniMax 语音'
-        },
-        mistral: {
-          model: 'Mistral TTS 模型',
-          voiceId: 'Mistral 语音'
-        },
-        gemini: {
-          model: 'Gemini TTS 模型',
-          voice: 'Gemini 语音'
-        },
-        neutts: {
-          model: 'NeuTTS 模型',
-          device: 'NeuTTS 设备'
-        },
-        kittentts: {
-          model: 'KittenTTS 模型',
-          voice: 'KittenTTS 语音'
-        },
-        piper: {
-          voice: 'Piper 语音'
-        },
-        deepinfra: {
-          model: 'DeepInfra TTS 模型',
-          voice: 'DeepInfra 语音'
-        }
-      },
-      memory: {
-        memoryEnabled: '持久记忆',
-        userProfileEnabled: '用户画像',
-        memoryCharLimit: '记忆预算',
-        userCharLimit: '画像预算',
-        provider: '记忆提供方'
-      },
-      context: {
-        engine: '上下文引擎'
-      },
-      compression: {
-        enabled: '自动压缩',
-        threshold: '压缩阈值',
-        codexGpt55Autoraise: 'Codex 压缩自动提高',
-        targetRatio: '压缩目标',
-        protectLastN: '保护最近消息'
-      },
-      auxiliary: {
-        compression: {
-          timeout: '压缩模型超时（秒）'
-        }
-      },
-      delegation: {
-        model: '子智能体模型',
-        provider: '子智能体提供方',
-        maxIterations: '子智能体轮次上限',
-        maxConcurrentChildren: '并行子智能体',
-        childTimeoutSeconds: '子智能体超时',
-        reasoningEffort: '子智能体推理强度'
-      },
-      updates: {
-        nonInteractiveLocalChanges: '应用内更新本地更改'
-      }
-    }),
-    fieldDescriptions: defineFieldCopy({
-      model: '用于新对话，除非你在输入框中选择其他模型。',
-      modelContextLength: '保持为 0 则使用所选模型检测到的上下文窗口。',
-      fallbackProviders: '默认模型失败时尝试的备用“提供方:模型”条目。',
-      display: {
-        personality: '新会话的默认助手风格。',
-        showReasoning: '当后端提供推理内容时予以显示。'
-      },
-      desktop: {
-        repoScanEnabled: '扫描本地文件夹，并在“项目”中显示 Git 代码仓库。',
-        repoScanRoots: '要扫描的文件夹。留空时扫描主目录。',
-        repoScanExcludePaths: '发现代码仓库时跳过这些文件夹及其子目录。'
-      },
-      timezone: '当 Hermes 需要本地时间上下文时使用。留空则使用系统时区。',
-      browser: {
-        useRealProfile:
-          '本地浏览会使用你的真实登录信息。Hermes 会将默认浏览器的配置文件（Cookie、登录信息、偏好设置）复制到受管理的快照中，并使用随附的 Chromium 驱动该快照——不会直接打开你的实时配置文件，每次运行都会从中刷新副本。即使已配置云端浏览器后端，也允许智能体按需打开本地真实配置文件会话。仅支持 Chromium 浏览器（Chrome、Edge、Brave、Brave Origin、Chromium）；如果默认浏览器不是 Chromium，会显示明确的错误信息。默认关闭。'
-      },
-      agent: {
-        imageInputMode: '控制图片附件如何发送给模型。',
-        maxTurns: 'Hermes 停止一次运行前工具调用轮次的上限。'
-      },
-      terminal: {
-        cwd: '工具与终端操作的默认项目目录。',
-        persistentShell: '当后端支持时，在命令之间保留 Shell 状态。',
-        envPassthrough: '传入工具执行的环境变量。',
-        dockerImage: '使用 Docker 执行后端时采用的容器镜像。',
-        singularityImage: '使用 Singularity 执行后端时采用的镜像。',
-        modalImage: '使用 Modal 执行后端时采用的镜像。',
-        daytonaImage: '使用 Daytona 执行后端时采用的镜像。'
-      },
-      codeExecution: {
-        mode: '代码执行被限定到当前项目的严格程度。'
-      },
-      fileReadMaxChars: 'Hermes 单次文件读取可读取的最大字符数。',
-      approvals: {
-        mode: 'Hermes 如何处理需要显式审批的命令。',
-        timeout: '审批提示在超时前等待的时长。'
-      },
-      security: {
-        redactSecrets: '尽可能从模型可见内容中隐藏检测到的密钥。'
-      },
-      checkpoints: {
-        enabled: '在文件编辑前创建可回滚的快照。'
-      },
-      memory: {
-        memoryEnabled: '保存有助于未来会话的持久记忆。',
-        userProfileEnabled: '维护一份精简的用户偏好画像。'
-      },
-      context: {
-        engine: '在接近上下文上限时管理长对话的策略。'
-      },
-      compression: {
-        enabled: '当对话变大时对较早的上下文进行摘要。',
-        codexGpt55Autoraise: '为受支持的 ChatGPT Codex OAuth 模型将压缩阈值提高到 85%。'
-      },
-      auxiliary: {
-        compression: {
-          timeout: '每次调用辅助压缩模型的等待秒数（默认 120）。本地模型较慢时请调高。'
-        }
-      },
-      voice: {
-        autoTts: '自动朗读助手回复。',
-        voiceChatMode:
-          'chained：语音转文字 → Hermes → 文字转语音，使用下方的提供商。gpt-live：一个全双工的 OpenAI 语音模型（gpt-live-1）负责听和说，并把每个实际请求交给 Hermes——由你选择的任意模型带着完整工具集作答。需要 OpenAI API 密钥；语音层按每分钟 $0.05 计费。',
-        gptLive: {
-          voice: 'GPT-Live 模式使用的音色，可填写自定义音色 ID。',
-          instructions: '附加到实时语音人设的句子（语气、语速、语言）。Hermes 保留自己的系统提示词。'
-        }
-      },
-      stt: {
-        enabled: '启用本地或提供方支持的语音转写。',
-        echoTranscripts: '将语音消息的原始 🎙️ 转写文本发回聊天。',
-        elevenlabs: {
-          languageCode: '可选的 ISO-639-3 语言代码。留空让 ElevenLabs 自动检测。'
-        },
-        streaming: '说话时实时显示转写文字（支持 OpenAI、xAI、ElevenLabs）；发生错误时回退到录音转写。'
-      },
-      tts: {
-        xai: {
-          voiceId: 'xAI 语音 ID（例如 eve）或自定义语音 ID。',
-          language: '语音语言代码（例如 en、pt-BR），或使用“auto”自动检测。',
-          speed: '播放速度。0.7 = 较慢，1.0 = 正常，1.5 = 较快。',
-          autoSpeechTags: '让 LLM 在合成前将富有表现力的音频标签（[laughing]、[sighs]）插入脚本。',
-          optimizeStreamingLatency: '延迟与质量的权衡。0 = 最高质量，2 = 最低延迟。',
-          sampleRate: '音频采样率（Hz）。数值越高质量越好，文件越大。',
-          bitRate: 'MP3 比特率（bps）。仅在编解码器为 mp3 时适用。'
-        },
-        neutts: {
-          device: 'NeuTTS 的本地推理设备。'
-        }
-      },
-      updates: {
-        nonInteractiveLocalChanges:
-          'Hermes 从应用内更新时（无终端提示），保留本地源码修改（暂存）或丢弃（放弃）。通过终端更新时始终会询问。'
-      }
-    }),
+    fieldLabels: configPageFieldLabels,
+    fieldDescriptions: configPageFieldDescriptions,
     uninstallSection: {
       dangerZone: '危险操作',
       checkingInstalled: '正在检查已安装内容…',
@@ -1581,7 +1598,60 @@ export const zhOverrides = {
       couldNotSave: '无法保存凭据。',
       remove: '移除',
       getKey: '获取密钥',
-      saving: '保存中'
+      saving: '保存中',
+      toolPageIntro:
+        '这里用于连接网页搜索、语音和外部记忆等可选服务，不是聊天模型的 API 密钥设置。不使用某项服务时可以留空；点击项目可查看用途。外部服务可能会处理相关请求或按用量收费。',
+      toolServices: {
+        porcupine: {
+          label: '语音唤醒密钥（Porcupine）',
+          description: '仅当你在“语音”设置中选择 Porcupine 作为唤醒引擎时需要。默认唤醒引擎不需要此密钥。'
+        },
+        retaindbApiKey: {
+          label: 'RetainDB 记忆服务密钥',
+          description: '用于连接 RetainDB 外部记忆服务。只有选择并启用 RetainDB 作为记忆服务时才需要。'
+        },
+        retaindbBaseUrl: {
+          label: 'RetainDB 服务地址',
+          description: '只有连接自建 RetainDB 实例时才需要修改；使用 RetainDB 云服务时保留默认值即可。'
+        },
+        searxngUrl: {
+          label: '自建网页搜索地址（SearXNG）',
+          description: '填写你部署的 SearXNG 服务地址。无需 API 密钥；它只负责网页搜索，不负责提取网页正文。'
+        },
+        supermemoryApiKey: {
+          label: 'Supermemory 记忆服务密钥',
+          description: '用于连接 Supermemory 外部记忆服务。需要安装并启用对应插件，再选择它作为记忆服务后才会使用。'
+        },
+        tavilyApiKey: {
+          label: 'Tavily 网页搜索密钥',
+          description:
+            '用于 Tavily 网页搜索和网页内容提取。选择 Tavily 后可以不填密钥试用；填写后可按账号额度使用，具体费用以服务商规则为准。'
+        },
+        toolGatewayDomain: {
+          label: '上游工具网关域名（高级）',
+          description:
+            '这是 Hermes 上游托管工具网关的兼容配置，不是 Aino-API 地址。只有连接自定义上游网关时才需要填写。'
+        },
+        toolGatewayScheme: {
+          label: '上游工具网关协议（高级）',
+          description: '设置上游工具网关使用的协议，通常为 HTTPS。普通用户无需修改。'
+        },
+        toolGatewayUrl: {
+          label: '上游工具网关地址（高级）',
+          description:
+            '直接指定 Hermes 上游工具网关的完整地址，并覆盖自动生成的地址。这不是 Aino-API 地址，普通用户留空。'
+        },
+        toolGatewayToken: {
+          label: '上游工具网关令牌（高级）',
+          description:
+            '用于 Hermes 上游工具网关的访问令牌。通常由上游登录流程管理，不是 Aino 账号令牌，普通用户无需填写。'
+        },
+        voiceOpenaiKey: {
+          label: 'OpenAI 语音服务密钥',
+          description:
+            '用于 OpenAI 语音转文字和文字转语音，不影响普通文字聊天。语音调用可能产生费用；配置了 OPENAI_API_KEY 时，系统也可能复用它。'
+        }
+      }
     },
     envActions: {
       actions: '操作',
@@ -1593,25 +1663,27 @@ export const zhOverrides = {
       set: '设置',
       clear: '清除'
     },
-    // v2 多连接注册表：设置 → 网关。
+    // v2 多连接注册表：设置 → 运行服务。
     connections: {
-      title: '已注册网关',
-      intro: '管理本机以及通过远程、SSH 或 Hermes Cloud 连接可访问的每个 Hermes 网关。',
-      stagedNote: '可在“会话”侧边栏切换网关。工作区、聊天、消息和定时任务归属于各自网关；其他网关上的工作会继续运行。',
-      launchModeTitle: '启动时返回上次使用网关的会话视图',
-      launchModeDesc: '关闭时，会话将在主网关上打开。',
-      searchPlaceholder: '搜索网关…',
-      noSearchResults: '没有与搜索匹配的网关。',
+      title: '可用运行服务',
+      intro:
+        '管理这台电脑上的 Aino 后台，以及其他电脑或服务器上的 Aino 后台。它们各自运行智能体并保存自己的工作区和会话。',
+      stagedNote:
+        '可在“会话”侧边栏切换运行服务。每个服务都有自己的工作区、对话和任务；切换服务不会停止其他服务正在进行的工作。',
+      launchModeTitle: '启动时回到上次使用的服务',
+      launchModeDesc: '关闭时，默认打开主服务。',
+      searchPlaceholder: '搜索运行服务…',
+      noSearchResults: '没有找到匹配的运行服务。',
       loadFailed: '无法加载连接',
       currentPill: '当前',
-      primaryPill: '主连接',
+      primaryPill: '默认服务',
       managedPill: '应用管理',
       addConnection: '添加连接',
       editConnection: '编辑',
       removeConnection: '移除',
       removeConfirmTitle: '移除此连接？',
       removeConfirmDesc: (label: string) => `“${label}”将从本应用移除。实例本身不受影响——你可以随时重新添加。`,
-      makePrimary: '设为主连接',
+      makePrimary: '设为默认服务',
       testConnection: '测试',
       testOk: '可访问',
       testFailed: '连接测试失败',
@@ -1621,33 +1693,32 @@ export const zhOverrides = {
       updateAllRunning: '正在更新所有实例…',
       updateAllDone: '更新已分发',
       updateAllFailed: '批量更新失败',
-      updateSkippedCloud: '由 Hermes Cloud 托管',
-      kindLocal: '本地',
-      kindRemote: '远程网关',
-      kindCloud: 'Hermes Cloud',
+      updateSkippedCloud: '由云端托管',
+      kindLocal: '本机',
+      kindRemote: '另一台设备',
+      kindCloud: '旧版云端连接',
       kindSsh: 'SSH',
-      kindLocalDesc: '由本应用管理的 Hermes 运行时。',
-      kindRemoteDesc: '可通过 HTTP(S) 访问的 Hermes 网关——局域网、Tailscale 或互联网。',
-      kindCloudDesc: '通过你的 Hermes Cloud 账户发现的托管实例。',
-      kindSshDesc: '通过 SSH 访问的 Hermes 安装。',
+      kindLocalDesc: 'Aino 在这台电脑运行，由桌面应用自动管理。',
+      kindRemoteDesc: '连接另一台电脑或服务器上正在运行的 Aino。',
+      kindCloudDesc: '这是旧版本保存的云端运行服务，仍可继续使用；新增连接请使用“另一台设备”或 SSH。',
+      kindSshDesc: '通过 SSH 安全连接远程电脑，并由 Aino 在那里启动后台。',
       labelTitle: '名称',
       labelDesc: '必填。此实例出现的所有位置都会显示该名称；必须唯一（例如“家庭服务器”、“工作笔记本”）。',
       labelPlaceholder: '家庭服务器',
-      urlTitle: '网关 URL',
+      urlTitle: '服务地址',
       sshHostTitle: 'SSH 主机',
-      headersTitle: '额外网关请求头',
+      headersTitle: '额外访问验证信息（高级）',
       headersDesc:
-        '随发往此网关的每个 HTTP 和 WebSocket 请求一起发送——用于 Cloudflare Access 等访问代理（CF-Access-Client-Id / CF-Access-Client-Secret）。值加密存储。由 Hermes 管理的请求头（Authorization、Cookie、Host 等）会被忽略。',
+        '只有服务器管理员明确提供了 Cloudflare Access 等访问验证信息时才需要填写；普通用户留空即可。填写内容会随连接发送并加密保存。应用自动管理的登录信息不能在此替换。',
       headerValuePlaceholder: '值',
       headerValueSaved: '已保存——留空以保留',
       headerAdd: '添加请求头',
       headerRemove: '移除',
       duplicateLocal: '本应用已管理一个本地连接——只能有一个。',
-      duplicateUrl: (label: string) => `已存在指向此网关 URL 的连接（“${label}”）。`,
+      duplicateUrl: (label: string) => `已存在指向此服务地址的连接（“${label}”）。`,
       duplicateSsh: (label: string) => `已存在指向此 SSH 主机的连接（“${label}”）。`,
       sameBackendHint: (label: string) => `与“${label}”是同一后端`,
-      localAddHint: '“本地”不可用：应用管理的本地连接已存在（永远只有一个）。',
-      cloudAddHint: '提示：在上方登录 Hermes Cloud 可自动发现你的智能体——此表单仅用于手动注册已知的实例 URL。',
+      localAddHint: '本机服务由应用自动管理，不能重复添加。',
       save: '保存连接',
       saving: '保存中…',
       cancel: '取消',
@@ -1672,21 +1743,22 @@ export const zhOverrides = {
       scopeNotRestored: (profile: string, error: string) => `工作区“${profile}”未恢复：${error}`
     },
     gateway: {
-      loading: '正在加载网关设置...',
-      unavailableTitle: '网关设置不可用',
-      unavailableDesc: '桌面 IPC 桥未暴露网关设置。',
-      title: '网关连接',
+      loading: '正在加载运行服务设置…',
+      unavailableTitle: '运行服务设置不可用',
+      unavailableDesc: '此版本暂时无法读取运行服务设置。',
+      title: '运行位置与连接',
       envOverride: '环境变量覆盖',
       intro:
-        'Hermes 桌面端默认会启动自己的本地网关。当你希望此应用控制另一台机器上或可信代理后的现有 Hermes 后端时，可以使用远程网关。网关连接属于本机级设置；工作区是从所连接的网关中发现的。',
-      envOverrideTitle: '环境变量正在控制此桌面会话。',
-      envOverrideDesc: '取消设置 HERMES_DESKTOP_REMOTE_URL 和 HERMES_DESKTOP_REMOTE_TOKEN 后才会使用下面保存的设置。',
-      modeTitle: '连接模式',
-      localTitle: '本地网关',
-      localDesc: '在 localhost 启动私有 Hermes 后端。这是默认方式，并且可离线工作。',
-      remoteTitle: '远程网关',
-      remoteDesc: '将此桌面外壳连接到远程 Hermes 后端。',
-      remoteAuthHint: '托管网关使用 OAuth 或用户名密码；自托管网关也可能使用会话令牌。',
+        '运行服务（Hermes 文档称为 Gateway）是 Aino 在后台真正执行工作的程序：它处理对话、运行工具和定时任务；连接消息平台后，也负责收发消息。桌面端是操作界面。这里的“运行服务”不是网络代理。日常使用保持“在这台电脑运行”即可；只有要让另一台电脑或服务器处理任务时才需要切换。',
+      envOverrideTitle: '当前连接由外部启动配置指定。',
+      envOverrideDesc:
+        '本页的连接选择暂不生效。清除 HERMES_DESKTOP_REMOTE_URL 和 HERMES_DESKTOP_REMOTE_TOKEN 后，Aino 才会使用下面保存的设置。',
+      modeTitle: '智能体在哪台设备运行',
+      localTitle: '在这台电脑运行',
+      localDesc: '由桌面应用在这台电脑启动并管理 Aino 后台，适合大多数用户。',
+      remoteTitle: '使用另一台设备',
+      remoteDesc: '让另一台电脑或服务器上的 Aino 后台处理对话和工作区。',
+      remoteAuthHint: '远程服务可能要求账号登录、用户名和密码，或管理员提供的访问令牌。',
       cloudTitle: 'Hermes Cloud',
       cloudDesc: '只需登录 Hermes Cloud 一次，即可从你账户下的智能体中选择——无需粘贴 URL。',
       cloudSignInTitle: 'Hermes Cloud',
@@ -1707,9 +1779,9 @@ export const zhOverrides = {
       },
       cloudRefresh: '刷新',
       cloudConnect: '连接',
-      cloudSavedTitle: '已保存的云网关',
-      cloudSavedDesc: '使用已保存的网关，不更改默认网关。在下方登录以添加实例。在已保存的连接列表中管理名称和登录。',
-      cloudUseSaved: '使用网关',
+      cloudSavedTitle: '已保存的云端服务',
+      cloudSavedDesc: '选择已保存的云端服务不会更改默认服务。可在下方登录并添加服务，再到服务列表中管理名称和登录。',
+      cloudUseSaved: '使用此服务',
       cloudActive: '当前窗口正在使用',
       cloudConnecting: '正在连接…',
       cloudDiscoverFailed: '无法加载你的 Hermes Cloud 智能体',
@@ -1722,67 +1794,67 @@ export const zhOverrides = {
       cloudConnectedTo: name => `已连接到 ${name}。`,
       cloudAgentProvisioning: '正在配置…',
       cloudStatusLabel: status => `状态：${status}`,
-      remoteUrlTitle: '远程 URL',
-      remoteUrlDesc: '远程仪表盘后端的基础 URL。支持路径前缀，例如 /hermes。',
-      probing: '正在检查此网关的认证方式…',
-      probeError: '暂时无法访问此网关。请检查 URL；网关响应后会显示认证方式。',
+      remoteUrlTitle: '服务地址',
+      remoteUrlDesc: '填写另一台电脑或服务器上 Aino 后台的地址。',
+      probing: '正在检查此服务的登录方式…',
+      probeError: '暂时无法访问此服务。请检查服务地址；连接正常后会显示登录方式。',
       signedIn: '已登录',
       signIn: '登录',
       signOut: '退出登录',
       signInWith: provider => `使用 ${provider} 登录`,
-      authTitle: '认证',
-      authSignedInPassword: '此网关使用用户名和密码。你已登录，会话会自动刷新。',
-      authSignedInOauth: '此网关使用 OAuth。你已登录，会话会自动刷新。',
-      authNeedsPassword: '此网关使用用户名和密码。请登录以授权此桌面应用。',
-      authNeedsOauth: provider => `此网关使用 OAuth。请使用 ${provider} 登录以授权此桌面应用。`,
-      tokenTitle: '会话令牌',
-      tokenDesc: '用于 REST 和 WebSocket 访问的仪表盘会话令牌。留空则保留已保存的令牌。',
+      authTitle: '登录远程服务',
+      authSignedInPassword: '此服务使用用户名和密码。你已登录，登录状态会自动续期。',
+      authSignedInOauth: '此服务使用账号授权登录。你已登录，登录状态会自动续期。',
+      authNeedsPassword: '此服务需要用户名和密码。请登录以授权 Aino 桌面端连接。',
+      authNeedsOauth: provider => `此服务需要账号授权登录。请使用 ${provider} 登录以允许 Aino 桌面端连接。`,
+      tokenTitle: '访问令牌',
+      tokenDesc: '仅当远程服务管理员提供访问令牌时填写。留空会继续使用已保存的令牌。',
       existingToken: value => `现有令牌 ${value}`,
       savedToken: '已保存',
       pasteSessionToken: '粘贴会话令牌',
-      plainTextConfirmTitle: '以明文存储网关令牌？',
+      plainTextConfirmTitle: '未加密保存访问令牌？',
       plainTextConfirmDesc:
-        '在此设备上未找到操作系统的密钥环服务，因此 令牌 将以未加密的明文保存在应用的连接设置文件中，以该用户身份运行的任何进程都可读取。请安装或启用系统钥匙串（Linux 上为 GNOME Keyring 或 KWallet）以进行加密存储。',
+        '此设备没有可用的系统安全存储，因此访问令牌会以未加密形式保存在应用设置文件中；同一用户运行的其他程序可能读取它。请启用系统钥匙串（Linux 上为 GNOME Keyring 或 KWallet）以加密保存。',
       plainTextConfirmAction: '以明文保存',
       plainTextStoredTitle: '令牌以明文存储',
       plainTextStoredDesc:
-        '安全存储不可用，因此已保存的 令牌 以未加密方式存储在此设备上应用的连接设置文件中。请安装或启用系统钥匙串（Linux 上为 GNOME Keyring 或 KWallet）以对其加密。',
+        '系统安全存储不可用，因此访问令牌目前以未加密形式保存在此设备的应用设置文件中。请启用系统钥匙串（Linux 上为 GNOME Keyring 或 KWallet）以加密保存。',
       keychainEncryptionTitle: '使用系统钥匙串加密已保存的机密',
       keychainEncryptionDesc:
-        '默认关闭。开启后，网关令牌和登录凭据将使用系统钥匙串（Keychain Access、GNOME Keyring 或 Windows DPAPI）加密——系统可能会请求授权或密码。关闭时，它们以仅当前用户可读的普通文件形式存储。',
+        '默认关闭。开启后，访问令牌和登录信息会使用系统安全存储加密；系统可能会请求授权或密码。关闭时，它们保存在仅当前用户可读的普通文件中。',
       keychainEncryptionFailed: '无法更改机密加密设置',
       testRemote: '测试远程',
       saveForRestart: '保存到下次重启',
       saveAndReconnect: '保存并重连',
       diagnostics: '诊断',
-      diagnosticsDesc: '在文件管理器中显示 desktop.log，网关启动失败时很有用。',
+      diagnosticsDesc: '在文件管理器中显示 desktop.log，Aino 后台启动失败时很有用。',
       openLogs: '打开日志',
-      incompleteTitle: '远程网关配置不完整',
-      incompleteSignIn: '切换到远程前，请输入远程 URL 并完成登录。',
-      incompleteToken: '切换到远程前，请输入远程 URL 和会话令牌。',
-      incompleteSignInTest: '测试前，请输入远程 URL 并完成登录。',
-      incompleteTokenTest: '测试前，请输入远程 URL 和会话令牌。',
-      enterUrlFirst: '请先输入远程 URL。',
-      restartingTitle: '网关连接正在重启',
-      savedTitle: '网关设置已保存',
-      restartingMessage: 'Hermes 桌面端将使用已保存设置重新连接（界面保持打开）。',
+      incompleteTitle: '远程服务信息不完整',
+      incompleteSignIn: '切换前，请填写远程服务地址并完成登录。',
+      incompleteToken: '切换前，请填写远程服务地址和访问令牌。',
+      incompleteSignInTest: '测试前，请填写远程服务地址并完成登录。',
+      incompleteTokenTest: '测试前，请填写远程服务地址和访问令牌。',
+      enterUrlFirst: '请先填写远程服务地址。',
+      restartingTitle: '正在重新连接运行服务',
+      savedTitle: '运行服务设置已保存',
+      restartingMessage: 'Aino 桌面端将使用已保存的设置重新连接（界面保持打开）。',
       savedMessage: '已保存，下一次重启生效。',
       connectedTo: (baseUrl, version) => `已连接到 ${baseUrl}${version ? ` · Hermes ${version}` : ''}`,
-      reachableTitle: '远程网关可访问',
+      reachableTitle: '远程服务连接正常',
       signedOutTitle: '已退出登录',
-      signedOutMessage: '已清除远程网关会话。',
-      failedLoad: '网关设置加载失败',
+      signedOutMessage: '已清除远程服务的登录状态。',
+      failedLoad: '运行服务设置加载失败',
       signInFailed: '登录失败',
       signOutFailed: '退出登录失败',
-      testFailed: '远程网关测试失败',
-      applyFailed: '无法应用网关设置',
-      saveFailed: '无法保存网关设置',
+      testFailed: '远程服务连接测试失败',
+      applyFailed: '无法应用运行服务设置',
+      saveFailed: '无法保存运行服务设置',
       sshTitle: '通过 SSH 连接',
       sshDesc:
-        'Hermes 会通过 SSH 在远程启动并以隧道连接到本应用——无需自行启动或暴露任何服务。前提：已具备到该主机的密钥 SSH 访问。',
-      sshTrustHint: '首次提供的主机密钥会被信任并固定；后续变更将被拒绝。',
+        '通过 SSH 登录另一台电脑，由 Aino 在那里启动后台并建立安全连接。你需要已经能用 SSH 密钥登录那台设备；无需手动启动服务。',
+      sshTrustHint: '首次连接会记住这台设备的身份；以后身份信息变化时，Aino 会停止连接，避免连错设备。',
       sshHostTitle: '主机',
-      sshHostDesc: 'user@host，或 ~/.ssh/config 中的 Host 别名。',
+      sshHostDesc: '填写远程设备地址和 SSH 用户名（如 user@192.168.1.10），也可以选择 ~/.ssh/config 中已有的设备别名。',
       sshHostPick: '选择主机…',
       sshHostPickTitle: '主机',
       sshHostPickDesc: '~/.ssh/config 中的 Host 别名，或选择"自定义"手动输入。',
@@ -1794,27 +1866,26 @@ export const zhOverrides = {
       sshPortDesc: '留空 = 22 或 ~/.ssh/config 中的端口。',
       sshKeyTitle: '密钥文件',
       sshKeyDesc: '私钥路径。留空 = ssh-agent 或 ~/.ssh/config。',
-      sshHermesPathTitle: 'Hermes 路径（可选）',
-      sshHermesPathDesc: '远程 hermes 可执行文件的完整路径。留空 = 自动检测。',
+      sshHermesPathTitle: '远程后台程序位置（高级）',
+      sshHermesPathDesc: '仅当 Aino 无法自动找到远程设备上的后台程序时才填写；通常留空即可。',
       sshHermesPathPlaceholder: '自动检测',
       sshTestConnection: '测试 SSH',
       sshConnect: '连接',
       sshButtonsHint: '“保存”将在下次启动时生效，“连接”则立即重新连接。',
-      sshReachable: (host, platform) => `可连接：${host}（${platform}）——已找到 Hermes`,
+      sshReachable: (host, platform) => `可连接：${host}（${platform}）——已找到 Aino 后台`,
       sshIncompleteHost: '连接前请输入 SSH 主机。',
       sshErrUnreachable: '无法通过 SSH 连接到该主机。请检查主机、端口和网络。',
       sshErrAuth:
-        'SSH 认证失败。请将密钥加载到 ssh-agent（ssh-add），或在 ~/.ssh/config 中设置 IdentityFile——Hermes 以非交互方式运行 ssh。',
+        '无法通过 SSH 登录该设备。请确认 SSH 密钥已添加到系统，或检查 ~/.ssh/config 中的登录配置；Aino 不会弹出 SSH 密码输入框。',
       sshErrHostKey: '自上次连接以来主机密钥已更改。请确认这是预期的，然后运行 ssh-keygen -R <host> 并重新连接。',
-      sshErrNotInstalled:
-        '远程主机上未安装 Hermes。请在远程安装（curl -fsSL https://hermes-agent.nousresearch.com/install.sh | sh）或设置 Hermes 路径。',
-      sshErrPlatform: '不支持的远程平台。Hermes Desktop 的 SSH 模式支持 Linux、macOS 和 Windows 远程主机。',
+      sshErrNotInstalled: '远程设备上未找到 Aino 后台。请先安装 Aino 运行环境，或在下方指定后台程序位置。',
+      sshErrPlatform: '暂不支持此远程设备。SSH 连接支持 Linux、macOS 和 Windows。',
       sshErrTimeout: 'SSH 连接超时。主机可能无法访问或处于休眠状态。',
-      sshErrUpdateRequired: '使用桌面端 SSH 连接前，请更新远程主机上的 Hermes。',
+      sshErrUpdateRequired: '请先更新远程设备上的 Aino 后台，再从桌面端连接。',
       sshErrInteractiveAuth:
         'Tailscale SSH 需要交互式浏览器验证。请在终端运行 `ssh <host> true` 完成验证后重试——Hermes 以非交互方式运行 SSH。',
       sshErrUnknown: 'SSH 连接失败。',
-      registryConnectionsUnsupported: '此桌面版本无法连接已注册的网关。请更新 Hermes Desktop。'
+      registryConnectionsUnsupported: '此桌面版本无法连接已添加的运行服务。请更新 Aino。'
     },
     keys: {
       loading: '正在加载 API 密钥和凭据...',
@@ -2135,8 +2206,8 @@ export const zhOverrides = {
           messageByAdmin: '管理员已停止此终端的远程支出。',
           messageBySelf: '你已停止此终端的远程支出。'
         },
-        remoteSpendingReconnect: who => `${who} 请从“设置 → 网关”重新连接以重新授权此设备。`,
-        sessionRevoked: { title: '会话已登出', message: '你的会话已登出。请从“设置 → 网关”重新登录。' },
+        remoteSpendingReconnect: who => `${who} 请从“设置 → 运行服务”重新连接以重新授权此设备。`,
+        sessionRevoked: { title: '会话已登出', message: '你的会话已登出。请从“设置 → 运行服务”重新登录。' },
         cliBillingDisabled: {
           title: '远程支出已关闭',
           message: '此账户的远程支出已关闭，账单管理员可在门户的 Hermes Agent 页面开启。'
@@ -3102,9 +3173,9 @@ export const zhOverrides = {
     switchToConnection: name => `切换到 ${name}`,
     switchConnectionFailed: name => `无法连接到 ${name}`,
     manageProfiles: '管理工作区…',
-    connectGateway: '管理网关…',
+    connectGateway: '管理运行服务…',
     fleet: {
-      allOnGateway: '此网关上的全部工作区',
+      allOnGateway: '此运行服务上的全部工作区',
       gateway: gateway => `${gateway} 上的工作区`,
       gatewayUnreachable: gateway => `${gateway} · 无法连接`,
       onGateway: (name, gateway) => `${name} · ${gateway}`,
@@ -3112,7 +3183,7 @@ export const zhOverrides = {
       deleteOn: gateway => `（位于 ${gateway}）`,
       localDevice: '此设备（本地后端——若未安装 Hermes 则会安装，否则打开一个新会话）',
       switchDeviceTitle: '切换到此设备？',
-      switchDeviceDesc: '这会在这台电脑上打开一个新会话。当前对话仍留在另一个网关上。',
+      switchDeviceDesc: '这会在这台电脑上打开一个新会话。当前对话仍由另一台设备上的运行服务处理。',
       switchDeviceConfirm: '切换',
       installDeviceTitle: '切换到此设备？',
       installDeviceDesc: '这将在本地安装 Hermes，然后在这台电脑上打开一个新会话。确认之前不会开始安装。',
@@ -3131,7 +3202,7 @@ export const zhOverrides = {
       tokenPlaceholder: '粘贴远程会话令牌',
       tokenSavedHint: '已保存令牌。留空以保留现有令牌。',
       plainTextOptIn: '这台电脑没有安全密钥存储，令牌将以未加密方式保存到磁盘。仍然保存。',
-      collisionWarning: (label: string) => `设置中已存在名为“${label}”的网关。此工作区连接是独立的，不会更改它。`,
+      collisionWarning: (label: string) => `设置中已存在名为“${label}”的运行服务。此工作区连接是独立的，不会更改它。`,
       confirmTitle: '将此工作区连接到远程主机？',
       confirmNote: (profile: string, host: string) =>
         `${profile} 中的新对话将在 ${host} 上运行。命令和文件读取都发生在那台电脑上，而不是这台。请只连接你信任的主机。`,
@@ -3657,10 +3728,10 @@ export const zhOverrides = {
     },
     profileRail: '配置档案栏',
     gatewayGroups: {
-      grouping: '网关与配置',
+      grouping: '运行服务与配置',
       rename: '重命名分组',
       aliasLabel: '显示名称',
-      aliasHint: '仅更改显示名称；网关和配置档名称保持不变。',
+      aliasHint: '仅更改显示名称；运行服务和配置档名称保持不变。',
       resetName: '重置名称',
       moveUp: '上移',
       moveDown: '下移',
@@ -4026,6 +4097,8 @@ export const zhOverrides = {
     editingInComposer: '正在输入框中编辑',
     editingQueuedInComposer: '正在输入框中编辑排队回合',
     restoredDraftNotice: '已恢复你未发送的消息',
+    taskPausing: '正在暂停…',
+    taskPaused: '任务已暂停，可从已有进展继续。',
     restoredDraftUndo: '撤销',
     queueEdit: '编辑',
     queueExpand: '展开',
@@ -4752,7 +4825,7 @@ export const zhOverrides = {
       multiAgentSends: (level: string) => `多智能体协作，发送 ${level}`
     },
     gatewayMenu: {
-      gateway: '网关',
+      gateway: '运行服务',
       connected: '已连接',
       connecting: '连接中',
       offline: '离线',
@@ -4760,7 +4833,7 @@ export const zhOverrides = {
       inferenceNotReady: '推理未就绪',
       checkingInference: '正在检查推理',
       disconnected: '已断开',
-      reconnectGateway: '重连网关',
+      reconnectGateway: '重连运行服务',
       openSystem: '打开系统面板',
       connection: label => `连接：${label}`,
       recentActivity: '最近活动',
@@ -4787,14 +4860,14 @@ export const zhOverrides = {
         })[state] ?? state.replace(/_/g, ' ')
     },
     approvalMode: {
-      title: '审批模式',
+      title: '如何批准 Aino 的操作？',
       ariaLabel: mode => `审批模式：${mode}`,
-      manual: '手动',
-      manualDescription: '执行需要审批的操作前询问',
-      smart: '智能',
-      smartDescription: '自动评估操作，并在需要时询问',
-      off: '关闭',
-      offDescription: '不显示审批提示，直接运行'
+      manual: '请求批准',
+      manualDescription: '需批准的操作，先征求你的同意',
+      smart: '帮我批准',
+      smartDescription: '自动评估命令风险，必要时请你批准',
+      off: '不再询问',
+      offDescription: '直接执行，仍受系统权限与安全规则限制'
     },
     statusbar: {
       unknown: '未知',
@@ -4819,7 +4892,7 @@ export const zhOverrides = {
       openCommandCenter: '打开命令中心',
       showTerminal: '显示终端',
       hideTerminal: '隐藏终端',
-      gateway: '网关',
+      gateway: '运行服务',
       backend: '后端',
       messagingStopped: '消息网关已停止',
       messagingDegraded: name => `${name} 异常`,
@@ -4830,7 +4903,7 @@ export const zhOverrides = {
       gatewayConnecting: '连接中',
       gatewayOffline: '离线',
       gatewayRestarting: '重启中…',
-      gatewayTitle: '网关',
+      gatewayTitle: 'Aino 后台服务状态',
       customizeTitle: '在状态栏中显示',
       hideStatusbar: '隐藏状态栏',
       resetStatusbar: '恢复默认设置',
@@ -4871,7 +4944,7 @@ export const zhOverrides = {
         ram: '内存',
         unifiedNote: '统一内存——GPU 与系统共享此内存池。',
         toggle: '系统资源',
-        backendHost: '当前网关所在主机',
+        backendHost: '当前运行服务所在设备',
 
         unavailable: '暂时无法获取系统资源'
       },
@@ -4887,8 +4960,13 @@ export const zhOverrides = {
           tool_definitions: '工具定义'
         },
         empty: '暂无上下文数据',
+        detailsUnavailable: '分类明细暂不可用，当前用量仍可参考。',
+        unavailable: '暂时无法获取上下文用量，请重试。',
+        retry: '重试',
+        pendingDetails: '当前运行服务暂未提供分类明细。',
         loading: '正在加载明细…',
         percentFull: percent => `已用 ${percent}%`,
+        compactTitle: '上下文窗口',
         title: '上下文用量',
         tokenSummary: (used, max) => `${used} / ${max} 个词元`,
         compacting: '正在压缩上下文…'
@@ -4901,10 +4979,10 @@ export const zhOverrides = {
       noModel: '无模型',
       switchModel: '切换模型',
       openModelPicker: '打开模型选择器',
-      modelPinned: '已由你固定；新对话将使用此模型而非“设置”中的默认模型',
+      modelPinned: '仅用于当前对话；新对话使用“设置”中的默认模型',
       modelTitle: (provider, model) => `模型 · ${provider}: ${model}`,
       providerModelTitle: (provider, model) => `${provider} · ${model}`,
-      noRecentGatewayLogs: '暂无最近的网关日志',
+      noRecentGatewayLogs: '暂无最近的运行服务日志',
 
       subtaskMonitor: '子任务监控',
 
@@ -5168,14 +5246,10 @@ export const zhOverrides = {
   },
 
   zones: {
-    showTabStrip: '显示标签',
-    hideTabStrip: '隐藏标签',
-    showStripTab: title => `显示 ${title}`,
-    hideStripTab: title => `隐藏 ${title}`,
+    ...sidebarMode,
     zoneMenuLabel: title => `${title} 的区域选项`,
     lastTabKeptTitle: '保留最后一个标签',
     lastTabKeptBody: '该区域至少需要一个可见标签。请先显示另一个标签，或折叠整个侧边栏。',
-    toggleStripTab: title => `切换 ${title} 标签`,
     minimize: '最小化',
     restore: '还原',
     closeRunningTitle: '关闭正在运行的标签？',
@@ -5599,6 +5673,9 @@ export const zhOverrides = {
       gatewayDisconnected: 'Hermes 网关未连接'
     },
     tool: {
+      collapseDetails: '收起详情',
+      moreActions: '执行记录操作',
+      hideRecord: '隐藏这条记录',
       copyCode: '复制代码',
       renderingImage: '正在渲染图片',
       copyOutput: '复制输出',
@@ -6592,6 +6669,7 @@ export const zhOverrides = {
     notCharged: '不计费',
     purposes: {
       chat: '对话',
+      image: '生图',
       title: '会话标题',
       compression: '上下文压缩',
       vision: '图像理解',
@@ -6620,13 +6698,13 @@ export const zhOverrides = {
 
   platformRecharge: {
     title: '充值',
-    description: '订单到账金额以平台账本为准。',
+    description: '输入金额后自动核算，核对实付和到账金额后再支付。',
     amount: '充值金额',
     range: '单笔限额',
-    quote: '查看报价',
-    create: '确认创建订单',
-    payAmount: '支付金额',
-    creditAmount: '到账额度',
+    quote: '正在核算金额…',
+    create: '去支付',
+    payAmount: '实付金额',
+    creditAmount: '到账金额',
     fee: '手续费',
     orderId: '订单号',
     openPayment: '前往付款',
@@ -6751,6 +6829,7 @@ export const zhOverrides = {
   },
 
   home: {
+    ...homeGuidance.zh,
     subtitle: '丢一个文件路径、堆栈跟踪或粗略想法。我会调查、建议下一步，并保持操作可逆。',
     placeholder: '随便问点什么',
     workspace: '在工作区中工作',

@@ -93,24 +93,40 @@ export interface PlatformAccountBridge {
   completeSecondFactor(input: { totp_code: string }): Promise<PlatformAccountSnapshot>
   updateProfile(input: { display_name: string }): Promise<PlatformAccountSnapshot>
   requestBindingCode(input: { phone: string }): Promise<PhoneChallengeDTO>
-  submitStepUp(input: { totp_code: string; expected_user_id?: string; expected_generation?: number }): Promise<PlatformAccountSnapshot>
+  submitStepUp(input: {
+    totp_code: string
+    expected_user_id?: string
+    expected_generation?: number
+  }): Promise<PlatformAccountSnapshot>
   bindPhone(input: { phone: string; challenge_id: string; code: string }): Promise<PlatformAccountSnapshot>
   logout(): Promise<PlatformAccountSnapshot>
   onChanged(listener: (snapshot: PlatformAccountSnapshot) => void): () => void
 }
+
+export type PlatformModelPurpose = 'chat' | 'image'
+export const PLATFORM_IMAGE_QUALITIES = ['auto', 'low', 'medium', 'high', 'xhigh', 'max'] as const
+export type PlatformImageQuality = (typeof PLATFORM_IMAGE_QUALITIES)[number]
 
 export interface PlatformModel {
   id: string
   model: string
   display_name: string
   provider_label: string
-  api_mode: 'chat_completions' | 'responses' | 'anthropic_messages'
+  api_mode: 'chat_completions' | 'responses' | 'anthropic_messages' | 'images_generations'
+  /** Legacy catalogs omitted purpose and represented chat models only. */
+  purpose?: PlatformModelPurpose
   state: 'available' | 'insufficient_balance' | 'quota_exhausted' | 'unavailable'
   reason_code: string | null
   is_default: boolean
   context_window: number | null
   max_output_tokens: number | null
-  capabilities: { tools: boolean; vision: boolean; reasoning: boolean }
+  capabilities: {
+    tools: boolean
+    vision: boolean
+    reasoning: boolean
+    image_generation?: boolean
+    image_quality_options?: PlatformImageQuality[]
+  }
   billing_source: 'balance' | 'subscription'
   pricing: PlatformModelPricing
 }
@@ -145,7 +161,12 @@ export interface PlatformModelPricing {
 export interface PlatformModelsBridge {
   owner(expectedAccountRevision: number): Promise<{ platform_origin: string; user_id: string }>
   bind(input: BindPlatformModelInput & { session_ticket: string }): Promise<BindPlatformModelResult>
-  clear(input: { connection_id: string; profile: string; session_id: string }): Promise<void>
+  clear(input: {
+    connection_id: string
+    profile: string
+    session_id: string
+    purpose?: PlatformModelPurpose
+  }): Promise<void>
   list(): Promise<PlatformModel[]>
 }
 
@@ -155,6 +176,7 @@ export interface BindPlatformModelInput {
   session_id: string
   model_id: string
   expected_account_revision: number
+  purpose?: PlatformModelPurpose
 }
 
 export type BindPlatformModelResult =
@@ -255,13 +277,28 @@ export interface PlatformCreateOrderInput extends PaymentQuoteInput {
   expected_quote?: PaymentQuote
 }
 
-export interface PlatformOrderReference { order_id: string }
-export interface PlatformOrderQuery { page: number; page_size: number }
+export interface PlatformOrderReference {
+  order_id: string
+}
+export interface PlatformOrderQuery {
+  page: number
+  page_size: number
+}
 
 export type PlatformOrderStatus =
-  | 'PENDING' | 'PAID' | 'RECHARGING' | 'COMPLETED' | 'EXPIRED'
-  | 'CANCELLED' | 'FAILED' | 'REFUND_REQUESTED' | 'REFUNDING'
-  | 'REFUND_PENDING' | 'PARTIALLY_REFUNDED' | 'REFUNDED' | 'REFUND_FAILED'
+  | 'PENDING'
+  | 'PAID'
+  | 'RECHARGING'
+  | 'COMPLETED'
+  | 'EXPIRED'
+  | 'CANCELLED'
+  | 'FAILED'
+  | 'REFUND_REQUESTED'
+  | 'REFUNDING'
+  | 'REFUND_PENDING'
+  | 'PARTIALLY_REFUNDED'
+  | 'REFUNDED'
+  | 'REFUND_FAILED'
 
 export interface PlatformOrder {
   order_id: string

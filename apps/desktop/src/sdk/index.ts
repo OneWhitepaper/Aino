@@ -23,10 +23,8 @@ import type { ReactNode } from 'react'
 
 import { capabilityScoped, getApiRequestConnection } from '@/api/client'
 import { mutateSessionFenced } from '@/api/sessions'
-import { PRIMARY_SESSION_VIEW } from '@/app/chat/session-view'
-import { openSession, type OpenSessionIntent } from '@/app/open-session'
+import { openSession, type OpenSessionIntent, revealSessionWorkspace } from '@/app/open-session'
 import { syncWorkspaceRoute } from '@/app/routes'
-import type { ClientSessionState } from '@/app/types'
 import {
   $narrowViewport,
   $newSessionTabAction,
@@ -110,6 +108,7 @@ import type { SessionMutationSnapshot } from '../../../shared/src/session-http-m
 
 import { pluginDecisions, profiles, skills, toolsets } from './bridge'
 import { composerHost } from './composer'
+import { $focusedAwaitingResponse, $focusedBusy } from './focused-turn'
 import { i18nHost } from './i18n'
 import { planPluginOpenSession } from './plugin-open-session-plan'
 import {
@@ -130,30 +129,6 @@ export type * from './plugin-contract'
 // -- state: readonly views over the app's live atoms -------------------------
 
 const readonlyAtom = <T>(atomLike: ReadableAtom<T>): ReadableAtom<T> => atomLike
-
-/**
- * Turn flag for the FOCUSED chat — same semantics as the statusbar's busy
- * pulse. While the focused surface is the primary workspace (or a draft with
- * no runtime slice yet) this reads the primary view, which itself falls back
- * to the global draft atoms. Once a session TILE holds focus, the tile's own
- * state slice is authoritative — a background session can never leak in.
- */
-const focusedTurnFlag = (
-  select: (state: ClientSessionState) => boolean,
-  $primary: ReadableAtom<boolean>
-): ReadableAtom<boolean> =>
-  computed(
-    [$focusedStoredSessionId, $selectedStoredSessionId, $focusedSessionState, $primary],
-    (focused, selected, state, primary) =>
-      !focused || focused === selected ? primary : Boolean(state && select(state))
-  )
-
-const $focusedBusy = focusedTurnFlag(state => state.busy, PRIMARY_SESSION_VIEW.$busy)
-
-const $focusedAwaitingResponse = focusedTurnFlag(
-  state => state.awaitingResponse,
-  PRIMARY_SESSION_VIEW.$awaitingResponse
-)
 
 export interface PluginFocusedSessionOwner {
   connectionId: string
@@ -1326,7 +1301,15 @@ export const host = {
     workspaceOwnerKey: string,
     isStaleTile?: (tile: { storedSessionId: string; workspaceTabTitle?: string }) => boolean,
     onlyStoredIds?: readonly string[]
-  ): null | string => focusWorkspaceOwnerSessionTile(workspaceOwnerKey, isStaleTile, onlyStoredIds),
+  ): null | string => {
+    const focused = focusWorkspaceOwnerSessionTile(workspaceOwnerKey, isStaleTile, onlyStoredIds)
+
+    if (focused) {
+      revealSessionWorkspace(host.navigate)
+    }
+
+    return focused
+  },
 
   /** Reactive on-screen visibility of a contributed pane: true while it is in
    *  the layout tree, not dismissed/hidden, its zone un-minimized, AND holding

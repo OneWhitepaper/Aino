@@ -172,8 +172,8 @@ HERMES_AGENT_HELP_GUIDANCE = (
     # resolution). No "when the two differ" clause: docs-are-authoritative already carries the precedence.
     "You run on Aino Agent (by 蛋壳海盗). When the user needs help with Aino itself — configuring, "
     "setting up, using, extending, or troubleshooting it — or when you need to understand your own features, "
-    "tools, or capabilities, the documentation at https://hermes-agent.nousresearch.com/docs is your "
-    "authoritative reference and always holds the latest, most up-to-date information. The `hermes-agent` "
+    "tools, or capabilities, use the local checkout's docs/ and website/docs/ for this version, or "
+    "https://github.com/OneWhitepaper/Aino/tree/main/website/docs for the Aino source documentation. The `hermes-agent` "
     "skill has the actual commands and proven workflows — load it with skill_view(name='hermes-agent') "
     "before configuring, modifying, or troubleshooting Aino so you don't guess or invent workarounds."
 )
@@ -182,8 +182,8 @@ HERMES_AGENT_HELP_GUIDANCE = (
 HERMES_AGENT_HELP_GUIDANCE_NO_SKILLS = (
     "You run on Aino Agent (by 蛋壳海盗). When the user needs help with Aino itself — configuring, "
     "setting up, using, extending, or troubleshooting it — or when you need to understand your own features, "
-    "tools, or capabilities, the documentation at https://hermes-agent.nousresearch.com/docs is the "
-    "authoritative reference and always holds the latest, most up-to-date information. Point the user there "
+    "tools, or capabilities, use the local checkout's docs/ and website/docs/ for this version, or "
+    "https://github.com/OneWhitepaper/Aino/tree/main/website/docs for the Aino source documentation. Point the user there "
     "(or read it yourself if you have a way to fetch web content)."
 )
 

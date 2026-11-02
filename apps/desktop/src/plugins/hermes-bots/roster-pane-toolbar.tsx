@@ -90,7 +90,7 @@ export function renderRosterToolbar({
   return (
     <>
       <div className="flex items-center justify-between gap-2 px-2.5 pt-2.5 pb-1.5">
-        <span className="text-[0.6875rem] font-semibold uppercase tracking-wider text-(--ui-text-quaternary)">
+        <span className="text-[length:var(--aino-text-caption)] font-medium text-(--ui-text-tertiary)">
           Bots
         </span>
         <div className="flex items-center gap-0.5">
@@ -218,7 +218,7 @@ export function renderRosterToolbar({
                             kind={option.kind}
                           />
                           <span className="min-w-0 flex-1 truncate">{option.label || option.connectionId}</span>
-                          <span className="text-[0.625rem] tabular-nums text-(--ui-text-quaternary)">
+                          <span className="text-[length:var(--aino-text-caption)] tabular-nums text-(--ui-text-tertiary)">
                             {option.count}
                           </span>
                           {gatewayFilter === option.connectionId ? <Codicon name="check" /> : null}

@@ -1,9 +1,10 @@
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
 
-import type { DesktopUninstallSummary } from '@/global'
+import type { DesktopUninstallResult, DesktopUninstallSummary } from '@/global'
 import { I18nProvider, TRANSLATIONS, useI18n } from '@/i18n'
 import type { I18nContextValue } from '@/i18n'
+import { aboutPageCopy } from '@/i18n/about-page'
 import { applyProductBrand, brandTranslationTree } from '@/lib/brand'
 
 import { UninstallSection } from './uninstall-section'
@@ -87,6 +88,65 @@ it('keeps owned-install removal modes and confirms the selected mode', async ():
   })
 })
 
+it('opens an uninstall deep link after mount and stays dismissed until requested again', async (): Promise<void> => {
+  const run = vi.fn()
+  vi.stubGlobal('hermesDesktop', {
+    uninstall: { summary: async (): Promise<DesktopUninstallSummary> => summary(true), run }
+  })
+  const { rerender } = render(<UninstallSection dialog />)
+  await screen.findByRole('button', { name: aboutPageCopy('en').uninstall })
+  expect(screen.queryByRole('dialog')).toBeNull()
+
+  rerender(<UninstallSection defaultOpen dialog />)
+  expect(await screen.findByRole('dialog')).toBeTruthy()
+  fireEvent.click(screen.getByRole('button', { name: 'Close' }))
+  await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+  rerender(<UninstallSection defaultOpen dialog />)
+  expect(screen.queryByRole('dialog')).toBeNull()
+
+  rerender(<UninstallSection dialog />)
+  rerender(<UninstallSection defaultOpen dialog />)
+  expect(await screen.findByRole('dialog')).toBeTruthy()
+  expect(run).not.toHaveBeenCalled()
+})
+
+it('keeps an active uninstall visible until failure makes dismissal safe again', async (): Promise<void> => {
+  let finish: (result: DesktopUninstallResult) => void = (): void => {}
+
+  const run = vi.fn(
+    (): Promise<DesktopUninstallResult> =>
+      new Promise(resolve => {
+        finish = resolve
+      })
+  )
+
+  vi.stubGlobal('hermesDesktop', {
+    uninstall: { summary: async (): Promise<DesktopUninstallSummary> => summary(true), run }
+  })
+  render(<UninstallSection defaultOpen dialog />)
+  const dialog = await screen.findByRole('dialog')
+
+  fireEvent.click(screen.getByRole('button', { name: /Uninstall Chat GUI only/ }))
+  expect(run).not.toHaveBeenCalled()
+  expect(screen.getByRole('button', { name: 'Close' })).toBeTruthy()
+  fireEvent.click(screen.getByRole('button', { name: 'Yes, uninstall' }))
+  expect(run).toHaveBeenCalledExactlyOnceWith('gui')
+
+  fireEvent.keyDown(dialog, { key: 'Escape' })
+  expect(screen.getByRole('dialog')).toBe(dialog)
+  const overlay = globalThis.document.querySelector('[data-slot="dialog-overlay"]')
+
+  expect(overlay).not.toBeNull()
+  fireEvent.pointerDown(overlay!, { button: 0, pointerType: 'mouse' })
+  expect(screen.getByRole('dialog')).toBe(dialog)
+  expect(screen.queryByRole('button', { name: 'Close' })).toBeNull()
+  expect(screen.getByRole('button', { name: 'Cancel' }).hasAttribute('disabled')).toBe(true)
+
+  await act(async (): Promise<void> => finish({ ok: false, message: 'Removal failed' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Close' }))
+  await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+})
+
 it.each(['gui', 'lite', 'full'] as const)(
   'localizes confirmation for %s without changing mode or running before confirmation',
   async (mode: 'gui' | 'lite' | 'full'): Promise<void> => {
@@ -99,13 +159,21 @@ it.each(['gui', 'lite', 'full'] as const)(
         <Surface />
       </I18nProvider>
     )
-    const zh: (typeof TRANSLATIONS)['zh']['settings']['uninstallSection'] = brandTranslationTree(TRANSLATIONS.zh.settings.uninstallSection)
+
+    const zh: (typeof TRANSLATIONS)['zh']['settings']['uninstallSection'] = brandTranslationTree(
+      TRANSLATIONS.zh.settings.uninstallSection
+    )
+
     await screen.findByText(zh.uninstallHermes)
     fireEvent.click(screen.getByRole('button', { name: new RegExp(zh.options[mode].title) }))
     expect(screen.getByText(zh.confirmBody(zh.options[mode].consequence))).toBeTruthy()
     expect(run).not.toHaveBeenCalled()
     await act((): Promise<void> => i18n.setLocale('ja'))
-    const ja: (typeof TRANSLATIONS)['ja']['settings']['uninstallSection'] = brandTranslationTree(TRANSLATIONS.ja.settings.uninstallSection)
+
+    const ja: (typeof TRANSLATIONS)['ja']['settings']['uninstallSection'] = brandTranslationTree(
+      TRANSLATIONS.ja.settings.uninstallSection
+    )
+
     expect(screen.getByText(ja.confirmBody(ja.options[mode].consequence))).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: ja.yesUninstall }))
     expect(run).toHaveBeenCalledWith(mode)

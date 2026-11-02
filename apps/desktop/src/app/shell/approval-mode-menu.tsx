@@ -1,15 +1,16 @@
+import './approval-mode-menu.css'
+
 import { useStore } from '@nanostores/react'
-import { useEffect, useMemo } from 'react'
+import { useEffect } from 'react'
 
 import type { StatusbarItem } from '@/app/shell/statusbar-controls'
 import {
   DropdownMenuLabel,
   DropdownMenuRadioGroup,
-  DropdownMenuRadioItem,
-  DropdownMenuSeparator
+  DropdownMenuRadioItem
 } from '@/components/ui/dropdown-menu'
 import { useI18n } from '@/i18n'
-import { Zap, ZapFilled } from '@/lib/icons'
+import { AlertCircle, ShieldLock, Terminal } from '@/lib/icons'
 import {
   $approvalModes,
   type ApprovalMode,
@@ -17,6 +18,55 @@ import {
   setApprovalModeForProfile,
   syncApprovalModeForProfile
 } from '@/store/approval-mode'
+
+interface ApprovalModeOptionsProps {
+  disabled?: boolean
+  mode: ApprovalMode
+  onValueChange: (value: ApprovalMode) => void
+}
+
+const MODE_ICONS = { manual: ShieldLock, smart: Terminal, off: AlertCircle }
+
+export function ApprovalModeIcon({ className, mode }: { className?: string; mode: ApprovalMode }) {
+  const Icon = MODE_ICONS[mode]
+
+  return <Icon className={className} />
+}
+
+// Both the composer and status bar present the same profile-owned preference.
+export function ApprovalModeOptions({ disabled, mode, onValueChange }: ApprovalModeOptionsProps) {
+  const { t } = useI18n()
+  const copy = t.shell.approvalMode
+
+  const options = [
+    { value: 'manual', label: copy.manual, description: copy.manualDescription },
+    { value: 'smart', label: copy.smart, description: copy.smartDescription },
+    { value: 'off', label: copy.off, description: copy.offDescription }
+  ] as const
+
+  return (
+    <>
+      <DropdownMenuLabel className="approval-mode-heading">{copy.title}</DropdownMenuLabel>
+      <DropdownMenuRadioGroup onValueChange={value => onValueChange(value as ApprovalMode)} value={mode}>
+        {options.map(({ value, label, description }) => (
+          <DropdownMenuRadioItem
+            className="approval-mode-option"
+            data-approval-mode={value}
+            disabled={disabled}
+            key={value}
+            value={value}
+          >
+            <ApprovalModeIcon className="approval-mode-icon size-4" mode={value} />
+            <span className="approval-mode-copy">
+              <span className="approval-mode-name">{label}</span>
+              <span className="approval-mode-description">{description}</span>
+            </span>
+          </DropdownMenuRadioItem>
+        ))}
+      </DropdownMenuRadioGroup>
+    </>
+  )
+}
 
 export function useApprovalModeStatusbarItem(
   profile: string,
@@ -28,19 +78,7 @@ export function useApprovalModeStatusbarItem(
   const modes = useStore($approvalModes)
   const mode = modes[profile.trim() || 'default'] ?? 'smart'
 
-  const labels = useMemo<Record<ApprovalMode, string>>(
-    () => ({ manual: copy.manual, smart: copy.smart, off: copy.off }),
-    [copy.manual, copy.off, copy.smart]
-  )
-
-  const descriptions = useMemo<Record<ApprovalMode, string>>(
-    () => ({
-      manual: copy.manualDescription,
-      smart: copy.smartDescription,
-      off: copy.offDescription
-    }),
-    [copy.manualDescription, copy.offDescription, copy.smartDescription]
-  )
+  const labels: Record<ApprovalMode, string> = { manual: copy.manual, smart: copy.smart, off: copy.off }
 
   useEffect(() => {
     // The shell (and this chip) mount before the gateway socket opens at
@@ -57,32 +95,19 @@ export function useApprovalModeStatusbarItem(
   }, [gatewayState, profile, requestGateway])
 
   return {
-    className: mode === 'off' ? 'bg-(--chrome-action-hover) text-foreground' : undefined,
-    icon: mode === 'off' ? <ZapFilled className="size-3.5" /> : <Zap className="size-3.5 opacity-70" />,
+    className: mode === 'off' ? 'approval-mode-trigger-warning' : undefined,
+    icon: <ApprovalModeIcon className="size-3.5" mode={mode} />,
     id: 'approval-mode',
     label: labels[mode],
     menuAlign: 'end',
-    menuClassName: 'w-72 p-1',
+    menuClassName: 'approval-mode-menu',
     menuContent: (
-      <>
-        <DropdownMenuLabel>{copy.title}</DropdownMenuLabel>
-        <DropdownMenuSeparator />
-        <DropdownMenuRadioGroup
-          onValueChange={value => {
-            void setApprovalModeForProfile(requestGateway, profile, value as ApprovalMode).catch(() => undefined)
-          }}
-          value={mode}
-        >
-          {(['manual', 'smart', 'off'] as const).map(value => (
-            <DropdownMenuRadioItem className="items-start gap-2" key={value} value={value}>
-              <span className="flex min-w-0 flex-col gap-0.5">
-                <span className="text-xs text-foreground">{labels[value]}</span>
-                <span className="text-[0.6875rem] leading-snug text-(--ui-text-tertiary)">{descriptions[value]}</span>
-              </span>
-            </DropdownMenuRadioItem>
-          ))}
-        </DropdownMenuRadioGroup>
-      </>
+      <ApprovalModeOptions
+        mode={mode}
+        onValueChange={value => {
+          void setApprovalModeForProfile(requestGateway, profile, value).catch(() => undefined)
+        }}
+      />
     ),
     title: copy.ariaLabel(labels[mode]),
     variant: 'menu'

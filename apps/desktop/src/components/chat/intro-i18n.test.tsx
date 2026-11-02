@@ -2,7 +2,7 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { I18nProvider, TRANSLATIONS } from '@/i18n'
+import { BUNDLED_LOCALES, I18nProvider, TRANSLATIONS } from '@/i18n'
 import { AGENT_NAME } from '@/lib/brand'
 
 import { Intro } from './intro'
@@ -42,7 +42,12 @@ describe('empty chat intro localization', () => {
     fireEvent.click(screen.getByRole('button', { name: '分析文档' }))
     expect(onPickFiles).toHaveBeenCalledTimes(1)
 
-    fireEvent.click(screen.getByRole('button', { name: '审查代码' }))
+    fireEvent.click(
+      screen.getByRole('button', {
+        description: TRANSLATIONS.zh.home.actions.review.description,
+        name: '审查代码'
+      })
+    )
     expect(onInsertPrompt).toHaveBeenCalledWith('请审查当前代码，找出问题并给出可执行的优化建议。')
     expect(screen.getByRole('button', { name: '审查代码' }).querySelector('[data-aino-design-icon]')).toBeTruthy()
 
@@ -100,5 +105,27 @@ describe('empty chat intro localization', () => {
 
     expect(container.querySelector('.aino-home-subtitle')?.textContent).toBe(TRANSLATIONS[locale].home.subtitle)
     expect(screen.getByRole('heading', { level: 1 }).textContent).toBe(AGENT_NAME)
+  })
+
+  it.each(BUNDLED_LOCALES)('shows localized home guidance and keyboard hints in %s', locale => {
+    const { container } = render(
+      <I18nProvider configClient={null} initialLocale={locale}>
+        <Intro home personality="none" seed={0} />
+      </I18nProvider>
+    )
+
+    const copy = TRANSLATIONS[locale]
+    const hints = container.querySelector('.aino-home-composer-hints')!
+
+    expect(hints.textContent).toContain(`@ ${copy.home.hints.referenceFiles}`)
+    expect(hints.textContent).toContain(`/ ${copy.home.hints.commandsAndSkills}`)
+    expect(hints.textContent).toContain(`Enter ${copy.composer.send}`)
+    expect(hints.textContent).toContain(`Shift+Enter ${copy.home.hints.newLine}`)
+    expect(container.querySelector('.aino-home-footnote')?.textContent).toBe(copy.home.footnote)
+
+    if (locale !== 'en') {
+      expect(copy.home.hints).not.toEqual(TRANSLATIONS.en.home.hints)
+      expect(copy.home.footnote).not.toBe(TRANSLATIONS.en.home.footnote)
+    }
   })
 })

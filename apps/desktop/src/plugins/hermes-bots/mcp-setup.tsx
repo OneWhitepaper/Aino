@@ -6,7 +6,7 @@
  * the button, so it lives below both.
  */
 
-import { Button, host, Input, useI18n } from '@hermes/plugin-sdk'
+import { Button, Codicon, host, Input, useI18n } from '@hermes/plugin-sdk'
 import { useEffect, useRef, useState } from 'react'
 
 import { useBots } from './i18n'
@@ -297,14 +297,19 @@ export function McpSetupButton({ profile, entry, onDone, ensureProfile }: McpSet
 
   if (supported === false) {
     return (
-      <span className="ml-1.5 text-[0.65rem] text-(--ui-text-quaternary)">
+      <span className="ml-1.5 text-[length:var(--aino-text-caption)] text-(--ui-text-tertiary)">
         {b.tools.needsSetup(requires.join(', '))}
       </span>
     )
   }
 
   if (phase === 'done') {
-    return <span className="ml-1.5 text-[0.65rem] text-(--ui-success)">{b.tools.setUpDone}</span>
+    return (
+      <span className="ml-1.5 inline-flex items-center gap-1 text-[length:var(--aino-text-caption)] text-(--ui-success)">
+        <Codicon name="check" size="1em" />
+        {b.tools.setUpDone}
+      </span>
+    )
   }
 
   if (phase === 'keys') {
@@ -312,7 +317,7 @@ export function McpSetupButton({ profile, entry, onDone, ensureProfile }: McpSet
       <div className="mt-1 grid gap-1">
         {requires.map(k => (
           <Input
-            className="h-6 text-[0.7rem]"
+            className="text-[length:var(--aino-text-caption)]"
             key={k}
             onChange={e =>
               setKeyValues(prev => ({
@@ -338,16 +343,22 @@ export function McpSetupButton({ profile, entry, onDone, ensureProfile }: McpSet
   }
 
   if (phase === 'oauth') {
-    return <span className="ml-1.5 text-[0.65rem] text-(--ui-text-quaternary)">{message || b.tools.authorizing}</span>
+    return (
+      <span className="ml-1.5 text-[length:var(--aino-text-caption)] text-(--ui-text-tertiary)">
+        {message || b.tools.authorizing}
+      </span>
+    )
   }
 
   if (phase === 'busy') {
-    return <span className="ml-1.5 text-[0.65rem] text-(--ui-text-quaternary)">{b.tools.working}</span>
+    return (
+      <span className="ml-1.5 text-[length:var(--aino-text-caption)] text-(--ui-text-tertiary)">{b.tools.working}</span>
+    )
   }
 
   if (phase === 'error') {
     return (
-      <span className="ml-1.5 text-[0.65rem] text-(--ui-danger,#f87171)">
+      <span className="ml-1.5 text-[length:var(--aino-text-caption)] text-(--ui-danger,#f87171)">
         {(message || b.tools.setupFailed) + ' '}
         <Button className="underline" onClick={() => setPhase('idle')} size="inline" variant="link">
           {t.common.retry}
@@ -359,7 +370,7 @@ export function McpSetupButton({ profile, entry, onDone, ensureProfile }: McpSet
   // idle
   return (
     <Button
-      className="ml-1.5 text-[0.65rem] text-(--ui-accent) underline"
+      className="ml-1.5 text-[length:var(--aino-text-caption)] text-(--ui-accent) underline"
       onClick={() => void (isOAuth ? beginOAuth() : beginKeys())}
       size="inline"
       variant="link"

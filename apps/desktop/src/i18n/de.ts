@@ -1,6 +1,11 @@
+import { mergeTranslations } from '@hermes/shared/i18n'
+
 // health: allow FILE_LINES -- locale data: translated copy for the usage-window plan UI (allowance gauges, Large/Free tags, the limit card), one key per string
 import { defineFieldCopy } from '@/app/settings/field-copy'
 
+import { accountPage } from './account-page'
+import { appearancePage } from './appearance-page'
+import { configPagesFor } from './config-pages'
 import { deBoot } from './de_boot'
 import { deClarify } from './de_clarify'
 import { deConnectorAccounts } from './de_connector_accounts'
@@ -19,10 +24,307 @@ import { deSharedMetrics } from './de_shared_metrics'
 import { deThemePicker } from './de_theme_picker'
 import { deUpdateChannel } from './de_update_channel'
 import { defineLocale, type TranslationOverrides } from './define-locale'
+import { homeGuidance } from './home-guidance'
 import { introDe } from './intro-de'
 import { messagingDirectory } from './messaging-directory'
+import { runtimeFeatureCopy } from './runtime-feature-copy'
+import { toolPanel } from './tool-panel'
+import { workspacePage } from './workspace-page'
 
-export const deOverrides = {
+const configPageFieldLabels: Record<string, string> = defineFieldCopy({
+  model: 'Standardmodell',
+  modelContextLength: 'Kontextfenster',
+  fallbackProviders: 'Fallback-Modelle',
+  toolsets: 'Aktivierte Toolsets',
+  timezone: 'Zeitzone',
+  display: {
+    personality: 'Persönlichkeit',
+    showReasoning: 'Denkblöcke'
+  },
+  desktop: {
+    repoScanEnabled: 'Automatische Repository-Erkennung',
+    repoScanRoots: 'Repository-Erkennungs-Wurzeln',
+    repoScanExcludePaths: 'Ausgeschlossene Repository-Pfade'
+  },
+  agent: {
+    maxTurns: 'Maximale Agent-Schritte',
+    imageInputMode: 'Bildanhänge',
+    apiMaxRetries: 'API-Wiederholungen',
+    serviceTier: 'Service-Stufe',
+    toolUseEnforcement: 'Tool-Nutzungs-Durchsetzung'
+  },
+  terminal: {
+    cwd: 'Arbeitsverzeichnis',
+    backend: 'Ausführungs-Backend',
+    timeout: 'Befehls-Timeout',
+    persistentShell: 'Persistente Shell',
+    envPassthrough: 'Umgebungsvariablen-Durchreichung',
+    dockerImage: 'Docker-Image',
+    singularityImage: 'Singularity-Image',
+    modalImage: 'Modal-Image',
+    daytonaImage: 'Daytona-Image'
+  },
+  fileReadMaxChars: 'Datei-Lesegrenze',
+  toolOutput: {
+    maxBytes: 'Terminal-Ausgabelimit',
+    maxLines: 'Datei-Seitenlimit',
+    maxLineLength: 'Zeilenlängenlimit'
+  },
+  codeExecution: { mode: 'Code-Ausführungsmodus' },
+  approvals: {
+    mode: 'Genehmigungsmodus',
+    timeout: 'Genehmigungs-Timeout',
+    mcpReloadConfirm: 'MCP-Neuladen bestätigen'
+  },
+  commandAllowlist: 'Befehls-Whitelist',
+  security: {
+    redactSecrets: 'Geheimnisse schwärzen',
+    allowPrivateUrls: 'Private URLs erlauben'
+  },
+  browser: {
+    allowPrivateUrls: 'Private Browser-URLs',
+    autoLocalForPrivateUrls: 'Lokaler Browser für private URLs',
+    useRealProfile: 'Mein echtes Browser-Profil verwenden'
+  },
+  checkpoints: {
+    enabled: 'Datei-Checkpoints',
+    maxSnapshots: 'Checkpoint-Limit'
+  },
+  voice: {
+    maxRecordingSeconds: 'Maximale Aufnahmelänge',
+    autoTts: 'Antworten vorlesen',
+    voiceChatMode: 'Sprachchat-Modus',
+    gptLive: {
+      voice: 'GPT-Live-Stimme',
+      instructions: 'GPT-Live-Persona'
+    }
+  },
+  stt: {
+    enabled: 'Spracherkennung',
+    echoTranscripts: 'Transkripte wiedergeben',
+    provider: 'Spracherkennungs-Anbieter',
+    local: {
+      model: 'Lokales Transkriptionsmodell',
+      language: 'Transkriptionssprache'
+    },
+    openai: {
+      model: 'OpenAI-STT-Modell'
+    },
+    groq: {
+      model: 'Groq-STT-Modell'
+    },
+    mistral: {
+      model: 'Mistral-STT-Modell'
+    },
+    elevenlabs: {
+      modelId: 'ElevenLabs-STT-Modell',
+      languageCode: 'ElevenLabs-Sprache',
+      tagAudioEvents: 'Audio-Ereignisse markieren',
+      diarize: 'Sprecher-Diarisierung'
+    }
+  },
+  tts: {
+    provider: 'Text-zu-Sprache-Anbieter',
+    edge: {
+      voice: 'Edge-Stimme'
+    },
+    openai: {
+      model: 'OpenAI-TTS-Modell',
+      voice: 'OpenAI-Stimme'
+    },
+    elevenlabs: {
+      voiceId: 'ElevenLabs-Stimme',
+      modelId: 'ElevenLabs-Modell'
+    },
+    xai: {
+      voiceId: 'xAI (Grok) Stimme',
+      language: 'xAI-Sprache',
+      speed: 'xAI-Wiedergabegeschwindigkeit',
+      autoSpeechTags: 'xAI automatische Sprach-Tags',
+      optimizeStreamingLatency: 'xAI Streaming-Latenz-Optimierung',
+      sampleRate: 'xAI-Abtastrate',
+      bitRate: 'xAI-Bitrate'
+    },
+    minimax: {
+      model: 'MiniMax-TTS-Modell',
+      voiceId: 'MiniMax-Stimme'
+    },
+    mistral: {
+      model: 'Mistral-TTS-Modell',
+      voiceId: 'Mistral-Stimme'
+    },
+    gemini: {
+      model: 'Gemini-TTS-Modell',
+      voice: 'Gemini-Stimme'
+    },
+    neutts: {
+      model: 'NeuTTS-Modell',
+      device: 'NeuTTS-Gerät'
+    },
+    kittentts: {
+      model: 'KittenTTS-Modell',
+      voice: 'KittenTTS-Stimme'
+    },
+    piper: {
+      voice: 'Piper-Stimme'
+    },
+    deepinfra: {
+      model: 'DeepInfra-TTS-Modell',
+      voice: 'DeepInfra-Stimme'
+    }
+  },
+  memory: {
+    memoryEnabled: 'Persistentes Gedächtnis',
+    userProfileEnabled: 'Benutzerprofil',
+    memoryCharLimit: 'Gedächtnis-Budget',
+    userCharLimit: 'Profil-Budget',
+    provider: 'Gedächtnis-Anbieter'
+  },
+  context: {
+    engine: 'Kontext-Engine'
+  },
+  compression: {
+    enabled: 'Auto-Kompression',
+    threshold: 'Kompression-Schwelle',
+    codexGpt55Autoraise: 'Automatische Codex-Komprimierungsanhebung',
+    targetRatio: 'Kompression-Ziel',
+    protectLastN: 'Geschützte letzte Nachrichten'
+  },
+  auxiliary: {
+    compression: {
+      timeout: 'Timeout des Komprimierungsmodells (s)'
+    }
+  },
+  delegation: {
+    model: 'Subagent-Modell',
+    provider: 'Subagent-Anbieter',
+    maxIterations: 'Subagent-Rundenlimit',
+    maxConcurrentChildren: 'Parallele Subagenten',
+    childTimeoutSeconds: 'Subagent-Timeout',
+    reasoningEffort: 'Subagent-Denkanstrengung'
+  },
+  updates: {
+    nonInteractiveLocalChanges: 'Lokale Änderungen bei In-App-Update'
+  }
+})
+
+const configPageFieldDescriptions: Record<string, string> = defineFieldCopy({
+  model: 'Wird für neue Chats verwendet, sofern Sie im Composer kein anderes Modell wählen.',
+  modelContextLength: 'Auf 0 lassen, um das erkannte Kontextfenster des gewählten Modells zu verwenden.',
+  fallbackProviders: 'Backup-Anbieter:Modell-Einträge, die versucht werden, wenn das Standardmodell fehlschlägt.',
+  display: {
+    personality: 'Standard-Assistentenstil für neue Sessions.',
+    showReasoning: 'Denkabschnitte anzeigen, wenn das Backend sie liefert.'
+  },
+  desktop: {
+    repoScanEnabled: 'Lokale Ordner nach Git-Repositories durchsuchen, die in Projekten angezeigt werden.',
+    repoScanRoots:
+      'Zu durchsuchende Ordner. Leer lassen, um den Dateisystemscan auszulassen; Projekte mit Chats bleiben sichtbar.',
+    repoScanExcludePaths: 'Ordner und deren Unterordner, die bei der Repository-Erkennung übersprungen werden.'
+  },
+  timezone: 'IANA-Zeitzonenkennung. Leer verwendet die Systemzeitzone.',
+  browser: {
+    useRealProfile:
+      'Lokales Browsen nutzt Ihre echten Anmeldungen. Hermes kopiert das Profil Ihres Standardbrowsers (Cookies, Anmeldungen, Einstellungen) in einen verwalteten Schnappschuss und steuert ihn mit seinem gebündelten Chromium – Ihr Live-Profil wird nie direkt geöffnet, und die Kopie wird bei jedem Lauf daraus aktualisiert. Erlaubt dem Agenten außerdem, auf Anfrage eine lokale Session mit echtem Profil zu öffnen, selbst wenn ein Cloud-Browser-Backend konfiguriert ist. Nur Chromium-Browser (Chrome, Edge, Brave, Brave Origin, Chromium) werden unterstützt; ein Nicht-Chromium-Standard schlägt mit einer klaren Meldung fehl. Standardmäßig aus.'
+  },
+  agent: {
+    imageInputMode: 'Steuert, wie Bildanhänge an das Modell gesendet werden.',
+    maxTurns: 'Obergrenze für Tool-Aufruf-Runden, bevor Hermes einen Lauf stoppt.'
+  },
+  terminal: {
+    cwd: 'Standard-Projektordner für Tool- und Terminal-Arbeit.',
+    persistentShell:
+      'Nur SSH: exportierte Variablen zwischen Befehlen beibehalten. Aus startet jeden Befehl in der Anmeldeumgebung; das Arbeitsverzeichnis bleibt erhalten.',
+    envPassthrough:
+      'Namen der an Tools übergebenen Umgebungsvariablen, keine Werte. Nach Änderungen den Laufzeitdienst neu starten und bestehende Ausführungsumgebungen neu erstellen.',
+    dockerImage: 'Container-Image, das verwendet wird, wenn das Ausführungs-Backend Docker ist.',
+    singularityImage: 'Image, das verwendet wird, wenn das Ausführungs-Backend Singularity ist.',
+    modalImage: 'Image, das verwendet wird, wenn das Ausführungs-Backend Modal ist.',
+    daytonaImage: 'Image, das verwendet wird, wenn das Ausführungs-Backend Daytona ist.'
+  },
+  codeExecution: {
+    mode: 'Project nutzt den Sitzungsordner und Projekt-Python; strict einen temporären Ordner und Laufzeit-Python. Dateizugriffsrechte bleiben unverändert.'
+  },
+  fileReadMaxChars: 'Maximale Zeichenzahl, die Hermes aus einer Dateianfrage lesen kann.',
+  approvals: {
+    mode: 'Wie Hermes Befehle behandelt, die eine explizite Genehmigung benötigen.',
+    timeout: 'Wie lange Genehmigungsaufforderungen warten, bevor sie ablaufen.'
+  },
+  security: {
+    redactSecrets: 'Erkannte Geheimnisse nach Möglichkeit aus modellsichtbarem Inhalt ausblenden.'
+  },
+  checkpoints: {
+    enabled: 'Rollback-Schnappschüsse vor Dateibearbeitungen erstellen.'
+  },
+  memory: {
+    memoryEnabled: 'Dauerhafte Erinnerungen speichern, die zukünftigen Sessions helfen können.',
+    userProfileEnabled: 'Ein kompaktes Profil der Benutzerpräferenzen pflegen.'
+  },
+  context: {
+    engine: 'Strategie zur Verwaltung langer Gespräche nahe der Kontextgrenze.'
+  },
+  compression: {
+    enabled: 'Älteren Kontext zusammenfassen, wenn Gespräche groß werden.',
+    codexGpt55Autoraise: 'Komprimierung bei unterstützten ChatGPT-Codex-OAuth-Modellen auf 85 % anheben.'
+  },
+  auxiliary: {
+    compression: {
+      timeout:
+        'Sekunden, die pro Aufruf auf das Hilfsmodell für Komprimierung gewartet wird (Standard 120). Für langsame lokale Modelle erhöhen.'
+    }
+  },
+  voice: {
+    autoTts: 'Assistentenantworten automatisch vorlesen.',
+    voiceChatMode:
+      'chained: Sprache zu Text → Hermes → Text zu Sprache mit den Anbietern unten. gpt-live: Ein Vollduplex-Sprachmodell von OpenAI (gpt-live-1) hört zu und spricht und übergibt jede echte Anfrage an Hermes – das von Ihnen gewählte Modell antwortet mit allen Tools. Erfordert einen OpenAI-API-Schlüssel; die Sprachschicht kostet 0,05 $ pro Minute.',
+    gptLive: {
+      voice: 'Stimme für den GPT-Live-Modus. Eigene Stimm-IDs werden akzeptiert.',
+      instructions:
+        'Zusätzliche Sätze für die Live-Sprachpersona (Ton, Tempo, Sprache). Hermes behält seinen eigenen System-Prompt.'
+    }
+  },
+  tts: {
+    xai: {
+      voiceId: 'xAI-Stimm-ID (z. B. eve) oder eine benutzerdefinierte Stimm-ID.',
+      language: 'Sprachcode (z. B. en, pt-BR) oder „auto“ für automatische Erkennung.',
+      speed: 'Wiedergabegeschwindigkeit. 0,7 = langsamer, 1,0 = normal, 1,5 = schneller.',
+      autoSpeechTags:
+        'Ein LLM expressive Audio-Tags ([laughing], [sighs]) vor der Synthese in das Skript einfügen lassen.',
+      optimizeStreamingLatency: 'Latenz- vs. Qualitäts-Abwägung. 0 = beste Qualität, 2 = niedrigste Latenz.',
+      sampleRate: 'Audio-Abtastrate in Hz. Höher = bessere Qualität, größere Dateien.',
+      bitRate: 'MP3-Bitrate in bps. Gilt nur, wenn der Codec mp3 ist.'
+    },
+    neutts: {
+      device: 'Lokales Inferenzgerät für NeuTTS.'
+    }
+  },
+  stt: {
+    enabled: 'Lokale oder anbieterbasierte Sprachtranskription aktivieren.',
+    echoTranscripts: 'Das rohe 🎙️-Transkript von Sprachnachrichten zurück in den Chat posten.',
+    elevenlabs: {
+      languageCode: 'Optionaler ISO-639-3-Sprachcode. Leer lässt ElevenLabs automatisch erkennen.'
+    }
+  },
+  updates: {
+    nonInteractiveLocalChanges:
+      'Wenn Hermes sich aus der App selbst aktualisiert (ohne Terminal-Aufforderung), lokale Quellcode-Änderungen behalten (stash) oder verwerfen (discard). Terminal-Updates fragen immer nach.'
+  }
+})
+
+const deBaseOverrides = {
+  appearancePage: appearancePage.de,
+  home: homeGuidance.de,
+  toolPanel: toolPanel['de'],
+  workspacePage: workspacePage.de,
+  accountPage: accountPage['de'],
+  platformRecharge: {
+    description:
+      'Der Betrag wird nach der Eingabe automatisch berechnet. Prüfen Sie vor dem Bezahlen den Zahlbetrag und die Gutschrift.',
+    quote: 'Beträge werden berechnet…',
+    create: 'Zur Zahlung',
+    payAmount: 'Zahlbetrag',
+    creditAmount: 'Gutschrift'
+  },
   catalog: {
     enable: 'Aktivieren',
     disable: 'Deaktivieren',
@@ -697,6 +999,7 @@ export const deOverrides = {
     noResults: 'Keine Sprachen gefunden'
   },
   settings: {
+    configPages: configPagesFor('de', configPageFieldLabels, configPageFieldDescriptions),
     subpages: {
       appearanceTheme: 'Design',
       appearanceTypography: 'Typografie',
@@ -766,7 +1069,7 @@ export const deOverrides = {
       missing: 'Dieses Plugin hat keine Einstellungsseite. Es ist eventuell deaktiviert oder deinstalliert.'
     },
     nav: {
-      providers: 'Anbieter',
+      providers: 'Modelldienste',
       providerAccounts: 'Konten',
       providerApiKeys: 'API-Schlüssel',
       providerCustomEndpoints: 'Benutzerdefinierte Endpunkte',
@@ -775,6 +1078,7 @@ export const deOverrides = {
       apiKeys: 'Tools & Schlüssel',
       keybinds: 'Tastaturkürzel',
       keysTools: 'Tools',
+      keysCredentials: 'Schlüssel',
       keysSettings: 'Einstellungen',
       mcp: 'MCP',
       archivedChats: 'Archivierte Chats',
@@ -1147,281 +1451,8 @@ export const deOverrides = {
         turnOffFailed: 'Das Haustier konnte nicht ausgeschaltet werden.'
       }
     },
-    fieldLabels: defineFieldCopy({
-      model: 'Standardmodell',
-      modelContextLength: 'Kontextfenster',
-      fallbackProviders: 'Fallback-Modelle',
-      toolsets: 'Aktivierte Toolsets',
-      timezone: 'Zeitzone',
-      display: {
-        personality: 'Persönlichkeit',
-        showReasoning: 'Denkblöcke'
-      },
-      desktop: {
-        repoScanEnabled: 'Automatische Repository-Erkennung',
-        repoScanRoots: 'Repository-Erkennungs-Wurzeln',
-        repoScanExcludePaths: 'Ausgeschlossene Repository-Pfade'
-      },
-      agent: {
-        maxTurns: 'Maximale Agent-Schritte',
-        imageInputMode: 'Bildanhänge',
-        apiMaxRetries: 'API-Wiederholungen',
-        serviceTier: 'Service-Stufe',
-        toolUseEnforcement: 'Tool-Nutzungs-Durchsetzung'
-      },
-      terminal: {
-        cwd: 'Arbeitsverzeichnis',
-        backend: 'Ausführungs-Backend',
-        timeout: 'Befehls-Timeout',
-        persistentShell: 'Persistente Shell',
-        envPassthrough: 'Umgebungsvariablen-Durchreichung',
-        dockerImage: 'Docker-Image',
-        singularityImage: 'Singularity-Image',
-        modalImage: 'Modal-Image',
-        daytonaImage: 'Daytona-Image'
-      },
-      fileReadMaxChars: 'Datei-Lesegrenze',
-      toolOutput: {
-        maxBytes: 'Terminal-Ausgabelimit',
-        maxLines: 'Datei-Seitenlimit',
-        maxLineLength: 'Zeilenlängenlimit'
-      },
-      codeExecution: { mode: 'Code-Ausführungsmodus' },
-      approvals: {
-        mode: 'Genehmigungsmodus',
-        timeout: 'Genehmigungs-Timeout',
-        mcpReloadConfirm: 'MCP-Neuladen bestätigen'
-      },
-      commandAllowlist: 'Befehls-Whitelist',
-      security: {
-        redactSecrets: 'Geheimnisse schwärzen',
-        allowPrivateUrls: 'Private URLs erlauben'
-      },
-      browser: {
-        allowPrivateUrls: 'Private Browser-URLs',
-        autoLocalForPrivateUrls: 'Lokaler Browser für private URLs',
-        useRealProfile: 'Mein echtes Browser-Profil verwenden'
-      },
-      checkpoints: {
-        enabled: 'Datei-Checkpoints',
-        maxSnapshots: 'Checkpoint-Limit'
-      },
-      voice: {
-        maxRecordingSeconds: 'Maximale Aufnahmelänge',
-        autoTts: 'Antworten vorlesen',
-        voiceChatMode: 'Sprachchat-Modus',
-        gptLive: {
-          voice: 'GPT-Live-Stimme',
-          instructions: 'GPT-Live-Persona'
-        }
-      },
-      stt: {
-        enabled: 'Spracherkennung',
-        echoTranscripts: 'Transkripte wiedergeben',
-        provider: 'Spracherkennungs-Anbieter',
-        local: {
-          model: 'Lokales Transkriptionsmodell',
-          language: 'Transkriptionssprache'
-        },
-        openai: {
-          model: 'OpenAI-STT-Modell'
-        },
-        groq: {
-          model: 'Groq-STT-Modell'
-        },
-        mistral: {
-          model: 'Mistral-STT-Modell'
-        },
-        elevenlabs: {
-          modelId: 'ElevenLabs-STT-Modell',
-          languageCode: 'ElevenLabs-Sprache',
-          tagAudioEvents: 'Audio-Ereignisse markieren',
-          diarize: 'Sprecher-Diarisierung'
-        }
-      },
-      tts: {
-        provider: 'Text-zu-Sprache-Anbieter',
-        edge: {
-          voice: 'Edge-Stimme'
-        },
-        openai: {
-          model: 'OpenAI-TTS-Modell',
-          voice: 'OpenAI-Stimme'
-        },
-        elevenlabs: {
-          voiceId: 'ElevenLabs-Stimme',
-          modelId: 'ElevenLabs-Modell'
-        },
-        xai: {
-          voiceId: 'xAI (Grok) Stimme',
-          language: 'xAI-Sprache',
-          speed: 'xAI-Wiedergabegeschwindigkeit',
-          autoSpeechTags: 'xAI automatische Sprach-Tags',
-          optimizeStreamingLatency: 'xAI Streaming-Latenz-Optimierung',
-          sampleRate: 'xAI-Abtastrate',
-          bitRate: 'xAI-Bitrate'
-        },
-        minimax: {
-          model: 'MiniMax-TTS-Modell',
-          voiceId: 'MiniMax-Stimme'
-        },
-        mistral: {
-          model: 'Mistral-TTS-Modell',
-          voiceId: 'Mistral-Stimme'
-        },
-        gemini: {
-          model: 'Gemini-TTS-Modell',
-          voice: 'Gemini-Stimme'
-        },
-        neutts: {
-          model: 'NeuTTS-Modell',
-          device: 'NeuTTS-Gerät'
-        },
-        kittentts: {
-          model: 'KittenTTS-Modell',
-          voice: 'KittenTTS-Stimme'
-        },
-        piper: {
-          voice: 'Piper-Stimme'
-        },
-        deepinfra: {
-          model: 'DeepInfra-TTS-Modell',
-          voice: 'DeepInfra-Stimme'
-        }
-      },
-      memory: {
-        memoryEnabled: 'Persistentes Gedächtnis',
-        userProfileEnabled: 'Benutzerprofil',
-        memoryCharLimit: 'Gedächtnis-Budget',
-        userCharLimit: 'Profil-Budget',
-        provider: 'Gedächtnis-Anbieter'
-      },
-      context: {
-        engine: 'Kontext-Engine'
-      },
-      compression: {
-        enabled: 'Auto-Kompression',
-        threshold: 'Kompression-Schwelle',
-        codexGpt55Autoraise: 'Automatische Codex-Komprimierungsanhebung',
-        targetRatio: 'Kompression-Ziel',
-        protectLastN: 'Geschützte letzte Nachrichten'
-      },
-      auxiliary: {
-        compression: {
-          timeout: 'Timeout des Komprimierungsmodells (s)'
-        }
-      },
-      delegation: {
-        model: 'Subagent-Modell',
-        provider: 'Subagent-Anbieter',
-        maxIterations: 'Subagent-Rundenlimit',
-        maxConcurrentChildren: 'Parallele Subagenten',
-        childTimeoutSeconds: 'Subagent-Timeout',
-        reasoningEffort: 'Subagent-Denkanstrengung'
-      },
-      updates: {
-        nonInteractiveLocalChanges: 'Lokale Änderungen bei In-App-Update'
-      }
-    }),
-    fieldDescriptions: defineFieldCopy({
-      model: 'Wird für neue Chats verwendet, sofern Sie im Composer kein anderes Modell wählen.',
-      modelContextLength: 'Auf 0 lassen, um das erkannte Kontextfenster des gewählten Modells zu verwenden.',
-      fallbackProviders: 'Backup-Anbieter:Modell-Einträge, die versucht werden, wenn das Standardmodell fehlschlägt.',
-      display: {
-        personality: 'Standard-Assistentenstil für neue Sessions.',
-        showReasoning: 'Denkabschnitte anzeigen, wenn das Backend sie liefert.'
-      },
-      desktop: {
-        repoScanEnabled: 'Lokale Ordner nach Git-Repositories durchsuchen, die in Projekten angezeigt werden.',
-        repoScanRoots: 'Zu durchsuchende Ordner. Leer lassen, um Ihr Home-Verzeichnis zu durchsuchen.',
-        repoScanExcludePaths: 'Ordner und deren Unterordner, die bei der Repository-Erkennung übersprungen werden.'
-      },
-      timezone: 'IANA-Zeitzonenkennung. Leer verwendet die Systemzeitzone.',
-      browser: {
-        useRealProfile:
-          'Lokales Browsen nutzt Ihre echten Anmeldungen. Hermes kopiert das Profil Ihres Standardbrowsers (Cookies, Anmeldungen, Einstellungen) in einen verwalteten Schnappschuss und steuert ihn mit seinem gebündelten Chromium – Ihr Live-Profil wird nie direkt geöffnet, und die Kopie wird bei jedem Lauf daraus aktualisiert. Erlaubt dem Agenten außerdem, auf Anfrage eine lokale Session mit echtem Profil zu öffnen, selbst wenn ein Cloud-Browser-Backend konfiguriert ist. Nur Chromium-Browser (Chrome, Edge, Brave, Brave Origin, Chromium) werden unterstützt; ein Nicht-Chromium-Standard schlägt mit einer klaren Meldung fehl. Standardmäßig aus.'
-      },
-      agent: {
-        imageInputMode: 'Steuert, wie Bildanhänge an das Modell gesendet werden.',
-        maxTurns: 'Obergrenze für Tool-Aufruf-Runden, bevor Hermes einen Lauf stoppt.'
-      },
-      terminal: {
-        cwd: 'Standard-Projektordner für Tool- und Terminal-Arbeit.',
-        persistentShell: 'Shell-Zustand zwischen Befehlen beibehalten, wenn das Backend es unterstützt.',
-        envPassthrough: 'Umgebungsvariablen, die in die Tool-Ausführung durchgereicht werden.',
-        dockerImage: 'Container-Image, das verwendet wird, wenn das Ausführungs-Backend Docker ist.',
-        singularityImage: 'Image, das verwendet wird, wenn das Ausführungs-Backend Singularity ist.',
-        modalImage: 'Image, das verwendet wird, wenn das Ausführungs-Backend Modal ist.',
-        daytonaImage: 'Image, das verwendet wird, wenn das Ausführungs-Backend Daytona ist.'
-      },
-      codeExecution: {
-        mode: 'Wie streng die Code-Ausführung auf das aktuelle Projekt begrenzt ist.'
-      },
-      fileReadMaxChars: 'Maximale Zeichenzahl, die Hermes aus einer Dateianfrage lesen kann.',
-      approvals: {
-        mode: 'Wie Hermes Befehle behandelt, die eine explizite Genehmigung benötigen.',
-        timeout: 'Wie lange Genehmigungsaufforderungen warten, bevor sie ablaufen.'
-      },
-      security: {
-        redactSecrets: 'Erkannte Geheimnisse nach Möglichkeit aus modellsichtbarem Inhalt ausblenden.'
-      },
-      checkpoints: {
-        enabled: 'Rollback-Schnappschüsse vor Dateibearbeitungen erstellen.'
-      },
-      memory: {
-        memoryEnabled: 'Dauerhafte Erinnerungen speichern, die zukünftigen Sessions helfen können.',
-        userProfileEnabled: 'Ein kompaktes Profil der Benutzerpräferenzen pflegen.'
-      },
-      context: {
-        engine: 'Strategie zur Verwaltung langer Gespräche nahe der Kontextgrenze.'
-      },
-      compression: {
-        enabled: 'Älteren Kontext zusammenfassen, wenn Gespräche groß werden.',
-        codexGpt55Autoraise: 'Komprimierung bei unterstützten ChatGPT-Codex-OAuth-Modellen auf 85 % anheben.'
-      },
-      auxiliary: {
-        compression: {
-          timeout:
-            'Sekunden, die pro Aufruf auf das Hilfsmodell für Komprimierung gewartet wird (Standard 120). Für langsame lokale Modelle erhöhen.'
-        }
-      },
-      voice: {
-        autoTts: 'Assistentenantworten automatisch vorlesen.',
-        voiceChatMode:
-          'chained: Sprache zu Text → Hermes → Text zu Sprache mit den Anbietern unten. gpt-live: Ein Vollduplex-Sprachmodell von OpenAI (gpt-live-1) hört zu und spricht und übergibt jede echte Anfrage an Hermes – das von Ihnen gewählte Modell antwortet mit allen Tools. Erfordert einen OpenAI-API-Schlüssel; die Sprachschicht kostet 0,05 $ pro Minute.',
-        gptLive: {
-          voice: 'Stimme für den GPT-Live-Modus. Eigene Stimm-IDs werden akzeptiert.',
-          instructions:
-            'Zusätzliche Sätze für die Live-Sprachpersona (Ton, Tempo, Sprache). Hermes behält seinen eigenen System-Prompt.'
-        }
-      },
-      tts: {
-        xai: {
-          voiceId: 'xAI-Stimm-ID (z. B. eve) oder eine benutzerdefinierte Stimm-ID.',
-          language: 'Sprachcode (z. B. en, pt-BR) oder „auto“ für automatische Erkennung.',
-          speed: 'Wiedergabegeschwindigkeit. 0,7 = langsamer, 1,0 = normal, 1,5 = schneller.',
-          autoSpeechTags:
-            'Ein LLM expressive Audio-Tags ([laughing], [sighs]) vor der Synthese in das Skript einfügen lassen.',
-          optimizeStreamingLatency: 'Latenz- vs. Qualitäts-Abwägung. 0 = beste Qualität, 2 = niedrigste Latenz.',
-          sampleRate: 'Audio-Abtastrate in Hz. Höher = bessere Qualität, größere Dateien.',
-          bitRate: 'MP3-Bitrate in bps. Gilt nur, wenn der Codec mp3 ist.'
-        },
-        neutts: {
-          device: 'Lokales Inferenzgerät für NeuTTS.'
-        }
-      },
-      stt: {
-        enabled: 'Lokale oder anbieterbasierte Sprachtranskription aktivieren.',
-        echoTranscripts: 'Das rohe 🎙️-Transkript von Sprachnachrichten zurück in den Chat posten.',
-        elevenlabs: {
-          languageCode: 'Optionaler ISO-639-3-Sprachcode. Leer lässt ElevenLabs automatisch erkennen.'
-        }
-      },
-      updates: {
-        nonInteractiveLocalChanges:
-          'Wenn Hermes sich aus der App selbst aktualisiert (ohne Terminal-Aufforderung), lokale Quellcode-Änderungen behalten (stash) oder verwerfen (discard). Terminal-Updates fragen immer nach.'
-      }
-    }),
+    fieldLabels: configPageFieldLabels,
+    fieldDescriptions: configPageFieldDescriptions,
     uninstallSection: {
       dangerZone: 'Gefahrenzone',
       checkingInstalled: 'Installierte Komponenten werden geprüft…',
@@ -1614,7 +1645,66 @@ export const deOverrides = {
       couldNotSave: 'Die Anmeldedaten konnten nicht gespeichert werden.',
       remove: 'Entfernen',
       getKey: 'Einen Schlüssel erhalten',
-      saving: 'Wird gespeichert'
+      saving: 'Wird gespeichert',
+      toolPageIntro:
+        'Hier verbindest du optionale Dienste für Websuche, Sprache und externen Speicher. Dies sind keine API-Schlüssel für Chatmodelle. Nicht verwendete Dienste kannst du leer lassen. Klicke auf einen Eintrag für Details; externe Anbieter können Anfragen verarbeiten oder Gebühren berechnen.',
+      toolServices: {
+        porcupine: {
+          label: 'Porcupine-Schlüssel für Sprachaktivierung',
+          description:
+            'Nur erforderlich, wenn Porcupine in den Spracheinstellungen als Aktivierungsdienst gewählt ist. Der Standarddienst benötigt diesen Schlüssel nicht.'
+        },
+        retaindbApiKey: {
+          label: 'Schlüssel für RetainDB-Speicher',
+          description:
+            'Verbindet den optionalen externen RetainDB-Speicher. Nur erforderlich, wenn RetainDB als Speicheranbieter aktiviert ist.'
+        },
+        retaindbBaseUrl: {
+          label: 'RetainDB-Serveradresse',
+          description:
+            'Nur bei einer selbst gehosteten RetainDB-Instanz ändern. Für RetainDB Cloud den Standardwert beibehalten.'
+        },
+        searxngUrl: {
+          label: 'Adresse der eigenen Websuche (SearXNG)',
+          description:
+            'Adresse deines SearXNG-Servers. Kein API-Schlüssel erforderlich. Unterstützt die Suche, nicht das Auslesen von Webseiten.'
+        },
+        supermemoryApiKey: {
+          label: 'Schlüssel für Supermemory-Speicher',
+          description:
+            'Verbindet den optionalen externen Supermemory-Speicher. Installiere und aktiviere das Plugin und wähle es als Speicheranbieter.'
+        },
+        tavilyApiKey: {
+          label: 'Tavily-Websuchschlüssel',
+          description:
+            'Für Tavily-Websuche und das Auslesen von Webseiten. Tavily auswählen; ein Schlüssel kann höhere Limits ermöglichen. Gebühren des Anbieters können anfallen.'
+        },
+        toolGatewayDomain: {
+          label: 'Tool-Gateway-Domain (erweitert)',
+          description:
+            'Überschreibt die Domain für verwaltete Tool-Gateways. Für unterstützte Abonnements oder eigene Installationen; normalerweise leer lassen.'
+        },
+        toolGatewayScheme: {
+          label: 'Tool-Gateway-Protokoll (erweitert)',
+          description:
+            'Legt das Protokoll des Gateways fest, normalerweise HTTPS. Nur für eigene Gateways oder lokale Tests ändern.'
+        },
+        toolGatewayUrl: {
+          label: 'Tool-Gateway-Adresse (erweitert)',
+          description:
+            'Legt die vollständige Gateway-Adresse fest und ersetzt die automatische Ermittlung. Normalerweise leer lassen.'
+        },
+        toolGatewayToken: {
+          label: 'Zugriffstoken für Tool-Gateway (erweitert)',
+          description:
+            'Überschreibt das Gateway-Token manuell. Die Anmeldung verwaltet es normalerweise automatisch; leer lassen.'
+        },
+        voiceOpenaiKey: {
+          label: 'OpenAI-Schlüssel für Sprachdienste',
+          description:
+            'Für OpenAI-Spracherkennung und Sprachsynthese, nicht für normalen Chat. OpenAI kann die Nutzung berechnen; ein OPENAI_API_KEY kann gegebenenfalls ebenfalls verwendet werden.'
+        }
+      }
     },
     envActions: {
       actions: 'Aktionen',
@@ -1659,11 +1749,12 @@ export const deOverrides = {
       updateSkippedCloud: 'Wird von Hermes Cloud verwaltet',
       kindLocal: 'Lokal',
       kindRemote: 'Remote-Gateway',
-      kindCloud: 'Hermes Cloud',
+      kindCloud: 'Gespeicherte Cloud-Verbindung (alt)',
       kindSsh: 'SSH',
       kindLocalDesc: 'Die Hermes-Laufzeitumgebung, die von dieser App verwaltet wird.',
       kindRemoteDesc: 'Ein Hermes Gateway, das über HTTP(S) erreichbar ist – LAN, Tailscale oder das Internet.',
-      kindCloudDesc: 'Eine gehostete Instanz, die über Ihr Hermes-Cloud-Konto gefunden wurde.',
+      kindCloudDesc:
+        'Eine vorhandene Cloud-Verbindung aus einer älteren Aino-Version. Sie bleibt nutzbar; neue Verbindungen bitte über Remote-Gateway oder SSH hinzufügen.',
       kindSshDesc: 'Eine Hermes-Installation, die über SSH erreicht wird.',
       labelTitle: 'Name',
       labelDesc:
@@ -1683,8 +1774,6 @@ export const deOverrides = {
       duplicateSsh: (label: string) => `Eine Verbindung zu diesem SSH-Host existiert bereits („${label}“).`,
       sameBackendHint: (label: string) => `Gleiches Backend wie „${label}“`,
       localAddHint: 'Lokal ist nicht verfügbar: Die verwaltete lokale Verbindung existiert bereits (es gibt nur eine).',
-      cloudAddHint:
-        'Tipp: Die Anmeldung unter Hermes Cloud oben erkennt Ihre Agents automatisch – verwenden Sie dieses Formular nur, um eine bekannte Instanz-URL manuell zu registrieren.',
       save: 'Verbindung speichern',
       saving: 'Wird gespeichert…',
       cancel: 'Abbrechen',
@@ -4596,14 +4685,14 @@ export const deOverrides = {
       messagingPlatforms: 'Messaging-Plattformen'
     },
     approvalMode: {
-      title: 'Genehmigungsmodus',
+      title: 'Wie soll Aino um Genehmigung bitten?',
       ariaLabel: mode => `Genehmigungsmodus: ${mode}`,
-      manual: 'Manuell',
-      manualDescription: 'Nachfragen bei Aktionen, die eine Genehmigung erfordern',
-      smart: 'Smart',
-      smartDescription: 'Aktionen automatisch beurteilen und bei Bedarf nachfragen',
-      off: 'Aus',
-      offDescription: 'Ohne Genehmigungs-Abfragen ausführen'
+      manual: 'Genehmigung anfragen',
+      manualDescription: 'Vor Aktionen nachfragen, die eine Genehmigung erfordern',
+      smart: 'Für mich genehmigen',
+      smartDescription: 'Befehlsrisiken automatisch prüfen und bei Bedarf nachfragen',
+      off: 'Nicht nachfragen',
+      offDescription: 'Genehmigungsabfragen überspringen; Systemrechte und Sicherheitsregeln gelten weiterhin'
     },
     statusbar: {
       unknown: 'unbekannt',
@@ -4689,6 +4778,10 @@ export const deOverrides = {
           tool_definitions: 'Tool-Definitionen'
         },
         empty: 'Noch keine Kontext-Daten',
+        detailsUnavailable: 'Details sind vorübergehend nicht verfügbar. Die aktuelle Nutzung bleibt sichtbar.',
+        unavailable: 'Kontextnutzung nicht verfügbar. Bitte erneut versuchen.',
+        retry: 'Erneut versuchen',
+        pendingDetails: 'Die aktuelle Laufzeit hat keine Kategoriedetails bereitgestellt.',
         loading: 'Aufschlüsselung wird geladen…',
         percentFull: percent => `${percent}% voll`,
         title: 'Kontext-Verbrauch',
@@ -4702,8 +4795,7 @@ export const deOverrides = {
       noModel: 'kein Modell',
       switchModel: 'Modell wechseln',
       openModelPicker: 'Modell-Auswahl öffnen',
-      modelPinned:
-        'Von Ihnen angeheftet; neue Chats verwenden dieses Modell statt der Voreinstellung aus den Einstellungen',
+      modelPinned: 'Nur für dieses Gespräch; neue Chats verwenden das Standardmodell aus den Einstellungen',
       modelTitle: (provider, model) => `Modell · ${provider}: ${model}`,
       providerModelTitle: (provider, model) => `${provider} · ${model}`
     }
@@ -4880,6 +4972,8 @@ export const deOverrides = {
     }
   },
   zones: {
+    sidebarModeMenu: 'Gesprächsmodus wechseln',
+    sidebarSessionsDescription: 'Projekte, Dateien und alltägliche Gespräche',
     showTabStrip: 'Tabs anzeigen',
     hideTabStrip: 'Tabs ausblenden',
     showStripTab: title => `${title} anzeigen`,
@@ -5265,6 +5359,9 @@ export const deOverrides = {
       gatewayDisconnected: 'Hermes-Gateway ist nicht verbunden'
     },
     tool: {
+      collapseDetails: 'Details einklappen',
+      moreActions: 'Aktionen für den Ausführungseintrag',
+      hideRecord: 'Diesen Eintrag ausblenden',
       copyCode: 'Code kopieren',
       renderingImage: 'Rendert Bild',
       copyOutput: 'Ausgabe kopieren',
@@ -5671,5 +5768,10 @@ export const deOverrides = {
     }
   }
 } satisfies TranslationOverrides
+
+export const deOverrides = mergeTranslations<typeof deBaseOverrides & TranslationOverrides>(
+  deBaseOverrides,
+  runtimeFeatureCopy['de']
+)
 
 export const de = defineLocale(deOverrides)

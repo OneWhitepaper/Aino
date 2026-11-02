@@ -1,14 +1,31 @@
-import { act, cleanup, fireEvent, render } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { PreviewCloseConfirm } from '@/app/chat/preview-close-confirm'
 import { PANE_TOGGLE_REVEAL_EVENT } from '@/components/pane-shell'
 import { registry } from '@/contrib/registry'
+import { LAYOUT_KEYS } from '@/lib/layout-persistence'
+import { modeLayout } from '@/store/interface-mode'
 import { $paneStates, setPaneWidthOverride } from '@/store/panes'
+import { $previewTabs, closeRightRailTab, openPreview } from '@/store/preview'
+import { $pendingPreviewClose, cancelPreviewClose, setPreviewDirty } from '@/store/preview-edit'
 import { $connection } from '@/store/session'
-import { stubResizeObserver } from '@/test/jsdom'
+import { stubMenuDomApis, stubResizeObserver } from '@/test/jsdom'
 
-import { group, split } from '../model'
-import { $hiddenTreePanes, $layoutTree, $narrowViewport, declareDefaultTree } from '../store'
+import { allPaneIds, findGroup, group, type LayoutNode, split } from '../model'
+import {
+  $activeTreeGroup,
+  $hiddenTreePanes,
+  $layoutTree,
+  $narrowViewport,
+  closeFocusedSessionTab,
+  declareDefaultTree,
+  dismissTreePane,
+  noteActiveTreeGroup,
+  noteHoveredTreeGroup,
+  registerPaneCloser,
+  trackActiveTreeGroup
+} from '../store'
 
 import { NarrowOverlays, narrowOverlayWidth } from './narrow-overlays'
 
@@ -20,6 +37,7 @@ import { NarrowOverlays, narrowOverlayWidth } from './narrow-overlays'
 
 beforeAll(() => {
   stubResizeObserver()
+  stubMenuDomApis()
 })
 
 const disposers: (() => void)[] = []
@@ -39,6 +57,8 @@ const registerPane = (id: string, title: string, data: Record<string, unknown>, 
 beforeEach(() => {
   window.localStorage.clear()
   $hiddenTreePanes.set(new Set())
+  noteActiveTreeGroup(null)
+  noteHoveredTreeGroup(null)
 
   registerPane('sessions', 'sessions', { collapsible: true, placement: 'left', width: '237px' }, 'session rows')
   registerPane('bots', 'Bots', { collapsible: true, placement: 'left', width: '260px' }, 'bot roster')
@@ -53,6 +73,10 @@ afterEach(() => {
   $narrowViewport.set(false)
   $layoutTree.set(null)
   $connection.set(null)
+  cancelPreviewClose()
+  $previewTabs.set([])
+  noteActiveTreeGroup(null)
+  noteHoveredTreeGroup(null)
   vi.restoreAllMocks()
   delete (window as unknown as { hermesDesktop?: unknown }).hermesDesktop
   disposers.splice(0).forEach(dispose => dispose())
@@ -64,9 +88,184 @@ const revealPane = (id: string) => {
   })
 }
 
-const overlayTab = (paneId: string) => document.querySelector<HTMLElement>(`[data-narrow-overlay-tab="${paneId}"]`)
+const overlayTab = (paneId: string) =>
+  globalThis.document.querySelector<HTMLElement>(`[data-narrow-overlay-tab="${paneId}"]`)
 
 describe('narrow overlay of a stacked zone', () => {
+  it('keeps dirty preview selection on cancel and falls back only after confirmed close', () => {
+    const target = {
+      kind: 'file',
+      label: 'Unsaved.ts',
+      path: '/work/unsaved.ts',
+      source: '/work/unsaved.ts',
+      url: 'file:///work/unsaved.ts'
+    } as const
+
+    openPreview(target)
+    const tabId = $previewTabs.get().find(tab => tab.target.url === target.url)!.id
+    const paneId = 'preview-tile:' + tabId
+    registerPane('files', 'Files', { toolPanel: true, placement: 'right' }, 'File list')
+    registerPane(paneId, 'Unsaved.ts', { toolPanel: true, placement: 'main' }, 'Unsaved preview draft')
+    setPreviewDirty(target.url, true, tabId)
+    $layoutTree.set(
+      split('row', [group(['workspace']), group(['files', paneId], { id: 'close-tools', active: paneId })])
+    )
+    registerPaneCloser(paneId, () => closeRightRailTab(tabId))
+    registerPaneCloser('files', () => dismissTreePane('files'))
+
+    const dropClosed = $previewTabs.listen(tabs => {
+      if (!tabs.some(tab => tab.id === tabId)) {
+        dismissTreePane(paneId)
+      }
+    })
+
+    try {
+      const { container } = render(
+        <>
+          <NarrowOverlays />
+          <PreviewCloseConfirm />
+        </>
+      )
+
+      revealPane(paneId)
+      const close = () => overlayTab(paneId)!.querySelector<HTMLButtonElement>('[data-slot="pane-tab-close"] button')!
+
+      expect(close()).not.toBeNull()
+      fireEvent.click(close())
+      expect($pendingPreviewClose.get()).toBe(tabId)
+      fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+      expect(container.querySelector('[data-narrow-overlay="' + paneId + '"]')).not.toBeNull()
+      expect(findGroup($layoutTree.get()!, 'close-tools')?.active).toBe(paneId)
+      expect($previewTabs.get().some(tab => tab.id === tabId)).toBe(true)
+
+      fireEvent.click(close())
+      fireEvent.click(screen.getByRole('button', { name: 'Discard changes' }))
+      expect(container.querySelector('[data-narrow-overlay="files"]')).not.toBeNull()
+      expect(findGroup($layoutTree.get()!, 'close-tools')?.active).toBe('files')
+      expect(allPaneIds($layoutTree.get()!)).not.toContain(paneId)
+      fireEvent.click(overlayTab('files')!.querySelector<HTMLButtonElement>('[data-slot="pane-tab-close"] button')!)
+      expect(container.querySelector('[data-narrow-overlay]')).toBeNull()
+      expect(allPaneIds($layoutTree.get()!)).toContain('workspace')
+    } finally {
+      dropClosed()
+      registerPaneCloser(paneId)
+      registerPaneCloser('files')
+      setPreviewDirty(target.url, false, tabId)
+    }
+  })
+
+  it.each([['files'], ['files', 'review']])('keeps tool controls for %j without legacy group metadata', (...ids) => {
+    for (const id of ids) {
+      registerPane(id, id, { collapsible: true, toolPanel: true, placement: 'right', width: '432px' }, id + ' body')
+    }
+
+    $layoutTree.set(split('row', [group(['workspace']), group(ids, { id: 'legacy-tools' })]))
+    const { container } = render(<NarrowOverlays />)
+    revealPane(ids[0])
+
+    for (const id of ids) {
+      expect(overlayTab(id)).not.toBeNull()
+    }
+
+    expect(screen.getByRole('button', { name: 'List tabs' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'New tab' })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Maximize panel' })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Hide panel' }))
+    expect(container.querySelector('[data-narrow-overlay]')).toBeNull()
+  })
+
+  it('opens the real chooser as another overlay tool tab', () => {
+    registerPane(
+      'files',
+      'files',
+      { collapsible: true, toolPanel: true, placement: 'right', width: '432px' },
+      'files body'
+    )
+    $layoutTree.set(split('row', [group(['workspace']), group(['files'], { id: 'safe-tools' })]))
+    const { container } = render(<NarrowOverlays />)
+    revealPane('files')
+
+    fireEvent.click(screen.getByRole('button', { name: 'New tab' }))
+
+    expect(container.querySelector('[data-narrow-overlay="tool-new-tab"]')).not.toBeNull()
+    expect(overlayTab('files')).not.toBeNull()
+    expect(overlayTab('tool-new-tab')).not.toBeNull()
+    expect(screen.getByText('Open what you need in the current project.')).toBeTruthy()
+  })
+
+  it('reveals a newly registered tool in the same turn it joins the safe group', () => {
+    registerPane('files', 'files', { collapsible: true, toolPanel: true, placement: 'right' }, 'files body')
+    $layoutTree.set(split('row', [group(['workspace']), group(['files'], { id: 'safe-tools' })]))
+    const { container } = render(<NarrowOverlays />)
+
+    act(() => {
+      registerPane('new-browser', 'Browser', { toolPanel: true, placement: 'main' }, 'New browser body')
+      $layoutTree.set(
+        split('row', [
+          group(['workspace']),
+          group(['files', 'new-browser'], { id: 'safe-tools', active: 'new-browser' })
+        ])
+      )
+      window.dispatchEvent(new CustomEvent(PANE_TOGGLE_REVEAL_EVENT, { detail: { id: 'new-browser', mode: 'open' } }))
+    })
+
+    expect(container.querySelector('[data-narrow-overlay="new-browser"]')).not.toBeNull()
+    expect(screen.getByText('New browser body')).toBeTruthy()
+  })
+
+  it.each(['active tab', 'keyboard owner'])('closes the visible overlay tab with the correct %s', proof => {
+    const dirty = 'preview-tile:dirty-draft'
+    const chat = 'session-tile:keep-chat'
+    const closed: string[] = []
+    registerPane('files', 'Files', { collapsible: true, toolPanel: true, placement: 'right' }, 'File list')
+    registerPane(dirty, 'Unsaved preview', { toolPanel: true, placement: 'main' }, 'Unsaved preview draft')
+    registerPane(chat, 'Keep chat', { placement: 'main' }, 'Existing conversation')
+    $layoutTree.set(
+      split('row', [
+        group(['workspace', chat], { id: 'chat-zone', active: chat }),
+        group(['files', dirty], { id: 'tool-zone', active: dirty, toolPanel: true })
+      ])
+    )
+
+    for (const id of ['files', dirty, chat]) {
+      registerPaneCloser(id, () => {
+        closed.push(id)
+        dismissTreePane(id)
+      })
+    }
+
+    const stopTracking = trackActiveTreeGroup()
+
+    try {
+      render(<NarrowOverlays />)
+      revealPane(dirty)
+      noteActiveTreeGroup(proof === 'active tab' ? 'tool-zone' : 'chat-zone')
+      fireEvent.pointerDown(overlayTab('files')!, { button: 0 })
+
+      const restored = JSON.parse(
+        window.localStorage.getItem(LAYOUT_KEYS.tree + (modeLayout.mode === 'simple' ? '.simple' : ''))!
+      ) as LayoutNode
+
+      if (proof === 'active tab') {
+        expect(findGroup($layoutTree.get()!, 'tool-zone')?.active).toBe('files')
+        expect(findGroup(restored, 'tool-zone')?.active).toBe('files')
+      } else {
+        expect($activeTreeGroup.get()).toBe('tool-zone')
+      }
+
+      act(() => expect(closeFocusedSessionTab()).toBe(true))
+      expect(closed).toEqual(['files'])
+      expect(allPaneIds($layoutTree.get()!)).toContain(dirty)
+      expect(allPaneIds($layoutTree.get()!)).toContain(chat)
+    } finally {
+      stopTracking()
+
+      for (const id of ['files', dirty, chat]) {
+        registerPaneCloser(id)
+      }
+    }
+  })
+
   it('mirrors the zone tab strip so every stacked collapsible stays reachable', () => {
     const { getByTestId, queryByTestId } = render(<NarrowOverlays />)
 
@@ -136,7 +335,7 @@ describe('narrow overlay of a stacked zone', () => {
 
     // Controls rect = { x: 0, y: 0, width: 24 + 58, height: 34 }; the
     // reservation is the overlap's bottom edge, so the strip starts below it.
-    const overlay = document.querySelector<HTMLElement>('[data-narrow-overlay="sessions"]')
+    const overlay = globalThis.document.querySelector<HTMLElement>('[data-narrow-overlay="sessions"]')
     expect(overlay?.style.paddingTop).toBe('34px')
     // The reserved band stays a window-drag target, as in a docked TreeGroup.
     const dragSpacer = overlay?.querySelector<HTMLElement>('[aria-hidden="true"]')

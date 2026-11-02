@@ -66,6 +66,7 @@ export function PersistentTerminal({ onAddSelectionToChat }: PersistentTerminalP
   const terminalTakeover = useStore($terminalTakeover)
   const [rect, setRect] = useState<Rect | null>(null)
   const [ready, setReady] = useState(false)
+  const host = useRef<HTMLDivElement | null>(null)
 
   // VS Code parity: once the pane has ever been opened, keep the terminals
   // mounted — and their shells alive — even while hidden. Hiding the pane just
@@ -262,6 +263,14 @@ export function PersistentTerminal({ onAddSelectionToChat }: PersistentTerminalP
 
   const visible = Boolean(rect && !rect.hidden && rect.width > 0 && rect.height > 0)
 
+  useLayoutEffect(() => {
+    const focused = host.current?.ownerDocument.activeElement
+
+    if (!visible && focused instanceof HTMLElement && host.current?.contains(focused)) {
+      focused.blur()
+    }
+  }, [visible])
+
   const style: CSSProperties = {
     position: 'fixed',
     top: rect?.top ?? 0,
@@ -287,7 +296,7 @@ export function PersistentTerminal({ onAddSelectionToChat }: PersistentTerminalP
   // booting xterm/node-pty at 0×0 starts the shell at 80×24 and spawns a visible
   // conhost on Windows. After that `mounted` latches: shells persist while hidden.
   return (
-    <div aria-hidden={!visible} data-persistent-terminal="" style={style}>
+    <div data-persistent-terminal="" inert={!visible || undefined} ref={host} style={style}>
       {mounted && <TerminalWorkspace onAddSelectionToChat={onAddSelectionToChat} />}
     </div>
   )

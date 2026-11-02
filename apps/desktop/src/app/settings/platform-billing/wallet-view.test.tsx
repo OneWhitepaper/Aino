@@ -1,4 +1,4 @@
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
 
 import { platformAccountActions } from '@/api/platform'
@@ -88,17 +88,17 @@ it('loads devices alongside the wallet and keeps both visible across remounts an
   // Device discovery must not wait for the unrelated wallet HTTP response.
   await screen.findByText('remembered-device')
   await act(async () => resolveWallet(wallet))
-  await screen.findByText('41 USD')
+  await screen.findByText('41')
   expect(list).toHaveBeenCalledTimes(1)
   first.unmount()
   holdDevices = true
   render(view())
   await waitFor(() => expect(summary).toHaveBeenCalledTimes(2))
-  expect(screen.getByText('41 USD')).toBeTruthy()
+  expect(screen.getByText('41')).toBeTruthy()
   expect(screen.getByText('remembered-device')).toBeTruthy()
   await act(async () => rejectWallet({ code: 'network_error' }))
-  await screen.findByRole('alert')
-  expect(screen.getByText('41 USD')).toBeTruthy()
+  await within(screen.getByRole('region', { name: 'Aino wallet' })).findByRole('alert')
+  expect(screen.getByText('41')).toBeTruthy()
 })
 
 it('retires cached billing data on logout while unmounted and rejects a changed login generation', async () => {
@@ -156,7 +156,7 @@ it('retires cached billing data on logout while unmounted and rejects a changed 
   )
 
   const first = render(view())
-  await screen.findByText('17 USD')
+  await screen.findByText('17')
   first.unmount()
   act(() => snapshot.set({ ...signedIn, revision: 2, phase: 'signed_out', account: null }))
   // Account events must clear resources even when no billing component is mounted.
@@ -165,15 +165,15 @@ it('retires cached billing data on logout while unmounted and rejects a changed 
   act(() => snapshot.set({ ...signedIn, revision: 3 }))
   const second = render(view())
   await waitFor(() => expect(summary).toHaveBeenCalledTimes(2))
-  expect(screen.queryByText('17 USD')).toBeNull()
+  expect(screen.queryByText('17')).toBeNull()
   const resolveOldLogin = resolveWallet
   generation = 3
   act(() => snapshot.set({ ...signedIn, revision: 4 }))
   await waitFor(() => expect(summary).toHaveBeenCalledTimes(3))
   await act(async () => resolveOldLogin({ ...wallet, balance: '22', available_balance: '22' }))
-  expect(screen.queryByText('22 USD')).toBeNull()
+  expect(screen.queryByText('22')).toBeNull()
   await act(async () => resolveWallet({ ...wallet, balance: '33', available_balance: '33' }))
-  expect(await screen.findByText('33 USD')).toBeTruthy()
+  expect(await screen.findByText('33')).toBeTruthy()
   second.unmount()
 
   let releaseScope!: (value: PlatformBillingScope) => void
@@ -189,9 +189,9 @@ it('retires cached billing data on logout while unmounted and rejects a changed 
   act(() => snapshot.set({ ...signedIn, revision: 5 }))
   await waitFor(() => expect(summary).toHaveBeenCalledTimes(4))
   await act(async () => releaseScope({ origin: 'https://billing.example', user_id: '17', generation: 3 }))
-  expect(screen.queryByText('33 USD')).toBeNull()
+  expect(screen.queryByText('33')).toBeNull()
   await act(async () => resolveWallet({ ...wallet, balance: '44', available_balance: '44' }))
-  expect(await screen.findByText('44 USD')).toBeTruthy()
+  expect(await screen.findByText('44')).toBeTruthy()
 })
 
 it.each(['platform_account_changed', 'logout_in_progress', 'authentication_required', 'network_error'])(
@@ -240,11 +240,11 @@ it.each(['platform_account_changed', 'logout_in_progress', 'authentication_requi
         <PlatformWallet />
       </I18nProvider>
     )
-    await screen.findByText('17 USD')
+    await screen.findByText('17')
 
     generation = 2
     await act(async () => snapshot.set({ ...signedIn, revision: 2 }))
-    await waitFor(() => expect(screen.queryByText('17 USD')).toBeNull())
+    await waitFor(() => expect(screen.queryByText('17')).toBeNull())
 
     if (code === 'network_error') {
       expect(screen.getByRole('alert')).toBeTruthy()
@@ -300,13 +300,13 @@ it('discards an in-flight wallet response when its login generation retires befo
       <PlatformWallet />
     </I18nProvider>
   )
-  await screen.findByText('17 USD')
+  await screen.findByText('17')
   fireEvent.click(screen.getByRole('button', { name: 'Refresh' }))
   await waitFor(() => expect(release).toBeTypeOf('function'))
   generation = 2
   await act(async () => release({ ...wallet, balance: '22', available_balance: '22' }))
-  await waitFor(() => expect(screen.queryByText('17 USD')).toBeNull())
-  expect(screen.queryByText('22 USD')).toBeNull()
+  await waitFor(() => expect(screen.queryByText('17')).toBeNull())
+  expect(screen.queryByText('22')).toBeNull()
   expect(screen.queryByRole('alert')).toBeNull()
   expect(queryClient.getQueriesData({ queryKey: ['billing', 'platform'] })).toHaveLength(0)
 })
@@ -351,7 +351,7 @@ it('does not reopen a prior account recharge dialog for the next signed-in accou
   fireEvent.click(await screen.findByRole('button', { name: /^充值$/ }))
   await screen.findByRole('dialog')
   act(() => snapshot.set({ ...snapshot.get()!, revision: 2, account: { ...snapshot.get()!.account!, id: '18' } }))
-  await screen.findByText('18 USD')
+  await screen.findByText('18')
   expect(screen.queryByRole('dialog')).toBeNull()
 })
 
@@ -392,7 +392,12 @@ it('shows authoritative cash separately from subscription quota and removes it i
       <PlatformWallet />
     </I18nProvider>
   )
-  expect(await screen.findByText('1.12345678 USD')).toBeTruthy()
+  expect(await screen.findByText('1.12')).toBeTruthy()
+  const preciseBalance = screen.getByText('1.12345678 USD')
+  const disclosure = preciseBalance.closest('details')!
+  expect(disclosure.open).toBe(false)
+  fireEvent.click(disclosure.querySelector('summary')!)
+  expect(disclosure.open).toBe(true)
   expect(screen.getByText('2 USD')).toBeTruthy()
   expect(screen.getByText('Fixture subscription')).toBeTruthy()
   expect(screen.getByText('不限额')).toBeTruthy()

@@ -1,6 +1,6 @@
 import { atom, computed } from 'nanostores'
 
-import { dismissTreePane, isPaneVisible } from '@/components/pane-shell/tree/store'
+import { dismissTreePane, isPaneVisible, restoreTreePane } from '@/components/pane-shell/tree/store'
 import { translateNow } from '@/i18n'
 import {
   capturePreviewAnnotateDestination,
@@ -12,6 +12,7 @@ import { normalize } from '@/lib/text'
 
 import { recordFeatureUse } from './desktop-metrics'
 import { $rightRailActiveTabId, type RightRailTabId, selectRightRailTab } from './layout'
+import { $pendingPreviewClose, previewTabIsDirty, savePreviewTab } from './preview-edit'
 import { clearExplicitPreviewOpen, noteExplicitPreviewOpen, PREVIEW_TILE_PREFIX } from './preview-explicit'
 import {
   $pendingRuntimeByTab,
@@ -86,6 +87,8 @@ export interface PreviewServerRestart {
 }
 
 export interface PreviewTab {
+  /** Single-click peek; keeping it is independent of cross-session pinning. */
+  temporary?: boolean
   id: RightRailTabId
   target: PreviewTarget
   /** Stored id of the session that owns the tab. Absent on a tab opened in a
@@ -974,6 +977,7 @@ export function openPreview(
   }
 
   noteExplicitPreviewOpen(id)
+  restoreTreePane(PREVIEW_TILE_PREFIX + ':' + id)
   selectRightRailTab(id)
 }
 
@@ -1045,6 +1049,7 @@ export function newBrowserTab() {
     { id, pinned: false, sessionId: currentSessionId($focusedStoredSessionId.get()) ?? undefined, target: blankPage() }
   ])
   noteExplicitPreviewOpen(id)
+  restoreTreePane(PREVIEW_TILE_PREFIX + ':' + id)
   selectRightRailTab(id)
 }
 
@@ -1055,11 +1060,16 @@ export function setPreviewTabPinned(tabId: string, pinned: boolean): void {
   const currentSession = currentSessionId($focusedStoredSessionId.get()) ?? undefined
 
   $previewTabs.set(
-    $previewTabs
-      .get()
-      .map(tab =>
-        tab.id === tabId ? { ...tab, pinned, sessionId: tab.sessionId ?? (pinned ? undefined : currentSession) } : tab
-      )
+    $previewTabs.get().map(tab =>
+      tab.id === tabId
+        ? {
+            ...tab,
+            pinned,
+            temporary: pinned ? false : tab.temporary,
+            sessionId: tab.sessionId ?? (pinned ? undefined : currentSession)
+          }
+        : tab
+    )
   )
 }
 
@@ -1088,12 +1098,104 @@ export function prunePreviewTabsForSession(sessionId: string): void {
 }
 
 export function closeRightRailTab(tabId: string) {
+  const tab = $previewTabs.get().find(item => item.id === tabId)
+
+  if (tab && previewTabIsDirty(tab.id, tab.target.url)) {
+    $pendingPreviewClose.set(tabId)
+
+    return
+  }
+
   closeRightRailTabs(new Set([tabId]))
 }
 
+export function discardPreviewTab(tabId: string): void {
+  $pendingPreviewClose.set(null)
+  closeRightRailTabs(new Set([tabId]), true)
+}
+
+export async function saveAndClosePreviewTab(tabId: string): Promise<boolean> {
+  if (!(await savePreviewTab(tabId))) {
+    return false
+  }
+
+  closeRightRailTab(tabId)
+  $pendingPreviewClose.set(null)
+
+  return true
+}
+
+export function keepPreviewTab(tabId: string): void {
+  $previewTabs.set(
+    $previewTabs.get().map(tab => (tab.id === tabId && tab.temporary ? { ...tab, temporary: false } : tab))
+  )
+}
+
+export function openTemporaryPreview(
+  target: PreviewTarget,
+  owner = $focusedStoredSessionId.get(),
+  runtime = $activeSessionId.get(),
+  profile?: string
+): void {
+  const owned = bucketTabsFor(
+    $previewTabs.get(),
+    ownerIdentity({ profile, runtimeId: owner === null ? runtime : null, sessionId: currentSessionId(owner) }),
+    viewKey,
+    viewKey
+  )
+
+  const existing = owned.find(
+    tab => tab.target.kind === 'file' && (tab.target.path || tab.target.source) === (target.path || target.source)
+  )
+
+  if (existing && !existing.temporary) {
+    openPreview(target, owner, runtime, profile)
+
+    return
+  }
+
+  const replace = owned.filter(
+    tab => tab.temporary && !tab.pinned && tab.target.kind === 'file' && !previewTabIsDirty(tab.id, tab.target.url)
+  )
+
+  for (const tab of replace) {
+    if (tab.id !== existing?.id) {
+      closeRightRailTabs(new Set([tab.id]))
+    }
+  }
+
+  openPreview(target, owner, runtime, profile)
+
+  const opened = fileTabFor(
+    bucketTabsFor(
+      $previewTabs.get(),
+      ownerIdentity({ profile, runtimeId: owner === null ? runtime : null, sessionId: currentSessionId(owner) }),
+      viewKey,
+      viewKey
+    ),
+    target
+  )
+
+  if (opened) {
+    $previewTabs.set($previewTabs.get().map(tab => (tab.id === opened.id ? { ...tab, temporary: true } : tab)))
+  }
+}
+
 /** Close `tabIds` in one write, then re-home the selection once. */
-function closeRightRailTabs(tabIds: ReadonlySet<string>) {
+function closeRightRailTabs(requestedIds: ReadonlySet<string>, discard = false) {
   const current = $previewTabs.get()
+
+  const dirty = discard
+    ? []
+    : current.filter(tab => requestedIds.has(tab.id) && previewTabIsDirty(tab.id, tab.target.url))
+
+  if (dirty[0]) {
+    $pendingPreviewClose.set(dirty[0].id)
+  }
+
+  const tabIds = dirty.length
+    ? new Set([...requestedIds].filter(id => !dirty.some(tab => tab.id === id)))
+    : requestedIds
 
   if (!current.some(tab => tabIds.has(tab.id))) {
     return
@@ -1267,9 +1369,7 @@ export function closeArtifactPreviewTabs() {
 
 /** Close every tab so the rail's panes leave the tree. */
 export function closeRightRail() {
-  clearExplicitPreviewOpen()
-  $previewTabs.set([])
-  selectRightRailTab(null)
+  closeRightRailTabs(new Set($previewTabs.get().map(tab => tab.id)))
 }
 
 export function requestPreviewReload() {

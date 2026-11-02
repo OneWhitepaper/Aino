@@ -43,7 +43,7 @@ import { WorkspaceAddButton, WorkspaceShowMoreRow } from './workspace-header'
 // the lead's default tertiary. The glyph wrapper centers + caps size either way.
 // Auto-discovered repos (git lanes Desktop found by scanning disk, not rows in
 // projects.db) get the `repo` glyph so a glance tells explicit projects
-// (`folder-library`) apart from incidental disk/session findings.
+// (`folder`) apart from incidental disk/session findings.
 export function projectIcon({ color, icon, isAuto, isNoProject }: SidebarProjectTree) {
   if (color && !icon) {
     return (
@@ -56,7 +56,7 @@ export function projectIcon({ color, icon, isAuto, isNoProject }: SidebarProject
   return (
     <SidebarRowLeadGlyph style={color ? { color } : undefined}>
       <Codicon
-        name={icon || (isNoProject ? 'home' : isAuto ? 'repo' : 'folder-library')}
+        name={icon || (isNoProject ? 'home' : isAuto ? 'repo' : 'folder')}
         size={SIDEBAR_LEAD_ICON_SIZE}
       />
     </SidebarRowLeadGlyph>

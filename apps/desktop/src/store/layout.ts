@@ -2,22 +2,26 @@ import { atom, computed, type ReadableAtom, type WritableAtom } from 'nanostores
 
 import { SIDEBAR_COLLAPSE_MEDIA_QUERY } from '@/app/layout-constants'
 import { PANE_TOGGLE_REVEAL_EVENT } from '@/components/pane-shell'
-import { allPaneIds, type GroupNode } from '@/components/pane-shell/tree/model'
+import { allPaneIds, findGroupOfPane, type GroupNode } from '@/components/pane-shell/tree/model'
 import {
   $collapsedTreeSides,
   $hiddenTreePanes,
   $layoutTree,
+  dockToolPanelPane,
   layoutHasRootSide,
   paneRootSide,
   restoreHiddenTreeSideTabs,
   restoreMinimizedTreeSide,
   restoreTreePane,
+  revealTreePane,
   rootRow,
   setTreeGroupMinimized,
   setTreeSideCollapsed,
   shownPanesInGroup,
   type TreeSide
 } from '@/components/pane-shell/tree/store'
+import { isRestoredToolPanelGroup } from '@/components/pane-shell/tree/tool-panel-policy'
+import { $registryVersion, registry } from '@/contrib/registry'
 import { matchesQuery } from '@/hooks/use-media-query'
 import { connectionScopedAtom } from '@/lib/connection-scoped'
 import { LAYOUT_KEYS } from '@/lib/layout-persistence'
@@ -619,7 +623,7 @@ export function toggleLeftSide() {
     return
   }
 
-  const group = leftSideGroup()
+  const group = sideColumnGroup('left')
 
   if (!group) {
     // No foldable column on the left: fall back to the semantic sidebar
@@ -653,10 +657,17 @@ export function toggleLeftSide() {
 
 /** ⌘-positional-left's dispatch gate: something foldable lives left of main. */
 export function layoutHasLeftSide(): boolean {
-  return leftSideGroup() !== null || layoutHasRootSide('left')
+  return sideColumnGroup('left') !== null || layoutHasRootSide('left')
 }
 
 export function toggleFileBrowserOpen() {
+  dockToolPanelPane('files')
+
+  if (matchesQuery(SIDEBAR_COLLAPSE_MEDIA_QUERY)) {
+    $fileBrowserOpen.set(true)
+    revealTreePane('files')
+  }
+
   if (revealNarrowPane(FILE_BROWSER_PANE_ID, 'toggle')) {
     return
   }
@@ -664,16 +675,31 @@ export function toggleFileBrowserOpen() {
   const open = restoreMinimizedTreeSide(fileBrowserSide()) || !$fileBrowserOpen.get()
   $fileBrowserOpen.set(open)
   setTreeSideCollapsed(fileBrowserSide(), !open)
+
+  if (open) {
+    revealTreePane('files')
+  }
+
   trackArea('file_pane', open)
 }
 
 export function setFileBrowserOpen(open: boolean) {
   $fileBrowserOpen.set(open)
+
+  if (open && !$fileBrowserOpen.get()) {
+    return
+  }
+
+  if (open) {
+    dockToolPanelPane('files')
+  }
+
   setTreeSideCollapsed(fileBrowserSide(), !open)
 
   if (open) {
     restoreMinimizedTreeSide(fileBrowserSide())
     restoreHiddenTreeSideTabs(fileBrowserSide())
+    revealTreePane('files')
   }
 
   revealNarrowPane(FILE_BROWSER_PANE_ID, open ? 'open' : 'close')
@@ -693,11 +719,11 @@ export function toggleRightSide() {
     return
   }
 
-  const group = rightSideGroup()
+  const group = sideColumnGroup('right')
 
   if (!group) {
-    // No foldable column on the right (terminal-on-bottom, a nested right
-    // split): fall back to the semantic side collapse, never the left side.
+    // No foldable column or safe nested Files host: fall back to the
+    // semantic side collapse, never the left side.
     toggleFileBrowserOpen()
 
     return
@@ -729,43 +755,32 @@ export function toggleRightSide() {
 // (plus the semantic right side it falls back to). False only when nothing
 // lives on the right, so ⌘J can fall to the terminal instead.
 export function layoutHasRightSide(): boolean {
-  return rightSideGroup() !== null || layoutHasRootSide('right')
+  return sideColumnGroup('right') !== null || layoutHasRootSide('right')
 }
 
-// The POSITIONAL right side, derived from the live tree: the outermost
-// root-row column, when it is a leaf group physically right of main. Unlike
+// The POSITIONAL side, derived from the live tree: the outermost root-row
+// column, when it is a leaf group beside main. Unlike
 // the semantic `paneRootSide` (which sees only placement-tagged side panes),
 // this ALSO catches a preview-tile column (the Browser): its panes register
 // `placement: 'main'`, so the semantic walk classifies their zone as main.
-// Null when main is outermost (never reach past it into the left side) or the
-// right is a nested split (folding one inner zone would strand the rest) —
-// callers fall back to the semantic side collapse there.
-function rightSideGroup(): GroupNode | null {
+// A nested safe Files host follows the same hide/restore policy. Mixed chat
+// groups keep the semantic fallback; never reach past main into the opposite side.
+function sideColumnGroup(side: TreeSide): GroupNode | null {
   const row = rootRow()
-  const edge = row?.children.at(-1)
+  const edge = side === 'left' ? row?.children[0] : row?.children.at(-1)
+  const group = edge?.type === 'group' ? edge : edge && findGroupOfPane(edge, FILES_PANE_ID)
 
-  if (!row || edge?.type !== 'group' || edge.panes.some(isMainSurface)) {
+  if (!row || !group || group.panes.some(isMainSurface)) {
     return null
   }
 
-  return row.children.some(child => allPaneIds(child).some(isMainSurface)) ? edge : null
-}
+  const panes = registry.getArea('panes')
 
-// The POSITIONAL left side, derived from the live tree — the mirror of
-// rightSideGroup: the outermost root-row column, when it is a leaf group
-// physically LEFT of main. Catches the same "dragged/preview column" cases the
-// right walk does (here: the file tree after a ⌘\ flip). Null when main is
-// leftmost or the left is a nested split — callers fall back to the semantic
-// sidebar toggle.
-function leftSideGroup(): GroupNode | null {
-  const row = rootRow()
-  const edge = row?.children.at(0)
-
-  if (!row || edge?.type !== 'group' || edge.panes.some(isMainSurface)) {
+  if (edge?.type !== 'group' && !isRestoredToolPanelGroup(group, id => panes.find(pane => pane.id === id))) {
     return null
   }
 
-  return row.children.some(child => allPaneIds(child).some(isMainSurface)) ? edge : null
+  return row.children.some(child => allPaneIds(child).some(isMainSurface)) ? group : null
 }
 
 // Shown-state for the positional left column, same shape as rightSideShown.
@@ -779,9 +794,9 @@ function leftSideShown(group: GroupNode): boolean {
 // to the semantic sidebar flag whenever no leaf column lives left of main
 // (nested split, main leftmost) — the same fallback toggleLeftSide presses.
 export const $leftSideOpen: ReadableAtom<boolean> = computed(
-  [$layoutTree, $collapsedTreeSides, $hiddenTreePanes, $sidebarOpen],
+  [$layoutTree, $collapsedTreeSides, $hiddenTreePanes, $sidebarOpen, $registryVersion],
   () => {
-    const group = leftSideGroup()
+    const group = sideColumnGroup('left')
 
     return group ? leftSideShown(group) : $sidebarOpen.get()
   }
@@ -794,6 +809,16 @@ function rightSideShown(group: GroupNode): boolean {
 
   return !group.minimized && !(side && $collapsedTreeSides.get().has(side)) && shownPanesInGroup(group).length > 0
 }
+
+/** The titlebar reads the same positional right-column state its toggle changes. */
+export const $rightSideOpen: ReadableAtom<boolean> = computed(
+  [$layoutTree, $collapsedTreeSides, $hiddenTreePanes, $fileBrowserOpen, $registryVersion],
+  () => {
+    const group = sideColumnGroup('right')
+
+    return group ? rightSideShown(group) : $fileBrowserOpen.get()
+  }
+)
 
 // Is `paneId` a main surface (the workspace or a session/route tile)? Those
 // mark THE main column; preview tiles share `placement: 'main'` with them but

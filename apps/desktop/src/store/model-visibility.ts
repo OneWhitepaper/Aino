@@ -100,6 +100,26 @@ export const $knownModels = atom<Set<string> | null>(loadKeySet(KNOWN_STORAGE_KE
 
 export const $modelVisibilityOpen = atom(false)
 
+export interface CustomModelConfigTarget {
+  connectionId?: string
+  profile: string | null
+  kind?: 'provider' | 'custom'
+  providerId?: string
+}
+
+// The menu can belong to a background tile or Bot, so keep its owner when the
+// menu unmounts rather than resolving the ambient connection from the dialog.
+export const $customModelConfigTarget = atom<CustomModelConfigTarget | null>(null)
+
+export function openCustomModelConfig(target: CustomModelConfigTarget): void {
+  $modelVisibilityOpen.set(false)
+  $customModelConfigTarget.set({ ...target })
+}
+
+export function closeCustomModelConfig(): void {
+  $customModelConfigTarget.set(null)
+}
+
 /** Every collapsed-family key across `providers`. */
 function allFamilyKeys(providers: readonly ModelOptionProvider[]): Set<string> {
   const keys = new Set<string>()

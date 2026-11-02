@@ -4,6 +4,7 @@ import { type ComponentProps, type MouseEvent, type ReactNode, useEffect, useSta
 import { useLocation, useNavigate } from 'react-router'
 
 import { hudTargetSessionId } from '@/app/hud/handoff'
+import { toggleToolPanelSide } from '@/app/right-sidebar/tool-panel-actions'
 import titlebarHapticsIcon from '@/assets/aino-home/titlebar-haptics.svg'
 import titlebarHudIcon from '@/assets/aino-home/titlebar-hud.svg'
 import titlebarLayoutIcon from '@/assets/aino-home/titlebar-layout.svg'
@@ -32,14 +33,7 @@ import { recordAction } from '@/store/desktop-metrics'
 import { $hapticsMuted, toggleHapticsMuted } from '@/store/haptics'
 import { toggleHud } from '@/store/hud'
 import { $interfaceMode, shownInMode, type Tiered } from '@/store/interface-mode'
-import {
-  $fileBrowserOpen,
-  $leftSideOpen,
-  $panesFlipped,
-  toggleLeftSide,
-  togglePanesFlipped,
-  toggleRightSide
-} from '@/store/layout'
+import { $leftSideOpen, $panesFlipped, $rightSideOpen, togglePanesFlipped } from '@/store/layout'
 import { $unreadSessionCount } from '@/store/session-dot-state'
 import { $titlebarAppActionsSide, TITLEBAR_FIXED_TOOLS } from '@/store/titlebar-app-actions'
 
@@ -152,7 +146,7 @@ export function TitlebarControls({ leftTools = [], tools = [] }: TitlebarControl
   const location = useLocation()
   const modHeld = useModifierHeld()
   const hapticsMuted = useStore($hapticsMuted)
-  const fileBrowserOpen = useStore($fileBrowserOpen)
+  const rightSideOpen = useStore($rightSideOpen)
   const leftSideVisible = useStore($treeSideVisible('left'))
   const narrowViewport = useStore($narrowViewport)
   const leftSideOpen = useStore($leftSideOpen)
@@ -192,8 +186,8 @@ export function TitlebarControls({ leftTools = [], tools = [] }: TitlebarControl
   // from the live tree (see toggleLeftSide / toggleRightSide) — the browser
   // column, the sessions column, whatever is physically left / right. Never an
   // active highlight — plain show/hide affordances.
-  const leftEdge = { open: leftSideOpen, toggle: toggleLeftSide }
-  const rightEdge = { open: fileBrowserOpen, toggle: toggleRightSide }
+  const leftEdge = { open: leftSideOpen, toggle: () => toggleToolPanelSide('left') }
+  const rightEdge = { open: rightSideOpen, toggle: () => toggleToolPanelSide('right') }
   const leftLabel = leftEdge.open ? t.titlebar.hideSidebar : t.titlebar.showSidebar
   const rightLabel = rightEdge.open ? t.titlebar.hideRightSidebar : t.titlebar.showRightSidebar
 

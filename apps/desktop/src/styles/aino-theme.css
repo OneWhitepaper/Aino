@@ -1,8 +1,8 @@
 /* Shared by every renderer, including body portals and transparent windows.
    Palette seeds still belong to ThemeProvider; these are the Aino UI roles. */
 :root {
-  --aino-radius-control: 0.5rem;
-  --aino-radius-row: 0.5rem;
+  --aino-radius-control: 0.375rem;
+  --aino-radius-row: 0.375rem;
   --aino-radius-panel: 1rem;
   --aino-radius-menu: 0.75rem;
   --aino-radius-card: 0.875rem;
@@ -11,7 +11,7 @@
   --aino-text-label: 0.8125rem;
   --aino-text-ui: 0.875rem;
   --aino-text-body: 0.875rem;
-  --aino-text-title: 1.125rem;
+  --aino-text-title: 1rem;
   --aino-text-page-title: 1.5rem;
   --aino-line-height: 1.6;
   /* Base roles are shared; transcript/editor scopes apply the user's scale once. */
@@ -50,40 +50,40 @@
   --aino-surface-control: var(--ui-bg-quaternary);
   --aino-surface-ink: var(--ui-text-primary);
   --aino-surface-muted: var(--ui-text-secondary);
-  --aino-action-bg: var(--ui-text-primary);
-  --aino-action-fg: var(--ui-bg-elevated);
+  --aino-action-bg: var(--dt-primary-solid);
+  --aino-action-fg: var(--dt-primary-solid-foreground);
   --aino-action-hover: color-mix(in srgb, var(--aino-action-bg) 88%, var(--ui-bg-editor));
   --aino-scrim: rgb(0 0 0 / 12%);
   --aino-focus-ring: 0 0 0 2px color-mix(in srgb, var(--ui-accent) 16%, transparent);
 }
 
-:root.dark {
-  --aino-action-bg: var(--ui-text-primary);
-  --aino-action-fg: var(--ui-bg-chrome);
-  --aino-scrim: rgb(0 0 0 / 32%);
+/* ThemeProvider is the single palette owner, including explicit dark seeds.
+   These aliases connect existing renderer surfaces to those same seeds. */
+:root {
+  --ui-base: var(--theme-foreground);
+  --ui-bg-chrome: var(--theme-sidebar-seed);
+  --ui-bg-sidebar: var(--theme-sidebar-seed);
+  --ui-bg-editor: var(--dt-muted);
+  --ui-bg-input: var(--dt-muted);
+  --ui-bg-elevated: var(--theme-card-seed);
+  --ui-text-primary: var(--theme-foreground);
+  --ui-text-secondary: var(--dt-secondary-foreground);
+  --ui-text-tertiary: var(--dt-muted-foreground);
+  --ui-text-quaternary: color-mix(in srgb, var(--ui-text-tertiary) 72%, var(--ui-bg-elevated));
+  --ui-stroke-primary: var(--dt-border);
+  --ui-stroke-secondary: var(--dt-border);
+  --ui-stroke-tertiary: color-mix(in srgb, var(--dt-border) 65%, var(--ui-bg-elevated));
+  --ui-stroke-quaternary: color-mix(in srgb, var(--ui-stroke-tertiary) 60%, transparent);
+  --ui-row-active-background: var(--theme-accent-soft);
+  --ui-row-hover-background: color-mix(in srgb, var(--ui-base) 5%, var(--ui-bg-sidebar));
+  --ui-bg-tertiary: var(--theme-secondary);
+  --ui-bg-quaternary: var(--dt-muted);
 }
 
-/* The approved v2 light palette is derived UI presentation, below the fixed
-   ThemeProvider seeds. Glass continues to own the *-surface-background aliases. */
-:root:not(.dark) {
-  --ui-base: #303236;
-  --ui-bg-chrome: #f3f4f6;
-  --ui-bg-sidebar: #f3f4f6;
-  --ui-bg-editor: #f8f9fb;
-  --ui-bg-input: var(--ui-bg-editor);
-  --ui-bg-elevated: #fff;
-  --ui-text-primary: var(--ui-base);
-  --ui-text-secondary: #61666d;
-  --ui-text-tertiary: #858a92;
-  --ui-text-quaternary: color-mix(in srgb, var(--ui-text-tertiary) 72%, var(--ui-bg-elevated));
-  --ui-stroke-primary: #e3e5e9;
-  --ui-stroke-secondary: var(--ui-stroke-primary);
-  --ui-stroke-tertiary: #ebedf0;
-  --ui-stroke-quaternary: color-mix(in srgb, var(--ui-stroke-tertiary) 60%, transparent);
-  --ui-row-active-background: #e9eaf0;
-  --ui-row-hover-background: color-mix(in srgb, var(--ui-row-active-background) 55%, transparent);
-  --ui-bg-tertiary: color-mix(in srgb, var(--ui-row-active-background) 65%, var(--ui-bg-sidebar));
-  --ui-bg-quaternary: var(--ui-bg-editor);
+:root.dark {
+  --aino-action-bg: var(--theme-primary);
+  --aino-action-fg: var(--dt-primary-foreground);
+  --aino-scrim: rgb(0 0 0 / 32%);
 }
 
 /* Landing and navigation consume the same roles as portals and page chrome. */
@@ -109,7 +109,7 @@
   --shadow-aino-landing-composer: 0 1px 2px color-mix(in srgb, var(--ui-base) 3%, transparent);
   --aino-landing-font: var(--dt-font-sans);
   --aino-band-row2: 2.25rem;
-  --ui-chat-bubble-background: color-mix(in srgb, var(--ui-blue) 4%, var(--aino-surface-control));
+  --ui-chat-bubble-background: var(--theme-bubble-seed);
   --aino-table-header-background: color-mix(in srgb, var(--ui-blue) 3%, var(--aino-surface-bg));
 }
 
@@ -139,45 +139,6 @@
   );
 }
 
-/* ─────────────────────────────────────────────────────────────────────────
-   AINO SURFACE LANGUAGE
-
-   Chat is the product's visual anchor: a quiet paper surface, one-pixel
-   seams, generous whitespace, graphite actions, and soft neutral selection
-   bands.  The routes that sit beside chat used to opt into their own chrome
-   (bright blue outlines, dense boxed rows, and heavy modal frames).  Keep the
-   route components and their behavior intact, but let every durable page and
-   route overlay inherit the same visual contract here.
-
-   The variables are scoped to semantic surface markers rather than route
-   names.  That keeps contributed content and future pages on the same ladder,
-   and makes the treatment safe for the translucent-window modes: surfaces
-   still paint through the existing --ui-* tokens instead of forcing an opaque
-   background.
-   ───────────────────────────────────────────────────────────────────────── */
-
-/* Palette and control appearance are global in styles/aino-theme.css and the
-   UI primitives. These markers own page layout only, so portals and auxiliary
-   renderers cannot drift from their parent page. */
-
-/* Durable pages use the same type face and paper as the landing chat.  The
-   surface token remains transparent for whole-window Glass; sidebar-only
-   material keeps the content opaque. */
-:is([data-aino-page-shell], [data-aino-settings]) {
-  background: var(--ui-editor-surface-background) !important;
-  color: var(--aino-surface-ink);
-  font-family: var(--aino-landing-font);
-}
-
-:is([data-aino-page-shell], [data-aino-settings]) [data-aino-page-content] {
-  background: var(--ui-editor-surface-background) !important;
-}
-
-:is([data-aino-page-content], [data-aino-settings-content], [data-aino-overlay-main]) {
-  font-size: var(--aino-text-body);
-  line-height: var(--aino-line-height);
-}
-
 /* Only app-owned data tables opt in. Artifact documents and embedded sites
    retain their own presentation and existing scroll/column behaviour. */
 [data-slot='aino-data-table'] {
@@ -201,333 +162,4 @@
 
 [data-slot='aino-data-table'] tbody tr:not(:last-child) {
   border-bottom: 1px solid var(--ui-stroke-tertiary);
-}
-
-/* Page headers are a single quiet seam, not a second title bar. */
-[data-aino-page-header] {
-  border-bottom-color: var(--aino-surface-stroke) !important;
-  background: var(--ui-editor-surface-background) !important;
-}
-
-[data-aino-page-header]:not([data-tabs-variant='section']) [data-tour='page-tabs'] [data-tour^='tab-'] {
-  border: 0 !important;
-  border-radius: var(--aino-radius-control);
-  color: var(--ui-text-tertiary);
-  text-decoration: none;
-}
-
-[data-aino-page-header]:not([data-tabs-variant='section']) [data-tour='page-tabs'] [data-tour^='tab-']:hover {
-  background: var(--aino-surface-hover) !important;
-  color: var(--aino-surface-ink);
-}
-
-[data-aino-page-header]:not([data-tabs-variant='section']) [data-tour='page-tabs'] [data-tour^='tab-'][data-active='true'] {
-  background: var(--aino-surface-active) !important;
-  color: var(--aino-surface-ink);
-  box-shadow: none;
-  font-weight: 600;
-}
-
-[data-aino-page-header] input {
-  color: var(--aino-surface-ink);
-}
-
-/* The app rail is shared by every page.  Route selection follows chat's soft
-   band; the old inset blue ring is intentionally removed. */
-[data-aino-sidebar] {
-  background: var(--aino-surface-rail) !important;
-  border-color: var(--aino-surface-stroke) !important;
-  font-family: var(--aino-landing-font);
-}
-
-.aino-sidebar-brand {
-  display: flex;
-  flex: 0 0 auto;
-  align-items: center;
-  gap: 0.5rem;
-  min-height: 3.75rem;
-  padding-inline: 0.625rem;
-  font-size: 1rem;
-  font-weight: 600;
-  letter-spacing: -0.025em;
-}
-
-[data-aino-sidebar] [data-sidebar='menu-button'] {
-  min-height: 2.125rem;
-  font-size: var(--aino-text-ui);
-  border: 0 !important;
-  border-radius: var(--aino-radius-control) !important;
-  box-shadow: none !important;
-  color: var(--aino-surface-ink);
-}
-
-[data-aino-sidebar] [data-sidebar='menu-button']:hover,
-[data-aino-sidebar] [data-sidebar='menu-button']:focus-visible {
-  background: var(--aino-surface-hover) !important;
-  color: var(--aino-surface-ink);
-}
-
-[data-aino-sidebar] [data-sidebar='menu-button'][data-active='true'] {
-  background: var(--aino-surface-active) !important;
-  color: var(--aino-surface-ink) !important;
-  box-shadow: none !important;
-}
-
-[data-aino-sidebar] [data-slot='sidebar-nav-icon'] {
-  color: var(--aino-surface-muted);
-}
-
-[data-slot='sidebar-identity-footer'] {
-  border-top-color: var(--aino-surface-stroke) !important;
-}
-
-[data-aino-sidebar] [data-sidebar-session-row][data-selected='true'] {
-  background: var(--aino-surface-active) !important;
-  box-shadow: none !important;
-}
-
-/* Settings navigation is the same rail pattern at a different scale. */
-[data-aino-settings] [data-aino-overlay-nav] {
-  background: var(--aino-surface-rail) !important;
-  border-right: 1px solid var(--aino-surface-stroke);
-  padding-inline: 0.75rem;
-}
-
-[data-aino-settings] [data-aino-overlay-nav] [data-tour^='nav-'] {
-  min-height: 2rem;
-  height: 2rem;
-  border-color: transparent !important;
-  border-radius: var(--aino-radius-row) !important;
-  color: var(--aino-surface-muted);
-  padding-inline: 0.625rem;
-}
-
-[data-aino-settings] [data-aino-overlay-nav] [data-tour^='nav-']:hover,
-[data-aino-settings] [data-aino-overlay-nav] [data-tour^='nav-']:focus-visible {
-  background: var(--aino-surface-hover) !important;
-  color: var(--aino-surface-ink);
-}
-
-[data-aino-settings] [data-aino-overlay-nav] [data-tour^='nav-'][data-active='true'] {
-  background: var(--aino-surface-active) !important;
-  border-color: transparent !important;
-  box-shadow: none !important;
-  color: var(--aino-surface-ink) !important;
-  font-weight: 600;
-}
-
-[data-aino-settings] [data-aino-overlay-nav] {
-  background: var(--ui-bg-sidebar) !important;
-}
-
-[data-aino-settings] [data-aino-overlay-main] {
-  background: var(--ui-editor-surface-background) !important;
-}
-
-[data-aino-settings] [data-settings-profile-controls],
-[data-aino-settings] [data-settings-profile-controls] + * {
-  border-color: var(--aino-surface-stroke) !important;
-}
-
-/* Settings groups keep labels, values and controls on readable, ruled rows. */
-[data-settings-group] {
-  border: 1px solid var(--ui-stroke-secondary);
-  border-radius: var(--aino-radius-card);
-  background: var(--ui-editor-surface-background);
-  padding-inline: 1rem;
-}
-
-[data-settings-row] > div {
-  padding-block: 1rem;
-}
-
-[data-aino-breadcrumb-header] nav {
-  flex-wrap: wrap;
-  row-gap: 0.5rem;
-}
-
-[data-aino-breadcrumb-header] [aria-current='page'],
-[data-settings-section-heading][data-page='true'] {
-  font-size: var(--aino-text-page-title);
-  font-weight: 600;
-  letter-spacing: -0.025em;
-  line-height: 1.4;
-}
-
-[data-aino-settings] [data-aino-overlay-nav] [data-tour^='nav-'] {
-  height: auto;
-  min-height: 2.25rem;
-  margin-block: 0.125rem;
-}
-
-[data-aino-panel-header] {
-  padding-block: 0.5rem;
-}
-
-/* The settings body shares a readable column while its own scrollport and
-   narrow-screen navigation retain their existing layout ownership. */
-[data-aino-settings] [data-aino-settings-content] > div {
-  width: 100%;
-  max-width: 56rem;
-  margin-inline: auto;
-}
-
-[data-aino-settings-content] > div > [data-settings-section-heading]:first-child,
-[data-aino-settings-content] > div > :first-child > [data-settings-section-heading]:first-child {
-  font-size: var(--aino-text-page-title);
-  font-weight: 600;
-  letter-spacing: -0.025em;
-  line-height: 1.4;
-}
-
-/* Directory cards and panels share a surface role; their individual actions,
-   disclosures and owner routing stay in the existing feature components. */
-[data-catalog-card], .workspace-card {
-  border-color: var(--ui-stroke-secondary);
-  border-radius: var(--aino-radius-card);
-}
-
-[data-slot='bots-roster'] [data-slot='row-button'] {
-  border-radius: var(--aino-radius-control);
-  font-size: var(--aino-text-ui);
-}
-
-[data-settings-group] > [data-settings-row] ~ [data-settings-row] {
-  border-top: 1px solid var(--ui-stroke-tertiary);
-}
-
-/* Master/detail pages: the list reads as a calm rail and the inspector as the
-   open conversation canvas.  A single seam replaces nested blue frames. */
-[data-aino-master-detail] {
-  background: var(--aino-surface-bg) !important;
-}
-
-[data-aino-list-column] {
-  background: var(--aino-surface-rail) !important;
-  border-right: 1px solid var(--aino-surface-stroke);
-  padding: 0.75rem 0.625rem !important;
-}
-
-[data-aino-list-column] > :is(ul, div) {
-  min-width: 0;
-}
-
-[data-aino-detail-column] {
-  background: var(--aino-surface-bg) !important;
-}
-
-[data-aino-detail-column] > div > div {
-  max-width: min(54rem, 100%) !important;
-}
-
-[data-aino-master-detail] :is([data-aino-cap-row], [data-panel-row], [data-aino-active='true']) {
-  border-radius: var(--aino-radius-row) !important;
-}
-
-[data-aino-master-detail] :is([data-aino-cap-row], [data-panel-row], [data-aino-active='true']):hover {
-  background: var(--aino-surface-hover) !important;
-}
-
-[data-aino-master-detail]
-  :is([data-aino-cap-row][data-active='true'], [data-panel-row][data-active='true'], [data-aino-active='true']) {
-  background: var(--aino-surface-active) !important;
-  border-color: transparent !important;
-  box-shadow: none !important;
-  color: var(--aino-surface-ink) !important;
-}
-
-[data-aino-empty-state] {
-  color: var(--aino-surface-ink);
-}
-
-[data-aino-empty-state] :is(p, div) {
-  font-family: var(--aino-landing-font);
-}
-
-/* Route overlays use the same flat elevation rule as chat widgets: one soft
-   scrim, one hairline, one downward shadow. */
-[data-aino-overlay] {
-  background: var(--aino-scrim) !important;
-  backdrop-filter: blur(1px) saturate(0.96) !important;
-  -webkit-backdrop-filter: blur(1px) saturate(0.96) !important;
-}
-
-[data-aino-overlay-card] {
-  border: 1px solid var(--stroke-nous) !important;
-  border-radius: var(--aino-radius-panel) !important;
-  background: var(--ui-chat-surface-background) !important;
-  box-shadow: var(--shadow-nous) !important;
-  font-family: var(--aino-landing-font);
-}
-
-[data-aino-overlay-card] [data-aino-overlay-nav] {
-  background: var(--ui-sidebar-surface-background) !important;
-  border-right: 1px solid var(--aino-surface-stroke);
-}
-
-[data-aino-overlay-card] [data-aino-overlay-main] {
-  background: var(--ui-chat-surface-background) !important;
-}
-
-[data-aino-overlay-card] [data-aino-overlay-nav] [data-tour^='nav-'] {
-  border-color: transparent !important;
-  border-radius: var(--aino-radius-row) !important;
-  color: var(--ui-text-secondary);
-}
-
-[data-aino-overlay-card] [data-aino-overlay-nav] [data-tour^='nav-']:hover,
-[data-aino-overlay-card] [data-aino-overlay-nav] [data-tour^='nav-']:focus-visible {
-  background: var(--ui-row-hover-background) !important;
-  color: var(--ui-text-primary);
-}
-
-[data-aino-overlay-card] [data-aino-overlay-nav] [data-tour^='nav-'][data-active='true'] {
-  background: var(--ui-row-active-background) !important;
-  border-color: transparent !important;
-  box-shadow: none !important;
-  color: var(--ui-text-primary) !important;
-  font-weight: 600;
-}
-
-[data-aino-overlay-card] [data-aino-panel-body] {
-  gap: 1rem !important;
-}
-
-[data-aino-overlay-card] [data-aino-panel-list] {
-  border-right: 1px solid var(--aino-surface-stroke);
-  padding-right: 0.75rem;
-}
-
-[data-aino-overlay-card] [data-panel-row][data-active='true'] {
-  background: var(--ui-row-active-background) !important;
-  border-color: transparent !important;
-  box-shadow: none !important;
-}
-
-[data-aino-overlay-card] [data-panel-row]:hover {
-  background: var(--ui-row-hover-background) !important;
-}
-
-/* The embedded hub is cross-origin, so only its host frame can be themed.
-   This removes the old bright blue shell while leaving the external content
-   and install bridge untouched. */
-[data-aino-hub-frame] {
-  border: 1px solid var(--aino-surface-stroke) !important;
-  border-radius: 0.75rem !important;
-  background: var(--ui-bg-editor);
-}
-
-/* Small-screen parity: the same rails collapse into a single quiet row. */
-@media (max-width: 47.5rem) {
-  [data-aino-list-column] {
-    border-right: 0;
-    border-bottom: 1px solid var(--aino-surface-stroke);
-  }
-
-  [data-aino-overlay-card] [data-aino-panel-list] {
-    border-right: 0;
-    border-bottom: 1px solid var(--aino-surface-stroke);
-    padding-right: 0;
-    padding-bottom: 0.5rem;
-  }
 }

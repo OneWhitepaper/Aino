@@ -57,7 +57,7 @@ export function ReviewShipBar() {
     // it's a deliberate read-only view, not a broken pane.
     return (
       <div
-        className="shrink-0 px-2 pb-1.5 text-center text-[0.64rem] text-(--ui-text-tertiary)"
+        className="shrink-0 border-t border-(--ui-stroke-tertiary) px-3 py-3 text-center text-[length:var(--aino-text-caption)] leading-5 text-(--ui-text-tertiary)"
         data-suppress-pane-reveal-side=""
       >
         {c.readOnlyScope}
@@ -92,12 +92,15 @@ export function ReviewShipBar() {
   }
 
   return (
-    <div className="flex shrink-0 flex-col gap-1.5 p-2" data-suppress-pane-reveal-side="">
+    <div
+      className="flex shrink-0 flex-col gap-2 border-t border-(--ui-stroke-tertiary) p-3"
+      data-suppress-pane-reveal-side=""
+    >
       {/* Auto-growing message field (CSS field-sizing); generate/stop action
           fills the right edge on one row, then sticks to the top as it grows. */}
       <div className="relative">
         <Textarea
-          className="field-sizing-content max-h-40 min-h-0 resize-none pr-9"
+          className="field-sizing-content max-h-40 min-h-10 resize-none pr-10"
           disabled={generating}
           onChange={event => setMessage(event.target.value)}
           onKeyDown={event => {
@@ -112,7 +115,7 @@ export function ReviewShipBar() {
           value={message}
         />
         <GenerateButton
-          className="absolute top-px right-px h-6 w-8 rounded-l-none rounded-r-[2px]"
+          className="absolute top-2 right-2"
           disabled={!canGenerate}
           generating={generating}
           generatingLabel={c.stopGenerating}
@@ -145,7 +148,7 @@ export function ReviewShipBar() {
           the whole bar; px-7 reserves the icon's width on both sides. */}
       <div className="relative flex min-w-0 items-center">
         <Button
-          className="min-w-0 flex-1 justify-center px-7 text-[0.7rem] text-muted-foreground/85 hover:text-foreground"
+          className="min-w-0 flex-1 justify-center px-7"
           disabled={!hasFiles}
           onClick={() => {
             const target = reviewComposerTarget()
@@ -157,13 +160,12 @@ export function ReviewShipBar() {
           size="sm"
           variant="ghost"
         >
-          <span className="truncate underline underline-offset-2">{c.agentShip}</span>
+          <span className="truncate">{c.agentShip}</span>
         </Button>
         <Tip label={ship.ghReady ? prLabel : c.ghMissing}>
           <span className="absolute inset-y-0 right-0 flex items-center">
             <Button
               aria-label={prLabel}
-              className="size-7 text-muted-foreground/80 hover:text-foreground"
               disabled={!ship.ghReady || busy}
               onClick={() => void createOrOpenPr().catch(err => notifyError(err, prLabel))}
               size="icon-xs"

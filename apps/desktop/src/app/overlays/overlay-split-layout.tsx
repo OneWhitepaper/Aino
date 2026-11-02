@@ -79,7 +79,7 @@ export function OverlaySidebar({ children, className, fullPage = false }: Overla
         // The left links sit beside (not under) the floating close button on
         // overlays. A full-page surface already has its own in-flow header, so
         // it starts with a normal page gutter instead.
-        'flex min-h-0 flex-col gap-0.5 overflow-y-auto bg-(--ui-sidebar-surface-background) px-2.5 pb-3',
+        'flex min-h-0 flex-col gap-0.5 overflow-y-auto border-r border-(--ui-stroke-tertiary) bg-(--ui-sidebar-surface-background) px-3 pb-3',
         fullPage ? 'pt-3' : OVERLAY_TOP_CLEARANCE,
         className
       )}
@@ -131,7 +131,7 @@ export const OverlayNavItem = memo(function OverlayNavItem({
       aria-current={current ? 'page' : undefined}
       aria-pressed={pressed}
       className={cn(
-        'row-hover flex h-7 w-full shrink-0 items-center justify-start gap-2 rounded-md border px-2 text-left text-[length:var(--conversation-text-font-size)] font-normal transition-colors',
+        'row-hover flex min-h-8 w-full shrink-0 items-center justify-start gap-2 rounded-(--aino-radius-row) border-0 px-2.5 py-1 text-left text-[length:var(--aino-text-label)] font-normal transition-colors',
         nested
           ? active
             ? current
@@ -141,7 +141,7 @@ export const OverlayNavItem = memo(function OverlayNavItem({
                 'border-transparent bg-transparent font-medium text-foreground hover:bg-(--chrome-action-hover)'
             : 'border-transparent bg-transparent text-(--ui-text-tertiary) hover:bg-(--chrome-action-hover) hover:text-foreground'
           : active
-            ? 'border-(--ui-stroke-tertiary) bg-(--ui-bg-tertiary) text-foreground'
+            ? 'bg-(--ui-row-active-background) font-medium text-foreground'
             : 'border-transparent bg-transparent text-(--ui-text-secondary) hover:bg-(--chrome-action-hover) hover:text-foreground'
       )}
       // Names the row by its own id, so a tour can address one link
@@ -185,6 +185,10 @@ export interface OverlayNavGroup extends OverlayNavLink {
   /** Visual break before this group — a spacer on the rail, a separator in
    *  the dropdown. */
   gapBefore?: boolean
+  /** Non-interactive label starting a visible collection of page links. */
+  section?: { id: string; label: string }
+  /** Reveal matching plugin descendants while a settings search is active. */
+  searchExpanded?: boolean
 }
 
 // Data-driven pane nav: one model renders a persistent left rail on wide
@@ -229,14 +233,15 @@ export function OverlayNav({
 
   return (
     <>
-      <OverlaySidebar className={RAIL_HIDDEN} fullPage={fullPage}>
+      <OverlaySidebar className={fullPage ? undefined : RAIL_HIDDEN} fullPage={fullPage}>
         {groups.map(group => {
           const hasChildren = Boolean(group.children?.length)
-          const expanded = disclosures[group.id] ?? group.active
+          const expanded = group.searchExpanded || (disclosures[group.id] ?? group.active)
           const childrenId = `${navId}-${group.id}`
 
           return (
             <Fragment key={group.id}>
+              {group.section && <h3 data-overlay-nav-section={group.section.id}>{group.section.label}</h3>}
               {group.gapBefore && <div aria-hidden className="h-2" />}
               <div className="relative">
                 <OverlayNavItem
@@ -296,7 +301,7 @@ export function OverlayNav({
                         nested
                         onClick={child.onSelect}
                       />
-                      {child.active && Boolean(child.children?.length) && (
+                      {(child.active || group.searchExpanded) && Boolean(child.children?.length) && (
                         <div className="ml-3 flex flex-col gap-0.5 pl-1.5">
                           {child.children?.map(grandchild => (
                             <OverlayNavItem
@@ -321,55 +326,55 @@ export function OverlayNav({
         {footer && <div className="mt-auto flex items-center gap-1 pt-2">{footer}</div>}
       </OverlaySidebar>
 
-      {/* Narrow overlays ride the OverlayView titlebar strip. A full-page
-          surface owns an in-flow header, so its dropdown gets a regular row. */}
-      <div
-        className={cn(
-          fullPage
-            ? 'relative z-20 h-10 items-center justify-between gap-2 border-b border-(--ui-stroke-tertiary) bg-(--ui-sidebar-surface-background) px-3'
-            : 'pointer-events-none relative z-20 h-[calc(var(--titlebar-height)+0.1875rem)] items-center justify-between gap-2 pl-3 pr-[calc(var(--titlebar-tools-right,0.75rem)+2.25rem)]',
-          BAR_HIDDEN
-        )}
-      >
-        <div className="pointer-events-auto min-w-0 [-webkit-app-region:no-drag]">
-          <TabDropdown
-            align="start"
-            items={groups.flatMap(group => [
-              {
-                active: group.active && !group.children?.some(child => child.active),
-                icon: group.icon,
-                id: group.id,
-                label: group.label,
-                onSelect: group.onSelect,
-                separatorBefore: group.gapBefore
-              },
-              ...(group.children ?? []).flatMap(child => [
+      {/* Full-page Settings keeps its grouped rail at every width. Other
+          overlays retain the shared compact dropdown in their titlebar. */}
+      {!fullPage && (
+        <div
+          className={cn(
+            'pointer-events-none relative z-20 h-[calc(var(--titlebar-height)+0.1875rem)] items-center justify-between gap-2 pl-3 pr-[calc(var(--titlebar-tools-right,0.75rem)+2.25rem)]',
+            BAR_HIDDEN
+          )}
+        >
+          <div className="pointer-events-auto min-w-0 [-webkit-app-region:no-drag]">
+            <TabDropdown
+              align="start"
+              items={groups.flatMap(group => [
                 {
-                  active: child.active && !child.children?.some(grandchild => grandchild.active),
-                  icon: child.icon,
-                  id: child.id,
-                  indent: true,
-                  label: child.label,
-                  onSelect: child.onSelect
+                  active: group.active && !group.children?.some(child => child.active),
+                  icon: group.icon,
+                  id: group.id,
+                  label: group.label,
+                  onSelect: group.onSelect,
+                  separatorBefore: group.gapBefore
                 },
-                ...(child.children ?? []).map(grandchild => ({
-                  active: grandchild.active,
-                  icon: grandchild.icon,
-                  id: grandchild.id,
-                  indent: true,
-                  label: `${child.label} › ${grandchild.label}`,
-                  onSelect: grandchild.onSelect
-                }))
-              ])
-            ])}
-          />
-        </div>
-        {footer && (
-          <div className="pointer-events-auto flex shrink-0 items-center gap-1 [-webkit-app-region:no-drag]">
-            {footer}
+                ...(group.children ?? []).flatMap(child => [
+                  {
+                    active: child.active && !child.children?.some(grandchild => grandchild.active),
+                    icon: child.icon,
+                    id: child.id,
+                    indent: true,
+                    label: child.label,
+                    onSelect: child.onSelect
+                  },
+                  ...(child.children ?? []).map(grandchild => ({
+                    active: grandchild.active,
+                    icon: grandchild.icon,
+                    id: grandchild.id,
+                    indent: true,
+                    label: `${child.label} › ${grandchild.label}`,
+                    onSelect: grandchild.onSelect
+                  }))
+                ])
+              ])}
+            />
           </div>
-        )}
-      </div>
+          {footer && (
+            <div className="pointer-events-auto flex shrink-0 items-center gap-1 [-webkit-app-region:no-drag]">
+              {footer}
+            </div>
+          )}
+        </div>
+      )}
     </>
   )
 }

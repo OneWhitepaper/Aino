@@ -14,6 +14,7 @@ import type { Contribution } from '@/contrib/types'
 
 import type { GroupNode, LayoutNode } from '../model'
 import { allPaneIds } from '../model'
+import { isToolPanelGroup } from '../tool-panel-policy'
 
 import type { FloatingAnchor } from './floating-rect'
 
@@ -45,6 +46,11 @@ export interface PaneSizing {
 
 /** Chrome behavior flags a pane contributes. Read via `paneChrome`. */
 interface PaneChrome extends PaneSizing {
+  toolPanel?: boolean
+  /** Opt into the host's shared brand picker when docked with Sessions.
+   *  The pane owns its localized description; selection still activates the
+   *  existing pane and never creates a separate navigation mode. */
+  sidebarDescription?: () => string
   /** Leaves the grid on narrow viewports; revealed as an edge overlay. */
   collapsible?: boolean
   /** Arrive minimized — a rail tab rather than an open zone. For a pane that
@@ -131,6 +137,19 @@ interface PaneChrome extends PaneSizing {
 }
 
 export const paneChrome = (c: Contribution | undefined) => (c?.data ?? {}) as PaneChrome
+
+/** Every tenant of a safe tool-only group moves to the same narrow overlay.
+ *  Per-pane collapsible flags alone strand terminal/chooser siblings docked. */
+export function narrowToolPaneIds(
+  node: LayoutNode,
+  paneFor: (id: string) => Contribution | undefined
+): ReadonlySet<string> {
+  if (node.type === 'group') {
+    return new Set(isToolPanelGroup(node, paneFor) ? node.panes : [])
+  }
+
+  return new Set(node.children.flatMap(child => [...narrowToolPaneIds(child, paneFor)]))
+}
 
 /** Resolve a computed style length ("237px" / "none" / "auto") to px. */
 export function computedPx(value: string, fallback: number): number {
@@ -242,7 +261,7 @@ export function fixedTrackSize(node: LayoutNode, axis: 'row' | 'column', ctx: Tr
     // panes' declared widths — otherwise the outer track keeps reserving the
     // full sidebar width and the collapsed rail floats in a dead column.
     if (node.minimized) {
-      return MINIMIZED_TRACK
+      return isToolPanelGroup(node, ctx.paneFor) ? '0px' : MINIMIZED_TRACK
     }
 
     const overrideKey = axis === 'row' ? 'widthOverride' : 'heightOverride'
@@ -319,6 +338,14 @@ export function fixedTrackSize(node: LayoutNode, axis: 'row' | 'column', ctx: Tr
  * collapse and still hand their space to their neighbors.
  */
 export function subtreeGone(node: LayoutNode, ctx: TrackContext): boolean {
+  if (node.type === 'group' && node.minimized && isToolPanelGroup(node, ctx.paneFor)) {
+    return true
+  }
+
+  if (node.type === 'split') {
+    return node.children.every(child => subtreeGone(child, ctx))
+  }
+
   const ids = allPaneIds(node)
 
   if (ids.length === 0 || !ids.every(ctx.paneGone)) {

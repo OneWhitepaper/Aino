@@ -63,8 +63,8 @@ export function VoiceProviderFields({
   const writeConfigCache = useMemo(() => hermesConfigCacheWriter(profile), [scopeKey])
 
   const { data: schemaResponse } = useQuery({
-    queryKey: ['hermes-config-schema'],
-    queryFn: () => getHermesConfigSchema(),
+    queryKey: scopeKey == null ? ['hermes-config-schema'] : ['hermes-config-schema', scopeKey],
+    queryFn: () => getHermesConfigSchema(profile),
     staleTime: 5 * 60 * 1000
   })
 
@@ -76,14 +76,15 @@ export function VoiceProviderFields({
   // pattern): the seeded record is a default-expanded snapshot, and echoing it
   // whole would overwrite keys other surfaces changed since it loaded. The
   // baseline advances to each successfully saved draft.
-  const [baseline, setBaseline] = useState<HermesConfigRecord | null>(null)
+  const baseline = useRef<HermesConfigRecord | null>(null)
   const seeded = useRef(false)
+  const saveQueue = useRef<Promise<void>>(Promise.resolve())
 
   // eslint-disable-next-line no-restricted-syntax -- one-shot config seed flag, not an atom mirror
   useEffect(() => {
     if (loadedConfig && !seeded.current) {
       seeded.current = true
-      setBaseline(loadedConfig)
+      baseline.current = loadedConfig
       setConfig(loadedConfig)
     }
   }, [loadedConfig])
@@ -91,22 +92,31 @@ export function VoiceProviderFields({
   const saveVersionRef = useRef(0)
   const [saveVersion, setSaveVersion] = useState(0)
 
+  // eslint-disable-next-line no-restricted-syntax -- serialized autosave bookkeeping, not an atom mirror
   useEffect(() => {
     if (!config || saveVersion === 0) {
       return
     }
 
     const timeout = window.setTimeout(() => {
-      void saveHermesConfigRecord(diffConfig(baseline ?? {}, config), writeScope ?? profile)
-        .then(() => {
-          setBaseline(config)
+      saveQueue.current = saveQueue.current.then(async () => {
+        try {
+          const result = await saveHermesConfigRecord(diffConfig(baseline.current ?? {}, config), writeScope ?? profile)
+
+          if (!result.ok) {
+            throw new Error(t.settings.config.autosaveFailed)
+          }
+
+          baseline.current = config
           writeConfigCache(config)
-        })
-        .catch(err => notifyError(err, t.settings.config.autosaveFailed))
+        } catch (err) {
+          notifyError(err, t.settings.config.autosaveFailed)
+        }
+      })
     }, 550)
 
     return () => window.clearTimeout(timeout)
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- copy is stable; `profile`/`baseline` are keyed by scopeKey; avoid re-scheduling autosave on locale change
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- copy is stable; `profile` is keyed by scopeKey; avoid re-scheduling autosave on locale change
   }, [config, scopeKey, saveVersion, writeConfigCache, writeScope])
 
   // ElevenLabs cloned/library voices from the live account, when available —
@@ -122,7 +132,7 @@ export function VoiceProviderFields({
 
     let cancelled = false
 
-    getElevenLabsVoices()
+    getElevenLabsVoices(profile)
       .then(result => {
         if (cancelled || !result.available) {
           return
@@ -139,7 +149,8 @@ export function VoiceProviderFields({
       })
 
     return () => void (cancelled = true)
-  }, [wantsElevenLabs])
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `profile` is keyed by its stable scope string
+  }, [scopeKey, wantsElevenLabs])
 
   if (keys.length === 0 || !config) {
     return null

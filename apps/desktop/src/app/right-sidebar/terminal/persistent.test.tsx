@@ -19,7 +19,7 @@ vi.mock('./terminals', () => ({
 }))
 
 vi.mock('./workspace', () => ({
-  TerminalWorkspace: () => <div data-testid="terminal-workspace" />
+  TerminalWorkspace: () => <textarea aria-label="Terminal input" data-testid="terminal-workspace" />
 }))
 
 let resizeObserverCallback: ResizeObserverCallback | null = null
@@ -102,7 +102,7 @@ describe('PersistentTerminal rect tracking', () => {
   beforeEach(() => {
     ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
     setDocumentHidden(false)
-    vi.spyOn(document, 'hasFocus').mockReturnValue(true)
+    vi.spyOn(window.document, 'hasFocus').mockReturnValue(true)
     windowState = installWindowStateBridge()
     resizeObserverCallback = null
     mutationObserverCallback = null
@@ -370,7 +370,7 @@ describe('PersistentTerminal rect tracking', () => {
     expect(overlay.style.pointerEvents).toBe('auto')
 
     act(() => {
-      vi.mocked(document.hasFocus).mockReturnValue(false)
+      vi.mocked(window.document.hasFocus).mockReturnValue(false)
       window.dispatchEvent(new Event('blur'))
     })
 
@@ -387,5 +387,24 @@ describe('PersistentTerminal rect tracking', () => {
     expect(overlay.style.pointerEvents).toBe('none')
     // The PTY survives — only the overlay stands down.
     expect(mount.container!.querySelector('[data-testid="terminal-workspace"]')).not.toBeNull()
+  })
+
+  it('releases focused input and makes the retained terminal inert when its slot is hidden', () => {
+    const raf = installRaf()
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue(rect(10, 20, 200, 100))
+    $terminalTakeover.set(true)
+    mount.render(<HiddenPaneHarness hidden={false} />)
+    const overlay = mount.container!.querySelector('[data-persistent-terminal]')!
+    const input = overlay.querySelector('textarea')!
+    input.focus()
+    expect(input.ownerDocument.activeElement).toBe(input)
+    act(() => raf.runNext())
+    act(() => mount.root!.render(<HiddenPaneHarness hidden />))
+    act(() => mutationObserverCallback?.([], {} as MutationObserver))
+    act(() => raf.runNext())
+    expect(input.ownerDocument.activeElement).not.toBe(input)
+    expect(overlay.hasAttribute('inert')).toBe(true)
+    expect(input.isConnected).toBe(true)
+    expect(overlay.querySelector('textarea')).toBe(input)
   })
 })

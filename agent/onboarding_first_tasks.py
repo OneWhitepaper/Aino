@@ -61,8 +61,8 @@ FIRST_TASKS: tuple[FirstTask, ...] = (
         "hermes", "Explain how Aino works", lambda facts, picks: False, ("hermes-agent", "claude-design", "p5js"),
         goal="build a living page that shows how Aino works on the Hermes core, from the real docs and this install",
         steps=(
-            "Read https://hermes-agent.nousresearch.com/docs/llms.txt once with web_extract. Open a page only to "
-            "check a fact you show.",
+            "Read the local checkout's docs/aino-brand-boundary.md and relevant website/docs/ pages for this "
+            "version; otherwise use https://github.com/OneWhitepaper/Aino/tree/main/website/docs. Check each fact you show.",
             "Read this install: the model, how many skills are installed, the connected apps, and what this chat did "
             "(tools called, skills loaded, their name and picks).",
             "Within a minute, open it in the preview pane with the title, those facts and three screen headings. "

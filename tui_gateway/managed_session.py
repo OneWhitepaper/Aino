@@ -135,7 +135,7 @@ def submit_refusal(sid, session):
 
 
 def release_selection(sid, session):
-    get_registry().clear_session(sid)
+    get_registry().clear_session(sid, purpose='chat')
     for field in ("managed_model_params", "managed_pending_switch", "resume_runtime_overrides"):
         session.pop(field, None)
     if agent := session.get("agent"):
@@ -172,7 +172,7 @@ def select_model(sid, session, model_id, confirmed):
                 session["viewers"] = {peer: viewers.get(peer, time.time())}
             session["managed_model_params"] = selected
             session["managed_pending_switch"] = True
-        get_registry().clear_session(sid)
+        get_registry().clear_session(sid, purpose='chat')
     return False
 
 
@@ -192,7 +192,7 @@ def apply_bound_selection(sid, session):
             with server._session_profile_runtime_scope(session):
                 server._commit_agent_switch(sid, session, agent, result, agent.model, None)
         except Exception:
-            get_registry().clear_session(sid)
+            get_registry().clear_session(sid, purpose='chat')
             raise ManagedBindingError("managed_model_switch_failed") from None
         agent._fallback_chain = []
         agent._fallback_model = None

@@ -1,8 +1,1 @@
-<svg preserveAspectRatio="none" overflow="visible" style="display: block;" width="15" height="15" viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg">
-<g id="Icon">
-<path id="Vector" d="M5 1.875L2.5 4.375L5 6.875" stroke="#99A1AF" stroke-width="0.9375" stroke-linecap="round" stroke-linejoin="round"/>
-<path id="Vector_2" d="M2.5 4.375H12.5" stroke="#99A1AF" stroke-width="0.9375" stroke-linecap="round" stroke-linejoin="round"/>
-<path id="Vector_3" d="M10 13.125L12.5 10.625L10 8.125" stroke="#99A1AF" stroke-width="0.9375" stroke-linecap="round" stroke-linejoin="round"/>
-<path id="Vector_4" d="M12.5 10.625H2.5" stroke="#99A1AF" stroke-width="0.9375" stroke-linecap="round" stroke-linejoin="round"/>
-</g>
-</svg>
+<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 48 48" fill="none"><path d="M42 19H5.99998" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"></path><path d="M30 7L42 19" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"></path><path d="M6.79897 29H42.799" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"></path><path d="M6.79895 29L18.799 41" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"></path></svg>

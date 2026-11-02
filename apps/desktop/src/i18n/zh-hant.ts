@@ -1,6 +1,14 @@
+import { mergeTranslations } from '@hermes/shared/i18n'
+
+import { accountPage } from './account-page'
+import { appearancePage } from './appearance-page'
 import { defineLocale, type TranslationOverrides } from './define-locale'
+import { homeGuidance } from './home-guidance'
 import { introZhHant } from './intro-zh-hant'
 import { messagingDirectory } from './messaging-directory'
+import { runtimeFeatureCopy } from './runtime-feature-copy'
+import { toolPanel } from './tool-panel'
+import { workspacePage } from './workspace-page'
 import { zh } from './zh'
 import { zhHantArtifacts } from './zh-hant_artifacts'
 import { zhHantAssistant } from './zh-hant_assistant'
@@ -15,7 +23,12 @@ import { zhHantDiagnostics } from './zh-hant_diagnostics'
 import { zhHantFirstRun } from './zh-hant_first_run'
 import { zhHantSettings } from './zh-hant_settings'
 
-export const zhHantOverrides = {
+const zhHantBaseOverrides = {
+  appearancePage: appearancePage['zh-hant'],
+  home: homeGuidance['zh-hant'],
+  toolPanel: toolPanel['zh-hant'],
+  workspacePage: workspacePage['zh-hant'],
+  accountPage: accountPage['zh-hant'],
   connectorOffer: {
     heading: '保留已連接的應用程式',
     body: '登入免費的 Nous 帳戶，即可將 Gmail、Slack 等已連接的應用程式保留在你的帳戶中。'
@@ -306,6 +319,7 @@ export const zhHantOverrides = {
     notCharged: '不計費',
     purposes: {
       chat: '對話',
+      image: '生圖',
       title: '會話標題',
       compression: '上下文壓縮',
       vision: '圖像理解',
@@ -334,13 +348,13 @@ export const zhHantOverrides = {
 
   platformRecharge: {
     title: '儲值',
-    description: '入帳金額以平台帳本為準。',
+    description: '輸入金額後自動試算，核對實付與入帳金額後再付款。',
     amount: '儲值金額',
     range: '單筆限額',
-    quote: '查看報價',
-    create: '確認建立訂單',
-    payAmount: '付款金額',
-    creditAmount: '入帳額度',
+    quote: '正在試算金額…',
+    create: '去付款',
+    payAmount: '實付金額',
+    creditAmount: '入帳金額',
     fee: '手續費',
     orderId: '訂單編號',
     openPayment: '前往付款',
@@ -578,5 +592,10 @@ export const zhHantOverrides = {
     }
   }
 } satisfies TranslationOverrides
+
+export const zhHantOverrides = mergeTranslations<typeof zhHantBaseOverrides & TranslationOverrides>(
+  zhHantBaseOverrides,
+  runtimeFeatureCopy['zh-hant']
+)
 
 export const zhHant = defineLocale(zhHantOverrides)

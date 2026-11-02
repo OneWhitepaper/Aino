@@ -171,9 +171,11 @@ def test_configured_provider_colliding_with_builtin_keeps_custom_identity():
     assert result.target_provider == "custom:deepseek"
 
 
-def test_explicit_configured_provider_colliding_with_builtin_keeps_custom_identity():
-    """The Desktop picker supplies an explicit provider, so its route must
-    persist the same unambiguous identity as typed model detection."""
+@pytest.mark.parametrize("explicit_provider,target_provider", [
+    ("deepseek", "deepseek"), ("custom:deepseek", "custom:deepseek"),
+])
+def test_explicit_provider_distinguishes_builtin_from_saved_configuration(explicit_provider, target_provider):
+    """The picker can address the official provider and the same-named saved endpoint separately."""
     from hermes_cli.config import get_compatible_custom_providers
 
     user_providers = {
@@ -186,7 +188,7 @@ def test_explicit_configured_provider_colliding_with_builtin_keeps_custom_identi
     }
     result = _run_switch(
         raw_input="deepseek-flash",
-        explicit_provider="deepseek",
+        explicit_provider=explicit_provider,
         current_provider="custom",
         current_base_url="https://api.deepseek.com/v1",
         user_providers=user_providers,
@@ -194,7 +196,7 @@ def test_explicit_configured_provider_colliding_with_builtin_keeps_custom_identi
     )
 
     assert result.success is True, result.error_message
-    assert result.target_provider == "custom:deepseek"
+    assert result.target_provider == target_provider
 
 
 def test_distinct_legacy_endpoint_with_same_model_stays_ambiguous():

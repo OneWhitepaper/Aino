@@ -1,146 +1,112 @@
-import { useState } from 'react'
+import './account-wallet.css'
+
+import { useId, useState } from 'react'
 
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useI18n } from '@/i18n'
-import { CreditCard, Monitor, RefreshCw } from '@/lib/icons'
+import { ChevronRight, CreditCard, Plus, RefreshCw } from '@/lib/icons'
 
-import { ListRow, ListRowSkeleton, SettingsGroup, SettingsSection } from '../primitives'
+import { ListRowSkeleton, SettingsGroup } from '../primitives'
 
 import { BillingHistory } from './billing-history'
 import { PlatformDevices } from './devices-view'
 import { RechargeView } from './recharge-view'
 import { formatUsageAmount } from './usage-view'
 import { useWallet } from './use-wallet'
+import { compactWalletBalance } from './wallet-balance'
+import { WalletSubscriptions } from './wallet-subscriptions'
 
 export function PlatformWallet() {
   const { t, locale } = useI18n()
   const copy = t.platformWallet
+  const page = t.accountPage
   const { available, wallet, loading, error, refresh, scope } = useWallet()
   const [recharge, setRecharge] = useState<{ scope: string; orderId?: string } | null>(null)
   const scopeKey = scope ? `${scope.origin}:${scope.user_id}:${scope.generation}` : ''
   const initialLoading = loading && !wallet
+  const id = useId()
+  const exactBalance = wallet ? formatUsageAmount(wallet.available_balance) : ''
+  const compactBalance = wallet ? compactWalletBalance(wallet.available_balance) : ''
 
   if (!available) {
     return null
   }
 
   return (
-    <div className="mt-8 min-w-0">
-      <SettingsSection
-        aside={
-          <Button disabled={loading} onClick={refresh} size="sm" variant="ghost">
-            <RefreshCw />
-            {copy.refresh}
-          </Button>
-        }
-        icon={CreditCard}
-        title={copy.title}
-      >
-        {initialLoading && (
-          <div aria-busy aria-label={t.common.loading} role="status">
-            <SettingsGroup>
-              <div className="py-3" data-settings-row="">
-                <p className="text-xs text-muted-foreground">{copy.available}</p>
-                <Skeleton className="mt-1 h-8 w-40 max-w-full" />
-              </div>
-              <ListRow action={<Skeleton className="h-5 w-24 max-w-full" />} title={copy.frozen} />
-            </SettingsGroup>
-            <Skeleton className="mt-4 h-8 w-24 max-w-full" />
-            <Skeleton className="mt-3 h-4 w-52 max-w-full" />
+    <div className="account-wallet">
+      <div className="account-wallet-overview">
+        <SettingsGroup aria-labelledby={`${id}-wallet`} className="account-wallet-card" role="region">
+          <div className="account-wallet-heading">
+            <h2 id={`${id}-wallet`}>
+              <CreditCard aria-hidden="true" />
+              {copy.title}
+            </h2>
+            <Button aria-label={copy.refresh} disabled={loading} onClick={refresh} size="icon-sm" variant="ghost">
+              <RefreshCw />
+            </Button>
           </div>
-        )}
-        {error && (
-          <p className="text-sm text-destructive" role="alert">
-            {t.settings.account.platformError(error)}
-          </p>
-        )}
-        {wallet && (
-          <>
-            <SettingsGroup>
-              <div className="py-3" data-settings-row="">
-                <p className="text-xs text-muted-foreground">{copy.available}</p>
-                <p className="mt-1 text-2xl font-medium tabular-nums [overflow-wrap:anywhere]">
-                  {formatUsageAmount(wallet.available_balance)} {wallet.currency}
-                </p>
+          {initialLoading && (
+            <div aria-busy aria-label={t.common.loading} className="account-wallet-loading" role="status">
+              <Skeleton className="h-3 w-20" />
+              <Skeleton className="h-8 w-44 max-w-full" />
+              <Skeleton className="h-3 w-64 max-w-full" />
+            </div>
+          )}
+          {error && (
+            <p className="account-wallet-error" role="alert">
+              {t.settings.account.platformError(error)}
+            </p>
+          )}
+          {wallet && (
+            <>
+              <div className="account-wallet-balance-row">
+                <div className="account-wallet-balance-copy">
+                  <p className="account-wallet-label">{copy.available}</p>
+                  <p className="account-wallet-balance">
+                    <span>{compactBalance}</span> <span className="account-wallet-currency">{wallet.currency}</span>
+                  </p>
+                  {compactBalance !== exactBalance && (
+                    <details className="account-wallet-precision">
+                      <summary>
+                        <ChevronRight aria-hidden="true" />
+                        {page.exactBalance}
+                      </summary>
+                      <p>
+                        {exactBalance} {wallet.currency}
+                      </p>
+                    </details>
+                  )}
+                </div>
+                {scope && (
+                  <Button onClick={() => setRecharge({ scope: scopeKey })} size="sm">
+                    <Plus />
+                    {t.platformRecharge.title}
+                  </Button>
+                )}
               </div>
-              <ListRow
-                action={
-                  <span className="tabular-nums [overflow-wrap:anywhere]">
+              <div className="account-wallet-footer">
+                <span>
+                  {copy.frozen}{' '}
+                  <span className="account-wallet-number">
                     {formatUsageAmount(wallet.frozen_balance)} {wallet.currency}
                   </span>
-                }
-                title={copy.frozen}
-              />
-            </SettingsGroup>
-            {!wallet.payment_enabled && <p className="mt-2 text-xs text-muted-foreground">{copy.paymentDisabled}</p>}
-            {scope && (
-              <div className="mt-4">
-                <Button
-                  onClick={() => {
-                    setRecharge({ scope: scopeKey })
-                  }}
-                  size="sm"
-                  variant="outline"
-                >
-                  <CreditCard />
-                  {t.platformRecharge.title}
-                </Button>
+                </span>
+                <span>
+                  {copy.updated}: {new Date(wallet.updated_at).toLocaleString(locale)}
+                </span>
               </div>
-            )}
-            <p className="mt-3 text-xs text-muted-foreground">
-              {copy.updated}: {new Date(wallet.updated_at).toLocaleString(locale)}
-            </p>
-          </>
-        )}
-      </SettingsSection>
-      {initialLoading && (
-        <SettingsSection icon={CreditCard} title={copy.subscriptions}>
-          <SettingsGroup aria-busy aria-label={t.common.loading} role="status">
-            <ListRowSkeleton wide />
-          </SettingsGroup>
-        </SettingsSection>
-      )}
-      {wallet && (
-        <SettingsSection icon={CreditCard} title={copy.subscriptions}>
-          {wallet.active_subscriptions.length === 0 ? (
-            <p className="text-sm text-muted-foreground">{copy.noSubscriptions}</p>
-          ) : (
-            <SettingsGroup role="list">
-              {wallet.active_subscriptions.map(subscription => (
-                <div className="min-w-0 py-3" data-settings-row="" key={subscription.id} role="listitem">
-                  <div className="flex flex-wrap items-baseline justify-between gap-2 text-sm">
-                    <span className="min-w-0 [overflow-wrap:anywhere]">{subscription.name}</span>
-                    <span className="tabular-nums [overflow-wrap:anywhere]">
-                      {subscription.remaining === null
-                        ? copy.unlimited
-                        : `${formatUsageAmount(subscription.remaining)} ${subscription.unit}`}
-                    </span>
-                  </div>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    {copy.expires}: {new Date(subscription.expires_at).toLocaleDateString(locale)}
-                  </p>
-                </div>
-              ))}
-            </SettingsGroup>
+              {!wallet.payment_enabled && <p className="account-wallet-payment-notice">{copy.paymentDisabled}</p>}
+            </>
           )}
-        </SettingsSection>
-      )}
+        </SettingsGroup>
+        <WalletSubscriptions id={id} initialLoading={initialLoading} wallet={wallet} />
+      </div>
       {initialLoading && !scope && window.hermesDesktop?.platformBilling && (
-        <>
-          <div aria-busy aria-label={t.common.loading} className="my-6 flex gap-1" role="status">
-            <Skeleton className="h-8 w-24 max-w-full" />
-            <Skeleton className="h-8 w-24 max-w-full" />
-          </div>
-          {window.hermesDesktop.platformDevices && (
-            <SettingsSection icon={Monitor} title={t.platformDevices.title}>
-              <SettingsGroup aria-busy aria-label={t.common.loading} role="status">
-                <ListRowSkeleton />
-                <ListRowSkeleton />
-              </SettingsGroup>
-            </SettingsSection>
-          )}
-        </>
+        <div aria-busy aria-label={t.common.loading} className="account-wallet-history-loading" role="status">
+          <Skeleton className="h-8 w-44 max-w-full" />
+          {window.hermesDesktop.platformDevices && <ListRowSkeleton />}
+        </div>
       )}
       {scope && window.hermesDesktop?.platformBilling && (
         <>

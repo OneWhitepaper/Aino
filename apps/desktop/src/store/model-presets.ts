@@ -15,12 +15,12 @@ import {
 import { $sessionStates, sessionTileDelegate } from './session-states'
 
 const STORAGE_KEY = 'hermes.desktop.model-presets'
+const SCOPED_PRESET_PREFIX = '@conversation:'
 const pendingWrites = new Map<string, Promise<unknown>>()
 const confirmedValues = new Map<string, string>()
 
-/** Per-model reasoning/fast preset, remembered globally across sessions and
- *  re-applied to the session whenever that model is selected. Unset dimensions
- *  fall back to the Hermes default (medium effort, no fast). */
+/** Per-model options. Unscoped preferences are persistent for task editors;
+ *  conversation-scoped entries remain in memory for that chat only. */
 export interface ModelPreset {
   effort?: string
   fast?: boolean
@@ -32,8 +32,13 @@ export const modelPresetServiceTier = ({ fast, serviceTier }: ModelPreset): stri
 
 type RequestGateway = <T>(method: string, params?: Record<string, unknown>) => Promise<T>
 
-/** Stable `provider::model` key (matches the visibility-store format). */
-export const modelPresetKey = (provider: string, model: string): string => `${provider}::${model}`
+const scopePrefix = (scope: string): string => `${SCOPED_PRESET_PREFIX}${JSON.stringify(scope)}:`
+
+export const modelPresetScope = (owner: string, conversation: string): string => JSON.stringify([owner, conversation])
+
+/** Unscoped keys retain the shared visibility-store format. */
+export const modelPresetKey = (provider: string, model: string, scope?: string): string =>
+  `${scope === undefined ? '' : scopePrefix(scope)}${provider}::${model}`
 
 function load(): Record<string, ModelPreset> {
   const raw = storedString(STORAGE_KEY)
@@ -53,13 +58,13 @@ function load(): Record<string, ModelPreset> {
 
 export const $modelPresets = atom<Record<string, ModelPreset>>(load())
 
-export function getModelPreset(provider: string, model: string): ModelPreset {
-  return $modelPresets.get()[modelPresetKey(provider, model)] ?? {}
+export function getModelPreset(provider: string, model: string, scope?: string): ModelPreset {
+  return $modelPresets.get()[modelPresetKey(provider, model, scope)] ?? {}
 }
 
-/** Merge a partial preset for one model and persist. */
-export function setModelPreset(provider: string, model: string, patch: ModelPreset): void {
-  const key = modelPresetKey(provider, model)
+/** Merge one model's options; chat overrides never enter shared preferences. */
+export function setModelPreset(provider: string, model: string, patch: ModelPreset, scope?: string): void {
+  const key = modelPresetKey(provider, model, scope)
   const tier = modelPresetServiceTier(patch)
 
   const next = {
@@ -72,7 +77,39 @@ export function setModelPreset(provider: string, model: string, patch: ModelPres
   }
 
   $modelPresets.set(next)
-  persistString(STORAGE_KEY, JSON.stringify(next))
+
+  if (scope === undefined) {
+    persistString(
+      STORAGE_KEY,
+      JSON.stringify(Object.fromEntries(Object.entries(next).filter(([key]) => !key.startsWith(SCOPED_PRESET_PREFIX))))
+    )
+  }
+}
+
+/** First send assigns the existing draft a stored identity, preserving its edits. */
+export function migrateModelPresetScope(from: string, to: string): void {
+  if (from === to) {
+    return
+  }
+
+  const prefix = scopePrefix(from)
+  const target = scopePrefix(to)
+  const current = $modelPresets.get()
+  const entries = Object.entries(current).filter(([key]) => key.startsWith(prefix))
+
+  if (!entries.length) {
+    return
+  }
+
+  const next = { ...current }
+
+  for (const [key, preset] of entries) {
+    const destination = target + key.slice(prefix.length)
+    next[destination] = { ...preset, ...next[destination] }
+    delete next[key]
+  }
+
+  $modelPresets.set(next)
 }
 
 /** Apply a model's preset to the composer, then push it to a live session.

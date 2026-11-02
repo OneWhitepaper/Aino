@@ -1,8 +1,9 @@
 // @vitest-environment jsdom
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
-import { MemoryRouter } from 'react-router'
+import { MemoryRouter, useLocation, useNavigate } from 'react-router'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { PaneVisibleContext } from '@/components/pane-shell/pane-visibility'
 import { group, split } from '@/components/pane-shell/tree/model'
 import { $layoutTree, noteActiveTreeGroup } from '@/components/pane-shell/tree/store'
 import { SidebarProvider } from '@/components/ui/sidebar'
@@ -35,7 +36,7 @@ import { $removedSessionIds } from '@/store/session-removal'
 import { SIDEBAR_NAV_PREFS_AREA } from '@/store/sidebar-nav'
 import { makeSessionInfo } from '@/test/session-info'
 
-import { type AppView, ROUTES_AREA, SIDEBAR_NAV_AREA } from '../../routes'
+import { type AppView, appViewForPath, ROUTES_AREA, SIDEBAR_NAV_AREA } from '../../routes'
 
 import { $gatewayGroupCollapsed } from './gateway-group-preferences'
 
@@ -55,31 +56,36 @@ const renderSidebar = (
   currentView: AppView,
   onNewSessionInWorkspace = noop,
   onNavigate = noop,
-  onRetrySessions: () => Promise<void> = noopAsync
+  onRetrySessions: () => Promise<void> = noopAsync,
+  visible = true
 ) =>
   render(
     <MemoryRouter initialEntries={[pathname]}>
       <SidebarProvider>
-        <ChatSidebar
-          currentView={currentView}
-          onArchiveSession={noop}
-          onBranchSession={noop}
-          onDeleteSession={noop}
-          onLoadMoreSessions={noop}
-          onManageCronJob={noop}
-          onNavigate={onNavigate}
-          onNewSessionInWorkspace={onNewSessionInWorkspace}
-          onNewSessionSplit={noop}
-          onResumeSession={noop}
-          onRetrySessions={onRetrySessions}
-          onTriggerCronJob={noopAsync}
-        />
+        <PaneVisibleContext.Provider value={visible}>
+          <ChatSidebar
+            currentView={currentView}
+            onArchiveSession={noop}
+            onBranchSession={noop}
+            onDeleteSession={noop}
+            onLoadMoreSessions={noop}
+            onManageCronJob={noop}
+            onNavigate={onNavigate}
+            onNewSessionInWorkspace={onNewSessionInWorkspace}
+            onNewSessionSplit={noop}
+            onResumeSession={noop}
+            onRetrySessions={onRetrySessions}
+            onTriggerCronJob={noopAsync}
+          />
+        </PaneVisibleContext.Provider>
       </SidebarProvider>
     </MemoryRouter>
   )
 
 const currentButtons = () =>
-  screen.queryAllByRole('button').filter(button => button.classList.contains('bg-(--ui-control-active-background)'))
+  screen
+    .queryAllByRole('button')
+    .filter(button => button.dataset.sidebar === 'menu-button' && button.dataset.active === 'true')
 
 const expectOnlyCurrent = (label: string | null) => {
   const button = label ? screen.getByRole('button', { name: label }) : null
@@ -208,6 +214,63 @@ describe('ChatSidebar navigation activity', () => {
     expect(screen.queryByRole('button', { name: 'Kanban' })).toBeNull()
     expectOnlyCurrent(null)
     expectOnlySelectedSession(null)
+  })
+
+  it.each(['/capabilities', '/profiles', '/settings'])(
+    'does not project chat search over %s when retained tile focus is stale',
+    path => {
+      renderSidebar(path, appViewForPath(path))
+      focus('tile-one-group')
+
+      expect(registry.getArea('titleBar.center').some(item => item.id === 'sessions:search')).toBe(false)
+    }
+  )
+
+  it('keeps the retained Sessions search out of the Agent Hub titlebar', () => {
+    renderSidebar('/tile-one', 'chat', noop, noop, noopAsync, false)
+    expect(registry.getArea('titleBar.center').some(item => item.id === 'sessions:search')).toBe(false)
+  })
+
+  it('drops and restores chat search through page history navigation', () => {
+    function Navigation() {
+      const location = useLocation()
+      const navigate = useNavigate()
+
+      return (
+        <SidebarProvider>
+          <button onClick={() => navigate('/capabilities?tab=tools')}>Tools page</button>
+          <button onClick={() => navigate(-1)}>Back</button>
+          <button onClick={() => navigate(1)}>Forward</button>
+          <ChatSidebar
+            currentView={appViewForPath(location.pathname)}
+            onArchiveSession={noop}
+            onBranchSession={noop}
+            onDeleteSession={noop}
+            onLoadMoreSessions={noop}
+            onManageCronJob={noop}
+            onNavigate={noop}
+            onNewSessionInWorkspace={noop}
+            onNewSessionSplit={noop}
+            onResumeSession={noop}
+            onTriggerCronJob={noopAsync}
+          />
+        </SidebarProvider>
+      )
+    }
+
+    render(
+      <MemoryRouter initialEntries={['/tile-one']}>
+        <Navigation />
+      </MemoryRouter>
+    )
+    const hasSearch = () => registry.getArea('titleBar.center').some(item => item.id === 'sessions:search')
+    expect(hasSearch()).toBe(true)
+    fireEvent.click(screen.getByRole('button', { name: 'Tools page' }))
+    expect(hasSearch()).toBe(false)
+    fireEvent.click(screen.getByRole('button', { name: 'Back' }))
+    expect(hasSearch()).toBe(true)
+    fireEvent.click(screen.getByRole('button', { name: 'Forward' }))
+    expect(hasSearch()).toBe(false)
   })
 
   it('keeps project entry points visible before any session exists and hides empty pins', () => {

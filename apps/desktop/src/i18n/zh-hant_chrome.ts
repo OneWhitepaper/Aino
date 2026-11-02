@@ -357,14 +357,14 @@ export const zhHantChrome = {
       messagingPlatforms: '訊息平台'
     },
     approvalMode: {
-      title: '核准模式',
+      title: '如何核准 Aino 的操作？',
       ariaLabel: mode => `核准模式：${mode}`,
-      manual: '手動',
-      manualDescription: '執行需要核准的操作前詢問',
-      smart: '智慧',
-      smartDescription: '自動評估操作，並在需要時詢問',
-      off: '關閉',
-      offDescription: '不顯示核准提示，直接執行'
+      manual: '請求核准',
+      manualDescription: '需核准的操作，先徵求你的同意',
+      smart: '幫我核准',
+      smartDescription: '自動評估命令風險，必要時請你核准',
+      off: '不再詢問',
+      offDescription: '直接執行，仍受系統權限與安全規則限制'
     },
     statusbar: {
       unknown: '未知',
@@ -437,6 +437,10 @@ export const zhHantChrome = {
           tool_definitions: '工具定義'
         },
         empty: '尚無上下文資料',
+        detailsUnavailable: '分類明細暫時無法取得，目前用量仍可參考。',
+        unavailable: '暫時無法取得上下文用量，請重試。',
+        retry: '重試',
+        pendingDetails: '目前執行服務尚未提供分類明細。',
         loading: '正在載入明細…',
         percentFull: percent => `已用 ${percent}%`,
         title: '上下文使用量',
@@ -451,7 +455,7 @@ export const zhHantChrome = {
       noModel: '無模型',
       switchModel: '切換模型',
       openModelPicker: '開啟模型選擇器',
-      modelPinned: '已由你固定；新對話將使用此模型而非「設定」中的預設模型',
+      modelPinned: '僅用於目前對話；新對話使用「設定」中的預設模型',
       modelTitle: (provider, model) => `模型 · ${provider}：${model}`,
       providerModelTitle: (provider, model) => `${provider} · ${model}`,
       subtaskMonitor: '子任務監控'
@@ -508,6 +512,8 @@ export const zhHantChrome = {
   },
 
   zones: {
+    sidebarModeMenu: '切換對話模式',
+    sidebarSessionsDescription: '專案、檔案與日常對話',
     showTabStrip: '顯示分頁',
     hideTabStrip: '隱藏分頁',
     showStripTab: title => `顯示 ${title}`,

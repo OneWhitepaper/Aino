@@ -12,6 +12,7 @@ import navMessagingIcon from '@/assets/aino-home/nav-messaging.svg'
 import navNewSessionIcon from '@/assets/aino-home/nav-new-session.svg'
 import navSkillsIcon from '@/assets/aino-home/nav-skills.svg'
 import { AinoDesignIcon } from '@/components/aino-design-icon'
+import { usePaneVisible } from '@/components/pane-shell/pane-visibility'
 import { Button } from '@/components/ui/button'
 import { Codicon } from '@/components/ui/codicon'
 import { GlyphSpinner } from '@/components/ui/glyph-spinner'
@@ -77,7 +78,6 @@ import {
   normalizeProfileKey,
   sidebarProfileForScope
 } from '@/store/profile'
-import { $profileRailVisible } from '@/store/profile-rail-prefs'
 import { $projectScope, ALL_PROJECTS, exitProjectScope } from '@/store/project-scope'
 import {
   $activeProjectId,
@@ -145,7 +145,7 @@ import { SidebarCronJobsSection } from './cron-jobs-section'
 import { SidebarFilterMenu } from './filter-menu'
 import { buildGatewaySessionGroups, scopeGatewaySessionGroups, useGatewaySessionGroups } from './gateway-group-model'
 import { SidebarLoadMoreRow } from './load-more-row'
-import { contributedSidebarNav, SidebarNavigation } from './navigation'
+import { contributedSidebarNav, isDraftNavigationActive, SidebarNavigation } from './navigation'
 import { orderByIds, reconcileOrderIds, resolveManualSessionOrderIds, sameIds } from './order'
 import { filterSessionsByProfileScope } from './profile-scope'
 import { ProjectDialog } from './project-dialog'
@@ -368,6 +368,7 @@ export function ChatSidebar({
   // tab, else the main selection — so it stays 1:1 with whatever tab is active.
   const selectedSessionId = useStore($focusedStoredSessionId)
   const focusedSessionIsTile = useStore($focusedSessionIsTile)
+  const paneVisible = usePaneVisible()
   const currentView = focusedSessionIsTile ? 'chat' : routeView
   const sessions = useStore($sessions)
   const cronSessions = useStore($cronSessions)
@@ -448,7 +449,6 @@ export function ChatSidebar({
   }, [])
 
   const activeSidebarSessionId = currentView === 'chat' ? selectedSessionId : null
-  const profileRailVisible = useStore($profileRailVisible)
 
   const dndSensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
@@ -1397,7 +1397,7 @@ export function ChatSidebar({
       data-tip-region=""
       data-tour="sessions-sidebar"
     >
-      {currentView === 'chat' && (
+      {routeView === 'chat' && paneVisible && (
         <Contribute area="titleBar.center" id="sessions:search">
           <div className="relative flex h-full w-full min-w-0 items-center" data-session-search-shell="">
             <SearchField
@@ -1447,11 +1447,12 @@ export function ChatSidebar({
         </Contribute>
       )}
 
-      <SidebarContent className="gap-0 overflow-hidden bg-transparent px-2">
+      <SidebarContent className="aino-sidebar-content">
         <SidebarNavigation
           currentView={currentView}
           navItems={navItems}
           navLabels={s.nav}
+          newSessionActive={isDraftNavigationActive(currentView, focusedSessionIsTile, selectedSessionId)}
           onNavigate={onNavigate}
           onNewSessionInWorkspace={onNewSessionInWorkspace}
           onNewSessionSplit={onNewSessionSplit}
@@ -1461,7 +1462,7 @@ export function ChatSidebar({
 
         <SidebarStorageCorruptNotice />
         <div
-          className={cn('flex min-h-0 flex-1 flex-col gap-3 pt-2 pb-1.75', SCROLL_Y, SCROLL_GUTTER)}
+          className={cn('aino-sidebar-sections', SCROLL_Y, SCROLL_GUTTER)}
           data-sessions-mode={sessionsMode}
           data-sessions-project={inProject ? (enteredProjectId ?? undefined) : undefined}
         >

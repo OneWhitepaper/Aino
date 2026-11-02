@@ -32,9 +32,11 @@ function fontFamilyFromConfig(config: HermesConfigRecord): string {
  * `TerminalFontSetting`; the live value publishes through `$chatFontFamily`
  * so the theme paint (`--dt-font-sans`) follows every keystroke.
  */
-export function ChatFontSetting() {
+export function ChatFontSetting({ compact = false, id }: { compact?: boolean; id?: string } = {}) {
   const { t } = useI18n()
   const copy = t.settings.appearance
+  const page = t.appearancePage
+  const title = compact ? page.uiFontTitle : copy.chatFontTitle
   const { data: loadedConfig, dataUpdatedAt, writeScope } = useHermesConfigRecord()
   const [draft, setDraft] = useState<string | null>(null)
   // The seed effect refuses to reseed while the query still carries the
@@ -128,19 +130,19 @@ export function ChatFontSetting() {
         <div className="mt-3 space-y-2">
           <div className="flex items-center gap-3">
             <ComboboxInput
-              aria-label={copy.chatFontTitle}
+              aria-label={title}
               className="flex-1"
               disabled={draft === null}
               onChange={update}
               options={CHAT_FONT_SUGGESTIONS}
-              placeholder={copy.chatFontPlaceholder}
+              placeholder={compact ? page.uiFontPlaceholder : copy.chatFontPlaceholder}
               renderOption={font => (
                 <span style={{ fontFamily: resolveChatFontFamily(font, 'var(--dt-font-sans)') }}>{font}</span>
               )}
               value={value}
             />
             <Button disabled={!value || draft === null} onClick={() => update('')} size="inline" variant="text">
-              {copy.chatFontReset}
+              {compact ? page.uiFontReset : copy.chatFontReset}
             </Button>
           </div>
           {/* Inherits --dt-font-sans, so it IS the live result, not a simulation. */}
@@ -148,15 +150,18 @@ export function ChatFontSetting() {
             aria-label={copy.chatFontPreview}
             className="overflow-hidden px-1 py-2 text-sm text-(--ui-text-secondary)"
           >
-            <span className="mr-2 text-[length:var(--conversation-caption-font-size)] text-(--ui-text-tertiary)">
-              {copy.chatFontPreview}
-            </span>
-            <span>{copy.chatFontSample}</span>
+            {!compact && (
+              <span className="mr-2 text-[length:var(--conversation-caption-font-size)] text-(--ui-text-tertiary)">
+                {copy.chatFontPreview}
+              </span>
+            )}
+            <span>{compact ? page.uiFontSample : copy.chatFontSample}</span>
           </div>
         </div>
       }
-      description={copy.chatFontDesc}
-      title={copy.chatFontTitle}
+      description={compact ? page.uiFontDescription : copy.chatFontDesc}
+      id={id}
+      title={title}
       wide
     />
   )

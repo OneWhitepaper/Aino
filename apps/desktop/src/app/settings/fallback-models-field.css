@@ -1,0 +1,75 @@
+.fallback-models-field {
+  min-width: 0;
+  width: 100%;
+  container-type: inline-size;
+}
+.fallback-models-heading,
+.fallback-models-row {
+  display: grid;
+  grid-template-columns: 2.125rem minmax(0, 1.15fr) minmax(0, 1fr) 2.375rem;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+  padding-inline: 0.625rem;
+  border-bottom: 1px solid var(--ui-stroke-tertiary);
+}
+.fallback-models-heading {
+  padding-block: 0.5625rem;
+  border-top: 1px solid var(--ui-stroke-tertiary);
+  color: var(--ui-text-tertiary);
+  font-size: var(--aino-text-caption);
+  font-weight: 400;
+}
+.fallback-models-row {
+  min-height: 3.625rem;
+  padding-block: 0.5rem;
+}
+.fallback-models-order {
+  color: var(--ui-text-tertiary);
+  font-size: var(--aino-text-caption);
+}
+.fallback-models-provider,
+.fallback-models-model {
+  min-width: 0;
+  width: 100%;
+}
+.fallback-models-row [data-slot='select-value'] {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.fallback-models-remove {
+  justify-self: center;
+}
+.fallback-models-empty {
+  margin: 0;
+  padding: 0.875rem 0.625rem;
+  color: var(--ui-text-tertiary);
+  font-size: var(--aino-text-caption);
+  line-height: 1.6;
+}
+.fallback-models-add {
+  padding: 0.75rem 0.5rem 0;
+}
+@container (max-width: 34rem) {
+  .fallback-models-heading {
+    display: none;
+  }
+  .fallback-models-row {
+    grid-template-columns: 1.5rem minmax(0, 1fr) 1.75rem;
+    gap: 0.5rem;
+    padding-block: 0.875rem;
+  }
+  .fallback-models-order {
+    grid-column: 1;
+    grid-row: 1;
+  }
+  .fallback-models-provider,
+  .fallback-models-model {
+    grid-column: 2;
+  }
+  .fallback-models-remove {
+    grid-column: 3;
+    grid-row: 1;
+  }
+}

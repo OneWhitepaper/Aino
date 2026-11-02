@@ -133,8 +133,8 @@ test('home project selection can create, reenter and open folders without inheri
   await page.getByRole('menuitem', { name: /New project/ }).click()
   const dialog = page.getByRole('dialog')
   await dialog.getByRole('textbox').first().fill('HomeProject')
-  await dialog.getByRole('button', { name: /Add folder/ }).click()
-  await dialog.getByRole('button', { name: 'Create', exact: true }).click()
+  await dialog.getByRole('button', { name: 'Add folders on this computer', exact: true }).click()
+  await dialog.getByRole('button', { name: 'Create project', exact: true }).click()
   await expect(dialog).toHaveCount(0)
   await expect(surface.getByRole('button', { name: 'HomeProject', exact: true })).toBeVisible()
 

@@ -3,6 +3,63 @@ import { enDelegationRouting } from './en_delegation_routing'
 import type { ModelSettingsTranslations } from './types_model_settings'
 
 export const enModelSettings: ModelSettingsTranslations = {
+  imageGeneration: {
+    qualityTitle: 'Image quality',
+    qualityHint:
+      'Controls detail and generation effort. Higher quality can take longer and cost more. Independent of text reasoning.',
+    qualityDefault: 'Model default',
+    qualityUnsupported: 'The saved quality is no longer supported. Choose another level or restore the model default.',
+    qualitySavedHint: 'Applies to subsequent image requests.',
+    qualitySaved: 'Image quality saved',
+    qualityRuntimeUnavailable: 'Update the runtime to choose image quality. Current quality is unchanged.',
+    qualityUnavailable: 'This model has no configurable quality levels. Its default quality is used.',
+    runtimeUnavailable: 'The current runtime does not provide Aino image generation. Restart or update the runtime.',
+    loadFailed: 'Could not load image settings. Check the runtime connection and retry.',
+    qualityLabels: { auto: 'Auto', low: 'Low', medium: 'Medium', high: 'High', xhigh: 'Very high', max: 'Maximum' },
+    billingRules: 'Billed according to the image generation rules. View usage in My Account.',
+    unavailable:
+      'Aino image generation is unavailable. Update the runtime and check that image models are configured on the platform.',
+    title: 'Image generation',
+    description:
+      'Generate images with your Aino account. Image models are managed separately from text models; selections apply to new conversations.'
+  },
+  pages: {
+    description: 'Manage the default model and the models used for different tasks.',
+    auxiliaryTask: 'Task',
+    auxiliaryPurpose: 'Purpose',
+    auxiliaryModel: 'Model',
+    moaReferences: 'Reference models',
+    moaEnableDescription: 'Enabled presets remain available through the existing model routing.'
+  },
+  defaultMain: {
+    appliedLabel: 'Current default model',
+    applied: 'Applied',
+    unconfigured: 'No default model selected',
+    title: 'Default main model',
+    description: 'Choose one default model source for new sessions.',
+    sourceLabel: 'Model source',
+    builtIn: 'Aino built-in models',
+    thirdParty: 'Third-party service',
+    builtInDescription: 'Use your Aino account balance without a separate API key.',
+    thirdPartyDescription: 'Use a connected model service, billed by that provider.',
+    unchanged: 'Matches the current default',
+    pending: 'Not applied · the current default is unchanged',
+    apply: 'Apply as default',
+    scopeHint:
+      'Applies to new sessions. Existing chats can still switch models in the composer. Manual choices remain in use.',
+    defaultsTitle: 'Default parameters',
+    defaultsDescription: 'Existing parameter settings apply when the model supports them.',
+    reasoningDescription: 'Controls how deeply the model reasons before answering',
+    speedDescription: 'Faster responses may use a different service tier',
+    chooseBuiltIn: 'Choose an Aino built-in model',
+    selectionTitle: 'Choose an Aino built-in model',
+    selectionDescription: 'Confirm your choice, then use “Apply as default” on the page.',
+    confirmSelection: 'Confirm choice',
+    configureConnection: 'Configure connection',
+    connection: 'API key',
+    connectionSaved: 'This service is configured · choose a model',
+    ainoConnected: 'Aino account connected · uses Aino balance'
+  },
   setupProviderFallback: 'provider',
   setUpProvider: name => `Set up ${name}`,
   apiKeyPlaceholder: keyEnv => `${keyEnv} key`,

@@ -9,8 +9,6 @@ import { Tip } from '@/components/ui/tooltip'
 import { useDelayedTrue } from '@/hooks/use-delayed-true'
 import { useI18n } from '@/i18n'
 import { displayPath } from '@/lib/display-path'
-import { cn } from '@/lib/utils'
-import { $panesFlipped } from '@/store/layout'
 import { notifyError } from '@/store/notifications'
 import {
   $reviewDiff,
@@ -18,7 +16,6 @@ import {
   $reviewFiles,
   $reviewIsRepo,
   $reviewLoading,
-  $reviewRevertTarget,
   $reviewScope,
   $reviewSelectedPath,
   $reviewTreeMode,
@@ -31,21 +28,15 @@ import {
   unstageReviewFile
 } from '@/store/review'
 
-import { SidebarPanelLabel } from '../../shell/sidebar-label'
-import { PaneEmptyState, RightSidebarSectionHeader } from '../index'
+import { PaneEmptyState } from '../index'
 
 import { ReviewFileTree } from './file-tree'
 import { ReviewScopeRow } from './scope-row'
 import { ReviewShipBar } from './ship-bar'
 
-// Compact header/diff action buttons — micro hit targets packed tight, matching
-// the rest of the app's icon-action rows.
-const ACTION_BTN = 'size-5'
-
 export function ReviewPane() {
   const { t } = useI18n()
   const c = t.statusStack.coding
-  const panesFlipped = useStore($panesFlipped)
   const files = useStore($reviewFiles)
   const loading = useStore($reviewLoading)
   const isRepo = useStore($reviewIsRepo)
@@ -62,9 +53,6 @@ export function ReviewPane() {
   const hasFiles = files.length > 0
   // A repo (or a load that may reveal one) gets the header + scope chrome.
   const showChrome = loading || isRepo
-  // `{ path: null }` → revert all; `{ path: '…' }` → revert one file.
-  const revertTarget = useStore($reviewRevertTarget)
-  const revertingAll = revertTarget?.path == null
   // Delay the skeletons so fast loads (most project switches) just blank → content
   // instead of flashing a jarring loading state.
   const showTreeSkeleton = useDelayedTrue(loading && !hasFiles)
@@ -73,72 +61,64 @@ export function ReviewPane() {
   return (
     <aside
       aria-label={c.review}
-      className={cn(
-        'before:pointer-events-none relative flex h-full w-full min-w-0 flex-col overflow-hidden border-(--ui-stroke-secondary) bg-(--ui-sidebar-surface-background) pt-(--titlebar-height) text-(--ui-text-tertiary)',
-        panesFlipped ? 'border-r' : 'border-l'
-      )}
+      className="relative flex h-full min-h-0 w-full min-w-0 flex-col overflow-hidden bg-(--ui-sidebar-surface-background) text-(--ui-text-secondary)"
     >
       {showChrome && (
-        <RightSidebarSectionHeader data-suppress-pane-reveal-side="">
-          <div className="flex min-w-0 flex-1">
-            {/* Pure self-naming label — redundant under a zone tab that already
-                says "review", so the zone header hides it (styles.css). */}
-            <SidebarPanelLabel data-pane-self-label="">{c.review}</SidebarPanelLabel>
+        <div className="shrink-0 border-b border-(--ui-stroke-tertiary)" data-suppress-pane-reveal-side="">
+          <ReviewScopeRow />
+          <div className="flex min-h-9 min-w-0 items-center gap-0.5 px-3 pb-2">
+            <span className="min-w-0 flex-1 truncate text-[length:var(--aino-text-caption)] text-(--ui-text-tertiary)">
+              {c.changed(files.length)}
+            </span>
+            <Tip label={treeMode === 'tree' ? c.viewAsList : c.viewAsTree}>
+              <Button
+                aria-label={treeMode === 'tree' ? c.viewAsList : c.viewAsTree}
+                disabled={!hasFiles}
+                onClick={toggleReviewTreeMode}
+                size="icon-xs"
+                variant="ghost"
+              >
+                <Codicon name={treeMode === 'tree' ? 'list-flat' : 'list-tree'} size="0.8125rem" />
+              </Button>
+            </Tip>
+            <Tip label={c.stageAll}>
+              <Button
+                aria-label={c.stageAll}
+                disabled={!hasFiles || !isUncommitted}
+                onClick={() => void stageReviewFile(null).catch(err => notifyError(err, c.stageAll))}
+                size="icon-xs"
+                variant="ghost"
+              >
+                <Codicon name="add" size="0.8125rem" />
+              </Button>
+            </Tip>
+            <Tip label={c.revertAll}>
+              <Button
+                aria-label={c.revertAll}
+                disabled={!hasFiles || !isUncommitted}
+                onClick={() => requestRevert(null)}
+                size="icon-xs"
+                variant="ghost"
+              >
+                <Codicon name="discard" size="0.8125rem" />
+              </Button>
+            </Tip>
+            <Tip label={t.rightSidebar.refreshTree}>
+              <Button
+                aria-label={t.rightSidebar.refreshTree}
+                onClick={() => void refreshReview()}
+                size="icon-xs"
+                variant="ghost"
+              >
+                <Codicon name="refresh" size="0.8125rem" spinning={loading} />
+              </Button>
+            </Tip>
+            <Button aria-label={c.close} onClick={closeReview} size="icon-xs" variant="ghost">
+              <Codicon name="close" size="0.8125rem" />
+            </Button>
           </div>
-          <Tip label={treeMode === 'tree' ? c.viewAsList : c.viewAsTree}>
-            <Button
-              aria-label={treeMode === 'tree' ? c.viewAsList : c.viewAsTree}
-              className={ACTION_BTN}
-              disabled={!hasFiles}
-              onClick={toggleReviewTreeMode}
-              size="icon-xs"
-              variant="ghost"
-            >
-              <Codicon name={treeMode === 'tree' ? 'list-flat' : 'list-tree'} size="0.8125rem" />
-            </Button>
-          </Tip>
-          <Tip label={c.stageAll}>
-            <Button
-              aria-label={c.stageAll}
-              className={ACTION_BTN}
-              disabled={!hasFiles || !isUncommitted}
-              onClick={() => void stageReviewFile(null).catch(err => notifyError(err, c.stageAll))}
-              size="icon-xs"
-              variant="ghost"
-            >
-              <Codicon name="add" size="0.8125rem" />
-            </Button>
-          </Tip>
-          <Tip label={c.revertAll}>
-            <Button
-              aria-label={c.revertAll}
-              className={ACTION_BTN}
-              disabled={!hasFiles || !isUncommitted}
-              onClick={() => requestRevert(null)}
-              size="icon-xs"
-              variant="ghost"
-            >
-              <Codicon name="discard" size="0.8125rem" />
-            </Button>
-          </Tip>
-          <Tip label={t.rightSidebar.refreshTree}>
-            <Button
-              aria-label={t.rightSidebar.refreshTree}
-              className={ACTION_BTN}
-              onClick={() => void refreshReview()}
-              size="icon-xs"
-              variant="ghost"
-            >
-              <Codicon name="refresh" size="0.8125rem" spinning={loading} />
-            </Button>
-          </Tip>
-          <Button aria-label={c.close} className={ACTION_BTN} onClick={closeReview} size="icon-xs" variant="ghost">
-            <Codicon name="close" size="0.8125rem" />
-          </Button>
-        </RightSidebarSectionHeader>
+        </div>
       )}
-
-      {showChrome && <ReviewScopeRow />}
 
       {showChrome ? (
         hasFiles ? (
@@ -151,26 +131,29 @@ export function ReviewPane() {
           <PaneEmptyState label={t.rightSidebar.noDiffs} />
         )
       ) : (
-        // No repo at all → same terse empty state, just without the chrome.
-        <PaneEmptyState label={t.rightSidebar.noDiffs} />
+        <PaneEmptyState label={c.notRepo} />
       )}
 
       {/* Selected file's diff — reuses the shiki-highlighted FileDiffPanel. */}
       {selectedFile && (
-        <div className="flex max-h-[55%] shrink-0 flex-col border-t border-(--ui-stroke-secondary)">
-          <div className="flex items-center gap-1 px-2.5 py-1.5" data-suppress-pane-reveal-side="">
+        <div className="flex min-h-0 flex-[2] flex-col border-t border-(--ui-stroke-tertiary)">
+          <div className="flex min-h-10 shrink-0 items-center gap-1.5 px-3 py-2" data-suppress-pane-reveal-side="">
+            <Codicon className="shrink-0 text-(--ui-text-tertiary)" name="diff" size="0.875rem" />
             <span
-              className="min-w-0 flex-1 truncate font-mono text-[0.66rem] text-(--ui-text-secondary)"
+              className="min-w-0 flex-1 truncate text-[length:var(--aino-text-label)] text-(--ui-text-secondary)"
               title={displayPath(selectedFile.path)}
             >
               {displayPath(selectedFile.path)}
             </span>
-            <DiffCount added={selectedFile.added} className="text-[0.64rem] leading-4" removed={selectedFile.removed} />
+            <DiffCount
+              added={selectedFile.added}
+              className="text-[length:var(--aino-text-caption)] leading-4"
+              removed={selectedFile.removed}
+            />
             {isUncommitted && (
               <Tip label={selectedFile.staged ? c.unstage : c.stage}>
                 <Button
                   aria-label={selectedFile.staged ? c.unstage : c.stage}
-                  className={ACTION_BTN}
                   onClick={() =>
                     void (
                       selectedFile.staged ? unstageReviewFile(selectedFile.path) : stageReviewFile(selectedFile.path)
@@ -183,17 +166,11 @@ export function ReviewPane() {
                 </Button>
               </Tip>
             )}
-            <Button
-              aria-label={c.close}
-              className={ACTION_BTN}
-              onClick={clearReviewSelection}
-              size="icon-xs"
-              variant="ghost"
-            >
+            <Button aria-label={c.close} onClick={clearReviewSelection} size="icon-xs" variant="ghost">
               <Codicon name="close" size="0.8rem" />
             </Button>
           </div>
-          <div className="min-h-0 flex-1 overflow-auto px-1 pb-1">
+          <div className="min-h-0 flex-1 overflow-auto px-2 pb-2">
             {diffLoading ? (
               showDiffSkeleton ? (
                 <DiffSkeleton />
@@ -201,7 +178,9 @@ export function ReviewPane() {
             ) : diff ? (
               <FileDiffPanel className="mx-0 mb-0 h-full max-h-none" diff={diff} path={selectedFile.path} virtualized />
             ) : (
-              <div className="py-6 text-center text-[0.66rem] text-muted-foreground/60">{c.noDiff}</div>
+              <div className="py-6 text-center text-[length:var(--aino-text-caption)] text-(--ui-text-tertiary)">
+                {c.noDiff}
+              </div>
             )}
           </div>
         </div>

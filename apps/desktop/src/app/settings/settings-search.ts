@@ -1,3 +1,4 @@
+import type { ConfigPagesCopy } from '@/i18n/types_config_pages'
 import type { IconComponent } from '@/lib/icons'
 import { normalize } from '@/lib/text'
 import type { ConfigFieldSchema, EnvVarInfo, HermesConfigRecord } from '@/types/hermes'
@@ -16,7 +17,7 @@ export interface SettingsSearchTarget {
   field?: string
   key?: string
   keysView?: CredentialSettingsView
-  providerView?: 'accounts' | 'custom-endpoints' | 'keys'
+  providerView?: 'third-party' | 'custom-endpoints' | 'local'
   setting?: string
   view: SettingsView
 }
@@ -32,6 +33,7 @@ export interface SettingsSearchEntry {
 }
 
 interface ConfigSearchCopy {
+  configPages?: ConfigPagesCopy
   fieldDescriptions: Record<string, string>
   fieldLabels: Record<string, string>
   sections: Record<string, string>
@@ -89,11 +91,18 @@ export function buildConfigSearchEntries(
 
     return visibleFields.map(([key, field]) => ({
       context,
-      description: configFieldDescription(key, field, copy),
+      description: copy.configPages?.fields[key]?.description ?? configFieldDescription(key, field, copy),
       icon: section.icon,
       id: `config-field:${key}`,
-      keywords: ['settings', section.id, section.label, key],
-      label: configFieldLabel(key, copy),
+      keywords: [
+        'settings',
+        section.id,
+        section.label,
+        key,
+        configFieldLabel(key, copy),
+        configFieldDescription(key, field, copy)
+      ],
+      label: copy.configPages?.fields[key]?.label ?? configFieldLabel(key, copy),
       target: {
         field: key,
         view: `config:${section.id}` as SettingsView

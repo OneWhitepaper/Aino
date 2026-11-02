@@ -114,12 +114,10 @@ describe('desktop i18n runtime translator', () => {
 
     expect(translateNow('settings.managedUpdates.scopesRestored', '工作、个人')).toBe('已恢复的工作区：工作、个人')
     expect(translateNow('settings.managedUpdates.progress')).toBe('正在排空会话、更新远端安装并恢复工作区…')
-    expect(translateNow('settings.gateway.remoteUrlDesc')).toBe(
-      '远程仪表盘后端的基础 URL。支持路径前缀，例如 /hermes。'
-    )
-    expect(translateNow('settings.gateway.tokenTitle')).toBe('会话令牌')
+    expect(translateNow('settings.gateway.remoteUrlDesc')).toBe('填写另一台电脑或服务器上 Aino 后台的地址。')
+    expect(translateNow('settings.gateway.tokenTitle')).toBe('访问令牌')
     expect(translateNow('settings.gateway.tokenDesc')).toBe(
-      '用于 REST 和 WebSocket 访问的仪表盘会话令牌。留空则保留已保存的令牌。'
+      '仅当远程服务管理员提供访问令牌时填写。留空会继续使用已保存的令牌。'
     )
   })
 
@@ -127,15 +125,15 @@ describe('desktop i18n runtime translator', () => {
     setRuntimeI18nLocale('zh')
 
     expect(translateNow('settings.gateway.remoteAuthHint')).toBe(
-      '托管网关使用 OAuth 或用户名密码；自托管网关也可能使用会话令牌。'
+      '远程服务可能要求账号登录、用户名和密码，或管理员提供的访问令牌。'
     )
-    expect(translateNow('settings.gateway.plainTextConfirmTitle')).toBe('以明文存储网关令牌？')
-    expect(translateNow('settings.gateway.incompleteToken')).toBe('切换到远程前，请输入远程 URL 和会话令牌。')
+    expect(translateNow('settings.gateway.plainTextConfirmTitle')).toBe('未加密保存访问令牌？')
+    expect(translateNow('settings.gateway.incompleteToken')).toBe('切换前，请填写远程服务地址和访问令牌。')
     expect(translateNow('settings.gateway.restartingMessage')).toBe(
-      'Aino 桌面端将使用已保存设置重新连接（界面保持打开）。'
+      'Aino 桌面端将使用已保存的设置重新连接（界面保持打开）。'
     )
     expect(translateNow('settings.gateway.sshErrUpdateRequired')).toBe(
-      '使用桌面端 SSH 连接前，请更新远程主机上的 Aino。'
+      '请先更新远程设备上的 Aino 后台，再从桌面端连接。'
     )
     expect(translateNow('settings.profileScope.editsProfile', '工作')).toBe('此页面的更改将应用于工作区“工作”。')
   })

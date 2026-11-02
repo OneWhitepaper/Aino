@@ -203,6 +203,7 @@ function ProfilesManager() {
             current={normalizeProfileKey(selected.name) === normalizeProfileKey(activeProfile)}
             key={selected.name}
             onClose={() => setSelectedName(null)}
+            onRename={() => setPendingRename(selected)}
             profile={selected}
           />
         )}
@@ -274,35 +275,35 @@ function ProfileRow({ active, current, menuItems, onSelect, profile }: ProfileRo
           className="workspace-card-select"
           onClick={onSelect}
         >
-          <span className="workspace-card-top">
-            <WorkspaceGlyph profile={profile} />
-            {current && (
-              <span className="workspace-current-badge">
-                <Codicon name="check" size="0.75rem" />
-                {p.currentBadge}
-              </span>
-            )}
+          <WorkspaceGlyph profile={profile} />
+          <span className="workspace-card-copy">
+            <span className="workspace-card-title">
+              <span className="truncate">{label}</span>
+              {profile.is_default && <span className="workspace-default-badge">{p.defaultBadge}</span>}
+            </span>
+            <dl className="workspace-card-facts">
+              <div className="min-w-0">
+                <dt className="sr-only">{p.modelLabel}</dt>
+                <dd title={profile.model ?? undefined}>
+                  <Codicon name="hubot" size="0.8125rem" />
+                  <span className="truncate">{profile.model ?? p.notSet}</span>
+                </dd>
+              </div>
+              <div className="shrink-0">
+                <dt className="sr-only">{p.skillsLabel}</dt>
+                <dd>
+                  <Codicon name="extensions" size="0.8125rem" />
+                  <span>{p.skills(profile.skill_count)}</span>
+                </dd>
+              </div>
+            </dl>
           </span>
-          <span className="workspace-card-title">
-            <span className="truncate">{label}</span>
-            {profile.is_default && <span className="workspace-default-badge">{p.defaultBadge}</span>}
-          </span>
-          <dl className="workspace-card-facts">
-            <div className="min-w-0">
-              <dt className="sr-only">{p.modelLabel}</dt>
-              <dd title={profile.model ?? undefined}>
-                <Codicon name="hubot" size="0.8125rem" />
-                <span className="truncate">{profile.model ?? p.notSet}</span>
-              </dd>
-            </div>
-            <div className="shrink-0">
-              <dt className="sr-only">{p.skillsLabel}</dt>
-              <dd>
-                <Codicon name="extensions" size="0.8125rem" />
-                <span>{p.skills(profile.skill_count)}</span>
-              </dd>
-            </div>
-          </dl>
+          {current && (
+            <span className="workspace-current-badge">
+              <Codicon name="check" size="0.75rem" />
+              <span className="sr-only">{p.currentBadge}</span>
+            </span>
+          )}
         </RowButton>
         <div className="workspace-card-menu">
           <PanelRowMenu items={menuItems} label={label} />
@@ -315,10 +316,11 @@ function ProfileRow({ active, current, menuItems, onSelect, profile }: ProfileRo
 interface ProfileDetailProps {
   current: boolean
   onClose: () => void
+  onRename: () => void
   profile: ProfileInfo
 }
 
-function ProfileDetail({ current, onClose, profile }: ProfileDetailProps) {
+function ProfileDetail({ current, onClose, onRename, profile }: ProfileDetailProps) {
   const { t } = useI18n()
   const p = t.profiles
   const navigate = useNavigate()
@@ -335,21 +337,16 @@ function ProfileDetail({ current, onClose, profile }: ProfileDetailProps) {
             <div className="workspace-inspector-meta">{profile.is_default && <span>{p.defaultBadge}</span>}</div>
           </div>
         </div>
-        <Button aria-label={t.common.close} onClick={onClose} size="icon-sm" variant="ghost">
-          <Codicon name="close" />
-        </Button>
+        <div className="workspace-inspector-actions">
+          <Button onClick={onRename} size="sm" variant="outline">
+            <Codicon name="edit" />
+            {p.renameMenu}
+          </Button>
+          <Button aria-label={t.common.close} onClick={onClose} size="icon-sm" variant="ghost">
+            <Codicon name="close" />
+          </Button>
+        </div>
       </header>
-      {current ? (
-        <p className="workspace-current-status">
-          <Codicon name="check" size="0.8125rem" />
-          {p.currentBadge}
-        </p>
-      ) : (
-        <Button className="w-full shrink-0" onClick={() => selectProfile(profile.name)} size="sm">
-          <Codicon name="arrow-swap" />
-          {p.switchToProfile(profileLabel(profile))}
-        </Button>
-      )}
       <SegmentedControl
         className="w-full shrink-0"
         onChange={value => {
@@ -411,6 +408,20 @@ function ProfileDetail({ current, onClose, profile }: ProfileDetailProps) {
           </Suspense>
         </div>
       )}
+      <footer className="workspace-inspector-footer">
+        <p>{p.previewHint}</p>
+        {current ? (
+          <span className="workspace-current-status">
+            <Codicon name="check" size="0.8125rem" />
+            {p.currentBadge}
+          </span>
+        ) : (
+          <Button onClick={() => selectProfile(profile.name)} size="sm">
+            <Codicon name="arrow-swap" />
+            {p.switchToProfile(profileLabel(profile))}
+          </Button>
+        )}
+      </footer>
     </aside>
   )
 }

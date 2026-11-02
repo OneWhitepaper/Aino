@@ -176,7 +176,10 @@ export const PaneTab = React.forwardRef<HTMLDivElement, PaneTabProps>(function P
       {onClose && !vertical && showCloseButton && (
         // Mask the content beneath the close button instead of painting over it.
         // Geometry stays fixed; the same fade works on solid and glass surfaces.
-        <span className="pointer-events-none absolute inset-y-0 right-0 flex items-stretch opacity-0 transition-opacity group-hover/tab:pointer-events-auto group-hover/tab:opacity-100">
+        <span
+          className="pointer-events-none absolute inset-y-0 right-0 flex items-stretch opacity-0 transition-opacity group-hover/tab:pointer-events-auto group-hover/tab:opacity-100 group-focus-within/tab:pointer-events-auto group-focus-within/tab:opacity-100"
+          data-slot="pane-tab-close"
+        >
           <button
             aria-label={translateNow('common.close')}
             className="grid w-(--pane-tab-close-width) cursor-pointer place-items-center bg-transparent text-(--ui-text-tertiary) outline-none hover:text-foreground"
@@ -245,6 +248,7 @@ export const PaneTabLabel = React.forwardRef<HTMLElement, PaneTabLabelProps>(fun
 })
 
 interface PaneTabStripProps extends React.ComponentProps<'div'> {
+  variant?: 'default' | 'tool'
   /** The scrolling tab list — receives `role="tablist"`. */
   children: React.ReactNode
   /** Semantic surface the strip belongs to. Main workspace strips share the
@@ -268,7 +272,7 @@ interface PaneTabStripProps extends React.ComponentProps<'div'> {
  * `data-zone-tabstrip`, drop carets) ride on the usual div props.
  */
 export const PaneTabStrip = React.forwardRef<HTMLDivElement, PaneTabStripProps>(function PaneTabStrip(
-  { children, className, listRef, surface, trailing, titlebar = false, ...props },
+  { children, className, listRef, surface, trailing, titlebar = false, variant = 'default', ...props },
   ref
 ) {
   return (
@@ -278,10 +282,15 @@ export const PaneTabStrip = React.forwardRef<HTMLDivElement, PaneTabStripProps>(
       // active tab's primary underline is the only seam.
       className={cn(
         'group/pane-header relative flex min-w-0 shrink-0 select-none bg-(--ui-sidebar-surface-background) [--pane-tab-active-bg:var(--ui-sidebar-surface-background)]',
-        titlebar ? 'h-full flex-1 [-webkit-app-region:drag]' : 'h-7 [-webkit-app-region:no-drag]',
+        titlebar
+          ? 'h-full flex-1 [-webkit-app-region:drag]'
+          : variant === 'tool'
+            ? 'h-[45px] [-webkit-app-region:no-drag]'
+            : 'h-7 [-webkit-app-region:no-drag]',
         className
       )}
       data-pane-surface={surface}
+      data-pane-variant={variant === 'tool' ? 'tool' : undefined}
       ref={ref}
       {...props}
     >

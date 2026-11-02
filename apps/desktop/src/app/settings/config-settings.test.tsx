@@ -7,6 +7,7 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vite
 
 import type * as ConfigApi from '@/api/config'
 import { $settingsRequestProfile } from '@/store/settings-scope'
+import { stubMenuDomApis } from '@/test/jsdom'
 
 import type { ConfigSettings as ConfigSettingsType } from './config-settings'
 
@@ -31,6 +32,7 @@ vi.mock('@/hermes', async () => ({
   getHermesConfigSchema: () => getHermesConfigSchema(),
   saveHermesConfig: (config: unknown, profile?: string) => saveHermesConfig(config, profile),
   getElevenLabsVoices: () => getElevenLabsVoices(),
+  getProfiles: async () => ({ profiles: [] }),
   setApiRequestProfile: () => {}
 }))
 
@@ -66,6 +68,7 @@ vi.mock('@/store/projects', () => ({
 let ConfigSettings: typeof ConfigSettingsType
 
 beforeAll(async () => {
+  stubMenuDomApis()
   ;({ ConfigSettings } = await import('./config-settings'))
 }, 60_000)
 
@@ -102,7 +105,7 @@ function renderConfigSettings(activeSectionId = 'safety', route = '/settings') {
 }
 
 describe('ConfigSettings autosave', () => {
-  it('shows every group in a category while locating and editing a legacy field link', async () => {
+  it('keeps both groups reachable while locating and editing a legacy field link', async () => {
     const scrollIntoView = vi.fn()
     Element.prototype.scrollIntoView = scrollIntoView
     getHermesConfigRecord.mockResolvedValue({
@@ -121,9 +124,13 @@ describe('ConfigSettings autosave', () => {
       '/settings?tab=config:memory&page=context&field=compression.enabled'
     )
 
-    expect(await screen.findByText('Persistent memory')).toBeTruthy()
-    expect(screen.getByText('Context & compression')).toBeTruthy()
-    expect(screen.getAllByRole('switch')).toHaveLength(2)
+    await screen.findAllByRole('tab')
+    await screen.findAllByRole('switch', { hidden: true })
+    expect(screen.getByRole('tab', { selected: true }).getAttribute('aria-controls')).toBe(
+      screen.getByRole('tabpanel').id
+    )
+    expect(screen.getAllByRole('switch', { hidden: true })).toHaveLength(2)
+    expect(screen.getAllByRole('switch')).toHaveLength(1)
 
     const target = container.querySelector<HTMLElement>('[id="setting-field-compression.enabled"]')!
     // Focus updates the DOM immediately; router navigation commits separately.
@@ -136,6 +143,12 @@ describe('ConfigSettings autosave', () => {
     fireEvent.click(within(target).getByRole('switch'))
 
     await waitFor(() => expect(saveHermesConfig).toHaveBeenCalledWith({ compression: { enabled: false } }, 'default'))
+
+    fireEvent.mouseDown(screen.getAllByRole('tab')[0], { button: 0, ctrlKey: false })
+    expect(
+      within(container.querySelector<HTMLElement>('[id="setting-field-memory.memory_enabled"]')!).getByRole('switch')
+    ).toBeTruthy()
+    expect(screen.getAllByRole('switch')).toHaveLength(1)
   })
 
   it('renders and saves the Codex compression auto-raise setting', async () => {
@@ -152,11 +165,15 @@ describe('ConfigSettings autosave', () => {
 
     try {
       renderConfigSettings('memory')
+      await screen.findAllByRole('tab')
+      fireEvent.mouseDown(screen.getAllByRole('tab')[1], { button: 0, ctrlKey: false })
 
-      expect(await screen.findByText('Codex Compression Auto-Raise')).toBeTruthy()
-      expect(screen.getByText('Raise compression to 85% for supported ChatGPT Codex OAuth models.')).toBeTruthy()
-
-      screen.getByRole('switch').click()
+      const target = window.document.getElementById('setting-field-compression.codex_gpt55_autoraise')!
+      expect(target).not.toBeNull()
+      expect(target.textContent).toContain('85%')
+      const toggle = within(target).getByRole('switch')
+      expect(toggle.getAttribute('aria-checked')).toBe('true')
+      fireEvent.click(toggle)
       await vi.advanceTimersByTimeAsync(700)
 
       await vi.waitFor(() =>
@@ -175,18 +192,19 @@ describe('ConfigSettings autosave', () => {
     try {
       renderConfigSettings()
 
-      await screen.findByText('Checkpoints')
+      await screen.findAllByRole('tab')
+      fireEvent.mouseDown(screen.getAllByRole('tab')[2], { button: 0, ctrlKey: false })
       const toggle = within(window.document.getElementById('setting-field-checkpoints.enabled')!).getByRole('switch')
 
       // Edit: flip checkpoints.enabled on, let the debounced autosave fire.
-      toggle.click()
+      fireEvent.click(toggle)
       await vi.advanceTimersByTimeAsync(700)
 
       await vi.waitFor(() => expect(saveHermesConfig).toHaveBeenCalledTimes(1))
       expect(saveHermesConfig.mock.calls[0][0]).toEqual({ checkpoints: { enabled: true } })
 
       // Revert: flip it back to its original value and let autosave fire again.
-      toggle.click()
+      fireEvent.click(toggle)
       await vi.advanceTimersByTimeAsync(700)
 
       await vi.waitFor(() => expect(saveHermesConfig).toHaveBeenCalledTimes(2))
@@ -215,8 +233,9 @@ describe('ConfigSettings autosave', () => {
 
       await vi.waitFor(() => expect(getHermesConfigRecord).toHaveBeenCalledWith('nash'))
 
-      await screen.findByText('Checkpoints')
-      within(window.document.getElementById('setting-field-checkpoints.enabled')!).getByRole('switch').click()
+      await screen.findAllByRole('tab')
+      fireEvent.mouseDown(screen.getAllByRole('tab')[2], { button: 0, ctrlKey: false })
+      fireEvent.click(within(window.document.getElementById('setting-field-checkpoints.enabled')!).getByRole('switch'))
       await vi.advanceTimersByTimeAsync(700)
 
       await vi.waitFor(() => expect(saveHermesConfig).toHaveBeenCalledWith({ checkpoints: { enabled: true } }, 'nash'))

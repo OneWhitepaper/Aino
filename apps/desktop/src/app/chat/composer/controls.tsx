@@ -129,21 +129,22 @@ export function ComposerControls({
     />
   )
 
-  const secondaryControls = foldedVoice ? (
+  const secondaryControls = (
     <>
-      {modelControls}
-      {voiceMenu}
-    </>
-  ) : (
-    <>
-      {modelControls}
-      <DictationButton disabled={disabled} onToggle={onDictate} state={state.voice} status={voiceStatus} />
-      {voiceMenu}
+      <div className="aino-composer-model-controls" data-slot="composer-model-controls">
+        {modelControls}
+      </div>
+      <div className="aino-composer-voice-controls" data-slot="composer-voice-controls">
+        {!foldedVoice && (
+          <DictationButton disabled={disabled} onToggle={onDictate} state={state.voice} status={voiceStatus} />
+        )}
+        {voiceMenu}
+      </div>
     </>
   )
 
   return (
-    <div className="flex min-w-0 shrink items-center gap-(--composer-control-gap)">
+    <div className="aino-composer-controls">
       {minimal ? null : secondaryControls}
       {renderSteerButton(busy, busyAction, onSteer, disabled, c.steer)}
       {showQueueButton ? (

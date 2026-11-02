@@ -11,14 +11,12 @@ export const GHOST_ICON_BTN = cn(
   'text-(--ui-text-tertiary) hover:bg-(--chrome-action-hover) hover:text-foreground'
 )
 
-// Send/voice-conversation primary: solid foreground-on-background circle
-// (reads as black-on-white in light mode, white-on-black in dark mode) to
-// match the reference composer's high-contrast CTA. Keeps the pill itself
-// neutral and lets the action visually dominate the row.
+// Use the shared action palette so send and voice follow the same light/dark
+// treatment as the rest of the application.
 export const PRIMARY_ICON_BTN = cn(
   'size-(--composer-control-primary-size,var(--composer-control-size)) shrink-0 rounded-full p-0',
-  'bg-foreground text-background hover:bg-foreground/90',
-  'disabled:bg-foreground/30 disabled:text-background disabled:opacity-100'
+  'bg-(--aino-action-bg) text-(--aino-action-fg) hover:bg-(--aino-action-hover)',
+  'disabled:bg-(--ui-bg-tertiary) disabled:text-(--ui-text-tertiary) disabled:opacity-100'
 )
 
 /** A toggle that is currently ON — dictation, spoken replies, the wake word. */

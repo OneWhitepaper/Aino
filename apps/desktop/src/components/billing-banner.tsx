@@ -16,9 +16,9 @@ function firstLine(text: string): string {
  * {@link StatusRow} — same chrome as its status-stack siblings, so it reads as
  * one piece with the composer card (no bordered alert-in-a-card). It never
  * disables the composer — slash commands (`/topup`, `/model`, `/login`) stay
- * usable — it only offers recovery: Nous opens Settings → Billing in-app, other
- * providers deep-link out. The sticky toast is the loud surface; this is the calm
- * reminder that outlives it.
+ * usable — provider-specific payment links open externally, while managed
+ * providers return to model selection. The sticky toast is the loud surface;
+ * this is the calm reminder that outlives it.
  */
 export function BillingBanner({ sessionId }: { sessionId: null | string }) {
   const active = useStore($billingBlock)
@@ -45,7 +45,7 @@ export function BillingBanner({ sessionId }: { sessionId: null | string }) {
             type="button"
             variant="text"
           >
-            {billingCtaLabel(block, copy)}
+            {billingCtaLabel(block, { addCredits: copy.addCredits, chooseModel: t.desktop.chooseModel })}
           </Button>
           <Button
             aria-label={copy.dismiss}

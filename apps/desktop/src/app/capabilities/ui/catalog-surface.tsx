@@ -2,9 +2,6 @@ import '../catalog/catalog-discovery.css'
 
 import type { ReactNode } from 'react'
 
-import { cn } from '@/lib/utils'
-
-import { PAGE_INSET_X, PAGE_MAX_W } from '../../layout-constants'
 import { CatalogCard, type CatalogCardVariant } from '../catalog/catalog-card'
 import type { CatalogEntry, CatalogKind } from '../catalog/catalog-data'
 import { CatalogDeveloper } from '../catalog/catalog-developer'
@@ -73,7 +70,7 @@ export function CatalogSurface({
 }) {
   return (
     <div className="@container/catalog capabilities-scroll">
-      <div className={cn('capabilities-sections mx-auto w-full py-6', PAGE_INSET_X, PAGE_MAX_W)}>
+      <div className="capabilities-sections capabilities-sections-page">
         {sections
           .filter(section => section.items.length)
           .map(section => (

@@ -2,8 +2,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testi
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { DesktopConnectionsRegistry } from '@/global'
-import { I18nProvider, TRANSLATIONS } from '@/i18n'
-import { applyProductBrand } from '@/lib/brand'
+import { I18nProvider } from '@/i18n'
 import { _resetFleetRosterForTests, refreshFleetRoster } from '@/store/fleet-roster'
 import { $connection } from '@/store/session'
 import { deferred } from '@/test/deferred'
@@ -215,51 +214,6 @@ describe('ConnectionsRegistrySection', () => {
     })
   })
 
-  it('signs a hand-registered Cloud connection in and saves it as oauth (#89529)', async () => {
-    const oauthLoginConnectionConfig = vi.fn().mockResolvedValue({ connected: true, ok: true })
-    Object.assign(window.hermesDesktop!, { oauthLoginConnectionConfig })
-
-    render(<ConnectionsRegistrySection />)
-
-    await screen.findByText('Homelab')
-    fireEvent.click(screen.getByText('Add connection'))
-    fireEvent.click(
-      screen.getByRole('button', { name: applyProductBrand(TRANSLATIONS.en.settings.connections.kindCloud) })
-    )
-    fireEvent.change(screen.getByPlaceholderText('Homelab'), { target: { value: 'Team cloud' } })
-    fireEvent.change(screen.getByPlaceholderText('http://homelab.lan:9119'), {
-      target: { value: 'https://team.hermes.cloud' }
-    })
-
-    // Cloud never takes a pasted token: no token box, a sign-in button instead.
-    expect(screen.queryByPlaceholderText('Paste session token')).toBeNull()
-    fireEvent.click(await screen.findByRole('button', { name: /sign in/i }))
-    // The draft identity rides along (#99989): a pre-save sign-in must name the
-    // connection whose jar the login writes into — connectionId null (unset draft)
-    // plus the draft label here. The kind/authMode matter just as much: a CLOUD
-    // draft must sign in on the legacy shared portal jar, which is the jar the
-    // saved cloud entry reads — never a private per-connection jar.
-    await waitFor(() =>
-      expect(oauthLoginConnectionConfig).toHaveBeenCalledWith('https://team.hermes.cloud', {
-        connectionId: null,
-        label: 'Team cloud',
-        authMode: 'oauth',
-        kind: 'cloud'
-      })
-    )
-
-    fireEvent.click(screen.getByText('Save connection').closest('button')!)
-
-    await waitFor(() => expect(save).toHaveBeenCalledTimes(1))
-    expect(save.mock.calls[0][0]).toMatchObject({
-      authMode: 'oauth',
-      kind: 'cloud',
-      label: 'Team cloud',
-      url: 'https://team.hermes.cloud'
-    })
-    expect(save.mock.calls[0][0].token).toBeUndefined()
-  })
-
   it('saves a custom remote Hermes path for SSH connections', async () => {
     render(<ConnectionsRegistrySection />)
 
@@ -322,9 +276,32 @@ describe('ConnectionsRegistrySection', () => {
 
     const localKind = screen.getByRole('button', { name: 'Local' }) as HTMLButtonElement
     expect(localKind.disabled).toBe(true)
-    expect(screen.getByRole('button', { name: 'Nous Cloud' })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Saved cloud connection (legacy)' })).toBeNull()
     expect(screen.getByRole('button', { name: 'Remote gateway' })).toBeTruthy()
     expect(screen.getByRole('button', { name: 'SSH' })).toBeTruthy()
+  })
+
+  it('keeps a previously saved cloud connection editable as a legacy entry', async () => {
+    const savedCloud = {
+      authMode: 'oauth' as const,
+      id: 'old-cloud',
+      kind: 'cloud' as const,
+      label: 'Old cloud',
+      tokenPreview: null,
+      tokenSet: false,
+      url: 'https://old-cloud.example'
+    }
+
+    list.mockResolvedValueOnce({ ...registry, connections: [registry.connections[0], savedCloud] })
+    render(<ConnectionsRegistrySection />)
+
+    await screen.findByText('Old cloud')
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }))
+
+    const legacyKind = screen.getByRole('button', { name: 'Saved cloud connection (legacy)' }) as HTMLButtonElement
+    expect(legacyKind.disabled).toBe(true)
+    expect(screen.getByDisplayValue('Old cloud')).toBeTruthy()
+    expect(screen.getByDisplayValue('https://old-cloud.example')).toBeTruthy()
   })
 
   it('rejects a duplicate gateway URL in the save path with an inline error', async () => {

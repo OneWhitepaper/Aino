@@ -8,7 +8,7 @@ import { $reviewFiles, $reviewOpen } from '@/store/review'
 
 import { ReviewFileTree } from './file-tree'
 
-const ROW_HEIGHT = 24
+const ROW_HEIGHT = 32
 const VIEWPORT_HEIGHT = 600
 
 const file = (path: string): HermesReviewFile => ({
@@ -91,8 +91,8 @@ describe('ReviewFileTree', () => {
     // 5,000 files would be ~5,000 rows in the DOM without virtualization.
     expect(mounted.length).toBeLessThan(100)
 
-    // The scroller still accounts for the full 5,000 × 24px list height.
-    const spacer = container.querySelector<HTMLDivElement>('[style*="120000px"]')
+    // The scroller still accounts for the full list at its rendered row height.
+    const spacer = container.querySelector<HTMLDivElement>('[style*="' + 5000 * ROW_HEIGHT + 'px"]')
     expect(spacer).not.toBeNull()
 
     // The window starts at the top, so the first rows are mounted.

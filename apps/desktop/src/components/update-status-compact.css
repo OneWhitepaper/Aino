@@ -1,0 +1,101 @@
+.compact-update-status {
+  display: flex;
+  min-height: 6.875rem;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+.compact-update-line {
+  display: flex;
+  min-height: 1.25rem;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4375rem;
+  margin: 0;
+  color: var(--ui-text-secondary);
+  font-size: 0.71875rem;
+  line-height: 1.7;
+}
+.compact-update-line > svg {
+  width: 0.8125rem;
+  height: 0.8125rem;
+  flex: none;
+  color: var(--ui-green);
+}
+.compact-update-line > svg.animate-spin {
+  color: var(--ui-text-tertiary);
+}
+.compact-update-line-warning > svg {
+  color: var(--ui-yellow);
+}
+.compact-update-reason {
+  max-width: 23rem;
+  margin: 0.3125rem 0 0;
+  color: var(--ui-text-tertiary);
+  font-size: 0.65625rem;
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+}
+.compact-update-reason > button {
+  margin-inline-start: 0.3125rem;
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.compact-update-status .compact-update-action {
+  --aino-action-bg: var(--ui-text-primary);
+  --aino-action-fg: var(--ui-bg-editor);
+  --aino-action-hover: color-mix(in srgb, var(--ui-text-primary) 88%, var(--ui-bg-editor));
+  min-width: 7.25rem;
+  min-height: 2.0625rem;
+  margin-top: 1rem;
+  padding: 0.375rem 0.75rem;
+  border-radius: 0.4375rem;
+  font-size: 0.71875rem;
+}
+.compact-update-progress {
+  display: flex;
+  width: 14.375rem;
+  max-width: 100%;
+  align-items: center;
+  gap: 0.625rem;
+  margin-top: 0.75rem;
+  color: var(--ui-text-tertiary);
+  font-size: 0.625rem;
+}
+.compact-update-progress > progress {
+  height: 0.25rem;
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  border: 0;
+  border-radius: 0.25rem;
+  background: var(--ui-stroke-tertiary);
+  accent-color: var(--ui-text-secondary);
+}
+.compact-update-progress > progress::-webkit-progress-bar {
+  background: var(--ui-stroke-tertiary);
+  border-radius: 0.25rem;
+}
+.compact-update-progress > progress::-webkit-progress-value {
+  background: var(--ui-text-secondary);
+  border-radius: 0.25rem;
+}
+.compact-update-progress > progress::-moz-progress-bar {
+  background: var(--ui-text-secondary);
+  border-radius: 0.25rem;
+}
+.compact-update-error {
+  max-height: 15rem;
+  overflow: auto;
+  margin: 0;
+  padding: 0.8125rem;
+  border: 1px solid var(--ui-stroke-tertiary);
+  border-radius: 0.4375rem;
+  background: var(--ui-bg-secondary);
+  color: var(--ui-text-secondary);
+  font-size: 0.65625rem;
+  line-height: 1.8;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}

@@ -6,7 +6,7 @@ import logging
 
 from hermes_state_runtime import RuntimeStoreError
 from tui_gateway.managed_model_runtime import ManagedBindingError, get_registry, persisted_managed_model_metadata
-from tui_gateway.methods_managed_model import _binding, _managed_owner, _managed_text
+from tui_gateway.methods_managed_model import _binding, _managed_owner, _managed_purpose, _managed_text
 
 logger = logging.getLogger(__name__)
 
@@ -27,10 +27,41 @@ def binding_key(authority, sid):
     return f"{authority.profile_id}\0{sid}"
 
 
-def managed_state(authority, sid):
+def _purpose(params):
+    try:
+        return _managed_purpose(params)
+    except ManagedBindingError as exc:
+        raise RuntimeStoreError(str(exc)) from None
+
+
+def managed_state(authority, sid, *, purpose='chat'):
     live = authority.sessions.get(sid)
     if live is None:
         raise RuntimeStoreError("not_found")
+    if purpose == 'image':
+        from gateway.session_policy import policy_for_source
+        policy = policy_for_source(authority.runner, live.source)
+        if policy is None or policy.source != 'gui':
+            raise RuntimeStoreError('managed_binding_forbidden')
+        from pathlib import Path
+        from gateway.run import _profile_runtime_scope
+        from hermes_cli.config import load_config
+        with _profile_runtime_scope(Path(authority.profile_id)):
+            cfg = load_config().get('image_gen') or {}
+        cfg = cfg if isinstance(cfg, dict) else {}
+        selected = {'model_id': cfg.get('model')} if cfg.get('provider') == 'aino' else None
+        previous = getattr(live, 'managed_image_state', None)
+        if (not selected or not isinstance(selected['model_id'], str) or not selected['model_id'].strip()):
+            get_registry().clear_session(binding_key(authority, sid), purpose='image')
+            live.__dict__.pop('managed_image_state', None)
+            raise RuntimeStoreError('managed_binding_forbidden')
+        if previous is None or previous.get('managed_image_params', {}).get('model_id') != selected['model_id']:
+            get_registry().clear_session(binding_key(authority, sid), purpose='image')
+            previous = {'managed_image_params': selected, 'transport': None}
+            live.managed_image_state = previous
+        return previous
+    if purpose != 'chat':
+        raise RuntimeStoreError('invalid_params')
     from gateway.session_policy import policy_for_source
     selected = selection_for_policy(policy_for_source(authority.runner, live.source))
     if selected is None:
@@ -44,13 +75,13 @@ def managed_state(authority, sid):
 
 def clear_managed_selection(authority, sid):
     """A committed model edit retires the old credential before its new route can run."""
-    get_registry().clear_session(binding_key(authority, sid))
+    get_registry().clear_session(binding_key(authority, sid), purpose='chat')
     live = authority.sessions.get(sid)
     if live is not None:
         live.__dict__.pop("managed_model_state", None)
 
 
-def _owned(connection, ref, *, issuer=False):
+def _owned(connection, ref, *, issuer=False, purpose='chat'):
     if issuer:
         if ref.session_id not in connection.subscriptions:
             raise RuntimeStoreError("permission_denied")
@@ -62,7 +93,7 @@ def _owned(connection, ref, *, issuer=False):
     policy = policy_for_source(connection.authority.runner, live.source)
     if policy is None or policy.source != "gui":
         raise RuntimeStoreError("managed_binding_forbidden")
-    state = managed_state(connection.authority, ref.session_id)
+    state = managed_state(connection.authority, ref.session_id, purpose=purpose)
     from tui_gateway.managed_model_runtime import transport_principal
     try:
         transport_principal(connection.transport)
@@ -111,45 +142,50 @@ def managed_agent_context(agent, authority, sid):
 
 
 async def ticket(connection, ref, params):
-    live, _ = _owned(connection, ref, issuer=True)
+    purpose = _purpose(params)
+    live, _ = _owned(connection, ref, issuer=True, purpose=purpose)
     async with live.mutation_lock:
-        _, state = _owned(connection, ref, issuer=True)
+        _, state = _owned(connection, ref, issuer=True, purpose=purpose)
         peer = connection.transport
         key = binding_key(connection.authority, ref.session_id)
         if state.get("transport") not in (None, peer):
-            get_registry().clear_session(key)
+            get_registry().clear_session(key, purpose=purpose)
         state["transport"] = peer
         try:
             owner, model_id = _managed_owner(params), _managed_text(params, "model_id", 128)
-            value = get_registry().issue(key, state, peer, owner, model_id)
+            value = get_registry().issue(key, state, peer, owner, model_id, purpose=purpose)
         except (ManagedBindingError, ValueError, TypeError) as exc:
             raise RuntimeStoreError(str(exc)) from None
-    return {"session_ticket": value, "managed_model_binding": 1}
+    return {"session_ticket": value, "managed_model_binding": 1, 'managed_image_binding': 1}
 
 
 async def claim(connection, ref, params):
-    live, _ = _owned(connection, ref)
+    purpose = _purpose(params)
+    live, _ = _owned(connection, ref, purpose=purpose)
     async with live.mutation_lock:
-        _, state = _owned(connection, ref)
+        _, state = _owned(connection, ref, purpose=purpose)
         try:
             revision = get_registry().claim(binding_key(connection.authority, ref.session_id), state, connection.transport,
                                             _managed_text(params, "session_ticket"),
-                                            _managed_owner(params), _managed_text(params, "model_id", 128))
+                                            _managed_owner(params), _managed_text(params, "model_id", 128), purpose=purpose)
         except (ManagedBindingError, ValueError, TypeError) as exc:
             raise RuntimeStoreError(str(exc)) from None
     return {"binding_revision": revision, "managed_model_binding": 1,
-            "managed_model_context_window": True}
+            "managed_model_context_window": True, 'managed_image_binding': 1}
 
 
 async def bind(connection, ref, params):
-    live, _ = _owned(connection, ref)
+    purpose = _purpose(params)
+    live, _ = _owned(connection, ref, purpose=purpose)
     async with live.mutation_lock:
-        _, state = _owned(connection, ref)
+        _, state = _owned(connection, ref, purpose=purpose)
         try:
             binding = _binding(params, binding_key(connection.authority, ref.session_id))
             get_registry().bind(binding, state, connection.transport)
         except (ManagedBindingError, ValueError, TypeError, OverflowError) as exc:
             raise RuntimeStoreError(str(exc)) from None
+        if purpose == 'image':
+            return {"bound": True, "model_id": binding.model_id, "binding_revision": binding.binding_revision}
         try:
             await asyncio.to_thread(_persist, connection.authority, ref.session_id, binding)
         except Exception:  # health: allow BLE001 -- clear an in-memory lease on any failed durable bind
@@ -160,9 +196,10 @@ async def bind(connection, ref, params):
 
 
 async def renew(connection, ref, params):
-    live, _ = _owned(connection, ref)
+    purpose = _purpose(params)
+    live, _ = _owned(connection, ref, purpose=purpose)
     async with live.mutation_lock:
-        _, state = _owned(connection, ref)
+        _, state = _owned(connection, ref, purpose=purpose)
         try:
             binding = _binding(params, binding_key(connection.authority, ref.session_id))
             get_registry().renew(binding, state, connection.transport)
@@ -172,14 +209,15 @@ async def renew(connection, ref, params):
 
 
 async def clear(connection, ref, params):
-    live, _ = _owned(connection, ref)
+    purpose = _purpose(params)
+    live, _ = _owned(connection, ref, purpose=purpose)
     revision = params.get("binding_revision")
     if type(revision) is not int or revision <= 0:
         raise RuntimeStoreError("invalid_params")
     async with live.mutation_lock:
         try:
             removed = get_registry().clear(binding_key(connection.authority, ref.session_id), revision,
-                                           connection.transport)
+                                           connection.transport, purpose=purpose)
         except ManagedBindingError as exc:
             raise RuntimeStoreError(str(exc)) from None
     return {"cleared": removed}

@@ -54,6 +54,7 @@ describe('ReviewPane header gating', () => {
   it('enables stage-all / revert-all under the uncommitted scope', () => {
     renderPane()
 
+    expect(screen.getByText('1 changed')).toBeTruthy()
     expect((screen.getByLabelText('Stage all') as HTMLButtonElement).disabled).toBe(false)
     expect((screen.getByLabelText('Revert all') as HTMLButtonElement).disabled).toBe(false)
   })
@@ -87,5 +88,15 @@ describe('ReviewPane header gating', () => {
     fireEvent.click(screen.getByRole('menuitem', { name: 'Uncommitted' }))
 
     expect($reviewScope.get()).toBe('uncommitted')
+  })
+
+  it('distinguishes a non-repository from a repository with no changes', () => {
+    $reviewFiles.set([])
+    $reviewIsRepo.set(false)
+    renderPane()
+
+    expect(screen.getByText('Not a git repository')).toBeTruthy()
+    expect(screen.queryByLabelText('Stage all')).toBeNull()
+    expect(screen.queryByText('No diffs')).toBeNull()
   })
 })

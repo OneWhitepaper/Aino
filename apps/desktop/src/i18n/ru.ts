@@ -1,7 +1,13 @@
+import { mergeTranslations } from '@hermes/shared/i18n'
+
 // health: allow FILE_LINES -- locale data: translated copy for the usage-window plan UI (allowance gauges, Large/Free tags, the limit card), one key per string
 import { defineFieldCopy } from '@/app/settings/field-copy'
 
+import { accountPage } from './account-page'
+import { appearancePage } from './appearance-page'
+import { configPagesFor } from './config-pages'
 import { defineLocale, type TranslationOverrides } from './define-locale'
+import { homeGuidance } from './home-guidance'
 import { messagingDirectory } from './messaging-directory'
 import { ruBoot } from './ru_boot'
 import { ruCatalog, ruSkillDeepLink } from './ru_catalog'
@@ -19,6 +25,9 @@ import { ruProjects } from './ru_projects'
 import { ruSharedMetrics } from './ru_shared_metrics'
 import { ruThemePicker } from './ru_theme_picker'
 import { ruUpdateChannel } from './ru_update_channel'
+import { runtimeFeatureCopy } from './runtime-feature-copy'
+import { toolPanel } from './tool-panel'
+import { workspacePage } from './workspace-page'
 
 // RU_PLURAL: (count, one, few, many) — русские формы сущ. падежа
 // RU_NOUN: (count, one, few, many) — формы род. множественного
@@ -41,7 +50,288 @@ const RU_NOUN = (count: number | string, one: string, few: string, many: string)
   return n === 1 && nn !== 11 ? one : n >= 2 && n <= 4 && (nn < 12 || nn > 14) ? few : many
 }
 
-export const ruOverrides = {
+const configPageFieldLabels: Record<string, string> = defineFieldCopy({
+  model: 'Модель по умолчанию',
+  modelContextLength:
+    'Переопределяет обнаруженное окно контекста ТОЛЬКО основной модели чата (в токенах). Оставьте 0, чтобы использовать обнаруженное значение выбранной модели. Не влияет на вспомогательные модели и модели MoA.',
+  fallbackProviders: 'Резервные модели',
+  toolsets: 'Включённые наборы инструментов',
+  timezone: 'Часовой пояс',
+  display: {
+    personality: 'Личность',
+    showReasoning: 'Блоки рассуждений'
+  },
+  desktop: {
+    repoScanEnabled: 'Автоматическое обнаружение репозиториев',
+    repoScanRoots: 'Корни обнаружения репозиториев',
+    repoScanExcludePaths: 'Исключаемые пути репозиториев'
+  },
+  agent: {
+    maxTurns: 'Макс. шагов агента',
+    imageInputMode: 'Вложения изображений',
+    apiMaxRetries: 'Повторы API',
+    serviceTier: 'Уровень сервиса',
+    toolUseEnforcement: 'Принудительное использование инструментов'
+  },
+  terminal: {
+    cwd: 'Рабочий каталог',
+    backend: 'Бэкенд выполнения',
+    timeout: 'Тайм-аут команд',
+    persistentShell: 'Персистентная оболочка',
+    envPassthrough: 'Пропуск переменных окружения',
+    dockerImage: 'Образ Docker',
+    singularityImage: 'Образ Singularity',
+    modalImage: 'Образ Modal',
+    daytonaImage: 'Образ Daytona'
+  },
+  fileReadMaxChars: 'Лимит чтения файла',
+  toolOutput: {
+    maxBytes: 'Лимит вывода терминала',
+    maxLines: 'Лимит страниц файла',
+    maxLineLength: 'Лимит длины строки'
+  },
+  codeExecution: {
+    mode: 'Режим выполнения кода'
+  },
+  approvals: {
+    mode: 'Режим подтверждения',
+    timeout: 'Тайм-аут подтверждения',
+    mcpReloadConfirm: 'Подтверждать перезагрузку MCP'
+  },
+  commandAllowlist: 'Список разрешённых команд',
+  security: {
+    redactSecrets: 'Скрывать секреты',
+    allowPrivateUrls: 'Разрешать частные URL'
+  },
+  browser: {
+    allowPrivateUrls: 'Частные URL браузера',
+    autoLocalForPrivateUrls: 'Локальный браузер для частных URL'
+  },
+  checkpoints: {
+    enabled: 'Чекпоинты файлов',
+    maxSnapshots: 'Лимит чекпоинтов'
+  },
+  voice: {
+    maxRecordingSeconds: 'Макс. длительность записи',
+    autoTts: 'Зачитывать ответы вслух'
+  },
+  stt: {
+    enabled: 'Распознавание речи',
+    echoTranscripts: 'Повторять расшифровки',
+    provider: 'Провайдер распознавания речи',
+    local: {
+      model: 'Локальная модель транскрипции',
+      language: 'Язык транскрипции'
+    },
+    openai: {
+      model: 'Модель STT OpenAI'
+    },
+    groq: {
+      model: 'Модель STT Groq'
+    },
+    mistral: {
+      model: 'Модель STT Mistral'
+    },
+    elevenlabs: {
+      modelId: 'Модель STT ElevenLabs',
+      languageCode: 'Язык ElevenLabs',
+      tagAudioEvents: 'Метки звуковых событий',
+      diarize: 'Разделение спикеров'
+    }
+  },
+  tts: {
+    provider: 'Провайдер синтеза речи',
+    edge: {
+      voice: 'Голос Edge'
+    },
+    openai: {
+      model: 'Модель TTS OpenAI',
+      voice: 'Голос OpenAI'
+    },
+    elevenlabs: {
+      voiceId: 'Голос ElevenLabs',
+      modelId: 'Модель ElevenLabs'
+    },
+    xai: {
+      voiceId: 'Голос xAI (Grok)',
+      language: 'Язык xAI',
+      speed: 'Скорость воспроизведения xAI',
+      autoSpeechTags: 'Автомаркеры речи xAI',
+      optimizeStreamingLatency: 'Оптимизация задержки стриминга xAI',
+      sampleRate: 'Частота дискретизации xAI',
+      bitRate: 'Битрейт xAI'
+    },
+    minimax: {
+      model: 'Модель TTS MiniMax',
+      voiceId: 'Голос MiniMax'
+    },
+    mistral: {
+      model: 'Модель TTS Mistral',
+      voiceId: 'Голос Mistral'
+    },
+    gemini: {
+      model: 'Модель TTS Gemini',
+      voice: 'Голос Gemini'
+    },
+    neutts: {
+      model: 'Модель NeuTTS',
+      device: 'Устройство NeuTTS'
+    },
+    kittentts: {
+      model: 'Модель KittenTTS',
+      voice: 'Голос KittenTTS'
+    },
+    piper: {
+      voice: 'Голос Piper'
+    },
+    deepinfra: {
+      model: 'Модель TTS DeepInfra',
+      voice: 'Голос DeepInfra'
+    }
+  },
+  memory: {
+    memoryEnabled: 'Персистентная память',
+    userProfileEnabled: 'Профиль пользователя',
+    memoryCharLimit: 'Бюджет памяти',
+    userCharLimit: 'Бюджет профиля',
+    provider: 'Провайдер памяти'
+  },
+  context: {
+    engine: 'Движок контекста'
+  },
+  compression: {
+    enabled: 'Авто-сжатие',
+    threshold: 'Порог сжатия',
+    codexGpt55Autoraise: 'Автоповышение сжатия Codex',
+    targetRatio: 'Целевое сжатие',
+    protectLastN: 'Защищённые недавние сообщения'
+  },
+  auxiliary: {
+    compression: {
+      timeout: 'Таймаут модели сжатия (с)'
+    }
+  },
+  delegation: {
+    model: 'Модель субагента',
+    provider: 'Провайдер субагента',
+    maxIterations: 'Лимит ходов субагента',
+    maxConcurrentChildren: 'Параллельные субагенты',
+    childTimeoutSeconds: 'Тайм-аут субагента',
+    reasoningEffort: 'Глубина рассуждений субагента'
+  },
+  updates: {
+    nonInteractiveLocalChanges: 'Локальные изменения при обновлении из приложения'
+  }
+})
+
+const configPageFieldDescriptions: Record<string, string> = defineFieldCopy({
+  model: 'Используется для новых чатов, если вы не выберете другую модель в композере.',
+  modelContextLength: 'Оставьте 0, чтобы использовать обнаруженное окно контекста выбранной модели.',
+  fallbackProviders:
+    'Резервные записи provider:model, которые будут пробоваться, если модель по умолчанию не сработает.',
+  display: {
+    personality: 'Стиль ассистента по умолчанию для новых сеансов.',
+    showReasoning: 'Показывать блоки рассуждений, когда бэкенд их предоставляет.'
+  },
+  desktop: {
+    repoScanEnabled: 'Сканировать локальные папки на Git-репозитории, чтобы показывать их в Проектах.',
+    repoScanRoots:
+      'Папки для сканирования. Пустой список отключает обход диска; проекты, связанные с чатами, остаются видимыми.',
+    repoScanExcludePaths: 'Папки и их вложенные, которые нужно пропускать при обнаружении репозиториев.'
+  },
+  timezone: 'Идентификатор часового пояса IANA. Пустое значение — системный часовой пояс.',
+  agent: {
+    imageInputMode: 'Управляет тем, как вложения изображений отправляются модели.',
+    maxTurns: 'Верхний предел ходов с вызовами инструментов, после которого Hermes останавливает запуск.'
+  },
+  terminal: {
+    cwd: 'Папка проекта по умолчанию для инструментов и терминала.',
+    persistentShell:
+      'Только SSH: сохранять экспортированные переменные между командами. При отключении каждая команда использует среду входа; рабочая папка сохраняется всегда.',
+    envPassthrough:
+      'Имена переменных окружения для инструментов, не их значения. После изменений перезапустите службу и создайте заново существующие среды выполнения.',
+    dockerImage: 'Образ контейнера, используемый, когда бэкенд выполнения — Docker.',
+    singularityImage: 'Образ, используемый, когда бэкенд выполнения — Singularity.',
+    modalImage: 'Образ, используемый, когда бэкенд выполнения — Modal.',
+    daytonaImage: 'Образ, используемый, когда бэкенд выполнения — Daytona.'
+  },
+  codeExecution: {
+    mode: 'Project использует папку сессии и Python проекта; strict — временную папку и Python среды выполнения. Права доступа к файлам не меняются.'
+  },
+  fileReadMaxChars: 'Максимальное число символов, которые Hermes может прочитать из одного запроса к файлу.',
+  approvals: {
+    mode: 'Как Hermes обрабатывает команды, требующие явного подтверждения.',
+    timeout: 'Как долго запросы подтверждения ждут перед тайм-аутом.'
+  },
+  security: {
+    redactSecrets: 'Скрывать обнаруженные секреты из видимого для модели содержимого, когда это возможно.'
+  },
+  checkpoints: {
+    enabled: 'Создавать снимки для отката перед правкой файлов.'
+  },
+  memory: {
+    memoryEnabled: 'Сохранять долговременные воспоминания, которые могут помочь будущим сеансам.',
+    userProfileEnabled: 'Поддерживать компактный профиль предпочтений пользователя.'
+  },
+  context: {
+    engine: 'Стратегия управления длинными диалогами у предела контекста.'
+  },
+  compression: {
+    enabled: 'Сжимать более старый контекст, когда диалоги становятся большими.',
+    codexGpt55Autoraise: 'Повышает порог сжатия до 85% для поддерживаемых моделей ChatGPT Codex OAuth.'
+  },
+  auxiliary: {
+    compression: {
+      timeout:
+        'Сколько секунд ждать вспомогательную модель сжатия за один вызов (по умолчанию 120). Увеличьте для медленных локальных моделей.'
+    }
+  },
+  voice: {
+    autoTts: 'Автоматически зачитывать ответы ассистента.'
+  },
+  tts: {
+    xai: {
+      voiceId: 'ID голоса xAI (например, eve) или ID пользовательского голоса.',
+      language: 'Код языка речи (например, en, pt-BR) или «auto» для автоопределения.',
+      speed: 'Скорость воспроизведения. 0.7 = медленнее, 1.0 = нормально, 1.5 = быстрее.',
+      autoSpeechTags:
+        'Позволить LLM вставлять выразительные звуковые теги ([laughing], [sighs]) в сценарий перед синтезом.',
+      optimizeStreamingLatency:
+        'Компромисс между задержкой и качеством. 0 = лучшее качество, 2 = минимальная задержка.',
+      sampleRate: 'Частота дискретизации аудио в Гц. Выше = лучшее качество, большие файлы.',
+      bitRate: 'Битрейт MP3 в бит/с. Действует только когда кодек — mp3.'
+    },
+    neutts: {
+      device: 'Локальное устройство инференса для NeuTTS.'
+    }
+  },
+  stt: {
+    enabled: 'Включать локальное или провайдерное распознавание речи.',
+    echoTranscripts: 'Возвращать в чат «сырую» 🎙️ расшифровку голосовых сообщений.',
+    elevenlabs: {
+      languageCode: 'Необязательный код языка ISO-639-3. Пустое значение — автоопределение ElevenLabs.'
+    }
+  },
+  updates: {
+    nonInteractiveLocalChanges:
+      'Когда Hermes обновляет себя из приложения (без запроса в терминале), сохранять локальные правки исходников (stash) или выбрасывать (discard). Обновления из терминала всегда спрашивают.'
+  }
+})
+
+const ruBaseOverrides = {
+  appearancePage: appearancePage.ru,
+  home: homeGuidance.ru,
+  toolPanel: toolPanel['ru'],
+  workspacePage: workspacePage.ru,
+  accountPage: accountPage['ru'],
+  platformRecharge: {
+    description:
+      'Суммы рассчитываются автоматически после ввода. Перед оплатой проверьте сумму платежа и сумму зачисления.',
+    quote: 'Расчёт сумм…',
+    create: 'Перейти к оплате',
+    payAmount: 'Сумма к оплате',
+    creditAmount: 'Сумма зачисления'
+  },
   connectorOffer: {
     heading: 'Сохранить подключённые приложения',
     body: 'Войдите в бесплатную учётную запись Nous, чтобы сохранить подключённые приложения, например Gmail или Slack.'
@@ -352,6 +642,7 @@ export const ruOverrides = {
     noResults: 'Языки не найдены'
   },
   settings: {
+    configPages: configPagesFor('ru', configPageFieldLabels, configPageFieldDescriptions),
     // Window plans (Nous subscription with included usage). Other billing strings: overlay-gaps.json.
     billing: {
       keepGoingOnCredits: {
@@ -443,7 +734,7 @@ export const ruOverrides = {
     resetFailed: 'Не удалось сбросить',
     pluginPages: ruPluginSettings.pluginPages,
     nav: {
-      providers: 'Провайдеры',
+      providers: 'Модельные сервисы',
       providerAccounts: 'Аккаунты',
       providerApiKeys: 'API-ключи',
       providerCustomEndpoints: 'Свои эндпоинты',
@@ -451,6 +742,7 @@ export const ruOverrides = {
       apiKeys: 'Инструменты и ключи',
       keybinds: 'Горячие клавиши',
       keysTools: 'Инструменты',
+      keysCredentials: 'Ключи',
       keysSettings: 'Настройки',
       mcp: 'MCP',
       archivedChats: 'Архив чатов',
@@ -642,269 +934,8 @@ export const ruOverrides = {
         turnOffFailed: 'Не удалось выключить питомца.'
       }
     },
-    fieldLabels: defineFieldCopy({
-      model: 'Модель по умолчанию',
-      modelContextLength:
-        'Переопределяет обнаруженное окно контекста ТОЛЬКО основной модели чата (в токенах). Оставьте 0, чтобы использовать обнаруженное значение выбранной модели. Не влияет на вспомогательные модели и модели MoA.',
-      fallbackProviders: 'Резервные модели',
-      toolsets: 'Включённые наборы инструментов',
-      timezone: 'Часовой пояс',
-      display: {
-        personality: 'Личность',
-        showReasoning: 'Блоки рассуждений'
-      },
-      desktop: {
-        repoScanEnabled: 'Автоматическое обнаружение репозиториев',
-        repoScanRoots: 'Корни обнаружения репозиториев',
-        repoScanExcludePaths: 'Исключаемые пути репозиториев'
-      },
-      agent: {
-        maxTurns: 'Макс. шагов агента',
-        imageInputMode: 'Вложения изображений',
-        apiMaxRetries: 'Повторы API',
-        serviceTier: 'Уровень сервиса',
-        toolUseEnforcement: 'Принудительное использование инструментов'
-      },
-      terminal: {
-        cwd: 'Рабочий каталог',
-        backend: 'Бэкенд выполнения',
-        timeout: 'Тайм-аут команд',
-        persistentShell: 'Персистентная оболочка',
-        envPassthrough: 'Пропуск переменных окружения',
-        dockerImage: 'Образ Docker',
-        singularityImage: 'Образ Singularity',
-        modalImage: 'Образ Modal',
-        daytonaImage: 'Образ Daytona'
-      },
-      fileReadMaxChars: 'Лимит чтения файла',
-      toolOutput: {
-        maxBytes: 'Лимит вывода терминала',
-        maxLines: 'Лимит страниц файла',
-        maxLineLength: 'Лимит длины строки'
-      },
-      codeExecution: {
-        mode: 'Режим выполнения кода'
-      },
-      approvals: {
-        mode: 'Режим подтверждения',
-        timeout: 'Тайм-аут подтверждения',
-        mcpReloadConfirm: 'Подтверждать перезагрузку MCP'
-      },
-      commandAllowlist: 'Список разрешённых команд',
-      security: {
-        redactSecrets: 'Скрывать секреты',
-        allowPrivateUrls: 'Разрешать частные URL'
-      },
-      browser: {
-        allowPrivateUrls: 'Частные URL браузера',
-        autoLocalForPrivateUrls: 'Локальный браузер для частных URL'
-      },
-      checkpoints: {
-        enabled: 'Чекпоинты файлов',
-        maxSnapshots: 'Лимит чекпоинтов'
-      },
-      voice: {
-        maxRecordingSeconds: 'Макс. длительность записи',
-        autoTts: 'Зачитывать ответы вслух'
-      },
-      stt: {
-        enabled: 'Распознавание речи',
-        echoTranscripts: 'Повторять расшифровки',
-        provider: 'Провайдер распознавания речи',
-        local: {
-          model: 'Локальная модель транскрипции',
-          language: 'Язык транскрипции'
-        },
-        openai: {
-          model: 'Модель STT OpenAI'
-        },
-        groq: {
-          model: 'Модель STT Groq'
-        },
-        mistral: {
-          model: 'Модель STT Mistral'
-        },
-        elevenlabs: {
-          modelId: 'Модель STT ElevenLabs',
-          languageCode: 'Язык ElevenLabs',
-          tagAudioEvents: 'Метки звуковых событий',
-          diarize: 'Разделение спикеров'
-        }
-      },
-      tts: {
-        provider: 'Провайдер синтеза речи',
-        edge: {
-          voice: 'Голос Edge'
-        },
-        openai: {
-          model: 'Модель TTS OpenAI',
-          voice: 'Голос OpenAI'
-        },
-        elevenlabs: {
-          voiceId: 'Голос ElevenLabs',
-          modelId: 'Модель ElevenLabs'
-        },
-        xai: {
-          voiceId: 'Голос xAI (Grok)',
-          language: 'Язык xAI',
-          speed: 'Скорость воспроизведения xAI',
-          autoSpeechTags: 'Автомаркеры речи xAI',
-          optimizeStreamingLatency: 'Оптимизация задержки стриминга xAI',
-          sampleRate: 'Частота дискретизации xAI',
-          bitRate: 'Битрейт xAI'
-        },
-        minimax: {
-          model: 'Модель TTS MiniMax',
-          voiceId: 'Голос MiniMax'
-        },
-        mistral: {
-          model: 'Модель TTS Mistral',
-          voiceId: 'Голос Mistral'
-        },
-        gemini: {
-          model: 'Модель TTS Gemini',
-          voice: 'Голос Gemini'
-        },
-        neutts: {
-          model: 'Модель NeuTTS',
-          device: 'Устройство NeuTTS'
-        },
-        kittentts: {
-          model: 'Модель KittenTTS',
-          voice: 'Голос KittenTTS'
-        },
-        piper: {
-          voice: 'Голос Piper'
-        },
-        deepinfra: {
-          model: 'Модель TTS DeepInfra',
-          voice: 'Голос DeepInfra'
-        }
-      },
-      memory: {
-        memoryEnabled: 'Персистентная память',
-        userProfileEnabled: 'Профиль пользователя',
-        memoryCharLimit: 'Бюджет памяти',
-        userCharLimit: 'Бюджет профиля',
-        provider: 'Провайдер памяти'
-      },
-      context: {
-        engine: 'Движок контекста'
-      },
-      compression: {
-        enabled: 'Авто-сжатие',
-        threshold: 'Порог сжатия',
-        codexGpt55Autoraise: 'Автоповышение сжатия Codex',
-        targetRatio: 'Целевое сжатие',
-        protectLastN: 'Защищённые недавние сообщения'
-      },
-      auxiliary: {
-        compression: {
-          timeout: 'Таймаут модели сжатия (с)'
-        }
-      },
-      delegation: {
-        model: 'Модель субагента',
-        provider: 'Провайдер субагента',
-        maxIterations: 'Лимит ходов субагента',
-        maxConcurrentChildren: 'Параллельные субагенты',
-        childTimeoutSeconds: 'Тайм-аут субагента',
-        reasoningEffort: 'Глубина рассуждений субагента'
-      },
-      updates: {
-        nonInteractiveLocalChanges: 'Локальные изменения при обновлении из приложения'
-      }
-    }),
-    fieldDescriptions: defineFieldCopy({
-      model: 'Используется для новых чатов, если вы не выберете другую модель в композере.',
-      modelContextLength: 'Оставьте 0, чтобы использовать обнаруженное окно контекста выбранной модели.',
-      fallbackProviders:
-        'Резервные записи provider:model, которые будут пробоваться, если модель по умолчанию не сработает.',
-      display: {
-        personality: 'Стиль ассистента по умолчанию для новых сеансов.',
-        showReasoning: 'Показывать блоки рассуждений, когда бэкенд их предоставляет.'
-      },
-      desktop: {
-        repoScanEnabled: 'Сканировать локальные папки на Git-репозитории, чтобы показывать их в Проектах.',
-        repoScanRoots: 'Папки для сканирования. Оставьте пустым, чтобы сканировать домашний каталог.',
-        repoScanExcludePaths: 'Папки и их вложенные, которые нужно пропускать при обнаружении репозиториев.'
-      },
-      timezone: 'Идентификатор часового пояса IANA. Пустое значение — системный часовой пояс.',
-      agent: {
-        imageInputMode: 'Управляет тем, как вложения изображений отправляются модели.',
-        maxTurns: 'Верхний предел ходов с вызовами инструментов, после которого Hermes останавливает запуск.'
-      },
-      terminal: {
-        cwd: 'Папка проекта по умолчанию для инструментов и терминала.',
-        persistentShell: 'Сохранять состояние оболочки между командами, если бэкенд это поддерживает.',
-        envPassthrough: 'Переменные окружения, которые передавать в выполнение инструментов.',
-        dockerImage: 'Образ контейнера, используемый, когда бэкенд выполнения — Docker.',
-        singularityImage: 'Образ, используемый, когда бэкенд выполнения — Singularity.',
-        modalImage: 'Образ, используемый, когда бэкенд выполнения — Modal.',
-        daytonaImage: 'Образ, используемый, когда бэкенд выполнения — Daytona.'
-      },
-      codeExecution: {
-        mode: 'Насколько строго выполнение кода ограничено текущим проектом.'
-      },
-      fileReadMaxChars: 'Максимальное число символов, которые Hermes может прочитать из одного запроса к файлу.',
-      approvals: {
-        mode: 'Как Hermes обрабатывает команды, требующие явного подтверждения.',
-        timeout: 'Как долго запросы подтверждения ждут перед тайм-аутом.'
-      },
-      security: {
-        redactSecrets: 'Скрывать обнаруженные секреты из видимого для модели содержимого, когда это возможно.'
-      },
-      checkpoints: {
-        enabled: 'Создавать снимки для отката перед правкой файлов.'
-      },
-      memory: {
-        memoryEnabled: 'Сохранять долговременные воспоминания, которые могут помочь будущим сеансам.',
-        userProfileEnabled: 'Поддерживать компактный профиль предпочтений пользователя.'
-      },
-      context: {
-        engine: 'Стратегия управления длинными диалогами у предела контекста.'
-      },
-      compression: {
-        enabled: 'Сжимать более старый контекст, когда диалоги становятся большими.',
-        codexGpt55Autoraise: 'Повышает порог сжатия до 85% для поддерживаемых моделей ChatGPT Codex OAuth.'
-      },
-      auxiliary: {
-        compression: {
-          timeout:
-            'Сколько секунд ждать вспомогательную модель сжатия за один вызов (по умолчанию 120). Увеличьте для медленных локальных моделей.'
-        }
-      },
-      voice: {
-        autoTts: 'Автоматически зачитывать ответы ассистента.'
-      },
-      tts: {
-        xai: {
-          voiceId: 'ID голоса xAI (например, eve) или ID пользовательского голоса.',
-          language: 'Код языка речи (например, en, pt-BR) или «auto» для автоопределения.',
-          speed: 'Скорость воспроизведения. 0.7 = медленнее, 1.0 = нормально, 1.5 = быстрее.',
-          autoSpeechTags:
-            'Позволить LLM вставлять выразительные звуковые теги ([laughing], [sighs]) в сценарий перед синтезом.',
-          optimizeStreamingLatency:
-            'Компромисс между задержкой и качеством. 0 = лучшее качество, 2 = минимальная задержка.',
-          sampleRate: 'Частота дискретизации аудио в Гц. Выше = лучшее качество, большие файлы.',
-          bitRate: 'Битрейт MP3 в бит/с. Действует только когда кодек — mp3.'
-        },
-        neutts: {
-          device: 'Локальное устройство инференса для NeuTTS.'
-        }
-      },
-      stt: {
-        enabled: 'Включать локальное или провайдерное распознавание речи.',
-        echoTranscripts: 'Возвращать в чат «сырую» 🎙️ расшифровку голосовых сообщений.',
-        elevenlabs: {
-          languageCode: 'Необязательный код языка ISO-639-3. Пустое значение — автоопределение ElevenLabs.'
-        }
-      },
-      updates: {
-        nonInteractiveLocalChanges:
-          'Когда Hermes обновляет себя из приложения (без запроса в терминале), сохранять локальные правки исходников (stash) или выбрасывать (discard). Обновления из терминала всегда спрашивают.'
-      }
-    }),
+    fieldLabels: configPageFieldLabels,
+    fieldDescriptions: configPageFieldDescriptions,
     about: { updates: 'Обновления', channel: ruUpdateChannel },
     poolLimits: {
       warmBotBackendsAria: 'Количество сохраняемых подключений профилей',
@@ -1015,7 +1046,65 @@ export const ruOverrides = {
       couldNotSave: 'Не удалось сохранить учётные данные.',
       remove: 'Удалить',
       getKey: 'Получить ключ',
-      saving: 'Сохранение'
+      saving: 'Сохранение',
+      toolPageIntro:
+        'Здесь подключаются дополнительные сервисы веб-поиска, голосовых функций и внешней памяти. Это не API-ключи модели чата. Неиспользуемые поля можно оставить пустыми. Откройте пункт, чтобы узнать подробности; внешние сервисы могут обрабатывать запросы и взимать плату.',
+      toolServices: {
+        porcupine: {
+          label: 'Ключ голосового пробуждения Porcupine',
+          description:
+            'Нужен только если Porcupine выбран движком голосового пробуждения в настройках голоса. Для движка по умолчанию ключ не требуется.'
+        },
+        retaindbApiKey: {
+          label: 'Ключ памяти RetainDB',
+          description:
+            'Подключает внешний сервис памяти RetainDB. Нужен только если RetainDB выбран и включён как поставщик памяти.'
+        },
+        retaindbBaseUrl: {
+          label: 'Адрес сервиса RetainDB',
+          description:
+            'Меняйте только при подключении собственного сервера RetainDB. Для RetainDB Cloud оставьте значение по умолчанию.'
+        },
+        searxngUrl: {
+          label: 'Адрес собственного веб-поиска (SearXNG)',
+          description:
+            'Адрес вашего сервера SearXNG. API-ключ не нужен. Поддерживается поиск, но не извлечение содержимого страниц.'
+        },
+        supermemoryApiKey: {
+          label: 'Ключ памяти Supermemory',
+          description:
+            'Подключает внешний сервис памяти Supermemory. Установите и включите плагин, затем выберите его как поставщика памяти.'
+        },
+        tavilyApiKey: {
+          label: 'Ключ веб-поиска Tavily',
+          description:
+            'Используется для веб-поиска и извлечения страниц через Tavily. Выберите Tavily; ключ может повысить лимиты. Возможна оплата по тарифам сервиса.'
+        },
+        toolGatewayDomain: {
+          label: 'Домен шлюза инструментов (дополнительно)',
+          description:
+            'Переопределяет домен управляемых шлюзов инструментов. Для поддерживаемых подписок или собственных установок; обычно оставляют пустым.'
+        },
+        toolGatewayScheme: {
+          label: 'Протокол шлюза инструментов (дополнительно)',
+          description:
+            'Задаёт протокол шлюза, обычно HTTPS. Меняйте только для собственного шлюза или локального тестирования.'
+        },
+        toolGatewayUrl: {
+          label: 'Адрес шлюза инструментов (дополнительно)',
+          description: 'Задаёт полный адрес шлюза вместо автоматического определения. Обычно оставляют пустым.'
+        },
+        toolGatewayToken: {
+          label: 'Токен доступа к шлюзу (дополнительно)',
+          description:
+            'Вручную переопределяет токен шлюза. Обычно он управляется входом в аккаунт; оставьте поле пустым.'
+        },
+        voiceOpenaiKey: {
+          label: 'Ключ голосовых сервисов OpenAI',
+          description:
+            'Используется для распознавания и синтеза речи OpenAI, а не для обычного чата. OpenAI может взимать плату; при подходящей настройке может использоваться OPENAI_API_KEY.'
+        }
+      }
     },
     envActions: {
       actions: 'Действия',
@@ -1061,11 +1150,12 @@ export const ruOverrides = {
       updateSkippedCloud: 'Управляется Hermes Cloud',
       kindLocal: 'Локальный',
       kindRemote: 'Удалённый шлюз',
-      kindCloud: 'Hermes Cloud',
+      kindCloud: 'Сохранённое облачное подключение (старое)',
       kindSsh: 'SSH',
       kindLocalDesc: 'Рантайм Hermes, которым управляет это приложение.',
       kindRemoteDesc: 'Шлюз Hermes, доступный по HTTP(S) — LAN, Tailscale или интернет.',
-      kindCloudDesc: 'Хостинговая инстанция, обнаруженная через ваш аккаунт Hermes Cloud.',
+      kindCloudDesc:
+        'Облачное подключение, сохранённое в старой версии Aino. Оно продолжит работать; новые подключения добавляйте через удалённый шлюз или SSH.',
       kindSshDesc: 'Установка Hermes, доступная по SSH.',
       labelTitle: 'Имя',
       labelDesc:
@@ -1085,8 +1175,6 @@ export const ruOverrides = {
       duplicateSsh: label => `Соединение с этим SSH-хостом уже есть («${label}»).`,
       sameBackendHint: label => `Тот же бэкенд, что и «${label}»`,
       localAddHint: 'Локальное недоступно: управляемое локальное соединение уже существует (их всегда только одно).',
-      cloudAddHint:
-        'Подсказка: вход в Hermes Cloud выше автоматически обнаруживает ваших агентов — эту форму используйте только для ручной регистрации известного URL инстанса.',
       save: 'Сохранить соединение',
       saving: 'Сохранение…',
       cancel: 'Отмена',
@@ -3350,14 +3438,14 @@ export const ruOverrides = {
       messagingPlatforms: 'Платформы сообщений'
     },
     approvalMode: {
-      title: 'Режим подтверждения',
+      title: 'Как Aino запрашивать разрешение?',
       ariaLabel: mode => `Режим подтверждения: ${mode}`,
-      manual: 'Ручной',
+      manual: 'Запрашивать разрешение',
       manualDescription: 'Спрашивать перед действиями, требующими подтверждения',
-      smart: 'Умный',
-      smartDescription: 'Автоматически оценивать действия и спрашивать при необходимости',
-      off: 'Выкл',
-      offDescription: 'Выполнять без запросов подтверждения'
+      smart: 'Подтверждать за меня',
+      smartDescription: 'Оценивать риск команд и спрашивать вас при необходимости',
+      off: 'Не спрашивать',
+      offDescription: 'Пропускать запросы; системные разрешения и правила безопасности остаются в силе'
     },
     statusbar: {
       unknown: 'неизвестно',
@@ -3435,6 +3523,10 @@ export const ruOverrides = {
           tool_definitions: 'Определения инструментов'
         },
         empty: 'Данных контекста пока нет',
+        detailsUnavailable: 'Подробная разбивка временно недоступна. Текущее использование по-прежнему показано.',
+        unavailable: 'Использование контекста недоступно. Повторите попытку.',
+        retry: 'Повторить',
+        pendingDetails: 'Текущая среда выполнения не предоставила разбивку по категориям.',
         loading: 'Загрузка разбивки…',
         percentFull: percent => `${percent}% занято`,
         title: 'Использование контекста',
@@ -3449,7 +3541,7 @@ export const ruOverrides = {
       noModel: 'модель не выбрана',
       switchModel: 'Сменить модель',
       openModelPicker: 'Открыть выбор модели',
-      modelPinned: 'закреплено вами; новые чаты используют её вместо модели по умолчанию из настроек',
+      modelPinned: 'Только для текущего чата; новые чаты используют модель по умолчанию из настроек',
       modelTitle: (provider, model) => `Модель · ${provider}: ${model}`,
       providerModelTitle: (provider, model) => `${provider} · ${model}`,
       subtaskMonitor: 'Монитор подзадач',
@@ -3631,6 +3723,8 @@ export const ruOverrides = {
     }
   },
   zones: {
+    sidebarModeMenu: 'Переключить режим общения',
+    sidebarSessionsDescription: 'Проекты, файлы и повседневные беседы',
     showTabStrip: 'Показать вкладки',
     hideTabStrip: 'Скрыть вкладки',
     showStripTab: title => `Показать ${title}`,
@@ -3824,6 +3918,9 @@ export const ruOverrides = {
       gatewayDisconnected: 'Шлюз Hermes не подключён'
     },
     tool: {
+      collapseDetails: 'Свернуть подробности',
+      moreActions: 'Действия с записью выполнения',
+      hideRecord: 'Скрыть эту запись',
       copyCode: 'Копировать код',
       renderingImage: 'Рендеринг изображения',
       copyOutput: 'Копировать вывод',
@@ -4086,5 +4183,10 @@ export const ruOverrides = {
     }
   }
 } satisfies TranslationOverrides
+
+export const ruOverrides = mergeTranslations<typeof ruBaseOverrides & TranslationOverrides>(
+  ruBaseOverrides,
+  runtimeFeatureCopy['ru']
+)
 
 export const ru = defineLocale(ruOverrides)

@@ -1,6 +1,7 @@
 import { skillCatalogInstallIdentifier } from '@hermes/shared'
 import { queryOptions, useQuery } from '@tanstack/react-query'
 
+import { type ProfileScope, profileScopeKey } from '@/api/client'
 import { CATALOG_ORIGIN } from '@/lib/plugin-catalog'
 import { queryClient } from '@/lib/query-client'
 
@@ -96,7 +97,8 @@ function catalogLinks(kind: CatalogKind, row: any, rawName: string, source: stri
         : null,
     sourceUrl: webUrl(row.repo || row.sourceUrl),
     docsUrl:
-      webUrl(row.docsUrl) || (text(row.docsPath) ? `${CATALOG_ORIGIN}/docs/user-guide/skills/${text(row.docsPath)}` : null),
+      webUrl(row.docsUrl) ||
+      (text(row.docsPath) ? `${CATALOG_ORIGIN}/docs/user-guide/skills/${text(row.docsPath)}` : null),
     imageUrl: curationOwnsArtwork(kind, row) ? officialCatalogArtwork(kind, row) : catalogImageUrl(row.image),
     screenshots:
       kind === 'plugins'
@@ -262,7 +264,9 @@ export async function fetchCatalog(kind: CatalogKind): Promise<CatalogEntry[]> {
     // Chromium can turn our abort into "The user aborted a request." The
     // controller, not that browser-dependent exception name, owns the cause.
     if (controller.signal.aborted) {
-      throw new Error(`Catalog download timed out after ${CATALOG_STALL_MS / 1000} seconds without progress. Please try again.`)
+      throw new Error(
+        `Catalog download timed out after ${CATALOG_STALL_MS / 1000} seconds without progress. Please try again.`
+      )
     }
 
     throw error
@@ -271,9 +275,12 @@ export async function fetchCatalog(kind: CatalogKind): Promise<CatalogEntry[]> {
   }
 }
 
-const catalogQuery = (kind: CatalogKind) =>
+export const catalogQueryKey = (kind: CatalogKind, profile?: ProfileScope) =>
+  ['public-catalog', kind, profileScopeKey(profile)] as const
+
+const catalogQuery = (kind: CatalogKind, profile?: ProfileScope) =>
   queryOptions({
-    queryKey: ['public-catalog', kind],
+    queryKey: catalogQueryKey(kind, profile),
     queryFn: () => fetchCatalog(kind),
     staleTime: 30 * 60_000,
     // The skills snapshot parses to ~100k rows; release it once the page has
@@ -286,9 +293,9 @@ const catalogQuery = (kind: CatalogKind) =>
     retry: false
   })
 
-export function useCatalog(kind: CatalogKind) {
+export function useCatalog(kind: CatalogKind, profile?: ProfileScope) {
   return useQuery({
-    ...catalogQuery(kind),
+    ...catalogQuery(kind, profile),
     // A failed catalog stays parked across remounts (tab switches) until the
     // user explicitly chooses Try again.
     enabled: query => query.state.status !== 'error'
@@ -296,8 +303,8 @@ export function useCatalog(kind: CatalogKind) {
 }
 
 /** Warm a catalog while the browser is idle so switching tabs doesn't pay the fetch + parse. */
-export function prefetchCatalogWhenIdle(kind: CatalogKind) {
-  const id = requestIdleCallback(() => void queryClient.prefetchQuery(catalogQuery(kind)), { timeout: 5_000 })
+export function prefetchCatalogWhenIdle(kind: CatalogKind, profile?: ProfileScope) {
+  const id = requestIdleCallback(() => void queryClient.prefetchQuery(catalogQuery(kind, profile)), { timeout: 5_000 })
 
   return () => cancelIdleCallback(id)
 }

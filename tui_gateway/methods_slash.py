@@ -228,7 +228,7 @@ def _format_live_context_output(sid: str, session: dict, arg: str) -> str:
             messages = _history_to_messages(list(session.get("history", [])), profile_home=session.get("profile_home"))
 
     breakdown_lines: list[str] = []
-    if (agent := session.get("agent")) is not None:
+    if (agent := session.get("agent")) is not None and not _session_uses_compute_host(session):
         # Live agent: the desktop gauge's engine (agent.context_breakdown) —
         # full Cursor-style breakdown, provider-anchored, no provider calls.
         # `all` expands per-skill / per-toolset costs, matching the CLI.
@@ -275,7 +275,7 @@ def _format_live_context_output(sid: str, session: dict, arg: str) -> str:
         lines.append(f"Context usage: {mark}{context_used:,} tokens")
     if usage.get("compressions"):
         lines.append(f"Compressions: {int(usage.get('compressions') or 0):,}")
-    if (agent := session.get("agent")) is not None:
+    if agent is not None and not _session_uses_compute_host(session):
         from agent.context_file_sources import context_file_sources_for_agent, render_context_file_lines
         # RPC thread: bind the session cwd or the discovery walk keys on the backend's cwd, not the workspace.
         tokens = _set_session_context(session["session_key"], cwd=_session_cwd(session))

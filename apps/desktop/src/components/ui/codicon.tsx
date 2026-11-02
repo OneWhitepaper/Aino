@@ -1,7 +1,11 @@
+import './codicon.css'
+
 import type { Icon } from '@tabler/icons-react'
 import type * as React from 'react'
 
 import { cn } from '@/lib/utils'
+
+import { codiconDesignIcons } from './codicon-design-icons'
 
 export interface CodiconProps extends React.HTMLAttributes<HTMLElement> {
   name: string
@@ -10,13 +14,18 @@ export interface CodiconProps extends React.HTMLAttributes<HTMLElement> {
 }
 
 export function Codicon({ className, name, size, spinning, style, ...props }: CodiconProps) {
+  const DesignIcon = Object.hasOwn(codiconDesignIcons, name) ? codiconDesignIcons[name] : undefined
+
   return (
     <i
       aria-hidden="true"
       className={cn('codicon', `codicon-${name}`, spinning && 'codicon-modifier-spin', className)}
+      data-aino-icon-name={DesignIcon ? name : undefined}
       style={{ ...(size != null && size !== '' ? { fontSize: size } : {}), ...style }}
       {...props}
-    />
+    >
+      {DesignIcon && <DesignIcon size="1em" />}
+    </i>
   )
 }
 

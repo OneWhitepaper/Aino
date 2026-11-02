@@ -102,7 +102,10 @@ export function CapabilitiesView({
 
   // Plugins is small enough to warm from any tab. Skills (~100k rows) only
   // loads when asked for: an idle parse of it would still block the page.
-  useEffect(() => (mode === 'plugins' ? undefined : prefetchCatalogWhenIdle('plugins')), [mode])
+  useEffect(
+    () => (mode === 'plugins' ? undefined : prefetchCatalogWhenIdle('plugins', scope.profile)),
+    [mode, scope.profile]
+  )
 
   // Rotating placeholder nudges from the user's own data — teach that search
   // understands tool names, not just titles.

@@ -35,11 +35,12 @@ that the mockup does not show.
   layout store. Pale neutral navigation, soft selected rows, white reading and
   management surfaces, hairline seams and restrained shadows form one hierarchy.
 - Use the existing system sans stack and remembered font preference. UI and
-  reading base roles are 14px, supporting copy 12–13px, section titles 18px and
-  page titles 24px. Conversation scale is still applied exactly once. Code,
+  reading and navigation roles are 14px, compact controls and labels 12–13px,
+  supporting copy 12px, section titles 16px and page titles 22–24px. Conversation
+  scale is still applied exactly once. Code,
   terminal content, and embedded user documents retain their own typography.
-- Controls and rows use 8px corners, cards 14px, menus 12px, floating panels 16px, and the
-  composer 24px. Native circles (avatars, radio controls, send) remain circles.
+- Controls and rows use 6px corners, cards 14px, menus 12px, floating panels 16px,
+  and the composer 24px. Native circles (avatars, radio controls, send) remain circles.
 - `styles/aino-theme.css` owns shared surface/type roles; `aino-chat.css` owns
   home/transcript geometry; `aino-workbench.css` owns file/preview chrome.
   Extend existing primitives before styling a caller. Menus, tooltips, dialogs,
@@ -51,6 +52,18 @@ that the mockup does not show.
   Workspace selection still previews; only the explicit switch action activates it.
 - Native OS file pickers and third-party embedded documents keep their native
   presentation. Only app-owned surrounding chrome is themed.
+- The default Sessions/Agent Hub rail uses a shared 61px brand row below the
+  native window controls. Its current title (Aino or the contributed pane name)
+  opens the existing dropdown menu, with descriptions and a checked current item.
+  A lone pane has a static brand without a chevron. The host owns presentation;
+  existing pane activation still owns chat and routines. Unknown guests, layout
+  editing, detached panes and minimized zones retain the ordinary pane strip.
+- Approval menus share one presentation in the composer and status bar: a
+  320px surface (clamped to the viewport), 16px icons, 13px option names and
+  12px supporting text. Plain-language choices explain the existing profile
+  approval policy; the off option and its trigger use the warning color. This
+  setting does not grant filesystem/network access or bypass system permissions
+  and safety rules. Keep the existing gateway configuration and approval flow.
 
 ## Principles
 
@@ -78,37 +91,78 @@ that the mockup does not show.
 
 - **Chat is the home surface.** The transcript and composer stay primary; tools,
   previews, files, review, and terminal complement the conversation.
-- **Workspace cards preview before switching.** The overview shows profiles as
-  cards beside an inspector. Selecting a card only changes the inspected profile;
-  the explicit switch action alone reuses the existing profile activation flow.
-  Selection styling and the current-workspace badge describe separate states.
-  Closing the inspector does not switch profiles or reopen it on a roster refresh.
-  Model settings, capabilities, profile menus and SOUL.md editing retain their
-  existing routes and persistence. Narrow containers stack the inspector below
-  the overview. ProfileGlyph's large size and SegmentedControl's underline variant
-  reuse the shared primitives; their existing compact defaults stay unchanged.
-  The page heading owns the New workspace action; the compact search belongs
-  above the card grid. Cards keep a readable column width even when only one
-  workspace exists. The inspector groups model settings, the existing SOUL.md
-  editor and storage details; advanced browsing stays below the overview.
-  Its neutral selection and actions derive from the shared surface
-  roles, including dark mode. The default workspace uses the Aino mark;
-  named workspaces retain ProfileGlyph and their configured identity colors.
+- **Workspace selection previews before switching.** A compact, searchable left
+  list sits beside the selected workspace's wider detail area. Selecting an item
+  only changes the inspected profile; the explicit footer switch action alone
+  reuses the existing profile activation flow. Selected and current are separate
+  states. Closing the inspector does not switch profiles or reopen it on a roster
+  refresh. The heading owns New workspace; the detail header reuses the existing
+  rename dialog and menus. Model settings, capabilities, SOUL.md editing and
+  storage retain their routes, persistence and profile scope. Narrow containers
+  stack list and detail; the overview may use compact cards when no detail is
+  inspected. The default workspace uses the Aino mark, while named workspaces
+  retain ProfileGlyph and their configured identity colors.
 - **Pages are durable destinations.** Chat, Settings, Skills, Messaging, and
-  Artifacts remain in shell chrome. Do not hide a distinct product noun inside
-  an unrelated page.
+  Artifacts remain in shell chrome. Durable management pages temporarily occupy
+  the full work area while navigation remains available; saved pane layout and
+  ordinary file-editor drafts survive the presentation change. Hiding a pane is
+  not permission to unmount it or recreate its state. Do not hide a distinct
+  product noun inside an unrelated page.
 - **Capabilities is a directory, not a billboard.** Keep the four existing
   Skills, Plugins, Connectors and Tools destinations. The page identity and
   configuration target sit above their tabs; the configuration target never
   switches the active workspace. Skills and Plugins reuse the existing
   installed facet for Discover / Installed, with the existing search, view
   preference, category/source facets and advanced tag/sort controls. Categories
-  use a scrollable side rail, compact recommendations precede uniform neutral
-  cards, and details reuse the accessible dialog as a right-side drawer.
+  and sources remain in the existing filter popover rather than a permanent
+  side rail. Discover / Installed occupies its own row above search, filters and
+  view controls. Compact recommendations precede uniform neutral cards, and
+  details reuse the accessible dialog as a right-side drawer.
   Original names, authors, installation identifiers, editor/archive actions and
   profile/connection routing stay authoritative. Connectors and toolsets keep
   their existing management flows and shared presentation primitives.
-- **Route overlays are short tasks.** Command Center, Cron, Profiles, Agents,
+- **Workspace settings keep the existing configuration owner.** Three horizontal
+  categories — Projects and discovery, Terminal environment, Files and execution —
+  reuse the existing configuration draft, scoped autosave, schema and project
+  refresh. Full-width directory inputs and line-separated list editors serialize
+  the same string arrays; hidden categories keep their drafts mounted. Discovery
+  off preserves the configured roots and exclusions, and search reveals its target
+  without enabling scanning. Project/Strict are directory and Python choices, not
+  permission controls. Unknown configuration rows retain the generic editor.
+  Shared input, switch, tabs, settings groups and theme tokens own the controls;
+  prototype reset/save chrome does not become a new persistence mechanism.
+- **Conversation, Safety, Browser, Memory, Voice and Advanced share one form rhythm.**
+  Their horizontal categories arrange existing schema rows and feature slots;
+  scoped configuration drafts, autosave, device preferences, credentials, Vault,
+  memory authorization and voice providers keep their existing owners. Hidden
+  categories stay mounted so switching tabs preserves drafts. Field, device and
+  credential deep links select their category before consuming focus parameters;
+  legacy Tools and Terminal links resolve to Advanced's Runtime category.
+  Mode cards write the original enum values, percentage controls save fractional
+  values without rounding, and multiline editors save the existing string arrays.
+  Unknown schema values retain the generic editor. Tool and credential disclosures
+  start closed; config load failures retain independent device controls and retry.
+  Shared primitives and theme tokens own typography, borders and responsive rows;
+  prototype-only demo actions do not create a second settings mechanism.
+- **Model defaults have one owner and one Apply.** The model page uses five
+  horizontal categories and one current-default summary. Reopening paints the
+  existing connection/profile catalog cache while refreshing
+  in the background. Same-account built-in refreshes retain the known model label;
+  applying waits for fresh authorization. Late reads cannot restore an older default.
+  Aino built-in, official third-party services and custom API models are mutually exclusive drafts in the same main-model
+  form; switching sources or confirming the existing catalog dialog stages a
+  choice. The page Apply reuses existing configuration writes and scoped Aino
+  preferences. Activating Aino clears only the higher-priority main route,
+  retains provider credentials/endpoints and preserves live conversations.
+  Summary and runtime share the available preferred/default selection rule.
+  Composer model and reasoning edits belong to the current conversation only.
+  New Chat and `/new` resolve Settings defaults, including when the draft has
+  not sent its first message. Per-model conversation options share that scope
+  and never become persisted defaults for another conversation.
+  Auxiliary task tables and MoA sections retain dynamic tasks, all routing,
+  reasoning and existing autosave; schema-backed fallback/delegation controls
+  keep their original owners. Hidden sources retain their local drafts.
+- **Route overlays are short tasks.** Command Center, Cron, Agents,
   and Starmap render as `OverlayView` cards and return to the previous route on
   close. Settings is a full-page workspace with its own navigation and return
   affordance. Model/session pickers and dialogs layer above the current
@@ -118,21 +172,34 @@ that the mockup does not show.
   switches where the underlying tool is meant to persist.
   Files, Summary and newly created terminals follow the last interacted chat
   tab, including split chats. Clicking a tool does not silently switch back to
-  the main chat. Existing shells keep their processes and directories; a matching
-  tab may be selected, never moved or recreated. Unscoped Review follows the same
+  the main chat. Existing shells keep their processes and directories; moving
+  their tab into the shared tool host never recreates or retargets the shell.
+  Unscoped Review follows the same
   chat, while an explicitly opened repository stays pinned until another explicit
   review action. Source/profile ownership gates filesystem actions; delayed reads
   cannot paint or open files from a previous project or machine.
 - **Summary is a persistent workspace card.** Its list icon precedes Terminal
   and the right-sidebar toggle. The titlebar button alone opens and closes it;
   outside clicks, Escape, conversation switches and opening other panes leave
-  the choice intact. The card reserves a right-hand column, recentering the
-  transcript and composer together within the remaining workspace. It scrolls
-  independently and never mutates the user's saved tiling tree or remounts
-  chat/terminal surfaces. Below 1024px, or when existing tracks cannot fit beside
-  the card, it stacks beneath the workspace. The compact rail fits its content,
-  capped at 40% of the workspace height so the composer remains usable. Opening and closing use
-  a 200ms slide/resize transition, disabled under reduced motion. Its contents follow the selected
+  the choice intact. The card belongs to the last interacted visible chat,
+  inside its pane, before sibling file, preview, review or terminal panes.
+  File and preview focus never moves the card out of that conversation.
+  It reserves a right-hand column, recentering the transcript and composer
+  together within that chat. It sits in a 320px rail with 12px outer gutters.
+  The rail shares the active chat
+  canvas instead of painting a separate full-height sidebar; its compact paper
+  card uses 14px corners, quiet elevation, 12px section labels and 13px regular
+  resource rows. Outputs and Sources keep their add actions in the section
+  header. Empty Outputs retains that action without a large placeholder row.
+  The card scrolls independently and never mutates the user's saved tiling tree
+  or remounts chat/terminal surfaces. When its owning chat has less than 960px
+  available, it floats at that chat's top-right, within the same pane. It never
+  stacks beneath the composer or enters the file/tool panel. The compact card
+  keeps the same 320px width capped by its chat, scrolls independently, and uses
+  a scoped CSS anchor to stop above the existing composer dock. It does not
+  reduce the chat's height. Opening uses a 200ms slide/resize transition, disabled
+  under reduced motion. Closing and transferring ownership hide the old card immediately.
+  Its contents follow the selected
   conversation: an overview leads with the live turn state (turn ended never
   means task completed), followed by outputs, plans and execution details.
   Ordinary chat has a small neutral empty state and an Outputs affordance; real
@@ -159,13 +226,20 @@ that the mockup does not show.
   rather than scanning the transcript on every token. Finished plans/delegations
   remain readable after their live chips clear; a historical dispatch alone
   never claims a child is still running. Read failures offer retry, not a false
-  empty result. System
-  resources remain in Settings and are not displayed or polled by this card.
+  empty result. System resource meters have no standalone Settings page and
+  are not displayed or polled by this card. Hardware detection remains available
+  to local model setup.
   Context usage lives beside the model in the composer: a neutral progress
   ring reveals usage on hover and the existing breakdown on click. It reads
   that composer's session and owner-routed `session.context_breakdown` request,
   refreshes when idle, and reflects the existing compaction state. Summary
   no longer fetches or duplicates those details.
+  Known occupancy appears immediately, independently of category details.
+  Cold sessions restore only history-validated provider usage, without starting
+  an agent. Unknown occupancy stays unknown; lifetime throughput is never its
+  substitute. Shared reads reuse one calculation per session; a five-second
+  detail deadline leaves a quiet explanation and an explicit Retry action.
+  Category details for a cold session update after its next conversation turn.
   Diffs, source previews and terminals open beside the summary, without
   dismissing it. Settings temporarily covers the workspace without resetting
   the summary choice.
@@ -285,11 +359,31 @@ Brightness remains per profile and follows peer windows; CLI/TUI skins, typograp
 zoom and native Glass keep their independent settings. Stored theme assets are not
 deleted when upgrading.
 
+Appearance uses five page-local categories: Theme & text, Window & layout, Chat
+display, Habits & guidance, and Desktop pets. Brightness preview cards select only
+Light/Dark/System; they do not restore the retired palette marketplace. Shared
+Select, Switch, Tabs and settings rows own controls; lower-frequency terminal,
+window, transparency, tool-result and interaction options live in disclosures.
+Search opens the owning category and disclosure before focusing its existing
+setting ID. Tabs retain mounted editors and pet state, with standard keyboard
+navigation. Presentation previews read the existing preference stores and cached
+configuration, use sample content, and never create agent work or duplicate saves.
+The pets page retains real artwork, catalog installation, generated-pet editing,
+export, removal confirmation, size and roaming. Native tray and transparency
+availability continue to follow the existing platform capabilities.
+
 The approved reply style is also the system type and density ladder: 14px
-body copy at 1.6 line height, 14px controls, navigation and activity, 13px group labels, 12px supporting
-metadata, and 18px section/dialog headings. Conversation size aliases resolve
-from these existing Aino roles; routes and body portals do not carry separate
-size palettes. Named Tailwind utilities (`text-xs`, `text-sm`, `text-base`,
+body copy at 1.6 line height, 14px normal controls, navigation and activity,
+12–13px compact controls and group labels, 12px supporting metadata, and 16px
+section/dialog headings. Conversation size aliases resolve
+from these existing Aino roles. Conversation text defaults to 100% (14px),
+with a 1.65 reading line height, 18px/16px first/second-level reply headings,
+and 13px code and reasoning text. These sizes scale together with the reader's
+saved chat preference; metadata and surrounding navigation remain independent.
+Settings applies a deliberate compact reading
+scope (13px rows/navigation, 12px supporting labels, 16px sections, 22px page
+titles) without enlarging its content above the navigation; body portals retain
+the shared base roles. Named Tailwind utilities (`text-xs`, `text-sm`, `text-base`,
 `text-lg`) resolve to the same caption/UI/body/title roles. Project names,
 recent-session titles, model and reasoning selectors use the 14px UI role;
 timestamps and other secondary metadata use the 12px caption role. Do not
@@ -325,8 +419,8 @@ Intro reveal shares this chrome and the saved UI typography; its animated canvas
 retains its own media colors.
 
 Settings uses `SettingsGroup` from `app/settings/primitives.tsx` for related
-form rows: a single neutral one-pixel outline, 8px corners, no shadow, and
-16px horizontal insets. Keep section titles outside the outline. `ListRow`
+form rows: a single neutral one-pixel outline, 12px corners, no shadow, and
+18px horizontal insets. Keep section titles outside the outline. `ListRow`
 owns `data-settings-row`; custom row wrappers use the same marker when they
 include an inline editor. Only sibling rows inside a group receive dividers,
 so descriptions, status messages and expanded controls stay with their row.
@@ -334,6 +428,21 @@ Do not add another group around already framed tools or lists. Grouped rows
 use a 36rem content-width breakpoint for the label/control split, accounting
 for the added insets; narrower groups stack. Use shared stroke tokens in
 both brightness modes, without flattening native Glass surfaces.
+
+My account uses one profile card, a wallet/subscription overview and a ledger
+section, followed by a collapsed device-authorisation section. Profile editing
+uses the existing dialog; sign-out reuses the shared confirmation and pending
+state. Wallet display may round its decimal string to two places, with the full
+authoritative amount available in the adjacent disclosure. Account changes
+retire local editors and existing billing scope boundaries remain authoritative.
+The ledger opens on orders; usage filters can be hidden without discarding
+their draft or applied query. Narrow containers stack the overview and turn
+ledger rows into readable records, retaining timestamps, currencies and actions.
+Recharge automatically previews server-calculated payment, fee and credit amounts
+after a brief input debounce. Inputs remain editable while previewing; editing or
+closing invalidates late results. Only an explicit payment action creates an
+order with that preview, retaining final-price confirmation, payment recovery,
+cancellation and balance refresh.
 
 My account's usage history queries the full ledger by date range, model and
 call purpose. Dates use the displayed local timezone. Bordered rows show exact
@@ -346,15 +455,17 @@ results. Chat reply receipts retain their compact layout. Purpose filters follow
 the server's advertised supported values; old servers retain the legacy set.
 Historical auxiliary calls without finer attribution stay visibly unclassified.
 
-The approved v2 light palette is a `#fcfcfc` canvas, `#f3f3f4` sidebar,
-`#ffffff` paper, and `#f8f9fa` field/header fill. Primary, secondary and supporting
-ink are `#303236`, `#61666d` and `#858a92`; seams use `#e7e8ea`, control outlines
-use `#e1e4e8`, and selection uses `#e5e6e8`. These values live in the derived
-`--ui-*` roles, not ThemeProvider's inline seeds. Landing and sidebar colors alias
-those same roles, so dark appearance and native Glass follow the existing surface
-resolution. Actions are graphite; links and focus retain their semantic accent.
-Semantic error/success/warning, syntax and diff colors retain their meaning. Use the normal
-UI font for labels; reserve monospace for code, commands, paths and numeric data.
+The reference light palette is a `#f9fafb` page canvas, `#f2f3f5` navigation,
+`#ffffff` content and `#e5e6eb` seams. Primary, secondary and supporting ink are
+`#252831`, `#454d5f` and `#8b909b`; the restrained brand accent is `#7583b2`.
+These seeds, including their explicit dark counterparts, belong to ThemeProvider's
+fixed Aino palette (`monoTheme`); `aino-theme.css` aliases existing `--theme-*`
+and `--dt-*` values into shared `--ui-*` roles. Do not maintain a second raw
+light/dark palette in route CSS. Primary actions use the contrast-adjusted accent
+roles; semantic error/success/warning, syntax and diff colors retain their meaning.
+Landing, sidebar, body portals and native Glass resolve through those same roles.
+Use the normal UI font for labels; reserve monospace for code, commands, paths
+and numeric data.
 
 Floating panels (base `Dialog`, route overlays, boot/install/update surfaces,
 model-picker, onboarding, prompt overlays, notifications) use:
@@ -443,9 +554,9 @@ renderer and Electron's first window paint.
 | `--ui-widget-surface-background` | fill for inline chat widgets (`WIDGET_SHELL_CLASS`) |
 | `--chrome-action-hover` | hover fill for quiet controls |
 | `--theme-primary`, `--ui-accent` | brand/accent |
-| `--aino-action-bg / -fg / -hover` | graphite primary action and contrast-safe inverse; shared by button, switch and checkbox |
-| `--aino-radius-control / -row / -panel` | 8px controls and selected rows, 16px floating panels |
-| `--aino-text-caption / -ui / -body / -title` | 12 / 13 / 15 / 18px type roles; document headings can step up |
+| `--aino-action-bg / -fg / -hover` | muted brand primary action and contrast-safe inverse; shared by button, switch and checkbox |
+| `--aino-radius-control / -row / -panel` | 6px controls and selected rows, 16px floating panels |
+| `--aino-text-caption / -label / -ui / -body / -title / -page-title` | 12 / 13 / 14 / 14 / 16 / 24px base roles; settings uses its compact scope and 22px page title |
 | `--aino-surface-*`, `--aino-scrim`, `--aino-focus-ring` | shared paper, rail, strokes, state fills, backdrop and input focus |
 | `--aino-landing-*`, `--shadow-aino-landing-composer` | home/sidebar aliases of the shared semantic roles and `shadow-nous`; no independent light or dark palette |
 
@@ -506,13 +617,57 @@ trigger within 300ms opens instantly. The cooldown starts on close, so a
 hover a second later waits again. Once triggered, entrance has no animation.
 Exit fades over 100ms and moves 0.125rem toward the anchor; reduced motion
 disables the exit animation. `OverflowTip` stays on its own longer delay
-(list titles must not trail while scanning). Tooltips use the shared 8px control radius.
+(list titles must not trail while scanning). Tooltips use the shared 6px control radius.
 
 **Tooltip placement.** Choose intent through `placement`: `control` above (default), `toolbar` below, `row` to the right, and `left-rail` / `right-rail` inward. Explicit `side` and `align` override the preference. Radix flips and shifts for collisions, keeps the arrow attached, and hides detached triggers. Controls and toolbars use their owning pane as a boundary; row descriptions and rails may extend into the window. Use `boundary="viewport"` for an intentional escape. Short labels size to content; descriptions wrap within 24rem and the available space, in one rounded bubble.
 
 **Slash descriptions.** Keep autocomplete rows single-line and ellipsized, but reveal the complete catalog description to the right of the hovered row. Use the shared bounded tooltip, collision padding, and word wrapping; it must not intercept row selection. Catalog and completion producers preserve the full author-supplied description.
 
 **Model search.** Model filters and their highlighted labels treat hyphens, dots, underscores and spaces equivalently. Preserve original label spelling inside marks. The shared highlighter remains literal for other surfaces such as the command palette; model callers explicitly opt in. Model identifier search does not use dictionary spellcheck.
+
+**Composer model picker.** One search covers Aino models, favorites and configured providers.
+Unconfigured provider catalogs and remembered custom models without their configured provider
+stay out of the list and search. Inherited shell credentials alone do not configure a provider.
+Keep the current saved provider's recovery row when its credential is unavailable. Managed
+Aino models appear once in their built-in section.
+Configured external models appear directly under their Third-party services or Custom models source heading; a saved
+provider-collapse preference must not hide their rows in the composer. Other model
+pickers retain their provider grouping and collapse controls.
+The list and adjacent detail card use existing menu primitives and theme tokens. Hover, focus
+and the detail arrow preview a model; only selecting its list row applies it through the
+existing session controller. Details show available catalog facts, never invented prices or
+capabilities. Active Aino parameter edits retain account and platform-owner verification.
+Keep the two-card picker compact: a 480px maximum width, 30px model rows and a 216px
+scrolling list. Tighten card padding and control heights while preserving readable type.
+Detail values align to the right; the submenu chevron must not take a second automatic margin.
+Anchor the list's right edge above the model trigger, with details extending to its right.
+Measure stable layout widths for the alignment offset; keep both cards inside the positioning
+engine's collision box so the complete menu shifts safely away from window edges.
+At narrow widths, details replace the list; Back or Escape returns to search. Escape inside
+an options submenu closes that submenu first. Refresh, favorites, custom model management
+and selection failure recovery retain their existing behavior.
+Configure custom models opens the shared endpoint editor in a compact, 540px dialog
+owned by the requesting connection and profile. Its primary flow is a name and API URL,
+API key with a connection test, then an editable model selector. Custom configuration
+has no provider selector; saved connections appear in a separate, initially collapsed
+Saved configurations section for editing. Name and URL remain visible while editing;
+each saved connection has a separate delete action using the shared confirmation,
+with all mutations disabled until deletion finishes. Deleting the selected connection
+clears its draft and refreshes the catalog; cancellation or failure retains it.
+protocol, discovery and context options stay in the collapsed advanced section. Saving adds the configuration
+without switching the current or default model. Settings reuses the same editor and
+retains its explicit activation, deletion and default-model actions.
+Official third-party setup is separate: choose a provider and enter its API key to
+fetch models through the existing provider APIs. Provider presets and credential
+identities come from backend metadata, never a second frontend registry. Proxy and
+private endpoints belong to Custom API models with editable URL, key and model.
+Model services settings exposes both flows on the existing page. Saving a key or
+endpoint refreshes available models without applying a default or changing a live
+conversation. Source switching retains independent provider/model drafts and clears
+unsaved credentials. Official providers and same-named user endpoints remain distinct:
+the official API uses its canonical credential, while the custom connection retains
+its explicitly namespaced route and credential. Never hide the official setup entry
+or borrow a custom connection's models because their display names match.
 
 **Keybind hints in tooltips.** On a tipped button bound to a rebindable hotkey,
 use `<TipKeybindLabel actionId="..." />` — it reads the i18n label and the
@@ -521,8 +676,9 @@ context-dependent (e.g. "Show" / "Hide"). Never hardcode combos; always use
 `useKeybindHint` or `TipKeybindLabel`.
 
 Notes:
-- Text and icon buttons use the shared 8px control radius; text sizes use padding
-  + line-height (no fixed heights). Boxless text/link actions have no radius.
+- Text and icon buttons use the shared 6px control radius; text sizes use padding
+  + line-height with a 32px default / 28px small minimum, allowing wrapped or
+  scaled content to grow. Boxless text/link actions have no radius.
   Primary actions use `--aino-action-*`, not the link accent.
 - SVGs inherit `size-3.5` (`size-3` at `xs`). Don't re-set icon size.
 - Polymorph with `asChild` when the button must render as a link/Slot.
@@ -551,8 +707,9 @@ blurred backdrop.
 ## Form controls
 
 - **`controlVariants`** (`src/components/ui/control.ts`) is the shared shape for
-  `Input` / `Textarea` / `SelectTrigger`: 8px corners, 14px normal UI text and
-  padding-driven size. New text-entry controls compose it. Fields have neutral
+  `Input` / `Textarea` / `SelectTrigger`: 6px corners, 14px normal UI text and
+  padding-driven size with a 32px normal / 28px extra-small minimum. New
+  text-entry controls compose it. Fields have neutral
   fill/hairlines, accent-only focus and a semantic invalid state; grouped fields
   inherit the same font size as bare controls. No page-specific control overrides.
 - **`SearchField`** — borderless, underline-on-focus, auto-width. The only
@@ -562,7 +719,7 @@ blurred backdrop.
   (color mode, tool-call display, usage period). Replaces radio piles and
   pill rows. The neutral track and active paper option share the control radius,
   with the same keyboard focus outline as buttons. Menu selection rows use the
-  8px row radius; normal route tabs use a soft neutral selection fill.
+  6px row radius; normal route tabs use a soft neutral selection fill.
 - **`Switch`** (`size="xs"`) — bare, with `aria-label`. No bordered text wrapper.
 - **`FanMenu`** (`src/components/ui/fan-menu.tsx`) — one hub control that
   fans sibling toggles out on hover: `direction` `vertical` | `horizontal`
@@ -582,8 +739,8 @@ blurred backdrop.
   Glass sidebar scope follows the foreground rail: Settings owns its boundary
   while open, and its narrow dropdown leaves no vertical glass strip.
   Sidebar Glass follows the rail's physical left and right bounds, including
-  when a swap places it between chat and Summary. Chat and Summary keep their
-  opaque fields on either side; moving a rail never leaves its old tint behind.
+  after side swaps. Chat and its Summary retain their shared opaque field;
+  moving a navigation rail never leaves its old tint behind.
   Swapping sides changes track order without moving their DOM hosts, preserving
   chat subscriptions, drafts and embedded documents. Keyboard and assistive
   reading order follow the visual flex order; sashes resolve neighbors by track
@@ -597,22 +754,55 @@ blurred backdrop.
   second header row for a session-only primary group. Mixed pane tabs,
   secondary chat splits and layout edit mode retain their local strips;
   Settings and auxiliary windows never borrow the primary window's header.
-- **Gutters:** `PAGE_INSET_X` (`src/app/layout-constants.ts`) for page side
-  padding; `PAGE_INSET_NEG_X` to bleed a child to the edge. Don't hardcode
-  `px-6`/`px-8` on pages.
+- **Gutters:** generic overlays reuse `PAGE_INSET_X` / `PAGE_INSET_NEG_X`
+  (`src/app/layout-constants.ts`). Management page owners align heading, tabs,
+  search and results on one 1088px outer column with 32px side gutters, reducing
+  to their compact gutters on narrow containers. Settings owns its separate
+  reading column. Do not add a theme-wide route selector to correct a page's
+  internal geometry.
 - **Master/detail overlays:** `OverlaySplitLayout` + `OverlaySidebar` /
   `OverlayMain`. Cron, profiles, etc. ride this — don't rebuild a titlebar
   shell.
+- **Settings shell:** `SettingsShell` reuses `OverlaySplitLayout` and `OverlayNav`
+  for the 236px navigation column (220px at the compact desktop breakpoint),
+  back/search controls and active-route title. Four open, non-interactive
+  section labels organize every destination: personal/appearance, conversation/
+  intelligence, work/connections and security/system. Settings navigation never
+  collapses these collections. Its local search filters destinations without
+  changing the active route; Enter and the shortcut keep the complete existing
+  settings palette available. Matching plugin descendants reveal their original
+  route handlers. System controls sit inline at
+  the heading's trailing edge: runtime status, command center and More. The
+  navigation has no system footer. More retains configuration import/export,
+  confirmed reset and About with live version/update state. Runtime popovers
+  open below the header; their existing profile and connection scope remains.
+  Main content uses a white reading surface with a bounded 56rem body, 44px
+  desktop insets and its own scroll owner. Embedded bare content keeps its
+  caller's width instead of importing a 56rem minimum. The complete native
+  account subtree — wallet, subscriptions, orders, usage and devices — remains
+  behind its existing account and runtime capability gates. Preview fixtures
+  must exercise that native account path rather than treating a legacy dev
+  identity's missing capabilities as product content removal.
+- **About settings:** a compact centered identity, live version, one short update
+  status and one neutral primary action. Website and release notes remain small
+  text links. Installation details, supported source-channel controls and remote
+  runtime updates live in the existing dialog primitives; remote attention keeps
+  a visible indicator on that entry. Check errors summarize their actual cause,
+  with the full diagnostic text and copy action in a details dialog. Uninstall
+  stays behind the existing ownership probe and retains all original confirmation
+  and OS-managed removal rules. Updates reuse the canonical stores, progress
+  overlay and actions; pending bundle swaps remain visible.
 - **Settings subpages:** `OverlayNav` keeps navigation and disclosure separate:
   labels navigate; the shared `DisclosureCaret` button opens a branch without
   changing the page. Active paths reveal automatically, inactive paths stay
   folded unless manually opened. General comes first wherever present; parent
   labels and parent URLs open the first ordered subpage, never an overview or
   the last visited child. Explicit child links retain their destination;
-  every parent and child uses the same Settings breadcrumb, without a duplicate
-  icon-and-title heading. Page-level `SectionHeading page` retains actions and
-  counts under breadcrumb-owned chrome; embedded callers keep their headings.
-  Narrow windows keep every destination available in the shared navigation dropdown.
+  the shell resolves the current route title and suppresses only an identical
+  page-level heading through the existing breadcrumb context. Differently named
+  sections, actions and counts remain; embedded callers keep their headings.
+  Narrow Settings windows retain the independently scrolling grouped rail
+  at 176px; other overlay surfaces keep the shared navigation dropdown.
   Search and saved field links resolve to the owning child before highlighting.
 - **Rows:** `ListRow` (settings `primitives.tsx`) for label/description/action
   rows. Flat, flush-left; no per-row indentation that fights flush headers.
@@ -628,21 +818,23 @@ blurred backdrop.
   14px labels, separate count badges and a fine active underline on an open track.
   The primitive owns the selection appearance; do not layer text underlines or
   the legacy route-tab fill onto it. The existing dropdown handles narrow panes.
-  Search, discovery/installed selection, view controls and filters share one toolbar;
-  a quiet category/source rail leads to compact cards or flat installed-skill rows.
+  Discover / Installed sits above a separate search/filter/view toolbar. The
+  existing filter popover keeps categories, sources, tiers and tags available
+  without reserving a permanent side rail; compact cards or flat installed-skill
+  rows use the remaining reading width.
   Categories are single-choice navigation: another category replaces the previous
   one, and clicking the current category or All clears it. Sources and tags retain
   their existing multi-select filter behavior.
-  Standalone toolset search and card sections share `PAGE_INSET_X` and
-  `PAGE_MAX_W`, with space above the first section; the rail-owned catalog's
-  zero inner padding must not flatten a standalone page's gutters.
+  Skills, plugins, connectors and toolset search/results share the capability
+  page owner's 1088px outer column and 32px gutters, with space above the first
+  section. Embedded catalogues respect the owner's supplied width.
   Skill details open in the existing dialog as a right drawer with overview and
   usage tabs; usage retains the full original instructions and existing editing
   actions. Plugin list mode keeps its existing master/detail management panel,
   including configuration, updates, uninstall and Agent/Desktop controls. All
   categories, profile routing, source links and keyboard focus behavior remain
-  available. Narrow windows wrap the heading, scroll categories horizontally and
-  keep the detail body scrollable; use existing palette, controls and type roles.
+  available. Narrow windows wrap the heading, retain all filters in the popover
+  and keep the detail body scrollable; use existing palette, controls and type roles.
 - **No dividers between rows** unless the list genuinely needs them; prefer
   spacing. When you do need one, it's a single `--ui-stroke-tertiary` hairline.
 
@@ -822,7 +1014,12 @@ the final aliases on an outer chat surface: inner scopes recalculate them.
   top of the input instead of a second fixed workspace button below it.
   The home order is localized heading and subtitle → project selector above the input →
   composer controls → the four existing quick tasks. The centered composition
-  caps at 744px; the composer uses 24px corners, and quick tasks use 14px corners.
+  caps at 864px; the home composer starts at 192px high, uses 24px corners, and
+  quick tasks use 14px corners. Quick-task titles use the 14px UI role and their
+  descriptions the 13px label role; the home editor starts at 16px and retains
+  the saved chat text scale. Its project footer has a 44px minimum height and
+  13px labels, with inline padding aligned to the editor. Short windows use a
+  160px composer and tighter cards.
   The reserved slot and actual composer share one height, and the editor scrolls
   above its controls for long drafts. Task columns respond to the available chat
   pane width, and short windows use a more compact composer and spacing. The heading uses the same sans family as the UI. The sidebar carries the existing
@@ -874,10 +1071,50 @@ the final aliases on an outer chat surface: inner scopes recalculate them.
   toggle. Per-reply diagnostics are quiet, wrapping text beneath the answer;
   expandable details distinguish session elapsed time from reply duration.
   Only measured data is shown, with new reply metrics persisted as display
-  metadata, never injected into model context. System resources live in Settings
-  and poll only while viewed. Webhooks open from Gateway settings, subtask
+  metadata, never injected into model context. Plugin status controls live in
+  Settings ▸ Plugins. Webhooks open from Gateway settings, subtask
   monitoring from Agent Hub; scheduled jobs and terminal keep their navigation.
   Versions and updates live in Settings.
+- Files, previews, Browser, Terminal, Review and explicitly opened Logs share one
+  tool group backed by the existing pane tree. Its plus opens a localized new-tab
+  chooser, with a discoverable tab list, maximize/restore and full-panel hide.
+  The tool-only PaneTabStrip variant is 45px high with 32px tabs, 3px gaps,
+  7px fully rounded selected outlines, 12px labels and 14px lead icons; other
+  custom tab strips retain their existing geometry.
+  Hide releases all of that group's width and keeps its selected tab and live
+  resources. Every safe tool-only group uses this chrome, including an unmarked
+  group created by dragging; minimized tools never leave a vertical header rail.
+  Restored tool-only decks consolidate into the Files host, otherwise an existing
+  marked or first safe host, preserving its selected tab and hidden state. Old
+  migration flags, custom preset IDs and user-placed pins do not bypass this
+  upgrade. Applying a preset uses the same normalization; known legacy bundled
+  decks extract core tools from their chat/navigation stack. Unknown plugin and
+  mixed chat groups retain their own layout. No dismissed resource is reopened.
+  Summary remains inside its conversation. Single-click file peeks are temporary;
+  double-click or Keep tab preserves them within their owner session. Pin to
+  workspace remains an explicit separate cross-session action. Dirty editors stay
+  mounted across tool switches, hide and session changes. Closing offers Cancel,
+  Discard changes and Save and close using the editor's existing save, source and
+  on-disk conflict checks. Project file search reuses scoped path completion;
+  a delayed result from another source/session cannot open a local path.
+- Explicit tool entry points use one docking action: the originating safe tool
+  group wins, followed by Files and the existing safe host. Review keeps the
+  current tool session's repository and composer target. Background readiness
+  and passive restoration never change the saved selected tab or steal focus.
+  Narrow windows show one overlay for the shared group with the same tab strip,
+  chooser, list and hide actions. Visible tab selection also updates keyboard
+  ownership; the selected chip scrolls into the strip's viewport through the
+  existing active-tab visibility helper. Closing a narrow tool uses the same
+  resource owner and dirty-file confirmation as docked tabs, selecting the
+  remaining active sibling only after the close succeeds. Terminal, Browser and
+  editor bodies remain single live instances.
+  Narrow reveals use the existing idempotent open intent; opening a target hidden
+  by another group's maximize releases only that maximize. Review content starts
+  directly under the shared tab strip, without another titlebar or self-title.
+  Scope and Git actions remain available; file list and selected virtualized
+  diff receive actual flex height and scroll independently above the fixed ship
+  controls. The changed line must be visibly inside its viewport, not merely
+  present in the DOM.
 - **Inline widgets** — a tool result that renders as a panel the user reads or
   acts on (clarify, artifact card) wears `WIDGET_SHELL_CLASS`
   (`src/components/chat/widget-shell.ts`): shared radius, the
@@ -971,22 +1208,26 @@ the final aliases on an outer chat surface: inner scopes recalculate them.
 
 ## Iconography & brand
 
-- **Tabler** is the default component/chrome set. Import its curated aliases and
-  `iconSize` scale from `src/lib/icons.ts`; do not import icon packages directly
-  in feature code.
-- **`Codicon`** is the compact editor/tool/status vocabulary. Use
-  `src/components/ui/codicon.tsx`, including `codiconIcon()` where a
-  Tabler-shaped component is required.
-- Pick the vocabulary by semantic context and reuse the existing icon for an
-  action. Do not introduce a third icon set or mix styles within one control
-  group.
+- **IconPark outline** is the approved application/chrome vocabulary, matching
+  the interface prototype (48-unit viewBox, 1.7-unit stroke). Import the existing
+  curated aliases and `iconSize` scale from `src/lib/icons.ts`; feature code must
+  not import another icon package. Static paths and their license live in
+  `src/assets/aino-icons/`; navigation masks use the same source.
+- **`Codicon`** preserves the editor/plugin name API. Common application names
+  render the same approved SVGs through `src/components/ui/codicon.tsx`, including
+  `codiconIcon()` for component-shaped consumers. Specialized editor/Git names
+  and unknown extension names retain their established fallback vocabulary.
+- Reuse the existing semantic icon for an action across pages, menus and dialogs.
+  Do not substitute decorative shapes for distinct actions. Provider/platform
+  brands, user avatars, file-language art and specialized Git/resource diagrams
+  retain their own identities.
 - **`BrandMark`** (`src/components/brand-mark.tsx`) is the Aino brand glyph — a
   small vector mark, softly rounded and identical in light/dark. Use it for
-  explicit brand moments outside the home headline and sidebar top; those two
-  surfaces have no decorative app glyph. Do not reintroduce star/sparkle icons.
+  explicit brand moments and the approved sidebar mode selector. The home
+  headline has no decorative app glyph. Do not reintroduce star/sparkle icons.
 - Account sign-in retains its existing `assets/aino-account/logo.png` artwork
   and compact, centered layout with pill-shaped fields and actions. The home
-  and sidebar glyph removal does not apply to sign-in; its scoped CSS shares
+  headline glyph removal does not apply to sign-in; its scoped CSS shares
   the app's color tokens without replacing that approved layout.
 
 ## Motion

@@ -21,7 +21,8 @@ URL_TIMEOUT_SECONDS = 30.0
 
 def probe_with_rollback(
         server_name: str, cfg: dict, hermes_home: str, flow, reconnect_live: bool, *,
-        on_commit: Optional[Callable[[], None]] = None) -> None:
+        on_commit: Optional[Callable[[], None]] = None,
+        commit_config: Optional[Callable[[], None]] = None) -> None:
     """Roll back failures through initialize; commit authorization before tool discovery.
 
     ``on_commit`` runs right after the configuration is saved: a card install persists its setup
@@ -68,8 +69,8 @@ def probe_with_rollback(
             raise
         tools, discovery_error = [], exception_message(exc)
     try:
-        _commit(server_name, cfg, on_commit, flow)
-    except AttemptCanceled:
+        _commit(server_name, cfg, on_commit, flow, commit_config=commit_config)
+    except Exception:
         undo()
         raise
     if flow is not None:
@@ -107,13 +108,16 @@ def cancel_attempt(flow) -> bool:
     return False
 
 
-def _commit(server_name: str, cfg: dict, on_commit: Optional[Callable[[], None]], flow=None) -> None:
+def _commit(server_name: str, cfg: dict, on_commit: Optional[Callable[[], None]], flow=None, *,
+            commit_config: Optional[Callable[[], None]] = None) -> None:
     from hermes_cli.mcp_config import _save_mcp_server
 
     with _COMMIT_GUARD:
         if flow is not None and getattr(flow, "cancelled", False):
             raise AttemptCanceled("canceled")
-        if not _save_mcp_server(server_name, cfg):
+        if commit_config is not None:
+            commit_config()
+        elif not _save_mcp_server(server_name, cfg):
             raise RuntimeError(f"'{server_name}' was rejected: suspicious command/args configuration")
         if on_commit is not None:
             on_commit()
@@ -122,7 +126,8 @@ def _commit(server_name: str, cfg: dict, on_commit: Optional[Callable[[], None]]
 
 
 def _reuse_saved_authorization(
-        server_name: str, cfg: dict, flow, on_commit: Optional[Callable[[], None]]) -> bool:
+        server_name: str, cfg: dict, flow, on_commit: Optional[Callable[[], None]], *,
+        commit_config: Optional[Callable[[], None]] = None) -> bool:
     """Connect with the tokens already on disk, with no browser step and no consent.
 
     Retrying discovery for a server that is authorized must not ask the user to sign in again, and
@@ -136,7 +141,7 @@ def _reuse_saved_authorization(
     try:
         with suppress_interactive_oauth():
             tools = _probe_single_server(server_name, cfg, connect_timeout=30)
-        _commit(server_name, cfg, on_commit, flow)
+        _commit(server_name, cfg, on_commit, flow, commit_config=commit_config)
     except Exception as exc:
         logger.debug("saved authorization for %s was not usable: %s", server_name, exc)
         return False
@@ -151,6 +156,7 @@ def run_worker(
         hermes_home: str, server_name: str, cfg: dict, reconnect_live: bool, *,
         flow, on_done: Optional[Callable[[], None]] = None,
         env: Optional[dict[str, str]] = None, on_commit: Optional[Callable[[], None]] = None,
+        commit_config: Optional[Callable[[], None]] = None,
         reuse_saved: bool = False) -> None:
     """Drive the interactive MCP OAuth probe under the shared callback bridge.
 
@@ -170,10 +176,12 @@ def run_worker(
             secret_token = set_secret_scope(
                 {**build_profile_secret_scope(Path(hermes_home)), **(env or {})}, profile_home=hermes_home)
             if not (reuse_saved and flow is not None
-                    and _reuse_saved_authorization(server_name, cfg, flow, on_commit)):
+                    and _reuse_saved_authorization(server_name, cfg, flow, on_commit,
+                                                   commit_config=commit_config)):
                 with force_interactive_oauth(), dashboard_oauth_flow(flow):
                     probe_with_rollback(
-                        server_name, cfg, hermes_home, flow, reconnect_live, on_commit=on_commit)
+                        server_name, cfg, hermes_home, flow, reconnect_live, on_commit=on_commit,
+                        commit_config=commit_config)
         finally:
             if secret_token is not None:
                 reset_secret_scope(secret_token)
@@ -305,6 +313,7 @@ def start(
     server_name: str, *, url_timeout: float = URL_TIMEOUT_SECONDS,
     client_redirect_uri: Optional[str] = None, cfg: Optional[dict] = None,
     env: Optional[dict[str, str]] = None, on_commit: Optional[Callable[[], None]] = None,
+    commit_config: Optional[Callable[[], None]] = None,
 ) -> OAuthAttempt:
     """Start a card OAuth flow and wait until its authorization URL is published.
 
@@ -336,6 +345,7 @@ def start(
         target=run_worker, args=(hermes_home, server_name, cfg, False),
         kwargs={"flow": flow, "on_done": lambda: mcp_oauth_sessions.finish_flow(flow.flow_id),
                 "reuse_saved": True,
+                **({"commit_config": commit_config} if commit_config is not None else {}),
                 **({"env": env, "on_commit": on_commit} if env or on_commit else {})},
         daemon=True, name=f"mcp-oauth-{server_name}").start()
     deadline = time.time() + url_timeout

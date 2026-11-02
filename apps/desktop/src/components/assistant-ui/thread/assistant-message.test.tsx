@@ -395,7 +395,7 @@ describe('scheduled retry at the usage-limit reset (#98852)', () => {
   })
 })
 
-describe("a window plan's limit: one-click switch and credits (no silent switch)", () => {
+describe("a window plan's limit: model switching without Nous billing controls", () => {
   const limitMessage = (credits: 'add_credits' | 'use_credits', suggestions = true) =>
     failedMessage(
       {
@@ -435,8 +435,7 @@ describe("a window plan's limit: one-click switch and credits (no silent switch)
 
     await waitFor(() => expect(onReload).toHaveBeenCalledTimes(1))
     expect(switchSessionModel).toHaveBeenCalledWith('rt-1', 'example/model-free:free', 'nous')
-    // No balance: the credits way on is Billing, labelled for what it does.
-    expect(screen.getByRole('button', { name: 'Open billing settings' })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Open billing settings' })).toBeNull()
     expect(screen.queryByRole('button', { name: 'Turn on Keep going on credits' })).toBeNull()
     // The generic provider menu is replaced by the one-click switch.
     expect(screen.queryByRole('button', { name: 'Switch provider' })).toBeNull()
@@ -464,14 +463,14 @@ describe("a window plan's limit: one-click switch and credits (no silent switch)
     expect(onReload).not.toHaveBeenCalled()
   })
 
-  it('with a balance and Keep going off, offers to turn on Keep going (a lasting setting)', async () => {
+  it('does not offer Nous credit spending controls', async () => {
     render(
       <MemoryRouter>
         <Harness assistant={limitMessage('use_credits')} />
       </MemoryRouter>
     )
 
-    expect(await screen.findByRole('button', { name: 'Turn on Keep going on credits' })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Turn on Keep going on credits' })).toBeNull()
     expect(screen.getByRole('button', { name: 'Switch to Model Free (free)' })).toBeTruthy()
   })
 
@@ -482,7 +481,7 @@ describe("a window plan's limit: one-click switch and credits (no silent switch)
       </MemoryRouter>
     )
 
-    expect(await screen.findByRole('button', { name: 'Open billing settings' })).toBeTruthy()
+    expect(await screen.findByRole('button', { name: 'Choose a model' })).toBeTruthy()
     expect(screen.queryByRole('button', { name: /^Switch to / })).toBeNull()
   })
 })

@@ -49,12 +49,12 @@ describe('fixed Aino appearance', () => {
 
     act(() => $activeGatewayProfile.set('work'))
     expect(ctx!.mode).toBe('dark')
-    expect(cssVar('--theme-background-seed')).toBe(monoTheme.colors.background)
+    expect(cssVar('--theme-background-seed')).toBe(monoTheme.darkColors!.background)
     act(() => ingestBackendSkin(bloomberg('#ff9f0a'), { apply: true }))
     act(() => ctx!.setTheme('everforest'))
     expect(ctx!.themeName).toBe(monoTheme.name)
     expect(ctx!.mode).toBe('dark')
-    expect(cssVar('--theme-foreground')).toBe(monoTheme.colors.foreground)
+    expect(cssVar('--theme-foreground')).toBe(monoTheme.darkColors!.foreground)
 
     act(() => ingestBackendSkin({ name: 'mono', colors: {} }, { apply: true }))
     expect(JSON.parse(window.localStorage.getItem('hermes-desktop-profile-themes-v1')!)).toEqual({
@@ -172,7 +172,7 @@ describe('ThemeProvider highlight preview', () => {
     renderProbe()
     const committed = cssVar('--theme-background-seed')
     act(() => ctx.previewTheme(ctx.themeName, 'dark'))
-    expect(cssVar('--theme-background-seed')).toBe(monoTheme.colors.background)
+    expect(cssVar('--theme-background-seed')).toBe(monoTheme.darkColors!.background)
     expect(ctx.mode).toBe('light')
     expect(modePref.resolve('default')).toBe('light')
 
@@ -188,7 +188,7 @@ describe('ThemeProvider highlight preview', () => {
 
     expect(ctx.mode).toBe('dark')
     expect(modePref.resolve('default')).toBe('dark')
-    expect(cssVar('--theme-background-seed')).toBe(monoTheme.colors.background)
+    expect(cssVar('--theme-background-seed')).toBe(monoTheme.darkColors!.background)
   })
 
   it('ignores a preview of an alternate or unknown palette', () => {

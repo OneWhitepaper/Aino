@@ -49,10 +49,34 @@ These are deliberate compatibility boundaries, not a second product installed al
 Branding must never imply that Aino operates another provider's service:
 
 - Nous Portal/Nous Cloud login, billing, gateway recovery and provider support remain Nous-specific.
+- Nous-hosted services retain the existing default availability, guest onboarding and account
+  eligibility rules. There is no additional Aino `nous.enabled` opt-in gate. `nous.guest` defaults
+  true, while an existing explicit false remains respected. Restoring availability neither grants
+  a subscription nor bypasses authentication, quotas or per-tool provider selections. Existing
+  credentials are not deleted or migrated.
+- Telegram quick setup retains its existing managed-service flow and real provider identity;
+  manual BotFather setup and explicit custom setup services remain supported.
+- Local and user-configured remote MCP servers use the existing MCP lifecycle and approval flow
+  independently of Nous accounts, billing or managed-tool entitlement. MCP OAuth retains its
+  existing Client ID Metadata Document, dynamic registration and explicit client configuration
+  paths according to the server's supported authorization mechanisms.
 - The standing Nous free-tier legal strip appears only while the selected inference route uses that service. An available free-tier identity beside an Aino or user-configured provider is not enough; the linked policies belong to Nous.
 - The desktop **Send diagnostics to Aino** action collects through `diagnostics.collect` and uploads through the existing native Aino account client, after per-upload consent. Aino-API stores private bundles and exposes them only to authorized administrators; there is no public view link or Nous fallback. The explicitly named legacy `diagnostics.share_nous` and CLI `hermes debug share --nous` still target Nous. See [private diagnostics](implementation/aino-private-diagnostics.md) for access and retention boundaries.
 - Daily **usage statistics** reuse Hermes's collector and queue but require a new recipient-bound Aino consent. The same private administration page distinguishes statistics from manually uploaded logs. No old Nous opt-in or historical send window is reused. See [usage statistics](implementation/aino-usage-statistics.md).
-- The existing upstream-hosted plugin catalog and Skills Hub remain available at their real service URLs. Submitting to that shared catalog still targets its actual upstream maintainers. This change does not create an Aino mirror or alter iframe trust policies.
+- Upstream model/plugin catalog refreshes, the centralized Skills Hub index and the existing
+  Skills Hub browser remain available through their real service URLs. Bundled catalogs and
+  existing cached data remain available.
+  Explicit custom model catalog URLs keep their own authority and never fall back to upstream
+  when unreachable. These services use their actual URLs; no substitute Aino hosted connector,
+  account or catalog endpoint is invented. Desktop contribution links target the Aino repository.
+  Desktop catalog and installed-state caches remain profile-scoped. The Skills Hub iframe keeps
+  its origin, message-source and sandbox restrictions.
+  Optional-skill live fallback reads `OneWhitepaper/Aino` with source-specific cache identity;
+  explicit third-party skill pointers retain their actual authors and repositories.
+- New conversation help uses the local checkout's `docs/` and `website/docs/` for the installed
+  version, with the Aino repository as the source-documentation reference. Existing conversation
+  prompts are not rebuilt. Generic provider application attribution names Aino and `petoi.cn`;
+  vendor-required integration/authentication markers retain their compatibility values.
 - Other providers, model families, external plugins, user-authored content and dependency licenses retain their names.
 
 ## Public source, licensing and releases

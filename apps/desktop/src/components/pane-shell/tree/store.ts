@@ -6,8 +6,10 @@ import { atom, computed, type ReadableAtom } from 'nanostores'
  */
 
 import { SIDEBAR_COLLAPSE_MEDIA_QUERY } from '@/app/layout-constants'
+import { PANE_TOGGLE_REVEAL_EVENT } from '@/components/pane-shell'
 import { setPluginEnabled } from '@/contrib/plugins-store'
 import { $registryVersion, registry } from '@/contrib/registry'
+import { matchesQuery } from '@/hooks/use-media-query'
 import { translateNow } from '@/i18n'
 import { LAYOUT_KEYS } from '@/lib/layout-persistence'
 import { Codecs } from '@/lib/persisted'
@@ -17,6 +19,7 @@ import { notify } from '@/store/notifications'
 import { clearAllPaneSizeOverrides } from '@/store/panes'
 import { isBrowserWindow, isSecondaryWindow } from '@/store/windows'
 
+import { enforceDockedPanes, type PaneDockHint } from './dock-policy'
 import {
   allPaneIds,
   anchorsFirst,
@@ -47,6 +50,14 @@ import { beginLayoutHydration, endLayoutHydration, recalledEdgeWeights, remember
 import { isTreePaneParked } from './parked-panes'
 import { FLOATING_PLACEMENT } from './renderer/floating-rect'
 import { tabStripVisibleForZone } from './renderer/strip-visibility'
+import {
+  fallbackToolDockGroup,
+  hostsPreviewToolTab,
+  isRestoredToolPanelGroup,
+  toolDockPosition,
+  unifiedToolGroup
+} from './tool-panel-policy'
+import { $maximizedToolGroup } from './tool-panel-view'
 
 // v2: v1 trees were saved against placeholder panes with index-order zone
 // assignment (chat could land in a corner cell). Retire them wholesale.
@@ -164,6 +175,12 @@ function frontPaneInGroup(paneId: string) {
   const group = tree ? findGroupOfPane(tree, paneId) : null
 
   if (!tree || !group || group.active === paneId) {
+    return
+  }
+
+  // Tool availability may arrive in a different order during reconnect. The
+  // saved tab remains authoritative; explicit opens use revealTreePane.
+  if (isRestoredToolPanelGroup(group, id => registry.getArea('panes').find(pane => pane.id === id))) {
     return
   }
 
@@ -527,13 +544,13 @@ export function focusedSessionTabAnchor(): null | string {
  *  MAIN chat instead. Returns false when there's nothing to close, so ⌘W
  *  stays a no-op — it never closes the window. */
 export function closeFocusedSessionTab(): boolean {
-  const active = tabTargetGroup(group => group.panes.some(isMainStripPane))?.active
+  const active = tabTargetGroup(group => hostsPreviewToolTab(group) || group.panes.some(isMainStripPane))?.active
 
   if (!active || isUncloseablePane(active)) {
     return false
   }
 
-  closeTreePane(active)
+  closeTabPane(active)
 
   return true
 }
@@ -778,7 +795,7 @@ export function cycleTreeTabInFocusedZone(direction: 1 | -1): null | string {
   const group = tabTargetGroup(candidate => {
     const shown = shownPanesInGroup(candidate)
 
-    return shown.length >= 2 && shown.some(isMainStripPane)
+    return shown.length >= 2 && (hostsPreviewToolTab(candidate) || shown.some(isMainStripPane))
   })
 
   if (!group) {
@@ -1228,14 +1245,14 @@ export const $sessionTileEdgeHover = computed(
 /**
  * Adopt panes present in `source` but missing from `target`: each joins the
  * group its source siblings map to in the target (first group as a last
- * resort). Layout changes never lose panes.
+ * resort). Layout changes never lose panes or undo an explicit dismissal.
  */
 function adoptMissingPanes(target: LayoutNode, source: LayoutNode): LayoutNode {
   const have = new Set(allPaneIds(target))
   let next = target
 
   for (const paneId of allPaneIds(source)) {
-    if (have.has(paneId)) {
+    if (have.has(paneId) || $dismissedPanes.get().has(paneId)) {
       continue
     }
 
@@ -1292,19 +1309,6 @@ export function declareDefaultTree(tree: LayoutNode, simpleTree: LayoutNode = tr
  * boots), so user rearrangement wins from then on and plugin reloads keep
  * the pane where the user left it.
  */
-interface PaneDockHint {
-  pane: string
-  pos: DropPosition
-  /** Center docks: stack BEFORE this pane id (the strip divider's slot). */
-  before?: null | string
-  /** Enforced dock invariant: the pane is re-homed onto this hint's anchor
-   *  on EVERY boot when it isn't already in the declared relationship —
-   *  no one-time token, and user placement does not exempt it. Once per
-   *  adoption lifetime (per boot), so an intra-session drag sticks until the
-   *  next boot. See `enforceDockedPanes`. */
-  enforce?: boolean
-}
-
 // The retired one-time dock-heal ledger (`heal: '<token>'` hints). Its guards
 // (token burned even when the heal was skipped; $userPlacedPanes exempt) left
 // exactly the users who had fought the old stacked layout stuck with it —
@@ -1330,82 +1334,6 @@ export function resetEnforcedDocks(): void {
   enforcedDocksThisBoot.clear()
 }
 
-/**
- * A `panes` contribution whose dock hint carries `enforce: true` is re-homed
- * onto the hint's anchor at every boot's first adoption pass when it isn't
- * already docked there. Unlike the retired one-time heal, nothing
- * exempts the pane — not a burned token, not $userPlacedPanes — because the
- * hint is the owner's standing invariant about where the pane lives
- * (Bot Mode's Bots pane IS the SESSIONS | BOTS tab strip), not a one-shot
- * migration. Center hints consolidate panes into their anchor's tab strip;
- * edge hints restore the declared split beside their anchor.
- *
- * Silent like adoption — the anchor zone keeps its active tab. The center
- * insert pins the zone's header shown, which is the point: the strip is how
- * the user finds the tab.
- */
-function enforceDockedPanes(
-  tree: LayoutNode,
-  dataOf: (paneId: string) => { dock?: PaneDockHint; placement?: string } | undefined
-): LayoutNode {
-  let next = tree
-
-  for (const pane of registry.getArea('panes')) {
-    const dock = dataOf(pane.id)?.dock
-
-    if (!dock?.enforce || !allPaneIds(next).includes(pane.id)) {
-      continue
-    }
-
-    if (enforcedDocksThisBoot.has(pane.id)) {
-      continue
-    }
-
-    enforcedDocksThisBoot.add(pane.id)
-
-    const from = findGroupOfPane(next, pane.id)
-    const anchor = findGroupOfPane(next, dock.pane)
-
-    if (!from || !anchor) {
-      continue
-    }
-
-    if (dock.pos === 'center' && from.id === anchor.id) {
-      // Already stacked with its anchor, and nothing to repair: the trees that
-      // produced the "my ui only shows bots now... cant find the sessions"
-      // regression carried an accidental `headerHidden: true`, which the load
-      // migration now drops outright. A surviving `never` here is deliberate
-      // and recoverable from the toggle command, so boot does not overrule it.
-      continue
-    }
-
-    if (dock.pos !== 'center') {
-      const moved = movePaneOp(next, pane.id, {
-        groupId: anchor.id,
-        pos: dock.pos,
-        before: dock.before
-      })
-
-      if (moved !== next) {
-        next = moved
-      }
-
-      continue
-    }
-
-    const without = removePane(next, pane.id)
-    const target = without ? findGroupOfPane(without, dock.pane)?.id : undefined
-
-    if (!without || !target) {
-      continue
-    }
-
-    next = insertAtGroup(without, target, pane.id, 'center', dock.before, false) ?? next
-  }
-
-  return next
-}
-
 export function adoptContributedPanes(): void {
   const tree = $layoutTree.get()
 
@@ -1426,7 +1354,7 @@ export function adoptContributedPanes(): void {
 
   // Enforced dock invariants run FIRST: they re-home panes that are ALREADY
   // in the tree, so the missing-pane adoption below never sees them.
-  const healed = enforceDockedPanes(tree, dataOf)
+  const healed = enforceDockedPanes(tree, dataOf, enforcedDocksThisBoot)
 
   // `placement: 'floating'` opts OUT of the tree entirely — those panes render
   // as fixed cards above it (renderer/floating-panes.tsx). Adopting one would
@@ -1448,7 +1376,12 @@ export function adoptContributedPanes(): void {
   let next = healed
 
   for (const pane of anchorsFirst(missing, id => dataOf(id)?.dock?.pane)) {
-    const dock = dataOf(pane.id)?.dock
+    const toolTarget =
+      pane.id === 'files'
+        ? unifiedToolGroup(next)
+        : fallbackToolDockGroup(next, pane, id => panes.find(candidate => candidate.id === id))
+
+    const dock = toolTarget?.panes[0] ? { pane: toolTarget.panes[0], pos: 'center' as const } : dataOf(pane.id)?.dock
     const placement = placementOf(pane.id) ?? 'right'
 
     const anchor =
@@ -1459,21 +1392,18 @@ export function adoptContributedPanes(): void {
     const target = findGroupOfPane(next, anchor ?? '')?.id
 
     if (target) {
-      // Silent adoption: don't front over the zone's active tab — a reveal
-      // does. An edge dock re-takes the share the pane held when it closed —
-      // but only against the seam partner it was recorded with (#108679).
-      //
-      // Nothing writes the strip choice afterwards. This used to read the
-      // host's hidden flag before the insert and stamp it back on after, purely
-      // to undo the pin `insertAtGroup` applied; with the pin gone the zone's
-      // own preference simply survives, and the adopted pane arrives with a
-      // chip whenever auto says the zone has more than one.
+      // Silent adoption preserves the active tab and strip preference. Edge
+      // shares replay only against their recorded seam partner (#108679).
       next =
         insertAtGroup(
           next,
           target,
           pane.id,
-          dock?.pos ?? 'center',
+          toolDockPosition(
+            pane,
+            panes.find(candidate => candidate.id === anchor),
+            dock?.pos
+          ),
           dock?.before,
           false,
           recalledEdgeWeights(pane.id, anchor)
@@ -1485,11 +1415,8 @@ export function adoptContributedPanes(): void {
     commit(next)
   }
 
-  // After the commit, so the zone exists to minimize. `defaultCollapsed` is the
-  // pane's arrival state, not a standing invariant: it runs on the adoption
-  // that put the pane in the tree, and a pane already in the tree is never
-  // re-adopted — so a user's expand persists with the layout and is never
-  // overruled on a later boot.
+  // Minimize after the zone exists, only on first arrival: later boots keep
+  // the user's persisted expansion.
   for (const pane of missing) {
     if (dataOf(pane.id)?.defaultCollapsed) {
       setPaneCollapsed(pane.id, true)
@@ -1756,6 +1683,10 @@ export function reorderTreePanes(groupId: string, paneIds: readonly string[], to
 }
 
 export function setTreeGroupMinimized(groupId: string, minimized: boolean) {
+  if (minimized && $maximizedToolGroup.get() === groupId) {
+    $maximizedToolGroup.set(null)
+  }
+
   const tree = $layoutTree.get()
 
   if (tree) {
@@ -1836,19 +1767,55 @@ export function setPaneCollapsed(paneId: string, collapsed: boolean) {
   }
 }
 
-/** Restore a minimized tool pane the truthful way — through its store opener
- *  when bound (keeps ⌃`/titlebar toggles in sync), then reveal regardless.
- *  Used by the rail (tab / whole-rail click), the header chevron, and ⌃`.
- *
- *  The opener is fire-and-forget because it may be a NO-OP: the store can
- *  already be `true` while the pane is off screen (the zone was minimized from
- *  the zone menu, the tab was closed with ⌘W, or a stacked sibling holds the
- *  active slot). nanostores don't fire listeners on a same-value `.set()`, so
- *  the bindPaneCollapse listener never runs. `revealTreePane` is idempotent and
- *  does the real work — un-dismiss, un-collapse the side, un-minimize, front. */
+/** Explicit tool selection uses the existing safe panel host, without moving a mixed chat/plugin group. */
+export function dockToolPanelPane(paneId: string, sourcePaneId = 'tool-new-tab'): void {
+  const tree = $layoutTree.get()
+
+  if (
+    !tree ||
+    (!['files', 'review', 'terminal', 'logs', 'tool-new-tab'].includes(paneId) && !paneId.startsWith('preview-tile:'))
+  ) {
+    return
+  }
+
+  const panes = registry.getArea('panes')
+  const paneFor = (id: string) => panes.find(pane => pane.id === id)
+  const candidate = paneFor(paneId)
+
+  if (!(candidate?.data as { toolPanel?: boolean } | undefined)?.toolPanel) {
+    return
+  }
+
+  const accepts = (group: GroupNode | null | undefined) => group && isRestoredToolPanelGroup(group, paneFor)
+
+  const source = findGroupOfPane(tree, sourcePaneId)
+  const files = findGroupOfPane(tree, 'files')
+  const current = findGroupOfPane(tree, paneId)
+
+  const fallback = allPaneIds(tree)
+    .map(id => findGroupOfPane(tree, id))
+    .find(accepts)
+
+  const target = accepts(source) ? source : accepts(files) ? files : accepts(current) ? current : fallback
+
+  if (target && current?.id !== target.id) {
+    moveTreePane(paneId, { groupId: target.id, pos: 'center' })
+  }
+
+  if (target && $maximizedToolGroup.get() && $maximizedToolGroup.get() !== target.id) {
+    $maximizedToolGroup.set(null)
+  }
+}
+
+/** Restore through the owning opener, then dock explicit tool intent and reveal even on a same-value store set. */
 export function restoreTreePane(paneId: string) {
   paneOpeners[paneId]?.()
+  dockToolPanelPane(paneId)
   revealTreePane(paneId)
+
+  if (matchesQuery(SIDEBAR_COLLAPSE_MEDIA_QUERY)) {
+    window.dispatchEvent(new CustomEvent(PANE_TOGGLE_REVEAL_EVENT, { detail: { id: paneId, mode: 'open' } }))
+  }
 }
 
 /** Is a pane actually ON SCREEN? In the tree, not dismissed, not chrome

@@ -95,11 +95,11 @@ jobs:
           # A stable run is on main too, but it tests a candidate. It compares and never rewrites baselines.
           if [ "${{ github.ref_name }}" = "main" ] && [ -z "${{ inputs.commit }}" ]; then
             echo "On main — generating/updating baseline screenshots"
-            npm run build && xvfb-run -a --server-args="-screen 0 1280x1024x24" \
+            npm run build && node scripts/bundle-electron-main.mjs --dev && xvfb-run -a --server-args="-screen 0 1280x1024x24" \
               npx playwright test --reporter=list --workers=2 --update-snapshots
           else
             echo "On PR — comparing against cached baselines"
-            npm run build && xvfb-run -a --server-args="-screen 0 1280x1024x24" \
+            npm run build && node scripts/bundle-electron-main.mjs --dev && xvfb-run -a --server-args="-screen 0 1280x1024x24" \
               npx playwright test --reporter=list --workers=2
           fi
         env:

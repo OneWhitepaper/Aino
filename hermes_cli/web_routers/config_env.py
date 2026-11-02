@@ -26,6 +26,7 @@ from hermes_cli.web_server_profiles import (
 from fastapi import HTTPException, Request
 from hermes_cli.config import DEFAULT_CONFIG, OPTIONAL_ENV_VARS, read_raw_config, require_readable_config_before_write, custom_endpoint_key_env, coerce_provider_id, find_provider_entry, get_compatible_custom_providers, _ENV_REF_RE, _deep_merge
 from hermes_cli.config_providers import _canonical_api_mode, _custom_provider_entry_to_provider_config
+from hermes_cli.providers import custom_provider_slug, is_builtin_provider_id
 from hermes_cli.web_models import ConfigUpdate, EnvVarUpdate, EnvVarDelete, EnvVarReveal, CustomEndpointUpdate
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -464,7 +465,7 @@ def _endpoint_row(
 def _model_names_provider(model_cfg: dict[str, Any], provider_key: str, entry: Optional[dict[str, Any]]) -> bool:
     """True when ``model.provider`` points at this ``providers`` entry.
 
-    ``switch_model`` spells the active provider either as the stored key or as
+    ``switch_model`` spells the active provider either as a non-built-in stored key or as
     ``custom:<lowercased name>``; the list's ``is_current`` and delete's mirror
     detach must accept both, or a mixed-case key activates but never shows as
     active.
@@ -473,6 +474,8 @@ def _model_names_provider(model_cfg: dict[str, Any], provider_key: str, entry: O
     if isinstance(entry, dict) and coerce_provider_id(entry.get("name")):
         names.add(coerce_provider_id(entry.get("name")).lower())
     current = str(model_cfg.get("provider") or "").strip().lower()
+    if is_builtin_provider_id(current):
+        return False
     return current.removeprefix("custom:") in names
 
 
@@ -563,7 +566,15 @@ def _detach_main_model_from_provider(cfg: dict[str, Any], provider_key: str, ent
     See #62269.
     """
     model_cfg = cfg.get("model")
-    if not isinstance(model_cfg, dict) or not _model_names_provider(model_cfg, provider_key, entry):
+    if not isinstance(model_cfg, dict):
+        return
+    bare_custom_match = (
+        str(model_cfg.get("provider") or "").lower() == "custom"
+        and isinstance(entry, dict)
+        and bool(model_cfg.get("base_url"))
+        and str(model_cfg["base_url"]).rstrip("/") == str(entry.get("base_url") or "").rstrip("/")
+    )
+    if not (_model_names_provider(model_cfg, provider_key, entry) or bare_custom_match):
         return
     for field in ("provider", "base_url", "api_key", "key_env"):
         model_cfg.pop(field, None)
@@ -716,7 +727,12 @@ def _write_custom_endpoint(cfg: dict[str, Any], body: CustomEndpointUpdate) -> t
     cfg["providers"] = providers
 
     if body.make_default:
-        result = _validated_main_model_selection(cfg, endpoint_id, model, base_url)
+        from hermes_cli.runtime_provider import frozen_runtime_config
+
+        route = custom_provider_slug(endpoint_id, endpoint_id) if is_builtin_provider_id(endpoint_id) else endpoint_id
+        # Validate the pending entry, before it is committed to config.yaml.
+        with frozen_runtime_config(cfg):
+            result = _validated_main_model_selection(cfg, route, model, base_url)
         cfg["model"] = _apply_main_model_assignment(cfg.get("model", {}), result)
         if entry.get("key_env") and isinstance(cfg["model"], dict):
             cfg["model"]["key_env"] = entry["key_env"]
@@ -800,8 +816,9 @@ def activate_custom_endpoint(endpoint_id: str, profile: Optional[str] = None):
             if not model or not base_url:
                 raise HTTPException(status_code=400, detail="custom endpoint is incomplete")
 
+            route = custom_provider_slug(provider_key, provider_key) if is_builtin_provider_id(provider_key) else provider_key
             model_cfg = _apply_main_model_assignment(
-                cfg.get("model", {}), _validated_main_model_selection(cfg, provider_key, model, base_url))
+                cfg.get("model", {}), _validated_main_model_selection(cfg, route, model, base_url))
             if entry.get("key_env"):
                 model_cfg["key_env"] = entry["key_env"]
                 model_cfg.pop("api_key", None)
@@ -818,12 +835,15 @@ def activate_custom_endpoint(endpoint_id: str, profile: Optional[str] = None):
                     model_cfg["api_key"] = entry["api_key"]
             cfg["model"] = model_cfg
             save_config(cfg)
-        return {"ok": True, "provider": provider_key, "model": model}
+        return {"ok": True, "provider": route, "model": model}
 
 
 @router.delete("/api/providers/custom-endpoints/{endpoint_id}")
 def delete_custom_endpoint(endpoint_id: str, profile: Optional[str] = None):
     """Remove a configured custom endpoint from ``providers``."""
+    from hermes_cli.config import require_env_writable
+    from hermes_cli.web_routers.custom_endpoint_cleanup import clear_endpoint_credential_pools, endpoint_credential_slots
+
     with http_failure(
         f"DELETE /api/providers/custom-endpoints/{endpoint_id} failed", 500,
         detail="Failed to delete custom endpoint",
@@ -839,11 +859,20 @@ def delete_custom_endpoint(endpoint_id: str, profile: Optional[str] = None):
             else:
                 # A legacy ``custom_providers:`` row is addressed by its slug.
                 provider_key = _custom_endpoint_id(endpoint_id)
-                if _pop_legacy_custom_provider(cfg, provider_key) is None:
+                entry = _pop_legacy_custom_provider(cfg, provider_key)
+                if entry is None:
                     raise HTTPException(status_code=404, detail="custom endpoint not found")
             _detach_main_model_from_provider(cfg, provider_key, entry)
-            remove_env_value(custom_endpoint_key_env(provider_key))
+            slots = endpoint_credential_slots(provider_key, entry, cfg)
+            for key in slots:
+                require_env_writable(key, "remove")
             save_config(cfg)
+            # Effective config expands ${VAR}; inspect the saved raw form too,
+            # or a sibling's hand-written credential reference looks unshared.
+            slots = endpoint_credential_slots(provider_key, entry, read_raw_config())
+            for key in slots:
+                remove_env_value(key)
+            clear_endpoint_credential_pools(provider_key, entry, cfg, slots)
             response = _custom_endpoint_response(cfg)
         response["ok"] = True
         return response

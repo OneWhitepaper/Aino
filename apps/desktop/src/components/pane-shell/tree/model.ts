@@ -51,6 +51,8 @@ export interface GroupNode {
    *  only by the zone menu and the toggle command. Minimize ignores it — a
    *  minimized group IS its strip. */
   tabStrip?: TabStripMode
+  /** Unified right tool group; explicit vertical decks retain minimized headers. */
+  toolPanel?: boolean
 }
 
 export type LayoutNode = SplitNode | GroupNode
@@ -69,7 +71,8 @@ export const group = (panes: string[], options?: Partial<Omit<GroupNode, 'type' 
   panes,
   active: options?.active ?? panes[0] ?? '',
   minimized: options?.minimized,
-  tabStrip: options?.tabStrip
+  tabStrip: options?.tabStrip,
+  toolPanel: options?.toolPanel
 })
 
 export const split = (

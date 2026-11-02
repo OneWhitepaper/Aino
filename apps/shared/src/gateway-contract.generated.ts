@@ -8,6 +8,7 @@ export interface ManagedModelTicketParams {
   profile?: string | null
   owner: PlatformOwner
   model_id: string
+  purpose?: 'chat' | 'image'
 }
 export interface PlatformOwner {
   platform_origin: string
@@ -16,31 +17,35 @@ export interface PlatformOwner {
 export interface ManagedModelTicketResult {
   session_ticket: string
   managed_model_binding: number
+  managed_image_binding?: number
 }
 export interface ClaimManagedModelParams {
   session_id: string
   profile?: string | null
   owner: PlatformOwner
   model_id: string
+  purpose?: 'chat' | 'image'
   session_ticket: string
 }
 export interface ClaimManagedModelResult {
   binding_revision: number
   managed_model_binding: number
   managed_model_context_window?: boolean
+  managed_image_binding?: number
 }
 export interface BindManagedModelParams {
   session_id: string
   profile?: string | null
   owner: PlatformOwner
   model_id: string
+  purpose?: 'chat' | 'image'
   binding_revision: number
   credential_id: string
   api_key: string
   base_url: string
   expires_at: string
   model: string
-  api_mode: 'chat_completions' | 'responses' | 'anthropic_messages'
+  api_mode: 'chat_completions' | 'responses' | 'anthropic_messages' | 'images_generations'
   capabilities: ManagedCapabilities
   context_window?: number | null
 }
@@ -48,6 +53,8 @@ export interface ManagedCapabilities {
   tools: boolean
   vision: boolean
   reasoning: boolean
+  image_generation?: boolean
+  image_quality_options?: ('auto' | 'low' | 'medium' | 'high' | 'xhigh' | 'max')[]
 }
 export interface BindManagedModelResult {
   bound: boolean
@@ -58,6 +65,7 @@ export interface ClearManagedModelParams {
   session_id: string
   profile?: string | null
   binding_revision: number
+  purpose?: 'chat' | 'image'
 }
 export interface ClearManagedModelResult {
   cleared: boolean
@@ -1210,6 +1218,7 @@ export interface ConnectionOperationTarget {
   alias?: string | null
   attempt?: string | null
   required_env?: ConnectionTargetEnvField[] | null
+  mcp_config?: McpInstallConfig | null
   tools?: string[] | null
   hint?: string | null
   display?: string | null
@@ -1243,6 +1252,16 @@ export interface ConnectionTargetEnvField {
   secret: boolean
   default: string
   prompt?: string | null
+}
+/** Non-secret configuration displayed before installing a custom MCP server. */
+export interface McpInstallConfig {
+  url?: string | null
+  command?: string | null
+  args?: string[] | null
+  auth?: 'none' | 'oauth' | null
+  timeout?: number | null
+  transport?: 'http' | 'stdio' | null
+  env_keys?: string[] | null
 }
 export type CatalogTier = 'official' | 'verified' | 'community'
 /** The catalog's security scan of the pinned commit; read-only on the card. */
@@ -5375,6 +5394,7 @@ export interface CanonicalSubmitParams {
   api_text?: string | null
   model_override?: CanonicalModelOverride | null
   clarify_batch?: boolean
+  continuation_of?: CanonicalContinuation | null
 }
 export interface CanonicalAttachment {
   path: string
@@ -5390,6 +5410,11 @@ export interface CanonicalModelOverride {
   model: string
   provider?: string | null
   reasoning?: string | null
+}
+export interface CanonicalContinuation {
+  admission_id: string
+  execution_generation: number
+  revision: number
 }
 /** ``prompt.submit``: the admission receipt, or ``{voice_stopped: true}``. */
 export type CanonicalSubmitResult = AdmissionStatus | CanonicalVoiceStopped
@@ -5788,6 +5813,7 @@ export interface GatewayReadyPayload {
   replay_epoch: string
   heartbeat?: boolean | null
   managed_model_binding?: number | null
+  managed_image_binding?: number | null
   session_authority?: boolean | null
 }
 /** ``agent/onboarding_record.py::_transition``: the run ``run_id`` stopped being in progress. ``stored_session_id`` is its chat at the compression tip. ``done``: the first-task card was answered; ``skipped``: Skip setup; ``replaced``: a rerun opened a new run; ``deleted``: its chat was deleted. */

@@ -113,8 +113,9 @@ async def run_tui_read(authority, ref, live, policy, render, arg) -> dict:
 async def context_breakdown(connection, ref, params) -> dict:
     """``session.context_breakdown`` on the owner: the category estimate (``compute_session_context_
     breakdown``) and context-file manifest of this session's resident agent over its stored
-    transcript, built in the session's workspace. Before the agent exists: empty categories plus the
-    session's stored usage (the contract's pre-build shape)."""
+    transcript, built in the session's workspace. Before the agent exists, the persisted transcript
+    and system prompt still provide immediate category estimates; live-only categories are added
+    once the agent is resident."""
     from gateway.session_busy_controls import authorize
     from hermes_state_runtime import RuntimeStoreError
     if set(params) - {'session_id', 'profile'} or not isinstance(ref.session_id, str) or not ref.session_id:
@@ -124,38 +125,86 @@ async def context_breakdown(connection, ref, params) -> dict:
     live = authority.sessions.get(ref.session_id)
     if live is None:
         raise RuntimeStoreError('not_found')
-    agent = authority.agent(ref)
-    if agent is None:
-        from gateway.session_usage import stats
-        usage = await stats(connection, ref, {'session_id': ref.session_id})
-        usage = usage.get('usage') if isinstance(usage.get('usage'), dict) else usage
-        return {'categories': [], 'context_max': int(usage.get('context_max') or 0),
-                'context_percent': int(usage.get('context_percent') or 0),
-                'context_used': int(usage.get('context_used') or 0), 'estimated_total': 0,
-                'context_estimated': bool(usage.get('context_estimated', False)),
-                'context_source': str(usage.get('context_source') or 'provider_usage'),
-                'model': str(usage.get('model') or '')}
+    task = live.context_breakdown_task
+    if task is None or task.done():
+        task = live.context_breakdown_task = asyncio.create_task(_read_context_breakdown(authority, ref, live))
+        task.add_done_callback(lambda done: _context_breakdown_finished(live, done))
+    return dict(await asyncio.shield(task))
+
+
+def _context_breakdown_finished(live, task) -> None:
+    if live.context_breakdown_task is task:
+        live.context_breakdown_task = None
+    if not task.cancelled():
+        task.exception()  # A viewer may have left before a failed read settled.
+
+
+async def _read_context_breakdown(authority, ref, live) -> dict:
+    from hermes_state_runtime import RuntimeStoreError
+    # A transcript/model edit can race the first snapshot. Re-read once rather than publish it
+    # under newer intent; a continuously changing turn should retry after it settles.
+    for _ in range(2):
+        agent = authority.agent(ref)
+        payload = (await asyncio.to_thread(_cold_context_breakdown, authority, ref, live) if agent is None
+                   else await asyncio.to_thread(_live_context_breakdown, authority, ref, live, agent))
+        if payload is not None:
+            return payload
+    raise RuntimeStoreError('session_busy')
+
+
+def _live_context_breakdown(authority, ref, live, agent) -> dict | None:
     from gateway.session_authorities import owner_scope
     from gateway.session_commands import _session_workspace
     stored = _stored_id(authority, ref)
+    from agent.context_breakdown import compute_session_context_breakdown
+    from agent.context_file_sources import context_file_sources_for_agent
+    with owner_scope(authority), _session_workspace(authority.runner, live.source):
+        # Reuse the payload while neither the transcript nor the agent moved.
+        key = (_agent_context_marks(agent), authority.db.conversation_revision(stored, include_ancestors=True))
+        cached = live.context_breakdown
+        if cached is not None and cached[0] == (id(agent), key):
+            return dict(cached[1])
+        conversation = authority.db.get_messages_as_conversation(stored, include_ancestors=True)
+        payload = compute_session_context_breakdown(agent, conversation)
+        payload['context_files'] = context_file_sources_for_agent(agent)
+        if (authority.agent(ref) is not agent
+                or key != (_agent_context_marks(agent), authority.db.conversation_revision(stored, include_ancestors=True))):
+            return None
+        live.context_breakdown = ((id(agent), key), payload)
+        return dict(payload)
 
-    def build():
-        from agent.context_breakdown import compute_session_context_breakdown
-        from agent.context_file_sources import context_file_sources_for_agent
-        with owner_scope(authority), _session_workspace(authority.runner, live.source):
-            # A revision probe is two indexed reads; the rebuild walks the whole transcript and the
-            # system prompt. Reuse the payload while neither the transcript nor the agent moved.
-            key = (id(agent), _agent_context_marks(agent),
-                   authority.db.conversation_revision(stored, include_ancestors=True))
-            cached = live.context_breakdown
-            if cached is not None and cached[0] == key:
-                return dict(cached[1])
-            conversation = authority.db.get_messages_as_conversation(stored, include_ancestors=True)
-            payload = compute_session_context_breakdown(agent, conversation)
-            payload['context_files'] = context_file_sources_for_agent(agent)
-            live.context_breakdown = (key, payload)
-            return dict(payload)
-    return await asyncio.to_thread(build)
+
+def _cold_context_breakdown(authority, ref, live) -> dict | None:
+    """Reuse a persisted provider anchor before this process has constructed an agent."""
+    from agent.usage_anchor import USAGE_ANCHOR_MODEL_CONFIG_KEY, context_usage_from_history
+    from agent.context_breakdown import compute_cold_context_categories
+    from gateway.session_authorities import owner_scope
+    with owner_scope(authority):
+        stored = _stored_id(authority, ref)
+        anchor = authority.db.get_session_model_config_value(stored, USAGE_ANCHOR_MODEL_CONFIG_KEY, None)
+        row = authority.db.get_session(stored) or {}
+        key = ('cold', authority.db.conversation_revision(stored, include_ancestors=True), repr(anchor),
+               row.get('model'), row.get('system_prompt_hash'), row.get('system_prompt'))
+        cached = live.context_breakdown
+        if cached is not None and cached[0] == key:
+            return dict(cached[1])
+        # Read the durable transcript even when no provider anchor exists. The category panel is
+        # an estimate, so it can show conversation tokens immediately without constructing an
+        # agent or waiting for the next model turn; the anchor remains optional for occupancy.
+        history = authority.db.get_messages_as_conversation(stored, include_ancestors=True)
+        usage = context_usage_from_history(
+            history, anchor, row.get('_system_prompt_resolved') or row.get('system_prompt'))
+        categories = compute_cold_context_categories(
+            history, row.get('_system_prompt_resolved') or row.get('system_prompt'))
+        payload = {'categories': categories['categories'], 'context_max': 0, 'context_percent': 0,
+                   'context_used': 0, 'estimated_total': categories['estimated_total'], 'context_estimated': False,
+                   'context_source': 'unknown', 'model': str(row.get('model') or ''), **usage}
+        if (authority.agent(ref) is not None
+                or key[1] != authority.db.conversation_revision(stored, include_ancestors=True)
+                or anchor != authority.db.get_session_model_config_value(stored, USAGE_ANCHOR_MODEL_CONFIG_KEY, None)):
+            return None
+        live.context_breakdown = (key, payload)
+        return dict(payload)
 
 
 def _agent_context_marks(agent) -> tuple:

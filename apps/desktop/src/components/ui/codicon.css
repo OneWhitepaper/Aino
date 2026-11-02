@@ -1,0 +1,9 @@
+/* Keep legacy names as the plugin/editor API while app controls use SVG paths. */
+.codicon[data-aino-icon-name]::before {
+  content: none;
+}
+.codicon[data-aino-icon-name] > svg {
+  display: block;
+  width: 1em;
+  height: 1em;
+}

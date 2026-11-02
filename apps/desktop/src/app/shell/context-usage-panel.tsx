@@ -1,6 +1,7 @@
 import { compactNumber } from '@hermes/shared'
 import { useMemo } from 'react'
 
+import { Button } from '@/components/ui/button'
 import { Codicon } from '@/components/ui/codicon'
 import { useI18n } from '@/i18n'
 import { cn } from '@/lib/utils'
@@ -15,6 +16,8 @@ interface ContextUsagePanelProps {
   compacting?: boolean
   breakdown: ContextBreakdown | null
   loading: boolean
+  unavailable?: boolean
+  onRetry?: () => void
   showTitle?: boolean
   usage: UsageStats
 }
@@ -29,6 +32,8 @@ export function ContextUsagePanel({
   compacting = false,
   breakdown,
   loading,
+  unavailable = false,
+  onRetry,
   showTitle = true,
   usage
 }: ContextUsagePanelProps) {
@@ -65,20 +70,20 @@ export function ContextUsagePanel({
           ? copy.loading
           : copy.empty
 
+  const summary = copy.tokenSummary(
+    `${usage.context_estimated && contextUsed != null ? '~' : ''}${usedLabel}`,
+    maxLabel
+  )
+
   if (compact) {
     return (
-      <div
-        className="flex flex-col items-center gap-1 px-4 py-3 text-[length:var(--aino-text-ui)] leading-5"
-        data-slot="context-usage-hint"
-      >
-        <p className="font-medium text-muted-foreground">{copy.title}</p>
-        {status && <p className="text-muted-foreground">{status}</p>}
-        {hasContextData && (
-          <p className="text-foreground">
-            {copy.tokenSummary(`${usage.context_estimated && contextUsed != null ? '~' : ''}${usedLabel}`, maxLabel)}
-          </p>
-        )}
-      </div>
+      <CompactContextUsage
+        categories={categories}
+        hasContextData={hasContextData}
+        status={status}
+        summary={summary}
+        unavailable={unavailable}
+      />
     )
   }
 
@@ -87,9 +92,7 @@ export function ContextUsagePanel({
       <div className="flex items-baseline justify-between gap-2">
         {showTitle && <p className="font-medium text-foreground">{copy.title}</p>}
 
-        <span className="text-[0.6875rem] text-muted-foreground">
-          {copy.tokenSummary(`${usage.context_estimated && contextUsed != null ? '~' : ''}${usedLabel}`, maxLabel)}
-        </span>
+        <span className="text-[0.6875rem] text-muted-foreground">{summary}</span>
       </div>
 
       {compacting && (
@@ -98,27 +101,26 @@ export function ContextUsagePanel({
         </p>
       )}
 
-
       {contextPercent !== null && (
-      <p className="flex items-center justify-between gap-2 text-[0.6875rem] text-foreground">
-        <span>
-          {usage.context_estimated ? '~' : ''}
-          {copy.percentFull(contextPercent)}
-        </span>
-
-        {usage.compressions !== undefined && (
-          <span
-            className="inline-flex items-center gap-1 text-muted-foreground"
-            data-testid="context-panel-compressions"
-          >
-            <Codicon aria-hidden="true" name="layers" size="0.6875rem" />
-            {t.shell.statusbar.compressions(usage.compressions)}
+        <p className="flex items-center justify-between gap-2 text-[0.6875rem] text-foreground">
+          <span>
+            {usage.context_estimated ? '~' : ''}
+            {copy.percentFull(contextPercent)}
           </span>
-        )}
-      </p>
+
+          {usage.compressions !== undefined && (
+            <span
+              className="inline-flex items-center gap-1 text-muted-foreground"
+              data-testid="context-panel-compressions"
+            >
+              <Codicon aria-hidden="true" name="layers" size="0.6875rem" />
+              {t.shell.statusbar.compressions(usage.compressions)}
+            </span>
+          )}
+        </p>
       )}
 
-      <ContextUsageBar categories={categories} segmentTotal={segmentTotal} />
+      <ContextUsageBar categories={categories} contextPercent={contextPercent} segmentTotal={segmentTotal} />
 
       <ul className="flex flex-col gap-1.5">
         {categories.map(category => (
@@ -134,13 +136,105 @@ export function ContextUsagePanel({
         ))}
       </ul>
 
-      {loading && !categories.length && <p className="text-[0.6875rem] text-muted-foreground">{copy.loading}</p>}
-
-      {!loading && !categories.length && !hasContextData && (
-        <p className="text-[0.6875rem] text-muted-foreground">{copy.empty}</p>
-      )}
+      <ContextUsageEmptyState
+        breakdown={breakdown}
+        hasCategories={categories.length > 0}
+        hasContextData={hasContextData}
+        loading={loading}
+        onRetry={onRetry}
+        unavailable={unavailable}
+      />
     </div>
   )
+}
+
+interface CompactContextUsageProps {
+  categories: readonly ContextUsageCategory[]
+  hasContextData: boolean
+  status: string | null
+  summary: string
+  unavailable: boolean
+}
+
+function CompactContextUsage({ categories, hasContextData, status, summary, unavailable }: CompactContextUsageProps) {
+  const { t } = useI18n()
+  const copy = t.shell.statusbar.contextUsagePanel
+
+  return (
+    <div className="context-usage-compact" data-slot="context-usage-hint">
+      <div className="context-usage-compact-header">
+        <p className="context-usage-compact-title">{copy.compactTitle}</p>
+        {status && <p className="context-usage-compact-status">{status}</p>}
+      </div>
+      {hasContextData && <p className="context-usage-compact-summary">{summary}</p>}
+      {categories.slice(0, 4).length > 0 && (
+        <ul className="context-usage-compact-categories" data-slot="context-usage-compact-categories">
+          {categories.slice(0, 4).map(category => (
+            <li key={category.id}>
+              <span className="context-usage-compact-category-name">
+                <span
+                  aria-hidden="true"
+                  className="context-usage-compact-category-dot"
+                  style={{ background: category.color }}
+                />
+                <span>{category.label}</span>
+              </span>
+              <span className="context-usage-compact-category-tokens">~{compactNumber(category.tokens)}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+      {!hasContextData && unavailable && <p className="context-usage-compact-status">{copy.unavailable}</p>}
+    </div>
+  )
+}
+
+interface ContextUsageEmptyStateProps {
+  breakdown: ContextBreakdown | null
+  hasContextData: boolean
+  hasCategories: boolean
+  loading: boolean
+  unavailable: boolean
+  onRetry?: () => void
+}
+
+function ContextUsageEmptyState({
+  breakdown,
+  hasContextData,
+  hasCategories,
+  loading,
+  unavailable,
+  onRetry
+}: ContextUsageEmptyStateProps) {
+  const { t } = useI18n()
+  const copy = t.shell.statusbar.contextUsagePanel
+
+  if (hasCategories) {
+    return null
+  }
+
+  if (loading) {
+    return <p className="text-[0.6875rem] text-muted-foreground">{copy.loading}</p>
+  }
+
+  if (unavailable) {
+    return (
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-[0.6875rem] text-muted-foreground" role="status">
+          {hasContextData ? copy.detailsUnavailable : copy.unavailable}
+        </p>
+        {onRetry && (
+          <Button onClick={onRetry} size="xs" type="button" variant="ghost">
+            {copy.retry}
+          </Button>
+        )}
+      </div>
+    )
+  }
+
+  const message = hasContextData ? (breakdown ? copy.pendingDetails : null) : copy.empty
+
+  return message ? <p className="text-[0.6875rem] text-muted-foreground">{message}</p> : null
 }
 
 /** The statusbar meter's trailing `[bar] N%`, plus a quiet `layers N` once the
@@ -165,26 +259,31 @@ export function ContextMeterDetail({ bar, compressions }: { bar: string; compres
 
 function ContextUsageBar({
   categories,
+  contextPercent,
   segmentTotal
 }: {
   categories: readonly ContextUsageCategory[]
+  contextPercent: number | null
   segmentTotal: number
 }) {
   return (
     <div
       className={cn(
         'flex h-1.5 overflow-hidden rounded-full',
-        categories.length ? 'bg-(--ui-stroke-tertiary)' : 'dither bg-(--ui-bg-elevated)'
+        categories.length || contextPercent !== null ? 'bg-(--ui-stroke-tertiary)' : 'dither bg-(--ui-bg-elevated)'
       )}
       data-slot="context-usage-bar"
     >
+      {!categories.length && contextPercent !== null && (
+        <span className="h-full bg-(--ui-text-tertiary)" style={{ width: `${contextPercent}%` }} />
+      )}
       {categories.map(category => (
         <span
           className="h-full min-w-px"
           key={category.id}
           style={{
             background: category.color,
-            width: `${(category.tokens / segmentTotal) * 100}%`
+            width: `${(category.tokens / segmentTotal) * (contextPercent ?? 100)}%`
           }}
         />
       ))}

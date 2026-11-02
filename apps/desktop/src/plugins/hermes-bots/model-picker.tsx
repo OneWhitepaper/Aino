@@ -9,6 +9,7 @@
 import {
   Button,
   catalogProviderMatches,
+  Codicon,
   GlyphSpinner,
   Input,
   Select,
@@ -218,6 +219,7 @@ export function ModelPicker({ bot = null, value, onChange, placeholderModel }: M
           size="sm"
           variant="ghost"
         >
+          <Codicon name="arrow-left" size="1em" />
           {b.model.backToDropdowns}
         </Button>
       </div>
@@ -265,7 +267,10 @@ export function ModelPicker({ bot = null, value, onChange, placeholderModel }: M
                 {p.name ? `${p.name} (${p.slug})` : p.slug}
               </SelectItem>
             ))}
-            <SelectItem value={CUSTOM}>{b.model.enterManually}</SelectItem>
+            <SelectItem value={CUSTOM}>
+              <Codicon name="edit" size="1em" />
+              {b.model.enterManually}
+            </SelectItem>
           </SelectContent>
         </Select>
       )}
@@ -298,7 +303,9 @@ export function ModelPicker({ bot = null, value, onChange, placeholderModel }: M
                 model: event.target.value
               })
             }
-            placeholder={placeholderModel === undefined ? b.model.gatewayDefault : placeholderModel || b.model.modelNamePlaceholder}
+            placeholder={
+              placeholderModel === undefined ? b.model.gatewayDefault : placeholderModel || b.model.modelNamePlaceholder
+            }
             value={value.model}
           />
         )

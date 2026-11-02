@@ -8,6 +8,23 @@ beforeEach(() => {
   document.documentElement.style.removeProperty('--chat-text-scale')
 })
 
+it('starts at the shared reading size when no chat scale was selected', async () => {
+  const { $chatTextScale } = await import('./chat-text-scale')
+
+  expect($chatTextScale.get()).toBe(100)
+  expect(document.documentElement.style.getPropertyValue('--chat-text-scale')).toBe('1')
+  expect(localStorage.getItem(KEY)).toBeNull()
+})
+
+it.each([110, 125, 150])('preserves an explicitly saved %s percent reading preference', async scale => {
+  localStorage.setItem(KEY, String(scale))
+  const { $chatTextScale } = await import('./chat-text-scale')
+
+  expect($chatTextScale.get()).toBe(scale)
+  expect(document.documentElement.style.getPropertyValue('--chat-text-scale')).toBe(String(scale / 100))
+  expect(localStorage.getItem(KEY)).toBe(String(scale))
+})
+
 it('restores the selected chat scale without changing window zoom or global typography', async () => {
   const { $zoomPercent } = await import('./zoom')
   const zoom = $zoomPercent.get()

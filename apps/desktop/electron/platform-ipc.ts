@@ -120,6 +120,14 @@ export function registerPlatformIpc({
     return value
   }
 
+  function modelPurpose(input: Record<string, unknown>): { purpose?: 'chat' | 'image' } {
+    if (input.purpose === undefined) { return {} }
+
+    if (input.purpose !== 'chat' && input.purpose !== 'image') { throw new Error('invalid_platform_input') }
+
+    return { purpose: input.purpose }
+  }
+
   function safeIpcError(error: unknown) {
     const source = error && typeof error === 'object' ? (error as Record<string, unknown>) : {}
     const message = error instanceof Error ? error.message : ''
@@ -395,7 +403,8 @@ export function registerPlatformIpc({
           model_id: field(value, 'model_id', 256),
           session_ticket: field(value, 'session_ticket', 256),
           expected_account_revision:
-            typeof value.expected_account_revision === 'number' ? value.expected_account_revision : 0
+            typeof value.expected_account_revision === 'number' ? value.expected_account_revision : 0,
+          ...modelPurpose(value)
         }
 
         return await bindingController.bind(bindInput, win)
@@ -423,7 +432,8 @@ export function registerPlatformIpc({
           {
             connection_id: boundedString(value, 'connection_id', 256),
             profile: boundedString(value, 'profile', 256),
-            session_id: field(value, 'session_id', 256)
+            session_id: field(value, 'session_id', 256),
+            ...modelPurpose(value)
           },
           win
         )

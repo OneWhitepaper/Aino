@@ -2,7 +2,7 @@ import { atom, computed } from 'nanostores'
 
 import { SIDEBAR_COLLAPSE_MEDIA_QUERY } from '@/app/layout-constants'
 import { PANE_TOGGLE_REVEAL_EVENT } from '@/components/pane-shell'
-import { isPaneVisible, revealTreePane } from '@/components/pane-shell/tree/store'
+import { dockToolPanelPane, isPaneVisible, revealTreePane } from '@/components/pane-shell/tree/store'
 import type { HermesReviewFile, HermesReviewScope, HermesReviewShipInfo } from '@/global'
 import { matchesQuery } from '@/hooks/use-media-query'
 import { translateNow } from '@/i18n/runtime'
@@ -13,6 +13,7 @@ import { Codecs, persistentAtom } from '@/lib/persisted'
 import { modeBound } from '@/store/interface-mode'
 
 import { refreshRepoStatus, repoStatusForCwd } from './coding-status'
+import { $freshDraftKey } from './composer'
 import { $activeConnectionId } from './connections'
 import { noteAreaClosed, recordFeatureUse } from './desktop-metrics'
 import { $activeGatewayProfile } from './profile'
@@ -161,6 +162,12 @@ export const $reviewScopeTarget = atom('main')
 
 let reviewScopeSource: string | null = null
 let reviewScopeStoredId: string | null = null
+let reviewDraftKey: string | null = null
+
+/** A saved layout's active Review is not an explicit selection in a new draft. */
+export function reviewBelongsToCurrentDraft(): boolean {
+  return $reviewOpen.get() && reviewScopeStoredId === null && reviewDraftKey === $freshDraftKey.get()
+}
 
 export const $reviewRepoCwd = computed(
   [$reviewScopeCwd, $toolWorkspaceCwd],
@@ -350,7 +357,10 @@ export async function selectReviewFile(file: HermesReviewFile): Promise<void> {
   const ctx = reviewCtx()
 
   const ownsSelection = () =>
-    seq === reviewSelectionSeq && $reviewSelectedPath.get() === file.path && repoCwd() === intentCwd && (!ctx || reviewContextIsCurrent(ctx))
+    seq === reviewSelectionSeq &&
+    $reviewSelectedPath.get() === file.path &&
+    repoCwd() === intentCwd &&
+    (!ctx || reviewContextIsCurrent(ctx))
 
   if (!ctx) {
     if (ownsSelection()) {
@@ -440,7 +450,8 @@ function reviewOriginChanged(scopeCwd: null | string, scopeTarget: string): bool
     $reviewScopeCwd.get() !== origin.cwd ||
     $reviewScopeTarget.get() !== origin.target ||
     reviewScopeSource !== origin.sourceKey ||
-    reviewScopeStoredId !== origin.storedId
+    reviewScopeStoredId !== origin.storedId ||
+    (origin.storedId === null && reviewDraftKey !== $freshDraftKey.get())
   )
 }
 
@@ -451,12 +462,16 @@ export function openReview(scopeCwd: null | string = null, scopeTarget = 'main',
   const origin = resolveReviewOrigin(scopeCwd, scopeTarget)
   reviewScopeSource = origin.sourceKey
   reviewScopeStoredId = origin.storedId
+  reviewDraftKey = origin.storedId === null ? $freshDraftKey.get() : null
   $reviewScopeCwd.set(origin.cwd)
   $reviewScopeTarget.set(origin.target)
   $reviewOpen.set(true)
   recordFeatureUse('review_pane')
 
-  if (refresh) {void refreshReview()}
+  if (refresh) {
+    void refreshReview()
+  }
+
   void refreshShipInfo()
 }
 
@@ -515,17 +530,12 @@ export function revealReview(scopeCwd: null | string = null, scopeTarget = 'main
     openReview(scopeCwd, scopeTarget, refresh)
   }
 
-  if (matchesQuery(SIDEBAR_COLLAPSE_MEDIA_QUERY)) {
-    // The reveal pin is a toggle, so only fire it when the overlay isn't
-    // already slid in — otherwise "show me the diff" would hide the pane.
-    if (!wasOpen) {
-      window.dispatchEvent(new CustomEvent(PANE_TOGGLE_REVEAL_EVENT, { detail: { id: REVIEW_PANE_ID } }))
-    }
-
-    return
-  }
-
+  dockToolPanelPane(REVIEW_PANE_ID)
   revealTreePane(REVIEW_PANE_ID)
+
+  if (matchesQuery(SIDEBAR_COLLAPSE_MEDIA_QUERY)) {
+    window.dispatchEvent(new CustomEvent(PANE_TOGGLE_REVEAL_EVENT, { detail: { id: REVIEW_PANE_ID, mode: 'open' } }))
+  }
 }
 
 /** The changed file matching a tool-reported path (absolute or repo-relative). */
@@ -602,7 +612,10 @@ async function afterMutation(ctx: { cwd: string; sourceKey: string }): Promise<v
 }
 
 export async function stageReviewFile(path: null | string, scopeCwd?: null | string): Promise<void> {
-  if ($reviewScope.get() !== 'uncommitted') {return}
+  if ($reviewScope.get() !== 'uncommitted') {
+    return
+  }
+
   const ctx = reviewCtx(scopeCwd)
 
   if (!ctx) {
@@ -614,7 +627,10 @@ export async function stageReviewFile(path: null | string, scopeCwd?: null | str
 }
 
 export async function unstageReviewFile(path: null | string, scopeCwd?: null | string): Promise<void> {
-  if ($reviewScope.get() !== 'uncommitted') {return}
+  if ($reviewScope.get() !== 'uncommitted') {
+    return
+  }
+
   const ctx = reviewCtx(scopeCwd)
 
   if (!ctx) {
@@ -626,7 +642,10 @@ export async function unstageReviewFile(path: null | string, scopeCwd?: null | s
 }
 
 export async function revertReviewFile(path: null | string, scopeCwd?: null | string): Promise<void> {
-  if ($reviewScope.get() !== 'uncommitted') {return}
+  if ($reviewScope.get() !== 'uncommitted') {
+    return
+  }
+
   const ctx = reviewCtx(scopeCwd)
 
   if (!ctx) {

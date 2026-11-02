@@ -13,7 +13,7 @@ import { $pluginInstallRequest, closePluginInstallRequest } from '@/store/plugin
 import { $connection, $gatewayState } from '@/store/session'
 
 import { PageSearchShell } from '../../page-search-shell'
-import { parseCatalog } from '../catalog/catalog-data'
+import { catalogQueryKey, parseCatalog } from '../catalog/catalog-data'
 import { $catalogCardView } from '../catalog/store'
 
 import { PluginsTab } from './plugins-tab'
@@ -52,7 +52,9 @@ const weatherEntry = {
 }
 
 function seedCatalog(entries = [weatherEntry]) {
-  queryClient.setQueryData(['public-catalog', 'plugins'], parseCatalog('plugins', entries))
+  for (const profile of [null, 'workbot']) {
+    queryClient.setQueryData(catalogQueryKey('plugins', profile), parseCatalog('plugins', entries))
+  }
 }
 
 async function selectCatalogEntry(name: string) {
@@ -77,7 +79,10 @@ vi.mock('@/app/gateway/hooks/use-gateway-request', () => ({
 const uninstallDiskPlugin = vi.fn(async (_id: string) => ({ ok: true }))
 const setEnvVar = vi.fn(async (..._args: unknown[]) => ({}))
 
-vi.mock('@/api/config', () => ({ setEnvVar: (...args: unknown[]) => setEnvVar(...args) }))
+vi.mock('@/api/config', () => ({
+  getHermesConfigRecord: vi.fn(async () => ({ nous: { enabled: true } })),
+  setEnvVar: (...args: unknown[]) => setEnvVar(...args)
+}))
 
 vi.mock('@/contrib/runtime-loader', async importOriginal => ({
   ...(await importOriginal<Record<string, unknown>>()),

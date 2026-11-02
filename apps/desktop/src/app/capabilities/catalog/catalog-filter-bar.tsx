@@ -1,4 +1,3 @@
-import { IconCategory, IconDatabase, IconFilter2, IconRosetteDiscountCheck } from '@tabler/icons-react'
 import { type ReactNode, useId, useState } from 'react'
 
 import { Button } from '@/components/ui/button'
@@ -6,6 +5,7 @@ import { Codicon } from '@/components/ui/codicon'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { SegmentedControl } from '@/components/ui/segmented-control'
 import { useI18n } from '@/i18n'
+import { AppWindow, CheckCircle2, Data, Settings2 } from '@/lib/icons'
 
 import { catalogIcon } from './catalog-card'
 import { type CatalogKind } from './catalog-data'
@@ -82,7 +82,7 @@ export function CatalogFilterBar(props: CatalogFilterBarProps) {
           size="sm"
           variant={!selected.length ? 'secondary' : 'ghost'}
         >
-          {mode === 'categories' ? <IconCategory /> : tiers ? <IconRosetteDiscountCheck /> : <IconDatabase />}
+          {mode === 'categories' ? <AppWindow /> : tiers ? <CheckCircle2 /> : <Data />}
           <span>{mode === 'categories' ? c.allCategories : c.allSources}</span>
         </Button>
         {rows.map(row => (
@@ -93,7 +93,7 @@ export function CatalogFilterBar(props: CatalogFilterBarProps) {
             size="sm"
             variant={selected.includes(row.value) ? 'secondary' : 'ghost'}
           >
-            {mode === 'categories' ? <Codicon name={catalogIcon(row.value)} /> : <IconDatabase />}
+            {mode === 'categories' ? <Codicon name={catalogIcon(row.value)} /> : <Data />}
             <span title={catalogDisplayLabel(row.label, t)}>{catalogDisplayLabel(row.label, t)}</span>
           </Button>
         ))}
@@ -120,7 +120,7 @@ export function CatalogFilterMenu(props: CatalogFilterBarProps) {
       <Popover onOpenChange={setExpanded} open={expanded}>
         <PopoverTrigger asChild>
           <Button aria-labelledby={`${panelId}-label`} size="sm" variant={expanded ? 'default' : 'secondary'}>
-            <IconFilter2 />
+            <Settings2 />
             {c.filters}
           </Button>
         </PopoverTrigger>
@@ -138,6 +138,7 @@ export function CatalogFilterMenu(props: CatalogFilterBarProps) {
                 {c.clearFilters}
               </Button>
             </div>
+            <CatalogFilterBar {...props} />
             <div className="flex flex-col gap-2">
               <span className="text-xs text-(--ui-text-tertiary)">{c.sortBy}</span>
               {props.sortControl}

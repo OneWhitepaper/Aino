@@ -7,11 +7,9 @@ import { useI18n } from '@/i18n'
 import { isDesktopToolsetVisible } from '@/lib/desktop-toolsets'
 import { queryClient } from '@/lib/query-client'
 import { invalidateSlashCompletions } from '@/lib/slash-completion-cache'
-import { cn } from '@/lib/utils'
 import { notify, notifyError } from '@/store/notifications'
 import type { ToolsetInfo } from '@/types/hermes'
 
-import { PAGE_INSET_X, PAGE_MAX_W } from '../../layout-constants'
 import { asText, toolNames, toolsetDisplayLabel } from '../../settings/helpers'
 import { CatalogSwitch } from '../catalog/catalog-switch'
 import { CapabilityEmpty } from '../primitives'
@@ -133,21 +131,24 @@ export function ToolsetsTab({ hints, onQueryChange, profile, query, toolsets }: 
   // Same search row as every other Capabilities tab; it stays put when a query
   // empties the list.
   const search = (
-    <header className="shrink-0 border-b border-(--ui-stroke-secondary) py-3.5">
-      <div className={cn('mx-auto w-full', PAGE_INSET_X, PAGE_MAX_W)}>
-        <CapabilitySearch
-          hints={hints}
-          onChange={onQueryChange}
-          placeholder={t.skills.searchToolsets}
-          scope={t.skills.tabToolsets}
-          value={query}
-        />
-      </div>
+    <header className="capabilities-toolbar">
+      <CapabilitySearch
+        hints={hints}
+        onChange={onQueryChange}
+        placeholder={t.skills.searchToolsets}
+        scope={t.skills.tabToolsets}
+        value={query}
+      />
     </header>
   )
 
   if (visibleToolsets.length === 0) {
-    return <div className="flex h-full min-h-0 flex-col">{search}<CapabilityEmpty noun="tools" query={query} /></div>
+    return (
+      <div className="flex h-full min-h-0 flex-col">
+        {search}
+        <CapabilityEmpty noun="tools" query={query} />
+      </div>
+    )
   }
 
   const item = (toolset: ToolsetInfo, layout: CatalogSurfaceSection['layout']): CatalogSurfaceItem => {
@@ -177,8 +178,17 @@ export function ToolsetsTab({ hints, onQueryChange, profile, query, toolsets }: 
   // The feature row is the four most-used toolsets once there is real usage to
   // rank by; before that it's the essentials. Everything else sits under what it does.
   const used = visibleToolsets.slice(0, TOOLSET_FEATURE_COUNT)
-  const ranked = !!toolCalls && used.length === TOOLSET_FEATURE_COUNT && used.every(toolset => toolsetCalls(toolset, toolCalls) > 0)
-  const featured = query || visibleToolsets.length <= TOOLSET_FEATURE_MIN ? [] : ranked ? used : visibleToolsets.filter(toolset => TOOLSET_ESSENTIALS.includes(toolset.name))
+
+  const ranked =
+    !!toolCalls && used.length === TOOLSET_FEATURE_COUNT && used.every(toolset => toolsetCalls(toolset, toolCalls) > 0)
+
+  const featured =
+    query || visibleToolsets.length <= TOOLSET_FEATURE_MIN
+      ? []
+      : ranked
+        ? used
+        : visibleToolsets.filter(toolset => TOOLSET_ESSENTIALS.includes(toolset.name))
+
   const rest = visibleToolsets.filter(toolset => !featured.includes(toolset))
 
   const sections: CatalogSurfaceSection[] = [
@@ -207,17 +217,36 @@ export function ToolsetsTab({ hints, onQueryChange, profile, query, toolsets }: 
             aria-label={t.skills.all}
             checked={bulkToolsets.length > 0 && bulkToolsets.every(ts => ts.enabled)}
             disabled={bulkBusy}
-            onCheckedChange={checked => void bulkApply(bulkToolsets.filter(row => row.enabled !== checked), checked)}
+            onCheckedChange={checked =>
+              void bulkApply(
+                bulkToolsets.filter(row => row.enabled !== checked),
+                checked
+              )
+            }
           />
         }
         kind="plugins"
         sections={sections}
       />
-      <Dialog onOpenChange={open => { if (!open) {setSelectedToolset(null)} }} open={selectedToolset !== null}>
+      <Dialog
+        onOpenChange={open => {
+          if (!open) {
+            setSelectedToolset(null)
+          }
+        }}
+        open={selectedToolset !== null}
+      >
         <DialogContent className="max-w-2xl">
-          <DialogTitle className="sr-only">{activeToolset ? toolsetDisplayLabel(activeToolset) : t.skills.tabToolsets}</DialogTitle>
+          <DialogTitle className="sr-only">
+            {activeToolset ? toolsetDisplayLabel(activeToolset) : t.skills.tabToolsets}
+          </DialogTitle>
           {activeToolset && (
-            <ToolsetDetail onConfiguredChange={refreshToolsets} profile={profile} toolCalls={toolCalls ?? {}} toolset={activeToolset} />
+            <ToolsetDetail
+              onConfiguredChange={refreshToolsets}
+              profile={profile}
+              toolCalls={toolCalls ?? {}}
+              toolset={activeToolset}
+            />
           )}
         </DialogContent>
       </Dialog>

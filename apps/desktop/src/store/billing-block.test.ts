@@ -2,12 +2,13 @@ import type { BillingBlock } from '@hermes/shared'
 import { beforeEach, expect, test, vi } from 'vitest'
 
 vi.mock('@/lib/external-link', () => ({ openExternalLink: vi.fn() }))
+vi.mock('@/store/session', () => ({ setModelPickerOpen: vi.fn() }))
 
 import { openExternalLink } from '@/lib/external-link'
+import { setModelPickerOpen } from '@/store/session'
 
 import {
   $billingBlock,
-  $billingSettingsRequest,
   clearBillingBlock,
   runBillingRecovery,
   setBillingBlock
@@ -27,7 +28,6 @@ function makeBlock(overrides: Partial<BillingBlock> = {}): BillingBlock {
 
 beforeEach(() => {
   $billingBlock.set(null)
-  $billingSettingsRequest.set(0)
   vi.clearAllMocks()
 })
 
@@ -46,9 +46,9 @@ test('clearBillingBlock with no arg clears any active block', () => {
   expect($billingBlock.get()).toBeNull()
 })
 
-test('runBillingRecovery routes Nous to in-app Settings, never an external link', () => {
+test('runBillingRecovery sends managed account billing walls to model selection', () => {
   runBillingRecovery(makeBlock({ is_nous: true, provider: 'nous', provider_label: 'Nous Portal' }))
-  expect($billingSettingsRequest.get()).toBe(1)
+  expect(setModelPickerOpen).toHaveBeenCalledWith(true)
   expect(openExternalLink).not.toHaveBeenCalled()
 })
 
@@ -56,11 +56,11 @@ test('runBillingRecovery deep-links a third-party provider to its billing page',
   const block = makeBlock({ billing_url: 'https://openrouter.ai/settings/credits', provider: 'openrouter' })
   runBillingRecovery(block)
   expect(openExternalLink).toHaveBeenCalledWith('https://openrouter.ai/settings/credits')
-  expect($billingSettingsRequest.get()).toBe(0)
+  expect(setModelPickerOpen).not.toHaveBeenCalled()
 })
 
-test('runBillingRecovery falls back to in-app settings when a provider has no URL', () => {
+test('runBillingRecovery returns to model selection when a provider has no billing URL', () => {
   runBillingRecovery(makeBlock({ billing_url: null, provider: 'custom' }))
   expect(openExternalLink).not.toHaveBeenCalled()
-  expect($billingSettingsRequest.get()).toBe(1)
+  expect(setModelPickerOpen).toHaveBeenCalledWith(true)
 })

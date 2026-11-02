@@ -805,6 +805,7 @@ def build_system_prompt(agent: Any, system_message: Optional[str] = None) -> str
     volatile so implicit longest-prefix caches keep the unchanged scaffold."""
     parts = build_system_prompt_parts(agent, system_message=system_message)
     agent._cached_system_prompt_static = parts["stable"]
+    agent._cached_system_prompt_parts = dict(parts)
     # Surface context-file truncation warnings in chat, not only in logs.
     for warning in drain_truncation_warnings():
         agent._emit_diagnostic_status(warning)
@@ -825,6 +826,7 @@ def invalidate_system_prompt(agent: Any) -> None:
     """
     agent._cached_system_prompt = None
     agent._cached_system_prompt_static = None
+    agent._cached_system_prompt_parts = None
     if hasattr(agent, "_plugin_system_prompt_sections_snapshot"):
         agent._plugin_system_prompt_sections_previous = agent._plugin_system_prompt_sections_snapshot
         del agent._plugin_system_prompt_sections_snapshot

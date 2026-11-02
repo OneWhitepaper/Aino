@@ -17,7 +17,8 @@
  * `electron-builder --dir` step and matches `hermes desktop --source`. The
  * packaged-binary path is already covered by `launch.spec.ts`.
  *
- * Prerequisite: `npm run build` must have been run so that `dist/` exists.
+ * Prerequisite: `npm run build && node scripts/bundle-electron-main.mjs --dev`
+ * builds the renderer and the source-test Electron main/preloads.
  */
 
 import * as fs from 'node:fs'
@@ -246,14 +247,14 @@ function assertDistBuilt(): void {
 
   if (!fs.existsSync(electronMain)) {
     throw new Error(
-      `Desktop dist not built. Run 'cd apps/desktop && npm run build' first.\n` +
+      `Desktop dist not built. Run 'cd apps/desktop && npm run build && node scripts/bundle-electron-main.mjs --dev' first.\n` +
         `Missing: ${electronMain}`,
     )
   }
 
   if (!fs.existsSync(indexHtml)) {
     throw new Error(
-      `Desktop dist/index.html not found. Run 'cd apps/desktop && npm run build' first.\n` +
+      `Desktop dist/index.html not found. Run 'cd apps/desktop && npm run build && node scripts/bundle-electron-main.mjs --dev' first.\n` +
         `Missing: ${indexHtml}`,
     )
   }

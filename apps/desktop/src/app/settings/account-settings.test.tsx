@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { MemoryRouter } from 'react-router'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
@@ -84,6 +84,11 @@ describe('platform account settings', () => {
     expect(screen.getByText('member@example.test')).toBeTruthy()
   })
 
+  it('keeps an emoji nickname intact in the profile avatar', () => {
+    renderAccount({}, snapshot({ ...original, display_name: '🤖 Aino' }))
+    expect(screen.getByText('🤖')).toBeTruthy()
+  })
+
   it('saves the nickname through the platform username mapping and updates the sidebar', async () => {
     const updated = snapshot({ ...original, display_name: '小海盗 🏴‍☠️' })
     const updateProfile = vi.fn().mockResolvedValue(updated)
@@ -113,7 +118,7 @@ describe('platform account settings', () => {
     await screen.findByRole('alert')
     expect((screen.getByRole('textbox', { name: 'Nickname' }) as HTMLInputElement).value).toBe('Keep my draft')
     expect(actions.state.get().account).toEqual(original)
-    expect(screen.getByRole('button', { name: 'My account · Original' })).toBeTruthy()
+    expect(screen.getByRole('button', { hidden: true, name: 'My account · Original' })).toBeTruthy()
   })
 
   it('keeps the last verified profile visible offline and retries through the account owner', async () => {
@@ -123,5 +128,68 @@ describe('platform account settings', () => {
     expect(screen.getByText('+86 138****8000')).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
     await waitFor(() => expect(retry).toHaveBeenCalledOnce())
+  })
+
+  it('closes the nickname draft when the current account changes', () => {
+    const { actions, bridge } = renderAccount()
+    fireEvent.click(screen.getByRole('button', { name: 'Edit nickname' }))
+    fireEvent.change(screen.getByRole('textbox', { name: 'Nickname' }), { target: { value: 'Previous draft' } })
+
+    act(() =>
+      actions.state.set({
+        ...actions.state.get(),
+        account: { ...original, id: '18', display_name: 'Another account' }
+      })
+    )
+
+    expect(screen.queryByRole('textbox', { name: 'Nickname' })).toBeNull()
+    expect(bridge.updateProfile).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByRole('button', { name: 'Edit nickname' }))
+    expect((screen.getByRole('textbox', { name: 'Nickname' }) as HTMLInputElement).value).toBe('Another account')
+  })
+
+  it('requires an explicit sign-out confirmation and keeps the account on failure', async () => {
+    const logout = vi
+      .fn()
+      .mockRejectedValue(Object.assign(new Error('network_unavailable'), { code: 'network_unavailable' }))
+
+    const { actions } = renderAccount({ logout })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Sign out' }))
+    const dialog = screen.getByRole('dialog')
+    expect(logout).not.toHaveBeenCalled()
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }))
+    expect(screen.queryByRole('dialog')).toBeNull()
+    expect(logout).not.toHaveBeenCalled()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Sign out' }))
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Sign out' }))
+    await within(screen.getByRole('dialog')).findByText(/network|connect|try again/i)
+    expect(logout).toHaveBeenCalledOnce()
+    expect(actions.state.get().account).toEqual(original)
+  })
+
+  it('submits sign out only once while its confirmation is pending', async () => {
+    let finish!: (value: PlatformAccountSnapshot) => void
+
+    const logout = vi.fn(
+      () =>
+        new Promise<PlatformAccountSnapshot>(resolve => {
+          finish = resolve
+        })
+    )
+
+    const { actions } = renderAccount({ logout })
+    fireEvent.click(screen.getByRole('button', { name: 'Sign out' }))
+    const dialog = screen.getByRole('dialog')
+    const confirm = within(dialog).getByRole('button', { name: 'Sign out' })
+
+    fireEvent.click(confirm)
+    fireEvent.click(confirm)
+    fireEvent.keyDown(dialog, { key: 'Enter' })
+
+    expect(logout).toHaveBeenCalledOnce()
+    await act(async () => finish(snapshot(null, 'signed_out')))
+    expect(actions.state.get().account).toBeNull()
   })
 })

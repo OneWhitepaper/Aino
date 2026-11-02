@@ -34,6 +34,50 @@ afterEach(() => {
 })
 
 describe('composer context usage', () => {
+  it('keeps measured usage visible and offers recovery when category details time out', async () => {
+    vi.useFakeTimers()
+    const sessionId = 'delayed-details'
+    const view = { ...PRIMARY_SESSION_VIEW, $runtimeId: atom<string | null>(sessionId), $busy: atom(false) }
+
+    const requestGateway = vi
+      .fn()
+      .mockImplementationOnce(() => new Promise(() => undefined))
+      .mockResolvedValue(breakdown)
+
+    $sessionStates.set({
+      [sessionId]: {
+        ...createClientSessionState(sessionId),
+        usage: {
+          calls: 1,
+          input: 0,
+          output: 0,
+          total: 0,
+          context_used: 10_000,
+          context_max: 100_000,
+          context_percent: 10
+        }
+      }
+    })
+    render(
+      <I18nProvider configClient={null} initialLocale="zh">
+        <SessionViewProvider value={view}>
+          <ComposerContextUsage enabled requestGateway={requestGateway} />
+        </SessionViewProvider>
+      </I18nProvider>
+    )
+    const button = screen.getByRole('button', { name: '上下文用量 · 已用 10%' })
+    fireEvent.click(button)
+    const details = screen.getByRole('dialog', { name: '上下文用量' })
+    expect(within(details).getByText('10k / 100k 个词元')).toBeTruthy()
+    await act(() => vi.advanceTimersByTimeAsync(5_000))
+    expect(within(details).queryByText('正在加载明细…')).toBeNull()
+    expect(screen.getByRole('progressbar').getAttribute('aria-valuenow')).toBe('10')
+    expect(within(details).getByText('分类明细暂不可用，当前用量仍可参考。')).toBeTruthy()
+    await act(async () => fireEvent.click(within(details).getByRole('button', { name: '重试' })))
+    expect(within(details).getByText('对话')).toBeTruthy()
+    expect(requestGateway).toHaveBeenCalledTimes(2)
+  })
+
   it('uses the current account catalog for a cold managed session without binding or inventing occupancy', async () => {
     const sessionId = 'cold-managed'
     const originalBridge = window.hermesDesktop
@@ -320,11 +364,13 @@ describe('composer context usage', () => {
 
     const button = screen.getByRole('button', { name: '上下文用量 · 已用 10%' })
     await waitFor(() =>
-      expect(requestGateway).toHaveBeenCalledWith('session.context_breakdown', { session_id: sessionId })
+      expect(requestGateway).toHaveBeenCalledWith('session.context_breakdown', { session_id: sessionId }, 5_000)
     )
     expect(screen.getByRole('progressbar').getAttribute('aria-valuenow')).toBe('10')
     fireEvent.pointerMove(button, { pointerType: 'mouse' })
     const hint = await screen.findByRole('tooltip')
+    expect(hint.className).toContain('context-usage-tooltip')
+    expect(hint.textContent).toContain('上下文窗口')
     expect(hint.textContent).toContain('已用 10%')
     expect(hint.textContent).toContain('10k / 100k')
     fireEvent.click(button)
@@ -343,7 +389,7 @@ describe('composer context usage', () => {
     )
     expect(screen.getByRole('progressbar').getAttribute('aria-valuenow')).toBe('40')
     expect(within(dialog).getByText('已用 40%')).toBeTruthy()
-    expect(requestGateway).toHaveBeenCalledTimes(1)
+    await waitFor(() => expect(requestGateway).toHaveBeenCalledTimes(2))
 
     fireEvent.keyDown(button.ownerDocument, { key: 'Escape' })
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
@@ -386,19 +432,29 @@ describe('composer context usage', () => {
     rerender(content(secondOwner))
     expect(screen.getByRole('button', { name: '上下文用量 · 正在加载明细…' })).toBeTruthy()
     expect(screen.getByRole('progressbar').getAttribute('aria-valuenow')).toBeNull()
+    expect(screen.getByRole('progressbar').querySelector('svg')?.classList.contains('motion-safe:animate-spin')).toBe(
+      false
+    )
     act(() => setSessionCompacting(sessionId, true))
     expect(screen.getByRole('button', { name: '上下文用量 · 正在压缩上下文…' })).toBeTruthy()
+    expect(screen.getByRole('progressbar').querySelector('svg')?.classList.contains('motion-safe:animate-spin')).toBe(
+      true
+    )
     await act(async () => resolvePrevious(breakdown))
     expect(screen.getByRole('progressbar').getAttribute('aria-valuenow')).toBeNull()
     expect(secondOwner).toHaveBeenCalledTimes(1)
 
     act(() => setSessionCompacting(sessionId, false))
     await screen.findByRole('button', { name: '上下文用量 · ~已用 20%' })
+    expect(screen.getByRole('progressbar').getAttribute('aria-valuenow')).toBe('20')
+    expect(screen.getByRole('progressbar').querySelector('svg')?.classList.contains('motion-safe:animate-spin')).toBe(
+      false
+    )
     expect(secondOwner).toHaveBeenCalledTimes(2)
 
-    // Model changes and a renewed capacity for the SAME model both invalidate
-    // the old breakdown before the replacement response arrives.
-    for (const change of [
+    // A model change drops categories immediately. Capacity can resolve later
+    // for the same model without discarding its already measured categories.
+    for (const [index, change] of [
       () => view.$model.set('replacement-model'),
       () =>
         $sessionStates.set({
@@ -407,7 +463,7 @@ describe('composer context usage', () => {
             usage: { calls: 0, input: 0, output: 0, total: 0, context_max: 372_000 }
           }
         })
-    ]) {
+    ].entries()) {
       let resolveFresh!: (value: ContextBreakdown) => void
       secondOwner.mockImplementationOnce(
         () =>
@@ -416,7 +472,13 @@ describe('composer context usage', () => {
           })
       )
       act(change)
-      expect(screen.queryByRole('button', { name: /已用 20%/ })).toBeNull()
+
+      if (index === 0) {
+        expect(screen.queryByRole('button', { name: /已用 20%/ })).toBeNull()
+      } else {
+        expect(screen.getByRole('button', { name: /已用 20%/ })).toBeTruthy()
+      }
+
       await act(async () =>
         resolveFresh({ ...breakdown, context_max: 372_000, context_used: 74_400, context_percent: 20 })
       )

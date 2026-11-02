@@ -7,6 +7,7 @@ import { useLocation } from 'react-router'
 
 import type { SubmitTextOptions } from '@/app/session/hooks/use-prompt-actions/utils'
 import { sessionShouldHaveTranscript } from '@/app/session/hooks/use-session-actions/utils'
+import { SummaryWorkspace } from '@/app/shell/summary-workspace'
 import { Thread } from '@/components/assistant-ui/thread'
 import { TranscriptWindowProvider } from '@/components/assistant-ui/thread/transcript-window'
 import { Backdrop } from '@/components/Backdrop'
@@ -53,8 +54,9 @@ import { $focusedStoredSessionId } from '@/store/session-focus'
 import { $sessionStates, sessionTileDelegate } from '@/store/session-states'
 import { $transcriptTailBySessionId, transcriptTailState } from '@/store/transcript-tail'
 import { isAuxiliaryWindow, isMainWindow } from '@/store/windows'
+import type { SessionInfo } from '@/types/hermes'
 
-import { primaryRouteSelectedSessionId, routeSessionId } from '../routes'
+import { appViewForPath, primaryRouteSelectedSessionId, routeSessionId } from '../routes'
 import { titlebarHeaderBaseClass, titlebarHeaderShadowClass, titlebarHeaderTitleClass } from '../shell/titlebar'
 
 import { ChatDropOverlay } from './chat-drop-overlay'
@@ -133,6 +135,14 @@ interface ChatHeaderProps {
   selectedSessionId: null | string
 }
 
+function chatHeaderSessionPinned(session: SessionInfo | null, selectedSessionId: string | null, pinnedIds: string[]) {
+  return session
+    ? pinnedIds.includes(sessionPinId(session))
+    : selectedSessionId
+      ? pinnedIds.includes(selectedSessionId)
+      : false
+}
+
 function ChatHeader({
   activeSessionId,
   isRoutedSessionView,
@@ -140,6 +150,8 @@ function ChatHeader({
   onToggleSelectedPin,
   selectedSessionId
 }: ChatHeaderProps) {
+  const location = useLocation()
+  const paneVisible = usePaneVisible()
   const sessions = useStore($sessions)
   const pinnedSessionIds = useStore($pinnedSessionIds)
   const profiles = useStore($profiles)
@@ -159,16 +171,17 @@ function ChatHeader({
   // Pins live on the durable lineage-root id, but selectedSessionId is the live
   // (tip) id — resolve through the loaded row so the menu reflects the pin
   // state after auto-compression rotates the id.
-  const selectedIsPinned = activeStoredSession
-    ? pinnedSessionIds.includes(sessionPinId(activeStoredSession))
-    : selectedSessionId
-      ? pinnedSessionIds.includes(selectedSessionId)
-      : false
+  const selectedIsPinned = chatHeaderSessionPinned(activeStoredSession, selectedSessionId, pinnedSessionIds)
 
   // Secondary windows (new-session scratch, subagent watch, cmd-click pop-out)
   // are compact side panels — they drop the session-actions header + border
   // entirely. A brand-new draft has nothing to pin/delete/rename either.
-  if (isAuxiliaryWindow() || (!selectedSessionId && !activeSessionId && !isRoutedSessionView)) {
+  if (
+    !paneVisible ||
+    appViewForPath(location.pathname) !== 'chat' ||
+    isAuxiliaryWindow() ||
+    (!selectedSessionId && !activeSessionId && !isRoutedSessionView)
+  ) {
     return null
   }
 
@@ -471,10 +484,13 @@ export function ChatRuntimeBoundary({
 // useCallback at the call sites) memo() lets the whole chat shell skip those.
 export const ChatView = memo(function ChatView(props: ChatViewProps) {
   const composerSurfaceId = useId()
+  const composerScope = useComposerScope()
 
   return (
     <ComposerSurfaceProvider value={composerSurfaceId}>
-      <ChatViewContent {...props} />
+      <SummaryWorkspace target={composerScope.target}>
+        <ChatViewContent {...props} />
+      </SummaryWorkspace>
     </ComposerSurfaceProvider>
   )
 })
@@ -484,7 +500,9 @@ function ComposerHeartField() {
   const petActive = useStore($petActive)
   const petOverlayActive = useStore($petOverlayActive)
 
-  if (petActive || petOverlayActive) {return null}
+  if (petActive || petOverlayActive) {
+    return null
+  }
 
   return (
     <HeartField
@@ -783,7 +801,7 @@ const ChatViewContent = memo(function ChatViewContent({
   return (
     <div
       className={cn(
-        'relative isolate flex h-full min-w-0 flex-col overflow-hidden bg-(--ui-chat-surface-background)',
+        'relative isolate flex h-full w-full min-w-0 flex-col overflow-hidden bg-(--ui-chat-surface-background)',
         className
       )}
       data-chat-surface=""
@@ -798,7 +816,7 @@ const ChatViewContent = memo(function ChatViewContent({
     >
       <Backdrop />
       {/* Tiles get their chrome from the layout zone (chip strip); the modal
-          prompt overlays stay active-session-scoped in the primary surface. */}
+        prompt overlays stay active-session-scoped in the primary surface. */}
       {isPrimary && (
         <ChatHeader
           activeSessionId={activeSessionId}
@@ -810,8 +828,8 @@ const ChatViewContent = memo(function ChatViewContent({
       )}
 
       {/* Mounted for the primary AND every tile, each scoped to its own session
-          so a tiled/background session's blocking prompt surfaces instead of
-          stalling to timeout. */}
+        so a tiled/background session's blocking prompt surfaces instead of
+        stalling to timeout. */}
       <PromptOverlays sessionId={activeSessionId} />
 
       <ChatRuntimeBoundary
@@ -850,18 +868,18 @@ const ChatViewContent = memo(function ChatViewContent({
           )}
           {showChatBar && !showIntro && <ScrollToBottomButton sessionId={activeSessionId} />}
           {/* Vibe hearts rise from the composer only when no pet is out (else
-              they play on the pet). Fired by the core `reaction` event. */}
+            they play on the pet). Fired by the core `reaction` event. */}
           <ComposerHeartField />
           {/* A session drag hovering an EDGE hands the visual to the zone
-              target; the link overlay shows only for the center region. */}
+            target; the link overlay shows only for the center region. */}
           <ChatDropOverlay kind={overlayKind} />
           <ChatSwapOverlay profile={gatewaySwapTarget} />
           {/* Paint-first wake (#89843): transcript is live, profile gate still
-              settling in the background — subtle badge, not an overlay. */}
+            settling in the background — subtle badge, not an overlay. */}
           {isPrimary && !gatewaySwapTarget && <ChatSyncBadge profile={hydrationSyncProfile} />}
         </div>
         {/* Docked composers overlay their pane; the shared float escapes pane
-            clipping through a stable portal host without remounting its editor. */}
+          clipping through a stable portal host without remounting its editor. */}
         {showChatBar && (
           <FloatingComposerSurface>
             <Suspense fallback={<ChatBarFallback />}>

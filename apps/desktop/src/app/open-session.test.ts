@@ -32,6 +32,8 @@ vi.mock('@/store/windows', () => ({
 
 vi.mock('./routes', () => ({
   $workspaceIsPage: { get: () => workspaceIsPageGet() },
+  NEW_CHAT_ROUTE: '/',
+  syncWorkspaceRoute: vi.fn(),
   sessionRoute: (id: string) => `/c/${encodeURIComponent(id)}`
 }))
 
@@ -93,10 +95,50 @@ describe('openSession', () => {
     expect(openSessionTile).not.toHaveBeenCalled()
   })
 
+  it.each(['ordinary-chat', null])('reveals an existing Bot tab from a page while preserving primary %s', primary => {
+    $selectedStoredSessionId.set(primary)
+    workspaceIsPageGet.mockReturnValue(true)
+    focusOpenSession.mockReturnValue('tile')
+
+    openSession('canonical-bot', navigate, 'in-place', {
+      workspaceMode: 'bots',
+      workspaceOwnerKey: 'bot:remote::writer',
+      ownerRoute: { connectionId: 'remote', mode: 'remote', profile: 'writer' }
+    })
+
+    expect(navigate).toHaveBeenCalledWith(primary ? '/c/ordinary-chat' : '/')
+    expect($selectedStoredSessionId.get()).toBe(primary)
+    expect(openSessionTile).not.toHaveBeenCalled()
+  })
+
+  it('leaves a page before opening a cold canonical Bot tab without replacing primary', () => {
+    $selectedStoredSessionId.set('ordinary-chat')
+    workspaceIsPageGet.mockReturnValue(true)
+    focusOpenSession.mockReturnValue(null)
+    const scope = { workspaceMode: 'bots' as const, workspaceOwnerKey: 'bot:remote::writer' }
+
+    openSession('canonical-bot', navigate, 'in-place', scope)
+
+    expect(navigate).toHaveBeenCalledWith('/c/ordinary-chat')
+    expect(openSessionTile).toHaveBeenCalledWith('canonical-bot', 'center', undefined, undefined, scope)
+    expect($selectedStoredSessionId.get()).toBe('ordinary-chat')
+  })
+
   it('in-place focuses main when already selected and not on a page', () => {
     focusOpenSession.mockReturnValue('main')
     openSession('s1', navigate)
     expect(navigate).not.toHaveBeenCalled()
+  })
+
+  it('reveals an ordinary open tile covered by a page while preserving primary', () => {
+    $selectedStoredSessionId.set('ordinary-chat')
+    workspaceIsPageGet.mockReturnValue(true)
+    focusOpenSession.mockReturnValue('tile')
+
+    openSession('second-chat', navigate)
+
+    expect(navigate).toHaveBeenCalledWith('/c/ordinary-chat')
+    expect(openSessionTile).not.toHaveBeenCalled()
   })
 
   it('in-place routes when the main session is covered by a page', () => {
@@ -207,6 +249,26 @@ describe('openSession', () => {
     openSession('s1', navigate, 'stack')
     expect(openSessionTile).toHaveBeenCalledWith('s1', 'center')
     expect(navigate).not.toHaveBeenCalled()
+  })
+
+  it.each([false, true])('reveals an unopened picker chat from a page when reusing a draft is %s', reuseDraft => {
+    $selectedStoredSessionId.set('primary-chat')
+    workspaceIsPageGet.mockReturnValue(true)
+    focusOpenSession.mockReturnValue(null)
+    reuseBlankDraftTile.mockReturnValue(reuseDraft)
+
+    openSessionFromPicker('second-chat', navigate, 'stack')
+
+    expect(navigate).toHaveBeenCalledWith('/c/primary-chat')
+    expect($selectedStoredSessionId.get()).toBe('primary-chat')
+    expect($sessionResumeRequest.get()?.sessionId).toBe('second-chat')
+
+    if (reuseDraft) {
+      expect(reuseBlankDraftTile).toHaveBeenCalledWith('second-chat')
+      expect(openSessionTile).not.toHaveBeenCalled()
+    } else {
+      expect(openSessionTile).toHaveBeenCalledWith('second-chat', 'center')
+    }
   })
 
   it('stack spends an open blank draft tab before stacking a new one', () => {

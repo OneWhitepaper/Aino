@@ -678,17 +678,46 @@ describe('flat tool list approval surfacing', () => {
     })
   })
 
-  it('lets completed tool rows be dismissed', async () => {
+  it('keeps details intact when collapsing and hides a completed record only from its menu', async () => {
+    const message = completedOnlyMessage()
+    const run = settledRunMessage()
+    assert(message.role === 'assistant' && run.role === 'assistant')
+    const command = run.content[1]!
+    const { container } = render(<GroupHarness message={{ ...message, content: [command] }} />)
+    const rowToggle = await screen.findByRole('button', { name: /Ran ls -la/ })
+
+    fireEvent.click(rowToggle)
+    expect(await screen.findByRole('region', { name: 'Shell' })).not.toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Collapse details' }))
+    expect(screen.queryByRole('region', { name: 'Shell' })).toBeNull()
+    expect(rowToggle.getAttribute('aria-expanded')).toBe('false')
+    expect(container.querySelectorAll('[data-tool-row]')).toHaveLength(1)
+    fireEvent.click(rowToggle)
+    const output = await screen.findByRole('region', { name: 'Shell' })
+    expect(output.textContent).toContain('wiring.tsx')
+    expect(output.textContent).toContain('exit 0')
+
+    fireEvent.keyDown(screen.getByRole('button', { name: 'Execution record actions' }), { key: 'ArrowDown' })
+    expect(await screen.findByRole('menuitem', { name: 'Hide this record' })).not.toBeNull()
+    expect(container.querySelector('[data-terminal-transcript]')).toBe(output)
+    fireEvent.keyDown(screen.getByRole('menu'), { key: 'Escape' })
+    await waitFor(() => expect(screen.queryByRole('menu')).toBeNull())
+    expect(screen.getByRole('region', { name: 'Shell' })).toBe(output)
+  })
+
+  it('lets completed tool rows be hidden through the actions menu', async () => {
     const { container } = render(<GroupHarness message={completedOnlyMessage()} />)
 
-    const dismiss = await screen.findByLabelText('Dismiss')
+    const actions = await screen.findByRole('button', { name: 'Execution record actions' })
 
     expect(container.querySelectorAll('[data-slot="tool-block"]').length).toBeGreaterThan(0)
+    expect(screen.queryByRole('menuitem', { name: 'Hide this record' })).toBeNull()
 
-    fireEvent.click(dismiss)
+    fireEvent.keyDown(actions, { key: 'ArrowDown' })
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Hide this record' }))
 
     await waitFor(() => {
-      expect(screen.queryByLabelText('Dismiss')).toBeNull()
+      expect(container.querySelector('[data-tool-row]')).toBeNull()
     })
   })
 
@@ -699,10 +728,11 @@ describe('flat tool list approval surfacing', () => {
     // and rendering the same message fresh.
     const first = render(<GroupHarness message={completedOnlyMessage()} />)
 
-    fireEvent.click(await screen.findByLabelText('Dismiss'))
+    fireEvent.keyDown(await screen.findByRole('button', { name: 'Execution record actions' }), { key: 'ArrowDown' })
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Hide this record' }))
 
     await waitFor(() => {
-      expect(screen.queryByLabelText('Dismiss')).toBeNull()
+      expect(screen.queryByRole('button', { name: 'Execution record actions' })).toBeNull()
     })
 
     first.unmount()
@@ -712,7 +742,7 @@ describe('flat tool list approval surfacing', () => {
     // The row is the only thing this message renders, so staying dismissed
     // means nothing comes back — including its dismiss control.
     await waitFor(() => {
-      expect(screen.queryByLabelText('Dismiss')).toBeNull()
+      expect(screen.queryByRole('button', { name: 'Execution record actions' })).toBeNull()
     })
   })
 
@@ -723,7 +753,7 @@ describe('flat tool list approval surfacing', () => {
       expect(container.querySelectorAll('[data-slot="tool-block"]').length).toBeGreaterThan(0)
     })
 
-    expect(screen.queryByLabelText('Dismiss')).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Execution record actions' })).toBeNull()
   })
 })
 

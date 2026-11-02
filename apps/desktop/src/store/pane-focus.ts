@@ -5,7 +5,7 @@ import { revealTreePane } from '@/components/pane-shell/tree/store'
 import { registry } from '@/contrib/registry'
 
 import { setFileBrowserOpen, setSidebarOpen } from './layout'
-import { openReview } from './review'
+import { revealReview } from './review'
 
 // Explicit-request pane reveals, keyed to the backend `focus_pane` tool. Each
 // entry drives the pane's own reveal path (some are toggle-bound) so a revealed
@@ -14,7 +14,7 @@ import { openReview } from './review'
 const PANE_REVEALERS: Record<string, () => void> = {
   chat: () => revealTreePane('workspace'),
   files: () => setFileBrowserOpen(true),
-  review: () => openReview(),
+  review: () => revealReview(),
   sessions: () => setSidebarOpen(true),
   terminal: () => setTerminalTakeover(true)
 }

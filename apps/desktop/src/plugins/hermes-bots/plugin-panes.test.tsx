@@ -257,6 +257,23 @@ describe('localized registration labels', () => {
 })
 
 describe('the Scheduled jobs pane', () => {
+  it('joins the shared tool tabs instead of splitting a narrow legacy column beside the chat', async () => {
+    paneStores()
+    const harness = recordingContext()
+    mocks.botChatOwnsWorkspace.mockReturnValue(true)
+    plugin.register(harness.ctx)
+    await settle()
+
+    const data = harness.find('routines')!.data!
+    expect(data.toolPanel).toBe(true)
+    expect(data.placement).toBe('right')
+    expect(data.dock).toEqual({ pane: 'files', pos: 'center', enforce: true })
+    expect(data.minWidth).toBe('20rem')
+    expect(data.width).not.toBe('250px')
+    expect(data.defaultCollapsed).toBeUndefined()
+    harness.dispose()
+  })
+
   it('stays unregistered until a bot chat owns the workspace', async () => {
     const store = paneStores()
     const harness = recordingContext()

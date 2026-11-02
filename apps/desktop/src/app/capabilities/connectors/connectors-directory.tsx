@@ -62,13 +62,15 @@ export function ConnectorsDirectory({
     <div className="flex min-h-0 flex-1 flex-col" data-slot="connectors-directory">
       {cards.length === 0 ? null : (
         <>
-          <CapabilitySearch
-            actions={addYourOwn}
-            onChange={query => set({ query })}
-            placeholder={copy.searchPlaceholder(cards.length)}
-            scope={copy.title}
-            value={filter.query}
-          />
+          <div className="capabilities-directory-toolbar">
+            <CapabilitySearch
+              onChange={query => set({ query })}
+              placeholder={copy.searchPlaceholder(cards.length)}
+              scope={copy.title}
+              value={filter.query}
+            />
+            {addYourOwn}
+          </div>
 
           {showSegments || segmentFellBack || hiddenMatches > 0 ? (
             <div className="mt-(--capabilities-gap-controls) flex shrink-0 flex-wrap items-center gap-2">
@@ -81,6 +83,7 @@ export function ConnectorsDirectory({
                   }))}
                   sizing="content"
                   value={segment}
+                  variant="underline"
                 />
               ) : null}
 
@@ -118,7 +121,9 @@ export function ConnectorsDirectory({
       ) : null}
 
       {loading ? (
-        <div className="mt-(--capabilities-gap-lead)"><ToolsWash label={copy.page.loading} rows={10} /></div>
+        <div className="mt-(--capabilities-gap-lead)">
+          <ToolsWash label={copy.page.loading} rows={10} />
+        </div>
       ) : groups.length > 0 ? (
         <div className="capabilities-sections min-h-0 flex-1 overflow-y-auto overscroll-contain pb-4">
           {groups.map(group => (

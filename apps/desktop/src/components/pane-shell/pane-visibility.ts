@@ -48,6 +48,9 @@ export const NO_PANE_GROUP = 'window'
  *  because the provider is the zone that renders it. */
 export const PaneGroupContext = createContext(NO_PANE_GROUP)
 
+/** The host is already painting the brand above this navigation content. */
+export const SidebarBrandContext = createContext(false)
+
 export const usePaneGroup = (): string => useContext(PaneGroupContext)
 
 /** Whether an element belongs to an inactive keep-alive pane. */

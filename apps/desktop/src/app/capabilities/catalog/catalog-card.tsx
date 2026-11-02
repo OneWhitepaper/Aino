@@ -9,7 +9,7 @@ import { useI18n } from '@/i18n'
 import { cn } from '@/lib/utils'
 
 import { type CatalogEntry } from './catalog-data'
-import { catalogDescription, catalogDisplayName } from './catalog-localization'
+import { catalogDescription, catalogDisplayLabel, catalogDisplayName } from './catalog-localization'
 import { CatalogHeaderMeta } from './catalog-metadata'
 
 export function catalogIcon(category: string) {
@@ -97,16 +97,19 @@ export function CatalogCard({ entry, action, accentIndex, onOpen, variant = 'def
           <Codicon name={catalogIcon(entry.category)} />
         </span>
         <div className="catalog-card-copy">
-          <Tip label={catalogDisplayName(entry)}>
-            <RowButton
-              aria-haspopup="dialog"
-              aria-label={catalogDisplayName(entry)}
-              className="catalog-card-title text-left after:absolute after:inset-0 after:rounded-[inherit] focus-visible:outline-none focus-visible:after:outline-2 focus-visible:after:outline-primary focus-visible:after:-outline-offset-2"
-              onClick={() => onOpen(entry)}
-            >
-              {catalogDisplayName(entry)}
-            </RowButton>
-          </Tip>
+          <div className="catalog-card-identity">
+            <Tip label={catalogDisplayName(entry)}>
+              <RowButton
+                aria-haspopup="dialog"
+                aria-label={catalogDisplayName(entry)}
+                className="catalog-card-title text-left after:absolute after:inset-0 after:rounded-[inherit] focus-visible:outline-none focus-visible:after:outline-2 focus-visible:after:outline-primary focus-visible:after:-outline-offset-2"
+                onClick={() => onOpen(entry)}
+              >
+                {catalogDisplayName(entry)}
+              </RowButton>
+            </Tip>
+            <span className="catalog-card-category">{catalogDisplayLabel(entry.categoryLabel, t)}</span>
+          </div>
           <span className="catalog-card-description">{catalogDescription(entry, t)}</span>
         </div>
       </div>

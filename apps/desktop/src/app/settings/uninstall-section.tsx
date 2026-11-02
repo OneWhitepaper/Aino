@@ -1,8 +1,10 @@
 import { type ReactElement, useContext, useEffect, useState } from 'react'
 
 import { Button } from '@/components/ui/button'
+import { Dialog, DialogContent, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import type { DesktopUninstallMode, DesktopUninstallResult, DesktopUninstallSummary } from '@/global'
 import { useI18n } from '@/i18n'
+import { aboutPageCopy } from '@/i18n/about-page'
 import { AlertTriangle, Loader2, Trash2 } from '@/lib/icons'
 import { cn } from '@/lib/utils'
 
@@ -18,7 +20,72 @@ interface ModeOption {
   needsAgent: boolean
 }
 
-export function UninstallSection(): ReactElement | null {
+interface UninstallSectionProps {
+  dialog?: boolean
+  defaultOpen?: boolean
+}
+
+function UninstallSurface({
+  children,
+  dialog = false,
+  defaultOpen = false,
+  running = false
+}: UninstallSectionProps & { children: ReactElement; running?: boolean }): ReactElement {
+  const { locale } = useI18n()
+  const copy = aboutPageCopy(locale)
+  const [open, setOpen] = useState(defaultOpen)
+
+  useEffect(() => {
+    if (defaultOpen) {
+      setOpen(true)
+    }
+  }, [defaultOpen])
+
+  if (!dialog) {
+    return children
+  }
+
+  return (
+    <Dialog
+      onOpenChange={next => {
+        if (!running) {
+          setOpen(next)
+        }
+      }}
+      open={open}
+    >
+      <DialogTrigger asChild>
+        <button className="about-utility-link" type="button">
+          {copy.uninstall}
+        </button>
+      </DialogTrigger>
+      <DialogContent
+        aria-describedby={undefined}
+        bodyClassName="about-uninstall-body"
+        className="about-uninstall-dialog"
+        onEscapeKeyDown={event => {
+          if (running) {
+            event.preventDefault()
+          }
+        }}
+        onInteractOutside={event => {
+          if (running) {
+            event.preventDefault()
+          }
+        }}
+        showCloseButton={!running}
+      >
+        <DialogTitle>{copy.uninstall}</DialogTitle>
+        <SettingsBreadcrumbContext.Provider value={true}>{children}</SettingsBreadcrumbContext.Provider>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+export function UninstallSection({
+  dialog = false,
+  defaultOpen = false
+}: UninstallSectionProps = {}): ReactElement | null {
   const hasBreadcrumb = useContext(SettingsBreadcrumbContext)
   const { t } = useI18n()
   const u = t.settings.uninstallSection
@@ -96,21 +163,23 @@ export function UninstallSection(): ReactElement | null {
     }
 
     return (
-      <div className={cn('mx-auto w-full max-w-2xl', !hasBreadcrumb && 'mt-8')}>
-        <SectionHeading icon={AlertTriangle} page title={u.uninstallHermes} />
-        <div className="flex flex-col gap-2 rounded-xl border border-border/60 bg-background/40 px-4 py-3">
-          <p className="text-xs text-muted-foreground">{u.managedBody}</p>
-          <p className="text-sm font-medium">{summary.native_removal_instructions}</p>
-          <p className="text-xs text-muted-foreground">{u.dataKept(summary.hermes_home)}</p>
-          {summary.platform === 'win32' && (
-            <div className="mt-1">
-              <Button onClick={(): void => void bridge.openAppsSettings()} size="sm" variant="outline">
-                {u.openAppsSettings}
-              </Button>
-            </div>
-          )}
+      <UninstallSurface defaultOpen={defaultOpen} dialog={dialog}>
+        <div className={cn('mx-auto w-full max-w-2xl', !hasBreadcrumb && !dialog && 'mt-8')}>
+          <SectionHeading icon={AlertTriangle} page title={u.uninstallHermes} />
+          <div className="flex flex-col gap-2 rounded-xl border border-border/60 bg-background/40 px-4 py-3">
+            <p className="text-xs text-muted-foreground">{u.managedBody}</p>
+            <p className="text-sm font-medium">{summary.native_removal_instructions}</p>
+            <p className="text-xs text-muted-foreground">{u.dataKept(summary.hermes_home)}</p>
+            {summary.platform === 'win32' && (
+              <div className="mt-1">
+                <Button onClick={(): void => void bridge.openAppsSettings()} size="sm" variant="outline">
+                  {u.openAppsSettings}
+                </Button>
+              </div>
+            )}
+          </div>
         </div>
-      </div>
+      </UninstallSurface>
     )
   }
 
@@ -145,59 +214,61 @@ export function UninstallSection(): ReactElement | null {
   const pendingOption: ModeOption | null = options.find((opt: ModeOption): boolean => opt.mode === pending) ?? null
 
   return (
-    <div className={cn('mx-auto w-full max-w-2xl', !hasBreadcrumb && 'mt-8')}>
-      <SectionHeading icon={AlertTriangle} page title={t.settings.uninstallSection.dangerZone} />
+    <UninstallSurface defaultOpen={defaultOpen} dialog={dialog} running={running}>
+      <div className={cn('mx-auto w-full max-w-2xl', !hasBreadcrumb && !dialog && 'mt-8')}>
+        <SectionHeading icon={AlertTriangle} page title={t.settings.uninstallSection.dangerZone} />
 
-      <div className="rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-3">
-        {pendingOption ? (
-          <div>
-            <p className="text-sm font-medium text-destructive">{t.settings.uninstallSection.confirmUninstall}</p>
-            <p className="mt-1 text-xs text-muted-foreground">{u.confirmBody(pendingOption.consequence)}</p>
-            {summary?.running_app_path && (
-              <p className="mt-1 font-mono text-[0.68rem] text-muted-foreground/60">
-                {u.appLabel} {summary.running_app_path}
-              </p>
-            )}
-            {error && <p className="mt-2 text-xs text-destructive">{error}</p>}
-            <div className="mt-3 flex flex-wrap items-center gap-3">
-              <Button disabled={running} onClick={(): void => void handleConfirm()} size="sm" variant="destructive">
-                {running && <Loader2 className="size-3 animate-spin" />}
-                {running ? u.uninstalling : u.yesUninstall}
-              </Button>
-              <Button disabled={running} onClick={(): void => setPending(null)} size="sm" variant="text">
-                {t.common.cancel}
-              </Button>
+        <div className="rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-3">
+          {pendingOption ? (
+            <div>
+              <p className="text-sm font-medium text-destructive">{t.settings.uninstallSection.confirmUninstall}</p>
+              <p className="mt-1 text-xs text-muted-foreground">{u.confirmBody(pendingOption.consequence)}</p>
+              {summary?.running_app_path && (
+                <p className="mt-1 font-mono text-[0.68rem] text-muted-foreground/60">
+                  {u.appLabel} {summary.running_app_path}
+                </p>
+              )}
+              {error && <p className="mt-2 text-xs text-destructive">{error}</p>}
+              <div className="mt-3 flex flex-wrap items-center gap-3">
+                <Button disabled={running} onClick={(): void => void handleConfirm()} size="sm" variant="destructive">
+                  {running && <Loader2 className="size-3 animate-spin" />}
+                  {running ? u.uninstalling : u.yesUninstall}
+                </Button>
+                <Button disabled={running} onClick={(): void => setPending(null)} size="sm" variant="text">
+                  {t.common.cancel}
+                </Button>
+              </div>
             </div>
-          </div>
-        ) : (
-          <div className="flex flex-col gap-2">
-            <p className="text-sm font-medium">{t.settings.uninstallSection.uninstallHermes}</p>
-            <p className="text-xs text-muted-foreground">{u.chooseHowMuch}</p>
-            <div className="mt-1 flex flex-col gap-2">
-              {visibleOptions.map((opt: ModeOption): ReactElement => (
-                <button
-                  className={cn(
-                    'flex items-start gap-3 rounded-lg border border-border/60 bg-background/40 px-3 py-2.5 text-left transition',
-                    'hover:border-destructive/40 hover:bg-destructive/5'
-                  )}
-                  key={opt.mode}
-                  onClick={(): void => {
-                    setError(null)
-                    setPending(opt.mode)
-                  }}
-                  type="button"
-                >
-                  <Trash2 className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
-                  <span className="min-w-0">
-                    <span className="block text-sm font-medium text-foreground">{opt.title}</span>
-                    <span className="mt-0.5 block text-xs text-muted-foreground">{opt.description}</span>
-                  </span>
-                </button>
-              ))}
+          ) : (
+            <div className="flex flex-col gap-2">
+              {!dialog && <p className="text-sm font-medium">{t.settings.uninstallSection.uninstallHermes}</p>}
+              <p className="text-xs text-muted-foreground">{u.chooseHowMuch}</p>
+              <div className="mt-1 flex flex-col gap-2">
+                {visibleOptions.map((opt: ModeOption): ReactElement => (
+                  <button
+                    className={cn(
+                      'flex items-start gap-3 rounded-lg border border-border/60 bg-background/40 px-3 py-2.5 text-left transition',
+                      'hover:border-destructive/40 hover:bg-destructive/5'
+                    )}
+                    key={opt.mode}
+                    onClick={(): void => {
+                      setError(null)
+                      setPending(opt.mode)
+                    }}
+                    type="button"
+                  >
+                    <Trash2 className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+                    <span className="min-w-0">
+                      <span className="block text-sm font-medium text-foreground">{opt.title}</span>
+                      <span className="mt-0.5 block text-xs text-muted-foreground">{opt.description}</span>
+                    </span>
+                  </button>
+                ))}
+              </div>
             </div>
-          </div>
-        )}
+          )}
+        </div>
       </div>
-    </div>
+    </UninstallSurface>
   )
 }

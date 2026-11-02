@@ -21,7 +21,9 @@ vi.mock('@/hermes', () => ({
 // Load once at module scope so no test's 15s budget pays the heavy transform
 // + import (the first-test timeout flake under CI load).
 const { KeysSettings } = await import('./keys-settings')
+const { credentialDescription, credentialRowLabel } = await import('./credential-key-ui')
 const { $settingsScopeOverride } = await import('@/store/settings-scope')
+const { setRuntimeI18nLocale } = await import('@/i18n')
 
 beforeEach(() => {
   getEnvVars.mockResolvedValue({})
@@ -36,7 +38,7 @@ afterEach(() => {
   vi.clearAllMocks()
 })
 
-async function renderKeysSettings(view: 'settings' | 'tools', route = '/settings') {
+async function renderKeysSettings(view: 'all' | 'settings' | 'tools', route = '/settings') {
   await act(async () => {
     render(
       <MemoryRouter initialEntries={[route]}>
@@ -108,7 +110,69 @@ describe('KeysSettings', () => {
     expect(screen.queryByText('BRAVE SEARCH')).toBeNull()
   })
 
-  it('expands and highlights a deep-linked credential card', async () => {
+  it('shows matching frames and independent collapsed Tool and Key sections in Advanced', async () => {
+    getEnvVars.mockResolvedValue({
+      API_SERVER_TOKEN: envVar('setting', { description: 'Protect the local API server.' }),
+      BRAVE_SEARCH_API_KEY: envVar('tool', { description: 'Search the web with Brave.' }),
+      TELEGRAM_BOT_TOKEN: envVar('messaging', { channel_managed: true, description: 'Telegram bot token.' })
+    })
+
+    render(
+      <MemoryRouter initialEntries={['/settings?tab=config%3Aadvanced']}>
+        <KeysSettings embedded view="all" />
+      </MemoryRouter>
+    )
+
+    const toolsSection = screen.getByRole('button', { name: 'Tools' })
+    const keysSection = screen.getByRole('button', { name: 'Keys' })
+    expect(toolsSection.getAttribute('aria-expanded')).toBe('false')
+    expect(keysSection.getAttribute('aria-expanded')).toBe('false')
+    const toolsFrame = toolsSection.closest('[data-settings-group]')
+    const keysFrame = keysSection.closest('[data-settings-group]')
+    expect(toolsFrame).toBeTruthy()
+    expect(keysFrame).toBeTruthy()
+    expect(toolsFrame?.className).toBe(keysFrame?.className)
+    expect(screen.queryByText('BRAVE SEARCH')).toBeNull()
+    expect(screen.queryByText('API SERVER')).toBeNull()
+
+    fireEvent.click(toolsSection)
+    expect(await screen.findByText('BRAVE SEARCH')).toBeTruthy()
+    expect(screen.queryByText('API SERVER')).toBeNull()
+
+    fireEvent.click(keysSection)
+    expect(screen.getByText('API SERVER')).toBeTruthy()
+    expect(screen.getByText(/Connect optional services for web search, voice, and external memory/)).toBeTruthy()
+    expect(screen.queryByText('TELEGRAM BOT')).toBeNull()
+    expect(toolsSection.getAttribute('aria-expanded')).toBe('true')
+    expect(keysSection.getAttribute('aria-expanded')).toBe('true')
+  })
+
+  it('explains tool credentials and shows user-facing names in the selected language', async () => {
+    getEnvVars.mockResolvedValue({
+      TAVILY_API_KEY: envVar('tool', { description: 'Upstream description.', is_set: false })
+    })
+
+    await renderKeysSettings('tools')
+
+    expect(screen.getByText(/Connect optional services for web search, voice, and external memory/)).toBeTruthy()
+    expect(screen.getByText('Tavily web search key')).toBeTruthy()
+    fireEvent.click(screen.getByText('Tavily web search key'))
+    expect(screen.getByText(/Used for Tavily web search and page extraction/)).toBeTruthy()
+    expect(screen.getByText('TAVILY_API_KEY')).toBeTruthy()
+
+    setRuntimeI18nLocale('zh')
+
+    try {
+      expect(credentialRowLabel('TAVILY_API_KEY', envVar('tool'))).toBe('Tavily 网页搜索密钥')
+      expect(
+        credentialDescription('TAVILY_API_KEY', envVar('tool', { description: 'Upstream description.' }))
+      ).toContain('网页搜索')
+    } finally {
+      setRuntimeI18nLocale('en')
+    }
+  })
+
+  it('opens the matching collapsed section for a deep-linked credential card', async () => {
     getEnvVars.mockResolvedValue({
       BRAVE_SEARCH_API_KEY: envVar('tool', { description: 'Search the web with Brave.' }),
       FIRECRAWL_API_KEY: envVar('tool', { description: 'Crawl and extract websites.' })
@@ -116,12 +180,13 @@ describe('KeysSettings', () => {
 
     render(
       <MemoryRouter initialEntries={['/settings?tab=keys']}>
-        <KeysSettings view="tools" />
+        <KeysSettings embedded view="all" />
         <DeepLinkButton target="FIRECRAWL_API_KEY" />
       </MemoryRouter>
     )
 
-    expect(await screen.findByText('BRAVE SEARCH')).toBeTruthy()
+    await waitFor(() => expect(getEnvVars).toHaveBeenCalled())
+    expect(screen.getByRole('button', { name: 'Tools' }).getAttribute('aria-expanded')).toBe('false')
     fireEvent.click(screen.getByRole('button', { name: 'Open key' }))
 
     await waitFor(() => {
@@ -129,6 +194,8 @@ describe('KeysSettings', () => {
       expect(target?.classList).toContain('setting-field-highlight')
     })
     expect(screen.getByText('Crawl and extract websites.')).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Tools' }).getAttribute('aria-expanded')).toBe('true')
+    expect(screen.getByRole('button', { name: 'Keys' }).getAttribute('aria-expanded')).toBe('false')
   })
 
   it('drops an unsaved credential edit when the settings target switches profile', async () => {

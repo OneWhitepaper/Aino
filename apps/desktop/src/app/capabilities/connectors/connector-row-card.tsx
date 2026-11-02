@@ -86,13 +86,9 @@ export function ConnectorRowCard({
 
   return (
     <div
-      className={cn(
-        'relative flex items-center gap-3 rounded-lg border p-3 transition-colors duration-500 hover:transition-none',
-        selected
-          ? 'border-(--theme-primary) bg-(--ui-row-active-background)'
-          : 'border-(--ui-stroke-quaternary) bg-(--ui-bg-elevated) hover:bg-(--chrome-action-hover)'
-      )}
+      className="connector-directory-card"
       data-connector={card.slug}
+      data-selected={selected}
       data-slot="connector-row-card"
       onFocus={onPrefetch}
       onPointerEnter={onPrefetch}
@@ -105,7 +101,7 @@ export function ConnectorRowCard({
       <div className="grid min-w-0 flex-1 gap-0.5">
         <div className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5">
           <button
-            className="min-w-0 truncate text-[0.8125rem] font-semibold text-(--ui-text-primary) outline-none after:absolute after:inset-0 after:rounded-lg focus-visible:after:ring-[0.1875rem] focus-visible:after:ring-ring/50"
+            className="min-w-0 truncate text-[length:var(--aino-text-ui)] font-medium text-(--ui-text-primary) outline-none after:absolute after:inset-0 after:rounded-[inherit] focus-visible:after:ring-[0.1875rem] focus-visible:after:ring-ring/50"
             onClick={onOpen}
             type="button"
           >
@@ -214,12 +210,22 @@ function AccountSummary({ card }: { card: ConnectorCardModel }) {
   ) : null
 }
 
-function SecondLine({ card, description, reason }: { card: ConnectorCardModel; description?: string; reason?: string }) {
+function SecondLine({
+  card,
+  description,
+  reason
+}: {
+  card: ConnectorCardModel
+  description?: string
+  reason?: string
+}) {
   if (reason) {
-    return <p className={cn('truncate text-[0.72rem]', REASON_TONE[card.state])}>{reason}</p>
+    return <p className={cn('truncate text-[length:var(--aino-text-caption)]', REASON_TONE[card.state])}>{reason}</p>
   }
 
   return description ? (
-    <p className="line-clamp-2 text-[0.72rem] leading-snug text-(--ui-text-secondary)">{description}</p>
+    <p className="line-clamp-2 text-[length:var(--aino-text-label)] leading-relaxed text-(--ui-text-secondary)">
+      {description}
+    </p>
   ) : null
 }

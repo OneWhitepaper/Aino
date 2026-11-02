@@ -6,6 +6,7 @@ import { hudTargetSessionId } from '@/app/hud/handoff'
 import { setTerminalTakeover } from '@/app/right-sidebar/store'
 import { toggleTerminalPane } from '@/app/right-sidebar/terminal/reveal-focus'
 import { closeActiveTerminal, createTerminal, cycleTerminal } from '@/app/right-sidebar/terminal/terminals'
+import { toggleToolPanelSide } from '@/app/right-sidebar/tool-panel-actions'
 import { appViewForPath, isRouteBlockingSurface } from '@/app/routes'
 import {
   activateTreeTabSlot,
@@ -38,6 +39,7 @@ import {
   findPrevious as findPreviousMatch,
   openFindBar
 } from '@/store/find-in-page'
+import { activeGatewayConnectionId } from '@/store/gateway'
 import { toggleHud } from '@/store/hud'
 import { toggleSimpleMode } from '@/store/interface-mode'
 import { $capture, $comboIndex, captureStep, endCapture, setBinding } from '@/store/keybinds'
@@ -47,12 +49,12 @@ import {
   requestSessionSearchFocus,
   setFileBrowserOpen,
   togglePanesFlipped,
-  toggleRightSide,
   toggleSidebarOpen
 } from '@/store/layout'
 import { notifyError } from '@/store/notifications'
 import { toggleBrowserTab } from '@/store/preview'
 import {
+  $activeGatewayProfile,
   $newChatProfile,
   cycleProfile,
   requestProfileCreate,
@@ -65,9 +67,12 @@ import { openFolderAsProject } from '@/store/projects'
 import { toggleReview } from '@/store/review'
 import {
   $activeSessionId,
+  $currentModel,
+  $currentProvider,
   $currentReasoningEffort,
   $defaultReasoningEffort,
   $selectedStoredSessionId,
+  getComposerSelectionGeneration,
   markComposerSelectionManual,
   setCurrentReasoningEffort,
   setModelPickerOpen
@@ -235,6 +240,10 @@ export function useKeybinds(deps: KeybindRuntimeDeps): void {
 
   const stepSessionReasoning = (direction: 1 | -1) => {
     const sessionId = $activeSessionId.get()
+    const model = $currentModel.get()
+    const provider = $currentProvider.get()
+    const profile = $activeGatewayProfile.get()
+    const connectionId = activeGatewayConnectionId()
 
     // No live session: the draft's pick still steps (it ships on the next
     // session.create); no `config.set` — without a session the RPC falls
@@ -249,6 +258,7 @@ export function useKeybinds(deps: KeybindRuntimeDeps): void {
 
     markComposerSelectionManual()
     setCurrentReasoningEffort(next)
+    const generation = getComposerSelectionGeneration()
 
     if (!sessionId) {
       return
@@ -258,14 +268,23 @@ export function useKeybinds(deps: KeybindRuntimeDeps): void {
 
     reasoningRequestSeqRef.current = requestSeq
 
+    const isCurrent = () =>
+      reasoningRequestSeqRef.current === requestSeq &&
+      getComposerSelectionGeneration() === generation &&
+      $activeSessionId.get() === sessionId &&
+      $currentModel.get() === model &&
+      $currentProvider.get() === provider &&
+      $activeGatewayProfile.get() === profile &&
+      activeGatewayConnectionId() === connectionId
+
     void writeSessionReasoningEffort(deps.requestGateway, sessionId, next)
       .then(value => {
-        if (reasoningRequestSeqRef.current === requestSeq) {
+        if (isCurrent()) {
           setCurrentReasoningEffort(value)
         }
       })
       .catch(error => {
-        if (reasoningRequestSeqRef.current === requestSeq) {
+        if (isCurrent()) {
           setCurrentReasoningEffort(rollback)
           notifyError(error, translateNow('shell.modelOptions.updateFailed'))
         }
@@ -343,7 +362,7 @@ export function useKeybinds(deps: KeybindRuntimeDeps): void {
     // ⌘J toggles the physical right side — whatever column lives there in the
     // live tree (the Browser preview column, the files column). Falls back to
     // the terminal when nothing lives on the right (terminal-on-bottom).
-    'view.toggleRightSidebar': () => (layoutHasRightSide() ? toggleRightSide() : toggleTerminalPane()),
+    'view.toggleRightSidebar': () => (layoutHasRightSide() ? toggleToolPanelSide('right') : toggleTerminalPane()),
     'view.toggleReview': toggleReview,
     'view.toggleStatusbar': toggleStatusbarVisible,
     'view.toggleProfileRail': toggleProfileRailVisible,

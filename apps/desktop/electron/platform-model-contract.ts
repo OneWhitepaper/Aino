@@ -1,4 +1,5 @@
 import type { PlatformModel, PlatformModelPricing } from '../shared/platform-contract'
+import { PLATFORM_IMAGE_QUALITIES } from '../shared/platform-contract'
 
 // Parse only public fields; arbitrary server fields never reach the renderer.
 function invalid(): never {
@@ -98,18 +99,49 @@ export function parsePlatformModel(value: unknown): PlatformModel {
     return invalid()
   }
 
+  const apiMode = choice(m.api_mode, [
+    'chat_completions',
+    'responses',
+    'anthropic_messages',
+    'images_generations'
+  ] as const)
+
+  const purpose = m.purpose === undefined ? 'chat' : choice(m.purpose, ['chat', 'image'] as const)
+  const imageGeneration = c.image_generation === undefined ? false : bool(c.image_generation)
+
+  const qualities =
+    c.image_quality_options === undefined
+      ? []
+      : array(c.image_quality_options, value => choice(value, PLATFORM_IMAGE_QUALITIES))
+
+  if (
+    (apiMode === 'images_generations') !== (purpose === 'image') ||
+    (purpose === 'image' && !imageGeneration) ||
+    (purpose !== 'image' && qualities.length > 0) ||
+    new Set(qualities).size !== qualities.length
+  ) {
+    return invalid()
+  }
+
   return {
     id,
     model,
     display_name: str(m.display_name),
     provider_label: str(m.provider_label),
-    api_mode: choice(m.api_mode, ['chat_completions', 'responses', 'anthropic_messages'] as const),
+    api_mode: apiMode,
+    purpose,
     state: choice(m.state, ['available', 'insufficient_balance', 'quota_exhausted', 'unavailable'] as const),
     reason_code: nullable(m.reason_code, str),
     is_default: bool(m.is_default),
     context_window: nullable(m.context_window, num),
     max_output_tokens: nullable(m.max_output_tokens, num),
-    capabilities: { tools: bool(c.tools), vision: bool(c.vision), reasoning: bool(c.reasoning) },
+    capabilities: {
+      tools: bool(c.tools),
+      vision: bool(c.vision),
+      reasoning: bool(c.reasoning),
+      image_generation: imageGeneration,
+      ...(qualities.length ? { image_quality_options: qualities } : {})
+    },
     billing_source: choice(m.billing_source, ['balance', 'subscription'] as const),
     pricing: pricing(m.pricing)
   }

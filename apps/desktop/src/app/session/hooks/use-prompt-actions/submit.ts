@@ -1,6 +1,7 @@
 import type { PromptSubmitResult } from '@hermes/shared'
 import { type MutableRefObject, useCallback } from 'react'
 
+import { SETTINGS_ROUTE } from '@/app/routes'
 import { getSession, PROMPT_SUBMIT_REQUEST_TIMEOUT_MS } from '@/hermes'
 import { translateNow, type Translations } from '@/i18n'
 import { type ChatMessage, finalizeInterruptedMessages, textPart } from '@/lib/chat-messages'
@@ -13,7 +14,6 @@ import {
   stopVoicePlayback,
   takeVoicePlaybackInterrupted
 } from '@/lib/voice-playback'
-import { requestBillingSettings } from '@/store/billing-block'
 import {
   $composerAttachments,
   type ComposerAttachment,
@@ -33,6 +33,7 @@ import { platformErrorSurface, platformRecoveryAction, verifiedPlatformModel } f
 import { PlatformSelectionError } from '@/store/platform-models'
 import { requestFreshSession } from '@/store/profile'
 import { isStoredTranscriptReadOnly } from '@/store/read-only-transcript'
+import { requestRoute } from '@/store/recovery-requests'
 import {
   $activeSessionId,
   $currentModel,
@@ -314,7 +315,7 @@ function notifySubmitFailure(err: unknown, copy: Translations['desktop']): void 
                 : copy.chooseModel,
         onClick:
           recovery === 'account'
-            ? requestBillingSettings
+            ? () => requestRoute(`${SETTINGS_ROUTE}?tab=account`)
             : recovery === 'new-chat'
               ? requestFreshSession
               : () => setModelPickerOpen(true)
@@ -1204,6 +1205,7 @@ export function useSubmitPrompt(deps: SubmitPromptDeps) {
           // Off-screen widget intent: the gateway types the persisted user
           // row display_kind=hidden so no client renders it as a bubble.
           ...(options?.displayKind === 'hidden' && { display_kind: 'hidden' }),
+          ...(options?.continuationOf && { continuation_of: options.continuationOf }),
           // Typed into the floating HUD, so the user is looking at another app
           // rather than at Hermes. The gateway turns this into a per-turn hint
           // to read the window underneath and work in it.
@@ -1278,7 +1280,7 @@ export function useSubmitPrompt(deps: SubmitPromptDeps) {
                   // key (version skew) before any handler ran. Both are pre-admission and
                   // safe to retry identityless. Never downgrade on a timeout, malformed
                   // ACK or an ambiguous retry.
-                  if (!isPreAdmissionRefusal(error) || prepared.legacyAttempted) {
+                  if (!isPreAdmissionRefusal(error) || prepared.legacyAttempted || params.continuation_of) {
                     throw error
                   }
 

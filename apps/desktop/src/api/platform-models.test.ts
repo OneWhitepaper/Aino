@@ -198,12 +198,16 @@ it.each([
 
   const bridge: PlatformModelsBridge = {
     owner: async () => {
-      if (stage === 'owner') {throw failure}
+      if (stage === 'owner') {
+        throw failure
+      }
 
       return { platform_origin: 'http://127.0.0.1:1234', user_id: '17' }
     },
     bind: async () => {
-      if (stage === 'bind') {throw failure}
+      if (stage === 'bind') {
+        throw failure
+      }
 
       return { ok: true, ready: true, model_id: 'fixture', billing_source: 'aino', expires_at: 'later' }
     },
@@ -213,7 +217,9 @@ it.each([
 
   Object.defineProperty(window, 'hermesDesktop', { configurable: true, value: { platformModels: bridge } })
   vi.mocked(requestGatewayForAgent).mockImplementation(async () => {
-    if (stage === 'ticket') {throw failure}
+    if (stage === 'ticket') {
+      throw failure
+    }
 
     return { managed_model_binding: 1, session_ticket: 'ticket' }
   })
@@ -269,4 +275,50 @@ it.each([
 
   expect(result).toEqual({ ok: false, error: { code: expectedCode } })
   expect(JSON.stringify(result)).not.toContain('remote secret')
+})
+
+it('requests an image-purpose ticket and requires the separate image binding capability', async () => {
+  const account: PlatformAccountSnapshot = {
+    revision: 7,
+    phase: 'signed_in',
+    account: { id: '17', display_name: 'Fixture', email: '', phone_masked: '' },
+    mode: 'development',
+    remember_state: 'session_only',
+    error: null
+  }
+
+  const owner = { platform_origin: 'http://127.0.0.1:1234', user_id: '17' }
+  const bind = vi.fn().mockResolvedValue({ ok: true, ready: true })
+  const bridge: PlatformModelsBridge = { owner: async () => owner, bind, clear: async () => {}, list: async () => [] }
+  Object.defineProperty(window, 'hermesDesktop', { configurable: true, value: { platformModels: bridge } })
+  const request = vi.fn().mockResolvedValue({ managed_image_binding: 1, session_ticket: 'image-ticket' })
+
+  const input = {
+    connection_id: 'remote',
+    profile: 'writer',
+    session_id: 'byok-chat',
+    model_id: 'image-catalog',
+    purpose: 'image' as const,
+    expected_account_revision: 7
+  }
+
+  expect((await bindPlatformModel(input, account, request)).ok).toBe(true)
+  expect(request).toHaveBeenCalledWith(
+    'session.managed_model_ticket',
+    {
+      session_id: 'byok-chat',
+      model_id: 'image-catalog',
+      purpose: 'image',
+      owner
+    },
+    10_000
+  )
+  expect(bind).toHaveBeenCalledWith({ ...input, session_ticket: 'image-ticket' })
+  bind.mockClear()
+  request.mockResolvedValue({ managed_model_binding: 1, session_ticket: 'chat-ticket' })
+  expect(await bindPlatformModel(input, account, request)).toEqual({
+    ok: false,
+    error: { code: 'unsupported_gateway' }
+  })
+  expect(bind).not.toHaveBeenCalled()
 })

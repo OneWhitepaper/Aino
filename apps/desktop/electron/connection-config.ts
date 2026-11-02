@@ -422,13 +422,8 @@ function remoteRequestMatchesBaseUrl(requestUrl, baseUrl) {
   }
 }
 
-// True for connection modes that resolve to a REMOTE backend. 'cloud' is a
-// Hermes Cloud connection (cloud-auto-discovery Q3/Q6): it carries a
-// remote-shaped block and reuses the entire remote connect/probe/reconnect
-// path, so every resolution site treats it exactly like 'remote'. The only
-// places that distinguish cloud from remote are the settings UI (which card to
-// show) and config persistence (remembering the provenance). Centralized here
-// so no resolution site forgets the third arm.
+// True for connection modes that resolve to a remote backend. 'cloud' remains
+// a legacy saved mode and follows the same remote connect/probe/reconnect path.
 function modeIsRemoteLike(mode) {
   return mode === 'remote' || mode === 'cloud'
 }
@@ -1031,8 +1026,10 @@ function pathWithProfileScope(path, profile, method?: string) {
 
   // A path that already names its profile never also carries the ambient one: the two disagree
   // whenever the sidebar is on another profile or "All profiles", and the gateway refuses the pair.
-  if (parsed.searchParams.has('profile')
-      || (profileRouteSuffix(parsed.pathname) && !profileCollectionRoute(parsed.pathname, method))) {
+  if (
+    parsed.searchParams.has('profile') ||
+    (profileRouteSuffix(parsed.pathname) && !profileCollectionRoute(parsed.pathname, method))
+  ) {
     return path
   }
 

@@ -25,6 +25,13 @@ logger = logging.getLogger(__name__)
 
 VALID_ASPECT_RATIOS: tuple[str, ...] = ("landscape", "square", "portrait")
 DEFAULT_ASPECT_RATIO = "landscape"
+IMAGE_QUALITY_OPTIONS = ("auto", "low", "medium", "high", "xhigh", "max")
+
+
+def valid_image_quality_options(value):
+    return (isinstance(value, list) and len(value) <= len(IMAGE_QUALITY_OPTIONS)
+            and all(isinstance(item, str) and item in IMAGE_QUALITY_OPTIONS for item in value)
+            and len(set(value)) == len(value))
 
 
 class ImageGenProvider(CatalogProviderBase):

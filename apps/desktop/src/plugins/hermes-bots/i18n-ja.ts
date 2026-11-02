@@ -12,9 +12,9 @@ export const ja: BotsMessages = {
     mcpServers: 'MCP サーバー',
     providerCustom: 'プロバイダー（カスタム）',
     modelCustom: 'モデル（カスタム）',
-    backToDropdowns: '← 選択リストに戻る',
+    backToDropdowns: '選択リストに戻る',
     inheritLaunch: '継承（起動プロファイル）',
-    enterManually: '✏️ 手動入力…',
+    enterManually: '手動入力…',
     gatewayDefault: 'ゲートウェイの既定値',
     modelNameExample: '例：モデル名',
     modelSwitchFailed: 'モデルの切り替えに失敗しました',
@@ -78,6 +78,7 @@ export const ja: BotsMessages = {
     createdOn: (name, target) => `${target} にボット「${name}」を作成しました`
   },
   roster: {
+    modeDescription: 'ボット、グループチャット、共同作業',
     title: 'Agent Hub',
     search: 'ボットとグループチャットを検索',
     searchPlaceholder: 'ボットとグループチャットを検索…',
@@ -459,7 +460,7 @@ export const ja: BotsMessages = {
     testFailed: '設定後のサーバーテストに失敗しました',
     completeSignIn: 'ブラウザーでサインインを完了してください…',
     needsSetup: keys => `設定が必要（${keys}）— アプリ内で設定するにはゲートウェイを再起動してください`,
-    setUpDone: '設定済み ✓',
+    setUpDone: '設定済み',
     saveTest: '保存してテスト',
     authorizing: '認証中…',
     working: '処理中…',
@@ -473,12 +474,12 @@ export const ja: BotsMessages = {
     noHubMatch: 'ハブに一致するスキルはありません。',
     search: '検索',
     searchingShort: '検索中…',
-    browseHub: '完全なハブを閲覧 ▾',
+    browseHub: '完全なハブを閲覧',
     hideHub: 'ハブブラウザーを隠す',
     hubHint:
       '任意のスキルで「+ Add to this Agent」を押すとインストールされ、上の一覧に表示されます。角をドラッグしてサイズを変更できます。',
     searching: 'コミュニティと既知のソースを検索中 — 約10秒かかることがあります…',
-    added: '✓ 追加済み',
+    added: '追加済み',
     installed: name => `スキル「${name}」をインストールしました`,
     installTitle: name => `「${name}」をインストールして上の一覧に追加`,
     installing: name => `「${name}」をインストール中…`,
@@ -487,7 +488,7 @@ export const ja: BotsMessages = {
   mcp: {
     setupNeeded: requires =>
       `セットアップが必要（${requires}） — アプリ内設定を有効にするにはゲートウェイを再起動してください`,
-    setupDone: 'セットアップ済み ✓',
+    setupDone: 'セットアップ済み',
     saveTest: '保存してテスト',
     authorizing: '認証中…',
     setupFailed: 'セットアップに失敗しました',
@@ -515,9 +516,9 @@ export const ja: BotsMessages = {
     providerCustomPlaceholder: '例: omnirouter、inferx、9router',
     modelCustomPlaceholder: '例: antigravity/gemini-3.6-flash-high',
     gatewayDefault: 'ゲートウェイの既定値',
-    backToDropdowns: '← ドロップダウンに戻る',
+    backToDropdowns: 'ドロップダウンに戻る',
     inheritLaunch: '継承（起動プロファイル）',
-    enterManually: '✏️ 手動入力…',
+    enterManually: '手動入力…',
     modelNamePlaceholder: '例: モデル名'
   },
   screen: {

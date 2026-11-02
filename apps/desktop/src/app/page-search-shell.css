@@ -1,0 +1,23 @@
+/* Shared page header, owned here rather than by a theme-wide route override. */
+[data-aino-page-header] {
+  background: var(--ui-editor-surface-background);
+  border-bottom-color: var(--ui-stroke-tertiary);
+}
+[data-aino-page-header]:not([data-tabs-variant='section']) [data-tour='page-tabs'] [data-tour^='tab-'] {
+  border: 0;
+  border-radius: var(--aino-radius-control);
+  color: var(--ui-text-tertiary);
+  text-decoration: none;
+}
+[data-aino-page-header]:not([data-tabs-variant='section']) [data-tour='page-tabs'] [data-tour^='tab-']:hover {
+  background: var(--ui-row-hover-background);
+  color: var(--ui-text-primary);
+}
+[data-aino-page-header]:not([data-tabs-variant='section'])
+  [data-tour='page-tabs']
+  [data-tour^='tab-'][data-active='true'] {
+  background: var(--ui-row-active-background);
+  color: var(--ui-text-primary);
+  box-shadow: none;
+  font-weight: 600;
+}

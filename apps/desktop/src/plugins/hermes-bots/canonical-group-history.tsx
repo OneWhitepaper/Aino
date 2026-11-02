@@ -42,7 +42,7 @@ function EventTime({ timestamp }: { timestamp?: number }) {
 
   if (!Number.isFinite(at.getTime())) {return null}
 
-  return <time className="text-[0.625rem] text-(--ui-text-quaternary)" dateTime={at.toISOString()}>{sdk.relativeTime(at.getTime())}</time>
+  return <time className="text-[length:var(--aino-text-caption)] text-(--ui-text-tertiary)" dateTime={at.toISOString()}>{sdk.relativeTime(at.getTime())}</time>
 }
 
 function EventBody({ event, notice }: { event: CanonicalGroupEvent; notice?: string }) {
@@ -90,7 +90,7 @@ export function CanonicalGroupHistory({ binding, events, members = [], disabled 
 
     return <div className="grid grid-cols-[minmax(0,1fr)] gap-1 px-2 py-1.5" key={event.seq}>
     <div className="flex items-center gap-2">
-      {author && <strong className="text-[0.7rem] font-semibold text-(--ui-accent)">{author}</strong>}
+      {author && <strong className="text-[length:var(--aino-text-caption)] font-semibold text-(--ui-accent)">{author}</strong>}
       <EventTime timestamp={event.created_at} />
     </div>
     <EventBody event={event} notice={notice} />

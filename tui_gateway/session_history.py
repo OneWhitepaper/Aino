@@ -549,57 +549,53 @@ def _turn_failure_detail(error: Any, reason: Any = None, prompt: Any = None) -> 
     return out + (f" cause={message!r}" if message else "")
 
 
+def _cold_session_context_breakdown(session: dict) -> dict:
+    usage = _session_usage_snapshot(session) or _get_usage(None)
+    mirror = _metadata_mirror(session)
+    # Remote occupancy owns its own prompt; never attribute it to the parked local transcript.
+    categories = {} if isinstance(mirror.get("usage"), dict) else _cold_history_context_usage(session)
+    return {
+        "categories": categories.get("categories", []), "context_max": usage.get("context_max", 0) or 0,
+        "context_percent": usage.get("context_percent", 0) or 0,
+        "context_used": usage.get("context_used", 0) or 0,
+        "estimated_total": categories.get("estimated_total", 0),
+        "context_estimated": usage.get("context_estimated", False),
+        "context_source": usage.get("context_source", "unknown"),
+        "model": (mirror.get("model") or (session.get("managed_model_params") or {}).get("model")
+                  or _live_session_identity(session)[0])}
+
+
 def _cold_history_context_usage(session: dict) -> dict:
-    """Reuse the restored transcript and durable anchor, without a second full history read."""
-    from agent.usage_anchor import USAGE_ANCHOR_MODEL_CONFIG_KEY, anchored_context_tokens
+    """Cache category estimates and anchored usage over the already-restored transcript."""
+    from agent.context_breakdown import compute_cold_context_categories
+    from agent.usage_anchor import USAGE_ANCHOR_MODEL_CONFIG_KEY, context_usage_from_history
 
     with session.get("history_lock") or contextlib.nullcontext():
-        history = session.get("history") or []
+        history = session.get("history")
+        if not isinstance(history, list):
+            history = []
         key = (session.get("session_key"), session.get("profile_home"), session.get("history_version", 0),
                id(history), len(history))
-        if session.get("resume_hydrating") or not key[0] or not history:
+        if session.get("resume_hydrating") or not key[0]:
             return {}
         cached = session.get("_cold_context_usage")
         if cached and cached[0] == key:
             return dict(cached[1])
         snapshot = list(history)
 
-    usage = {}
     try:
-        with _session_db(session) as db:
-            if db is None:
-                return usage
-            anchor = db.get_session_model_config_value(key[0], USAGE_ANCHOR_MODEL_CONFIG_KEY, None)
-            candidates = [snapshot]
-            # Provider requests include the system message, while SessionDB stores it on the
-            # session row and transcript rows start at the first user message. Validate against
-            # this temporary projection only; never install it into the live session history.
-            if isinstance(anchor, dict):
-                row = db.get_session(key[0]) or {}
-                system_prompt = row.get("_system_prompt_resolved") or row.get("system_prompt")
-                if isinstance(system_prompt, str) and system_prompt:
-                    candidates.append([{"role": "system", "content": system_prompt}, *snapshot])
-                elif int(anchor.get("base_count") or 0) <= len(snapshot):
-                    # Very short sessions can predate system-prompt snapshot persistence. The
-                    # provider still priced a leading system row; this empty placeholder preserves
-                    # row indexes while its content is excluded from the exact anchored total.
-                    candidates.append([{"role": "system", "content": ""}, *snapshot])
-            matched = next((candidate for candidate in candidates
-                            if anchored_context_tokens(candidate, anchor) is not None), None)
-            if matched is not None:
-                tokens = anchored_context_tokens(matched, anchor)
-                delta = matched[int(anchor["base_count"]):]
-                if delta and delta[0].get("role") == "assistant":
-                    delta = delta[1:]
-                source = "provider_usage_plus_estimate" if delta else "provider_usage"
-                usage = {"context_used": tokens, "context_source": source,
-                         "context_estimated": source != "provider_usage"}
+        with _session_profile_runtime_scope(session), _session_db(session) as db:
+            anchor = db.get_session_model_config_value(key[0], USAGE_ANCHOR_MODEL_CONFIG_KEY, None) if db else None
+            row = (db.get_session(key[0]) or {}) if db else {}
+            prompt = row.get("_system_prompt_resolved") or row.get("system_prompt")
+            usage = {**compute_cold_context_categories(snapshot, prompt),
+                     **context_usage_from_history(snapshot, anchor, prompt)}
     except Exception:
         logger.debug("cold session context anchor recovery failed", exc_info=True)
         return {}
 
     with session.get("history_lock") or contextlib.nullcontext():
-        current = session.get("history") or []
+        current = session.get("history")
         if (current is history and session.get("session_key") == key[0]
                 and session.get("profile_home") == key[1]
                 and session.get("history_version", 0) == key[2] and len(current) == key[4]):
@@ -612,7 +608,8 @@ def _cold_session_context_usage(session: dict) -> dict:
     """Cold occupancy follows the owning history; capacity follows the active model lease."""
     from .managed_model_runtime import get_registry
 
-    usage = _cold_history_context_usage(session)
+    usage = {key: value for key, value in _cold_history_context_usage(session).items()
+             if key not in {"categories", "estimated_total"}}
     with _sessions_lock:
         runtime_sid = next((sid for sid, record in _sessions.items() if record is session), None)
     binding = get_registry().get(runtime_sid, session) if runtime_sid else None

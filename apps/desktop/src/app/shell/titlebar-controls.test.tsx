@@ -5,7 +5,8 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vite
 
 import { $terminalTakeover, setTerminalTakeover } from '@/app/right-sidebar/store'
 import { $activeTerminalId, $terminals } from '@/app/right-sidebar/terminal/terminals'
-import { group, split } from '@/components/pane-shell/tree/model'
+import { findGroup, group, split } from '@/components/pane-shell/tree/model'
+import { ToolPanelControls } from '@/components/pane-shell/tree/renderer/tool-panel-controls'
 import {
   $dismissedPanes,
   $hiddenTreePanes,
@@ -16,6 +17,7 @@ import {
 } from '@/components/pane-shell/tree/store'
 import { registry } from '@/contrib/registry'
 import { I18nProvider } from '@/i18n'
+import { $fileBrowserOpen } from '@/store/layout'
 import { $summaryOpen } from '@/store/summary'
 import { setTitlebarAppActionsSide } from '@/store/titlebar-app-actions'
 import { stubResizeObserver } from '@/test/jsdom'
@@ -74,6 +76,56 @@ describe('titlebar terminal toggle', () => {
     expect(isPaneVisible('terminal')).toBe(false)
     expect($terminals.get()).toBe(terminals)
     expect($activeTerminalId.get()).toBe('running-shell')
+  })
+
+  it('offers Show after panel Hide and restores the same active terminal without replacing its shells', () => {
+    const dispose = registry.registerMany([
+      { id: 'workspace', area: 'panes', data: { placement: 'main', uncloseable: true }, render: () => null },
+      { id: 'files', area: 'panes', data: { placement: 'right', toolPanel: true }, render: () => null },
+      { id: 'terminal', area: 'panes', data: { placement: 'right', toolPanel: true }, render: () => null }
+    ])
+
+    $dismissedPanes.set(new Set())
+    $hiddenTreePanes.set(new Set())
+    $layoutTree.set(
+      split('row', [
+        group(['workspace']),
+        group(['files', 'terminal'], { id: 'tools', toolPanel: true, active: 'terminal' })
+      ])
+    )
+    $fileBrowserOpen.set(true)
+    setTerminalTakeover(true)
+    const terminals = [{ auto: true, cwd: '/project', id: 'retained-shell', kind: 'user' as const, title: 'zsh' }]
+    $terminals.set(terminals)
+    $activeTerminalId.set('retained-shell')
+
+    try {
+      render(
+        <I18nProvider configClient={null} initialLocale="en">
+          <MemoryRouter>
+            <TitlebarControls />
+            <ToolPanelControls
+              activate={() => undefined}
+              groupId="tools"
+              panes={['files', 'terminal']}
+              title={id => id}
+            />
+          </MemoryRouter>
+        </I18nProvider>
+      )
+      expect(screen.getByRole('button', { name: 'Hide right sidebar' })).toBeTruthy()
+      fireEvent.click(screen.getByRole('button', { name: 'Hide panel' }))
+      expect(findGroup($layoutTree.get()!, 'tools')?.minimized).toBe(true)
+      fireEvent.click(screen.getByRole('button', { name: 'Show right sidebar' }))
+      expect(findGroup($layoutTree.get()!, 'tools')?.minimized).toBeFalsy()
+      expect(findGroup($layoutTree.get()!, 'tools')?.active).toBe('terminal')
+      expect(screen.getByRole('button', { name: 'Hide right sidebar' })).toBeTruthy()
+      expect($fileBrowserOpen.get()).toBe(true)
+      expect($terminals.get()).toBe(terminals)
+      expect($activeTerminalId.get()).toBe('retained-shell')
+    } finally {
+      dispose()
+    }
   })
 })
 

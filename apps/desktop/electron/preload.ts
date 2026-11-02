@@ -17,8 +17,15 @@ const translucencySupport = ipcRenderer.sendSync('hermes:translucency:support')
 const hudWindowing = ipcRenderer.sendSync('hermes:hud:windowing')
 const hudNativeDrag = hudWindowing?.nativeDrag === true
 
-const launchFlags: { localModels?: boolean; assumeFreshInstall?: boolean; guestOnboarding?: boolean; accountAdapter?: string; skipIntro?: boolean } | undefined =
-  ipcRenderer.sendSync('hermes:feature-flags')
+const launchFlags:
+  | {
+      localModels?: boolean
+      assumeFreshInstall?: boolean
+      guestOnboarding?: boolean
+      accountAdapter?: string
+      skipIntro?: boolean
+    }
+  | undefined = ipcRenderer.sendSync('hermes:feature-flags')
 
 // Local, sanitized skin payload for the first renderer theme paint. This does
 // not wait on `gateway.ready`, so an unreachable remote primary cannot force
@@ -63,7 +70,9 @@ contextBridge.exposeInMainWorld('hermesDesktop', {
     owner: async revision => unwrapPlatformAccountIpc(await ipcRenderer.invoke('aino:platform-models:owner', revision)),
     bind: input => ipcRenderer.invoke('aino:platform-models:bind', input),
     list: async () => unwrapPlatformAccountIpc(await ipcRenderer.invoke('aino:platform-models:list')),
-    clear: async input => { unwrapPlatformAccountIpc(await ipcRenderer.invoke('aino:platform-models:clear', input)) }
+    clear: async input => {
+      unwrapPlatformAccountIpc(await ipcRenderer.invoke('aino:platform-models:clear', input))
+    }
   },
   platformDevices: {
     list: async input => unwrapPlatformAccountIpc(await ipcRenderer.invoke('aino:platform-devices:list', input)),
@@ -75,14 +84,20 @@ contextBridge.exposeInMainWorld('hermesDesktop', {
   },
   platformBilling: {
     quote: async input => unwrapPlatformAccountIpc(await ipcRenderer.invoke('aino:platform-billing:quote', input)),
-    createOrder: async input => unwrapPlatformAccountIpc(await ipcRenderer.invoke('aino:platform-billing:create-order', input)),
-    getOrder: async input => unwrapPlatformAccountIpc(await ipcRenderer.invoke('aino:platform-billing:get-order', input)),
-    listOrders: async input => unwrapPlatformAccountIpc(await ipcRenderer.invoke('aino:platform-billing:list-orders', input)),
-    cancelOrder: async input => unwrapPlatformAccountIpc(await ipcRenderer.invoke('aino:platform-billing:cancel-order', input)),
-    openCheckout: async input => unwrapPlatformAccountIpc(await ipcRenderer.invoke('aino:platform-billing:open-checkout', input)),
+    createOrder: async input =>
+      unwrapPlatformAccountIpc(await ipcRenderer.invoke('aino:platform-billing:create-order', input)),
+    getOrder: async input =>
+      unwrapPlatformAccountIpc(await ipcRenderer.invoke('aino:platform-billing:get-order', input)),
+    listOrders: async input =>
+      unwrapPlatformAccountIpc(await ipcRenderer.invoke('aino:platform-billing:list-orders', input)),
+    cancelOrder: async input =>
+      unwrapPlatformAccountIpc(await ipcRenderer.invoke('aino:platform-billing:cancel-order', input)),
+    openCheckout: async input =>
+      unwrapPlatformAccountIpc(await ipcRenderer.invoke('aino:platform-billing:open-checkout', input)),
     scope: async input => unwrapPlatformAccountIpc(await ipcRenderer.invoke('aino:platform-billing:scope', input)),
     summary: async input => unwrapPlatformAccountIpc(await ipcRenderer.invoke('aino:platform-billing:summary', input)),
-    checkoutInfo: async input => unwrapPlatformAccountIpc(await ipcRenderer.invoke('aino:platform-billing:checkout-info', input)),
+    checkoutInfo: async input =>
+      unwrapPlatformAccountIpc(await ipcRenderer.invoke('aino:platform-billing:checkout-info', input)),
     listUsage: async input => unwrapPlatformAccountIpc(await ipcRenderer.invoke('aino:platform-billing:usage', input))
   },
   // Launch-flag fact: the Nous free tier is on for this launch
@@ -375,13 +390,10 @@ contextBridge.exposeInMainWorld('hermesDesktop', {
   oauthLoginConnectionConfig: (remoteUrl, options) =>
     ipcRenderer.invoke('hermes:connection-config:oauth-login', remoteUrl, options),
   oauthLogoutConnectionConfig: remoteUrl => ipcRenderer.invoke('hermes:connection-config:oauth-logout', remoteUrl),
-  // Hermes Cloud: one portal login powers discovery + silent per-agent sign-in
-  // (cloud-auto-discovery Phase 3).
+  // Legacy Nous-hosted connection recovery; no discovery or new cloud setup.
   cloud: {
     status: () => ipcRenderer.invoke('hermes:cloud:status'),
     login: () => ipcRenderer.invoke('hermes:cloud:login'),
-    logout: () => ipcRenderer.invoke('hermes:cloud:logout'),
-    discover: org => ipcRenderer.invoke('hermes:cloud:discover', org),
     agentSignIn: dashboardUrl => ipcRenderer.invoke('hermes:cloud:agent-sign-in', dashboardUrl)
   },
   profile: {

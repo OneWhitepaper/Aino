@@ -1,8 +1,10 @@
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import type { DesktopUpdateStatus, DesktopVersionInfo, HermesConnection } from '@/global'
+import type { DesktopUninstallSummary, DesktopUpdateStatus, DesktopVersionInfo, HermesConnection } from '@/global'
+import { aboutPageCopy } from '@/i18n/about-page'
 import { en } from '@/i18n/en'
+import { compactUpdateCopy } from '@/i18n/update-status-compact'
 import { applyProductBrand } from '@/lib/brand'
 import { $confirmRequest, settleConfirm } from '@/store/confirm'
 import type * as SessionStore from '@/store/session'
@@ -93,14 +95,15 @@ describe('AboutSettings', (): void => {
 
   afterEach((): void => {
     cleanup()
+    vi.unstubAllGlobals()
   })
 
   it('shows shared version details and refreshes each remote gateway independently', (): void => {
     const { rerender } = render(<AboutSettings />)
 
     expect(screen.getByRole('heading', { name: applyProductBrand(en.updates.appName) })).toBeTruthy()
-    expect(screen.getByText(en.updates.versionDetailsInstallId)).toBeTruthy()
-    expect(screen.getByText(en.updates.latestBody)).toBeTruthy()
+    expect(screen.queryByText(en.updates.versionDetailsInstallId)).toBeNull()
+    expect(screen.getByText(compactUpdateCopy('en').current)).toBeTruthy()
     expect(screen.queryByText(en.updates.latestBodyBackend)).toBeNull()
     expect(refreshDesktopVersion).toHaveBeenCalledTimes(1)
     expect(checkBackendUpdates).not.toHaveBeenCalled()
@@ -108,9 +111,13 @@ describe('AboutSettings', (): void => {
     $connection.set(connection('remote'))
     rerender(<AboutSettings />)
 
-    expect(screen.getByText(en.updates.latestBodyBackend)).toBeTruthy()
-    expect(checkBackendUpdates).toHaveBeenCalledTimes(1)
     expect(screen.getAllByRole('link', { name: en.updates.releaseNotes })).toHaveLength(1)
+    fireEvent.click(screen.getByRole('button', { name: aboutPageCopy('en').installationInfo }))
+    const installation = screen.getByRole('dialog', { name: aboutPageCopy('en').installationInfo })
+    fireEvent.click(within(installation).getByText(aboutPageCopy('en').technicalDetails))
+    expect(within(installation).getByText(en.updates.versionDetailsInstallId)).toBeTruthy()
+    expect(within(installation).getByText(en.updates.latestBodyBackend)).toBeTruthy()
+    expect(checkBackendUpdates).toHaveBeenCalledTimes(1)
 
     $connection.set({ ...connection('remote'), baseUrl: 'http://other-gateway:9119' })
     rerender(<AboutSettings />)
@@ -136,6 +143,8 @@ describe('AboutSettings', (): void => {
     )
     $updateStatus.set({ ...source, branch: 'main' })
     render(<AboutSettings />)
+    expect(screen.queryByRole('button', { name: about.main })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: aboutPageCopy('en').installationInfo }))
     expect(screen.getByRole('button', { name: about.main }).getAttribute('aria-pressed')).toBe('true')
 
     fireEvent.click(screen.getByRole('button', { name: about.stable }))
@@ -179,6 +188,7 @@ describe('AboutSettings', (): void => {
     $backendUpdateStatus.set({ supported: true, behind: 3 })
     render(<AboutSettings />)
     expect(screen.getByText(message)).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: aboutPageCopy('en').installationInfo }))
     expect(screen.getAllByRole('button', { name: en.updates.checkNow })).toHaveLength(1)
     fireEvent.click(screen.getByRole('button', { name: en.updates.updateNow }))
     expect(startActiveUpdate).toHaveBeenCalledWith('backend')
@@ -189,17 +199,54 @@ describe('AboutSettings', (): void => {
     render(<AboutSettings />)
     vi.mocked(checkBackendUpdates).mockClear()
 
-    const buttons = screen.getAllByRole('button', { name: en.updates.checkNow })
-    fireEvent.click(buttons[0])
+    fireEvent.click(screen.getByRole('button', { name: en.updates.checkNow }))
     await waitFor((): void => {
       expect(checkUpdates).toHaveBeenCalledWith({ force: true })
     })
     expect(checkBackendUpdates).not.toHaveBeenCalled()
 
-    fireEvent.click(buttons[1])
+    fireEvent.click(screen.getByRole('button', { name: aboutPageCopy('en').installationInfo }))
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: en.updates.checkNow }))
     await waitFor((): void => {
       expect(checkBackendUpdates).toHaveBeenCalledWith({ force: true })
     })
     expect(checkUpdates).toHaveBeenCalledTimes(1)
+  })
+
+  it('opens the existing uninstall confirmation only after ownership is established', async (): Promise<void> => {
+    const run = vi.fn().mockResolvedValue({ ok: true })
+
+    const summary: DesktopUninstallSummary = {
+      code_removal_allowed: true,
+      native_removal_instructions: null,
+      hermes_home: '/test/home',
+      agent_installed: true,
+      gui_installed: true,
+      source_built_artifacts: [],
+      packaged_app_paths: [],
+      userdata_dir: '/test/desktop',
+      userdata_exists: true,
+      platform: 'linux'
+    }
+
+    vi.stubGlobal('hermesDesktop', { uninstall: { summary: async () => summary, run } })
+    render(<AboutSettings />)
+    expect(screen.queryByText(en.settings.uninstallSection.dangerZone)).toBeNull()
+    fireEvent.click(await screen.findByRole('button', { name: aboutPageCopy('en').uninstall }))
+    const dialog = screen.getByRole('dialog', { name: aboutPageCopy('en').uninstall })
+    fireEvent.click(within(dialog).getByRole('button', { name: /Uninstall Chat GUI only/ }))
+    expect(run).not.toHaveBeenCalled()
+    expect(within(dialog).getByText(en.settings.uninstallSection.confirmUninstall)).toBeTruthy()
+    fireEvent.click(within(dialog).getByRole('button', { name: en.settings.uninstallSection.yesUninstall }))
+    await waitFor(() => expect(run).toHaveBeenCalledWith('gui'))
+  })
+
+  it('does not offer an uninstall entry when ownership cannot be read', async (): Promise<void> => {
+    const summary = vi.fn().mockRejectedValue(new Error('IPC unavailable'))
+
+    vi.stubGlobal('hermesDesktop', { uninstall: { summary, run: vi.fn() } })
+    render(<AboutSettings />)
+    await waitFor(() => expect(summary).toHaveBeenCalledOnce())
+    expect(screen.queryByRole('button', { name: aboutPageCopy('en').uninstall })).toBeNull()
   })
 })

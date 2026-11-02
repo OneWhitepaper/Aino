@@ -184,11 +184,8 @@ def test_focus_mode_coding_posture_gets_the_tool(monkeypatch):
     assert "manage_connections" in _session_tool_names(selection, connectors=True)
 
 
-def test_session_the_portal_has_not_enabled_never_receives_the_tool(tmp_path, monkeypatch):
-    """The portal gate is the tool's check_fn: a session whose account the portal has not enabled
-    for connectors does not get ``manage_connections`` in its schema on any surface, so the
-    model cannot call it and read the gateway's 404 back to the user. The handler keeps the same
-    gate for the direct RPC path."""
+def test_hosted_eligibility_does_not_hide_local_mcp_management(tmp_path, monkeypatch):
+    """Local installation remains available while the hosted handler still rejects access."""
     from hermes_cli.tools_config import _get_platform_tools
     from tools.registry import registry
     from tui_gateway.server import _load_enabled_toolsets
@@ -202,7 +199,7 @@ def test_session_the_portal_has_not_enabled_never_receives_the_tool(tmp_path, mo
         ["coding"],
     ]
     for selection in selections:
-        assert "manage_connections" not in _session_tool_names(selection, connectors=False), selection
+        assert "manage_connections" in _session_tool_names(selection, connectors=False), selection
 
     with patch("tools.connectors.gateway.config.connectors_available", return_value=False):
         out = json.loads(registry.dispatch("manage_connections", {"action": "status"}))

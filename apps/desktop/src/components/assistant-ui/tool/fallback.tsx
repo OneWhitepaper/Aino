@@ -37,6 +37,7 @@ import {
   SCAFFOLD_META_CLASS,
   ScaffoldRow
 } from '@/components/chat/scaffold-row'
+import { ActionsMenu } from '@/components/ui/actions-menu'
 import { Button } from '@/components/ui/button'
 import { Codicon } from '@/components/ui/codicon'
 import { CopyButton } from '@/components/ui/copy-button'
@@ -45,6 +46,7 @@ import { FadeText } from '@/components/ui/fade-text'
 import { FileTypeIcon } from '@/components/ui/file-type-icon'
 import { GlyphSpinner } from '@/components/ui/glyph-spinner'
 import { ToolIcon } from '@/components/ui/tool-icon'
+import { Tip } from '@/components/ui/tooltip'
 import { translateNow, useI18n } from '@/i18n'
 import { connectorCalls, mcpTargets } from '@/lib/connector-tools'
 import { PrettyLink, LinkifiedText as SharedLinkifiedText, urlSlugTitleLabel } from '@/lib/external-link'
@@ -394,29 +396,45 @@ function ToolDiffStats({ diffStats }: { diffStats: { added: number; removed: num
   )
 }
 
-function ToolDismissAction({ disclosureId, open }: { disclosureId: string; open: boolean }) {
+interface ToolRecordActionsProps {
+  disclosureId: string
+  open: boolean
+}
+
+function ToolRecordActions({ disclosureId, open }: ToolRecordActionsProps) {
   const { t } = useI18n()
-  const statusCopy = t.statusStack
+  const copy = t.assistant.tool
 
   return (
-    <Button
-      aria-label={statusCopy.dismiss}
+    <span
       className={cn(
-        'size-5 rounded-md text-(--ui-text-tertiary) transition-opacity hover:text-(--ui-text-primary) hover:opacity-100',
+        'flex items-center gap-0.5 text-(--ui-text-tertiary) transition-opacity',
         open
           ? 'opacity-80'
-          : 'opacity-0 group-hover/disclosure-row:opacity-80 group-focus-within/disclosure-row:opacity-80'
+          : 'opacity-0 group-hover/disclosure-row:opacity-80 group-focus-within/disclosure-row:opacity-80 has-[[data-state=open]]:opacity-80'
       )}
-      onClick={event => {
-        event.stopPropagation()
-        dismissToolRow(disclosureId)
-      }}
-      size="icon-xs"
-      type="button"
-      variant="ghost"
     >
-      <Codicon name="close" size="0.75rem" />
-    </Button>
+      {open && (
+        <Tip label={copy.collapseDetails}>
+          <Button
+            aria-label={copy.collapseDetails}
+            onClick={event => {
+              event.stopPropagation()
+              setToolDisclosureOpen(disclosureId, false)
+            }}
+            size="icon-xs"
+            variant="ghost"
+          >
+            <Codicon name="chevron-up" size="0.75rem" />
+          </Button>
+        </Tip>
+      )}
+      <ActionsMenu items={kit => <kit.Item onSelect={() => dismissToolRow(disclosureId)}>{copy.hideRecord}</kit.Item>}>
+        <Button aria-label={copy.moreActions} onClick={event => event.stopPropagation()} size="icon-xs" variant="ghost">
+          <Codicon name="ellipsis" size="0.75rem" />
+        </Button>
+      </ActionsMenu>
+    </span>
   )
 }
 
@@ -654,18 +672,17 @@ function ToolEntry({ part }: ToolEntryProps) {
   // `opacity-0` (yet still clickable) button straddling the caret/duration made
   // the disclosure caret hard to hit. Copy now lives in the expanded body's
   // top-right, where it can't fight the caret for the right edge.
-  const trailing = !embedded && isPending ? (
-    <span className="flex shrink-0 items-center gap-1.5">
-      <TimelineTimestamp className={SCAFFOLD_META_CLASS} completedAt={completedAt} timestamp={timestamp} />
-      <ToolRunningMeta seconds={elapsed} toolCallId={toolCallId} />
-    </span>
-  ) : undefined
+  const trailing =
+    !embedded && isPending ? (
+      <span className="flex shrink-0 items-center gap-1.5">
+        <TimelineTimestamp className={SCAFFOLD_META_CLASS} completedAt={completedAt} timestamp={timestamp} />
+        <ToolRunningMeta seconds={elapsed} toolCallId={toolCallId} />
+      </span>
+    ) : undefined
 
-  // Once a turn has settled, a hover/focus-revealed dismiss lets the user clear
-  // a completed/failed row that would otherwise sit at the tail of the chat.
-  // It goes in the in-flow `action` slot (not `trailing`) so it can't overlap
-  // the disclosure caret's hit-target — see the comment above `trailing`.
-  const dismissAction = canDismiss ? <ToolDismissAction disclosureId={disclosureId} open={open} /> : undefined
+  // Disclosure and view-only hiding are separate actions; neither affects execution.
+  // Keep controls in the in-flow slot so they cannot overlap the title's caret.
+  const recordActions = canDismiss ? <ToolRecordActions disclosureId={disclosureId} open={open} /> : undefined
 
   if (dismissed) {
     return null
@@ -697,7 +714,7 @@ function ToolEntry({ part }: ToolEntryProps) {
     >
       <div className={cn(open && isFileEdit && 'border-b border-(--ui-stroke-tertiary) px-2 py-1.5')}>
         <DisclosureRow
-          action={dismissAction}
+          action={recordActions}
           onToggle={
             hasExpandableContent
               ? () => {

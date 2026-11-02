@@ -155,7 +155,7 @@ const ERROR_SUMMARIES: ErrorSummaryRule[] = [
     // Any other classified storage failure (locked, corrupt, read-only …):
     // the Maintenance panel runs the doctor that names the fix.
     category: 'storage_failure',
-    test: msg => STORAGE_CODE_RE.test(msg),
+    test: msg => STORAGE_CODE_RE.test(msg) || /^storage_[a-z_]+$/i.test(msg.trim()),
     summarize: () => translateNow('notifications.errors.storageFailure'),
     action: () => RECOVERY_ACTIONS.openMaintenance()
   },
@@ -274,12 +274,19 @@ export function readableError(
   const raw = error instanceof Error ? error.message : typeof error === 'string' ? error : fallback
   const unwrapped = raw.match(/Error invoking remote method '[^']+': Error: (.+)$/)?.[1] ?? raw
   const cleaned = cleanErrorText(unwrapped)
-  const detail = cleaned.match(/"detail"\s*:\s*"([^"]+)"/)?.[1] ?? cleaned
-  const summary = summarizeErrorMessage(detail, fallback)
+  const rpcData = error && typeof error === 'object' ? (error as { data?: unknown }).data : undefined
+  const rpcError = rpcData && typeof rpcData === 'object' ? rpcData as { detail?: unknown; reason?: unknown } : undefined
+  const rpcDetail = typeof rpcError?.detail === 'string' ? cleanErrorText(rpcError.detail) : undefined
+  const detail = rpcDetail ?? cleaned.match(/"detail"\s*:\s*"([^"]+)"/)?.[1] ?? cleaned
+  const reason = typeof rpcError?.reason === 'string' ? rpcError.reason : undefined
+  const isStructuredStorageFailure = reason ? /^(storage_[a-z_]+|disk_full)$/.test(reason) : false
+  const summaryInput = isStructuredStorageFailure ? JSON.stringify({ code: reason, detail }) : detail
+  const summary = summarizeErrorMessage(summaryInput, fallback)
+  const detailIsOnlyStorageCode = /^storage_[a-z_]+$/i.test(detail.trim())
 
   return {
     message: summary.message,
-    detail: detail === summary.message ? undefined : detail,
+    detail: detail === summary.message || detailIsOnlyStorageCode ? undefined : detail,
     action: summary.action,
     category: summary.category
   }

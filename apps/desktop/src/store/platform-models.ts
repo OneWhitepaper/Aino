@@ -2,10 +2,11 @@ import { atom, computed, type ReadableAtom } from 'nanostores'
 
 import { platformAccountActions } from '@/api/platform'
 import { translateNow } from '@/i18n'
+import { platformModelSupportsPurpose } from '@/lib/platform-model-purpose'
 import { platformDefaultScope, type PlatformDefaultScopeInput } from '@/lib/platform-model-scope'
 import { readKey, writeKey } from '@/lib/storage'
 
-import type { PlatformAccountSnapshot, PlatformModel } from '../../shared/platform-contract'
+import type { PlatformAccountSnapshot, PlatformModel, PlatformModelPurpose } from '../../shared/platform-contract'
 
 import { createPlatformModelOwner, type PlatformModelOwner, samePlatformAccount } from './platform-model-owner'
 
@@ -25,7 +26,12 @@ function currentOrigin(accountId: string, mode: string): string | null {
   return account?.mode === mode && owner?.user_id === accountId ? owner.platform_origin : null
 }
 
-export function platformDefaultKey(accountId: string, scope: PlatformDefaultScopeInput | undefined, mode: string, origin: string) {
+export function platformDefaultKey(
+  accountId: string,
+  scope: PlatformDefaultScopeInput | undefined,
+  mode: string,
+  origin: string
+) {
   const { key } = platformDefaultScope(scope)
   const accountKey = `${PLATFORM_DEFAULT_PREFIX}${encodeURIComponent(accountId)}`
 
@@ -38,14 +44,21 @@ export function readPlatformDefault(
   mode = 'production',
   origin = currentOrigin(accountId, mode)
 ): string | null {
-  if (!accountId || !origin) {return null}
+  if (!accountId || !origin) {
+    return null
+  }
+
   const value = readKey(platformDefaultKey(accountId, scope, mode, origin))
 
-  if (value !== null) {return value}
+  if (value !== null) {
+    return value
+  }
 
-  return mode === 'production' && origin === 'https://api.agentera.com.cn' &&
+  return mode === 'production' &&
+    origin === 'https://api.agentera.com.cn' &&
     platformDefaultScope(scope).key === '["legacy-local","default"]'
-    ? readKey(`${PLATFORM_DEFAULT_PREFIX}${encodeURIComponent(accountId)}`) : null
+    ? readKey(`${PLATFORM_DEFAULT_PREFIX}${encodeURIComponent(accountId)}`)
+    : null
 }
 
 export function writePlatformDefault(
@@ -59,7 +72,10 @@ export function writePlatformDefault(
     return
   }
 
-  if (!origin) {throw new PlatformSelectionError('platform_account_changed')}
+  if (!origin) {
+    throw new PlatformSelectionError('platform_account_changed')
+  }
+
   writeKey(platformDefaultKey(accountId, scope, mode, origin), modelId)
 }
 
@@ -88,7 +104,8 @@ export function requirePlatformSelection(
   account: PlatformAccountSnapshot | null,
   models: PlatformModel[],
   modelId: string,
-  ownerUserId: string
+  ownerUserId: string,
+  purpose: PlatformModelPurpose = 'chat'
 ): PlatformModel {
   if (account?.phase !== 'signed_in' || !account.account) {
     throw new PlatformSelectionError('not_authenticated')
@@ -100,7 +117,11 @@ export function requirePlatformSelection(
 
   const model = models.find(row => row.id === modelId)
 
-  if (!model || model.state !== 'available') {
+  if (!model || !platformModelSupportsPurpose(model, purpose)) {
+    throw new PlatformSelectionError('model_unavailable')
+  }
+
+  if (model.state !== 'available') {
     throw new PlatformSelectionError(model?.state || 'model_unavailable')
   }
 
@@ -111,7 +132,9 @@ export function requirePlatformSelection(
 export function createPlatformModelCatalog(
   account: ReadableAtom<PlatformAccountSnapshot | null>,
   list: () => Promise<PlatformModel[]>,
-  lookupOwner: (revision: number) => Promise<PlatformModelOwner> = async () => { throw new Error('owner_unavailable') }
+  lookupOwner: (revision: number) => Promise<PlatformModelOwner> = async () => {
+    throw new Error('owner_unavailable')
+  }
 ) {
   const sameAccount = samePlatformAccount
   const owner = createPlatformModelOwner(account, lookupOwner)
@@ -183,7 +206,11 @@ export function platformModelCatalog() {
     const actions = platformAccountActions(desktop.platformAccount)
     cached = {
       bridge: desktop.platformAccount,
-      catalog: createPlatformModelCatalog(actions.snapshot, () => desktop.platformModels.list(), revision => desktop.platformModels.owner(revision))
+      catalog: createPlatformModelCatalog(
+        actions.snapshot,
+        () => desktop.platformModels.list(),
+        revision => desktop.platformModels.owner(revision)
+      )
     }
   }
 

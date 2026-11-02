@@ -36,6 +36,7 @@ import {
 import { notifyError } from '@/store/notifications'
 import { invalidateMcpSuggestionIndex } from '@/store/suggestion-providers/mcp'
 
+import { McpSetupReview } from './mcp-setup-review'
 import { selectMessageRunning } from './tool/fallback-model'
 import { parseMaybeObject } from './tool/fallback-model/format'
 
@@ -92,6 +93,29 @@ const rowVerb = (target: ConnectionTarget, action: SetupAction): McpVerb => {
   return MCP_VERBS[target.state]
 }
 
+function rowPresentation(
+  target: ConnectionTarget,
+  action: SetupAction,
+  verb: McpVerb,
+  t: ReturnType<typeof useI18n>['t']
+) {
+  const ready = target.state === 'connected' && target.tools.length > 0 && !target.discoveryError
+  const discovering = target.state === 'connected' && !ready && !target.discoveryError
+  const mark = target.discoveryError ? 'idle' : discovering ? 'waiting' : CONNECTOR_CARD_PHASES[target.state].mark
+
+  const rowCue = target.discoveryError
+    ? t.connectors.authorizedToolsUnavailable
+    : discovering
+      ? t.assistant.catalogInstall.phase.loading_tools
+      : verb === 'working' || (action === 'authorize' && target.state === 'pending')
+        ? t.settings.mcp.statusConnecting
+        : verb === 'open'
+          ? t.connectors.waiting
+          : undefined
+
+  return { mark, rowCue }
+}
+
 function readSetupAction(args: unknown): SetupAction {
   const [target] = mcpTargets('manage_connections', parseMaybeObject(args))
 
@@ -114,15 +138,17 @@ function McpSetupSummary({ action, rows }: { action: SetupAction; rows: SettledT
     <div className="my-2 grid min-w-0 max-w-lg gap-1" data-connector-offer>
       {rows.map(row => {
         const title = prettyName(row.name)
-        const connected = row.state === 'connected'
+        const connected = row.state === 'connected' && row.tools > 0 && !row.toolsUnavailable
 
-        const line = connected
-          ? row.toolsUnavailable
-            ? `${DONE[action](copy, title)} · ${t.connectors.authorizedToolsUnavailable}`
-            : DONE[action](copy, title)
-          : row.state === 'skipped'
-            ? t.connectors.skipped
-            : t.connectors.notConnected
+        const line = row.toolsUnavailable
+          ? t.connectors.authorizedToolsUnavailable
+          : connected
+            ? DONE[action](copy, title)
+            : row.state === 'connected'
+              ? t.assistant.catalogInstall.phase.loading_tools
+              : row.state === 'skipped'
+                ? t.connectors.skipped
+                : t.connectors.notConnected
 
         return (
           <ConnectorSummary
@@ -314,7 +340,6 @@ function McpSetupRow({ action, onReissue, reissueBlocked, reissuing, request, ta
   // The operation's seq when the consent was sent; null when nothing is in flight.
   const [sentAtSeq, setSentAtSeq] = useState<null | number>(null)
   const server = target.name
-  const phase = CONNECTOR_CARD_PHASES[target.state]
   const verb = rowVerb(target, action)
   const fields = target.requiredEnv
 
@@ -388,12 +413,7 @@ function McpSetupRow({ action, onReissue, reissueBlocked, reissuing, request, ta
   } satisfies Record<Exclude<McpVerb, 'none'>, ConnectorRowAction>
 
   const displayServer = prettyName(server)
-
-  const rowCue = target.discoveryError
-    ? t.connectors.authorizedToolsUnavailable
-    : verb === 'open'
-      ? t.connectors.waiting
-      : undefined
+  const { mark, rowCue } = rowPresentation(target, action, verb, t)
 
   return (
     <>
@@ -401,9 +421,10 @@ function McpSetupRow({ action, onReissue, reissueBlocked, reissuing, request, ta
         action={verb === 'none' ? undefined : ACTIONS[verb]}
         connector={{ name: server, title: displayServer }}
         cue={rowCue}
-        mark={phase.mark}
-        markLabel={MARK_LABEL[phase.mark](t.connectors)}
+        mark={mark}
+        markLabel={rowCue ?? MARK_LABEL[mark](t.connectors)}
       />
+      <McpSetupReview target={target} />
       <SetupFormDialog
         copy={{
           cancel: t.connectors.setupCancel,

@@ -1,20 +1,107 @@
-/* ── Aino landing surface ────────────────────────────────────────────────
-   The empty chat keeps the real Thread + ChatBar mounted. This surface only
-   supplies the landing copy and quick-action affordances; the composer itself
-   is repositioned below so every send/attachment/voice path remains the same
-   implementation as a normal chat. */
+/* Aino's navigation, landing and composer are one composition. Stateful rows,
+   menus and editors remain the existing Hermes components. */
+.aino-sidebar-content {
+  gap: 0;
+  overflow: hidden;
+  padding-inline: 0.75rem;
+  background: transparent;
+}
+
+.aino-sidebar-brand {
+  display: flex;
+  flex: 0 0 auto;
+  min-height: 3.75rem;
+  align-items: center;
+  gap: 0.625rem;
+  padding-inline: 0.5rem;
+  color: var(--ui-text-primary);
+  font-size: 1rem;
+  font-weight: 600;
+  letter-spacing: -0.025em;
+}
+
+.aino-sidebar-navigation {
+  flex-shrink: 0;
+  padding: 0 0 0.875rem;
+  border-bottom: 0;
+}
+
+[data-aino-sidebar] .aino-sidebar-nav-row {
+  display: flex;
+  width: 100%;
+  height: 2.125rem;
+  min-height: 2.125rem;
+  justify-content: flex-start;
+  gap: 0.625rem;
+  padding: 0.375rem 0.625rem;
+  border: 0;
+  border-radius: var(--aino-radius-control);
+  background: transparent;
+  color: var(--ui-text-secondary);
+  font-size: 0.8125rem;
+  font-weight: 400;
+  line-height: 1.25rem;
+  text-align: start;
+  box-shadow: none;
+  transition:
+    background-color 100ms ease-out,
+    color 100ms ease-out;
+}
+
+[data-aino-sidebar] .aino-sidebar-nav-row:is(:hover, :focus-visible) {
+  background: var(--ui-control-hover-background);
+  color: var(--ui-text-primary);
+}
+
+[data-aino-sidebar] .aino-sidebar-nav-row-active {
+  background: var(--ui-control-active-background);
+  color: var(--ui-text-primary);
+}
+
+.aino-sidebar-nav-icon {
+  display: grid;
+  width: 1.125rem;
+  height: 1.125rem;
+  flex: 0 0 auto;
+  place-items: center;
+  color: var(--ui-text-tertiary);
+}
+
+.aino-sidebar-sections {
+  --aino-text-ui: var(--aino-text-caption);
+  display: flex;
+  min-height: 0;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 0.875rem;
+  padding-block: 0.75rem 0.5rem;
+}
+
+.aino-sidebar-section-header {
+  display: flex;
+  min-height: 1.75rem;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.25rem;
+  padding: 0.125rem 0.625rem 0.375rem;
+}
+
+[data-slot='sidebar-identity-footer'] > [data-slot='button'] {
+  font-size: var(--aino-text-caption);
+  font-weight: 400;
+}
+
+/* The homepage reserves space for the same live composer used by conversations. */
 .aino-home-layout {
   container-type: inline-size;
   display: grid;
   width: 100%;
   min-width: 0;
   height: 100%;
-  /* The reference leaves slightly more breathing room below the composition.
-     Flexible tracks collapse when content needs the space in shorter panes. */
   grid-template-columns: minmax(0, 1fr);
-  grid-template-rows: minmax(0, 7fr) auto minmax(0, 9fr);
+  grid-template-rows: minmax(1.5rem, 7fr) auto minmax(1.5rem, 9fr);
   justify-items: center;
-  /* This surface already reserves the real composer in its measured slot. */
   padding-bottom: 0;
   pointer-events: auto;
   text-align: center;
@@ -23,234 +110,202 @@
 .aino-home-content {
   grid-row: 2;
   display: flex;
-  width: min(46.5rem, 100%);
+  width: min(var(--composer-width), 100%);
   min-width: 0;
   flex-direction: column;
   align-items: center;
   font-family: var(--aino-landing-font);
 }
 
+.aino-home-heading {
+  width: 100%;
+  min-width: 0;
+}
+
+.aino-home-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6875rem;
+}
+
+.aino-home-brand {
+  width: 2.0625rem;
+  height: 2.0625rem;
+  border-radius: 0.5625rem;
+}
+
 .aino-home-title {
+  min-width: 0;
   margin: 0;
   color: var(--aino-landing-title);
   font-family: var(--aino-landing-font);
-  font-size: clamp(1.375rem, 3cqi, 1.5rem);
+  font-size: clamp(1.5rem, 3cqi, 1.75rem);
   font-weight: 600;
-  line-height: 1.25;
+  line-height: 1.5;
   letter-spacing: -0.025em;
   text-wrap: balance;
 }
 
-.aino-home-subtitle {
-  max-width: 100%;
-  margin: 1rem 0 0;
+[data-slot='aui_intro'].aino-home-layout .aino-home-subtitle {
+  max-width: 36rem;
+  margin: 0.75rem auto 0;
   color: var(--aino-landing-muted);
-  font-size: var(--aino-text-ui);
+  font-size: 0.75rem;
   line-height: 1.8;
-  white-space: normal;
+  text-wrap: pretty;
 }
 
-/* Reserve the live composer beneath the introduction. The actual ChatBar is
-   absolutely docked over this slot by the home-layout selectors below. */
+/* A measured slot keeps the long-lived editor aligned when drawers or attachments resize. */
 .aino-home-composer-slot {
   width: 100%;
-  height: var(--aino-home-composer-height);
-  flex: 0 0 var(--aino-home-composer-height);
+  height: max(var(--aino-home-composer-height), var(--composer-measured-height));
+  flex: 0 0 max(var(--aino-home-composer-height), var(--composer-measured-height));
+  margin-top: 2rem;
+}
+
+.aino-home-recommendations {
+  width: 100%;
   margin-top: 1.5rem;
+}
+
+.aino-home-composer-hints {
+  display: flex;
+  width: 100%;
+  justify-content: space-between;
+  gap: 0.5rem 1rem;
+  margin-top: 0.375rem;
+  padding-inline: 0.375rem;
+  color: var(--aino-landing-muted);
+  font-size: 0.625rem;
+  line-height: 1.6;
+  text-align: start;
+}
+
+.aino-home-composer-hints > span {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+}
+
+.aino-home-composer-hints kbd {
+  font: inherit;
+}
+
+.aino-home-footnote {
+  grid-row: 3;
+  align-self: end;
+  max-width: 100%;
+  margin: 1.5rem 1rem 1.25rem;
+  color: var(--aino-landing-muted);
+  font-family: var(--aino-landing-font);
+  font-size: 0.625rem;
+  line-height: 1.7;
+  text-wrap: balance;
 }
 
 .aino-home-actions {
   display: grid;
   width: 100%;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.75rem;
-  margin-top: 2rem;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.5625rem;
 }
 
 .aino-home-action {
   min-width: 0;
-  min-height: 4rem;
+  min-height: 2.625rem;
   justify-content: flex-start;
-  gap: 0.75rem;
-  padding: 0.875rem 1rem;
-  border: 1px solid var(--aino-landing-stroke);
-  border-radius: var(--aino-radius-card);
-  color: var(--aino-landing-primary);
-  background: var(--ui-bg-elevated);
+  gap: 0.5625rem;
+  padding: 0.625rem 0.6875rem;
+  border: 1px solid transparent;
+  border-radius: 0.5625rem;
+  background: var(--aino-landing-control);
+  color: var(--aino-landing-secondary);
   box-shadow: none;
   text-align: start;
 }
 
-.aino-home-action:hover,
-.aino-home-action:focus-visible {
-  border-color: var(--ui-stroke-secondary);
+.aino-home-action:is(:hover, :focus-visible) {
+  border-color: var(--ui-stroke-tertiary);
   background: var(--ui-control-hover-background);
   color: var(--ui-text-primary);
 }
 
-.aino-home-action-icon {
-  width: 1.3125rem;
-  height: 1.3125rem;
+.aino-home-action-symbol {
+  display: grid;
+  width: 1rem;
+  height: 1rem;
   flex: 0 0 auto;
+  place-items: center;
   color: var(--aino-landing-muted);
+}
+
+.aino-home-action-icon {
+  width: 1rem;
+  height: 1rem;
 }
 
 .aino-home-action-copy {
-  display: grid;
+  display: flex;
   min-width: 0;
-  gap: 0.125rem;
-}
-
-.aino-home-action-title,
-.aino-home-action-description {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  text-wrap: balance;
 }
 
 .aino-home-action-title {
-  color: var(--aino-landing-primary);
-  font-size: 0.8125rem;
-  font-weight: 600;
-  line-height: 1.5;
-}
-
-.aino-home-action-description {
-  color: var(--aino-landing-muted);
-  font-size: var(--aino-text-caption);
+  overflow: hidden;
+  color: inherit;
+  font-size: 0.75rem;
   font-weight: 400;
-  line-height: 1.25;
+  line-height: 1.5;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-/* On the landing page the composer is the same live component, simply moved
-   into the visual slot from the design. Keep the selector scoped to the main
-   chat surface so HUD, pop-out, tiles, and regular sessions are untouched. */
-[data-chat-surface][data-home-layout] {
-  --aino-home-composer-height: 9rem;
-  --composer-width: 46.5rem;
-  --composer-control-gap: 0.5rem;
-  --composer-control-primary-size: 1.75rem;
-  --composer-control-size: 1.75rem;
+.aino-home-action-arrow {
+  width: 0.75rem;
+  height: 0.75rem;
+  flex: 0 0 auto;
+  margin-left: auto;
+  color: var(--aino-landing-muted);
+  opacity: 0;
+  transition: opacity 100ms ease-out;
+}
+
+.aino-home-action:is(:hover, :focus-visible) .aino-home-action-arrow {
+  opacity: 1;
+}
+
+/* Shared composer: a bounded editor above one independent control row, plus
+   the existing project/status footer. Home and conversations vary dimensions,
+   not structure; HUD and floating windows keep their existing layout. */
+[data-chat-surface]:is([data-home-layout], [data-conversation-layout]) {
+  --composer-control-gap: 0.25rem;
+  --composer-control-primary-size: 2rem;
+  --composer-control-size: 2rem;
+  --composer-input-min-height: 1.75rem;
+  --aino-composer-min-height: 6.75rem;
+  --aino-composer-padding: 0.75rem 1rem;
   background: var(--aino-landing-surface);
   font-family: var(--aino-landing-font);
 }
 
-[data-chat-surface][data-home-layout] [data-slot='aui_thread-content'] {
-  /* Keep the flowing landing content on the same 16px inset as the live
-     composer whenever the window is narrower than the approved composition. */
-  width: calc(100% - 2rem);
-  padding-inline: 0;
+[data-chat-surface][data-home-layout] {
+  --aino-landing-surface: var(--ui-bg-elevated);
+  --ui-chat-surface-background: var(--ui-bg-elevated);
+  --aino-home-composer-height: 12rem;
+  --aino-composer-min-height: var(--aino-home-composer-height);
+  --aino-composer-padding: 1rem 1.0625rem 0.75rem;
+  --aino-radius-composer: 1.125rem;
+  --composer-width: 48.75rem;
+  --composer-control-size: 1.875rem;
+  --composer-control-primary-size: 1.9375rem;
+  --composer-input-min-height: 4.5rem;
+  --conversation-text-base-size: 0.9375rem;
+  --conversation-text-font-size: calc(var(--conversation-text-base-size) * var(--chat-text-scale, 1));
 }
 
-/* Home reserves the composer inside the intro. The ordinary empty-state
-   wrapper's bottom-composer clearance would otherwise shift this slot twice. */
-[data-chat-surface][data-home-layout] [data-slot='aui_empty-placeholder'] {
-  padding-top: 0;
-}
-
-[data-chat-surface][data-home-layout] [data-slot='composer-dock'] {
-  /* Keep the live composer in ordinary absolute layout. CSS anchor positioning
-     leaves this long-lived element in a stale Chromium paint layer when the
-     home screen becomes a conversation, making correct DOM bounds invisible
-     and non-interactive. Responsive offsets below follow the slot without
-     putting the composer itself into that experimental paint path. */
-  top: var(--aino-home-composer-top, clamp(16rem, 34vh, 20rem));
-  bottom: auto;
-  width: calc(min(var(--composer-width), calc(100% - 2rem)) + 10px);
-}
-
-[data-chat-surface][data-home-layout] [data-slot='composer-root'] {
-  --composer-fill: var(--ui-bg-elevated);
-  border-radius: var(--aino-radius-composer);
-}
-
-[data-chat-surface][data-home-layout] [data-slot='composer-surface'] {
-  height: var(--aino-home-composer-height);
-  min-height: var(--aino-home-composer-height);
-  border-radius: var(--aino-radius-composer);
-  background: var(--ui-bg-elevated);
-  border-color: var(--aino-landing-composer-stroke) !important;
-  box-shadow: var(--shadow-aino-landing-composer);
-}
-
-[data-chat-surface][data-home-layout] .coding-status-bar {
-  min-height: 2.5rem;
-  padding-inline: 1.25rem;
-  background: var(--ui-bg-editor);
-  border-bottom-color: var(--ui-stroke-tertiary);
-}
-
-[data-chat-surface][data-home-layout] [data-slot='composer-fade'] {
-  height: 100%;
-  min-height: 0;
-  gap: 0;
-  padding: 1.25rem 1.25rem 1rem;
-}
-
-[data-chat-surface][data-home-layout] [data-slot='composer-layout'] {
-  min-height: 0;
-  flex: 1 1 auto;
-  grid-template-columns: auto minmax(0, 1fr);
-  grid-template-rows: minmax(0, 1fr) 1.75rem;
-  grid-template-areas:
-    'input input'
-    'menu controls';
-  column-gap: 0.625rem;
-  row-gap: 0;
-}
-
-[data-chat-surface][data-home-layout] [data-slot='composer-input-cell'] {
-  align-self: stretch;
-  padding-inline: 0.25rem;
-}
-
-/* The rich editor already scrolls itself, but its unbounded wrapper otherwise
-   keeps the editor's 150px max-content height when a long draft is entered.
-   Constrain that wrapper to the first grid row so text stops above the fixed
-   control row instead of painting underneath it. */
-[data-chat-surface][data-home-layout] [data-slot='composer-input-cell'] > div {
-  height: 100%;
-}
-
-[data-chat-surface][data-home-layout] [data-slot='composer-leading-controls'] {
-  align-self: end;
-  transform: none;
-  translate: none;
-}
-
-[data-chat-surface][data-home-layout] [data-slot='composer-context-menu'] {
-  border-radius: 9999px;
-  background: var(--aino-landing-control);
-}
-
-[data-chat-surface][data-home-layout] [data-slot='composer-trailing-controls'] {
-  align-self: end;
-}
-
-[data-chat-surface][data-home-layout] [data-slot='composer-rich-input'] {
-  color: var(--aino-landing-primary);
-  height: 100%;
-  min-height: 3.5rem;
-  padding-left: 0;
-  padding-top: 0.125rem;
-  font-size: var(--conversation-text-font-size);
-}
-
-[data-chat-surface][data-home-layout] [data-slot='composer-rich-input']:is(:empty, [data-empty])::before {
-  color: var(--aino-landing-placeholder) !important;
-}
-
-/* ── Focused conversation ────────────────────────────────────────────────
-   Keep the existing Thread, message actions, and live ChatBar intact; this
-   layer changes only their placement and paint after the landing screen has
-   become a conversation. The dock is an in-flow flex child here, so the
-   transcript can never cover or intercept the bottom composer. */
 [data-chat-surface][data-conversation-layout] {
   --composer-width: 780px;
-  --composer-input-min-height: 1.75rem;
-  --composer-control-gap: 0.5rem;
-  --composer-control-primary-size: 1.75rem;
-  --composer-control-size: 1.75rem;
   --composer-row-gap: 0.25rem;
   --composer-shell-pad-block-end: 1.25rem;
   --conversation-turn-gap: 1.25rem;
@@ -262,22 +317,33 @@
   --scaffold-block-gap: 0.25rem;
   --tool-row-gap: 0rem;
   --disclosure-caret-rest: 0;
-  --dt-line-height: 1.6;
+  --dt-line-height: 1.65;
   --message-text-indent: 0rem;
   --thread-last-message-clearance: 2rem;
   --thread-viewport-height: 100%;
-  background: var(--aino-landing-surface);
-  font-family: var(--aino-landing-font);
+}
+
+[data-chat-surface]:is([data-home-layout], [data-conversation-layout]) [data-slot='aui_thread-content'] {
+  width: calc(100% - 2rem);
+  padding-inline: 0;
+}
+
+[data-chat-surface][data-home-layout] [data-slot='aui_empty-placeholder'] {
+  padding-top: 0;
+}
+
+[data-chat-surface][data-home-layout] [data-slot='composer-dock'] {
+  top: var(--aino-home-composer-top, clamp(16rem, 34vh, 20rem));
+  bottom: auto;
+  width: calc(min(var(--composer-width), calc(100% - 2rem)) + 10px);
+}
+
+[data-chat-surface][data-conversation-layout] [data-slot='aui_thread-content'] {
+  padding-top: 2rem;
 }
 
 [data-chat-surface][data-conversation-layout] [data-slot='composer-bounds'] {
   z-index: 0;
-}
-
-[data-chat-surface][data-conversation-layout] [data-slot='aui_thread-content'] {
-  width: calc(100% - 2rem);
-  padding-top: 2rem;
-  padding-inline: 0;
 }
 
 [data-chat-surface][data-conversation-layout] [data-slot='composer-dock']:not([data-popped-out]) {
@@ -289,8 +355,9 @@
   translate: none;
 }
 
-[data-chat-surface][data-conversation-layout] [data-slot='composer-root']:not([data-popped-out]) {
-  --composer-fill: color-mix(in srgb, var(--ui-bg-elevated) 96%, var(--ui-chat-surface-background));
+[data-chat-surface]:is([data-home-layout], [data-conversation-layout])
+  [data-slot='composer-root']:not([data-popped-out]) {
+  --composer-fill: var(--ui-bg-elevated);
   border-radius: var(--aino-radius-composer);
 }
 
@@ -300,39 +367,112 @@
   display: none;
 }
 
-[data-chat-surface][data-conversation-layout] [data-slot='composer-surface'] {
-  min-height: 6.75rem;
+[data-chat-surface]:is([data-home-layout], [data-conversation-layout]) [data-slot='composer-surface'] {
+  min-height: var(--aino-composer-min-height);
+  grid-template-rows: 1fr auto;
+  border-radius: var(--aino-radius-composer);
   border-color: var(--aino-landing-composer-stroke) !important;
+  background: var(--ui-bg-elevated);
   box-shadow: var(--shadow-aino-landing-composer);
 }
 
-[data-chat-surface][data-conversation-layout] [data-slot='composer-fade'] {
-  min-height: 0;
-  height: 100%;
-  gap: 0;
-  padding: 0.75rem 1rem;
+[data-chat-surface]:is([data-home-layout], [data-conversation-layout]) [data-slot='composer-surface'] > .status-drawer {
+  grid-row: 2;
+  grid-column: 1;
 }
 
-[data-chat-surface][data-conversation-layout] [data-slot='composer-layout'] {
+[data-chat-surface]:is([data-home-layout], [data-conversation-layout]) .coding-status-bar {
+  min-height: 2rem;
+  padding: 0.25rem 1rem;
+  border-top: 1px solid var(--ui-stroke-tertiary);
+  border-bottom: 0;
+  border-radius: 0;
+  background: var(--ui-bg-quinary);
+  color: var(--ui-text-tertiary);
+}
+
+[data-chat-surface]:is([data-home-layout], [data-conversation-layout])
+  .coding-status-bar
+  [data-slot='dropdown-menu-trigger']
+  .truncate {
+  font-size: var(--aino-text-caption);
+}
+
+/* The existing grip controls both this project drawer and the task stack. */
+[data-chat-surface][data-home-layout] [data-slot='composer-surface'] {
+  grid-template-rows: auto minmax(0, 1fr);
+}
+
+[data-chat-surface][data-home-layout] [data-slot='composer-surface'] > .status-drawer {
+  grid-row: 1;
+}
+
+[data-chat-surface][data-home-layout] [data-slot='composer-surface'] > [data-slot='composer-fade'] {
+  grid-row: 2;
+}
+
+[data-chat-surface][data-home-layout] .coding-status-bar {
+  min-height: 2.5rem;
+  padding: 0.25rem 0.9375rem;
+  border-top: 0;
+  border-bottom: 1px solid var(--ui-stroke-tertiary);
+  background: color-mix(in srgb, var(--ui-bg-quaternary) 45%, var(--ui-bg-elevated));
+}
+
+[data-chat-surface][data-home-layout] .coding-status-bar [data-slot='dropdown-menu-trigger'] {
+  min-height: 1.75rem;
+}
+
+[data-chat-surface][data-home-layout] .coding-status-bar [data-slot='dropdown-menu-trigger'] .truncate {
+  font-size: 0.75rem;
+}
+
+[data-chat-surface][data-home-layout] [data-slot='composer-approval-mode'] {
+  font-size: 0.6875rem;
+}
+
+[data-chat-surface]:is([data-home-layout], [data-conversation-layout]) [data-slot='composer-fade'] {
+  grid-row: 1;
+  grid-column: 1;
+  min-height: 0;
+  gap: 0.375rem;
+  padding: var(--aino-composer-padding);
+}
+
+[data-chat-surface]:is([data-home-layout], [data-conversation-layout]) [data-slot='composer-layout'] {
+  min-height: 0;
   flex: 1 1 auto;
-  min-height: 0;
   grid-template-columns: auto minmax(0, 1fr);
-  grid-template-rows: minmax(var(--composer-input-min-height), 1fr) 1.75rem;
-  grid-template-areas:
-    'input input'
-    'menu controls';
-  column-gap: 0.75rem;
-  row-gap: 0.25rem;
+  grid-template-rows: minmax(var(--composer-input-min-height), auto) var(--composer-control-size);
+  grid-template-areas: 'input input' 'menu controls';
+  column-gap: 0.375rem;
+  row-gap: 0.375rem;
 }
 
-[data-chat-surface][data-conversation-layout] [data-slot='composer-input-cell'],
-[data-chat-surface][data-conversation-layout] [data-slot='composer-input-cell'] > div {
-  height: 100%;
+[data-chat-surface]:is([data-home-layout], [data-conversation-layout]) [data-slot='composer-input-cell'],
+[data-chat-surface]:is([data-home-layout], [data-conversation-layout]) [data-slot='composer-input-cell'] > div {
+  min-height: 0;
 }
 
-[data-chat-surface][data-conversation-layout] [data-slot='composer-rich-input'] {
+[data-chat-surface]:is([data-home-layout], [data-conversation-layout]) [data-slot='composer-leading-controls'],
+[data-chat-surface]:is([data-home-layout], [data-conversation-layout]) [data-slot='composer-trailing-controls'] {
+  align-self: end;
+  transform: none;
+  translate: none;
+}
+
+[data-chat-surface]:is([data-home-layout], [data-conversation-layout]) [data-slot='composer-context-menu'] {
+  border-radius: 9999px;
+  background: var(--aino-landing-control);
+}
+
+[data-chat-surface]:is([data-home-layout], [data-conversation-layout]) [data-slot='composer-context-usage'] {
+  width: var(--composer-control-size);
+  height: var(--composer-control-size);
+}
+
+[data-chat-surface]:is([data-home-layout], [data-conversation-layout]) [data-slot='composer-rich-input'] {
   width: 100%;
-  height: 100%;
   min-height: var(--composer-input-min-height);
   padding: 0.125rem 0.25rem;
   color: var(--aino-landing-primary);
@@ -340,18 +480,26 @@
   line-height: var(--aino-line-height);
 }
 
-[data-chat-surface][data-conversation-layout] [data-slot='composer-leading-controls'] {
-  align-self: end;
-  translate: none;
+[data-chat-surface][data-home-layout] [data-slot='composer-rich-input']:is(:empty, [data-empty])::before {
+  color: var(--aino-landing-placeholder) !important;
 }
 
-[data-chat-surface][data-conversation-layout] [data-slot='composer-context-menu'] {
-  border-radius: 9999px;
-  background: var(--aino-landing-control);
+.aino-composer-controls,
+.aino-composer-model-controls,
+.aino-composer-voice-controls {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: var(--composer-control-gap);
 }
 
-[data-chat-surface][data-conversation-layout] [data-slot='composer-trailing-controls'] {
-  align-self: end;
+.aino-composer-controls,
+.aino-composer-model-controls {
+  flex-shrink: 1;
+}
+
+.aino-composer-voice-controls {
+  flex-shrink: 0;
 }
 
 /* Keep the message row full-width so checkpoint/edit behaviour is unchanged;
@@ -430,9 +578,29 @@
   font-weight: 400;
 }
 
+/* Reply headings mark sections within a conversation, with ratios that also
+   follow the reader's saved chat scale. Page-title sizing belongs to pages. */
+[data-chat-surface][data-conversation-layout] .aui-md :is(h1, h2, h3, h4) {
+  font-weight: 600;
+  line-height: 1.5;
+  letter-spacing: normal;
+}
+
+[data-chat-surface][data-conversation-layout] .aui-md h1 {
+  font-size: 1.285714em;
+}
+
+[data-chat-surface][data-conversation-layout] .aui-md h2 {
+  font-size: 1.142857em;
+}
+
+[data-chat-surface][data-conversation-layout] .aui-md :is(h3, h4) {
+  font-size: 1em;
+}
+
 [data-chat-surface][data-conversation-layout] .aui-md th {
   color: var(--ui-text-secondary);
-  font-size: 0.8125rem;
+  font-size: inherit;
   font-weight: 500;
 }
 
@@ -448,7 +616,7 @@
 
 [data-chat-surface][data-conversation-layout] .aui-md .aui-md-table :is(th, td) {
   padding: 0.375rem 0.875rem;
-  line-height: 1.375rem;
+  line-height: var(--dt-line-height);
   font-variant-numeric: tabular-nums;
 }
 
@@ -487,8 +655,8 @@
 }
 
 [data-chat-surface][data-conversation-layout] [data-slot='code-card-body'] {
-  font-size: 0.75rem;
-  line-height: 1.25rem;
+  font-size: calc(var(--conversation-text-font-size) * 13 / 14);
+  line-height: 1.6;
 }
 
 [data-chat-surface][data-conversation-layout] [data-slot='code-card-body'] pre {
@@ -592,7 +760,7 @@
   border-left: 1px solid var(--ui-stroke-tertiary);
   padding: 0.125rem 0 0.25rem calc(var(--conversation-glyph-gap) + var(--conversation-glyph-cell) / 2);
   color: var(--ui-text-secondary);
-  font-size: 0.8125rem;
+  font-size: calc(var(--conversation-text-font-size) * 13 / 14);
   line-height: 1.65;
 }
 
@@ -657,29 +825,33 @@
   }
 }
 
-@media (max-height: 48rem) {
+@media (max-height: 42rem) {
   [data-chat-surface][data-home-layout] {
-    --aino-home-composer-height: 8.5rem;
+    --aino-home-composer-height: 10.5rem;
+    --aino-composer-padding: 0.75rem 1rem 0.625rem;
+    --composer-input-min-height: 3rem;
   }
 
   .aino-home-composer-slot {
     margin-top: 1.5rem;
   }
 
-  .aino-home-action {
-    min-height: 4rem;
+  .aino-home-recommendations {
+    margin-top: 1.25rem;
   }
 }
 
-@container (max-width: 48rem) {
+@container (max-width: 38rem) {
+  .aino-home-composer-hints {
+    flex-wrap: wrap;
+  }
+
   .aino-home-actions {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
-}
 
-@media (max-width: 38rem) {
-  .aino-home-content {
-    width: min(100%, calc(100vw - 2rem));
+  [data-slot='aui_intro'].aino-home-layout .aino-home-subtitle {
+    max-width: 28rem;
   }
 }
 
@@ -687,4 +859,116 @@
   .aino-home-actions {
     grid-template-columns: minmax(0, 1fr);
   }
+
+  .aino-home-title-row {
+    gap: 0.5rem;
+  }
+
+  .aino-home-brand {
+    width: 1.75rem;
+    height: 1.75rem;
+  }
+
+  .aino-home-title {
+    font-size: 1.375rem;
+  }
+}
+
+/* Session index follows the same rail composition, including portaled row actions. */
+[data-tour='sessions-sidebar'] [data-sidebar-section-header] {
+  padding-inline: 0.625rem;
+  color: var(--aino-landing-secondary);
+}
+
+[data-tour='sessions-sidebar'] [data-sidebar-section-header] > button:hover,
+[data-tour='sessions-sidebar'] [data-sidebar-section-header] > button:focus-visible {
+  background: var(--ui-row-hover-background);
+}
+
+[data-tour='sessions-sidebar'] [data-sidebar-section-label] {
+  gap: 0;
+  padding-left: 0;
+  color: var(--aino-landing-secondary);
+  font-size: var(--aino-text-caption);
+  font-weight: 500;
+  line-height: 1.25rem;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+[data-tour='sessions-sidebar'] [data-sidebar-section-label] > .dither {
+  display: none;
+}
+
+[data-tour='sessions-sidebar'] [data-sidebar-section-content] {
+  gap: 0.1875rem;
+}
+
+[data-tour='sessions-sidebar'] [data-sidebar-pinned-hint] {
+  min-height: 0;
+  padding-block: 0;
+  padding-right: 0.5rem;
+  color: var(--aino-landing-muted);
+  font-size: var(--aino-text-caption);
+  line-height: 1.35;
+}
+
+[data-tour='sessions-sidebar'] [data-sidebar-pinned-hint] > span:first-child {
+  color: var(--aino-landing-muted);
+}
+
+[data-tour='sessions-sidebar'] [data-sidebar-session-row] {
+  border-radius: var(--aino-radius-row);
+}
+
+[data-tour='sessions-sidebar'] [data-sidebar-session-row]:hover {
+  background: var(--aino-landing-control);
+}
+
+[data-tour='sessions-sidebar'] [data-sidebar-session-row][data-selected='true'] {
+  background: var(--aino-landing-session-active);
+  box-shadow: none;
+}
+
+[data-tour='sessions-sidebar'] [data-sidebar-session-row][data-selected='true'] .aino-sidebar-session-label {
+  color: var(--aino-landing-primary);
+  font-weight: 500;
+}
+
+[data-tour='sessions-sidebar'] [data-sidebar-session-row] .aino-sidebar-session-label {
+  color: var(--aino-landing-primary);
+  font-size: 0.75rem;
+}
+
+[data-tour='sessions-sidebar'] [data-sidebar-session-row] [data-sidebar-session-actions] {
+  color: var(--aino-landing-muted);
+  font-size: var(--aino-text-caption);
+}
+
+[data-tour='sessions-sidebar'] [data-sidebar-session-row] [data-sidebar-session-lead],
+[data-tour='sessions-sidebar'] [data-sidebar-session-row] [data-reorder-handle] {
+  color: var(--aino-landing-muted);
+}
+
+[data-tour='sessions-sidebar']
+  [data-sidebar-session-row][data-selected='true']
+  :is([data-sidebar-session-lead], [data-reorder-handle]) {
+  color: var(--aino-landing-accent);
+}
+
+[data-tour='sessions-sidebar'] [data-sidebar-date-divider] {
+  color: var(--aino-landing-muted);
+}
+
+[data-tour='sessions-sidebar'] [data-sidebar-date-divider] > span:first-child {
+  color: var(--aino-landing-muted);
+  font-size: var(--aino-text-caption);
+  font-weight: 600;
+  line-height: 1rem;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+[data-tour='sessions-sidebar'] [data-sidebar-date-divider] > span[aria-hidden='true'] {
+  background: var(--aino-landing-stroke);
 }

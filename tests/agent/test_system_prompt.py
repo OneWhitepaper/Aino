@@ -476,6 +476,8 @@ def test_stable_tier_is_identical_across_homes(tmp_path, monkeypatch):
 
 
 def test_build_system_prompt_records_stable_prefix():
+    from agent.system_prompt import invalidate_system_prompt
+
     agent = _make_agent()
     with (
         patch("agent.prompt_builder.load_soul_md", return_value=""),
@@ -486,6 +488,11 @@ def test_build_system_prompt_records_stable_prefix():
 
     assert prompt.startswith(agent._cached_system_prompt_static)
     assert prompt[len(agent._cached_system_prompt_static):].startswith("\n\ncontext")
+    assert prompt == "\n\n".join(part for part in agent._cached_system_prompt_parts.values() if part)
+    agent._cached_system_prompt = prompt
+    invalidate_system_prompt(agent)
+    assert agent._cached_system_prompt_parts is None
+    assert agent._cached_system_prompt is None
 
 
 def test_coding_prompt_orders_shared_context_before_workspace(monkeypatch):

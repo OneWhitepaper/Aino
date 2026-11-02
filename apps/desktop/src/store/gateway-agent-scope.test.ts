@@ -107,7 +107,7 @@ describe('registry-agent scope eviction (activeGateway must never silently hit t
     installDesktop({ getConnection: vi.fn(async () => agentConn), getConnectionFor: undefined as never })
 
     await expect(action()).rejects.toThrow(translateNow('settings.gateway.registryConnectionsUnsupported'))
-    await expect(action()).rejects.toThrow('此桌面版本无法连接已注册的网关。请更新 Aino。')
+    await expect(action()).rejects.toThrow('此桌面版本无法连接已添加的运行服务。请更新 Aino。')
   })
 
   it('activates the agent socket, not the primary, for a registry scope', async () => {

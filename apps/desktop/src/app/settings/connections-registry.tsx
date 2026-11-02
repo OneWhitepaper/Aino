@@ -213,8 +213,8 @@ function scrollableAncestor(element: HTMLElement): HTMLElement | null {
 
 /**
  * The connections registry section of Settings → Gateways: manage the named
- * agent sources (local runtime + any number of remote gateways / Hermes Cloud
- * instances / SSH hosts). Storage-level management — the active/primary
+ * agent sources (local runtime + remote gateways / legacy hosted connections
+ * / SSH hosts). Storage-level management — the active/primary
  * switchover UX is the connection-mode controls above this section.
  */
 export function ConnectionsRegistrySection() {
@@ -698,11 +698,11 @@ export function ConnectionsRegistrySection() {
 
       {editor ? (
         <div className="mt-4 space-y-3 rounded-lg border border-border/60 p-4">
-          <div className="grid grid-cols-2 gap-2 @2xl:grid-cols-4">
+          <div className="grid grid-cols-2 gap-2 @2xl:grid-cols-3">
             {/* Kind is fixed once created (buttons disable on edit). On create
-                every kind is offered; Local is disabled while the managed
-                local entry exists (the registry holds at most one). */}
-            {(editor.id ? ([editor.kind] as const) : (['local', 'cloud', 'remote', 'ssh'] as const)).map(kind => (
+                all supported kinds are offered; Local is disabled while the
+                managed local entry exists (the registry holds at most one). */}
+            {(editor.id ? ([editor.kind] as const) : (['local', 'remote', 'ssh'] as const)).map(kind => (
               <Button
                 disabled={Boolean(editor.id) || (kind === 'local' && hasLocal)}
                 key={kind}
@@ -725,10 +725,6 @@ export function ConnectionsRegistrySection() {
           </div>
           <p className="text-xs text-muted-foreground">{kindMeta[editor.kind].desc}</p>
           {!editor.id && hasLocal ? <p className="text-xs text-muted-foreground">{s.localAddHint}</p> : null}
-          {!editor.id && editor.kind === 'cloud' ? (
-            <p className="text-xs text-muted-foreground">{s.cloudAddHint}</p>
-          ) : null}
-
           <ListRow
             action={
               <Input

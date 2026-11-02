@@ -1,7 +1,13 @@
+import { mergeTranslations } from '@hermes/shared/i18n'
+
 // health: allow FILE_LINES -- locale data: translated copy for the usage-window plan UI (allowance gauges, Large/Free tags, the limit card), one key per string
 import { defineFieldCopy } from '@/app/settings/field-copy'
 
+import { accountPage } from './account-page'
+import { appearancePage } from './appearance-page'
+import { configPagesFor } from './config-pages'
 import { defineLocale, type TranslationOverrides } from './define-locale'
+import { homeGuidance } from './home-guidance'
 import { introJa } from './intro-ja'
 import { jaBoot } from './ja_boot'
 import { jaCatalog, jaSkillDeepLink } from './ja_catalog'
@@ -21,8 +27,257 @@ import { jaSharedMetrics } from './ja_shared_metrics'
 import { jaThemePicker } from './ja_theme_picker'
 import { jaUpdateChannel } from './ja_update_channel'
 import { messagingDirectory } from './messaging-directory'
+import { runtimeFeatureCopy } from './runtime-feature-copy'
+import { toolPanel } from './tool-panel'
+import { workspacePage } from './workspace-page'
 
-export const jaOverrides = {
+const configPageFieldLabels: Record<string, string> = defineFieldCopy({
+  model: 'デフォルトモデル',
+  modelContextLength: 'メインモデルのコンテキストウィンドウ（token）',
+  fallbackProviders: 'フォールバックモデル',
+  toolsets: '有効なツールセット',
+  timezone: 'タイムゾーン',
+  display: {
+    personality: '人格',
+    showReasoning: '推論ブロック'
+  },
+  desktop: {
+    repoScanEnabled: 'リポジトリの自動検出',
+    repoScanRoots: 'リポジトリの検索ルート',
+    repoScanExcludePaths: '除外するリポジトリパス'
+  },
+  agent: {
+    maxTurns: '最大エージェントステップ',
+    imageInputMode: '画像添付',
+    apiMaxRetries: 'API 再試行回数',
+    serviceTier: 'サービス階層',
+    toolUseEnforcement: 'ツール使用の強制'
+  },
+  terminal: {
+    cwd: '作業ディレクトリ',
+    backend: '実行バックエンド',
+    timeout: 'コマンドタイムアウト',
+    persistentShell: '永続シェル',
+    envPassthrough: '環境変数の引き継ぎ',
+    dockerImage: 'Docker イメージ',
+    singularityImage: 'Singularity イメージ',
+    modalImage: 'Modal イメージ',
+    daytonaImage: 'Daytona イメージ'
+  },
+  fileReadMaxChars: 'ファイル読み取り上限',
+  toolOutput: {
+    maxBytes: 'ターミナル出力上限',
+    maxLines: 'ファイルページ上限',
+    maxLineLength: '行長上限'
+  },
+  codeExecution: {
+    mode: 'コード実行モード'
+  },
+  approvals: {
+    mode: '承認モード',
+    timeout: '承認タイムアウト',
+    mcpReloadConfirm: 'MCP 再読み込みの確認'
+  },
+  commandAllowlist: 'コマンド許可リスト',
+  security: {
+    redactSecrets: 'シークレットを伏せる',
+    allowPrivateUrls: 'プライベート URL を許可'
+  },
+  browser: {
+    allowPrivateUrls: 'ブラウザーのプライベート URL',
+    autoLocalForPrivateUrls: 'プライベート URL にはローカルブラウザーを使用'
+  },
+  checkpoints: {
+    enabled: 'ファイルチェックポイント',
+    maxSnapshots: 'チェックポイント上限'
+  },
+  voice: {
+    maxRecordingSeconds: '最大録音時間',
+    autoTts: '応答を読み上げる'
+  },
+  stt: {
+    enabled: '音声認識',
+    provider: '音声認識プロバイダー',
+    local: {
+      model: 'ローカル文字起こしモデル',
+      language: '文字起こし言語'
+    },
+    openai: {
+      model: 'OpenAI STT モデル'
+    },
+    groq: {
+      model: 'Groq STT モデル'
+    },
+    mistral: {
+      model: 'Mistral STT モデル'
+    },
+    elevenlabs: {
+      modelId: 'ElevenLabs STT モデル',
+      languageCode: 'ElevenLabs 言語',
+      tagAudioEvents: '音声イベントをタグ付け',
+      diarize: '話者分離'
+    }
+  },
+  tts: {
+    provider: '音声合成プロバイダー',
+    edge: {
+      voice: 'Edge 音声'
+    },
+    openai: {
+      model: 'OpenAI TTS モデル',
+      voice: 'OpenAI 音声'
+    },
+    elevenlabs: {
+      voiceId: 'ElevenLabs 音声',
+      modelId: 'ElevenLabs モデル'
+    },
+    xai: {
+      voiceId: 'xAI (Grok) 音声',
+      language: 'xAI 言語',
+      speed: '再生速度',
+      autoSpeechTags: '自動音声タグ',
+      optimizeStreamingLatency: 'ストリーミング遅延最適化',
+      sampleRate: 'サンプルレート',
+      bitRate: 'ビットレート'
+    },
+    minimax: {
+      model: 'MiniMax TTS モデル',
+      voiceId: 'MiniMax 音声'
+    },
+    mistral: {
+      model: 'Mistral TTS モデル',
+      voiceId: 'Mistral 音声'
+    },
+    gemini: {
+      model: 'Gemini TTS モデル',
+      voice: 'Gemini 音声'
+    },
+    neutts: {
+      model: 'NeuTTS モデル',
+      device: 'NeuTTS デバイス'
+    },
+    kittentts: {
+      model: 'KittenTTS モデル',
+      voice: 'KittenTTS 音声'
+    },
+    piper: {
+      voice: 'Piper 音声'
+    }
+  },
+  memory: {
+    memoryEnabled: '永続メモリ',
+    userProfileEnabled: 'ユーザープロファイル',
+    memoryCharLimit: 'メモリ予算',
+    userCharLimit: 'プロファイル予算',
+    provider: 'メモリプロバイダー'
+  },
+  context: {
+    engine: 'コンテキストエンジン'
+  },
+  compression: {
+    enabled: '自動圧縮',
+    threshold: '圧縮しきい値',
+    codexGpt55Autoraise: 'Codex 圧縮の自動引き上げ',
+    targetRatio: '圧縮目標',
+    protectLastN: '保護する直近メッセージ'
+  },
+  auxiliary: {
+    compression: {
+      timeout: '圧縮モデルのタイムアウト（秒）'
+    }
+  },
+  delegation: {
+    model: 'サブエージェントモデル',
+    provider: 'サブエージェントプロバイダー',
+    maxIterations: 'サブエージェントターン上限',
+    maxConcurrentChildren: '並列サブエージェント',
+    childTimeoutSeconds: 'サブエージェントタイムアウト',
+    reasoningEffort: 'サブエージェント推論強度'
+  },
+  updates: {
+    nonInteractiveLocalChanges: 'アプリ内更新時のローカル変更'
+  }
+})
+
+const configPageFieldDescriptions: Record<string, string> = defineFieldCopy({
+  model: 'コンポーザーで別のモデルを選ばない限り、新しいチャットで使用されます。',
+  modelContextLength:
+    'メインのチャットモデルのみ、検出されたコンテキストウィンドウを上書きします（トークン数）。0 のままにすると、選択したモデルから検出された値を使用します。補助モデル/MoA モデルには影響しません。',
+  fallbackProviders: 'デフォルトモデルが失敗したときに試す provider:model 形式のバックアップです。',
+  display: {
+    personality: '新しいセッションのデフォルトのアシスタントスタイルです。',
+    showReasoning: 'バックエンドが推論内容を提供したときに表示します。'
+  },
+  desktop: {
+    repoScanEnabled: 'ローカルフォルダを検索して Git リポジトリをプロジェクトに表示します。',
+    repoScanRoots:
+      '検索するフォルダです。空の場合はディスクを検索しません。チャットに関連付けたプロジェクトは引き続き表示されます。',
+    repoScanExcludePaths: 'リポジトリ検出時に除外するフォルダとその配下です。'
+  },
+  timezone:
+    'Hermes がローカル時刻のコンテキストを必要とするときに使用します。空欄ならシステムのタイムゾーンを使います。',
+  agent: {
+    imageInputMode: '画像添付をモデルへ送る方法を制御します。',
+    maxTurns: 'Hermes が 1 回の実行を停止するまでのツール呼び出しターン上限です。'
+  },
+  terminal: {
+    cwd: 'ツールとターミナル作業のデフォルトプロジェクトフォルダーです。',
+    persistentShell:
+      'SSH のみ：コマンドでエクスポートした環境変数を保持します。オフでは各コマンドがログイン環境を使用します。作業ディレクトリは常に保持されます。',
+    envPassthrough:
+      'ツールに渡す環境変数の名前を入力します。値は入力しないでください。変更後は実行サービスを再起動し、既存の実行環境を作り直してください。'
+  },
+  codeExecution: {
+    mode: 'Project はセッションのフォルダとプロジェクトの Python、strict は一時フォルダと実行環境の Python を使用します。ファイルのアクセス権は変わりません。'
+  },
+  fileReadMaxChars: 'Hermes が 1 回のファイル読み取りで取得できる最大文字数です。',
+  approvals: {
+    mode: '明示的な承認が必要なコマンドを Hermes がどう扱うかを設定します。',
+    timeout: '承認プロンプトがタイムアウトするまで待つ時間です。'
+  },
+  security: {
+    redactSecrets: '検出したシークレットを、可能な限りモデルから見える内容から隠します。'
+  },
+  checkpoints: {
+    enabled: 'ファイル編集前にロールバック用スナップショットを作成します。'
+  },
+  memory: {
+    memoryEnabled: '将来のセッションに役立つ永続メモリを保存します。',
+    userProfileEnabled: 'ユーザーの好みをまとめた簡潔なプロファイルを維持します。'
+  },
+  context: {
+    engine: '長い会話がコンテキスト上限に近づいたときの管理戦略です。'
+  },
+  compression: {
+    enabled: '会話が大きくなったとき、古いコンテキストを要約します。',
+    codexGpt55Autoraise: '対応する ChatGPT Codex OAuth モデルの圧縮しきい値を 85% に引き上げます。'
+  },
+  auxiliary: {
+    compression: {
+      timeout: '補助圧縮モデルの呼び出しごとに待機する秒数（既定 120）。遅いローカルモデルでは値を上げてください。'
+    }
+  },
+  voice: {
+    autoTts: 'アシスタントの応答を自動で読み上げます。'
+  },
+  stt: {
+    enabled: 'ローカルまたはプロバイダーによる音声文字起こしを有効にします。',
+    elevenlabs: {
+      languageCode: '任意の ISO-639-3 言語コードです。空欄なら ElevenLabs が自動検出します。'
+    }
+  },
+  updates: {
+    nonInteractiveLocalChanges:
+      'アプリから Hermes 自身を更新するとき、ローカルのソース変更を保持するか破棄するかを選びます。ターミナル更新では常に確認されます。'
+  }
+})
+
+const jaBaseOverrides = {
+  appearancePage: appearancePage.ja,
+  home: homeGuidance.ja,
+  toolPanel: toolPanel['ja'],
+  workspacePage: workspacePage.ja,
+  accountPage: accountPage['ja'],
   connectorOffer: {
     heading: '接続したアプリを保持',
     body: '無料の Nous アカウントにサインインすると、Gmail や Slack などの接続したアプリをアカウントに保存できます。'
@@ -243,6 +498,7 @@ export const jaOverrides = {
   },
 
   settings: {
+    configPages: configPagesFor('ja', configPageFieldLabels, configPageFieldDescriptions),
     // Window plans (Nous subscription with included usage). Other billing strings: overlay-gaps.json.
     billing: {
       keepGoingOnCredits: {
@@ -366,7 +622,7 @@ export const jaOverrides = {
     resetFailed: 'リセットに失敗しました',
     pluginPages: jaPluginSettings.pluginPages,
     nav: {
-      providers: 'プロバイダー',
+      providers: 'モデルサービス',
       providerAccounts: 'アカウント',
       providerApiKeys: 'API キー',
       providerCustomEndpoints: 'カスタムエンドポイント',
@@ -375,6 +631,7 @@ export const jaOverrides = {
       apiKeys: 'ツールとキー',
       keybinds: 'キーボードショートカット',
       keysTools: 'ツール',
+      keysCredentials: 'キー',
       keysSettings: '設定',
       mcp: 'MCP',
       archivedChats: 'アーカイブ済みチャット',
@@ -650,242 +907,8 @@ export const jaOverrides = {
         turnOffFailed: 'ペットをオフにできませんでした。'
       }
     },
-    fieldLabels: defineFieldCopy({
-      model: 'デフォルトモデル',
-      modelContextLength:
-        'メインのチャットモデルのみ、検出されたコンテキストウィンドウを上書きします（トークン数）。0 のままにすると、選択したモデルから検出された値を使用します。補助モデル/MoA モデルには影響しません。',
-      fallbackProviders: 'フォールバックモデル',
-      toolsets: '有効なツールセット',
-      timezone: 'タイムゾーン',
-      display: {
-        personality: '人格',
-        showReasoning: '推論ブロック'
-      },
-      desktop: {
-        repoScanEnabled: 'リポジトリの自動検出',
-        repoScanRoots: 'リポジトリの検索ルート',
-        repoScanExcludePaths: '除外するリポジトリパス'
-      },
-      agent: {
-        maxTurns: '最大エージェントステップ',
-        imageInputMode: '画像添付',
-        apiMaxRetries: 'API 再試行回数',
-        serviceTier: 'サービス階層',
-        toolUseEnforcement: 'ツール使用の強制'
-      },
-      terminal: {
-        cwd: '作業ディレクトリ',
-        backend: '実行バックエンド',
-        timeout: 'コマンドタイムアウト',
-        persistentShell: '永続シェル',
-        envPassthrough: '環境変数の引き継ぎ',
-        dockerImage: 'Docker イメージ',
-        singularityImage: 'Singularity イメージ',
-        modalImage: 'Modal イメージ',
-        daytonaImage: 'Daytona イメージ'
-      },
-      fileReadMaxChars: 'ファイル読み取り上限',
-      toolOutput: {
-        maxBytes: 'ターミナル出力上限',
-        maxLines: 'ファイルページ上限',
-        maxLineLength: '行長上限'
-      },
-      codeExecution: {
-        mode: 'コード実行モード'
-      },
-      approvals: {
-        mode: '承認モード',
-        timeout: '承認タイムアウト',
-        mcpReloadConfirm: 'MCP 再読み込みの確認'
-      },
-      commandAllowlist: 'コマンド許可リスト',
-      security: {
-        redactSecrets: 'シークレットを伏せる',
-        allowPrivateUrls: 'プライベート URL を許可'
-      },
-      browser: {
-        allowPrivateUrls: 'ブラウザーのプライベート URL',
-        autoLocalForPrivateUrls: 'プライベート URL にはローカルブラウザーを使用'
-      },
-      checkpoints: {
-        enabled: 'ファイルチェックポイント',
-        maxSnapshots: 'チェックポイント上限'
-      },
-      voice: {
-        maxRecordingSeconds: '最大録音時間',
-        autoTts: '応答を読み上げる'
-      },
-      stt: {
-        enabled: '音声認識',
-        provider: '音声認識プロバイダー',
-        local: {
-          model: 'ローカル文字起こしモデル',
-          language: '文字起こし言語'
-        },
-        openai: {
-          model: 'OpenAI STT モデル'
-        },
-        groq: {
-          model: 'Groq STT モデル'
-        },
-        mistral: {
-          model: 'Mistral STT モデル'
-        },
-        elevenlabs: {
-          modelId: 'ElevenLabs STT モデル',
-          languageCode: 'ElevenLabs 言語',
-          tagAudioEvents: '音声イベントをタグ付け',
-          diarize: '話者分離'
-        }
-      },
-      tts: {
-        provider: '音声合成プロバイダー',
-        edge: {
-          voice: 'Edge 音声'
-        },
-        openai: {
-          model: 'OpenAI TTS モデル',
-          voice: 'OpenAI 音声'
-        },
-        elevenlabs: {
-          voiceId: 'ElevenLabs 音声',
-          modelId: 'ElevenLabs モデル'
-        },
-        xai: {
-          voiceId: 'xAI (Grok) 音声',
-          language: 'xAI 言語',
-          speed: '再生速度',
-          autoSpeechTags: '自動音声タグ',
-          optimizeStreamingLatency: 'ストリーミング遅延最適化',
-          sampleRate: 'サンプルレート',
-          bitRate: 'ビットレート'
-        },
-        minimax: {
-          model: 'MiniMax TTS モデル',
-          voiceId: 'MiniMax 音声'
-        },
-        mistral: {
-          model: 'Mistral TTS モデル',
-          voiceId: 'Mistral 音声'
-        },
-        gemini: {
-          model: 'Gemini TTS モデル',
-          voice: 'Gemini 音声'
-        },
-        neutts: {
-          model: 'NeuTTS モデル',
-          device: 'NeuTTS デバイス'
-        },
-        kittentts: {
-          model: 'KittenTTS モデル',
-          voice: 'KittenTTS 音声'
-        },
-        piper: {
-          voice: 'Piper 音声'
-        }
-      },
-      memory: {
-        memoryEnabled: '永続メモリ',
-        userProfileEnabled: 'ユーザープロファイル',
-        memoryCharLimit: 'メモリ予算',
-        userCharLimit: 'プロファイル予算',
-        provider: 'メモリプロバイダー'
-      },
-      context: {
-        engine: 'コンテキストエンジン'
-      },
-      compression: {
-        enabled: '自動圧縮',
-        threshold: '圧縮しきい値',
-        codexGpt55Autoraise: 'Codex 圧縮の自動引き上げ',
-        targetRatio: '圧縮目標',
-        protectLastN: '保護する直近メッセージ'
-      },
-      auxiliary: {
-        compression: {
-          timeout: '圧縮モデルのタイムアウト（秒）'
-        }
-      },
-      delegation: {
-        model: 'サブエージェントモデル',
-        provider: 'サブエージェントプロバイダー',
-        maxIterations: 'サブエージェントターン上限',
-        maxConcurrentChildren: '並列サブエージェント',
-        childTimeoutSeconds: 'サブエージェントタイムアウト',
-        reasoningEffort: 'サブエージェント推論強度'
-      },
-      updates: {
-        nonInteractiveLocalChanges: 'アプリ内更新時のローカル変更'
-      }
-    }),
-    fieldDescriptions: defineFieldCopy({
-      model: 'コンポーザーで別のモデルを選ばない限り、新しいチャットで使用されます。',
-      modelContextLength: '0 のままにすると、選択したモデルから検出されたコンテキストウィンドウを使用します。',
-      fallbackProviders: 'デフォルトモデルが失敗したときに試す provider:model 形式のバックアップです。',
-      display: {
-        personality: '新しいセッションのデフォルトのアシスタントスタイルです。',
-        showReasoning: 'バックエンドが推論内容を提供したときに表示します。'
-      },
-      desktop: {
-        repoScanEnabled: 'ローカルフォルダを検索して Git リポジトリをプロジェクトに表示します。',
-        repoScanRoots: '検索するフォルダです。空の場合はホームディレクトリを検索します。',
-        repoScanExcludePaths: 'リポジトリ検出時に除外するフォルダとその配下です。'
-      },
-      timezone:
-        'Hermes がローカル時刻のコンテキストを必要とするときに使用します。空欄ならシステムのタイムゾーンを使います。',
-      agent: {
-        imageInputMode: '画像添付をモデルへ送る方法を制御します。',
-        maxTurns: 'Hermes が 1 回の実行を停止するまでのツール呼び出しターン上限です。'
-      },
-      terminal: {
-        cwd: 'ツールとターミナル作業のデフォルトプロジェクトフォルダーです。',
-        persistentShell: 'バックエンドが対応している場合、コマンド間でシェル状態を保持します。',
-        envPassthrough: 'ツール実行へ渡す環境変数です。'
-      },
-      codeExecution: {
-        mode: 'コード実行を現在のプロジェクトにどれだけ厳密に制限するかを設定します。'
-      },
-      fileReadMaxChars: 'Hermes が 1 回のファイル読み取りで取得できる最大文字数です。',
-      approvals: {
-        mode: '明示的な承認が必要なコマンドを Hermes がどう扱うかを設定します。',
-        timeout: '承認プロンプトがタイムアウトするまで待つ時間です。'
-      },
-      security: {
-        redactSecrets: '検出したシークレットを、可能な限りモデルから見える内容から隠します。'
-      },
-      checkpoints: {
-        enabled: 'ファイル編集前にロールバック用スナップショットを作成します。'
-      },
-      memory: {
-        memoryEnabled: '将来のセッションに役立つ永続メモリを保存します。',
-        userProfileEnabled: 'ユーザーの好みをまとめた簡潔なプロファイルを維持します。'
-      },
-      context: {
-        engine: '長い会話がコンテキスト上限に近づいたときの管理戦略です。'
-      },
-      compression: {
-        enabled: '会話が大きくなったとき、古いコンテキストを要約します。',
-        codexGpt55Autoraise: '対応する ChatGPT Codex OAuth モデルの圧縮しきい値を 85% に引き上げます。'
-      },
-      auxiliary: {
-        compression: {
-          timeout: '補助圧縮モデルの呼び出しごとに待機する秒数（既定 120）。遅いローカルモデルでは値を上げてください。'
-        }
-      },
-      voice: {
-        autoTts: 'アシスタントの応答を自動で読み上げます。'
-      },
-      stt: {
-        enabled: 'ローカルまたはプロバイダーによる音声文字起こしを有効にします。',
-        elevenlabs: {
-          languageCode: '任意の ISO-639-3 言語コードです。空欄なら ElevenLabs が自動検出します。'
-        }
-      },
-      updates: {
-        nonInteractiveLocalChanges:
-          'アプリから Hermes 自身を更新するとき、ローカルのソース変更を保持するか破棄するかを選びます。ターミナル更新では常に確認されます。'
-      }
-    }),
+    fieldLabels: configPageFieldLabels,
+    fieldDescriptions: configPageFieldDescriptions,
     about: { updates: '更新', channel: jaUpdateChannel },
     poolLimits: {
       warmBotBackendsAria: '維持するプロファイル接続数',
@@ -982,7 +1005,65 @@ export const jaOverrides = {
       couldNotSave: '認証情報を保存できませんでした。',
       remove: '削除',
       getKey: 'キーを取得',
-      saving: '保存中'
+      saving: '保存中',
+      toolPageIntro:
+        'ここではWeb検索、音声、外部メモリなどのオプションサービスを接続します。チャットモデルのAPIキーではありません。使わないサービスは空欄のままで構いません。項目を開くと詳細を確認できます。外部サービスはリクエストを処理し、利用料金が発生する場合があります。',
+      toolServices: {
+        porcupine: {
+          label: '音声ウェイクワードキー（Porcupine）',
+          description:
+            '音声設定でPorcupineをウェイクワードエンジンに選んだ場合のみ必要です。既定のエンジンでは不要です。'
+        },
+        retaindbApiKey: {
+          label: 'RetainDBメモリサービスキー',
+          description:
+            '任意の外部メモリサービスRetainDBに接続します。メモリプロバイダーとして選択して有効にした場合のみ必要です。'
+        },
+        retaindbBaseUrl: {
+          label: 'RetainDBサービスアドレス',
+          description:
+            '自分でホストしたRetainDBを使う場合のみ変更します。RetainDB Cloudでは既定値のままにしてください。'
+        },
+        searxngUrl: {
+          label: '自分でホストするWeb検索アドレス（SearXNG）',
+          description:
+            'SearXNGサーバーのアドレスです。APIキーは不要です。Web検索専用で、ページ本文の抽出には対応しません。'
+        },
+        supermemoryApiKey: {
+          label: 'Supermemoryメモリサービスキー',
+          description:
+            '任意の外部メモリサービスSupermemoryに接続します。対応プラグインをインストールして有効にし、メモリプロバイダーとして選択してください。'
+        },
+        tavilyApiKey: {
+          label: 'Tavily Web検索キー',
+          description:
+            'TavilyのWeb検索とページ抽出に使用します。Tavilyを選択して利用します。キーを設定すると上限が増える場合があります。料金は提供元の規約によります。'
+        },
+        toolGatewayDomain: {
+          label: 'ツールゲートウェイドメイン（詳細）',
+          description:
+            '管理対象ツールゲートウェイのドメインを上書きします。対応する契約や独自環境向けです。通常は空欄にしてください。'
+        },
+        toolGatewayScheme: {
+          label: 'ツールゲートウェイプロトコル（詳細）',
+          description:
+            'ゲートウェイのプロトコルを設定します。通常はHTTPSです。独自環境やローカルテストの場合のみ変更してください。'
+        },
+        toolGatewayUrl: {
+          label: 'ツールゲートウェイアドレス（詳細）',
+          description: '完全なゲートウェイアドレスを指定し、自動生成を上書きします。通常は空欄にしてください。'
+        },
+        toolGatewayToken: {
+          label: 'ツールゲートウェイアクセストークン（詳細）',
+          description:
+            'ゲートウェイのアクセストークンを手動で上書きします。通常はアカウントログインで管理されるため、空欄にしてください。'
+        },
+        voiceOpenaiKey: {
+          label: 'OpenAI音声サービスキー',
+          description:
+            'OpenAIの音声認識と音声合成に使用します。通常のチャットには使いません。利用料金が発生する場合があります。設定によってはOPENAI_API_KEYを再利用できます。'
+        }
+      }
     },
     envActions: {
       actions: 'アクション',
@@ -3167,14 +3248,14 @@ export const jaOverrides = {
       messagingPlatforms: 'メッセージングプラットフォーム'
     },
     approvalMode: {
-      title: '承認モード',
+      title: 'Aino の操作をどのように承認しますか？',
       ariaLabel: mode => `承認モード: ${mode}`,
-      manual: '手動',
+      manual: '承認を求める',
       manualDescription: '承認が必要な操作の前に確認します',
-      smart: 'スマート',
-      smartDescription: '必要な場合にのみ確認します',
-      off: 'オフ',
-      offDescription: '承認プロンプトなしで実行します'
+      smart: '代わりに承認する',
+      smartDescription: 'コマンドのリスクを自動で評価し、必要な場合に確認します',
+      off: '確認しない',
+      offDescription: '承認の確認を省略します。システム権限と安全規則は引き続き適用されます'
     },
     statusbar: {
       unknown: '不明',
@@ -3247,6 +3328,10 @@ export const jaOverrides = {
           tool_definitions: 'ツール定義'
         },
         empty: 'コンテキストデータはまだありません',
+        detailsUnavailable: '分類の詳細を取得できません。現在の使用量は引き続き表示されます。',
+        unavailable: 'コンテキスト使用量を取得できません。再試行してください。',
+        retry: '再試行',
+        pendingDetails: '現在のランタイムから分類の詳細は提供されていません。',
         loading: '内訳を読み込み中…',
         percentFull: percent => `${percent}% 使用中`,
         title: 'コンテキスト使用状況',
@@ -3261,7 +3346,7 @@ export const jaOverrides = {
       noModel: 'モデルなし',
       switchModel: 'モデルを切り替え',
       openModelPicker: 'モデルピッカーを開く',
-      modelPinned: '手動で固定中 — 新しいチャットは設定のデフォルトではなくこのモデルを使用します',
+      modelPinned: 'この会話のみで使用します。新しいチャットは設定の既定モデルを使用します',
       modelTitle: (provider, model) => `モデル · ${provider}: ${model}`,
       providerModelTitle: (provider, model) => `${provider} · ${model}`,
       subtaskMonitor: 'サブタスク監視'
@@ -3445,6 +3530,8 @@ export const jaOverrides = {
   },
 
   zones: {
+    sidebarModeMenu: '会話モードを切り替え',
+    sidebarSessionsDescription: 'プロジェクト、ファイル、日常の会話',
     showTabStrip: 'タブを表示',
     hideTabStrip: 'タブを隠す',
     showStripTab: title => `${title} を表示`,
@@ -3718,6 +3805,9 @@ export const jaOverrides = {
     clarify: jaClarify,
     themePicker: jaThemePicker,
     tool: {
+      collapseDetails: '詳細を折りたたむ',
+      moreActions: '実行履歴の操作',
+      hideRecord: 'この履歴を非表示',
       copyCode: 'コードをコピー',
       renderingImage: '画像をレンダリング中',
       copyOutput: '出力をコピー',
@@ -4315,6 +4405,7 @@ export const jaOverrides = {
     notCharged: '課金なし',
     purposes: {
       chat: 'チャット',
+      image: '画像生成',
       title: '会話タイトル',
       compression: 'コンテキスト圧縮',
       vision: '画像理解',
@@ -4343,13 +4434,13 @@ export const jaOverrides = {
 
   platformRecharge: {
     title: 'チャージ',
-    description: '残高への反映はプラットフォームの台帳で確認されます。',
+    description: '金額を入力すると自動計算されます。支払額とチャージされる金額を確認してからお支払いください。',
     amount: 'チャージ金額',
     range: '1件あたりの上限・下限',
-    quote: '見積もりを確認',
-    create: '注文を確定',
+    quote: '金額を計算中…',
+    create: '支払いへ進む',
     payAmount: '支払額',
-    creditAmount: '追加残高',
+    creditAmount: 'チャージされる金額',
     fee: '手数料',
     orderId: '注文番号',
     openPayment: '支払いへ進む',
@@ -4596,5 +4687,10 @@ export const jaOverrides = {
     }
   }
 } satisfies TranslationOverrides
+
+export const jaOverrides = mergeTranslations<typeof jaBaseOverrides & TranslationOverrides>(
+  jaBaseOverrides,
+  runtimeFeatureCopy['ja']
+)
 
 export const ja = defineLocale(jaOverrides)

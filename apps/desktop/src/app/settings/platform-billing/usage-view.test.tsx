@@ -95,3 +95,15 @@ it('keeps compact receipts narrow and distinguishes legacy, unknown and pending 
   expect(screen.queryByText('9 USD')).toBeNull()
   expect(screen.queryByText(/Invalid Date/)).toBeNull()
 })
+
+it.each([
+  ['zh', '生图'],
+  ['en', 'Image generation']
+] as const)('labels image receipts in %s', (locale, label) => {
+  render(
+    <I18nProvider configClient={null} initialLocale={locale}>
+      <UsageView rows={[{ ...receipt, desktop_purpose: 'image' }]} />
+    </I18nProvider>
+  )
+  expect(screen.getByText(label)).toBeTruthy()
+})

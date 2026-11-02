@@ -6,6 +6,7 @@ import { useNavigate } from 'react-router'
 import { ConnectionSwitcher } from '@/app/chat/sidebar/connection-switcher'
 import { ProfileSwitcher } from '@/app/chat/sidebar/profile-dropdown-switcher'
 import type { CommandCenterSection } from '@/app/command-center'
+import { summaryContextUsage } from '@/app/right-sidebar/summary/summary-data'
 import { toggleTerminalPane } from '@/app/right-sidebar/terminal/reveal-focus'
 import { useApprovalModeStatusbarItem } from '@/app/shell/approval-mode-menu'
 import { ContextMeterDetail, ContextUsagePanel } from '@/app/shell/context-usage-panel'
@@ -43,6 +44,7 @@ import { useStoreSelector } from '@/lib/use-session-slice'
 import { cn } from '@/lib/utils'
 import { resolveVersionStatus } from '@/lib/version-status'
 import type { ApprovalModeRequester } from '@/store/approval-mode'
+import { sessionCompacting } from '@/store/compaction'
 import { copyFilePath, revealFile, shouldOfferLocalReveal } from '@/store/file-actions'
 import { $freeTierSignInOpen, $freeTierStatus, FREE_TIER_MODEL } from '@/store/free-tier'
 import { openFreeTierSignIn } from '@/store/free-tier-sign-in'
@@ -56,6 +58,8 @@ import {
   $busy,
   $connection,
   $currentCwd,
+  $currentModel,
+  $currentProvider,
   $currentUsage,
   $selectedStoredSessionId,
   $sessions,
@@ -159,6 +163,8 @@ export function useStatusbarItems({
   // own cwd in `$sessionStates` and must not paint the primary's workspace.
   const primaryCwd = useStore($currentCwd)
   const primaryUsage = useStore($currentUsage)
+  const primaryModel = useStore($currentModel)
+  const primaryProvider = useStore($currentProvider)
   const gatewayRestarting = useStore($gatewayRestarting)
   const primarySessionStartedAt = useStore($sessionStartedAt)
   const tileSessionFocusStartedAt = useStore($tileSessionFocusStartedAt)
@@ -224,6 +230,8 @@ export function useStatusbarItems({
   // reports new usage — far rarer than a delta — so its reference is a valid
   // bail-out key on its own.
   const focusedUsage = useStoreSelector($focusedSessionState, state => state?.usage ?? null)
+  const focusedModel = useStoreSelector($focusedSessionState, state => state?.model ?? '')
+  const focusedProvider = useStoreSelector($focusedSessionState, state => state?.provider ?? '')
   const focusedStateCwd = useStoreSelector($focusedSessionState, state => state?.cwd?.trim() || '')
 
   // Runtime slices carry the stored id they were bound for. During a primary
@@ -241,6 +249,9 @@ export function useStatusbarItems({
   // EMPTY_USAGE (module constant) keeps the fallback referentially stable —
   // a fresh `{...}` each render would bust the usage-label memos below.
   const currentUsage = primaryFocused ? primaryUsage : (focusedUsage ?? EMPTY_USAGE)
+  const currentModel = primaryFocused ? primaryModel : focusedModel
+  const currentProvider = primaryFocused ? primaryProvider : focusedProvider
+  const compacting = useStore(useMemo(() => sessionCompacting(activeSessionId), [activeSessionId]))
 
   const turnStartedAt = primaryFocused ? primaryTurnStartedAt : focusedTurnStartedAt
 
@@ -311,32 +322,25 @@ export function useStatusbarItems({
   // toggled off, so this covers the rest.
   const contextItemHidden = useStore($statusbarHiddenIds).includes('context-usage')
 
-  const { breakdown: contextBreakdown, loading: contextBreakdownLoading } = useContextBreakdown({
+  const {
+    breakdown: contextBreakdown,
+    loading: contextBreakdownLoading,
+    refetch: refetchContextBreakdown,
+    unavailable: contextBreakdownUnavailable
+  } = useContextBreakdown({
     busy,
     enabled: !contextItemHidden,
+    identityKey: JSON.stringify([currentProvider, currentModel]),
+    refreshKey: JSON.stringify([currentUsage.context_max, currentUsage.context_used, currentUsage.context_percent]),
     requestGateway,
-    sessionId: activeSessionId
+    sessionId: activeSessionId,
+    suspended: compacting
   })
 
-  // The breakdown wins whenever we have one, for two reasons: it reports the
-  // MEASURED occupancy once the backend has it (falling back to the estimate
-  // only before that), and it is keyed to the session it describes. The global
-  // `$currentUsage` is neither — a resumed session reports no context fields,
-  // and the store merges rather than replaces, so the PREVIOUS session's gauge
-  // numbers survive the switch. Mid-turn useContextBreakdown returns null (the
-  // snapshot is pre-turn), so the streamed usage carries the gauge.
+  // Share the composer's merge policy: cold reads restore occupancy without
+  // a window, while live usage owns measured tokens and the known capacity.
   const gaugeUsage = useMemo<UsageStats>(
-    () =>
-      contextBreakdown
-        ? {
-            ...currentUsage,
-            context_estimated: contextBreakdown.context_estimated,
-            context_source: contextBreakdown.context_source,
-            context_max: contextBreakdown.context_max,
-            context_percent: contextBreakdown.context_percent,
-            context_used: contextBreakdown.context_used
-          }
-        : currentUsage,
+    () => summaryContextUsage(currentUsage, contextBreakdown),
     [contextBreakdown, currentUsage]
   )
 
@@ -689,7 +693,14 @@ export function useStatusbarItems({
         menuAlign: 'end',
         menuClassName: 'w-auto border-(--ui-stroke-secondary) p-0',
         menuContent: (
-          <ContextUsagePanel breakdown={contextBreakdown} loading={contextBreakdownLoading} usage={gaugeUsage} />
+          <ContextUsagePanel
+            breakdown={contextBreakdown}
+            compacting={compacting}
+            loading={contextBreakdownLoading}
+            onRetry={refetchContextBreakdown}
+            unavailable={contextBreakdownUnavailable}
+            usage={gaugeUsage}
+          />
         ),
         toggleLabel: copy.toggleContextUsage,
         variant: 'menu'
@@ -722,7 +733,7 @@ export function useStatusbarItems({
         variant: 'text'
       },
       {
-        // Window plans only: today's allowance (else the one that binds) at a glance; opens Billing.
+        // Window plans only: today's allowance (else the one that binds) at a glance; opens the account.
         className:
           planUsed >= 0.8
             ? 'text-red-600 dark:text-red-400'
@@ -738,7 +749,7 @@ export function useStatusbarItems({
         title: planGauge
           ? copy.planUsageTitle(formatPercentUsed(planUsed), formatResetsIn(planGauge.resets_at_ms) ?? '')
           : undefined,
-        to: `${SETTINGS_ROUTE}?tab=billing`,
+        to: `${SETTINGS_ROUTE}?tab=account`,
         // Listed in the bar's show/hide menu only for window plans; everyone else never sees the entry.
         toggleLabel: planGauge ? copy.togglePlanUsage : undefined,
         variant: 'link'
@@ -770,9 +781,12 @@ export function useStatusbarItems({
       cacheHit,
       chatOpen,
       clientVersionItem,
+      compacting,
       contextBar,
       contextBreakdown,
       contextBreakdownLoading,
+      contextBreakdownUnavailable,
+      refetchContextBreakdown,
       contextUsage,
       copy,
       currentUsage.compressions,

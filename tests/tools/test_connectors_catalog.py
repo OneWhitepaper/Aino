@@ -10,6 +10,7 @@ Contracts:
 
 import json
 import threading
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -18,12 +19,15 @@ import pytest
 
 from tools.connectors import live
 from tools.connectors.catalog_tool import NOT_HERE, manage_catalog
-from tools.connectors.contract import TargetState
+from tools.connectors.contract import SettleReason, TargetState
 from tools.connectors.run import apply_answer
+from tests.waiting import wait_until
 
 
 @pytest.fixture(autouse=True)
-def _clean_live():
+def _clean_live(monkeypatch):
+    # Fake catalog entries have no remote manifest; a cold GitHub probe delays the approval card.
+    monkeypatch.setattr("hermes_cli.plugin_catalog_presence._pinned_manifest", lambda *_: None)
     live.reset_for_tests()
     yield
     live.reset_for_tests()
@@ -226,28 +230,32 @@ def test_a_failed_row_keeps_its_reason_and_try_again_works_while_the_card_is_ope
     card = _card(lambda payload: {"targets": [{"name": "blender", "status": "approved", "env": None}]})
 
     def wait_for(state):
-        for _ in range(200):
+        def reached():
+            if result.done():
+                result.result()  # Surface a tool-thread exception before waiting on a state it cannot reach.
             operation = live.current("s1")
-            if operation is not None and operation.targets[0].state == state:
-                return operation
-            threading.Event().wait(0.01)
-        raise AssertionError(f"blender never reached {state}")
+            return operation if operation is not None and operation.targets[0].state == state else None
 
-    with patch("tools.connectors.run.WATCH_INTERVAL_SECONDS", 0.01):
-        result = {}
-        thread = threading.Thread(target=lambda: result.setdefault("out", json.loads(manage_catalog(
+        return wait_until(reached, what=f"blender reached {state}")
+
+    with patch("tools.connectors.run.WATCH_INTERVAL_SECONDS", 0.01), ThreadPoolExecutor(max_workers=1) as worker:
+        result = worker.submit(manage_catalog,
             {"action": "install", "items": [{"kind": "plugin", "id": "blender"}, {"kind": "plugin", "id": "krita"}]},
-            session_id="s1", connection_callback=card, card_surface=True, installer=installer))))
-        thread.start()
-        operation = wait_for(TargetState.failed)
-        assert operation.targets[0].detail == "clone failed: network down"
-        assert not operation.settled  # krita still waits on the user
-        installer.install_error = ""
-        apply_answer(operation, json.dumps({"targets": [{"name": "blender", "status": "approved"}]}))
-        wait_for(TargetState.connected)
-        apply_answer(operation, json.dumps({"targets": [{"name": "krita", "status": "skipped"}]}))
-        thread.join(5)
-    assert result["out"]["targets"][0]["state"] == TargetState.connected.value
+            session_id="s1", connection_callback=card, card_surface=True, installer=installer)
+        try:
+            operation = wait_for(TargetState.failed)
+            assert operation.targets[0].detail == "clone failed: network down"
+            assert not operation.settled  # krita still waits on the user
+            installer.install_error = ""
+            apply_answer(operation, json.dumps({"targets": [{"name": "blender", "status": "approved"}]}))
+            wait_for(TargetState.connected)
+            apply_answer(operation, json.dumps({"targets": [{"name": "krita", "status": "skipped"}]}))
+            out = json.loads(result.result(timeout=5))
+        finally:
+            operation = live.current("s1")
+            if operation is not None:
+                operation.settle(SettleReason.interrupt)
+    assert out["targets"][0]["state"] == TargetState.connected.value
     assert len(installer.installs) == 2
 
     # A failed row does not hold the turn to the deadline: once it is the last open row, the

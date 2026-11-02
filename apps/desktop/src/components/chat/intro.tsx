@@ -1,13 +1,15 @@
-import { useLayoutEffect, useRef, useState } from 'react'
+import { useId, useLayoutEffect, useRef, useState } from 'react'
 
 import actionAnalyzeIcon from '@/assets/aino-home/action-analyze.svg'
 import actionCodeReviewIcon from '@/assets/aino-home/action-code-review.svg'
 import actionReportIcon from '@/assets/aino-home/action-report.svg'
 import actionResearchIcon from '@/assets/aino-home/action-research.svg'
 import { AinoDesignIcon } from '@/components/aino-design-icon'
+import { BrandMark } from '@/components/brand-mark'
 import { Button } from '@/components/ui/button'
 import { type Locale, useI18n } from '@/i18n'
 import { AGENT_NAME, PRODUCT_NAME } from '@/lib/brand'
+import { ArrowUpRight } from '@/lib/icons'
 import { capitalize, normalize } from '@/lib/text'
 import { cn } from '@/lib/utils'
 
@@ -240,6 +242,7 @@ export function Intro({ home, onInsertPrompt, onPickFiles, personality, seed }: 
 
   const body = bodies?.[Math.abs(rotationSeed) % bodies.length] ?? copy.body
   const showHome = home ?? Boolean(onInsertPrompt || onPickFiles)
+  const homeActionsId = useId()
   const homeLayoutRef = useRef<HTMLElement>(null)
   const homeContentRef = useRef<HTMLDivElement>(null)
   const homeSlotRef = useRef<HTMLDivElement>(null)
@@ -264,7 +267,19 @@ export function Intro({ home, onInsertPrompt, onPickFiles, personality, seed }: 
       )
     }
 
+    const viewport = slot.closest<HTMLElement>('[data-slot="aui_thread-viewport"]')
+    let scrollFrame: number | null = null
+
+    // The live composer is outside the scroller, so its slot can move without resizing.
+    const onScroll = () => {
+      scrollFrame ??= requestAnimationFrame(() => {
+        scrollFrame = null
+        syncTop()
+      })
+    }
+
     syncTop()
+    viewport?.addEventListener('scroll', onScroll, { passive: true })
     const observer = new ResizeObserver(syncTop)
     observer.observe(surface)
     observer.observe(content)
@@ -274,6 +289,12 @@ export function Intro({ home, onInsertPrompt, onPickFiles, personality, seed }: 
 
     return () => {
       observer.disconnect()
+      viewport?.removeEventListener('scroll', onScroll)
+
+      if (scrollFrame !== null) {
+        cancelAnimationFrame(scrollFrame)
+      }
+
       surface.style.removeProperty('--aino-home-composer-top')
     }
   }, [showHome])
@@ -323,35 +344,57 @@ export function Intro({ home, onInsertPrompt, onPickFiles, personality, seed }: 
     return (
       <section className="aino-home-layout" data-home-layout="" data-slot="aui_intro" ref={homeLayoutRef}>
         <div className="aino-home-content" ref={homeContentRef}>
-          <h1 className="aino-home-title">{headline}</h1>
-          <p className="aino-home-subtitle">{subtitle}</p>
+          <header className="aino-home-heading">
+            <div className="aino-home-title-row">
+              <BrandMark aria-hidden="true" className="aino-home-brand" />
+              <h1 className="aino-home-title">{headline}</h1>
+            </div>
+            <p className="aino-home-subtitle">{subtitle}</p>
+          </header>
 
           {/* The real composer is positioned over this reserved slot by ChatView.
               Keeping the slot in the intro preserves one source of truth for all
               composer behavior while matching the landing-page rhythm. */}
           <div aria-hidden="true" className="aino-home-composer-slot" ref={homeSlotRef} />
-
-          <div className="aino-home-actions" role="group">
-            {actions.map(action => {
-              return (
-                <Button
-                  aria-label={action.title}
-                  className={cn('aino-home-action', `aino-home-action-${action.key}`)}
-                  key={action.key}
-                  onClick={action.onClick}
-                  type="button"
-                  variant="outline"
-                >
-                  <AinoDesignIcon className="aino-home-action-icon" src={action.iconSrc} />
-                  <span className="aino-home-action-copy">
-                    <span className="aino-home-action-title">{action.title}</span>
-                    <span className="aino-home-action-description">{action.description}</span>
-                  </span>
-                </Button>
-              )
-            })}
+          <div className="aino-home-composer-hints">
+            <span>
+              <kbd>@</kbd> {homeCopy.hints.referenceFiles} · <kbd>/</kbd> {homeCopy.hints.commandsAndSkills}
+            </span>
+            <span>
+              <kbd>Enter</kbd> {t.composer.send} · <kbd>Shift+Enter</kbd> {homeCopy.hints.newLine}
+            </span>
           </div>
+
+          <section aria-label={homeCopy.subtitle} className="aino-home-recommendations">
+            <div className="aino-home-actions">
+              {actions.map(action => {
+                return (
+                  <Button
+                    aria-describedby={`${homeActionsId}-${action.key}-description`}
+                    aria-label={action.title}
+                    className={cn('aino-home-action', `aino-home-action-${action.key}`)}
+                    key={action.key}
+                    onClick={action.onClick}
+                    type="button"
+                    variant="secondary"
+                  >
+                    <span aria-hidden="true" className="aino-home-action-symbol">
+                      <AinoDesignIcon className="aino-home-action-icon" src={action.iconSrc} />
+                    </span>
+                    <span className="aino-home-action-copy">
+                      <span className="aino-home-action-title">{action.title}</span>
+                    </span>
+                    <span className="sr-only" id={`${homeActionsId}-${action.key}-description`}>
+                      {action.description}
+                    </span>
+                    <ArrowUpRight aria-hidden="true" className="aino-home-action-arrow" />
+                  </Button>
+                )
+              })}
+            </div>
+          </section>
         </div>
+        <footer className="aino-home-footnote">{homeCopy.footnote}</footer>
       </section>
     )
   }

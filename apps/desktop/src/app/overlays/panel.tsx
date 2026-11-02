@@ -49,7 +49,7 @@ export function Panel({
       closeLabel={closeLabel}
       // Header title rides up next to the floating close button — see
       // OVERLAY_TOP_CLEARANCE, the shared clearance every overlay column uses.
-      contentClassName={cn('flex h-full min-h-0 flex-col px-4 pb-4 sm:px-5', OVERLAY_TOP_CLEARANCE, contentClassName)}
+      contentClassName={cn('flex h-full min-h-0 flex-col px-5 pb-5 sm:px-6', OVERLAY_TOP_CLEARANCE, contentClassName)}
       onClose={onClose}
       rootClassName={cn('flex h-full w-full flex-col', className)}
     >
@@ -71,10 +71,17 @@ export function PanelHeader({ actions, subtitle, title }: PanelHeaderProps) {
     // layout space, so header actions would otherwise slide right up against it.
     // Reserve clearance (button footprint from the card edge + a small gap) on
     // the right whenever actions are present.
-    <header className={cn('mb-6 flex shrink-0 items-start justify-between gap-4', actions ? 'pr-8' : undefined)} data-aino-panel-header="">
+    <header
+      className={cn('mb-6 flex shrink-0 items-start justify-between gap-4 py-2', actions ? 'pr-8' : undefined)}
+      data-aino-panel-header=""
+    >
       <div className="min-w-0">
-        <h2 className="text-[length:var(--aino-text-page-title)] font-semibold tracking-tight text-foreground">{title}</h2>
-        {subtitle ? <p className="mt-2 text-[length:var(--aino-text-ui)] leading-relaxed text-muted-foreground">{subtitle}</p> : null}
+        <h2 className="text-[length:var(--aino-text-page-title)] font-semibold tracking-tight text-foreground">
+          {title}
+        </h2>
+        {subtitle ? (
+          <p className="mt-2 text-[length:var(--aino-text-ui)] leading-relaxed text-muted-foreground">{subtitle}</p>
+        ) : null}
       </div>
       {actions ? <div className="flex shrink-0 items-center gap-1.5">{actions}</div> : null}
     </header>
@@ -88,7 +95,7 @@ export function PanelBody({ children, className }: { children: ReactNode; classN
         // Side-by-side master/detail on a wide card; once it narrows (same
         // threshold the other overlays collapse at) stack the list above the
         // detail so the detail keeps full width instead of being squished.
-        'flex min-h-0 flex-1 flex-col gap-4 overflow-hidden min-[47.5rem]:flex-row min-[47.5rem]:gap-5',
+        'flex min-h-0 flex-1 flex-col gap-4 overflow-hidden min-[47.5rem]:flex-row min-[47.5rem]:gap-4',
         className
       )}
       data-aino-panel-body=""
@@ -127,7 +134,10 @@ export function PanelList({
     // Full-width and height-capped when stacked (narrow); a fixed 13rem rail
     // beside the detail when wide.
     <div
-      className={cn('flex w-full shrink-0 flex-col max-[47.5rem]:max-h-[40%] min-[47.5rem]:w-52', className)}
+      className={cn(
+        'flex w-full shrink-0 flex-col max-[47.5rem]:max-h-[40%] max-[47.5rem]:border-b max-[47.5rem]:pb-2 min-[47.5rem]:w-52 min-[47.5rem]:border-r min-[47.5rem]:pr-3 border-(--ui-stroke-tertiary)',
+        className
+      )}
       data-aino-panel-list=""
     >
       {onSearchChange ? (
@@ -187,14 +197,14 @@ export function PanelListRow({
   const row = (
     <div
       className={cn(
-        'group/row row-hover relative flex h-7 w-full items-center rounded-md text-[length:var(--aino-text-label)] hover:text-foreground',
+        'group/row row-hover relative flex min-h-8 w-full items-center rounded-(--aino-radius-row) text-[length:var(--aino-text-label)] hover:text-foreground',
         active ? 'bg-(--ui-row-active-background) text-foreground' : 'text-(--ui-text-secondary)'
       )}
       data-active={active}
       data-panel-row={rowKey}
     >
       <RowButton
-        className="flex h-full min-w-0 flex-1 items-center gap-2 rounded-md pl-2 pr-1 text-left"
+        className="flex h-auto min-w-0 flex-1 self-stretch items-center gap-2 rounded-md pl-2 pr-1 text-left"
         onClick={onSelect}
       >
         {lead ??
@@ -205,7 +215,11 @@ export function PanelListRow({
           ) : null)}
         <span className="min-w-0 flex-1 truncate font-medium text-foreground/85">{title}</span>
       </RowButton>
-      {meta ? <span className="shrink-0 pr-2 text-[length:var(--aino-text-caption)] tabular-nums text-(--ui-text-secondary)">{meta}</span> : null}
+      {meta ? (
+        <span className="shrink-0 pr-2 text-[length:var(--aino-text-caption)] tabular-nums text-(--ui-text-secondary)">
+          {meta}
+        </span>
+      ) : null}
       {menuItems ? (
         <div className="shrink-0 pr-1">
           <PanelRowMenu items={menuItems} label={menuLabel} />
@@ -307,7 +321,9 @@ export function PanelEmpty({ action, description, icon = 'inbox', title }: Panel
         <Codicon className="text-muted-foreground/50" name={icon} size="1.25rem" />
         {title ? <p className="text-[length:var(--aino-text-body)] font-medium text-foreground/90">{title}</p> : null}
         {description ? (
-          <p className="max-w-sm text-[length:var(--aino-text-label)] leading-relaxed text-(--ui-text-secondary)">{description}</p>
+          <p className="max-w-sm text-[length:var(--aino-text-label)] leading-relaxed text-(--ui-text-secondary)">
+            {description}
+          </p>
         ) : null}
         {action ? <div className="mt-2">{action}</div> : null}
       </div>
@@ -317,7 +333,12 @@ export function PanelEmpty({ action, description, icon = 'inbox', title }: Panel
 
 export function PanelSectionLabel({ children, className }: { children: ReactNode; className?: string }) {
   return (
-    <div className={cn('text-[length:var(--aino-text-caption)] font-medium tracking-normal text-(--ui-text-secondary)', className)}>
+    <div
+      className={cn(
+        'text-[length:var(--aino-text-caption)] font-medium tracking-normal text-(--ui-text-secondary)',
+        className
+      )}
+    >
       {children}
     </div>
   )

@@ -163,7 +163,6 @@ it('keeps an out-of-range amount editable and shows the corrective error without
     </I18nProvider>
   )
   fireEvent.change(await screen.findByLabelText('充值金额'), { target: { value: '1' } })
-  fireEvent.click(screen.getByRole('button', { name: '查看报价' }))
   expect((await screen.findByRole('alert')).textContent).toContain('限额')
   expect((screen.getByLabelText('充值金额') as HTMLInputElement).value).toBe('1')
   expect(bridge.createOrder).not.toHaveBeenCalled()
@@ -321,8 +320,10 @@ it('keeps the original order across close and reopen and confirms wallet refresh
 
   const rendered = render(view(true))
   fireEvent.change(await screen.findByLabelText('充值金额'), { target: { value: '20' } })
-  fireEvent.click(screen.getByRole('button', { name: '查看报价' }))
-  fireEvent.click(await screen.findByRole('button', { name: '确认创建订单' }))
+  await waitFor(() =>
+    expect((screen.getByRole('button', { name: '去支付' }) as HTMLButtonElement).disabled).toBe(false)
+  )
+  fireEvent.click(screen.getByRole('button', { name: '去支付' }))
   expect(await screen.findByText('已支付，正在到账')).toBeTruthy()
   expect(screen.queryByText('充值成功')).toBeNull()
   expect(credited).not.toHaveBeenCalled()

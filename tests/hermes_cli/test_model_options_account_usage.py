@@ -23,22 +23,27 @@ def _snapshot(used: float) -> AccountUsageSnapshot:
 
 def test_picker_reads_cached_usage_and_refreshes_without_waiting(monkeypatch):
     monkeypatch.setenv("OPENROUTER_API_KEY", "test-key-123")
-    release, called = threading.Event(), threading.Event()
+    # Provider discovery has its own network budget; this contract fences only the usage API.
+    monkeypatch.setattr("hermes_cli.model_switch.list_authenticated_providers", lambda **_kwargs: [{
+        "slug": "openrouter", "name": "OpenRouter", "models": ["test/model"],
+        "api_url": "https://openrouter.ai/api/v1", "authenticated": True,
+    }])
+    release, called, finished = threading.Event(), threading.Event(), threading.Event()
     answers = iter([_snapshot(92.0)])
 
     def slow_usage_api(_base_url, _api_key):
         called.set()
         release.wait(10)
+        finished.set()
         return next(answers)
 
     monkeypatch.setitem(account_usage._USAGE_FETCHERS, "openrouter", slow_usage_api)
     ctx = load_picker_context()
 
-    started = time.monotonic()
     first = next(r for r in build_model_options_payload(ctx)["providers"] if r["slug"] == "openrouter")
-    assert time.monotonic() - started < 5, "the picker waited on the usage API"
     assert "usage" not in first, "nothing cached yet, so nothing to show"
     assert called.wait(5), "opening the picker must start a background usage refresh"
+    assert not finished.is_set(), "the picker waited on the usage API"
 
     release.set()
     deadline = time.monotonic() + 5

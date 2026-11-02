@@ -718,7 +718,10 @@ class AuthorityConnection:
                 binding_key(self.authority, ref.session_id), managed_state(self.authority, ref.session_id)) is None:
             raise RuntimeStoreError('awaiting_managed_credentials')
         # The interactive WS is the one surface a restart's after-turn wait admits (#139041).
+        from gateway.session_pause import continuation_guard
         receipt = await self.authority.submit(self.actor, request,
+                                              _authorize_write=continuation_guard(
+                                                  ref, self.actor.subject, params.get('continuation_of')),
                                               queue_while_restarting=self._operator is True)
         return asdict(receipt)
 
@@ -779,7 +782,7 @@ class AuthorityConnection:
             raise RuntimeStoreError('permission_denied')
         forbidden = set(params) - {'session_id', 'text', 'submission_id', 'input_id', 'queued', 'attachments', 'finite', 'unattended',
                                    'surface', 'voice_context', 'interrupted', 'voice_turn', 'display_kind', 'title_preview',
-                                   'turn_author', 'api_text', 'model_override', 'clarify_batch'}
+                                   'turn_author', 'api_text', 'model_override', 'clarify_batch', 'continuation_of'}
         if forbidden:
             raise RuntimeStoreError('invalid_params')
         request_id = params.get('submission_id') or params.get('input_id')

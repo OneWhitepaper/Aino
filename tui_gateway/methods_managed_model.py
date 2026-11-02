@@ -31,6 +31,30 @@ def _managed_owner(params):
     return ManagedModelOwner(origin, _managed_text(value, "user_id"))
 
 
+def _managed_purpose(params):
+    purpose = params.get('purpose', 'chat')
+    if purpose not in ('chat', 'image'):
+        raise ManagedBindingError('managed_binding_invalid')
+    return purpose
+
+
+def _image_selection(sid, session):
+    from . import server
+    from hermes_cli.config import load_config
+    with server._session_profile_runtime_scope(session):
+        cfg = load_config().get('image_gen') or {}
+    cfg = cfg if isinstance(cfg, dict) else {}
+    previous = session.get('managed_image_params') or {}
+    model_id = cfg.get('model')
+    if cfg.get('provider') != 'aino' or not isinstance(model_id, str) or not model_id.strip():
+        get_registry().clear_session(sid, purpose='image')
+        session.pop('managed_image_params', None)
+        raise ManagedBindingError('managed_binding_forbidden')
+    if previous.get('model_id') != model_id:
+        get_registry().clear_session(sid, purpose='image')
+        session['managed_image_params'] = {'model_id': model_id}
+
+
 def _managed_method(name):
     def decorate(fn):
         def handler(rid, params):
@@ -53,6 +77,8 @@ def _managed_method(name):
                     expected_home = Path(requested_home or get_hermes_home()).resolve()
                     if Path(session.get("profile_home") or get_hermes_home()).resolve() != expected_home:
                         raise ManagedBindingError("managed_binding_forbidden")
+                    if _managed_purpose(params) == 'image':
+                        _image_selection(sid, session)
                     return srv._ok(rid, fn(params, sid, session, peer))
             except (ManagedBindingError, ValueError, TypeError, OverflowError, FileNotFoundError):
                 # Never echo params, credential material, URLs or raw exceptions.
@@ -68,18 +94,20 @@ def _managed_model_ticket(params, sid, session, peer):
     if session.get("transport") is not peer:
         raise ManagedBindingError("managed_binding_forbidden")
     owner, model_id = _managed_owner(params), _managed_text(params, "model_id", 128)
-    ticket = get_registry().issue(sid, session, peer, owner, model_id)
-    return {"session_ticket": ticket, "managed_model_binding": 1}
+    ticket = get_registry().issue(sid, session, peer, owner, model_id, purpose=_managed_purpose(params))
+    return {"session_ticket": ticket, "managed_model_binding": 1, 'managed_image_binding': 1}
 
 
 @_managed_method("session.claim_managed_model")
 def _claim_managed_model(params, sid, session, peer):
     revision = get_registry().claim(sid, session, peer, _managed_text(params, "session_ticket"),
-                                   _managed_owner(params), _managed_text(params, "model_id", 128))
-    return {"binding_revision": revision, "managed_model_binding": 1, "managed_model_context_window": True}
+                                   _managed_owner(params), _managed_text(params, "model_id", 128), purpose=_managed_purpose(params))
+    return {"binding_revision": revision, "managed_model_binding": 1, "managed_model_context_window": True, 'managed_image_binding': 1}
 
 
 def _binding(params, sid):
+    from agent.image_gen_provider import valid_image_quality_options
+    purpose = _managed_purpose(params)
     owner = _managed_owner(params)
     expires = datetime.fromisoformat(_managed_text(params, "expires_at"))
     if expires.tzinfo is None or expires <= datetime.now(UTC):
@@ -89,11 +117,17 @@ def _binding(params, sid):
         raise ManagedBindingError("managed_binding_invalid")
     mode = _managed_text(params, "api_mode")
     capabilities = params.get("capabilities")
+    quality_options = capabilities.get("image_quality_options", []) if isinstance(capabilities, dict) else []
+    if not valid_image_quality_options(quality_options) or (purpose != 'image' and quality_options):
+        raise ManagedBindingError("managed_binding_invalid")
     context_window = params.get("context_window")
     if context_window is not None and (type(context_window) is not int or context_window <= 0):
         raise ManagedBindingError("managed_binding_invalid")
-    if (mode not in {"chat_completions", "responses", "anthropic_messages"}
-            or not isinstance(capabilities, dict) or capabilities.get("tools") is not True
+    valid_mode = mode == 'images_generations' if purpose == 'image' else mode in {
+        'chat_completions', 'responses', 'anthropic_messages'}
+    if (not valid_mode
+            or not isinstance(capabilities, dict)
+            or capabilities.get('image_generation' if purpose == 'image' else 'tools') is not True
             or any(type(capabilities.get(k)) is not bool for k in ("tools", "vision", "reasoning"))
             or _managed_text(params, "base_url", 2048) != owner.platform_origin + "/v1"):
         raise ManagedBindingError("managed_binding_invalid")
@@ -102,16 +136,17 @@ def _binding(params, sid):
         model=_managed_text(params, "model", 256), api_mode=mode, capabilities=dict(capabilities),
         credential_id=_managed_text(params, "credential_id"), api_key=_managed_text(params, "api_key", 4096),
         base_url=params["base_url"], expires_at=expires, binding_revision=revision,
-        context_window=context_window)
+        context_window=context_window, purpose=purpose)
 
 
 @_managed_method("session.bind_managed_model")
 def _bind_managed_model(params, sid, session, peer):
     binding = _binding(params, sid)
     get_registry().bind(binding, session, peer)
-    from .managed_session import apply_bound_selection, sync_bound_context
-    apply_bound_selection(sid, session)
-    sync_bound_context(sid, session)
+    if binding.purpose == 'chat':
+        from .managed_session import apply_bound_selection, sync_bound_context
+        apply_bound_selection(sid, session)
+        sync_bound_context(sid, session)
     return {"bound": True, "model_id": binding.model_id, "binding_revision": binding.binding_revision}
 
 
@@ -119,8 +154,9 @@ def _bind_managed_model(params, sid, session, peer):
 def _renew_managed_model(params, sid, session, peer):
     binding = _binding(params, sid)
     get_registry().renew(binding, session, peer)
-    from .managed_session import sync_bound_context
-    sync_bound_context(sid, session)
+    if binding.purpose == 'chat':
+        from .managed_session import sync_bound_context
+        sync_bound_context(sid, session)
     return {"bound": True, "model_id": binding.model_id, "binding_revision": binding.binding_revision}
 
 
@@ -129,7 +165,7 @@ def _clear_managed_model(params, sid, session, peer):
     revision = params.get("binding_revision")
     if type(revision) is not int or revision <= 0:
         raise ManagedBindingError("managed_binding_invalid")
-    return {"cleared": get_registry().clear(sid, revision, peer)}
+    return {"cleared": get_registry().clear(sid, revision, peer, purpose=_managed_purpose(params))}
 
 
 def register(server):

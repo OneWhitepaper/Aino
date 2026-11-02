@@ -1,4 +1,12 @@
+import { accountPage } from './account-page'
+import { appearancePage } from './appearance-page'
+import { configPagesFor } from './config-pages'
 import { enMessaging } from './en_messaging'
+import { sidebarMode } from './en_sidebar_mode'
+import { homeGuidance } from './home-guidance'
+import { toolPanel } from './tool-panel'
+import { workspacePage } from './workspace-page'
+
 const accountErrors: Record<string, string> = {
   INVALID_PHONE: 'Enter a valid phone number.',
   PHONE_REGION_UNSUPPORTED: 'Phone numbers from this region are not supported.',
@@ -47,7 +55,15 @@ import { enUninstallSection } from './en_uninstall_section'
 import { enUpdateChannel } from './en_update_channel'
 import type { Translations } from './types'
 
+const configPageFieldLabels: Record<string, string> = FIELD_LABELS
+
+const configPageFieldDescriptions: Record<string, string> = FIELD_DESCRIPTIONS
+
 export const en: Translations = {
+  appearancePage: appearancePage.en,
+  toolPanel: toolPanel['en'],
+  workspacePage: workspacePage.en,
+  accountPage: accountPage['en'],
   externalOpenFailed: enExternalOpenFailed,
   sharedMetrics: enSharedMetrics,
   appTour: enAppTour,
@@ -707,6 +723,7 @@ export const en: Translations = {
   },
 
   settings: {
+    configPages: configPagesFor('en', configPageFieldLabels, configPageFieldDescriptions),
     subpages: {
       appearanceTheme: 'Theme',
       appearanceTypography: 'Typography',
@@ -774,7 +791,7 @@ export const en: Translations = {
       missing: 'That plugin has no settings page. It may be disabled or uninstalled.'
     },
     nav: {
-      providers: 'Providers',
+      providers: 'Model services',
       providerAccounts: 'Accounts',
       providerApiKeys: 'API keys',
       providerCustomEndpoints: 'Custom Endpoints',
@@ -783,6 +800,7 @@ export const en: Translations = {
       apiKeys: 'Tools & Keys',
       keybinds: 'Keyboard Shortcuts',
       keysTools: 'Tools',
+      keysCredentials: 'Keys',
       keysSettings: 'Settings',
       mcp: 'MCP',
       archivedChats: 'Archived Chats',
@@ -1197,8 +1215,8 @@ export const en: Translations = {
 
       noInstalledThemesMatch: query => `No installed themes match "${query}".`
     },
-    fieldLabels: FIELD_LABELS,
-    fieldDescriptions: FIELD_DESCRIPTIONS,
+    fieldLabels: configPageFieldLabels,
+    fieldDescriptions: configPageFieldDescriptions,
     uninstallSection: enUninstallSection,
     customEndpoints: {
       active: 'Active',
@@ -1434,7 +1452,65 @@ export const en: Translations = {
       couldNotSave: 'Could not save credential.',
       remove: 'Remove',
       getKey: 'Get a key',
-      saving: 'Saving'
+      saving: 'Saving',
+      toolPageIntro:
+        'Connect optional services for web search, voice, and external memory here. These are not chat model API keys. Leave a field empty if you do not use that service. Click an item for details; external providers may process related requests or charge for usage.',
+      toolServices: {
+        porcupine: {
+          label: 'Porcupine wake-word key',
+          description:
+            'Only needed if Porcupine is selected as the wake-word engine in Voice settings. The default engine does not need this key.'
+        },
+        retaindbApiKey: {
+          label: 'RetainDB memory service key',
+          description:
+            'Connects the optional RetainDB external memory service. Only needed when RetainDB is selected and enabled as your memory provider.'
+        },
+        retaindbBaseUrl: {
+          label: 'RetainDB service address',
+          description:
+            'Change this only when connecting to a self-hosted RetainDB instance. Leave the default for RetainDB Cloud.'
+        },
+        searxngUrl: {
+          label: 'Self-hosted web search address (SearXNG)',
+          description:
+            'The address of your SearXNG server. No API key is needed. It provides web search only, not page extraction.'
+        },
+        supermemoryApiKey: {
+          label: 'Supermemory memory service key',
+          description:
+            'Connects the optional Supermemory external memory service. Install and enable its plugin, then select it as your memory provider to use it.'
+        },
+        tavilyApiKey: {
+          label: 'Tavily web search key',
+          description:
+            'Used for Tavily web search and page extraction. Select Tavily to use it; a key can provide higher limits. Provider charges may apply.'
+        },
+        toolGatewayDomain: {
+          label: 'Tool gateway domain (advanced)',
+          description:
+            'Overrides the domain used to build managed tool gateway addresses. Intended for supported subscriber or custom deployments; most users should leave it empty.'
+        },
+        toolGatewayScheme: {
+          label: 'Tool gateway protocol (advanced)',
+          description: 'Sets the gateway protocol, usually HTTPS. Change it only for a custom or local test gateway.'
+        },
+        toolGatewayUrl: {
+          label: 'Tool gateway address (advanced)',
+          description:
+            'Pins the complete tool gateway address instead of deriving it automatically. Most users should leave it empty.'
+        },
+        toolGatewayToken: {
+          label: 'Tool gateway access token (advanced)',
+          description:
+            'Manually overrides the gateway access token. Account sign-in normally manages this for you, so most users should leave it empty.'
+        },
+        voiceOpenaiKey: {
+          label: 'OpenAI voice service key',
+          description:
+            'Used for OpenAI speech-to-text and text-to-speech, not regular chat. OpenAI may charge for voice usage; an existing OPENAI_API_KEY may also be reused when the voice provider is configured for it.'
+        }
+      }
     },
     envActions: {
       actions: 'Actions',
@@ -1479,11 +1555,12 @@ export const en: Translations = {
       updateSkippedCloud: 'Managed by Hermes Cloud',
       kindLocal: 'Local',
       kindRemote: 'Remote gateway',
-      kindCloud: 'Hermes Cloud',
+      kindCloud: 'Saved cloud connection (legacy)',
       kindSsh: 'SSH',
       kindLocalDesc: 'The Hermes runtime managed by this app.',
       kindRemoteDesc: 'A Hermes gateway reachable over HTTP(S) — LAN, Tailscale, or the internet.',
-      kindCloudDesc: 'A hosted instance discovered through your Hermes Cloud account.',
+      kindCloudDesc:
+        'An existing cloud connection saved by an older Aino version. It remains usable; create new connections with Remote gateway or SSH.',
       kindSshDesc: 'A Hermes install reached over SSH.',
       labelTitle: 'Name',
       labelDesc: 'Required. Shown everywhere this instance appears; must be unique (e.g. “Homelab”, “Work laptop”).',
@@ -1502,8 +1579,6 @@ export const en: Translations = {
       duplicateSsh: (label: string) => `A connection to this SSH host already exists (“${label}”).`,
       sameBackendHint: (label: string) => `Same backend as “${label}”`,
       localAddHint: 'Local is unavailable: the managed local connection already exists (there is only ever one).',
-      cloudAddHint:
-        'Tip: signing in under Hermes Cloud above discovers your agents automatically — use this form only to register a known instance URL by hand.',
       save: 'Save connection',
       saving: 'Saving…',
       cancel: 'Cancel',
@@ -3689,6 +3764,8 @@ export const en: Translations = {
     editingInComposer: 'Editing in composer',
     editingQueuedInComposer: 'Editing queued turn in composer',
     restoredDraftNotice: 'Restored your unsent message',
+    taskPausing: 'Pausing…',
+    taskPaused: 'Task paused. Continue from preserved progress.',
     restoredDraftUndo: 'Undo',
     queueEdit: 'Edit',
     queueExpand: 'Expand',
@@ -4466,14 +4543,14 @@ export const en: Translations = {
       state: state => state.replace(/_/g, ' ').replace(/^./, char => char.toUpperCase())
     },
     approvalMode: {
-      title: 'Approval mode',
+      title: 'How should Aino ask for approval?',
       ariaLabel: mode => `Approval mode: ${mode}`,
-      manual: 'Manual',
-      manualDescription: 'Ask before actions that require approval',
-      smart: 'Smart',
-      smartDescription: 'Automatically assess actions and ask when needed',
-      off: 'Off',
-      offDescription: 'Run without approval prompts'
+      manual: 'Ask for approval',
+      manualDescription: 'Ask before running actions that require approval',
+      smart: 'Approve for me',
+      smartDescription: 'Assess command risk automatically and ask you when needed',
+      off: 'Do not ask',
+      offDescription: 'Skip approval prompts; system permissions and safety rules still apply'
     },
     statusbar: {
       unknown: 'unknown',
@@ -4569,8 +4646,13 @@ export const en: Translations = {
           tool_definitions: 'Tool definitions'
         },
         empty: 'No context data yet',
+        detailsUnavailable: 'Category details are temporarily unavailable. Current usage is still shown.',
+        unavailable: 'Context usage is temporarily unavailable. Try again.',
+        retry: 'Retry',
+        pendingDetails: 'The current runtime has not provided category details.',
         loading: 'Loading breakdown…',
         percentFull: percent => `${percent}% Full`,
+        compactTitle: 'Context window',
         title: 'Context Usage',
         tokenSummary: (used, max) => `${used} / ${max} Tokens`,
         compacting: 'Compacting context…'
@@ -4583,7 +4665,7 @@ export const en: Translations = {
       noModel: 'no model',
       switchModel: 'Switch model',
       openModelPicker: 'Open model picker',
-      modelPinned: 'pinned by you; new chats use this instead of the Settings default',
+      modelPinned: 'Selected for this conversation; new chats use the Settings default',
       modelTitle: (provider, model) => `Model · ${provider}: ${model}`,
       providerModelTitle: (provider, model) => `${provider} · ${model}`,
       noRecentGatewayLogs: 'No recent gateway log lines',
@@ -4857,14 +4939,10 @@ export const en: Translations = {
   },
 
   zones: {
-    showTabStrip: 'Show tabs',
-    hideTabStrip: 'Hide tabs',
-    showStripTab: title => `Show ${title}`,
-    hideStripTab: title => `Hide ${title}`,
+    ...sidebarMode,
     zoneMenuLabel: title => `Zone options for ${title}`,
     lastTabKeptTitle: 'Last tab stays',
     lastTabKeptBody: 'This zone needs at least one visible tab. Show another tab first, or collapse the whole sidebar.',
-    toggleStripTab: title => `Toggle ${title} tab`,
     minimize: 'Minimize',
     restore: 'Restore',
     closeRunningTitle: 'Close running tab?',
@@ -5136,6 +5214,9 @@ export const en: Translations = {
       gatewayDisconnected: 'Hermes is offline right now. Reconnect, then send it again.'
     },
     tool: {
+      collapseDetails: 'Collapse details',
+      moreActions: 'Execution record actions',
+      hideRecord: 'Hide this record',
       copyCode: 'Copy code',
       renderingImage: 'Rendering image',
       copyOutput: 'Copy output',
@@ -5929,6 +6010,7 @@ export const en: Translations = {
     notCharged: 'Not charged',
     purposes: {
       chat: 'Chat',
+      image: 'Image generation',
       title: 'Conversation title',
       compression: 'Context compression',
       vision: 'Image understanding',
@@ -5957,13 +6039,14 @@ export const en: Translations = {
 
   platformRecharge: {
     title: 'Recharge',
-    description: 'Credits are confirmed by the platform ledger.',
+    description:
+      'Enter an amount to calculate automatically, then check the payment and credited amounts before paying.',
     amount: 'Recharge amount',
     range: 'Per-order limits',
-    quote: 'Get quote',
-    create: 'Confirm order',
-    payAmount: 'Payment amount',
-    creditAmount: 'Account credit',
+    quote: 'Calculating amounts…',
+    create: 'Proceed to payment',
+    payAmount: 'Amount to pay',
+    creditAmount: 'Amount credited',
     fee: 'Fee',
     orderId: 'Order number',
     openPayment: 'Open payment',
@@ -6091,6 +6174,7 @@ export const en: Translations = {
   },
 
   home: {
+    ...homeGuidance.en,
     subtitle:
       'Drop a file path, stack trace, or rough idea. I’ll investigate, suggest next steps, and keep actions reversible.',
     placeholder: 'Ask anything',

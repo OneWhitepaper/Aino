@@ -1,0 +1,103 @@
+"""Image authority is explicit per turn and never borrowed from another session."""
+
+from contextvars import copy_context
+from datetime import UTC, datetime, timedelta
+from types import SimpleNamespace
+
+import pytest
+
+
+def test_image_scope_restores_owner_and_keeps_only_live_credentials():
+    from tui_gateway.managed_image_runtime import current_image_binding, managed_image_scope
+
+    first = SimpleNamespace(purpose="image", expires_at=datetime.now(UTC) + timedelta(minutes=2))
+    second = SimpleNamespace(purpose="image", expires_at=datetime.now(UTC) + timedelta(minutes=2))
+    live = [first]
+    assert current_image_binding() is None
+    with managed_image_scope(lambda: live[0]):
+        assert current_image_binding() is first
+        copied = copy_context()
+        live[0] = second
+        assert copied.run(current_image_binding) is second
+        with managed_image_scope(lambda: None):
+            assert current_image_binding() is None
+        assert current_image_binding() is second
+    assert current_image_binding() is None
+
+
+@pytest.mark.parametrize("purpose,offset", [("chat", 120), ("image", -1)])
+def test_image_scope_refuses_chat_or_expired_lease(purpose, offset):
+    from tui_gateway.managed_image_runtime import current_image_binding, managed_image_scope
+
+    binding = SimpleNamespace(purpose=purpose, expires_at=datetime.now(UTC) + timedelta(seconds=offset))
+    with managed_image_scope(lambda: binding):
+        assert current_image_binding() is None
+
+
+def test_canonical_scope_fences_generation_and_rechecks_live_selection(monkeypatch):
+    from hermes_state_runtime import RuntimeStoreError
+    from tui_gateway.managed_image_runtime import conversation_image_scope, current_image_binding
+    from tui_gateway.managed_model_runtime import get_registry
+
+    authority = SimpleNamespace(profile_id="profile", sessions={"sid": object()}, executing={"sid": 7})
+    lease = SimpleNamespace(purpose="image", expires_at=datetime.now(UTC) + timedelta(minutes=2))
+    state = {}
+    selection = [state]
+    def selected(*_args, **_kwargs):
+        if selection[0] is None:
+            raise RuntimeStoreError("managed_binding_forbidden")
+        return selection[0]
+    monkeypatch.setattr("gateway.session_platform_model.managed_state", selected)
+    monkeypatch.setattr(get_registry(), "get", lambda *_args, **_kwargs: lease)
+    with conversation_image_scope(owner=(authority, "sid", 7)):
+        assert current_image_binding() is lease
+        stale = copy_context()
+        authority.executing["sid"] = 8
+        assert stale.run(current_image_binding) is None
+        authority.executing["sid"] = 7
+        selection[0] = None
+        assert current_image_binding() is None
+
+
+def test_copied_legacy_turn_cannot_keep_image_authority_after_scope_exit(monkeypatch):
+    from tui_gateway.managed_image_runtime import conversation_image_scope, current_image_binding
+    from tui_gateway.managed_model_runtime import get_registry
+
+    lease = SimpleNamespace(purpose="image", expires_at=datetime.now(UTC) + timedelta(minutes=2))
+    monkeypatch.setattr("tui_gateway.methods_managed_model._image_selection", lambda *_a: None)
+    monkeypatch.setattr(get_registry(), "get", lambda *_a, **_k: lease)
+    with conversation_image_scope(session_id="legacy", session={}):
+        assert current_image_binding() is lease
+        old_turn = copy_context()
+    assert old_turn.run(current_image_binding) is None
+
+
+@pytest.mark.parametrize("boundary", ["selection", "lease"])
+@pytest.mark.parametrize("change", ["generation", "session"])
+def test_canonical_scope_refuses_owner_changed_during_resolution(monkeypatch, boundary, change):
+    from tui_gateway.managed_image_runtime import conversation_image_scope, current_image_binding
+    from tui_gateway.managed_model_runtime import get_registry
+
+    authority = SimpleNamespace(profile_id="profile", sessions={"sid": object()}, executing={"sid": 7})
+    lease = SimpleNamespace(purpose="image", expires_at=datetime.now(UTC) + timedelta(minutes=2))
+
+    def change_owner():
+        if change == "generation":
+            authority.executing["sid"] = 8
+        else:
+            authority.sessions["sid"] = object()
+
+    def selected(*_args, **_kwargs):
+        if boundary == "selection":
+            change_owner()
+        return {}
+
+    def bound(*_args, **_kwargs):
+        if boundary == "lease":
+            change_owner()
+        return lease
+
+    monkeypatch.setattr("gateway.session_platform_model.managed_state", selected)
+    monkeypatch.setattr(get_registry(), "get", bound)
+    with conversation_image_scope(owner=(authority, "sid", 7)):
+        assert current_image_binding() is None

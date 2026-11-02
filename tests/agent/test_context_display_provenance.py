@@ -9,7 +9,7 @@ from agent.usage_anchor import capture_usage_anchor
 
 def test_context_provenance_follows_the_selected_number():
     comp = ContextCompressor(model="fixture", config_context_length=100_000, quiet_mode=True)
-    agent = SimpleNamespace(context_compressor=comp, tools=[], model="fixture")
+    agent = SimpleNamespace(context_compressor=comp, tools=[], model="fixture", _cached_system_prompt="fixture")
     messages = [{"role": "user", "content": "fixture question"}]
     with patch("agent.system_prompt.build_system_prompt_parts", return_value={"stable": "fixture"}):
         for source in ("local_estimate", "provider_usage", "provider_usage_plus_estimate"):

@@ -57,6 +57,7 @@ class GatewayReadyPayload(Payload):
     replay_epoch: str
     heartbeat: bool | None = None  # WebSocket transport only
     managed_model_binding: int | None = None
+    managed_image_binding: int | None = None
     # WebSocket transport bound to a session authority: session verbs speak the canonical wire
     # (``runtime.describe`` / ``session.create source=…``), so an explicit attach must negotiate it.
     session_authority: bool | None = None

@@ -13,6 +13,7 @@ import os
 import threading
 import time
 from contextlib import ExitStack, suppress
+from types import SimpleNamespace
 
 import pytest
 
@@ -243,3 +244,119 @@ def test_a_failed_reissue_leaves_the_row_failed_with_no_link(owned, monkeypatch,
     assert target.state == TargetState.failed
     assert target.connect_url is None
     assert target.detail == "vendor: still no"
+
+
+@pytest.mark.parametrize("tool_enabled", [True, False])
+def test_local_mcp_retry_needs_session_tools_but_no_hosted_service(owned, tmp_path, tool_enabled):
+    from hermes_constants import get_hermes_home
+    from tools.connectors import mcp
+
+    owner, stranger, session = owned
+    profile = tmp_path / "mcp-profile"
+    profile.mkdir()
+    (profile / "config.yaml").write_text("tools:\n  connectors:\n    enabled: false\n", encoding="utf-8")
+    session.update(profile_home=str(profile), agent=SimpleNamespace(
+        enabled_toolsets=["connections"] if tool_enabled else [], disabled_toolsets=[]))
+    homes = []
+
+    class Backend:
+        def start_oauth(self, name):
+            homes.append(get_hermes_home())
+            if len(homes) == 1:
+                raise RuntimeError("authorization failed")
+            return SimpleNamespace(auth_url=f"https://auth.example/{name}/retry")
+
+    operation = ConnectionOperation([Target("custom", "mcp", "authorize")], session_key=SID)
+    runner = mcp.open_runner("authorize", Backend())
+    try:
+        with server._session_profile_runtime_scope(session):
+            live.open(operation)
+            runner.prepare(operation)
+        assert operation.target("custom").state == TargetState.failed
+        assert _connect_rpc(stranger, connectors=["custom"], reconnect=True)["error"]["code"] == 4001
+        reply = _connect_rpc(owner, connectors=["custom"], reconnect=True)
+        if not tool_enabled:
+            assert reply["error"]["code"] == 4031, reply
+            assert operation.target("custom").state == TargetState.failed
+            assert homes == [profile]
+            return
+        assert "result" in reply, reply
+        target = reply["result"]["targets"][0]
+        assert target["state"] == "initiated"
+        assert target["connect_url"] == "https://auth.example/custom/retry"
+        assert homes == [profile, profile]
+        wrong_account = _connect_rpc(owner, connectors=["custom"], alias="foreign", reconnect=True)
+        assert wrong_account["error"]["code"] == 4004, wrong_account
+        assert len(homes) == 2
+    finally:
+        runner.work.clear()
+        runner.close()
+
+
+@pytest.mark.parametrize("names", [["notion"], ["local", "notion"], ["local", "missing"]])
+def test_retry_cannot_use_local_targets_to_bypass_hosted_policy(owned, tmp_path, names):
+    owner, _, session = owned
+    profile = tmp_path / "hosted-disabled"
+    profile.mkdir()
+    (profile / "config.yaml").write_text("tools:\n  connectors:\n    enabled: false\n", encoding="utf-8")
+    session.update(profile_home=str(profile), agent=SimpleNamespace(
+        enabled_toolsets=["connections"], disabled_toolsets=[]))
+    operation = _open_op()
+    operation.targets.append(Target("local", "mcp", "authorize", state=TargetState.failed))
+    operation.transition("notion", TargetState.failed, Actor.backend_watcher)
+    reply = _connect_rpc(owner, connectors=names, reconnect=True)
+    assert reply["error"]["code"] == 4031, reply
+    assert reply["error"]["data"]["reason"] == "CONNECTORS_UNAVAILABLE"
+    assert operation.target("notion").state == TargetState.failed
+    assert operation.target("local").state == TargetState.failed
+
+
+@pytest.mark.parametrize("kind", ["plugin", "skill"])
+def test_local_catalog_retry_installs_without_hosted_services(owned, tmp_path, kind):
+    from tools.connectors import catalog
+    from tests.waiting import wait_until
+
+    owner, _, session = owned
+    profile = tmp_path / "catalog-profile"
+    profile.mkdir()
+    (profile / "config.yaml").write_text("tools:\n  connectors:\n    enabled: false\n", encoding="utf-8")
+    session.update(profile_home=str(profile), agent=SimpleNamespace(
+        enabled_toolsets=["connections"], disabled_toolsets=[]))
+    installed = profile / "installed"
+
+    class Installer:
+        def plugin_entry(self, name):
+            return SimpleNamespace(name=name, repo="https://example.com/plugin", sha="a" * 40,
+                                   description="Local plugin", tier="community", requires_hermes="",
+                                   platforms=[], subdir="", capabilities=SimpleNamespace(requires_env=[]))
+
+        def refuse(self, entry):
+            return None
+
+        def skill_meta(self, name):
+            return {"name": name, "identifier": name, "source": "community"}
+
+        def install_plugin(self, name, **options):
+            installed.write_text(name, encoding="utf-8")
+            return {"ok": True}
+
+        def install_skill(self, name, **options):
+            installed.write_text(name, encoding="utf-8")
+            return {"name": name, "already_installed": False}
+
+    operation = ConnectionOperation([Target("local", kind, "install", state=TargetState.failed)], session_key=SID)
+    with server._session_profile_runtime_scope(session):
+        runner = catalog.open_runner(Installer())
+        live.open(operation)
+        runner.prepare(operation)
+    try:
+        reply = _connect_rpc(owner, connectors=["local"], reconnect=True)
+        assert "result" in reply, reply
+        work = wait_until(lambda: runner.work.get("local"))
+        assert work.done.wait(5)
+        runner.observe(operation)
+        status = _rpc(owner, "connectors.operation.status", op_id=operation.op_id)
+        assert status["result"]["targets"][0]["state"] == "connected", status
+        assert installed.read_text(encoding="utf-8") == "local"
+    finally:
+        runner.close()

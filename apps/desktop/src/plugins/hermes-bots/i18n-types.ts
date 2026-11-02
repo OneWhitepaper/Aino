@@ -69,6 +69,7 @@ export type BotsMessages = {
     createdOn: (name: string, target: string) => string
   }
   roster: {
+    modeDescription: string
     title: string
     search: string
     searchPlaceholder: string

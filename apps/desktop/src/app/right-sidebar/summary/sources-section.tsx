@@ -22,6 +22,7 @@ export function SourcesSection({ items, session }: { items: SummaryResource[]; s
         <Tip label={t.summary.sources.add}>
           <Button
             aria-label={t.summary.sources.add}
+            data-slot="summary-section-action"
             onClick={() => requestComposerFocus(session.target, { typeChar: '@' })}
             size="icon-xs"
             type="button"

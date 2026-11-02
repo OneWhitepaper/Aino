@@ -73,7 +73,8 @@ def test_how_hermes_works_reads_the_docs_and_builds_three_screens():
 
     assert text.split("\n")[1] == ("Load these skills with skill_view first: hermes-agent, claude-design, p5js, "
                                    "humanizer.")
-    assert "https://hermes-agent.nousresearch.com/docs" in text and "web_extract" in text
+    assert "https://github.com/OneWhitepaper/Aino/tree/main/website/docs" in text
+    assert "local checkout" in text and "docs/aino-brand-boundary.md" in text
     assert all(f"Screen {n}" in text for n in (1, 2, 3)) and "~/aino-first-task/" in text
 
 

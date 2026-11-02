@@ -5,6 +5,51 @@ import { deDelegationRouting } from './de_delegation_routing'
 import type { ModelSettingsTranslations } from './types_model_settings'
 
 export const deModelSettings: TranslationOverride<ModelSettingsTranslations> = {
+  imageGeneration: {
+    billingRules: 'Abrechnung gemäß den Regeln zur Bilderzeugung. Den Verbrauch finden Sie unter Mein Konto.',
+    unavailable:
+      'Die Aino-Bilderzeugung ist nicht verfügbar. Aktualisieren Sie die Laufzeit und prüfen Sie die Bildmodelle auf der Plattform.',
+    title: 'Bilderzeugung',
+    description:
+      'Erzeugen Sie Bilder mit Ihrem Aino-Konto. Bildmodelle werden getrennt von Textmodellen verwaltet; die Auswahl gilt für neue Gespräche.'
+  },
+  pages: {
+    description: 'Standardmodell und Modelle für verschiedene Aufgaben verwalten.',
+    auxiliaryTask: 'Aufgabe',
+    auxiliaryPurpose: 'Zweck',
+    auxiliaryModel: 'Modell',
+    moaReferences: 'Referenzmodelle',
+    moaEnableDescription: 'Aktivierte Vorlagen bleiben über das bestehende Modellrouting verfügbar.'
+  },
+  defaultMain: {
+    appliedLabel: 'Aktuelles Standardmodell',
+    applied: 'Angewendet',
+    unconfigured: 'Kein Standardmodell ausgewählt',
+    title: 'Standard-Hauptmodell',
+    description: 'Wählen Sie eine Standardmodellquelle für neue Sitzungen.',
+    sourceLabel: 'Modellquelle',
+    builtIn: 'Integrierte Aino-Modelle',
+    thirdParty: 'Drittanbieterdienst',
+    builtInDescription: 'Verwenden Sie Ihr Aino-Guthaben ohne separaten API-Schlüssel.',
+    thirdPartyDescription: 'Verwenden Sie einen verbundenen Modelldienst mit Abrechnung durch dessen Anbieter.',
+    unchanged: 'Entspricht dem aktuellen Standard',
+    pending: 'Nicht angewendet · der aktuelle Standard bleibt unverändert',
+    apply: 'Als Standard anwenden',
+    scopeHint:
+      'Gilt für neue Sitzungen. In bestehenden Chats können Sie das Modell im Eingabefeld wechseln. Manuelle Auswahlen werden weiterhin verwendet.',
+    defaultsTitle: 'Standardparameter',
+    defaultsDescription: 'Vorhandene Parameter gelten, wenn das Modell sie unterstützt.',
+    reasoningDescription: 'Steuert die Analysetiefe vor der Antwort',
+    speedDescription: 'Schnellere Antworten können eine andere Dienststufe verwenden',
+    chooseBuiltIn: 'Integriertes Aino-Modell auswählen',
+    selectionTitle: 'Integriertes Aino-Modell auswählen',
+    selectionDescription: 'Bestätigen Sie Ihre Auswahl und klicken Sie auf der Seite auf „Als Standard anwenden“.',
+    confirmSelection: 'Auswahl bestätigen',
+    configureConnection: 'Verbindung konfigurieren',
+    connection: 'API-Schlüssel',
+    connectionSaved: 'Dienst eingerichtet · Modell auswählen',
+    ainoConnected: 'Aino-Konto verbunden · verwendet Aino-Guthaben'
+  },
   setupProviderFallback: 'Anbieter',
   setUpProvider: name => `${name} einrichten`,
   staleAuxBefore: (count, names) =>

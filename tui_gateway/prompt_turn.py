@@ -821,7 +821,9 @@ def _invoke_agent(
     _usage_stop, _usage_thread = _start_usage_ticker(sid, agent)
     try:
         from agent.notification_presentation import notification_turn, event_presentation_muted
-        with notification_turn(agent, muted=event_presentation_muted("message.delta", sid), session_id=sid):
+        from tui_gateway.managed_image_runtime import conversation_image_scope
+        with notification_turn(agent, muted=event_presentation_muted("message.delta", sid), session_id=sid), \
+                conversation_image_scope(session_id=sid, session=session):
             st.result = agent.run_conversation(run_message, **st.run_kwargs)
     finally:
         # Stop AND join before anything emits: a tick surviving past message.complete would

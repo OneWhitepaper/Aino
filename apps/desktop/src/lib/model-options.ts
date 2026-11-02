@@ -6,21 +6,21 @@ type CatalogProviderIdentity = Partial<Pick<ModelOptionProvider, 'aliases' | 'na
   Pick<ModelOptionProvider, 'slug'>
 
 /** Route identity uses only canonical keys and aliases accepted by the gateway. */
-export function modelProviderMatches(row: ModelOptionProvider, provider: string): boolean {
+export function modelProviderMatches(row: CatalogProviderIdentity, provider: string): boolean {
   return row.slug === provider || (row.aliases?.includes(provider) ?? false)
 }
 
-/** True when `currentProvider` is this catalog row — slug, display name, or
- *  a custom-provider alias (`custom:<key>` vs the bare config key, #87035). */
+/** Namespaced custom connections match only route keys. Their user-editable
+ *  display names can equal an official slug without making it the same route.
+ *  Legacy rows retain their display-name and explicit-alias compatibility. */
 export function catalogProviderMatches(provider: CatalogProviderIdentity, currentProvider: string): boolean {
   if (!currentProvider) {
     return false
   }
 
   return (
-    provider.slug === currentProvider ||
-    provider.name === currentProvider ||
-    (provider.aliases?.includes(currentProvider) ?? false)
+    modelProviderMatches(provider, currentProvider) ||
+    (!provider.slug.startsWith('custom:') && provider.name === currentProvider)
   )
 }
 
@@ -30,7 +30,10 @@ export function findCatalogProvider<T extends CatalogProviderIdentity>(
   providers: readonly T[],
   currentProvider: string
 ): T | undefined {
-  return providers.find(row => catalogProviderMatches(row, currentProvider))
+  return (
+    providers.find(row => modelProviderMatches(row, currentProvider)) ??
+    providers.find(row => catalogProviderMatches(row, currentProvider))
+  )
 }
 
 /** The catalog's option support for the current pick, or undefined while the
@@ -79,20 +82,15 @@ export function moaPickRemoved(
   return !(row?.models ?? []).includes(model)
 }
 
-/** A bare provider slug is the pre-migration spelling of a custom entry. The
- *  catalog aliases `custom:<key>` with the bare config key (#87035), so a pick
- *  still carrying `nvidia` and a profile default of `custom:nvidia` name the
- *  SAME endpoint — the pick's spelling is simply stale, not a distinct choice.
- *  Shipping the bare slug resolves the NATIVE provider instead of the custom
- *  entry, silently dropping the entry's `extra_body` (e.g.
- *  `thinking: {type: adaptive}`) that the user configured (#81922).
- *
- *  Only a bare slug can be superseded: a pick that already names a provider
- *  class (`custom:<other>`, `moa`, `openai-codex`) is a different endpoint and
- *  keeps the sticky behavior. The bare slug must be the default's own key, so
- *  an unrelated manual pick (`anthropic` while the default is `custom:nvidia`)
- *  is never clobbered. */
-export function customDefaultSupersedesPick(pickProvider: string, defaultProvider: string): boolean {
+/** Migrate a bare custom-provider alias only when the owner's catalog proves
+ *  both spellings name one route (#81922). A same-named official provider is
+ *  a distinct choice, so an exact slug wins over any legacy alias. Missing
+ *  catalog data cannot authorize changing a manual pick. */
+export function customDefaultSupersedesPick(
+  pickProvider: string,
+  defaultProvider: string,
+  providers?: readonly ModelOptionProvider[]
+): boolean {
   const pick = (pickProvider || '').trim().toLowerCase()
   const fallback = (defaultProvider || '').trim().toLowerCase()
 
@@ -102,7 +100,17 @@ export function customDefaultSupersedesPick(pickProvider: string, defaultProvide
 
   const key = fallback.slice('custom:'.length).trim()
 
-  return key.length > 0 && pick === key
+  if (!key || pick !== key) {
+    return false
+  }
+
+  const route = (provider: string) =>
+    providers?.find(row => row.slug.toLowerCase() === provider) ??
+    providers?.find(row => row.aliases?.some(alias => alias.toLowerCase() === provider))
+
+  const fallbackRoute = route(fallback)
+
+  return fallbackRoute !== undefined && fallbackRoute === route(pick)
 }
 
 interface ModelOptionsRequest {

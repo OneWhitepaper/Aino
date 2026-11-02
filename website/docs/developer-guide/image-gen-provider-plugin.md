@@ -6,6 +6,15 @@ description: "How to build an image-generation backend plugin for Hermes Agent"
 
 # Building an Image Generation Provider Plugin
 
+Account-backed catalogs may override
+`CatalogProviderBase.accepts_model_selection(model_id)` when the authoritative
+catalog lives in the authenticated desktop process. The default validates
+against `list_models()`. An override validates only a saved non-secret preference;
+it must not grant permission. The Aino image provider accepts a bounded catalog
+identifier here and requires a matching, short-lived image-purpose lease at
+dispatch. `list_models()` returns the current preference for readback without
+copying account credentials or duplicating the remote model catalog.
+
 Image-gen provider plugins register a backend that services every `image_generate` tool call — DALL·E, gpt-image, Grok, Flux, Imagen, Stable Diffusion, fal, Replicate, a local ComfyUI rig, anything. Built-in providers (OpenAI, OpenAI-Codex, xAI, FAL, Krea, DeepInfra, OpenRouter, Meta Model API) all ship as plugins. You can add a new one, or override a bundled one, by dropping a directory into `plugins/image_gen/<name>/`.
 
 :::tip

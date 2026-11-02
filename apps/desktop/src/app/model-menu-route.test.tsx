@@ -5,6 +5,7 @@ import { MemoryRouter } from 'react-router'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 
 import { platformAccountActions } from '@/api/platform'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import type { HermesConnection } from '@/global'
 import {
   $activeGatewayConnectionId,
@@ -36,7 +37,14 @@ vi.mock('@/lib/model-options', async importOriginal => ({
   requestModelOptions: vi.fn(async () => ({ providers: [] }))
 }))
 // Keep the actual menu/controller and gateway stores; omit the unrelated chat shell.
-vi.mock('./chat', () => ({ ChatView: ({ modelMenuContent }: { modelMenuContent?: ReactNode }) => modelMenuContent }))
+vi.mock('./chat', () => ({
+  ChatView: ({ modelMenuContent }: { modelMenuContent?: ReactNode }) => (
+    <DropdownMenu open>
+      <DropdownMenuTrigger>Model</DropdownMenuTrigger>
+      <DropdownMenuContent>{modelMenuContent}</DropdownMenuContent>
+    </DropdownMenu>
+  )
+}))
 vi.mock('./chat/sidebar', () => ({ ChatSidebar: () => null }))
 vi.mock('./right-sidebar/terminal/chrome', () => ({ TerminalPaneChrome: () => null }))
 vi.mock('./contrib/latest-actions', () => ({ latestChatActions: () => ({}), latestSidebarActions: () => ({}) }))
@@ -53,9 +61,14 @@ class MenuSocket extends EventTarget {
     queueMicrotask(() => {
       this.readyState = MenuSocket.OPEN
       this.dispatchEvent(new Event('open'))
-      this.dispatchEvent(new MessageEvent('message', {
-        data: JSON.stringify({ method: 'event', params: { type: 'gateway.ready', payload: { managed_model_binding: 1 } } })
-      }))
+      this.dispatchEvent(
+        new MessageEvent('message', {
+          data: JSON.stringify({
+            method: 'event',
+            params: { type: 'gateway.ready', payload: { managed_model_binding: 1 } }
+          })
+        })
+      )
     })
   }
 
@@ -69,7 +82,10 @@ beforeEach(async () => {
   stubResizeObserver()
   vi.stubGlobal('WebSocket', MenuSocket)
   clearGatewayManagedCapabilities()
-  configureGatewayRegistry({ onEvent: () => undefined, onActiveRouteChanged: profile => $activeGatewayProfile.set(profile) })
+  configureGatewayRegistry({
+    onEvent: () => undefined,
+    onActiveRouteChanged: profile => $activeGatewayProfile.set(profile)
+  })
   setPrimaryGateway(null, 'default')
   setPrimaryGatewayConnectionId(null)
   await ensureGatewayForProfile('default')
@@ -104,73 +120,92 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
-it.each(['inline', 'dialog'] as const)('%s menu follows exact owners through cold boot, source replacement and redial', async surface => {
-  const actions = { selectModel: vi.fn(), requestGateway: vi.fn() } as unknown as WiringActions
-  render(
-    <MemoryRouter>
-      <QueryClientProvider client={new QueryClient()}>
-        {surface === 'inline' ? (
-          <ChatRoutesSurface actions={actions} />
-        ) : (
-          <ModelPickerOverlay onSelect={actions.selectModel} requestGateway={actions.requestGateway} />
-        )}
-      </QueryClientProvider>
-    </MemoryRouter>
-  )
-
-  const gateway = { connectionState: 'open' } as never
-  await act(async () => {
-    setPrimaryGateway(gateway, 'default')
-    setConnection({ connectionId: 'local', mode: 'local', profile: 'default' } as never)
-    setPrimaryGatewayConnectionId('local')
-    reportPrimaryGatewayEvent(gateway, { type: 'gateway.ready', payload: { managed_model_binding: 1 } })
-    await ensureGatewayForProfile('default')
-  })
-  expect(await screen.findByRole('option', { name: /Fixture Model/ })).toBeTruthy()
-
-  act(() => {
-    setPrimaryGatewayConnectionId('replacement-source')
-    recordGatewayReadyCapability(
-      { connectionId: 'foreign-source', profile: 'default' },
-      { type: 'gateway.ready', payload: { managed_model_binding: 1 } }
+it.each(['inline', 'dialog'] as const)(
+  '%s menu follows exact owners through cold boot, source replacement and redial',
+  async surface => {
+    const modelRole = surface === 'inline' ? 'menuitem' : 'option'
+    const actions = { selectModel: vi.fn(), requestGateway: vi.fn() } as unknown as WiringActions
+    render(
+      <MemoryRouter>
+        <QueryClientProvider client={new QueryClient()}>
+          {surface === 'inline' ? (
+            <ChatRoutesSurface actions={actions} />
+          ) : (
+            <ModelPickerOverlay onSelect={actions.selectModel} requestGateway={actions.requestGateway} />
+          )}
+        </QueryClientProvider>
+      </MemoryRouter>
     )
-  })
-  expect(screen.queryByRole('option', { name: /Fixture Model/ })).toBeNull()
-  expect(screen.getByText('This connection does not support Aino models')).toBeTruthy()
 
-  act(() => reportPrimaryGatewayEvent(gateway, { type: 'gateway.ready', payload: { managed_model_binding: 1 } }))
-  expect(await screen.findByRole('option', { name: /Fixture Model/ })).toBeTruthy()
-
-  const descriptor: HermesConnection = {
-    authMode: 'token', baseUrl: 'https://fixture.invalid', connectionId: 'replacement-source',
-    mode: 'remote', profile: 'isolated', token: 'fixture', wsUrl: 'wss://fixture.invalid/api/ws', sharedRemote: false,
-    isFullscreen: false, nativeOverlayWidth: 0, logs: [], windowButtonPosition: null
-  }
-
-  const getConnectionFor = vi.fn(async () => descriptor)
-  window.hermesDesktop!.getConnectionFor = getConnectionFor
-
-  await act(async () => { await ensureGatewayForAgent('replacement-source', 'isolated') })
-  expect(await screen.findByRole('option', { name: /Fixture Model/ })).toBeTruthy()
-
-  for (const retained of [false, true]) {
-    const release = retained ? retainGatewayForRelay('replacement-source', 'isolated') : null
-    const probe = deferred<HermesConnection>()
-    getConnectionFor.mockImplementationOnce(() => probe.promise)
+    const gateway = { connectionState: 'open' } as never
+    await act(async () => {
+      setPrimaryGateway(gateway, 'default')
+      setConnection({ connectionId: 'local', mode: 'local', profile: 'default' } as never)
+      setPrimaryGatewayConnectionId('local')
+      reportPrimaryGatewayEvent(gateway, { type: 'gateway.ready', payload: { managed_model_binding: 1 } })
+      await ensureGatewayForProfile('default')
+    })
+    expect(await screen.findByRole(modelRole, { name: /Fixture Model/ })).toBeTruthy()
 
     act(() => {
-      disposeSecondariesForConnection('replacement-source', { redial: true })
-      release?.()
+      setPrimaryGatewayConnectionId('replacement-source')
+      recordGatewayReadyCapability(
+        { connectionId: 'foreign-source', profile: 'default' },
+        { type: 'gateway.ready', payload: { managed_model_binding: 1 } }
+      )
     })
+    expect(screen.queryByRole(modelRole, { name: /Fixture Model/ })).toBeNull()
+    expect(screen.getByText('This connection does not support Aino models')).toBeTruthy()
 
-    // A pending shared-host probe leaves no active entry: neither menu may
-    // keep borrowing the disposed socket's still-recorded ready evidence.
-    expect(activeGatewayConnectionId()).toBeNull()
-    expect($activeGatewayConnectionId.get(), retained ? 'deferred redial owner' : 'immediate redial owner').toBe(activeGatewayConnectionId())
-    expect(screen.queryByRole('option', { name: /Fixture Model/ })).toBeNull()
+    act(() => reportPrimaryGatewayEvent(gateway, { type: 'gateway.ready', payload: { managed_model_binding: 1 } }))
+    expect(await screen.findByRole(modelRole, { name: /Fixture Model/ })).toBeTruthy()
 
-    await act(async () => { probe.resolve(descriptor) })
-    await waitFor(() => expect($activeGatewayConnectionId.get()).toBe('replacement-source'))
-    expect(await screen.findByRole('option', { name: /Fixture Model/ })).toBeTruthy()
+    const descriptor: HermesConnection = {
+      authMode: 'token',
+      baseUrl: 'https://fixture.invalid',
+      connectionId: 'replacement-source',
+      mode: 'remote',
+      profile: 'isolated',
+      token: 'fixture',
+      wsUrl: 'wss://fixture.invalid/api/ws',
+      sharedRemote: false,
+      isFullscreen: false,
+      nativeOverlayWidth: 0,
+      logs: [],
+      windowButtonPosition: null
+    }
+
+    const getConnectionFor = vi.fn(async () => descriptor)
+    window.hermesDesktop!.getConnectionFor = getConnectionFor
+
+    await act(async () => {
+      await ensureGatewayForAgent('replacement-source', 'isolated')
+    })
+    expect(await screen.findByRole(modelRole, { name: /Fixture Model/ })).toBeTruthy()
+
+    for (const retained of [false, true]) {
+      const release = retained ? retainGatewayForRelay('replacement-source', 'isolated') : null
+      const probe = deferred<HermesConnection>()
+      getConnectionFor.mockImplementationOnce(() => probe.promise)
+
+      act(() => {
+        disposeSecondariesForConnection('replacement-source', { redial: true })
+        release?.()
+      })
+
+      // A pending shared-host probe leaves no active entry: neither menu may
+      // keep borrowing the disposed socket's still-recorded ready evidence.
+      expect(activeGatewayConnectionId()).toBeNull()
+      expect($activeGatewayConnectionId.get(), retained ? 'deferred redial owner' : 'immediate redial owner').toBe(
+        activeGatewayConnectionId()
+      )
+      expect(screen.queryByRole(modelRole, { name: /Fixture Model/ })).toBeNull()
+
+      await act(async () => {
+        probe.resolve(descriptor)
+      })
+      await waitFor(() => expect($activeGatewayConnectionId.get()).toBe('replacement-source'))
+      expect(await screen.findByRole(modelRole, { name: /Fixture Model/ })).toBeTruthy()
+    }
   }
-})
+)

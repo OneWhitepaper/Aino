@@ -1,4 +1,4 @@
-import { JsonRpcGatewayError } from '@hermes/shared'
+import { jsonRpcErrorFromFrame, JsonRpcGatewayError } from '@hermes/shared'
 import { beforeEach, expect, test, vi } from 'vitest'
 
 import { translateNow } from '@/i18n'
@@ -56,6 +56,31 @@ test('ELEVENLABS_API_KEY not set toasts plain copy with an Open Keys action for 
 test('structured storage_* error codes route to Maintenance', () => {
   notifyError(new Error('500 {"detail":{"message":"database is locked","code":"storage_locked"}}'), 'Prompt failed')
 
+  $notifications.get()[0]?.action?.onClick()
+  expect($routeRequest.get()?.path).toBe('/command-center?section=maintenance')
+})
+
+test('canonical storage refusals show the backend detail and route to Maintenance', () => {
+  notifyError(
+    jsonRpcErrorFromFrame({
+      code: 4001,
+      message: 'storage_unavailable',
+      data: { reason: 'storage_unavailable', detail: 'Failed to save approval mode: config is read-only' }
+    }),
+    'Save failed'
+  )
+
+  expect(lastMessage()).toBe(translateNow('notifications.errors.storageFailure'))
+  expect($notifications.get()[0]?.detail).toContain('Failed to save approval mode: config is read-only')
+  $notifications.get()[0]?.action?.onClick()
+  expect($routeRequest.get()?.path).toBe('/command-center?section=maintenance')
+})
+
+test('legacy bare storage_unavailable response uses localized storage guidance', () => {
+  notifyError(new JsonRpcGatewayError('storage_unavailable', { code: 5001 }), 'Save failed')
+
+  expect(lastMessage()).toBe(translateNow('notifications.errors.storageFailure'))
+  expect($notifications.get()[0]?.detail).toBeUndefined()
   $notifications.get()[0]?.action?.onClick()
   expect($routeRequest.get()?.path).toBe('/command-center?section=maintenance')
 })

@@ -1,3 +1,4 @@
+import { revealSessionWorkspace } from '@/app/open-session'
 import { $paneVisible, revealTreePane } from '@/components/pane-shell/tree/store'
 import {
   $workspaceMode,
@@ -41,6 +42,9 @@ export function switchWorkspaceScope(
       // Visibility listeners run inside a tree mutation. A later switch wins.
       setTimeout(() => {
         if ($workspaceMode.get() === 'sessions') {
+          revealSessionWorkspace(to => {
+            window.location.hash = `#${to}`
+          })
           revealTreePane(pane)
         }
       }, 0)

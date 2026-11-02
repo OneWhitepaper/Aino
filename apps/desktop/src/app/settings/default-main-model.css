@@ -1,0 +1,250 @@
+.default-main-model {
+  container-type: inline-size;
+  min-width: 0;
+}
+.default-main-model-current {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1.625rem;
+  padding: 0.875rem 1rem;
+  border-radius: var(--aino-radius-row);
+  background: var(--ui-bg-tertiary);
+}
+.default-main-model-current-copy {
+  min-width: 0;
+}
+.default-main-model-current-label {
+  margin: 0 0 0.3125rem;
+  color: var(--ui-text-tertiary);
+  font-size: var(--aino-text-caption);
+}
+.default-main-model-current-value {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.25rem 0.5625rem;
+  color: var(--ui-text-primary);
+  font-size: var(--aino-text-body);
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+.default-main-model-current-source,
+.default-main-model-current-state {
+  color: var(--ui-text-tertiary);
+  font-size: var(--aino-text-caption);
+  font-weight: 400;
+}
+.default-main-model-current-state {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  gap: 0.3125rem;
+}
+.default-main-model-current-state > svg {
+  width: 0.875rem;
+  height: 0.875rem;
+}
+.default-main-model-heading {
+  margin-bottom: 0.875rem;
+}
+.default-main-model-heading [data-settings-section-heading] {
+  margin-bottom: 0.3125rem;
+}
+.default-main-model-heading > p {
+  margin: 0 0 0 1.5rem;
+  color: var(--ui-text-secondary);
+  font-size: var(--aino-text-caption);
+  line-height: 1.6;
+}
+.default-main-model-fields {
+  border-top: 1px solid var(--ui-stroke-tertiary);
+}
+.default-main-model-source-row {
+  display: grid;
+  grid-template-columns: 8.375rem minmax(0, 1fr);
+  align-items: start;
+  gap: 1.5rem;
+  padding-block: 1.0625rem;
+  border-bottom: 1px solid var(--ui-stroke-tertiary);
+}
+.default-main-model-source-label {
+  padding-top: 0.5rem;
+  color: var(--ui-text-secondary);
+  font-size: var(--aino-text-body);
+}
+.default-main-model-source-choice {
+  min-width: 0;
+}
+.default-main-model-source-options {
+  display: inline-flex;
+  flex-wrap: wrap;
+  max-width: 100%;
+  gap: 0.25rem;
+  padding: 0.25rem;
+}
+.default-main-model-source-options > button {
+  min-height: 2rem;
+  gap: 0.4375rem;
+  padding-inline: 0.875rem;
+  font-size: var(--aino-text-body);
+}
+.default-main-model-source-options > button > svg {
+  width: 0.9375rem;
+  height: 0.9375rem;
+}
+.default-main-model-source-description,
+.default-main-model-scope-hint {
+  margin: 0.5rem 0 0;
+  color: var(--ui-text-tertiary);
+  font-size: var(--aino-text-caption);
+  line-height: 1.6;
+}
+.default-main-model-controls[hidden] {
+  display: none;
+}
+.default-main-model-controls [data-settings-row-body] {
+  grid-template-columns: 8.375rem minmax(0, 1fr);
+  align-items: center;
+  gap: 1.5rem;
+  min-height: 4rem;
+  padding-block: 0.8125rem;
+}
+.default-main-model-controls [data-settings-row-body] > div:last-child {
+  justify-content: stretch;
+  justify-self: stretch;
+}
+.default-main-model-controls [data-settings-row] {
+  border-bottom: 1px solid var(--ui-stroke-tertiary);
+}
+.default-main-model-controls .settings-row-label {
+  color: var(--ui-text-secondary);
+  font-size: var(--aino-text-body);
+  font-weight: 400;
+}
+.default-main-model-controls [data-slot='select-trigger'] {
+  min-height: 2.25rem;
+  font-size: var(--aino-text-body);
+}
+.default-main-model-controls-builtin [aria-haspopup='dialog'] {
+  min-height: 3rem;
+  text-align: start;
+  font-size: var(--aino-text-body);
+}
+.default-main-model-connection {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4375rem;
+  margin: 0.6875rem 0 0 9.875rem;
+  color: var(--ui-text-secondary);
+  font-size: var(--aino-text-caption);
+  line-height: 1.6;
+}
+.default-main-model-connection > svg {
+  width: 0.875rem;
+  height: 0.875rem;
+  flex-shrink: 0;
+}
+.default-main-model-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.75rem 1.25rem;
+  margin-top: 1.0625rem;
+}
+.default-main-model-save-state {
+  color: var(--ui-text-tertiary);
+  font-size: var(--aino-text-caption);
+}
+.default-main-model-actions > button {
+  min-height: 2.125rem;
+  padding-inline: 0.75rem;
+  font-size: var(--aino-text-caption);
+}
+.default-main-model-save-state[data-pending] {
+  color: var(--ui-yellow);
+}
+.default-main-model-scope-hint {
+  margin-top: 0.875rem;
+}
+.default-main-model-defaults {
+  margin-top: 2rem;
+}
+.default-main-model-parameters > [data-settings-section-heading] {
+  margin-bottom: 0.3125rem;
+}
+.default-main-model-parameters > p {
+  margin: 0 0 0.8125rem 1.5rem;
+  color: var(--ui-text-secondary);
+  font-size: var(--aino-text-caption);
+  line-height: 1.6;
+}
+.default-main-model-parameters > [data-settings-row] {
+  border-bottom: 1px solid var(--ui-stroke-tertiary);
+}
+.default-main-model-parameters > p + [data-settings-row] {
+  border-top: 1px solid var(--ui-stroke-tertiary);
+}
+.default-main-model-parameters [data-settings-row-body] {
+  grid-template-columns: minmax(9rem, 1fr) minmax(0, auto);
+  align-items: center;
+  min-height: 4.125rem;
+  padding-block: 0.8125rem;
+}
+.default-main-model-parameters .settings-row-label {
+  font-size: var(--aino-text-body);
+  font-weight: 400;
+}
+.default-main-model-parameters .settings-row-description {
+  color: var(--ui-text-tertiary);
+}
+.default-main-model-parameters [role='group'] {
+  max-width: 100%;
+}
+.default-main-model-parameters [role='group'] > div {
+  display: inline-flex;
+  flex-wrap: wrap;
+  max-width: 100%;
+}
+.default-main-model-parameters [role='group'] button {
+  min-height: 1.6875rem;
+  padding-inline: 0.625rem;
+  font-size: var(--aino-text-caption);
+}
+@container (max-width: 34rem) {
+  .default-main-model-source-row,
+  .default-main-model-controls [data-settings-row-body],
+  .default-main-model-parameters [data-settings-row-body] {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.5625rem;
+  }
+  .default-main-model-source-label {
+    padding-top: 0;
+  }
+  .default-main-model-current {
+    align-items: start;
+  }
+  .default-main-model-connection {
+    margin-inline-start: 0;
+  }
+  .default-main-model-parameters [data-settings-row-body] > div:last-child {
+    justify-content: flex-start;
+    justify-self: start;
+  }
+}
+
+.default-main-model-connection[data-connected]::before {
+  content: '';
+  width: 0.375rem;
+  height: 0.375rem;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: var(--ui-green);
+}
+.model-settings-scope [role='status'] {
+  grid-column: 1 / -1;
+  text-align: end;
+}

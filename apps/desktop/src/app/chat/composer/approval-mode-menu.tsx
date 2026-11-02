@@ -1,18 +1,16 @@
 import { useStore } from '@nanostores/react'
 import { useCallback, useEffect, useState } from 'react'
 
+import { ApprovalModeIcon, ApprovalModeOptions } from '@/app/shell/approval-mode-menu'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
   DropdownMenuContent,
-  DropdownMenuLabel,
-  DropdownMenuRadioGroup,
-  DropdownMenuRadioItem,
-  DropdownMenuSeparator,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { useI18n } from '@/i18n'
-import { ChevronDown, Zap, ZapFilled } from '@/lib/icons'
+import { ChevronDown } from '@/lib/icons'
+import { cn } from '@/lib/utils'
 import {
   $approvalModes,
   type ApprovalMode,
@@ -67,12 +65,6 @@ export function ApprovalModeMenu({
   const [saving, setSaving] = useState(false)
   const labels: Record<ApprovalMode, string> = { manual: copy.manual, smart: copy.smart, off: copy.off }
 
-  const descriptions: Record<ApprovalMode, string> = {
-    manual: copy.manualDescription,
-    smart: copy.smartDescription,
-    off: copy.offDescription
-  }
-
   useEffect(() => {
     if (!disabled) {
       void syncApprovalModeForProfile(requestGateway, profile).catch(() => undefined)
@@ -96,14 +88,14 @@ export function ApprovalModeMenu({
       <DropdownMenuTrigger asChild>
         <Button
           aria-label={copy.ariaLabel(labels[mode])}
-          className={compact ? undefined : 'text-xs font-normal'}
+          className={cn(!compact && 'text-[length:var(--aino-text-label)] font-normal', mode === 'off' && 'approval-mode-trigger-warning')}
           data-slot="composer-approval-mode"
           disabled={disabled || saving}
           size={compact ? 'icon-xs' : 'sm'}
           type="button"
           variant="ghost"
         >
-          {mode === 'off' ? <ZapFilled /> : <Zap />}
+          <ApprovalModeIcon mode={mode} />
           {!compact && (
             <>
               <span>{labels[mode]}</span>
@@ -112,24 +104,8 @@ export function ApprovalModeMenu({
           )}
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" className="w-72" side="top">
-        <DropdownMenuLabel>{copy.title}</DropdownMenuLabel>
-        <DropdownMenuSeparator />
-        <DropdownMenuRadioGroup onValueChange={value => void selectMode(value as ApprovalMode)} value={mode}>
-          {(['manual', 'smart', 'off'] as const).map(value => (
-            <DropdownMenuRadioItem
-              className="items-start gap-2"
-              disabled={disabled || saving}
-              key={value}
-              value={value}
-            >
-              <span className="flex min-w-0 flex-col gap-0.5">
-                <span className="text-xs text-foreground">{labels[value]}</span>
-                <span className="text-[0.6875rem] leading-snug text-(--ui-text-tertiary)">{descriptions[value]}</span>
-              </span>
-            </DropdownMenuRadioItem>
-          ))}
-        </DropdownMenuRadioGroup>
+      <DropdownMenuContent align="start" className="approval-mode-menu" side="top">
+        <ApprovalModeOptions disabled={disabled || saving} mode={mode} onValueChange={value => void selectMode(value)} />
       </DropdownMenuContent>
     </DropdownMenu>
   )

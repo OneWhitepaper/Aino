@@ -1,31 +1,14 @@
 [data-catalog-card] {
-  border-color: var(--ui-stroke-secondary);
+  border: 1px solid var(--ui-stroke-secondary);
   border-radius: var(--aino-radius-card);
   background: var(--ui-bg-elevated);
-  transition:
-    border-color 0.12s ease,
-    background-color 0.12s ease;
+  transition: border-color 0.12s ease;
 }
 [data-catalog-card]:is(:hover, :focus-within) {
   border-color: var(--ui-stroke-primary);
 }
-/* Store-browsing feel: hovering one card dims its siblings in the same group. */
-[data-catalog-hover-group]:has([data-catalog-card]:hover) [data-catalog-card]:not(:hover) {
-  opacity: 1;
-  filter: none;
-}
-
 @media (prefers-reduced-motion: reduce) {
   [data-catalog-card] {
-    transition:
-      border-color 0.1s ease,
-      box-shadow 0.1s ease,
-      opacity 0.15s ease,
-      filter 0.15s ease;
-  }
-
-  [data-catalog-card]:is(:hover, :focus-within),
-  [data-catalog-hover-group]:has([data-catalog-card]:hover) [data-catalog-card] {
     transition: none;
   }
 }

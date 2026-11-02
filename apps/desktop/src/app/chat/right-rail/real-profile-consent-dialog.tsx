@@ -1,5 +1,5 @@
 import { useStore } from '@nanostores/react'
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 
 import { readUseRealProfile } from '@/app/settings/browser-real-profile-panel'
 import { Button } from '@/components/ui/button'
@@ -16,6 +16,7 @@ import { saveHermesConfigRecord } from '@/hermes'
 import { useI18n } from '@/i18n'
 import { Check, Globe } from '@/lib/icons'
 import { notify, notifyError } from '@/store/notifications'
+import { $activeGatewayProfile } from '@/store/profile'
 import {
   $realProfilePromptClaim,
   $realProfilePromptDismissed,
@@ -90,6 +91,17 @@ export function RealProfileConsentDialog({ tabId }: RealProfileConsentDialogProp
   const { data: config, writeScope } = useHermesConfigRecord()
   const setConfig = hermesConfigCacheWriter()
   const [busy, setBusy] = useState(false)
+  const activeProfile = useStore($activeGatewayProfile)
+  const revision = useRef(0)
+
+  // eslint-disable-next-line no-restricted-syntax -- invalidates pending request generations; does not mirror an atom
+  useEffect(() => {
+    setBusy(false)
+
+    return () => {
+      revision.current += 1
+    }
+  }, [activeProfile, connection?.connectionId])
 
   useEffect(() => {
     claimRealProfilePrompt(tabId)
@@ -110,6 +122,12 @@ export function RealProfileConsentDialog({ tabId }: RealProfileConsentDialogProp
         : {}
 
     const next = { ...config, browser: { ...browser, use_real_profile: true } }
+    const version = revision.current
+
+    const isCurrent = () =>
+      revision.current === version &&
+      $connection.get()?.connectionId === connection?.connectionId &&
+      $activeGatewayProfile.get() === activeProfile
 
     setBusy(true)
     setConfig(next)
@@ -119,14 +137,20 @@ export function RealProfileConsentDialog({ tabId }: RealProfileConsentDialogProp
       // snapshot would overwrite keys other surfaces changed since it loaded.
       await saveHermesConfigRecord({ browser: { use_real_profile: true } }, writeScope)
 
-      notify({ kind: 'info', title: copy.enabledTitle, message: copy.enabledMessage })
+      if (isCurrent()) {
+        notify({ kind: 'info', title: copy.enabledTitle, message: copy.enabledMessage })
+      }
     } catch (err) {
-      setConfig(config)
-      notifyError(err, copy.failedSave)
+      if (isCurrent()) {
+        setConfig(config)
+        notifyError(err, copy.failedSave)
+      }
     } finally {
-      setBusy(false)
+      if (isCurrent()) {
+        setBusy(false)
+      }
     }
-  }, [busy, config, copy, setConfig, writeScope])
+  }, [activeProfile, busy, config, connection?.connectionId, copy, setConfig, writeScope])
 
   // Remote backend, config not loaded yet, feature already on, opted out, or
   // another pane owns the prompt — render nothing. `enabled` flipping true

@@ -20,5 +20,10 @@ if (!process.env.HERMES_E2E_RUN_TMP) {
   process.env.TMPDIR = root
   process.env.TEMP = root
   process.env.TMP = root
-  process.on('exit', () => fs.rmSync(root, { recursive: true, force: true }))
+  process.on('exit', () => fs.rmSync(root, {
+    recursive: true,
+    force: true,
+    maxRetries: 5,
+    retryDelay: 100,
+  }))
 }

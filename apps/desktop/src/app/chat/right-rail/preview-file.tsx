@@ -21,7 +21,7 @@ import { chunkTextLines, useFixedRowWindow } from '@/components/chat/fixed-row-w
 import { LazyShiki as ShikiHighlighter } from '@/components/chat/shiki-highlighter'
 import { PageLoader } from '@/components/page-loader'
 import { Button } from '@/components/ui/button'
-import { Tip } from '@/components/ui/tooltip'
+import { CopyButton } from '@/components/ui/copy-button'
 import { translateNow, useI18n } from '@/i18n'
 import { localizedPreviewError } from '@/i18n/preview-errors'
 import {
@@ -35,7 +35,7 @@ import {
   writeDesktopFileText
 } from '@/lib/desktop-fs'
 import { ExternalLink } from '@/lib/external-link'
-import { Check, Pencil, X } from '@/lib/icons'
+import { Box, Check, X } from '@/lib/icons'
 import { createMemoizedMathPlugin } from '@/lib/katex-memo'
 import { isComposerChord } from '@/lib/keybinds/chords'
 import { normalizeOrLocalPreviewTarget } from '@/lib/local-preview'
@@ -51,9 +51,11 @@ import {
 import { previewTargetFromMarkdownHref } from '@/lib/preview-targets'
 import { cn } from '@/lib/utils'
 import { markPreviewTabMissing, openPreview, type PreviewTarget } from '@/store/preview'
-import { setPreviewDirty } from '@/store/preview-edit'
+import { registerPreviewSaver, setPreviewDirty } from '@/store/preview-edit'
 import { $connection, $currentCwd } from '@/store/session'
 import { notifyWorkspaceChanged } from '@/store/workspace-events'
+
+import { FilePreviewActions } from './preview-file-actions'
 
 const SHIKI_THEME = { dark: 'github-dark-default', light: 'github-light-default' } as const
 const TEXT_PREVIEW_MAX_BYTES = 512 * 1024
@@ -78,28 +80,6 @@ const TONE_STYLES: Record<EmptyStateTone, { cube: string; primary: string }> = {
     primary:
       'border-amber-400/40 bg-amber-50 text-amber-900 hover:bg-amber-100 dark:border-amber-300/30 dark:bg-amber-300/15 dark:text-amber-100 dark:hover:bg-amber-300/20'
   }
-}
-
-function PreviewCubeIcon({ className }: { className?: string }) {
-  return (
-    <svg aria-hidden="true" className={cn('size-16', className)} viewBox="0 0 64 64">
-      <path
-        d="M32 5 56 18.5v27L32 59 8 45.5v-27L32 5Z"
-        fill="none"
-        stroke="currentColor"
-        strokeLinejoin="round"
-        strokeWidth="1.25"
-      />
-      <path
-        d="M8 18.5 32 32l24-13.5M32 32v27"
-        fill="none"
-        stroke="currentColor"
-        strokeLinejoin="round"
-        strokeWidth="1.25"
-      />
-      <path d="M20 11.75 44 25.25" fill="none" opacity="0.45" stroke="currentColor" strokeWidth="0.9" />
-    </svg>
-  )
 }
 
 interface PreviewEmptyStateProps {
@@ -127,7 +107,7 @@ export function PreviewEmptyState({
       style={{ '--preview-error-bottom': `${consoleHeight}px` } as CSSProperties}
     >
       <div className="grid max-w-sm justify-items-center gap-5">
-        <PreviewCubeIcon className={styles.cube} />
+        <Box aria-hidden className={cn('size-8', styles.cube)} />
         <div className="grid gap-2">
           <div className="text-sm font-medium text-foreground">{title}</div>
           {body && <div className="text-xs leading-relaxed text-muted-foreground">{body}</div>}
@@ -135,27 +115,27 @@ export function PreviewEmptyState({
         {(primaryAction || secondaryAction) && (
           <div className="grid justify-items-center gap-2">
             {primaryAction && (
-              <button
-                className={cn(
-                  'rounded-full border px-3.5 py-1.5 text-xs font-medium shadow-xs transition-colors disabled:cursor-default disabled:opacity-60',
-                  styles.primary
-                )}
+              <Button
+                className={styles.primary}
                 disabled={primaryAction.disabled}
                 onClick={primaryAction.onClick}
+                size="sm"
                 type="button"
+                variant="outline"
               >
                 {primaryAction.label}
-              </button>
+              </Button>
             )}
             {secondaryAction && (
-              <button
-                className="text-[0.6875rem] font-medium text-muted-foreground underline decoration-current/20 underline-offset-4 transition-colors hover:text-foreground disabled:cursor-default disabled:text-muted-foreground/55 disabled:no-underline"
+              <Button
                 disabled={secondaryAction.disabled}
                 onClick={secondaryAction.onClick}
+                size="sm"
                 type="button"
+                variant="text"
               >
                 {secondaryAction.label}
-              </button>
+              </Button>
             )}
           </div>
         )}
@@ -327,19 +307,19 @@ async function readTextPreview(filePath: string) {
 // our components keep typography simple and route fenced code through Shiki
 // without the library's copy/download/fullscreen chrome.
 const MD_TAG_CLASSES = {
-  h1: 'mb-3 mt-6 text-3xl font-bold leading-tight tracking-tight first:mt-0',
-  h2: 'mb-2.5 mt-5 text-2xl font-semibold leading-snug tracking-tight first:mt-0',
-  h3: 'mb-2 mt-4 text-xl font-semibold leading-snug first:mt-0',
-  h4: 'mb-2 mt-3 text-base font-semibold leading-snug first:mt-0',
-  p: 'mb-4 leading-relaxed text-foreground last:mb-0',
+  h1: 'mb-3 mt-6 text-[1.6875rem] font-semibold leading-[1.4] tracking-tight first:mt-0',
+  h2: 'mb-2.5 mt-7 text-lg font-semibold leading-normal tracking-tight first:mt-0',
+  h3: 'mb-2.5 mt-5 text-sm font-semibold leading-normal first:mt-0',
+  h4: 'mb-2 mt-4 text-[0.8125rem] font-semibold leading-normal first:mt-0',
+  p: 'mb-3 leading-[1.9] text-(--ui-text-secondary) last:mb-0',
   ul: 'mb-4 list-disc pl-6 marker:text-muted-foreground/70 last:mb-0',
   ol: 'mb-4 list-decimal pl-6 marker:text-muted-foreground/70 last:mb-0',
-  li: 'mt-1 leading-relaxed',
+  li: 'mt-1 leading-[1.9]',
   blockquote: 'mb-4 border-l-2 border-border pl-3 text-muted-foreground italic last:mb-0',
-  pre: 'mb-4 overflow-hidden rounded-lg border border-border bg-card font-mono text-xs leading-relaxed last:mb-0 [&_pre]:m-0 [&_pre]:overflow-x-auto [&_pre]:bg-transparent! [&_pre]:p-3 [&_pre]:font-mono',
+  pre: 'mb-4 overflow-hidden rounded-md border border-(--ui-stroke-tertiary) bg-(--ui-bg-editor) font-mono text-xs leading-relaxed last:mb-0 [&_pre]:m-0 [&_pre]:overflow-x-auto [&_pre]:bg-transparent! [&_pre]:p-3 [&_pre]:font-mono',
   hr: 'my-6 border-border',
-  th: 'px-3 py-2 text-left text-sm font-semibold text-foreground',
-  td: 'px-3 py-2 align-top text-sm leading-relaxed',
+  th: 'px-3 py-2 text-left text-[0.8125rem] font-medium text-foreground',
+  td: 'px-3 py-2 align-top text-[0.8125rem] leading-relaxed',
   thead: 'bg-muted/35 text-muted-foreground'
 } as const
 
@@ -363,10 +343,7 @@ function MarkdownCode({ className, children, ...props }: ComponentProps<'code'>)
   if (!language) {
     return (
       <code
-        className={cn(
-          'rounded bg-muted px-1 py-0.5 font-mono text-[0.86em] text-pink-700 dark:text-pink-300',
-          className
-        )}
+        className={cn('rounded bg-(--ui-bg-sidebar) px-1 py-0.5 font-mono text-[0.86em] text-(--ui-accent)', className)}
         {...props}
       >
         {children}
@@ -501,7 +478,7 @@ export function MarkdownPreview({ filePath, text }: { filePath?: string; text: s
   return (
     <PreviewNoteContext.Provider value={filePath}>
       <div
-        className="preview-markdown mx-auto max-w-3xl px-4 py-3 text-sm text-foreground"
+        className="preview-markdown mx-auto w-full max-w-3xl px-4 py-3 text-[0.8125rem] text-(--ui-text-secondary)"
         data-preview-markdown=""
         data-selectable-text="true"
       >
@@ -523,11 +500,13 @@ export function MarkdownPreview({ filePath, text }: { filePath?: string; text: s
 
 export function PreviewModeSwitcher({
   active,
+  leading,
   modes,
   onSelect,
   trailing
 }: {
   active: PreviewViewMode
+  leading?: ReactNode
   modes: PreviewViewMode[]
   onSelect: (mode: PreviewViewMode) => void
   trailing?: ReactNode
@@ -535,7 +514,7 @@ export function PreviewModeSwitcher({
   const { t } = useI18n()
   const showModes = modes.length > 1
 
-  if (!showModes && !trailing) {
+  if (!showModes && !leading && !trailing) {
     return null
   }
 
@@ -566,6 +545,7 @@ export function PreviewModeSwitcher({
             {label[mode]}
           </Button>
         ))}
+      {leading}
       {trailing && <div className="ml-auto flex items-center gap-1.5">{trailing}</div>}
     </div>
   )
@@ -740,10 +720,31 @@ export function SourceView({ filePath, language, text }: { filePath?: string; la
 
 export type PreviewViewMode = 'diff' | 'rendered' | 'source'
 
+interface FilePreviewRefusalProps {
+  target: PreviewTarget
+  binary?: boolean
+  byteSize?: number
+  onContinue: () => void
+}
+
+function FilePreviewRefusal({ target, binary, byteSize, onContinue }: FilePreviewRefusalProps) {
+  const { t } = useI18n()
+
+  return (
+    <PreviewEmptyState
+      body={binary ? t.preview.binaryBody(target.label) : t.preview.largeBody(target.label, formatBytes(byteSize))}
+      primaryAction={{ label: t.preview.previewAnyway, onClick: onContinue }}
+      title={binary ? t.preview.binaryTitle : t.preview.largeTitle}
+      tone="warning"
+    />
+  )
+}
+
 export function LocalFilePreview({
   onClose,
   onSelectRendered,
   reloadKey,
+  tabId,
   target
 }: {
   /** Closes the preview's tab; offered when the file can't be shown. */
@@ -752,6 +753,7 @@ export function LocalFilePreview({
    *  `rendered` mode to the switcher and routes its selection to the pane. */
   onSelectRendered?: () => void
   reloadKey: number
+  tabId?: string
   target: PreviewTarget
 }) {
   const { t } = useI18n()
@@ -797,7 +799,7 @@ export function LocalFilePreview({
     setConflict(false)
     draftRef.current = ''
     baselineRef.current = ''
-  }, [filePath, reloadKey])
+  }, [filePath])
 
   // In source mode HTML files take the same path as plain text files; the
   // pane owns the rendered (webview) mode. `previewKind === 'binary'` arrives
@@ -954,10 +956,10 @@ export function LocalFilePreview({
   // Publish the unsaved state to the rail so the tab can show a modified dot.
   // Keyed by url; cleared on unmount/tab-change so a stale dot never lingers.
   useEffect(() => {
-    setPreviewDirty(target.url, editing && dirty)
+    setPreviewDirty(target.url, editing && dirty, tabId)
 
-    return () => setPreviewDirty(target.url, false)
-  }, [target.url, editing, dirty])
+    return () => setPreviewDirty(target.url, false, tabId)
+  }, [target.url, tabId, editing, dirty])
 
   const beginEdit = () => {
     const text = state.text ?? ''
@@ -1023,9 +1025,9 @@ export function LocalFilePreview({
     setSelfReload(n => n + 1)
   }
 
-  const saveEdit = async (force = false) => {
+  const saveEdit = async (force = false): Promise<boolean> => {
     if (saving) {
-      return
+      return false
     }
 
     setSaving(true)
@@ -1056,7 +1058,7 @@ export function LocalFilePreview({
             setConflict(true)
             setSaving(false)
 
-            return
+            return false
           }
         } catch {
           // Couldn't re-read for the check — fall through and attempt the write.
@@ -1069,16 +1071,27 @@ export function LocalFilePreview({
       await writeDesktopFileText(filePath, draftRef.current)
       baselineRef.current = draftRef.current
       setDirty(false)
+      setPreviewDirty(target.url, false, tabId)
       setConflict(false)
       setEditing(false)
       notifyWorkspaceChanged()
       setSelfReload(n => n + 1)
+
+      return true
     } catch (error) {
       setSaveError(error instanceof Error ? error.message : String(error))
+
+      return false
     } finally {
       setSaving(false)
     }
   }
+
+  useEffect(() => {
+    if (tabId && editing) {
+      return registerPreviewSaver(tabId, () => saveEdit())
+    }
+  })
 
   // Rendered before the loading/error branches so a background re-read (file
   // watcher, workspace tick) can't unmount the editor and drop the draft. Uses
@@ -1149,11 +1162,23 @@ export function LocalFilePreview({
   const closeAction = onClose ? { label: t.common.close, onClick: onClose } : undefined
 
   if (state.error) {
-    return <PreviewEmptyState body={localizedPreviewError(t, state.error)} primaryAction={closeAction} title={t.preview.unavailable} />
+    return (
+      <PreviewEmptyState
+        body={localizedPreviewError(t, state.error)}
+        primaryAction={closeAction}
+        title={t.preview.unavailable}
+      />
+    )
   }
 
   if (pdfError) {
-    return <PreviewEmptyState body={localizedPreviewError(t, pdfError)} primaryAction={closeAction} title={t.preview.unavailable} />
+    return (
+      <PreviewEmptyState
+        body={localizedPreviewError(t, pdfError)}
+        primaryAction={closeAction}
+        title={t.preview.unavailable}
+      />
+    )
   }
 
   if (
@@ -1166,34 +1191,43 @@ export function LocalFilePreview({
     const size = target.byteSize || state.byteSize
 
     return (
-      <PreviewEmptyState
-        body={binary ? t.preview.binaryBody(target.label) : t.preview.largeBody(target.label, formatBytes(size))}
-        primaryAction={{ label: t.preview.previewAnyway, onClick: () => setForcePreview(true) }}
-        title={binary ? t.preview.binaryTitle : t.preview.largeTitle}
-        tone="warning"
-      />
+      <FilePreviewRefusal binary={binary} byteSize={size} onContinue={() => setForcePreview(true)} target={target} />
     )
   }
 
   if (isImage && state.dataUrl) {
     return (
-      <div className="flex h-full w-full items-center justify-center overflow-auto bg-transparent p-4">
-        <img
-          alt={target.label}
-          className="max-h-full max-w-full rounded-lg object-contain shadow-sm"
-          draggable={false}
-          src={state.dataUrl}
+      <div className="flex h-full w-full flex-col overflow-hidden bg-transparent">
+        <PreviewModeSwitcher
+          active="rendered"
+          modes={[]}
+          onSelect={() => {}}
+          trailing={<FilePreviewActions filePath={filePath} target={target} />}
         />
+        <div className="flex min-h-0 flex-1 items-center justify-center overflow-auto p-4">
+          <img
+            alt={target.label}
+            className="max-h-full max-w-full rounded-lg object-contain shadow-sm"
+            draggable={false}
+            src={state.dataUrl}
+          />
+        </div>
       </div>
     )
   }
 
   if (isPdf && state.dataUrl && pdfUrl) {
     return (
-      <div className="h-full w-full overflow-hidden bg-transparent">
+      <div className="flex h-full w-full flex-col overflow-hidden bg-transparent">
+        <PreviewModeSwitcher
+          active="rendered"
+          modes={[]}
+          onSelect={() => {}}
+          trailing={<FilePreviewActions filePath={filePath} target={target} />}
+        />
         <iframe
           aria-label={target.label}
-          className="h-full w-full border-0 bg-white"
+          className="min-h-0 w-full flex-1 border-0 bg-white"
           src={pdfUrl}
           title={target.label}
         />
@@ -1209,13 +1243,11 @@ export function LocalFilePreview({
     const isMarkdown = (state.language || target.language) === 'markdown'
     const hasDiff = Boolean(state.diff && state.diff.trim())
     // Order the toggle reads left→right; default lands on the most useful view.
-    const modes: PreviewViewMode[] = []
+    const modes: PreviewViewMode[] = ['source']
 
     if (isMarkdown || onSelectRendered) {
       modes.push('rendered')
     }
-
-    modes.push('source')
 
     if (hasDiff) {
       modes.push('diff')
@@ -1252,22 +1284,10 @@ export function LocalFilePreview({
         )}
         <PreviewModeSwitcher
           active={mode}
+          leading={<CopyButton appearance="icon" buttonSize="icon-xs" text={state.text} />}
           modes={modes}
           onSelect={selectMode}
-          trailing={
-            canEdit ? (
-              <Tip label={`${t.preview.edit} (e)`}>
-                <button
-                  className="flex items-center gap-1 text-[0.625rem] font-bold text-muted-foreground underline-offset-4 transition-colors hover:text-foreground"
-                  onClick={beginEdit}
-                  type="button"
-                >
-                  <Pencil className="size-3" />
-                  {t.preview.edit}
-                </button>
-              </Tip>
-            ) : null
-          }
+          trailing={<FilePreviewActions filePath={filePath} onEdit={canEdit ? beginEdit : undefined} target={target} />}
         />
         <div className="min-h-0 flex-1 overflow-auto">
           {mode === 'rendered' ? (

@@ -449,6 +449,16 @@ export const arChrome = {
       viewAllLogs: 'عرض كل السجلات',
       messagingPlatforms: 'منصات المراسلة'
     },
+    approvalMode: {
+      title: 'كيف يطلب Aino موافقتك؟',
+      ariaLabel: mode => `وضع الموافقة: ${mode}`,
+      manual: 'طلب موافقتي',
+      manualDescription: 'اسألني قبل تنفيذ الإجراءات التي تتطلب موافقة',
+      smart: 'الموافقة نيابةً عني',
+      smartDescription: 'تقييم مخاطر الأوامر تلقائيًا وسؤالي عند الحاجة',
+      off: 'عدم السؤال',
+      offDescription: 'تجاوز طلبات الموافقة؛ تظل أذونات النظام وقواعد السلامة سارية'
+    },
     statusbar: {
       unknown: 'غير معروف',
       restart: 'إعادة تشغيل',
@@ -497,7 +507,7 @@ export const arChrome = {
       noModel: 'لا يوجد نموذج',
       switchModel: 'تبديل النموذج',
       openModelPicker: 'فتح اختيار النموذج',
-      modelPinned: 'النموذج مثبت',
+      modelPinned: 'لهذه المحادثة فقط؛ تستخدم المحادثات الجديدة النموذج الافتراضي في الإعدادات',
       modelTitle: (provider, model) => `${provider}: ${model}`,
       providerModelTitle: (provider, model) => `${provider}: ${model}`,
       subtaskMonitor: 'مراقبة المهام الفرعية',
@@ -560,6 +570,8 @@ export const arChrome = {
     terminalStartFailed: (error: string) => `فشل تشغيل الطرفية: ${error}`
   },
   zones: {
+    sidebarModeMenu: 'تبديل وضع المحادثة',
+    sidebarSessionsDescription: 'المشاريع والملفات والمحادثات اليومية',
     showTabStrip: 'إظهار علامات التبويب',
     hideTabStrip: 'إخفاء علامات التبويب',
     showStripTab: title => `إظهار ${title}`,

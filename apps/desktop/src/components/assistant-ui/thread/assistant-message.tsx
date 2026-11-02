@@ -16,7 +16,6 @@ import { requestModelMenuToggle } from '@/app/chat/composer/focus'
 import { useComposerScope } from '@/app/chat/composer/scope'
 import { useSessionView } from '@/app/chat/session-view'
 import { SETTINGS_ROUTE } from '@/app/routes'
-import { useBillingApi } from '@/app/settings/billing/api'
 import { dispatchedTo } from '@/components/assistant-ui/thread/agent-delivery'
 import { ChangedFilesCard } from '@/components/assistant-ui/thread/changed-files-card'
 import {
@@ -73,7 +72,6 @@ import type { TurnMetrics } from '@/lib/turn-metrics'
 import { useEnterAnimation } from '@/lib/use-enter-animation'
 import { cn } from '@/lib/utils'
 import { playSpeechText, stopVoicePlayback } from '@/lib/voice-playback'
-import { requestBillingSettings } from '@/store/billing-block'
 import { DESKTOP_BUTTON_ACTIONS, recordAction } from '@/store/desktop-metrics'
 import { openFreeTierSignIn } from '@/store/free-tier-sign-in'
 import { notifyError } from '@/store/notifications'
@@ -840,46 +838,8 @@ const SwitchToModelAction: FC<{ suggestion: UsageLimitSuggestion }> = ({ suggest
   )
 }
 
-// usage_window, Keep going off with a balance: "Use credits" turns the account
-// setting on (the same call as Settings → Billing's switch), then re-runs the
-// turn. A refusal (remote spending not allowed yet, step-up) opens Billing, which
-// explains and fixes it.
-const UseCreditsAction: FC = () => {
-  const { t } = useI18n()
-  const copy = t.assistant.thread
-  const aui = useAui()
-  const api = useBillingApi()
-  const [busy, setBusy] = useState(false)
-
-  const turnOnCredits = useCallback(async () => {
-    triggerHaptic('submit')
-    setBusy(true)
-
-    try {
-      const result = await api.updateKeepGoingOnCredits(true)
-
-      if (result.ok) {
-        aui.message().reload()
-      } else {
-        requestBillingSettings()
-      }
-    } catch (error) {
-      notifyError(error, copy.errorUseCreditsFailed)
-    } finally {
-      setBusy(false)
-    }
-  }, [api, aui, copy.errorUseCreditsFailed])
-
-  return (
-    <button className="aui-error-action" disabled={busy} onClick={() => void turnOnCredits()} type="button">
-      {busy && <Loader2Icon className="size-3 animate-spin" />}
-      {copy.errorUseCredits}
-    </button>
-  )
-}
-
-// usage_window's own buttons, ahead of the generic ones: switch to the plan's suggested model, or turn
-// on credits. Nothing for any other failure.
+// A usage-window failure offers its suggested model; without one, the generic
+// provider switch is the recovery path. Retry at reset remains available.
 const UsageWindowLeadActions: FC<{ plan: ReturnType<typeof errorRecoveryPlan>; surface?: ErrorSurface }> = ({
   plan,
   surface
@@ -889,7 +849,6 @@ const UsageWindowLeadActions: FC<{ plan: ReturnType<typeof errorRecoveryPlan>; s
   return (
     <>
       {plan.switchToModel && suggestion && <SwitchToModelAction suggestion={suggestion} />}
-      {plan.useCredits && <UseCreditsAction />}
     </>
   )
 }
@@ -1184,11 +1143,6 @@ const ErrorRecoveryActions: FC = () => {
         </span>
       )}
       {plan.retry && surface?.resetsAt !== undefined && <ScheduledRetryAction resetsAt={surface.resetsAt} />}
-      {plan.openBilling && (
-        <button className="aui-error-action" onClick={() => requestBillingSettings()} type="button">
-          {copy.errorOpenBillingSettings}
-        </button>
-      )}
       {recovery === null && plan.switchProvider && inRouter && (
         <SwitchProviderAction label={switchProviderLabel(copy, surface)} />
       )}

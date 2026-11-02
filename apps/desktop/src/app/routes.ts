@@ -273,6 +273,11 @@ export function isWorkspacePageRoute(to: string): boolean {
  *  don't count — they float above the workspace. */
 export const $workspaceIsPage = atom(false)
 
+/** Durable pages use the full work area; navigation stays available. This is
+ * presentation only: other pane instances and the saved tiling tree survive. */
+export const workspacePageKeepsPane = (paneId: string): boolean =>
+  paneId === 'workspace' || paneId === 'sessions' || paneId === 'hermes-bots:pane'
+
 /** Page-owned controls (kanban's board switcher) projected into the workspace
  *  panel's tab-header space while `$workspaceIsPage` holds — the page's title
  *  row, not the native band. Distinct from `titleBar.*`, whose slots stay

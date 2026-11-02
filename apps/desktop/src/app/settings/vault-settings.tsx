@@ -13,14 +13,13 @@ import {
   DialogHeader,
   DialogTitle
 } from '@/components/ui/dialog'
-import { EmptyState } from '@/components/ui/empty-state'
 import { Field } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
 import { useI18n } from '@/i18n'
 import { triggerHaptic } from '@/lib/haptics'
-import { KeyRound, Lock, Plus, ShieldLock, Trash2 } from '@/lib/icons'
+import { KeyRound, Lock, ShieldLock } from '@/lib/icons'
 import { $activeConnectionId } from '@/store/connections'
 import { requestGatewayForAgent } from '@/store/gateway'
 import { notify, notifyError } from '@/store/notifications'
@@ -28,8 +27,10 @@ import { $gatewayState } from '@/store/session'
 import { $settingsScopeProfile } from '@/store/settings-scope'
 
 import { CONTROL_TEXT } from './constants'
-import { ListRow, Pill, SectionHeading, SettingsContent, SettingsGroup } from './primitives'
+import { ListRow, Pill, SectionHeading, SettingsContent, SettingsDisclosure, SettingsGroup } from './primitives'
 import { SettingsProfileScope } from './profile-scope'
+import { VaultCredentialItems, VaultCredentialsHeading, type VaultItem } from './vault-credential-items'
+import { VaultUnlockDialog } from './vault-unlock-dialog'
 
 // Vault data is private to one (connection, profile); the cache key carries that owner so a
 // late response from profile A can never paint under profile B.
@@ -53,18 +54,6 @@ export type VaultKind = 'address' | 'login' | 'payment'
 const VAULT_KINDS: readonly VaultKind[] = ['login', 'payment', 'address']
 const IDENTIFIER_TYPES = ['email', 'phone', 'username'] as const
 type IdentifierType = (typeof IDENTIFIER_TYPES)[number]
-
-interface VaultItem {
-  id: string
-  kind: string
-  label: string
-  origin: null | string
-  created_at: string
-  identifier?: null | string
-  identifier_type?: null | string
-  backend?: VaultSourceName
-  has_otp?: boolean
-}
 
 /** Add-dialog prefill from a deep link (`/settings?tab=vault&kind=…`). NEVER secrets. */
 export interface VaultPrefill {
@@ -152,35 +141,12 @@ function buildSecret(form: VaultForm): Record<string, string> {
 }
 
 interface VaultSettingsProps {
+  defaultExpanded?: boolean
+  embedded?: boolean
   subpage?: string
 }
 
-function VaultCredentialsHeading({ count, onAdd }: { count: number; onAdd: () => void }) {
-  const { t } = useI18n()
-  const v = t.settings.vault
-
-  return (
-    <>
-      <SectionHeading
-        aside={
-          <Button className="gap-1.5" onClick={() => onAdd()} size="sm" type="button" variant="outline">
-            <Plus className="size-3.5" />
-            {v.add}
-          </Button>
-        }
-        icon={ShieldLock}
-        meta={count > 0 ? v.count(count) : undefined}
-        page
-        title={v.title}
-      />
-      <p className="mb-2 text-[length:var(--conversation-caption-font-size)] leading-(--conversation-caption-line-height) text-(--ui-text-tertiary)">
-        {v.blurb}
-      </p>
-    </>
-  )
-}
-
-export function VaultSettings({ subpage }: VaultSettingsProps = {}) {
+export function VaultSettings({ defaultExpanded = false, embedded = false, subpage }: VaultSettingsProps = {}) {
   const { t } = useI18n()
   const v = t.settings.vault
   const gatewayState = useStore($gatewayState)
@@ -207,6 +173,8 @@ export function VaultSettings({ subpage }: VaultSettingsProps = {}) {
   const VAULT_QUERY_KEY = useMemo(() => vaultQueryKey(owner), [owner])
   const VAULT_SOURCES_QUERY_KEY = useMemo(() => vaultSourcesQueryKey(owner), [owner])
   const [searchParams, setSearchParams] = useSearchParams()
+  const hasAddPrefill = ['kind', 'label', 'origin'].some(param => searchParams.has(param))
+  const [sectionExpanded, setSectionExpanded] = useState(defaultExpanded || hasAddPrefill)
 
   const [addOpen, setAddOpen] = useState(false)
   const [form, setForm] = useState<VaultForm>(EMPTY_FORM)
@@ -220,8 +188,14 @@ export function VaultSettings({ subpage }: VaultSettingsProps = {}) {
   const pendingMasterPassword = useRef('')
   const pendingSecret = useRef<null | Record<string, string>>(null)
 
+  useEffect(() => {
+    if (defaultExpanded || hasAddPrefill) {
+      setSectionExpanded(true)
+    }
+  }, [defaultExpanded, hasAddPrefill])
+
   const { data: sourcesData } = useQuery({
-    enabled: gatewayState === 'open',
+    enabled: gatewayState === 'open' && (!embedded || sectionExpanded),
     queryKey: VAULT_SOURCES_QUERY_KEY,
     // Manager detection can change while this settings page is closed. Mark this
     // metadata query immediately stale so remount and closed-to-open recovery
@@ -239,7 +213,7 @@ export function VaultSettings({ subpage }: VaultSettingsProps = {}) {
   const invalidateVault = useCallback(() => {
     void queryClient.invalidateQueries({ queryKey: VAULT_QUERY_KEY })
     void queryClient.invalidateQueries({ queryKey: VAULT_SOURCES_QUERY_KEY })
-  }, [queryClient])
+  }, [queryClient, VAULT_QUERY_KEY, VAULT_SOURCES_QUERY_KEY])
 
   const setSourceEnabled = useMutation({
     mutationFn: ({ name, enabled }: { name: VaultSourceName; enabled: boolean }) =>
@@ -282,7 +256,7 @@ export function VaultSettings({ subpage }: VaultSettingsProps = {}) {
   })
 
   const { data, error, isPending } = useQuery({
-    enabled: gatewayState === 'open',
+    enabled: gatewayState === 'open' && (!embedded || sectionExpanded),
     queryKey: VAULT_QUERY_KEY,
     queryFn: async () => {
       const result = await requestGateway<{ items: VaultItem[] }>('vault.list', {})
@@ -339,7 +313,10 @@ export function VaultSettings({ subpage }: VaultSettingsProps = {}) {
     setSearchParams(next, { replace: true })
   }, [openAdd, searchParams, setSearchParams])
 
-  const invalidate = useCallback(() => queryClient.invalidateQueries({ queryKey: VAULT_QUERY_KEY }), [queryClient])
+  const invalidate = useCallback(
+    () => queryClient.invalidateQueries({ queryKey: VAULT_QUERY_KEY }),
+    [queryClient, VAULT_QUERY_KEY]
+  )
 
   const addMutation = useMutation({
     mutationFn: async (payload: { kind: VaultKind; label: string; origin?: string }) => {
@@ -400,91 +377,34 @@ export function VaultSettings({ subpage }: VaultSettingsProps = {}) {
     [invalidate, requestGateway]
   )
 
-  const kindLabel = useCallback((kind: string) => v.kinds[kind as VaultKind] ?? kind, [v.kinds])
-
   const sourceLabel = useCallback(
     (name: VaultSourceName) => externalSources.find(s => s.name === name)?.display_name ?? name,
     [externalSources]
   )
 
-  const formatCreated = useCallback((iso: string) => {
-    const parsed = new Date(iso)
-
-    return Number.isNaN(parsed.getTime()) ? iso : parsed.toLocaleDateString()
-  }, [])
-
-  return (
-    <SettingsContent>
+  const content = (
+    <>
       {/* The vault is per profile (its RPCs ride the (connection, profile) owner above), so the
           page must SAY which profile it is showing — without the chip a non-default selection
           looked like the default vault with entries missing (#121966). */}
-      <SettingsProfileScope className="mb-5" />
+      {!embedded && <SettingsProfileScope className="mb-5" />}
       {(subpage === undefined || subpage === 'credentials') && (
         <>
-          <VaultCredentialsHeading count={items.length} onAdd={openAdd} />
+          <VaultCredentialsHeading count={items.length} embedded={embedded} onAdd={openAdd} />
 
-          {!isPending && items.length === 0 && <EmptyState description={v.emptyDesc} title={v.empty} />}
-
-          {items.length > 0 && (
-            <SettingsGroup>
-              {items.map(item => (
-                <ListRow
-                  action={
-                    item.backend && item.backend !== 'local' ? (
-                      <Pill tone="muted">{sourceLabel(item.backend)}</Pill>
-                    ) : (
-                      <Button
-                        aria-label={v.deleteAction}
-                        className="text-(--ui-text-tertiary) hover:text-destructive"
-                        onClick={() => setPendingDelete(item)}
-                        size="icon-sm"
-                        type="button"
-                        variant="ghost"
-                      >
-                        <Trash2 className="size-3.5" />
-                      </Button>
-                    )
-                  }
-                  description={
-                    // identifier · origin · date, separated so the row scans as three facts; the origin is
-                    // omitted when the label already IS the host (save-on-page items are labelled by host).
-                    <span className="flex flex-wrap items-center gap-x-2">
-                      {item.identifier && <span className="truncate">{v.identifierShown(item.identifier)}</span>}
-                      {item.origin && item.origin.replace(/^https?:\/\//, '') !== item.label && (
-                        <>
-                          {item.identifier && (
-                            <span aria-hidden className="text-(--ui-text-tertiary)">
-                              ·
-                            </span>
-                          )}
-                          <span className="truncate">{item.origin}</span>
-                        </>
-                      )}
-                      <span aria-hidden className="text-(--ui-text-tertiary)">
-                        ·
-                      </span>
-                      <span>{v.createdOn(formatCreated(item.created_at))}</span>
-                    </span>
-                  }
-                  key={item.id}
-                  title={
-                    <span className="flex items-center gap-2">
-                      <span className="truncate">{item.label}</span>
-                      <Pill tone={item.kind === 'login' ? 'primary' : 'muted'}>{kindLabel(item.kind)}</Pill>
-                      {item.has_otp && <Pill tone="muted">{v.twoFactorBadge}</Pill>}
-                    </span>
-                  }
-                />
-              ))}
-            </SettingsGroup>
-          )}
+          <VaultCredentialItems
+            isPending={isPending}
+            items={items}
+            onDelete={setPendingDelete}
+            sourceLabel={sourceLabel}
+          />
         </>
       )}
 
       {(subpage === undefined || subpage === 'sources') && (
         <>
           <div className={subpage === undefined ? 'mt-6' : undefined}>
-            <SectionHeading icon={KeyRound} page title={v.sources.title} />
+            <SectionHeading icon={KeyRound} page={!embedded} title={v.sources.title} />
           </div>
           <p className="mb-2 text-[length:var(--conversation-caption-font-size)] leading-(--conversation-caption-line-height) text-(--ui-text-tertiary)">
             {v.sources.blurb}
@@ -565,45 +485,19 @@ export function VaultSettings({ subpage }: VaultSettingsProps = {}) {
       )}
 
       {/* Unlock dialog */}
-      <Dialog onOpenChange={open => !open && closeUnlock()} open={unlockTarget !== null}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle icon={KeyRound}>{v.sources.unlockTitle(unlockTarget?.display_name ?? '')}</DialogTitle>
-            <DialogDescription>{v.sources.unlockDescription}</DialogDescription>
-          </DialogHeader>
-          <form
-            className="grid gap-3"
-            onSubmit={e => {
-              e.preventDefault()
-
-              if (unlockTarget && masterPassword) {
-                pendingMasterPassword.current = masterPassword
-                setMasterPassword('')
-                unlockSource.mutate({ name: unlockTarget.name })
-              }
-            }}
-          >
-            <Input
-              autoComplete="current-password"
-              autoFocus
-              disabled={unlockSource.isPending}
-              onChange={e => setMasterPassword(e.target.value)}
-              placeholder={v.sources.masterPasswordPlaceholder}
-              type="password"
-              value={masterPassword}
-            />
-            {unlockError && <p className="text-xs text-destructive">{unlockError}</p>}
-            <DialogFooter>
-              <Button onClick={closeUnlock} type="button" variant="ghost">
-                {t.common.cancel}
-              </Button>
-              <Button disabled={unlockSource.isPending || !masterPassword} type="submit">
-                {unlockSource.isPending ? v.sources.unlocking : v.sources.unlock}
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
+      <VaultUnlockDialog
+        busy={unlockSource.isPending}
+        error={unlockError}
+        masterPassword={masterPassword}
+        onClose={closeUnlock}
+        onPasswordChange={setMasterPassword}
+        onUnlock={name => {
+          pendingMasterPassword.current = masterPassword
+          setMasterPassword('')
+          unlockSource.mutate({ name })
+        }}
+        target={unlockTarget}
+      />
 
       {/* Add dialog */}
       <Dialog onOpenChange={open => !open && closeAdd()} open={addOpen}>
@@ -850,6 +744,21 @@ export function VaultSettings({ subpage }: VaultSettingsProps = {}) {
         open={pendingDelete !== null}
         title={v.deleteTitle}
       />
-    </SettingsContent>
+    </>
   )
+
+  if (embedded) {
+    return (
+      <SettingsDisclosure
+        expanded={sectionExpanded}
+        icon={ShieldLock}
+        label={v.title}
+        onToggle={() => setSectionExpanded(open => !open)}
+      >
+        {content}
+      </SettingsDisclosure>
+    )
+  }
+
+  return <SettingsContent>{content}</SettingsContent>
 }

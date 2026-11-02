@@ -28,7 +28,7 @@ export function UsageFiltersForm({ initialFilters, onApply, purposes, timezone }
   return (
     <form
       aria-label={copy.filters}
-      className="mb-4 space-y-3 rounded-(--aino-radius-panel) border border-(--ui-stroke-tertiary) p-3"
+      className="account-usage-filters"
       onSubmit={event => {
         event.preventDefault()
 
@@ -48,7 +48,7 @@ export function UsageFiltersForm({ initialFilters, onApply, purposes, timezone }
         )
       }}
     >
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+      <div className="account-usage-filter-fields">
         <label className="space-y-1 text-xs text-muted-foreground">
           <span>{copy.startDate}</span>
           <Input
@@ -104,7 +104,7 @@ export function UsageFiltersForm({ initialFilters, onApply, purposes, timezone }
           {copy.invalidDateRange}
         </p>
       )}
-      <div className="flex flex-wrap items-center justify-between gap-2">
+      <div className="account-usage-filter-actions">
         <span className="text-xs text-muted-foreground">{copy.timezone(timezone)}</span>
         <div className="flex gap-2">
           <Button

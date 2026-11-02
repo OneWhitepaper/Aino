@@ -1,14 +1,27 @@
-import { useStore } from '@nanostores/react'
-import { type ReactElement, useEffect } from 'react'
+import './about-settings.css'
 
+import { useStore } from '@nanostores/react'
+import { type ReactElement, useEffect, useId } from 'react'
+
+import { Button } from '@/components/ui/button'
+import { CopyButton } from '@/components/ui/copy-button'
+import { Dialog, DialogClose, DialogContent, DialogFooter, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { UpdateStatusCard, VersionHero } from '@/components/update-status'
 import { VersionDetails } from '@/components/version-details'
 import { useI18n } from '@/i18n'
-import { RefreshCw } from '@/lib/icons'
+import { aboutPageCopy } from '@/i18n/about-page'
+import { RELEASES_URL, WEBSITE_URL } from '@/lib/brand'
+import { ExternalLink } from '@/lib/external-link'
 import { $connection } from '@/store/session'
-import { $desktopVersion, checkBackendUpdates, refreshDesktopVersion } from '@/store/updates'
+import {
+  $backendUpdateApply,
+  $backendUpdateStatus,
+  $desktopVersion,
+  checkBackendUpdates,
+  refreshDesktopVersion
+} from '@/store/updates'
 
-import { SectionHeading, SettingsContent } from './primitives'
+import { SettingsContent } from './primitives'
 import { SETTING_IDS, settingElementId } from './settings-manifest'
 import { UninstallSection } from './uninstall-section'
 import { UpdateChannelRow } from './update-channel-row'
@@ -20,29 +33,27 @@ interface AboutSettingsProps {
 
 export function AboutSettings({ subpage }: AboutSettingsProps = {}): ReactElement {
   useSettingDeepLink('about', page => subpage === undefined || page === subpage)
-
-  if (subpage === 'uninstall') {
-    return (
-      <SettingsContent>
-        <UninstallSection />
-      </SettingsContent>
-    )
-  }
-
-  return <AppUpdatesSettings includeUninstall={subpage === undefined} />
-}
-
-interface AppUpdatesSettingsProps {
-  includeUninstall: boolean
-}
-
-function AppUpdatesSettings({ includeUninstall }: AppUpdatesSettingsProps): ReactElement {
-  const { t } = useI18n()
+  const { locale, t } = useI18n()
+  const copy = aboutPageCopy(locale)
+  const remoteAttentionId = useId()
   const version = useStore($desktopVersion)
   const connection = useStore($connection)
+  const remoteStatus = useStore($backendUpdateStatus)
+  const remoteApply = useStore($backendUpdateApply)
   const remote = connection?.mode === 'remote'
 
-  // Refresh the running version when About opens or the active gateway changes.
+  const remoteAttention =
+    remote &&
+    Boolean(
+      remoteStatus?.error ||
+      remoteStatus?.retirement ||
+      remoteStatus?.updateAvailable ||
+      (remoteStatus?.behind ?? 0) > 0 ||
+      remoteApply.applying ||
+      remoteApply.stage === 'restart' ||
+      remoteApply.error
+    )
+
   useEffect((): void => {
     void refreshDesktopVersion()
 
@@ -53,17 +64,81 @@ function AppUpdatesSettings({ includeUninstall }: AppUpdatesSettingsProps): Reac
 
   return (
     <SettingsContent>
-      <VersionHero version={version} />
-      <div className="mx-auto mt-4 w-full max-w-2xl">
-        <SectionHeading icon={RefreshCw} title={t.settings.about.updates} />
-        <div className="grid gap-3" id={settingElementId(SETTING_IDS.about.updates)}>
-          <UpdateStatusCard target="client" />
-          <UpdateChannelRow />
-          {/* Client and remote backend updates are independent. Only the client has release notes. */}
-          {remote && <UpdateStatusCard showReleaseNotes={false} target="backend" />}
+      <div className="about-page">
+        <VersionHero variant="compact" version={version} />
+        <section
+          aria-label={t.settings.about.updates}
+          className="about-update"
+          id={settingElementId(SETTING_IDS.about.updates)}
+        >
+          <UpdateStatusCard target="client" variant="compact" />
+        </section>
+        <div className="about-links">
+          <ExternalLink href={WEBSITE_URL} native showExternalIcon>
+            {copy.website}
+          </ExternalLink>
+          <span aria-hidden>·</span>
+          <ExternalLink href={RELEASES_URL} native showExternalIcon>
+            {t.updates.releaseNotes}
+          </ExternalLink>
         </div>
-        {version && <VersionDetails version={version} />}
-        {includeUninstall && <UninstallSection />}
+        <div className="about-utilities">
+          <Dialog>
+            <DialogTrigger asChild>
+              <button
+                aria-describedby={remoteAttention ? remoteAttentionId : undefined}
+                aria-label={copy.installationInfo}
+                className="about-utility-link"
+                type="button"
+              >
+                {copy.installationInfo}
+                {remoteAttention && (
+                  <span
+                    aria-label={copy.remoteAttention}
+                    className="about-attention-dot"
+                    id={remoteAttentionId}
+                    role="img"
+                  />
+                )}
+              </button>
+            </DialogTrigger>
+            <DialogContent
+              aria-describedby={undefined}
+              bodyClassName="about-installation-body"
+              className="about-installation-dialog"
+            >
+              <DialogTitle>{copy.installationInfo}</DialogTitle>
+              {version && (
+                <>
+                  <p className="about-installation-version">
+                    {version.appVersion ? t.updates.version(version.appVersion) : t.updates.versionUnavailable}
+                  </p>
+                  <details className="about-technical-details">
+                    <summary>{copy.technicalDetails}</summary>
+                    <VersionDetails version={version} />
+                  </details>
+                </>
+              )}
+              <UpdateChannelRow />
+              {remote && <UpdateStatusCard showReleaseNotes={false} target="backend" />}
+              <DialogFooter>
+                {version && (
+                  <CopyButton
+                    buttonSize="sm"
+                    buttonVariant="outline"
+                    label={copy.copyInfo}
+                    text={JSON.stringify(version, null, 2)}
+                  />
+                )}
+                <DialogClose asChild>
+                  <Button size="sm">{copy.close}</Button>
+                </DialogClose>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+          <UninstallSection defaultOpen={subpage === 'uninstall'} dialog />
+        </div>
+        <p className="about-copyright">{copy.copyright}</p>
       </div>
     </SettingsContent>
   )

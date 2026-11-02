@@ -19,6 +19,7 @@ import {
 import { createClientSessionState } from '@/lib/chat-runtime'
 import { sessionListFingerprint, sessionMessagesSignature } from '@/lib/session-signatures'
 import { latestSessionTodos, latestSessionTodoSnapshot } from '@/lib/todos'
+import { $freshDraftKey } from '@/store/composer'
 import { pendingSessionReplay } from '@/store/gateway'
 import { $sidebarShowArchived } from '@/store/layout'
 import { $changeEventsAvailable, $cronChangeTick, $projectsChangeTick, $sessionsChangeTick } from '@/store/live-sync'
@@ -1004,6 +1005,7 @@ export function useBackgroundSync({
   requestGateway,
   updateSessionState
 }: BackgroundSyncParams): void {
+  const freshDraftKey = useStore($freshDraftKey)
   const changeEventsAvailable = useStore($changeEventsAvailable)
   const cronChangeTick = useStore($cronChangeTick)
   const activeTranscriptRefreshPendingRef = useRef<string | null>(null)
@@ -1524,5 +1526,5 @@ export function useBackgroundSync({
       void refreshCurrentModel()
       void refreshHermesConfig()
     }
-  }, [activeSessionId, freshDraftReady, gatewayState, refreshCurrentModel, refreshHermesConfig])
+  }, [activeSessionId, freshDraftKey, freshDraftReady, gatewayState, refreshCurrentModel, refreshHermesConfig])
 }

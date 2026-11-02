@@ -28,11 +28,24 @@ import {
 } from '@/store/session-states'
 import { canOpenSessionWindow, openSessionInNewWindow } from '@/store/windows'
 
-import { $workspaceIsPage, sessionRoute } from './routes'
+import { $workspaceIsPage, NEW_CHAT_ROUTE, sessionRoute, syncWorkspaceRoute } from './routes'
 
 export type OpenSessionIntent = 'in-place' | 'main' | 'stack' | 'tab' | 'window'
 
 export type OpenSessionNavigate = (to: string, options?: { replace?: boolean }) => void
+
+/** A foreground session tab lives beside primary, not in its route. Leave a full
+ * page before fronting the tab, preserving primary's conversation or draft. */
+export function revealSessionWorkspace(navigate: OpenSessionNavigate): void {
+  if (!$workspaceIsPage.get()) {
+    return
+  }
+
+  const selected = $selectedStoredSessionId.get()
+  const to = selected ? sessionRoute(selected) : NEW_CHAT_ROUTE
+  navigate(to)
+  syncWorkspaceRoute(to)
+}
 
 export interface OpenSessionWorkspaceScope {
   ownerRoute?: SessionProfileRoute
@@ -110,6 +123,20 @@ function scopedOpenIntent(intent: OpenSessionIntent, mode: WorkspaceMode, target
   return mode === 'bots' && intent === 'in-place' && !targetsPrimary ? 'stack' : intent
 }
 
+function revealFocusedSession(
+  focused: 'main' | 'tile' | null,
+  storedSessionId: string,
+  navigate: OpenSessionNavigate
+): void {
+  if (focused === 'tile') {
+    revealSessionWorkspace(navigate)
+  }
+
+  if (focusedSessionNeedsRoute(focused, $workspaceIsPage.get())) {
+    navigate(sessionRoute(storedSessionId))
+  }
+}
+
 /**
  * @param navigate Required for `in-place` (route into main when not on screen).
  *   `tab` / `window` ignore it — pass a no-op when you don't have a router handle.
@@ -159,6 +186,10 @@ export function openSession(
     return
   }
 
+  if (botWorkspaceScope) {
+    revealSessionWorkspace(navigate)
+  }
+
   // A `stack` open arrives from outside the workspace, so unlike a sidebar
   // click it can't assume main is spendable: it behaves like `tab`, except main
   // IS fair game while it's only a blank draft, and an already-open blank draft
@@ -184,12 +215,12 @@ export function openSession(
     const focused = focusOpenSession(storedSessionId, workspaceScope)
 
     if (focused) {
-      if (focusedSessionNeedsRoute(focused, $workspaceIsPage.get())) {
-        navigate(sessionRoute(storedSessionId))
-      }
+      revealFocusedSession(focused, storedSessionId, navigate)
 
       return
     }
+
+    revealSessionWorkspace(navigate)
 
     // Nothing to jump to, but an open tab may still be an empty "New session" —
     // that's the tab the user would have typed into, so spend it rather than
@@ -219,10 +250,7 @@ export function openSession(
   // `'main'` hit still has to route back: fronting the workspace tab alone
   // leaves the page showing.
   const focused = focusOpenSession(storedSessionId, workspaceScope)
-
-  if (focusedSessionNeedsRoute(focused, $workspaceIsPage.get())) {
-    navigate(sessionRoute(storedSessionId))
-  }
+  revealFocusedSession(focused, storedSessionId, navigate)
 
   // The target may also be the chat MAIN already holds — a Bot Mode roster
   // click whose owner lost its tile (closing main promoted a neighbour tile

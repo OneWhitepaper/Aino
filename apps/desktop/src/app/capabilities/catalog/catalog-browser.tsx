@@ -1,6 +1,7 @@
 import { useStore } from '@nanostores/react'
 import { memo, type ReactNode, useDeferredValue, useEffect, useState } from 'react'
 
+import type { ProfileScope } from '@/api/client'
 import { PageLoader } from '@/components/page-loader'
 import { Button } from '@/components/ui/button'
 import { Codicon } from '@/components/ui/codicon'
@@ -21,7 +22,7 @@ import { type CatalogEntry, type CatalogKind, useCatalog } from './catalog-data'
 import { CatalogDetail } from './catalog-detail'
 import { CatalogDetailDialog } from './catalog-detail-dialog'
 import { CatalogDiscovery } from './catalog-discovery'
-import { CatalogFilterBar, CatalogFilterMenu } from './catalog-filter-bar'
+import { CatalogFilterMenu } from './catalog-filter-bar'
 import { CatalogListRow } from './catalog-list-row'
 import { catalogDisplayName } from './catalog-localization'
 import {
@@ -40,6 +41,7 @@ import { useCatalogFilters } from './use-catalog-filters'
 
 interface CatalogBrowserProps {
   kind: CatalogKind
+  profile?: ProfileScope
   query?: string
   onQueryChange?: (value: string) => void
   /** Data-derived "Try …" placeholder nudges for the search field. */
@@ -216,6 +218,7 @@ function CatalogSearchHeader({
         ]}
         sizing="content"
         value={installedOnly ? 'installed' : 'discover'}
+        variant="underline"
       />
       <div className="catalog-toolbar-controls">
         <CapabilitySearch
@@ -225,6 +228,7 @@ function CatalogSearchHeader({
           scope={kind === 'plugins' ? t.skills.tabPlugins : t.skills.tabSkills}
           value={query ?? ''}
         />
+        {filters}
         {actions}
         <div
           aria-label={t.catalog.cardView + ' / ' + t.catalog.listView}
@@ -249,7 +253,6 @@ function CatalogSearchHeader({
             </Tip>
           ))}
         </div>
-        {filters}
       </div>
     </header>
   )
@@ -474,6 +477,7 @@ function CatalogResults({
 // Props take no destructuring defaults: React Compiler 1.0 skips components that have them.
 export const CatalogBrowser = memo(function CatalogBrowser({
   kind,
+  profile,
   isInstalled,
   onInstall,
   isInstalling,
@@ -494,7 +498,7 @@ export const CatalogBrowser = memo(function CatalogBrowser({
   const { t } = useI18n()
   const c = t.catalog
   const cardView = useStore($catalogCardView)
-  const { data, isPending, error, refetch } = useCatalog(kind)
+  const { data, isPending, error, refetch } = useCatalog(kind, profile)
   const deferredQuery = useDeferredValue((query ?? '').trim().toLowerCase())
   const [selectedId, setSelectedId] = useState<string | null>(selectedEntryId ?? null)
   const [detailOpen, setDetailOpen] = useState(false)
@@ -646,7 +650,6 @@ export const CatalogBrowser = memo(function CatalogBrowser({
           query={query}
         />
         <div className="catalog-workspace">
-          <CatalogFilterBar {...filterProps} />
           <div className="catalog-workspace-content">
             {notice}
             {error && entries.length > 0 && (

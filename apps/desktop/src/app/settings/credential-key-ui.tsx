@@ -18,6 +18,35 @@ export type KeyRowProps = Omit<EnvRowProps, 'info' | 'varKey'>
 /** Matches Advanced / config field controls (ListRow + Input). */
 export const CREDENTIAL_CONTROL_CLASS = cn('h-8', CONTROL_TEXT)
 
+const TOOL_CREDENTIAL_DESCRIPTIONS = {
+  PORCUPINE_ACCESS_KEY: 'porcupine',
+  RETAINDB_API_KEY: 'retaindbApiKey',
+  RETAINDB_BASE_URL: 'retaindbBaseUrl',
+  SEARXNG_URL: 'searxngUrl',
+  SUPERMEMORY_API_KEY: 'supermemoryApiKey',
+  TAVILY_API_KEY: 'tavilyApiKey',
+  TOOL_GATEWAY_DOMAIN: 'toolGatewayDomain',
+  TOOL_GATEWAY_SCHEME: 'toolGatewayScheme',
+  TOOL_GATEWAY_URL: 'toolGatewayUrl',
+  TOOL_GATEWAY_USER_TOKEN: 'toolGatewayToken',
+  VOICE_TOOLS_OPENAI_KEY: 'voiceOpenaiKey'
+} as const
+
+type ToolCredentialName = keyof typeof TOOL_CREDENTIAL_DESCRIPTIONS
+
+const toolCredentialLabelKey = (name: ToolCredentialName) =>
+  `settings.credentials.toolServices.${TOOL_CREDENTIAL_DESCRIPTIONS[name]}.label`
+
+export function credentialDescription(varKey: string, info: EnvVarInfo): string | undefined {
+  if (Object.hasOwn(TOOL_CREDENTIAL_DESCRIPTIONS, varKey)) {
+    const service = TOOL_CREDENTIAL_DESCRIPTIONS[varKey as ToolCredentialName]
+
+    return translateNow(`settings.credentials.toolServices.${service}.description`)
+  }
+
+  return info.description?.trim() || undefined
+}
+
 // Resting credential field: chrome stripped so it reads as plain subtext.
 // Stacked (<@2xl) it collapses to zero box (flush under its label); at @2xl it
 // keeps the full control metrics (h-8 + px-2.5/py-1.5) so it centres on the
@@ -171,7 +200,7 @@ export function CredentialKeyCard({
   varKey
 }: CredentialKeyCardProps) {
   const docsUrl = info.url?.trim()
-  const description = info.description?.trim()
+  const description = credentialDescription(varKey, info)
   const expandable = Boolean(description || docsUrl)
 
   return (
@@ -244,6 +273,12 @@ export function CredentialKeyCard({
               <p className="text-[length:var(--conversation-caption-font-size)] leading-(--conversation-caption-line-height) text-(--ui-text-tertiary)">
                 {description}
               </p>
+            )}
+
+            {Object.hasOwn(TOOL_CREDENTIAL_DESCRIPTIONS, varKey) && (
+              <code className="w-fit rounded bg-(--ui-bg-tertiary) px-1.5 py-0.5 text-[length:var(--conversation-caption-font-size)] text-(--ui-text-tertiary)">
+                {varKey}
+              </code>
             )}
 
             {docsUrl && <CredentialDocsLink href={docsUrl} />}
@@ -374,6 +409,10 @@ export function ProviderKeyRows({ expanded, group, onExpand, onToggle, rowProps 
 }
 
 export function credentialRowLabel(varKey: string, info: EnvVarInfo): string {
+  if (Object.hasOwn(TOOL_CREDENTIAL_DESCRIPTIONS, varKey)) {
+    return translateNow(toolCredentialLabelKey(varKey as ToolCredentialName))
+  }
+
   if (isKeyVar(varKey, info)) {
     return prettyName(varKey.replace(/(?:_API_KEY|_TOKEN|_KEY)$/i, ''))
   }

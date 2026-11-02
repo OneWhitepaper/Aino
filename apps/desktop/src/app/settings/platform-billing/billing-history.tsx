@@ -1,18 +1,22 @@
-import { useEffect, useState } from 'react'
+import './account-history.css'
+
+import { useEffect, useId, useState } from 'react'
 
 import { Button } from '@/components/ui/button'
 import { Loader } from '@/components/ui/loader'
 import { SegmentedControl } from '@/components/ui/segmented-control'
 import { useI18n } from '@/i18n'
-import { RefreshCw } from '@/lib/icons'
+import { RefreshCw, SlidersHorizontal } from '@/lib/icons'
 import { LEGACY_USAGE_PURPOSES } from '@/lib/turn-billing'
 
 import type {
   PlatformBillingBridge,
   PlatformBillingScope,
   PlatformOrderPage,
+  PlatformOrderStatus,
   PlatformUsagePage
 } from '../../../../shared/platform-contract'
+import { Pill } from '../primitives'
 
 import { HistoryPagination } from './history-pagination'
 import { type UsageFilters, UsageFiltersForm } from './usage-filters'
@@ -24,11 +28,18 @@ interface BillingHistoryProps {
   onOpenOrder: (orderId: string) => void
 }
 
+const ORDER_STATUS_TONES: Partial<Record<PlatformOrderStatus, 'success' | 'warn'>> = {
+  COMPLETED: 'success',
+  PENDING: 'warn',
+  RECHARGING: 'warn'
+}
+
 export function BillingHistory({ bridge, scope, onOpenOrder }: BillingHistoryProps) {
   const { t, locale } = useI18n()
   const copy = t.platformBillingHistory
+  const accountCopy = t.accountPage
   const [mode, setMode] = useState<'orders' | 'usage'>('orders')
-  const [expanded, setExpanded] = useState(false)
+  const [filtersOpen, setFiltersOpen] = useState(false)
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(20)
   const [filters, setFilters] = useState<UsageFilters>({})
@@ -52,12 +63,9 @@ export function BillingHistory({ bridge, scope, onOpenOrder }: BillingHistoryPro
   const origin = scope.origin
   const owner = scope.user_id
   const generation = scope.generation
+  const filtersId = useId()
 
   useEffect(() => {
-    if (!expanded) {
-      return
-    }
-
     let alive = true
     let request = 0
 
@@ -127,28 +135,58 @@ export function BillingHistory({ bridge, scope, onOpenOrder }: BillingHistoryPro
       alive = false
       document.removeEventListener('visibilitychange', visible)
     }
-  }, [bridge, expanded, generation, key, mode, origin, owner, page, pageSize, filters, timezone, scopeKey])
+  }, [bridge, generation, key, mode, origin, owner, page, pageSize, filters, timezone, scopeKey])
 
   const data = result.key === key ? result.data : null
   const error = result.key === key && result.error
 
   return (
-    <section className="my-6 min-w-0">
-      <SegmentedControl
-        onChange={value => {
-          setMode(value)
-          setPage(1)
-          setExpanded(true)
-        }}
-        options={[
-          { id: 'orders', label: copy.orders },
-          { id: 'usage', label: copy.usage }
-        ]}
-        value={mode}
-      />
-      {expanded && (
-        <div className="mt-4 min-w-0">
+    <section aria-label={accountCopy.historyTitle} className="account-history">
+      <div className="account-history-heading">
+        <h2>{accountCopy.historyTitle}</h2>
+        <p>{accountCopy.historyDescription}</p>
+      </div>
+      <div className="account-history-toolbar">
+        <SegmentedControl
+          className="account-history-tabs"
+          onChange={value => {
+            setMode(value)
+            setPage(1)
+          }}
+          options={[
+            { id: 'orders', label: copy.orders },
+            { id: 'usage', label: copy.usage }
+          ]}
+          sizing="content"
+          value={mode}
+          variant="underline"
+        />
+        <div className="account-history-actions">
           {mode === 'usage' && (
+            <Button
+              aria-controls={filtersId}
+              aria-expanded={filtersOpen}
+              onClick={() => setFiltersOpen(value => !value)}
+              size="sm"
+              variant="ghost"
+            >
+              <SlidersHorizontal />
+              {accountCopy.filters}
+            </Button>
+          )}
+          <Button
+            aria-label={accountCopy.refreshHistory}
+            onClick={() => setRetry(value => value + 1)}
+            size="icon-sm"
+            variant="ghost"
+          >
+            <RefreshCw />
+          </Button>
+        </div>
+      </div>
+      <div className="account-history-content">
+        {mode === 'usage' && (
+          <div hidden={!filtersOpen} id={filtersId}>
             <UsageFiltersForm
               initialFilters={filters}
               key={scopeKey}
@@ -160,65 +198,103 @@ export function BillingHistory({ bridge, scope, onOpenOrder }: BillingHistoryPro
               purposes={purposes.scopeKey === scopeKey ? purposes.values : LEGACY_USAGE_PURPOSES}
               timezone={timezone}
             />
-          )}
-          {error ? (
-            <div className="flex flex-wrap items-center gap-3 text-sm" role="alert">
-              <span>{copy.error}</span>
-              <Button onClick={() => setRetry(value => value + 1)} size="sm" variant="ghost">
-                <RefreshCw />
-                {copy.retry}
-              </Button>
-            </div>
-          ) : !data ? (
+          </div>
+        )}
+        {error ? (
+          <div className="account-history-state flex flex-wrap items-center gap-3 text-sm" role="alert">
+            <span>{copy.error}</span>
+            <Button onClick={() => setRetry(value => value + 1)} size="sm" variant="ghost">
+              <RefreshCw />
+              {copy.retry}
+            </Button>
+          </div>
+        ) : !data ? (
+          <div className="account-history-state">
             <Loader />
-          ) : (
-            <>
-              {mode === 'usage' ? (
-                data.items.length === 0 && Object.keys(filters).length > 0 ? (
-                  <p className="text-sm text-muted-foreground">{copy.noMatches}</p>
-                ) : (
-                  <UsageView rows={(data as PlatformUsagePage).items} variant="table" />
-                )
-              ) : data.items.length === 0 ? (
-                <p className="text-sm text-muted-foreground">{copy.empty}</p>
+          </div>
+        ) : (
+          <>
+            {mode === 'usage' ? (
+              data.items.length === 0 && Object.keys(filters).length > 0 ? (
+                <p className="account-history-state text-sm text-muted-foreground">{copy.noMatches}</p>
               ) : (
-                <ul className="m-0 list-none space-y-2 p-0">
-                  {(data as PlatformOrderPage).items.map(order => (
-                    <li key={order.order_id}>
-                      <Button
-                        className="w-full justify-between text-left"
-                        onClick={() => onOpenOrder(order.order_id)}
-                        variant="ghost"
-                      >
-                        <span className="min-w-0 flex-1 [overflow-wrap:anywhere]">
-                          {order.out_trade_no}
-                          <span className="mt-1 block text-xs font-normal text-muted-foreground">
-                            {new Date(order.created_at).toLocaleDateString(locale)} ·{' '}
+                <UsageView rows={(data as PlatformUsagePage).items} variant="table" />
+              )
+            ) : data.items.length === 0 ? (
+              <p className="account-history-state text-sm text-muted-foreground">{copy.empty}</p>
+            ) : (
+              <div className="account-ledger-table-wrap">
+                <table
+                  aria-label={copy.orders}
+                  className="account-ledger-table account-order-table"
+                  data-slot="aino-data-table"
+                >
+                  <thead>
+                    <tr>
+                      <th scope="col">{accountCopy.columns.order}</th>
+                      <th scope="col">{accountCopy.columns.created}</th>
+                      <th scope="col">{accountCopy.columns.status}</th>
+                      <th className="account-ledger-cost" scope="col">
+                        {accountCopy.columns.amount}
+                      </th>
+                      <th scope="col">
+                        <span className="sr-only">{accountCopy.columns.actions}</span>
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(data as PlatformOrderPage).items.map(order => (
+                      <tr className="account-ledger-record" key={order.order_id}>
+                        <td className="account-order-id">{order.out_trade_no}</td>
+                        <td className="account-ledger-time">
+                          <time dateTime={order.created_at}>
+                            <span>{new Date(order.created_at).toLocaleDateString(locale)}</span>
+                            <span className="account-ledger-time-secondary">
+                              {new Date(order.created_at).toLocaleTimeString(locale, {
+                                hour: '2-digit',
+                                minute: '2-digit',
+                                hourCycle: 'h23'
+                              })}
+                            </span>
+                          </time>
+                        </td>
+                        <td className="account-ledger-status">
+                          <Pill tone={ORDER_STATUS_TONES[order.status] ?? 'muted'}>
                             {t.platformRecharge.status[order.status]}
-                          </span>
-                        </span>
-                        <span className="shrink-0 text-right tabular-nums">
+                          </Pill>
+                        </td>
+                        <td className="account-ledger-cost">
                           {formatUsageAmount(order.pay_amount)} {order.payment_currency}
-                        </span>
-                      </Button>
-                    </li>
-                  ))}
-                </ul>
-              )}
-              <HistoryPagination
-                onPage={setPage}
-                onPageSize={size => {
-                  setPageSize(size)
-                  setPage(1)
-                }}
-                page={page}
-                pageSize={pageSize}
-                total={data.total}
-              />
-            </>
-          )}
-        </div>
-      )}
+                        </td>
+                        <td className="account-ledger-action">
+                          <Button
+                            aria-label={`${accountCopy.viewOrder} ${order.out_trade_no}`}
+                            onClick={() => onOpenOrder(order.order_id)}
+                            size="xs"
+                            variant="ghost"
+                          >
+                            {accountCopy.viewOrder}
+                          </Button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+            <HistoryPagination
+              onPage={setPage}
+              onPageSize={size => {
+                setPageSize(size)
+                setPage(1)
+              }}
+              page={page}
+              pageSize={pageSize}
+              total={data.total}
+            />
+          </>
+        )}
+      </div>
     </section>
   )
 }

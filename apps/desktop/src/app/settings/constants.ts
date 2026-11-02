@@ -236,7 +236,6 @@ export const ENUM_OPTIONS: Record<string, string[]> = {
   'agent.image_input_mode': ['auto', 'native', 'text'],
   'approvals.mode': ['manual', 'smart', 'off'],
   'code_execution.mode': ['project', 'strict'],
-  'context.engine': ['compressor', 'default', 'custom'],
   // '' = inherit the agent's own effort; the rest is the shared scale.
   'delegation.reasoning_effort': ['', ...REASONING_EFFORTS],
   // NOTE: memory.provider is intentionally NOT listed here. Its options are
@@ -616,13 +615,13 @@ export const FIELD_DESCRIPTIONS: Record<string, string> = defineFieldCopy({
   },
   desktop: {
     repoScanEnabled: 'Scan local folders for Git repositories to show in Projects.',
-    repoScanRoots: 'Folders to scan. Leave empty to scan your home directory.',
+    repoScanRoots:
+      'Folders to scan. Leave empty to skip filesystem scanning; projects linked to chats remain available.',
     repoScanExcludePaths: 'Folders and their descendants to skip during repository discovery.'
   },
   timezone: 'IANA timezone identifier. Blank uses the system timezone.',
   browser: {
-    useRealProfile:
-      `Local browsing uses your real logins. ${PRODUCT_NAME} copies your default browser's profile (cookies, logins, preferences) into a managed snapshot and drives it with its packaged Chromium — your live profile is never opened directly, and the copy is refreshed from it on each run. Also lets the agent open a local real-profile session on request even when a cloud browser backend is configured. Only Chromium browsers (Chrome, Edge, Brave, Brave Origin, Chromium) are supported; a non-Chromium default fails with a clear message. Off by default.`
+    useRealProfile: `Local browsing uses your real logins. ${PRODUCT_NAME} copies your default browser's profile (cookies, logins, preferences) into a managed snapshot and drives it with its packaged Chromium — your live profile is never opened directly, and the copy is refreshed from it on each run. Also lets the agent open a local real-profile session on request even when a cloud browser backend is configured. Only Chromium browsers (Chrome, Edge, Brave, Brave Origin, Chromium) are supported; a non-Chromium default fails with a clear message. Off by default.`
   },
   agent: {
     imageInputMode: 'Controls how image attachments are sent to the model.',
@@ -632,14 +631,15 @@ export const FIELD_DESCRIPTIONS: Record<string, string> = defineFieldCopy({
     cwd: 'Default project folder for tool and terminal work.',
     persistentShell:
       'SSH backend: keep exported variables between commands. Off starts each command from the login environment; the working directory always carries over.',
-    envPassthrough: 'Environment variables to pass into tool execution.',
+    envPassthrough:
+      'Names of environment variables to pass into tools, not their values. After changes, restart the runtime service and recreate existing execution environments.',
     dockerImage: 'Container image used when the execution backend is Docker.',
     singularityImage: 'Image used when the execution backend is Singularity.',
     modalImage: 'Image used when the execution backend is Modal.',
     daytonaImage: 'Image used when the execution backend is Daytona.'
   },
   codeExecution: {
-    mode: 'How strictly code execution is scoped to the current project.'
+    mode: 'Project uses the session folder and project Python; strict uses a temporary folder and the runtime Python. This does not change file access permissions.'
   },
   fileReadMaxChars: `Maximum characters ${PRODUCT_NAME} can read from one file request.`,
   approvals: {
@@ -671,12 +671,10 @@ export const FIELD_DESCRIPTIONS: Record<string, string> = defineFieldCopy({
   },
   voice: {
     autoTts: 'Automatically speak assistant responses.',
-    voiceChatMode:
-      `chained: speech-to-text → ${PRODUCT_NAME} → text-to-speech with the providers below. gpt-live: one full-duplex OpenAI voice model (gpt-live-1) listens and talks, and hands every real request to ${PRODUCT_NAME} — any model you have selected answers with the full toolset. Needs an OpenAI API key; the voice layer bills $0.05 per minute.`,
+    voiceChatMode: `chained: speech-to-text → ${PRODUCT_NAME} → text-to-speech with the providers below. gpt-live: one full-duplex OpenAI voice model (gpt-live-1) listens and talks, and hands every real request to ${PRODUCT_NAME} — any model you have selected answers with the full toolset. Needs an OpenAI API key; the voice layer bills $0.05 per minute.`,
     gptLive: {
       voice: 'Voice for GPT-Live mode. Custom voice IDs are accepted.',
-      instructions:
-        `Extra sentences for the live voice persona (tone, pace, language). ${PRODUCT_NAME} keeps its own system prompt.`
+      instructions: `Extra sentences for the live voice persona (tone, pace, language). ${PRODUCT_NAME} keeps its own system prompt.`
     }
   },
   tts: {
@@ -702,8 +700,7 @@ export const FIELD_DESCRIPTIONS: Record<string, string> = defineFieldCopy({
     }
   },
   updates: {
-    nonInteractiveLocalChanges:
-      `When ${PRODUCT_NAME} updates itself from the app (no terminal prompt), keep local source edits (stash) or throw them away (discard). Terminal updates always ask.`
+    nonInteractiveLocalChanges: `When ${PRODUCT_NAME} updates itself from the app (no terminal prompt), keep local source edits (stash) or throw them away (discard). Terminal updates always ask.`
   }
 })
 

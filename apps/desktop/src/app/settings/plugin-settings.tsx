@@ -40,6 +40,7 @@ import { desktopPackageName } from '../capabilities/plugins/plugin-packages'
 import type { OverlayNavLink } from '../overlays/overlay-split-layout'
 import { CAPABILITIES_ROUTE } from '../routes'
 
+import { ContributedStatusSettings } from './contributed-status-settings'
 import { PluginSettingsForm } from './plugin-settings-form'
 import { EmptyState, ListRowSkeleton, SectionHeading, SettingsContent } from './primitives'
 import { SettingsProfileScope } from './profile-scope'
@@ -314,6 +315,7 @@ function PluginSettingsOverview({
           })}
         </div>
       )}
+      <ContributedStatusSettings />
     </SettingsContent>
   )
 }

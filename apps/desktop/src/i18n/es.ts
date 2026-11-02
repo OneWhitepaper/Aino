@@ -1,6 +1,11 @@
+import { mergeTranslations } from '@hermes/shared/i18n'
+
 // health: allow FILE_LINES -- locale data: translated copy for the usage-window plan UI (allowance gauges, Large/Free tags, the limit card), one key per string
 import { defineFieldCopy } from '@/app/settings/field-copy'
 
+import { accountPage } from './account-page'
+import { appearancePage } from './appearance-page'
+import { configPagesFor } from './config-pages'
 import { defineLocale, type TranslationOverrides } from './define-locale'
 import { esBoot } from './es_boot'
 import { esClarify } from './es_clarify'
@@ -19,10 +24,309 @@ import { esProjects } from './es_projects'
 import { esSharedMetrics } from './es_shared_metrics'
 import { esThemePicker } from './es_theme_picker'
 import { esUpdateChannel } from './es_update_channel'
+import { homeGuidance } from './home-guidance'
 import { introEs } from './intro-es'
 import { messagingDirectory } from './messaging-directory'
+import { runtimeFeatureCopy } from './runtime-feature-copy'
+import { toolPanel } from './tool-panel'
+import { workspacePage } from './workspace-page'
 
-export const esOverrides = {
+const configPageFieldLabels: Record<string, string> = defineFieldCopy({
+  model: 'Modelo predeterminado',
+  modelContextLength: 'Ventana de contexto del modelo principal (forzada)',
+  fallbackProviders: 'Modelos de respaldo',
+  toolsets: 'Conjuntos de herramientas activados',
+  timezone: 'Zona horaria',
+  display: {
+    personality: 'Personalidad',
+    showReasoning: 'Bloques de razonamiento'
+  },
+  desktop: {
+    repoScanEnabled: 'Detección automática de repositorios',
+    repoScanRoots: 'Carpetas de búsqueda de repositorios',
+    repoScanExcludePaths: 'Rutas de repositorio excluidas'
+  },
+  agent: {
+    maxTurns: 'Pasos máximos del agente',
+    imageInputMode: 'Adjuntos de imagen',
+    apiMaxRetries: 'Reintentos de API',
+    serviceTier: 'Nivel de servicio',
+    toolUseEnforcement: 'Aplicación de uso de herramientas'
+  },
+  terminal: {
+    cwd: 'Directorio de trabajo',
+    backend: 'Backend de ejecución',
+    timeout: 'Tiempo límite de comandos',
+    persistentShell: 'Shell persistente',
+    envPassthrough: 'Paso de variables de entorno',
+    dockerImage: 'Imagen de Docker',
+    singularityImage: 'Imagen de Singularity',
+    modalImage: 'Imagen de Modal',
+    daytonaImage: 'Imagen de Daytona'
+  },
+  fileReadMaxChars: 'Límite de lectura de archivos',
+  toolOutput: {
+    maxBytes: 'Límite de salida del terminal',
+    maxLines: 'Límite de páginas de archivo',
+    maxLineLength: 'Límite de longitud de línea'
+  },
+  codeExecution: { mode: 'Modo de ejecución de código' },
+  approvals: {
+    mode: 'Modo de aprobación',
+    timeout: 'Tiempo límite de aprobación',
+    mcpReloadConfirm: 'Confirmar recargas de MCP'
+  },
+  commandAllowlist: 'Lista de comandos permitidos',
+  security: {
+    redactSecrets: 'Redactar secretos',
+    allowPrivateUrls: 'Permitir URL privadas'
+  },
+  browser: {
+    allowPrivateUrls: 'URL privadas del navegador',
+    autoLocalForPrivateUrls: 'Navegador local para URL privadas',
+    useRealProfile: 'Usar mi perfil real del navegador'
+  },
+  checkpoints: {
+    enabled: 'Checkpoints de archivos',
+    maxSnapshots: 'Límite de checkpoints'
+  },
+  voice: {
+    maxRecordingSeconds: 'Duración máxima de grabación',
+    autoTts: 'Leer respuestas en voz alta',
+    voiceChatMode: 'Modo de chat de voz',
+    gptLive: {
+      voice: 'Voz de GPT-Live',
+      instructions: 'Personalidad de GPT-Live'
+    }
+  },
+  stt: {
+    enabled: 'Voz a texto',
+    echoTranscripts: 'Eco de transcripciones',
+    provider: 'Proveedor de voz a texto',
+    local: {
+      model: 'Modelo local de transcripción',
+      language: 'Idioma de transcripción'
+    },
+    openai: {
+      model: 'Modelo STT de OpenAI'
+    },
+    groq: {
+      model: 'Modelo STT de Groq'
+    },
+    mistral: {
+      model: 'Modelo STT de Mistral'
+    },
+    elevenlabs: {
+      modelId: 'Modelo STT de ElevenLabs',
+      languageCode: 'Idioma de ElevenLabs',
+      tagAudioEvents: 'Etiquetar eventos de audio',
+      diarize: 'Diarización de hablantes'
+    }
+  },
+  tts: {
+    provider: 'Proveedor de texto a voz',
+    edge: {
+      voice: 'Voz de Edge'
+    },
+    openai: {
+      model: 'Modelo TTS de OpenAI',
+      voice: 'Voz de OpenAI'
+    },
+    elevenlabs: {
+      voiceId: 'Voz de ElevenLabs',
+      modelId: 'Modelo de ElevenLabs'
+    },
+    xai: {
+      voiceId: 'Voz de xAI (Grok)',
+      language: 'Idioma de xAI',
+      speed: 'Velocidad de reproducción de xAI',
+      autoSpeechTags: 'Etiquetas de voz automáticas de xAI',
+      optimizeStreamingLatency: 'Optimización de latencia de streaming de xAI',
+      sampleRate: 'Frecuencia de muestreo de xAI',
+      bitRate: 'Tasa de bits de xAI'
+    },
+    minimax: {
+      model: 'Modelo TTS de MiniMax',
+      voiceId: 'Voz de MiniMax'
+    },
+    mistral: {
+      model: 'Modelo TTS de Mistral',
+      voiceId: 'Voz de Mistral'
+    },
+    gemini: {
+      model: 'Modelo TTS de Gemini',
+      voice: 'Voz de Gemini'
+    },
+    neutts: {
+      model: 'Modelo de NeuTTS',
+      device: 'Dispositivo de NeuTTS'
+    },
+    kittentts: {
+      model: 'Modelo de KittenTTS',
+      voice: 'Voz de KittenTTS'
+    },
+    piper: {
+      voice: 'Voz de Piper'
+    },
+    deepinfra: {
+      model: 'Modelo TTS de DeepInfra',
+      voice: 'Voz de DeepInfra'
+    }
+  },
+  memory: {
+    memoryEnabled: 'Memoria persistente',
+    userProfileEnabled: 'Perfil de usuario',
+    memoryCharLimit: 'Presupuesto de memoria',
+    userCharLimit: 'Presupuesto de perfil',
+    provider: 'Proveedor de memoria'
+  },
+  context: {
+    engine: 'Motor de contexto'
+  },
+  compression: {
+    enabled: 'Compresión automática',
+    threshold: 'Umbral de compresión',
+    codexGpt55Autoraise: 'Aumento automático de compresión de Codex',
+    targetRatio: 'Objetivo de compresión',
+    protectLastN: 'Mensajes recientes protegidos'
+  },
+  auxiliary: {
+    compression: {
+      timeout: 'Tiempo de espera del modelo de compresión (s)'
+    }
+  },
+  delegation: {
+    model: 'Modelo de subagente',
+    provider: 'Proveedor de subagente',
+    maxIterations: 'Límite de turnos del subagente',
+    maxConcurrentChildren: 'Subagentes paralelos',
+    childTimeoutSeconds: 'Tiempo límite del subagente',
+    reasoningEffort: 'Esfuerzo de razonamiento del subagente'
+  },
+  updates: {
+    nonInteractiveLocalChanges: 'Cambios locales en actualización desde la app'
+  }
+})
+
+const configPageFieldDescriptions: Record<string, string> = defineFieldCopy({
+  model: 'Se usa para chats nuevos salvo que elijas otro modelo en el compositor.',
+  modelContextLength:
+    'Sustituye la ventana de contexto detectada solo del modelo de chat PRINCIPAL (en tokens). Déjalo en 0 para usar el valor detectado del modelo seleccionado. No afecta a los modelos auxiliares/MoA.',
+  fallbackProviders: 'Entradas proveedor:model de respaldo para probar si falla el modelo predeterminado.',
+  display: {
+    personality: 'Estilo predeterminado del asistente para sesiones nuevas.',
+    showReasoning: 'Muestra secciones de razonamiento cuando el backend las proporcione.'
+  },
+  desktop: {
+    repoScanEnabled: 'Busca repositorios Git en carpetas locales para mostrarlos en Proyectos.',
+    repoScanRoots:
+      'Carpetas que se buscarán. Déjalo vacío para omitir el escaneo; los proyectos vinculados a chats seguirán visibles.',
+    repoScanExcludePaths:
+      'Carpetas que se omitirán, junto con todos sus subdirectorios, durante la detección de repositorios.'
+  },
+  timezone: 'Identificador de zona horaria IANA. Vacío usa la zona horaria del sistema.',
+  browser: {
+    useRealProfile:
+      'La navegación local usa tus inicios de sesión reales. Hermes copia el perfil de tu navegador predeterminado (cookies, inicios de sesión, preferencias) en una instantánea gestionada y lo controla con su Chromium integrado: tu perfil activo nunca se abre directamente y la copia se actualiza a partir de él en cada ejecución. También permite que el agente abra bajo petición una sesión local con tu perfil real, incluso si hay un backend de navegador en la nube configurado. Solo se admiten navegadores Chromium (Chrome, Edge, Brave, Brave Origin, Chromium); un navegador predeterminado que no sea Chromium falla con un mensaje claro. Desactivado de forma predeterminada.'
+  },
+  agent: {
+    imageInputMode: 'Controla cómo se envían los adjuntos de imagen al modelo.',
+    maxTurns: 'Límite superior de turnos con llamadas a herramientas antes de que Hermes detenga una ejecución.'
+  },
+  terminal: {
+    cwd: 'Carpeta de proyecto predeterminada para herramientas y terminal.',
+    persistentShell:
+      'Solo SSH: conserva variables exportadas entre comandos. Al desactivarlo, cada comando usa el entorno de inicio; el directorio de trabajo se conserva.',
+    envPassthrough:
+      'Nombres de variables de entorno que se pasan a herramientas, no sus valores. Tras cambiarlos, reinicia el servicio y recrea los entornos de ejecución existentes.',
+    dockerImage: 'Imagen de contenedor usada cuando el backend de ejecución es Docker.',
+    singularityImage: 'Imagen usada cuando el backend de ejecución es Singularity.',
+    modalImage: 'Imagen usada cuando el backend de ejecución es Modal.',
+    daytonaImage: 'Imagen usada cuando el backend de ejecución es Daytona.'
+  },
+  codeExecution: {
+    mode: 'Project usa la carpeta de la sesión y Python del proyecto; strict usa una carpeta temporal y Python del entorno de ejecución. No cambia los permisos de archivos.'
+  },
+  fileReadMaxChars: 'Máximo de caracteres que Hermes puede leer en una solicitud de archivo.',
+  approvals: {
+    mode: 'Cómo maneja Hermes los comandos que necesitan aprobación explícita.',
+    timeout: 'Cuánto esperan los prompts de aprobación antes de vencer.'
+  },
+  security: {
+    redactSecrets: 'Oculta secretos detectados del contenido visible para el modelo cuando sea posible.'
+  },
+  checkpoints: {
+    enabled: 'Crea snapshots de reversión antes de editar archivos.'
+  },
+  memory: {
+    memoryEnabled: 'Guarda memorias duraderas que pueden ayudar en sesiones futuras.',
+    userProfileEnabled: 'Mantiene un perfil compacto de preferencias del usuario.'
+  },
+  context: {
+    engine: 'Estrategia para gestionar conversaciones largas cerca del límite de contexto.'
+  },
+  compression: {
+    enabled: 'Resume contexto antiguo cuando las conversaciones crecen.',
+    codexGpt55Autoraise: 'Sube la compresión al 85 % para los modelos compatibles de ChatGPT Codex OAuth.'
+  },
+  auxiliary: {
+    compression: {
+      timeout:
+        'Segundos de espera del modelo auxiliar de compresión por llamada (120 por defecto). Súbelo para modelos locales lentos.'
+    }
+  },
+  voice: {
+    autoTts: 'Lee automáticamente en voz alta las respuestas del asistente.',
+    voiceChatMode:
+      'chained: voz a texto → Hermes → texto a voz con los proveedores de abajo. gpt-live: un modelo de voz full-duplex de OpenAI (gpt-live-1) escucha y habla, y pasa cada solicitud real a Hermes; el modelo que hayas seleccionado responde con todas las herramientas. Requiere una clave API de OpenAI; la capa de voz cuesta 0,05 US$ por minuto.',
+    gptLive: {
+      voice: 'Voz del modo GPT-Live. Se aceptan ID de voz personalizados.',
+      instructions:
+        'Frases adicionales para la personalidad de voz en vivo (tono, ritmo, idioma). Hermes mantiene su propio prompt de sistema.'
+    }
+  },
+  tts: {
+    xai: {
+      voiceId: 'ID de voz de xAI (por ejemplo, eve) o un ID de voz personalizado.',
+      language: 'Código del idioma hablado (p. ej., en, pt-BR) o "auto" para detectarlo automáticamente.',
+      speed: 'Velocidad de reproducción. 0.7 = más lento, 1.0 = normal, 1.5 = más rápido.',
+      autoSpeechTags:
+        'Permite que un LLM inserte etiquetas de audio expresivas ([laughing], [sighs]) en el guion antes de sintetizarlo.',
+      optimizeStreamingLatency: 'Equilibrio entre latencia y calidad. 0 = mejor calidad, 2 = menor latencia.',
+      sampleRate: 'Frecuencia de muestreo del audio en Hz. Un valor mayor ofrece más calidad y archivos más grandes.',
+      bitRate: 'Tasa de bits de MP3 en bps. Solo se aplica cuando el códec es mp3.'
+    },
+    neutts: {
+      device: 'Dispositivo de inferencia local para NeuTTS.'
+    }
+  },
+  stt: {
+    enabled: 'Activa transcripción de voz local o respaldada por proveedor.',
+    echoTranscripts: 'Publica la transcripción sin procesar 🎙️ de los mensajes de voz en el chat.',
+    elevenlabs: {
+      languageCode: 'Código de idioma ISO-639-3 opcional. En blanco deja que ElevenLabs lo detecte automáticamente.'
+    }
+  },
+  updates: {
+    nonInteractiveLocalChanges:
+      'Cuando Hermes se actualiza desde la app sin prompt de terminal, conserva los cambios locales de código fuente (stash) o descártalos. Las actualizaciones desde terminal siempre preguntan.'
+  }
+})
+
+const esBaseOverrides = {
+  appearancePage: appearancePage.es,
+  home: homeGuidance.es,
+  toolPanel: toolPanel['es'],
+  workspacePage: workspacePage.es,
+  accountPage: accountPage['es'],
+  platformRecharge: {
+    description:
+      'El cálculo es automático al introducir el importe. Revisa el importe a pagar y el saldo que se añadirá antes de pagar.',
+    quote: 'Calculando importes…',
+    create: 'Ir al pago',
+    payAmount: 'Importe a pagar',
+    creditAmount: 'Saldo que se añadirá'
+  },
   catalog: {
     enable: 'Activar',
     disable: 'Desactivar',
@@ -701,6 +1005,7 @@ export const esOverrides = {
     noResults: 'No se encontraron idiomas'
   },
   settings: {
+    configPages: configPagesFor('es', configPageFieldLabels, configPageFieldDescriptions),
     subpages: {
       appearanceTheme: 'Tema',
       appearanceTypography: 'Tipografía',
@@ -771,7 +1076,7 @@ export const esOverrides = {
       missing: 'Este plugin no tiene página de ajustes. Puede que esté desactivado o desinstalado.'
     },
     nav: {
-      providers: 'Proveedores',
+      providers: 'Servicios de modelos',
       providerAccounts: 'Cuentas',
       providerApiKeys: 'Claves API',
       providerCustomEndpoints: 'Endpoints personalizados',
@@ -780,6 +1085,7 @@ export const esOverrides = {
       apiKeys: 'Herramientas y claves',
       keybinds: 'Atajos de teclado',
       keysTools: 'Herramientas',
+      keysCredentials: 'Claves',
       keysSettings: 'Configuración',
       mcp: 'MCP',
       archivedChats: 'Chats archivados',
@@ -1149,284 +1455,8 @@ export const esOverrides = {
         turnOffFailed: 'No se pudo desactivar la mascota.'
       }
     },
-    fieldLabels: defineFieldCopy({
-      model: 'Modelo predeterminado',
-      modelContextLength: 'Ventana de contexto del modelo principal (forzada)',
-      fallbackProviders: 'Modelos de respaldo',
-      toolsets: 'Conjuntos de herramientas activados',
-      timezone: 'Zona horaria',
-      display: {
-        personality: 'Personalidad',
-        showReasoning: 'Bloques de razonamiento'
-      },
-      desktop: {
-        repoScanEnabled: 'Detección automática de repositorios',
-        repoScanRoots: 'Carpetas de búsqueda de repositorios',
-        repoScanExcludePaths: 'Rutas de repositorio excluidas'
-      },
-      agent: {
-        maxTurns: 'Pasos máximos del agente',
-        imageInputMode: 'Adjuntos de imagen',
-        apiMaxRetries: 'Reintentos de API',
-        serviceTier: 'Nivel de servicio',
-        toolUseEnforcement: 'Aplicación de uso de herramientas'
-      },
-      terminal: {
-        cwd: 'Directorio de trabajo',
-        backend: 'Backend de ejecución',
-        timeout: 'Tiempo límite de comandos',
-        persistentShell: 'Shell persistente',
-        envPassthrough: 'Paso de variables de entorno',
-        dockerImage: 'Imagen de Docker',
-        singularityImage: 'Imagen de Singularity',
-        modalImage: 'Imagen de Modal',
-        daytonaImage: 'Imagen de Daytona'
-      },
-      fileReadMaxChars: 'Límite de lectura de archivos',
-      toolOutput: {
-        maxBytes: 'Límite de salida del terminal',
-        maxLines: 'Límite de páginas de archivo',
-        maxLineLength: 'Límite de longitud de línea'
-      },
-      codeExecution: { mode: 'Modo de ejecución de código' },
-      approvals: {
-        mode: 'Modo de aprobación',
-        timeout: 'Tiempo límite de aprobación',
-        mcpReloadConfirm: 'Confirmar recargas de MCP'
-      },
-      commandAllowlist: 'Lista de comandos permitidos',
-      security: {
-        redactSecrets: 'Redactar secretos',
-        allowPrivateUrls: 'Permitir URL privadas'
-      },
-      browser: {
-        allowPrivateUrls: 'URL privadas del navegador',
-        autoLocalForPrivateUrls: 'Navegador local para URL privadas',
-        useRealProfile: 'Usar mi perfil real del navegador'
-      },
-      checkpoints: {
-        enabled: 'Checkpoints de archivos',
-        maxSnapshots: 'Límite de checkpoints'
-      },
-      voice: {
-        maxRecordingSeconds: 'Duración máxima de grabación',
-        autoTts: 'Leer respuestas en voz alta',
-        voiceChatMode: 'Modo de chat de voz',
-        gptLive: {
-          voice: 'Voz de GPT-Live',
-          instructions: 'Personalidad de GPT-Live'
-        }
-      },
-      stt: {
-        enabled: 'Voz a texto',
-        echoTranscripts: 'Eco de transcripciones',
-        provider: 'Proveedor de voz a texto',
-        local: {
-          model: 'Modelo local de transcripción',
-          language: 'Idioma de transcripción'
-        },
-        openai: {
-          model: 'Modelo STT de OpenAI'
-        },
-        groq: {
-          model: 'Modelo STT de Groq'
-        },
-        mistral: {
-          model: 'Modelo STT de Mistral'
-        },
-        elevenlabs: {
-          modelId: 'Modelo STT de ElevenLabs',
-          languageCode: 'Idioma de ElevenLabs',
-          tagAudioEvents: 'Etiquetar eventos de audio',
-          diarize: 'Diarización de hablantes'
-        }
-      },
-      tts: {
-        provider: 'Proveedor de texto a voz',
-        edge: {
-          voice: 'Voz de Edge'
-        },
-        openai: {
-          model: 'Modelo TTS de OpenAI',
-          voice: 'Voz de OpenAI'
-        },
-        elevenlabs: {
-          voiceId: 'Voz de ElevenLabs',
-          modelId: 'Modelo de ElevenLabs'
-        },
-        xai: {
-          voiceId: 'Voz de xAI (Grok)',
-          language: 'Idioma de xAI',
-          speed: 'Velocidad de reproducción de xAI',
-          autoSpeechTags: 'Etiquetas de voz automáticas de xAI',
-          optimizeStreamingLatency: 'Optimización de latencia de streaming de xAI',
-          sampleRate: 'Frecuencia de muestreo de xAI',
-          bitRate: 'Tasa de bits de xAI'
-        },
-        minimax: {
-          model: 'Modelo TTS de MiniMax',
-          voiceId: 'Voz de MiniMax'
-        },
-        mistral: {
-          model: 'Modelo TTS de Mistral',
-          voiceId: 'Voz de Mistral'
-        },
-        gemini: {
-          model: 'Modelo TTS de Gemini',
-          voice: 'Voz de Gemini'
-        },
-        neutts: {
-          model: 'Modelo de NeuTTS',
-          device: 'Dispositivo de NeuTTS'
-        },
-        kittentts: {
-          model: 'Modelo de KittenTTS',
-          voice: 'Voz de KittenTTS'
-        },
-        piper: {
-          voice: 'Voz de Piper'
-        },
-        deepinfra: {
-          model: 'Modelo TTS de DeepInfra',
-          voice: 'Voz de DeepInfra'
-        }
-      },
-      memory: {
-        memoryEnabled: 'Memoria persistente',
-        userProfileEnabled: 'Perfil de usuario',
-        memoryCharLimit: 'Presupuesto de memoria',
-        userCharLimit: 'Presupuesto de perfil',
-        provider: 'Proveedor de memoria'
-      },
-      context: {
-        engine: 'Motor de contexto'
-      },
-      compression: {
-        enabled: 'Compresión automática',
-        threshold: 'Umbral de compresión',
-        codexGpt55Autoraise: 'Aumento automático de compresión de Codex',
-        targetRatio: 'Objetivo de compresión',
-        protectLastN: 'Mensajes recientes protegidos'
-      },
-      auxiliary: {
-        compression: {
-          timeout: 'Tiempo de espera del modelo de compresión (s)'
-        }
-      },
-      delegation: {
-        model: 'Modelo de subagente',
-        provider: 'Proveedor de subagente',
-        maxIterations: 'Límite de turnos del subagente',
-        maxConcurrentChildren: 'Subagentes paralelos',
-        childTimeoutSeconds: 'Tiempo límite del subagente',
-        reasoningEffort: 'Esfuerzo de razonamiento del subagente'
-      },
-      updates: {
-        nonInteractiveLocalChanges: 'Cambios locales en actualización desde la app'
-      }
-    }),
-    fieldDescriptions: defineFieldCopy({
-      model: 'Se usa para chats nuevos salvo que elijas otro modelo en el compositor.',
-      modelContextLength:
-        'Sustituye la ventana de contexto detectada solo del modelo de chat PRINCIPAL (en tokens). Déjalo en 0 para usar el valor detectado del modelo seleccionado. No afecta a los modelos auxiliares/MoA.',
-      fallbackProviders: 'Entradas proveedor:model de respaldo para probar si falla el modelo predeterminado.',
-      display: {
-        personality: 'Estilo predeterminado del asistente para sesiones nuevas.',
-        showReasoning: 'Muestra secciones de razonamiento cuando el backend las proporcione.'
-      },
-      desktop: {
-        repoScanEnabled: 'Busca repositorios Git en carpetas locales para mostrarlos en Proyectos.',
-        repoScanRoots: 'Carpetas que se buscarán. Déjalo vacío para buscar en tu directorio de inicio.',
-        repoScanExcludePaths:
-          'Carpetas que se omitirán, junto con todos sus subdirectorios, durante la detección de repositorios.'
-      },
-      timezone: 'Identificador de zona horaria IANA. Vacío usa la zona horaria del sistema.',
-      browser: {
-        useRealProfile:
-          'La navegación local usa tus inicios de sesión reales. Hermes copia el perfil de tu navegador predeterminado (cookies, inicios de sesión, preferencias) en una instantánea gestionada y lo controla con su Chromium integrado: tu perfil activo nunca se abre directamente y la copia se actualiza a partir de él en cada ejecución. También permite que el agente abra bajo petición una sesión local con tu perfil real, incluso si hay un backend de navegador en la nube configurado. Solo se admiten navegadores Chromium (Chrome, Edge, Brave, Brave Origin, Chromium); un navegador predeterminado que no sea Chromium falla con un mensaje claro. Desactivado de forma predeterminada.'
-      },
-      agent: {
-        imageInputMode: 'Controla cómo se envían los adjuntos de imagen al modelo.',
-        maxTurns: 'Límite superior de turnos con llamadas a herramientas antes de que Hermes detenga una ejecución.'
-      },
-      terminal: {
-        cwd: 'Carpeta de proyecto predeterminada para herramientas y terminal.',
-        persistentShell: 'Mantiene el estado de la shell entre comandos cuando el backend lo admite.',
-        envPassthrough: 'Variables de entorno que se pasan a la ejecución de herramientas.',
-        dockerImage: 'Imagen de contenedor usada cuando el backend de ejecución es Docker.',
-        singularityImage: 'Imagen usada cuando el backend de ejecución es Singularity.',
-        modalImage: 'Imagen usada cuando el backend de ejecución es Modal.',
-        daytonaImage: 'Imagen usada cuando el backend de ejecución es Daytona.'
-      },
-      codeExecution: {
-        mode: 'Qué tan estrictamente se limita la ejecución de código al proyecto actual.'
-      },
-      fileReadMaxChars: 'Máximo de caracteres que Hermes puede leer en una solicitud de archivo.',
-      approvals: {
-        mode: 'Cómo maneja Hermes los comandos que necesitan aprobación explícita.',
-        timeout: 'Cuánto esperan los prompts de aprobación antes de vencer.'
-      },
-      security: {
-        redactSecrets: 'Oculta secretos detectados del contenido visible para el modelo cuando sea posible.'
-      },
-      checkpoints: {
-        enabled: 'Crea snapshots de reversión antes de editar archivos.'
-      },
-      memory: {
-        memoryEnabled: 'Guarda memorias duraderas que pueden ayudar en sesiones futuras.',
-        userProfileEnabled: 'Mantiene un perfil compacto de preferencias del usuario.'
-      },
-      context: {
-        engine: 'Estrategia para gestionar conversaciones largas cerca del límite de contexto.'
-      },
-      compression: {
-        enabled: 'Resume contexto antiguo cuando las conversaciones crecen.',
-        codexGpt55Autoraise: 'Sube la compresión al 85 % para los modelos compatibles de ChatGPT Codex OAuth.'
-      },
-      auxiliary: {
-        compression: {
-          timeout:
-            'Segundos de espera del modelo auxiliar de compresión por llamada (120 por defecto). Súbelo para modelos locales lentos.'
-        }
-      },
-      voice: {
-        autoTts: 'Lee automáticamente en voz alta las respuestas del asistente.',
-        voiceChatMode:
-          'chained: voz a texto → Hermes → texto a voz con los proveedores de abajo. gpt-live: un modelo de voz full-duplex de OpenAI (gpt-live-1) escucha y habla, y pasa cada solicitud real a Hermes; el modelo que hayas seleccionado responde con todas las herramientas. Requiere una clave API de OpenAI; la capa de voz cuesta 0,05 US$ por minuto.',
-        gptLive: {
-          voice: 'Voz del modo GPT-Live. Se aceptan ID de voz personalizados.',
-          instructions:
-            'Frases adicionales para la personalidad de voz en vivo (tono, ritmo, idioma). Hermes mantiene su propio prompt de sistema.'
-        }
-      },
-      tts: {
-        xai: {
-          voiceId: 'ID de voz de xAI (por ejemplo, eve) o un ID de voz personalizado.',
-          language: 'Código del idioma hablado (p. ej., en, pt-BR) o "auto" para detectarlo automáticamente.',
-          speed: 'Velocidad de reproducción. 0.7 = más lento, 1.0 = normal, 1.5 = más rápido.',
-          autoSpeechTags:
-            'Permite que un LLM inserte etiquetas de audio expresivas ([laughing], [sighs]) en el guion antes de sintetizarlo.',
-          optimizeStreamingLatency: 'Equilibrio entre latencia y calidad. 0 = mejor calidad, 2 = menor latencia.',
-          sampleRate:
-            'Frecuencia de muestreo del audio en Hz. Un valor mayor ofrece más calidad y archivos más grandes.',
-          bitRate: 'Tasa de bits de MP3 en bps. Solo se aplica cuando el códec es mp3.'
-        },
-        neutts: {
-          device: 'Dispositivo de inferencia local para NeuTTS.'
-        }
-      },
-      stt: {
-        enabled: 'Activa transcripción de voz local o respaldada por proveedor.',
-        echoTranscripts: 'Publica la transcripción sin procesar 🎙️ de los mensajes de voz en el chat.',
-        elevenlabs: {
-          languageCode: 'Código de idioma ISO-639-3 opcional. En blanco deja que ElevenLabs lo detecte automáticamente.'
-        }
-      },
-      updates: {
-        nonInteractiveLocalChanges:
-          'Cuando Hermes se actualiza desde la app sin prompt de terminal, conserva los cambios locales de código fuente (stash) o descártalos. Las actualizaciones desde terminal siempre preguntan.'
-      }
-    }),
+    fieldLabels: configPageFieldLabels,
+    fieldDescriptions: configPageFieldDescriptions,
     uninstallSection: {
       dangerZone: 'Zona de peligro',
       checkingInstalled: 'Comprobando lo que está instalado…',
@@ -1613,7 +1643,66 @@ export const esOverrides = {
       couldNotSave: 'No se pudo guardar la credencial.',
       remove: 'Quitar',
       getKey: 'Obtener una clave',
-      saving: 'Guardando'
+      saving: 'Guardando',
+      toolPageIntro:
+        'Aquí puedes conectar servicios opcionales de búsqueda web, voz y memoria externa. No son claves API del modelo de chat. Deja en blanco lo que no uses. Abre cada elemento para ver los detalles; los proveedores externos pueden procesar solicitudes o cobrar por uso.',
+      toolServices: {
+        porcupine: {
+          label: 'Clave de activación por voz (Porcupine)',
+          description:
+            'Solo se necesita si eliges Porcupine como motor de activación por voz en Ajustes de voz. El motor predeterminado no necesita esta clave.'
+        },
+        retaindbApiKey: {
+          label: 'Clave de memoria de RetainDB',
+          description:
+            'Conecta el servicio externo opcional de memoria RetainDB. Solo se necesita si lo eliges y activas como proveedor de memoria.'
+        },
+        retaindbBaseUrl: {
+          label: 'Dirección del servicio RetainDB',
+          description:
+            'Cámbiala solo si usas una instancia propia de RetainDB. Para RetainDB Cloud, deja el valor predeterminado.'
+        },
+        searxngUrl: {
+          label: 'Dirección de búsqueda propia (SearXNG)',
+          description:
+            'Dirección de tu servidor SearXNG. No requiere clave API. Sirve para buscar en la web, no para extraer el contenido de páginas.'
+        },
+        supermemoryApiKey: {
+          label: 'Clave de memoria de Supermemory',
+          description:
+            'Conecta el servicio externo opcional Supermemory. Instala y activa su complemento y selecciónalo como proveedor de memoria.'
+        },
+        tavilyApiKey: {
+          label: 'Clave de búsqueda web de Tavily',
+          description:
+            'Se usa para buscar en la web y extraer páginas con Tavily. Selecciona Tavily para usarlo; la clave puede aumentar los límites. Puede haber cargos del proveedor.'
+        },
+        toolGatewayDomain: {
+          label: 'Dominio de la pasarela de herramientas (avanzado)',
+          description:
+            'Sustituye el dominio de las pasarelas de herramientas administradas. Para suscripciones compatibles o instalaciones personalizadas; normalmente se deja vacío.'
+        },
+        toolGatewayScheme: {
+          label: 'Protocolo de la pasarela de herramientas (avanzado)',
+          description:
+            'Define el protocolo de la pasarela, normalmente HTTPS. Cámbialo solo para una pasarela propia o pruebas locales.'
+        },
+        toolGatewayUrl: {
+          label: 'Dirección de la pasarela de herramientas (avanzado)',
+          description:
+            'Fija la dirección completa de la pasarela y sustituye la detección automática. Normalmente se deja vacío.'
+        },
+        toolGatewayToken: {
+          label: 'Token de acceso a la pasarela (avanzado)',
+          description:
+            'Sustituye manualmente el token de acceso. El inicio de sesión normalmente lo gestiona; déjalo vacío.'
+        },
+        voiceOpenaiKey: {
+          label: 'Clave de voz de OpenAI',
+          description:
+            'Se usa para transcribir voz y generar voz con OpenAI, no para el chat normal. OpenAI puede cobrar por el uso; también se puede reutilizar OPENAI_API_KEY si la configuración de voz lo permite.'
+        }
+      }
     },
     envActions: {
       actions: 'Acciones',
@@ -1658,11 +1747,12 @@ export const esOverrides = {
       updateSkippedCloud: 'Administrado por Hermes Cloud',
       kindLocal: 'Local',
       kindRemote: 'Gateway remoto',
-      kindCloud: 'Hermes Cloud',
+      kindCloud: 'Conexión de nube guardada (anterior)',
       kindSsh: 'SSH',
       kindLocalDesc: 'El entorno de ejecución de Hermes administrado por esta app.',
       kindRemoteDesc: 'Un gateway de Hermes accesible por HTTP(S): LAN, Tailscale o internet.',
-      kindCloudDesc: 'Una instancia alojada detectada a través de tu cuenta de Hermes Cloud.',
+      kindCloudDesc:
+        'Una conexión en la nube guardada por una versión anterior de Aino. Sigue disponible; añade conexiones nuevas con Gateway remoto o SSH.',
       kindSshDesc: 'Una instalación de Hermes accesible por SSH.',
       labelTitle: 'Nombre',
       labelDesc:
@@ -1682,8 +1772,6 @@ export const esOverrides = {
       duplicateSsh: (label: string) => `Ya existe una conexión a este host SSH (“${label}”).`,
       sameBackendHint: (label: string) => `Mismo backend que “${label}”`,
       localAddHint: 'Local no está disponible: la conexión local administrada ya existe (solo puede haber una).',
-      cloudAddHint:
-        'Consejo: al iniciar sesión en Hermes Cloud arriba, tus agentes se detectan automáticamente; usa este formulario solo para registrar a mano la URL de una instancia conocida.',
       save: 'Guardar conexión',
       saving: 'Guardando…',
       cancel: 'Cancelar',
@@ -4581,14 +4669,14 @@ export const esOverrides = {
       messagingPlatforms: 'Plataformas de mensajería'
     },
     approvalMode: {
-      title: 'Modo de aprobación',
+      title: '¿Cómo debe Aino pedir aprobación?',
       ariaLabel: mode => `Modo de aprobación: ${mode}`,
-      manual: 'Manual',
-      manualDescription: 'Preguntar antes de acciones que requieran aprobación',
-      smart: 'Inteligente',
-      smartDescription: 'Evaluar automáticamente las acciones y preguntar cuando sea necesario',
-      off: 'Desactivado',
-      offDescription: 'Ejecutar sin solicitudes de aprobación'
+      manual: 'Pedir aprobación',
+      manualDescription: 'Preguntar antes de ejecutar acciones que requieran aprobación',
+      smart: 'Aprobar por mí',
+      smartDescription: 'Evaluar el riesgo de los comandos y preguntarte cuando sea necesario',
+      off: 'No preguntar',
+      offDescription: 'Omitir las solicitudes; se mantienen los permisos del sistema y las reglas de seguridad'
     },
     statusbar: {
       unknown: 'desconocido',
@@ -4674,6 +4762,10 @@ export const esOverrides = {
           tool_definitions: 'Definiciones de herramientas'
         },
         empty: 'Aún no hay datos de contexto',
+        detailsUnavailable: 'El desglose no está disponible temporalmente. El uso actual sigue visible.',
+        unavailable: 'El uso del contexto no está disponible. Inténtalo de nuevo.',
+        retry: 'Reintentar',
+        pendingDetails: 'El entorno actual no ha proporcionado detalles por categoría.',
         loading: 'Cargando desglose…',
         percentFull: percent => `${percent}% lleno`,
         title: 'Uso del contexto',
@@ -4687,7 +4779,7 @@ export const esOverrides = {
       noModel: 'sin modelo',
       switchModel: 'Cambiar modelo',
       openModelPicker: 'Abrir selector de modelo',
-      modelPinned: 'fijado por ti; los chats nuevos lo usan en lugar del predeterminado de Configuración',
+      modelPinned: 'Solo para esta conversación; los chats nuevos usan el modelo predeterminado de Configuración',
       modelTitle: (provider, model) => `Modelo · ${provider}: ${model}`,
       providerModelTitle: (provider, model) => `${provider} · ${model}`
     }
@@ -4867,6 +4959,8 @@ export const esOverrides = {
     }
   },
   zones: {
+    sidebarModeMenu: 'Cambiar modo de conversación',
+    sidebarSessionsDescription: 'Proyectos, archivos y conversaciones cotidianas',
     showTabStrip: 'Mostrar pestañas',
     hideTabStrip: 'Ocultar pestañas',
     showStripTab: title => `Mostrar ${title}`,
@@ -5252,6 +5346,9 @@ export const esOverrides = {
       gatewayDisconnected: 'Hermes está sin conexión ahora mismo. Reconéctate y vuelve a enviarlo.'
     },
     tool: {
+      collapseDetails: 'Contraer detalles',
+      moreActions: 'Acciones del registro de ejecución',
+      hideRecord: 'Ocultar este registro',
       copyCode: 'Copiar código',
       renderingImage: 'Renderizando imagen',
       copyOutput: 'Copiar salida',
@@ -5661,5 +5758,10 @@ export const esOverrides = {
     }
   }
 } satisfies TranslationOverrides
+
+export const esOverrides = mergeTranslations<typeof esBaseOverrides & TranslationOverrides>(
+  esBaseOverrides,
+  runtimeFeatureCopy['es']
+)
 
 export const es = defineLocale(esOverrides)

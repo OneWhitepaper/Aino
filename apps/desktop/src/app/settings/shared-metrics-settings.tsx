@@ -1,5 +1,5 @@
 import { useStore } from '@nanostores/react'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 
 import { DocsLink } from '@/components/onboarding/flow'
 import { useI18n } from '@/i18n'
@@ -34,6 +34,7 @@ export function SharedMetricsSettings() {
   const [consent, setConsent] = useState<SharedMetricsConsent | null>(null)
   const [loaded, setLoaded] = useState(false)
   const [busy, setBusy] = useState(false)
+  const revision = useRef(0)
 
   const request = useMemo(
     () =>
@@ -47,28 +48,43 @@ export function SharedMetricsSettings() {
     [connectionId, scopeProfile]
   )
 
+  // eslint-disable-next-line no-restricted-syntax -- invalidates request generations; owner values are read from atoms directly
   useEffect(() => {
-    let cancelled = false
+    const version = ++revision.current
 
     setLoaded(false)
+    setConsent(null)
+    setBusy(false)
     void readSharedMetricsConsent(request).then(next => {
-      if (!cancelled) {
+      if (revision.current === version) {
         setConsent(next)
         setLoaded(true)
       }
     })
 
-    return () => void (cancelled = true)
+    return () => {
+      revision.current += 1
+    }
   }, [request])
 
   const save = async (flags: { enabled: boolean; send: boolean }) => {
     const previous = consent
+    const version = revision.current
+
+    const isCurrent = () =>
+      revision.current === version &&
+      $activeConnectionId.get() === connectionId &&
+      $settingsScopeProfile.get() === scopeProfile
 
     setBusy(true)
     setConsent({ ...flags, send: flags.enabled && flags.send, decided: true, recipient: 'aino' })
 
     try {
       const saved = await saveSharedMetricsConsent(request, flags)
+
+      if (!isCurrent()) {
+        return
+      }
 
       setConsent(saved)
 
@@ -81,10 +97,14 @@ export function SharedMetricsSettings() {
         setDesktopMetricsGate(saved.enabled ? 'on' : 'off')
       }
     } catch (err) {
-      setConsent(previous)
-      notifyError(err, copy.saveFailed)
+      if (isCurrent()) {
+        setConsent(previous)
+        notifyError(err, copy.saveFailed)
+      }
     } finally {
-      setBusy(false)
+      if (isCurrent()) {
+        setBusy(false)
+      }
     }
   }
 

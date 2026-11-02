@@ -11,7 +11,7 @@ CONNECTOR_ACTIONS = ("display", "status", "connect", "reconnect", "rename")
 MCP_ACTIONS = ("install", "enable", "authorize")
 ALL_ACTIONS = CONNECTOR_ACTIONS + MCP_ACTIONS
 
-_TARGET_FIELDS = frozenset({"name", "mcp", "alias", "to"})
+_TARGET_FIELDS = frozenset({"name", "mcp", "alias", "to", "config"})
 
 ALIAS_PATTERN = r"^[a-z0-9][a-z0-9-]{0,31}$"
 _ALIAS_RE = re.compile(ALIAS_PATTERN)
@@ -50,11 +50,13 @@ def normalize_targets(raw: Any) -> tuple[list[HostedTarget], list[str], Optional
             if unknown:
                 return [], [], (
                     f"unknown target field(s) {', '.join(unknown)}: a target is "
-                    "{\"name\": \"<slug>\"} or {\"name\": \"<server>\", \"mcp\": true}. Transport, "
-                    "URLs and credentials come from the catalog manifest, never from the call."
+                    "{\"name\": \"<slug>\"} or {\"name\": \"<server>\", \"mcp\": true, \"config\": {...}}. "
+                    "Custom config is reviewed before installation; never pass literal secrets."
                 )
             name = str(item.get("name") or "").strip().lower()
             is_mcp = bool(item.get("mcp", False))
+            if "config" in item and (item.get("mcp") is not True or not isinstance(item["config"], dict)):
+                return [], [], "'config' is a custom MCP object and requires mcp: true."
             if is_mcp and ("alias" in item or "to" in item):
                 return [], [], "'alias' and 'to' name hosted connector accounts; an MCP target takes neither."
             alias = str(item["alias"]).strip() if item.get("alias") is not None else None
@@ -73,13 +75,32 @@ def normalize_targets(raw: Any) -> tuple[list[HostedTarget], list[str], Optional
     return managed, mcp, None
 
 
+def custom_server_configs(raw: Any, action: str) -> tuple[dict[str, dict], Optional[str]]:
+    """Keep each reviewed configuration unambiguous across the targets of a call."""
+    entries = raw if isinstance(raw, list) else [raw]
+    configs: dict[str, dict] = {}
+    seen: set[str] = set()
+    for entry in entries:
+        if not isinstance(entry, dict) or not entry.get("mcp"):
+            continue
+        name = str(entry.get("name") or "").strip().lower()
+        if name in seen and ("config" in entry or name in configs):
+            return {}, f"duplicate custom MCP target '{name}'; propose each server only once"
+        seen.add(name)
+        if "config" in entry:
+            if action != "install":
+                return {}, "'config' is accepted only for a custom MCP install"
+            configs[name] = entry["config"]
+    return configs, None
+
+
 def validate_action(action: str, managed: list[HostedTarget], mcp: list[str]) -> Optional[str]:
     if action not in ALL_ACTIONS:
         return (
             f"action must be one of {', '.join(ALL_ACTIONS)}. "
             f"{', '.join(MCP_ACTIONS)} apply to local MCP servers "
             "(targets {\"name\": ..., \"mcp\": true}); the rest apply to managed connectors. "
-            "Disconnecting an account is done by the user in the Nous Portal dashboard, not "
+            "Disconnecting an account is done by the user in the application's connection settings, not "
             "through this tool."
         )
     if action in MCP_ACTIONS:

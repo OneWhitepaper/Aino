@@ -141,7 +141,7 @@ _SCHEMA_OVERRIDES: dict[str, dict[str, Any]] = {
     "display.resume_display": _select("How resumed sessions display history", "minimal", "full", "off"),
     "display.busy_input_mode": _select("Input behavior while agent is running", "interrupt", "queue", "steer"),
     "approvals.mode": _select("Dangerous command approval mode", "manual", "smart", "off"),
-    "context.engine": _select("Context management engine", "default", "custom"),
+    "context.engine": _select("Context management engine", "compressor"),
     "human_delay.mode": _select("Simulated typing delay mode", "off", "typing", "fixed"),
     "logging.level": _select("Log level for agent.log", "DEBUG", "INFO", "WARNING", "ERROR"),
     "agent.service_tier": _select(
@@ -357,6 +357,21 @@ def _memory_provider_schema_options(cfg: dict[str, Any]) -> list[str]:
     return options
 
 
+def _context_engine_schema_options(cfg: dict[str, Any]) -> list[str]:
+    """Available engines in the current profile, retaining its configured legacy value."""
+    options = ["compressor"]
+    try:
+        from plugins.context_engine import discover_context_engines
+
+        options.extend(name for name, _, available in discover_context_engines() if available)
+    except (ImportError, OSError):
+        _log.debug("context engine discovery failed", exc_info=True)
+    current = cfg_get(cfg, "context", "engine")
+    if isinstance(current, str) and current.strip():
+        options.append(current)
+    return list(dict.fromkeys(options))
+
+
 def _schema_select_options(key: str) -> Optional[list[str]]:
     entry = CONFIG_SCHEMA.get(key)
     options = entry.get("options") if isinstance(entry, dict) else None
@@ -364,7 +379,7 @@ def _schema_select_options(key: str) -> Optional[list[str]]:
 
 
 def _schema_with_dynamic_provider_options() -> dict[str, dict[str, Any]]:
-    """CONFIG_SCHEMA with per-request discovery-driven ``*.provider`` options merged.
+    """CONFIG_SCHEMA with per-request discovery-driven provider/engine options merged.
 
     ``_SCHEMA_OVERRIDES`` freezes option lists at import time, so a provider installed after
     the server started never appears. Recomputing at request time reflects the CURRENT
@@ -391,6 +406,7 @@ def _schema_with_dynamic_provider_options() -> dict[str, dict[str, Any]]:
             merge(f"{kind}.provider", _custom_provider_options(kind, list(existing), cfg))
 
     merge("memory.provider", _memory_provider_schema_options(cfg))
+    merge("context.engine", _context_engine_schema_options(cfg))
 
     tb_options = _schema_select_options("terminal.backend")
     if tb_options is not None:

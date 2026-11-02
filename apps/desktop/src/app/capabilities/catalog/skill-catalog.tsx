@@ -314,6 +314,7 @@ function ScopedSkillCatalog({
       }
       onInstall={install}
       onQueryChange={onQueryChange}
+      profile={profile}
       query={query}
       renderInstalledAction={entry => {
         const skill = catalog.skillsById.get(entry.id)

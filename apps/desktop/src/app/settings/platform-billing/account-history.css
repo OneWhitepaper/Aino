@@ -1,0 +1,320 @@
+.account-history {
+  container-type: inline-size;
+  min-width: 0;
+  margin-block: 1.875rem;
+}
+
+.account-history-heading,
+.account-history-toolbar,
+.account-history-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.account-history-heading {
+  margin-bottom: 0.75rem;
+}
+
+.account-history-heading h2 {
+  color: var(--ui-text-primary);
+  font-size: var(--aino-text-body);
+  font-weight: 500;
+}
+
+.account-history-heading p {
+  color: var(--ui-text-tertiary);
+  font-size: var(--aino-text-caption);
+}
+
+.account-history-toolbar {
+  border-bottom: 1px solid var(--ui-stroke-tertiary);
+}
+
+.account-history-tabs {
+  align-self: stretch;
+  border-bottom: 0;
+}
+
+.account-history-actions {
+  gap: 0.25rem;
+  padding-bottom: 0.25rem;
+}
+
+.account-history-content {
+  min-width: 0;
+}
+
+.account-history-state {
+  padding-block: 1.5rem;
+}
+
+.account-ledger-table-wrap {
+  min-width: 0;
+}
+
+.account-ledger-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+  text-align: start;
+  font-size: var(--aino-text-caption);
+  line-height: 1.65;
+}
+
+.account-ledger-table th {
+  text-align: start;
+  padding: 0.75rem 0.625rem;
+  color: var(--ui-text-tertiary);
+  background: var(--ui-bg-quaternary);
+  font-weight: 400;
+}
+
+.account-ledger-table td {
+  min-width: 0;
+  padding: 0.875rem 0.625rem;
+  border-bottom: 1px solid var(--ui-stroke-tertiary);
+  color: var(--ui-text-primary);
+  overflow-wrap: anywhere;
+  vertical-align: middle;
+}
+
+.account-ledger-table th:first-child,
+.account-ledger-table td:first-child {
+  padding-inline-start: 0.75rem;
+}
+
+.account-ledger-record:hover {
+  background: var(--ui-row-hover-background);
+}
+
+.account-order-table th:nth-child(1) {
+  width: 34%;
+}
+.account-order-table th:nth-child(2) {
+  width: 20%;
+}
+.account-order-table th:nth-child(3) {
+  width: 17%;
+}
+.account-order-table th:nth-child(4) {
+  width: 20%;
+}
+.account-order-table th:nth-child(5) {
+  width: 9%;
+}
+.account-usage-table th:nth-child(1) {
+  width: 19%;
+}
+.account-usage-table th:nth-child(2) {
+  width: 24%;
+}
+.account-usage-table th:nth-child(3) {
+  width: 15%;
+}
+.account-usage-table th:nth-child(4) {
+  width: 19%;
+}
+.account-usage-table th:nth-child(5) {
+  width: 13%;
+}
+.account-usage-table th:nth-child(6) {
+  width: 10%;
+}
+
+.account-ledger-table .account-ledger-cost {
+  text-align: end;
+  font-variant-numeric: tabular-nums;
+}
+
+.account-ledger-table .account-ledger-action {
+  text-align: end;
+  padding-inline: 0.25rem;
+}
+
+.account-ledger-table .account-ledger-time {
+  color: var(--ui-text-tertiary);
+  font-variant-numeric: tabular-nums;
+}
+
+.account-ledger-time-secondary {
+  display: block;
+  margin-top: 0.125rem;
+}
+
+.account-usage-ledger {
+  min-width: 0;
+  font-size: var(--aino-text-caption);
+}
+
+.account-usage-ledger > p {
+  margin-block: 1rem;
+}
+
+.account-usage-detail-row td {
+  background: var(--ui-bg-quaternary);
+  padding: 1rem;
+}
+
+.account-usage-details {
+  display: grid;
+  gap: 1rem;
+  padding-block: 0.25rem;
+  text-align: start;
+}
+
+.account-usage-counters {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.account-usage-identifiers {
+  display: grid;
+  min-width: 0;
+  gap: 0.375rem;
+}
+
+.account-usage-identifiers > div {
+  display: grid;
+  grid-template-columns: 5.25rem minmax(0, 1fr);
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.account-usage-filters {
+  display: grid;
+  gap: 0.75rem;
+  padding-block: 1rem;
+  border-bottom: 1px solid var(--ui-stroke-tertiary);
+}
+
+.account-usage-filter-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+.account-usage-filter-fields > * {
+  min-width: 0;
+}
+
+.account-usage-filter-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.account-history-pagination {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 0.75rem;
+  padding-top: 0.875rem;
+  font-size: var(--aino-text-caption);
+}
+
+.account-history-pagination > span {
+  margin-inline-end: auto;
+}
+
+.account-history-page-size,
+.account-history-page-jump {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+}
+
+@container (max-width: 40rem) {
+  .account-history-pagination {
+    justify-content: flex-start;
+  }
+  .account-history-pagination > nav {
+    flex-basis: 100%;
+    order: 1;
+  }
+  .account-ledger-table .account-ledger-cost {
+    overflow-wrap: anywhere;
+  }
+}
+
+@container (max-width: 32rem) {
+  .account-history-heading {
+    align-items: flex-start;
+    flex-wrap: wrap;
+    gap: 0.25rem;
+  }
+  .account-ledger-table,
+  .account-ledger-table tbody {
+    display: block;
+    width: 100%;
+  }
+  .account-ledger-table thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+  .account-ledger-record {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 0.375rem 0.75rem;
+    padding: 1rem 0;
+    border-bottom: 1px solid var(--ui-stroke-tertiary);
+  }
+  .account-ledger-table .account-ledger-record td {
+    padding: 0;
+    border: 0;
+  }
+  .account-order-id,
+  .account-usage-model {
+    grid-column: 1;
+    grid-row: 1;
+  }
+  .account-ledger-time {
+    grid-column: 1;
+    grid-row: 2;
+  }
+  .account-ledger-time time span {
+    display: inline;
+  }
+  .account-ledger-time-secondary::before {
+    content: ' ';
+  }
+  .account-ledger-cost {
+    grid-column: 2;
+    grid-row: 1;
+    max-width: 10rem;
+  }
+  .account-ledger-status {
+    grid-column: 2;
+    grid-row: 2;
+    text-align: end;
+  }
+  .account-usage-purpose {
+    grid-column: 1;
+    grid-row: 3;
+  }
+  .account-ledger-action {
+    grid-column: 2;
+    grid-row: 3;
+  }
+  .account-usage-detail-row,
+  .account-usage-detail-row > td {
+    display: block;
+    width: 100%;
+  }
+  .account-usage-counters {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .account-usage-filter-fields {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

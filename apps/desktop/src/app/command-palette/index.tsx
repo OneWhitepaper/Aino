@@ -398,16 +398,7 @@ const toSessionEntry = (session: SessionRow): SessionEntry => ({
 const sessionKeywords = (session: SessionEntry, ...tags: string[]): string[] =>
   [...tags, 'chat', 'session', session.preview, session.git_branch].filter((word): word is string => !!word)
 
-type NonConfigSettingsLabel =
-  | 'about'
-  | 'archivedChats'
-  | 'gateway'
-  | 'keysSettings'
-  | 'keysTools'
-  | 'mcp'
-  | 'plugins'
-  | 'providerAccounts'
-  | 'providerApiKeys'
+type NonConfigSettingsLabel = 'about' | 'archivedChats' | 'gateway' | 'keysSettings' | 'keysTools' | 'mcp' | 'plugins'
 
 const NON_CONFIG_SETTINGS: ReadonlyArray<{
   icon: IconComponent
@@ -415,18 +406,6 @@ const NON_CONFIG_SETTINGS: ReadonlyArray<{
   labelKey: NonConfigSettingsLabel
   tab: string
 }> = [
-  {
-    icon: Zap,
-    keywords: ['accounts', 'sign in', 'oauth', 'login', 'subscription', 'models', 'anthropic', 'openai'],
-    labelKey: 'providerAccounts',
-    tab: 'providers&pview=accounts'
-  },
-  {
-    icon: KeyRound,
-    keywords: ['providers', 'api key', 'keys', 'secrets', 'tokens', 'egress', 'iron proxy', 'sandbox proxy'],
-    labelKey: 'providerApiKeys',
-    tab: 'providers&pview=keys'
-  },
   {
     icon: Globe,
     // The Connections registry merged into the unified Gateways page.

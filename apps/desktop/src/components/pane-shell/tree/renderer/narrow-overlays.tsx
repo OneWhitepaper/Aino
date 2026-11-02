@@ -6,30 +6,38 @@ import { useStore } from '@nanostores/react'
  * titlebar toggles route here on narrow) slides the pane OVER the layout
  * instead of squeezing it. Event reveals pin; hover reveals follow the mouse.
  */
-import { useRef } from 'react'
+import { type Dispatch, type RefObject, type SetStateAction, useRef } from 'react'
 import { type MouseEventHandler, useCallback, useEffect, useMemo, useState } from 'react'
 
-import { PaneTab, PaneTabLabel, PaneTabStrip } from '@/components/ui/pane-tab'
+import { openToolPanelChooser, TOOL_CHOOSER_PANE } from '@/app/right-sidebar/tool-panel-actions'
+import { $workspaceIsPage, workspacePageKeepsPane } from '@/app/routes'
+import { Codicon } from '@/components/ui/codicon'
+import { PaneStripGlyph, PaneTab, PaneTabLabel, PaneTabStrip } from '@/components/ui/pane-tab'
 import { ContribBoundary, ContribRender } from '@/contrib/react/boundary'
 import { Slot } from '@/contrib/react/slot'
 import { useContributions } from '@/contrib/react/use-contributions'
-import { registry } from '@/contrib/registry'
 import type { Contribution } from '@/contrib/types'
 import { useI18n } from '@/i18n'
 import { localizedPaneTitle } from '@/i18n/contributions'
-import { ESCAPE_PRIORITY, isTopEscapeLayer, pushEscapeLayer } from '@/lib/escape-layers'
 import { cn } from '@/lib/utils'
 import { $chatOnboardingSolo } from '@/store/onboarding-intro'
 import { $paneStates } from '@/store/panes'
 
-import { PANE_TOGGLE_REVEAL_EVENT } from '../..'
+import { $layoutEditMode } from '../../edit-mode'
 import { useWindowControlsOverlap } from '../../geometry'
-import { NO_PANE_GROUP } from '../../pane-visibility'
-import { allPaneIds, findGroupOfPane, type LayoutNode } from '../model'
-import { $hiddenTreePanes, $layoutTree, $narrowViewport } from '../store'
+import { NO_PANE_GROUP, SidebarBrandContext } from '../../pane-visibility'
+import { allPaneIds, findGroup, findGroupOfPane, type GroupNode, type LayoutNode } from '../model'
+import { $hiddenTreePanes, $layoutTree, $narrowViewport, activateTreePane, closeTabPane } from '../store'
+import { clearTabSelection } from '../tab-selection'
+import { isToolPanelGroup } from '../tool-panel-policy'
 
 import { KeepAlivePaneSlot, useStablePaneHosts } from './keep-alive-panes'
-import { fixedTrackSize, paneChrome, type TrackContext } from './track-model'
+import { type NarrowRevealState as RevealState, useNarrowRevealControls } from './narrow-reveal-controls'
+import { SidebarModeHeader } from './sidebar-mode-header'
+import { sidebarModePanes } from './sidebar-mode-presentation'
+import { useActiveTabVisible } from './tab-strip-scroll'
+import { ToolPanelControls } from './tool-panel-controls'
+import { fixedTrackSize, narrowToolPaneIds, paneChrome, type TrackContext } from './track-model'
 
 /** The width a revealed narrow overlay sizes itself to: the SAME resolution
  *  the pane's zone uses while docked — declared max() refined by the live
@@ -49,8 +57,62 @@ export function narrowOverlayWidth(ctx: TrackContext, tree: LayoutNode | null, r
   return track ?? paneChrome(revealed).width ?? '18rem'
 }
 
+/** A removed plugin falls back within its existing group. Reconcile identity
+ *  as well as paint, so re-enabling it cannot revive a stale Bot Mode. */
+function useResolvedReveal(
+  reveal: RevealState | null,
+  setReveal: Dispatch<SetStateAction<RevealState | null>>,
+  panes: readonly Contribution[],
+  tree: LayoutNode | null
+) {
+  const ownerId = useRef<string | undefined>(undefined)
+  const currentOwner = reveal && tree ? findGroupOfPane(tree, reveal.id) : null
+
+  if (currentOwner) {
+    ownerId.current = currentOwner.id
+  }
+
+  const owner = reveal && tree ? findGroup(tree, ownerId.current || '') : null
+  const members = owner ? owner.panes.flatMap(id => panes.find(pane => pane.id === id) ?? []) : []
+
+  const revealed = reveal
+    ? (panes.find(p => p.id === reveal.id) ?? members.find(pane => pane.id === owner?.active) ?? members[0])
+    : undefined
+
+  useEffect(() => {
+    if (!reveal || reveal.id === revealed?.id) {
+      return
+    }
+
+    setReveal(current => current && (revealed ? { ...current, id: revealed.id } : null))
+    const group = revealed && tree ? findGroupOfPane(tree, revealed.id) : null
+
+    if (group?.active === reveal.id && revealed) {
+      activateTreePane(group.id, revealed.id)
+    }
+  }, [reveal, revealed, setReveal, tree])
+
+  return revealed
+}
+
+/** A collapsed zone retains every available sibling as a navigation target. */
+function collapsedZonePanes(
+  revealed: Contribution | undefined,
+  tree: LayoutNode | null,
+  collapsibles: readonly Contribution[]
+) {
+  if (!revealed || !tree) {
+    return { group: null, panes: [revealed].filter((pane): pane is Contribution => Boolean(pane)) }
+  }
+
+  const zone = findGroupOfPane(tree, revealed.id)
+  const mates = zone ? zone.panes.map(id => collapsibles.find(pane => pane.id === id)) : []
+  const shown = mates.filter((pane): pane is Contribution => Boolean(pane))
+
+  return { group: zone, panes: shown.length > 0 ? shown : [revealed] }
+}
+
 export function NarrowOverlays() {
-  const { locale, t } = useI18n()
   const narrow = useStore($narrowViewport)
   const solo = useStore($chatOnboardingSolo)
   const tree = useStore($layoutTree)
@@ -58,7 +120,9 @@ export function NarrowOverlays() {
   const paneStates = useStore($paneStates)
   const stableHosts = useStablePaneHosts()
   const hiddenPanes = useStore($hiddenTreePanes)
-  const [reveal, setReveal] = useState<{ id: string; pinned: boolean } | null>(null)
+  const workspacePage = useStore($workspaceIsPage)
+  const editMode = useStore($layoutEditMode)
+  const [reveal, setReveal] = useState<RevealState | null>(null)
 
   // The revealed overlay spans the full viewport height (inset-y-0 below), so
   // its tab strip starts at the top edge — under the native window controls
@@ -66,6 +130,7 @@ export function NarrowOverlays() {
   // the same way a docked zone does (TreeGroup's wcOverlap -> paddingTop plus
   // an absolute drag-region spacer so the band stays a window-drag target).
   const overlayRef = useRef<HTMLDivElement>(null)
+  const tabsRef = useRef<HTMLDivElement>(null)
   const wcOverlap = useWindowControlsOverlap(overlayRef, reveal !== null)
 
   const onMouseLeave = useCallback<MouseEventHandler<HTMLDivElement>>(event => {
@@ -80,91 +145,43 @@ export function NarrowOverlays() {
     setReveal(current => (current?.pinned ? current : null))
   }, [])
 
-  // Own an Escape layer only while something is revealed, so Escape closes the
-  // overlay only when it's the top layer (never under a dialog / edit mode).
-  const revealActive = reveal !== null
-  useEffect(() => (revealActive ? pushEscapeLayer(ESCAPE_PRIORITY.narrowOverlay) : undefined), [revealActive])
-
   const inTree = useMemo(() => new Set(tree ? allPaneIds(tree) : []), [tree])
+
+  const narrowTools = useMemo(
+    () => (tree ? narrowToolPaneIds(tree, id => panes.find(pane => pane.id === id)) : new Set<string>()),
+    [tree, panes]
+  )
 
   const collapsibles = useMemo(
     // Solo adopts sidebar panes without their surrounding sidebar chrome.
     // Suppress every reveal path while those panes are intentionally hidden.
-    () => (solo ? [] : panes.filter(p => paneChrome(p).collapsible && inTree.has(p.id) && !hiddenPanes.has(p.id))),
-    [solo, panes, inTree, hiddenPanes]
+    () =>
+      solo
+        ? []
+        : panes.filter(
+            p =>
+              (paneChrome(p).collapsible || narrowTools.has(p.id)) &&
+              inTree.has(p.id) &&
+              !hiddenPanes.has(p.id) &&
+              (!workspacePage || workspacePageKeepsPane(p.id))
+          ),
+    [solo, panes, inTree, hiddenPanes, workspacePage, narrowTools]
   )
 
-  // ⌘B / ⌘G's narrow branch dispatches the app's toggle-reveal event with the
-  // REAL pane id — accept those via each contribution's revealAliases.
-  useEffect(() => {
-    if (!narrow || solo) {
-      setReveal(null)
+  useNarrowRevealControls(narrow, solo, reveal, setReveal)
 
-      return
-    }
+  const revealed = useResolvedReveal(reveal, setReveal, collapsibles, tree)
 
-    const onToggle = (event: Event) => {
-      const detail = (event as CustomEvent<{ id?: string; mode?: 'close' | 'open' | 'toggle' }>).detail
-      const id = detail?.id
-
-      if (!id) {
-        return
-      }
-
-      // Opening a pane can unhide it in the same event turn. Read that current
-      // state instead of the previous render's list so the first click works.
-      const currentTree = $layoutTree.get()
-      const currentIds = new Set(currentTree ? allPaneIds(currentTree) : [])
-
-      const match = registry
-        .getArea('panes')
-        .find(
-          p =>
-            paneChrome(p).collapsible &&
-            currentIds.has(p.id) &&
-            !$hiddenTreePanes.get().has(p.id) &&
-            (p.id === id || paneChrome(p).revealAliases?.includes(id))
-        )
-
-      if (!match) {
-        return
-      }
-
-      // `open`/`close` are explicit intents (programmatic reveal, titlebar show);
-      // `toggle` (default) is the ⌘B/⌘G flip.
-      const mode = detail?.mode ?? 'toggle'
-      setReveal(current => {
-        if (mode === 'open') {
-          return { id: match.id, pinned: true }
-        }
-
-        if (mode === 'close') {
-          return current?.id === match.id ? null : current
-        }
-
-        return current?.id === match.id && current.pinned ? null : { id: match.id, pinned: true }
-      })
-    }
-
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape' || event.defaultPrevented || !isTopEscapeLayer(ESCAPE_PRIORITY.narrowOverlay)) {
-        return
-      }
-
-      event.preventDefault()
-      setReveal(null)
-    }
-
-    window.addEventListener(PANE_TOGGLE_REVEAL_EVENT, onToggle)
-    window.addEventListener('keydown', onKeyDown)
-
-    return () => {
-      window.removeEventListener(PANE_TOGGLE_REVEAL_EVENT, onToggle)
-      window.removeEventListener('keydown', onKeyDown)
-    }
-  }, [narrow, solo])
-
-  const revealed = reveal ? collapsibles.find(p => p.id === reveal.id) : undefined
+  // Mirror the collapsed zone's tabs and keep explicit activations in view.
+  const { group: revealedGroup, panes: zonePanes } = collapsedZonePanes(revealed, tree, collapsibles)
+  const toolPanel = Boolean(revealedGroup && isToolPanelGroup(revealedGroup, id => panes.find(pane => pane.id === id)))
+  const modePanes = sidebarModePanes(revealedGroup?.panes ?? [], zonePanes, !editMode)
+  const compactSidebar = modePanes.length > 0
+  useActiveTabVisible(tabsRef, revealed?.id ?? '', {
+    enabled: narrow && !solo && Boolean(revealed) && !compactSidebar && (toolPanel || zonePanes.length > 1),
+    last: zonePanes.at(-1)?.id === revealed?.id,
+    tabCount: zonePanes.length
+  })
 
   if (!narrow || solo || collapsibles.length === 0) {
     return null
@@ -184,22 +201,6 @@ export function NarrowOverlays() {
         revealed
       )
     : null
-
-  // The revealed pane's ZONE-mates that also left the grid (the sessions zone
-  // stacks SESSIONS | BOTS): the overlay mirrors the zone's tab strip so a
-  // pane docked into a collapsed zone stays reachable on narrow viewports —
-  // without this, only the zone's first pane ever surfaces again.
-  const zonePanes = (() => {
-    if (!revealed || !tree) {
-      return [revealed].filter((p): p is Contribution => Boolean(p))
-    }
-
-    const zone = findGroupOfPane(tree, revealed.id)
-    const mates = zone ? zone.panes.map(id => collapsibles.find(p => p.id === id)) : []
-    const shown = mates.filter((p): p is Contribution => Boolean(p))
-
-    return shown.length > 0 ? shown : [revealed]
-  })()
 
   return (
     <>
@@ -231,6 +232,8 @@ export function NarrowOverlays() {
           // through text. Contract: `[data-glass-opaque]` in styles.css.
           data-glass-opaque=""
           data-narrow-overlay={revealed.id}
+          data-tool-panel={toolPanel || undefined}
+          data-tree-group={toolPanel ? revealedGroup?.id : undefined}
           onMouseLeave={onMouseLeave}
           ref={overlayRef}
           // Match the pane's docked width (sessions ~237px, files its rail
@@ -250,49 +253,204 @@ export function NarrowOverlays() {
               style={{ height: wcOverlap.height, left: wcOverlap.x, top: wcOverlap.y, width: wcOverlap.width }}
             />
           )}
-          {/* Zone-mates share the overlay through the zone's own tab strip
-              (SESSIONS | BOTS) — a lone pane keeps the stripless form. */}
-          {zonePanes.length > 1 && (
-            <PaneTabStrip>
-              {zonePanes.map(pane => (
-                <PaneTab
-                  active={pane.id === revealed.id}
-                  aria-selected={pane.id === revealed.id}
-                  data-narrow-overlay-tab={pane.id}
-                  key={pane.id}
-                  onPointerDown={event => {
-                    if (event.button === 0) {
-                      event.preventDefault()
-                      setReveal(current => ({ id: pane.id, pinned: current?.pinned ?? false }))
-                    }
-                  }}
-                >
-                  <PaneTabLabel>
-                    {localizedPaneTitle(t, pane.id, String(pane.title ?? pane.id), pane.source, locale)}
-                  </PaneTabLabel>
-                </PaneTab>
-              ))}
-            </PaneTabStrip>
-          )}
-          {stableHosts && paneChrome(revealed).lifecycleKeepAlive ? (
-            <div className="relative min-h-0 min-w-0 flex-1">
-              <KeepAlivePaneSlot
-                groupId={(tree && findGroupOfPane(tree, revealed.id)?.id) || NO_PANE_GROUP}
-                headerVisible={zonePanes.length > 1}
-                onMouseLeave={onMouseLeave}
-                overlay
-                paneId={revealed.id}
-                visible
-              />
-            </div>
-          ) : (
-            <ContribBoundary id={revealed.id}>
-              {revealed.render && <ContribRender render={revealed.render} />}
-            </ContribBoundary>
-          )}
-          {tree && findGroupOfPane(tree, revealed.id)?.panes.includes('sessions') && <Slot area="navigation.footer" />}
+          <NarrowOverlayTabs
+            compactSidebar={compactSidebar}
+            modePanes={modePanes}
+            panes={panes}
+            revealed={revealed}
+            revealedGroup={revealedGroup}
+            setReveal={setReveal}
+            tabsRef={tabsRef}
+            toolPanel={toolPanel}
+            zonePanes={zonePanes}
+          />
+          <NarrowOverlayContent
+            compactSidebar={compactSidebar}
+            onMouseLeave={onMouseLeave}
+            revealed={revealed}
+            stableHosts={stableHosts}
+            toolPanel={toolPanel}
+            tree={tree}
+            zonePanes={zonePanes}
+          />
         </div>
       )}
+    </>
+  )
+}
+
+interface NarrowOverlayTabsProps {
+  compactSidebar: boolean
+  revealed: Contribution
+  modePanes: readonly Contribution[]
+  toolPanel: boolean
+  revealedGroup: GroupNode | null | undefined
+  tabsRef: RefObject<HTMLDivElement | null>
+  zonePanes: readonly Contribution[]
+  panes: readonly Contribution[]
+  setReveal: Dispatch<SetStateAction<RevealState | null>>
+}
+
+function NarrowOverlayTabs({
+  compactSidebar,
+  revealed,
+  modePanes,
+  toolPanel,
+  revealedGroup,
+  tabsRef,
+  zonePanes,
+  panes,
+  setReveal
+}: NarrowOverlayTabsProps) {
+  const { locale, t } = useI18n()
+
+  return (
+    <>
+      {/* Zone-mates share the overlay through the zone's own tab strip
+              (SESSIONS | BOTS) — a lone pane keeps the stripless form. */}
+      {compactSidebar ? (
+        <SidebarModeHeader
+          activeId={revealed.id}
+          items={modePanes.map(pane => ({
+            id: pane.id,
+            title:
+              pane.id === 'sessions'
+                ? 'Aino'
+                : localizedPaneTitle(t, pane.id, String(pane.title ?? pane.id), pane.source, locale),
+            description: paneChrome(pane).sidebarDescription?.()
+          }))}
+          menuLabel={t.zones.sidebarModeMenu}
+          onOpenChange={open => {
+            // Clicking this hover-revealed menu is an explicit intent to
+            // keep the rail open while its portal extends into the page.
+            if (open) {
+              setReveal(current => (current ? { ...current, pinned: true } : null))
+            }
+          }}
+          onSelect={paneId => {
+            clearTabSelection()
+
+            if (revealedGroup) {
+              activateTreePane(revealedGroup.id, paneId)
+            }
+
+            setReveal({ id: paneId, pinned: true })
+          }}
+        />
+      ) : (
+        (toolPanel || zonePanes.length > 1) && (
+          <PaneTabStrip
+            listRef={tabsRef}
+            trailing={
+              toolPanel && revealedGroup ? (
+                <ToolPanelControls
+                  activate={id => {
+                    activateTreePane(revealedGroup.id, id)
+                    setReveal({ id, pinned: true })
+                  }}
+                  canMaximize={false}
+                  groupId={revealedGroup.id}
+                  onHide={() => setReveal(null)}
+                  panes={zonePanes.map(pane => pane.id)}
+                  title={id => {
+                    const pane = panes.find(item => item.id === id)
+
+                    return localizedPaneTitle(t, id, String(pane?.title ?? id), pane?.source, locale)
+                  }}
+                />
+              ) : undefined
+            }
+            variant={toolPanel ? 'tool' : 'default'}
+          >
+            {zonePanes.map(pane => (
+              <PaneTab
+                active={pane.id === revealed.id}
+                aria-selected={pane.id === revealed.id}
+                data-narrow-overlay-tab={pane.id}
+                key={pane.id}
+                onClose={
+                  toolPanel && !paneChrome(pane).hideOnly && !paneChrome(pane).uncloseable
+                    ? () => closeTabPane(pane.id)
+                    : undefined
+                }
+                onPointerDown={event => {
+                  if (event.button === 0) {
+                    event.preventDefault()
+
+                    if (revealedGroup) {
+                      activateTreePane(revealedGroup.id, pane.id)
+                    }
+
+                    setReveal(current => ({ id: pane.id, pinned: current?.pinned ?? false }))
+                  }
+                }}
+                role="tab"
+              >
+                {toolPanel && paneChrome(pane).tabLead && (
+                  <span className="ml-2 -mr-1 flex shrink-0 items-center">{paneChrome(pane).tabLead?.()}</span>
+                )}
+                <PaneTabLabel>
+                  {localizedPaneTitle(t, pane.id, String(pane.title ?? pane.id), pane.source, locale)}
+                </PaneTabLabel>
+              </PaneTab>
+            ))}
+            {toolPanel && revealedGroup && (
+              <PaneStripGlyph
+                icon={<Codicon name="add" size="0.8125rem" />}
+                label={t.zones.newTab}
+                onSelect={() => {
+                  openToolPanelChooser(revealedGroup.id)
+                  setReveal({ id: TOOL_CHOOSER_PANE, pinned: true })
+                }}
+              />
+            )}
+          </PaneTabStrip>
+        )
+      )}
+    </>
+  )
+}
+
+interface NarrowOverlayContentProps {
+  compactSidebar: boolean
+  stableHosts: boolean
+  revealed: Contribution
+  tree: LayoutNode | null
+  toolPanel: boolean
+  zonePanes: readonly Contribution[]
+  onMouseLeave: MouseEventHandler<HTMLDivElement>
+}
+
+function NarrowOverlayContent({
+  compactSidebar,
+  stableHosts,
+  revealed,
+  tree,
+  toolPanel,
+  zonePanes,
+  onMouseLeave
+}: NarrowOverlayContentProps) {
+  return (
+    <>
+      <SidebarBrandContext value={compactSidebar}>
+        {stableHosts && paneChrome(revealed).lifecycleKeepAlive ? (
+          <div className="relative min-h-0 min-w-0 flex-1">
+            <KeepAlivePaneSlot
+              groupId={(tree && findGroupOfPane(tree, revealed.id)?.id) || NO_PANE_GROUP}
+              headerVisible={toolPanel || zonePanes.length > 1}
+              onMouseLeave={onMouseLeave}
+              overlay
+              paneId={revealed.id}
+              visible
+            />
+          </div>
+        ) : (
+          <ContribBoundary id={revealed.id}>
+            {revealed.render && <ContribRender render={revealed.render} />}
+          </ContribBoundary>
+        )}
+      </SidebarBrandContext>
+      {tree && findGroupOfPane(tree, revealed.id)?.panes.includes('sessions') && <Slot area="navigation.footer" />}
     </>
   )
 }

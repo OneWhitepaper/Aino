@@ -47,6 +47,10 @@ import { SidebarSessionSkeletons } from './section-states'
 import { SidebarSessionRow } from './session-row'
 import { VirtualSessionList } from './virtual-session-list'
 
+function sidebarSectionKind(pinned: boolean, overview: boolean, project: boolean, grouped: boolean) {
+  return pinned ? 'pinned' : overview ? 'projects' : project ? 'project' : grouped ? 'grouped' : 'sessions'
+}
+
 export const VIRTUALIZE_THRESHOLD = 25
 
 interface SidebarSectionHeaderProps {
@@ -84,10 +88,7 @@ function SidebarSectionHeader({
   )
 
   return (
-    <div
-      className="group/section flex shrink-0 items-center justify-between gap-1 pb-1 pt-1.5"
-      data-sidebar-section-header=""
-    >
+    <div className="aino-sidebar-section-header group/section" data-sidebar-section-header="">
       {collapsible ? (
         <button
           aria-expanded={open}
@@ -98,7 +99,10 @@ function SidebarSectionHeader({
           type="button"
         >
           {labelBody}
-          <DisclosureCaret className="text-(--ui-text-tertiary)" open={open} />
+          <DisclosureCaret
+            className="text-(--ui-text-tertiary) opacity-0 group-hover/section:opacity-100 group-focus-within/section:opacity-100"
+            open={open}
+          />
         </button>
       ) : (
         <div className="flex w-fit min-w-0 items-center gap-1 leading-none">{labelBody}</div>
@@ -630,18 +634,14 @@ export function SidebarSessionsSection({
   // kept a phantom 4px scrollbar gutter and cut every row short on the right.
   const resolvedContentClassName = cn(contentClassName, flatVirtualized && 'overflow-visible')
 
-  const sectionKind = pinned
-    ? 'pinned'
-    : projectOverview !== undefined
-      ? 'projects'
-      : projectContent
-        ? 'project'
-        : groups?.length
-          ? 'grouped'
-          : 'sessions'
+  const sectionKind = sidebarSectionKind(pinned, projectOverview !== undefined, !!projectContent, !!groups?.length)
 
   return (
-    <SidebarGroup className={cn(rootClassName, DROP_TARGET_RING)} data-sidebar-section={sectionKind} {...sessionDropTargetProps(pinned)}>
+    <SidebarGroup
+      className={cn(rootClassName, DROP_TARGET_RING)}
+      data-sidebar-section={sectionKind}
+      {...sessionDropTargetProps(pinned)}
+    >
       <SidebarSectionHeader
         action={headerAction}
         collapsible={collapsible}

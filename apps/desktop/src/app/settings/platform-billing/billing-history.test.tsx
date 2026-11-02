@@ -61,7 +61,6 @@ it('opens an existing order by its id without creating another and keeps usage s
       <BillingHistory bridge={bridge} onOpenOrder={openOrder} scope={scope} />
     </I18nProvider>
   )
-  fireEvent.click(screen.getByRole('button', { name: '充值订单' }))
   fireEvent.click(await screen.findByRole('button', { name: /original-merchant-order/ }))
   expect(openOrder).toHaveBeenCalledWith('431')
   expect(createOrder).not.toHaveBeenCalled()
@@ -91,6 +90,7 @@ it('queries the full ledger with filters and preserves them across numbered page
   fireEvent.click(screen.getByRole('button', { name: '消费记录' }))
   fireEvent.click(await screen.findByRole('button', { name: '前往第 89 页' }))
   await waitFor(() => expect(queries.at(-1)?.page).toBe(89))
+  fireEvent.click(screen.getByRole('button', { name: '筛选' }))
   fireEvent.change(screen.getByLabelText('模型'), { target: { value: 'grok-4.6' } })
   fireEvent.change(screen.getByLabelText('开始日期'), { target: { value: '2026-09-20' } })
   fireEvent.change(screen.getByLabelText('结束日期'), { target: { value: '2026-09-22' } })
@@ -122,6 +122,40 @@ it('queries the full ledger with filters and preserves them across numbered page
   fireEvent.click(screen.getByRole('button', { name: '查询' }))
   expect(screen.getByRole('alert')).toBeTruthy()
   expect(queries).toHaveLength(count)
+})
+
+it('keeps an applied filter and its local draft when the filter panel is hidden', async () => {
+  const scope = { origin: 'https://fixture.example.test', user_id: '17', generation: 1 }
+
+  const listUsage = vi.fn(async (query: PlatformUsageQuery) => ({
+    items: [],
+    page: query.page,
+    page_size: query.page_size,
+    total: 60
+  }))
+
+  const bridge = {
+    scope: async () => scope,
+    listOrders: async () => ({ items: [], page: 1, page_size: 20, total: 0 }),
+    listUsage
+  } as unknown as PlatformBillingBridge
+
+  render(
+    <I18nProvider configClient={null} initialLocale="zh">
+      <BillingHistory bridge={bridge} onOpenOrder={() => {}} scope={scope} />
+    </I18nProvider>
+  )
+  fireEvent.click(screen.getByRole('button', { name: '消费记录' }))
+  fireEvent.click(screen.getByRole('button', { name: '筛选' }))
+  fireEvent.change(screen.getByLabelText('模型'), { target: { value: 'fixture-model' } })
+  fireEvent.click(screen.getByRole('button', { name: '查询' }))
+  await waitFor(() => expect(listUsage.mock.lastCall?.[0]).toMatchObject({ model: 'fixture-model' }))
+  fireEvent.click(screen.getByRole('button', { name: '筛选' }))
+  expect(screen.queryByRole('button', { name: '查询' })).toBeNull()
+  fireEvent.click(await screen.findByRole('button', { name: '前往第 2 页' }))
+  await waitFor(() => expect(listUsage.mock.lastCall?.[0]).toMatchObject({ page: 2, model: 'fixture-model' }))
+  fireEvent.click(screen.getByRole('button', { name: '筛选' }))
+  expect((screen.getByLabelText('模型') as HTMLInputElement).value).toBe('fixture-model')
 })
 
 it('does not publish late records after the account scope changes', async () => {

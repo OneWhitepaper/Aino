@@ -122,6 +122,34 @@ def anchored_context_tokens(messages: list[dict[str, Any]], anchor: Optional[dic
     return total
 
 
+def context_usage_from_history(messages: list[dict[str, Any]], anchor: Any, system_prompt: Any = None) -> dict[str, Any]:
+    """Recover display occupancy from durable history without rebuilding the agent.
+
+    Requests include a system row that SessionDB stores separately. Validate that temporary
+    projection as well as transcript-only anchors; never install it into the live history.
+    """
+    anchor = _serialize(anchor)
+    if anchor is None or not messages:
+        return {}
+    candidates = [messages]
+    if isinstance(system_prompt, str) and system_prompt:
+        candidates.append([{"role": "system", "content": system_prompt}, *messages])
+    elif int(anchor.get("base_count") or 0) <= len(messages):
+        # Legacy sessions may have priced a leading system row before its bytes were persisted.
+        candidates.append([{"role": "system", "content": ""}, *messages])
+    for candidate in candidates:
+        tokens = anchored_context_tokens(candidate, anchor)
+        if tokens is None:
+            continue
+        delta = candidate[int(anchor["base_count"]):]
+        if delta and delta[0].get("role") == "assistant":
+            delta = delta[1:]
+        source = "provider_usage_plus_estimate" if delta else "provider_usage"
+        return {"context_used": tokens, "context_source": source,
+                "context_estimated": source != "provider_usage"}
+    return {}
+
+
 def _serialize(anchor: Any) -> Optional[dict[str, Any]]:
     if not isinstance(anchor, dict):
         return None

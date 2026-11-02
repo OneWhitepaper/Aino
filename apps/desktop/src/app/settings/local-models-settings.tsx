@@ -24,17 +24,23 @@ import { LocalModelsRuntimeSection } from './local-models-runtime-section'
 import { SettingsContent, SettingsSkeleton } from './primitives'
 import { ActiveProfileNote } from './profile-scope'
 
-export function LocalModelsSettings(): ReactElement {
+export function LocalModelsSettings({
+  embedded = false,
+  visible = true
+}: {
+  embedded?: boolean
+  visible?: boolean
+}): ReactElement {
   const owner: LocalModelsOwner = useLocalModelsOwner()
 
   return (
     <LocalModelsOwnerProvider key={JSON.stringify(localModelsKey(owner))} value={owner}>
-      <ScopedLocalModelsSettings />
+      <ScopedLocalModelsSettings embedded={embedded} visible={visible} />
     </LocalModelsOwnerProvider>
   )
 }
 
-function ScopedLocalModelsSettings(): ReactElement {
+function ScopedLocalModelsSettings({ embedded, visible }: { embedded: boolean; visible: boolean }): ReactElement {
   const owner: LocalModelsOwner = useScopedLocalModelsOwner()
   const installStarting: boolean = useIsMutating({ mutationKey: localModelsKey(owner, 'install') }) > 0
   const { data: status } = useLocalModelsStatus(owner, true, true)
@@ -65,6 +71,12 @@ function ScopedLocalModelsSettings(): ReactElement {
     // mount (stale history) never triggers a navigation.
     const seen = seenQuickstarts.current
 
+    if (!visible) {
+      seen.clear()
+
+      return
+    }
+
     for (const j of jobs) {
       if (j.kind !== 'quickstart') {
         continue
@@ -77,7 +89,7 @@ function ScopedLocalModelsSettings(): ReactElement {
         navigate(NEW_CHAT_ROUTE)
       }
     }
-  }, [jobs, navigate])
+  }, [jobs, navigate, visible])
 
   if (!status || !catalog) {
     return <SettingsSkeleton sections={[{ rows: 2 }, { rows: 4 }]} />
@@ -109,6 +121,7 @@ function ScopedLocalModelsSettings(): ReactElement {
   if ((qJob || (needsSetup && !configure && heroModel)) && !otherActiveJob && !installStarting && !failedInstall) {
     return (
       <LocalModelsQuickstart
+        embedded={embedded}
         heroModel={heroModel}
         job={qJob}
         lastError={lastError}
@@ -117,13 +130,15 @@ function ScopedLocalModelsSettings(): ReactElement {
     )
   }
 
-  return (
-    <SettingsContent>
-      <ActiveProfileNote className="mb-5" />
+  const content = (
+    <>
+      {!embedded && <ActiveProfileNote className="mb-5" />}
       <LocalModelsRuntimeSection jobs={jobs} lastError={lastError} status={status} />
       <LocalModelsHardwareSection hardware={hardware} />
       <LocalModelsModelsSection catalog={catalog} jobs={jobs} lastError={lastError} status={status} />
       <LocalModelsBrowseSection />
-    </SettingsContent>
+    </>
   )
+
+  return embedded ? <div>{content}</div> : <SettingsContent>{content}</SettingsContent>
 }

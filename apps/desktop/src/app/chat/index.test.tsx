@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { MemoryRouter } from 'react-router'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { PaneVisibleContext } from '@/components/pane-shell/pane-visibility'
 import { assistantTextPart, type ChatMessage } from '@/lib/chat-messages'
 import {
   $activeSessionId,
@@ -161,5 +162,45 @@ describe('ChatView render isolation', () => {
     // memo(ChatView) with stable props must absorb the parent's idle tick —
     // the transcript (Thread) must not re-render. This is PR #38470's contract.
     expect(threadRenderCount.current).toBe(1)
+  })
+
+  it.each([
+    ['/capabilities', true],
+    ['/profiles', true],
+    ['/settings', true],
+    ['/stored-1', false]
+  ] as const)('does not retain a primary chat header on %s (pane visible: %s)', (path, visible) => {
+    const noop = vi.fn()
+    render(
+      <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+        <MemoryRouter initialEntries={[path]}>
+          <PaneVisibleContext.Provider value={visible}>
+            <ChatView
+              gateway={null}
+              onAddContextRef={noop}
+              onAddUrl={noop}
+              onAttachDroppedItems={noop}
+              onAttachImageBlob={noop}
+              onCancel={noop}
+              onDeleteSelectedSession={noop}
+              onEdit={noop}
+              onPasteClipboardImage={noop}
+              onPickFiles={noop}
+              onPickFolders={noop}
+              onPickImages={noop}
+              onReload={noop}
+              onRemoveAttachment={noop}
+              onRetryResume={noop}
+              onSteer={noop}
+              onSubmit={noop}
+              onThreadMessagesChange={noop}
+              onToggleSelectedPin={noop}
+            />
+          </PaneVisibleContext.Provider>
+        </MemoryRouter>
+      </QueryClientProvider>
+    )
+
+    expect(screen.queryByTestId('session-actions-menu')).toBeNull()
   })
 })

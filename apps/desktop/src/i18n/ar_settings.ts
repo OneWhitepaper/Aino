@@ -1,6 +1,142 @@
 import { arDelegationRouting } from './ar_delegation_routing'
 import { arUpdateChannel } from './ar_update_channel'
+import { configPagesFor } from './config-pages'
 import type { TranslationOverrides } from './define-locale'
+
+const configPageFieldLabels: Record<string, string> = {
+  model: 'النموذج الافتراضي',
+  modelContextLength:
+    'يتجاوز نافذة السياق المكتشفة لنموذج المحادثة الرئيسي فقط (بالرموز). اتركه 0 لاستخدام القيمة المكتشفة للنموذج المحدد. لا يؤثر على النماذج المساعدة أو نماذج MoA.',
+  fallbackProviders: 'النماذج الاحتياطية',
+  toolsets: 'مجموعات الأدوات المفعلة',
+  timezone: 'المنطقة الزمنية',
+  'display.personality': 'أسلوب المساعد',
+  'display.showReasoning': 'إظهار التفكير',
+  'agent.maxTurns': 'الحد الأقصى لخطوات الوكيل',
+  'agent.imageInputMode': 'مرفقات الصور',
+  'agent.apiMaxRetries': 'محاولات API',
+  'agent.serviceTier': 'مستوى الخدمة',
+  'agent.toolUseEnforcement': 'فرض استخدام الأدوات',
+  'terminal.cwd': 'مجلد العمل',
+  'terminal.backend': 'خلفية التنفيذ',
+  'terminal.timeout': 'مهلة الأوامر',
+  'terminal.persistentShell': 'صدفة مستمرة',
+  'terminal.envPassthrough': 'تمرير متغيرات البيئة',
+  'terminal.dockerImage': 'صورة Docker',
+  'terminal.singularityImage': 'صورة Singularity',
+  'terminal.modalImage': 'صورة Modal',
+  'terminal.daytonaImage': 'صورة Daytona',
+  fileReadMaxChars: 'حد قراءة الملفات',
+  'toolOutput.maxBytes': 'حد مخرجات الطرفية',
+  'toolOutput.maxLines': 'حد صفحات الملفات',
+  'toolOutput.maxLineLength': 'حد طول السطر',
+  'codeExecution.mode': 'نمط تنفيذ الكود',
+  'approvals.mode': 'نمط الموافقات',
+  'approvals.timeout': 'مهلة الموافقة',
+  'approvals.mcpReloadConfirm': 'تأكيد إعادة تحميل MCP',
+  commandAllowlist: 'قائمة الأوامر المسموحة',
+  'security.redactSecrets': 'إخفاء الأسرار',
+  'security.allowPrivateUrls': 'السماح بالروابط الخاصة',
+  'browser.allowPrivateUrls': 'روابط المتصفح الخاصة',
+  'browser.autoLocalForPrivateUrls': 'متصفح محلي للروابط الخاصة',
+  'checkpoints.enabled': 'نقاط حفظ الملفات',
+  'checkpoints.maxSnapshots': 'حد نقاط الحفظ',
+  'voice.maxRecordingSeconds': 'أقصى مدة للتسجيل',
+  'voice.autoTts': 'قراءة الردود صوتياً',
+  'stt.enabled': 'تحويل الكلام إلى نص',
+  'stt.provider': 'مزود تحويل الكلام إلى نص',
+  'stt.local.model': 'نموذج التفريغ المحلي',
+  'stt.local.language': 'لغة التفريغ',
+  'stt.openai.model': 'نموذج OpenAI STT',
+  'stt.groq.model': 'نموذج Groq STT',
+  'stt.mistral.model': 'نموذج Mistral STT',
+  'stt.elevenlabs.modelId': 'نموذج ElevenLabs STT',
+  'stt.elevenlabs.languageCode': 'لغة ElevenLabs',
+  'stt.elevenlabs.tagAudioEvents': 'وسم أحداث الصوت',
+  'stt.elevenlabs.diarize': 'تمييز المتحدثين',
+  'tts.provider': 'مزود تحويل النص إلى كلام',
+  'tts.edge.voice': 'صوت Edge',
+  'tts.openai.model': 'نموذج OpenAI TTS',
+  'tts.openai.voice': 'صوت OpenAI',
+  'tts.elevenlabs.voiceId': 'صوت ElevenLabs',
+  'tts.elevenlabs.modelId': 'نموذج ElevenLabs',
+  'tts.xai.voiceId': 'صوت xAI (Grok)',
+  'tts.xai.language': 'لغة xAI',
+  'tts.minimax.model': 'نموذج MiniMax TTS',
+  'tts.minimax.voiceId': 'صوت MiniMax',
+  'tts.mistral.model': 'نموذج Mistral TTS',
+  'tts.mistral.voiceId': 'صوت Mistral',
+  'tts.gemini.model': 'نموذج Gemini TTS',
+  'tts.gemini.voice': 'صوت Gemini',
+  'tts.neutts.model': 'نموذج NeuTTS',
+  'tts.neutts.device': 'جهاز NeuTTS',
+  'tts.kittentts.model': 'نموذج KittenTTS',
+  'tts.kittentts.voice': 'صوت KittenTTS',
+  'tts.piper.voice': 'صوت Piper',
+  'memory.memoryEnabled': 'الذاكرة المستمرة',
+  'memory.userProfileEnabled': 'ملف المستخدم',
+  'memory.memoryCharLimit': 'ميزانية الذاكرة',
+  'memory.userCharLimit': 'ميزانية الملف الشخصي',
+  'memory.provider': 'مزود الذاكرة',
+  'context.engine': 'محرك السياق',
+  'compression.enabled': 'الضغط التلقائي',
+  'compression.threshold': 'عتبة الضغط',
+  'compression.codexGpt55Autoraise': 'الرفع التلقائي لضغط Codex',
+  'compression.targetRatio': 'هدف الضغط',
+  'compression.protectLastN': 'الرسائل الأخيرة المحمية',
+  'auxiliary.compression.timeout': 'مهلة نموذج الضغط (ثانية)',
+  'delegation.model': 'نموذج الوكيل الفرعي',
+  'delegation.provider': 'مزود الوكيل الفرعي',
+  'delegation.maxIterations': 'حد دورات الوكيل الفرعي',
+  'delegation.maxConcurrentChildren': 'الوكلاء الفرعيون المتوازيون',
+  'delegation.childTimeoutSeconds': 'مهلة الوكيل الفرعي',
+  'delegation.reasoningEffort': 'جهد تفكير الوكيل الفرعي',
+  'updates.nonInteractiveLocalChanges': 'تغييرات التحديث داخل التطبيق'
+}
+
+const configPageFieldDescriptions: Record<string, string> = {
+  model: 'يستخدم في المحادثات الجديدة ما لم تختر نموذجاً مختلفاً من محرر الرسائل.',
+  modelContextLength: 'اتركه 0 لاستخدام نافذة السياق المكتشفة للنموذج المحدد.',
+  fallbackProviders: 'إدخالات احتياطية بصيغة provider:model لتجربتها إذا فشل النموذج الافتراضي.',
+  'display.personality': 'أسلوب المساعد الافتراضي للجلسات الجديدة.',
+  'display.showReasoning': 'يعرض أقسام التفكير عندما توفرها الخلفية.',
+  'desktop.repoScanRoots':
+    'المجلدات المراد فحصها. اتركها فارغة لتجاوز فحص القرص؛ تظل المشاريع المرتبطة بالمحادثات ظاهرة.',
+  timezone: 'تستخدم عندما يحتاج Hermes إلى سياق الوقت المحلي. اتركها فارغة لاستخدام منطقة النظام.',
+  'agent.imageInputMode': 'يتحكم في طريقة إرسال مرفقات الصور إلى النموذج.',
+  'agent.maxTurns': 'الحد الأعلى لدورات استدعاء الأدوات قبل أن يوقف Hermes التشغيل.',
+  'terminal.cwd': 'مجلد المشروع الافتراضي لعمل الأدوات والطرفية.',
+  'terminal.persistentShell':
+    'خاص بـ SSH: يحتفظ بالمتغيرات المصدرة بين الأوامر. عند إيقافه، يستخدم كل أمر بيئة تسجيل الدخول؛ يبقى مجلد العمل محفوظاً دائماً.',
+  'terminal.envPassthrough':
+    'أسماء متغيرات البيئة التي تمرر إلى الأدوات، وليس قيمها. بعد التعديل، أعد تشغيل الخدمة وأعد إنشاء بيئات التنفيذ الحالية.',
+  'terminal.dockerImage': 'صورة الحاوية المستخدمة عند اختيار Docker كخلفية تنفيذ.',
+  'terminal.singularityImage': 'الصورة المستخدمة عند اختيار Singularity.',
+  'terminal.modalImage': 'الصورة المستخدمة عند اختيار Modal.',
+  'terminal.daytonaImage': 'الصورة المستخدمة عند اختيار Daytona.',
+  'codeExecution.mode':
+    'يستخدم Project مجلد الجلسة وPython الخاص بالمشروع؛ يستخدم strict مجلداً مؤقتاً وPython الخاص ببيئة التشغيل. لا يغير أذونات الملفات.',
+  fileReadMaxChars: 'أقصى عدد أحرف يستطيع Hermes قراءته من ملف واحد في الطلب.',
+  'approvals.mode': 'كيف يتعامل Hermes مع الأوامر التي تحتاج موافقة صريحة.',
+  'approvals.timeout': 'مدة انتظار طلبات الموافقة قبل انتهاء المهلة.',
+  'security.redactSecrets': 'يخفي الأسرار المكتشفة من المحتوى المرئي للنموذج قدر الإمكان.',
+  'checkpoints.enabled': 'ينشئ لقطات رجوع قبل تعديلات الملفات.',
+  'memory.memoryEnabled': 'يحفظ ذكريات دائمة يمكن أن تساعد الجلسات القادمة.',
+  'memory.userProfileEnabled': 'يحافظ على ملف مختصر لتفضيلات المستخدم.',
+  'context.engine': 'استراتيجية إدارة المحادثات الطويلة قرب حد السياق.',
+  'compression.enabled': 'يلخص السياق الأقدم عندما تكبر المحادثات.',
+  'compression.codexGpt55Autoraise': 'يرفع عتبة الضغط إلى 85٪ لنماذج ChatGPT Codex OAuth المدعومة.',
+  'auxiliary.compression.timeout':
+    'عدد الثواني لانتظار نموذج الضغط المساعد في كل استدعاء (الافتراضي 120). ارفعه للنماذج المحلية البطيئة.',
+  'voice.autoTts': 'ينطق ردود المساعد تلقائياً.',
+  'tts.xai.voiceId': 'معرف صوت xAI مثل eve أو معرف صوت مخصص.',
+  'tts.xai.language': 'رمز لغة النطق، مثل en.',
+  'tts.neutts.device': 'جهاز الاستدلال المحلي لـ NeuTTS.',
+  'stt.enabled': 'يفعل التفريغ الصوتي المحلي أو عبر مزود.',
+  'stt.elevenlabs.languageCode': 'رمز لغة ISO-639-3 اختياري. اتركه فارغاً للاكتشاف التلقائي.',
+  'updates.nonInteractiveLocalChanges':
+    'عندما يحدّث Hermes نفسه من التطبيق دون موجه طرفية، احتفظ بتعديلات المصدر المحلية أو تجاهلها.'
+}
 
 export const arSettings = {
   language: {
@@ -13,6 +149,7 @@ export const arSettings = {
     noResults: 'لا توجد لغة مطابقة'
   },
   settings: {
+    configPages: configPagesFor('ar', configPageFieldLabels, configPageFieldDescriptions),
     // Window plans (Nous subscription with included usage). Other billing strings: overlay-gaps.json.
     billing: {
       keepGoingOnCredits: {
@@ -110,12 +247,13 @@ export const arSettings = {
       missing: 'هذه الإضافة ليس لها صفحة إعدادات. ربما عُطّلت أو أُزيلت.'
     },
     nav: {
-      providers: 'المزودون',
+      providers: 'خدمات النماذج',
       providerAccounts: 'الحسابات',
       providerApiKeys: 'مفاتيح API',
       gateway: 'البوابة',
       apiKeys: 'الأدوات والمفاتيح',
       keysTools: 'الأدوات',
+      keysCredentials: 'المفاتيح',
       keysSettings: 'الإعدادات',
       mcp: 'MCP',
       archivedChats: 'المحادثات المؤرشفة',
@@ -450,134 +588,8 @@ export const arSettings = {
         turnOffFailed: 'تعذّر إيقاف الحيوان الأليف.'
       }
     },
-    fieldLabels: {
-      model: 'النموذج الافتراضي',
-      modelContextLength:
-        'يتجاوز نافذة السياق المكتشفة لنموذج المحادثة الرئيسي فقط (بالرموز). اتركه 0 لاستخدام القيمة المكتشفة للنموذج المحدد. لا يؤثر على النماذج المساعدة أو نماذج MoA.',
-      fallbackProviders: 'النماذج الاحتياطية',
-      toolsets: 'مجموعات الأدوات المفعلة',
-      timezone: 'المنطقة الزمنية',
-      'display.personality': 'أسلوب المساعد',
-      'display.showReasoning': 'إظهار التفكير',
-      'agent.maxTurns': 'الحد الأقصى لخطوات الوكيل',
-      'agent.imageInputMode': 'مرفقات الصور',
-      'agent.apiMaxRetries': 'محاولات API',
-      'agent.serviceTier': 'مستوى الخدمة',
-      'agent.toolUseEnforcement': 'فرض استخدام الأدوات',
-      'terminal.cwd': 'مجلد العمل',
-      'terminal.backend': 'خلفية التنفيذ',
-      'terminal.timeout': 'مهلة الأوامر',
-      'terminal.persistentShell': 'صدفة مستمرة',
-      'terminal.envPassthrough': 'تمرير متغيرات البيئة',
-      'terminal.dockerImage': 'صورة Docker',
-      'terminal.singularityImage': 'صورة Singularity',
-      'terminal.modalImage': 'صورة Modal',
-      'terminal.daytonaImage': 'صورة Daytona',
-      fileReadMaxChars: 'حد قراءة الملفات',
-      'toolOutput.maxBytes': 'حد مخرجات الطرفية',
-      'toolOutput.maxLines': 'حد صفحات الملفات',
-      'toolOutput.maxLineLength': 'حد طول السطر',
-      'codeExecution.mode': 'نمط تنفيذ الكود',
-      'approvals.mode': 'نمط الموافقات',
-      'approvals.timeout': 'مهلة الموافقة',
-      'approvals.mcpReloadConfirm': 'تأكيد إعادة تحميل MCP',
-      commandAllowlist: 'قائمة الأوامر المسموحة',
-      'security.redactSecrets': 'إخفاء الأسرار',
-      'security.allowPrivateUrls': 'السماح بالروابط الخاصة',
-      'browser.allowPrivateUrls': 'روابط المتصفح الخاصة',
-      'browser.autoLocalForPrivateUrls': 'متصفح محلي للروابط الخاصة',
-      'checkpoints.enabled': 'نقاط حفظ الملفات',
-      'checkpoints.maxSnapshots': 'حد نقاط الحفظ',
-      'voice.maxRecordingSeconds': 'أقصى مدة للتسجيل',
-      'voice.autoTts': 'قراءة الردود صوتياً',
-      'stt.enabled': 'تحويل الكلام إلى نص',
-      'stt.provider': 'مزود تحويل الكلام إلى نص',
-      'stt.local.model': 'نموذج التفريغ المحلي',
-      'stt.local.language': 'لغة التفريغ',
-      'stt.openai.model': 'نموذج OpenAI STT',
-      'stt.groq.model': 'نموذج Groq STT',
-      'stt.mistral.model': 'نموذج Mistral STT',
-      'stt.elevenlabs.modelId': 'نموذج ElevenLabs STT',
-      'stt.elevenlabs.languageCode': 'لغة ElevenLabs',
-      'stt.elevenlabs.tagAudioEvents': 'وسم أحداث الصوت',
-      'stt.elevenlabs.diarize': 'تمييز المتحدثين',
-      'tts.provider': 'مزود تحويل النص إلى كلام',
-      'tts.edge.voice': 'صوت Edge',
-      'tts.openai.model': 'نموذج OpenAI TTS',
-      'tts.openai.voice': 'صوت OpenAI',
-      'tts.elevenlabs.voiceId': 'صوت ElevenLabs',
-      'tts.elevenlabs.modelId': 'نموذج ElevenLabs',
-      'tts.xai.voiceId': 'صوت xAI (Grok)',
-      'tts.xai.language': 'لغة xAI',
-      'tts.minimax.model': 'نموذج MiniMax TTS',
-      'tts.minimax.voiceId': 'صوت MiniMax',
-      'tts.mistral.model': 'نموذج Mistral TTS',
-      'tts.mistral.voiceId': 'صوت Mistral',
-      'tts.gemini.model': 'نموذج Gemini TTS',
-      'tts.gemini.voice': 'صوت Gemini',
-      'tts.neutts.model': 'نموذج NeuTTS',
-      'tts.neutts.device': 'جهاز NeuTTS',
-      'tts.kittentts.model': 'نموذج KittenTTS',
-      'tts.kittentts.voice': 'صوت KittenTTS',
-      'tts.piper.voice': 'صوت Piper',
-      'memory.memoryEnabled': 'الذاكرة المستمرة',
-      'memory.userProfileEnabled': 'ملف المستخدم',
-      'memory.memoryCharLimit': 'ميزانية الذاكرة',
-      'memory.userCharLimit': 'ميزانية الملف الشخصي',
-      'memory.provider': 'مزود الذاكرة',
-      'context.engine': 'محرك السياق',
-      'compression.enabled': 'الضغط التلقائي',
-      'compression.threshold': 'عتبة الضغط',
-      'compression.codexGpt55Autoraise': 'الرفع التلقائي لضغط Codex',
-      'compression.targetRatio': 'هدف الضغط',
-      'compression.protectLastN': 'الرسائل الأخيرة المحمية',
-      'auxiliary.compression.timeout': 'مهلة نموذج الضغط (ثانية)',
-      'delegation.model': 'نموذج الوكيل الفرعي',
-      'delegation.provider': 'مزود الوكيل الفرعي',
-      'delegation.maxIterations': 'حد دورات الوكيل الفرعي',
-      'delegation.maxConcurrentChildren': 'الوكلاء الفرعيون المتوازيون',
-      'delegation.childTimeoutSeconds': 'مهلة الوكيل الفرعي',
-      'delegation.reasoningEffort': 'جهد تفكير الوكيل الفرعي',
-      'updates.nonInteractiveLocalChanges': 'تغييرات التحديث داخل التطبيق'
-    },
-    fieldDescriptions: {
-      model: 'يستخدم في المحادثات الجديدة ما لم تختر نموذجاً مختلفاً من محرر الرسائل.',
-      modelContextLength: 'اتركه 0 لاستخدام نافذة السياق المكتشفة للنموذج المحدد.',
-      fallbackProviders: 'إدخالات احتياطية بصيغة provider:model لتجربتها إذا فشل النموذج الافتراضي.',
-      'display.personality': 'أسلوب المساعد الافتراضي للجلسات الجديدة.',
-      'display.showReasoning': 'يعرض أقسام التفكير عندما توفرها الخلفية.',
-      timezone: 'تستخدم عندما يحتاج Hermes إلى سياق الوقت المحلي. اتركها فارغة لاستخدام منطقة النظام.',
-      'agent.imageInputMode': 'يتحكم في طريقة إرسال مرفقات الصور إلى النموذج.',
-      'agent.maxTurns': 'الحد الأعلى لدورات استدعاء الأدوات قبل أن يوقف Hermes التشغيل.',
-      'terminal.cwd': 'مجلد المشروع الافتراضي لعمل الأدوات والطرفية.',
-      'terminal.persistentShell': 'يحافظ على حالة الصدفة بين الأوامر عندما تدعمها الخلفية.',
-      'terminal.envPassthrough': 'متغيرات البيئة التي تمرر إلى تنفيذ الأدوات.',
-      'terminal.dockerImage': 'صورة الحاوية المستخدمة عند اختيار Docker كخلفية تنفيذ.',
-      'terminal.singularityImage': 'الصورة المستخدمة عند اختيار Singularity.',
-      'terminal.modalImage': 'الصورة المستخدمة عند اختيار Modal.',
-      'terminal.daytonaImage': 'الصورة المستخدمة عند اختيار Daytona.',
-      'codeExecution.mode': 'مدى تقييد تنفيذ الكود بالمشروع الحالي.',
-      fileReadMaxChars: 'أقصى عدد أحرف يستطيع Hermes قراءته من ملف واحد في الطلب.',
-      'approvals.mode': 'كيف يتعامل Hermes مع الأوامر التي تحتاج موافقة صريحة.',
-      'approvals.timeout': 'مدة انتظار طلبات الموافقة قبل انتهاء المهلة.',
-      'security.redactSecrets': 'يخفي الأسرار المكتشفة من المحتوى المرئي للنموذج قدر الإمكان.',
-      'checkpoints.enabled': 'ينشئ لقطات رجوع قبل تعديلات الملفات.',
-      'memory.memoryEnabled': 'يحفظ ذكريات دائمة يمكن أن تساعد الجلسات القادمة.',
-      'memory.userProfileEnabled': 'يحافظ على ملف مختصر لتفضيلات المستخدم.',
-      'context.engine': 'استراتيجية إدارة المحادثات الطويلة قرب حد السياق.',
-      'compression.enabled': 'يلخص السياق الأقدم عندما تكبر المحادثات.',
-      'compression.codexGpt55Autoraise': 'يرفع عتبة الضغط إلى 85٪ لنماذج ChatGPT Codex OAuth المدعومة.',
-      'auxiliary.compression.timeout':
-        'عدد الثواني لانتظار نموذج الضغط المساعد في كل استدعاء (الافتراضي 120). ارفعه للنماذج المحلية البطيئة.',
-      'voice.autoTts': 'ينطق ردود المساعد تلقائياً.',
-      'tts.xai.voiceId': 'معرف صوت xAI مثل eve أو معرف صوت مخصص.',
-      'tts.xai.language': 'رمز لغة النطق، مثل en.',
-      'tts.neutts.device': 'جهاز الاستدلال المحلي لـ NeuTTS.',
-      'stt.enabled': 'يفعل التفريغ الصوتي المحلي أو عبر مزود.',
-      'stt.elevenlabs.languageCode': 'رمز لغة ISO-639-3 اختياري. اتركه فارغاً للاكتشاف التلقائي.',
-      'updates.nonInteractiveLocalChanges':
-        'عندما يحدّث Hermes نفسه من التطبيق دون موجه طرفية، احتفظ بتعديلات المصدر المحلية أو تجاهلها.'
-    },
+    fieldLabels: configPageFieldLabels,
+    fieldDescriptions: configPageFieldDescriptions,
     about: {
       updates: 'التحديثات',
       channel: arUpdateChannel
@@ -659,7 +671,60 @@ export const arSettings = {
       couldNotSave: 'تعذّر حفظ بيانات الاعتماد.',
       remove: 'إزالة',
       getKey: 'احصل على مفتاح',
-      saving: 'جار الحفظ'
+      saving: 'جار الحفظ',
+      toolPageIntro:
+        'استخدم هذه الصفحة لربط خدمات اختيارية للبحث والميزات الصوتية والذاكرة الخارجية. هذه ليست مفاتيح API لنموذج المحادثة. اترك ما لا تستخدمه فارغًا. افتح العنصر لمعرفة التفاصيل؛ قد تعالج الخدمات الخارجية الطلبات أو تفرض رسومًا.',
+      toolServices: {
+        porcupine: {
+          label: 'مفتاح التنبيه الصوتي Porcupine',
+          description:
+            'يلزم فقط عند اختيار Porcupine كمحرك للتنبيه الصوتي في إعدادات الصوت. المحرك الافتراضي لا يحتاج إلى هذا المفتاح.'
+        },
+        retaindbApiKey: {
+          label: 'مفتاح ذاكرة RetainDB',
+          description: 'يربط خدمة الذاكرة الخارجية الاختيارية RetainDB. يلزم فقط عند اختيارها وتفعيلها كمزوّد للذاكرة.'
+        },
+        retaindbBaseUrl: {
+          label: 'عنوان خدمة RetainDB',
+          description:
+            'غيّره فقط عند الاتصال بنسخة RetainDB مستضافة ذاتيًا. اترك القيمة الافتراضية لخدمة RetainDB السحابية.'
+        },
+        searxngUrl: {
+          label: 'عنوان البحث المستضاف ذاتيًا (SearXNG)',
+          description: 'عنوان خادم SearXNG لديك. لا يحتاج إلى مفتاح API. يوفّر البحث فقط ولا يستخرج محتوى الصفحات.'
+        },
+        supermemoryApiKey: {
+          label: 'مفتاح ذاكرة Supermemory',
+          description: 'يربط خدمة الذاكرة الخارجية Supermemory. ثبّت الإضافة وفعّلها ثم اخترها كمزوّد للذاكرة.'
+        },
+        tavilyApiKey: {
+          label: 'مفتاح بحث Tavily',
+          description:
+            'يُستخدم للبحث على الويب واستخراج الصفحات عبر Tavily. اختر Tavily لاستخدامه؛ وقد يرفع المفتاح حدود الاستخدام. قد تُطبق رسوم المزوّد.'
+        },
+        toolGatewayDomain: {
+          label: 'نطاق بوابة الأدوات (متقدم)',
+          description:
+            'يغيّر النطاق المستخدم لبوابات الأدوات المُدارة. مخصص لاشتراكات مدعومة أو إعدادات مخصصة؛ اتركه فارغًا عادةً.'
+        },
+        toolGatewayScheme: {
+          label: 'بروتوكول بوابة الأدوات (متقدم)',
+          description: 'يحدد بروتوكول البوابة، وغالبًا HTTPS. غيّره فقط لبوابة مخصصة أو لاختبار محلي.'
+        },
+        toolGatewayUrl: {
+          label: 'عنوان بوابة الأدوات (متقدم)',
+          description: 'يحدد عنوان البوابة الكامل بدلًا من إنشائه تلقائيًا. اتركه فارغًا عادةً.'
+        },
+        toolGatewayToken: {
+          label: 'رمز دخول بوابة الأدوات (متقدم)',
+          description: 'يستبدل رمز البوابة يدويًا. تتم إدارته عادةً عند تسجيل الدخول إلى الحساب، لذا اتركه فارغًا.'
+        },
+        voiceOpenaiKey: {
+          label: 'مفتاح خدمات الصوت من OpenAI',
+          description:
+            'يُستخدم لتحويل كلام OpenAI إلى نص وتحويل النص إلى كلام، وليس للمحادثة العادية. قد تفرض OpenAI رسومًا؛ ويمكن إعادة استخدام OPENAI_API_KEY عند إعداد مزوّد الصوت لذلك.'
+        }
+      }
     },
     envActions: {
       actions: 'إجراءات',
@@ -774,6 +839,43 @@ export const arSettings = {
       importServerWrapperRequired: 'لفّ الخادم داخل `{"mcpServers": {"name": …}}` لمنحه اسما.'
     },
     model: {
+      pages: {
+        description: 'إدارة النموذج الافتراضي والنماذج المستخدمة للمهام المختلفة.',
+        auxiliaryTask: 'المهمة',
+        auxiliaryPurpose: 'الغرض',
+        auxiliaryModel: 'النموذج',
+        moaReferences: 'النماذج المرجعية',
+        moaEnableDescription: 'تظل الإعدادات المفعلة متاحة عبر توجيه النماذج الحالي.'
+      },
+      defaultMain: {
+        appliedLabel: 'النموذج الافتراضي الحالي',
+        applied: 'تم التطبيق',
+        unconfigured: 'لم يتم اختيار نموذج افتراضي',
+        title: 'النموذج الرئيسي الافتراضي',
+        description: 'اختر مصدرا افتراضيا واحدا للنموذج للجلسات الجديدة.',
+        sourceLabel: 'مصدر النموذج',
+        builtIn: 'نماذج Aino المدمجة',
+        thirdParty: 'خدمة خارجية',
+        builtInDescription: 'استخدم رصيد حساب Aino دون مفتاح API منفصل.',
+        thirdPartyDescription: 'استخدم خدمة نماذج متصلة يتولى مزودها الفوترة.',
+        unchanged: 'يطابق الإعداد الافتراضي الحالي',
+        pending: 'لم يطبق · النموذج الافتراضي الحالي لم يتغير',
+        apply: 'تطبيق كافتراضي',
+        scopeHint:
+          'يطبق على الجلسات الجديدة. يمكنك تغيير النموذج في المحادثات الحالية من مربع الإدخال. يستمر استخدام الاختيارات اليدوية.',
+        defaultsTitle: 'المعلمات الافتراضية',
+        defaultsDescription: 'تستخدم إعدادات المعلمات الحالية عندما يدعمها النموذج.',
+        reasoningDescription: 'يتحكم في عمق التحليل قبل الإجابة',
+        speedDescription: 'قد تستخدم الإجابات الأسرع فئة خدمة مختلفة',
+        chooseBuiltIn: 'اختيار نموذج Aino مدمج',
+        selectionTitle: 'اختيار نموذج Aino مدمج',
+        selectionDescription: 'أكد الاختيار ثم اضغط «تطبيق كافتراضي» في الصفحة.',
+        confirmSelection: 'تأكيد الاختيار',
+        configureConnection: 'إعداد الاتصال',
+        connection: 'مفتاح API',
+        connectionSaved: 'الخدمة مهيأة · اختر نموذجا',
+        ainoConnected: 'حساب Aino متصل · يستخدم رصيد Aino'
+      },
       moaTitle: 'مزيج الوكلاء (Mixture of Agents)',
       moaPreset: 'إعداد مسبق',
       moaDescription:

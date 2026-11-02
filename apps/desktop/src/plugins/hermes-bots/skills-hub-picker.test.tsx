@@ -50,10 +50,12 @@ interface PickMessage {
 }
 
 /** Mount the section with the hub browser open and hand back its frame. */
-function openHubBrowser() {
+async function openHubBrowser() {
   const { container } = render(<HubSkillsSection />)
 
-  fireEvent.click(screen.getByRole('button', { name: /browse the full hub/i }))
+  await act(async () => {
+    fireEvent.click(screen.getByRole('button', { name: /browse the full hub/i }))
+  })
 
   const frame = container.querySelector('iframe')
 
@@ -62,14 +64,16 @@ function openHubBrowser() {
   return frame as HTMLIFrameElement
 }
 
-function postPick(data: PickMessage, options: { origin?: string; source?: null | Window }) {
-  window.dispatchEvent(
-    new MessageEvent('message', {
-      data,
-      origin: options.origin ?? HUB_ORIGIN,
-      source: options.source ?? null
-    })
-  )
+async function postPick(data: PickMessage, options: { origin?: string; source?: null | Window }) {
+  await act(async () => {
+    window.dispatchEvent(
+      new MessageEvent('message', {
+        data,
+        origin: options.origin ?? HUB_ORIGIN,
+        source: options.source ?? null
+      })
+    )
+  })
 }
 
 function installCalls() {
@@ -82,6 +86,8 @@ function routedInstallCalls() {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  mocks.request.mockResolvedValue({})
+  mocks.requestProfile.mockResolvedValue({})
   // Opening the hub browser now HEAD-probes the primary picker URL; default to
   // a healthy probe so every non-fallback test stays hermetic and offline.
   vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true }))
@@ -93,10 +99,21 @@ afterEach(() => {
 })
 
 describe('hub pick messages', () => {
+  it('opens the hub after Browse without a separate profile service opt-in', async () => {
+    const { container } = render(<HubSkillsSection />)
+
+    expect(container.querySelector('iframe')).toBeNull()
+    expect(fetch).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByRole('button', { name: /browse the full hub/i }))
+    await waitFor(() => expect(container.querySelector('iframe')).toBeTruthy())
+    expect(mocks.request.mock.calls.some(([method]) => method === 'config.get')).toBe(false)
+    expect(fetch).toHaveBeenCalledTimes(1)
+  })
+
   it('uses GitHub Pages when the Vercel hub probe is unavailable', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false }))
 
-    const frame = openHubBrowser()
+    const frame = await openHubBrowser()
 
     await waitFor(() =>
       expect(frame.getAttribute('src')).toBe(`${FALLBACK_HUB_ORIGIN}/hermes-agent/docs/skills?embed=picker`)
@@ -106,7 +123,7 @@ describe('hub pick messages', () => {
   it('uses GitHub Pages when the probe request fails', async () => {
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('network error')))
 
-    const frame = openHubBrowser()
+    const frame = await openHubBrowser()
 
     await waitFor(() =>
       expect(frame.getAttribute('src')).toBe(`${FALLBACK_HUB_ORIGIN}/hermes-agent/docs/skills?embed=picker`)
@@ -136,7 +153,7 @@ describe('hub pick messages', () => {
     )
 
     try {
-      const frame = openHubBrowser()
+      const frame = await openHubBrowser()
 
       await act(async () => {
         await vi.advanceTimersByTimeAsync(8_000)
@@ -150,15 +167,15 @@ describe('hub pick messages', () => {
   })
 
   it('keeps the Vercel picker when the probe succeeds', async () => {
-    const frame = openHubBrowser()
+    const frame = await openHubBrowser()
 
     await waitFor(() => expect(frame.getAttribute('src')).toBe(`${HUB_ORIGIN}/docs/skills?embed=picker`))
   })
 
-  it('accepts an install message from the fallback picker frame', () => {
-    const frame = openHubBrowser()
+  it('accepts an install message from the fallback picker frame', async () => {
+    const frame = await openHubBrowser()
 
-    postPick(
+    await postPick(
       { identifier: 'nous/web-research', name: 'Web Research', type: 'hermes-skill-pick' },
       { origin: FALLBACK_HUB_ORIGIN, source: frame.contentWindow }
     )
@@ -167,7 +184,7 @@ describe('hub pick messages', () => {
   })
 
   it('pins the hub frame to the required sandbox and clipboard posture (#91612)', async () => {
-    const frame = openHubBrowser()
+    const frame = await openHubBrowser()
 
     // Same-origin (the hub's own routing), scripts, and popups — external
     // links then reach the OS browser via the main-process window-open
@@ -180,10 +197,10 @@ describe('hub pick messages', () => {
     expect(frame.getAttribute('allow')).toBe('clipboard-write')
   })
 
-  it('installs the picked skill when it comes from our own frame', () => {
-    const frame = openHubBrowser()
+  it('installs the picked skill when it comes from our own frame', async () => {
+    const frame = await openHubBrowser()
 
-    postPick(
+    await postPick(
       { identifier: 'nous/web-research', name: 'Web Research', type: 'hermes-skill-pick' },
       {
         source: frame.contentWindow
@@ -211,9 +228,10 @@ describe('hub pick messages', () => {
     )
 
     fireEvent.click(screen.getByRole('button', { name: /browse the full hub/i }))
+    await waitFor(() => expect(container.querySelector('iframe')).toBeTruthy())
     const frame = container.querySelector('iframe') as HTMLIFrameElement
 
-    postPick(
+    await postPick(
       { identifier: 'nous/web-research', name: 'Web Research', type: 'hermes-skill-pick' },
       { source: frame.contentWindow }
     )
@@ -238,11 +256,11 @@ describe('hub pick messages', () => {
     expect(installCalls()).toEqual([])
   })
 
-  it('regression: ignores a same-origin window that is NOT the picker frame', () => {
-    openHubBrowser()
+  it('regression: ignores a same-origin window that is NOT the picker frame', async () => {
+    await openHubBrowser()
 
     // Same origin, different window — the OAuth-popup shape of the hole.
-    postPick(
+    await postPick(
       { identifier: 'nous/web-research', name: 'Web Research', type: 'hermes-skill-pick' },
       {
         source: window
@@ -252,10 +270,10 @@ describe('hub pick messages', () => {
     expect(installCalls()).toEqual([])
   })
 
-  it('ignores anything posted from another origin', () => {
-    const frame = openHubBrowser()
+  it('ignores anything posted from another origin', async () => {
+    const frame = await openHubBrowser()
 
-    postPick(
+    await postPick(
       { identifier: 'nous/web-research', name: 'Web Research', type: 'hermes-skill-pick' },
       {
         origin: 'https://evil.example',
@@ -266,32 +284,32 @@ describe('hub pick messages', () => {
     expect(installCalls()).toEqual([])
   })
 
-  it('regression: refuses identifiers outside the slug charset', () => {
-    const frame = openHubBrowser()
+  it('regression: refuses identifiers outside the slug charset', async () => {
+    const frame = await openHubBrowser()
 
     for (const identifier of ['../../etc/passwd', 'skill; rm -rf /', '-flag', 'name with spaces', '']) {
-      postPick({ identifier, name: 'Web Research', type: 'hermes-skill-pick' }, { source: frame.contentWindow })
+      await postPick({ identifier, name: 'Web Research', type: 'hermes-skill-pick' }, { source: frame.contentWindow })
     }
 
     // The empty identifier falls back to `name`, which is also off-charset.
     expect(installCalls()).toEqual([])
   })
 
-  it('ignores messages that are not a skill pick', () => {
-    const frame = openHubBrowser()
+  it('ignores messages that are not a skill pick', async () => {
+    const frame = await openHubBrowser()
 
-    postPick({ identifier: 'nous/web-research', type: 'oauth-callback' }, { source: frame.contentWindow })
-    postPick({ identifier: 'nous/web-research', type: 'hermes-skill-pick' }, { source: frame.contentWindow })
+    await postPick({ identifier: 'nous/web-research', type: 'oauth-callback' }, { source: frame.contentWindow })
+    await postPick({ identifier: 'nous/web-research', type: 'hermes-skill-pick' }, { source: frame.contentWindow })
 
     // The second has no `name`, so it is not a complete pick either.
     expect(installCalls()).toEqual([])
   })
 
-  it('stops listening once the hub browser is closed', () => {
-    const frame = openHubBrowser()
+  it('stops listening once the hub browser is closed', async () => {
+    const frame = await openHubBrowser()
 
     fireEvent.click(screen.getByRole('button', { name: /hide the hub browser/i }))
-    postPick(
+    await postPick(
       { identifier: 'nous/web-research', name: 'Web Research', type: 'hermes-skill-pick' },
       {
         source: frame.contentWindow

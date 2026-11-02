@@ -1,3 +1,5 @@
+import './page-search-shell.css'
+
 import type { ReactNode } from 'react'
 
 import { Badge } from '@/components/ui/badge'
@@ -135,7 +137,7 @@ export function PageSearchShell({
   const layout = headerLayouts[tabsAlign]
 
   const content = (
-    <div className="min-h-0 flex-1 overflow-hidden bg-(--ui-chat-surface-background)" data-aino-page-content="">
+    <div className="min-h-0 flex-1 overflow-hidden bg-(--ui-editor-surface-background)" data-aino-page-content="">
       {children}
     </div>
   )
@@ -143,7 +145,10 @@ export function PageSearchShell({
   const page = (
     <section
       {...props}
-      className={cn('flex h-full min-w-0 flex-col overflow-hidden bg-(--ui-chat-surface-background)', className)}
+      className={cn(
+        'flex h-full w-full min-w-0 flex-1 flex-col overflow-hidden bg-(--ui-editor-surface-background) text-[length:var(--aino-text-label)] text-foreground',
+        className
+      )}
       data-aino-page-shell=""
     >
       {/*

@@ -17323,7 +17323,7 @@ def test_model_options_preserves_canonical_custom_row_after_agent_init(monkeypat
     )
     monkeypatch.setattr(
         "hermes_cli.auth.is_provider_explicitly_configured",
-        lambda _slug: False,
+        lambda _slug, **_kwargs: False,
     )
     # A host signed in to Claude Code / Anthropic OAuth would otherwise keep the anthropic row.
     monkeypatch.setattr("hermes_cli.inventory._anthropic_oauth_credentials_present", lambda: False)

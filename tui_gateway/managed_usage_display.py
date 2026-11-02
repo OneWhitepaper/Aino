@@ -11,7 +11,8 @@ logger = logging.getLogger(__name__)
 
 def finish_managed_metrics(agent, session, start, text, metrics, *, persist, on_update):
     scope = billing_scope.get()
-    if not scope or scope.source != "aino":
+    metadata = current_usage_metadata()
+    if not scope or "billing" not in metadata:
         return None
     from tui_gateway.turn_metrics import _persist_metrics
     db = getattr(agent, "_session_db", None)
@@ -25,7 +26,7 @@ def finish_managed_metrics(agent, session, start, text, metrics, *, persist, on_
             logger.debug("billing reply boundary unavailable", exc_info=True)
     initial = None
     stored_text = None
-    identity = current_usage_metadata()["billing"]
+    identity = metadata["billing"]
 
     def update(receipts):
         nonlocal initial, stored_text

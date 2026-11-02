@@ -812,6 +812,8 @@ export interface SubmitTextOptions {
    *  renders anywhere — the off-screen path for widget intents. The agent
    *  still receives the text as a normal user turn. */
   displayKind?: 'hidden'
+  /** Settled Stop identity; continuation appends to history, never rewinds/replays it. */
+  continuationOf?: TaskContinuation
   /** Per-turn client surface the gateway turns into a model-bound note. The
    *  HUD sets `hud` from its own store; a GPT-Live delegation passes
    *  `voice-live` (spoken transcript in, speakable prose out). */
@@ -838,3 +840,4 @@ export interface SubmitTextOptions {
    *  recovery. Distinct from the runtime session id minted by the gateway. */
   storedSessionId?: string | null
 }
+import type { TaskContinuation } from '@/store/task-pause'

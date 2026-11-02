@@ -31,9 +31,9 @@ export function HistoryPagination({ page, pageSize, total, onPage, onPageSize }:
   const maxPage = Math.min(10000, pageCount)
 
   return (
-    <div className="mt-4 flex flex-wrap items-center justify-between gap-3 text-xs">
+    <div className="account-history-pagination">
       <span className="text-muted-foreground">{copy.totalRecords(total)}</span>
-      <div className="flex items-center gap-2">
+      <div className="account-history-page-size">
         <span className="text-muted-foreground">{copy.pageSize}</span>
         <Select onValueChange={value => onPageSize(Number(value))} value={String(pageSize)}>
           <SelectTrigger aria-label={copy.pageSize} className="w-20" size="sm">
@@ -74,7 +74,7 @@ export function HistoryPagination({ page, pageSize, total, onPage, onPageSize }:
         </PaginationContent>
       </Pagination>
       <form
-        className="flex items-center gap-1"
+        className="account-history-page-jump"
         onSubmit={event => {
           event.preventDefault()
           const value = Number(jump)

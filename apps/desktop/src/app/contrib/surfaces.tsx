@@ -156,7 +156,7 @@ export const ChatRoutesSurface = memo(function ChatRoutesSurface({
         <Route
           element={page(
             <div
-              className="flex h-full min-h-0 min-w-0 flex-col overflow-auto"
+              className="flex h-full min-h-0 min-w-0 flex-col overflow-auto bg-(--ui-editor-surface-background) text-[length:var(--aino-text-label)] text-foreground"
               data-aino-contributed-page
               data-aino-page-shell
             >

@@ -15,7 +15,7 @@ describe('gateway event routing', () => {
   it('localizes the empty gateway log state', () => {
     setRuntimeI18nLocale('zh')
 
-    expect(buildGatewayLogItems([])[0]?.label).toBe('暂无最近的网关日志')
+    expect(buildGatewayLogItems([])[0]?.label).toBe('暂无最近的运行服务日志')
   })
 
   it('rehydrates pending approvals on reconnect ready and resumed session info', () => {

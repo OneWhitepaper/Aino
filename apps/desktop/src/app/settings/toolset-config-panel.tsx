@@ -33,6 +33,7 @@ import type {
   ToolsetModelsResponse
 } from '@/types/hermes'
 
+import { AinoImageSettings } from './aino-image-settings'
 import { EnvVarActionsMenu, EnvVarActionsTrigger, EnvVarContextMenu } from './env-var-actions-menu'
 import { prettyName } from './helpers'
 import { Pill } from './primitives'
@@ -539,6 +540,14 @@ function ModelCatalogPicker({ toolset, providerName, isActiveBackend, profile }:
 }
 
 export function ToolsetConfigPanel({ toolset, onConfiguredChange, profile }: ToolsetConfigPanelProps) {
+  return toolset === 'image_gen' ? (
+    <AinoImageSettings onConfiguredChange={onConfiguredChange} profile={profile} />
+  ) : (
+    <ProviderToolsetConfigPanel onConfiguredChange={onConfiguredChange} profile={profile} toolset={toolset} />
+  )
+}
+
+function ProviderToolsetConfigPanel({ toolset, onConfiguredChange, profile }: ToolsetConfigPanelProps) {
   const { t } = useI18n()
   const copy = t.settings.toolsets
   const [cfg, setCfg] = useState<ToolsetConfig | null>(null)

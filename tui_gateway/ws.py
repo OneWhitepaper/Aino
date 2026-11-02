@@ -269,10 +269,9 @@ class WSTransport:
                     # loop-stall wait in write(), this is a dead peer. Latch under the writer lock so queued
                     # batches bail, and close the socket so handle_ws's read loop ends and its teardown
                     # (session detach/reap, client reconnect) runs. See #106369.
-                    self._closed = True
+                    self.abort(reason="send deadline")
                     _log.warning("ws send deadline exceeded (socket stalled, loop responsive) peer=%s deadline=%ss — closing",
                                  self._peer, _WS_SEND_DEADLINE_S)
-                    self._loop.create_task(self._close_socket(1011, "send deadline"))
                     return
                 except UnicodeEncodeError as exc:
                     # A single illegal UTF-8 frame (lone surrogate) must not tear down the socket.
@@ -290,24 +289,24 @@ class WSTransport:
             self._token_flush_handle.cancel()
             self._token_flush_handle = None
 
-    def abort(self) -> None:
+    def abort(self, *, reason: str = "fanout overflow") -> None:
         """Close from any thread and drop the socket with 1011 so the client reconnects and replays
-        (fanout overflow). One-shot: N mirrored sessions overflowing on this socket schedule one close."""
+        once, even when send backpressure and several overflowing sessions race."""
         self._closed = True
         with self._token_lock:
             if self._abort_requested:
                 return
             self._abort_requested = True
         if self._on_loop():
-            self._finish_abort()
+            self._finish_abort(reason)
             return
         # A loop that already shut down has nothing left to cancel or close.
         with contextlib.suppress(RuntimeError):
-            self._loop.call_soon_threadsafe(self._finish_abort)
+            self._loop.call_soon_threadsafe(self._finish_abort, reason)
 
-    def _finish_abort(self) -> None:  # loop thread
+    def _finish_abort(self, reason: str) -> None:  # loop thread
         self.close()
-        self._loop.create_task(self._close_socket(1011, "fanout overflow"))
+        self._loop.create_task(self._close_socket(1011, reason))
 
     async def _close_socket(self, code: int, reason: str) -> None:
         """Close the peer socket so ``handle_ws``'s ``receive_text`` unblocks and its disconnect teardown
@@ -560,6 +559,7 @@ async def handle_ws(ws: Any, *, auth_identity: dict | None = None, subprotocol: 
             "params": {"type": "gateway.ready", "payload": {
                 "skin": skin_payload, "change_events": True, "heartbeat": True, "replay_epoch": replay_epoch(),
                 "managed_model_binding": 1,
+                'managed_image_binding': 1,
                 **({"session_authority": True} if authority_connection is not None else {}),
             }},
         })

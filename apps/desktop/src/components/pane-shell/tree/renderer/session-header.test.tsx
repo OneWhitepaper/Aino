@@ -3,6 +3,7 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { SessionDraftTitle } from '@/app/chat/session-draft-title'
+import { $workspaceIsPage } from '@/app/routes'
 import { Slot } from '@/contrib/react/slot'
 import { registry } from '@/contrib/registry'
 import { createClientSessionState } from '@/lib/chat-runtime'
@@ -49,6 +50,7 @@ beforeAll(() => {
 })
 
 beforeEach(() => {
+  $workspaceIsPage.set(false)
   window.localStorage.clear()
   $layoutEditMode.set(false)
   $activeSessionId.set(null)
@@ -70,6 +72,8 @@ afterEach(() => {
     act(() => root!.unmount())
   }
 
+  $workspaceIsPage.set(false)
+
   container?.remove()
   disposers.splice(0).forEach(dispose => dispose())
   root = null
@@ -82,6 +86,17 @@ afterEach(() => {
 })
 
 describe('single-session header', () => {
+  it('does not paint a retained session title while the workspace route covers the chat', () => {
+    render(<TreeGroup node={group(['workspace'], { id: 'covered-chat' })} parentAxis="row" />)
+    expect(globalThis.document.querySelector('[data-current-session-title]')).not.toBeNull()
+
+    act(() => $workspaceIsPage.set(true))
+    expect(globalThis.document.querySelector('[data-current-session-title]')).toBeNull()
+
+    act(() => $workspaceIsPage.set(false))
+    expect(globalThis.document.querySelector('[data-current-session-title]')).not.toBeNull()
+  })
+
   it('hides the retained conversation title on a full-page route and restores it in chat', () => {
     const node = group(['workspace'], { id: 'page-route' })
 

@@ -58,13 +58,14 @@ export function selectToolsetModel(
   name: string,
   model: string,
   provider?: string,
-  profile?: ProfileScope
+  profile?: ProfileScope,
+  options?: { activate: boolean; quality?: string | null }
 ): Promise<{ ok: boolean; name: string; model: string }> {
   return window.hermesDesktop.api<{ ok: boolean; name: string; model: string }>({
     ...capabilityScoped(profile),
     path: `/api/tools/toolsets/${encodeURIComponent(name)}/model`,
     method: 'PUT',
-    body: { model, provider }
+    body: { model, provider, ...options }
   })
 }
 

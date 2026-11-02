@@ -19,6 +19,7 @@ interface RechargeState {
   quote: PaymentQuote | null
   order: PlatformOrder | null
   busy: boolean
+  quoting: boolean
   error: string | null
   credited: boolean
 }
@@ -30,6 +31,7 @@ const blank: RechargeState = {
   quote: null,
   order: null,
   busy: false,
+  quoting: false,
   error: null,
   credited: false
 }
@@ -50,6 +52,7 @@ export function useRecharge(
   const lifecycle = useRef({ generation: 0 })
   const inflight = useRef(false)
   const operation = useRef(0)
+  const quoteRequest = useRef(0)
   const visible = state.key === key ? state : blank
   const owner = scope.user_id
   const origin = scope.origin
@@ -166,6 +169,47 @@ export function useRecharge(
     apply: applyOrder
   })
 
+  const quoteInput = useCallback(
+    async (input: PaymentQuoteInput, signal: AbortSignal) => {
+      if (!open || signal.aborted || inflight.current) {
+        return
+      }
+
+      const request = ++quoteRequest.current
+      const generation = lifecycle.current.generation
+
+      const current = () =>
+        !signal.aborted && request === quoteRequest.current && generation === lifecycle.current.generation
+
+      setState(previous => ({ ...previous, quote: null, quoting: true, error: null }))
+
+      try {
+        await verify()
+
+        if (!current()) {
+          return
+        }
+
+        const quote = await bridge.quote({ ...input, expected_user_id: owner })
+        await verify()
+
+        if (current()) {
+          setState(previous => ({ ...previous, quote, quoting: false }))
+        }
+      } catch (error) {
+        if (current()) {
+          setState(previous => ({ ...previous, quoting: false, error: paymentErrorCode(error) }))
+        }
+      }
+    },
+    [bridge, open, owner, verify]
+  )
+
+  const clearQuote = useCallback(() => {
+    ++quoteRequest.current
+    setState(previous => ({ ...previous, quote: null, quoting: false, error: null }))
+  }, [])
+
   const action = async (run: () => Promise<Partial<RechargeState>>) => {
     if (inflight.current || !open) {
       return
@@ -258,9 +302,8 @@ export function useRecharge(
 
   return {
     ...visible,
-    quoteInput: (input: PaymentQuoteInput) =>
-      action(async () => ({ quote: await bridge.quote({ ...input, expected_user_id: owner }) })),
-    clearQuote: () => setState(previous => ({ ...previous, quote: null })),
+    quoteInput,
+    clearQuote,
     submit,
     refresh: () => {
       if (visible.order) {

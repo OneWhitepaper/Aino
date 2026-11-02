@@ -41,8 +41,8 @@ describe('approval mode statusbar item', () => {
     const requestGateway = vi.fn(async (_method, params) => ({ value: params?.value ?? 'smart' }))
     render(<Harness profile="work" requestGateway={requestGateway} />)
 
-    fireEvent.pointerDown(screen.getByRole('button', { name: /smart/i }), { button: 0 })
-    fireEvent.click(await screen.findByRole('menuitemradio', { name: /manual/i }))
+    fireEvent.pointerDown(screen.getByRole('button', { name: /approve for me/i }), { button: 0 })
+    fireEvent.click(await screen.findByRole('menuitemradio', { name: /ask for approval/i }))
 
     await waitFor(() => {
       // The menu shows the "work" profile, so the write must name it (#125969); an unscoped
@@ -52,7 +52,7 @@ describe('approval mode statusbar item', () => {
         value: 'manual',
         profile: 'work'
       })
-      expect(screen.getByRole('button', { name: /manual/i })).toBeTruthy()
+      expect(screen.getByRole('button', { name: /ask for approval/i })).toBeTruthy()
     })
   })
 
@@ -70,13 +70,13 @@ describe('approval mode statusbar item', () => {
     )
 
     expect(requestGateway).not.toHaveBeenCalled()
-    expect(screen.getByRole('button', { name: /smart/i })).toBeTruthy()
+    expect(screen.getByRole('button', { name: /approve for me/i })).toBeTruthy()
 
     rerender(<Harness gatewayState="open" profile="boot" requestGateway={requestGateway} />)
 
     await waitFor(() => {
       expect(requestGateway).toHaveBeenCalledWith('config.get', { key: 'approvals.mode', profile: 'boot' })
-      expect(screen.getByRole('button', { name: /off/i })).toBeTruthy()
+      expect(screen.getByRole('button', { name: /do not ask/i })).toBeTruthy()
     })
   })
 })

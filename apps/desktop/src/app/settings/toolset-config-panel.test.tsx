@@ -299,10 +299,10 @@ describe('ToolsetConfigPanel', () => {
     await waitFor(() => expect(screen.getByText('This is your active backend')).toBeTruthy())
   })
 
-  it('shows a backend model catalog for image_gen and persists a pick', async () => {
+  it('shows a backend model catalog for video_gen and persists a pick', async () => {
     getToolsetConfig.mockResolvedValue(
       config({
-        name: 'image_gen',
+        name: 'video_gen',
         active_provider: 'FAL.ai',
         providers: [
           {
@@ -318,7 +318,7 @@ describe('ToolsetConfigPanel', () => {
       })
     )
     getToolsetModels.mockResolvedValue({
-      name: 'image_gen',
+      name: 'video_gen',
       has_models: true,
       provider: 'FAL.ai',
       plugin: 'fal',
@@ -330,16 +330,16 @@ describe('ToolsetConfigPanel', () => {
       default: 'z-image-turbo'
     })
 
-    render(<ToolsetConfigPanel onConfiguredChange={vi.fn()} toolset="image_gen" />)
+    render(<ToolsetConfigPanel onConfiguredChange={vi.fn()} toolset="video_gen" />)
 
     // Both catalog rows render with their picker metadata.
     expect(await screen.findByText('Z-Image Turbo')).toBeTruthy()
     expect(screen.getByText('FLUX 2 Pro')).toBeTruthy()
-    expect(getToolsetModels).toHaveBeenCalledWith('image_gen', 'FAL.ai')
+    expect(getToolsetModels).toHaveBeenCalledWith('video_gen', 'FAL.ai')
 
     // Picking a different model persists via the model endpoint.
     fireEvent.click(screen.getByRole('button', { name: /FLUX 2 Pro/ }))
-    await waitFor(() => expect(selectToolsetModel).toHaveBeenCalledWith('image_gen', 'flux-2-pro', 'FAL.ai'))
+    await waitFor(() => expect(selectToolsetModel).toHaveBeenCalledWith('video_gen', 'flux-2-pro', 'FAL.ai'))
   })
 
   it('saves an API key for a provider env var', async () => {

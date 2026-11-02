@@ -7760,6 +7760,15 @@
             "title": "Model Id",
             "type": "string"
           },
+          "purpose": {
+            "default": "chat",
+            "enum": [
+              "chat",
+              "image"
+            ],
+            "title": "Purpose",
+            "type": "string"
+          },
           "binding_revision": {
             "title": "Binding Revision",
             "type": "integer"
@@ -7788,7 +7797,8 @@
             "enum": [
               "chat_completions",
               "responses",
-              "anthropic_messages"
+              "anthropic_messages",
+              "images_generations"
             ],
             "title": "Api Mode",
             "type": "string"
@@ -9096,6 +9106,30 @@
           "key"
         ],
         "title": "CanonicalConfigSetParams",
+        "type": "object"
+      },
+      "CanonicalContinuation": {
+        "additionalProperties": false,
+        "properties": {
+          "admission_id": {
+            "title": "Admission Id",
+            "type": "string"
+          },
+          "execution_generation": {
+            "title": "Execution Generation",
+            "type": "integer"
+          },
+          "revision": {
+            "title": "Revision",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "admission_id",
+          "execution_generation",
+          "revision"
+        ],
+        "title": "CanonicalContinuation",
         "type": "object"
       },
       "CanonicalControlParams": {
@@ -12107,6 +12141,17 @@
             "default": false,
             "title": "Clarify Batch",
             "type": "boolean"
+          },
+          "continuation_of": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CanonicalContinuation"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
           }
         },
         "required": [
@@ -12378,6 +12423,15 @@
             "title": "Model Id",
             "type": "string"
           },
+          "purpose": {
+            "default": "chat",
+            "enum": [
+              "chat",
+              "image"
+            ],
+            "title": "Purpose",
+            "type": "string"
+          },
           "session_ticket": {
             "title": "Session Ticket",
             "type": "string"
@@ -12407,6 +12461,11 @@
             "default": false,
             "title": "Managed Model Context Window",
             "type": "boolean"
+          },
+          "managed_image_binding": {
+            "default": 1,
+            "title": "Managed Image Binding",
+            "type": "integer"
           }
         },
         "required": [
@@ -12670,6 +12729,15 @@
           "binding_revision": {
             "title": "Binding Revision",
             "type": "integer"
+          },
+          "purpose": {
+            "default": "chat",
+            "enum": [
+              "chat",
+              "image"
+            ],
+            "title": "Purpose",
+            "type": "string"
           }
         },
         "required": [
@@ -14397,6 +14465,17 @@
             ],
             "default": null,
             "title": "Required Env"
+          },
+          "mcp_config": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/McpInstallConfig"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
           },
           "tools": {
             "anyOf": [
@@ -19784,6 +19863,18 @@
             "default": null,
             "title": "Managed Model Binding"
           },
+          "managed_image_binding": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Managed Image Binding"
+          },
           "session_authority": {
             "anyOf": [
               {
@@ -23485,6 +23576,26 @@
           "reasoning": {
             "title": "Reasoning",
             "type": "boolean"
+          },
+          "image_generation": {
+            "default": false,
+            "title": "Image Generation",
+            "type": "boolean"
+          },
+          "image_quality_options": {
+            "items": {
+              "enum": [
+                "auto",
+                "low",
+                "medium",
+                "high",
+                "xhigh",
+                "max"
+              ],
+              "type": "string"
+            },
+            "title": "Image Quality Options",
+            "type": "array"
           }
         },
         "required": [
@@ -23520,6 +23631,15 @@
           "model_id": {
             "title": "Model Id",
             "type": "string"
+          },
+          "purpose": {
+            "default": "chat",
+            "enum": [
+              "chat",
+              "image"
+            ],
+            "title": "Purpose",
+            "type": "string"
           }
         },
         "required": [
@@ -23539,6 +23659,11 @@
           },
           "managed_model_binding": {
             "title": "Managed Model Binding",
+            "type": "integer"
+          },
+          "managed_image_binding": {
+            "default": 1,
+            "title": "Managed Image Binding",
             "type": "integer"
           }
         },
@@ -23618,6 +23743,112 @@
           "servers"
         ],
         "title": "McpCatalogResult",
+        "type": "object"
+      },
+      "McpInstallConfig": {
+        "additionalProperties": false,
+        "description": "Non-secret configuration displayed before installing a custom MCP server.",
+        "properties": {
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Url"
+          },
+          "command": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Command"
+          },
+          "args": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Args"
+          },
+          "auth": {
+            "anyOf": [
+              {
+                "enum": [
+                  "none",
+                  "oauth"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Auth"
+          },
+          "timeout": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Timeout"
+          },
+          "transport": {
+            "anyOf": [
+              {
+                "enum": [
+                  "http",
+                  "stdio"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Transport"
+          },
+          "env_keys": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Env Keys"
+          }
+        },
+        "title": "McpInstallConfig",
         "type": "object"
       },
       "McpOauthCallbackParams": {

@@ -10,6 +10,7 @@ import { type LocalModelsActionScope, runQuickstart, useLocalModelsActionScope }
 import { SettingsContent } from './primitives'
 
 export interface LocalModelsQuickstartProps {
+  embedded?: boolean
   job: LocalRuntimeJob | null
   heroModel: LocalCatalogModel | null
   lastError: LocalRuntimeJob | undefined
@@ -21,6 +22,7 @@ export interface LocalModelsQuickstartProps {
 // leads with a hero that does everything in one click; the full pane
 // stays one 'Let me choose' click away.
 export function LocalModelsQuickstart({
+  embedded = false,
   job: qJob,
   heroModel,
   lastError,
@@ -35,8 +37,8 @@ export function LocalModelsQuickstart({
 
   const stages = [copy.quickstartStageEngine, copy.quickstartStageModel, copy.quickstartStageFinish]
 
-  return (
-    <SettingsContent>
+  const content = (
+    <>
       <div className="flex min-h-[60dvh] items-center justify-center">
         <div className="w-full max-w-md text-center">
           <div className="mx-auto mb-5 flex size-14 items-center justify-center rounded-2xl bg-primary/10">
@@ -126,6 +128,8 @@ export function LocalModelsQuickstart({
           )}
         </div>
       </div>
-    </SettingsContent>
+    </>
   )
+
+  return embedded ? <div>{content}</div> : <SettingsContent>{content}</SettingsContent>
 }

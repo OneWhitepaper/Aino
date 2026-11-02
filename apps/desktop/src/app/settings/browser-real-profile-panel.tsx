@@ -1,8 +1,11 @@
-import { useCallback, useState } from 'react'
+import { useStore } from '@nanostores/react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 
-import { type ProfileScope, saveHermesConfigRecord } from '@/hermes'
+import { type ProfileScope, profileScopeKey, saveHermesConfigRecord } from '@/hermes'
 import { useI18n } from '@/i18n'
+import { $activeConnectionId } from '@/store/connections'
 import { notify, notifyError } from '@/store/notifications'
+import { $activeGatewayProfile } from '@/store/profile'
 
 import { hermesConfigCacheWriter, useHermesConfigRecord } from '../hooks/use-config-record'
 
@@ -45,6 +48,21 @@ export function BrowserRealProfilePanel({ profile }: BrowserRealProfilePanelProp
   const { data: config, writeScope } = useHermesConfigRecord(profile)
   const setConfig = hermesConfigCacheWriter(profile)
   const [busy, setBusy] = useState(false)
+  const connectionId = useStore($activeConnectionId)
+  const activeProfile = useStore($activeGatewayProfile)
+  const profileKey = profileScopeKey(profile)
+  const revision = useRef(0)
+
+  // eslint-disable-next-line no-restricted-syntax -- invalidates pending request generations; does not mirror an atom
+  useEffect(() => {
+    setBusy(false)
+
+    return () => {
+      // A pending save still belongs to its original writeScope. Its rollback
+      // must not use the cache writer after this panel changes owners.
+      revision.current += 1
+    }
+  }, [activeProfile, connectionId, profileKey])
 
   const enabled = readUseRealProfile(config)
 
@@ -60,6 +78,12 @@ export function BrowserRealProfilePanel({ profile }: BrowserRealProfilePanelProp
           : {}
 
       const next = { ...config, browser: { ...browser, use_real_profile: on } }
+      const version = revision.current
+
+      const isCurrent = () =>
+        revision.current === version &&
+        $activeConnectionId.get() === connectionId &&
+        $activeGatewayProfile.get() === activeProfile
 
       setBusy(true)
       setConfig(next)
@@ -69,19 +93,27 @@ export function BrowserRealProfilePanel({ profile }: BrowserRealProfilePanelProp
         // snapshot would overwrite keys other surfaces changed since it loaded.
         await saveHermesConfigRecord({ browser: { use_real_profile: on } }, writeScope ?? profile)
 
+        if (!isCurrent()) {
+          return
+        }
+
         notify({
           kind: 'info',
           title: on ? copy.enabledTitle : copy.disabledTitle,
           message: on ? copy.enabledMessage : copy.disabledMessage
         })
       } catch (err) {
-        setConfig(config)
-        notifyError(err, copy.failedSave)
+        if (isCurrent()) {
+          setConfig(config)
+          notifyError(err, copy.failedSave)
+        }
       } finally {
-        setBusy(false)
+        if (isCurrent()) {
+          setBusy(false)
+        }
       }
     },
-    [config, copy, profile, setConfig, writeScope]
+    [activeProfile, config, connectionId, copy, profile, setConfig, writeScope]
   )
 
   return (

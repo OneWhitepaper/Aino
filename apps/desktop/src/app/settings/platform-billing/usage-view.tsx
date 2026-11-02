@@ -5,12 +5,20 @@ import { CopyButton } from '@/components/ui/copy-button'
 import { type Translations, useI18n } from '@/i18n'
 
 import type { PlatformUsageRow } from '../../../../shared/platform-contract'
+import { Pill } from '../primitives'
 
 interface UsageViewProps {
   rows: PlatformUsageRow[]
   truncated?: boolean
   variant?: 'compact' | 'table'
 }
+
+const SETTLEMENT_TONES = {
+  settled: 'success',
+  not_charged: 'success',
+  pending: 'warn',
+  unknown: 'muted'
+} as const
 
 export function formatUsageAmount(amount: string): string {
   const [whole, fraction = ''] = amount.split('.')
@@ -86,8 +94,8 @@ function UsageDetails({ row }: { row: PlatformUsageRow }) {
   ] as const
 
   return (
-    <div className="space-y-4 py-2">
-      <dl className="grid grid-cols-2 gap-4 xl:grid-cols-4">
+    <div className="account-usage-details">
+      <dl className="account-usage-counters">
         {counters.map(([label, value]) => (
           <div key={label}>
             <dt className="text-xs text-muted-foreground">{label}</dt>
@@ -99,9 +107,9 @@ function UsageDetails({ row }: { row: PlatformUsageRow }) {
           </div>
         ))}
       </dl>
-      <dl className="grid min-w-0 gap-2">
+      <dl className="account-usage-identifiers">
         {identifiers.map(([label, value]) => (
-          <div className="grid min-w-0 grid-cols-[6rem_minmax(0,1fr)] items-center gap-2" key={label}>
+          <div key={label}>
             <dt className="text-xs text-muted-foreground">{label}</dt>
             <dd className="flex min-w-0 items-center gap-1">
               <span className="min-w-0 font-mono text-xs [overflow-wrap:anywhere]">{value || copy.unknown}</span>
@@ -131,28 +139,24 @@ export function UsageView({ rows, truncated = false, variant = 'compact' }: Usag
   }
 
   return (
-    <div className="min-w-0 text-sm">
+    <div className={variant === 'table' ? 'account-usage-ledger' : 'min-w-0 text-sm'}>
       {rows.length === 0 ? (
         <p className="text-muted-foreground">{copy.empty}</p>
       ) : variant === 'table' ? (
-        <div className="overflow-x-auto rounded-lg border border-(--ui-stroke-tertiary)">
+        <div className="account-ledger-table-wrap">
           <table
             aria-label={history.usage}
-            className="w-full min-w-[560px] border-collapse text-left text-xs"
+            className="account-ledger-table account-usage-table"
             data-slot="aino-data-table"
           >
-            <thead className="bg-muted/35 text-muted-foreground">
-              <tr className="border-b border-(--ui-stroke-tertiary)">
+            <thead>
+              <tr>
                 {(['time', 'model', 'purpose', 'cost', 'status'] as const).map(column => (
-                  <th
-                    className={`px-2 py-3 font-medium ${column === 'cost' ? 'text-right' : ''}`}
-                    key={column}
-                    scope="col"
-                  >
+                  <th className={column === 'cost' ? 'account-ledger-cost' : undefined} key={column} scope="col">
                     {history.columns[column]}
                   </th>
                 ))}
-                <th className="px-2 py-3 font-medium" scope="col">
+                <th scope="col">
                   <span className="sr-only">{history.details}</span>
                 </th>
               </tr>
@@ -164,17 +168,19 @@ export function UsageView({ rows, truncated = false, variant = 'compact' }: Usag
 
                 return (
                   <Fragment key={row.id}>
-                    <tr className="border-b border-(--ui-stroke-tertiary) last:border-b-0">
-                      <td className="whitespace-nowrap px-2 py-3 leading-5 text-muted-foreground">
+                    <tr className="account-ledger-record">
+                      <td className="account-ledger-time">
                         <UsageTime stacked value={row.created_at} />
                       </td>
-                      <td className="max-w-40 px-2 py-3 font-medium [overflow-wrap:anywhere]">{row.model}</td>
-                      <td className="px-2 py-3">
+                      <td className="account-usage-model">{row.model}</td>
+                      <td className="account-usage-purpose">
                         <UsagePurpose purpose={row.desktop_purpose} />
                       </td>
-                      <td className="whitespace-nowrap px-2 py-3 text-right tabular-nums">{usageAmount(row, copy)}</td>
-                      <td className="px-2 py-3 text-muted-foreground">{statuses[row.settlement_status]}</td>
-                      <td className="px-2 py-2">
+                      <td className="account-ledger-cost">{usageAmount(row, copy)}</td>
+                      <td className="account-ledger-status">
+                        <Pill tone={SETTLEMENT_TONES[row.settlement_status]}>{statuses[row.settlement_status]}</Pill>
+                      </td>
+                      <td className="account-ledger-action">
                         <Button
                           aria-controls={detailId}
                           aria-expanded={open}
@@ -199,8 +205,8 @@ export function UsageView({ rows, truncated = false, variant = 'compact' }: Usag
                       </td>
                     </tr>
                     {open && (
-                      <tr className="border-b border-(--ui-stroke-tertiary) bg-muted/20 last:border-b-0" id={detailId}>
-                        <td className="px-4 py-3" colSpan={6}>
+                      <tr className="account-usage-detail-row" id={detailId}>
+                        <td colSpan={6}>
                           <UsageDetails row={row} />
                         </td>
                       </tr>

@@ -114,7 +114,9 @@ def _retry(authority, ref, operation, request):
                                    or request.connection_id not in (None, target.repair_id, target.connection_id)):
             raise ConnectorRefusal(*UNKNOWN_TARGET_REFUSAL)
     with _session_context(authority, ref):
-        _require_connectors(authority, ref)
+        targets = [operation.target(name) for name in request.connectors]
+        hosted = not targets or any(target is None or target.kind not in {'mcp', 'plugin', 'skill'} for target in targets)
+        _require_connectors(authority, ref, hosted=hosted)
         try:
             reason = run.reissue(operation, request.connectors)
         except RuntimeStoreError:
@@ -128,13 +130,14 @@ def _retry(authority, ref, operation, request):
     return _view(operation)
 
 
-def _require_connectors(authority, ref):
-    """The sidecar's ``_session_connector_gate``: connectors on, and ``manage_connections`` in the session's tools."""
+def _require_connectors(authority, ref, *, hosted=True):
+    """Require the session's management tool; hosted targets also need service availability."""
     import model_tools
     from tools.connectors import connectors_available
     from tui_gateway import connector_refusals as refusals
     enabled, disabled = _session_toolsets(authority, ref)
-    if 'manage_connections' not in model_tools._select_tool_names(enabled, disabled, quiet_mode=True) or not connectors_available():
+    if ('manage_connections' not in model_tools._select_tool_names(enabled, disabled, quiet_mode=True)
+            or hosted and not connectors_available()):
         raise ConnectorRefusal(*refusals.CONNECTORS_UNAVAILABLE)
 
 

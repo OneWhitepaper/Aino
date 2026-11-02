@@ -657,14 +657,15 @@ def _apply_custom_aliases(rows: list[dict]) -> None:
     providers (#87035). Exposing ``aliases`` — every current and legacy spelling from
     :func:`hermes_cli.providers.custom_provider_aliases` — lets the frontend do a membership check instead.
     """
-    from hermes_cli.providers import custom_provider_aliases
+    from hermes_cli.providers import custom_provider_aliases, is_builtin_provider_id
 
     for row in rows:
         if not row.get("is_user_defined"):
             continue
         try:
             row["aliases"] = sorted(
-                custom_provider_aliases(str(row.get("name", "")), str(row.get("slug", ""))))
+                alias for alias in custom_provider_aliases(str(row.get("name", "")), str(row.get("slug", "")))
+                if not is_builtin_provider_id(alias))
         except Exception:
             continue
 
@@ -793,7 +794,7 @@ def _filter_explicit_provider_rows(rows: list[dict], ctx: ConfigContext) -> list
             # deliberate sign-ins that leave no trace in config/env; keep the rows discovery accepted.
             (slug == "anthropic" and _anthropic_oauth_credentials_present())
             or _external_process_signed_in(slug)
-            or is_provider_explicitly_configured(slug)
+            or is_provider_explicitly_configured(slug, include_process_env=False)
         )
 
     return [row for row in rows

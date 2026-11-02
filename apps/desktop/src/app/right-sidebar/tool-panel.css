@@ -1,0 +1,120 @@
+.aino-tool-chooser {
+  min-width: 0;
+  height: 100%;
+  overflow: auto;
+  padding: 30px 24px;
+  color: var(--ui-text-primary);
+}
+.aino-tool-chooser h2 {
+  margin: 0 0 5px;
+  font-size: 20px;
+  font-weight: 500;
+  letter-spacing: -0.4px;
+}
+.aino-tool-chooser > p {
+  margin: 0 0 23px;
+  font-size: var(--aino-text-label);
+  color: var(--ui-text-secondary);
+}
+.aino-tool-choices {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 9px;
+}
+.aino-tool-choices .aino-tool-choice {
+  height: auto;
+  min-height: 72px;
+  justify-content: flex-start;
+  gap: 10px;
+  padding: 13px 10px;
+  text-align: start;
+  white-space: normal;
+  background: var(--ui-sidebar-surface-background);
+}
+.aino-tool-choice > svg {
+  flex-shrink: 0;
+  color: var(--ui-text-tertiary);
+}
+.aino-tool-choice strong {
+  display: block;
+  font-size: var(--aino-text-ui);
+  font-weight: 500;
+}
+.aino-tool-choice small {
+  display: block;
+  margin-top: 2px;
+  font-size: var(--aino-text-caption);
+  line-height: 1.6;
+  color: var(--ui-text-secondary);
+}
+.aino-tool-chooser h3 {
+  margin: 27px 0 9px;
+  font-size: var(--aino-text-label);
+  font-weight: 500;
+  color: var(--ui-text-secondary);
+}
+.aino-tool-chooser .aino-tool-recent {
+  width: 100%;
+  height: auto;
+  min-height: 32px;
+  justify-content: flex-start;
+  gap: 8px;
+  font-size: var(--aino-text-label);
+}
+.aino-tool-recent span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.aino-tool-chooser .aino-tool-project {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  margin-top: 25px;
+  font-size: var(--aino-text-caption);
+}
+.aino-tool-project span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+@container (width < 300px) {
+  .aino-tool-choices {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* This variant belongs only to the unified right-side workspace. */
+[data-pane-variant='tool'] {
+  height: 45px;
+  padding: 5px 5px 6px;
+  align-items: center;
+  border-bottom: 1px solid var(--ui-stroke-tertiary);
+  --pane-tab-active-bg: var(--ui-bg-elevated);
+  --pane-tab-strip-bg: transparent;
+}
+[data-pane-variant='tool'] > [role='tablist'] {
+  height: 32px;
+  gap: 3px;
+  align-items: center;
+}
+[data-pane-variant='tool'] [data-slot='pane-tab'] {
+  height: 32px;
+  min-width: 100px;
+  max-width: 185px;
+  border: 1px solid transparent !important;
+  border-radius: 7px;
+  font-size: 12px;
+  font-family: var(--dt-font-sans);
+}
+[data-pane-variant='tool'] [data-slot='pane-tab'][data-active='true'] {
+  border: 1px solid var(--ui-stroke-secondary) !important;
+  background: var(--ui-bg-elevated);
+}
+[data-pane-variant='tool'] [data-slot='pane-tab-label'] {
+  font-size: 12px;
+}
+[data-pane-variant='tool'] [data-slot='pane-tab'] > .pane-tab-content > span:first-child svg {
+  width: 14px;
+  height: 14px;
+}

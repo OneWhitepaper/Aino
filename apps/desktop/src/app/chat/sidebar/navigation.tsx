@@ -1,7 +1,8 @@
 import { useStore } from '@nanostores/react'
-import { useEffect, useState } from 'react'
+import { useContext, useEffect, useState } from 'react'
 
 import { BrandMark } from '@/components/brand-mark'
+import { SidebarBrandContext } from '@/components/pane-shell/pane-visibility'
 import { Codicon } from '@/components/ui/codicon'
 import { ContextMenu, ContextMenuContent, ContextMenuTrigger } from '@/components/ui/context-menu'
 import {
@@ -57,8 +58,13 @@ const ACTIVE_VIEWS: Record<string, AppView> = {
   cron: 'cron'
 }
 
+export function isDraftNavigationActive(view: AppView, isTile: boolean, sessionId: null | string) {
+  return view === 'chat' && !isTile && sessionId === null
+}
+
 interface SidebarNavigationProps {
   currentView: AppView
+  newSessionActive?: boolean
   pathname: string
   navItems: SidebarNavItem[]
   navLabels: Record<string, string>
@@ -70,6 +76,7 @@ interface SidebarNavigationProps {
 
 export function SidebarNavigation({
   currentView,
+  newSessionActive = false,
   pathname,
   navItems,
   navLabels,
@@ -78,6 +85,7 @@ export function SidebarNavigation({
   onNewSessionInWorkspace,
   onNewSessionSplit
 }: SidebarNavigationProps) {
+  const hostBrand = useContext(SidebarBrandContext)
   const newSessionCombo = useStore($bindings)['session.new']?.[0]
   const newSessionKbd = newSessionCombo ? comboTokens(newSessionCombo) : []
   const [newSessionKbdFlash, setNewSessionKbdFlash] = useState(false)
@@ -102,17 +110,20 @@ export function SidebarNavigation({
 
   return (
     <>
-      <div aria-hidden="true" className="aino-sidebar-brand">
-        <BrandMark className="size-8" />
-        <span>Aino</span>
-      </div>
-      <SidebarGroup className="shrink-0 p-0 pt-2">
+      {!hostBrand && (
+        <header aria-label="Aino" className="aino-sidebar-brand">
+          <BrandMark className="size-8" />
+          <span>Aino</span>
+        </header>
+      )}
+      <SidebarGroup className="aino-sidebar-navigation" role="navigation">
         <SidebarGroupContent>
-          <SidebarMenu className="gap-0">
+          <SidebarMenu className="gap-0.5">
             {navItems.map(item => {
               const isInteractive = Boolean(item.action) || Boolean(item.route)
 
               const active =
+                (item.id === 'new-session' && newSessionActive) ||
                 ACTIVE_VIEWS[item.id] === currentView ||
                 (currentView === 'extension' && Boolean(item.route) && pathname === item.route)
 
@@ -122,16 +133,9 @@ export function SidebarNavigation({
                 <SidebarMenuButton
                   aria-disabled={!isInteractive}
                   className={cn(
-                    // no-drag: these rows sit directly under the titlebar's
-                    // [-webkit-app-region:drag] strips (app-shell.tsx), with only
-                    // 6px of clearance. Drag regions win hit-testing over DOM
-                    // (pointer-events can't override), and on Linux/WSLg the
-                    // resolved region has been observed to swallow clicks on the
-                    // top rows. Same carve-out as USER_BUBBLE_BASE_CLASS in
-                    // thread.tsx.
-                    'flex h-8 w-full justify-start gap-2.5 rounded-lg border-0 px-2.5 py-1.5 text-left text-[length:var(--aino-text-ui)] leading-5 font-normal transition-colors duration-100 ease-out [-webkit-app-region:no-drag] hover:bg-(--ui-control-hover-background) hover:text-foreground hover:transition-none',
-                    active && 'bg-(--ui-control-active-background) text-foreground',
-                    !isInteractive && 'cursor-default hover:border-transparent hover:bg-transparent hover:text-inherit'
+                    'aino-sidebar-nav-row [-webkit-app-region:no-drag]',
+                    active && 'aino-sidebar-nav-row-active',
+                    !isInteractive && 'cursor-default hover:bg-transparent hover:text-inherit'
                   )}
                   // A tip anchored to the label points at the end of the
                   // word; the row is what it's actually about.
@@ -186,8 +190,8 @@ export function SidebarNavigation({
                   }
                   type="button"
                 >
-                  <span className="grid size-5 shrink-0 place-items-center" data-slot="sidebar-nav-icon">
-                    <item.icon className="size-[18px]" />
+                  <span className="aino-sidebar-nav-icon" data-slot="sidebar-nav-icon">
+                    <item.icon className="size-[17px]" />
                   </span>
                   {/* Shrink-to-fit, not flex-1: the label carries the row's
                         `data-tour` handle, and anything anchored to it should

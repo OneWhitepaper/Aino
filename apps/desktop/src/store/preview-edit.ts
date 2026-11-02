@@ -5,26 +5,53 @@ import { atom } from 'nanostores'
 // without threading editor state up through the pane. The editor in
 // `preview-file.tsx` is the sole writer; the rail tabs are the readers.
 export const $dirtyPreviewUrls = atom<Record<string, true>>({})
+const $dirtyPreviewWriters = atom<Record<string, string>>({})
+export const $pendingPreviewClose = atom<string | null>(null)
+export const cancelPreviewClose = () => $pendingPreviewClose.set(null)
+const previewSavers = new Map<string, () => Promise<boolean>>()
 
-export function setPreviewDirty(url: string, dirty: boolean): void {
+export function registerPreviewSaver(tabId: string, save: () => Promise<boolean>): () => void {
+  previewSavers.set(tabId, save)
+
+  return () => {
+    if (previewSavers.get(tabId) === save) {
+      previewSavers.delete(tabId)
+    }
+  }
+}
+
+export async function savePreviewTab(tabId: string): Promise<boolean> {
+  return (await previewSavers.get(tabId)?.()) ?? false
+}
+
+export function previewTabIsDirty(tabId: string, url: string): boolean {
+  const writers = $dirtyPreviewWriters.get()
+
+  return writers[tabId] === url || writers[url] === url
+}
+
+export function setPreviewDirty(url: string, dirty: boolean, tabId = url): void {
   if (!url) {
     return
   }
 
-  const current = $dirtyPreviewUrls.get()
-  const has = Boolean(current[url])
+  const current = $dirtyPreviewWriters.get()
+  const has = current[tabId] === url
 
   if (dirty === has) {
     return
   }
 
   if (dirty) {
-    $dirtyPreviewUrls.set({ ...current, [url]: true })
+    const next = { ...current, [tabId]: url }
+    $dirtyPreviewWriters.set(next)
+    $dirtyPreviewUrls.set(Object.fromEntries(Object.values(next).map(value => [value, true as const])))
 
     return
   }
 
   const next = { ...current }
-  delete next[url]
-  $dirtyPreviewUrls.set(next)
+  delete next[tabId]
+  $dirtyPreviewWriters.set(next)
+  $dirtyPreviewUrls.set(Object.fromEntries(Object.values(next).map(value => [value, true as const])))
 }

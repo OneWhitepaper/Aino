@@ -10,7 +10,9 @@ from tools.connectors.catalog_tool import MANAGE_CATALOG_SCHEMA, manage_catalog
 from tools.connectors.gateway import config as gateway_config
 from tools.connectors.managed import run_managed_action
 from tools.connectors.mcp import run_mcp_operation
-from tools.connectors.targets import ALIAS_PATTERN, ALL_ACTIONS, MCP_ACTIONS, normalize_targets, validate_action
+from tools.connectors.targets import (
+    ALIAS_PATTERN, ALL_ACTIONS, MCP_ACTIONS, custom_server_configs, normalize_targets, validate_action,
+)
 from tools.registry import registry, tool_error
 
 
@@ -33,11 +35,15 @@ def manage_connections(
     action_error = validate_action(action, managed, mcp_targets)
     if action_error:
         return tool_error(action_error)
+    configs, config_error = custom_server_configs(args.get("connectors"), action)
+    if config_error:
+        return tool_error(config_error)
 
     if action in MCP_ACTIONS:
         return run_mcp_operation(
             mcp_targets, action, backend=mcp_backend,
             connection_callback=connection_callback, session_id=session_id, tool_call_id=tool_call_id,
+            server_configs=configs or None,
         )
 
     return run_managed_action(
@@ -52,7 +58,7 @@ MANAGE_CONNECTIONS_SCHEMA = {
     "name": "manage_connections",
     "description": (
         "Connect the user to apps. Two kinds: a hosted connector account (Gmail, Notion, ...) "
-        "served through the tool gateway, and a local MCP server from the bundled catalog. "
+        "served through an explicitly enabled third-party gateway, and an Aino MCP server. "
         "Targets go in 'connectors': a bare slug or {\"name\": \"gmail\"} is a hosted connector "
         "account; {\"name\": \"linear\", \"mcp\": true} is a local MCP server. Many names exist on "
         "both sides, so the user's own words decide. Pass \"mcp\": true only when the user asks "
@@ -76,16 +82,27 @@ MANAGE_CONNECTIONS_SCHEMA = {
         "USER to open in a browser (never open it yourself); ask them to say when they are done, "
         "then use 'status'. "
         "When a hosted connector tool call returns CONNECTION_REQUIRED, use 'connect'. "
-        "MCP actions (every target must carry \"mcp\": true): 'install' adds a catalog entry, "
+        "MCP actions require no Nous account. Every MCP target must carry \"mcp\": true. "
+        "'install' adds a catalog entry or a custom server using a config object. For a user URL "
+        "or JSON, pass its actual MCP configuration: url (HTTP) or command and args (stdio), "
+        "auth ('oauth' or 'none'), optional timeout/transport, and env key references. "
+        "For example env={\"API_KEY\": \"${API_KEY}\"}. Never pass literal credentials; "
+        "the user enters missing keys on the approval card. Choose auth='oauth' for OAuth servers. "
+        "The card shows the source before any process, connection or authorization starts. "
+        "Custom installs require a card and cannot replace configured or plugin-owned servers. "
+        "Do not use Codex/Claude plugin commands: those install into other apps, not Aino. "
+        "Adding MCP does not install a foreign plugin's bundled skills. "
         "'enable' re-enables a disabled configured server, 'authorize' runs its OAuth. "
         "They show the user an approval card and block until it settles. Never hand-edit "
         "mcp_servers config — always use this tool. After a skip or a timeout, do not re-ask on "
         "your own: continue without the app or ask in chat. A later request from the USER for that "
         "same app is not a re-ask — run it. A connected server's tools are named in the result and are "
-        "callable at once through tool_describe/tool_call. Where no card exists an MCP target runs at once and the result says what "
+        "callable at once through tool_describe/tool_call. An authorization URL or initiated state "
+        "is not installation success. Report ready only for connected targets with discovered "
+        "tools and no discovery_error. Where no card exists a catalog MCP target runs and the result says what "
         "happened, with a link for the user to open when one is needed. This tool can NOT "
         "disconnect, delete, or revoke an account — that is deliberately user-only. When asked, say so and direct the user to the "
-        "Nous Portal (their org's Connectors page) or the desktop app."
+        "Aino connection settings or the actual third-party account page."
     ),
     "parameters": {
         "type": "object",
@@ -110,9 +127,27 @@ MANAGE_CONNECTIONS_SCHEMA = {
                                 "mcp": {
                                     "type": "boolean",
                                     "description": (
-                                        "true = a local MCP server from the catalog; absent or "
+                                        "true = an MCP server (catalog or custom config); absent or "
                                         "false = a hosted connector account."
                                     ),
+                                },
+                                "config": {
+                                    "type": "object",
+                                    "description": "Custom MCP install only. Non-secret source reviewed before connecting.",
+                                    "properties": {
+                                        "url": {"type": "string"},
+                                        "command": {"type": "string"},
+                                        "args": {"type": "array", "items": {"type": "string"}},
+                                        "auth": {"type": "string", "enum": ["none", "oauth"]},
+                                        "timeout": {"type": "number", "exclusiveMinimum": 0},
+                                        "transport": {"type": "string", "enum": ["http", "stdio"]},
+                                        "env": {
+                                            "type": "object",
+                                            "additionalProperties": {"type": "string"},
+                                            "description": "Matching ${KEY} references only; never literal secrets.",
+                                        },
+                                    },
+                                    "additionalProperties": False,
                                 },
                                 "alias": {
                                     "type": "string",
@@ -154,16 +189,11 @@ registry.register(
     name="manage_connections",
     toolset="connections",
     schema=MANAGE_CONNECTIONS_SCHEMA,
-    # The portal gate decides schema presence: an account the portal has not enabled for
-    # connectors never sees the tool, so the model cannot call it and read the gateway's
-    # 404 back to them. The handler runs the same gate so the RPC path (methods_connectors) and
-    # a cached schema agree. Read as a module attribute so tests patch
-    # ``gateway.config.connectors_available`` at one seam.
+    # Local MCP management is independent; only the hosted handler checks eligibility.
     handler=lambda args, **kw: manage_connections(
         args, session_id=kw.get("session_id"), tool_call_id=kw.get("tool_call_id"),
         connectors_available=gateway_config.connectors_available,
     ),
-    check_fn=lambda: gateway_config.connectors_available(),
     emoji="🔗",
 )
 

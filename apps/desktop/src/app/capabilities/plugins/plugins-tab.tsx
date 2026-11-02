@@ -42,7 +42,7 @@ import { Pill } from '../../settings/primitives'
 import { useDeepLinkHighlight } from '../../settings/use-deep-link-highlight'
 import { CatalogAlert } from '../catalog/catalog-alert'
 import { CatalogBrowser } from '../catalog/catalog-browser'
-import { type CatalogEntry, parseCatalog } from '../catalog/catalog-data'
+import { type CatalogEntry, catalogQueryKey, parseCatalog } from '../catalog/catalog-data'
 import { CatalogSwitch } from '../catalog/catalog-switch'
 import { TOOLSETS_QUERY_KEY } from '../toolsets/toolsets-data'
 
@@ -106,7 +106,7 @@ async function rescanAll(requestGateway: GatewayRequest, scope: null | string) {
  *  half of a unified package into the scoped profile (the desktop half is
  *  already here). Provenance comes from the package marker Electron stamped
  *  when it copied the half out (catalog sidecar or git remote). */
-function installAgentHalfHere(record: PluginRecord, profile: null | string) {
+function installAgentHalfHere(record: PluginRecord, profile: ProfileScope) {
   const origin = record.packageOrigin
 
   if (!origin?.repo) {
@@ -118,14 +118,14 @@ function installAgentHalfHere(record: PluginRecord, profile: null | string) {
   // generic Verified badge.
   const tier = origin.catalogName
     ? queryClient
-        .getQueryData<CatalogEntry[]>(['public-catalog', 'plugins'])
+        .getQueryData<CatalogEntry[]>(catalogQueryKey('plugins', profile))
         ?.find(entry => entry.name === origin.catalogName)?.source
     : undefined
 
   openPluginInstallRequest({
     catalogName: origin.catalogName,
     legacyHint: 'agent',
-    profile,
+    profile: profileParam(profile),
     repo: origin.repo,
     sha: origin.sha,
     tier
@@ -149,7 +149,8 @@ const updateTargetLabel = (agent: AgentPluginRow) =>
   agent.catalog_version ?? agent.catalog_sha?.slice(0, 8) ?? shortTarget(agent.update_target)
 
 /** A full commit shortens to 8 characters; a feed version stays as it is. */
-const shortTarget = (target?: string) => (target && /^[0-9a-f]{40}$/i.test(target) ? target.slice(0, 8) : (target ?? ''))
+const shortTarget = (target?: string) =>
+  target && /^[0-9a-f]{40}$/i.test(target) ? target.slice(0, 8) : (target ?? '')
 
 function KindBadge({ kind }: { kind: PackageKind }) {
   const { t } = useI18n()
@@ -505,7 +506,7 @@ function PackageRow({
                 <Button
                   className="h-5 px-1.5 text-[0.65rem]"
                   disabled={!desktop.packageOrigin?.repo}
-                  onClick={() => installAgentHalfHere(desktop, scope)}
+                  onClick={() => installAgentHalfHere(desktop, profile)}
                   size="xs"
                   variant="outline"
                 >
@@ -786,6 +787,7 @@ export const PluginsTab = memo(function PluginsTab({
       // CatalogEntry has no `tier` field, so don't "fix" this to entry.tier.
       onInstall={entry => openCatalogPluginInstall(entry, scope, { tier: entry.source })}
       onQueryChange={onQueryChange}
+      profile={profile}
       query={query}
       renderInstalledAction={entry => {
         const pkg = packageById.get(entry.id)

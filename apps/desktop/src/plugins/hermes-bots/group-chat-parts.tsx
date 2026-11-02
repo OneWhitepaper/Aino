@@ -273,7 +273,7 @@ export function GroupMentionInput({ members, onChange, onSubmitDraft, value, ...
               onMouseEnter={() => setSelected(index)}
             >
               <span className="font-medium">{`@${option.handle}`}</span>
-              <span className="truncate text-[0.65rem] text-(--ui-text-quaternary)">{option.meta}</span>
+              <span className="truncate text-[length:var(--aino-text-caption)] text-(--ui-text-tertiary)">{option.meta}</span>
             </RowButton>
           ))}
         </div>

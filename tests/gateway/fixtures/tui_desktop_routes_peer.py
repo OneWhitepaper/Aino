@@ -8,6 +8,9 @@ import traceback
 
 _CONFIG = '''gateway:
   multiplex_profiles: false
+tools:
+  connectors:
+    enabled: false
 model:
   provider: custom
   default: no-inference
@@ -268,7 +271,14 @@ async def _connection_card(authority, ws, reader, sid, marker, receipt):
     failed = await rpc(ws, 'connectors.connect', owner=owner, connectors=['linear'], reconnect=True)
     assert failed['error']['code'] == 5034 and failed['error']['data']['reason'] == 'CONNECTOR_REQUEST_FAILED', failed
     connectors.connectors_available = lambda *a, **k: False
-    gated = await rpc(ws, 'connectors.connect', owner=owner, connectors=['linear'], reconnect=True)
+    run.reissue = rerun
+    for kind in ('plugin', 'skill'):
+        operation.transition('linear', TargetState.failed, Actor.backend_watcher)
+        operation.target('linear').kind = kind
+        retried = await rpc(ws, 'connectors.connect', owner=owner, connectors=['linear'], reconnect=True)
+        assert retried.get('result', {}).get('targets', [{}])[0].get('state') == 'initiated', retried
+    operation.target('linear').kind = 'mcp'
+    gated = await rpc(ws, 'connectors.connect', owner=owner, connectors=['unknown'], reconnect=True)
     assert gated['error']['code'] == 4031 and gated['error']['data']['reason'] == 'CONNECTORS_UNAVAILABLE', gated
     connectors.connectors_available = lambda *a, **k: True
     # A session whose tools leave out manage_connections cannot re-run a target, even with connectors on.
@@ -306,8 +316,62 @@ async def _connection_card(authority, ws, reader, sid, marker, receipt):
     receipt['card'] = True
 
 
+async def _local_retry(authority, ws, reader, sid, marker, receipt):
+    from types import SimpleNamespace
+
+    from gateway.run import _profile_runtime_scope
+    from hermes_constants import get_hermes_home
+    from tests.gateway.fixtures.local_recovery_probe import rpc
+    from tools.connectors import live, mcp
+    from tools.connectors.contract import Actor, TargetState
+    from tools.connectors.operation import ConnectionOperation, Target
+
+    created = await rpc(ws, 'session.create', request_id='local-retry', source='gui', toolsets=['connections'],
+                        cwd=str(Path(authority.profile_id) / 'session-work'))
+    sid = created['result']['session_id']
+    owner = {'type': 'session', 'session_id': sid}
+    homes = []
+
+    class Backend:
+        def start_oauth(self, name):
+            homes.append(get_hermes_home())
+            if len(homes) == 1:
+                raise RuntimeError('authorization failed')
+            return SimpleNamespace(auth_url=f'https://auth.example/{name}/retry')
+
+    operation = ConnectionOperation([Target('local', 'mcp', 'authorize')], session_key=authority.sessions[sid].route)
+    runner = mcp.open_runner('authorize', Backend())
+    try:
+        with _profile_runtime_scope(Path(authority.profile_id)):
+            live.open(operation)
+            runner.prepare(operation)
+        assert operation.target('local').state == TargetState.failed
+        operation.targets.append(Target('hosted', 'connector', 'connect'))
+        operation.transition('hosted', TargetState.failed, Actor.backend_watcher)
+        for names in (['hosted'], ['local', 'hosted'], ['local', 'missing']):
+            denied = await rpc(ws, 'connectors.connect', owner=owner, connectors=names, reconnect=True)
+            assert denied['error']['code'] == 4031, denied
+            assert denied['error']['data']['reason'] == 'CONNECTORS_UNAVAILABLE', denied
+        denied = await _call(reader, 'connectors.connect', owner=owner, connectors=['local'], reconnect=True)
+        assert _error(denied) == 'permission_denied', denied
+        denied = await rpc(ws, 'connectors.connect', owner=owner, connectors=['local'], alias='foreign', reconnect=True)
+        assert denied['error']['code'] == 4004, denied
+        denied = await rpc(ws, 'connectors.connect', owner=owner, connectors=['local'], profile='foreign', reconnect=True)
+        assert _error(denied) == 'profile_mismatch', denied
+        retried = await rpc(ws, 'connectors.connect', owner=owner, connectors=['local'], reconnect=True)
+        assert retried.get('result', {}).get('targets', [{}])[0].get('state') == 'initiated', retried
+        assert operation.target('local').connect_url == 'https://auth.example/local/retry'
+        assert operation.target('hosted').state == TargetState.failed
+        assert homes == [Path(authority.profile_id), Path(authority.profile_id)], homes
+        receipt['local_retry'] = True
+    finally:
+        runner.work.clear()
+        runner.close()
+        live.close(operation)
+
+
 MODES = {'react': _react, 'control': _control, 'control_refusals': _control_refusals, 'commands': _commands,
-         'connection_card': _connection_card}
+         'connection_card': _connection_card, 'local_retry': _local_retry}
 
 
 if __name__ == '__main__':

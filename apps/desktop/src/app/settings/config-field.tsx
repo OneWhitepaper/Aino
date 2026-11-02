@@ -22,35 +22,15 @@ export function parseListFieldDraft(raw: string): string[] {
     .filter(Boolean)
 }
 
-/**
- * One generic config row: label + description resolved from the i18n field
- * copy (falling back to the schema description), and a control picked from the
- * field schema — Switch for booleans, Select for enums, free-input combobox
- * (Input + datalist) for FREE_INPUT_KEYS voice/model names, and Input/Textarea
- * for the rest. Shared by the Settings config sections and the Capabilities
- * TTS provider panel so both surfaces render identical fields.
- */
-export function ConfigField({
-  schemaKey,
-  schema,
-  value,
-  enumOptions,
-  optionLabels,
-  onChange,
-  descriptionExtra
-}: {
-  schemaKey: string
-  schema: ConfigFieldSchema
-  value: unknown
-  enumOptions?: string[]
-  optionLabels?: Record<string, string>
-  onChange: (value: unknown) => void
-  descriptionExtra?: ReactNode
-}) {
-  const { t } = useI18n()
-  const c = t.settings.config
-
+function configFieldCopy(
+  t: ReturnType<typeof useI18n>['t'],
+  schemaKey: string,
+  schema: ConfigFieldSchema,
+  labelOverride?: string,
+  descriptionOverride?: ReactNode
+) {
   const label =
+    labelOverride ??
     fieldCopyForSchemaKey(t.settings.fieldLabels, schemaKey) ??
     fieldCopyForSchemaKey(FIELD_LABELS, schemaKey) ??
     prettyName(schemaKey.split('.').pop() ?? schemaKey)
@@ -71,9 +51,49 @@ export function ConfigField({
   const normalizedDesc = normalize(rawDescription)
 
   const description =
-    rawDescription && normalizedDesc !== normalize(label) && normalizedDesc !== normalize(schemaKey)
+    descriptionOverride ??
+    (rawDescription && normalizedDesc !== normalize(label) && normalizedDesc !== normalize(schemaKey)
       ? rawDescription
-      : undefined
+      : undefined)
+
+  return { label, description }
+}
+
+/**
+ * One generic config row: label + description resolved from the i18n field
+ * copy (falling back to the schema description), and a control picked from the
+ * field schema — Switch for booleans, Select for enums, free-input combobox
+ * (Input + datalist) for FREE_INPUT_KEYS voice/model names, and Input/Textarea
+ * for the rest. Shared by the Settings config sections and the Capabilities
+ * TTS provider panel so both surfaces render identical fields.
+ */
+export function ConfigField({
+  schemaKey,
+  schema,
+  value,
+  enumOptions,
+  optionLabels,
+  onChange,
+  descriptionExtra,
+  labelOverride,
+  descriptionOverride,
+  unit
+}: {
+  schemaKey: string
+  schema: ConfigFieldSchema
+  value: unknown
+  enumOptions?: string[]
+  optionLabels?: Record<string, string>
+  onChange: (value: unknown) => void
+  descriptionExtra?: ReactNode
+  labelOverride?: string
+  descriptionOverride?: ReactNode
+  unit?: string
+}) {
+  const { t } = useI18n()
+  const c = t.settings.config
+
+  const { label, description } = configFieldCopy(t, schemaKey, schema, labelOverride, descriptionOverride)
 
   const descriptionNode: ReactNode = descriptionExtra ? (
     <span className="inline-flex flex-wrap items-center gap-x-3 gap-y-1">
@@ -190,6 +210,7 @@ export function ConfigField({
   if (schema.type === 'number') {
     return row(
       <Input
+        aria-label={label}
         className={CONTROL_TEXT}
         onChange={e => {
           const raw = e.target.value
@@ -200,6 +221,7 @@ export function ConfigField({
           }
         }}
         placeholder={c.notSet}
+        suffix={unit}
         type="number"
         value={value === undefined || value === null ? '' : String(value)}
       />

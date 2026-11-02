@@ -197,7 +197,7 @@ export function AvatarPicker({ shape, color, image, onShape, onColor, onImage, g
                     {locked ? b.avatar.unlockFace : b.avatar.lockFace}
                   </Button>
                 </div>
-                <div className="text-center text-[0.65rem] text-(--ui-text-quaternary)">
+                <div className="text-center text-[length:var(--aino-text-caption)] text-(--ui-text-tertiary)">
                   {locked ? b.avatar.faceLocked : b.avatar.faceFollowsName}
                 </div>
                 <Button
@@ -266,7 +266,7 @@ export function AvatarPicker({ shape, color, image, onShape, onColor, onImage, g
               {genBusy ? b.avatar.generating : b.avatar.generate}
             </Button>
             {describe.trim() ? null : (
-              <div className="text-center text-[0.65rem] text-(--ui-text-quaternary)">{b.bot.descriptionHint}</div>
+              <div className="text-center text-[length:var(--aino-text-caption)] text-(--ui-text-tertiary)">{b.bot.descriptionHint}</div>
             )}
           </div>
         ) : (

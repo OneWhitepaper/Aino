@@ -12,7 +12,7 @@
 
 import { useStore } from '@nanostores/react'
 
-import { findGroup } from '@/components/pane-shell/tree/model'
+import { findGroup, findGroupOfPane } from '@/components/pane-shell/tree/model'
 import {
   $activeTreeGroup,
   $layoutTree,
@@ -20,6 +20,7 @@ import {
   revealTreePane,
   treePanesWithPrefix
 } from '@/components/pane-shell/tree/store'
+import { unifiedToolGroup } from '@/components/pane-shell/tree/tool-panel-policy'
 import { type MenuKit, renderActionItem } from '@/components/ui/actions-menu'
 import { FileTypeIcon } from '@/components/ui/file-type-icon'
 import { ToolIcon } from '@/components/ui/tool-icon'
@@ -35,7 +36,7 @@ import {
   adoptPersistedBrowserTab,
   type BrowserPage,
   closeRightRailTab,
-  forgetBrowserPage,
+  keepPreviewTab,
   markBrowserTabPopped,
   newBrowserTab,
   popOutBrowserTab,
@@ -43,12 +44,12 @@ import {
   type PreviewTarget,
   setPreviewTabPinned
 } from '@/store/preview'
+import { $dirtyPreviewUrls, previewTabIsDirty } from '@/store/preview-edit'
 import { explicitOpenBlocksZone, PREVIEW_TILE_PREFIX } from '@/store/preview-explicit'
 import { canOpenBrowserWindow } from '@/store/windows'
 
 import { paneMirror } from './pane-mirror'
 import { PreviewTilePane } from './right-rail/preview'
-import { forgetPreviewConsole } from './right-rail/preview-console-store'
 
 /** The target behind a tile id, or null once its tab is gone. */
 function targetFor(tabId: string): PreviewTarget | null {
@@ -117,6 +118,13 @@ function previewTabMenuPrefix(tabId: string) {
 
     return (
       <>
+        {$previewTabs.get().find(tab => tab.id === tabId)?.temporary &&
+          renderActionItem(kit, {
+            icon: 'pin',
+            key: 'keep',
+            label: translateNow('toolPanel.keep'),
+            onSelect: () => keepPreviewTab(tabId)
+          })}
         {renderActionItem(kit, {
           icon: pinned ? 'pinned' : 'pin',
           key: 'pin',
@@ -189,6 +197,23 @@ function BrowserTabLabel({ tabId }: { tabId: string }) {
   return target ? browserTabLabel(target, pages[tabId]) : null
 }
 
+function FileTabLabel({ tabId }: { tabId: string }) {
+  const tabs = useStore($previewTabs)
+  const dirty = useStore($dirtyPreviewUrls)
+  const tab = tabs.find(item => item.id === tabId)
+
+  return (
+    <span className={tab?.temporary ? 'italic' : undefined}>
+      {previewTitle(tabId)}
+      {tab && dirty[tab.target.url] && previewTabIsDirty(tabId, tab.target.url) ? (
+        <span aria-label={translateNow('preview.unsavedChanges')} className="ml-1">
+          •
+        </span>
+      ) : null}
+    </span>
+  )
+}
+
 /** The tab's lead glyph — the same file/tool icon family the file tree and code
  *  fences resolve through, so a `.tsx` peek and its sidebar row agree. */
 function PreviewTabLead({ tabId }: { tabId: string }) {
@@ -218,11 +243,23 @@ const previewPaneId = (tabId: string) => `${PREVIEW_TILE_PREFIX}:${tabId}`
  *  acyclic; adoption places a pane after an anchor arriving with it (store.ts).
  *  `undefined` means this is the first preview — it opens its own zone. */
 function existingPreviewAnchor(tabId: string): string | undefined {
+  const tree = $layoutTree.get()
+
+  if (tree && findGroupOfPane(tree, 'files')) {
+    return 'files'
+  }
+
   const own = previewPaneId(tabId)
   const inTree = treePanesWithPrefix(`${PREVIEW_TILE_PREFIX}:`).find(id => id !== own)
 
   if (inTree) {
     return inTree
+  }
+
+  const toolAnchor = tree && unifiedToolGroup(tree)?.panes.find(id => id !== own)
+
+  if (toolAnchor) {
+    return toolAnchor
   }
 
   const head = $dockedVisiblePreviewTabs.get()[0]
@@ -334,9 +371,13 @@ function keepsLiveBody(tabId: string): boolean {
 /** A tab whose session left the screen keeps its live body when it is a page
  *  still open in this profile's rail (`targetFor` reads it) and not popped
  *  out (the pop-out window owns that guest). */
-const retainHiddenPreview = (tabId: string) => keepsLiveBody(tabId) && !$poppedBrowserTabIds.get().has(tabId)
+const isDirtyPreview = (tabId: string) => previewTabIsDirty(tabId, targetFor(tabId)?.url ?? '')
+
+const retainHiddenPreview = (tabId: string) =>
+  (keepsLiveBody(tabId) || isDirtyPreview(tabId)) && !$poppedBrowserTabIds.get().has(tabId)
 
 const watchPreviewTileMirror = paneMirror<{ id: string }>({
+  toolPanel: true,
   // Only the FOCUSED session's tabs (plus pins) are in the tree — switching
   // sessions swaps the drawer without closing any tab. A hidden session's
   // live page leaves the tree but stays mounted (hidden, inert) so returning
@@ -345,6 +386,7 @@ const watchPreviewTileMirror = paneMirror<{ id: string }>({
   source: $dockedVisiblePreviewTabs,
   retain: retainHiddenPreview,
   retainLimit: HIDDEN_LIVE_PREVIEW_LIMIT,
+  retainProtected: isDirtyPreview,
   key: tab => tab.id,
   prefix: PREVIEW_TILE_PREFIX,
   // The FIRST preview still opens its own zone docked beside main (identical
@@ -357,7 +399,8 @@ const watchPreviewTileMirror = paneMirror<{ id: string }>({
   minWidth: '22rem',
   title: previewTitle,
   tabLead: tabId => <PreviewTabLead tabId={tabId} />,
-  tabTitle: tabId => (targetFor(tabId)?.kind === 'url' ? <BrowserTabLabel tabId={tabId} /> : undefined),
+  tabTitle: tabId =>
+    targetFor(tabId)?.kind === 'url' ? <BrowserTabLabel tabId={tabId} /> : <FileTabLabel tabId={tabId} />,
   // A Browser is a vessel, so there can be more of it — a file peek is one of
   // a kind and leaves the strip's "+" to whatever else the zone holds.
   newTab: tabId => (targetFor(tabId)?.kind === 'url' ? newBrowserTab : undefined),
@@ -365,12 +408,8 @@ const watchPreviewTileMirror = paneMirror<{ id: string }>({
   // the explicit cross-session workspace, everything else belongs to the
   // session that opened it (#73890).
   tabMenuPrefix: previewTabMenuPrefix,
-  lifecycleKeepAlive: keepsLiveBody,
+  lifecycleKeepAlive: () => true,
   // The body's own Close (an error state's way out) is the tab's ✕, verbatim.
   render: tabId => <PreviewTilePane onClose={() => closeTabPane(previewPaneId(tabId))} tabId={tabId} />,
-  close: tabId => {
-    forgetBrowserPage(tabId)
-    forgetPreviewConsole(tabId)
-    closeRightRailTab(tabId)
-  }
+  close: closeRightRailTab
 })

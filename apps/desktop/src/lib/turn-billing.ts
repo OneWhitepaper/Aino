@@ -21,6 +21,7 @@ export const LEGACY_USAGE_PURPOSES = [
 
 const PURPOSES = new Set<string>([
   ...LEGACY_USAGE_PURPOSES,
+  'image',
   'session_summary',
   'approval',
   'mcp',

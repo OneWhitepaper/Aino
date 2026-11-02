@@ -3,8 +3,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { DesktopProfileRoute, HermesApiRequest } from '@/global'
 import { createClientSessionState } from '@/lib/chat-runtime'
+import { platformDefaultScope } from '@/lib/platform-model-scope'
+import { freshDraftScope } from '@/store/composer'
 import { $defaultProfileRoute, setDefaultProfile } from '@/store/default-profile'
 import { requestGatewayForAgent } from '@/store/gateway'
+import { $modelPresets, getModelPreset, modelPresetScope, setModelPreset } from '@/store/model-presets'
 import {
   $activeGatewayProfile,
   $newChatConnectionId,
@@ -18,12 +21,26 @@ import {
 import { $projectScope, ALL_PROJECTS } from '@/store/project-scope'
 import {
   $activeSessionId,
+  $connection,
+  $currentModel,
+  $currentProvider,
+  $currentReasoningEffort,
+  $currentReasoningEffortWire,
   $sessions,
   _resetSessionOwnerHintsForTests,
   applyConfiguredDefaultProjectDir,
+  clearComposerSelectionOwner,
+  getCurrentModelSource,
   getSessionOwnerHint,
+  markComposerSelectionManual,
   setActiveSessionId,
+  setComposerSelectionOwner,
   setConnection,
+  setCurrentModel,
+  setCurrentModelSource,
+  setCurrentProvider,
+  setCurrentReasoningEffort,
+  setCurrentReasoningEffortWire,
   setSessions
 } from '@/store/session'
 
@@ -74,7 +91,7 @@ function mountActions() {
     })
   )
 
-  return { ...result, navigate, requestGateway }
+  return { ...result, navigate, requestGateway, state }
 }
 
 function mountSlashCommand(startFreshSessionDraft: () => void) {
@@ -93,6 +110,11 @@ function mountSlashCommand(startFreshSessionDraft: () => void) {
 }
 
 beforeEach(() => {
+  $modelPresets.set({})
+  setCurrentModel('')
+  setCurrentProvider('')
+  setCurrentModelSource('')
+  setCurrentReasoningEffort('')
   _resetSessionOwnerHintsForTests()
   $defaultProfileRoute.set(null)
   $newChatRoute.set({ connectionId: 'previous', profile: 'other' })
@@ -143,10 +165,157 @@ afterEach(() => {
   setActiveSessionId(null)
   setConnection(null)
   setSessions([])
+  setCurrentModel('')
+  setCurrentProvider('')
+  setCurrentModelSource('')
+  setCurrentReasoningEffort('')
+  $modelPresets.set({})
   vi.clearAllMocks()
 })
 
 describe('generic new session default routing', () => {
+  it('keeps draft model options with the assigned conversation after the first send', async () => {
+    const { result } = mountActions()
+    act(() => result.current.selectSidebarItem({ action: 'new-session' } as never))
+    const owner = platformDefaultScope({ connectionId: 'previous', profile: 'other' }).key
+    setModelPreset('provider', 'model', { effort: 'high' }, modelPresetScope(owner, freshDraftScope()))
+    await act(() => result.current.createBackendSessionForSend())
+    expect(getModelPreset('provider', 'model', modelPresetScope(owner, 'created-stored'))).toEqual({ effort: 'high' })
+    expect(getModelPreset('provider', 'model')).toEqual({})
+  })
+
+  it.each(['draft', 'slash'])('drops the previous conversation model and effort before %s first send', async action => {
+    const { result, state } = mountActions()
+    state.model = 'existing-manual-model'
+    state.provider = 'existing-provider'
+    state.reasoningEffort = 'high'
+    setCurrentModel(state.model)
+    setCurrentProvider(state.provider)
+    setCurrentReasoningEffort(state.reasoningEffort)
+    setCurrentReasoningEffortWire('high')
+    markComposerSelectionManual()
+
+    if (action === 'slash') {
+      const slash = mountSlashCommand(result.current.startFreshSessionDraft)
+      await act(() => slash.result.current('/new'))
+    } else {
+      act(() => result.current.selectSidebarItem({ action: 'new-session' } as never))
+    }
+
+    expect(getCurrentModelSource()).toBe('default')
+    expect($currentModel.get()).toBe('')
+    expect($currentProvider.get()).toBe('')
+    expect($currentReasoningEffort.get()).toBe('')
+    expect($currentReasoningEffortWire.get()).toBe('')
+    await act(() => result.current.createBackendSessionForSend('use the Settings default'))
+    const create = vi.mocked(requestGatewayForAgent).mock.calls.find(call => call[2] === 'session.create')?.[3]
+    expect(create).not.toHaveProperty('model')
+    expect(create).not.toHaveProperty('provider')
+    expect(create).not.toHaveProperty('reasoning_effort')
+    expect(state).toMatchObject({
+      model: 'existing-manual-model',
+      provider: 'existing-provider',
+      reasoningEffort: 'high'
+    })
+  })
+
+  it('creates an independent new tile from Settings without reusing the occupied conversation selection', async () => {
+    const { result } = mountActions()
+    setCurrentModel('existing-manual-model')
+    setCurrentProvider('existing-provider')
+    setCurrentReasoningEffort('high')
+    markComposerSelectionManual()
+
+    await act(() => result.current.openNewSessionTile('right'))
+
+    const create = vi.mocked(requestGatewayForAgent).mock.calls.find(call => call[2] === 'session.create')?.[3]
+    expect(create).not.toHaveProperty('model')
+    expect(create).not.toHaveProperty('provider')
+    expect(create).not.toHaveProperty('reasoning_effort')
+    expect($currentModel.get()).toBe('existing-manual-model')
+    expect($currentProvider.get()).toBe('existing-provider')
+    expect($currentReasoningEffort.get()).toBe('high')
+    expect(getCurrentModelSource()).toBe('manual')
+  })
+
+  it('does not resurrect an old destination pick when the selected default source finishes activating', async () => {
+    const { result } = mountActions()
+    const destination = { connectionId: 'chosen-host', profile: 'chosen' }
+    setComposerSelectionOwner(destination.connectionId, destination.profile)
+    setCurrentModel('destination-old-model')
+    setCurrentProvider('destination-provider')
+    markComposerSelectionManual()
+    setComposerSelectionOwner('previous', 'other')
+    setCurrentModel('existing-model')
+    setCurrentProvider('existing-provider')
+    markComposerSelectionManual()
+    await act(() => setDefaultProfile(destination))
+
+    act(() => result.current.selectSidebarItem({ action: 'new-session' } as never))
+    // Mirrors ensureGatewayAgent's delayed activation publication.
+    act(() => setComposerSelectionOwner(destination.connectionId, destination.profile))
+
+    expect(getCurrentModelSource()).toBe('default')
+    expect($currentModel.get()).toBe('')
+    expect($currentProvider.get()).toBe('')
+    await act(() => result.current.createBackendSessionForSend())
+    const create = vi.mocked(requestGatewayForAgent).mock.calls.find(call => call[2] === 'session.create')?.[3]
+    expect(create).not.toHaveProperty('model')
+    expect(create).not.toHaveProperty('provider')
+  })
+
+  it('keeps an independent tile on its Settings default while the occupied conversation changes model', async () => {
+    const { result } = mountActions()
+    let complete!: (value: { provider: string; model: string }) => void
+
+    const info = new Promise(resolve => {
+      complete = resolve
+    })
+
+    const api = vi.fn(async () => info)
+    window.hermesDesktop!.api = api as never
+    setCurrentModel('existing-model')
+    setCurrentProvider('existing-provider')
+    markComposerSelectionManual()
+    const pending = result.current.openNewSessionTile('right')
+    await vi.waitFor(() => expect(api).toHaveBeenCalled())
+    setCurrentModel('new-occupied-model')
+    markComposerSelectionManual()
+
+    await act(async () => {
+      complete({ model: 'configured-model', provider: 'configured-provider' })
+      await pending
+    })
+
+    const create = vi.mocked(requestGatewayForAgent).mock.calls.find(call => call[2] === 'session.create')?.[3]
+    expect(create).toBeDefined()
+    expect(create).not.toHaveProperty('model')
+    expect(create).not.toHaveProperty('provider')
+    expect($currentModel.get()).toBe('new-occupied-model')
+  })
+
+  it('keeps a fresh legacy-profile draft on Settings defaults when its descriptor arrives later', async () => {
+    const { result } = mountActions()
+    const previous = $connection.get()!
+    const legacy = { ...previous, mode: 'local' as const, profile: 'personal', registryScoped: false }
+    setConnection(legacy)
+    setCurrentModel('old-local-manual-model')
+    setCurrentProvider('old-local-provider')
+    markComposerSelectionManual()
+    setConnection(previous)
+    await act(() => setDefaultProfile({ connectionId: null, profile: 'personal' }))
+    act(() => result.current.selectSidebarItem({ action: 'new-session' } as never))
+
+    act(() => {
+      clearComposerSelectionOwner()
+      setConnection(legacy)
+    })
+
+    expect(getCurrentModelSource()).toBe('default')
+    expect($currentModel.get()).toBe('')
+    expect($currentProvider.get()).toBe('')
+  })
+
   it.each(
     [
       { name: 'primary window control', query: '/' },

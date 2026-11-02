@@ -86,7 +86,11 @@ function isCurrentDraftScope(scopeKey: string): boolean {
   )
 }
 
-function modelSwitchPath(sessionId: null | string, primary: boolean, nextProvider: string): 'blocked' | 'managed' | 'byok' {
+function modelSwitchPath(
+  sessionId: null | string,
+  primary: boolean,
+  nextProvider: string
+): 'blocked' | 'managed' | 'byok' {
   if (platformHistoryOwner(sessionId) !== null) {
     return 'blocked'
   }
@@ -96,10 +100,6 @@ function modelSwitchPath(sessionId: null | string, primary: boolean, nextProvide
     : ($sessionStates.get()[sessionId!]?.provider ?? '')
 
   return nextProvider === 'aino' || provider === 'aino' ? 'managed' : 'byok'
-}
-
-function modelSwitchScope(primary: boolean, provider: string): string {
-  return primary && provider.toLowerCase() !== 'moa' ? '' : ' --session'
 }
 
 function modelPickAbandoned(sessionId: string, pickToken: number, primary: boolean): boolean {
@@ -209,6 +209,10 @@ export function useModelControls({
       const scopeKey = platformDefaultScope(scope).key
       let selectionGeneration: number | null = null
 
+      const selectionIsCurrent = () =>
+        profileRefreshEpochRef.current === profileRefreshEpoch && isCurrentDraftScope(scopeKey) &&
+        getComposerSelectionGeneration() === selectionGeneration
+
       try {
         if (!isCurrentDraftScope(scopeKey)) {
           return
@@ -226,19 +230,19 @@ export function useModelControls({
 
         // Catalogs are discovery hints; only the gateway can reject a saved pick.
         const keepManualPick = () => !force && Boolean($currentModel.get()) && getCurrentModelSource() === 'manual'
+        const catalogKey = modelOptionsQueryKey(profile, null, cacheOwnerConnectionId)
+
+        const ownerCatalog = () =>
+          queryClient.getQueryData<ModelOptionsResult>(catalogKey) ??
+          queryClient.fetchQuery({
+            queryKey: catalogKey,
+            queryFn: () => requestModelOptions({ profile, request: requestGateway })
+          })
 
         let reseedStaleMoa = false
 
         if (keepManualPick() && $currentProvider.get().toLowerCase() === 'moa') {
-          const key = modelOptionsQueryKey(profile, null, cacheOwnerConnectionId)
-
-          const catalog =
-            queryClient.getQueryData<ModelOptionsResult>(key) ??
-            (await queryClient.fetchQuery({
-              queryKey: key,
-              queryFn: () => requestModelOptions({ profile, request: requestGateway })
-            }))
-
+          const catalog = await ownerCatalog()
           reseedStaleMoa = moaPickRemoved(catalog, 'moa', $currentModel.get())
         }
 
@@ -259,14 +263,25 @@ export function useModelControls({
         // default — value comparisons alone miss re-selecting the same row.
         const resolved = await resolveModelDefault(scope)
 
-        if (
-          profileRefreshEpochRef.current !== profileRefreshEpoch ||
-          !isCurrentDraftScope(scopeKey) ||
-          getComposerSelectionGeneration() !== selectionGeneration ||
-          (keepManualPick() &&
-            !reseedStaleMoa &&
-            !customDefaultSupersedesPick($currentProvider.get(), resolved.provider))
-        ) {
+        if (!selectionIsCurrent()) {
+          return
+        }
+
+        if (keepManualPick() && !reseedStaleMoa) {
+          const pick = $currentProvider.get().trim().toLowerCase()
+
+          if (resolved.provider.trim().toLowerCase() !== `custom:${pick}`) {
+            return
+          }
+
+          const catalog = await ownerCatalog()
+
+          if (!customDefaultSupersedesPick(pick, resolved.provider, catalog.providers)) {
+            return
+          }
+        }
+
+        if (!selectionIsCurrent()) {
           return
         }
 
@@ -275,10 +290,8 @@ export function useModelControls({
         if (
           error instanceof PlatformSelectionError &&
           error.code === 'model_unavailable' &&
-          profileRefreshEpochRef.current === profileRefreshEpoch &&
-          isCurrentDraftScope(scopeKey) &&
           selectionGeneration !== null &&
-          getComposerSelectionGeneration() === selectionGeneration
+          selectionIsCurrent()
         ) {
           $modelDefaultUnavailable.set(true)
         }
@@ -448,26 +461,14 @@ export function useModelControls({
         return repaint && !(touchesPrimary && $activeSessionId.get() !== liveSessionId) ? repaint : null
       }
 
-      // The PRIMARY profile's main agent lets the gateway decide persistence
-      // (resolve_persist_behavior): session-only by default, persisted when
-      // model.persist_switch_by_default is true or when no default has ever
-      // been configured (the first-ever pick, so resolve_provider never falls
-      // through to a leftover OPENAI_API_KEY env var — #86414). A plain pick
-      // no longer silently rewrites config.yaml (#90235); Settings → Model
-      // remains the explicit "set as default" door.
-      //
-      // Two things stay --session, deliberately:
-      //  - a SECONDARY chat tile: picking a model there must not rewrite the
-      //    profile default (the cross-session-contamination guard).
-      //  - MoA (mixture-of-agents) presets: a transient orchestration choice
-      //    that must never become the persisted global gateway default.
-      const scope = modelSwitchScope(touchesPrimary, selection.provider || '')
-
+      // A conversation pick never rewrites Settings, including on backends
+      // configured to persist model switches by default. Guarded retries use
+      // this same session-only command.
       const requestSwitch = (confirmExpensiveModel = false) =>
         requestGateway<ModelSwitchResponse>('config.set', {
           session_id: liveSessionId,
           key: 'model',
-          value: `${selection.model} --provider ${selection.provider}${scope}`,
+          value: `${selection.model} --provider ${selection.provider} --session`,
           ...(confirmExpensiveModel ? { confirm_expensive_model: true } : {})
         })
 

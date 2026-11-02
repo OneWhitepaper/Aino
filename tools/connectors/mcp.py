@@ -14,7 +14,6 @@ from tools.connectors.contract import Actor, SettleReason, TargetState
 from tools.connectors.gateway.config import operation_session_key
 from tools.connectors.operation import ConnectionOperation, DetachedOperation, IllegalTransition, Target
 from tools.connectors.run import Kind, run_operation
-from tools.connectors.targets import hosted_names, misrouted_to_mcp_error
 from tools.registry import tool_error
 
 logger = logging.getLogger(__name__)
@@ -65,12 +64,6 @@ def validate_mcp_names(action: str, names: list[str]) -> Optional[str]:
     unknown = [n for n in names if n not in allowed]
     if not unknown:
         return None
-    foreign = [n for n in unknown if n not in catalog and n not in configured]
-    if foreign:
-        hosted = hosted_names() or set()
-        misrouted = [n for n in foreign if n in hosted]
-        if misrouted:
-            return " ".join(misrouted_to_mcp_error(action, name) for name in misrouted)
     if action == "install":
         return (
             f"unknown MCP server(s) for install: {', '.join(unknown)}. Install works for "
@@ -295,6 +288,9 @@ class _Runner:
         _RUNNERS[operation.op_id] = self
         self.op_id = operation.op_id
         self.operation = operation
+        bind = getattr(self.backend, "bind_operation", None)
+        if bind is not None:
+            bind(operation)
         if self.action == "authorize" and len(operation.targets) > 1:
             self._prepare_together(operation)
             return
@@ -770,6 +766,8 @@ def apply_answer(operation: ConnectionOperation, raw: str) -> None:
 
 AUTHORIZATION_KEPT = ("the authorization had already completed when this was canceled, so it was "
                       "kept; run the same action again to list the tools")
+INSTALLATION_KEPT = ("the installation had already completed when this was canceled, so it was "
+                     "kept; use enable to list its tools")
 
 
 def _cancel_attempt(runner: Optional[_Runner], target: Target) -> str:
@@ -778,6 +776,9 @@ def _cancel_attempt(runner: Optional[_Runner], target: Target) -> str:
     work = runner.work.pop(target.name, None) if runner is not None else None
     flow = getattr(getattr(work, "attempt", None), "flow", None)
     if flow is None:
+        cancel = getattr(runner.backend, "cancel_install", None) if runner is not None else None
+        if cancel is not None and cancel(target.name):
+            return INSTALLATION_KEPT
         return ""
     from tools.connectors.mcp_oauth import cancel_attempt
 
@@ -823,8 +824,23 @@ def run_mcp_operation(
     session_id: Optional[str],
     tool_call_id: Optional[str] = None,
     backend: Any = None,
+    server_configs: Optional[dict[str, dict[str, Any]]] = None,
 ) -> str:
-    error = validate_mcp_names(action, names)
+    custom = server_configs or {}
+    try:
+        if custom:
+            from tools.connectors.custom_mcp import CustomMCPBackend, ensure_new_server
+
+            if action != "install" or set(custom) - set(names):
+                raise ValueError("custom MCP configurations are only accepted for named install targets")
+            if connection_callback is None:
+                raise ValueError("custom MCP installation requires an interactive approval card")
+            backend = CustomMCPBackend(custom, backend or _default_backend())
+            for name in custom:
+                ensure_new_server(name)
+    except (TypeError, ValueError) as exc:
+        return tool_error(str(exc))
+    error = validate_mcp_names(action, [name for name in names if name not in custom])
     if error:
         return tool_error(error)
     runner = open_runner(action, backend)
@@ -835,10 +851,18 @@ def run_mcp_operation(
         return _no_card_result(runner, names, action, session_key)
     try:
         return run_operation(
-            [Target(n, "mcp", action) for n in names],
+            [_install_target(n, action, custom) for n in names],
             Kind(prepare=runner.prepare, observe=runner.observe, note=NOTE),
             session_key=session_key, tool_call_id=tool_call_id,
             connection_callback=connection_callback, with_urls_in_result=False,
         )
     finally:
         runner.close()
+
+
+def _install_target(name: str, action: str, configs: dict[str, dict[str, Any]]) -> Target:
+    if name not in configs:
+        return Target(name, "mcp", action)
+    from tools.connectors.custom_mcp import public_config
+
+    return Target(name, "mcp", action, mcp_config=public_config(configs[name]))

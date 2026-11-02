@@ -8,51 +8,88 @@
 }
 
 [data-preview-toolbar] {
+  container-type: inline-size;
+  min-height: 2rem;
   min-width: 0;
-  background: var(--ui-editor-surface-background);
+  background: var(--ui-bg-editor);
   color: var(--ui-text-secondary);
-  font-size: var(--aino-text-caption);
+  font-size: 0.75rem;
 }
 
-[data-preview-toolbar] [data-slot='button'][aria-pressed='true'] {
-  background: var(--ui-row-active-background);
-  color: var(--ui-text-primary);
+[data-preview-toolbar] button {
+  min-height: 1.625rem;
+  font-size: 0.75rem;
+  font-weight: 400;
+  border-radius: 0.375rem;
+}
+
+[data-preview-toolbar] button[aria-pressed='true'] {
+  background: color-mix(in srgb, var(--ui-accent) 9%, var(--ui-bg-elevated));
+  color: var(--ui-accent);
 }
 
 [data-preview-markdown] {
-  padding: clamp(1.25rem, 3vw, 2.25rem);
-  line-height: 1.8;
+  padding: 2.125rem clamp(1.25rem, 3vw, 2.125rem) 2.625rem;
+  line-height: 1.9;
 }
 
-[data-zone-tabstrip]:has([data-tree-tab^='preview-tile:']) {
+[data-preview-markdown] :is(h1, h2, h3, h4) {
+  color: var(--ui-text-primary);
+}
+
+[data-zone-tabstrip]:not([data-pane-variant='tool']):has([data-tree-tab^='preview-tile:']) {
   --pane-tab-active-accent: transparent;
   --pane-tab-active-bg: var(--ui-bg-elevated);
   --pane-tab-strip-bg: var(--ui-bg-chrome);
   border-bottom: 1px solid var(--ui-stroke-tertiary);
 }
 
-[data-zone-tabstrip]:has([data-tree-tab^='preview-tile:']) [data-tree-tab] {
-  border-radius: 0.625rem 0.625rem 0 0;
+[data-zone-tabstrip]:not([data-pane-variant='tool']):has([data-tree-tab^='preview-tile:']) [data-tree-tab] {
+  border: 1px solid transparent;
+  border-bottom: 0;
+  border-radius: 0.5rem 0.5rem 0 0;
   font-family: var(--dt-font-sans);
 }
 
-[data-file-browser] [data-project-tree] {
-  padding-inline: 0.625rem;
+[data-zone-tabstrip]:not([data-pane-variant='tool']) [data-tree-tab^='preview-tile:'][data-active='true'] {
+  border-color: var(--ui-stroke-secondary) !important;
 }
 
-[data-file-browser] [data-file-browser-header] {
-  border-bottom: 1px solid var(--ui-stroke-tertiary);
-  margin-bottom: 0.375rem;
+/* File close actions stay discoverable, without changing session-tab chrome
+   or the shared middle-click / keyboard close behavior. */
+[data-tree-tab^='preview-tile:'][data-closeable] > .pane-tab-content,
+[data-tree-tab^='preview-tile:'][data-closeable]:hover > .pane-tab-content {
+  padding-right: var(--pane-tab-close-width);
+  mask-image: none;
 }
 
-[data-file-browser] [data-sidebar-label-tone] {
-  color: var(--ui-text-primary);
-  font-size: var(--aino-text-ui);
-  font-weight: 500;
+[data-tree-tab^='preview-tile:'] [data-slot='pane-tab-close'] {
+  pointer-events: auto;
+  opacity: 1;
+}
+
+[data-tree-tab^='preview-tile:'] [data-slot='pane-tab-close'] button {
+  opacity: 0.65;
+}
+
+[data-tree-tab^='preview-tile:'] [data-slot='pane-tab-close'] button:hover {
+  opacity: 1;
+}
+
+@container (max-width: 26rem) {
+  .aino-preview-open-system span {
+    display: none;
+  }
+}
+
+[data-zone-tabstrip]:not([data-pane-variant='tool']):has([data-tree-tab^='preview-tile:'])
+  [data-slot='pane-tab-label'] {
+  font-size: 0.75rem;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .aino-preview-surface *, [data-file-browser] * {
+  .aino-preview-surface *,
+  [data-file-browser] * {
     transition-duration: 0s !important;
   }
 }

@@ -42,7 +42,7 @@ export function SummarySection({
       data-slot="summary-section"
       data-state={state}
     >
-      <div className={embedded ? 'sr-only' : 'mb-2 flex min-w-0 items-center gap-2'}>
+      <div className={embedded ? 'sr-only' : 'mb-2 flex min-w-0 items-center gap-2'} data-slot="summary-section-header">
         {Icon && <Icon className="size-4 shrink-0 text-(--ui-text-tertiary)" />}
         <h2 className="min-w-0 flex-1 truncate text-[length:var(--aino-text-caption)] font-medium text-(--ui-text-tertiary)">
           {title}
@@ -71,7 +71,7 @@ export function SummarySection({
             </Button>
           )}
         </div>
-      ) : (
+      ) : children === null ? null : (
         <div
           className={cn(
             'min-w-0 text-[length:var(--aino-text-ui)] leading-5 text-(--ui-text-secondary)',

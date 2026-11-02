@@ -31,17 +31,19 @@ import {
 import { markReasoningEffortPending } from '@/lib/chat-runtime'
 import { isMissingRpcMethod } from '@/lib/gateway-rpc'
 import { purgeInFlightTurnJournals, recoverInFlightTurnJournal } from '@/lib/inflight-turn-journal'
+import { platformDefaultScope } from '@/lib/platform-model-scope'
 import { latestSessionTodoSnapshot } from '@/lib/todos'
 import { setSessionYolo } from '@/lib/yolo-session'
 import { $clarifyRequests, clearClarifyRequest } from '@/store/clarify'
-import { announceGoneSessionDraft, announceNewSessionDraftKey } from '@/store/composer'
+import { announceGoneSessionDraft, announceNewSessionDraftKey, freshDraftScope } from '@/store/composer'
 import { clearQueuedPrompts } from '@/store/composer-queue'
 import { resetSessionBackground } from '@/store/composer-status'
 import { $connectionRequests } from '@/store/connection-request'
-import { pendingSessionReplay, requestGatewayForAgent, retainGatewayForAgent } from '@/store/gateway'
+import { pendingSessionReplay, requestGatewayForAgent } from '@/store/gateway'
 import { $gatewaySwitching } from '@/store/gateway-switch'
 import { clearSessionGoal } from '@/store/goals'
 import { $pinnedSessionIds } from '@/store/layout'
+import { migrateModelPresetScope, modelPresetScope } from '@/store/model-presets'
 import { clearNotifications, notify, notifyError } from '@/store/notifications'
 import { adoptDraftPreviewTabs, prunePreviewTabsForSession } from '@/store/preview'
 import {
@@ -68,15 +70,21 @@ import {
   $newChatWorkspaceTarget,
   $sessions,
   $yoloActive,
+  markComposerSelectionDefault,
   rotateFreshDraftKey,
   sessionPinId,
   setActiveSessionId,
   setAwaitingResponse,
   setBusy,
+  setComposerSelectionOwner,
   setCurrentBranch,
   setCurrentCwd,
   setCurrentCwdExplicit,
   setCurrentCwdTransient,
+  setCurrentModel,
+  setCurrentPlatformOwner,
+  setCurrentProvider,
+  setCurrentReasoningEffort,
   setCurrentUsage,
   setFreshDraftReady,
   setIntroSeed,
@@ -170,6 +178,7 @@ import {
 } from './resume-owner'
 import { applyRuntimeInfo, applyStoredSessionPreviewRuntimeInfo } from './runtime-info'
 import { backgroundRuntimeOptions, runtimeOwner } from './runtime-owner'
+import { retainSessionCreateOwner, sessionCreateOwnerRequest } from './session-create-request'
 import { useStoredSessionRotation } from './stored-session-rotation'
 import {
   createPersistedDisplayTranscriptProvenance,
@@ -204,16 +213,6 @@ import {
 // How long we keep creatingSessionRef after create/fork navigate before giving up
 // if the router never lands on the pending stored id (stuck navigate / lost race).
 const CREATE_GUARD_RELEASE_MS = 3_000
-
-async function retainSessionCreateOwner(
-  capturedRoute: ReturnType<typeof resolveNewChatOwnerRoute>,
-  managedProfileOnly: boolean,
-  createProfile: string
-) {
-  return capturedRoute || managedProfileOnly
-    ? await retainGatewayForAgent(capturedRoute?.connectionId ?? null, createProfile, { spawnPriority: 'foreground' })
-    : () => undefined
-}
 
 export function useSessionActions({
   activeSessionId,
@@ -314,12 +313,20 @@ export function useSessionActions({
       setCurrentUsage({ calls: 0, input: 0, output: 0, total: 0 })
       setSessionStartedAt(null)
       setTurnStartedAt(null)
-      // The composer's model/effort/fast is sticky UI state (persisted in
-      // localStorage) — a new chat FOLLOWS your last pick instead of snapping
-      // back to the profile default, so we deliberately don't reset it here. The
-      // profile default still owns first-run seeding and profile switches (see
-      // refreshCurrentModel). Keep the canonical service tier too: clearing
-      // it while retaining fast=true would silently downgrade Ultrafast.
+      // A conversation's picker overrides end here. A fast first send must
+      // resolve the captured profile's Settings defaults before refresh effects
+      // run, without borrowing the previous chat's model or reasoning level.
+      const draftOwner = resolveNewChatOwnerRoute()
+
+      if (draftOwner) {
+        setComposerSelectionOwner(draftOwner.connectionId, draftOwner.profile)
+      }
+
+      markComposerSelectionDefault()
+      setCurrentModel('')
+      setCurrentProvider('')
+      setCurrentPlatformOwner('')
+      setCurrentReasoningEffort('')
       setYoloActive(false)
       setNewChatWorkspaceTarget(hasWorkspaceTarget ? workspaceTarget : undefined)
       // #52589 provenance: only a deliberate string workspace target is an explicit
@@ -386,6 +393,12 @@ export function useSessionActions({
         const capturedProfile = $newChatProfile.get() || normalizeProfileKey($activeGatewayProfile.get())
         const legacyProfileIntent = isLegacyNewChatProfile(capturedProfile)
 
+        const presetOwner = platformDefaultScope(
+          capturedRoute ? { connectionId: capturedRoute.connectionId, profile: capturedRoute.profile } : capturedProfile
+        ).key
+
+        const draftPresetScope = modelPresetScope(presetOwner, freshDraftScope())
+
         const {
           params: baseParams,
           platformAuthority,
@@ -413,18 +426,7 @@ export function useSessionActions({
 
         try {
           created = await createPlatformDraft(
-            capturedRoute || managedProfileOnly
-              ? (method, payload) =>
-                  requestGatewayForAgent(
-                    capturedRoute?.connectionId ?? null,
-                    createProfile,
-                    method,
-                    payload,
-                    undefined,
-                    undefined,
-                    { spawnPriority: 'foreground' }
-                  )
-              : requestGateway,
+            sessionCreateOwnerRequest(capturedRoute, managedProfileOnly, createProfile, requestGateway),
             params,
             platformOwner,
             capturedRoute,
@@ -496,6 +498,7 @@ export function useSessionActions({
           activeSessionIdRef.current = created.session_id
           selectedStoredSessionIdRef.current = stored
           ensureSessionState(created.session_id, stored)
+          migrateModelPresetScope(draftPresetScope, modelPresetScope(presetOwner, stored || created.session_id))
 
           if (stored) {
             markSessionCreatedThisRun(stored)
@@ -800,7 +803,7 @@ export function useSessionActions({
           capturedRoute,
           requestedProfile,
           options?.route === null || defaultTarget?.route === null,
-          workspaceScope.workspaceMode !== 'bots'
+          workspaceScope.workspaceMode === 'bots' ? false : 'defaults'
         )
 
         const params = { ...prepared.params, request_id: crypto.randomUUID() }
@@ -818,18 +821,7 @@ export function useSessionActions({
 
         try {
           created = await createPlatformDraft(
-            capturedRoute || managedProfileOnly
-              ? (method, payload) =>
-                  requestGatewayForAgent(
-                    capturedRoute?.connectionId ?? null,
-                    createProfile,
-                    method,
-                    payload,
-                    undefined,
-                    undefined,
-                    { spawnPriority: 'foreground' }
-                  )
-              : requestGateway,
+            sessionCreateOwnerRequest(capturedRoute, managedProfileOnly, createProfile, requestGateway),
             params,
             prepared.platformOwner,
             capturedRoute,

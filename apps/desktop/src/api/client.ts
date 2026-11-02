@@ -10,6 +10,7 @@ import { map, type MapStore } from 'nanostores'
 import type { HermesApiRequest } from '@/global'
 import { translateNow } from '@/i18n/runtime'
 import { PRODUCT_NAME } from '@/lib/brand'
+import { clearTaskPause, type TaskContinuation } from '@/store/task-pause'
 
 import { CANONICAL_GATEWAY_PROTOCOL, CanonicalDesktopProtocol, canonicalProfile, canonicalPromptParams, canonicalSessionKey, recordCanonicalOwner, splitRewindSubmit } from './canonical-protocol'
 
@@ -333,7 +334,18 @@ export class HermesGateway extends JsonRpcGatewayClient {
     return this.canonical
   }
 
+  taskPauseKey(sessionId: string, profile?: string | null): string | null {
+    if (!this.canonical) { return null }
+    const profiles = this.sessionProfiles.get(sessionId)
+
+    if (!profile && profiles && profiles.size > 1) { return null }
+    const params = this.routeCanonicalParams('session.interrupt', { session_id: sessionId, ...(profile ? { profile } : {}) })
+
+    return this.protocol.taskPauseKey(sessionId, params.profile)
+  }
+
   override async connect(wsUrl: string): Promise<void> {
+    this.protocol.clearTaskPauses()
     this.connectionGeneration++
     this.canonical = new URL(wsUrl).searchParams.has('native_dial')
     this.attached.clear()
@@ -390,7 +402,12 @@ export class HermesGateway extends JsonRpcGatewayClient {
   }
 
   override async request<T>(method: string, params: Record<string, unknown> = {}, timeoutMs?: number, signal?: AbortSignal): Promise<T> {
-    if (!this.canonical) { return super.request<T>(method, legacyParams(method, params), timeoutMs, signal) }
+    if (!this.canonical) {
+      if (params.continuation_of) { throw new Error('Task continuation requires the canonical gateway') }
+
+      return super.request<T>(method, legacyParams(method, params), timeoutMs, signal)
+    }
+
     const generation = this.connectionGeneration
     const deadline = requestDeadline(timeoutMs)
     // A truncating submit (edit / regenerate / restore) is the owner's rewind, then the submit.
@@ -466,7 +483,25 @@ export class HermesGateway extends JsonRpcGatewayClient {
       return settled
     } catch (error) {
       this.protocol.failure(prepared, error)
+      this.clearFailedTaskPause(method, params, prepared, error)
+
       throw error
+    }
+  }
+
+  private clearFailedTaskPause(method: string, params: Record<string, unknown>, prepared: Record<string, unknown>, error: unknown): void {
+    const reason = (error as { data?: { reason?: string }; message?: string })?.data?.reason ?? (error as Error)?.message
+
+    if (method !== 'session.interrupt' && !(params.continuation_of && reason === 'stale_continuation')) { return }
+
+    const key = this.taskPauseKey(String(params.session_id), typeof params.profile === 'string' ? params.profile : undefined)
+
+    if (!key) { return }
+
+    if (method === 'session.interrupt' && typeof prepared.execution_generation === 'number') {
+      clearTaskPause(key, prepared.execution_generation)
+    } else if (params.continuation_of) {
+      clearTaskPause(key, params.continuation_of as TaskContinuation)
     }
   }
 

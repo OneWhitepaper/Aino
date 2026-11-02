@@ -101,6 +101,8 @@ import { FirstSendHarness, Harness, type HarnessHandle, routeManagedDraftRequest
 
 describe('createBackendSessionForSend profile routing', () => {
   async function prepareDeferredManagedCreate() {
+    // New independent tiles resolve Settings instead of another chat's picker.
+    vi.mocked(getGlobalModelInfo).mockResolvedValue({ model: '', provider: '' })
     let account: PlatformAccountSnapshot = { ...platformSnapshot(), mode: 'development' }
     let broadcast!: (next: PlatformAccountSnapshot) => void
     const create = deferred<SessionCreateResponse>()

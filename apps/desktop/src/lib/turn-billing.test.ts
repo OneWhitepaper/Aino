@@ -36,3 +36,21 @@ describe('managed reply correlation', () => {
     expect(parseTurnBilling({ ...raw, calls_complete: 'true' })).toBeUndefined()
   })
 })
+
+it('retains both image and chat correlation calls in a mixed billable turn', () => {
+  const calls = ['chat', 'image'].map(purpose => ({ call_id: crypto.randomUUID(), purpose }))
+
+  const billing = {
+    source: 'aino',
+    user_id: '17',
+    session_id: crypto.randomUUID(),
+    turn_id: crypto.randomUUID(),
+    calls,
+    calls_complete: true,
+    revision: 2
+  }
+
+  expect(parseTurnBilling(billing)?.calls).toEqual(calls)
+  expect(parseTurnMetrics({ billing })?.billing?.calls).toEqual(calls)
+  expect(parseTurnBilling({ ...billing, calls: [{ ...calls[0], purpose: 'untrusted_future' }] })).toBeUndefined()
+})

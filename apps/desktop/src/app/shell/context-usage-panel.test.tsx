@@ -96,7 +96,7 @@ describe('useContextBreakdown', () => {
     )
 
     await waitFor(() => expect(result.current.breakdown).toEqual(breakdown))
-    expect(requestGateway).toHaveBeenCalledWith('session.context_breakdown', { session_id: 'runtime-1' })
+    expect(requestGateway).toHaveBeenCalledWith('session.context_breakdown', { session_id: 'runtime-1' }, 5_000)
   })
 
   it('does not fetch while the gauge is hidden, and fetches once it is shown', async () => {
@@ -114,12 +114,12 @@ describe('useContextBreakdown', () => {
     await waitFor(() => expect(requestGateway).toHaveBeenCalledTimes(1))
   })
 
-  it('skips the estimate mid-turn — the gateway streams measured usage then', () => {
+  it('can read category details when the session is already running', () => {
     const requestGateway = vi.fn().mockResolvedValue(breakdown)
 
     renderHook(() => useContextBreakdown({ busy: true, enabled: true, requestGateway, sessionId: 'runtime-1' }))
 
-    expect(requestGateway).not.toHaveBeenCalled()
+    expect(requestGateway).toHaveBeenCalledWith('session.context_breakdown', { session_id: 'runtime-1' }, 5_000)
   })
 
   it('refetches on a session switch and never reports the previous session numbers', async () => {
@@ -138,11 +138,23 @@ describe('useContextBreakdown', () => {
     rerender({ sessionId: 'runtime-2' })
 
     expect(result.current.breakdown).toBeNull()
-    expect(requestGateway).toHaveBeenLastCalledWith('session.context_breakdown', { session_id: 'runtime-2' })
+    expect(requestGateway).toHaveBeenLastCalledWith('session.context_breakdown', { session_id: 'runtime-2' }, 5_000)
   })
 })
 
 describe('ContextUsagePanel', () => {
+  it('explains restored usage without starting or waiting for an agent to build category details', () => {
+    render(
+      <ContextUsagePanel
+        breakdown={{ ...breakdown, categories: [], estimated_total: 0 }}
+        loading={false}
+        usage={usage}
+      />
+    )
+    expect(screen.getByText('The current runtime has not provided category details.')).toBeTruthy()
+    expect(screen.queryByText('Loading breakdown…')).toBeNull()
+  })
+
   it('marks estimates but preserves the provider-usage header', () => {
     for (const estimated of [true, false]) {
       const { container, unmount } = render(
@@ -164,6 +176,21 @@ describe('ContextUsagePanel', () => {
     expect(screen.getByText('Conversation')).toBeTruthy()
   })
 
+  it('shows the leading category details in the compact hover readout', () => {
+    const { container } = render(<ContextUsagePanel breakdown={breakdown} compact loading={false} usage={usage} />)
+
+    const hint = container.querySelector('[data-slot="context-usage-hint"]')
+    expect(hint?.textContent).toContain('Conversation')
+    expect(hint?.textContent).toContain('241.4k')
+  })
+
+  it('scales category segments to occupied context and leaves the rest of the window free', () => {
+    const { container } = render(<ContextUsagePanel breakdown={breakdown} loading={false} usage={usage} />)
+    const segment = container.querySelector<HTMLElement>('[data-slot="context-usage-bar"] > span')
+
+    expect(segment?.style.width).toBe('47%')
+  })
+
   it('can omit its own title when embedded under a section heading', () => {
     render(<ContextUsagePanel breakdown={breakdown} loading={false} showTitle={false} usage={usage} />)
 
@@ -174,8 +201,12 @@ describe('ContextUsagePanel', () => {
   it('does not present missing occupancy as zero usage', () => {
     for (const compact of [false, true]) {
       const { unmount } = render(
-        <ContextUsagePanel breakdown={null} compact={compact} loading={false}
-          usage={{ calls: 0, context_max: 372_000, input: 0, output: 0, total: 0 }} />
+        <ContextUsagePanel
+          breakdown={null}
+          compact={compact}
+          loading={false}
+          usage={{ calls: 0, context_max: 372_000, input: 0, output: 0, total: 0 }}
+        />
       )
 
       expect(screen.queryByText('0 / 0')).toBeNull()

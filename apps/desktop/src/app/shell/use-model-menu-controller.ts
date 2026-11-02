@@ -12,7 +12,17 @@ import { modelOptionsQueryKey, requestModelOptions } from '@/lib/model-options'
 import { currentPickerSelection } from '@/lib/model-status-label'
 import { platformDefaultScope } from '@/lib/platform-model-scope'
 import { useStoresSelector } from '@/lib/use-session-slice'
-import { $modelPresets, applyModelPreset, getModelPreset, type ModelPreset, modelPresetKey, modelPresetServiceTier, setModelPreset } from '@/store/model-presets'
+import { $freshDraftKey } from '@/store/composer'
+import {
+  $modelPresets,
+  applyModelPreset,
+  getModelPreset,
+  type ModelPreset,
+  modelPresetKey,
+  modelPresetScope,
+  modelPresetServiceTier,
+  setModelPreset
+} from '@/store/model-presets'
 import { verifiedPlatformModel } from '@/store/platform-model-capability'
 import { platformModelCatalog } from '@/store/platform-models'
 import { $activeGatewayProfile } from '@/store/profile'
@@ -54,8 +64,8 @@ export interface ModelMenuHostProps {
 
 /**
  * The controller that gives a model-menu edit its meaning on a chat surface —
- * write through to THIS surface's session, remember the pick as a global
- * preset, keep the optimistic stores honest, and roll back on a failed gateway
+ * write through to THIS surface's session, remember options within this chat,
+ * keep the optimistic stores honest, and roll back on a failed gateway
  * write. Shared by the composer's model menu and its reasoning menu so both
  * pills edit the same session through one code path.
  */
@@ -72,6 +82,7 @@ export function useModelMenuController({
   const view = useSessionView()
   const activeSessionId = useStore(view.$runtimeId)
   const storedSessionId = useStore(view.$storedId)
+  const freshDraftKey = useStore($freshDraftKey)
   const currentFastMode = useStore(view.$fast)
   const currentServiceTier = useStore(view.$serviceTier ?? UNKNOWN_SERVICE_TIER)
   const currentModel = useStore(view.$model)
@@ -82,19 +93,30 @@ export function useModelMenuController({
   const modelPresets = useStore($modelPresets)
   const defaultEffort = useStore($defaultReasoningEffort) || DEFAULT_REASONING_EFFORT
   const touchesPrimary = view.kind === 'primary'
-  const completionScope = platformDefaultScope(ownerConnectionId ? { connectionId: ownerConnectionId, profile } : profile).key
+
+  const completionScope = platformDefaultScope(
+    ownerConnectionId ? { connectionId: ownerConnectionId, profile } : profile
+  ).key
+
   usePlatformModels()
   const catalog = platformModelCatalog()
 
   const activePlatformModel = useStoresSelector(
-    [$sessionStates, $currentPlatformOwner, $currentPlatformOrigin, catalog.state, catalog.account, catalog.owner.state],
+    [
+      $sessionStates,
+      $currentPlatformOwner,
+      $currentPlatformOrigin,
+      catalog.state,
+      catalog.account,
+      catalog.owner.state
+    ],
     () => {
       if (currentProvider !== 'aino') {
         return null
       }
 
       const state = activeSessionId ? $sessionStates.get()[activeSessionId] : undefined
-      const owner = state ? state.platformModel?.ownerUserId ?? '' : $currentPlatformOwner.get()
+      const owner = state ? (state.platformModel?.ownerUserId ?? '') : $currentPlatformOwner.get()
       const origin = state ? state.platformModel?.platformOrigin : $currentPlatformOrigin.get()
 
       return verifiedPlatformModel(currentModel, owner, origin)
@@ -117,7 +139,7 @@ export function useModelMenuController({
     modelOptions.data
   )
 
-  const hostScope = `${ownerConnectionId ?? ''}::${profile}`
+  const hostScope = modelPresetScope(completionScope, storedSessionId || activeSessionId || freshDraftKey)
   const latestHostScope = useRef(hostScope)
   latestHostScope.current = hostScope
 
@@ -130,13 +152,13 @@ export function useModelMenuController({
     const stamps = new Map(
       dimensions.map(dimension => {
         const ownerKey = `${hostScope}::${activeSessionId ?? 'draft'}::${dimension}`
-        const presetKey = `${modelPresetKey(row.provider, row.model)}::${dimension}`
+        const presetKey = `${modelPresetKey(row.provider, row.model, hostScope)}::${dimension}`
 
         return [dimension, { ownerKey, presetKey, owner: nextEdit(ownerKey), preset: nextEdit(presetKey) }]
       })
     )
 
-    setModelPreset(row.provider, row.model, patch)
+    setModelPreset(row.provider, row.model, patch, hostScope)
 
     if (touchesPrimary) {
       markComposerSelectionManual()
@@ -166,15 +188,20 @@ export function useModelMenuController({
           return
         }
 
-        const current = getModelPreset(row.provider, row.model)
+        const current = getModelPreset(row.provider, row.model, hostScope)
 
         if (dimension === 'effort' && current.effort === patch.effort) {
-          setModelPreset(row.provider, row.model, { effort: confirmed.effort })
+          setModelPreset(row.provider, row.model, { effort: confirmed.effort }, hostScope)
         } else if (dimension === 'speed' && modelPresetServiceTier(current) === modelPresetServiceTier(patch)) {
-          setModelPreset(row.provider, row.model, {
-            fast: confirmed.fast ?? false,
-            serviceTier: modelPresetServiceTier(confirmed) ?? 'normal'
-          })
+          setModelPreset(
+            row.provider,
+            row.model,
+            {
+              fast: confirmed.fast ?? false,
+              serviceTier: modelPresetServiceTier(confirmed) ?? 'normal'
+            },
+            hostScope
+          )
         }
       }
     }).finally(() => {
@@ -193,8 +220,7 @@ export function useModelMenuController({
   }
 
   const controller: ModelMenuController = {
-    // Selecting a model row restores that model's remembered preset onto the
-    // session (effort/fast). applyModelPreset owns the batched gateway write.
+    // Model switches restore this conversation's options, never another chat's.
     applyPreset: (preset, row) => patchPreset(preset, row, t.shell.modelOptions.updateFailed),
 
     current: {
@@ -207,7 +233,7 @@ export function useModelMenuController({
       provider: optionsProvider
     },
 
-    presetFor: (provider, model) => modelPresets[modelPresetKey(provider, model)] ?? {},
+    presetFor: (provider, model) => modelPresets[modelPresetKey(provider, model, hostScope)] ?? {},
 
     // The composer picker never persists the profile default. With a session it
     // scopes the switch to that session; with none it's UI state shipped on the
@@ -219,20 +245,18 @@ export function useModelMenuController({
       (!touchesPrimary || platformDefaultScope($activeGatewayProfile.get()).key === completionScope),
 
     setOptions: (patch, row) => {
-      // Editing always records the model's global preset (keyed by
-      // provider::model, not per-surface — a tile edit re-applies to that model
-      // everywhere); the active model also gets it pushed onto its OWN session.
+      // Preview edits belong to this chat; only its active model gets a write.
       // Non-active edits stay preset-only — no model switch, no session write.
       if (!row.isActive) {
-        setModelPreset(row.provider, row.model, patch)
+        setModelPreset(row.provider, row.model, patch, hostScope)
 
-        // Invalidate a pending rollback for the same globally remembered dimension.
+        // Invalidate a pending rollback for this chat's remembered dimension.
         if (patch.effort !== undefined) {
-          nextEdit(`${modelPresetKey(row.provider, row.model)}::effort`)
+          nextEdit(`${modelPresetKey(row.provider, row.model, hostScope)}::effort`)
         }
 
         if (modelPresetServiceTier(patch) !== undefined) {
-          nextEdit(`${modelPresetKey(row.provider, row.model)}::speed`)
+          nextEdit(`${modelPresetKey(row.provider, row.model, hostScope)}::speed`)
         }
 
         return

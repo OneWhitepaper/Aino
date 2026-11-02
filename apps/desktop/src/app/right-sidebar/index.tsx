@@ -1,7 +1,7 @@
 import './files/styles.css'
 
 import { useStore } from '@nanostores/react'
-import { type ComponentProps, useCallback, useEffect } from 'react'
+import { type ComponentProps, useCallback, useEffect, useRef } from 'react'
 
 import { TreeSkeleton } from '@/components/chat/skeletons'
 import { ErrorBoundary } from '@/components/error-boundary'
@@ -15,7 +15,7 @@ import { cn } from '@/lib/utils'
 import { refreshRepoStatus, registerRepoStatusCwd } from '@/store/coding-status'
 import { $panesFlipped } from '@/store/layout'
 import { notifyError } from '@/store/notifications'
-import { openPreview } from '@/store/preview'
+import { $visiblePreviewTabs, keepPreviewTab, openPreview, openTemporaryPreview } from '@/store/preview'
 import { openFolderAsProject } from '@/store/projects'
 import { $toolSession, $toolWorkspaceCwd, toolSessionIsCurrent } from '@/store/tool-session'
 
@@ -37,6 +37,7 @@ export function RightSidebarPane({ onActivateFile, onActivateFolder }: RightSide
   const hasWorkspace = Boolean(currentCwd)
   const panesFlipped = useStore($panesFlipped)
   const targetCwd = currentCwd
+  const previewIntent = useRef(0)
 
   const {
     collapseAll,
@@ -80,7 +81,9 @@ export function RightSidebarPane({ onActivateFile, onActivateFolder }: RightSide
 
   const canCollapse = Object.values(openState).some(Boolean)
 
-  const previewFile = async (path: string) => {
+  const previewFile = async (path: string, temporary = false) => {
+    const intent = ++previewIntent.current
+
     if (!toolSessionIsCurrent(session)) {
       return
     }
@@ -88,7 +91,7 @@ export function RightSidebarPane({ onActivateFile, onActivateFolder }: RightSide
     try {
       const preview = await normalizeOrLocalPreviewTarget(path, effectiveCwd || undefined)
 
-      if (!toolSessionIsCurrent(session)) {
+      if (intent !== previewIntent.current || !toolSessionIsCurrent(session)) {
         return
       }
 
@@ -96,7 +99,19 @@ export function RightSidebarPane({ onActivateFile, onActivateFolder }: RightSide
         throw new Error(r.couldNotPreview(path))
       }
 
-      openPreview(preview)
+      if (temporary) {
+        openTemporaryPreview(preview, session.storedId, session.runtimeId, session.scope.profile)
+      } else {
+        openPreview(preview, session.storedId, session.runtimeId, session.scope.profile)
+
+        const tab = $visiblePreviewTabs
+          .get()
+          .find(tab => (tab.target.path || tab.target.source) === (preview.path || preview.source))
+
+        if (tab) {
+          keepPreviewTab(tab.id)
+        }
+      }
     } catch (error) {
       if (toolSessionIsCurrent(session)) {
         notifyError(error, r.previewUnavailable)
@@ -122,9 +137,10 @@ export function RightSidebarPane({ onActivateFile, onActivateFolder }: RightSide
         onActivateFile={onActivateFile ?? previewFile}
         onActivateFolder={onActivateFolder ?? previewFile}
         onCollapseAll={collapseAll}
+        onKeepFile={path => void previewFile(path)}
         onLoadChildren={loadChildren}
         onNodeOpenChange={setNodeOpen}
-        onPreviewFile={previewFile}
+        onPreviewFile={path => void previewFile(path, true)}
         onRefresh={handleRefresh}
         onToggleShowIgnored={() => setShowIgnored(!showIgnored)}
         openState={openState}
@@ -159,6 +175,7 @@ function FilesystemTab({
   onLoadChildren,
   onNodeOpenChange,
   onPreviewFile,
+  onKeepFile,
   onRefresh,
   onToggleShowIgnored,
   openState,
@@ -229,6 +246,7 @@ function FilesystemTab({
         loading={loading}
         onActivateFile={onActivateFile}
         onActivateFolder={onActivateFolder}
+        onKeepFile={onKeepFile}
         onLoadChildren={onLoadChildren}
         onNodeOpenChange={onNodeOpenChange}
         onPreviewFile={onPreviewFile}
@@ -258,6 +276,7 @@ interface FileTreeBodyProps {
   onLoadChildren: (id: string) => void | Promise<void>
   onNodeOpenChange: (id: string, open: boolean) => void
   onPreviewFile?: (path: string) => void
+  onKeepFile?: (path: string) => void
   /** Force-reload the root. The hook also auto-retries while errored, so this
    *  is the impatient-user path. */
   onRetry?: () => void
@@ -275,6 +294,7 @@ function FileTreeBody({
   onLoadChildren,
   onNodeOpenChange,
   onPreviewFile,
+  onKeepFile,
   onRetry,
   openState
 }: FileTreeBodyProps) {
@@ -328,6 +348,7 @@ function FileTreeBody({
         data={data}
         onActivateFile={onActivateFile}
         onActivateFolder={onActivateFolder}
+        onKeepFile={onKeepFile}
         onLoadChildren={onLoadChildren}
         onNodeOpenChange={onNodeOpenChange}
         onPreviewFile={onPreviewFile}

@@ -38,11 +38,12 @@ const { hostMock } = vi.hoisted(() => ({
 
 vi.mock('@hermes/plugin-sdk', async () => {
   const { useQuery } = await import('@tanstack/react-query')
-  const { catalogProviderMatches, useI18n } = await vi.importActual<typeof HermesSdk>('@hermes/plugin-sdk')
+  const { catalogProviderMatches, Codicon, useI18n } = await vi.importActual<typeof HermesSdk>('@hermes/plugin-sdk')
 
   return {
     Button: (props: React.ComponentProps<'button'>) => <button {...props} />,
     catalogProviderMatches,
+    Codicon,
     GlyphSpinner: () => <span data-testid="spinner" />,
     host: hostMock,
     Input: (props: React.ComponentProps<'input'>) => <input {...props} />,
@@ -61,8 +62,8 @@ vi.mock('./shared', () => ({ ID: 'hermes-bots' }))
 vi.mock('./i18n', () => ({
   useBots: () => ({
     model: {
-      backToDropdowns: '← Back to dropdowns',
-      enterManually: '✏️ Enter manually…',
+      backToDropdowns: 'Back to dropdowns',
+      enterManually: 'Enter manually…',
       gatewayDefault: 'gateway default',
       inheritLaunch: 'Inherit (launch profile)',
       modelCustom: 'Model (Custom)',

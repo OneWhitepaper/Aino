@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto'
 import WebSocket from 'ws'
 
 import { JsonRpcGatewayClient } from '../../shared/src/json-rpc-gateway'
-import type { BindPlatformModelInput, BindPlatformModelResult, PlatformModel } from '../shared/platform-contract'
+import type { BindPlatformModelInput, BindPlatformModelResult, PlatformModel, PlatformModelPurpose } from '../shared/platform-contract'
 
 import type { PlatformAuth } from './platform-auth'
 import { PlatformClientError } from './platform-client'
@@ -27,7 +27,7 @@ export interface PlatformRuntimeBindingController {
     input: BindPlatformModelInput & { session_ticket: string },
     window: PlatformBindingWindow
   ): Promise<BindPlatformModelResult>
-  clear(input: { connection_id: string; profile: string; session_id: string }, window: PlatformBindingWindow): void
+  clear(input: { connection_id: string; profile: string; session_id: string; purpose?: PlatformModelPurpose }, window: PlatformBindingWindow): void
   list(): Promise<PlatformModel[]>
   releaseWindow(window: PlatformBindingWindow): void
   invalidateConnections(): void
@@ -46,6 +46,29 @@ interface Slot {
   intent: number
   active?: Binding
   pending?: Binding
+}
+interface ManagedBindingClaim {
+  managed_model_binding?: number
+  binding_revision?: number
+  managed_model_context_window?: boolean
+  managed_image_binding?: number
+}
+
+function requireManagedBindingClaim(claim: ManagedBindingClaim, purpose: PlatformModelPurpose = 'chat'): number {
+  if (claim.managed_model_binding !== 1 || (purpose === 'image' && claim.managed_image_binding !== 1)
+    || !Number.isSafeInteger(claim.binding_revision) || claim.binding_revision! <= 0) {
+    throw new Error('unsupported_gateway')
+  }
+
+  return claim.binding_revision!
+}
+
+function purposeParams(purpose: PlatformModelPurpose | undefined): { purpose?: 'image' } {
+  if (purpose !== undefined && !['chat', 'image'].includes(purpose)) {
+    throw new Error('invalid_platform_input')
+  }
+
+  return purpose === 'image' ? { purpose } : {}
 }
 
 export function createPlatformRuntimeBindingController(options: {
@@ -83,8 +106,8 @@ export function createPlatformRuntimeBindingController(options: {
     slot.active = slot.pending = undefined
   }
 
-  function scope(input: { connection_id: string; profile: string; session_id: string }) {
-    return JSON.stringify([input.connection_id, input.profile, input.session_id])
+  function scope(input: { connection_id: string; profile: string; session_id: string; purpose?: PlatformModelPurpose }) {
+    return JSON.stringify([input.connection_id, input.profile, input.session_id, input.purpose ?? 'chat'])
   }
 
   function resetAll() {
@@ -134,6 +157,14 @@ export function createPlatformRuntimeBindingController(options: {
 
       if (snapshot.revision !== input.expected_account_revision) {
         return failure('stale_account_revision')
+      }
+
+      let purpose: { purpose?: 'image' }
+
+      try {
+        purpose = purposeParams(input.purpose)
+      } catch {
+        return failure('invalid_platform_input')
       }
 
       if (
@@ -206,36 +237,25 @@ export function createPlatformRuntimeBindingController(options: {
 
         slot.pending = binding
         const owner = { platform_origin: options.origin, user_id: account }
-        const params = { session_id: input.session_id, profile: target.profile, owner, model_id: input.model_id }
+        const params = { session_id: input.session_id, profile: target.profile, owner, model_id: input.model_id, ...purpose }
 
         // Capability and live session authorization are proven BEFORE obtaining
         // the inference secret. Older gateways fail here without receiving a Key.
-        const claim = await binding.rpc.request<{
-          managed_model_binding?: number
-          binding_revision?: number
-          managed_model_context_window?: boolean
-        }>(
+        const claim = await binding.rpc.request<ManagedBindingClaim>(
           'session.claim_managed_model',
           { ...params, session_ticket: input.session_ticket }
         )
 
         check()
 
-        if (
-          claim.managed_model_binding !== 1 ||
-          !Number.isSafeInteger(claim.binding_revision) ||
-          claim.binding_revision! <= 0
-        ) {
-          throw new Error('unsupported_gateway')
-        }
-
-        claimedRevision = claim.binding_revision!
+        claimedRevision = requireManagedBindingClaim(claim, input.purpose)
         const supportsContextWindow = claim.managed_model_context_window === true
 
         const lease = await auth.modelLease({
           model_id: input.model_id,
           device_id: options.deviceId(),
-          connection_grant_id: binding.grant
+          connection_grant_id: binding.grant,
+          ...purpose
         })
 
         check()
@@ -287,7 +307,8 @@ export function createPlatformRuntimeBindingController(options: {
             const next = await auth.modelLease({
               model_id: input.model_id,
               device_id: options.deviceId(),
-              connection_grant_id: retained.grant
+              connection_grant_id: retained.grant,
+              ...purpose
             })
 
             if (!stillOwned()) {
@@ -344,7 +365,8 @@ export function createPlatformRuntimeBindingController(options: {
               {
                 session_id: input.session_id,
                 profile: binding.target.profile,
-                binding_revision: claimedRevision
+                binding_revision: claimedRevision,
+                ...purpose
               },
               2000
             )

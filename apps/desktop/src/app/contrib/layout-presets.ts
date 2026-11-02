@@ -5,53 +5,39 @@ import { registerBundledPresets } from '@/components/pane-shell/tree/presets'
 // Layout presets — CHAT (main) always dominates.
 // ---------------------------------------------------------------------------
 
-// Navigation and file/review rails stay full-height. Only the chat workspace
-// shares its height with the terminal deck.
-//
-// Preview tiles are DYNAMIC panes (like session tiles), so no preset names one:
-// they're registered by watchPreviewTiles as tabs open, and dockPaneBeside lands
-// each one directly beside the file tree wherever that currently lives — so a
-// file double-click still slides a preview open as its own pane next to the
-// tree, never as a tab stacked into the files sidebar.
+// Files and tools share one horizontal tab host. Dynamic preview/session IDs
+// never belong in saved preset geometry; their existing owners restore them.
+// applyLayoutPreset normalizes the legacy bundled shapes below through the
+// same tool-panel policy used when restoring a persisted layout.
 export const DEFAULT_TREE = split(
   'row',
   [
     group(['sessions'], { id: 'grp-sessions' }),
-    split(
-      'column',
-      [group(['workspace'], { id: 'grp-main' }), group(['terminal'], { id: 'grp-terminal' })],
-      [3, 1],
-      'spl-workspace'
-    ),
-    split('row', [group(['review'], { id: 'grp-review' }), group(['files'], { id: 'grp-files' })], [1, 1.2], 'spl-rail')
+    group(['workspace'], { id: 'grp-main' }),
+    group(['files', 'review', 'terminal'], { id: 'grp-files', tabStrip: 'always', toolPanel: true })
   ],
-  [1, 3.4, 1.25],
+  [1, 3.4, 1.8],
   'spl-root'
 )
 
-// Focus is one column of attention: files and review are tabs BEHIND the chat,
-// the terminal a collapsed rail under it — opening the terminal must never
-// cover the conversation, which a terminal tab did.
+// Keep this legacy preset ID and geometry readable by existing saved choices.
+// Applying it extracts the core tools into the shared host beside the chat.
 const FOCUS_TREE = split(
   'row',
   [group(['sessions']), split('column', [group(['workspace', 'files', 'review']), group(['terminal'])], [3, 1])],
   [1, 4.6]
 )
 
-// Basic is sessions and chat with the tooling RESTING in its own slots: the
-// terminal a collapsed rail under the chat (its column carries the chat, so
-// ⌘J folding the right side can never take the rail with it), review and
-// files a right column that ⌘J / ⌘G open. A tree that simply omitted them was
-// a lie — applying it adopts every missing pane back in as workspace tabs,
-// which is Focus.
+// Resting tools remain part of Basic's geometry without occupying visible
+// space. Explicit opens reveal their shared host through the normal action.
 export const BASIC_TREE = split(
   'row',
   [
     group(['sessions']),
-    split('column', [group(['workspace']), group(['terminal'])], [3, 1]),
-    split('row', [group(['review']), group(['files'])], [1, 1.2])
+    group(['workspace']),
+    group(['files', 'review', 'terminal'], { tabStrip: 'always', toolPanel: true })
   ],
-  [1, 3.4, 1.25]
+  [1, 3.4, 1.8]
 )
 
 const BASIC_RESTING = ['terminal', 'files', 'review'] as const
@@ -66,11 +52,8 @@ const TERMINAL_TREE = split(
   [1, 3.2, 1.2]
 )
 
-// Terminal deck places the tooling without opening it: the terminal rests as
-// its bottom rail and files/review as a closed right column, so ⌃` and ⌘J open
-// each one in its deck slot. Review rests with files: closing the file tree
-// collapses their shared column, and an open review there would leave ⌘G
-// reading open while nothing shows.
+// The legacy Terminal deck keeps its resting intent. Normalization joins its
+// tools without reopening them or reintroducing a separate bottom rail.
 const TERMINAL_RESTING = ['terminal', 'files', 'review'] as const
 
 // The first-run intro's borrowed layout: the chat alone, no tab strip. Unlisted,

@@ -1,6 +1,7 @@
 import { useStore } from '@nanostores/react'
 import { type KeyboardEvent as ReactKeyboardEvent, type ReactNode, useRef, useState } from 'react'
 
+import { Codicon } from '@/components/ui/codicon'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import {
   ContextMenu,
@@ -75,27 +76,41 @@ export function FileEntryContextMenu({ children, isDirectory, name, path, relati
       <ContextMenuContent onCloseAutoFocus={event => event.preventDefault()}>
         {localFs && (
           <>
-            <ContextMenuItem onSelect={() => void revealFile(path)}>{revealLabel}</ContextMenuItem>
+            <ContextMenuItem onSelect={() => void revealFile(path)}>
+              <Codicon name="folder-opened" />
+              {revealLabel}
+            </ContextMenuItem>
             <ContextMenuSeparator />
           </>
         )}
-        <ContextMenuItem onSelect={() => void copyFilePath(path)}>{m.copyPath}</ContextMenuItem>
+        <ContextMenuItem onSelect={() => void copyFilePath(path)}>
+          <Codicon name="copy" />
+          {m.copyPath}
+        </ContextMenuItem>
         {relativeTo && (
           <ContextMenuItem onSelect={() => void copyFilePath(toRelativePath(path, relativeTo))}>
+            <Codicon name="copy" />
             {m.copyRelativePath}
           </ContextMenuItem>
         )}
         {remoteDownload && (
           <>
             <ContextMenuSeparator />
-            <ContextMenuItem onSelect={() => void downloadRemoteFile(path)}>{m.download}</ContextMenuItem>
+            <ContextMenuItem onSelect={() => void downloadRemoteFile(path)}>
+              <Codicon name="cloud-download" />
+              {m.download}
+            </ContextMenuItem>
           </>
         )}
         {localFs && (
           <>
             <ContextMenuSeparator />
-            <ContextMenuItem onSelect={() => beginInlineRename(path)}>{m.rename}</ContextMenuItem>
+            <ContextMenuItem onSelect={() => beginInlineRename(path)}>
+              <Codicon name="edit" />
+              {m.rename}
+            </ContextMenuItem>
             <ContextMenuItem onSelect={() => requestFileDelete(target)} variant="destructive">
+              <Codicon name="trash" />
               {m.delete}
             </ContextMenuItem>
           </>

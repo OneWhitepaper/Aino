@@ -79,9 +79,11 @@ export interface PlatformLeaseInput {
   model_id: string
   device_id: string
   connection_grant_id: string
+  purpose?: 'chat' | 'image'
 }
 
 export interface PlatformModelLeaseDTO {
+  purpose?: 'chat' | 'image'
   credential_id: string
   api_key: string
   base_url: string
@@ -488,7 +490,7 @@ export function createPlatformClient({
       await request('POST', '/auth/logout', { refresh_token: refreshToken })
     },
     async models(token) {
-      const data = await request('GET', '/desktop/models', undefined, token)
+      const data = await request('GET', '/desktop/models?include_images=true', undefined, token)
 
       if (!Array.isArray(data)) {
         throw new PlatformClientError('invalid_response')
@@ -517,11 +519,16 @@ export function createPlatformClient({
       const model = parsePlatformModel(data.model)
       const expiresAt = stringField(data.expires_at)
       const baseUrl = stringField(data.base_url)
+      const purpose = input.purpose ?? 'chat'
+      const returnedPurpose = data.purpose ?? 'chat'
 
       if (
         model.id !== input.model_id ||
         model.state !== 'available' ||
-        !model.capabilities.tools ||
+        returnedPurpose !== purpose ||
+        model.purpose !== purpose ||
+        (purpose === 'image' ? model.api_mode !== 'images_generations' || model.capabilities.image_generation !== true
+          : !model.capabilities.tools || model.api_mode === 'images_generations') ||
         !Number.isFinite(Date.parse(expiresAt)) ||
         Date.parse(expiresAt) <= now() ||
         baseUrl !== `${origin}/v1`
@@ -530,6 +537,7 @@ export function createPlatformClient({
       }
 
       return {
+        purpose,
         credential_id: stringField(data.credential_id),
         api_key: stringField(data.api_key),
         base_url: baseUrl,

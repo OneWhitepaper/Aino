@@ -1,26 +1,30 @@
+import './settings.css'
+
 import type { ComponentProps, ReactNode } from 'react'
-import { createContext, useContext } from 'react'
+import { createContext, useContext, useId } from 'react'
 
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { DisclosureCaret } from '@/components/ui/disclosure-caret'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Switch } from '@/components/ui/switch'
 import { triggerHaptic } from '@/lib/haptics'
 import type { IconComponent } from '@/lib/icons'
 import { cn } from '@/lib/utils'
 
-import { PAGE_INSET_X } from '../layout-constants'
-
-// The settings shell owns page titles; embedded callers retain their headings.
-export const SettingsBreadcrumbContext = createContext(false)
+// A page owns its matching heading; embedded callers keep their own titles.
+// `true` remains the breadcrumb-only mode used by nested settings consumers.
+export const SettingsBreadcrumbContext = createContext<boolean | string>(false)
 
 // `bare` drops the page gutters + tall bottom pad for embedding in a tighter
 // surface (e.g. the boot-failure recovery card owns its own padding).
 export function SettingsContent({ children, bare = false }: { children: ReactNode; bare?: boolean }) {
   return (
-    <section className="min-h-0 overflow-hidden" data-aino-settings-content="">
-      <div className={cn('h-full min-h-0 overflow-y-auto', bare ? 'px-5 pb-6' : cn('pb-20', PAGE_INSET_X))}>
-        {children}
+    <section className="settings-content" data-aino-settings-content="" data-settings-bare={bare || undefined}>
+      <div className="settings-scroll" data-settings-scroll="">
+        <div className="settings-body" data-settings-body="">
+          {children}
+        </div>
       </div>
     </section>
   )
@@ -35,7 +39,49 @@ const PILL_VARIANT = {
 } as const
 
 export function SettingsGroup({ className, ...props }: ComponentProps<'div'>) {
-  return <div className={cn('@container/settings-group min-w-0', className)} data-settings-group="" {...props} />
+  return <div className={cn('@container/settings-group settings-group', className)} data-settings-group="" {...props} />
+}
+
+export function SettingsDisclosure({
+  children,
+  expanded,
+  icon: Icon,
+  label,
+  mounted = expanded,
+  onToggle,
+  sectionId
+}: {
+  children: ReactNode
+  expanded: boolean
+  icon: IconComponent
+  label: string
+  mounted?: boolean
+  onToggle: () => void
+  sectionId?: string
+}) {
+  const id = useId()
+  const headingId = `${id}-heading`
+  const panelId = `${id}-panel`
+
+  return (
+    <SettingsGroup className="mb-3" id={sectionId}>
+      <button
+        aria-controls={panelId}
+        aria-expanded={expanded}
+        className="flex min-h-10 w-full items-center gap-2 py-2 text-left text-[length:var(--aino-text-body)] font-medium text-(--ui-text-primary) transition-colors hover:text-foreground"
+        id={headingId}
+        onClick={onToggle}
+        type="button"
+      >
+        <Icon className="size-4 shrink-0 text-muted-foreground" />
+        <span className="min-w-0 flex-1">{label}</span>
+        <DisclosureCaret className="text-(--ui-text-tertiary)" open={expanded} />
+      </button>
+      <div aria-labelledby={headingId} hidden={!expanded} id={panelId} role="region">
+        {mounted && <div className="border-t border-(--ui-stroke-tertiary) pb-4 pt-3">{children}</div>}
+      </div>
+    </SettingsGroup>
+  )
 }
 
 // Rest props spread through to the Badge's DOM node — REQUIRED for Radix
@@ -70,18 +116,18 @@ export function SectionHeading({
   title: string
 }) {
   const hasBreadcrumb = useContext(SettingsBreadcrumbContext)
-  const showTitle = !page || !hasBreadcrumb
+  const showTitle = hasBreadcrumb !== title && (!page || hasBreadcrumb !== true)
 
   if (!showTitle && !aside && !meta) {
     return null
   }
 
   return (
-    <div className="mb-4 flex items-center gap-2 pt-2 text-[length:var(--aino-text-title)] font-medium" data-page={page || undefined} data-settings-section-heading="">
+    <div className="settings-section-heading" data-page={page || undefined} data-settings-section-heading="">
       {showTitle && (
         <>
           <Icon className="size-4 shrink-0 text-muted-foreground" />
-          <span>{title}</span>
+          <span className="min-w-0">{title}</span>
         </>
       )}
       {meta && <Pill>{meta}</Pill>}
@@ -107,7 +153,7 @@ export function SettingsSection({
   title: string
 }) {
   return (
-    <section className="mb-6">
+    <section className="settings-section">
       <SectionHeading aside={aside} icon={icon} meta={meta} title={title} />
       {children}
     </section>
@@ -183,22 +229,19 @@ export function ListRow({
     <div className={cn('@container', className)} data-settings-row="" data-tour={dataTour} id={id}>
       <div
         className={cn(
-          'grid gap-3 py-3',
+          'settings-row-body grid gap-3',
           !wide &&
             '@2xl:grid-cols-[minmax(0,1fr)_minmax(15rem,22rem)] @2xl:items-center @xl/settings-group:grid-cols-[minmax(0,1fr)_minmax(15rem,22rem)] @xl/settings-group:items-center'
         )}
+        data-settings-row-body=""
       >
         <div className="min-w-0">
-          <div className="flex items-center justify-between gap-3 text-[length:var(--aino-text-body)] font-medium text-foreground">
+          <div className="settings-row-label flex items-center justify-between gap-3">
             <span className="min-w-0">{title}</span>
             {wide && action && <div className="flex shrink-0 items-center gap-2">{action}</div>}
           </div>
-          {description && (
-            <div className="mt-1 text-[length:var(--aino-text-label)] leading-relaxed text-(--ui-text-secondary)">
-              {description}
-            </div>
-          )}
-          {hint && <div className="mt-1 block font-mono text-[0.68rem] text-muted-foreground/45">{hint}</div>}
+          {description && <div className="settings-row-description">{description}</div>}
+          {hint && <div className="settings-row-hint">{hint}</div>}
           {below}
         </div>
         {!wide && action && (
@@ -296,10 +339,11 @@ export function ListRowSkeleton({ wide = false }: { wide?: boolean }) {
     <div className="@container" data-settings-row="">
       <div
         className={cn(
-          'grid gap-3 py-3',
+          'settings-row-body grid gap-3',
           !wide &&
             '@2xl:grid-cols-[minmax(0,1fr)_minmax(15rem,22rem)] @2xl:items-center @xl/settings-group:grid-cols-[minmax(0,1fr)_minmax(15rem,22rem)] @xl/settings-group:items-center'
         )}
+        data-settings-row-body=""
       >
         <div className="min-w-0 space-y-1.5">
           <Skeleton className="h-3.5 w-40 max-w-full" />
@@ -317,14 +361,18 @@ export function ListRowSkeleton({ wide = false }: { wide?: boolean }) {
 // over one or more sections, each an optional heading above a run of rows.
 // `<SettingsSkeleton search sections={[{ heading, rows }]} />`.
 export function SettingsSkeleton({
+  afterContent,
+  embedded = false,
   search = false,
   sections = [{ rows: 4 }]
 }: {
+  afterContent?: ReactNode
+  embedded?: boolean
   search?: boolean
   sections?: { heading?: boolean; rows: number }[]
 }) {
-  return (
-    <SettingsContent>
+  const content = (
+    <>
       {search && <Skeleton className="mb-3 h-8 w-full" />}
       {sections.map((section, i) => (
         <section className={cn(i > 0 && 'mt-6')} key={i}>
@@ -336,8 +384,11 @@ export function SettingsSkeleton({
           </SettingsGroup>
         </section>
       ))}
-    </SettingsContent>
+      {afterContent}
+    </>
   )
+
+  return embedded ? content : <SettingsContent>{content}</SettingsContent>
 }
 
 // Canonical implementation lives in components/ui; re-exported so the many

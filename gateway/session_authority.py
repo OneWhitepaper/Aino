@@ -67,6 +67,8 @@ class LiveSession:
     # ``(revision key, payload)`` of the last ``session.context_breakdown``: Desktop re-polls it on
     # every idle mount and reconnect, and a rebuild walks the whole stored transcript (#140667).
     context_breakdown: tuple | None = None
+    # Join on the loop before submitting a worker; a cancelled viewer leaves this read running.
+    context_breakdown_task: asyncio.Task | None = field(default=None, repr=False)
     # A viewer attached while a guarded deferred pick awaits consent: the next boundary asks again.
     reask_pick: bool = False
     # (principal, effort) of a ``/reasoning`` command that arrived while a turn ran: applied in memory at

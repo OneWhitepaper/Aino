@@ -43,6 +43,8 @@ function gateway() {
   // SAFETY: the card and its queries call only `request` on the primary socket.
   setPrimaryGateway({ request } as never)
   setPrimaryGatewayConnectionId('connection-1')
+  // SAFETY: no native side effects are expected from opening the directory.
+  window.hermesDesktop = { api: vi.fn().mockResolvedValue({}) } as never
 
   return request
 }
@@ -91,6 +93,15 @@ afterEach(() => {
 })
 
 describe('ConnectorDirectoryCard', () => {
+  it('shows hosted apps without a separate service opt-in', async () => {
+    const request = gateway()
+    const { container } = inChat(<ConnectorDirectoryCard onContinue={vi.fn()} />)
+
+    await waitFor(() => expect(tileOrder(container).sort()).toEqual(['Gmail', 'Linear', 'Notion', 'Slack']))
+    expect(request.mock.calls.some(([method]) => method === 'connectors.list')).toBe(true)
+    expect(screen.getByRole('button', { name: 'Continue' }).hasAttribute('disabled')).toBe(false)
+  })
+
   it('pins Suggested rows first in the given order, then the most used apps, and Continue reports the result', async () => {
     gateway()
     const onContinue = vi.fn()

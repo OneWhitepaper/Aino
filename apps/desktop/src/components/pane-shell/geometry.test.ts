@@ -129,7 +129,7 @@ describe('publishWorkspaceGeometry', () => {
     titlebar.dataset.slot = 'app-titlebar'
     titlebar.getBoundingClientRect = () => rect(0, 0, viewportWidth, 43)
     const layout = ownerDocument.createElement('div')
-    layout.dataset.slot = 'summary-workspace-main'
+    layout.dataset.slot = 'layout-tree-root'
     layout.getBoundingClientRect = () => rect(0, 43, viewportWidth - 344, 800)
     const navigation = ownerDocument.createElement('aside')
     navigation.dataset.navigationRail = ''

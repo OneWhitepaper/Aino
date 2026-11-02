@@ -198,14 +198,17 @@ export function HubSkillsSection({ bot, onInstalled }: HubSkillsSectionProps) {
   return (
     <div className="grid gap-1.5 border-t border-(--ui-stroke-secondary) pt-2">
       <div className="flex items-baseline justify-between gap-2">
-        <div className="text-[0.7rem] font-medium text-(--ui-text-secondary)">{b.tools.skillsHub}</div>
+        <div className="text-[length:var(--aino-text-caption)] font-medium text-(--ui-text-secondary)">
+          {b.tools.skillsHub}
+        </div>
         <Button
-          className="text-[0.65rem] text-(--ui-text-quaternary) hover:text-(--ui-text-secondary)"
+          className="text-[length:var(--aino-text-caption)] text-(--ui-text-tertiary) hover:text-(--ui-text-secondary)"
           onClick={() => setBrowseHub(v => !v)}
           size="inline"
           variant="text"
         >
           {browseHub ? b.tools.hideHub : b.tools.browseHub}
+          <Codicon name={browseHub ? 'chevron-up' : 'chevron-down'} size="1em" />
         </Button>
       </div>
       {browseHub ? (
@@ -249,7 +252,7 @@ export function HubSkillsSection({ bot, onInstalled }: HubSkillsSectionProps) {
               title={b.tools.skillsHub}
             />
           </div>
-          <div className="px-1 text-[0.65rem] leading-4 text-(--ui-text-quaternary)">
+          <div className="px-1 text-[length:var(--aino-text-caption)] leading-4 text-(--ui-text-tertiary)">
             {installing ? b.tools.installing(installing) : b.tools.hubHint}
           </div>
         </div>
@@ -276,9 +279,13 @@ export function HubSkillsSection({ bot, onInstalled }: HubSkillsSectionProps) {
           {searching ? b.tools.searchingShort : b.tools.search}
         </Button>
       </div>
-      {searching ? <div className="px-1 text-[0.65rem] text-(--ui-text-quaternary)">{b.tools.searching}</div> : null}
+      {searching ? (
+        <div className="px-1 text-[length:var(--aino-text-caption)] text-(--ui-text-tertiary)">{b.tools.searching}</div>
+      ) : null}
       {results === null ? null : results.length === 0 ? (
-        <div className="px-1 py-1.5 text-[0.7rem] text-(--ui-text-quaternary)">{b.tools.noHubMatch}</div>
+        <div className="px-1 py-1.5 text-[length:var(--aino-text-caption)] text-(--ui-text-tertiary)">
+          {b.tools.noHubMatch}
+        </div>
       ) : (
         <div
           className="overflow-y-auto overscroll-contain"
@@ -292,11 +299,13 @@ export function HubSkillsSection({ bot, onInstalled }: HubSkillsSectionProps) {
                 <div className="min-w-0 flex-1">
                   <div className="truncate font-medium">{r.name}</div>
                   {r.description ? (
-                    <div className="truncate text-[0.65rem] text-(--ui-text-quaternary)">{r.description}</div>
+                    <div className="truncate text-[length:var(--aino-text-caption)] text-(--ui-text-tertiary)">
+                      {r.description}
+                    </div>
                   ) : null}
                 </div>
                 {installed[r.name] ? (
-                  <span className="flex shrink-0 items-center gap-0.5 text-[0.65rem] text-(--ui-text-tertiary)">
+                  <span className="flex shrink-0 items-center gap-0.5 text-[length:var(--aino-text-caption)] text-(--ui-text-tertiary)">
                     <Codicon name="check" size="0.65rem" />
                     {b.tools.added}
                   </span>
@@ -309,7 +318,11 @@ export function HubSkillsSection({ bot, onInstalled }: HubSkillsSectionProps) {
                     size="sm"
                     variant="ghost"
                   >
-                    {installing === r.name ? '…' : '+'}
+                    <Codicon
+                      name={installing === r.name ? 'loading' : 'add'}
+                      size="1em"
+                      spinning={installing === r.name}
+                    />
                   </Button>
                 )}
               </div>

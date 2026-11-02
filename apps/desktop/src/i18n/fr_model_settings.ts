@@ -5,6 +5,51 @@ import { frDelegationRouting } from './fr_delegation_routing'
 import type { ModelSettingsTranslations } from './types_model_settings'
 
 export const frModelSettings: TranslationOverride<ModelSettingsTranslations> = {
+  imageGeneration: {
+    billingRules: 'Facturé selon les règles de génération d’images. Consultez l’utilisation dans Mon compte.',
+    unavailable:
+      'La génération d’images Aino est indisponible. Mettez à jour le moteur et vérifiez les modèles d’image sur la plateforme.',
+    title: 'Génération d’images',
+    description:
+      'Générez des images avec votre compte Aino. Les modèles d’image sont gérés séparément des modèles de texte ; la sélection s’applique aux nouvelles conversations.'
+  },
+  pages: {
+    description: 'Gérez le modèle par défaut et les modèles utilisés pour les différentes tâches.',
+    auxiliaryTask: 'Tâche',
+    auxiliaryPurpose: 'Utilisation',
+    auxiliaryModel: 'Modèle',
+    moaReferences: 'Modèles de référence',
+    moaEnableDescription: 'Les préréglages activés restent disponibles via le routage de modèles existant.'
+  },
+  defaultMain: {
+    appliedLabel: 'Modèle par défaut actuel',
+    applied: 'Appliqué',
+    unconfigured: 'Aucun modèle par défaut sélectionné',
+    title: 'Modèle principal par défaut',
+    description: 'Choisissez une source de modèle par défaut pour les nouvelles sessions.',
+    sourceLabel: 'Source du modèle',
+    builtIn: 'Modèles intégrés Aino',
+    thirdParty: 'Service tiers',
+    builtInDescription: 'Utilisez le solde de votre compte Aino sans clé API distincte.',
+    thirdPartyDescription: 'Utilisez un service de modèles connecté, facturé par son fournisseur.',
+    unchanged: 'Correspond au modèle par défaut actuel',
+    pending: 'Non appliqué · le modèle par défaut reste inchangé',
+    apply: 'Appliquer par défaut',
+    scopeHint:
+      'Concerne les nouvelles sessions. Dans les conversations existantes, vous pouvez changer de modèle dans la zone de saisie. Les choix manuels restent utilisés.',
+    defaultsTitle: 'Paramètres par défaut',
+    defaultsDescription: 'Les paramètres existants sont utilisés lorsque le modèle les prend en charge.',
+    reasoningDescription: 'Définit la profondeur du raisonnement avant la réponse',
+    speedDescription: 'Des réponses plus rapides peuvent utiliser un autre niveau de service',
+    chooseBuiltIn: 'Choisir un modèle intégré Aino',
+    selectionTitle: 'Choisir un modèle intégré Aino',
+    selectionDescription: 'Confirmez votre choix, puis cliquez sur « Appliquer par défaut » sur la page.',
+    confirmSelection: 'Confirmer le choix',
+    configureConnection: 'Configurer la connexion',
+    connection: 'Clé API',
+    connectionSaved: 'Service configuré · choisissez un modèle',
+    ainoConnected: 'Compte Aino connecté · utilise le solde Aino'
+  },
   setupProviderFallback: 'fournisseur',
   setUpProvider: name => `Configurer ${name}`,
   staleAuxBefore: (count, names) =>

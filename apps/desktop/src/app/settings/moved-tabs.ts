@@ -9,6 +9,55 @@ const MOVED_TO_CAPABILITIES: Record<string, { param: string; tab: string }> = {
 export function movedSettingsTabRedirect(search: string): null | string {
   const params = new URLSearchParams(search)
 
+  if (params.get('tab') === 'resources') {
+    params.set('tab', 'about')
+
+    return `/settings?${params}`
+  }
+
+  if (params.get('tab') === 'vault') {
+    params.set('tab', 'config:safety')
+    params.set('vault', 'open')
+    params.set('page', 'vault')
+
+    return `/settings?${params}`
+  }
+
+  if (params.get('tab') === 'keys') {
+    params.set('tab', 'config:advanced')
+    params.delete('kview')
+    params.set('page', 'keys')
+
+    return `/settings?${params}`
+  }
+
+  if (params.get('tab') === 'billing') {
+    params.set('tab', 'account')
+    params.delete('bview')
+
+    return `/settings?${params}`
+  }
+
+  if (params.get('tab') === 'providers' && ['accounts', 'keys'].includes(params.get('pview') ?? '')) {
+    params.set('tab', 'config:model')
+    params.delete('pview')
+    params.delete('key')
+
+    return `/settings?${params}`
+  }
+
+  const providerView = params.get('pview')
+
+  if (
+    params.get('tab') === 'providers' &&
+    providerView !== null &&
+    !['third-party', 'custom-endpoints', 'local'].includes(providerView)
+  ) {
+    params.set('pview', 'custom-endpoints')
+
+    return `/settings?${params}`
+  }
+
   if (
     params.get('tab') === 'config:advanced' &&
     (params.get('page') === 'delegation' || params.get('field')?.startsWith('delegation.'))

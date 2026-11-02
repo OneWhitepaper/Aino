@@ -67,3 +67,103 @@
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
+
+/* Codex-style context readout: a compact status surface on hover, while the
+   click target continues to own the full category breakdown. */
+.context-usage-tooltip {
+  min-width: 12.75rem;
+  max-width: 14rem !important;
+  padding: 0.625rem !important;
+  border: 0 !important;
+  border-radius: 0.625rem !important;
+  background: color-mix(in srgb, var(--ui-base) 92%, var(--ui-bg-elevated)) !important;
+  color: var(--ui-bg-elevated) !important;
+  box-shadow: 0 0.5rem 1.5rem color-mix(in srgb, var(--ui-base) 24%, transparent) !important;
+}
+
+.context-usage-compact {
+  display: flex;
+  width: 100%;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: var(--aino-text-caption);
+  line-height: 1.35;
+}
+
+.context-usage-compact-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.context-usage-compact-title,
+.context-usage-compact-status,
+.context-usage-compact-summary {
+  margin: 0;
+}
+
+.context-usage-compact-title {
+  color: inherit;
+  font-weight: 600;
+}
+
+.context-usage-compact-status {
+  color: color-mix(in srgb, currentColor 72%, transparent);
+}
+
+.context-usage-compact-summary {
+  color: inherit;
+  font-variant-numeric: tabular-nums;
+}
+
+.context-usage-compact-categories {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  margin: 0.2rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.context-usage-compact-categories li,
+.context-usage-compact-category-name {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.context-usage-compact-categories li {
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.context-usage-compact-category-name {
+  gap: 0.35rem;
+  overflow: hidden;
+}
+
+.context-usage-compact-category-name > span:last-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.context-usage-compact-category-dot {
+  width: 0.4rem;
+  height: 0.4rem;
+  flex: 0 0 auto;
+  border-radius: 999px;
+}
+
+.context-usage-compact-category-tokens {
+  flex: 0 0 auto;
+  color: color-mix(in srgb, currentColor 78%, transparent);
+  font-variant-numeric: tabular-nums;
+}
+
+:root.dark .context-usage-tooltip {
+  background: color-mix(in srgb, var(--ui-bg-elevated) 88%, var(--ui-bg-chrome)) !important;
+  color: var(--ui-text-primary) !important;
+  box-shadow: 0 0.5rem 1.5rem rgb(0 0 0 / 36%) !important;
+}

@@ -91,6 +91,13 @@ it('reveals only the shortcut target after a hold and clears on release, blur or
   act(() => {
     modifier(true)
     vi.advanceTimersByTime(400)
+    // No keyup reaches the renderer after an OS-owned interaction.
+    window.dispatchEvent(new PointerEvent('pointerdown', { metaKey: false, ctrlKey: false }))
+  })
+  expect($heldTabModifier.get()).toBe(false)
+  act(() => {
+    modifier(true)
+    vi.advanceTimersByTime(400)
     $capture.set('profile.switch.1')
   })
   expect(container.querySelector('[data-tab-key-hint]')).toBeNull()

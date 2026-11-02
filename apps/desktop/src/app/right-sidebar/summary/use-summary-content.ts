@@ -40,6 +40,9 @@ export function useSummaryContent(session: ReturnType<typeof useSummarySession>)
     },
     refetchOnWindowFocus: false,
     retry: false,
+    // Returning to the idle key must read the completed turn, even when
+    // the shared client's minute-long freshness window has not elapsed.
+    staleTime: 0,
     gcTime: 60_000
   })
 

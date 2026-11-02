@@ -211,10 +211,12 @@ async def test_other_surfaces_keep_the_gateway_handlers(owner):
 @pytest.mark.asyncio
 async def test_context_breakdown_verb_serves_the_owner_agents_categories(owner, monkeypatch):
     """The classic CLI's /context (and Desktop's popover) read the breakdown of the gateway's own
-    agent through ``session.context_breakdown``; before the agent exists it is the empty shape."""
+    agent through ``session.context_breakdown``; before the agent exists the transcript category is
+    still available immediately."""
     sid = (await owner.call('session.create', request_id='c', source='cli', cwd=str(owner.workdir)))['session_id']
-    empty = await owner.call('session.context_breakdown', session_id=sid)
-    assert empty['categories'] == [] and empty['estimated_total'] == 0
+    cold = await owner.call('session.context_breakdown', session_id=sid)
+    assert [(category['id'], category['tokens']) for category in cold['categories']] == [('conversation', 0)]
+    assert cold['estimated_total'] == 0
     from agent import context_breakdown, context_file_sources
     agent = SimpleNamespace(model='fake-model', provider='custom')
     owner.authority.runner._cached_agent_for = lambda route: agent
@@ -285,3 +287,193 @@ async def test_context_breakdown_follows_an_in_place_row_rewrite(owner, monkeypa
     assert db.set_user_message_content(stored, row_id, expanded) == 1
     after = await owner.call('session.context_breakdown', session_id=sid)
     assert after['estimated_total'] == len(expanded) > before['estimated_total']
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('cancel_first', [False, True])
+async def test_context_breakdown_concurrent_readers_share_one_build(owner, monkeypatch, cancel_first):
+    """Two desktop meters share the same build, even if one viewer leaves."""
+    import asyncio
+    import threading
+    from agent import context_breakdown, context_file_sources
+    from gateway import session_busy_controls
+    sid = (await owner.call('session.create', request_id='r', source='cli', cwd=str(owner.workdir)))['session_id']
+    agent = SimpleNamespace(model='fake-model', provider='custom')
+    owner.authority.runner._cached_agent_for = lambda route: agent
+    started, release = (threading.Event() for _ in range(2))
+    computed, workers = [], []
+    loop = asyncio.get_running_loop()
+    run_in_executor = loop.run_in_executor
+    readers_ready = asyncio.Event()
+    authorize, readers = session_busy_controls.authorize, []
+
+    def record_reader(*args, **kwargs):
+        result = authorize(*args, **kwargs)
+        readers.append(True)
+        if len(readers) == 11:
+            readers_ready.set()
+        return result
+
+    def record_worker(executor, function, *args):
+        workers.append(True)
+        return run_in_executor(executor, function, *args)
+
+    def compute(current, messages):
+        computed.append(current)
+        started.set()
+        assert release.wait(3), 'context build was not released'
+        return {'categories': [], 'context_max': 128000, 'context_used': 120, 'context_percent': 0,
+                'estimated_total': 120, 'context_estimated': False,
+                'context_source': 'provider_usage', 'model': 'fake-model'}
+
+    monkeypatch.setattr(loop, 'run_in_executor', record_worker)
+    monkeypatch.setattr(session_busy_controls, 'authorize', record_reader)
+    monkeypatch.setattr(context_breakdown, 'compute_session_context_breakdown', compute)
+    monkeypatch.setattr(context_file_sources, 'context_file_sources_for_agent', lambda current: [])
+    first = asyncio.create_task(owner.call('session.context_breakdown', session_id=sid))
+    duplicates = []
+    try:
+        assert await run_in_executor(None, started.wait, 2), 'first context build did not start'
+        if cancel_first:
+            first.cancel()
+            with pytest.raises(asyncio.CancelledError):
+                await first
+        duplicates = [asyncio.create_task(owner.call('session.context_breakdown', session_id=sid)) for _ in range(10)]
+        await asyncio.wait_for(readers_ready.wait(), 2)
+        assert len(workers) == 1, 'duplicate readers must share the pending task before submitting a worker'
+    finally:
+        release.set()
+        results = await asyncio.gather(first, *duplicates, return_exceptions=True)
+    assert len(computed) == 1
+    assert results[-1]['context_used'] == 120
+    if not cancel_first:
+        assert results[0] == results[1]
+
+
+@pytest.mark.asyncio
+async def test_context_breakdown_pending_build_rechecks_a_changed_transcript(owner, monkeypatch):
+    """A joiner after a rewrite must not receive or cache the pending old snapshot."""
+    import asyncio
+    import threading
+    from agent import context_breakdown, context_file_sources
+    from gateway import session_busy_controls
+    from gateway.session_tui_reads import _stored_id
+    sid = (await owner.call('session.create', request_id='r', source='cli', cwd=str(owner.workdir)))['session_id']
+    stored = _stored_id(owner.authority, SimpleNamespace(session_id=sid))
+    row_id = owner.authority.db.append_message(stored, 'user', 'original')
+    agent = SimpleNamespace(model='fake-model', provider='custom')
+    owner.authority.runner._cached_agent_for = lambda route: agent
+    started, release = threading.Event(), threading.Event()
+    joiner_ready = asyncio.Event()
+    computed, readers = [], []
+    authorize = session_busy_controls.authorize
+
+    def record_reader(*args, **kwargs):
+        result = authorize(*args, **kwargs)
+        readers.append(True)
+        if len(readers) == 2:
+            joiner_ready.set()
+        return result
+
+    def compute(current, messages):
+        chars = sum(len(str(message.get('content') or '')) for message in messages)
+        computed.append(chars)
+        if len(computed) == 1:
+            started.set()
+            assert release.wait(3), 'context build was not released'
+        return {'categories': [], 'context_max': 128000, 'context_used': chars, 'context_percent': 0,
+                'estimated_total': chars, 'context_estimated': True,
+                'context_source': 'local_estimate', 'model': 'fake-model'}
+
+    monkeypatch.setattr(session_busy_controls, 'authorize', record_reader)
+    monkeypatch.setattr(context_breakdown, 'compute_session_context_breakdown', compute)
+    monkeypatch.setattr(context_file_sources, 'context_file_sources_for_agent', lambda current: [])
+    first = asyncio.create_task(owner.call('session.context_breakdown', session_id=sid))
+    second = None
+    try:
+        assert await asyncio.to_thread(started.wait, 2), 'first context build did not start'
+        rewritten = 'replacement with a different context size'
+        assert owner.authority.db.set_user_message_content(stored, row_id, rewritten) == 1
+        second = asyncio.create_task(owner.call('session.context_breakdown', session_id=sid))
+        await asyncio.wait_for(joiner_ready.wait(), 2)
+    finally:
+        release.set()
+        results = await asyncio.gather(first, *([second] if second is not None else []), return_exceptions=True)
+    assert all(result['context_used'] == len(rewritten) for result in results)
+    assert len(computed) == 2
+    assert (await owner.call('session.context_breakdown', session_id=sid))['context_used'] == len(rewritten)
+    assert len(computed) == 2
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('with_tail', [False, True])
+async def test_cold_context_breakdown_restores_only_matching_persisted_usage(owner, monkeypatch, with_tail):
+    """Opening a completed chat recovers its priced context without constructing an agent."""
+    from agent.model_metadata import estimate_messages_tokens_rough
+    from agent.usage_anchor import USAGE_ANCHOR_MODEL_CONFIG_KEY, capture_usage_anchor
+    from gateway.session_tui_reads import _stored_id
+    sid = (await owner.call('session.create', request_id='r', source='cli', cwd=str(owner.workdir)))['session_id']
+    stored = _stored_id(owner.authority, SimpleNamespace(session_id=sid))
+    db = owner.authority.db
+    row_id = db.append_message(stored, 'user', 'the provider-priced question')
+    db.update_system_prompt(stored, 'the frozen session prompt')
+    history = db.get_messages_as_conversation(stored, include_ancestors=True)
+    anchor = capture_usage_anchor(12000, 30, [{'role': 'system', 'content': 'the frozen session prompt'}, *history])
+    db.patch_session_model_config(stored, {USAGE_ANCHOR_MODEL_CONFIG_KEY: anchor})
+    db.append_message(stored, 'assistant', 'the already-priced response')
+    tail = [{'role': 'user', 'content': 'new material'}] if with_tail else []
+    if tail:
+        db.append_message(stored, 'user', tail[0]['content'])
+        tail = db.get_messages_as_conversation(stored, include_ancestors=True)[2:]
+    reads = []
+    read_history = db.get_messages_as_conversation
+
+    def counted(*args, **kwargs):
+        reads.append(True)
+        return read_history(*args, **kwargs)
+
+    monkeypatch.setattr(db, 'get_messages_as_conversation', counted)
+    first = await owner.call('session.context_breakdown', session_id=sid)
+    assert first['context_used'] == 12030 + estimate_messages_tokens_rough(tail)
+    assert first['context_source'] == ('provider_usage_plus_estimate' if with_tail else 'provider_usage')
+    assert first['context_estimated'] is with_tail
+    assert {category['id'] for category in first['categories']} == {'system_prompt', 'conversation'}
+    assert first['estimated_total'] > 0
+    assert await owner.call('session.context_breakdown', session_id=sid) == first
+    assert len(reads) == 1
+
+    assert db.set_user_message_content(stored, row_id, 'rewritten and no longer priced ' * 20) == 1
+    stale = await owner.call('session.context_breakdown', session_id=sid)
+    assert stale['context_used'] == 0
+    assert stale['context_source'] == 'unknown'
+    categories = {category['id']: category['tokens'] for category in stale['categories']}
+    assert categories['conversation'] == estimate_messages_tokens_rough(read_history(stored, include_ancestors=True))
+    assert stale['estimated_total'] == sum(categories.values())
+    assert categories['conversation'] != next(
+        category['tokens'] for category in first['categories'] if category['id'] == 'conversation')
+
+
+@pytest.mark.asyncio
+async def test_cold_context_categories_read_history_without_a_provider_anchor(owner):
+    """A restored unpriced transcript has category estimates without starting an agent."""
+    from agent.model_metadata import estimate_messages_tokens_rough, estimate_tokens_rough
+    from gateway.session_tui_reads import _stored_id
+    sid = (await owner.call('session.create', request_id='unpriced', source='gui',
+                            cwd=str(owner.workdir)))['session_id']
+    stored = _stored_id(owner.authority, SimpleNamespace(session_id=sid))
+    db = owner.authority.db
+    db.update_system_prompt(stored, 'the persisted prompt is separate from the transcript')
+    db.append_message(stored, 'user', 'history that has not received provider usage yet')
+    db.append_message(stored, 'assistant', 'a restored answer')
+    history = db.get_messages_as_conversation(stored, include_ancestors=True)
+
+    cold = await owner.call('session.context_breakdown', session_id=sid)
+
+    categories = {category['id']: category['tokens'] for category in cold['categories']}
+    assert categories == {
+        'system_prompt': estimate_tokens_rough('the persisted prompt is separate from the transcript'),
+        'conversation': estimate_messages_tokens_rough(history),
+    }
+    assert cold['estimated_total'] == sum(categories.values())
+    assert cold['context_source'] == 'unknown'
+    assert owner.authority.agent(SimpleNamespace(session_id=sid)) is None

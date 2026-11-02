@@ -1,0 +1,158 @@
+.config-page-layout {
+  container: config-page / inline-size;
+  min-width: 0;
+}
+.config-page-layout [hidden] {
+  display: none !important;
+}
+.config-page-context {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1.25rem;
+  margin-bottom: 1.5rem;
+}
+.config-page-context > p {
+  color: var(--ui-text-secondary);
+  font-size: 0.75rem;
+  line-height: 1.65;
+}
+.config-page-scope {
+  flex: 0 1 auto;
+}
+.config-page-tabs-root {
+  gap: 0;
+}
+.config-page-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-start;
+  width: 100%;
+  height: auto;
+  gap: 0.5rem 1.5rem;
+  margin-bottom: 1.625rem;
+  border-bottom: 1px solid var(--ui-stroke-tertiary);
+}
+.config-page-tabs > button {
+  height: auto;
+  padding: 0 0 0.6875rem;
+  font-size: 0.8125rem;
+  font-weight: 400;
+  line-height: 1.5;
+}
+.config-page-tabs > button[aria-selected='true'] {
+  font-weight: 500;
+}
+.config-page-panel {
+  min-width: 0;
+}
+.config-page-section + .config-page-section {
+  margin-top: 1.5rem;
+}
+.config-page-section .settings-section-heading {
+  margin-bottom: 0.75rem;
+  font-size: 0.875rem;
+}
+.config-page-layout .settings-group {
+  padding-inline: 1.1875rem;
+  border-color: var(--ui-stroke-tertiary);
+  border-radius: var(--aino-radius-card);
+}
+.config-page-layout [data-settings-row-body] {
+  gap: 1.25rem;
+  padding-block: 1.125rem;
+}
+.config-page-layout .settings-row-label {
+  font-size: 0.8125rem;
+  font-weight: 500;
+}
+.config-page-layout .settings-row-description {
+  max-width: 37rem;
+  font-size: 0.75rem;
+  line-height: 1.65;
+}
+.config-page-layout [data-slot='input'],
+.config-page-layout [data-slot='select-trigger'],
+.config-page-layout [data-slot='searchable-select-trigger'],
+.config-page-layout [data-slot='input-group'] {
+  min-height: 2.25rem;
+  font-size: 0.8125rem;
+}
+.config-page-layout [data-slot='input-group'] [data-slot='input'] {
+  min-height: 0;
+}
+.config-page-layout [data-slot='switch'] {
+  width: 2.0625rem;
+  height: 1.25rem;
+}
+.config-page-layout [data-slot='switch-thumb'] {
+  width: 0.875rem;
+  height: 0.875rem;
+}
+.config-page-layout [data-slot='switch-thumb'][data-state='checked'] {
+  translate: 0.9375rem 0;
+  transform: none;
+}
+.config-page-layout .settings-disclosure {
+  margin-block: 0.75rem;
+}
+.config-page-layout .config-page-leading-row {
+  margin-bottom: 1rem;
+}
+.config-page-layout .config-page-appendix {
+  margin-top: 1.5rem;
+}
+.config-page-load-error {
+  display: flex;
+  min-height: 8rem;
+  margin-bottom: 1.5rem;
+}
+.config-page-loading {
+  display: grid;
+  gap: 0.75rem;
+  margin-bottom: 1.5rem;
+}
+@container config-page (min-width: 44rem) {
+  .config-page-layout [data-settings-row-body]:has(> div:only-child) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .config-page-layout [data-settings-row-body]:not(:has(> div:only-child)) {
+    grid-template-columns: minmax(0, 1fr) minmax(10rem, 13rem);
+    align-items: center;
+  }
+  .config-page-layout [data-settings-row-body] > div:last-child:not(:only-child) {
+    justify-self: end;
+  }
+  .config-page-layout
+    [data-settings-row-body]
+    > div:last-child:not(:only-child):has(
+      [data-slot='select-trigger'],
+      [data-slot='searchable-select-trigger'],
+      [data-slot='input-group']
+    ) {
+    width: 100%;
+  }
+  .config-page-layout [data-settings-row-body] > div:last-child:not(:only-child) > [data-slot='select-trigger'],
+  .config-page-layout
+    [data-settings-row-body]
+    > div:last-child:not(:only-child)
+    > [data-slot='searchable-select-trigger'] {
+    width: 100%;
+  }
+}
+@container config-page (max-width: 43.999rem) {
+  .config-page-context {
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+  .config-page-layout [data-settings-row-body] {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.75rem;
+  }
+  .config-page-layout [data-settings-row-body] > div:last-child {
+    justify-self: stretch;
+  }
+  .config-page-layout [data-settings-row-body] > div:last-child:not(:only-child) {
+    justify-content: flex-start;
+  }
+}

@@ -1049,7 +1049,7 @@ class TestOptionalSkillSourceMetadata:
         meta = src.inspect("official/finance/3-statement-model")
 
         assert meta is not None
-        assert meta.repo == "NousResearch/hermes-agent"
+        assert meta.repo == "OneWhitepaper/Aino"
         assert meta.path == "optional-skills/finance/3-statement-model"
 
     def test_scan_all_accepts_install_prefix_but_rejects_nested_support_skills(self, tmp_path):
@@ -1165,8 +1165,8 @@ class TestOptionalSkillSourceLiveRepoFallback:
         assert bundle.identifier == "official/software-development/ast-grep"
         assert bundle.trust_level == "builtin"
         # FULL directory arrives — including root-level files GitHubSource.fetch drops
-        assert bundle.files["install.sh"] == b"#!/bin/sh\n"
-        assert bundle.files["LICENSE"] == b"MIT"
+        assert bundle.files["install.sh"] == b"#!/bin/sh\n" and bundle.files["LICENSE"] == b"MIT"
+        src._github._get_repo_tree.assert_called_with("OneWhitepaper/Aino")
 
     def test_fetch_bare_name_resolves_via_remote_tree(self, tmp_path):
         src = self._make_source(tmp_path, ["software-development/ast-grep"])
@@ -1228,7 +1228,7 @@ class TestOptionalSkillSourceLiveRepoFallback:
         meta = src.inspect("official/software-development/ast-grep")
 
         assert meta is not None
-        assert meta.repo == "NousResearch/hermes-agent"
+        assert meta.repo == "OneWhitepaper/Aino"
         assert meta.path == "optional-skills/software-development/ast-grep"
 
     def test_offline_degrades_to_local_only(self, tmp_path):

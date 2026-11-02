@@ -53,6 +53,16 @@ const appearanceSetting = (subpage: AppearanceSubpageId, keywords: readonly stri
  * settings and do not belong here; their pages own their own deep links.
  */
 export const SETTINGS_MANIFEST = {
+  model: {
+    imageGeneration: {
+      subpage: 'main',
+      keywords: ['image', 'generation', 'provider', 'Aino', 'Nous', '图像', '图片'],
+      copy: t => ({
+        label: t.settings.model.imageGeneration.title,
+        description: t.settings.model.imageGeneration.description
+      })
+    }
+  },
   appearance: {
     language: {
       subpage: 'general',
@@ -180,7 +190,7 @@ export const SETTINGS_MANIFEST = {
       copy: t => ({ label: t.settings.quickEntry.shortcutTitle, description: t.settings.quickEntry.shortcutDesc })
     },
     warmBotBackends: {
-      subpage: 'desktop',
+      subpage: 'runtime',
       keywords: ['bot', 'profile', 'prewarm', 'connection', 'socket', 'cache', 'limit'],
       copy: t => ({
         label: t.settings.poolLimits.warmBotBackendsTitle,
@@ -188,7 +198,7 @@ export const SETTINGS_MANIFEST = {
       })
     },
     backendIdleTimeout: {
-      subpage: 'desktop',
+      subpage: 'runtime',
       keywords: ['bot', 'profile', 'idle', 'connection', 'socket', 'cache', 'timeout'],
       copy: t => ({
         label: t.settings.poolLimits.backendIdleTimeoutTitle,
@@ -285,7 +295,7 @@ export const SETTINGS_MANIFEST = {
 export type ManifestViewKey = keyof typeof SETTINGS_MANIFEST
 
 /** Manifest keys that are config sections route as `config:<key>`; the rest are views of their own. */
-const CONFIG_SECTION_KEYS: readonly ManifestViewKey[] = ['appearance', 'chat', 'advanced']
+const CONFIG_SECTION_KEYS: readonly ManifestViewKey[] = ['appearance', 'chat', 'advanced', 'model']
 
 export const manifestView = (key: ManifestViewKey): SettingsView =>
   CONFIG_SECTION_KEYS.includes(key) ? `config:${key}` : (key as SettingsView)

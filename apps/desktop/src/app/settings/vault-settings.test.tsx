@@ -28,11 +28,11 @@ import { VaultSettings } from './vault-settings'
 
 stubResizeObserver()
 
-const renderVault = (route = '/settings?tab=vault') =>
+const renderVault = (route = '/settings?tab=vault', embedded = false) =>
   render(
     <MemoryRouter initialEntries={[route]}>
       <QueryClientProvider client={queryClient}>
-        <VaultSettings />
+        <VaultSettings embedded={embedded} />
       </QueryClientProvider>
     </MemoryRouter>
   )
@@ -61,6 +61,37 @@ afterEach(() => {
 })
 
 describe('VaultSettings', () => {
+  it('keeps Passwords & Logins collapsed until opened and only then loads vault data', async () => {
+    requestGateway.mockResolvedValue({ items: [], sources: [] })
+    renderVault('/settings?tab=config%3Asafety', true)
+
+    const section = screen.getByRole('button', { name: 'Passwords & Logins' })
+    expect(section.getAttribute('aria-expanded')).toBe('false')
+    expect(screen.queryByRole('button', { name: 'Add' })).toBeNull()
+    expect(requestGateway).not.toHaveBeenCalled()
+
+    fireEvent.click(section)
+
+    await waitFor(() => expect(section.getAttribute('aria-expanded')).toBe('true'))
+    await waitFor(() => expect(requestGateway).toHaveBeenCalledWith('vault.list', {}))
+    expect(screen.getByRole('button', { name: 'Add' })).toBeTruthy()
+  })
+
+  it('opens the merged section for a login deep link and keeps its prefilled dialog', async () => {
+    requestGateway.mockResolvedValue({ items: [], sources: [] })
+    renderVault(
+      '/settings?tab=config%3Asafety&vault=open&kind=login&label=github&origin=https%3A%2F%2Fgithub.com',
+      true
+    )
+
+    await waitFor(() => expect(screen.getByLabelText('Label')).toBeTruthy())
+    expect(globalThis.document.querySelector('[data-settings-group] button')?.getAttribute('aria-expanded')).toBe(
+      'true'
+    )
+    expect((screen.getByLabelText('Label') as HTMLInputElement).value).toBe('github')
+    expect((screen.getByLabelText('Site origin') as HTMLInputElement).value).toBe('https://github.com')
+  })
+
   // Two connections both serving `default` (this device + a remote gateway): a bare profile
   // name would resolve onto the PRIMARY socket and the panel would show the other machine's
   // vault (#94811). The RPC must name the connection the panel claims to show.

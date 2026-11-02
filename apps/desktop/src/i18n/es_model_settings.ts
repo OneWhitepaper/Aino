@@ -5,6 +5,51 @@ import { esDelegationRouting } from './es_delegation_routing'
 import type { ModelSettingsTranslations } from './types_model_settings'
 
 export const esModelSettings: TranslationOverride<ModelSettingsTranslations> = {
+  imageGeneration: {
+    billingRules: 'Se factura según las reglas de generación de imágenes. Consulta el uso en Mi cuenta.',
+    unavailable:
+      'La generación de imágenes de Aino no está disponible. Actualiza el entorno y comprueba los modelos de imagen de la plataforma.',
+    title: 'Generación de imágenes',
+    description:
+      'Genera imágenes con tu cuenta de Aino. Los modelos de imagen se gestionan por separado de los de texto; la selección se aplica a las conversaciones nuevas.'
+  },
+  pages: {
+    description: 'Administra el modelo predeterminado y los modelos para cada tarea.',
+    auxiliaryTask: 'Tarea',
+    auxiliaryPurpose: 'Propósito',
+    auxiliaryModel: 'Modelo',
+    moaReferences: 'Modelos de referencia',
+    moaEnableDescription: 'Los ajustes activados siguen disponibles mediante el enrutamiento de modelos existente.'
+  },
+  defaultMain: {
+    appliedLabel: 'Modelo predeterminado actual',
+    applied: 'Aplicado',
+    unconfigured: 'No hay modelo predeterminado seleccionado',
+    title: 'Modelo principal predeterminado',
+    description: 'Elige una fuente de modelo predeterminada para las sesiones nuevas.',
+    sourceLabel: 'Fuente del modelo',
+    builtIn: 'Modelos integrados de Aino',
+    thirdParty: 'Servicio de terceros',
+    builtInDescription: 'Usa el saldo de tu cuenta de Aino sin una clave API adicional.',
+    thirdPartyDescription: 'Usa un servicio de modelos conectado, con facturación de su proveedor.',
+    unchanged: 'Coincide con el valor predeterminado actual',
+    pending: 'Sin aplicar · el modelo predeterminado no ha cambiado',
+    apply: 'Aplicar como predeterminado',
+    scopeHint:
+      'Se aplica a sesiones nuevas. En los chats existentes puedes cambiar el modelo desde el editor. Las selecciones manuales se siguen utilizando.',
+    defaultsTitle: 'Parámetros predeterminados',
+    defaultsDescription: 'Los parámetros existentes se aplican cuando el modelo los admite.',
+    reasoningDescription: 'Controla la profundidad de análisis antes de responder',
+    speedDescription: 'Las respuestas más rápidas pueden usar otro nivel de servicio',
+    chooseBuiltIn: 'Elegir un modelo integrado de Aino',
+    selectionTitle: 'Elegir un modelo integrado de Aino',
+    selectionDescription: 'Confirma tu selección y pulsa «Aplicar como predeterminado» en la página.',
+    confirmSelection: 'Confirmar selección',
+    configureConnection: 'Configurar conexión',
+    connection: 'Clave de API',
+    connectionSaved: 'Servicio configurado · elige un modelo',
+    ainoConnected: 'Cuenta de Aino conectada · usa el saldo de Aino'
+  },
   setupProviderFallback: 'proveedor',
   setUpProvider: name => `Configurar ${name}`,
   staleAuxBefore: (count, names) =>

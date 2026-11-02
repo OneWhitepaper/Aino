@@ -71,7 +71,7 @@ def _bytes_to_tokens(size: Optional[int]) -> Optional[int]:
 
 
 def _skills_block(stable: str) -> str:
-    """The live ``<available_skills>`` block inside the stable tier, or ''."""
+    """The frozen ``<available_skills>`` block, in either old or current prompt tiers."""
     m = _SKILLS_BLOCK_RE.search(stable)
     return m.group(0) if m else ""
 
@@ -112,6 +112,20 @@ def _join(*parts: str) -> str:
     return "\n\n".join(part for part in parts if part).strip()
 
 
+def _cached_prompt_parts(agent: Any) -> dict[str, str]:
+    """Read already-sent prompt bytes; observing usage must never build or pin a prompt."""
+    prompt = getattr(agent, "_cached_system_prompt", None)
+    if not isinstance(prompt, str):
+        return {}
+    parts = getattr(agent, "_cached_system_prompt_parts", None)
+    if (isinstance(parts, dict) and all(isinstance(parts.get(tier), str) for tier in ("stable", "context", "volatile"))
+            and _join(parts["stable"], parts["context"], parts["volatile"]) == prompt):
+        return parts
+    # Older/restored agents only retain the full prompt. Do not rediscover files, skills or plugin
+    # sections to recover attribution: all unidentifiable frozen prose stays under system prompt.
+    return {"stable": prompt}
+
+
 def _glyph(cat: dict[str, Any]) -> str:
     return _CATEGORIES.get(str(cat.get("id") or ""), (None, "▪"))[1]
 
@@ -149,15 +163,18 @@ def compute_session_context_breakdown(agent: Any, messages: Optional[list[dict]]
     """Return a Cursor-style context usage breakdown for one live agent."""
     from agent.model_metadata import estimate_messages_tokens_rough
     from agent.usage_anchor import anchored_context_tokens
-    from agent.system_prompt import build_system_prompt_parts
 
     messages = messages or []
-    parts = build_system_prompt_parts(agent)
+    parts = _cached_prompt_parts(agent)
     stable = parts.get("stable", "") or ""
-    skills_index = _skills_block(stable)
+    volatile = parts.get("volatile", "") or ""
+    skills_index = _skills_block(_join(stable, volatile))
     memory_block, user_block = _memory_blocks(agent)
+    memory_block = memory_block if memory_block in _join(stable, volatile) else ""
+    user_block = user_block if user_block in _join(stable, volatile) else ""
     system_prompt_text = _join(
-        _strip_blocks(stable, skills_index), _strip_blocks(parts.get("volatile", "") or "", memory_block, user_block)
+        _strip_blocks(stable, skills_index, memory_block, user_block),
+        _strip_blocks(volatile, skills_index, memory_block, user_block)
     )
     builtin_tools, mcp_tools, subagent_tools = _split_tools(list(getattr(agent, "tools", None) or []))
     tokens_by_id = {
@@ -214,6 +231,29 @@ def compute_session_context_breakdown(agent: Any, messages: Optional[list[dict]]
     }
 
 
+def compute_cold_context_categories(messages: Sequence[dict], system_prompt: Optional[str] = None) -> dict[str, Any]:
+    """Estimate categories available before a session agent has been rebuilt.
+
+    A restored session can have a provider usage anchor and persisted system prompt while its
+    live agent is still cold. Showing the conversation and persisted prompt immediately is more
+    useful than returning an empty breakdown; tool, memory and skill rows remain absent until the
+    live prompt is available because their source data is not persisted on the session row.
+    """
+    from agent.model_metadata import estimate_messages_tokens_rough
+
+    tokens_by_id = {
+        "system_prompt": _chars_to_tokens(system_prompt) if system_prompt else 0,
+        "conversation": estimate_messages_tokens_rough(list(messages)),
+    }
+    categories = [
+        {"color": _CATEGORIES[category_id][0], "id": category_id, "label": _category_label(category_id),
+         "tokens": tokens}
+        for category_id, tokens in tokens_by_id.items()
+        if tokens > 0 or category_id in _ALWAYS_REPORTED
+    ]
+    return {"categories": categories, "estimated_total": sum(tokens_by_id.values())}
+
+
 def compute_context_details(agent: Any) -> dict[str, Any]:
     """Expanded per-skill / per-toolset cost listing for ``/context all``.
 
@@ -221,9 +261,8 @@ def compute_context_details(agent: Any) -> dict[str, Any]:
     live skills block; schema bytes via the registry's tool→toolset map).
     """
     from hermes_cli.prompt_size import _compute_skills_breakdown, _compute_toolsets_breakdown
-    from agent.system_prompt import build_system_prompt_parts
-
-    skills_block = _skills_block(build_system_prompt_parts(agent).get("stable", "") or "")
+    parts = _cached_prompt_parts(agent)
+    skills_block = _skills_block(_join(parts.get("stable", ""), parts.get("volatile", "")))
     tools = list(getattr(agent, "tools", None) or [])
     return {
         "skills": [

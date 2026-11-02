@@ -107,7 +107,7 @@ export function OverlayView({
       <div className="relative h-full min-h-0">
         <div
           className={cn(
-            'relative flex h-full min-h-0 flex-col overflow-hidden rounded-(--aino-radius-panel) border border-(--stroke-nous) bg-(--ui-chat-surface-background) shadow-nous',
+            'relative flex h-full min-h-0 flex-col overflow-hidden rounded-(--aino-radius-panel) border border-(--stroke-nous) bg-(--ui-editor-surface-background) text-[length:var(--aino-text-label)] text-foreground shadow-nous',
             rootClassName
           )}
           // Marks the card as a RAISED surface for window glass: while the field

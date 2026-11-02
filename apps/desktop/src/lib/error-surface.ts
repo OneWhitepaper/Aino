@@ -324,13 +324,9 @@ export interface ErrorRecoveryPlan {
    *  model.switch); Settings → Models deep link fallback when no chat surface
    *  is on screen. */
   switchProvider: boolean
-  /** Settings → Billing (usage_window: turn on Keep going, add credits). */
-  openBilling: boolean
   /** usage_window: one-click "Switch to <recommended model>" (this session),
    *  then re-run the turn. Shown only when the backend named a model. */
   switchToModel: boolean
-  /** usage_window: "Use credits" — turns on Keep going, then re-runs the turn. */
-  useCredits: boolean
   /** Open logs / Send diagnostics / Copy details. Off for a plan limit: it is
    *  not a fault, and those buttons would bury the two that fix it. */
   diagnostics: boolean
@@ -356,11 +352,9 @@ const CODE_PLANS: Partial<Record<ErrorCodeKey, Partial<ErrorRecoveryPlan>>> = {
   loop_error: { startNewSession: true },
   model_not_found: { chooseModel: true, retry: false },
   payload_too_large: { compress: true, retry: false, startNewSession: true },
-  // A window plan's limit: the two ways on, one click each — switch to the
-  // plan's recommended model, or spend credits (Use credits when Keep going is
-  // off and there is a balance, else Add credits via Billing). Retry at the
-  // reset stays. Switch provider is not the fix (the provider is fine).
-  usage_window: { diagnostics: false, openBilling: true, retry: true, switchProvider: false }
+  // A window plan can switch to a suggested model, or to another provider;
+  // retry at its reset remains available.
+  usage_window: { diagnostics: false, retry: true, switchProvider: false }
 }
 
 export function errorRecoveryPlan(surface: ErrorSurface | null | undefined): ErrorRecoveryPlan {
@@ -381,9 +375,7 @@ export function errorRecoveryPlan(surface: ErrorSurface | null | undefined): Err
     signInFreeTier: isFreeTierSurface(surface),
     startNewSession: false,
     switchProvider: surface != null && SWITCH_PROVIDER_LAYERS.includes(surface.layer),
-    openBilling: false,
     switchToModel: false,
-    useCredits: false,
     diagnostics: true,
     updateApiKey: apiKeyRejected
   }
@@ -394,11 +386,7 @@ export function errorRecoveryPlan(surface: ErrorSurface | null | undefined): Err
   if (surface?.code === 'usage_window') {
     const limit = surface.usageLimit
     plan.switchToModel = Boolean(limit?.suggestions.length)
-    plan.useCredits = limit?.credits === 'use_credits'
-    // Use credits replaces Open billing; Add credits is Open billing.
-    plan.openBilling = !plan.useCredits
-    // An older backend (no structured limit): keep the menu so there is still a way on.
-    plan.switchProvider = !limit
+    plan.switchProvider = !plan.switchToModel
   }
 
   return plan

@@ -58,6 +58,17 @@ describe('settings subpage routing', () => {
     }
   })
 
+  it('opens current and legacy backend pool setting links on runtime', () => {
+    for (const setting of [SETTING_IDS.advanced.warmBotBackends, SETTING_IDS.advanced.backendIdleTimeout]) {
+      const serialized = new URLSearchParams(settingsSearchTargetQuery({ view: 'config:advanced', setting }))
+      expect(serialized.get('page')).toBe('runtime')
+      expect(resolveSettingsSubpage('config:advanced', serialized)).toBe('runtime')
+      expect(resolveSettingsSubpage('config:advanced', new URLSearchParams({ page: 'desktop', setting }))).toBe(
+        'runtime'
+      )
+    }
+  })
+
   it('routes every curated field and legacy target to its owning child before consuming the target', () => {
     for (const section of SECTIONS.filter(section => section.keys.length)) {
       for (const field of section.keys) {

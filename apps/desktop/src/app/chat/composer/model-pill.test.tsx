@@ -113,6 +113,55 @@ function MenuChoice() {
   return <button onClick={() => close?.()}>Choose model</button>
 }
 
+it.each(['pointer', 'hotkey'] as const)(
+  'releases composer focus before the %s-opened modal menu hides its app surface',
+  async method => {
+    const surface = window.document.createElement('div')
+    const editor = window.document.createElement('div')
+    const host = window.document.createElement('div')
+    surface.dataset.composerTarget = 'main'
+    editor.dataset.slot = RICH_INPUT_SLOT
+    editor.contentEditable = 'true'
+    editor.tabIndex = 0
+    editor.textContent = 'Keep this draft'
+    surface.append(editor, host)
+    window.document.body.append(surface)
+    const focusedWhenHidden: boolean[] = []
+    const setAttribute = surface.setAttribute.bind(surface)
+
+    const attribute = vi.spyOn(surface, 'setAttribute').mockImplementation((name, value) => {
+      if (name === 'aria-hidden' && value === 'true') {
+        focusedWhenHidden.push(surface.contains(surface.ownerDocument.activeElement))
+      }
+
+      setAttribute(name, value)
+    })
+
+    try {
+      render(<ModelPill disabled={false} model={modelState({ modelMenuContent: <MenuChoice /> })} />, {
+        container: host
+      })
+      editor.focus()
+      window.getSelection()!.setBaseAndExtent(editor.firstChild!, 4, editor.firstChild!, 4)
+
+      if (method === 'pointer') {
+        fireEvent.pointerDown(screen.getByRole('button'), { button: 0, ctrlKey: false, pointerType: 'mouse' })
+      } else {
+        act(() => requestModelMenuToggle())
+      }
+
+      expect(await screen.findByRole('menu')).toBeTruthy()
+      expect(focusedWhenHidden.length).toBeGreaterThan(0)
+      expect(focusedWhenHidden).not.toContain(true)
+      expect(editor.textContent).toBe('Keep this draft')
+    } finally {
+      cleanup()
+      attribute.mockRestore()
+      surface.remove()
+    }
+  }
+)
+
 it('returns to the exact caret or backward selection after the model menu closes', async () => {
   const surface = globalThis.document.createElement('div')
   surface.dataset.composerTarget = 'main'

@@ -1,65 +1,43 @@
 import { useStore } from '@nanostores/react'
-import { useCallback, useEffect, useMemo, useRef } from 'react'
+import { startTransition, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router'
 
-import { Button } from '@/components/ui/button'
-import { codiconIcon } from '@/components/ui/codicon'
-import { KbdCombo } from '@/components/ui/kbd'
-import { Tip } from '@/components/ui/tooltip'
 import { getHermesConfigDefaults, getHermesConfigRecord, saveHermesConfig } from '@/hermes'
 import { useI18n } from '@/i18n'
 import { ESCAPE_PRIORITY, isTopEscapeLayer, pushEscapeLayer } from '@/lib/escape-layers'
 import { triggerHaptic } from '@/lib/haptics'
-import {
-  Archive,
-  BarChart3,
-  Bell,
-  ChevronLeft,
-  Cpu,
-  Download,
-  Globe,
-  Info,
-  Keyboard,
-  KeyRound,
-  RefreshCw,
-  Search,
-  Settings2,
-  ShieldLock,
-  Upload,
-  UserCircle,
-  Wrench,
-  Zap
-} from '@/lib/icons'
+import { Archive, Bell, Globe, Info, Keyboard, UserCircle, Zap } from '@/lib/icons'
 import { isEditableTarget } from '@/lib/keybinds/combo'
 import { typeToFocusChar } from '@/lib/keybinds/composer-focus-keys'
-import { cn } from '@/lib/utils'
 import { $commandPaletteOpen, openCommandPalettePage } from '@/store/command-palette'
 import { confirm } from '@/store/confirm'
 import { $activeConnectionId } from '@/store/connections'
-import { bindingsFor } from '@/store/keybinds'
-import { $localModelsEnabled } from '@/store/local-models-flag'
 import { notifyError } from '@/store/notifications'
 import { $settingsScopeProfile } from '@/store/settings-scope'
 
 import { useRouteEnumParam } from '../hooks/use-route-enum-param'
-import { OverlayIconButton } from '../overlays/overlay-chrome'
-import { OverlayMain, OverlayNav, type OverlayNavGroup, OverlaySplitLayout } from '../overlays/overlay-split-layout'
+import type { OverlayNavGroup } from '../overlays/overlay-split-layout'
 
 import { AboutSettings } from './about-settings'
 import { AccountSettings } from './account-settings'
 import { AppearanceSettings } from './appearance-settings'
-import { BillingSettings } from './billing'
 import { ConfigSettings } from './config-settings'
 import { SECTIONS } from './constants'
 import { GatewaySettings } from './gateway-settings'
 import { KeybindSettings } from './keybind-settings'
-import { KEYS_VIEWS, KeysSettings, type KeysView } from './keys-settings'
+import { KeysSettings } from './keys-settings'
 import { movedSettingsTabRedirect } from './moved-tabs'
 import { NotificationsSettings } from './notifications-settings'
-import { PAGE_SCOPED_PARAMS, PLUGINS_NAV_ICON, pluginSettingsNavChildren, PluginSettingsPane, usePluginSettingsRoute } from './plugin-settings'
+import {
+  PAGE_SCOPED_PARAMS,
+  PLUGINS_NAV_ICON,
+  pluginSettingsNavChildren,
+  PluginSettingsPane,
+  usePluginSettingsRoute
+} from './plugin-settings'
 import { PROVIDER_VIEWS, ProvidersSettings, type ProviderView } from './providers-settings'
 import { SessionsSettings } from './sessions-settings'
-import { SystemResourcesSettings } from './system-resources-settings'
+import { SettingsShell } from './settings-shell'
 import { SettingsSystemControls } from './system-status-controls'
 import type { SettingsPageProps, SettingsView as SettingsViewId } from './types'
 import { vaultOwnerKey, VaultSettings } from './vault-settings'
@@ -77,9 +55,7 @@ const SETTINGS_VIEWS: readonly SettingsViewId[] = [
   'keys',
   'vault',
   'notifications',
-  'billing',
   'sessions',
-  'resources',
   'plugins',
   'about'
 ]
@@ -132,7 +108,19 @@ export function SettingsView({
     }
   }, [navigate, search])
 
-  const [activeView] = useRouteEnumParam('tab', SETTINGS_VIEWS, 'account' as SettingsViewId)
+  const [routeActiveView] = useRouteEnumParam('tab', SETTINGS_VIEWS, 'account' as SettingsViewId)
+
+  const activeView =
+    routeActiveView === 'keys'
+      ? ('config:advanced' as SettingsViewId)
+      : routeActiveView === 'vault'
+        ? ('config:safety' as SettingsViewId)
+        : routeActiveView
+
+  const vaultDefaultExpanded =
+    routeActiveView === 'vault' ||
+    new URLSearchParams(search).get('vault') === 'open' ||
+    ['kind', 'label', 'origin'].some(param => new URLSearchParams(search).has(param))
 
   const plugins = usePluginSettingsRoute(activeView === 'plugins')
 
@@ -153,7 +141,8 @@ export function SettingsView({
         'origin',
         'pview',
         'kview',
-        'bview'
+        'bview',
+        'vault'
       ]) {
         next.delete(key)
       }
@@ -171,44 +160,39 @@ export function SettingsView({
       setActiveView('gateway')
     }
   }, [activeView, setActiveView])
-  // Providers subnav (Accounts vs API keys) lives in its own param so each
-  // sub-view is deep-linkable and survives a refresh.
-  const [providerView, setProviderView] = useRouteEnumParam<ProviderView>('pview', PROVIDER_VIEWS, 'accounts')
-  const [keysView] = useRouteEnumParam<KeysView>('kview', KEYS_VIEWS, 'tools')
+  // Local runtimes and custom endpoints remain separately addressable within
+  // Model Services; retired account/key routes are redirected above.
+  const [providerView] = useRouteEnumParam<ProviderView>('pview', PROVIDER_VIEWS, 'custom-endpoints')
 
   // Jump to a section + its sub-view in one navigate. Two sequential setters
   // would each read the same stale `search` and the second would clobber the
   // first's `tab` — so the sub-view never opened on narrow screens.
-  const openSubView = useCallback(
-    (tab: SettingsViewId, param: string, value: string, fallback: string) => {
-      const params = new URLSearchParams(search)
-
-      for (const key of ['page', 'field', 'setting', 'key', 'aux', 'session', 'kind', 'label', 'origin']) {
-        params.delete(key)
-      }
-
-      params.set('tab', tab)
-
-      if (value === fallback) {
-        params.delete(param)
-      } else {
-        params.set(param, value)
-      }
-
-      const qs = params.toString()
-      navigate({ hash, pathname, search: qs ? `?${qs}` : '' }, { replace: true })
-    },
-    [hash, navigate, pathname, search]
-  )
-
-  const openProviderView = useCallback(
-    (view: ProviderView) => openSubView('providers', 'pview', view, 'accounts'),
-    [openSubView]
-  )
-
-  const openKeysView = useCallback((view: KeysView) => openSubView('keys', 'kview', view, 'tools'), [openSubView])
-
   const importInputRef = useRef<HTMLInputElement | null>(null)
+  const fallbackImportInputRef = useRef<HTMLInputElement | null>(null)
+  const [pendingImport, setPendingImport] = useState<{ file: File; owner: string } | null>(null)
+  const importOwner = JSON.stringify([activeConnectionId, scopeProfile])
+  const importPickerOwnerRef = useRef(importOwner)
+
+  useEffect(() => {
+    if (pendingImport && (pendingImport.owner !== importOwner || activeView !== 'config:advanced')) {
+      setPendingImport(null)
+    }
+  }, [activeView, importOwner, pendingImport])
+
+  const openImport = () => {
+    triggerHaptic('open')
+    setPendingImport(null)
+    const input = importInputRef.current
+
+    if (input && !input.disabled) {
+      input.click()
+
+      return
+    }
+
+    importPickerOwnerRef.current = importOwner
+    fallbackImportInputRef.current?.click()
+  }
 
   const exportConfig = async () => {
     try {
@@ -267,21 +251,6 @@ export function SettingsView({
             onSelect: () => setActiveView(view)
           }
 
-          // Credential Vault lives beside the Browser section: it feeds the
-          // browser's model-blind vault fill, so the two are one mental unit.
-          if (s.id === 'browser') {
-            return [
-              entry,
-              {
-                active: activeView === 'vault',
-                icon: ShieldLock,
-                id: 'vault',
-                label: t.settings.nav.vault,
-                onSelect: () => setActiveView('vault')
-              }
-            ]
-          }
-
           return [entry]
         }),
         {
@@ -292,52 +261,7 @@ export function SettingsView({
           onSelect: () => setActiveView('notifications')
         },
         {
-          active: activeView === 'billing',
-          icon: BarChart3,
-          id: 'billing',
-          label: t.settings.nav.billing,
-          onSelect: () => setActiveView('billing')
-        },
-        {
           active: activeView === 'providers',
-          children: [
-            {
-              active: activeView === 'providers' && providerView === 'accounts',
-              icon: codiconIcon('account'),
-              id: 'pview:accounts',
-              label: t.settings.nav.providerAccounts,
-              onSelect: () => openProviderView('accounts')
-            },
-            {
-              active: activeView === 'providers' && providerView === 'keys',
-              icon: KeyRound,
-              id: 'pview:keys',
-              label: t.settings.nav.providerApiKeys,
-              onSelect: () => openProviderView('keys')
-            },
-            {
-              active: activeView === 'providers' && providerView === 'custom-endpoints',
-              icon: Globe,
-              id: 'pview:custom-endpoints',
-              label: t.settings.nav.providerCustomEndpoints,
-              onSelect: () => openProviderView('custom-endpoints')
-            },
-            // Local models ships behind the --local launch flag: no flag, no
-            // nav entry (the pane itself also refuses to render, so a stale
-            // ?pview=local deep link falls back to accounts-shaped emptiness
-            // rather than a hidden feature).
-            ...($localModelsEnabled.get()
-              ? [
-                  {
-                    active: activeView === 'providers' && providerView === 'local',
-                    icon: Cpu,
-                    id: 'pview:local',
-                    label: t.settings.nav.providerLocalModels,
-                    onSelect: () => openProviderView('local')
-                  }
-                ]
-              : [])
-          ],
           gapBefore: true,
           icon: Zap,
           id: 'providers',
@@ -357,29 +281,6 @@ export function SettingsView({
           id: 'keybinds',
           label: t.settings.nav.keybinds,
           onSelect: () => setActiveView('keybinds')
-        },
-        {
-          active: activeView === 'keys',
-          children: [
-            {
-              active: activeView === 'keys' && keysView === 'tools',
-              icon: Wrench,
-              id: 'kview:tools',
-              label: t.settings.nav.keysTools,
-              onSelect: () => openKeysView('tools')
-            },
-            {
-              active: activeView === 'keys' && keysView === 'settings',
-              icon: Settings2,
-              id: 'kview:settings',
-              label: t.settings.nav.keysSettings,
-              onSelect: () => openKeysView('settings')
-            }
-          ],
-          icon: KeyRound,
-          id: 'keys',
-          label: t.settings.nav.apiKeys,
-          onSelect: () => setActiveView('keys')
         },
         {
           active: activeView === 'sessions',
@@ -403,16 +304,9 @@ export function SettingsView({
           id: 'about',
           label: t.settings.nav.about,
           onSelect: () => setActiveView('about')
-        },
-        {
-          active: activeView === 'resources',
-          icon: Cpu,
-          id: 'resources',
-          label: t.shell.statusbar.systemResources.title,
-          onSelect: () => setActiveView('resources')
         }
       ] as OverlayNavGroup[],
-    [activeView, keysView, providerView, plugins, t, setActiveView, openProviderView, openKeysView]
+    [activeView, plugins, t, setActiveView]
   )
 
   // Type-to-search: printable keystrokes on the Settings surface (outside any
@@ -439,84 +333,37 @@ export function SettingsView({
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [])
 
-  // Fake search pill riding the card's top edge, dead-center and half off it.
-  // Clicking (or just typing) opens the ⌘K palette scoped to settings; while
-  // the palette is up the pill hands over to it — grows slightly and fades,
-  // then fades back when the palette closes. It sits outside the raised card,
-  // so it needs its own opaque glass surface to mask the content underneath.
-  const searchCombo = bindingsFor('nav.commandPalette')[0]
-  const paletteOpen = useStore($commandPaletteOpen)
-
-  const searchPill = (
-    <button
-      className={cn(
-        'flex h-(--titlebar-control-height) items-center gap-1.5 rounded-full border border-(--ui-stroke-secondary) bg-(--ui-chat-surface-background) px-2.5 text-(--ui-text-tertiary) shadow-sm transition-all duration-200 ease-out hover:text-foreground motion-reduce:transition-none',
-        paletteOpen && 'pointer-events-none scale-110 opacity-0'
-      )}
-      data-glass-opaque=""
-      onClick={() => {
-        triggerHaptic('open')
-        openCommandPalettePage('settings')
-      }}
-      tabIndex={paletteOpen ? -1 : undefined}
-      type="button"
-    >
-      <Search className="size-3" />
-      <span className="text-xs">{t.settings.search.pill}</span>
-      {searchCombo && <KbdCombo combo={searchCombo} size="sm" variant="ghost" />}
-    </button>
-  )
-
-  const navFooter = (
-    <div className="flex w-full flex-col gap-1 border-t border-(--ui-stroke-tertiary) pt-2 max-[47.5rem]:w-auto max-[47.5rem]:flex-row max-[47.5rem]:border-0 max-[47.5rem]:pt-0">
+  const toolbar = (
+    <>
       <SettingsSystemControls
         onOpenCommandCenter={onOpenCommandCenter}
         onOpenCommandCenterSection={onOpenCommandCenterSection}
         requestGateway={requestGateway}
       />
-      <SettingsVersionControl onOpenAbout={() => setActiveView('about')} />
-      <div className="flex items-center gap-1">
-        <Tip label={t.settings.exportConfig}>
-          <OverlayIconButton onClick={() => void exportConfig()}>
-            <Download />
-          </OverlayIconButton>
-        </Tip>
-        <Tip label={t.settings.importConfig}>
-          <OverlayIconButton
-            onClick={() => {
-              triggerHaptic('open')
-              importInputRef.current?.click()
-            }}
-          >
-            <Upload />
-          </OverlayIconButton>
-        </Tip>
-        <Tip label={t.settings.resetToDefaults}>
-          <OverlayIconButton
-            className="hover:text-destructive"
-            onClick={() => {
-              triggerHaptic('warning')
-              void resetConfig()
-            }}
-          >
-            <RefreshCw />
-          </OverlayIconButton>
-        </Tip>
-      </div>
-    </div>
+      <SettingsVersionControl
+        onExport={() => void exportConfig()}
+        onImport={openImport}
+        onOpenAbout={() => setActiveView('about')}
+        onReset={() => void resetConfig()}
+      />
+    </>
   )
 
   const activeSettingsContent =
     activeView === 'plugins' ? (
-      <PluginSettingsPane entries={plugins.entries} missing={plugins.missing} onOpen={plugins.open} pending={plugins.pending} target={plugins.target} />
+      <PluginSettingsPane
+        entries={plugins.entries}
+        missing={plugins.missing}
+        onOpen={plugins.open}
+        pending={plugins.pending}
+        target={plugins.target}
+      />
     ) : activeView === 'account' ? (
       <AccountSettings />
     ) : activeView === 'config:appearance' ? (
       <AppearanceSettings />
     ) : activeView === 'about' ? (
       <AboutSettings />
-    ) : activeView === 'resources' ? (
-      <SystemResourcesSettings />
     ) : activeView === 'gateway' || activeView === 'connections' ? (
       // 'connections' renders the unified page too so the frame before
       // the alias redirect lands doesn't flash the fallback view.
@@ -526,73 +373,65 @@ export function SettingsView({
     ) : activeView.startsWith('config:') ? (
       <ConfigSettings
         activeSectionId={activeView.slice('config:'.length)}
+        afterContent={
+          activeView === 'config:advanced' ? (
+            <KeysSettings embedded view="all" />
+          ) : activeView === 'config:safety' ? (
+            <VaultSettings
+              defaultExpanded={vaultDefaultExpanded}
+              embedded
+              key={vaultOwnerKey(activeConnectionId, scopeProfile)}
+            />
+          ) : undefined
+        }
+        importFile={
+          activeView === 'config:advanced' && pendingImport?.owner === importOwner ? pendingImport.file : undefined
+        }
         importInputRef={importInputRef}
         onConfigSaved={onConfigSaved}
+        onImportConsumed={file => {
+          setPendingImport(previous => (previous?.file === file ? null : previous))
+        }}
         onMainModelChanged={onMainModelChanged}
       />
     ) : activeView === 'providers' ? (
       <ProvidersSettings
         key={scopeProfile}
-        onClose={onClose}
         onConfigSaved={onConfigSaved}
         onMainModelChanged={onMainModelChanged}
-        onViewChange={setProviderView}
         view={providerView}
       />
-    ) : activeView === 'keys' ? (
-      <KeysSettings view={keysView} />
     ) : activeView === 'notifications' ? (
       <NotificationsSettings />
-    ) : activeView === 'billing' ? (
-      <BillingSettings />
-    ) : activeView === 'vault' ? (
-      <VaultSettings key={vaultOwnerKey(activeConnectionId, scopeProfile)} />
     ) : (
       <SessionsSettings />
     )
 
   return (
-    <section
-      aria-label={t.commandCenter.settings}
-      className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden bg-(--ui-chat-surface-background)"
-      data-aino-settings=""
-      data-settings-workspace=""
-    >
-      <header
-        className="grid h-12 shrink-0 grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-3 border-b border-(--ui-stroke-tertiary) bg-(--ui-sidebar-surface-background) px-3"
-        data-aino-page-header=""
-        data-settings-header=""
-      >
-        <div className="flex min-w-0 items-center">
-          <Button
-            aria-label={t.settings.closeSettings}
-            className="gap-1.5 text-(--ui-text-secondary) hover:text-foreground"
-            onClick={() => {
-              triggerHaptic('close')
-              onClose()
-            }}
-            size="sm"
-            variant="ghost"
-          >
-            <ChevronLeft className="size-4" />
-            <span>{t.commandCenter.back}</span>
-          </Button>
-          <h1 className="ml-2 truncate text-sm font-semibold text-foreground">{t.commandCenter.settings}</h1>
-        </div>
-        <div className="flex min-w-0 items-center justify-center">{searchPill}</div>
-        <div />
-      </header>
+    <SettingsShell groups={navGroups} onClose={onClose} toolbar={toolbar}>
+      {activeSettingsContent}
+      <input
+        accept=".json,application/json"
+        aria-label={t.settings.importConfig}
+        className="hidden"
+        data-settings-import-picker=""
+        onChange={event => {
+          const file = event.target.files?.[0]
+          event.target.value = ''
 
-      <div className="min-h-0 flex-1" data-aino-page-content="">
-        <OverlaySplitLayout>
-          <OverlayNav footer={navFooter} fullPage groups={navGroups} />
-
-          <OverlayMain className="px-0 pb-0" fullPage>
-            {activeSettingsContent}
-          </OverlayMain>
-        </OverlaySplitLayout>
-      </div>
-    </section>
+          if (file && importPickerOwnerRef.current === importOwner) {
+            // The file and destination must commit together so the previous
+            // page cannot cancel the import before Advanced mounts.
+            startTransition(() => {
+              setPendingImport({ file, owner: importOwner })
+              setActiveView('config:advanced')
+            })
+          }
+        }}
+        ref={fallbackImportInputRef}
+        type="file"
+      />
+    </SettingsShell>
   )
 }
 

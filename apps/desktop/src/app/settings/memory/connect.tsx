@@ -22,18 +22,28 @@ export function MemoryConnect({ profile, provider }: { profile?: string; provide
   const [phase, setPhase] = useState<'error' | 'idle' | 'pending'>('idle')
   const [detail, setDetail] = useState('')
   const timer = useRef<ReturnType<typeof setInterval> | null>(null)
-  const deadline = useRef(0)
+  const timeout = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const generation = useRef(0)
 
   const stop = useCallback(() => {
+    generation.current += 1
+
     if (timer.current !== null) {
       clearInterval(timer.current)
       timer.current = null
+    }
+
+    if (timeout.current !== null) {
+      clearTimeout(timeout.current)
+      timeout.current = null
     }
   }, [])
 
   useEffect(() => {
     let active = true
     setCapable('unknown')
+    setPhase('idle')
+    setDetail('')
     getMemoryProviderOAuthStatus(provider, profile)
       .then(s => {
         if (!active) {
@@ -72,11 +82,17 @@ export function MemoryConnect({ profile, provider }: { profile?: string; provide
   }, [phase])
 
   const connect = useCallback(async () => {
+    stop()
+    const attempt = generation.current
     setPhase('pending')
 
     try {
       await startMemoryProviderOAuth(provider, profile)
     } catch (err) {
+      if (generation.current !== attempt) {
+        return
+      }
+
       setPhase('error')
       setDetail(m.startConnectionFailed)
       notifyError(err, m.failedStartConnection)
@@ -84,20 +100,22 @@ export function MemoryConnect({ profile, provider }: { profile?: string; provide
       return
     }
 
-    deadline.current = Date.now() + POLL_TIMEOUT_MS
-    stop()
+    if (generation.current !== attempt) {
+      return
+    }
+
+    // A rejected or stalled status request must not outlive the consent deadline.
+    timeout.current = setTimeout(() => {
+      stop()
+      setPhase('error')
+      setDetail(m.timedOut)
+    }, POLL_TIMEOUT_MS)
     timer.current = setInterval(() => {
       void (async () => {
         try {
           const next = await getMemoryProviderOAuthStatus(provider, profile)
 
-          if (next.state === 'pending') {
-            if (Date.now() > deadline.current) {
-              stop()
-              setPhase('error')
-              setDetail(m.timedOut)
-            }
-
+          if (generation.current !== attempt || next.state === 'pending') {
             return
           }
 
@@ -112,7 +130,7 @@ export function MemoryConnect({ profile, provider }: { profile?: string; provide
             setPhase('idle')
           }
         } catch {
-          // Transient poll failure — keep trying until the deadline.
+          // The deadline also bounds repeated transient failures.
         }
       })()
     }, POLL_MS)

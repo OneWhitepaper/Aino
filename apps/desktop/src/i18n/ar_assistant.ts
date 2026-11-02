@@ -153,6 +153,9 @@ export const arAssistant = {
     },
     themePicker: arThemePicker,
     tool: {
+      collapseDetails: 'طي التفاصيل',
+      moreActions: 'إجراءات سجل التنفيذ',
+      hideRecord: 'إخفاء هذا السجل',
       copyCode: 'نسخ الكود',
       renderingImage: 'جار عرض الصورة...',
       copyOutput: 'نسخ الإخراج',

@@ -1,3 +1,5 @@
+import './pet-settings.css'
+
 import { useStore } from '@nanostores/react'
 import { type ReactNode, useEffect, useState } from 'react'
 
@@ -10,12 +12,11 @@ import { Input } from '@/components/ui/input'
 import { SearchField } from '@/components/ui/search-field'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Slider } from '@/components/ui/slider'
-import { Tip } from '@/components/ui/tooltip'
+import { Switch } from '@/components/ui/switch'
 import { useI18n } from '@/i18n'
 import { triggerHaptic } from '@/lib/haptics'
-import { Download, Loader2, PawPrint, Pencil, Trash2 } from '@/lib/icons'
+import { Check, Download, Loader2, PawPrint, Pencil, Trash2 } from '@/lib/icons'
 import { isSubmitEnter } from '@/lib/ime'
-import { selectableCardClass } from '@/lib/selectable-card'
 import { cn } from '@/lib/utils'
 import { $petInfo, $petRoam, setPetRoam } from '@/store/pet'
 import {
@@ -39,7 +40,7 @@ import {
 } from '@/store/pet-gallery'
 import { $gatewayState } from '@/store/session'
 
-import { ListRow, SectionHeading, SettingsGroup, ToggleRow } from './primitives'
+import { ListRow, SettingsDisclosure, SettingsGroup, ToggleRow } from './primitives'
 
 /**
  * Appearance opt-in for the floating petdex mascot. A thin view over the shared
@@ -60,6 +61,7 @@ export function PetSettings() {
   const petInfo = useStore($petInfo)
   const roam = useStore($petRoam)
   const [query, setQuery] = useState('')
+  const [catalogExpanded, setCatalogExpanded] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState<GalleryPet | null>(null)
   const [renameTarget, setRenameTarget] = useState<GalleryPet | null>(null)
   const [renameValue, setRenameValue] = useState('')
@@ -114,154 +116,113 @@ export function PetSettings() {
   const RENDER_CAP = 60
   const sorted = rankedGalleryPets(gallery, query)
   const shown = sorted.slice(0, RENDER_CAP)
+  const installed = shown.filter(pet => pet.installed)
+  const catalog = shown.filter(pet => !pet.installed)
+
+  const renderCard = (pet: GalleryPet) => (
+    <PetCard
+      active={enabled && active === pet.slug}
+      busy={busySlug === pet.slug}
+      currentLabel={t.appearancePage.petCurrent}
+      deleteLabel={pet.generated ? copy.delete(pet.displayName) : copy.uninstall(pet.displayName)}
+      exportLabel={copy.exportPet(pet.displayName)}
+      generatedLabel={copy.generatedTag}
+      installedLabel={copy.installedTag}
+      key={pet.slug}
+      loadThumb={(slug, url) => loadPetThumb(requestGateway, slug, url)}
+      onExport={() => exportPet(pet.slug)}
+      onRemove={() => (pet.generated ? setConfirmDelete(pet) : removePet(pet.slug))}
+      onRename={() => {
+        setRenameValue(pet.displayName)
+        setRenameTarget(pet)
+      }}
+      onSelect={() => selectPet(pet.slug)}
+      pet={pet}
+      renameLabel={copy.rename(pet.displayName)}
+    />
+  )
 
   return (
-    <div>
-      <SectionHeading icon={PawPrint} page title={copy.title} />
-      <p className="max-w-2xl text-[length:var(--conversation-caption-font-size)] leading-(--conversation-caption-line-height) text-(--ui-text-tertiary)">
-        {copy.intro}
+    <div className="pet-settings">
+      <header className="pet-settings-header">
+        <div>
+          <h2>{copy.chooseTitle}</h2>
+          <p>{copy.intro}</p>
+        </div>
+        <Switch
+          aria-label={copy.chooseTitle}
+          checked={enabled}
+          onCheckedChange={on => {
+            triggerHaptic('selection')
+            toggle(on)
+          }}
+        />
+      </header>
+
+      {staleBackend && <p className="pet-settings-notice">{copy.restartHint}</p>}
+
+      <SearchField
+        aria-label={copy.searchPlaceholder}
+        containerClassName="pet-settings-search"
+        onChange={setQuery}
+        placeholder={copy.searchPlaceholder}
+        value={query}
+        variant="box"
+      />
+      <p className="pet-settings-description">{copy.chooseDesc}</p>
+
+      {status === 'loading' && pets.length === 0 ? (
+        <div className="pet-settings-grid">
+          {Array.from({ length: 4 }, (_, i) => (
+            <div className="pet-settings-skeleton" key={i}>
+              <Skeleton className="size-12 shrink-0 rounded-md" />
+              <div className="min-w-0 flex-1 space-y-2">
+                <Skeleton className="h-3.5 w-24 max-w-full" />
+                <Skeleton className="h-3 w-16 max-w-full" />
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : pets.length === 0 ? (
+        <p className="pet-settings-empty">{copy.unreachable}</p>
+      ) : shown.length === 0 ? (
+        <p className="pet-settings-empty">{copy.noMatch(query)}</p>
+      ) : (
+        <>
+          {installed.length > 0 && (
+            <section className="pet-settings-installed">
+              <h3>
+                {copy.installedTag}
+                <span>{installed.length}</span>
+              </h3>
+              <div className="pet-settings-grid">{installed.map(renderCard)}</div>
+            </section>
+          )}
+          {catalog.length > 0 && (
+            <SettingsDisclosure
+              expanded={catalogExpanded || query.length > 0}
+              icon={PawPrint}
+              label={`${t.appearancePage.petCatalog} · ${catalog.length}`}
+              mounted
+              onToggle={() => setCatalogExpanded(value => !value)}
+            >
+              <div className="pet-settings-grid pet-settings-catalog">{catalog.map(renderCard)}</div>
+            </SettingsDisclosure>
+          )}
+        </>
+      )}
+      <p aria-live="polite" className="pet-settings-status" role="status">
+        {error ? (
+          <span className="text-(--ui-red)">{error}</span>
+        ) : sorted.length > RENDER_CAP ? (
+          copy.countCapped(RENDER_CAP, sorted.length)
+        ) : (
+          copy.count(sorted.length)
+        )}
       </p>
 
-      {staleBackend && (
-        <p className="mt-2 rounded-lg border border-(--ui-stroke-tertiary) bg-(--ui-bg-quinary) px-3 py-2 text-[length:var(--conversation-caption-font-size)] leading-(--conversation-caption-line-height) text-(--ui-text-tertiary)">
-          {copy.restartHint}
-        </p>
-      )}
-
-      <SettingsGroup className="mt-2">
-        <ToggleRow
-          below={
-            <>
-              <SearchField
-                containerClassName="mt-3 w-full"
-                inputClassName="flex-1"
-                onChange={setQuery}
-                placeholder={copy.searchPlaceholder}
-                value={query}
-              />
-              {/* Fixed-height scroll area so filtering never grows/shrinks the
-                  page (no layout thrash); the grid scrolls inside it. */}
-              <div className="mt-3 h-72 overflow-y-auto pr-1">
-                {status === 'loading' && pets.length === 0 ? (
-                  // First load keeps the grid's shape rather than flashing the
-                  // "unreachable" copy before the gallery has even arrived.
-                  <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
-                    {Array.from({ length: 6 }, (_, i) => (
-                      <div className="flex items-center gap-2.5 px-2.5 py-2" key={i}>
-                        <Skeleton className="size-10 shrink-0 rounded-md" />
-                        <div className="min-w-0 flex-1 space-y-1.5">
-                          <Skeleton className="h-3.5 w-24 max-w-full" />
-                          <Skeleton className="h-3 w-16 max-w-full" />
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : pets.length === 0 ? (
-                  <p className="text-[length:var(--conversation-caption-font-size)] text-(--ui-text-tertiary)">
-                    {copy.unreachable}
-                  </p>
-                ) : shown.length === 0 ? (
-                  <p className="wrap-anywhere text-[length:var(--conversation-caption-font-size)] text-(--ui-text-tertiary)">
-                    {copy.noMatch(query)}
-                  </p>
-                ) : (
-                  <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
-                    {shown.map(pet => {
-                      const isActive = enabled && active === pet.slug
-                      const isBusy = busySlug === pet.slug
-
-                      return (
-                        <div className="group relative" key={pet.slug}>
-                          <button
-                            className={cn(
-                              'flex w-full items-center gap-2.5 px-2.5 py-2 text-left disabled:opacity-50',
-                              selectableCardClass({ active: isActive, prominent: pet.installed })
-                            )}
-                            disabled={isBusy}
-                            onClick={() => void selectPet(pet.slug)}
-                            type="button"
-                          >
-                            <PetThumb
-                              alt={pet.displayName}
-                              load={(slug, url) => loadPetThumb(requestGateway, slug, url)}
-                              slug={pet.slug}
-                              url={pet.spritesheetUrl}
-                            />
-                            <span className="min-w-0 flex-1">
-                              <span className="flex items-center gap-1.5">
-                                <span className="truncate text-[length:var(--conversation-text-font-size)] font-medium">
-                                  {pet.displayName}
-                                </span>
-                                {pet.generated && (
-                                  <span className="shrink-0 rounded-full bg-primary/15 px-1.5 py-px text-[0.625rem] font-medium text-primary">
-                                    {copy.generatedTag}
-                                  </span>
-                                )}
-                              </span>
-                              <span className="block truncate text-[length:var(--conversation-caption-font-size)] text-(--ui-text-tertiary)">
-                                {pet.slug}
-                                {pet.installed ? ` · ${copy.installedTag}` : ''}
-                              </span>
-                            </span>
-                            {isBusy && <Loader2 className="size-4 shrink-0 animate-spin text-(--ui-text-tertiary)" />}
-                          </button>
-                          {!isBusy && (pet.installed || pet.generated) && (
-                            <div className="absolute right-1.5 top-1.5 flex gap-1 opacity-0 transition focus-within:opacity-100 group-hover:opacity-100">
-                              {pet.generated && (
-                                <PetAction
-                                  icon={<Pencil className="size-3.5" />}
-                                  label={copy.rename(pet.displayName)}
-                                  onClick={() => {
-                                    setRenameValue(pet.displayName)
-                                    setRenameTarget(pet)
-                                  }}
-                                />
-                              )}
-                              {pet.generated && (
-                                <PetAction
-                                  icon={<Download className="size-3.5" />}
-                                  label={copy.exportPet(pet.displayName)}
-                                  onClick={() => exportPet(pet.slug)}
-                                />
-                              )}
-                              {pet.installed && (
-                                // Generated pets have no remote source — deletion is
-                                // permanent, so confirm; petdex pets just uninstall.
-                                <PetAction
-                                  danger
-                                  icon={<Trash2 className="size-3.5" />}
-                                  label={pet.generated ? copy.delete(pet.displayName) : copy.uninstall(pet.displayName)}
-                                  onClick={() => (pet.generated ? setConfirmDelete(pet) : removePet(pet.slug))}
-                                />
-                              )}
-                            </div>
-                          )}
-                        </div>
-                      )
-                    })}
-                  </div>
-                )}
-              </div>
-              {/* Always-present status line so its appearance never shifts layout. */}
-              <p className="mt-2 min-h-4 text-[length:var(--conversation-caption-font-size)] text-(--ui-text-tertiary)">
-                {error ? (
-                  <span className="text-(--ui-red)">{error}</span>
-                ) : sorted.length > RENDER_CAP ? (
-                  copy.countCapped(RENDER_CAP, sorted.length)
-                ) : (
-                  copy.count(sorted.length)
-                )}
-              </p>
-            </>
-          }
-          checked={enabled}
-          description={copy.chooseDesc}
-          label={copy.chooseTitle}
-          onChange={toggle}
-          wide
-        />
-
-        {enabled && (
+      {enabled && (
+        <SettingsGroup className="pet-settings-options">
           <ListRow
             action={
               <div className="flex items-center gap-3">
@@ -284,12 +245,10 @@ export function PetSettings() {
             description={copy.scaleDesc}
             title={copy.scaleTitle}
           />
-        )}
 
-        {enabled && (
           <ToggleRow checked={roam} description={copy.roamDesc} label={copy.roamTitle} onChange={setPetRoam} />
-        )}
-      </SettingsGroup>
+        </SettingsGroup>
+      )}
 
       <ConfirmDialog
         confirmLabel={copy.deleteConfirm}
@@ -346,31 +305,92 @@ export function PetSettings() {
   )
 }
 
-/** A single hover-revealed icon action on a pet card (rename / export / delete). */
+interface PetCardProps {
+  active: boolean
+  busy: boolean
+  currentLabel: string
+  deleteLabel: string
+  exportLabel: string
+  generatedLabel: string
+  installedLabel: string
+  loadThumb: (slug: string, url?: string) => Promise<string | null>
+  onExport: () => void
+  onRemove: () => void
+  onRename: () => void
+  onSelect: () => void
+  pet: GalleryPet
+  renameLabel: string
+}
+
+function PetCard({
+  active,
+  busy,
+  currentLabel,
+  deleteLabel,
+  exportLabel,
+  generatedLabel,
+  installedLabel,
+  loadThumb,
+  onExport,
+  onRemove,
+  onRename,
+  onSelect,
+  pet,
+  renameLabel
+}: PetCardProps) {
+  return (
+    <article className="pet-settings-card" data-current={active || undefined}>
+      <button aria-pressed={active} className="pet-settings-select" disabled={busy} onClick={onSelect} type="button">
+        <PetThumb alt={pet.displayName} load={loadThumb} size={48} slug={pet.slug} url={pet.spritesheetUrl} />
+        <span className="pet-settings-identity">
+          <span className="pet-settings-name">{pet.displayName}</span>
+          <span className="pet-settings-slug">{pet.slug}</span>
+          {pet.generated && <span className="pet-settings-tag">{generatedLabel}</span>}
+        </span>
+        {busy && <Loader2 className="pet-settings-busy animate-spin" />}
+      </button>
+      {(pet.installed || pet.generated) && (
+        <div className="pet-settings-card-footer">
+          <span className="pet-settings-card-status" data-current={active || undefined}>
+            {active && <Check aria-hidden="true" />}
+            {active ? currentLabel : pet.installed ? installedLabel : generatedLabel}
+          </span>
+          <div className="pet-settings-actions">
+            {pet.generated && <PetAction disabled={busy} icon={<Pencil />} label={renameLabel} onClick={onRename} />}
+            {pet.generated && <PetAction disabled={busy} icon={<Download />} label={exportLabel} onClick={onExport} />}
+            {pet.installed && (
+              <PetAction danger disabled={busy} icon={<Trash2 />} label={deleteLabel} onClick={onRemove} />
+            )}
+          </div>
+        </div>
+      )}
+    </article>
+  )
+}
+
 function PetAction({
   danger,
+  disabled,
   icon,
   label,
   onClick
 }: {
   danger?: boolean
+  disabled?: boolean
   icon: ReactNode
   label: string
   onClick: () => void
 }) {
   return (
-    <Tip label={label}>
-      <button
-        aria-label={label}
-        className={cn(
-          'grid size-6 place-items-center rounded-md bg-(--ui-bg-elevated)/80 text-(--ui-text-tertiary) backdrop-blur-sm transition',
-          danger ? 'hover:text-(--ui-red)' : 'hover:text-foreground'
-        )}
-        onClick={onClick}
-        type="button"
-      >
-        {icon}
-      </button>
-    </Tip>
+    <button
+      aria-label={label}
+      className={cn('pet-settings-action', danger && 'pet-settings-action-danger')}
+      disabled={disabled}
+      onClick={onClick}
+      type="button"
+    >
+      {icon}
+      <span>{label}</span>
+    </button>
   )
 }

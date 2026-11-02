@@ -1,5 +1,24 @@
 import { Button } from '@/components/ui/button'
 import { useI18n } from '@/i18n'
+import { cn } from '@/lib/utils'
+
+interface ComposerDragRegionProps {
+  dragging: boolean
+  onToggle: () => void
+}
+
+/** The surface covers the center, leaving only the surrounding grab margin hit-testable. */
+export function ComposerDragRegion({ dragging, onToggle }: ComposerDragRegionProps) {
+  return (
+    <div
+      aria-hidden
+      className={cn('pointer-events-auto absolute inset-0', dragging ? 'cursor-grabbing' : 'cursor-grab')}
+      data-dragging={dragging ? '' : undefined}
+      data-slot="composer-drag-region"
+      onDoubleClick={onToggle}
+    />
+  )
+}
 
 /**
  * Radial dock-target glow shown while a popped-out composer is dragged.

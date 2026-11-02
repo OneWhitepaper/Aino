@@ -12,6 +12,19 @@ class TurnCallTracker:
         self._foreground_done = False
         self._revision = 0
         self._listener = None
+        self._managed_owner = None
+
+    def bind_managed_owner(self, user_id, session_id):
+        """Attach one billing identity to mixed BYOK/tool receipts, never a credential."""
+        with self._lock:
+            owner = (user_id, session_id)
+            if self._managed_owner not in (None, owner):
+                raise RuntimeError("managed_billing_scope_mismatch")
+            self._managed_owner = owner
+
+    def managed_owner(self):
+        with self._lock:
+            return self._managed_owner
 
     def snapshot(self):
         with self._lock:
