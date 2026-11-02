@@ -91,6 +91,10 @@ if entry.check_fn:
 
 Key behaviors:
 - Check results are **cached per-call** — if multiple tools share the same `check_fn`, it only runs once.
+- Across calls, availability uses a short TTL scoped to the profile and its config file signature.
+  A config edit re-probes when assembling tools for a new conversation, including edits from
+  another process; existing conversations retain their frozen tool schemas. Transient-failure
+  grace applies only while that configuration is unchanged.
 - Exceptions in `check_fn()` are treated as "unavailable" (fail-safe).
 - The `is_toolset_available()` method checks whether a toolset's `check_fn` passes, used for UI display and toolset resolution.
 

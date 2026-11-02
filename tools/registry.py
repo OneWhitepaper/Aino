@@ -260,8 +260,9 @@ _CHECK_FN_TTL_SECONDS = 30.0
 # so a genuinely-down backend is reflected within a couple of turns.
 _CHECK_FN_FAILURE_GRACE_SECONDS = 60.0
 _CHECK_FN_CACHE_MAX = 512
-_check_fn_cache: dict[tuple[Callable, Optional[str]], tuple[float, bool]] = {}
-_check_fn_last_good: dict[tuple[Callable, Optional[str]], float] = {}
+_CheckConfigSignature = tuple[str, Optional[tuple[int, int, int, int]]]
+_check_fn_cache: dict[tuple[Callable, Optional[str]], tuple[float, bool, _CheckConfigSignature]] = {}
+_check_fn_last_good: dict[tuple[Callable, Optional[str]], tuple[float, _CheckConfigSignature]] = {}
 _check_fn_ever_good: set[tuple[Callable, Optional[str]]] = set()  # probes that admitted tools this process
 _check_fn_core_drop_warned: set[tuple[Callable, Optional[str]]] = set()  # once-per-process WARNING gate
 _check_fn_cache_lock = threading.Lock()
@@ -287,7 +288,7 @@ def _prune_check_fn_caches(now: float) -> None:
     """Expire stale entries and cap profile-dimensional cache growth. Caller holds the lock."""
     for cache, ttl, stamp in (
         (_check_fn_cache, _CHECK_FN_TTL_SECONDS, lambda v: v[0]),
-        (_check_fn_last_good, _CHECK_FN_FAILURE_GRACE_SECONDS, lambda v: v)):
+        (_check_fn_last_good, _CHECK_FN_FAILURE_GRACE_SECONDS, lambda v: v[0])):
         for key, value in list(cache.items()):
             if now - stamp(value) >= ttl:
                 cache.pop(key, None)
@@ -357,6 +358,18 @@ def _run_check_fn_uncached(fn: Callable) -> bool:
     return False
 
 
+def _check_fn_config_signature() -> _CheckConfigSignature:
+    """Config writes re-probe availability for future assemblies, including writes from another process."""
+    from hermes_cli.config import get_config_path
+    from utils import file_signature
+
+    path = get_config_path()
+    try:
+        return str(path), file_signature(path.stat())
+    except OSError:
+        return str(path), None
+
+
 def _check_fn_cached(fn: Callable) -> bool:
     """Return bool(fn()), TTL-cached across calls."""
     now = time.monotonic()
@@ -366,10 +379,11 @@ def _check_fn_cached(fn: Callable) -> bool:
     if scope == CHECK_FN_CACHE_BYPASS:
         return _run_check_fn_uncached(fn)
     cache_key = (fn, scope)
+    config_signature = _check_fn_config_signature()
     with _check_fn_cache_lock:
         _prune_check_fn_caches(now)  # leaves only entries within TTL
         cached = _check_fn_cache.get(cache_key)
-        if cached is not None:
+        if cached is not None and cached[2] == config_signature:
             return cached[1]
     exc_info = None
     try:
@@ -384,12 +398,13 @@ def _check_fn_cached(fn: Callable) -> bool:
     with _check_fn_cache_lock:
         _prune_check_fn_caches(now)
         if value:
-            _check_fn_last_good[cache_key] = now
+            _check_fn_last_good[cache_key] = (now, config_signature)
             _check_fn_ever_good.add(cache_key)
-            _check_fn_cache[cache_key] = (now, True)
+            _check_fn_cache[cache_key] = (now, True, config_signature)
             return True
         last_good = _check_fn_last_good.get(cache_key)
-        if last_good is not None and now - last_good < _CHECK_FN_FAILURE_GRACE_SECONDS:
+        if (last_good is not None and last_good[1] == config_signature
+                and now - last_good[0] < _CHECK_FN_FAILURE_GRACE_SECONDS):
             # Recent success → flake: serve last-good True, do NOT cache (next call re-probes).
             logger.warning(
                 "check_fn %s failed (%s) within %.0fs of last success; "
@@ -416,7 +431,7 @@ def _check_fn_cached(fn: Callable) -> bool:
             log(
                 "check_fn %s %s; dependent tools will be unavailable this turn", _fn_label(fn), outcome,
                 exc_info=exc_info)
-        _check_fn_cache[cache_key] = (now, False)
+        _check_fn_cache[cache_key] = (now, False, config_signature)
         return False
 
 
@@ -454,9 +469,11 @@ def get_cached_check_fn_result(fn: Callable) -> Optional[bool]:
     if scope == CHECK_FN_CACHE_BYPASS:
         # Unresolved profile identity bypasses the cache; nothing trustworthy to report.
         return None
+    config_signature = _check_fn_config_signature()
     with _check_fn_cache_lock:
         cached = _check_fn_cache.get((fn, scope))
-    return cached[1] if cached is not None and now - cached[0] < _CHECK_FN_TTL_SECONDS else None
+    return (cached[1] if cached is not None and cached[2] == config_signature
+            and now - cached[0] < _CHECK_FN_TTL_SECONDS else None)
 
 
 class ToolRegistry:

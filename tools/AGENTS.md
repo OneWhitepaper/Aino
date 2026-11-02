@@ -53,7 +53,9 @@ Rules for tool code:
 - **No `offset`/`limit` on instructional tools** (skills, prompts, playbooks) — models read page 1
   and skip the rest (root rubric).
 - **`check_fn` answers reachability/opt-in for the profile it runs under, never surface.** Results
-  are TTL-cached in `registry.py::_check_fn_cache` keyed by `hermes_home_key()`, and one process
+  are TTL-cached in `registry.py::_check_fn_cache` by profile, with the owning config file's
+  signature checked before reuse or transient-failure grace. A config edit re-probes for new
+  tool assemblies; existing conversations keep their frozen schemas. One process
   serves many sessions AND many profiles: a probe reads credentials through
   `agent.secret_scope.get_secret`, never bare `os.getenv` (that answers with the launch profile's
   `.env` for everyone). The registry classifies an `UnscopedSecretError` from
