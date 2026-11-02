@@ -6,7 +6,6 @@ import {
   createLocalGatewayDials,
   createStaleGatewayRestarter,
   ensureLocalGateway,
-  gatewayOwnerProfile,
   localGatewayDial,
   nativeGatewayHttpHeaders,
   redialLocalGateway,
@@ -82,13 +81,13 @@ import { installApplicationMenuAfterFirstWindow } from './application-menu-start
 import { stopBackendChild as stopBackendChildImpl, waitForBackendExit } from './backend-child'
 import { execText, isPidOnlyStartMarker, processStartMarker, REAP_PROBE_TIMEOUT_MS } from './backend-claim'
 import { createBackendConnectionState } from './backend-connection-state'
-import { assertDescriptorStillOwned, forgetFailedDescriptor } from './backend-descriptor-cache'
+import { assertDescriptorStillOwned, forgetFailedDescriptor, newPoolEntry } from './backend-descriptor-cache'
 import { BackendDialClaims } from './backend-dial-claim'
 import { buildDesktopBackendEnv, profileBackendParentEnv } from './backend-env'
 import { isReauthRequiredError, waitForHermesReady } from './backend-health'
 import { backendCommandMatches, createBackendOwnership, createBackendShutdownCoordinator } from './backend-ownership'
 import { canImportHermesCli, PROBE_TIMEOUT_MS, shouldTrustHermesOverride, verifyHermesCli } from './backend-probes'
-import { recycleOwnedBackend } from './backend-recycle'
+import { createAttachedLocalGatewayRestarter, createProfileBackendRecycler } from './backend-recycle'
 import { isPidAliveWindows, waitForBackendRelease } from './backend-release-gate'
 import { createInstalledRuntimeGate } from './backend-resolution'
 import { desktopBackendSpawnEnv } from './backend-spawn-env'
@@ -346,7 +345,7 @@ import {
   shouldRelaunchForNvidiaGpuDeath,
   writeNvidiaEglMarker
 } from './linux-nvidia-egl-fallback'
-import { createLocalBackendLifecycle, waitForTeardown } from './local-backend-lifecycle'
+import { createLocalBackendLifecycle, LOCAL_GATEWAY_LIFECYCLE_SCOPE, waitForTeardown } from './local-backend-lifecycle'
 import { resolveMediaStreamFile } from './local-read-path'
 import { localSkinProfileKey, readLocalSkinPayload } from './local-skin'
 import { ACTIVE_LOG_POLL_MS, planLogRotation, reclaimActiveLogIfOversized } from './log-rotation'
@@ -9857,10 +9856,7 @@ function invalidatePrimaryConnection() {
   return backendConnectionState.invalidate()
 }
 
-// Re-home the primary backend: reset connection state, then wait for the live
-// dashboard process to actually exit (SIGKILL after 5s) so the next
-// startHermes() spawns fresh instead of racing the dying one. Shared by the
-// connection-config and profile switch flows.
+// Reset primary routing and await any Desktop-owned legacy child before re-homing.
 async function teardownPrimaryBackendAndWait({ soft = false }: { soft?: boolean } = {}): Promise<void> {
   const stopping = backendConnectionState.stopProcess(localBackendLifecycle.stop)
 
@@ -10027,6 +10023,12 @@ async function ensureBackend(profile, opts: { passive?: boolean; request?: { met
       : { ...connection, profile: key }
   }
 
+  const lifecycleScope = routeOpts.profileRemoteOverride || routeOpts.globalRemote ? '' : LOCAL_GATEWAY_LIFECYCLE_SCOPE
+
+  while (localBackendLifecycle.pendingRecycle(lifecycleScope)) {
+    await localBackendLifecycle.pendingRecycle(lifecycleScope)
+  }
+
   const existing = backendPool.get(key)
 
   if (existing) {
@@ -10039,14 +10041,16 @@ async function ensureBackend(profile, opts: { passive?: boolean; request?: { met
   assertNotPassiveSpawn(passive, key)
   const entry = newPoolEntry()
 
-  entry.connectionPromise = dialPoolBackend(key, entry).catch(error => {
-    // Land the failure in desktop.log: without this a dial that fails before
-    // the gateway answers (guard rejection, runtime resolution) leaves no trace
-    // beyond renderer-side rejections users never see in a bundle.
-    logPoolSpawnFailure(`"${key}"`, error)
-    forgetFailedPoolEntry(key, entry)
-    throw error
-  })
+  entry.connectionPromise = localBackendLifecycle
+    .start(() => dialPoolBackend(key, entry), lifecycleScope)
+    .catch(error => {
+      // Land the failure in desktop.log: without this a dial that fails before
+      // the gateway answers (guard rejection, runtime resolution) leaves no trace
+      // beyond renderer-side rejections users never see in a bundle.
+      logPoolSpawnFailure(`"${key}"`, error)
+      forgetFailedDescriptor(backendPool, key, entry)
+      throw error
+    })
   backendPool.set(key, entry)
 
   const connection = await entry.connectionPromise
@@ -10186,6 +10190,10 @@ async function ensureRegistryBackend(
       return ensureBackend(profile, { passive })
     }
 
+    while (localBackendLifecycle.pendingRecycle(LOCAL_GATEWAY_LIFECYCLE_SCOPE)) {
+      await localBackendLifecycle.pendingRecycle(LOCAL_GATEWAY_LIFECYCLE_SCOPE)
+    }
+
     const existingLocal = backendPool.get(localRoute.poolKey)
 
     if (existingLocal) {
@@ -10195,16 +10203,22 @@ async function ensureRegistryBackend(
     assertNotPassiveSpawn(passive, localRoute.poolKey)
     const localEntry = newPoolEntry()
 
-    localEntry.connectionPromise = dialPoolBackend(profileKey, localEntry, {
-      forceLocal: true,
-      poolKey: localRoute.poolKey
-    }).catch(error => {
-      // Same trace rule as the v1 path: a forced-local dial that rejects must
-      // still land in desktop.log.
-      logPoolSpawnFailure(`"${profileKey}" (forced-local)`, error)
-      forgetFailedPoolEntry(localRoute.poolKey, localEntry)
-      throw error
-    })
+    localEntry.connectionPromise = localBackendLifecycle
+      .start(
+        () =>
+          dialPoolBackend(profileKey, localEntry, {
+            forceLocal: true,
+            poolKey: localRoute.poolKey
+          }),
+        LOCAL_GATEWAY_LIFECYCLE_SCOPE
+      )
+      .catch(error => {
+        // Same trace rule as the v1 path: a forced-local dial that rejects must
+        // still land in desktop.log.
+        logPoolSpawnFailure(`"${profileKey}" (forced-local)`, error)
+        forgetFailedDescriptor(backendPool, localRoute.poolKey, localEntry)
+        throw error
+      })
     backendPool.set(localRoute.poolKey, localEntry)
 
     return localEntry.connectionPromise
@@ -10260,7 +10274,7 @@ async function ensureRegistryBackend(
     source.kind === 'ssh' ? resolveRegistryEffectiveFingerprint() : null,
     managedUpdateCorrelation
   ).catch(error => {
-    forgetFailedPoolEntry(key, entry)
+    forgetFailedDescriptor(backendPool, key, entry)
     throw error
   })
   backendPool.set(key, entry)
@@ -10391,7 +10405,7 @@ async function ensureManagedSshBackendAtKey(source, profile, key, correlationId,
     correlationId,
     tokenPersistenceSource
   ).catch(error => {
-    forgetFailedPoolEntry(key, entry)
+    forgetFailedDescriptor(backendPool, key, entry)
     throw error
   })
   backendPool.set(key, entry)
@@ -10874,18 +10888,6 @@ async function stopRegistryConnectionBackends(connectionId) {
   )
 }
 
-function newPoolEntry() {
-  return { connectionPromise: null, remoteBaseUrl: null }
-}
-
-function forgetFailedPoolEntry(poolKey: string, entry: any) {
-  forgetFailedDescriptor(backendPool, poolKey, entry)
-}
-
-function assertPoolEntryStillOwned(poolKey: string, entry: any) {
-  assertDescriptorStillOwned(backendPool, poolKey, entry)
-}
-
 // Resolve the connection descriptor for a named profile that is not the
 // primary: attach to (or start) its canonical local gateway via
 // `hermes gateway ensure`, or verify and describe its remote. Mirrors the local
@@ -10931,11 +10933,11 @@ async function dialPoolBackend(profile, entry, opts: { forceLocal?: boolean; poo
     async () => {
       const backend = await ensureRuntime(
         await resolveHermesBackend(['--profile', profile, 'gateway', 'ensure', '--json']),
-        () => assertPoolEntryStillOwned(poolKey, entry)
+        () => assertDescriptorStillOwned(backendPool, poolKey, entry)
       )
 
       profileDeletionGate.assertCanStart(profile)
-      assertPoolEntryStillOwned(poolKey, entry)
+      assertDescriptorStillOwned(backendPool, poolKey, entry)
 
       // Never another profile's dotenv credentials from the Desktop env (#68367).
       return runGatewayEnsure(
@@ -10961,7 +10963,7 @@ async function dialPoolBackend(profile, entry, opts: { forceLocal?: boolean; poo
         timeoutMs: UPDATE_WAIT_TIMEOUT_MS
       })
       // Update waits yield: retirement or profile deletion may win in that gap.
-      assertPoolEntryStillOwned(poolKey, entry)
+      assertDescriptorStillOwned(backendPool, poolKey, entry)
       assertLocalProfileCanStart(profile, profileDeletionGate, key =>
         directoryExists(path.join(HERMES_HOME, 'profiles', key))
       )
@@ -10969,7 +10971,8 @@ async function dialPoolBackend(profile, entry, opts: { forceLocal?: boolean; poo
     restartStaleLocalGateway
   )
 
-  assertPoolEntryStillOwned(poolKey, entry)
+  assertDescriptorStillOwned(backendPool, poolKey, entry)
+  entry.gatewayEndpoint = connection.gatewayEndpoint
 
   return { ...connection, profile, logs: hermesLog.slice(-80), ...getWindowState() }
 }
@@ -11005,23 +11008,12 @@ async function restartLocalGatewayOwner(ownerProfile: string): Promise<void> {
 // restarted once before attaching instead of being re-attached on every dial.
 const restartStaleLocalGateway = createStaleGatewayRestarter(restartLocalGatewayOwner, rememberLog)
 
-// Models-page "Restart Hermes": restart the local gateway behind `profile`'s cached descriptor.
-// A remote/SSH descriptor has no gatewayEndpoint, so nothing local is touched for it.
-async function restartAttachedLocalGateway(profile: string): Promise<void> {
-  const pending =
-    profile === primaryProfileKey()
-      ? backendConnectionState.getPromise()
-      : localProfilePoolKeys(profile)
-          .map(key => backendPool.get(key)?.connectionPromise)
-          .find(Boolean)
-
-  const connection = await pending?.catch(() => null)
-  const endpoint = connection?.gatewayEndpoint
-
-  if (endpoint) {
-    await restartLocalGatewayOwner(gatewayOwnerProfile(endpoint))
-  }
-}
+const restartAttachedLocalGateway = createAttachedLocalGatewayRestarter({
+  pool: backendPool,
+  primaryConnection: () => (primaryBackendIsRemote() ? null : backendConnectionState.getPromise()),
+  primaryProfile: primaryProfileKey,
+  restartOwner: restartLocalGatewayOwner
+})
 
 // Forget a cached descriptor. Nothing is killed: the gateway behind it owns its
 // own lifetime (`hermes gateway ensure` attach semantics), so the next
@@ -11230,6 +11222,14 @@ async function startHermes(requestedProfile?: string) {
   }
 
   await reapOrphanedBackendsOnce()
+
+  return localBackendLifecycle.start(
+    () => startHermesAttempt(requestedProfile),
+    primaryBackendIsRemote() ? '' : LOCAL_GATEWAY_LIFECYCLE_SCOPE
+  )
+}
+
+async function startHermesAttempt(requestedProfile?: string) {
   localBackendLifecycle.assertCanStart()
 
   // Latched-failure short-circuit: once bootstrap has failed in this
@@ -13933,20 +13933,20 @@ const hudIpc = registerHudIpc({
   }
 })
 
+const recycleProfileBackend = createProfileBackendRecycler({
+  duringLocalRecycle: run => localBackendLifecycle.recycle(LOCAL_GATEWAY_LIFECYCLE_SCOPE, run),
+  notifyApplied: sendConnectionApplied,
+  primaryProfile: primaryProfileKey,
+  primaryRemote: primaryBackendIsRemote,
+  profileRouteOptions,
+  restartLocalGateway: restartAttachedLocalGateway,
+  teardownPool: teardownPoolBackendAndWait,
+  teardownPrimary: () => teardownPrimaryBackendAndWait({ soft: true }),
+  teardownSsh: value => teardownSshConnection(value || null)
+})
+
 ipcMain.handle('hermes:backend:recycle', async (_event, profile) => {
-  // Models-page recovery after a code-skew 503 (#97046): kill the owned
-  // SSH serve (if any) before the local child so reconnect cannot reuse a
-  // stale lockfile, and restart the attached local gateway (Desktop does not
-  // own it). Soft primary teardown keeps the renderer shell mounted.
-  await recycleOwnedBackend({
-    notifyApplied: sendConnectionApplied,
-    primaryProfile: primaryProfileKey(),
-    profile: typeof profile === 'string' ? profile : '',
-    restartLocalGateway: restartAttachedLocalGateway,
-    teardownPool: teardownPoolBackendAndWait,
-    teardownPrimary: () => teardownPrimaryBackendAndWait({ soft: true }),
-    teardownSsh: value => teardownSshConnection(value || null)
-  })
+  await recycleProfileBackend(profile)
 
   return { ok: true }
 })

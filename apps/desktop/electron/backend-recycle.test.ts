@@ -19,6 +19,7 @@ describe('recycleOwnedBackend', () => {
     const events: string[] = []
 
     const target = await recycleOwnedBackend({
+      duringRecycle: run => run(),
       notifyApplied: () => events.push('applied'),
       primaryProfile: 'default',
       profile: undefined,
@@ -47,6 +48,7 @@ describe('recycleOwnedBackend', () => {
     const events: string[] = []
 
     const target = await recycleOwnedBackend({
+      duringRecycle: run => run(),
       notifyApplied: () => events.push('applied'),
       primaryProfile: 'default',
       profile: 'paid-ads',
@@ -77,6 +79,7 @@ describe('recycleOwnedBackend', () => {
     })
 
     const run = recycleOwnedBackend({
+      duringRecycle: run => run(),
       notifyApplied: () => events.push('applied'),
       primaryProfile: 'default',
       restartLocalGateway: async () => undefined,

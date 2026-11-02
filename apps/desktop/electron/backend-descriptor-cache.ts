@@ -11,6 +11,10 @@ export interface BackendDescriptorEntry {
   connectionPromise: Promise<unknown> | null
 }
 
+export function newPoolEntry() {
+  return { connectionPromise: null, gatewayEndpoint: null, remoteBaseUrl: null }
+}
+
 /** Drop a failed entry — only if it is still the installed one. */
 export function forgetFailedDescriptor<TEntry extends BackendDescriptorEntry>(
   cache: Map<string, TEntry>,
