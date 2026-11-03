@@ -42,9 +42,9 @@ export function CanonicalGroupRoster({ members = [], label, labels, phases }: {
     {members.map(member => {
       const phase = phases.get(member.member_id)
 
-      return <li className="inline-flex items-center gap-1" data-phase={phase ?? 'idle'} key={member.member_id}>
+      return <li className="inline-flex min-w-0 max-w-full items-center gap-1" data-phase={phase ?? 'idle'} key={member.member_id}>
         {phase === 'working' && <GlyphSpinner ariaLabel={labels.memberWorking} className="text-(--ui-accent)" />}
-        <span className={phase === 'working' ? 'text-(--ui-text-secondary)' : undefined}>{memberName(member)}</span>
+        <span className={`min-w-0 wrap-anywhere ${phase === 'working' ? 'text-(--ui-text-secondary)' : ''}`}>{memberName(member)}</span>
         {phase === 'queued' && <span className="text-(--ui-text-quaternary)">· {labels.memberQueued}</span>}
       </li>
     })}

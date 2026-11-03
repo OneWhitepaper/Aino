@@ -261,11 +261,11 @@ export function GroupMentionInput({ handleFor, members, onChange, onSubmitDraft,
   return (
     <div className="relative min-w-0 flex-1">
       {open ? (
-        <div className="absolute bottom-full left-0 z-50 mb-1 max-h-48 w-64 overflow-y-auto rounded-lg border border-(--ui-stroke-secondary) bg-(--ui-bg-elevated) py-1 shadow-md">
+        <div className="absolute bottom-full left-0 z-50 mb-1 max-h-48 w-64 max-w-full overflow-y-auto rounded-(--aino-radius-menu) border border-(--stroke-nous) bg-(--ui-bg-elevated) py-1 shadow-nous">
           {options.map((option, index) => (
             <RowButton
               className={cn(
-                'flex w-full items-baseline gap-2 px-2 py-1 text-left text-xs',
+                'flex w-full min-w-0 items-baseline gap-2 px-2 py-1 text-left text-xs',
                 index === active ? 'bg-(--ui-control-hover-background) text-foreground' : 'text-(--ui-text-secondary)'
               )} // preventDefault on mousedown so the input keeps focus.
               key={option.handle}
@@ -275,8 +275,8 @@ export function GroupMentionInput({ handleFor, members, onChange, onSubmitDraft,
               }}
               onMouseEnter={() => setSelected(index)}
             >
-              <span className="font-medium">{`@${option.handle}`}</span>
-              <span className="truncate text-[length:var(--aino-text-caption)] text-(--ui-text-tertiary)">{option.meta}</span>
+              <span className="min-w-0 wrap-anywhere font-medium">{`@${option.handle}`}</span>
+              <span className="min-w-0 truncate text-[length:var(--aino-text-caption)] text-(--ui-text-tertiary)">{option.meta}</span>
             </RowButton>
           ))}
         </div>

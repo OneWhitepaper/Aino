@@ -61,18 +61,18 @@
 }
 
 .aino-sidebar-mode-menu[data-slot='dropdown-menu-content'] {
-  width: 320px;
+  width: 15rem;
   min-width: 0;
   max-width: var(--radix-dropdown-menu-content-available-width);
-  padding: 9px;
-  border-radius: 17px;
+  padding: 6px;
+  border-radius: var(--aino-radius-menu);
 }
 
 .aino-sidebar-mode-menu .aino-sidebar-mode-item {
-  gap: 18px;
-  min-height: 72px;
-  padding: 12px 14px;
-  border-radius: 10px;
+  gap: 10px;
+  min-height: 56px;
+  padding: 8px 10px;
+  border-radius: var(--aino-radius-control);
 }
 
 .aino-sidebar-mode-copy {
@@ -86,26 +86,27 @@
 .aino-sidebar-mode-item-title {
   overflow: hidden;
   color: var(--ui-text-primary);
-  font-size: 1rem;
+  font-size: var(--aino-text-ui);
   font-weight: 500;
-  line-height: 1.5;
+  line-height: 1.4;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .aino-sidebar-mode-description {
   color: var(--ui-text-tertiary);
-  font-size: 0.75rem;
+  font-size: var(--aino-text-caption);
   font-weight: 400;
-  line-height: 1.65;
+  line-height: 1.5;
   overflow-wrap: anywhere;
 }
 
 .aino-sidebar-mode-item > [data-state='checked'] {
+  flex: none;
   color: var(--ui-text-secondary);
 }
 
 .aino-sidebar-mode-item > [data-state='checked'] svg {
-  width: 20px;
-  height: 20px;
+  width: 16px;
+  height: 16px;
 }

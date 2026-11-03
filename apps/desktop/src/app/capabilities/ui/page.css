@@ -118,10 +118,25 @@
   justify-content: space-between;
   gap: 12px;
 }
+.connectors-directory {
+  container: connectors / inline-size;
+}
+.connector-directory-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 12px;
+}
+@container connectors (min-width: 680px) {
+  .connector-directory-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
 .connector-directory-card {
   position: relative;
-  display: flex;
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr) auto;
   align-items: center;
+  container: connector-card / inline-size;
   min-width: 0;
   min-height: 112px;
   gap: 12px;
@@ -130,6 +145,23 @@
   border-radius: var(--aino-radius-card);
   background: var(--ui-bg-elevated);
   transition: border-color 120ms;
+}
+.connector-card-lane {
+  grid-column: 3;
+  grid-row: 1;
+  width: 124px;
+}
+@container connector-card (max-width: 360px) {
+  .connector-card-lane {
+    grid-column: 2 / -1;
+    grid-row: 2;
+    width: auto;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 8px;
+  }
 }
 .connector-directory-card:hover {
   border-color: var(--ui-stroke-primary);

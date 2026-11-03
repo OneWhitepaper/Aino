@@ -61,7 +61,7 @@ export function SidebarModeHeader({ activeId, items, onSelect, menuLabel, onOpen
             aria-label={menuLabel}
             className="aino-sidebar-mode-menu"
             data-sidebar-mode-menu=""
-            sideOffset={10}
+            sideOffset={6}
           >
             <DropdownMenuRadioGroup onValueChange={onSelect} value={active.id}>
               {items.map(item => (

@@ -28,18 +28,20 @@ export function CanonicalGroupHeader({ busy, canStop, onBack, onDisband, onRenam
   }
 
   return <>
-    <header className="flex items-center gap-2">
+    <header className="flex min-w-0 flex-wrap items-start gap-2">
       {onBack && <Button onClick={onBack}>{labels.back}</Button>}
-      <div className="min-w-0">
-        <h2 className="text-sm font-medium">{room?.name || labels.loadingGroup}</h2>
+      <div className="min-w-0 flex-1 basis-48">
+        <h2 className="wrap-anywhere text-sm font-medium">{room?.name || labels.loadingGroup}</h2>
         <CanonicalGroupRoster label={labels.members} labels={labels} members={room?.members} phases={phases} />
       </div>
-      <Button disabled={busy || !canStop} onClick={onStop}>{labels.stop}</Button>
-      <Button disabled={busy || !room} onClick={() => setRenaming(room?.name ?? '')}>{labels.rename}</Button>
-      <Button disabled={busy || !room} onClick={() => setEnding(true)}>{labels.disband}</Button>
+      <div className="ml-auto flex max-w-full flex-wrap items-center gap-2">
+        <Button disabled={busy || !canStop} onClick={onStop}>{labels.stop}</Button>
+        <Button disabled={busy || !room} onClick={() => setRenaming(room?.name ?? '')}>{labels.rename}</Button>
+        <Button disabled={busy || !room} onClick={() => setEnding(true)}>{labels.disband}</Button>
+      </div>
     </header>
-    {renaming !== null && <form className="flex items-center gap-2" onSubmit={event => { event.preventDefault(); rename(renaming.trim()) }}>
-      <Input aria-label={labels.renameLabel} autoFocus onChange={event => setRenaming(event.target.value)} value={renaming} />
+    {renaming !== null && <form className="flex min-w-0 flex-wrap items-center gap-2" onSubmit={event => { event.preventDefault(); rename(renaming.trim()) }}>
+      <Input aria-label={labels.renameLabel} autoFocus className="min-w-0 flex-1 basis-48" onChange={event => setRenaming(event.target.value)} value={renaming} />
       <Button disabled={busy || !renaming.trim()} type="submit">{labels.save}</Button>
       <Button onClick={() => setRenaming(null)} type="button">{labels.cancel}</Button>
     </form>}

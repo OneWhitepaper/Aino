@@ -408,9 +408,6 @@
   .messaging-profile-scope > p {
     max-width: none;
   }
-  .messaging-platform-grid {
-    grid-template-columns: minmax(0, 1fr);
-  }
   .messaging-catalog-toolbar {
     align-items: stretch;
   }
@@ -446,8 +443,14 @@
   }
 }
 
-@container messaging (min-width: 701px) and (max-width: 900px) {
+@container messaging (min-width: 561px) and (max-width: 900px) {
   .messaging-platform-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@container messaging (max-width: 560px) {
+  .messaging-platform-grid {
+    grid-template-columns: minmax(0, 1fr);
   }
 }

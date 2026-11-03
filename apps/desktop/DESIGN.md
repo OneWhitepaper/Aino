@@ -55,6 +55,9 @@ that the mockup does not show.
 - The default Sessions/Agent Hub rail uses a shared 61px brand row below the
   native window controls. Its current title (Aino or the contributed pane name)
   opens the existing dropdown menu, with descriptions and a checked current item.
+  This two-option menu uses a compact 240px width capped by the viewport,
+  56px minimum rows, 14px names and 12px descriptions, with shared menu/control
+  corners. Long localized descriptions wrap rather than widening the menu.
   A lone pane has a static brand without a chevron. The host owns presentation;
   existing pane activation still owns chat and routines. Unknown guests, layout
   editing, detached panes and minimized zones retain the ordinary pane strip.
@@ -480,14 +483,17 @@ hairline in `src/styles/aino-theme.css`. Tune those tokens and every peer inheri
 Don't add per-overlay `shadow-[…]` or `border-(--ui-stroke-secondary)`
 one-offs; if elevation needs to change, change the token.
 
-Menus, selects, dialogs, sheets and popovers share the same `shadow-nous` +
-`--stroke-nous` treatment and 16px panel radius (sheets round their exposed edge).
+Menus and selects use the shared 12px menu radius; dialogs, sheets and ordinary
+popovers use the 16px panel radius (sheets round their exposed edge). All share
+the same `shadow-nous` + `--stroke-nous` treatment.
 Every floating list —
 `DropdownMenu`, `Select`, and Popover + cmdk pickers
 (`<PopoverContent variant="menu">` + `<Command variant="menu">`) — paints
 through `src/components/ui/menu.ts`, so a list reads the same wherever it
 opens. Typed fields with suggestions use `ComboboxInput`, never
 `<input list>` + `<datalist>` (Chromium paints that as its own OS popup).
+Shared menu and popover surfaces cap their width to the viewport with 8px side
+gutters; long menu labels wrap instead of pushing actions outside the window.
 
 Drag affordances may use tokenized
 dashed targets and local blur. These are semantic surface classes, not licenses

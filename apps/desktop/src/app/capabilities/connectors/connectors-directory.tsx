@@ -59,7 +59,7 @@ export function ConnectorsDirectory({
   const segmentFellBack = segments.length > 0 && segment !== filter.segment
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col" data-slot="connectors-directory">
+    <div className="connectors-directory flex min-h-0 min-w-0 flex-1 flex-col" data-slot="connectors-directory">
       {cards.length === 0 ? null : (
         <>
           <div className="capabilities-directory-toolbar">
@@ -198,7 +198,7 @@ function Group({
         </div>
       </header>
 
-      <div className="grid gap-3 sm:grid-cols-2">
+      <div className="connector-directory-grid">
         {group.cards.map(card => {
           const key = cardKey(card)
 

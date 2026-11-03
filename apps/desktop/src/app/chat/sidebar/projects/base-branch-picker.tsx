@@ -138,7 +138,7 @@ export function BaseBranchPicker({
           >
             <Codicon className="shrink-0 text-(--ui-text-tertiary)" name="git-branch" size="0.8rem" />
             <span className="shrink-0">{parts.before}</span>
-            <span className="shrink-0 text-primary underline-offset-4 decoration-current/20 group-hover:underline">
+            <span className="min-w-0 truncate text-primary underline-offset-4 decoration-current/20 group-hover:underline">
               {loading ? '...' : value}
             </span>
             <Codicon className="shrink-0 text-(--ui-text-tertiary)" name="chevron-down" size="0.75rem" />
