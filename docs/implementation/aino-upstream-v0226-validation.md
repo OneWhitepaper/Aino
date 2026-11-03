@@ -190,6 +190,31 @@ Final local receipts: `desktop-ui-full-fourth.log`,
 `native-recovery-acceptance.log`, `native-offline-signoff.log`,
 `recharge-autoquote-focused.log` and `native-image-first.log`.
 
+## Native image dimensions follow-up
+
+The OpenAI-compatible executor previously always selected one of three aspect
+presets, and the Aino wrapper did not forward an explicit size. The existing
+provider capability mechanism now exposes optional `size` (`auto` or positive
+`WIDTHxHEIGHT`) for Aino/OpenAI, including reference edits. Generation JSON and
+edit multipart requests preserve the explicit pixels and automatic quality.
+Invalid syntax rejects before credentials; API rejection does not retry or
+downgrade. Original image bytes remain unchanged. `requested_size` is distinct
+from header-derived `actual_size` / desktop-compatible `pixel_size`; unknown or
+different output dimensions carry an explanatory note.
+
+- Regression first: all **14 cases failed** on the previous implementation.
+- Focused image/provider/schema/managed-auth/billing suites: **181 passed** in
+  14 files through `scripts/run_tests.sh`, with file retries disabled.
+- Native account image generation/editing: **one passed** (48 seconds), using
+  isolated real API handlers and synthetic upstream pixels. Automatic quality,
+  original/source pixels, image-purpose ledger entries and transport/leak guards
+  remain verified. This does not establish the production route's native 4K
+  output; a model may reject or return different dimensions.
+- `scripts/check --staged --base HEAD`: **14 checks passed**, with zero blocking
+  or advisory code-health findings. Independent patch review found no blockers.
+- New tool controls apply to a new conversation; existing prompts and history
+  are not rewritten. API production code and the API checkout are unchanged.
+
 ## Validation boundary and release hold
 
 - This verifies source integration on macOS ARM64, not a newly signed/notarized

@@ -10,6 +10,7 @@ from __future__ import annotations
 import io
 import logging
 import os
+import re
 from typing import Any, Dict, List, Optional, Tuple
 
 from agent.secret_scope import get_secret, get_secret_str
@@ -128,6 +129,36 @@ def _named_bytes_io(ref: str) -> io.BytesIO:
     return bio
 
 
+def _resolve_image_size(size: Any, aspect: str) -> str:
+    if size is None:
+        return size_for(aspect)
+    if isinstance(size, str):
+        value = size.strip()
+        if re.fullmatch(r"auto|[1-9][0-9]*x[1-9][0-9]*", value):
+            return value
+    raise ValueError("size must be auto or WIDTHxHEIGHT with positive pixels, e.g. 2048x3072.")
+
+
+def _output_size_metadata(image_ref: str, requested_size: str) -> dict[str, Any]:
+    from PIL import Image
+
+    actual_size = None
+    # A URL left after a cache failure must not trigger another download just to inspect dimensions.
+    if not image_ref.startswith(("http://", "https://")):
+        try:
+            with Image.open(image_ref) as image:
+                actual_size = f"{image.width}x{image.height}"
+        except (OSError, ValueError, Image.DecompressionBombError):
+            pass  # Preserve the original result even when its dimensions cannot be verified.
+    extra = {"requested_size": requested_size, "actual_size": actual_size, "pixel_size": actual_size}
+    if actual_size is None:
+        extra["size_note"] = "Actual image dimensions could not be verified; do not claim the requested resolution was delivered."
+    elif requested_size != "auto" and actual_size != requested_size:
+        extra["size_note"] = (f"Requested {requested_size}; returned image is {actual_size}. "
+                              "The requested resolution was not delivered. No local resizing was applied.")
+    return extra
+
+
 class OpenAIImageGenProvider(StaticImageGenProvider):
     """OpenAI ``images.generate`` / ``images.edit`` backend with selectable API models."""
 
@@ -146,7 +177,8 @@ class OpenAIImageGenProvider(StaticImageGenProvider):
 
     def capabilities(self) -> dict[str, Any]:
         # images.edit() accepts up to 16 source images.
-        return {"modalities": ["text", "image"], "max_reference_images": 16}
+        return {"modalities": ["text", "image"], "max_reference_images": 16,
+                "creative_controls": ["size"]}
 
     def _endpoint(self):
         return _resolve_endpoint()
@@ -163,12 +195,17 @@ class OpenAIImageGenProvider(StaticImageGenProvider):
     def generate(
         self, prompt: str, aspect_ratio: str = DEFAULT_ASPECT_RATIO, *,
         image_url: Optional[str] = None, reference_image_urls: Optional[list[str]] = None,
+        size: Optional[str] = None,
         **kwargs: Any,
     ) -> dict[str, Any]:
         prompt = (prompt or "").strip()
         aspect = resolve_aspect_ratio(aspect_ratio)
         if not prompt:
             return prompt_required_error("openai", aspect)
+        try:
+            size = _resolve_image_size(size, aspect)
+        except ValueError as exc:
+            return error_factory(self.provider_id, aspect)(str(exc), "invalid_argument")
         base_url, api_key = self._endpoint()
         if not api_key:
             return error_factory("openai", aspect)(
@@ -181,7 +218,6 @@ class OpenAIImageGenProvider(StaticImageGenProvider):
         if err:
             return err
         tier_id, meta = self._model()
-        size = size_for(aspect)
         sources = collect_source_images(image_url, reference_image_urls, limit=16)
         is_edit = bool(sources)
         fail = error_factory(self.provider_id, aspect, model=tier_id, prompt=prompt)
@@ -222,6 +258,7 @@ class OpenAIImageGenProvider(StaticImageGenProvider):
         if err:
             return err
         extra: dict[str, Any] = {"size": size, "quality": meta["quality"]}
+        extra.update(_output_size_metadata(image_ref, size))
         if getattr(first, "revised_prompt", None):
             extra["revised_prompt"] = first.revised_prompt
         return success_response(

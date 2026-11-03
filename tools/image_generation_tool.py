@@ -937,7 +937,7 @@ _IMAGE_URL_PARAM = {
     ),
 }
 
-# Creative-control vocabulary (Krea 2 and Krea 3 today); a provider advertises the names it honors
+# Creative-control vocabulary; a provider advertises the names it honors
 # via ``capabilities()["creative_controls"]`` and only those reach the schema and its ``generate()``.
 _CREATIVE_CONTROL_PARAMS = {
     "creativity": {
@@ -951,6 +951,16 @@ _CREATIVE_CONTROL_PARAMS = {
     "resolution": {
         "type": "string", "enum": ["1K", "2K"],
         "description": "Output size: 1K (default) or 2K when small text or fine detail matters.",
+    },
+    "size": {
+        "type": "string", "pattern": "^(auto|[1-9][0-9]*x[1-9][0-9]*)$",
+        "description": (
+            "Native output pixels: auto or WIDTHxHEIGHT, overriding aspect_ratio. "
+            "For 2K/4K requests use explicit pixels, e.g. 2048x2048, 2048x3072, "
+            "3840x2160 or 4096x4096. Supported sizes depend on the selected model; "
+            "an unsupported size returns an error. Omit to keep the aspect-ratio default. "
+            "Check actual_size in the result; do not substitute local upscaling for native output."
+        ),
     },
     "intensity": {
         "type": "integer", "minimum": -100, "maximum": 100,
