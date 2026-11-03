@@ -2,8 +2,9 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { I18nProvider, setRuntimeI18nLocale } from '@/i18n'
+import { writeClipboardText } from '@/lib/clipboard'
 
-import { CopyButton, writeClipboardText } from './copy-button'
+import { CopyButton } from './copy-button'
 
 describe('CopyButton i18n', () => {
   afterEach(() => {

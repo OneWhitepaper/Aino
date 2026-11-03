@@ -13,15 +13,20 @@ import { jaBoot } from './ja_boot'
 import { jaCatalog, jaSkillDeepLink } from './ja_catalog'
 import { jaClarify } from './ja_clarify'
 import { jaConnectors } from './ja_connectors'
+import { jaCronControl } from './ja_cron_control'
+import { jaErrorCodes } from './ja_error_codes'
 import { jaErrorLayers } from './ja_error_layers'
 import { jaFirstRun } from './ja_first_run'
+import { jaGatewayHost } from './ja_gateway_host'
 import { jaLocalModels } from './ja_local_models'
+import { jaMemoryLayers } from './ja_memory_layers'
 import { jaModelMenu } from './ja_model_menu'
 import { jaModelSettings } from './ja_model_settings'
 import { jaNotices } from './ja_notices'
 import { jaNotifications } from './ja_notifications'
 import { jaOnboarding } from './ja_onboarding'
-import { jaPluginSettings } from './ja_plugins'
+import { jaPluginPreviewAccess } from './ja_plugin_preview_access'
+import { jaPluginSettings, jaPluginsTab } from './ja_plugins'
 import { jaProjects } from './ja_projects'
 import { jaSharedMetrics } from './ja_shared_metrics'
 import { jaThemePicker } from './ja_theme_picker'
@@ -416,6 +421,8 @@ const jaBaseOverrides = {
       microphoneConstraintsUnsupported: 'このデバイスはマイクの制約をサポートしていません。',
       microphoneFailed: 'マイクが失敗しました',
       microphoneInUse: 'マイクは他のアプリで使用中です。',
+      microphoneNeedsHttps:
+        'マイクには安全な接続が必要です。使うには、Webapp を HTTPS か 127.0.0.1 への SSH トンネル経由で開いてください。',
       microphonePermissionDenied: 'マイクのアクセス許可が拒否されました。',
       microphoneStartFailed: 'マイクの録音を開始できませんでした。',
       microphoneUnsupported: 'このランタイムはマイク録音をサポートしていません。',
@@ -593,7 +600,7 @@ const jaBaseOverrides = {
       advancedOutput: '出力の制限',
       advancedDelegation: 'サブエージェント',
       advancedDesktop: 'デスクトップと起動',
-      gatewayConnection: 'このウィンドウ',
+      gatewayConnection: 'プライマリゲートウェイ',
       gatewayDevices: '保存済みの接続',
       gatewayManagedUpdates: 'リモート更新',
       gatewayManagedUpdatesUnavailable: 'リモート更新には、管理対象 SSH の更新に対応したデスクトップ版が必要です。',
@@ -1078,8 +1085,7 @@ const jaBaseOverrides = {
     },
     gateway: {
       loading: 'ゲートウェイ設定を読み込み中...',
-      unavailableTitle: 'ゲートウェイ設定は利用できません',
-      unavailableDesc: 'デスクトップ IPC ブリッジはゲートウェイ設定を公開していません。',
+      ...jaGatewayHost,
       title: 'ゲートウェイ接続',
       envOverride: 'env オーバーライド',
       intro:
@@ -1308,7 +1314,7 @@ const jaBaseOverrides = {
       defaultDirTitle: 'デフォルトのプロジェクトディレクトリ',
       defaultDirDesc:
         '別のフォルダーを選択しない限り、新しいセッションはこのフォルダーで開始します。未設定の場合はホームディレクトリが使用されます。',
-      defaultDirUpdated: 'デフォルトのプロジェクトディレクトリを更新しました',
+      defaultDirUpdated: () => 'デフォルトのプロジェクトディレクトリを更新しました',
       defaultsTo: label => `デフォルト: ${label}。`,
       change: '変更',
       choose: '選択',
@@ -1459,7 +1465,9 @@ const jaBaseOverrides = {
       emailVerifiedLabel: '確認済みメール',
       offlineDescription: '最後に確認されたアカウント情報を表示しています。再接続後に再試行できます。',
       platformError: (code, retryAfter) =>
-        code === 'SMS_RATE_LIMITED' && retryAfter !== undefined
+        code === 'captcha_browser_unavailable'
+          ? 'このサイトの認証には Aino デスクトップアプリが必要です。デスクトップアプリを開いてログインしてください。'
+          : code === 'SMS_RATE_LIMITED' && retryAfter !== undefined
           ? `リクエストが多すぎます。${retryAfter} 秒後に再試行してください。`
           : 'アカウントのリクエストに失敗しました。再試行してください。',
       errors: {
@@ -1503,14 +1511,13 @@ const jaBaseOverrides = {
       wechatUnavailable: 'WeChat ログインはまだ利用できません。',
       switchIdentifier: 'メール / 電話番号に切り替え'
     }
-  },
+  ,
+memoryLayers: jaMemoryLayers
+},
 
   skillDeepLink: jaSkillDeepLink,
   skills: {
-    plugins: {
-      pageBlurb:
-        'プラグインはこのアプリ、エージェント、または両方を拡張できます。それぞれに独立したスイッチがあります。'
-    },
+    plugins: { ...jaPluginPreviewAccess, ...jaPluginsTab },
     hub: {
       search: '検索',
       searching: '検索中…',
@@ -1571,6 +1578,10 @@ const jaBaseOverrides = {
     changesApplyNewSessions: '変更は新しいセッションに適用されます。',
     skillUpdated: 'スキルを更新しました',
     edit: '編集',
+    lock: 'ロック',
+    locked: 'ロック中',
+    lockHint: 'ロック中はエージェントがこのスキルを変更できません。自分では引き続き編集できます。',
+    unlockedHint: 'ロックすると、エージェントはこのスキルを変更できなくなります。自分では引き続き編集できます。',
     archive: 'アーカイブ',
     skillArchivedTitle: 'スキルをアーカイブしました',
     skillArchivedMessage: 'hermes curator restore で復元できます。',
@@ -2027,19 +2038,22 @@ const jaBaseOverrides = {
     exported: 'プロファイルをエクスポートしました',
     failedImport: 'プロファイルのインポートに失敗しました',
     failedExport: 'プロファイルのエクスポートに失敗しました',
+    exportNeedsHost: name =>
+      `ブラウザーではプロファイルのアーカイブを保存できません。Hermes ホストで次を実行してください: hermes profile export ${name}`,
     allProfiles: 'すべてのプロファイル',
     showAllProfiles: 'すべてのプロファイルを表示',
+    notServedHere: 'ここでは提供されていません',
     switchToProfile: name => `${name} に切り替え`,
     switchToConnection: name => `${name} に切り替え`,
     switchConnectionFailed: name => `${name} に接続できませんでした`,
     manageProfiles: 'プロファイルを管理…',
     fleet: {
+      switchDeviceTitle: "このデバイスに切り替えますか？",
+      switchDeviceDesc: "このコンピューターで新しいセッションを開きます。現在の会話は別の実行サービスに残ります。",
+      switchDeviceConfirm: "切り替え",
       localDevice:
         'このデバイス（ローカルバックエンド — Hermes が無ければインストールし、あれば新しいセッションを開きます）',
-      switchDeviceTitle: 'このデバイスに切り替えますか？',
-      switchDeviceDesc: 'このコンピュータで新しいセッションを開きます。今の会話は別のゲートウェイに残ります。',
-      switchDeviceConfirm: '切り替える',
-      installDeviceTitle: 'このデバイスに切り替えますか？',
+      installDeviceTitle: 'このデバイスに Hermes をインストールしますか？',
       installDeviceDesc:
         'Hermes をローカルにインストールしてから、このコンピュータで新しいセッションを開きます。確認するまでインストールは始まりません。',
       installDeviceConfirm: 'ローカルにインストール',
@@ -2178,6 +2192,7 @@ const jaBaseOverrides = {
   },
 
   cron: {
+    control: jaCronControl,
     close: 'Cron を閉じる',
     title: 'スケジュール済みジョブ',
     count: count => `${count} 件のジョブ`,
@@ -2637,7 +2652,7 @@ const jaBaseOverrides = {
       '/init': 'リポジトリを調べて AGENTS.md の指示を作成または更新',
       '/suggestions': '提案された自動化を確認し、採用または却下',
       '/blueprint': 'ブループリントから自動化を設定',
-      '/browser': 'エージェントのブラウザーを管理 [connect|disconnect|status|use]',
+      '/browser': 'エージェントのブラウザーを管理 [connect|disconnect|status]',
       '/palette': 'コマンドパレットを開く',
       '/usage': 'このセッションのトークン使用量を表示',
       '/subscription': 'Nous のプランを確認し、ブラウザーで変更',
@@ -2949,6 +2964,8 @@ const jaBaseOverrides = {
     gitUnusable: 'このコンピューターで Git を実行できなかったため、更新を確認できませんでした。',
     latestBody: '最新バージョンを実行しています。',
     versionDetailsDistributionStore: 'Microsoft Store',
+    versionDetailsClient: 'このデバイス',
+    versionDetailsBackend: '接続中のバックエンド',
     latestBodyBackend: 'バックエンドは最新バージョンを実行しています。',
     allSetTitle: '準備完了',
     availableTitle: '新しい更新が利用可能',
@@ -3354,6 +3371,16 @@ const jaBaseOverrides = {
   },
 
   rightSidebar: {
+    terminalReconnectSame: "端末が切断されました。Enter で同じシェルに再接続します。",
+    terminalExpired: "端末が期限切れまたは終了しました。Enter で新しいシェルを作成します。",
+    terminalSuperseded: "端末は別のウィンドウに接続されています。Enter でこちらに戻します。",
+    terminalDenied: "端末へのアクセスが拒否されました。ログインとプロファイルを確認し、Enter で再試行してください。",
+    terminalCapacity: "端末数の上限です。他の端末を閉じ、Enter で再試行してください。",
+    terminalSignedOut: "ログアウトしました。このブラウザーで再ログインし、Enter で再接続してください。",
+    terminalReconnecting: "端末が切断されました。同じシェルに再接続しています…",
+    terminalStartRetry: (error: string) => "端末を起動できませんでした: " + error + "。Enter で再試行してください。",
+    terminalCloseFailed: "端末を閉じられませんでした",
+    terminalDropUnquotable: (shell, paths) => `これらの名前は ${shell} に安全に入力できません: ${paths}`,
     terminalReadOnly: '読み取り専用の出力',
     terminalReadOnlyHelp:
       'プロンプトに応答するには、バックグラウンドのコマンドを停止し、新しいターミナルで実行してください。新しいターミナルは別のシェルを開き、このプロセスには接続しません。',
@@ -3400,7 +3427,16 @@ const jaBaseOverrides = {
     terminalCloseAll: 'すべて閉じる',
     addToChat: 'チャットに追加',
     terminalStartFailed: error => `ターミナルの起動に失敗しました: ${error}`
-  },
+  ,
+terminalNewOn: '新しいターミナルを開く場所…',
+terminalGatewayRemoved: '削除されたゲートウェイ',
+terminalGatewayRemovedBody:
+      'このターミナルが動作していたゲートウェイは削除されたため、再度開けません。このタブを閉じてください。',
+terminalGatewayNoShellBody:
+      'このゲートウェイにはシェルアクセスがないため、このターミナルは再度開けません。このタブを閉じてください。',
+terminalDisconnectedBody:
+      'ターミナルが切断されました。Enter キーで新しいシェルを開始します。スクロールバックは保持されます。'
+},
 
   preview: {
     tab: 'プレビュー',
@@ -3464,6 +3500,7 @@ const jaBaseOverrides = {
       sentMessage: count => `${count} 件のログエントリーがコンポーザーに追加されました`
     },
     web: {
+      embeddedPreviewHint: '埋め込みプレビューを許可しないサイトです。元のページをブラウザーのタブで開いてください。',
       appFailedToBoot: 'プレビューアプリの起動に失敗しました',
       serverNotFound: 'サーバーが見つかりません',
       remoteLoopback:
@@ -3574,7 +3611,8 @@ const jaBaseOverrides = {
     saveApply: '保存して適用',
     notExpressible: 'この配置は互いに噛み合っています（風車型）— 入れ子の分割では表現できません',
     zoneCount: count => `${count} ゾーン`,
-    tabCount: count => `${count} 個のタブ`
+    tabCount: count => `${count} 個のタブ`,
+    tabActions: title => `${title} の操作`
   },
 
   contextMenu: {
@@ -3649,69 +3687,83 @@ const jaBaseOverrides = {
       errorGenericProvider: 'AI サービス',
       ...jaErrorLayers,
       errorCodes: {
+        ...jaErrorCodes,
         provider_policy_blocked: {
-          title: 'アカウント設定によりこのモデルはブロックされています',
+          title: (provider, model) => `${provider} の設定で ${model || 'このモデル'} がブロックされています`,
           body: provider =>
-            `${provider} はアカウントのデータまたはプライバシー設定により、このリクエストを処理できません。別のモデルまたはプロバイダーを選んでください。`
+            `${provider} のプライバシー設定により、このモデルのエンドポイントがすべて除外されています。${provider} で設定を変更するか、別のモデルを選んでください。`
         },
         content_policy_blocked: {
-          title: 'AI サービスが回答を拒否しました',
-          body: provider => `${provider} はこのメッセージへの回答を拒否しました。編集して再送してください。`
+          title: provider => `${provider} がこのメッセージを拒否しました`,
+          body: provider => `${provider} の安全フィルターにより拒否されました。メッセージを編集して再送してください。`
         },
         format_error: {
-          title: 'AI サービスがリクエストの形式を拒否しました',
+          title: provider => `${provider} がこのリクエストを拒否しました`,
           body: provider =>
-            `${provider} はこのリクエストの形式を受け付けませんでした。プロバイダーを切り替えるか、調査のため診断情報を送信してください。`
+            `${provider} はこの会話の構成を受け付けませんでした。プロバイダーを切り替えるか、繰り返し発生する場合は新しいチャットを開始してください。`
         },
         invalid_response: {
-          title: 'AI サービスが読み取れない応答を返しました',
-          body: provider => `${provider} は Hermes が読み取れない内容を返しました。しばらくしてから再試行してください。`
+          title: '返信を読み取れませんでした',
+          body: provider => `${provider} から空または壊れた返信が返されました。少ししてから再試行してください。`
         },
         empty_response: {
-          title: 'AI サービスが空の応答を返しました',
-          body: provider => `${provider} はこのメッセージに内容を返しませんでした。しばらくしてから再試行してください。`
+          title: '返信を取得できませんでした',
+          body: provider => `${provider} はこのメッセージに何も返しませんでした。少ししてから再試行してください。`
         },
         rate_limit: {
-          title: 'AI サービスが混み合っています',
-          body: provider => `${provider} は現在リクエスト数を制限しています。少し待ってから再試行してください。`
+          title: provider => `${provider} は現在混み合っています`,
+          body: provider => `${provider} のレート制限に達しました。少し待ってから再試行してください。`
         },
         upstream_rate_limit: {
-          title: 'AI サービスが混み合っています',
-          body: provider => `${provider} は現在リクエスト数を制限しています。少し待ってから再試行してください。`
+          title: (_provider, model) => `${model || 'このモデル'} は現在混み合っています`,
+          body: (provider, model) =>
+            `${model || 'このモデル'} は ${provider} の提供元でレート制限されています（お使いのアカウントの制限ではありません）。少ししてから再試行してください。`
         },
         overloaded: {
-          title: 'AI サービスの負荷が高すぎます',
+          title: provider => `${provider} は現在混み合っています`,
           body: provider =>
-            `${provider} で現在問題が発生しています。しばらくしてから再試行するか、プロバイダーを切り替えてください。`
+            `${provider} は過負荷のため、このリクエストを処理できませんでした。少ししてから再試行してください。`
         },
         server_error: {
-          title: 'AI サービスでエラーが発生しました',
-          body: provider =>
-            `${provider} がサーバーエラーを返しました。しばらくしてから再試行するか、プロバイダーを切り替えてください。`
+          title: provider => `${provider} で問題が発生しています`,
+          body: provider => `${provider} がサーバーエラーを返しました。少ししてから再試行してください。`
         },
         timeout: {
-          title: 'AI サービスに接続できません',
-          body: provider =>
-            `${provider} に接続できないか、時間内に応答がありませんでした。インターネット接続を確認してから再試行してください。`
+          title: provider => `${provider} に接続できません`,
+          body: provider => `Hermes は ${provider} に接続できませんでした。接続を確認してから再試行してください。`
         },
         ssl_cert_verification: {
-          title: '安全な接続に失敗しました',
+          title: provider => `${provider} との接続を検証できません`,
           body: provider =>
-            `Hermes は ${provider} との安全な接続を検証できませんでした。ネットワークやプロキシの設定を確認するか、プロバイダーを切り替えて再送してください。`
-        },
-        cron_session_read_only: {
-          title: 'このチャットはスケジュールされたジョブ用です',
-          body: 'このチャットはそのジョブの実行専用のため、メッセージは実行されませんでした。送信するには新しいチャットを開始してください。'
+            `プロキシまたは古い証明書ストアが ${provider} への安全な接続をブロックしました。修正方法はセットアップガイドを参照してください。`
         },
         usage_window: {
           title: '含まれる利用量を使い切りました',
           body: 'プランに含まれる利用量はリセットまで使い切りました。続けるには /topup でクレジットを追加してください。'
-        },
-        workspace_unavailable: {
-          title: 'このチャットのフォルダーが見つかりません',
-          body: 'このチャットの作業フォルダーが移動または削除されたため、メッセージは実行されませんでした。フォルダーを作り直すか、「Move to project」で別のフォルダーを割り当ててから、もう一度お試しください。'
         }
       },
+      errorAuthKinds: {
+        api_key: {
+          title: provider => `${provider} が API キーを拒否しました`,
+          body: () => '保存されたキーが無効か、取り消されています。キーを更新してから、メッセージを再送してください。'
+        },
+        oauth: {
+          title: provider => `${provider} に再度サインイン`
+        }
+      },
+      errorDetails: 'エラーの詳細を表示',
+      errorHideDetails: 'エラーの詳細を隠す',
+      errorDetailsCopy: '詳細をコピー',
+      errorCopyRaw: 'エラーをコピー',
+      errorContinue: '続行',
+      errorOpenProviderSettings: provider => `${provider} の設定を開く`,
+      errorOpenSetupGuide: 'セットアップガイドを開く',
+      errorSetupGuideLink: 'セットアップガイド',
+      errorOpenModelSettings: 'モデル設定を開く',
+      errorStartNewChatLink: '新しいチャットを開始',
+      errorChooseModelLink: '別のモデルを選ぶ',
+      errorRetryAtResetShort: time => `${time} に再試行`,
+      errorRateLimitResetBody: (provider, time) => `${provider} のレート制限に達しました。${time} にリセットされます。`,
       errorRetry: '再試行',
       errorSwitchToModel: (model, note) => (note ? `${model} に切り替え（${note}）` : `${model} に切り替え`),
       errorSwitchModelFailed: 'モデルを切り替えられませんでした',
@@ -3719,8 +3771,6 @@ const jaBaseOverrides = {
       errorUseCreditsFailed: 'クレジットで続行を有効にできませんでした',
       errorAddCredits: 'クレジットを追加',
       errorOpenBillingSettings: '請求設定を開く',
-      errorLimitResets: time => `制限は ${time} にリセットされます`,
-      errorRetryAtReset: time => `制限のリセット時に再試行（${time}）`,
       errorRetryScheduled: (time, wait) => `${time} に再試行 — 残り ${wait}`,
       errorRetryScheduledCancel: 'キャンセル',
       errorStartNewSession: '新しいセッションを開始',
@@ -3731,7 +3781,6 @@ const jaBaseOverrides = {
       errorOpenLogs: 'ログを開く',
       errorOpenLogsFailed: 'ログフォルダを開けませんでした',
       errorOpenDesktopLogs: 'デスクトップのログを開く',
-      errorCopyDiagnostics: 'エラー詳細をコピー',
       errorSendDiagnostics: '診断情報を送信',
       filesChanged: count => `${count} 件のファイルを変更`,
       reviewChanges: 'レビュー',
@@ -4070,6 +4119,12 @@ const jaBaseOverrides = {
   },
 
   desktop: {
+    localRuntimeUnavailableTitle: "ローカル実行環境を利用できません",
+    localRuntimeUnavailableDesktop: "設定 → モデルサービス → ローカルモデルで実行環境を設定してください。",
+    localRuntimeUnavailableWebapp: "Aino デスクトップでローカルモデルを設定するか、このブラウザーでホスト型モデルを選んでください。",
+    openLocalModels: "ローカルモデルを開く",
+    serviceAuthorizationTitle: "サービス認証",
+    serviceAuthorizationDescription: "外部サービス自身のアカウントでログインします。Aino アカウントとは別の認証です。",
     audioReadFailed: '録音した音声を読み取れませんでした',
     sessionUnavailable: 'セッションが利用できません',
     createSessionFailed: '新しいセッションを作成できませんでした',
@@ -4151,6 +4206,7 @@ const jaBaseOverrides = {
     imageAttach: '画像を添付',
     imageWriteFailed: '画像のディスクへの書き込みに失敗しました。',
     imageAttachFailed: '画像の添付に失敗しました',
+    attachFailed: (target?: string) => '添付に失敗しました' + (target ? `: ${target}` : ''),
     pastedContent: '貼り付けた内容',
     pasteAttachFailed: '貼り付けたテキストを添付できませんでした',
     attachImages: '画像を添付',
@@ -4158,6 +4214,7 @@ const jaBaseOverrides = {
     noClipboardImage: 'クリップボードに画像が見つかりません',
     clipboardPasteFailed: 'クリップボードからの貼り付けに失敗しました',
     dropFiles: 'ファイルをドロップ',
+    dropFilesMore: (count: number) => `ほか ${count} 件`,
     handoff: {
       pickPlatform: '送信先を選択',
       success: platform => `${platform} に引き継ぎました。いつでもここで再開できます。`,

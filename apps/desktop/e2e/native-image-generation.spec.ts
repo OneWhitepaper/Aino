@@ -10,6 +10,7 @@ import { buildAppEnv, createSandbox, type Sandbox, waitForAppReady } from './fix
 import {
   auditFixtureText,
   fixtureEnvironment,
+  guardedPlatformPython,
   installLoopbackNodeGuard,
   installLoopbackPythonGuard,
   launchGuardedDesktop,
@@ -52,17 +53,6 @@ interface AccountWindow {
   }
 }
 
-function guardedPython(sandbox: Sandbox, guardPath: string, python: string) {
-  const wrapper = path.join(sandbox.root, 'guarded-python')
-  const quote = (value: string) => `'${value.replaceAll("'", "'\"'\"'")}'`
-
-  // The source launcher replaces inherited PYTHONPATH with its checkout.
-  // Restore only the fixture transport guard before the real interpreter starts.
-  fs.writeFileSync(wrapper, `#!/bin/sh\nexport PYTHONPATH=${quote(guardPath)}:"$PYTHONPATH"\nexec ${quote(python)} "$@"\n`, { mode: 0o700 })
-
-  return wrapper
-}
-
 function prepareImageEnvironment(sandbox: Sandbox, api: API) {
   // This account flow does not provision the independent Nous welcome trial.
   fs.writeFileSync(path.join(sandbox.hermesHome, 'config.yaml'), [
@@ -88,7 +78,7 @@ function prepareImageEnvironment(sandbox: Sandbox, api: API) {
   env.HERMES_HOME = sandbox.hermesHome
   env.HERMES_DESKTOP_CWD = path.dirname(api.info.fixture_path)
   env.PYTHONPATH = installLoopbackPythonGuard(sandbox.root)
-  env.HERMES_DESKTOP_PYTHON = guardedPython(sandbox, env.PYTHONPATH,
+  env.HERMES_DESKTOP_PYTHON = guardedPlatformPython(sandbox.root, env.PYTHONPATH,
     env.HERMES_DESKTOP_PYTHON || path.resolve(import.meta.dirname, '../../../.venv/bin/python'))
 
   return { env, nodeGuard: installLoopbackNodeGuard(sandbox.root) }

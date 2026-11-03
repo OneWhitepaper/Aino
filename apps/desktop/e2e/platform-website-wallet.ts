@@ -15,6 +15,7 @@ interface WebsitePlatformAPI {
 export interface WebsiteWalletResult {
   accountId: string
   balance: string
+  fixtureDecorationSubstitutions: number
   transport: WebsiteTransportAudit
 }
 
@@ -47,8 +48,13 @@ export interface WebsiteWalletOptions {
 
 interface WebsiteServer {
   close(): Promise<void>
+  decorationSubstitutions(): number
   origin: string
 }
+
+// The real login layout hardcodes this aria-hidden artwork; site settings do
+// not control it. Only fixture-served JS substitutes the bundled local SVG.
+const LOGIN_ARTWORK_URL = 'https://d8j0ntlcm91z4.cloudfront.net/user_38xzZboKViGWJOttwIXH07lWA1P/hf_20260826_125039_45a71f04-36dd-4620-99d8-7526316d439e.png'
 
 const MIME_TYPES: Record<string, string> = {
   '.css': 'text/css; charset=utf-8',
@@ -94,10 +100,10 @@ function copyProxyHeaders(headers: http.IncomingHttpHeaders): http.OutgoingHttpH
   )
 }
 
-function writeStaticFile(request: http.IncomingMessage, response: http.ServerResponse, filename: string): void {
+function writeStaticFile(request: http.IncomingMessage, response: http.ServerResponse, filename: string, body?: Buffer): void {
   response.writeHead(200, {
     'Cache-Control': 'no-store',
-    'Content-Length': fs.statSync(filename).size,
+    'Content-Length': body?.byteLength ?? fs.statSync(filename).size,
     'Content-Type': MIME_TYPES[path.extname(filename).toLowerCase()] ?? 'application/octet-stream',
     'X-Content-Type-Options': 'nosniff'
   })
@@ -108,13 +114,18 @@ function writeStaticFile(request: http.IncomingMessage, response: http.ServerRes
     return
   }
 
-  fs.createReadStream(filename).pipe(response)
+  if (body) {
+    response.end(body)
+  } else {
+    fs.createReadStream(filename).pipe(response)
+  }
 }
 
 async function startWebsiteServer(frontendDist: string, apiOriginValue: string): Promise<WebsiteServer> {
   const apiOrigin = requireLoopbackHTTPOrigin(apiOriginValue, 'API fixture')
   const resolvedDist = path.resolve(frontendDist)
   const indexPath = path.join(resolvedDist, 'index.html')
+  let decorationSubstitutions = 0
 
   if (
     !fs.statSync(resolvedDist, { throwIfNoEntry: false })?.isDirectory() ||
@@ -183,7 +194,22 @@ async function startWebsiteServer(frontendDist: string, apiOriginValue: string):
       const requestedFile =
         insideDist && fs.statSync(requestedPath, { throwIfNoEntry: false })?.isFile() ? requestedPath : indexPath
 
-      writeStaticFile(request, response, requestedFile)
+      let body: Buffer | undefined
+
+      if (/^AinoLoginLayout-[\w-]+\.js$/.test(path.basename(requestedFile))) {
+        const script = fs.readFileSync(requestedFile, 'utf8')
+
+        if (script.includes(LOGIN_ARTWORK_URL)) {
+          if (!fs.statSync(path.join(resolvedDist, 'logo.svg'), { throwIfNoEntry: false })?.isFile()) {
+            throw new Error('Website fixture requires the bundled local logo.svg for login artwork')
+          }
+
+          decorationSubstitutions += script.split(LOGIN_ARTWORK_URL).length - 1
+          body = Buffer.from(script.replaceAll(LOGIN_ARTWORK_URL, '/logo.svg'))
+        }
+      }
+
+      writeStaticFile(request, response, requestedFile, body)
     } catch {
       if (!response.headersSent) {
         response.writeHead(500, { 'Content-Type': 'text/plain; charset=utf-8' })
@@ -209,6 +235,7 @@ async function startWebsiteServer(frontendDist: string, apiOriginValue: string):
 
   return {
     origin,
+    decorationSubstitutions: () => decorationSubstitutions,
     close: () =>
       new Promise<void>((resolve, reject) => {
         server.close(error => (error ? reject(error) : resolve()))
@@ -434,6 +461,7 @@ export async function verifyWebsiteWallet(options: WebsiteWalletOptions): Promis
     result = {
       accountId,
       balance: balanceMatch[1],
+      fixtureDecorationSubstitutions: server.decorationSubstitutions(),
       transport: {
         rejectedHTTP: transport.rejectedHTTP.map(rejection => ({ ...rejection })),
         rejectedHTTPCount: transport.rejectedHTTPCount,

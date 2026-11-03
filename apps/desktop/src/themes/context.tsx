@@ -19,6 +19,7 @@ import { $activeGatewayProfile, normalizeProfileKey } from '@/store/profile'
 import { setAppearance } from '@/store/translucency'
 
 import { $pendingSkinApply } from './backend-sync'
+import { writeBootPalette } from './boot-palette'
 import { $chatFontFamily, resolveChatFontFamily } from './chat-font'
 import { harmonize, readableInk } from './color'
 import { DEFAULT_SKIN_NAME, DEFAULT_TYPOGRAPHY, monoTheme, nousTheme } from './presets'
@@ -291,6 +292,13 @@ function applyTheme(theme: DesktopTheme, mode: 'light' | 'dark', chatFontFamily 
     // Storage may be unavailable (private mode / quota); the inline script
     // falls back to prefers-color-scheme.
   }
+
+  writeBootPalette({
+    background: chromeBg,
+    foreground: c.foreground,
+    accent: midground,
+    accentForeground: palette['--dt-midground-foreground']
+  })
 
   if (typo.fontUrl && !INJECTED_FONT_URLS.has(typo.fontUrl)) {
     const link = document.createElement('link')

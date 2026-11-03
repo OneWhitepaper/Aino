@@ -47,13 +47,22 @@ function persistedRowIds(message: SessionMessage): number[] {
 function persistedImageRefs(text: string) {
   const suffix = /\n\n((?:\[Image attached(?: at)?: [^\n]+\]\n)+)((?:\[screenshot\](?:\n|$))+)$/.exec(text)
 
-  if (!suffix) { return extractImageRefs(text) }
+  if (!suffix) {
+    return extractImageRefs(text)
+  }
+
   const paths = [...suffix[1].matchAll(/^\[Image attached(?: at)?: (.+)\]$/gm)].map(match => match[1])
 
-  if (paths.length !== suffix[2].split('[screenshot]').length - 1) { return extractImageRefs(text) }
+  if (paths.length !== suffix[2].split('[screenshot]').length - 1) {
+    return extractImageRefs(text)
+  }
+
   const extracted = extractImageRefs(text.slice(0, suffix.index))
 
-  return { cleanedText: extracted.cleanedText, refs: [...extracted.refs, ...paths.map(path => `@image:${formatRefValue(path)}`)] }
+  return {
+    cleanedText: extracted.cleanedText,
+    refs: [...extracted.refs, ...paths.map(path => `@image:${formatRefValue(path)}`)]
+  }
 }
 
 // Gateway routing note for Discord turns (gateway/run_inbound.py::discord_triggering_note).
@@ -463,13 +472,29 @@ export function toChatMessages(messages: SessionMessage[]): ChatMessage[] {
     clearPendingTools()
   }
 
-  messages.forEach((message, index) => {
-    if (!isPainted(message)) {
+  // The empty row closing a turn stopped during its tool run draws nothing, but it is
+  // the turn's last stored row and the one that says it was stopped: the mark goes on
+  // the bubble that row closes, as the reply folded below does.
+  const lendStoppedMark = (message: SessionMessage, index: number) => {
+    if (!messageInterrupted(message.display_metadata)) {
       return
     }
 
+    flushPendingTools(index)
+    const bubble = activeAssistantIndex === null ? undefined : result[activeAssistantIndex]
+
+    if (bubble?.role === 'assistant') {
+      bubble.interrupted = true
+    }
+  }
+
+  // `index` stays the stored row position (it keys tool-part and message ids), so skipped merges shift nothing.
+  const painted = messages.flatMap((message, index) => (isPainted(message) ? [{ index, message }] : []))
+
+  painted.forEach(({ message, index }) => {
     const rowIds = persistedRowIds(message)
     const rowId = rowIds[0]
+
     if (message.role === 'assistant') {
       nearestAssistant = message
     } else if (message.role === 'user' || message.role === 'system') {
@@ -588,7 +613,9 @@ export function toChatMessages(messages: SessionMessage[]): ChatMessage[] {
     }
 
     if (!parts.length && !extractedAttachmentRefs?.length) {
-      if (message.role !== 'assistant') {
+      if (message.role === 'assistant') {
+        lendStoppedMark(message, index)
+      } else {
         flushPendingTools(index)
         activeAssistantIndex = null
       }
@@ -652,6 +679,11 @@ export function toChatMessages(messages: SessionMessage[]): ChatMessage[] {
         }
 
         activeAssistant.durableComplete = durableComplete
+
+        if (messageInterrupted(message.display_metadata)) {
+          activeAssistant.interrupted = true
+        }
+
         activeAssistant.timestamp = earliestTimestamp(
           activeAssistant.timestamp,
           message.timestamp,

@@ -2,7 +2,9 @@ import type { ReactNode } from 'react'
 
 import { Codicon } from '@/components/ui/codicon'
 import { RowButton } from '@/components/ui/row-button'
+import { Tip } from '@/components/ui/tooltip'
 import { useI18n } from '@/i18n'
+import { Lock } from '@/lib/icons'
 import { cn } from '@/lib/utils'
 
 import { CARD_ACCENTS, catalogIcon } from './catalog-card'
@@ -21,7 +23,10 @@ export function CatalogListRow({ entry, accentIndex, selected, action, onOpen }:
   const { t } = useI18n()
 
   return (
-    <div className={cn('catalog-list-row', CARD_ACCENTS[accentIndex % CARD_ACCENTS.length])} data-entry-id={entry.id}>
+    <div
+      className={cn('catalog-list-row', CARD_ACCENTS[accentIndex % CARD_ACCENTS.length])}
+      data-entry-id={entry.id}
+    >
       <RowButton
         aria-haspopup="dialog"
         aria-label={catalogDisplayName(entry)}
@@ -33,7 +38,21 @@ export function CatalogListRow({ entry, accentIndex, selected, action, onOpen }:
         <Codicon name={catalogIcon(entry.category)} />
       </span>
       <span className="catalog-list-copy">
-        <span className="catalog-list-title">{catalogDisplayName(entry)}</span>
+        <span className="catalog-list-title inline-flex items-center gap-2">
+          {catalogDisplayName(entry)}
+          {entry.locked && (
+            <Tip label={t.skills.lockHint}>
+              <span
+                aria-label={t.skills.locked}
+                className="inline-flex shrink-0 text-(--ui-text-tertiary)"
+                data-slot="skill-locked-indicator"
+                role="img"
+              >
+                <Lock className="size-3.5" />
+              </span>
+            </Tip>
+          )}
+        </span>
         <span className="catalog-list-description">{catalogDescription(entry, t)}</span>
       </span>
       <span className="catalog-list-action relative z-10 shrink-0">{action}</span>

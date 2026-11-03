@@ -1,6 +1,7 @@
 import type { BillingBlock } from '@hermes/shared'
 import { atom } from 'nanostores'
 
+import { FALLBACK_PORTAL_BILLING_URL } from '@/app/settings/billing/use-billing-state'
 import { openExternalLink } from '@/lib/external-link'
 import { setModelPickerOpen } from '@/store/session'
 
@@ -18,6 +19,11 @@ export interface ActiveBillingBlock {
 }
 
 export const $billingBlock = atom<ActiveBillingBlock | null>(null)
+
+/** Nous service billing remains a separate provider destination from the Aino account. */
+export function requestBillingSettings(): void {
+  openExternalLink(FALLBACK_PORTAL_BILLING_URL)
+}
 
 export function setBillingBlock(sessionId: string, block: BillingBlock): void {
   $billingBlock.set({ at: Date.now(), block, sessionId })
@@ -44,7 +50,13 @@ export function clearBillingBlock(sessionId?: string): void {
  * stay external; managed or unlinked providers return to model selection.
  */
 export function runBillingRecovery(block: BillingBlock): void {
-  if (!block.is_nous && block.billing_url) {
+  if (block.is_nous) {
+    requestBillingSettings()
+
+    return
+  }
+
+  if (block.billing_url) {
     openExternalLink(block.billing_url)
 
     return

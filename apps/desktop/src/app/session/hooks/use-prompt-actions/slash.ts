@@ -1,5 +1,5 @@
 import { skillInvocationText } from '@hermes/shared'
-import { mergeUsage, parseCommandDispatch, parseSlashCommand } from '@hermes/shared'
+import { mergeUsage, parseCommandDispatch, parseSlashCommand, randomUuid } from '@hermes/shared'
 import { type MutableRefObject, useCallback, useRef } from 'react'
 
 import { mergeOlderTranscriptPage } from '@/app/chat/transcript-backfill'
@@ -7,6 +7,7 @@ import { prepareDefaultNewSession } from '@/app/session/new-session-route'
 import { invalidateContextBreakdown } from '@/app/shell/hooks/use-context-breakdown'
 import { getProfiles } from '@/hermes'
 import type { Translations } from '@/i18n'
+import { translateNow } from '@/i18n/runtime'
 import { type ChatMessage, toChatMessages } from '@/lib/chat-messages'
 import { sessionTitle } from '@/lib/chat-runtime'
 import {
@@ -70,6 +71,7 @@ import type {
   SlashExecResponse
 } from '../../../types'
 
+import { remoteBrowserManageRefusal } from './browser-manage-refusal'
 import { adoptPreparedSubmission, preparedSubmissionKey } from './prepared-submissions'
 import { queueKickoffIfSessionBusy } from './queue-if-busy'
 import { resolveTargetSessionId } from './resolve-target-session'
@@ -96,7 +98,10 @@ import {
 export const SESSION_COMPRESS_TIMEOUT_MS = 660_000
 const WAKE_START_TIMEOUT_MS = 180_000
 
-const wakeDeviceLabel = (device: WakeInputDeviceStatus | undefined, copy: Translations['desktop']['wakeStatus']): string => {
+const wakeDeviceLabel = (
+  device: WakeInputDeviceStatus | undefined,
+  copy: Translations['desktop']['wakeStatus']
+): string => {
   if (!device) {
     return copy.systemDefault
   }
@@ -281,7 +286,7 @@ export function useSlashCommand(deps: SlashCommandDeps) {
         return false
       }
 
-      const submissionId = options?.submission_id ?? crypto.randomUUID()
+      const submissionId = options?.submission_id ?? randomUuid()
 
       // Resolve the session this command targets through the SHARED ladder that
       // submit.ts uses. A slash command runs backend commands against a runtime
@@ -381,7 +386,7 @@ export function useSlashCommand(deps: SlashCommandDeps) {
 
       async function runExec(ctx: SlashActionCtx, boundOutput?: SlashOutput): Promise<void> {
         const { arg, command, name } = ctx
-        const resolved = boundOutput ?? await withSlashOutput(ctx)
+        const resolved = boundOutput ?? (await withSlashOutput(ctx))
 
         if (!resolved) {
           return
@@ -494,9 +499,7 @@ export function useSlashCommand(deps: SlashCommandDeps) {
               })
 
           if (queued !== 'idle') {
-            renderSlashOutput(
-              queued === 'queued' ? copy.sessionBusyQueued : copy.sessionBusyInterrupt
-            )
+            renderSlashOutput(queued === 'queued' ? copy.sessionBusyQueued : copy.sessionBusyInterrupt)
 
             return
           }
@@ -1023,10 +1026,14 @@ export function useSlashCommand(deps: SlashCommandDeps) {
               return
             }
 
-            const result = await requestGateway<{ value?: string }>('config.set', params)
+            const result = await requestGateway<{ status?: string; value?: string }>('config.set', params)
+            const value = result.value || params.value
 
             applyReasoningSlashResult(result.value)
-            renderSlashOutput(`reasoning: ${result.value || params.value}`)
+            // Typed while a reply streams: the owner applies the level from the next turn.
+            renderSlashOutput(
+              result.status === 'deferred' ? translateNow('shell.modelMenu.pickDeferred', value) : `reasoning: ${value}`
+            )
           } catch (err) {
             if (isMissingRpcMethod(err)) {
               await runExec(ctx)
@@ -1108,7 +1115,9 @@ export function useSlashCommand(deps: SlashCommandDeps) {
               applyWakeStartResult(started)
 
               if (!started?.started) {
-                renderSlashOutput(copy.wakeStartFailed(started?.hint?.trim() || started?.reason?.trim() || copy.wakeStatus.unknown))
+                renderSlashOutput(
+                  copy.wakeStartFailed(started?.hint?.trim() || started?.reason?.trim() || copy.wakeStatus.unknown)
+                )
 
                 return
               }
@@ -1296,8 +1305,7 @@ export function useSlashCommand(deps: SlashCommandDeps) {
         // gateway host, mirroring the TUI's browser.manage RPC. It mutates
         // BROWSER_CDP_URL (and may launch Chrome) in the gateway process — only
         // meaningful when that process runs on this machine, so those two are
-        // gated to local connections. `status` and `use [off]` (the profile's
-        // browser.backend, applied to new chats) are right on any backend.
+        // gated to local connections. `status` is right on any backend.
         browser: async ctx => {
           const resolved = await withSlashOutput(ctx)
 
@@ -1309,24 +1317,16 @@ export function useSlashCommand(deps: SlashCommandDeps) {
           const [rawAction = 'status', ...rest] = ctx.arg.trim().split(/\s+/).filter(Boolean)
           const cmdAction = rawAction.toLowerCase()
 
-          if (!['connect', 'disconnect', 'status', 'use'].includes(cmdAction)) {
+          if (!['connect', 'disconnect', 'status'].includes(cmdAction)) {
             renderSlashOutput(
-              'usage: /browser [connect|disconnect|status|use] [url] · persistent: set browser.cdp_url in config.yaml'
+              'usage: /browser [connect|disconnect|status] [url] · persistent: set browser.cdp_url in config.yaml'
             )
 
             return
           }
 
           if ((cmdAction === 'connect' || cmdAction === 'disconnect') && $connection.get()?.mode === 'remote') {
-            renderSlashOutput(copy.browserRemoteUnavailable)
-
-            return
-          }
-
-          const mode = cmdAction === 'use' ? (rest[0] ?? 'on').toLowerCase() : undefined
-
-          if (mode && mode !== 'on' && mode !== 'off') {
-            renderSlashOutput('usage: /browser use [off]')
+            renderSlashOutput(remoteBrowserManageRefusal(cmdAction))
 
             return
           }
@@ -1341,24 +1341,12 @@ export function useSlashCommand(deps: SlashCommandDeps) {
             const result = await requestGateway<BrowserManageResponse>('browser.manage', {
               action: cmdAction,
               session_id: sessionId,
-              ...(url && { url }),
-              ...(mode && { enabled: mode === 'on' })
+              ...(url && { url })
             })
 
             // Without a streamed session subscription, the gateway bundles its
             // progress lines into `messages` — flush them inline.
             result?.messages?.forEach(message => renderSlashOutput(message))
-
-            if (cmdAction === 'use') {
-              renderSlashOutput(
-                mode === 'on'
-                  ? 'Browser Use mode enabled — browser_exec via the Browser Use CLI 3.0'
-                  : 'Browser Use mode disabled — built-in browser tools restored'
-              )
-              renderSlashOutput('applies to new chats — this one keeps its current tools (/new to start one)')
-
-              return
-            }
 
             if (cmdAction === 'status') {
               renderSlashOutput(
@@ -1366,10 +1354,6 @@ export function useSlashCommand(deps: SlashCommandDeps) {
                   ? copy.browserStatusConnected(result.url || copy.browserUrlUnavailable)
                   : copy.browserNotConnected
               )
-
-              if (result?.browser_use) {
-                renderSlashOutput('Browser: Browser Use mode (browser_exec via the Browser Use CLI 3.0)')
-              }
 
               return
             }
@@ -1514,6 +1498,7 @@ export function useSlashCommand(deps: SlashCommandDeps) {
       branchCurrentSession,
       busyRef,
       copy,
+      commandDescriptions,
       createBackendSessionForSend,
       getRoutedStoredSessionId,
       getRuntimeIdForStoredSession,

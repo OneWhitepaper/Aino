@@ -23,6 +23,7 @@ import {
   modelPresetServiceTier,
   setModelPreset
 } from '@/store/model-presets'
+import { notify } from '@/store/notifications'
 import { verifiedPlatformModel } from '@/store/platform-model-capability'
 import { platformModelCatalog } from '@/store/platform-models'
 import { $activeGatewayProfile } from '@/store/profile'
@@ -168,7 +169,20 @@ export function useModelMenuController({
       failMessage,
       scope: hostScope,
       primary: touchesPrimary,
-      request: requestGateway,
+      // A level picked while a reply streams is the owner's for the next turn, like a model pick.
+      request: async <T>(method: string, params?: Record<string, unknown>) => {
+        const result = await requestGateway<T>(method, params)
+
+        if ((result as { status?: unknown } | undefined)?.status === 'deferred') {
+          notify({
+            id: `model-pick-deferred-${activeSessionId}`,
+            kind: 'info',
+            message: t.shell.modelMenu.pickDeferred(String(params?.value ?? ''))
+          })
+        }
+
+        return result
+      },
       sessionId: activeSessionId,
       isCurrent: dimension => {
         const stamp = stamps.get(dimension)!
@@ -192,7 +206,10 @@ export function useModelMenuController({
 
         if (dimension === 'effort' && current.effort === patch.effort) {
           setModelPreset(row.provider, row.model, { effort: confirmed.effort }, hostScope)
-        } else if (dimension === 'speed' && modelPresetServiceTier(current) === modelPresetServiceTier(patch)) {
+        } else if (
+          dimension === 'speed' &&
+          modelPresetServiceTier(current) === modelPresetServiceTier(patch)
+        ) {
           setModelPreset(
             row.provider,
             row.model,

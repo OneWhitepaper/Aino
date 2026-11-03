@@ -15,9 +15,10 @@ from hermes_cli.web_routers._common import (
     REDACTED_CREDENTIAL_WRITE_DETAIL, http_failure, is_redacted_credential_preview,
     redacted_credential_preview, scoped_to_thread,
 )
+from hermes_cli.config_backend import refusing_locked_omissions
 from hermes_cli.web_deps import LateState, late
 from hermes_cli.web_server_config import (
-    _apply_main_model_assignment, _denormalize_config_from_web, _normalize_config_for_web, _schema_with_dynamic_provider_options,
+    _apply_main_model_assignment, _denormalize_config_from_web, drop_model_key, _normalize_config_for_web, _schema_with_dynamic_provider_options,
     _validated_main_model_selection,
 )
 from hermes_cli.web_server_profiles import (
@@ -191,7 +192,7 @@ def _catalog_provider_env_metadata() -> dict:
 
     # Env vars declared with a NON-provider category (e.g. the shared
     # GITHUB_TOKEN, a Skills-Hub "tool" credential) must not be promoted into a
-    # provider card even when a provider (Copilot) lists them as auth aliases.
+    # provider card even when a provider lists them as auth aliases.
     _non_provider_keys = {
         k for k, v in OPTIONAL_ENV_VARS.items()
         if (v or {}).get("category") and (v or {}).get("category") != "provider"
@@ -706,17 +707,23 @@ def _write_custom_endpoint(cfg: dict[str, Any], body: CustomEndpointUpdate) -> t
         # sentinel and legacy masks. Either one is display-only, current or stale.
         if _ENV_REF_RE.fullmatch(submitted_key) or is_redacted_credential_preview(submitted_key):
             raise HTTPException(status_code=400, detail=REDACTED_CREDENTIAL_WRITE_DETAIL)
+        from hermes_cli.config import require_env_writable
+        require_env_writable(env_var, "set")
         save_env_value(env_var, submitted_key)
         entry["key_env"] = env_var
         entry.pop("api_key", None)
     elif submitted_key is not None:
         # Blank field means "clear the key", not "leave it alone".
+        from hermes_cli.config import require_env_writable
+        require_env_writable(env_var, "remove")
         remove_env_value(env_var)
         entry.pop("key_env", None)
         entry.pop("api_key", None)
     elif str(entry.get("api_key") or "").strip() and not _config_api_key_is_env_ref(endpoint_id):
         # Migrate a plaintext key an earlier release wrote, on the next save,
         # without the user having to re-enter it.
+        from hermes_cli.config import require_env_writable
+        require_env_writable(env_var, "set")
         save_env_value(env_var, entry["api_key"].strip())
         entry["key_env"] = env_var
         entry.pop("api_key", None)
@@ -736,9 +743,13 @@ def _write_custom_endpoint(cfg: dict[str, Any], body: CustomEndpointUpdate) -> t
         cfg["model"] = _apply_main_model_assignment(cfg.get("model", {}), result)
         if entry.get("key_env") and isinstance(cfg["model"], dict):
             cfg["model"]["key_env"] = entry["key_env"]
-            cfg["model"].pop("api_key", None)
+            drop_model_key(cfg["model"], "api_key")
 
     return endpoint_id, entry
+
+
+# Sections a custom-endpoint default assignment writes together: the route and its provider entry.
+_ROUTE_SECTIONS = ("model", "providers", "custom_providers")
 
 
 @router.get("/api/providers/custom-endpoints")
@@ -764,11 +775,17 @@ def upsert_custom_endpoint(body: CustomEndpointUpdate, profile: Optional[str] = 
         with _config_profile_scope(profile), _CONFIG_MUTATION_LOCK:
             cfg = load_config()
             providers = cfg.get("providers")
-            created = _resolve_custom_endpoint_entry(
-                providers if isinstance(providers, dict) else {}, body.id or body.name)[1] is None
-            endpoint_id, _entry = _write_custom_endpoint(cfg, body)
-            save_config(cfg)
-            response = _custom_endpoint_response(cfg)
+            stored_key, existing = _resolve_custom_endpoint_entry(
+                providers if isinstance(providers, dict) else {}, body.id or body.name)
+            created = existing is None
+            endpoint_id = coerce_provider_id(stored_key) if existing is not None else _custom_endpoint_id(body.id or body.name)
+            from hermes_cli.web_routers.custom_endpoint_cleanup import endpoint_credential_transaction
+            with endpoint_credential_transaction({custom_endpoint_key_env(endpoint_id)}):
+                endpoint_id, _entry = _write_custom_endpoint(cfg, body)
+                # Every explicit edit refuses omitted fields, including non-default provider edits.
+                with refusing_locked_omissions(*_ROUTE_SECTIONS, "agent.reasoning_overrides"):
+                    save_config(cfg)
+            response = _custom_endpoint_response(load_config())
             from hermes_constants import get_hermes_home
             home = get_hermes_home()
         if created:  # editing an endpoint that exists sets nothing new up
@@ -821,7 +838,7 @@ def activate_custom_endpoint(endpoint_id: str, profile: Optional[str] = None):
                 cfg.get("model", {}), _validated_main_model_selection(cfg, route, model, base_url))
             if entry.get("key_env"):
                 model_cfg["key_env"] = entry["key_env"]
-                model_cfg.pop("api_key", None)
+                drop_model_key(model_cfg, "api_key")
             elif entry.get("api_key"):
                 # `cfg` is env-expanded, so a raw `${VAR}` api_key would land as
                 # plaintext; copy the raw template when that's what's on disk.
@@ -834,7 +851,8 @@ def activate_custom_endpoint(endpoint_id: str, profile: Optional[str] = None):
                 else:
                     model_cfg["api_key"] = entry["api_key"]
             cfg["model"] = model_cfg
-            save_config(cfg)
+            with refusing_locked_omissions(*_ROUTE_SECTIONS):
+                save_config(cfg)
         return {"ok": True, "provider": route, "model": model}
 
 
@@ -842,7 +860,8 @@ def activate_custom_endpoint(endpoint_id: str, profile: Optional[str] = None):
 def delete_custom_endpoint(endpoint_id: str, profile: Optional[str] = None):
     """Remove a configured custom endpoint from ``providers``."""
     from hermes_cli.config import require_env_writable
-    from hermes_cli.web_routers.custom_endpoint_cleanup import clear_endpoint_credential_pools, endpoint_credential_slots
+    from hermes_cli.web_routers.custom_endpoint_cleanup import (
+        clear_endpoint_credential_pools, endpoint_credential_slots, endpoint_credential_transaction)
 
     with http_failure(
         f"DELETE /api/providers/custom-endpoints/{endpoint_id} failed", 500,
@@ -866,14 +885,22 @@ def delete_custom_endpoint(endpoint_id: str, profile: Optional[str] = None):
             slots = endpoint_credential_slots(provider_key, entry, cfg)
             for key in slots:
                 require_env_writable(key, "remove")
-            save_config(cfg)
-            # Effective config expands ${VAR}; inspect the saved raw form too,
-            # or a sibling's hand-written credential reference looks unshared.
-            slots = endpoint_credential_slots(provider_key, entry, read_raw_config())
-            for key in slots:
-                remove_env_value(key)
-            clear_endpoint_credential_pools(provider_key, entry, cfg, slots)
-            response = _custom_endpoint_response(cfg)
+            # A sibling's raw ${VAR} reference remains shared even after effective expansion.
+            from copy import deepcopy
+            from hermes_cli.config_backend import keeping_read_base
+            remaining = deepcopy(keeping_read_base(read_raw_config))
+            if isinstance(remaining.get("providers"), dict):
+                remaining["providers"].pop(stored_key, None)
+            _pop_legacy_custom_provider(remaining, provider_key)
+            _detach_main_model_from_provider(remaining, provider_key, entry)
+            slots &= endpoint_credential_slots(provider_key, entry, remaining)
+            with endpoint_credential_transaction(slots):
+                for key in slots:
+                    remove_env_value(key)
+                clear_endpoint_credential_pools(provider_key, entry, cfg, slots)
+                with refusing_locked_omissions(*_ROUTE_SECTIONS):
+                    save_config(cfg)
+            response = _custom_endpoint_response(load_config())
         response["ok"] = True
         return response
 

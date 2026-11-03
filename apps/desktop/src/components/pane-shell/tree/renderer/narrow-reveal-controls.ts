@@ -2,9 +2,10 @@ import { type Dispatch, type SetStateAction, useEffect } from 'react'
 
 import { registry } from '@/contrib/registry'
 import { ESCAPE_PRIORITY, isTopEscapeLayer, pushEscapeLayer } from '@/lib/escape-layers'
+import { hostHas } from '@/lib/host-capabilities'
 
 import { PANE_TOGGLE_REVEAL_EVENT } from '../..'
-import { allPaneIds } from '../model'
+import { allPaneIds, findGroupOfPane } from '../model'
 import { $hiddenTreePanes, $layoutTree } from '../store'
 
 import { narrowToolPaneIds, paneChrome } from './track-model'
@@ -39,7 +40,10 @@ function nextReveal(current: NarrowRevealState | null, id: string, mode: RevealM
   }
 
   if (mode === 'close') {
-    return current?.id === id ? null : current
+    const tree = $layoutTree.get()
+    const zone = tree && hostHas('narrowOverlayChrome') ? findGroupOfPane(tree, id) : null
+
+    return current && (current.id === id || zone?.panes.includes(current.id)) ? null : current
   }
 
   return current?.id === id && current.pinned ? null : { id, pinned: true }

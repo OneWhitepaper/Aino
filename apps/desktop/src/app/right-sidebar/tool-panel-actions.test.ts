@@ -466,7 +466,10 @@ it('explicitly opens Review on narrow screens after Escape, from Files and after
   const { stubResizeObserver } = await import('@/test/jsdom')
   stubResizeObserver()
   const originalMatchMedia = window.matchMedia
-  Object.defineProperty(window, 'matchMedia', { configurable: true, value: vi.fn(() => ({ matches: true })) })
+  Object.defineProperty(window, 'matchMedia', {
+    configurable: true,
+    value: vi.fn(() => ({ matches: true, addEventListener: vi.fn(), removeEventListener: vi.fn() }))
+  })
   session.$currentCwd.set('/narrow-project')
   session.$workspaceCwdOwner.set(session.$selectedStoredSessionId.get())
   registry.registerMany(

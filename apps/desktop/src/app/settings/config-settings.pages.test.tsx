@@ -28,6 +28,7 @@ vi.mock('@/hermes', async () => ({
   saveHermesConfig: (...args: unknown[]) => api.save(...args),
   getElevenLabsVoices: async () => ({ available: false }),
   getProfiles: async () => ({ profiles: [] }),
+  getMemoryStatus: async () => ({ active: 'builtin', providers: [] }),
   setApiRequestProfile: () => {}
 }))
 vi.mock('../hooks/use-on-profile-switch', () => ({ useOnProfileSwitch: () => {} }))
@@ -538,7 +539,8 @@ describe('unified configuration pages', () => {
     mount('safety')
     await screen.findAllByRole('tab')
     await openPage('approvals')
-    fireEvent.change(within(fieldRow('approvals.timeout')).getByRole('spinbutton'), { target: { value: '55' } })
+    const initial = await screen.findByDisplayValue('30')
+    fireEvent.change(initial, { target: { value: '55' } })
     await act(async () => scope.set('other'))
     const next = await screen.findByDisplayValue('80')
     fireEvent.change(next, { target: { value: '90' } })

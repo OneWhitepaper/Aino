@@ -2,15 +2,28 @@ import { AssistantRuntimeProvider, type ThreadMessage, useExternalStoreRuntime }
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
 
+import { $touchPointer } from '@/lib/touch-interaction'
+
 import { assistantMessage, stubThreadEnvironment, stubThreadViewportSize, userMessage } from '../test-utils'
 
 import { Thread } from '.'
 
 stubThreadEnvironment()
 stubThreadViewportSize()
-afterEach(cleanup)
+afterEach(() => {
+  cleanup()
+  $touchPointer.set(false)
+})
 
-function Harness({ running, onRestore }: { running: boolean; onRestore: () => void }) {
+function Harness({
+  running,
+  onRestore,
+  onCancel = async () => {}
+}: {
+  running: boolean
+  onRestore: () => void
+  onCancel?: () => Promise<void>
+}) {
   const runtime = useExternalStoreRuntime<ThreadMessage>({
     messages: [
       userMessage(),
@@ -19,12 +32,12 @@ function Harness({ running, onRestore }: { running: boolean; onRestore: () => vo
     isRunning: running,
     onNew: async () => {},
     onEdit: async () => {},
-    onCancel: async () => {}
+    onCancel
   })
 
   return (
     <AssistantRuntimeProvider runtime={runtime}>
-      <Thread onRestoreToMessage={onRestore} />
+      <Thread onCancel={onCancel} onRestoreToMessage={onRestore} />
     </AssistantRuntimeProvider>
   )
 }
@@ -42,4 +55,15 @@ it('keeps sent messages editable without a duplicate Stop and restores them afte
   fireEvent.click(await screen.findByRole('button', { name: 'Restore & rerun' }))
 
   await waitFor(() => expect(onRestore).toHaveBeenCalledWith('user-1', { text: 'edit me please', userOrdinal: 0 }))
+})
+
+it('lets a touch user stop the latest running prompt from its bubble', async () => {
+  $touchPointer.set(true)
+  const onCancel = vi.fn(async () => {})
+  render(<Harness onCancel={onCancel} onRestore={vi.fn()} running />)
+
+  fireEvent.click(await screen.findByRole('button', { name: 'Stop' }))
+
+  await waitFor(() => expect(onCancel).toHaveBeenCalledOnce())
+  expect(screen.queryByRole('button', { name: 'Restore checkpoint' })).toBeNull()
 })

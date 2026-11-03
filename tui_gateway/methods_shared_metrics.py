@@ -63,11 +63,23 @@ def _(rid, params: dict) -> dict:
     send = enabled and params.get("send") is True
     if send and params.get("recipient") != "aino":
         return _err(rid, 5096, "Explicit Aino usage-statistics consent is required; update the client.")
+    from hermes_cli.config_backend import ConfigWriteError, supports_file_tooling
     from hermes_cli.observability.shared_metrics_consent import set_answer
     try:
-        cfg = _load_cfg_raw()
-        set_answer(cfg, enabled, send)
-        _save_cfg(cfg)
+        if supports_file_tooling():
+            cfg = _load_cfg_raw()
+            set_answer(cfg, enabled, send)
+            _save_cfg(cfg)
+        else:
+            # Explicit keys: refused as a whole when locked, never saved-minus-the-locked-part
+            # while the consent bookkeeping below records the proposed answer.
+            answer = {}
+            set_answer(answer, enabled, send)
+            _write_config_changes({f"telemetry.shared_metrics.{key}": value
+                                   for key, value in answer["telemetry"]["shared_metrics"].items()})
+            cfg = _load_cfg_raw()
+    except ConfigWriteError as e:
+        return _err(rid, 4002, str(e))
     except Exception as e:
         return _err(rid, 5096, str(e))
     from hermes_cli.setup import _record_send_consent_change

@@ -6,6 +6,7 @@ import { setApiRequestConnection, setApiRequestProfile } from '@/hermes'
 import { createClientSessionState } from '@/lib/chat-runtime'
 import { adoptNewSessionDraft, stashSessionDraft, takeSessionDraft } from '@/store/composer'
 import { $confirmRequest, runConfirm, settleConfirm } from '@/store/confirm'
+import { keepRoute, keptRouteOpened } from '@/store/gateway-kept-routes'
 import { $hubInstalledOverride } from '@/store/hub-actions'
 import { requestMcpInstallFromDeepLink } from '@/store/mcp-deeplink-install'
 import { requestPluginCatalogInstallFromDeepLink } from '@/store/plugin-catalog-install'
@@ -126,7 +127,7 @@ describe('useDesktopIntegrations', () => {
     }
 
     vi.restoreAllMocks()
-    document.body.replaceChildren()
+    window.document.body.replaceChildren()
   })
 
   function render({
@@ -267,7 +268,9 @@ describe('useDesktopIntegrations', () => {
       const result = render({ profileReady: true, sessions: [] })
 
       expect(navigate).not.toHaveBeenCalled()
-      expect(window.localStorage.getItem('hermes.desktop.lastRoute.profile.default')).toBe('/remembered-session')
+      expect(window.localStorage.getItem('hermes.desktop.lastRoute.profile.default')).toBe(
+        '/remembered-session'
+      )
 
       result.rerender({
         activeProfile: 'default',
@@ -297,8 +300,12 @@ describe('useDesktopIntegrations', () => {
 
       expect(navigate).not.toHaveBeenCalled()
       // The remembered values stay intact for the primary window's next boot.
-      expect(window.localStorage.getItem('hermes.desktop.lastRoute.profile.default')).toBe('/remembered-session')
-      expect(window.localStorage.getItem('hermes.desktop.lastSessionId.profile.default')).toBe('remembered-session')
+      expect(window.localStorage.getItem('hermes.desktop.lastRoute.profile.default')).toBe(
+        '/remembered-session'
+      )
+      expect(window.localStorage.getItem('hermes.desktop.lastSessionId.profile.default')).toBe(
+        'remembered-session'
+      )
     })
   })
 
@@ -324,7 +331,9 @@ describe('useDesktopIntegrations', () => {
         sessions: [...sessions, session({ id: 'other-session', profile: 'default' })]
       })
 
-      expect(window.localStorage.getItem('hermes.desktop.lastSessionId.profile.default')).toBe('other-session')
+      expect(window.localStorage.getItem('hermes.desktop.lastSessionId.profile.default')).toBe(
+        'other-session'
+      )
     })
 
     it('holds the restore until the config record answers, then restores when on', () => {
@@ -372,7 +381,9 @@ describe('useDesktopIntegrations', () => {
       render({ profileReady: true, sessions })
 
       await waitFor(() => expect(navigate).toHaveBeenCalledWith('/parent-session', { replace: true }))
-      expect(window.localStorage.getItem('hermes.desktop.lastSessionId.profile.default')).toBe('parent-session')
+      expect(window.localStorage.getItem('hermes.desktop.lastSessionId.profile.default')).toBe(
+        'parent-session'
+      )
     })
 
     // Pins the reachability contract of the by-id resolve branch: the
@@ -413,21 +424,43 @@ describe('useDesktopIntegrations', () => {
       // A messaging slice can serve the child row, so list membership alone
       // must not make it rememberable.
       const sessions = [
-        session({ id: 'delegate-child', parent_session_id: 'parent-session', profile: 'default', source: 'subagent' })
+        session({
+          id: 'delegate-child',
+          parent_session_id: 'parent-session',
+          profile: 'default',
+          source: 'subagent'
+        })
       ]
 
-      render({ locationPathname: '/delegate-child', profileReady: true, routedSessionId: 'delegate-child', sessions })
+      render({
+        locationPathname: '/delegate-child',
+        profileReady: true,
+        routedSessionId: 'delegate-child',
+        sessions
+      })
 
-      expect(window.localStorage.getItem('hermes.desktop.lastSessionId.profile.default')).toBe('parent-session')
+      expect(window.localStorage.getItem('hermes.desktop.lastSessionId.profile.default')).toBe(
+        'parent-session'
+      )
       expect(window.localStorage.getItem('hermes.desktop.lastRoute.profile.default')).toBe('/parent-session')
     })
 
     it('keeps remembering a /branch child: source, not parenthood, is the discriminator', () => {
       const sessions = [
-        session({ id: 'branch-child', parent_session_id: 'parent-session', profile: 'default', source: 'tui' })
+        session({
+          id: 'branch-child',
+          parent_session_id: 'parent-session',
+          profile: 'default',
+          source: 'tui'
+        })
       ]
 
-      render({ locationPathname: '/branch-child', profileReady: true, routedSessionId: 'branch-child', sessions })
+      render({
+        locationPathname: '/branch-child',
+        profileReady: true,
+        routedSessionId: 'branch-child',
+        sessions
+      })
 
       expect(window.localStorage.getItem('hermes.desktop.lastSessionId.profile.default')).toBe('branch-child')
       expect(window.localStorage.getItem('hermes.desktop.lastRoute.profile.default')).toBe('/branch-child')
@@ -632,16 +665,16 @@ describe('useDesktopIntegrations', () => {
      * xterm host nested inside the [data-terminal] scope, which carries
      * [data-interactive-terminal] only on the user PTY. */
     function focusedTerminal(interactive: boolean): void {
-      const scope = document.createElement('div')
+      const scope = window.document.createElement('div')
       scope.dataset.terminal = ''
 
       if (interactive) {
         scope.dataset.interactiveTerminal = ''
       }
 
-      const host = document.createElement('div')
+      const host = window.document.createElement('div')
       scope.append(host)
-      document.body.append(scope)
+      window.document.body.append(scope)
       scope.tabIndex = -1
       ;(scope as HTMLElement).focus()
       scopeCleanup.push(
@@ -662,7 +695,7 @@ describe('useDesktopIntegrations', () => {
         cleanup()
       }
 
-      document.body.replaceChildren()
+      window.document.body.replaceChildren()
       closeRequested = undefined
       closeActiveTab.mockClear()
     })
@@ -851,7 +884,9 @@ describe('useDesktopIntegrations', () => {
         sessions: [session({ id: 'other-session', profile: 'default' })]
       })
 
-      expect(window.localStorage.getItem('hermes.desktop.lastSessionId.profile.default')).toBe('other-session')
+      expect(window.localStorage.getItem('hermes.desktop.lastSessionId.profile.default')).toBe(
+        'other-session'
+      )
     })
   })
 
@@ -873,10 +908,14 @@ describe('useDesktopIntegrations', () => {
     })
 
     it('navigates hermes://index-network/intent/1 deep links through the same path vocabulary', () => {
-      let deepLink: ((payload: { kind: string; name: string; params: Record<string, string> }) => void) | undefined
+      let deepLink:
+        ((payload: { kind: string; name: string; params: Record<string, string> }) => void) | undefined
+
       desktopWindow.hermesDesktop = {
         ...desktopWindow.hermesDesktop,
-        onDeepLink: (cb: (payload: { kind: string; name: string; params: Record<string, string> }) => void) => {
+        onDeepLink: (
+          cb: (payload: { kind: string; name: string; params: Record<string, string> }) => void
+        ) => {
           deepLink = cb
 
           return () => undefined
@@ -890,10 +929,14 @@ describe('useDesktopIntegrations', () => {
     })
 
     it('routes hermes://mcp/install to the pending-install dialog, not navigation', () => {
-      let deepLink: ((payload: { kind: string; name: string; params: Record<string, string> }) => void) | undefined
+      let deepLink:
+        ((payload: { kind: string; name: string; params: Record<string, string> }) => void) | undefined
+
       desktopWindow.hermesDesktop = {
         ...desktopWindow.hermesDesktop,
-        onDeepLink: (cb: (payload: { kind: string; name: string; params: Record<string, string> }) => void) => {
+        onDeepLink: (
+          cb: (payload: { kind: string; name: string; params: Record<string, string> }) => void
+        ) => {
           deepLink = cb
 
           return () => undefined
@@ -908,10 +951,14 @@ describe('useDesktopIntegrations', () => {
     })
 
     it('routes hermes://plugin/install?catalog= to the catalog lookup, not the git-path modal', () => {
-      let deepLink: ((payload: { kind: string; name: string; params: Record<string, string> }) => void) | undefined
+      let deepLink:
+        ((payload: { kind: string; name: string; params: Record<string, string> }) => void) | undefined
+
       desktopWindow.hermesDesktop = {
         ...desktopWindow.hermesDesktop,
-        onDeepLink: (cb: (payload: { kind: string; name: string; params: Record<string, string> }) => void) => {
+        onDeepLink: (
+          cb: (payload: { kind: string; name: string; params: Record<string, string> }) => void
+        ) => {
           deepLink = cb
 
           return () => undefined
@@ -969,7 +1016,10 @@ describe('useDesktopIntegrations', () => {
         return {}
       })
 
-      desktopWindow.hermesDesktop = { ...desktopWindow.hermesDesktop, api } as unknown as Window['hermesDesktop']
+      desktopWindow.hermesDesktop = {
+        ...desktopWindow.hermesDesktop,
+        api
+      } as unknown as Window['hermesDesktop']
       const deepLink = listen()
       const installs = () => api.mock.calls.filter(([r]) => r.path === '/api/skills/hub/install')
       const identifier = 'skills-sh/owner/repo/skill'
@@ -1093,6 +1143,55 @@ describe('useDesktopIntegrations', () => {
 
       unmount()
       dropSessionState('runtime-999')
+    })
+  })
+
+  describe('kept gateway opens', () => {
+    afterEach(() => {
+      vi.useRealTimers()
+    })
+
+    it('folds the launch burst of kept-route opens into one sessions refresh, and drops a pending one on unmount', () => {
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+      const refreshSessions = vi.fn()
+      const gateways = ['homelab', 'vps', 'nas', 'office', 'lab']
+      const releases = gateways.map(gateway => keepRoute(gateway, 'default'))
+
+      const { unmount } = renderHook(() =>
+        useDesktopIntegrations({
+          activeProfile: 'default',
+          chatOpen: false,
+          hasPreview: false,
+          locationPathname: '/',
+          navigate,
+          profileReady: false,
+          refreshSessions,
+          resumeExhaustedSessionId: null,
+          resumeLastSession: false,
+          routedSessionId: null,
+          runtimeIdByStoredSessionId: { current: new Map() },
+          sessions: [],
+          sessionsLoading: false
+        })
+      )
+
+      try {
+        for (const gateway of gateways) {
+          keptRouteOpened(gateway, 'default')
+          vi.advanceTimersByTime(100)
+        }
+
+        expect(refreshSessions).not.toHaveBeenCalled()
+        vi.advanceTimersByTime(1_000)
+        expect(refreshSessions).toHaveBeenCalledTimes(1)
+
+        keptRouteOpened('homelab', 'default')
+        unmount()
+        vi.advanceTimersByTime(1_000)
+        expect(refreshSessions).toHaveBeenCalledTimes(1)
+      } finally {
+        releases.forEach(release => release())
+      }
     })
   })
 })

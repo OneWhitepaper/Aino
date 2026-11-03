@@ -280,7 +280,8 @@ export const en: BotsMessages = {
     catalogInstalled: 'catalog · installed',
     catalog: 'catalog',
     createAction: 'Create Bot',
-    creating: 'Creating…'
+    creating: 'Creating…',
+    openBotChatInNewTab: 'Open Bot Chat in new tab'
   },
   avatar: {
     classicShapes: 'Classic shapes',
@@ -576,7 +577,9 @@ export const en: BotsMessages = {
     youControl: 'You are in control',
     otherControls: 'Another viewer is in control',
     agentControls: 'Bot is in control',
-    controlTaken: 'Another viewer took control. Watching only.'
+    controlTaken: 'Another viewer took control. Watching only.',
+    needsHttps:
+      'Bot screens need a secure connection. Open the Webapp over HTTPS, or through an SSH tunnel to 127.0.0.1, to view this one.'
   },
   cron: {
     untitled: 'Untitled job',

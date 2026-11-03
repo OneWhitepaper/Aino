@@ -195,8 +195,7 @@ export async function verifyPlatformWorkspace(
   expect(fs.readFileSync(path.join(profileHome, 'config.yaml'), 'utf8')).not.toContain('api_key')
 
   await page.locator('[data-tour="model-pill"]').first().click()
-  await page.getByRole('button', { name: 'Aino models', exact: true }).click()
-  await page.getByRole('option', { name: /fixture-tool-model/ }).click()
+  await page.getByRole('menuitem', { name: /fixture-tool-model/ }).click()
   const composer = page.locator('[contenteditable="true"]').first()
   await composer.click()
   await composer.pressSequentially(`Read ${api.info.fixture_path} from the isolated workspace and verify it.`)

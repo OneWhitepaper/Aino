@@ -27,6 +27,7 @@ import {
   listGroupNodeId,
   toggleWorkspaceNodeCollapsed
 } from '@/store/layout'
+import type { AgentProfileRoute } from '@/store/profile'
 import { sessionPinId } from '@/store/session'
 import { $sessionDotStateById, hasLiveTurn } from '@/store/session-dot-state'
 
@@ -124,7 +125,7 @@ interface SidebarSessionsSectionProps {
   onBranchSession?: (sessionId: string, profile?: string) => void
   onTogglePin: (sessionId: string) => void
   onToggleUnread: (sessionId: string) => void
-  onNewSessionInWorkspace?: (path: null | string) => void
+  onNewSessionInWorkspace?: (path: null | string, options?: { openTab?: boolean; owner?: AgentProfileRoute }) => void
   /** Create a new session as a tile at a drop target (drag from a project "+"). */
   onNewSessionSplit?: NewSessionSplitHandler
   pinned: boolean
@@ -204,6 +205,10 @@ interface SidebarSessionsSectionProps {
   card?: boolean
 }
 
+function projectSectionHasContent(content: SidebarSessionsSectionProps['projectContent']): boolean {
+  return Boolean(content && (content.sessionCount > 0 || content.repos.length > 0))
+}
+
 export function SidebarSessionsSection({
   label,
   open,
@@ -260,16 +265,14 @@ export function SidebarSessionsSection({
   const nodeOpen = useStore($sidebarWorkspaceNodeOpen)
   const isListGroupOpen = useCallback((key: string) => nodeOpen[listGroupNodeId(key)] ?? true, [nodeOpen])
   const sectionOpen = collapsible ? open : true
-  const hasGroupedSessions = Boolean(groups?.some(group => group.sessions.length > 0))
+  const hasGroupedSessions = Boolean(groups?.some(group => group.sessions.length > 0 || group.mode === 'profile'))
   // A defined project list is itself content (even an empty project should
   // render as a drill-in row so the user can see it exists).
   const hasProjectOverview = Boolean(projectOverview?.length)
 
   // Declared repos are content even before their first session: each repo header owns the action that starts
   // a session in that folder. Lanes likewise survive filtering and must still render.
-  const hasProjectContent = Boolean(
-    projectContent && (projectContent.sessionCount > 0 || projectContent.repos.length > 0)
-  )
+  const hasProjectContent = projectSectionHasContent(projectContent)
 
   const showEmptyState =
     forceEmptyState || (!hasGroupedSessions && !hasProjectOverview && !hasProjectContent && sessions.length === 0)
@@ -509,7 +512,9 @@ export function SidebarSessionsSection({
         {hasProjectContent ? (
           <EnteredProjectContent
             liveSessions={liveSessions}
-            onNewSession={onNewSessionInWorkspace}
+            onNewSession={
+              onNewSessionInWorkspace ? (path, owner) => onNewSessionInWorkspace(path, { owner }) : undefined
+            }
             onNewSessionSplit={onNewSessionSplit}
             project={projectContent}
             removedSessionIds={removedSessionIds}
@@ -540,7 +545,7 @@ export function SidebarSessionsSection({
         isSessionHidden={projectOverviewHidden?.isHidden}
         key={project.id}
         onEnter={onEnterProject}
-        onNewSession={onNewSessionInWorkspace}
+        onNewSession={onNewSessionInWorkspace ? (path, owner) => onNewSessionInWorkspace(path, { owner }) : undefined}
         onNewSessionSplit={onNewSessionSplit}
         // Keyed by project ID to match the producer: `overlayLivePreviews`
         // writes `out[node.id]` (workspace-groups.ts). A path key made Home

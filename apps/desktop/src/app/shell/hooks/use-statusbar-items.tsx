@@ -37,18 +37,25 @@ import {
 } from '@/lib/icons'
 import { type RuntimeReadinessResult } from '@/lib/runtime-readiness'
 import { resolveSessionTimerSince } from '@/lib/session-timer-since'
-import { cacheHitLabel, contextBarLabel, LiveDuration, tokensPerSecondLabel, usageContextLabel } from '@/lib/statusbar'
+import {
+  cacheHitLabel,
+  contextBarLabel,
+  LiveDuration,
+  tokensPerSecondLabel,
+  usageContextLabel
+} from '@/lib/statusbar'
 import { rollbackSentence } from '@/lib/update-copy'
 import { formatPercentUsed, formatResetsIn } from '@/lib/usage-percent'
 import { useStoreSelector } from '@/lib/use-session-slice'
 import { cn } from '@/lib/utils'
 import { resolveVersionStatus } from '@/lib/version-status'
+import { requestGatewayForActiveRoute } from '@/store/active-route-request'
 import type { ApprovalModeRequester } from '@/store/approval-mode'
 import { sessionCompacting } from '@/store/compaction'
 import { copyFilePath, revealFile, shouldOfferLocalReveal } from '@/store/file-actions'
 import { $freeTierSignInOpen, $freeTierStatus, FREE_TIER_MODEL } from '@/store/free-tier'
 import { openFreeTierSignIn } from '@/store/free-tier-sign-in'
-import { requestGatewayForProfile } from '@/store/gateway'
+import { $gateway } from '@/store/gateway'
 import { revealFileInTree } from '@/store/layout'
 import { $activeGatewayProfile } from '@/store/profile'
 import { $profileRailVisible } from '@/store/profile-rail-prefs'
@@ -69,7 +76,12 @@ import {
   idsShareLineage
 } from '@/store/session'
 import { $focusedStoredSessionId } from '@/store/session-focus'
-import { $focusedRuntimeId, $focusedSessionState, $sessionTiles, isSessionRemote } from '@/store/session-states'
+import {
+  $focusedRuntimeId,
+  $focusedSessionState,
+  $sessionTiles,
+  isSessionRemote
+} from '@/store/session-states'
 import { $statusbarHiddenIds } from '@/store/statusbar-prefs'
 import { $subagentsBySession, activeSubagentCount, failedSubagentCount } from '@/store/subagents'
 import { $gatewayRestarting } from '@/store/system-actions'
@@ -81,7 +93,7 @@ import {
   $updateStatus,
   openUpdateOverlayFor
 } from '@/store/updates'
-import type { StatusResponse, UsageStats } from '@/types/hermes'
+import type { FreeTierStatus, StatusResponse, UsageStats } from '@/types/hermes'
 
 import { CRON_ROUTE, SETTINGS_ROUTE, WEBHOOKS_ROUTE } from '../../routes'
 import type { StatusbarItem } from '../statusbar-controls'
@@ -126,6 +138,11 @@ function versionItem(
     toggleLabel,
     variant: 'action'
   }
+}
+
+/** The free model a trial runs on, named on the Sign in chip; null for a guest without the trial. */
+function freeTierTrialModel(status: FreeTierStatus | null): string | null {
+  return status?.available ? status.model || FREE_TIER_MODEL : null
 }
 
 // health: allow CC FUNC_LINES -- usage-window plans: one status-bar gauge item, hidden for every other account; this hook was over both targets on main
@@ -198,6 +215,7 @@ export function useStatusbarItems({
   // setup is running, so the chat the user is in has no second call to action,
   // and comes back when the setup ends.
   const freeTierSignInOpen = useStore($freeTierSignInOpen)
+  const trialModel = freeTierTrialModel(freeTier)
   const updateStatus = useStore($updateStatus)
   const updateApply = useStore($updateApply)
   const backendUpdateStatus = useStore($backendUpdateStatus)
@@ -211,18 +229,25 @@ export function useStatusbarItems({
   // clicking into a tile makes the statusbar describe THAT session.
   const focusedStoredSessionId = useStore($focusedStoredSessionId)
   const focusedRuntimeId = useStore($focusedRuntimeId)
+
   // Whether the FOCUSED session's workspace lives on another machine: a
   // Connections-tagged tile on a remote gateway inside a local-primary window
   // (and vice versa) is decided by the tile's owner route, falling back to the
   // ambient connection only when no owner is known (#115167).
-  const focusedWorkspaceRemote = useStoreSelector($sessionTiles, () => isSessionRemote(focusedStoredSessionId))
+  const focusedWorkspaceRemote = useStoreSelector($sessionTiles, () =>
+    isSessionRemote(focusedStoredSessionId)
+  )
+
   // `$focusedSessionState` is a projection of `$sessionStates`, which is
   // republished on EVERY message delta — tens of times a second during a turn.
   // Only the fields read here are selected, so an unchanged readout bails out
   // instead of rebuilding all ~9 statusbar items per token.
   const focusedBusy = useStoreSelector($focusedSessionState, state => Boolean(state?.busy))
 
-  const focusedRuntimeStartedAt = useStoreSelector($focusedSessionState, state => state?.runtimeStartedAt ?? null)
+  const focusedRuntimeStartedAt = useStoreSelector(
+    $focusedSessionState,
+    state => state?.runtimeStartedAt ?? null
+  )
 
   const focusedTurnStartedAt = useStoreSelector($focusedSessionState, state => state?.turnStartedAt ?? null)
   // `usage` is an object, so it can't be compared as a scalar. It IS however
@@ -238,7 +263,10 @@ export function useStatusbarItems({
   // tab switch the runtime id can lag a frame behind the new selection — the
   // slice still describes the PREVIOUS chat. Gate live cwd on ownership so we
   // never paint session A's workspace while the tab already shows session B.
-  const focusedStateStoredId = useStoreSelector($focusedSessionState, state => state?.storedSessionId?.trim() || null)
+  const focusedStateStoredId = useStoreSelector(
+    $focusedSessionState,
+    state => state?.storedSessionId?.trim() || null
+  )
 
   const selectedStoredSessionId = useStore($selectedStoredSessionId)
   const primaryFocused = !focusedStoredSessionId || focusedStoredSessionId === selectedStoredSessionId
@@ -248,7 +276,7 @@ export function useStatusbarItems({
 
   // EMPTY_USAGE (module constant) keeps the fallback referentially stable —
   // a fresh `{...}` each render would bust the usage-label memos below.
-  const currentUsage = primaryFocused ? primaryUsage : (focusedUsage ?? EMPTY_USAGE)
+  const currentUsage = focusedUsage ?? (primaryFocused ? primaryUsage : EMPTY_USAGE)
   const currentModel = primaryFocused ? primaryModel : focusedModel
   const currentProvider = primaryFocused ? primaryProvider : focusedProvider
   const compacting = useStore(useMemo(() => sessionCompacting(activeSessionId), [activeSessionId]))
@@ -256,7 +284,8 @@ export function useStatusbarItems({
   const turnStartedAt = primaryFocused ? primaryTurnStartedAt : focusedTurnStartedAt
 
   // A tile's stored row: cold/fallback start and cwd, and which backend it runs on.
-  const { focusedRowConnectionId, focusedRowCwd, focusedRowStartedAt } = useFocusedSessionRow(focusedStoredSessionId)
+  const { focusedRowConnectionId, focusedRowCwd, focusedRowStartedAt } =
+    useFocusedSessionRow(focusedStoredSessionId)
 
   const offerLocalReveal = shouldOfferLocalReveal(focusedRowConnectionId, connection?.mode === 'remote')
 
@@ -296,8 +325,8 @@ export function useStatusbarItems({
   // (backend truth via projects.*), so the status item labels by project without
   // a second per-session copy of the same fact. Re-derives whenever the cwd or
   // the tree changes; null (no named project) falls back to the cwd leaf below.
-  const projectTree = useStore($projectTree)
-  const projectName = useMemo(() => projectNameForCwd(currentCwd), [currentCwd, projectTree])
+  useStore($projectTree)
+  const projectName = projectNameForCwd(currentCwd)
 
   const changeWorkspaceItem = useChangeWorkspaceItem(changeSessionCwd, currentCwd, busy, {
     focusedRowConnectionId,
@@ -331,7 +360,11 @@ export function useStatusbarItems({
     busy,
     enabled: !contextItemHidden,
     identityKey: JSON.stringify([currentProvider, currentModel]),
-    refreshKey: JSON.stringify([currentUsage.context_max, currentUsage.context_used, currentUsage.context_percent]),
+    refreshKey: JSON.stringify([
+      currentUsage.context_max,
+      currentUsage.context_used,
+      currentUsage.context_percent
+    ]),
     requestGateway,
     sessionId: activeSessionId,
     suspended: compacting
@@ -353,15 +386,25 @@ export function useStatusbarItems({
   const planUsed = planGauge ? Math.min(1, Math.max(0, planGauge.used_bp / 10_000)) : 0
   const tokensPerSecond = tokensPerSecondLabel(currentUsage)
 
-  // Dial the viewed profile directly: the ambient `requestGateway` is the
+  // Dial the viewed route directly: the ambient `requestGateway` is the
   // session-routed dispatcher, which re-scopes `params.profile` to the FOCUSED
   // session's owner — a profile other than the one this menu shows.
   const requestApprovalModeGateway = useCallback<ApprovalModeRequester>(
-    (method, params) => requestGatewayForProfile(activeGatewayProfile, method, params),
+    (method, params) => requestGatewayForActiveRoute(activeGatewayProfile, method, params),
     [activeGatewayProfile]
   )
 
-  const approvalModeItem = useApprovalModeStatusbarItem(activeGatewayProfile, requestApprovalModeGateway, gatewayState)
+  // The active socket is part of the route: `default` on Box and `default` on
+  // This device share a name, so the profile alone would not re-read the mode.
+  const activeSocket = useStore($gateway)
+
+  const approvalModeItem = useApprovalModeStatusbarItem(
+    activeGatewayProfile,
+    requestApprovalModeGateway,
+    gatewayState,
+    activeSocket
+  )
+
   const systemResourcesItem = useSystemResourcesStatusbarItem()
 
   const gatewayMenuContent = useMemo(
@@ -529,9 +572,9 @@ export function useStatusbarItems({
         // solid and set off by a gap instead of touching the label.
         detail: (
           <span className="inline-flex items-center gap-2">
-            <span className="font-mono text-[0.625rem] text-muted-foreground/70">
-              {freeTier?.model ?? FREE_TIER_MODEL}
-            </span>
+            {trialModel && (
+              <span className="font-mono text-[0.625rem] text-muted-foreground/70">{trialModel}</span>
+            )}
             {/* The class merger drops Badge's own leading-none behind the size's
                 font-size class, so the badge grows to the inherited 1.5 leading and
                 overhangs an 11px label. Restating it here keeps it 11.6px tall. */}
@@ -540,15 +583,14 @@ export function useStatusbarItems({
             </Badge>
           </span>
         ),
-        // Shown while a free-tier identity exists and the tier is on: it names the
-        // identity that carries the connectors (and inference when nothing else
-        // does), and it is the persistent way in to the sign-in.
+        // Shown while a guest identity exists (the trial, or apps without it): the
+        // identity carrying the connectors, and the persistent way in to the sign-in.
         hidden: !freeTierSignInOpen,
         icon: <Codicon name="account" size="0.75rem" />,
         id: 'free-tier',
         label: freeTierCopy.providerName,
         onSelect: () => openFreeTierSignIn(),
-        title: freeTierCopy.statusLabel(freeTier?.model ?? FREE_TIER_MODEL),
+        title: trialModel ? freeTierCopy.statusLabel(trialModel) : freeTierCopy.providerName,
         toggleLabel: copy.toggleFreeTier,
         variant: 'action'
       },
@@ -651,7 +693,7 @@ export function useStatusbarItems({
       fileMenu.revealFileManager,
       fileMenu.revealInSidebar,
       offerLocalReveal,
-      freeTier?.model,
+      trialModel,
       freeTierSignInOpen,
       gatewayMenuContent,
       gatewayClassName,

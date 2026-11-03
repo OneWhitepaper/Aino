@@ -2,6 +2,8 @@
 
 import json
 
+import pytest
+
 
 def _configure(raw):
     from hermes_constants import get_hermes_home
@@ -37,16 +39,21 @@ def test_configured_nous_inference_keeps_its_explicit_route():
     assert runtime["base_url"] == "https://inference.example.test/v1"
 
 
-def test_explicit_portal_recommendations_preserve_provider_route(monkeypatch):
+@pytest.mark.parametrize("mirror_fails", [False, True], ids=["mirror", "origin-fallback"])
+def test_explicit_portal_recommendations_preserve_provider_route(monkeypatch, mirror_fails):
     from hermes_cli import models
 
     requests = []
     expected = {"paidRecommendedModel": {"modelName": "example/model"}}
+    mirror = f"{models.NOUS_RECOMMENDED_MODELS_MIRROR}/portal.example.test/api/nous/recommended-models"
+    origin = "https://portal.example.test/api/nous/recommended-models"
 
     def fetch(url, **_kwargs):
         requests.append(url)
+        if mirror_fails and url == mirror:
+            raise OSError("mirror unavailable")
         return expected
 
     monkeypatch.setattr(models, "_get_json", fetch)
     assert models.fetch_nous_recommended_models("https://portal.example.test", force_refresh=True) == expected
-    assert requests == ["https://portal.example.test/api/nous/recommended-models"]
+    assert requests == [mirror, *([origin] if mirror_fails else [])]

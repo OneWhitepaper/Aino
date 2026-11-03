@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button'
 import { getMemoryProviderOAuthStatus, startMemoryProviderOAuth } from '@/hermes'
 import { useI18n } from '@/i18n'
 import { Check, ExternalLink, Loader2 } from '@/lib/icons'
+import { refreshMemoryStatus } from '@/store/memory-status'
 import { notifyError } from '@/store/notifications'
 import type { MemoryProviderOAuthStatus } from '@/types/hermes'
 
@@ -128,6 +129,7 @@ export function MemoryConnect({ profile, provider }: { profile?: string; provide
             setDetail(next.detail || m.connectionFailed)
           } else {
             setPhase('idle')
+            refreshMemoryStatus()
           }
         } catch {
           // The deadline also bounds repeated transient failures.

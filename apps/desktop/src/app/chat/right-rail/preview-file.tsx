@@ -1,3 +1,4 @@
+import { fileUrlToNativePath } from '@hermes/shared'
 import { useStore } from '@nanostores/react'
 import type * as React from 'react'
 import type {
@@ -184,13 +185,7 @@ function filePathForTarget(target: PreviewTarget) {
     return target.path
   }
 
-  try {
-    const url = new URL(target.url)
-
-    return url.protocol === 'file:' ? decodeURIComponent(url.pathname) : target.url
-  } catch {
-    return target.url
-  }
+  return fileUrlToNativePath(target.url) ?? target.url
 }
 
 function formatBytes(bytes: number | undefined) {
@@ -269,9 +264,9 @@ function dataUrlToBlob(dataUrl: string) {
   return new Blob([bytes], { type: 'application/pdf' })
 }
 
-async function readTextPreview(filePath: string) {
+async function readTextPreview(filePath: string, sessionId?: string) {
   try {
-    return await readDesktopFileText(filePath)
+    return await readDesktopFileText(filePath, { sessionId })
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
 
@@ -740,13 +735,7 @@ function FilePreviewRefusal({ target, binary, byteSize, onContinue }: FilePrevie
   )
 }
 
-export function LocalFilePreview({
-  onClose,
-  onSelectRendered,
-  reloadKey,
-  tabId,
-  target
-}: {
+interface LocalFilePreviewProps {
   /** Closes the preview's tab; offered when the file can't be shown. */
   onClose?: () => void
   /** Present when the pane can render this file live (HTML). Adds the
@@ -754,8 +743,19 @@ export function LocalFilePreview({
   onSelectRendered?: () => void
   reloadKey: number
   tabId?: string
+  /** The session whose tab this is: a gateway read and Save resolve `/workspace` in its sandbox. */
+  sessionId?: string
   target: PreviewTarget
-}) {
+}
+
+export function LocalFilePreview({
+  onClose,
+  onSelectRendered,
+  reloadKey,
+  tabId,
+  sessionId,
+  target
+}: LocalFilePreviewProps) {
   const { t } = useI18n()
   const [state, setState] = useState<LocalPreviewState>({ loading: true })
   const [forcePreview, setForcePreview] = useState(false)
@@ -830,7 +830,7 @@ export function LocalFilePreview({
         if (isImage || isPdf) {
           // Prefer bytes the caller already handed us (a pasted/dropped
           // screenshot) over re-reading a path that may be transient/unreadable.
-          const dataUrl = target.dataUrl || (await readDesktopFileDataUrl(filePath))
+          const dataUrl = target.dataUrl || (await readDesktopFileDataUrl(filePath, { sessionId }))
 
           if (active) {
             setState({ dataUrl, loading: false })
@@ -839,7 +839,7 @@ export function LocalFilePreview({
           return
         }
 
-        const result = await readTextPreview(filePath)
+        const result = await readTextPreview(filePath, sessionId)
 
         if (active) {
           const shouldBlock = !forcePreview && (result.binary || (result.byteSize ?? 0) > TEXT_PREVIEW_MAX_BYTES)
@@ -904,6 +904,7 @@ export function LocalFilePreview({
     isText,
     reloadKey,
     selfReload,
+    sessionId,
     target.dataUrl,
     target.language,
     target.url
@@ -1052,7 +1053,7 @@ export function LocalFilePreview({
       // choice. `force` is the user picking "overwrite" from that banner.
       if (!force) {
         try {
-          const current = await readTextPreview(filePath)
+          const current = await readTextPreview(filePath, sessionId)
 
           if (!current.binary && (current.text ?? '') !== baselineRef.current) {
             setConflict(true)
@@ -1068,7 +1069,7 @@ export function LocalFilePreview({
       // Also guards Overwrite: bypassing a content conflict never authorizes
       // writing the same path on another connection/profile or this device.
       requireEditorOwner()
-      await writeDesktopFileText(filePath, draftRef.current)
+      await writeDesktopFileText(filePath, draftRef.current, { sessionId })
       baselineRef.current = draftRef.current
       setDirty(false)
       setPreviewDirty(target.url, false, tabId)

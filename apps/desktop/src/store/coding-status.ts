@@ -4,7 +4,13 @@ import type { HermesGitWorktree, HermesRepoStatus } from '@/global'
 import { desktopGit } from '@/lib/desktop-git'
 
 import { $projectScope, ALL_PROJECTS } from './project-scope'
-import { $projectTree, $worktreeDialog, $worktreeRefreshToken, projectRootCwd, type WorktreeDialogState } from './projects'
+import {
+  $projectTree,
+  $worktreeDialog,
+  $worktreeRefreshToken,
+  projectRootCwd,
+  type WorktreeDialogState
+} from './projects'
 import {
   $busy,
   $currentCwd,

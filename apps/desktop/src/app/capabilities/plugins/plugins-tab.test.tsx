@@ -438,6 +438,37 @@ describe('PluginsTab', () => {
     $pluginDecisions.set({})
   })
 
+  it('shows a package switch Off while its desktop half is off, and one click turns both halves on', async () => {
+    publishPlugin(
+      { id: 'meter-ui', name: 'Meter', kind: 'disk', status: 'disabled', packageName: 'meter' },
+      { activate: () => patchPlugin('meter-ui', { status: 'loaded' }), deactivate: () => undefined }
+    )
+    $agentPlugins.set([{ description: '', key: 'meter', name: 'meter', source: 'git', status: 'enabled', version: '1' }])
+    requestGateway.mockImplementation((async (_method: string, params?: { action?: string }) =>
+      params?.action === 'toggle'
+        ? { ok: true, plugin: { key: 'meter', name: 'meter', status: 'enabled' } }
+        : { plugins: [] }) as never)
+
+    renderPlugins({ profile: null })
+
+    // Card and compact layouts share the package state.
+    const switches = screen.getAllByRole('switch', { name: 'Meter' })
+    expect(switches.every(control => control.getAttribute('aria-checked') === 'false')).toBe(true)
+
+    fireEvent.click(switches[0])
+
+    await waitFor(() =>
+      expect(switches.every(control => control.getAttribute('aria-checked') === 'true')).toBe(true)
+    )
+    expect(requestGateway).toHaveBeenCalledWith(
+      'plugins.manage',
+      expect.objectContaining({ action: 'toggle', key: 'meter', enable: true })
+    )
+    expect($pluginDecisions.get()['meter-ui']).toBe(true)
+    requestGateway.mockImplementation(async () => ({ plugins: [] }))
+    $pluginDecisions.set({})
+  })
+
   it('leaves a desktop half the user switched off alone when its agent half is turned on', async () => {
     $pluginDecisions.set({ 'meter-ui': false })
     publishPlugin(

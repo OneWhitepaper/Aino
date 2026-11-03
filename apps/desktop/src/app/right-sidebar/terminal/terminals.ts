@@ -1,6 +1,7 @@
+import { randomUuid } from '@hermes/shared'
 import type { WebglAddon } from '@xterm/addon-webgl'
 import type { Terminal } from '@xterm/xterm'
-import { atom, computed } from 'nanostores'
+import { atom, computed, type ReadableAtom } from 'nanostores'
 
 import { translateNow } from '@/i18n'
 import { readKey, writeKey } from '@/lib/storage'
@@ -11,6 +12,7 @@ import { $toolSession, $toolWorkspaceCwd, toolSessionHasCurrentSource } from '@/
 import { setTerminalTakeover } from '../store'
 
 import { seedAgentTerminalCommand } from './agent-terminal-stream'
+import type { TerminalGateway } from './terminal-gateway'
 
 // xterm WebGL terminals that share one glyph atlas (same font/theme/DPR) keep
 // per-terminal render models over a SHARED texture. Clearing one terminal's
@@ -120,7 +122,7 @@ export interface TerminalEntry {
    *  sessions never moves or recreates a terminal; at most it re-SELECTS a tab
    *  already pointed at the session's cwd (see the $toolWorkspaceCwd listener). */
   cwd: string
-  /** Creation source, checked before delayed font loading starts the shell. */
+  /** Guard a legacy unbound launch until its gateway is recorded. */
   sourceKey?: string
   /** Last observed working directory of the live shell (tracked via the PTY
    *  cwd probe / OSC 7). Used to reopen the tab where the user last `cd`'d
@@ -131,18 +133,35 @@ export interface TerminalEntry {
    *  revived — a fresh shell starts beneath the restored buffer. Captured live
    *  for user tabs only; agent mirrors stay runtime-only. */
   reviveBuffer?: string
+  /** A server shell was created for this tab; restoration must never respawn it. */
+  persistent?: boolean
   /** `user` = interactive PTY shell. `agent` = read-only mirror of an agent
    *  background process (`terminal(background=true)`), keyed by `procId`. */
   kind: 'user' | 'agent'
   procId?: string
+  /** The gateway this tab was opened on (`local` = This device). The shell
+   *  runs on that host whichever gateway the window shows later; absent on a
+   *  tab from an older Desktop until its first start reports where it ran. */
+  connectionId?: string
+  /** Gateway profile the SSH tunnel is keyed by (with `connectionId`). */
+  profile?: string
+  /** `connectionId` left the registry. Ids are reusable label slugs, so a
+   *  gateway added later under the same name is another machine: this tab
+   *  never reconnects, even after relaunch. */
+  gatewayRemoved?: boolean
 }
 
 interface PersistedTerminalEntry {
   auto: boolean
+  connectionId?: string
+  gatewayRemoved?: boolean
   cwd: string
   id: string
   restoreCwd?: string
   reviveBuffer?: string
+  /** A server shell was created for this tab; restoration must never respawn it. */
+  persistent?: boolean
+  profile?: string
   title: string
 }
 
@@ -157,6 +176,13 @@ const TERMINALS_STORAGE_KEY = 'hermes.desktop.terminals.v1'
 // localStorage quota. Roughly mirrors VS Code's persistentSessionScrollback
 // default (100 lines) once the serialized escape codes are counted in.
 const MAX_REVIVE_BUFFER_CHARS = 48_000
+
+function persistedGateway(record: Record<string, unknown>): Pick<PersistedTerminalEntry, 'connectionId' | 'profile'> {
+  const connectionId = typeof record.connectionId === 'string' ? record.connectionId.trim() : ''
+  const profile = typeof record.profile === 'string' ? record.profile.trim() : ''
+
+  return connectionId ? { connectionId, ...(profile ? { profile } : {}) } : {}
+}
 
 function sanitizePersistedTerminal(value: unknown): PersistedTerminalEntry | null {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
@@ -176,10 +202,13 @@ function sanitizePersistedTerminal(value: unknown): PersistedTerminalEntry | nul
 
   return {
     auto: typeof record.auto === 'boolean' ? record.auto : true,
+    ...persistedGateway(record),
+    ...(record.gatewayRemoved === true ? { gatewayRemoved: true } : {}),
     cwd,
     id,
     ...(restoreCwd ? { restoreCwd } : {}),
     ...(reviveBuffer ? { reviveBuffer } : {}),
+    ...(record.persistent === true ? { persistent: true } : {}),
     title: title || 'Terminal'
   }
 }
@@ -224,10 +253,14 @@ function persistTerminals(list: readonly TerminalEntry[], activeTerminalId: null
     .filter(term => term.kind === 'user')
     .map(term => ({
       auto: term.auto,
+      ...(term.connectionId ? { connectionId: term.connectionId } : {}),
+      ...(term.gatewayRemoved ? { gatewayRemoved: true } : {}),
       cwd: term.cwd,
       id: term.id,
+      ...(term.profile ? { profile: term.profile } : {}),
       ...(term.restoreCwd ? { restoreCwd: term.restoreCwd } : {}),
       ...(term.reviveBuffer ? { reviveBuffer: term.reviveBuffer } : {}),
+      ...(term.persistent ? { persistent: true } : {}),
       title: term.title
     }))
 
@@ -256,23 +289,30 @@ export const $activeTerminal = computed(
   (list, id) => list.find(term => term.id === id) ?? null
 )
 
-const newId = () =>
-  globalThis.crypto?.randomUUID?.() ?? `term-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`
+const newId = () => randomUuid()
+
+// The gateway picked in Sessions, as a shell host. terminal-gateway.ts binds the
+// registry-backed store on load; this module stays free of the connection
+// stores. Unbound (or with no registry, like the Webapp) there is one host.
+let $defaultGateway: ReadableAtom<TerminalGateway | undefined> = atom(undefined)
+
+let unbindDefaultGateway = () => {}
 
 /** Append a fresh terminal and focus it. Captures the current cwd once (its only
  *  tie to session/project state); pass an explicit cwd to override. Returns the id. */
-export function createTerminal(cwd: string): string
-// eslint-disable-next-line no-redeclare -- TypeScript overload keeps explicit-cwd callers' guaranteed terminal id.
-export function createTerminal(): string | null
+export function createTerminal(cwd: string, gateway?: TerminalGateway): string
+// eslint-disable-next-line no-redeclare -- Explicit paths always create a terminal on the captured host.
+export function createTerminal(cwd?: string, gateway?: TerminalGateway): string | null
 
-// eslint-disable-next-line no-redeclare -- Implementation of the two overload signatures above.
-export function createTerminal(cwd?: string): string | null {
+// eslint-disable-next-line no-redeclare -- Implementation of the overload signatures above.
+export function createTerminal(cwd?: string, gateway?: TerminalGateway): string | null {
   const session = $toolSession.get()
-
   const connection = $connection.get()
+  const owner = gateway ?? $defaultGateway.get()
 
   if (
     cwd === undefined &&
+    !gateway &&
     (!toolSessionHasCurrentSource(session) || (connection?.mode === 'remote' && connection.remoteKind !== 'ssh'))
   ) {
     notifyError(new Error(translateNow('summary.state.unavailable')), translateNow('summary.state.unavailable'))
@@ -287,9 +327,10 @@ export function createTerminal(cwd?: string): string | null {
       id,
       title: 'Terminal',
       auto: true,
-      cwd: cwd ?? session.cwd,
+      cwd: cwd ?? (toolSessionHasCurrentSource(session) ? session.cwd : ''),
       kind: 'user',
-      ...(cwd === undefined ? { sourceKey: session.sourceKey } : {})
+      ...owner,
+      ...(!owner && cwd === undefined ? { sourceKey: session.sourceKey } : {})
     }
   ])
   $activeTerminalId.set(id)
@@ -297,11 +338,42 @@ export function createTerminal(cwd?: string): string | null {
   return id
 }
 
+/** A host-less launch cannot adopt another source while waiting for its font. */
 export function terminalSourceIsCurrent(id: string): boolean {
   const sourceKey = $terminals.get().find(term => term.id === id)?.sourceKey
 
   return !sourceKey || sourceKey === $toolSession.get().sourceKey
 }
+
+/** Record where a tab that had no gateway first ran. A recorded gateway never
+ *  changes: a later Sessions pick must not move a shell to another host. */
+export function adoptTerminalGateway(id: string, gateway: TerminalGateway): void {
+  $terminals.set(
+    $terminals
+      .get()
+      .map(term => (term.id === id && term.kind === 'user' && !term.connectionId ? { ...term, ...gateway } : term))
+  )
+}
+
+/** Mark tabs whose gateway is no longer registered. Sticky: see `gatewayRemoved`. */
+export function forgetRemovedTerminalGateways(registered: ReadonlySet<string>): void {
+  const list = $terminals.get()
+
+  const gone = (term: TerminalEntry) =>
+    term.kind === 'user' && Boolean(term.connectionId) && !term.gatewayRemoved && !registered.has(term.connectionId!)
+
+  if (list.some(gone)) {
+    $terminals.set(list.map(term => (gone(term) ? { ...term, gatewayRemoved: true } : term)))
+  }
+}
+
+/** True once user tabs run on more than one host: only then do This device
+ *  tabs need a label too. */
+export const $terminalHostsMixed = computed(
+  $terminals,
+  list =>
+    new Set(list.filter(term => term.kind === 'user' && term.connectionId).map(term => term.connectionId)).size > 1
+)
 
 // Procs we've already surfaced a tab for — so closing an agent tab doesn't
 // resurrect it on the next poll while the process is still running.
@@ -378,28 +450,55 @@ const terminalCwd = (term: TerminalEntry) => normalizePath(term.restoreCwd || te
 // one, and never reveals the pane; a detached session (empty cwd) or a cwd no
 // tab lives in leaves the tabs exactly where they were. `listen` (not
 // `subscribe`) so boot keeps the persisted active tab.
-computed([$toolWorkspaceCwd, $toolSession], (cwd, session) => JSON.stringify([cwd, session.sourceKey])).listen(() => {
-  const target = normalizePath($toolWorkspaceCwd.get())
+//
+// A path names a directory on one host: `/repo` on the NAS is not `/repo` here,
+// so only tabs on the session's gateway (or a fresh tab that has not recorded
+// one yet) can match. The link follows the (host, cwd) pair, so picking another
+// gateway re-selects even when both hosts report the same path string.
+export function bindTerminalDefaultGateway(source: ReadableAtom<TerminalGateway | undefined>): void {
+  unbindDefaultGateway()
+  $defaultGateway = source
+  let host = source.get()?.connectionId
+
+  unbindDefaultGateway = source.listen(gateway => {
+    if (gateway?.connectionId !== host) {
+      host = gateway?.connectionId
+      followSessionCwd($toolWorkspaceCwd.get())
+    }
+  })
+}
+
+function followSessionCwd(cwd: string) {
+  const target = normalizePath(cwd)
 
   if (!target) {
     return
   }
 
-  const list = $terminals.get()
-  const active = list.find(term => term.id === $activeTerminalId.get())
+  const host = $defaultGateway.get()?.connectionId
 
-  if (active?.kind === 'user' && terminalSourceIsCurrent(active.id) && terminalCwd(active) === target) {
+  const linked = (term: TerminalEntry | undefined) =>
+    term?.kind === 'user' &&
+    terminalCwd(term) === target &&
+    !term.gatewayRemoved &&
+    (!host || !term.connectionId || term.connectionId === host)
+
+  const list = $terminals.get()
+
+  if (linked(list.find(term => term.id === $activeTerminalId.get()))) {
     return
   }
 
-  const match = list.find(
-    term => term.kind === 'user' && terminalSourceIsCurrent(term.id) && terminalCwd(term) === target
-  )
+  const match = list.find(linked)
 
   if (match) {
     $activeTerminalId.set(match.id)
   }
-})
+}
+
+computed([$toolWorkspaceCwd, $toolSession], (cwd, session) => JSON.stringify([cwd, session.sourceKey])).listen(() =>
+  followSessionCwd($toolWorkspaceCwd.get())
+)
 
 /** Move the active tab by `direction` (+1 next / -1 prev), wrapping around. */
 export function cycleTerminal(direction: 1 | -1): void {
@@ -417,9 +516,39 @@ export function cycleTerminal(direction: 1 | -1): void {
   $activeTerminalId.set(list[(current + direction + list.length) % list.length].id)
 }
 
+const closingTerminals = new Set<string>()
+
 /** Drop a terminal. Focus slides to the neighbor that fills its slot; closing
  *  the last one closes the whole pane. */
 export function closeTerminal(id: string): void {
+  const entry = $terminals.get().find(term => term.id === id)
+  const closeSaved = window.hermesDesktop?.terminal?.closeSaved
+
+  if (entry?.kind !== 'user' || !closeSaved) {
+    removeExitedTerminal(id)
+
+    return
+  }
+
+  if (closingTerminals.has(id)) {
+    return
+  }
+
+  closingTerminals.add(id)
+  // Keep the tab and its resume handle until the server confirms termination.
+  void closeSaved(id)
+    .then(closed => {
+      if (!closed) {
+        throw new Error('Terminal close was not confirmed; retry closing this tab')
+      }
+
+      removeExitedTerminal(id)
+    })
+    .catch(error => notifyError(error, translateNow('rightSidebar.terminalCloseFailed')))
+    .finally(() => closingTerminals.delete(id))
+}
+
+export function removeExitedTerminal(id: string): void {
   const list = $terminals.get()
   const index = list.findIndex(term => term.id === id)
 
@@ -465,34 +594,49 @@ export function closeActiveTerminal(): void {
 }
 
 export function closeAllTerminals(): void {
-  if ($terminals.get().length === 0) {
-    return
-  }
-
-  $terminals.set([])
-  $activeTerminalId.set(null)
-  setTerminalTakeover(false)
+  $terminals.get().forEach(term => closeTerminal(term.id))
 }
 
 export function closeOtherTerminals(id: string): void {
   const keep = $terminals.get().find(term => term.id === id)
 
   if (keep) {
-    $terminals.set([keep])
+    $terminals
+      .get()
+      .filter(term => term.id !== id)
+      .forEach(term => closeTerminal(term.id))
     $activeTerminalId.set(keep.id)
   }
 }
 
-/** Record the latest serialized scrollback for a tab so it can be replayed on
- *  the next launch. Oversized buffers are tail-trimmed to stay under the storage
- *  budget; only user tabs ever carry one. */
+/** Server replay replaces renderer-only history once persistence is negotiated. */
+export function markTerminalPersistent(id: string): void {
+  $terminals.set(
+    $terminals.get().map(term => (term.id === id ? { ...term, persistent: true, reviveBuffer: undefined } : term))
+  )
+}
+
 export function updateTerminalReviveBuffer(id: string, reviveBuffer: string): void {
+  const terminals = $terminals.get()
+  const index = terminals.findIndex(term => term.id === id)
+  const term = terminals[index]
+
+  if (!term || term.kind !== 'user' || term.persistent) {
+    return
+  }
+
   const capped =
     reviveBuffer.length > MAX_REVIVE_BUFFER_CHARS ? reviveBuffer.slice(-MAX_REVIVE_BUFFER_CHARS) : reviveBuffer
 
-  $terminals.set(
-    $terminals.get().map(term => (term.id === id && term.kind === 'user' ? { ...term, reviveBuffer: capped } : term))
-  )
+  // Publishing also serializes every user tab and updates workspace subscribers.
+  // Stable TUI screens can produce identical snapshots for every capture.
+  if (term.reviveBuffer === capped) {
+    return
+  }
+
+  const next = terminals.slice()
+  next[index] = { ...term, reviveBuffer: capped }
+  $terminals.set(next)
 }
 
 /** Record the shell's latest working directory for a tab so the next launch can

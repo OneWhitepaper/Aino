@@ -84,7 +84,9 @@ _CHAIN_CAP = 1000
 
 # model_config keys that belong to the whole conversation, not one compression segment: a rotation
 # carries them onto the child (per-segment keys such as usage anchors stay behind).
-_CONVERSATION_MODEL_CONFIG_KEYS = ("onboarding_run",)
+# ``prompt_refresh_epoch`` too: without it a rotated child looks older than any past
+# ``hermes sessions refresh-prompts`` request and rebuilds its prompt once more after eviction.
+_CONVERSATION_MODEL_CONFIG_KEYS = ("onboarding_run", "prompt_refresh_epoch")
 _MANAGED_MODEL_CONFIG_KEYS = ("model_source", "platform_owner", "model_id", "model", "api_mode", "provider")
 
 
@@ -333,7 +335,7 @@ class SessionCompressionMixin:
         carried_keys = _CONVERSATION_MODEL_CONFIG_KEYS
         if continuation and parent_config.get("model_source") == "aino":
             carried_keys += _MANAGED_MODEL_CONFIG_KEYS
-        carried = {key: value for key, value in parent_config.items() if key in carried_keys}
+        carried = {key: value for key, value in parent_config.items() if continuation and key in carried_keys}
         model_config = {**carried, **(model_config or {})}
         system_prompt_hash = self._store_system_prompt(conn, system_prompt)
         # Pin/archive are compression-lineage flags; canonical branch/reset verbs also publish through

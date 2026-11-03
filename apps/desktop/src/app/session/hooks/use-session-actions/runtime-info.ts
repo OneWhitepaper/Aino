@@ -1,5 +1,3 @@
-import { mergeUsage } from '@hermes/shared'
-
 import { normalizePersonalityValue } from '@/lib/chat-runtime'
 import { platformModelStatePatch } from '@/lib/platform-session-model'
 import { requestDesktopOnboardingForCredentialWarning } from '@/store/onboarding'
@@ -30,6 +28,7 @@ import type { SessionRuntimeInfo } from '@/types/hermes'
 import type { ClientSessionState } from '../../../types'
 
 import { reconcileOwnerApprovalMode } from './runtime-owner'
+import { publishSessionUsage } from './session-usage'
 
 export type SessionRuntimeStatePatch = Partial<
   Pick<
@@ -220,7 +219,7 @@ export function applyRuntimeInfo(
       // session.info/session.resume is an authoritative session snapshot, not a
       // partial live tick. Clear a missing compression count so switching from
       // a counted session to an older/cold runtime cannot leak the old value.
-      setCurrentUsage(current => ({ ...mergeUsage(current, info.usage), compressions: info.usage?.compressions }))
+      publishSessionUsage(sessionState.usage)
     }
   }
 
@@ -229,12 +228,17 @@ export function applyRuntimeInfo(
 
 export function applyStoredSessionPreviewRuntimeInfo(
   stored: { cwd?: null | string; model?: null | string } | undefined,
-  storedSessionId: null | string
+  storedSessionId: null | string,
+  options: { sameSession?: boolean } = {}
 ) {
   // Compression count is live runtime state, not part of a durable session row.
   // Drop the previous session's value immediately while the selected runtime
   // resumes; the authoritative usage snapshot will repopulate it when present.
-  setCurrentUsage(current => ({ ...current, compressions: undefined }))
+  setCurrentUsage(current => ({
+    ...current,
+    ...(options.sameSession ? {} : { avg_tps: undefined, cache_hit_pct: undefined }),
+    compressions: undefined
+  }))
   // Transient: this is a PREVIEW painted while `session.resume` is still in
   // flight. If the resume is abandoned (user starts a new chat before it
   // returns, or the row is switched away), nothing repairs the selection

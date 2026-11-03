@@ -583,6 +583,7 @@ trigger with a soft open fill; `icon-titlebar` uses the shared control radius).
 that sit inside a heading/sentence; replaces `h-auto px-0 py-0`), `micro`
 (status-stack/table-footers), and the icon family `icon` / `icon-xs` /
 `icon-sm` / `icon-lg` / `icon-titlebar`.
+`touch` provides a 44px minimum target for compact mobile navigation.
 
 **Tooltips only when hover teaches something new.** `<Tip>` is for discovery,
 not a tax on every icon. Ask: does hover reveal something the user cannot
@@ -729,6 +730,20 @@ blurred backdrop.
 
 ## Layout
 
+In the browser-hosted Desktop, composer controls retain 44px targets on
+coarse-pointer surfaces. Its collapse stages budget the actual control-size
+token; below the two-target width budget, the context menu and Send occupy
+separate rows rather than clipping or shrinking. Native Desktop keeps the
+compact stages sized for 24px controls.
+The voice engine split-button uses `--composer-voice-menu-size`: compact on
+desktop, matching `--composer-control-size` on touch surfaces.
+Narrow browser touch layouts show the current session tab with an open-tab
+count. Its menu exposes every tab, while the new-tab action remains beside it.
+In the browser-hosted Desktop, outside taps dismiss narrow sidebar overlays;
+cancelled or scrolling gestures do not. Native Desktop keeps its overlay until
+Escape, the toggle or hover-out. Touch transcript gestures select a pane without
+focusing its composer.
+
 - **Navigation rail:** new layouts open at 260px. Existing saved widths remain
   authoritative, and the supported 245px minimum is unchanged. A quiet gray rail
   continues into its portion of the native titlebar, with one continuous hairline at the content boundary.
@@ -861,6 +876,9 @@ binding and hovered/focused-zone resolver as the number shortcuts.
 
 Tab close buttons fade the label with a content mask, not a painted gradient.
 The tab reads its surface token directly so glass tint is painted only once.
+Close glyphs keep a 24px hit area, including session tabs wrapped in context menus.
+`PaneTab` owns its `data-slot` marker after forwarded props so composition cannot
+disable that width or the label mask.
 
 Sticky user messages clip covered scrolling content, including the gap above
 them. Their wrappers stay unpainted; only the rounded user bubble owns a fill.

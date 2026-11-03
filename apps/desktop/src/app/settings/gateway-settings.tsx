@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Tip } from '@/components/ui/tooltip'
 import type { DesktopConnectionConfigInput } from '@/global'
 import { useI18n } from '@/i18n'
+import { hostHas } from '@/lib/host-capabilities'
 import { AlertCircle, Check, FileText, Globe, HelpCircle, Loader2, Monitor, Terminal } from '@/lib/icons'
 import { coerceRemoteUrlScheme } from '@/lib/remote-url'
 import { selectableCardClass } from '@/lib/selectable-card'
@@ -22,11 +23,13 @@ import { WEBHOOKS_ROUTE } from '../routes'
 
 import { ConnectionsRegistrySection } from './connections-registry'
 import { CONTROL_TEXT } from './constants'
+import { KeychainEncryptionSetting, useKeychainEncryption } from './keychain-encryption-setting'
 import { ManagedUpdatesSection } from './managed-updates-section'
-import { EmptyState, ListRow, Pill, SettingsContent, SettingsSkeleton, ToggleRow } from './primitives'
+import { EmptyState, ListRow, Pill, SettingsContent, SettingsSkeleton } from './primitives'
 import { SETTING_IDS, settingElementId } from './settings-manifest'
 import { enrichSelectedSshHost, selectSshHost } from './ssh-host-selection'
 import { useSettingDeepLink } from './use-setting-deep-link'
+import { WebappGatewaySettings } from './webapp-gateway-settings'
 
 type Mode = 'local' | 'remote' | 'ssh'
 type SavedMode = Mode | 'cloud'
@@ -75,7 +78,9 @@ const EMPTY_STATE: GatewaySettingsState = {
   sshRemoteProfile: ''
 }
 
-export function normalizeGatewaySettingsState(config: SavedGatewaySettings | null | undefined): GatewaySettingsState {
+export function normalizeGatewaySettingsState(
+  config: SavedGatewaySettings | null | undefined
+): GatewaySettingsState {
   if (!config || typeof config !== 'object') {
     return { ...EMPTY_STATE }
   }
@@ -145,6 +150,10 @@ interface GatewaySettingsProps {
 
 export function GatewaySettings({ embedded = false, subpage }: GatewaySettingsProps = {}) {
   useSettingDeepLink('gateway', page => subpage === undefined || page === subpage)
+
+  if (!hostHas('gatewayManagement')) {
+    return <WebappGatewaySettings embedded={embedded} />
+  }
 
   // Recovery always keeps the complete connection form, regardless of a
   // settings destination. Other tasks never mount that form or its probes.
@@ -247,45 +256,7 @@ function GatewayConnectionSettings({ embedded, standalone }: { embedded: boolean
   const sshTestSeq = useRef(0)
   const saveSeq = useRef(0)
   const saveOwner = useRef<number | null>(null)
-  // Opt-in OS-keychain encryption for stored gateway secrets. Read lazily via
-  // IPC (never touches the keychain); flipping it re-encodes stored secrets
-  // in the main process and can legitimately prompt for keychain access.
-  const [keychainEncryption, setKeychainEncryptionState] = useState(false)
-  const [keychainEncryptionBusy, setKeychainEncryptionBusy] = useState(false)
-
-  useEffect(() => {
-    let cancelled = false
-
-    void window.hermesDesktop
-      ?.getSecretStorageEncryption?.()
-      .then(res => {
-        if (!cancelled && res) {
-          setKeychainEncryptionState(res.on === true)
-        }
-      })
-      .catch(() => {})
-
-    return () => {
-      cancelled = true
-    }
-  }, [])
-
-  const setKeychainEncryption = async (on: boolean) => {
-    setKeychainEncryptionBusy(true)
-    // Optimistic paint; the IPC result (or a failure rollback) gets the last word.
-    setKeychainEncryptionState(on)
-
-    try {
-      const res = await window.hermesDesktop.setSecretStorageEncryption(on)
-
-      setKeychainEncryptionState(res?.on === true)
-    } catch (err) {
-      setKeychainEncryptionState(!on)
-      notifyError(err, g.keychainEncryptionFailed)
-    } finally {
-      setKeychainEncryptionBusy(false)
-    }
-  }
+  const keychainEncryption = useKeychainEncryption()
 
   const acceptSavedConfig = (config: SavedGatewaySettings): void => {
     const normalized = normalizeGatewaySettingsState(config)
@@ -477,7 +448,7 @@ function GatewayConnectionSettings({ embedded, standalone }: { embedded: boolean
         notify({
           kind: 'error',
           title: apply ? g.applyFailed : g.saveFailed,
-          message: (errors as Record<string, string>)[sshError] || g.sshErrUnknown
+          message: (errors as Record<string, string>)[sshError] || readableError(err, g.sshErrUnknown).message
         })
       } else {
         notifyError(err, apply ? g.applyFailed : g.saveFailed)
@@ -577,7 +548,12 @@ function GatewayConnectionSettings({ embedded, standalone }: { embedded: boolean
           unknown: g.sshErrUnknown
         }
 
-        throw new Error(errors[result.sshError || 'unknown'] || result.error || g.sshErrUnknown)
+        // An unclassified failure carries its own cause (the remote probe's error); the generic copy would hide it.
+        throw new Error(
+          (result.sshError && result.sshError !== 'unknown' && errors[result.sshError]) ||
+            result.error ||
+            g.sshErrUnknown
+        )
       }
 
       const message = g.sshReachable(result.host || state.sshHost, result.remotePlatform || '?')
@@ -772,7 +748,10 @@ function GatewayConnectionSettings({ embedded, standalone }: { embedded: boolean
                 className={cn('h-8', CONTROL_TEXT)}
                 inputMode="numeric"
                 onChange={event =>
-                  setState(current => ({ ...current, sshPort: event.target.value ? Number(event.target.value) : null }))
+                  setState(current => ({
+                    ...current,
+                    sshPort: event.target.value ? Number(event.target.value) : null
+                  }))
                 }
                 placeholder="22"
                 value={state.sshPort ?? ''}
@@ -796,7 +775,9 @@ function GatewayConnectionSettings({ embedded, standalone }: { embedded: boolean
             action={
               <Input
                 className={cn('h-8 font-mono', CONTROL_TEXT)}
-                onChange={event => setState(current => ({ ...current, sshRemoteHermesPath: event.target.value }))}
+                onChange={event =>
+                  setState(current => ({ ...current, sshRemoteHermesPath: event.target.value }))
+                }
                 placeholder={g.sshHermesPathPlaceholder}
                 value={state.sshRemoteHermesPath}
               />
@@ -851,14 +832,7 @@ function GatewayConnectionSettings({ embedded, standalone }: { embedded: boolean
 
       {embedded ? null : (
         <div className="mt-6 grid gap-1">
-          <ToggleRow
-            checked={keychainEncryption}
-            description={g.keychainEncryptionDesc}
-            disabled={keychainEncryptionBusy}
-            id={settingElementId(SETTING_IDS.gateway.keychainEncryption)}
-            label={g.keychainEncryptionTitle}
-            onChange={on => void setKeychainEncryption(on)}
-          />
+          <KeychainEncryptionSetting keychain={keychainEncryption} />
           <ListRow
             action={
               <Button onClick={() => void window.hermesDesktop?.revealLogs()} size="sm" variant="textStrong">

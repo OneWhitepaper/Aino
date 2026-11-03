@@ -6,6 +6,7 @@ import {
   $gatewayManagedCapabilities,
   managedModelRouteCapabilityFrom
 } from '@/store/gateway-managed-capability'
+import { platformRecoveryActionForCode } from '@/store/platform-model-capability'
 import { platformModelCatalog } from '@/store/platform-models'
 
 /** A platform session can be ready without configuring a persistent BYOK provider. */
@@ -26,8 +27,10 @@ export function usePlatformOnboardingReady(enabled: boolean): boolean {
   const signedIn = account?.phase === 'signed_in' && Boolean(account.account)
   const scope = account?.account ? JSON.stringify([account.account.id, account.mode, connectionId, profile]) : null
 
+  const accountRecovery = signedIn && state.phase === 'ready' && state.models.some(model =>
+    model.capabilities.tools && platformRecoveryActionForCode(model.state) === 'account')
   const recovering = account?.phase === 'offline' || account?.phase === 'loading' ||
-    (signedIn && (state.phase === 'idle' || state.phase === 'loading'))
+    (signedIn && (state.phase === 'idle' || state.phase === 'loading')) || accountRecovery
 
   const ready = supported && signedIn && state.phase === 'ready' &&
     state.models.some(model => model.state === 'available' && model.capabilities.tools)

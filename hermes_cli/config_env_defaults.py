@@ -1,12 +1,12 @@
 """Credential and optional environment declarations for setup and the dashboard."""
 
-from hermes_cli.config_defaults_env import _base_url, _env, _msg, _prov, _setting, _skill, _tool
+from hermes_cli.config_defaults_env import OptionalEnvVars, _base_url, _env, _msg, _prov, _setting, _skill, _tool
 
 
 # Optional environment variables that enhance functionality. Feeds the dashboard keys page and setup
 # checklists; category: provider|tool|skill|messaging|setting, advanced=True hides from checklists,
-# tools=[...] lists the model tools the key unlocks.
-ENV_DECLARATIONS = {
+# tools=[...] lists the model tools the key unlocks. Provider entries: config_provider_env (on first read).
+OPTIONAL_ENV_VARS = OptionalEnvVars({
     # ── Provider (handled in provider selection, not shown in checklists) ──
     "NOUS_BASE_URL": _base_url("Nous Portal"),
     "HERMES_ANON_API_SECRET": _env(
@@ -170,36 +170,22 @@ ENV_DECLARATIONS = {
     "BROWSERBASE_API_KEY": _tool(
         "Browserbase API key for cloud browser (optional — local browser works without this)",
         "Browserbase API key", "https://browserbase.com/",
-        tools=["browser_navigate", "browser_click"]),
+        tools=["browser_exec"]),
     "BROWSERBASE_PROJECT_ID": _tool(
         "Browserbase project ID (optional — only needed for cloud browser)",
         "Browserbase project ID", "https://browserbase.com/",
-        tools=["browser_navigate", "browser_click"], password=False),
+        tools=["browser_exec"], password=False),
     "BROWSER_USE_API_KEY": _tool(
         "Browser Use API key for cloud browser (optional — local browser works without this)",
         "Browser Use API key", "https://browser-use.com/",
-        tools=["browser_navigate", "browser_click"]),
+        tools=["browser_exec"]),
     "FIRECRAWL_BROWSER_TTL": _tool(
         "Firecrawl browser session TTL in seconds (optional, default 300)",
-        "Browser session TTL (seconds)", tools=["browser_navigate", "browser_click"],
+        "Browser session TTL (seconds)", tools=["browser_exec"],
         password=False),
-    "AGENT_BROWSER_ENGINE": _env(
-        "Local browser engine: auto (default Chrome), lightpanda (faster, no screenshots; Browser Use mode "
-        "spawns lightpanda serve), chrome", "Browser engine (auto/lightpanda/chrome)",
-        url="https://lightpanda.io/docs/run-locally/installation/one-liner",
-        tools=["browser_exec", "browser_navigate", "browser_snapshot", "browser_click", "browser_vision"],
-        password=False, category="tool", advanced=True),
-    "CAMOFOX_URL": _tool(
-        "Camofox browser server URL for local anti-detection browsing (e.g. http://localhost:9377)",
-        "Camofox server URL", "https://github.com/jo-inc/camofox-browser",
-        tools=["browser_navigate", "browser_click"], password=False),
-    "CAMOFOX_API_KEY": _tool(
-        "Optional bearer token sent as Authorization header to a remote/authenticated Camofox "
-        "server", "Camofox API key", "https://github.com/jo-inc/camofox-browser",
-        tools=["browser_navigate", "browser_click"], advanced=True),
     "FAL_KEY": _tool("FAL API key for image and video generation", "FAL API key", "https://fal.ai/",
         tools=["image_generate", "video_generate"]),
-    "KREA_API_KEY": _tool("Krea API key for Krea 2 image generation (Medium + Large)",
+    "KREA_API_KEY": _tool("Krea API key for Krea 3 and Krea 2 image generation",
         "Krea API key", "https://www.krea.ai/settings/api-tokens", tools=["image_generate"]),
     "VOICE_TOOLS_OPENAI_KEY": _tool(
         "OpenAI API key for voice transcription (Whisper) and OpenAI TTS",
@@ -420,4 +406,4 @@ ENV_DECLARATIONS = {
     "HERMES_EPHEMERAL_SYSTEM_PROMPT": _setting(
         "Ephemeral system prompt injected at API-call time (never persisted to sessions)",
         "Ephemeral system prompt", None),
-}
+})

@@ -2,8 +2,8 @@ import http from 'node:http'
 
 import { afterEach, expect, it } from 'vitest'
 
-import { createPlatformClient } from './platform-client'
-import { parsePlatformModel } from './platform-model-contract'
+import { createPlatformClient } from '../shared/platform-client'
+import { parsePlatformModel } from '../shared/platform-model-contract'
 
 const servers: http.Server[] = []
 

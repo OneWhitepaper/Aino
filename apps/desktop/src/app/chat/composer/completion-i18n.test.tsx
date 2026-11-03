@@ -16,18 +16,18 @@ afterEach(() => {
 })
 
 async function settleSearch(
-  hook: { result: { current: { adapter: { search?: (query: string) => readonly Unstable_TriggerItem[] } } } },
+  hook: { result: { current: { adapter: { search?: (query: string) => readonly Unstable_TriggerItem[] } | null } } },
   query: string
 ): Promise<readonly Unstable_TriggerItem[]> {
   act(() => {
-    hook.result.current.adapter.search?.(query)
+    hook.result.current.adapter?.search?.(query)
   })
 
   await act(async () => {
     await vi.advanceTimersByTimeAsync(200)
   })
 
-  return hook.result.current.adapter.search?.(query) ?? []
+  return hook.result.current.adapter?.search?.(query) ?? []
 }
 
 describe('composer completion localization', () => {

@@ -2,9 +2,16 @@ import { isStableOpen, reconnectBackoffDelayMs } from '@hermes/shared'
 
 import type { HermesConnection } from '@/global'
 import { translateNow } from '@/i18n'
+import { hostHas } from '@/lib/host-capabilities'
 import { RECONNECT_ATTEMPT_TIMEOUT_MS, withTimeout } from '@/lib/with-timeout'
 
-import { $apiRequestScope, getApiRequestConnection, getApiRequestProfile, hermesApi, profileScoped } from './client'
+import {
+  $apiRequestScope,
+  getApiRequestConnection,
+  getApiRequestProfile,
+  hermesApi,
+  profileScoped
+} from './client'
 
 /** Resolve the ACTIVE backend's connection descriptor, (connectionId,
  *  profile)-scoped — mirroring how store/profile resolves $connection: a
@@ -70,7 +77,11 @@ function pluginPathSuffix(caller: string, path: string): string {
  *  plugin's API or a core route through it. Profile-aware like every desktop
  *  REST call. Broader reach (core endpoints, another namespace) is the future
  *  declared-capability seam; today the namespace IS the boundary. */
-export async function pluginRest<T>(pluginId: string, path: string, opts: PluginRestOptions = {}): Promise<T> {
+export async function pluginRest<T>(
+  pluginId: string,
+  path: string,
+  opts: PluginRestOptions = {}
+): Promise<T> {
   if (!window.hermesDesktop?.api) {
     throw new Error(translateNow('settings.plugins.errors.desktopUnavailable'))
   }
@@ -108,7 +119,12 @@ async function pluginSocketUrl(
     // An IPC round-trip with no deadline of its own, bounded like activeConnection().
     return mint
       ? withTimeout(
-          mint({ connectionId: getApiRequestConnection(), path: suffix, pluginId, profile: getApiRequestProfile() }),
+          mint({
+            connectionId: getApiRequestConnection(),
+            path: suffix,
+            pluginId,
+            profile: getApiRequestProfile()
+          }),
           RECONNECT_ATTEMPT_TIMEOUT_MS,
           `Timed out preparing plugin socket "${pluginId}"`
         )
@@ -196,9 +212,10 @@ export function pluginSocket(pluginId: string, path: string, onMessage: (data: u
       return retry(dial, false)
     }
 
-    // OAuth cookie auth (WS tickets are single-use, core-managed): stay on the
-    // polling fallback rather than half-working.
-    if (stale() || connection.authMode === 'oauth') {
+    // OAuth cookie auth (WS tickets are single-use, core-managed) and the browser-hosted
+    // Desktop (its session token never rides a URL): stay on the polling fallback rather than
+    // half-working.
+    if (stale() || connection.authMode === 'oauth' || !hostHas('urlTokenAuth')) {
       return
     }
 

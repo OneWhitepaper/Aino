@@ -134,6 +134,7 @@ export const ListPlus = designIcon('ListAdd')
 export const Loader2 = designIcon('Loading')
 export const Loader2Icon = Loader2
 export const Lock = designIcon('Lock')
+export const LockOpen = designIcon('Unlock')
 export const LogIn = designIcon('Login')
 export const Camera = designIcon('Camera')
 export const Calendar = designIcon('Calendar')

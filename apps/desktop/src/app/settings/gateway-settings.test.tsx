@@ -1,11 +1,14 @@
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { installBrowserDesktopBridge } from '@/lib/browser-desktop-bridge'
 import { $notifications } from '@/store/notifications'
 import { deferred } from '@/test/deferred'
+import { clearWebappSession, seedWebappSession } from '@/test/webapp-session'
 
 // Collect the component graph before the behavioral test deadline starts.
 import { GatewaySettings, normalizeGatewaySettingsState } from './gateway-settings'
+import { SETTING_IDS, settingElementId } from './settings-manifest'
 
 const { registry } = vi.hoisted(() => ({ registry: { value: null as any } }))
 
@@ -61,10 +64,86 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup()
+  Reflect.deleteProperty(window, '__HERMES_AUTH_REQUIRED__')
+  Reflect.deleteProperty(window, 'hermesDesktop')
+  window.document.documentElement.removeAttribute('data-hermes-desktop-host')
+  vi.unstubAllGlobals()
   vi.clearAllMocks()
 })
 
 describe('GatewaySettings', () => {
+  // The Webapp is served by one Hermes host and can only reach that host, so no
+  // mode switch, Cloud sign-in or saved connection can act there. What applies
+  // is which host this is and, behind the sign-in gate, signing out of it.
+  describe('in the Webapp', () => {
+    // A gated host signs its browser in with a cookie; an unauthenticated one through its private launch link.
+    const installWebapp = (credential: 'gated' | 'launch-link') => {
+      Reflect.deleteProperty(window, 'hermesDesktop')
+
+      if (credential === 'gated') {
+        Object.assign(window, { __HERMES_AUTH_REQUIRED__: true })
+      } else {
+        seedWebappSession('served-token')
+      }
+
+      const fetchMock = vi.fn().mockResolvedValue(new Response('', { status: 200 }))
+      vi.stubGlobal('fetch', fetchMock)
+      expect(installBrowserDesktopBridge()).toBe(true)
+
+      return fetchMock
+    }
+
+    afterEach(() => {
+      Reflect.deleteProperty(window, '__HERMES_AUTH_REQUIRED__')
+      clearWebappSession()
+    })
+
+    it.each([false, true])('offers the serving host and its sign-out only (embedded: %s)', async embedded => {
+      const fetchMock = installWebapp('gated')
+      const toLogin = vi.fn((event: Event) => event.preventDefault())
+      window.addEventListener('hermes:browser-reauth-required', toLogin, { once: true })
+
+      render(<GatewaySettings embedded={embedded} />)
+
+      const signOut = await screen.findByRole('button', { name: 'Sign out' })
+      expect(screen.getByText(window.location.origin)).toBeTruthy()
+      expect(screen.getAllByRole('button')).toEqual([signOut])
+      expect(fetchMock).not.toHaveBeenCalled()
+
+      fireEvent.click(signOut)
+
+      await waitFor(() => expect(toLogin).toHaveBeenCalledTimes(1))
+      const [requestUrl, init] = fetchMock.mock.calls[0] as [URL, RequestInit]
+      expect(requestUrl.pathname).toBe('/auth/logout')
+      expect(init.method).toBe('POST')
+    })
+
+    it('has nothing to sign out of on a launch-link host', async () => {
+      installWebapp('launch-link')
+
+      render(<GatewaySettings />)
+
+      expect(await screen.findByText(window.location.origin)).toBeTruthy()
+      expect(screen.queryAllByRole('button')).toEqual([])
+    })
+  })
+
+  it('keeps native keychain encryption writable at its settings deep-link target', async () => {
+    const setSecretStorageEncryption = vi.fn().mockResolvedValue({ on: true })
+    Object.assign(window.hermesDesktop, {
+      getSecretStorageEncryption: vi.fn().mockResolvedValue({ on: false }),
+      setSecretStorageEncryption
+    })
+
+    render(<GatewaySettings />)
+    const toggle = await screen.findByRole('switch', { name: 'Encrypt saved secrets with the OS keychain' })
+    const target = window.document.getElementById(settingElementId(SETTING_IDS.gateway.keychainEncryption))
+    expect(target?.contains(toggle)).toBe(true)
+    fireEvent.click(toggle)
+    await waitFor(() => expect(setSecretStorageEncryption).toHaveBeenCalledExactlyOnceWith(true))
+    expect(toggle.getAttribute('aria-checked')).toBe('true')
+  })
+
   it('releases a pending save after a late probe invalidates its response', async () => {
     const saved = { ...localConnection, mode: 'remote', remoteUrl: 'https://a.example', remoteTokenSet: true }
     getConnectionConfig.mockResolvedValue(saved)
@@ -75,7 +154,11 @@ describe('GatewaySettings', () => {
 
     Object.assign(window.hermesDesktop, { probeConnectionConfig })
     render(<GatewaySettings />)
-    const saveButton = (await screen.findByRole('button', { name: 'Save for next restart' })) as HTMLButtonElement
+
+    const saveButton = (await screen.findByRole('button', {
+      name: 'Save for next restart'
+    })) as HTMLButtonElement
+
     await waitFor(() => expect(probeConnectionConfig).toHaveBeenCalledWith('https://a.example'))
     fireEvent.click(saveButton)
     expect(saveConnectionConfig).toHaveBeenCalledExactlyOnceWith({
@@ -85,7 +168,9 @@ describe('GatewaySettings', () => {
       remoteToken: undefined
     })
     expect(saveButton.disabled).toBe(true)
-    await act(async (): Promise<void> => pendingProbe.resolve({ reachable: true, authMode: 'oauth', providers: [] }))
+    await act(async (): Promise<void> =>
+      pendingProbe.resolve({ reachable: true, authMode: 'oauth', providers: [] })
+    )
     await act(async (): Promise<void> => pendingSave.resolve(saved))
     expect(saveButton.disabled).toBe(false)
     expect(screen.getByRole('button', { name: /Sign in with/ })).toBeTruthy()
@@ -93,7 +178,11 @@ describe('GatewaySettings', () => {
   })
 
   it('pre-saves OAuth before login and applies the resolved auth mode without requiring a test', async () => {
-    getConnectionConfig.mockResolvedValue({ ...localConnection, mode: 'remote', remoteUrl: 'https://login.example' })
+    getConnectionConfig.mockResolvedValue({
+      ...localConnection,
+      mode: 'remote',
+      remoteUrl: 'https://login.example'
+    })
     const pendingSave = deferred<void>()
     saveConnectionConfig.mockReturnValueOnce(pendingSave.promise)
     const oauthLoginConnectionConfig = vi.fn().mockResolvedValue({ connected: true })
@@ -182,8 +271,16 @@ describe('GatewaySettings', () => {
   })
 
   it('discards an old token test while saving the current credential-ready payload', async () => {
-    getConnectionConfig.mockResolvedValue({ ...localConnection, mode: 'remote', remoteUrl: 'https://a.example' })
-    const probeConnectionConfig = vi.fn().mockResolvedValue({ reachable: true, authMode: 'token', providers: [] })
+    getConnectionConfig.mockResolvedValue({
+      ...localConnection,
+      mode: 'remote',
+      remoteUrl: 'https://a.example'
+    })
+
+    const probeConnectionConfig = vi
+      .fn()
+      .mockResolvedValue({ reachable: true, authMode: 'token', providers: [] })
+
     const pendingTest = deferred<{ ok: boolean; baseUrl: string }>()
     const testConnectionConfig = vi.fn().mockReturnValue(pendingTest.promise)
 
@@ -344,7 +441,9 @@ describe('GatewaySettings', () => {
           ])
         )
       )
-      expect($notifications.get().some((n: { message?: string }) => n.message === 'SSH connection failed.')).toBe(false)
+      expect(
+        $notifications.get().some((n: { message?: string }) => n.message === 'SSH connection failed.')
+      ).toBe(false)
     } finally {
       $notifications.set([])
     }
@@ -375,7 +474,7 @@ describe('GatewaySettings', () => {
     const hostRow = screen.getByText('Host').closest('.grid') as HTMLElement
     const input = within(hostRow).getByRole('textbox') as HTMLInputElement
 
-    await waitFor(() => expect(document.activeElement).toBe(input))
+    await waitFor(() => expect(window.document.activeElement).toBe(input))
     fireEvent.change(input, { target: { value: 'build-box' } })
     expect(input.value).toBe('build-box')
 

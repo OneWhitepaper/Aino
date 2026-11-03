@@ -35,7 +35,9 @@ const manualResult: HandoffResult = {
   exitCode: 0,
   message: 'Reopen the updated app to finish.',
   branch: 'main',
-  warnings: []
+  warnings: [],
+  runId: null,
+  releaseHolders: []
 }
 
 const failedResult: HandoffResult = {
@@ -44,7 +46,9 @@ const failedResult: HandoffResult = {
   exitCode: 1,
   message: 'The updated app could not be built.',
   branch: 'main',
-  warnings: []
+  warnings: [],
+  runId: null,
+  releaseHolders: []
 }
 
 it('shows update notices once on a visible parent without waiting for acknowledgement', () => {

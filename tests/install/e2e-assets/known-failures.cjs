@@ -36,16 +36,34 @@ function readOptional(file) {
   }
 }
 
-function classifyWorkRoot(root, installMethod, updateMethod, error, checkout) {
-  const state = JSON.parse(fs.readFileSync(path.join(root, 'shas.json'), 'utf8').replace(/^\uFEFF/, ''))
-  const rule = matchKnownFailure({
-    platform: 'windows', phase: 'update', commit: state.old, installMethod, updateMethod, error,
-    checkout, target: state.current,
+// Each harness keeps its own work-root layout: shas.json + hermes-home on
+// windows-e2e.ps1, shas.env + home/.hermes on macos-desktop-e2e.sh.
+const WORK_ROOTS = {
+  windows: root => ({
+    state: JSON.parse(fs.readFileSync(path.join(root, 'shas.json'), 'utf8').replace(/^\uFEFF/, '')),
     logs: {
       update: readOptional(path.join(root, 'logs', 'update.log')),
       desktop: readOptional(path.join(root, 'hermes-home', 'logs', 'desktop.log')),
       handoff: readOptional(path.join(root, 'hermes-home', 'logs', 'desktop-update-handoff.log')),
     },
+  }),
+  macos: root => {
+    const env = Object.fromEntries(fs.readFileSync(path.join(root, 'shas.env'), 'utf8')
+      .split(/\r?\n/).filter(line => line.includes('=')).map(line => [line.slice(0, line.indexOf('=')), line.slice(line.indexOf('=') + 1)]))
+    return {
+      state: { old: env.OLD_SHA, current: env.TARGET_SHA, old_ref: env.OLD_REF },
+      logs: { bootstrap: readOptional(path.join(root, 'home', '.hermes', 'logs', 'bootstrap-installer.log')) },
+    }
+  },
+}
+
+function classifyWorkRoot(root, installMethod, updateMethod, error, checkoutOrPlatform = 'windows') {
+  const platform = /^[0-9a-f]{40}$/.test(checkoutOrPlatform) ? 'windows' : checkoutOrPlatform
+  const checkout = platform === checkoutOrPlatform ? undefined : checkoutOrPlatform
+  const { state, logs } = WORK_ROOTS[platform](root)
+  const rule = matchKnownFailure({
+    platform, phase: 'update', commit: state.old, installMethod, updateMethod, error, logs,
+    checkout, target: state.current,
   })
   if (!rule) return null
   return {
@@ -58,9 +76,9 @@ function classifyWorkRoot(root, installMethod, updateMethod, error, checkout) {
 module.exports = { matchKnownFailure, classifyWorkRoot, classifyPosixUpdate, rules }
 
 if (require.main === module) {
-  const [root, install, update, error, checkout] = process.argv.slice(2)
+  const [root, install, update, error, platform] = process.argv.slice(2)
   try {
-    const receipt = classifyWorkRoot(root, install, update, error, checkout)
+    const receipt = classifyWorkRoot(root, install, update, error, platform || 'windows')
     if (!receipt) process.exitCode = 1
     else {
       fs.writeFileSync(path.join(root, 'known-failure.json'), JSON.stringify(receipt, null, 2) + '\n')

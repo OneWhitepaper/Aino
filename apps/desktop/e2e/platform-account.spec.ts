@@ -123,6 +123,7 @@ test('uses the real native platform bridge across windows without a gateway-owne
     await page.screenshot({ path: testInfo.outputPath('platform-account-native.png') })
 
     await page.getByRole('button', { name: 'Sign out', exact: true }).click()
+    await page.getByRole('dialog', { name: 'Sign out', exact: true }).getByRole('button', { name: 'Sign out', exact: true }).click()
     await expect(page.getByRole('textbox', { name: 'Phone number', exact: true })).toBeVisible()
     await expect(peer.getByRole('textbox', { name: 'Phone number', exact: true })).toBeVisible()
     await app.close()

@@ -1,5 +1,6 @@
 """Credential cleanup for explicitly deleted custom endpoints."""
 
+from contextlib import contextmanager
 from typing import Any
 from urllib.parse import urlparse
 
@@ -77,3 +78,47 @@ def clear_endpoint_credential_pools(
                 changed = True
         if changed:
             _save_auth_store(store)
+
+
+@contextmanager
+def endpoint_credential_transaction(env_keys: set[str]):
+    """Keep local credentials intact when the final endpoint config commit is refused.
+
+    Callers commit configuration last. Remote config owns its atomic write; only a file backend
+    can restore config bytes. Existing env/auth locks keep rollback from replacing concurrent accounts.
+    """
+    from hermes_cli import config as config_module
+    from hermes_cli.auth import _auth_file_path, _auth_store_lock
+    from hermes_cli.config_backend import ConfigBackendUnavailable, supports_file_tooling
+    from hermes_cli.config_env_publication import env_publication_targets
+    from utils import atomic_write_bytes
+
+    config_path, env_path = config_module.get_config_path(), config_module.get_env_path()
+    with config_module._CONFIG_LOCK, config_module._env_write_lock(env_path), _auth_store_lock():
+        paths = (env_path, _auth_file_path())
+        before = {path: path.read_bytes() if path.exists() else None for path in paths}
+        if supports_file_tooling():
+            before[config_path] = config_path.read_bytes() if config_path.exists() else None  # config-reader: ok — byte-exact rollback, gated by supports_file_tooling()
+        # A slot may be injected by the launch environment or an external source, absent from
+        # .env entirely. Each publication destination can hold a different original value.
+        published = [(target, {key: target.get(key) for key in env_keys})
+                     for target in env_publication_targets()]
+        try:
+            yield
+        except (Exception, ConfigBackendUnavailable):
+            for path, data in before.items():
+                if data is None:
+                    path.unlink(missing_ok=True)
+                else:
+                    atomic_write_bytes(path, data)
+            for target, values in published:
+                for key, value in values.items():
+                    if value is None:
+                        target.pop(key, None)
+                    else:
+                        target[key] = value
+            config_module.invalidate_env_cache()
+            for cache in (config_module._LOAD_CONFIG_CACHE, config_module._RAW_CONFIG_CACHE,
+                          config_module._LAST_EXPANDED_CONFIG_BY_PATH):
+                cache.pop(str(config_path), None)
+            raise

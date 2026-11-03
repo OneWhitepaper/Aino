@@ -267,7 +267,8 @@ export const zhHant: BotsMessages = {
     catalogInstalled: '目錄 · 已安裝',
     catalog: '目錄',
     createAction: '建立機器人',
-    creating: '建立中…'
+    creating: '建立中…',
+    openBotChatInNewTab: '在新分頁中開啟機器人聊天'
   },
   avatar: {
     classicShapes: '經典形狀',
@@ -555,7 +556,8 @@ export const zhHant: BotsMessages = {
     youControl: '你正在控制',
     otherControls: '另一位檢視者正在控制',
     agentControls: '機器人正在控制',
-    controlTaken: '另一位檢視者已接手控制。僅可觀看。'
+    controlTaken: '另一位檢視者已接手控制。僅可觀看。',
+    needsHttps: '機器人螢幕需要安全連線。請透過 HTTPS 或到 127.0.0.1 的 SSH 通道開啟 Webapp 後檢視。'
   },
   cron: {
     untitled: '未命名工作',

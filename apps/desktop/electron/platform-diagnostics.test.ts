@@ -2,10 +2,10 @@ import { gzipSync } from 'node:zlib'
 
 import { describe, expect, it, vi } from 'vitest'
 
+import { createPlatformAuth } from '../shared/platform-auth'
+import { createPlatformClient } from '../shared/platform-client'
 import { unwrapPlatformAccountIpc } from '../shared/platform-contract'
 
-import { createPlatformAuth } from './platform-auth'
-import { createPlatformClient } from './platform-client'
 import { validateDiagnosticBundle } from './platform-diagnostics-contract'
 import { registerPlatformIpc } from './platform-ipc'
 
@@ -21,7 +21,7 @@ describe('Aino authenticated diagnostic uploads', () => {
       id, created_at: '2026-10-24T00:00:00Z', expires_at: '2026-11-07T00:00:00Z', size_bytes: 120
     } })))
 
-    const client = createPlatformClient({ origin: 'https://api.agentera.com.cn', fetchImpl })
+    const client = createPlatformClient({ validateDiagnostics: validateDiagnosticBundle, origin: 'https://api.agentera.com.cn', fetchImpl })
     const result = await client.uploadDiagnostics('private-token', bundle())
     expect(result.id).toBe(id)
     expect(fetchImpl).toHaveBeenCalledOnce()
@@ -31,7 +31,7 @@ describe('Aino authenticated diagnostic uploads', () => {
 
   it('rejects redirects without a fallback request', async () => {
     const fetchImpl = vi.fn().mockResolvedValue(new Response(null, { status: 307, headers: { location: 'https://portal.nousresearch.com' } }))
-    const client = createPlatformClient({ origin: 'https://api.agentera.com.cn', fetchImpl })
+    const client = createPlatformClient({ validateDiagnostics: validateDiagnosticBundle, origin: 'https://api.agentera.com.cn', fetchImpl })
     await expect(client.uploadDiagnostics('private-token', bundle())).rejects.toThrow('redirect_rejected')
     expect(fetchImpl).toHaveBeenCalledOnce()
   })
@@ -49,7 +49,7 @@ describe('Aino authenticated diagnostic uploads', () => {
         signal.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')))
       }))
 
-      const client = createPlatformClient({ origin: 'https://api.agentera.com.cn', fetchImpl })
+      const client = createPlatformClient({ validateDiagnostics: validateDiagnosticBundle, origin: 'https://api.agentera.com.cn', fetchImpl })
       const ordinary = client.profile('private-token').catch(error => error.code)
 
       await vi.advanceTimersByTimeAsync(10_000)
@@ -68,7 +68,7 @@ describe('Aino authenticated diagnostic uploads', () => {
 
   it('rejects unredacted, malformed and oversized bundles before network I/O', async () => {
     const fetchImpl = vi.fn()
-    const client = createPlatformClient({ origin: 'https://api.agentera.com.cn', fetchImpl })
+    const client = createPlatformClient({ validateDiagnostics: validateDiagnosticBundle, origin: 'https://api.agentera.com.cn', fetchImpl })
 
     for (const value of [bundle(false), 'bad-base64', gzipSync('x'.repeat(16 * 1024 * 1024 + 1)).toString('base64')]) {
       await expect(client.uploadDiagnostics('private-token', value)).rejects.toThrow('invalid_diagnostics_bundle')
@@ -83,7 +83,7 @@ describe('Aino authenticated diagnostic uploads', () => {
       String(url).endsWith('/user/profile') ? { id: 17, username: 'test', email: '' } : { id, created_at: '2026-10-24T00:00:00Z', expires_at: '2026-11-07T00:00:00Z', size_bytes: 120 }
     })))
 
-    const client = createPlatformClient({ origin: 'https://api.agentera.com.cn', fetchImpl })
+    const client = createPlatformClient({ validateDiagnostics: validateDiagnosticBundle, origin: 'https://api.agentera.com.cn', fetchImpl })
 
     const auth = createPlatformAuth({ client, now: Date.now, tokenStore: {
       load: async () => ({ accessToken: 'test-token', refreshToken: 'test-refresh', expiresAt: Date.now() + 100_000 }),

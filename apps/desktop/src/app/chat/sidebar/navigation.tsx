@@ -18,6 +18,7 @@ import { comboTokens } from '@/lib/keybinds/combo'
 import { cn } from '@/lib/utils'
 import { recordAction } from '@/store/desktop-metrics'
 import { $bindings } from '@/store/keybinds'
+import type { AgentProfileRoute } from '@/store/profile'
 import { $newChatProfile } from '@/store/profile'
 import { exitProjectScope } from '@/store/project-scope'
 import { openRouteTile } from '@/store/route-tiles'
@@ -70,7 +71,7 @@ interface SidebarNavigationProps {
   navLabels: Record<string, string>
   openInSplit: string
   onNavigate: (item: SidebarNavItem) => void
-  onNewSessionInWorkspace: (path: null | string, options?: { openTab?: boolean }) => void
+  onNewSessionInWorkspace: (path: null | string, options?: { openTab?: boolean; owner?: AgentProfileRoute }) => void
   onNewSessionSplit: NewSessionSplitHandler
 }
 

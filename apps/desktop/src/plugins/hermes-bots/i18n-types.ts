@@ -153,6 +153,7 @@ export type BotsMessages = {
   }
   /** Creating, editing and removing a bot. */
   bot: {
+    openBotChatInNewTab: string
     newTitle: string
     /** Command-palette label for opening the New Bot dialog. */
     newCommand: string
@@ -520,6 +521,7 @@ export type BotsMessages = {
 
   /** Bot Screen: the bot's headless desktop on the gateway host, live in a pane. */
   screen: {
+    needsHttps: string
     title: string
     menu: string
     unsupportedTitle: string

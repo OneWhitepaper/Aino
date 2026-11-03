@@ -223,8 +223,7 @@ export async function verifyLateLeaseAcrossAccountSwitch({ launched, api, accoun
 
     await page.getByRole('button', { name: 'New chat with current account', exact: true }).first().click()
     await page.locator('[data-tour="model-pill"]').first().click()
-    await page.getByRole('button', { name: 'Aino models', exact: true }).click()
-    await page.getByRole('option', { name: /fixture-tool-model/ }).click()
+    await page.getByRole('menuitem', { name: /fixture-tool-model/ }).click()
     await sendPrompt(page, `Read ${api.info.fixture_path} and verify its content.`)
     await expect.poll(async () => (await state(nextId)).usage_calls, { timeout: 60_000 }).toBe(nextBefore.usage_calls + 2)
     await expect(page.getByText(`Verified ${api.info.fixture_content}`, { exact: false }).first()).toBeVisible()

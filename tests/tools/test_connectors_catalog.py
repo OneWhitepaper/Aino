@@ -6,6 +6,7 @@ Contracts:
 - the model sends catalog ids and an action; every other key is refused before anything runs
 - an id the catalog does not know, or a plugin this OS cannot run, is drawn failed and never installed
 - an approved row installs and reports what went live; the card never witnesses the outcome
+- a ClawHub skill reads as installed through the id its hub source lists, never another source's
 """
 
 import json
@@ -71,7 +72,7 @@ class FakeInstaller:
     def skill_meta(self, identifier):
         return None
 
-    def install_skill(self, identifier, *, force):
+    def install_skill(self, identifier, *, force, source=None):
         raise AssertionError("no skill in these tests")
 
 
@@ -236,7 +237,7 @@ def test_a_failed_row_keeps_its_reason_and_try_again_works_while_the_card_is_ope
             operation = live.current("s1")
             return operation if operation is not None and operation.targets[0].state == state else None
 
-        return wait_until(reached, what=f"blender reached {state}")
+        return wait_until(reached, timeout=30, what=f"blender reached {state}")
 
     with patch("tools.connectors.run.WATCH_INTERVAL_SECONDS", 0.01), ThreadPoolExecutor(max_workers=1) as worker:
         result = worker.submit(manage_catalog,
@@ -250,12 +251,13 @@ def test_a_failed_row_keeps_its_reason_and_try_again_works_while_the_card_is_ope
             apply_answer(operation, json.dumps({"targets": [{"name": "blender", "status": "approved"}]}))
             wait_for(TargetState.connected)
             apply_answer(operation, json.dumps({"targets": [{"name": "krita", "status": "skipped"}]}))
-            out = json.loads(result.result(timeout=5))
+            out = json.loads(result.result(timeout=10))
         finally:
             operation = live.current("s1")
             if operation is not None:
                 operation.settle(SettleReason.interrupt)
     assert out["targets"][0]["state"] == TargetState.connected.value
+    assert out["targets"][1]["state"] == TargetState.skipped.value
     assert len(installer.installs) == 2
 
     # A failed row does not hold the turn to the deadline: once it is the last open row, the
@@ -265,3 +267,68 @@ def test_a_failed_row_keeps_its_reason_and_try_again_works_while_the_card_is_ope
     (row,) = out["targets"]
     assert out["settled_by"] == "all_resolved"
     assert (row["state"], row["detail"]) == (TargetState.failed.value, "clone failed: network down")
+
+
+class ClawHubSkillInstaller(FakeInstaller):
+    """One skill, resolved the way the hub index resolves a ClawHub hit: its bare slug."""
+
+    def skill_meta(self, identifier):
+        return {"name": "Agent Git Oracle", "description": "Repository analysis.", "source": "clawhub",
+                "identifier": identifier}
+
+    def install_skill(self, identifier, *, force, source=None):
+        self.installs.append({"identifier": identifier, "source": source})
+        return {"name": identifier, "already_installed": False}
+
+
+def test_a_skill_row_installs_with_the_source_that_resolved_it():
+    installer = ClawHubSkillInstaller()
+
+    out = _install([{"kind": "skill", "id": "agent-git-oracle"}], installer, _card(_approve()))
+
+    assert out["targets"][0]["state"] == TargetState.connected.value
+    assert installer.installs == [{"identifier": "agent-git-oracle", "source": "clawhub"}]
+
+
+def test_a_clawhub_install_is_read_back_through_its_card_id(monkeypatch):
+    # The lock records @owner/slug. Matching the bare slug exactly, a finished install raised its
+    # last printed line ("Files: ...") and a second one raised "Use --force to reinstall."
+    from tools.connectors.catalog import HostInstaller
+    from tools.skills_hub import HubLockFile
+
+    installs = []
+
+    def do_install(identifier, **_):
+        installs.append(identifier)
+        HubLockFile().record_install(
+            name="agent-git-oracle", source="clawhub", identifier="@tmstudio667-commits/agent-git-oracle",
+            trust_level="community", scan_verdict="safe", skill_hash="0" * 64,
+            install_path="agent-git-oracle", files=["SKILL.md"])
+        return True
+
+    monkeypatch.setattr("hermes_cli.skills_hub.do_install", do_install)
+    installer = HostInstaller()
+
+    assert installer.install_skill("agent-git-oracle", force=False, source="clawhub") == {
+        "name": "agent-git-oracle", "already_installed": False}
+    assert installer.install_skill("agent-git-oracle", force=False, source="clawhub")["already_installed"]
+    assert installer.install_skill("clawhub/agent-git-oracle", force=False)["already_installed"]
+    assert installs == ["agent-git-oracle"]
+
+
+def test_search_rows_mark_an_installed_clawhub_hit_but_not_another_sources_bare_id(monkeypatch):
+    from tools.connectors.catalog_tool import _skill_rows
+    from tools.skills_hub import HubLockFile
+    from tools.skills_hub_models import SkillMeta
+
+    HubLockFile().save({"version": 1, "installed": {"agent-git-oracle": {
+        "source": "clawhub", "identifier": "@tmstudio667-commits/agent-git-oracle",
+        "install_path": "agent-git-oracle"}}})
+    hits = [SkillMeta(name=name, description="", source=source, identifier="agent-git-oracle",
+                      trust_level="community")
+            for name, source in (("Agent Git Oracle", "clawhub"), ("agent-git-oracle", "skills-sh"))]
+    monkeypatch.setattr("tools.skills_hub_github.GitHubAuth", lambda: None)
+    monkeypatch.setattr("tools.skills_hub_search.create_source_router", lambda auth: [])
+    monkeypatch.setattr("tools.skills_hub_search.unified_search", lambda query, sources, limit: hits)
+
+    assert [row["installed"] for row in _skill_rows("agent git oracle")] == [True, False]

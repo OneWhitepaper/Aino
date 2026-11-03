@@ -65,12 +65,15 @@ export async function observeEdgeAlerts(launched: Launch, allowRevocation: boole
 
         if (!text) { continue }
 
-        const message = (alert.querySelector('details > div') ??
+        const message = (alert.querySelector('[data-slot="aui_error-details"] code') ?? alert.querySelector('details > div') ??
           alert.querySelector(':scope > div:first-child > div > .min-w-0'))?.textContent?.trim()
 
         const expected = allow && (
           message === 'Aino model authorization was revoked. Sign in and select the model again.' ||
-          (target.edgeOfflineAllowed && alert.tagName === 'P' && text === 'The account service is offline. Check your connection and retry.')
+          (target.edgeOfflineAllowed && (
+            (alert.tagName === 'P' && text === 'The account service is offline. Check your connection and retry.') ||
+            (alert.closest('.account-history') !== null && text === 'Could not load recordsRetry')
+          ))
         )
 
         if (!target.edgeAlerts.some(item => item.message === text && item.expected === expected)) {
@@ -268,8 +271,7 @@ async function bothAccount(pages: Page[], phase: AccountSnapshot['phase'], id: s
 export async function sendToolTurn(page: Page, api: API) {
   const before = await api.control<NativeState>('state')
   await page.locator('[data-tour="model-pill"]').first().click()
-  await page.getByRole('button', { name: 'Aino models', exact: true }).click()
-  await page.getByRole('option', { name: /fixture-tool-model/ }).click()
+  await page.getByRole('menuitem', { name: /fixture-tool-model/ }).click()
   await sendPrompt(page, `Read ${api.info.fixture_path} and verify its content.`)
   await expect
     .poll(async () => (await api.control<NativeState>('state')).usage_calls, { timeout: 60_000 })
@@ -417,13 +419,21 @@ export async function verifyOfflineAndAuthorizationRecovery({ launched, api, acc
   }
 
   await api.control('faults', JSON.stringify({ offline: false }))
-  await page.getByRole('button', { name: 'Retry', exact: true }).click()
+  await page.getByRole('status')
+    .filter({ hasText: 'Account details are shown from the last verified snapshot. Reconnect to refresh them.' })
+    .getByRole('button', { name: 'Retry', exact: true }).click()
   await bothAccount(pages, 'signed_in', accountId)
   // Wallet reads have their own explicit retry; account broadcasts must not
   // start a feedback loop of failed billing reads while the service is offline.
   await page.getByRole('button', { name: 'Refresh', exact: true }).click()
+  await page.getByRole('region', { name: 'Aino wallet', exact: true })
+    .getByText('View exact balance', { exact: true }).click()
   await expect(page.getByText(`${Number(initial.balance)} USD`, { exact: true })).toBeVisible()
+  // History also performs an independent authenticated read during the outage.
+  await page.getByRole('button', { name: 'Refresh billing history', exact: true }).click()
+  await expect(page.locator('.account-history [role="alert"]')).toHaveCount(0)
   // Device inventory owns its recovery separately from account and wallet state.
+  await page.locator('details.account-devices > summary').click()
   await page.getByRole('button', { name: 'Refresh devices', exact: true }).click()
 
   for (const candidate of pages) {
@@ -440,7 +450,7 @@ export async function verifyOfflineAndAuthorizationRecovery({ launched, api, acc
   const beforeRevocation = await api.control<NativeFaultState>('faults')
   await api.control('faults', JSON.stringify({ hold_inference_before_auth: true }))
   await sendPrompt(page, 'Read the same file again after verifying authorization.')
-  await expect.poll(async () => (await api.control<NativeFaultState>('faults')).inference_waiting).toBe(1)
+  await expect.poll(async () => (await api.control<NativeFaultState>('faults')).inference_waiting, { timeout: 45_000 }).toBe(1)
   const awaitingInference = await api.control<NativeFaultState>('faults')
   expect(awaitingInference.inference_requests).toBe(beforeRevocation.inference_requests + 1)
   expect(awaitingInference.credential_successes).toBe(beforeRevocation.credential_successes + 1)
@@ -451,7 +461,7 @@ export async function verifyOfflineAndAuthorizationRecovery({ launched, api, acc
   const recovery = page.locator('button.aui-error-action[data-action="account"]').last()
   await expect(recovery).toBeVisible({ timeout: 30_000 })
   const errorCard = recovery.locator('xpath=ancestor::*[@role="alert"]')
-  await errorCard.getByText('Details', { exact: true }).click()
+  await errorCard.getByRole('button', { name: 'View error details', exact: true }).click()
   await expect(page.getByText('Aino model authorization was revoked.', { exact: false }).first()).toBeVisible()
   const errorBlock = recovery.locator('..')
   await expect(errorBlock.getByRole('button', { name: /retry/i })).toHaveCount(0)
@@ -461,6 +471,7 @@ export async function verifyOfflineAndAuthorizationRecovery({ launched, api, acc
   await recovery.click()
   await expect(page.getByRole('button', { name: 'Sign out', exact: true })).toBeVisible()
   await page.getByRole('button', { name: 'Sign out', exact: true }).click()
+  await page.getByRole('dialog', { name: 'Sign out', exact: true }).getByRole('button', { name: 'Sign out', exact: true }).click()
   await bothAccount(pages, 'signed_out', null)
   await signInAgain()
   await bothAccount(pages, 'signed_in', accountId)

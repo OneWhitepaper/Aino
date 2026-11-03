@@ -1,6 +1,6 @@
 import { expect, it } from 'vitest'
 
-import { parsePlatformUsagePage, parsePlatformUsageQuery } from './platform-usage-contract'
+import { parsePlatformUsagePage, parsePlatformUsageQuery } from '../shared/platform-usage-contract'
 
 it('accepts only bounded usage filters, never caller-selected users or credentials', () => {
   expect(

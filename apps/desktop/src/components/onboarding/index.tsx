@@ -2,6 +2,7 @@ import type { ModelOptionProvider } from '@hermes/shared'
 import { useStore } from '@nanostores/react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 
+import { ambientOwnerConnectionId } from '@/api/client'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Codicon } from '@/components/ui/codicon'
@@ -65,7 +66,7 @@ export {
 } from './providers'
 
 import { $gateway, activeGatewayConnectionId } from '@/store/gateway'
-import { captureOnboardingScope, requestOnboardingGateway } from '@/store/onboarding-scope'
+import { captureFirstRunOwner, captureOnboardingScope, requestOnboardingGateway } from '@/store/onboarding-scope'
 
 interface DesktopOnboardingOverlayProps {
   enabled: boolean
@@ -216,9 +217,20 @@ export function DesktopOnboardingOverlay({
   useStore($gateway)
   const connectionId = activeGatewayConnectionId()
 
+  // Inspecting a keyless bot is passive. Only a real chat/setup request probes
+  // that bot; first-run readiness belongs to the computer's default profile.
   const scope = useMemo(
-    () => onboarding.targetScope ?? captureOnboardingScope({ connectionId, profile }),
-    [onboarding.targetScope, profile, connectionId]
+    () =>
+      onboarding.targetScope ??
+      captureOnboardingScope(
+        onboarding.requested
+          ? { connectionId, profile }
+          : (captureFirstRunOwner() ?? {
+              connectionId,
+              profile: ambientOwnerConnectionId() === 'local' ? 'default' : profile
+            })
+      ),
+    [onboarding.targetScope, onboarding.requested, profile, connectionId]
   )
 
   const platformReady = usePlatformOnboardingReady(enabled && !onboarding.manual)
@@ -229,12 +241,12 @@ export function DesktopOnboardingOverlay({
       scope,
       profile: scope.profile ?? undefined,
       requestGateway:
-        scope.connectionId || (scope.profile && onboarding.targetScope)
+        scope.connectionId || (scope.profile && (onboarding.targetScope || scope.profile !== profile))
           ? (method, params) => requestOnboardingGateway(scope, method, params)
           : requestGateway,
       onCompleted: () => onCompletedRef.current?.()
     }),
-    [onboarding.targetScope, scope, requestGateway]
+    [onboarding.targetScope, profile, scope, requestGateway]
   )
 
   // Cinematic exit on "Begin": dissolve the panel + overlay (revealing the chat
@@ -601,6 +613,19 @@ function Header() {
 }
 
 export const FEATURED_ID = 'nous'
+
+// Stand-in for the Nous row when the OAuth provider list could not be read
+// (it failed or came back empty, which drops the picker onto the key form).
+// Starting sign-in only needs the id; the backend's start reply decides the flow.
+const NOUS_FALLBACK: OAuthProvider = {
+  cli_command: 'hermes auth add nous',
+  docs_url: 'https://portal.nousresearch.com',
+  flow: 'device_code',
+  id: FEATURED_ID,
+  name: 'Nous Portal',
+  status: { logged_in: false }
+}
+
 const SHOW_ALL_KEY = 'hermes-onboarding-show-all-v1'
 
 const readShowAll = () => {
@@ -637,29 +662,25 @@ export function Picker({ ctx }: { ctx: OnboardingContext }) {
   const ordered = useMemo(() => (providers ? sortProviders(providers) : []), [providers])
   const hasOauth = ordered.length > 0
   const apiKeyOptions = useApiKeyCatalog(ctx.scope)
+  const select = (p: OAuthProvider) => void startProviderOAuth(p, ctx)
 
   // localEndpoint forces the key form regardless of `mode` (which a manual
   // provider refresh may flip back to 'oauth'); it preselects the local option
   // and hides the "back to sign in" link since the user came specifically to
-  // configure a custom endpoint.
-  if (localEndpoint || mode === 'apikey' || !hasOauth) {
+  // configure a custom endpoint. A list still loading (null) is not "no OAuth
+  // providers": it waits below instead of flashing the key form.
+  if (localEndpoint || mode === 'apikey' || (providers !== null && !hasOauth)) {
     return (
-      <div className="grid gap-3">
-        <ApiKeyForm
-          canGoBack={hasOauth && !localEndpoint}
-          initialEnvKey={localEndpoint ? 'OPENAI_BASE_URL' : apiKeyInitialEnv}
-          onBack={() => setOnboardingMode('oauth')}
-          onSave={(envKey, value, name, apiKey, modelName) =>
-            saveOnboardingApiKey(envKey, value, name, ctx, apiKey, modelName)
-          }
-          options={apiKeyOptions}
-        />
-        {manual ? null : (
-          <div className="flex justify-center pt-1">
-            <ChooseLaterLink />
-          </div>
-        )}
-      </div>
+      <KeyFormStep
+        apiKeyOptions={apiKeyOptions}
+        ctx={ctx}
+        hasOauth={hasOauth}
+        initialEnvKey={apiKeyInitialEnv}
+        localEndpoint={localEndpoint}
+        manual={manual}
+        onSelect={select}
+        providers={ordered}
+      />
     )
   }
 
@@ -667,7 +688,6 @@ export function Picker({ ctx }: { ctx: OnboardingContext }) {
     return <Status>{t.onboarding.lookingUpProviders}</Status>
   }
 
-  const select = (p: OAuthProvider) => void startProviderOAuth(p, ctx)
   const featured = ordered.find(p => p.id === FEATURED_ID) ?? null
   const rest = featured ? ordered.filter(p => p.id !== FEATURED_ID) : ordered
   // Collapse the secondary providers behind a disclosure whenever Nous Portal
@@ -733,6 +753,51 @@ export function Picker({ ctx }: { ctx: OnboardingContext }) {
           {t.onboarding.haveApiKey}
         </Button>
       </div>
+    </div>
+  )
+}
+
+// The API-key step of the picker. Nous stays reachable from it, including when
+// the provider list failed to load and there is no picker to go back to; the
+// custom-endpoint form (localEndpoint) is a deliberate destination and skips it.
+function KeyFormStep({
+  apiKeyOptions,
+  ctx,
+  hasOauth,
+  initialEnvKey,
+  localEndpoint,
+  manual,
+  onSelect,
+  providers
+}: {
+  apiKeyOptions: ApiKeyOption[]
+  ctx: OnboardingContext
+  hasOauth: boolean
+  initialEnvKey?: string
+  localEndpoint: boolean
+  manual: boolean
+  onSelect: (provider: OAuthProvider) => void
+  providers: OAuthProvider[]
+}) {
+  const nous = localEndpoint ? null : (providers.find(p => p.id === FEATURED_ID) ?? NOUS_FALLBACK)
+
+  return (
+    <div className="grid gap-3">
+      {nous ? <FeaturedProviderRow onSelect={onSelect} provider={nous} /> : null}
+      <ApiKeyForm
+        canGoBack={hasOauth && !localEndpoint}
+        initialEnvKey={localEndpoint ? 'OPENAI_BASE_URL' : initialEnvKey}
+        onBack={() => setOnboardingMode('oauth')}
+        onSave={(envKey, value, name, apiKey, modelName) =>
+          saveOnboardingApiKey(envKey, value, name, ctx, apiKey, modelName)
+        }
+        options={apiKeyOptions}
+      />
+      {manual ? null : (
+        <div className="flex justify-center pt-1">
+          <ChooseLaterLink />
+        </div>
+      )}
     </div>
   )
 }

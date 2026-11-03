@@ -34,10 +34,13 @@ def test_update_preserves_local_work_and_rescues_orphan_before_reset(
     t.args.channel, t.args.keep_stash = 'main', keep
     monkeypatch.setattr(hermes_main, '_sync_with_upstream_if_needed', update_cmd._sync_with_upstream_if_needed)
     monkeypatch.setattr(update_cmd, '_UPDATE_CRITICAL_MODULES', ())
+    from hermes_cli import update_custody
     original = subprocess.run
+    original_git = update_custody.run_git
     resets = []
 
-    def fault(command, *args, **kwargs):
+    def fault(git_cmd, args, **kwargs):
+        command = [*git_cmd, *args]
         if 'reset' in command and '--hard' in command:
             refs = original(['git', 'for-each-ref', '--format=%(objectname)',
                              'refs/hermes-update-backups/'], cwd=t.clone,
@@ -47,9 +50,9 @@ def test_update_preserves_local_work_and_rescues_orphan_before_reset(
         if ((failure == 'ref' and 'update-ref' in command and '-d' not in command)
                 or (failure == 'reset' and 'reset' in command and '--hard' in command)):
             return subprocess.CompletedProcess(command, 128, stdout='', stderr='fixture I/O refusal')
-        return original(command, *args, **kwargs)
+        return original_git(git_cmd, args, **kwargs)
 
-    monkeypatch.setattr(subprocess, 'run', fault)
+    monkeypatch.setattr(update_custody, 'run_git', fault)
     if failure == 'head':
         monkeypatch.setattr(update_cmd, '_capture_head_sha', lambda *_: None)
     if failure == 'reset':

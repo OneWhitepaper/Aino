@@ -1,3 +1,4 @@
+import { useStore } from '@nanostores/react'
 /**
  * Group node renderer — a ZONE: header strip (tabs when stacked, minimize
  * chevron) + the active pane's content, resolved from the contribution
@@ -8,9 +9,8 @@
  * every zone lights up as a whole-region drop target. Right-click opens the
  * contextual zone menu (tab close verbs + header/minimize toggles).
  */
-
-import { useStore } from '@nanostores/react'
 import {
+  type ComponentProps,
   type CSSProperties,
   Fragment,
   type ReactNode,
@@ -23,7 +23,7 @@ import {
 
 import { ShellMenuItems } from '@/app/context-menu/shell-menu-items'
 import { $workspaceIsPage, workspacePageKeepsPane } from '@/app/routes'
-import { TITLEBAR_DRAG_HANDLE_WIDTH, TITLEBAR_HEIGHT } from '@/app/shell/titlebar'
+import { TITLEBAR_DRAG_HANDLE_WIDTH } from '@/app/shell/titlebar'
 import { ActionsContextMenu, type MenuKit, renderActionItem } from '@/components/ui/actions-menu'
 import { Codicon } from '@/components/ui/codicon'
 import { DecodeText } from '@/components/ui/decode-text'
@@ -44,6 +44,7 @@ import type { Contribution } from '@/contrib/types'
 import { useI18n } from '@/i18n'
 import { localizedPaneTitle } from '@/i18n/contributions'
 import { useKeybindHint } from '@/lib/keybinds/use-keybind-hint'
+import { isBrowserOwnedTouch } from '@/lib/touch-interaction'
 import { cn } from '@/lib/utils'
 import { closeAllOpenSessionTiles, setZoneParkedTiles } from '@/store/session-states'
 import { $tabStripDefault } from '@/store/tabstrip-prefs'
@@ -75,7 +76,6 @@ import {
   collapseTreePane,
   hideOnlyZoneTabs,
   hostsSessionDropTarget,
-  isCollapsePane,
   isMainStripPane,
   isSessionStripPane,
   NEW_SESSION_DRAG,
@@ -92,8 +92,10 @@ import { TabKeyHint } from '../tab-key-hints'
 import { $tabSelection, isToggleSelectClick, selectionFor, selectTabRange, toggleTabSelected } from '../tab-selection'
 import { isToolPanelGroup } from '../tool-panel-policy'
 
+import { CompactTabPicker } from './compact-tab-picker'
 import { startPaneDrag } from './drag-session'
-import { groupMinimizeLabel, groupNewTab, groupTabActions, sessionHeaderVisible } from './group-tab-actions'
+import { groupHeaderPresentation } from './group-header-presentation'
+import { groupMinimizeLabel, groupNewTab, groupTabActions } from './group-tab-actions'
 import { SessionHeaderPlacement, WindowTitlebarContext } from './header-placement'
 import { KeepAlivePaneSlot, useStablePaneHosts } from './keep-alive-panes'
 import { PaneBody } from './pane-body'
@@ -101,10 +103,10 @@ import { PaneLayer } from './pane-layer'
 import { usePanelTitlebar } from './panel-titlebar'
 import { SidebarModeHeader } from './sidebar-mode-header'
 import { sidebarModePanes } from './sidebar-mode-presentation'
-import { tabStripVisibleForZone } from './strip-visibility'
 import { useActiveTabVisible } from './tab-strip-scroll'
 import { ToolPanelControls } from './tool-panel-controls'
 import { paneChrome } from './track-model'
+import { useZoneHeaderLayout } from './zone-header-layout'
 
 /** Right-click zone menu: the tab verbs (close this / others / to the right /
  *  all) plus the strip's own chrome toggles. Same items and icons as a session
@@ -112,6 +114,7 @@ import { paneChrome } from './track-model'
  *  a pane with no domain menu of its own (the file tree, a terminal, the main
  *  tab on a fresh draft) falls through to this one. */
 function ZoneMenu({
+  allowOpen,
   children,
   closable,
   includeAppActions = false,
@@ -125,6 +128,7 @@ function ZoneMenu({
   tabMenuPrefix,
   targetPane
 }: {
+  allowOpen?: () => boolean
   children: ReactNode
   includeAppActions?: boolean
   allowTabStripToggle?: boolean
@@ -254,7 +258,7 @@ function ZoneMenu({
   // `w-40` clips the spelled-out chord (`Ctrl+Alt+T`) under the menu's
   // overflow-x-hidden. Size to the row; `min-w-40` keeps the short rows.
   return (
-    <ActionsContextMenu contentClassName="w-max min-w-40" items={items}>
+    <ActionsContextMenu allowOpen={allowOpen} contentClassName="w-max min-w-40" items={items}>
       {children}
     </ActionsContextMenu>
   )
@@ -389,6 +393,35 @@ function useGroupPaneLifecycle({
   return { paneLifecycle, mountedPanes, hostedPanes, inlinePanes }
 }
 
+type ZoneMenuProps = ComponentProps<typeof ZoneMenu>
+
+interface ZoneBodyMenuProps extends Omit<ZoneMenuProps, 'allowOpen' | 'includeAppActions'> {
+  label: string
+}
+
+/** The body's zone menu, app actions included. A touch hold on message text,
+ *  an editable, a link or media keeps the browser's selection/paste callout;
+ *  the hold opens this menu only on plain pane chrome. */
+function ZoneBodyMenu({ children, label, ...menu }: ZoneBodyMenuProps) {
+  // Whether the touch now down landed on browser-owned body content.
+  const touchOwnedByBrowser = useRef(false)
+
+  return (
+    <ZoneMenu {...menu} allowOpen={() => !touchOwnedByBrowser.current} includeAppActions>
+      <div
+        aria-label={label}
+        data-zone-body={menu.nodeId}
+        onPointerCancel={() => void (touchOwnedByBrowser.current = false)}
+        onPointerDown={event => void (touchOwnedByBrowser.current = isBrowserOwnedTouch(event.nativeEvent))}
+        onPointerUp={() => void (touchOwnedByBrowser.current = false)}
+        style={{ display: 'contents' }}
+      >
+        {children}
+      </div>
+    </ZoneMenu>
+  )
+}
+
 export function TreeGroup({
   node,
   parentAxis,
@@ -473,11 +506,20 @@ export function TreeGroup({
   const active = paneFor(activeId)
   const isEmpty = shown.length === 0
   const tabSurface = shown.some(isMainStripPane) ? 'main' : 'sidebar'
-  const tabsBelowControls = panelTopEdge && (sidebarGroup || measuredBelowControls)
-  const tabsInTitlebar = panelTopEdge && !tabsBelowControls
   const activeChrome = paneChrome(active)
   const toolPanel = isToolPanelGroup(node, paneFor)
-  const stripHeight = toolPanel ? 45 : 28
+
+  const headerLayout = useZoneHeaderLayout({
+    measuredBelowControls,
+    narrow,
+    shown,
+    sidebarGroup,
+    topEdge: panelTopEdge
+  })
+
+  const compactTabs = headerLayout.compactTabs && !toolPanel
+  const { titlebarHeight, tabsBelowControls, tabsInTitlebar } = headerLayout
+  const stripHeight = toolPanel ? 45 : headerLayout.tabStripHeight
   const pageHeader = activeChrome.headerContent
 
   const newTab = groupNewTab({ activeId, node, shown, paneFor, toolPanel, newSessionTabAction, t })
@@ -496,65 +538,30 @@ export function TreeGroup({
     stableHosts
   })
 
-  // ONE header style: the app's compact pane-header. Whether this zone shows
-  // it is the resolver's call, not this component's — see strip-visibility.ts
-  // for the precedence. The same resolver answers for the toggle command, so
-  // the keystroke and the screen always agree about which way "toggle" points.
-  const stripVisible =
-    toolPanel ||
-    (!(workspacePage && shown.includes('workspace')) &&
-      tabStripVisibleForZone({
-        active: activeId,
-        defaultMode: tabStripDefault,
-        isCollapsePane,
-        mode: node.tabStrip,
-        paneFor,
-        shown
-      }))
-
-  // A group collapses ALONG its parent split's axis. In a row that means the
-  // WIDTH collapses — a full-width horizontal header would strand a tall
-  // empty column, so the minimized form is a narrow vertical rail instead
-  // (tabs reading top-to-bottom). In a column (stacked zones) the horizontal
-  // header IS the collapsed form, exactly as before.
-  //
-  // Non-tool minimized row groups keep their vertical restore rail. Unified
-  // tools hide their whole track instead of leaving the old 28px strip.
-  const verticalCollapse = !toolPanel && Boolean(node.minimized) && parentAxis === 'row' && !isEmpty
-
-  // A minimized group IS its header, so it shows one regardless.
-  const headerVisible =
-    !compactSidebar && !isEmpty && !verticalCollapse && (Boolean(node.minimized) || stripVisible || Boolean(pageHeader))
-
-  // Chat sessions are navigated from the Sessions rail, so a row of session
-  // tabs in the main header is redundant.  Keep the layout tree (and its
-  // active pane) intact, but present one Codex-style title for the pane being
-  // viewed — including the primary workspace, whose contribution title tracks
-  // the routed session (syncWorkspaceTitle), so a routed conversation gets the
-  // same single heading as a tile.  The zone's in-surface ChatHeader stays
-  // display:none inside trees (renderer/index.tsx), so this header is the only
-  // title a chat zone paints.  Layout edit mode deliberately keeps the full
-  // tab strip so every pane remains draggable/reorderable while editing.
-  // Independent of stripVisible: a workspace-only chat zone (no tiles open —
-  // the default main zone) auto-hides its strip, and that must not take the
-  // single session title with it.
-  const hideSessionTabStrip = sessionHeaderVisible({
-    workspacePage,
-    isEmpty,
-    verticalCollapse,
-    editMode,
-    shown,
-    headerVeto: activeChrome.headerVeto
-  })
-
-  const singleSessionHeader = hideSessionTabStrip
-  const titleInWindowBar = hasWindowTitlebar && singleSessionHeader && shown.includes('workspace') && !node.minimized
+  const { stripVisible, verticalCollapse, headerVisible, hideSessionTabStrip, singleSessionHeader, titleInWindowBar } =
+    groupHeaderPresentation({
+      node,
+      shown,
+      paneFor,
+      activeId,
+      activeChrome,
+      tabStripDefault,
+      toolPanel,
+      workspacePage,
+      parentAxis,
+      isEmpty,
+      compactSidebar,
+      pageHeader,
+      compactTabs,
+      editMode,
+      hasWindowTitlebar
+    })
 
   // Keep the activated tab — and, on the last one, the trailing "+" — inside
   // the strip's scroll window. Opening a tab past the right edge otherwise
   // left both the new tab and the button that made it out of view.
   useActiveTabVisible(tabsRef, activeId, {
-    enabled: headerVisible && !hideSessionTabStrip,
+    enabled: headerVisible && !hideSessionTabStrip && !compactTabs,
     last: shown[shown.length - 1] === activeId,
     tabCount: shown.length
   })
@@ -589,9 +596,15 @@ export function TreeGroup({
 
   // A pane's own live label when it has one, else its registered string.
   const tabLabel = (paneId: string) => paneChrome(paneFor(paneId)).tabTitle?.() ?? paneTitle(paneId)
+
   // String twin of `tabLabel` for the drag ghost / edit veil: resolved at
   // drag start, so a locale-following pane reads its LOADED-locale label.
-  const tabText = (paneId: string) => paneChrome(paneFor(paneId)).tabTitleText?.() ?? paneTitle(paneId)
+  const tabText = (paneId: string) => {
+    const pane = paneFor(paneId)
+    const chrome = paneChrome(pane)
+
+    return chrome.tabTitleText?.() ?? (chrome.tabTitle ? String(pane?.title ?? paneId) : paneTitle(paneId))
+  }
 
   // Collapse/restore a tool panel (or plain minimize elsewhere) — the header
   // chevron, routed so ⌃`/the titlebar toggle stay truthful. The strip itself
@@ -601,6 +614,7 @@ export function TreeGroup({
 
   // Same menu on the header strip and the edit veil — one prop bag.
   const minimizeLabel = groupMinimizeLabel(t, toolPanel, active)
+
   const zoneMenu = {
     allowTabStripToggle: !toolPanel || editMode,
     closable,
@@ -641,7 +655,7 @@ export function TreeGroup({
         wcOverlap
           ? { paddingTop: wcOverlap.y + wcOverlap.height }
           : panelTopEdge && verticalCollapse
-            ? { paddingTop: TITLEBAR_HEIGHT }
+            ? { paddingTop: titlebarHeight }
             : undefined
       }
     >
@@ -798,7 +812,7 @@ export function TreeGroup({
           data-panel-header=""
           style={
             panelTopEdge
-              ? { height: TITLEBAR_HEIGHT + (tabsBelowControls && headerVisible ? stripHeight : 0) }
+              ? { height: titlebarHeight + (tabsBelowControls && headerVisible ? stripHeight : 0) }
               : undefined
           }
         >
@@ -814,6 +828,21 @@ export function TreeGroup({
               data-panel-page-header=""
             >
               <PaneTab active>{pageHeader()}</PaneTab>
+            </div>
+          ) : headerVisible && compactTabs ? (
+            <div
+              className="flex min-w-0 flex-1"
+              data-zone-tabstrip={node.id}
+              onPointerDownCapture={() => noteActiveTreeGroup(node.id)}
+            >
+              <CompactTabPicker
+                activeId={activeId}
+                newTab={node.minimized ? null : newTab}
+                onClose={closeableTab(activeId) ? () => closeTab(activeId) : undefined}
+                onSelect={activatePane}
+                tabActions={paneId => paneChrome(paneFor(paneId)).tabActions?.()}
+                tabs={shown.map(id => ({ id, label: tabLabel(id), title: tabText(id) }))}
+              />
             </div>
           ) : headerVisible && !hideSessionTabStrip ? (
             <ZoneMenu {...zoneMenu}>
@@ -1005,7 +1034,7 @@ export function TreeGroup({
               )}
               data-window-drag-handle=""
               style={{
-                height: TITLEBAR_HEIGHT,
+                height: titlebarHeight,
                 width: headerVisible && tabsInTitlebar ? TITLEBAR_DRAG_HANDLE_WIDTH : undefined
               }}
             />
@@ -1049,15 +1078,9 @@ export function TreeGroup({
             wrap={
               available.length > 0
                 ? body => (
-                    <ZoneMenu {...zoneMenu} includeAppActions>
-                      <div
-                        aria-label={t.zones.zoneMenuLabel(String(tabLabel(activeId)))}
-                        data-zone-body={node.id}
-                        style={{ display: 'contents' }}
-                      >
-                        {body}
-                      </div>
-                    </ZoneMenu>
+                    <ZoneBodyMenu {...zoneMenu} label={t.zones.zoneMenuLabel(tabText(activeId))}>
+                      {body}
+                    </ZoneBodyMenu>
                   )
                 : undefined
             }
@@ -1074,7 +1097,7 @@ export function TreeGroup({
             {inlinePanes.length === 0 ? (
               <div className="grid h-full place-items-center">
                 {/* Same decode primitive as the CONNECTING boot overlay. */}
-                <DecodeText className="text-(--ui-text-quaternary)" cursor prefix={1} text="HERMES" />
+                <DecodeText className="text-(--ui-text-quaternary)" cursor prefix={1} text="AINO" />
               </div>
             ) : (
               inlinePanes.map(paneId => {
@@ -1142,7 +1165,7 @@ export function TreeGroup({
             onPointerDown={e => startPaneDrag(activeId, e, undefined, undefined, tabText(activeId))}
             style={{
               top: panelTopEdge
-                ? TITLEBAR_HEIGHT + (tabsBelowControls && headerVisible ? stripHeight : 0)
+                ? titlebarHeight + (tabsBelowControls && headerVisible ? stripHeight : 0)
                 : headerVisible
                   ? stripHeight
                   : 0,

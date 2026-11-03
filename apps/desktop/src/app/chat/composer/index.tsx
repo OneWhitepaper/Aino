@@ -1,15 +1,6 @@
 import { ComposerPrimitive } from '@assistant-ui/react'
 import { useStore } from '@nanostores/react'
-import {
-  type ClipboardEvent,
-  type FormEvent,
-  type KeyboardEvent,
-  useCallback,
-  useEffect,
-  useId,
-  useMemo,
-  useRef
-} from 'react'
+import { type ClipboardEvent, type FormEvent, type KeyboardEvent, useCallback, useEffect, useMemo, useRef } from 'react'
 
 import { useTourMarker } from '@/app/chat/tour-marker'
 import type { GatewayRequester } from '@/app/contrib/types'
@@ -23,7 +14,7 @@ import { chatMessageText } from '@/lib/chat-messages'
 import { sanitizeComposerInput } from '@/lib/composer-input-sanitize'
 import { DATA_IMAGE_URL_RE } from '@/lib/embedded-images'
 import { triggerHaptic } from '@/lib/haptics'
-import { isMacPlatform } from '@/lib/platform'
+import { $touchPointer } from '@/lib/touch-interaction'
 import { useStoreSelector, useStoresSelector } from '@/lib/use-session-slice'
 import { cn } from '@/lib/utils'
 import { sessionCompacting } from '@/store/compaction'
@@ -96,11 +87,9 @@ import { renderComposerQueueSlot, useComposerQueueScopeKey } from './queue-slot'
 import { RestoredDraftNotice } from './restored-draft-notice'
 import {
   beginComposerComposition,
-  composerPlainText,
   deleteChipBeforeCaret,
   deleteSelectionInEditor,
   insertComposerContentsAtCaret,
-  normalizeComposerEditorDom,
   RICH_INPUT_SLOT
 } from './rich-editor'
 import { useComposerScope, useComposerSurfaceId } from './scope'
@@ -110,6 +99,7 @@ import { StatusDrawerContent, StatusDrawerToggle } from './status-stack/drawer'
 import { SuggestionPills } from './suggestion-pills'
 import { TaskPauseNotice } from './task-pause-notice'
 import { extractClipboardImageBlobs, openDirectiveScope } from './text-utils'
+import { composerTextEntryProps, touchTapFocusHandlers } from './touch-text-entry'
 import { ComposerTriggerPopover } from './trigger-popover'
 import type { ChatBarProps } from './types'
 import { isRedoShortcut, isUndoShortcut } from './undo-history'
@@ -122,6 +112,19 @@ import {
   selectionLinkLabel
 } from './url-refs'
 import { VoiceActivity, VoicePlaybackActivity } from './voice-activity'
+
+/** Grid areas for the menu / input / controls row: one row when roomy, input
+ *  above menu + controls when stacked, and one area per row once two touch-size
+ *  controls no longer fit side by side. */
+function controlRowGridClass(singleColumn: boolean, stacked: boolean): string {
+  if (singleColumn) {
+    return 'grid-cols-[minmax(0,1fr)] gap-(--composer-row-gap) [grid-template-areas:"input"_"menu"_"controls"]'
+  }
+
+  return stacked
+    ? 'grid-cols-[auto_1fr] gap-(--composer-row-gap) [grid-template-areas:"input_input"_"menu_controls"]'
+    : 'grid-cols-[auto_1fr_auto] items-center gap-(--composer-control-gap) [grid-template-areas:"menu_input_controls"]'
+}
 
 export function ChatBar({
   busy,
@@ -155,6 +158,8 @@ export function ChatBar({
   const historyOwner = usePlatformHistoryOwner(sessionId)
   const disabled = disabledProp || bindingProject || historyOwner !== null
   const { hudMode, hudNativeDrag, hudGrabbing, onHudDragPointerDown } = useComposerHud()
+  const touchPointer = useStore($touchPointer)
+  const tapFocus = useMemo(() => (touchPointer ? touchTapFocusHandlers() : undefined), [touchPointer])
 
   // Voice-stop interception + contributed middleware wrap every send.
   const { onSubmit, voiceStopRef } = useMiddlewareSubmit(onSubmitProp, sessionId)
@@ -180,9 +185,8 @@ export function ChatBar({
   const awaitingInput = useStore(scope.$awaitingInput)
   const blockingPrompt = useStore(useMemo(() => sessionBlockingPrompt(sessionId ?? null), [sessionId]))
   const activeQueueSessionKey = useComposerQueueScopeKey(queueSessionKey, sessionId, freshDraftKey)
-  const { collapsed: statusDrawerCollapsed, toggle: toggleStatusDrawer } = useStatusDrawer(activeQueueSessionKey)
-  const statusDrawerId = useId()
-  const codingDrawerId = useId()
+  const statusDrawer = useStatusDrawer(activeQueueSessionKey)
+  const { codingDrawerId, collapsed: statusDrawerCollapsed, statusDrawerId, toggle: toggleStatusDrawer } = statusDrawer
 
   const requestBusyConfig = useCallback<GatewayRequester>(
     (method, params) => (gateway ? gateway.request(method, params) : Promise.reject(new Error('Gateway unavailable'))),
@@ -388,7 +392,7 @@ export function ChatBar({
     return onCancel()
   }, [activeQueueSessionKeyRef, onCancel])
 
-  const { compactPill, foldVoice, minimal, stacked } = useComposerMetrics({
+  const { compactPill, foldVoice, minimal, stacked, singleColumn } = useComposerMetrics({
     composerDockRef,
     composerRef,
     composerSurfaceRef,
@@ -482,20 +486,13 @@ export function ChatBar({
   // flushes to one per paint is lossless.
   const flushRafRef = useRef<number | undefined>(undefined)
 
-  const flushEditorToDraft = (editor: HTMLDivElement) => {
+  const flushEditorToDraft = (editor: HTMLDivElement, typing = false) => {
     if (flushRafRef.current !== undefined) {
       window.cancelAnimationFrame(flushRafRef.current)
       flushRafRef.current = undefined
     }
 
-    normalizeComposerEditorDom(editor)
-
-    const nextDraft = sanitizeComposerInput(composerPlainText(editor))
-
-    if (nextDraft !== draftRef.current) {
-      draftRef.current = nextDraft
-      setComposerText(nextDraft)
-    }
+    syncDraftFromEditor(typing, editor)
 
     window.setTimeout(refreshTrigger, 0)
   }
@@ -510,7 +507,7 @@ export function ChatBar({
 
     flushRafRef.current = window.requestAnimationFrame(() => {
       flushRafRef.current = undefined
-      flushEditorToDraft(editor)
+      flushEditorToDraft(editor, true)
     })
   }
 
@@ -1143,7 +1140,11 @@ export function ChatBar({
       hideModelPill={guidedChat}
       minimal={minimal || chatOnboardingSolo}
       onDictate={dictate}
-      onQueue={queueDraft}
+      onQueue={() => {
+        // Queueing clears the draft too, so the list over it closes with it.
+        closeTrigger()
+        queueDraft()
+      }}
       onSteer={canSteer ? () => steerDraft('steer') : undefined}
       onToggleAutoSpeak={handleToggleAutoSpeak}
       state={state}
@@ -1158,10 +1159,8 @@ export function ChatBar({
       <div
         aria-disabled={inputDisabled ? true : undefined}
         aria-label={t.composer.message}
-        autoCapitalize="off"
-        // Chromium's macOS text-replacement path shares the autocorrect gate.
-        // Keeping spellcheck off below still excludes smart quotes and dashes.
-        autoCorrect={isMacPlatform() ? 'on' : 'off'}
+        {...composerTextEntryProps(touchPointer)}
+        {...tapFocus}
         className={cn(
           'min-h-[1.625rem] min-h-(--composer-input-min-height) max-h-(--composer-input-max-height) cursor-text overflow-y-auto whitespace-pre-wrap break-words [overflow-wrap:anywhere] bg-transparent pb-1 pr-1 pt-1 leading-normal text-foreground outline-none disabled:cursor-not-allowed',
           '**:data-ref-text:cursor-default',
@@ -1225,7 +1224,6 @@ export function ChatBar({
         onPaste={handlePaste}
         ref={editorRef}
         role="textbox"
-        spellCheck={false}
         suppressContentEditableWarning
       />
       <ComposerDirectiveActions editorRef={editorRef} />
@@ -1394,6 +1392,9 @@ export function ChatBar({
                 return
               }
 
+              // The send clears the text an open completion list was built
+              // from; a list left open would take the next Enter or Tab.
+              closeTrigger()
               submitDraft()
             }}
             ref={composerRef}
@@ -1497,12 +1498,7 @@ export function ChatBar({
                   {queueEdit && editingQueuedPrompt && <QueuedEditBanner onExit={exitQueuedEdit} />}
                   {attachments.length > 0 && <AttachmentList attachments={attachments} onRemove={onRemoveAttachment} />}
                   <div
-                    className={cn(
-                      'grid w-full',
-                      stackedLayout
-                        ? 'grid-cols-[auto_1fr] gap-(--composer-row-gap) [grid-template-areas:"input_input"_"menu_controls"]'
-                        : 'grid-cols-[auto_1fr_auto] items-center gap-(--composer-control-gap) [grid-template-areas:"menu_input_controls"]'
-                    )}
+                    className={cn('grid w-full', controlRowGridClass(singleColumn, stackedLayout))}
                     data-slot="composer-layout"
                   >
                     <div

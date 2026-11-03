@@ -7,6 +7,7 @@ import { pathToFileURL } from 'node:url'
 import { _electron } from '@playwright/test'
 
 import { findElectron } from './fixtures'
+import { prepareNativeProtocolOverlay } from './platform-native-protocol-overlay'
 import { installErrorBannerGuard } from './test'
 
 export const KNOWN_BLOCKED_THEME_FONT_URL = 'https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&display=swap'
@@ -126,6 +127,28 @@ subprocess.Popen.__init__ = _guard_popen
 `, { mode: 0o600 })
 
   return directory
+}
+
+/** Source startup scrubs inherited PYTHONPATH. Load the fixture guard before
+ * importing the real CLI, then make the interpreter that spawns daemon children
+ * re-enter this same guarded launcher. */
+export function guardedPlatformPython(root: string, guardPath: string, python: string): string {
+  const bootstrap = path.join(root, 'guarded-platform-python.py')
+  const launcher = path.join(root, 'guarded-platform-python')
+  const quote = (value: string) => `'${value.replaceAll("'", "'\"'\"'")}'`
+  fs.writeFileSync(bootstrap, `import runpy, sys
+sys.path.insert(0, ${JSON.stringify(guardPath)})
+import sitecustomize
+sys.executable = ${JSON.stringify(launcher)}
+args = sys.argv[1:]
+if args[:1] != ['-m'] or len(args) < 2:
+    raise SystemExit('fixture launcher expects a Python module')
+sys.argv = [args[1], *args[2:]]
+runpy.run_module(args[1], run_name='__main__', alter_sys=True)
+`, { mode: 0o600 })
+  fs.writeFileSync(launcher, `#!/bin/sh\nexec ${quote(python)} ${quote(bootstrap)} "$@"\n`, { mode: 0o700 })
+
+  return launcher
 }
 
 export function installLoopbackNodeGuard(root: string): string {
@@ -320,12 +343,13 @@ export async function startRealPlatformAPI(apiRoot: string) {
   const runtimeHome = path.join(dir, 'home')
   const binaryPath = path.join(dir, 'aino-native-consumer.test')
   const logPath = path.join(dir, 'api.log')
-  const compileArgs = ['test', '-c', '-tags', 'integration,nativeconsumer', '-o', binaryPath, './internal/repository']
   const runtimeArgs = ['-test.run', '^TestAinoNativeConsumer$', '-test.count=1', '-test.timeout=9m', '-test.v']
   const apiSha = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: apiRoot, encoding: 'utf8' }).trim()
   fs.writeFileSync(path.join(dir, 'api-source-status.txt'), execFileSync('git', ['status', '--short'], { cwd: apiRoot }), { mode: 0o600 })
   fs.writeFileSync(path.join(dir, 'api-source-working.diff'), execFileSync('git', ['diff'], { cwd: apiRoot }), { mode: 0o600 })
   fs.writeFileSync(path.join(dir, 'api-source-head.txt'), `${apiSha}\n`, { mode: 0o600 })
+  const protocolOverlay = prepareNativeProtocolOverlay(apiRoot, dir, apiSha)
+  const compileArgs = ['test', '-overlay', protocolOverlay.overlay_path, '-c', '-tags', 'integration,nativeconsumer', '-o', binaryPath, './internal/repository']
   fs.mkdirSync(runtimeHome, { mode: 0o700 })
 
   // Compilation may use the existing Go caches, but the service itself gets no
@@ -374,6 +398,7 @@ export async function startRealPlatformAPI(apiRoot: string) {
   const binaryHash = execFileSync('shasum', ['-a', '256', binaryPath], { encoding: 'utf8' }).trim().split(/\s+/)[0]
   fs.writeFileSync(path.join(dir, 'runtime-isolation.json'), JSON.stringify({
     api_source_sha: apiSha,
+    fixture_protocol_overlay: protocolOverlay,
     binary: binaryPath,
     binary_sha256: binaryHash,
     runtime_home: runtimeHome,

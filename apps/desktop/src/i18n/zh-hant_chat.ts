@@ -121,7 +121,7 @@ export const zhHantChat = {
       '/init': '掃描儲存庫並產生或更新 AGENTS.md 專案指引',
       '/suggestions': '檢視建議的自動化項目（接受或略過）',
       '/blueprint': '使用 blueprint 範本設定自動化',
-      '/browser': '管理代理瀏覽器 [connect|disconnect|status|use]',
+      '/browser': '管理代理瀏覽器 [connect|disconnect|status]',
       '/palette': '開啟模糊搜尋指令面板（也可使用 Ctrl+P）',
       '/usage': '顯示 Token 用量與速率限制；`reset` 可兌換保留的 Codex 限額重設',
       '/subscription': '檢視你的 Nous 方案，並在瀏覽器中變更',
@@ -431,6 +431,12 @@ export const zhHantChat = {
   },
 
   desktop: {
+    localRuntimeUnavailableTitle: "本機執行環境無法使用",
+    localRuntimeUnavailableDesktop: "請在設定 → 模型服務 → 本機模型中完成執行環境設定。",
+    localRuntimeUnavailableWebapp: "請在 Aino 桌面版設定本機模型，或在此瀏覽器選擇託管模型。",
+    openLocalModels: "開啟本機模型",
+    serviceAuthorizationTitle: "服務授權",
+    serviceAuthorizationDescription: "使用第三方服務自己的帳戶登入。此授權獨立於你的 Aino 帳戶。",
     audioReadFailed: '無法讀取錄製的音訊',
     sessionUnavailable: '工作階段不可用',
     createSessionFailed: '無法建立新工作階段',
@@ -508,6 +514,7 @@ export const zhHantChat = {
     imageAttach: '附加圖片',
     imageWriteFailed: '無法將圖片寫入磁碟。',
     imageAttachFailed: '附加圖片失敗',
+    attachFailed: (target?: string) => '附加失敗' + (target ? `: ${target}` : ''),
     pastedContent: '貼上內容',
     pasteAttachFailed: '無法附加貼上的文字',
     attachImages: '附加圖片',
@@ -515,6 +522,7 @@ export const zhHantChat = {
     noClipboardImage: '剪貼簿中沒有圖片',
     clipboardPasteFailed: '剪貼簿貼上失敗',
     dropFiles: '拖曳檔案',
+    dropFilesMore: (count: number) => `以及另外 ${count} 項`,
     handoff: {
       pickPlatform: '選擇目標平台',
       success: platform => `已移交到 ${platform}。隨時可在此處恢復。`,

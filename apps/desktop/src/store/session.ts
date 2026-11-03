@@ -5,25 +5,30 @@ import { setApiRequestLocalMode } from '@/api/client'
 import { lastVisibleMessageIsUser } from '@/app/chat/thread-loading'
 import type { ContextSuggestion } from '@/app/types'
 import type { HermesConnection } from '@/global'
+import { browserPageBasePath, readBrowserDefaultProjectDir } from '@/lib/browser-settings'
 import type { ChatMessage } from '@/lib/chat-messages'
-import {
-  activeConnectionScopeSuffix,
-  connectionScopeSuffix,
-  rescopeConnectionScopedStores
-} from '@/lib/connection-scoped'
+import { activeConnectionScopeSuffix, rescopeConnectionScopedStores } from '@/lib/connection-scoped'
+import { hostHas } from '@/lib/host-capabilities'
 import { isMessagingSource } from '@/lib/session-source'
 import type { TileSessionFocusStamp } from '@/lib/session-timer-since'
-import { persistBoolean, persistString, readJson, storedBoolean, storedString, writeJson } from '@/lib/storage'
+import {
+  arraysEqual,
+  persistBoolean,
+  persistString,
+  readJson,
+  storedBoolean,
+  storedString,
+  writeJson
+} from '@/lib/storage'
 import type { SessionInfo, UsageStats } from '@/types/hermes'
 
 import { $removedSessionIds, isSessionRemovalPending, tombstoneRowIds } from './session-removal'
 import type { SessionOwnerRoute, SessionOwnerScope } from './session-request-router'
+import { composerScopeForConnection, workspaceCwdKey } from './session-storage-scope'
 import { clearUnreadOnOpen } from './session-unread-remote'
 
 type Updater<T> = T | ((current: T) => T)
 export type ComposerModelSource = '' | 'default' | 'manual'
-
-const WORKSPACE_CWD_KEY = 'hermes.desktop.workspace-cwd'
 
 // The composer caches this conversation or unsent draft's selection, NOT the
 // profile default (that lives in Settings → Model). New Chat clears model and
@@ -46,25 +51,6 @@ const COMPOSER_SERVICE_TIER_KEY = 'hermes.desktop.composer.service-tier'
 // composer. null means the exact owner is temporarily unknown: values may still
 // paint, but must not be written through the previous backend's storage key.
 let composerSelectionScope: string | null = ''
-
-function composerScopeForConnection(connection: HermesConnection | null): string | null {
-  if (!connection) {
-    return null
-  }
-
-  // Electron may infer the sole `local` registry id onto the ordinary primary
-  // descriptor. That remains the legacy single-backend path: only an explicit
-  // registry-scoped route earns a new namespace.
-  if (connection.mode !== 'remote' && !connection.registryScoped) {
-    return ''
-  }
-
-  if (connection.connectionId) {
-    return `.registry.${encodeURIComponent(connection.connectionId)}.${encodeURIComponent(connection.profile || 'default')}`
-  }
-
-  return connectionScopeSuffix(connection)
-}
 
 function composerSelectionKey(base: string): string | null {
   return composerSelectionScope === null ? null : `${base}${composerSelectionScope}`
@@ -331,23 +317,7 @@ export function setRememberedRoute(path: null | string, profile: string): void {
 
 let configuredDefaultProjectDir = ''
 
-function workspaceCwdKey(connection: HermesConnection | null = $connection.get()): string {
-  const profile = connection?.profile?.trim() || 'default'
-
-  if (connection?.mode !== 'remote') {
-    // One desktop runs several local profiles, and one shared key let the last
-    // profile's project leak into every other profile's new chats (#96834).
-    // The default profile keeps the bare key — byte-identical for
-    // single-profile users, the connection-scoped.ts contract.
-    return profile === 'default' ? WORKSPACE_CWD_KEY : `${WORKSPACE_CWD_KEY}.profile.${encodeURIComponent(profile)}`
-  }
-
-  const base = encodeURIComponent(connection.baseUrl || 'remote')
-
-  return `${WORKSPACE_CWD_KEY}.remote.${base}.${encodeURIComponent(profile)}`
-}
-
-export const getRememberedWorkspaceCwd = (): string => storedString(workspaceCwdKey())?.trim() || ''
+export const getRememberedWorkspaceCwd = (): string => storedString(workspaceCwdKey($connection.get()))?.trim() || ''
 export type NewChatWorkspaceTarget = null | string | undefined
 
 export const getConfiguredDefaultProjectDir = (): string => configuredDefaultProjectDir
@@ -882,6 +852,13 @@ export function keepFailedProfileMeta<T>(
   return next
 }
 
+/** Whether the last recents scan left `profile` unread: it failed, alone or as part of a failed
+ *  unified read. Its rows may be carried forward, but an empty section for it would claim
+ *  "No sessions yet" about a store nobody could read. */
+export function isSessionProfileUnread(failed: readonly string[], profile: string): boolean {
+  return failed.includes(ALL_PROFILES_SCAN) || failed.includes(profileKeyOf(profile))
+}
+
 /** Raise a session in recents on user send (before stream / turn resolve). */
 export function touchSessionActivity(
   sessionId: string | null | undefined,
@@ -1126,6 +1103,9 @@ export interface ProfileUsage {
 
 export const $sessionProfilesUsage = atom<Record<string, ProfileUsage>>({})
 
+/** Profiles named in the last recents scan's errors (see isSessionProfileUnread). */
+export const $sessionProfilesFailed = atom<string[]>([])
+
 /** Profiles whose state.db the backend reports as structurally corrupt (the list
  *  endpoints' `storage` map, #72046). An empty or partial list for one of these
  *  is a damaged store, not deleted history, and the sidebar says so. */
@@ -1168,6 +1148,12 @@ export const $awaitingResponse = atom(false)
 // resume on the next render/focus/reconnect instead of stranding the window.
 // Null whenever the active route has a healthy (or in-flight) resume.
 export const $resumeFailedSessionId = atom<string | null>(null)
+// Stored-session id whose last resume RPC failed while the REST fallback still
+// painted its history: readable, but bound to no runtime, so a turn running
+// there never streams its reply in. use-resume-reattach re-attempts the resume
+// quietly. Unlike $resumeFailedSessionId it never ends in the exhausted
+// overlay, which would cover the history the window can already show.
+export const $resumeReattachSessionId = atom<string | null>(null)
 export interface SessionResumeRequest {
   authoritativeSnapshot?: boolean
   ownerRoute?: SessionOwnerRoute
@@ -1592,6 +1578,16 @@ export const setSessionProfilesTruncated = (next: Updater<Record<string, boolean
   updateAtom($sessionProfilesTruncated, next)
 export const setSessionProfilesUsage = (next: Updater<Record<string, ProfileUsage>>) =>
   updateAtom($sessionProfilesUsage, next)
+
+/** Publish the profiles a recents scan reported as failed; unchanged keeps the array identity. */
+export function setSessionProfilesFailed(errors: Array<{ profile?: string }> | undefined | null): void {
+  const next = [...new Set((errors ?? []).map(error => profileKeyOf(error.profile)))].sort()
+
+  if (!arraysEqual($sessionProfilesFailed.get(), next)) {
+    $sessionProfilesFailed.set(next)
+  }
+}
+
 export const setSessionsLoading = (next: Updater<boolean>) => updateAtom($sessionsLoading, next)
 export const setSessionsLoadError = (next: Updater<boolean>) => updateAtom($sessionsLoadError, next)
 
@@ -1705,6 +1701,7 @@ export const setFreshDraftReady = (next: Updater<boolean>) => updateAtom($freshD
 export { $freshDraftKey, rotateFreshDraftKey } from './composer'
 
 export const setResumeFailedSessionId = (next: Updater<string | null>) => updateAtom($resumeFailedSessionId, next)
+export const setResumeReattachSessionId = (next: Updater<string | null>) => updateAtom($resumeReattachSessionId, next)
 
 export const requestSessionResume = (
   sessionId: string,
@@ -1749,7 +1746,7 @@ export const setCurrentModel = (next: Updater<string>) => {
 
   if ($currentModel.get().trim()) {
     $modelDefaultUnavailable.set(false)
-    }
+  }
 
   if ($currentModel.get() !== previous) {
     // The wire level belongs to one (provider, model, effort) triple, and a
@@ -1881,7 +1878,7 @@ export const setYoloActive = (next: Updater<boolean>) => updateAtom($yoloActive,
  */
 export const setCurrentCwd = (next: Updater<string>) => {
   updateAtom($currentCwd, next)
-  persistString(workspaceCwdKey(), $currentCwd.get().trim() || null)
+  persistString(workspaceCwdKey($connection.get()), $currentCwd.get().trim() || null)
 }
 
 export const setTerminalBackend = (next: Updater<string>) => updateAtom($terminalBackend, next)
@@ -1953,7 +1950,7 @@ export const $currentCwdExplicit = atom(false)
 
 export const setCurrentCwdExplicit = (next: Updater<boolean>) => updateAtom($currentCwdExplicit, next)
 
-export const workspaceCwdForNewSession = (): string => {
+export const workspaceCwdForNewSession = (profile?: string): string => {
   // A bare new chat starts DETACHED — no inherited cwd, so the composer's coding
   // rail (which keys off $currentCwd) shows no branch and the first message runs
   // in the gateway's default rather than silently in the last repo you touched.
@@ -1962,11 +1959,22 @@ export const workspaceCwdForNewSession = (): string => {
   // "remember where I was when I'm in a project" case is unaffected.
   //
   // This must behave identically in local and remote mode: the remembered CWD
-  // under the remote-keyed workspaceCwdKey() can be from a *different* project
+  // under the remote-keyed workspaceCwdKey($connection.get()) can be from a *different* project
   // than the one the user is currently scoped into, and bare-new-session in
   // the wrong workspace was the #57911 symptom. Resume/restore still reads
   // the remembered cwd via ensureDefaultWorkspaceCwd (where it remains
   // remote-keyed and intentionally sticky).
+  //
+  // A browser host stores that default folder per profile. The process cache
+  // holds the folder of the profile the window last synced (boot, a connection
+  // apply, Settings), and a rail switch does not refill it, so a browser new
+  // chat reads its own profile's key and stays detached when it never chose one.
+  const owner = profile?.trim()
+
+  if (owner && hostHas('originScopedPrefs')) {
+    return readBrowserDefaultProjectDir(browserPageBasePath(), owner)
+  }
+
   return getConfiguredDefaultProjectDir()
 }
 

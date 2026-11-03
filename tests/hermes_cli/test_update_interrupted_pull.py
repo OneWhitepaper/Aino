@@ -595,14 +595,15 @@ def test_an_empty_head_answer_keeps_the_marker(tmp_path, monkeypatch, capsys):
     stub = tmp_path / "silent-git"
     stub.write_text("", encoding="utf-8")
     monkeypatch.setattr(er, "_git_executable", lambda recorded="": str(stub))
-    real_run = subprocess.run
+    from hermes_cli import update_custody
+    real_run_git = update_custody.run_git
 
-    def silent(argv, *args, **kwargs):  # every git call "succeeds" with no output
-        if argv and argv[0] == str(stub):
-            return subprocess.CompletedProcess(argv, 0, "", "")
-        return real_run(argv, *args, **kwargs)
+    def silent(git_cmd, args, **kwargs):  # every git call "succeeds" with no output
+        if git_cmd and git_cmd[0] == str(stub):
+            return subprocess.CompletedProcess([*git_cmd, *args], 0, "", "")
+        return real_run_git(git_cmd, args, **kwargs)
 
-    monkeypatch.setattr(subprocess, "run", silent)
+    monkeypatch.setattr(update_custody, "run_git", silent)
     assert er.restore_interrupted_pull(root) is False
     assert marker.exists(), "an empty `rev-parse HEAD` deleted the marker over a torn tree"
     assert "Could not read HEAD" in capsys.readouterr().err

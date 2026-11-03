@@ -9,6 +9,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Input } from '@/components/ui/input'
 import { useI18n } from '@/i18n'
 import { Loader2 } from '@/lib/icons'
+import { isBrowserHostedDesktop } from '@/lib/platform'
 import type { AccountError } from '@/store/account'
 
 import type {
@@ -35,6 +36,32 @@ export interface AccountLoginCardProps {
   onCompleteSecondFactor: (code: string) => Promise<unknown>
 }
 
+interface AccountRememberControlProps {
+  browserHosted: boolean
+  loading: boolean
+  remember: boolean
+  onChange: (remember: boolean) => void
+}
+
+function AccountRememberControl({ browserHosted, loading, remember, onChange }: AccountRememberControlProps) {
+  const { t } = useI18n()
+  const copy = t.settings.account
+
+  return browserHosted ? (
+    <p className="aino-account-remember">{copy.browserSessionOnly}</p>
+  ) : (
+    <label className="aino-account-remember">
+      <Checkbox
+        aria-label={copy.rememberLabel}
+        checked={remember}
+        disabled={loading}
+        onCheckedChange={value => onChange(value === true)}
+      />
+      <span>{copy.rememberLabel}</span>
+    </label>
+  )
+}
+
 export function AccountLoginCard({
   capabilities,
   error,
@@ -59,7 +86,8 @@ export function AccountLoginCard({
   const [retrySeconds, setRetrySeconds] = useState(0)
   const [acceptedTerms, setAcceptedTerms] = useState(false)
   const [termsRequired, setTermsRequired] = useState(false)
-  const [remember, setRemember] = useState(true)
+  const browserHosted = isBrowserHostedDesktop()
+  const [remember, setRemember] = useState(!browserHosted)
   const [legalDocument, setLegalDocument] = useState<number | null>(null)
   const [openingRegistration, setOpeningRegistration] = useState(false)
   const [registrationOpened, setRegistrationOpened] = useState(false)
@@ -219,15 +247,12 @@ export function AccountLoginCard({
   const activeDocument = legalDocument === null ? null : documents[legalDocument]
 
   const rememberControl = (
-    <label className="aino-account-remember">
-      <Checkbox
-        aria-label={copy.rememberLabel}
-        checked={remember}
-        disabled={loading}
-        onCheckedChange={value => setRemember(value === true)}
-      />
-      <span>{copy.rememberLabel}</span>
-    </label>
+    <AccountRememberControl
+      browserHosted={browserHosted}
+      loading={loading}
+      onChange={setRemember}
+      remember={remember}
+    />
   )
 
   return (

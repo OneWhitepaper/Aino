@@ -26,6 +26,8 @@ export const zhHantBoot = {
       ipcBridgeUnavailable: '桌面 IPC 橋接器不可用。'
     },
     failure: {
+      webappTitle: '連接此瀏覽器',
+      webappDescription: '在閘道所在的電腦上執行 hermes webapp，為此瀏覽器授權存取。',
       title: 'Hermes 無法啟動',
       description: '背景閘道未啟動。請嘗試下面的復原步驟。這裡的操作不會刪除您的聊天或設定。',
       remoteTitle: '需要重新登入遠端閘道',
@@ -80,6 +82,7 @@ export const zhHantBoot = {
   },
   promptNotices: {
     legacySendUnconfirmed: '此伺服器無法確認這則訊息先前的傳送，它可能已經執行過。再次傳送前請先查看對話。',
+    restoredDraftAttachmentsDropped: '未傳送訊息中的附件沒有還原。傳送前請重新附加。',
     mcpReloadDeferred: '此對話正忙：MCP 變更會在目前輪次結束並再次重新載入 MCP 後生效，或在重新開啟對話時生效',
     mcpReloadUnavailable: servers => `未能連線：${servers}`,
     compactedTurnUnavailable: '這則訊息在壓縮對話時已被摘要，無法再還原或編輯。',
@@ -119,6 +122,8 @@ export const zhHantBoot = {
     gitUnusable: 'Hermes 無法在這台電腦上執行 Git，因此無法檢查更新。',
     latestBody: '您正在執行最新版本。',
     versionDetailsDistributionStore: 'Microsoft Store',
+    versionDetailsClient: '本裝置',
+    versionDetailsBackend: '已連線的後端',
     latestBodyBackend: '後端正在執行最新版本。',
     allSetTitle: '已是最新版本',
     availableTitle: '有可用更新',

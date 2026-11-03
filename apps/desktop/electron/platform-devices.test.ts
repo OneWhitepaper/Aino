@@ -2,12 +2,12 @@ import http from 'node:http'
 
 import { afterEach, expect, it } from 'vitest'
 
+import { createPlatformAuth } from '../shared/platform-auth'
+import { createPlatformClient } from '../shared/platform-client'
 import { unwrapPlatformAccountIpc } from '../shared/platform-contract'
+import type { PlatformRuntimeBindingController } from '../shared/platform-runtime-binding'
 
-import { createPlatformAuth } from './platform-auth'
-import { createPlatformClient } from './platform-client'
 import { registerPlatformIpc } from './platform-ipc'
-import type { PlatformRuntimeBindingController } from './platform-runtime-binding'
 
 const servers: http.Server[] = []
 afterEach(async () => {

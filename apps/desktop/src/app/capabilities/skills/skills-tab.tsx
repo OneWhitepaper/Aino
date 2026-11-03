@@ -4,8 +4,16 @@ import { ArchiveSkillConfirmDialog } from '@/app/learning/archive-skill-confirm-
 import { CodeEditor } from '@/components/chat/code-editor'
 import { Button } from '@/components/ui/button'
 import { Loader } from '@/components/ui/loader'
-import { editLearningNode, getLearningNode, type ProfileScope, profileScopeKey, setSkillEnabled } from '@/hermes'
+import { Tip } from '@/components/ui/tooltip'
+import {
+  editLearningNode,
+  getLearningNode,
+  type ProfileScope,
+  profileScopeKey,
+  setSkillEnabled
+} from '@/hermes'
 import { useI18n } from '@/i18n'
+import { Lock } from '@/lib/icons'
 import { queryClient } from '@/lib/query-client'
 import { invalidateSlashCompletions } from '@/lib/slash-completion-cache'
 import { notify, notifyError } from '@/store/notifications'
@@ -95,7 +103,9 @@ function ScopedSkillsTab({
         }
 
         const previous =
-          queryClient.getQueryData<SkillInfo[]>(skillsQueryKey(profile))?.find(skill => skill.name === row.name) ?? row
+          queryClient
+            .getQueryData<SkillInfo[]>(skillsQueryKey(profile))
+            ?.find(skill => skill.name === row.name) ?? row
 
         setSkills(current => current?.map(skill => (skill.name === row.name ? { ...skill, enabled } : skill)))
 
@@ -106,7 +116,9 @@ function ScopedSkillsTab({
           if (mounted.current) {
             setSkills(current =>
               current?.map(skill =>
-                skill.name === row.name && skill.enabled === enabled ? { ...skill, enabled: previous.enabled } : skill
+                skill.name === row.name && skill.enabled === enabled
+                  ? { ...skill, enabled: previous.enabled }
+                  : skill
               )
             )
           }
@@ -193,7 +205,9 @@ function ScopedSkillsTab({
         throw new Error(result.message)
       }
 
-      void queryClient.invalidateQueries({ queryKey: ['skill-content', editor.name, profileScopeKey(profile)] })
+      void queryClient.invalidateQueries({
+        queryKey: ['skill-content', editor.name, profileScopeKey(profile)]
+      })
       void queryClient.invalidateQueries({ queryKey: skillsQueryKey(profile), exact: true })
       invalidateSlashCompletions()
 
@@ -201,7 +215,11 @@ function ScopedSkillsTab({
         return
       }
 
-      notify({ kind: 'success', title: t.skills.skillUpdated, message: t.skills.appliesToNewSessions(editor.name) })
+      notify({
+        kind: 'success',
+        title: t.skills.skillUpdated,
+        message: t.skills.appliesToNewSessions(editor.name)
+      })
 
       if (request === editorRequest.current) {
         setSkillEditor(null)
@@ -226,7 +244,11 @@ function ScopedSkillsTab({
       {installedError instanceof Error ? installedError.message : null}
     </CatalogAlert>
   ) : installedPending ? (
-    <Loader className="mx-auto my-2 size-6 text-(--ui-text-tertiary)" label={t.skills.loading} type="rose-curve" />
+    <Loader
+      className="mx-auto my-2 size-6 text-(--ui-text-tertiary)"
+      label={t.skills.loading}
+      type="rose-curve"
+    />
   ) : null
 
   return (
@@ -259,16 +281,30 @@ function ScopedSkillsTab({
         profile={profile}
         query={query}
         renderInstalledAction={skill => (
-          <CatalogSwitch
-            aria-label={catalogDisplayName({
-              name: skill.name,
-              source: skill.provenance === 'bundled' ? 'built-in' : ''
-            })}
-            checked={skill.enabled}
-            disabled={controlsDisabled}
-            onCheckedChange={enabled => void applyEnabled([skill], enabled)}
-            size="xs"
-          />
+          <span className="inline-flex items-center gap-2">
+            {skill.locked && (
+              <Tip label={t.skills.lockHint}>
+                <span
+                  aria-label={t.skills.locked}
+                  className="inline-flex text-(--ui-text-tertiary)"
+                  data-slot="skill-locked-indicator"
+                  role="img"
+                >
+                  <Lock className="size-3.5" />
+                </span>
+              </Tip>
+            )}
+            <CatalogSwitch
+              aria-label={catalogDisplayName({
+                name: skill.name,
+                source: skill.provenance === 'bundled' ? 'built-in' : ''
+              })}
+              checked={skill.enabled}
+              disabled={controlsDisabled}
+              onCheckedChange={enabled => void applyEnabled([skill], enabled)}
+              size="xs"
+            />
+          </span>
         )}
         renderInstalledDetail={skill => (
           <>
@@ -322,8 +358,9 @@ function ScopedSkillsTab({
             const name = archiveTarget
 
             const snapshot =
-              queryClient.getQueryData<SkillInfo[]>(skillsQueryKey(profile))?.find(skill => skill.name === name) ??
-              skills.find(skill => skill.name === name)
+              queryClient
+                .getQueryData<SkillInfo[]>(skillsQueryKey(profile))
+                ?.find(skill => skill.name === name) ?? skills.find(skill => skill.name === name)
 
             void queryClient.cancelQueries({ queryKey: skillsQueryKey(profile), exact: true })
             setSkills(current => current?.filter(skill => skill.name !== name))
@@ -337,7 +374,9 @@ function ScopedSkillsTab({
             return () => {
               if (mounted.current) {
                 setSkills(current =>
-                  snapshot && current && !current.some(skill => skill.name === name) ? [...current, snapshot] : current
+                  snapshot && current && !current.some(skill => skill.name === name)
+                    ? [...current, snapshot]
+                    : current
                 )
               }
 

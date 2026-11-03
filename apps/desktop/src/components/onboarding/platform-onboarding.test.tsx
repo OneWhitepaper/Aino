@@ -159,7 +159,7 @@ it('reveals the workspace when the exact backend becomes ready for an available 
   expect(screen.getByRole('button', { name: 'Close' })).toBeTruthy()
 })
 
-it('does not adopt a late foreign catalog or treat an unavailable model as configured', async () => {
+it.each(['insufficient_balance', 'quota_exhausted'] as const)('does not adopt a late foreign catalog or initially treat %s as configured', async limitedState => {
   let resolve!: (models: PlatformModel[]) => void
   let calls = 0
 
@@ -170,7 +170,7 @@ it('does not adopt a late foreign catalog or treat an unavailable model as confi
       ? new Promise<PlatformModel[]>(done => {
           resolve = done
         })
-      : Promise.resolve([{ ...platformModel(), state: 'insufficient_balance' }])
+      : Promise.resolve([{ ...platformModel(), state: limitedState }])
   })
 
   setPrimaryGateway({ connectionState: 'open' } as never, 'default')
@@ -303,7 +303,7 @@ it('never lends offline readiness to another identity, gateway route, unsupporte
   expect(picker()).toBeTruthy()
 
   await verifyAgain()
-  models = [{ ...platformModel(), state: 'insufficient_balance' }]
+  models = [{ ...platformModel(), state: 'unavailable' }]
   changeAccount(platformSnapshot('user-a', ++revision))
   await waitFor(() => expect(picker()).toBeTruthy())
   changeAccount(offline())
@@ -323,4 +323,39 @@ it('never lends offline readiness to another identity, gateway route, unsupporte
   await installAccount(async () => [platformModel()], offline())
   render(<DesktopOnboardingOverlay enabled profile="default" requestGateway={requestGateway} />)
   expect(picker()).toBeTruthy()
+})
+
+it.each(['insufficient_balance', 'quota_exhausted'] as const)('keeps account recovery reachable after verified tools become %s without authorizing their use', async limitedState => {
+  let models = [platformModel()]
+  const changeAccount = await installAccount(async () => models)
+  setPrimaryGateway({ connectionState: 'open' } as never, 'default')
+  setPrimaryGatewayConnectionId('source-a')
+  recordGatewayReadyCapability(
+    { connectionId: 'source-a', profile: 'default' },
+    { type: 'gateway.ready', payload: { managed_model_binding: 1 } }
+  )
+  const view = render(<DesktopOnboardingOverlay enabled profile="default" requestGateway={requestGateway} />)
+  await waitFor(() => expect(view.container.childElementCount).toBe(0))
+
+  models = [{ ...platformModel(), state: limitedState }]
+  const limitedAccount = platformSnapshot('user-a', 2)
+  changeAccount(limitedAccount)
+  await waitFor(() => expect(platformModelCatalog().state.get().models[0]?.state).toBe(limitedState))
+  expect(view.container.childElementCount).toBe(0)
+  expect(() => requirePlatformSelection(limitedAccount, models, 'catalog-a', 'user-a')).toThrow()
+  expect($desktopOnboarding.get().configured).toBe(false)
+  expect(window.localStorage.getItem('hermes-desktop-onboarded-v1')).toBeNull()
+  expect(window.localStorage.getItem('hermes-onboarding-skipped-v1')).toBeNull()
+
+  act(() => $desktopOnboarding.set({ ...$desktopOnboarding.get(), manual: true }))
+  expect(screen.getByRole('button', { name: 'Close' })).toBeTruthy()
+  act(() => $desktopOnboarding.set({ ...$desktopOnboarding.get(), manual: false }))
+  expect(view.container.childElementCount).toBe(0)
+
+  changeAccount(platformSnapshot('user-b', 3))
+  await waitFor(() => expect(platformModelCatalog().state.get().models[0]?.state).toBe(limitedState))
+  expect(screen.getByRole('button', { name: "I'll choose a provider later" })).toBeTruthy()
+  changeAccount(platformSnapshot('user-a', 4))
+  await waitFor(() => expect(platformModelCatalog().state.get().models[0]?.state).toBe(limitedState))
+  expect(screen.getByRole('button', { name: "I'll choose a provider later" })).toBeTruthy()
 })

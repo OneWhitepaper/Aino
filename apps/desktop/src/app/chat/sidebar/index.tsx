@@ -73,6 +73,7 @@ import {
   $profileColors,
   $profiles,
   $profileScope,
+  type AgentProfileRoute,
   ALL_PROFILES,
   messagingTotalsKey,
   normalizeProfileKey,
@@ -152,6 +153,7 @@ import { ProjectDialog } from './project-dialog'
 import { resolveLiveProjectFilter } from './project-filter'
 import { ProjectSectionActions } from './project-section-actions'
 import {
+  enteredProjectLiveRows,
   excludeProjectSessions,
   orderProjectsByIds,
   overlayLiveLanes,
@@ -160,7 +162,6 @@ import {
   ProjectBackRow,
   ProjectMenu,
   projectTreeCwd,
-  reconcileEnteredProjectSessions,
   sessionBucketId,
   sessionMatchesProjectFilter,
   sessionRecency as sessionTime,
@@ -168,6 +169,7 @@ import {
   type SidebarWorkspaceTree,
   sortProjectsForOverview,
   StartWorkButton,
+  useGatewayProjectTree,
   useRepoWorktreeMap
 } from './projects'
 import { useWorkspaceNodeOpen } from './projects/model'
@@ -292,7 +294,7 @@ interface ChatSidebarProps extends React.ComponentProps<typeof Sidebar> {
   onDeleteSession: (sessionId: string) => void
   onArchiveSession: (sessionId: string) => void
   onBranchSession: (sessionId: string) => void
-  onNewSessionInWorkspace: (path: null | string, options?: { openTab?: boolean }) => void
+  onNewSessionInWorkspace: (path: null | string, options?: { openTab?: boolean; owner?: AgentProfileRoute }) => void
   /** Create a brand-new session and open it as a tile. `dir` is the dock edge
    *  (or `center` to stack a tab); `anchor`/`before` optionally pin it to a
    *  specific zone / tab-strip slot, and `cwd` pins it to a project's path —
@@ -650,11 +652,11 @@ export function ChatSidebar({
     }
   }, [agentOrderIds, agentOrderManual, unpinnedAgentSessions])
 
-  // Recents render in recency order. The hand-picked order is layered on per
-  // date group inside the section (orderRowsWithinGroups) rather than baked
-  // into the list here, so a drag ranks a row among its own day's chats
-  // instead of flattening the whole sidebar into an undated manual mode.
+  // Recents render in recency order. The hand-picked order is layered on per date group inside the
+  // section (orderRowsWithinGroups) rather than baked into the list here, so a drag ranks a row
+  // among its own day's chats instead of flattening the whole sidebar into an undated manual mode.
   const agentSessions = unpinnedAgentSessions
+  const { owners, ownerKey, tree: gatewayProjectTree } = useGatewayProjectTree(openedProjectTree, agentSessions)
 
   const displayAgentSessions = useMemo(
     () => (showArchived ? agentSessions : recentSessionsOutsideProjects(agentSessions, projects, openedProjectTree)),
@@ -866,7 +868,7 @@ export function ChatSidebar({
   // overview sort. Membership is the backend tree's — never re-derived here.
   const projectModel = useMemo<SidebarProjectTree[]>(() => {
     const sorted = sortProjectsForOverview(
-      openedProjectTree
+      gatewayProjectTree
         // A filtered-out project drops its whole lane, header included — hiding
         // only its rows would leave a row of empty folders behind.
         .filter(project => !project.isNoProject && (!projectFilter.length || projectFilter.includes(project.id)))
@@ -885,11 +887,7 @@ export function ChatSidebar({
       activeProjectId
     )
 
-    // Layer the user's manual drag-order on top of the deterministic sort. Empty
-    // (default) returns `sorted` untouched; projects the user hasn't ordered yet
-    // keep their sorted position rather than jumping the hand-picked list.
-    // Deduplicate by id — safety net for backend merge edge cases
-    // (e.g. Windows path-casing differences across profiles).
+    // Manual drag-order over the sorted list; dedupe by id (Windows path casing across profiles).
     const seen = new Set<string>()
 
     const deduped = sorted.filter(project => {
@@ -903,7 +901,7 @@ export function ChatSidebar({
     })
 
     return orderProjectsByIds(deduped, projectOrderIds)
-  }, [openedProjectTree, orderRepos, activeProjectId, projectFilter, projectOrderIds, isHiddenFromProjects, s])
+  }, [gatewayProjectTree, orderRepos, activeProjectId, projectFilter, projectOrderIds, isHiddenFromProjects, s])
 
   // The overview only renders in grouped mode; the model stays live regardless
   // so scoping is consistent across views.
@@ -959,8 +957,8 @@ export function ChatSidebar({
   }, [overviewEnteredProject, enteredProjectTree, orderRepos, isHiddenFromProjects])
 
   const enteredProjectOverlaySessions = useMemo(
-    () => reconcileEnteredProjectSessions(agentSessions, overviewEnteredProject?.previewSessions),
-    [agentSessions, overviewEnteredProject?.previewSessions]
+    () => enteredProjectLiveRows(overviewEnteredProject, agentSessions, owners),
+    [agentSessions, overviewEnteredProject, owners]
   )
 
   // Overlay live `$sessions` onto the entered project so a just-created session
@@ -973,9 +971,9 @@ export function ChatSidebar({
   const enteredProjectContent = useMemo(
     () =>
       enteredProject
-        ? overlayLiveLanes(enteredProject, enteredProjectOverlaySessions, removedSessionIds, projectOwners)
+        ? overlayLiveLanes(enteredProject, enteredProjectOverlaySessions, removedSessionIds, projectOwners, ownerKey)
         : undefined,
-    [enteredProject, enteredProjectOverlaySessions, removedSessionIds, projectOwners]
+    [enteredProject, enteredProjectOverlaySessions, removedSessionIds, projectOwners, ownerKey]
   )
 
   const scopedRepoPaths = useMemo(
@@ -986,7 +984,7 @@ export function ChatSidebar({
 
   // git worktree list is a VISUAL-only enhancer (empty lanes); never membership.
   const inEnteredProject = Boolean(enteredProject && !showAllProfiles)
-  const [scopedRepoWorktrees] = useRepoWorktreeMap(scopedRepoPaths, inEnteredProject)
+  const [scopedRepoWorktrees] = useRepoWorktreeMap(scopedRepoPaths, inEnteredProject, enteredProject)
 
   // Re-probe worktree lanes on out-of-band git changes the renderer can't see.
   // A turn can `git worktree add/remove` in the terminal (e.g. you ask Hermes to
@@ -1082,13 +1080,14 @@ export function ChatSidebar({
         projects,
         showAllSessions ? Infinity : PROJECT_PREVIEW_COUNT,
         {
+          ownerKey,
           removed: removedSessionIds,
           // Rank before the trim, so "3 priciest in this project" isn't "3 most
           // recent, priciest first".
           rankIds: sortOrderIds
         }
       ),
-    [projectOverview, agentSessions, projects, removedSessionIds, sortOrderIds, showAllSessions]
+    [projectOverview, agentSessions, projects, removedSessionIds, sortOrderIds, showAllSessions, ownerKey]
   )
 
   // A row's "Show all" hydrates raw backend lanes, which — like the drill-in —
@@ -1224,7 +1223,7 @@ export function ChatSidebar({
   }, [visibleMessagingSessions, messagingPlatformTotals, messagingTruncated, isPinnedSession, messagingProfile])
 
   const ownerGrouped = profileScope === ALL_PROFILES && grouping === 'profile'
-  const profileGroups = useGatewaySessionGroups(displayAgentSessions, ownerGrouped)
+  const profileGroups = useGatewaySessionGroups(displayAgentSessions, ownerGrouped, filtersNarrow)
 
   // Pagination is scope-aware. In "All profiles" mode it tracks the global
   // unified set; scoped to one profile it tracks that profile's own truncation
@@ -1548,7 +1547,7 @@ export function ChatSidebar({
                     <div className="group/workspace flex min-w-0 items-center gap-2 px-2 py-1">
                       <Codicon name="folder" size="0.875rem" />
                       <span className="min-w-0 flex-1 truncate text-sm font-medium">{enteredProject.label}</span>
-                      {enteredProject.path && <StartWorkButton repoPath={enteredProject.path} />}
+                      {enteredProject.path && <StartWorkButton project={enteredProject} />}
                       <ProjectMenu
                         isActive={enteredProject.id === activeProjectId}
                         onExitScope={exitProjectScope}
@@ -1611,7 +1610,8 @@ export function ChatSidebar({
                     <Button
                       aria-label={s.markAllRead}
                       className={HEADER_ACTION_BTN}
-                      onClick={() => {
+                      onClick={event => {
+                        event.stopPropagation()
                         markAllSessionsRead()
                         ackAllSessionsRead()
                       }}
