@@ -85,7 +85,7 @@ def _context(authority, ref, live, policy, agent, arg) -> str:
     with contextlib.suppress(Exception):
         rows = authority.db.get_messages_as_conversation(stored, include_ancestors=True, include_row_ids=True)
     from gateway.session_controls import display_projection
-    messages = display_projection(rows, authority.profile_id) if rows else []
+    messages = display_projection(rows, authority.profile_id, db=authority.db, session_id=ref.session_id) if rows else []
     breakdown: list[str] = []
     if agent is not None:
         with contextlib.suppress(Exception):

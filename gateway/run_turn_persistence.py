@@ -476,6 +476,11 @@ class GatewayTurnPersistenceMixin:
             ),
             "timestamp": prepared.persist_user_timestamp if prepared.persist_user_timestamp is not None else ts,
         }
+        # Text-vision preprocessing happened before the run; a fallback writer must retain that
+        # context for replay. Native pixels are attached later, so its caption is not a wire payload.
+        if (getattr(event, "_gateway_image_text_enriched", False)
+                and prepared.message_text != _user_entry["content"]):
+            _user_entry["api_content"] = prepared.message_text
         if prepared.persist_user_display_kind:
             _user_entry["display_kind"] = prepared.persist_user_display_kind
         from gateway.response_filters import persisted_user_metadata_for_event

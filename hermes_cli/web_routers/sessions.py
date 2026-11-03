@@ -668,7 +668,8 @@ def _is_untyped_scaffold_notice(message) -> bool:
     return isinstance(content, str) and content.lstrip().startswith("[System:")
 
 
-def _project_for_display(messages: list, *, home=None, inline_images: bool = True, prior_user_match=None) -> list:
+def _project_for_display(messages: list, *, home=None, inline_images: bool = True, prior_user_match=None,
+                         db=None, session_id=None) -> list:
     """Replace compaction summaries with their display-only projection and hide untyped
     gateway-scaffold notices.
 
@@ -687,6 +688,9 @@ def _project_for_display(messages: list, *, home=None, inline_images: bool = Tru
     from agent.message_metadata import withheld_prompt_text
     from agent.prompt_builder import STEER_DISPLAY_KIND
     from agent.turn_failure_copy import untyped_failed_turn_display_kind
+    from gateway.session_image_display import project_admitted_images
+
+    messages = project_admitted_images(messages, db=db, session_id=session_id)
 
     # inline_images=False (#116511): render content through the gateway's ``_coerce_message_text``
     # projection so a data-URI image part becomes ``[image]`` — the same branch session.resume's
@@ -763,7 +767,8 @@ async def get_session_messages(
             sid, limit=_limit, offset=offset, latest=latest_page,
             include_compacted=include_compacted, include_ancestors=True)
         return sid, _limit, _project_for_display(
-            messages, home=_history_profile_home(profile), prior_user_match=prior_user_content_matcher(db, sid), inline_images=inline_images)
+            messages, home=_history_profile_home(profile), prior_user_match=prior_user_content_matcher(db, sid),
+            inline_images=inline_images, db=db, session_id=sid)
 
     result = await asyncio.to_thread(_with_db, profile, _read, read_only=True)
     if result is None:
@@ -834,7 +839,8 @@ async def get_session_messages_around(
         if page is None:
             raise HTTPException(status_code=404, detail="Prompt not found")
         page["messages"] = _project_for_display(
-            page["messages"], home=_history_profile_home(profile), prior_user_match=prior_user_content_matcher(db, sid))
+            page["messages"], home=_history_profile_home(profile), prior_user_match=prior_user_content_matcher(db, sid),
+            db=db, session_id=sid)
         return {"session_id": sid, "profile": owner, **page}
 
     result = await asyncio.to_thread(_with_db, profile, _read, read_only=True)

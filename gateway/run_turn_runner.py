@@ -923,11 +923,14 @@ class TurnRunner(GatewayTurnProgressMixin, GatewaySessionAgentMixin):
         )
         if resume_pending and (interruption_is_fresh or mark_is_fresh):
             # Empty message = the startup auto-resume turn; there is no NEW user message.
-            ctx.message, persist_override = _prepare_resume_pending_message(
+            ctx.message, resume_persist = _prepare_resume_pending_message(
                 resume_reason, ctx.message, interactive=self._resume_note_interactive(),
             )
+            if persist_override is None:
+                persist_override = resume_persist
         elif agent_history and agent_history[-1].get("role") == "tool" and interruption_is_fresh:
-            persist_override = ctx.message
+            if persist_override is None:
+                persist_override = ctx.message
             ctx.message = (
                 "[System note: A new message has arrived. The conversation "
                 "history contains pending tool outputs from an interrupted turn. "
@@ -995,7 +998,11 @@ class TurnRunner(GatewayTurnProgressMixin, GatewaySessionAgentMixin):
             if ctx.title_user_message is not None:
                 kwargs["title_user_message"] = ctx.title_user_message
             if persist_user_message_override is not None:
-                kwargs["persist_user_message"] = persist_user_message_override
+                from agent.image_routing import build_persist_user_message
+                kwargs["persist_user_message"] = (
+                    build_persist_user_message(persist_user_message_override, [], api_message)
+                    if isinstance(persist_user_message_override, str) else persist_user_message_override
+                )
             elif observed_group_context:
                 kwargs["persist_user_message"] = ctx.message
             if ctx.persist_user_display_kind:

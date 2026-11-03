@@ -795,11 +795,13 @@ def _invoke_agent(
         _interim_assistant_cb if _load_interim_assistant_messages() else None)
     # A synthesized turn is typed at turn START so a crash persist writes a timeline event,
     # not a raw user bubble; the post-turn stamp is the fallback for an older agent.
+    from agent.image_routing import build_persist_user_message
+
     st.run_kwargs = run_kwargs = {
         "conversation_history": list(st.history),
         "stream_callback": _stream,
         "persist_user_message": (
-            _build_persist_user_message(prompt, images, run_message) if images else prompt)}
+            build_persist_user_message(prompt, images, run_message) if images else prompt)}
     try:
         run_params = inspect.signature(agent.run_conversation).parameters
     except (TypeError, ValueError):

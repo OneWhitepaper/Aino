@@ -215,6 +215,39 @@ different output dimensions carry an explanatory note.
 - New tool controls apply to a new conversation; existing prompts and history
   are not rewritten. API production code and the API checkout are unchanged.
 
+## Attached image presentation follow-up
+
+Canonical gateway text-vision preprocessing stored the auxiliary image description as
+user-authored content. The gateway now persists the caption and retained `@image`
+references, using the existing clean-content/API-sidecar contract. Model-facing
+vision enrichment stays intact; native image parts also survive the clean override.
+Queued turns, recovery scaffolding, captionless images and mixed image/voice/file
+attachments use the same separation. The legacy TUI and canonical gateway share the
+existing image persistence helpers, extracted to `agent/image_routing.py`.
+
+History readers recover old image presentation only from an exact admission ID,
+matching session owner and byte-verified retained attachments. This adds display
+content in REST and WebSocket projections; stored content and API replay are not
+rewritten. Missing or unbound attachments cannot be recovered by this projection.
+Image verification runs off the canonical owner event loop.
+
+- Regression cases reproduce text-vision persistence, captionless native input,
+  queued input and recovery failures before the fix; real SessionDB flush/reload
+  verifies clean display content and unchanged model sidecars.
+- Desktop Electron acceptance uses an isolated synthetic development account and
+  mock model responses. Real composer selection, text-mode vision preprocessing,
+  model input and cold reload pass: the user sees the original image and caption,
+  while the auxiliary description remains model-only. No production account or
+  paid inference is involved.
+- Final focused regression run: **29 passed** across eight files. Related image
+  routing/native/replay suites: **43 passed**; API sidecar/recovery/history suites:
+  **86 passed**; the full legacy TUI server file: **632 passed**. The final Electron
+  text-vision acceptance passed in **13 seconds**. Root static checks: **14 passed**,
+  with zero blocking or advisory code-health findings. Independent review found
+  no blockers.
+- The original uploaded image is retained; this fix does not replace it with an
+  image reconstruction or modify its pixels. Release remains on hold.
+
 ## Validation boundary and release hold
 
 - This verifies source integration on macOS ARM64, not a newly signed/notarized

@@ -74,6 +74,12 @@ def strip_discord_triggering_note(event: Any, message_text: Any) -> Any:
     return message_text.removeprefix(prefix)
 
 
+def persist_inbound_user_message(event: Any, message_text: Any) -> Any:
+    """Keep attached-image presentation separate from the model's vision enrichment."""
+    display_text = getattr(event, "_gateway_image_display_text", message_text)
+    return strip_discord_triggering_note(event, display_text)
+
+
 class GatewayInboundMixin(GatewayInboundHooksMixin, GatewayInboundTranscriptionMixin, GatewayPluginInjectionMixin):
     """Inbound message pipeline (_handle_message, text/media preparation, durable-turn markers, plugin injection) for GatewayRunner."""
 
@@ -1498,9 +1504,16 @@ class GatewayInboundMixin(GatewayInboundHooksMixin, GatewayInboundTranscriptionM
     async def _enrich_inbound_voice(
         self, event: MessageEvent, source: SessionSource, message_text: str, audio_paths: list[str]
     ) -> str:
-        message_text, _successful_transcripts = await self._enrich_message_with_transcription(
-            message_text, audio_paths,
+        display_text = getattr(event, "_gateway_image_display_text", None)
+        enriched, _successful_transcripts = await self._enrich_message_with_transcription(
+            message_text if display_text is None else "", audio_paths,
         )
+        if display_text is None:
+            message_text = enriched
+        elif enriched:
+            # Render the same STT notes around both captions; transcription and echo happen once.
+            message_text = self._prepend_media_prefix(enriched, message_text)
+            event._gateway_image_display_text = self._prepend_media_prefix(enriched, display_text)
         # Echo each successful transcript back immediately when configured so users can verify STT
         # quality in real time. On transcription failure do NOT send a hardcoded notice: that
         # bypassed the LLM and produced two replies; enrichment leaves one neutral marker instead.
@@ -1711,12 +1724,26 @@ class GatewayInboundMixin(GatewayInboundHooksMixin, GatewayInboundTranscriptionM
         message_text = self._prefix_inbound_sender_context(event, source, message_text)
         image_paths, audio_paths, audio_file_paths, video_paths = self._classify_inbound_media(event, _pending_stt_prepared)
         if image_paths:
+            from agent.image_routing import build_persist_message_with_image_refs
+            authored = (event._gateway_pending_stt_text if _pending_stt_prepared else
+                        getattr(event, "_gateway_authored_image_caption", event.text)) or ""
+            event._gateway_image_display_text = build_persist_message_with_image_refs(
+                self._prefix_inbound_sender_context(event, source, authored), image_paths,
+            )
+            before_vision = message_text
             message_text = await self._enrich_inbound_images(source, session_key, message_text, image_paths)
+            event._gateway_image_text_enriched = message_text != before_vision
         if audio_paths:
             message_text = await self._enrich_inbound_voice(event, source, message_text, audio_paths)
+        original_names = self._inbound_original_names(event)
         message_text = self._prepend_inbound_media_file_notes(
-            message_text, audio_file_paths, video_paths, self._inbound_original_names(event))
+            message_text, audio_file_paths, video_paths, original_names)
         message_text = self._prepend_inbound_document_notes(event, message_text)
+        if image_paths:
+            display_text = self._prepend_inbound_media_file_notes(
+                event._gateway_image_display_text, audio_file_paths, video_paths, original_names)
+            display_text = self._prepend_inbound_document_notes(event, display_text)
+            event._gateway_image_display_text = self._prepend_inbound_reply_context(event, source, display_text)
         from gateway.session_context_refs import turn_references
         message_text = await turn_references(self, event, source, session_key, message_text)
         if message_text is None:

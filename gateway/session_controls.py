@@ -100,11 +100,14 @@ _PROFILE_IMPLICIT = frozenset({'session.create', 'session.list', 'session.info',
                                'approval.respond', 'clarify.respond'})
 
 
-def display_projection(history, profile_home):
+def display_projection(history, profile_home, *, db=None, session_id=None):
     """Main's TUI display rows for a snapshot's stored rows: the sidecar's own
     ``_history_to_messages`` (compaction handoffs stripped, ``/steer`` unwrapped, tool rows
     labelled from the paired assistant ``tool_calls``), never a re-implementation."""
     from tui_gateway import server
+    from gateway.session_image_display import project_admitted_images
+    history = project_admitted_images(history, db=db, session_id=session_id)
+    history = [{**row, 'content': row['display_content']} if 'display_content' in row else row for row in history]
     rows = [{**row, '_row_id': row['row_id']} if 'row_id' in row else row for row in history]
     return server._history_to_messages(rows, profile_home=profile_home)
 
@@ -703,8 +706,9 @@ class AuthorityConnection:
         history, display = list(snapshot.history), {}
         if params.get('display_projection'):
             # A micro-compaction merge stays in ``messages`` (an undo target); its originals are what shows.
-            display['display_messages'] = display_projection(
-                [row for row in history if not model_only(row)], self.authority.profile_id)
+            display['display_messages'] = await asyncio.to_thread(display_projection,
+                [row for row in history if not model_only(row)], self.authority.profile_id,
+                db=self.authority.db, session_id=ref.session_id)
         return {'session_id': ref.session_id, 'stored_session_id': ref.session_id,
                 **await _resume_transcript(self.authority, ref, snapshot, history, omit), **display,
                 'running': snapshot.handle.execution_state == 'running',

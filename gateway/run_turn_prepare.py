@@ -635,8 +635,8 @@ class GatewayTurnPrepareMixin:
         model instruction, not authored text) — regardless of the toggle; only the in-context
         RENDER is gated behind gateway.message_timestamps.enabled (default OFF)."""
         from gateway.run import _load_gateway_config, _message_timestamps_enabled
-        from gateway.run_inbound import strip_discord_triggering_note
-        persist_user_message = None
+        from gateway.run_inbound import persist_inbound_user_message
+        persist_user_message = persist_inbound_user_message(event, None)
         persist_user_timestamp = None
         try:
             from hermes_time import get_timezone as _get_evt_tz
@@ -648,7 +648,7 @@ class GatewayTurnPrepareMixin:
             _evt_tz = _get_evt_tz()
             if message_text and isinstance(message_text, str):
                 _clean_message_text, _embedded_ts = _strip_msg_ts(message_text, tz=_evt_tz)
-                persist_user_message = strip_discord_triggering_note(event, _clean_message_text)
+                persist_user_message = persist_inbound_user_message(event, _clean_message_text)
                 _event_epoch = _coerce_msg_ts(getattr(event, "timestamp", None), tz=_evt_tz)
                 persist_user_timestamp = _event_epoch if _event_epoch is not None else _embedded_ts
                 if _message_timestamps_enabled(_load_gateway_config()):
@@ -718,6 +718,7 @@ class GatewayTurnPrepareMixin:
         # Keep human text separate from skills, sender metadata, and other model context.
         # With no text (e.g. voice-only), retain the existing enriched-message title fallback.
         title_user_message = event.text or None
+        event._gateway_authored_image_caption = event.text
 
         # Auto-load bound skill(s) only on NEW sessions; ongoing ones carry the content in history.
         _auto = getattr(event, "auto_skill", None)

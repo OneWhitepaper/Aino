@@ -68,10 +68,10 @@ class GatewayInboundTranscriptionMixin:
 
     def _pending_event_audio_paths(self, event) -> list[str]:
         """Return STT-eligible paths from a pending voice message."""
-        from gateway.run import _event_media_is_stt_input
+        from gateway.run import _event_media_is_audio, _event_media_is_stt_input
         return [
             path for i, path in enumerate(getattr(event, "media_urls", None) or [])
-            if _event_media_is_stt_input(event, i)
+            if _event_media_is_audio(event, i) and _event_media_is_stt_input(event, i)
         ]
 
     async def _transcribe_pending_audio_event_once(
