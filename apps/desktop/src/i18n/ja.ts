@@ -3440,6 +3440,8 @@ terminalDisconnectedBody:
 
   preview: {
     tab: 'プレビュー',
+    imageFit: 'パネルに合わせる',
+    imageActualSize: '実際のサイズ（100%）',
     pin: 'ワークスペースにピン留め',
     unpin: 'ワークスペースからピン留めを外す',
     closePane: 'プレビューペインを閉じる',

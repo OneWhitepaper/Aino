@@ -4873,6 +4873,8 @@ memoryLayers: esMemoryLayers
   },
   preview: {
     tab: 'Vista previa',
+    imageFit: 'Ajustar al panel',
+    imageActualSize: 'Tamaño real (100 %)',
     pin: 'Fijar al espacio de trabajo',
     unpin: 'Desfijar del espacio de trabajo',
     closePane: 'Cerrar panel de vista previa',

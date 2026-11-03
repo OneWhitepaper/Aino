@@ -4890,6 +4890,8 @@ memoryLayers: deMemoryLayers
   },
   preview: {
     tab: 'Vorschau',
+    imageFit: 'An das Fenster anpassen',
+    imageActualSize: 'Originalgröße (100 %)',
     pin: 'An Arbeitsbereich anheften',
     unpin: 'Vom Arbeitsbereich lösen',
     closePane: 'Vorschau-Fenster schließen',

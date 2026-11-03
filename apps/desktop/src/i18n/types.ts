@@ -4413,6 +4413,8 @@ terminalDropUnquotable: (shell: string, paths: string) => string
 
   preview: {
     tab: string
+    imageFit: string
+    imageActualSize: string
     pin: string
     unpin: string
     closePane: string

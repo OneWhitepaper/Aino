@@ -57,6 +57,7 @@ import { $connection, $currentCwd } from '@/store/session'
 import { notifyWorkspaceChanged } from '@/store/workspace-events'
 
 import { FilePreviewActions } from './preview-file-actions'
+import { PreviewImage } from './preview-image'
 
 const SHIKI_THEME = { dark: 'github-dark-default', light: 'github-light-default' } as const
 const TEXT_PREVIEW_MAX_BYTES = 512 * 1024
@@ -1205,14 +1206,7 @@ export function LocalFilePreview({
           onSelect={() => {}}
           trailing={<FilePreviewActions filePath={filePath} target={target} />}
         />
-        <div className="flex min-h-0 flex-1 items-center justify-center overflow-auto p-4">
-          <img
-            alt={target.label}
-            className="max-h-full max-w-full rounded-lg object-contain shadow-sm"
-            draggable={false}
-            src={state.dataUrl}
-          />
-        </div>
+        <PreviewImage alt={target.label} src={state.dataUrl} />
       </div>
     )
   }

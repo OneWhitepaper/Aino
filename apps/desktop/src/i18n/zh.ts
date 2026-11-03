@@ -5096,6 +5096,8 @@ terminalDisconnectedBody:
 
   preview: {
     tab: '预览',
+    imageFit: '适应面板',
+    imageActualSize: '原始大小（100%）',
     pin: '固定到工作区',
     unpin: '从工作区取消固定',
     closePane: '关闭预览面板',

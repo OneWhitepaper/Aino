@@ -58,6 +58,8 @@ export const zhHantArtifacts = {
 
   preview: {
     tab: '預覽',
+    imageFit: '符合面板大小',
+    imageActualSize: '原始大小（100%）',
     pin: '固定到工作區',
     unpin: '從工作區取消固定',
     closePane: '關閉預覽窗格',

@@ -55,6 +55,8 @@ export const arArtifacts = {
   },
   preview: {
     tab: 'معاينة',
+    imageFit: 'ملاءمة للوحة',
+    imageActualSize: 'الحجم الفعلي (100%)',
     pin: 'تثبيت في مساحة العمل',
     unpin: 'إلغاء التثبيت من مساحة العمل',
     closePane: 'إغلاق جزء المعاينة',

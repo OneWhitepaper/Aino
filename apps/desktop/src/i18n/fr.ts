@@ -4899,6 +4899,8 @@ memoryLayers: frMemoryLayers
   },
   preview: {
     tab: 'Aperçu',
+    imageFit: 'Ajuster au panneau',
+    imageActualSize: 'Taille réelle (100 %)',
     pin: "Épingler à l'espace de travail",
     unpin: "Détacher de l'espace de travail",
     closePane: "Fermer le panneau d'aperçu",

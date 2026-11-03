@@ -4777,6 +4777,8 @@ terminalDropUnquotable: (shell, paths) => `No safe way to type these names in ${
 
   preview: {
     tab: 'Preview',
+    imageFit: 'Fit to panel',
+    imageActualSize: 'Actual size (100%)',
     pin: 'Pin to workspace',
     unpin: 'Unpin from workspace',
     closePane: 'Close preview pane',
