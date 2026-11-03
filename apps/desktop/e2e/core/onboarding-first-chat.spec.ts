@@ -1,10 +1,10 @@
 /**
  * C2 core: onboarding completion, then the first chat.
  *
- * Fresh sandbox, NO provider configured: the real first-run onboarding shows.
- * The user picks the local / custom endpoint path and enters the fake
- * provider's URL; the real backend probes it (/v1/models), persists the
- * assignment, and the overlay closes. Then the first chat must obey the same
+ * Fresh sandbox, NO provider configured: the workspace stays available.
+ * The user opens Settings → Model and configures a custom endpoint; the real
+ * backend probes it (/v1/models), saves it, and applies it as the default.
+ * Then the first chat must obey the same
  * transcript oracle as everything else. A smoke test for onboarding followed
  * by a first chat; the #120005 double-paint needs a non-default profile and is
  * guarded by transcript-integrity.spec.ts.
@@ -20,6 +20,7 @@ import * as fs from 'node:fs'
 import * as path from 'node:path'
 
 import { expect, test } from '@playwright/test'
+import { parse } from 'yaml'
 
 import {
   coreAppEnv,
@@ -43,14 +44,20 @@ const nonce = Math.random()
 const U = (n: number) => `U${n}-${nonce}`
 const A = (n: number) => `A${n}-${nonce}`
 
-test('onboarding (custom endpoint) then first chat renders exactly once', async () => {
+test('model settings (custom endpoint) then first chat renders exactly once', async () => {
   const provider = await startScriptedProvider()
   const sandbox = createCoreSandbox('onboard')
   // A fresh desktop install starts the first-run onboarding chat on the free trial, and once a
   // provider is configured it starts it on that provider at the next launch (#137522, #137807). This
-  // spec covers the provider setup a user without the trial gets, then plain chats: no guest trial,
-  // onboarding recorded as done.
-  fs.writeFileSync(path.join(sandbox.hermesHome, 'config.yaml'), 'nous:\n  guest: false\nonboarding:\n  run: false\n')
+  // spec covers explicit model setup without the trial, then plain chats: no guest trial,
+  // onboarding recorded as done. Keep the core harness's development account and English UI.
+  fs.writeFileSync(path.join(sandbox.hermesHome, 'config.yaml'), [
+    'account:', '  dev_mode: true',
+    'display:', '  language: en',
+    'nous:', '  guest: false',
+    'onboarding:', '  run: false',
+    ''
+  ].join('\n'))
   const { app, page } = await launchCoreApp(coreAppEnv(sandbox))
   const ws = recordWebSockets(page)
 
@@ -58,40 +65,43 @@ test('onboarding (custom endpoint) then first chat renders exactly once', async 
     await signInCoreAccount(page)
     await installDuplicateSampler(page)
 
-    await test.step('first-run onboarding: custom endpoint', async () => {
-      // The onboarding surface masks the whole app until it finishes.
-      const openKeyForm = page
-        .locator('[data-glass-opaque]')
-        .filter({ visible: true })
-        .getByRole('button', { name: /api key/i })
+    await test.step('Settings → Model: configure and apply a custom endpoint', async () => {
+      await waitForInteractive(app, page)
+      await expect(page.getByRole('button', { name: "I'll choose a provider later", exact: true })).toHaveCount(0)
+      await page.getByRole('button', { name: 'Open settings', exact: true }).click()
+      await page.locator('.settings-navigation-items').getByRole('button', { name: 'Model', exact: true }).click()
+      await expect(page.getByRole('heading', { name: 'Model', exact: true })).toBeVisible()
+      await page.getByRole('button', { name: 'Custom models', exact: true }).click()
+      await page.getByRole('button', { name: 'Configure custom models', exact: true }).click()
 
-      await expect(openKeyForm).toHaveCount(1, { timeout: 180_000 })
-      await openKeyForm.click()
-      await page
-        .locator('[data-glass-opaque]')
-        .filter({ visible: true })
-        .getByRole('button', { name: /custom endpoint/i })
-        .click()
+      const form = page.getByRole('dialog', { name: 'Configure custom models', exact: true })
 
-      // The endpoint URL is the form's only plain-text input (API keys are password inputs).
-      const form = page
-        .locator('[data-glass-opaque]')
-        .filter({ visible: true })
-        .filter({ has: page.locator('input[type="text"]') })
+      await form.getByRole('textbox', { name: 'Name', exact: true }).fill('core-onboarding')
+      await form.getByRole('textbox', { name: 'Endpoint URL', exact: true }).fill(provider.url)
+      await form.getByRole('button', { name: 'Test connection', exact: true }).click()
+      // The model must come from real endpoint discovery, not a fixture config write.
+      await expect(form.getByRole('combobox', { name: 'Model name', exact: true })).toHaveValue('mock-model')
+      await form.getByRole('button', { name: 'Save', exact: true }).click()
+      await expect(form).toHaveCount(0)
 
-      await expect(form).toHaveCount(1)
-      await form.locator('input[type="text"]').fill(provider.url)
-      await form.getByRole('button', { name: /connect/i }).click()
-      // The overlay unmounts only after the backend probed the endpoint, saved
-      // the assignment and confirmed the runtime is ready; waitForInteractive
-      // fails while any full-viewport fixed layer still covers the composer.
+      // Saving a connection leaves the current model unchanged; the user explicitly applies it.
+      await page.getByRole('combobox', { name: 'Custom connection', exact: true }).click()
+      await page.getByRole('option', { name: 'core-onboarding', exact: true }).click()
+      await page.getByRole('combobox', { name: 'Model', exact: true }).click()
+      await page.getByRole('option', { name: 'mock-model', exact: true }).click()
+      await page.getByRole('button', { name: 'Apply as default', exact: true }).click()
+      await expect(page.locator('.default-main-model-current-value')).toContainText('mock-model')
+      await page.getByRole('button', { name: 'Close settings', exact: true }).click()
       await waitForInteractive(app, page)
     })
 
     await test.step('the persisted assignment is what the user entered', async () => {
-      const config = fs.readFileSync(path.join(sandbox.hermesHome, 'config.yaml'), 'utf8')
-      expect(config).toMatch(/provider:\s*['"]?custom/)
-      expect(config).toContain(`127.0.0.1:${new URL(provider.url).port}`)
+      const config = parse(fs.readFileSync(path.join(sandbox.hermesHome, 'config.yaml'), 'utf8'))
+
+      expect(config.model.provider).toBe('core-onboarding')
+      expect(config.model.default).toBe('mock-model')
+      expect(config.model.base_url).toContain(`127.0.0.1:${new URL(provider.url).port}`)
+      expect(config.providers['core-onboarding'].base_url).toBe(config.model.base_url)
     })
 
     await test.step('first chat after onboarding renders exactly once', async () => {

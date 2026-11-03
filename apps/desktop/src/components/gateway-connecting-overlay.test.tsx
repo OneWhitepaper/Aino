@@ -1,11 +1,12 @@
 import { act, cleanup, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { I18nProvider } from '@/i18n'
 import { $desktopBoot } from '@/store/boot'
 import { $gatewaySwitching } from '@/store/gateway-switch'
 import { $desktopOnboarding } from '@/store/onboarding'
-import { $introView } from '@/store/onboarding-intro'
-import { markOnboardingDecided } from '@/store/onboarding-presence'
+import { $decideExit, $introView } from '@/store/onboarding-intro'
+import { $onboardingDecided, markOnboardingDecided } from '@/store/onboarding-presence'
 import { setGatewayState } from '@/store/session'
 
 import { BootFailureOverlay } from './boot-failure-overlay'
@@ -54,14 +55,59 @@ function resetStores() {
 beforeEach(resetStores)
 afterEach(cleanup)
 
-// The connecting overlay renders "CONN" + a scrambled tail inside one
-// uppercase span; match that node specifically so the recovery overlay's
-// "Lost connection…" copy doesn't read as a false positive.
-const isConnectingShown = () =>
-  screen.queryAllByText((_, el) => /^CONN[/\\|\-_=+<>~:*A-Z]*$/.test(el?.textContent?.trim() ?? '')).length > 0
+const isConnectingShown = () => Boolean(screen.queryByRole('status', { name: 'Starting Aino…' }))
 
 const isRecoveryShown = () =>
   Boolean(screen.queryByText(/use local gateway/i) || screen.queryByText(/retry/i) || screen.queryByText(/sign in/i))
+
+describe('cold startup presentation', () => {
+  it('announces the localized startup stage and updates the actual progress', async () => {
+    markOnboardingDecided()
+    setGatewayState('connecting')
+    $desktopBoot.set({
+      ...$desktopBoot.get(),
+      message: '正在加载 Aino 设置',
+      progress: 35,
+      running: true,
+      visible: true
+    })
+    render(
+      <I18nProvider configClient={null} initialLocale="zh">
+        <GatewayConnectingOverlay />
+      </I18nProvider>
+    )
+
+    expect(screen.getByRole('status', { name: '正在启动 Aino…' })).toBeTruthy()
+    expect(screen.getByText('正在加载 Aino 设置')).toBeTruthy()
+    expect(screen.getByRole('progressbar').getAttribute('aria-valuenow')).toBe('35')
+
+    await act(async () => {
+      $desktopBoot.set({ ...$desktopBoot.get(), message: '正在加载最近会话', progress: 72 })
+    })
+    expect(screen.getByText('正在加载最近会话')).toBeTruthy()
+    expect(screen.queryByText('正在加载 Aino 设置')).toBeNull()
+    expect(screen.getByRole('progressbar').getAttribute('aria-valuenow')).toBe('72')
+  })
+
+  it('keeps the delayed startup exit available without claiming completion', async () => {
+    $onboardingDecided.set(false)
+    setGatewayState('connecting')
+    $desktopBoot.set({ ...$desktopBoot.get(), progress: 85, running: true, visible: true })
+    const exit = vi.fn()
+    $decideExit.set(exit)
+
+    try {
+      render(<GatewayConnectingOverlay />)
+      expect(screen.getByText('Setup is taking longer than usual.')).toBeTruthy()
+      screen.getByRole('button', { name: 'Continue without setup' }).click()
+      expect(exit).toHaveBeenCalledOnce()
+      expect(screen.queryByRole('progressbar')).toBeNull()
+    } finally {
+      $decideExit.set(null)
+      markOnboardingDecided()
+    }
+  })
+})
 
 describe('connecting overlay vs recovery surface', () => {
   it('post-boot socket drops do not re-cover the app with the initial CONNECTING overlay', async () => {

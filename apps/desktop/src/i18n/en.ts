@@ -5022,7 +5022,7 @@ tabActions: title => `Actions for ${title}`
       branchNewChat: 'Branch in new chat',
       react: 'React',
       dismissError: 'Dismiss error',
-      responseStopped: 'Response stopped',
+      responseStopped: 'Paused. Current progress is preserved.',
       ...enErrorLayers,
       errorCodes: enErrorCodes,
       errorAuthKinds: {
@@ -5497,7 +5497,7 @@ tabActions: title => `Actions for ${title}`
     sessionUnavailable: 'Session unavailable',
     createSessionFailed: 'Could not create a new session',
     promptFailed: 'Prompt failed',
-    providerCredentialRequired: 'Add a provider credential before sending your first message.',
+    providerCredentialRequired: 'Check this model and its credentials in Settings → Models to continue.',
     emptySlashCommand: 'empty slash command',
     slashCommandIgnoredTitle: 'Command not sent',
     slashCommandIgnoredBody:

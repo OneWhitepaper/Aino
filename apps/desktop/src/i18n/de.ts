@@ -5065,7 +5065,7 @@ memoryLayers: deMemoryLayers
       branchNewChat: 'In neuem Chat abzweigen',
       react: 'Reagieren',
       dismissError: 'Fehler schließen',
-      responseStopped: 'Antwort gestoppt',
+      responseStopped: 'Pausiert. Der bisherige Fortschritt bleibt erhalten.',
       ...deErrorLayers,
       errorCodes: {
         ...deErrorCodes,
@@ -5612,7 +5612,7 @@ memoryLayers: deMemoryLayers
     createSessionFailed: 'Neue Session konnte nicht erstellt werden',
     promptFailed: 'Prompt fehlgeschlagen',
     providerCredentialRequired:
-      'Fügen Sie Anmeldedaten für einen Anbieter hinzu, bevor Sie Ihre erste Nachricht senden.',
+      'Prüfe das Modell und seine Zugangsdaten unter Einstellungen → Modelle, um fortzufahren.',
     emptySlashCommand: 'leerer Slash-Befehl',
     desktopCommands: 'Desktop-Befehle',
     skillCommandsAvailable: count => `${count} Fähigkeitsbefehle verfügbar.`,

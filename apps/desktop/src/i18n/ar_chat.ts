@@ -417,7 +417,7 @@ export const arChat = {
     sessionUnavailable: 'الجلسة غير متاحة',
     createSessionFailed: 'فشل إنشاء الجلسة',
     promptFailed: 'فشل إرسال الرسالة',
-    providerCredentialRequired: 'مطلوب اعتماد المزود',
+    providerCredentialRequired: 'للمتابعة، تحقّق من النموذج وبيانات اعتماده في الإعدادات ← النماذج.',
     emptySlashCommand: 'أمر slash فارغ',
     slashCommandIgnoredTitle: 'لم يتم إرسال الأمر',
     slashCommandIgnoredBody: 'لا يمكن دمج أوامر slash مع المرفقات. أزل المرفق أو أرسل الأمر بشكل منفصل.',

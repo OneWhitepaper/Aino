@@ -181,6 +181,17 @@ that the mockup does not show.
   chat, while an explicitly opened repository stays pinned until another explicit
   review action. Source/profile ownership gates filesystem actions; delayed reads
   cannot paint or open files from a previous project or machine.
+- **Summary output clicks preserve open work.** Different output URLs open
+  separate browser tabs; clicking the same output focuses its existing tab.
+  File identity and existing source/preview behavior stay authoritative.
+- **Connection and pause states explain the next step.** Cold startup uses the
+  Aino mark, localized phase and real progress. Reconnecting does not cover an
+  already usable shell. A stopped response uses an aligned, quiet pause row;
+  the composer retains its existing Continue action without another nested card.
+- **Provider setup lives in Settings.** Missing credentials do not summon the
+  startup provider picker over the workspace. A request-time notice opens the
+  existing Model settings for its owner; explicit service authorization retains
+  the existing OAuth/API key flow. Account sign-in remains separate.
 - **Summary is a persistent workspace card.** Its list icon precedes Terminal
   and the right-sidebar toggle. The titlebar button alone opens and closes it;
   outside clicks, Escape, conversation switches and opening other panes leave

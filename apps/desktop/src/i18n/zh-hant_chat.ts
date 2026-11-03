@@ -441,7 +441,7 @@ export const zhHantChat = {
     sessionUnavailable: '工作階段不可用',
     createSessionFailed: '無法建立新工作階段',
     promptFailed: '提示詞傳送失敗',
-    providerCredentialRequired: '傳送第一則訊息前請先新增提供方憑證。',
+    providerCredentialRequired: '請前往「設定 → 模型」檢查目前模型及其授權後繼續。',
     emptySlashCommand: '空的斜線指令',
     slashCommandIgnoredTitle: '指令未傳送',
     slashCommandIgnoredBody: '斜線指令不能與附件同時使用。請移除附件或單獨傳送指令。',

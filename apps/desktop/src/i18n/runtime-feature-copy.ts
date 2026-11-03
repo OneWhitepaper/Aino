@@ -178,6 +178,7 @@ export const runtimeFeatureCopy = {
     }
   },
   ja: {
+    assistant: { thread: { responseStopped: '一時停止しました。ここまでの進行状況は保持されています。' } },
     composer: {
       taskPaused: 'タスクを一時停止しました。保存された進行状況から続行できます。',
       taskPausing: '一時停止中…'
@@ -229,6 +230,7 @@ export const runtimeFeatureCopy = {
     }
   },
   ru: {
+    assistant: { thread: { responseStopped: 'Приостановлено. Текущий прогресс сохранён.' } },
     composer: {
       taskPaused: 'Задача приостановлена. Можно продолжить с сохранённого места.',
       taskPausing: 'Приостановка…'
@@ -288,6 +290,7 @@ export const runtimeFeatureCopy = {
     }
   },
   ar: {
+    assistant: { thread: { responseStopped: 'متوقف مؤقتًا. تم الاحتفاظ بالتقدم الحالي.' } },
     composer: {
       taskPaused: 'المهمة متوقفة مؤقتًا. تابع من التقدم المحفوظ.',
       taskPausing: 'جارٍ الإيقاف المؤقت…'
@@ -347,6 +350,7 @@ export const runtimeFeatureCopy = {
     }
   },
   'zh-hant': {
+    assistant: { thread: { responseStopped: '已暫停，目前進度已保留。' } },
     composer: {
       taskPaused: '任務已暫停，可從保留的進度繼續。',
       taskPausing: '正在暫停…'

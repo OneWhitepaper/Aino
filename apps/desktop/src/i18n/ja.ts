@@ -4131,7 +4131,7 @@ terminalDisconnectedBody:
     sessionUnavailable: 'セッションが利用できません',
     createSessionFailed: '新しいセッションを作成できませんでした',
     promptFailed: 'プロンプトに失敗しました',
-    providerCredentialRequired: '最初のメッセージを送信する前にプロバイダー認証情報を追加してください。',
+    providerCredentialRequired: '続行するには、設定 → モデルで現在のモデルと認証情報を確認してください。',
     emptySlashCommand: '空のスラッシュコマンド',
     slashCommandIgnoredTitle: 'コマンドが送信されませんでした',
     slashCommandIgnoredBody:

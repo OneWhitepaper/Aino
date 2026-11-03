@@ -22,6 +22,7 @@ import { restOfLongPollGap } from '@/lib/long-poll'
 import { isProviderSetupErrorMessage } from '@/lib/provider-setup-errors'
 import { evaluateRuntimeReadiness, type RuntimeReadinessResult } from '@/lib/runtime-readiness'
 import { readKey, writeKey } from '@/lib/storage'
+import { $activeConnectionId, selectConnection } from '@/store/connections'
 import {
   $freeTierStatus,
   ackFreeTierNotice,
@@ -36,8 +37,10 @@ import { setMainModelAssignment } from '@/store/model-assignment'
 import { dismissNotification, notify, notifyError } from '@/store/notifications'
 import { afterOnboardingSurfaceClear, onboardingSurfaceOpen } from '@/store/onboarding-presence'
 import { captureOnboardingScope, type OnboardingScope } from '@/store/onboarding-scope'
+import { $activeGatewayProfile, normalizeProfileKey } from '@/store/profile'
 import { requestRoute } from '@/store/recovery-requests'
 import { setModelPickerOpen } from '@/store/session'
+import { setSettingsScope } from '@/store/settings-scope'
 import type { AppHandoffStatus, OAuthPollResponse, OAuthProvider, OAuthStartResponse } from '@/types/hermes'
 
 type PkceStart = Extract<OAuthStartResponse, { flow: 'pkce' }>
@@ -679,14 +682,48 @@ async function refreshProviders() {
   await providersRefreshPromise
 }
 
+async function openProviderSettings(scope: OnboardingScope) {
+  const profile = normalizeProfileKey(scope.profile)
+
+  const landed = () =>
+    $activeConnectionId.get() === scope.connectionId && normalizeProfileKey($activeGatewayProfile.get()) === profile
+
+  const switchFailed = translateNow('profiles.switchProfileFailed', profile)
+
+  try {
+    if (!landed() && scope.connectionId) {
+      await selectConnection(scope.connectionId, { profile })
+    }
+
+    // A missing registry entry or a superseded pick can resolve without landing.
+    // Never open another computer's model settings in response to this warning.
+    if (!landed()) {
+      throw new Error(switchFailed)
+    }
+
+    setSettingsScope(profile)
+    requestRoute('/settings?tab=config:model')
+  } catch (error) {
+    notifyError(error, switchFailed)
+  }
+}
+
 export function requestDesktopOnboarding(reason = DEFAULT_ONBOARDING_REASON) {
-  // Not over first-run onboarding. The free account may still be in
-  // the making, and a credential probe that fires meanwhile would drop the
-  // provider picker over it; onboarding hands over to the picker
-  // itself when the account fails.
-  afterOnboardingSurfaceClear(() =>
+  // Let first-run account setup finish before offering the existing model settings.
+  const scope = captureOnboardingScope()
+
+  afterOnboardingSurfaceClear(() => {
     patch({ reason: reason.trim() || DEFAULT_ONBOARDING_REASON, requested: true })
-  )
+    notify({
+      id: 'provider-settings-required',
+      kind: 'warning',
+      message: translateNow('chat.providerCredentialRequired'),
+      action: {
+        label: translateNow('titlebar.openSettings'),
+        onClick: () => openProviderSettings(scope)
+      }
+    })
+  })
 }
 
 /** Credential warning delivered passively (session create/activate/resume
@@ -694,8 +731,8 @@ export function requestDesktopOnboarding(reason = DEFAULT_ONBOARDING_REASON) {
  *  profile that has no provider configured. Popping the blocking onboarding
  *  overlay here punishes merely LOOKING at an unconfigured profile, so the
  *  warning is deferred instead: stashed until the user actually tries to
- *  chat, where the submit path consumes it and opens onboarding before the
- *  doomed send. The latest warning wins; a session event without a warning
+ *  chat, where the submit path consumes it and offers model settings before
+ *  the doomed send. The latest warning wins; a session event without a warning
  *  clears the stash (the profile became configured, or the user switched
  *  back to a healthy one). */
 let pendingCredentialWarning: null | string = null
@@ -714,7 +751,7 @@ export function requestDesktopOnboardingForCredentialWarning(reason: null | stri
 }
 
 /** Submit-time gate: returns the deferred credential warning (and clears it)
- *  so the caller can open onboarding instead of sending a prompt that the
+ *  so the caller can offer model settings instead of sending a prompt that the
  *  gateway already said will fail. Null when the active profile is healthy. */
 export function consumePendingCredentialWarning(): null | string {
   const warning = pendingCredentialWarning
@@ -824,6 +861,7 @@ export function closeManualOnboarding() {
 export function completeDesktopOnboarding(connected = false) {
   clearPoll()
   dismissNotification('runtime-not-ready')
+  dismissNotification('provider-settings-required')
   dismissNotification(LOCAL_RUNTIME_NOTICE_ID)
   writeCachedConfigured(true)
 

@@ -5333,6 +5333,7 @@ tabActions: title => `${title} 的操作`
       branchNewChat: '在新对话中分支',
       react: '回应',
       dismissError: '关闭错误',
+      responseStopped: '已暂停，当前进展已保留。',
       ...zhErrorLayers,
       errorGenericProvider: '模型服务',
       errorLayerBodies: {
@@ -5940,7 +5941,7 @@ tabActions: title => `${title} 的操作`
     sessionUnavailable: '会话不可用',
     createSessionFailed: '无法创建新会话',
     promptFailed: '提示词发送失败',
-    providerCredentialRequired: '发送第一条消息前请先添加提供方凭据。',
+    providerCredentialRequired: '请前往“设置 → 模型”检查当前模型及其授权后继续。',
     emptySlashCommand: '空斜杠命令',
     slashCommandIgnoredTitle: '命令未发送',
     slashCommandIgnoredBody: 'Slash 命令不能与附件同时使用。请移除附件或单独发送命令。',

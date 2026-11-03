@@ -1,4 +1,4 @@
-import { act, cleanup, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, render, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 
 import { setApiRequestLocalMode } from '@/api/client'
@@ -72,7 +72,7 @@ afterEach(() => {
 
 const request = async () => ({}) as never
 
-it('keeps a keyless bot passive and opens setup on that bot only after an explicit chat request', async () => {
+it('keeps a keyless bot passive and checks that bot only after an explicit chat request', async () => {
   const view = render(<DesktopOnboardingOverlay enabled profile="default" requestGateway={request} />)
 
   await waitFor(() => expect($desktopOnboarding.get().configured).toBe(true))
@@ -85,17 +85,19 @@ it('keeps a keyless bot passive and opens setup on that bot only after an explic
   expect(mocks.request.mock.calls.some(([, profile]) => profile === 'mail-assistant')).toBe(false)
 
   act(() => requestDesktopOnboarding('No inference provider is configured.'))
-  await screen.findByRole('button', { name: "I'll choose a provider later" })
+  await waitFor(() => expect($desktopOnboarding.get().configured).toBe(false))
+  expect(view.container.childElementCount).toBe(0)
   expect(mocks.request).toHaveBeenCalledWith('local', 'mail-assistant', 'setup.runtime_check', {
     profile: 'mail-assistant'
   })
 })
 
-it('still opens provider setup on first run when the computer default has no provider', async () => {
+it('keeps the workspace available on first run when the default has no provider', async () => {
   mocks.ready = false
-  render(<DesktopOnboardingOverlay enabled profile="default" requestGateway={request} />)
+  const view = render(<DesktopOnboardingOverlay enabled profile="default" requestGateway={request} />)
 
-  await screen.findByRole('button', { name: "I'll choose a provider later" })
+  await waitFor(() => expect($desktopOnboarding.get().configured).toBe(false))
+  expect(view.container.childElementCount).toBe(0)
   expect($desktopOnboarding.get().configured).toBe(false)
   expect(mocks.request).toHaveBeenCalledWith('local', 'default', 'setup.runtime_check', { profile: 'default' })
 })

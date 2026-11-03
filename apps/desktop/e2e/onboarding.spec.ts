@@ -1,47 +1,56 @@
-/**
- * E2E onboarding tests — verify the provider picker appears when no
- * inference provider is configured.
- *
- * Launches the app with an empty config.yaml (no providers). The renderer
- * should detect the unconfigured state and show the DesktopOnboardingOverlay
- * with provider options / API key form.
- *
- * Prerequisite: `npm run build` must have been run so dist/ exists.
- */
+/** Provider configuration is a Settings destination; it must not mask the workspace on boot. */
+import * as fs from 'node:fs'
+import * as path from 'node:path'
 
-import { test } from './test'
-
-import {
-  type NoProviderFixture,
-  setupNoProvider,
-  waitForOnboarding,
-} from './fixtures'
-import { expectVisualSnapshot } from './visual-snapshot'
+import { buildAppEnv, createSandbox, launchDesktop, type NoProviderFixture, waitForAppReady } from './fixtures'
+import { expect, test } from './test'
 
 let fixture: NoProviderFixture | null = null
 
-test.afterAll(async () => {
+test.afterEach(async () => {
   await fixture?.cleanup()
   fixture = null
 })
 
-test.describe('onboarding with no provider configured', () => {
-  test('onboarding overlay appears on first boot', async () => {
-    fixture = await setupNoProvider()
+test('keeps a fresh workspace available and configures models through settings', async () => {
+  test.slow()
+  const sandbox = createSandbox('model-settings-entry')
 
-    // The app should boot (hermes serve starts fine even without a provider),
-    // but the renderer should show the onboarding overlay because no
-    // provider is configured.
-    await waitForOnboarding(fixture.page, 90_000)
-  })
+  fs.writeFileSync(path.join(sandbox.hermesHome, 'config.yaml'), [
+    'display:', '  language: en',
+    'desktop:', '  repo_scan_enabled: false',
+    'account:', '  dev_mode: true',
+    'nous:', '  guest: false',
+    'onboarding:', '  run: false',
+    '',
+  ].join('\n'))
+  const { app, page } = await launchDesktop(buildAppEnv(sandbox))
 
-  test('screenshot of onboarding overlay', async () => {
-    if (!fixture) {
-      test.skip(true, 'Previous test failed — no app running')
+  fixture = { app, page, sandbox, cleanup: async () => {
+    await app.close().catch(() => undefined)
+    sandbox.cleanup()
+  } }
+  const errors: string[] = []
 
-      return
-    }
+  page.on('pageerror', error => errors.push(error.message))
+  const agreement = page.getByRole('checkbox', { name: 'Agree to the user agreement and privacy policy', exact: true })
 
-    await expectVisualSnapshot(fixture.page, { name: 'onboarding-overlay', app: fixture.app })
-  })
+  await expect(agreement).toBeVisible({ timeout: 120_000 })
+  await page.getByRole('textbox', { name: 'Phone number', exact: true }).fill('13800000101')
+  await agreement.check()
+  await page.getByRole('button', { name: 'Send code', exact: true }).click()
+  await page.getByRole('textbox', { name: 'Verification code', exact: true }).fill('1234')
+  await page.getByRole('button', { name: 'Sign in', exact: true }).click()
+  await waitForAppReady(fixture, 120_000)
+  await expect(page.getByRole('heading', { name: /get you setup/i })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: "I'll choose a provider later", exact: true })).toHaveCount(0)
+  await expect(page.locator('[data-slot="composer-rich-input"]:visible')).toBeVisible()
+  await page.screenshot({ path: test.info().outputPath('fresh-workspace.png') })
+
+  await page.evaluate(() => { location.hash = '#/settings?tab=config:model' })
+  await expect(page.getByRole('heading', { name: 'Model', exact: true })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Aino built-in models', exact: true })).toBeVisible()
+  await page.screenshot({ path: test.info().outputPath('model-settings.png') })
+  expect(errors).toEqual([])
+  await expect(page.locator('vite-error-overlay')).toHaveCount(0)
 })

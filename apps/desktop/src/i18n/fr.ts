@@ -5076,7 +5076,7 @@ memoryLayers: frMemoryLayers
       branchNewChat: 'Créer une branche dans une nouvelle conversation',
       react: 'Réagir',
       dismissError: "Ignorer l'erreur",
-      responseStopped: 'Réponse interrompue',
+      responseStopped: 'En pause. La progression actuelle est conservée.',
       ...frErrorLayers,
       errorCodes: {
         ...frErrorCodes,
@@ -5623,7 +5623,7 @@ memoryLayers: frMemoryLayers
     sessionUnavailable: 'Session indisponible',
     createSessionFailed: 'Impossible de créer une nouvelle session',
     promptFailed: "Échec de l'invite",
-    providerCredentialRequired: "Ajoutez un identifiant de fournisseur avant d'envoyer votre premier message.",
+    providerCredentialRequired: 'Vérifiez le modèle et ses identifiants dans Paramètres → Modèles pour continuer.',
     emptySlashCommand: 'commande slash vide',
     desktopCommands: 'Commandes Desktop',
     skillCommandsAvailable: count => `${count} commandes de skill disponibles.`,

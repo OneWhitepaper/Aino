@@ -88,9 +88,21 @@ describe('gateway `error` event → error card + toast', () => {
       'provider_not_configured'
     )
 
+    ctx.isActiveEvent = true
     handleStatusEvent(ctx)
 
     expect(requestDesktopOnboarding).toHaveBeenCalledTimes(1)
+  })
+
+  it.each(['background', 'foreign'] as const)('keeps %s credential errors with their own turn', source => {
+    const { ctx, failAssistantMessage } = errorContext('No usable credentials found.', 'provider_not_configured')
+
+    ctx.isActiveEvent = source !== 'background'
+    ctx.fromActiveSource = () => source !== 'foreign'
+    handleStatusEvent(ctx)
+
+    expect(requestDesktopOnboarding).not.toHaveBeenCalled()
+    expect(failAssistantMessage).toHaveBeenCalled()
   })
 
   it('does not route an unrelated failure to onboarding', () => {

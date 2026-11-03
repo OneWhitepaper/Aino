@@ -142,12 +142,77 @@ function handleModelSwitchStatus(ctx: GatewayEventContext, sessionId: string): v
   }
 }
 
+function handleGatewayError(ctx: GatewayEventContext): void {
+  const { payload, sessionId, isActiveEvent, occurredAt } = ctx
+  const { compactedTurnRef, failAssistantMessage, flushQueuedDeltas } = ctx.deps
+
+  const errorMessage = payload?.message || translateNow('desktop.agentReportedError')
+
+  // The gateway's own verdict when it sent one (agent init with no usable provider), else the
+  // sentence: a blank install needs an actionable settings destination.
+  const looksLikeProviderSetup = isProviderSetupErrorCode(payload?.code) || isProviderSetupErrorMessage(errorMessage)
+
+  // The gateway's `error` event carries no error_surface (prompt_turn.py
+  // emits it for pre-turn refusals). Recover the two codes it CAN mean from
+  // the text so the card and toast get the same plain copy + button gating
+  // as a classified turn: a live-owner refusal (SESSION_NOT_OWNED, #106217)
+  // is deterministic — Retry hits the same wall, only a new chat helps —
+  // and disk-full is a machine problem, not a provider one.
+  const surface = statusErrorSurface(errorMessage)
+
+  // When a code was recovered, the glossed card sentence explains it better
+  // than the raw refusal. When none was, the server's own text IS the plain
+  // copy (tui_gateway/user_messages.py writes actionable sentences for
+  // pre-turn failures — agent init, resume, cancelled-before-ready), and
+  // burying it under a generic "couldn't finish" gloss would hide the one
+  // instruction the user needs.
+  const card = surface ? errorCardText(runtimeTranslations().assistant.thread, surface) : null
+  const toastMessage = card ? `${card.title}. ${card.body}` : errorMessage
+
+  // A turn that errors out has also ended — drop any open blocking prompt
+  // for this session so an approval/sudo/secret overlay can't linger past
+  // the failed turn (same intent as the message.complete clear).
+  if (sessionId) {
+    clearAllPrompts(sessionId)
+    clearSettledClarifyRequest(sessionId)
+    clearActiveSessionTodos(sessionId)
+    reconcileSessionCompacting(sessionId, 'terminal')
+    compactedTurnRef.current.delete(sessionId)
+  }
+
+  if (isActiveEvent) {
+    setPetActivity({ reasoning: false, toolRunning: false })
+    flashPetActivity({ error: true })
+  }
+
+  dispatchNativeNotification({
+    body: toastMessage,
+    kind: 'turnError',
+    sessionId,
+    title: translateNow('notifications.native.turnErrorTitle')
+  })
+
+  if (looksLikeProviderSetup && isActiveEvent && ctx.fromActiveSource()) {
+    requestDesktopOnboarding(errorMessage)
+  } else {
+    toastGatewayError(errorMessage, surface, toastMessage, isActiveEvent)
+  }
+
+  if (sessionId) {
+    flushQueuedDeltas(sessionId)
+    failAssistantMessage(sessionId, errorMessage, occurredAt, surface)
+  }
+
+  if (isActiveEvent) {
+    setTurnStartedAt(null)
+  }
+}
+
 export function handleStatusEvent(ctx: GatewayEventContext): boolean {
   const { deps, event, payload, sessionId, isActiveEvent, occurredAt } = ctx
 
   const {
     compactedTurnRef,
-    failAssistantMessage,
     flushQueuedDeltas,
     hydrateFromStoredSession,
     sessionStateByRuntimeIdRef,
@@ -390,66 +455,7 @@ export function handleStatusEvent(ctx: GatewayEventContext): boolean {
   }
 
   if (event.type === 'error') {
-    const errorMessage = payload?.message || translateNow('desktop.agentReportedError')
-
-    // The gateway's own verdict when it sent one (agent init with no usable provider), else the
-    // sentence: a blank install must reach onboarding, not a toast it cannot act on.
-    const looksLikeProviderSetup = isProviderSetupErrorCode(payload?.code) || isProviderSetupErrorMessage(errorMessage)
-
-    // The gateway's `error` event carries no error_surface (prompt_turn.py
-    // emits it for pre-turn refusals). Recover the two codes it CAN mean from
-    // the text so the card and toast get the same plain copy + button gating
-    // as a classified turn: a live-owner refusal (SESSION_NOT_OWNED, #106217)
-    // is deterministic — Retry hits the same wall, only a new chat helps —
-    // and disk-full is a machine problem, not a provider one.
-    const surface = statusErrorSurface(errorMessage)
-
-    // When a code was recovered, the glossed card sentence explains it better
-    // than the raw refusal. When none was, the server's own text IS the plain
-    // copy (tui_gateway/user_messages.py writes actionable sentences for
-    // pre-turn failures — agent init, resume, cancelled-before-ready), and
-    // burying it under a generic "couldn't finish" gloss would hide the one
-    // instruction the user needs.
-    const card = surface ? errorCardText(runtimeTranslations().assistant.thread, surface) : null
-    const toastMessage = card ? `${card.title}. ${card.body}` : errorMessage
-
-    // A turn that errors out has also ended — drop any open blocking prompt
-    // for this session so an approval/sudo/secret overlay can't linger past
-    // the failed turn (same intent as the message.complete clear).
-    if (sessionId) {
-      clearAllPrompts(sessionId)
-      clearSettledClarifyRequest(sessionId)
-      clearActiveSessionTodos(sessionId)
-      reconcileSessionCompacting(sessionId, 'terminal')
-      compactedTurnRef.current.delete(sessionId)
-    }
-
-    if (isActiveEvent) {
-      setPetActivity({ reasoning: false, toolRunning: false })
-      flashPetActivity({ error: true })
-    }
-
-    dispatchNativeNotification({
-      body: toastMessage,
-      kind: 'turnError',
-      sessionId,
-      title: translateNow('notifications.native.turnErrorTitle')
-    })
-
-    if (looksLikeProviderSetup) {
-      requestDesktopOnboarding(errorMessage)
-    } else {
-      toastGatewayError(errorMessage, surface, toastMessage, isActiveEvent)
-    }
-
-    if (sessionId) {
-      flushQueuedDeltas(sessionId)
-      failAssistantMessage(sessionId, errorMessage, occurredAt, surface)
-    }
-
-    if (isActiveEvent) {
-      setTurnStartedAt(null)
-    }
+    handleGatewayError(ctx)
 
     return true
   }

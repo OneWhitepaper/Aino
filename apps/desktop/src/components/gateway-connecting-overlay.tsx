@@ -4,8 +4,8 @@ import { useEffect, useRef, useState } from 'react'
 
 import { BrandMark } from '@/components/brand-mark'
 import { Button } from '@/components/ui/button'
-import { DecodeText } from '@/components/ui/decode-text'
 import { Loader } from '@/components/ui/loader'
+import { Progress } from '@/components/ui/progress'
 import { prefersReducedMotion } from '@/hooks/use-media-query'
 import { useI18n } from '@/i18n'
 import { cn } from '@/lib/utils'
@@ -15,10 +15,6 @@ import { $decideExit, $introStartExit, $introView } from '@/store/onboarding-int
 import { $onboardingDecided } from '@/store/onboarding-presence'
 import { $gatewayState } from '@/store/session'
 import { isHudWindow, isMainWindow } from '@/store/windows'
-
-// Decode mechanics live in the shared <DecodeText> primitive
-// (components/ui/decode-text.tsx). "CONN" stays legible via prefix={4}.
-const TEXT = 'CONNECTING'
 
 // Exit choreography (ms): text fades down + out, hold, then the overlay fades.
 const TEXT_OUT_MS = 360
@@ -61,7 +57,7 @@ function isInitialConnect(
 }
 
 interface ConnectingOverlayViewProps {
-  decoding: boolean
+  boot: DesktopBootState
   starting?: boolean
   onExit: (() => void) | null
   phase: Phase
@@ -72,7 +68,7 @@ function SlowSetupStart({ onExit }: { onExit: () => void }) {
   const { t } = useI18n()
 
   return (
-    <div className="grid max-w-xs justify-items-center gap-3 text-center" role="status">
+    <div className="grid max-w-xs justify-items-center gap-3 text-center">
       <div className="text-sm font-medium text-foreground">{t.onboarding.setupSlowTitle}</div>
       <div className="text-xs text-muted-foreground">{t.onboarding.setupSlowBody}</div>
       <Button onClick={onExit} size="sm" type="button" variant="secondary">
@@ -82,7 +78,7 @@ function SlowSetupStart({ onExit }: { onExit: () => void }) {
   )
 }
 
-function ConnectingOverlayView({ decoding, onExit, phase, starting = false }: ConnectingOverlayViewProps) {
+function ConnectingOverlayView({ boot, onExit, phase, starting = false }: ConnectingOverlayViewProps) {
   const { t } = useI18n()
   const reduce = prefersReducedMotion()
   const leaving = phase !== 'live'
@@ -91,34 +87,45 @@ function ConnectingOverlayView({ decoding, onExit, phase, starting = false }: Co
   return (
     <div
       className={cn(
-        'fixed inset-0 z-(--z-connecting) grid place-items-center bg-(--ui-chat-surface-background) transition-opacity duration-500 ease-out',
+        'fixed inset-0 z-(--z-connecting) grid place-items-center bg-(--ui-chat-surface-background) p-6 transition-opacity duration-500 ease-out motion-reduce:transition-none',
         overlayHidden ? 'pointer-events-none opacity-0' : 'opacity-100'
       )}
       // Masks the whole app while booting — must stay filled under window
       // glass or the shell shows through. Contract: `[data-glass-opaque]`
       // in styles.css.
       data-glass-opaque=""
+      data-slot="gateway-connecting-overlay"
     >
-      {onExit ? (
-        <SlowSetupStart onExit={onExit} />
-      ) : starting ? (
-        <div className="grid justify-items-center gap-4" role="status">
-          {reduce ? <BrandMark className="size-16" /> : <Loader className="size-20" label={t.onboarding.starting} />}
-          <span className="text-sm text-muted-foreground">{t.onboarding.starting}</span>
-        </div>
-      ) : (
-        <DecodeText
-          active={decoding}
-          className={cn(
-            'pl-[0.4em] text-(--theme-primary) transition duration-300 ease-out',
-            leaving ? 'translate-y-2 opacity-0 saturate-0' : 'translate-y-0 opacity-100 saturate-100'
-          )}
-          cursor
-          loop
-          prefix={4}
-          text={TEXT}
-        />
-      )}
+      <section
+        aria-busy={!leaving}
+        aria-label={onExit ? t.onboarding.setupSlowTitle : t.onboarding.starting}
+        className={cn(
+          'grid w-full max-w-sm justify-items-center gap-6 px-4 py-8 text-center transition-[opacity,transform] duration-300 ease-out motion-reduce:transition-none',
+          leaving ? 'translate-y-2 opacity-0' : 'translate-y-0 opacity-100'
+        )}
+        role="status"
+      >
+        <BrandMark className="size-16" />
+        {onExit ? (
+          <SlowSetupStart onExit={onExit} />
+        ) : (
+          <div className="grid w-full justify-items-center gap-4">
+            <h1 className="text-xl font-semibold tracking-tight text-foreground">{t.onboarding.starting}</h1>
+            <div className="flex min-h-6 items-center justify-center gap-2 text-xs leading-5 text-muted-foreground">
+              {!reduce && <Loader aria-hidden="true" className="size-5 shrink-0" />}
+              <p>{starting ? t.onboarding.setupSlowBody : boot.message || t.boot.steps.connectingGateway}</p>
+            </div>
+            {!starting && (
+              <Progress
+                aria-label={boot.message || t.boot.steps.connectingGateway}
+                className="max-w-48"
+                size="sm"
+                value={boot.progress / 100}
+              />
+            )}
+          </div>
+        )}
+      </section>
     </div>
   )
 }
@@ -260,6 +267,6 @@ export function GatewayConnectingOverlay() {
   }
 
   return (
-    <ConnectingOverlayView decoding={phase === 'live' && (previewing || connecting)} onExit={onExit} phase={phase} starting={introStarting} />
+    <ConnectingOverlayView boot={boot} onExit={onExit} phase={phase} starting={introStarting} />
   )
 }

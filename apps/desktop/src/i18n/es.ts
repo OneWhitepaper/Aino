@@ -5050,7 +5050,7 @@ memoryLayers: esMemoryLayers
       branchNewChat: 'Ramificar en chat nuevo',
       react: 'Reaccionar',
       dismissError: 'Descartar error',
-      responseStopped: 'Respuesta detenida',
+      responseStopped: 'En pausa. El progreso actual se conserva.',
       ...esErrorLayers,
       errorCodes: {
         ...esErrorCodes,
@@ -5598,7 +5598,7 @@ memoryLayers: esMemoryLayers
     sessionUnavailable: 'Sesión no disponible',
     createSessionFailed: 'No se pudo crear una sesión nueva',
     promptFailed: 'Falló el prompt',
-    providerCredentialRequired: 'Añade una credencial de proveedor antes de enviar tu primer mensaje.',
+    providerCredentialRequired: 'Revisa el modelo y sus credenciales en Ajustes → Modelos para continuar.',
     emptySlashCommand: 'comando slash vacío',
     desktopCommands: 'Comandos de escritorio',
     skillCommandsAvailable: count => `${count} comandos de skill disponibles.`,

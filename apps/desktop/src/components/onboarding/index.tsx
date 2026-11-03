@@ -375,16 +375,13 @@ export function DesktopOnboardingOverlay({
     }
   }, [ctx, onboarding.flow.status, onboarding.manual, onboarding.providers])
 
-  if (!onboarding.manual && onboardingSurfaceActive()) {
+  // Provider configuration belongs to Settings. Startup probes and credential errors
+  // leave the workspace available; explicit authorization and the free-tier notice keep their flows.
+  if (!onboarding.manual && !onboarding.freeTierReady) {
     return null
   }
 
-  // Mount from frame 1 so we replace the boot overlay seamlessly. The
-  // configured field stays null until the runtime check resolves; only then
-  // do we know whether to dismiss (true) or surface the picker (false).
-  // EXCEPTION: manual mode (user opened the selector from a working app to
-  // add/switch a provider) shows the overlay regardless of configured state.
-  if (onboarding.configured === true && !onboarding.manual && !onboarding.freeTierReady) {
+  if (!onboarding.manual && onboardingSurfaceActive()) {
     return null
   }
 
@@ -393,18 +390,6 @@ export function DesktopOnboardingOverlay({
     !onboarding.manual &&
     (onboarding.flow.status === 'idle' || onboarding.flow.status === 'success')
   ) {
-    return null
-  }
-
-  // The user chose "I'll choose a provider later" on first run. Stay out of the
-  // way on every subsequent launch — they re-enter via Settings → Providers
-  // (manual mode), which sets manual=true and bypasses this gate.
-  // `requested` also outranks the skip: it is only ever set when the user hit a
-  // REAL credential wall (the submit-time deferred warning, a stream that
-  // reported a provider setup error), never by a passive readiness round. Now
-  // that the skip is durable, without this a genuinely broken provider could
-  // leave the user with a prompt that silently refuses to send and no picker.
-  if (onboarding.firstRunSkipped && !onboarding.requested && !onboarding.manual && !onboarding.freeTierReady) {
     return null
   }
 

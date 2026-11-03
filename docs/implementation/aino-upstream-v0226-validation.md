@@ -248,6 +248,43 @@ Image verification runs off the canonical owner event loop.
 - The original uploaded image is retained; this fix does not replace it with an
   image reconstruction or modify its pixels. Release remains on hold.
 
+## Desktop interaction and status follow-up
+
+- Summary output links use the existing preview store's explicit URL matching mode:
+  different outputs retain separate tabs and the same live URL focuses its tab.
+  Matching reads the current browser page, preserving page navigation and state.
+  Ordinary browser navigation, source ownership and file/artifact identity remain
+  on their existing paths.
+- Paused replies use the shared transcript scaffold, localized copy and a quiet
+  pause icon aligned with the message column. The composer keeps the existing
+  continuation action in a flat status row; stop/continue and saved progress are
+  unchanged.
+- Cold startup shows the Aino mark, current boot phase and real progress, with
+  reduced-motion support. Existing soft switches, reconnects, recovery and slow
+  startup exits retain their lifecycle.
+- Automatic legacy provider cards no longer cover the workspace. Credential
+  failures offer the existing Settings → Model destination and retain the draft.
+  The explicit action restores the failing connection/profile before selecting
+  the actual settings scope; failed or superseded switches do not open another
+  owner's settings. Background credential errors do not capture foreground
+  ownership. Manual OAuth/API-key authorization, account sign-in and free-tier
+  notices retain their existing flows.
+- Changes stay on the integration branch. No account migration, model default,
+  prompt/history rewrite or release promotion accompanies these UI fixes.
+- Behavior regressions were exercised red before the fixes. Final related UI
+  suites pass **222 cases in 27 files**; preview/summary suites pass **90 cases in
+  nine files**. Source/Electron/E2E typechecks, changed-file ESLint and the renderer
+  build pass. Root static checks pass all **14 checks** with zero code-health
+  findings after extracting gateway error handling and removing unreachable old
+  overlay gates.
+- Isolated Electron acceptance passes the three presentation flows (summary tabs,
+  pause/continue and Settings entry) in **36 seconds**. The custom endpoint core
+  flow also verifies real discovery, saved assignment, first/second turn, reload,
+  transcript integrity and one live backend socket. These use synthetic
+  development accounts and local mock providers. Connection-stage rendering was
+  inspected at desktop and narrow widths in light/dark; it follows real progress
+  and unmounts on connection. No paid inference is used.
+
 ## Validation boundary and release hold
 
 - This verifies source integration on macOS ARM64, not a newly signed/notarized

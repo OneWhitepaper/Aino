@@ -5,6 +5,7 @@ import type { SubmitTextOptions } from '@/app/session/hooks/use-prompt-actions/u
 import { Button } from '@/components/ui/button'
 import type { HermesGateway } from '@/hermes'
 import { useI18n } from '@/i18n'
+import { Loader2, Pause } from '@/lib/icons'
 import { notifyError } from '@/store/notifications'
 import { $sessionStates } from '@/store/session-states'
 import { $taskPauses, claimTaskContinuation, clearTaskPause, releaseTaskContinuation } from '@/store/task-pause'
@@ -63,19 +64,24 @@ export function TaskPauseNotice({ gateway, sessionId, profile, disabled, onSubmi
 
   return (
     <div
-      className="flex items-center justify-between gap-2 rounded-lg border border-border/50 bg-accent/18 px-2 py-1"
+      className="flex min-w-0 items-center gap-2 px-1 py-1.5"
       data-slot="task-pause-notice"
       role="status"
     >
-      <span className="text-xs text-muted-foreground">
+      {pause.phase === 'stopping' ? (
+        <Loader2 aria-hidden="true" className="size-3.5 shrink-0 animate-spin text-muted-foreground" />
+      ) : (
+        <Pause aria-hidden="true" className="size-3.5 shrink-0 text-muted-foreground" />
+      )}
+      <span className="min-w-0 flex-1 text-xs leading-5 text-muted-foreground">
         {pause.phase === 'stopping' ? t.composer.taskPausing : t.composer.taskPaused}
       </span>
       <Button
-        className="h-7 rounded-md px-2 text-xs"
         disabled={disabled || pause.phase !== 'paused'}
         onClick={() => {
           void continueTask()
         }}
+        size="xs"
         type="button"
         variant="ghost"
       >

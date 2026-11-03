@@ -4072,7 +4072,7 @@ const ruBaseOverrides = {
     sessionUnavailable: 'Сеанс недоступен',
     createSessionFailed: 'Не удалось создать новый сеанс',
     promptFailed: 'Промпт не удался',
-    providerCredentialRequired: 'Добавьте учётные данные провайдера перед отправкой первого сообщения.',
+    providerCredentialRequired: 'Чтобы продолжить, проверьте модель и её учётные данные в разделе «Настройки → Модели».',
     emptySlashCommand: 'пустая слэш-команда',
     desktopCommands: 'Команды desktop',
     skillCommandsAvailable: count =>

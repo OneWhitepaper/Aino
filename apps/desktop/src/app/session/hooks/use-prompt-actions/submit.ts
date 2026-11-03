@@ -445,8 +445,8 @@ export function useSubmitPrompt(deps: SubmitPromptDeps) {
       // The gateway already told us this profile has no usable provider (a
       // credential warning arrived with the session's runtime info, deferred
       // instead of popping onboarding on the mere profile switch). The user
-      // is now actually trying to chat — THIS is the moment to open
-      // onboarding, before a send the gateway said will fail. The draft
+      // is now actually trying to chat — offer model settings before a send
+      // the gateway said will fail. The draft
       // stays in the composer; once a provider is configured they just hit
       // Enter again.
       if (!options?.fromQueue) {
