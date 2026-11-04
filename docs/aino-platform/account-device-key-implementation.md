@@ -45,4 +45,4 @@
 
 ## Delivery and rollout boundary
 
-The local implementation is complete when the validation record is green; this checklist covers source and isolated tests, not production rollout. See `account-device-key-validation.md` for evidence and limits. Migration 253, API capability activation, selected-account/device rollout, multi-instance revocation timing, production load measurements and a user-approved Desktop release remain rollout work. Remote parent-device delegation remains phase 3.
+The local implementation is complete when the validation record is green; this checklist covers source and isolated tests, not production rollout. See `account-device-key-validation.md` for evidence and limits. The isolated environment has applied migration 253 and verified two-instance revocation, bounded concurrent load and settlement de-duplication; see `account-device-key-preflight.md`. Production migration, API capability activation, selected-account/device rollout, production load measurements and a user-approved Desktop release remain rollout work. Remote parent-device delegation remains phase 3.
