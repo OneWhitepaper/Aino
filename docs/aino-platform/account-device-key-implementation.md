@@ -34,7 +34,7 @@
 - [x] Extend existing auth/storage/runtime-binding modules with account/site/device-scoped Key persistence, singleflight ensure/rotation and capability negotiation; keep management login and model identity distinct.
 - [x] Preserve slots/revisions and local binding guards, remove timers/lease calls only on permanent local path, reuse Key across text/images/models/windows. Use existing catalog metadata per selection.
 - [x] Retain leases for remote/older gateways, never silently downgrade after a new-path failure. Clear local secrets on explicit logout/account switch, honor remember-login persistence and expose explicit reauthorization after revocation.
-- [x] Verify warm 100-message path has zero repeated credential requests; rotation/rebind, stale account replies, remember-login, remote protection and renderer secrecy.
+- [x] Verify 100 repeated controller binding calls and trusted gateway status checks issue no additional device-key POST or lease requests after the initial ensure; cover rotation/rebind, stale account replies, remember-login, remote protection and renderer secrecy. These are binding behavior tests, not 100 native model turns.
 
 ## Task 4 — Gateway contract and integration
 
