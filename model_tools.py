@@ -571,8 +571,10 @@ def _resolve_active_context_length() -> int:
             # Credential resolution failing (offline, no keys) degrades to a
             # provider+base_url-only lookup so static fallbacks still apply.
             try:
+                from hermes_cli.anon_challenge import background_caller
                 from hermes_cli.runtime_provider import resolve_runtime_provider
-                rt = resolve_runtime_provider(requested=provider, target_model=model_id) or {}
+                with background_caller():
+                    rt = resolve_runtime_provider(requested=provider, target_model=model_id) or {}
                 base_url = str(rt.get("base_url") or base_url or "").strip()
                 api_key = str(rt.get("api_key") or "").strip()
             except Exception as rt_exc:
