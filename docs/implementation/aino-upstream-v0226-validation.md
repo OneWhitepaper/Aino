@@ -336,6 +336,34 @@ submission recovery. Its subscription reads only that owner's pause state.
   user's account, model preferences and API checkout are untouched. No release
   or version change is part of this follow-up.
 
+## macOS close and reopen presentation
+
+- Reproduced the red-close/Dock-reopen flicker in real Electron: a signed-in
+  window painted the login form and resized `1180 → 340 → 1180` before returning
+  to its conversation. The native close/recreate policy and saved bounds were
+  correct; the new renderer treated unresolved identity as signed-out.
+- AccountFlow now uses the shared PageLoader during initial identity recovery,
+  without requesting compact login mode. Confirmed sign-out, reauthentication
+  and initial failures keep their existing login/retry paths. A later login
+  attempt keeps its form and second-factor inputs mounted.
+- Native status publishes before the separate public login-options network
+  request completes. Operation and revision fences prevent late refreshes or
+  options responses from undoing a newer login, sign-out or reauthentication.
+  Workspace reveal still waits for native bounds, including a changed action
+  owner that already has a cached signed-in state.
+- Regression tests were proven red before the fix. **53 renderer tests in seven
+  files** and **20 Electron unit tests in three files** pass, covering initial
+  restoration, offline identity, failed recovery/retry, input retention, owner
+  changes and late async results. Typechecks, changed-file lint and build pass.
+- The macOS Electron acceptance closes and reopens the workspace three times:
+  each observes **zero login-form mutations**, width samples only `[1180]`,
+  the same conversation route and its saved response, with no renderer errors.
+  The fixture waits for its initial turn to finish and its session row to become
+  visible before testing reopen. Browser plugin is unavailable; validation uses
+  the repository's Electron Playwright harness and disposable local account.
+- No native close/tray/background-work semantics, credentials, API checkout or
+  release version changed. The integration branch remains on release hold.
+
 ## Validation boundary and release hold
 
 - This verifies source integration on macOS ARM64, not a newly signed/notarized

@@ -451,6 +451,13 @@ uses the existing dialog; sign-out reuses the shared confirmation and pending
 state. Wallet display may round its decimal string to two places, with the full
 authoritative amount available in the adjacent disclosure. Account changes
 retire local editors and existing billing scope boundaries remain authoritative.
+Initial account restoration is distinct from signed-out login. A newly created
+window keeps its workspace geometry and shared PageLoader until native identity
+is known; only confirmed sign-out or authentication recovery enters compact
+login mode. Restoring a known account does not wait for public login options to
+finish their network request. The workspace becomes visible after native bounds
+settle, including when its account action owner changes. Later sign-in loading
+keeps the existing form and second-factor input mounted.
 The ledger opens on orders; usage filters can be hidden without discarding
 their draft or applied query. Narrow containers stack the overview and turn
 ledger rows into readable records, retaining timestamps, currencies and actions.

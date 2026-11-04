@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 
 import type { PlatformAccountSnapshot, PlatformPublicCapabilities } from '../../shared/platform-contract'
+import { deferred } from '../test/deferred'
 
 import { type AccountAdapter, createAccountActions } from './account'
 
@@ -49,6 +50,40 @@ function adapter(overrides: Partial<AccountAdapter> = {}): AccountAdapter {
 }
 
 describe('account actions', () => {
+  it.each(['signed_in', 'offline'] as const)(
+    'restores a known %s identity before login options finish loading',
+    async phase => {
+      const options = deferred<PlatformPublicCapabilities>()
+
+      const snapshot: PlatformAccountSnapshot = {
+        ...signedOut,
+        phase,
+        account: { id: 'restored', phone_masked: '', email: '', display_name: 'Restored' }
+      }
+
+      const actions = createAccountActions(
+        adapter({
+          status: async () => snapshot,
+          capabilities: () => options.promise
+        })
+      )
+
+      const pending = actions.refresh()
+
+      await vi.waitFor(() =>
+        expect(actions.state.get()).toMatchObject({
+          authenticated: true,
+          account: { id: 'restored' },
+          loading: true,
+          capabilities: null
+        })
+      )
+      options.resolve(capabilities)
+      await pending
+      expect(actions.state.get().capabilities).toEqual(capabilities)
+    }
+  )
+
   it('loads status and capabilities together and exposes the authenticated account', async () => {
     const snapshot: PlatformAccountSnapshot = {
       ...signedOut,
@@ -70,6 +105,41 @@ describe('account actions', () => {
       error: null
     })
   })
+
+  it.each([
+    { phase: 'signed_out', failOptions: false },
+    { phase: 'reauth_required', failOptions: true }
+  ] as const)(
+    'keeps a native $phase change authoritative while login options settle',
+    async ({ phase, failOptions }) => {
+      const options = deferred<PlatformPublicCapabilities>()
+
+      const source = adapter({
+        status: async () => ({
+          ...signedOut,
+          phase: 'signed_in',
+          account: { id: 'restored', phone_masked: '', email: '', display_name: 'Restored' }
+        }),
+        capabilities: () => options.promise
+      })
+
+      const actions = createAccountActions(source)
+      const pending = actions.refresh()
+
+      await vi.waitFor(() => expect(actions.state.get().authenticated).toBe(true))
+      vi.mocked(source.onChanged).mock.calls[0][0]({ ...signedOut, phase, revision: 2 })
+
+      if (failOptions) {
+        options.reject(Object.assign(new Error('offline'), { code: 'network_unavailable' }))
+      } else {
+        options.resolve(capabilities)
+      }
+
+      await pending
+      expect(actions.state.get()).toMatchObject({ authenticated: false, phase, account: null, loading: false })
+      expect(actions.snapshot.get()?.revision).toBe(2)
+    }
+  )
 
   it('surfaces safe structured errors and clears them after a successful refresh', async () => {
     const error = Object.assign(new Error('SMS_RATE_LIMITED'), { code: 'SMS_RATE_LIMITED', retry_after: 44 })
@@ -104,6 +174,33 @@ describe('account actions', () => {
     await pending
 
     expect(actions.state.get().account?.id).toBe('current')
+  })
+
+  it('ignores an older refresh even when a legacy adapter assigns its revision after the newer login', async () => {
+    const status = deferred<PlatformAccountSnapshot>()
+
+    const current: PlatformAccountSnapshot = {
+      ...signedOut,
+      revision: 2,
+      phase: 'signed_in',
+      account: { id: 'current', phone_masked: '', email: '', display_name: 'Current' }
+    }
+
+    const actions = createAccountActions(
+      adapter({
+        kind: 'legacy-development',
+        status: () => status.promise,
+        loginExisting: async () => ({ status: 'signed_in', snapshot: current })
+      })
+    )
+
+    const pending = actions.refresh()
+    await actions.loginExisting({ email: 'test@example.com', password: 'secret', remember: false })
+    status.resolve({ ...signedOut, revision: 3 })
+    await pending
+
+    expect(actions.state.get().account?.id).toBe('current')
+    expect(actions.state.get().authenticated).toBe(true)
   })
 
   it('publishes authoritative account changes received from another native window', () => {

@@ -3,9 +3,10 @@ import { Activity, type ReactNode, useEffect, useLayoutEffect, useMemo, useRef, 
 import { useNavigate } from 'react-router'
 
 import { createLegacyDevelopmentAccountActions, platformAccountActions } from '@/api/platform'
+import { PageLoader } from '@/components/page-loader'
 import { Button } from '@/components/ui/button'
 import { useI18n } from '@/i18n'
-import type { AccountActions } from '@/store/account'
+import type { AccountActions, AccountState } from '@/store/account'
 import { $activeConnectionId } from '@/store/connections'
 import { requestGatewayForAgent } from '@/store/gateway'
 import { $gatewayState } from '@/store/session'
@@ -19,6 +20,21 @@ export interface AccountFlowProps {
   refreshEnabled?: boolean
 }
 
+function useAccountRestoration(actions: AccountActions, state: AccountState) {
+  const [resolvedActions, setResolvedActions] = useState<AccountActions | null>(null)
+  // Loading also occurs during sign-in. Once this flow has resolved identity,
+  // keep its form mounted so authentication and second-factor drafts survive.
+  const restoringAccount = resolvedActions !== actions && state.phase === 'loading' && !state.error
+
+  useLayoutEffect(() => {
+    if (!restoringAccount) {
+      setResolvedActions(actions)
+    }
+  }, [actions, restoringAccount])
+
+  return restoringAccount
+}
+
 export function AccountFlow({ actions, children, refreshEnabled = true }: AccountFlowProps) {
   const state = useStore(actions.state)
   const { t } = useI18n()
@@ -28,6 +44,7 @@ export function AccountFlow({ actions, children, refreshEnabled = true }: Accoun
   const [windowError, setWindowError] = useState(false)
   const [workspaceReady, setWorkspaceReady] = useState(false)
   const [workspaceMounted, setWorkspaceMounted] = useState(false)
+  const restoringAccount = useAccountRestoration(actions, state)
 
   useEffect(() => {
     if (refreshEnabled) {
@@ -39,9 +56,16 @@ export function AccountFlow({ actions, children, refreshEnabled = true }: Accoun
     const setMode = window.hermesDesktop?.setAccountWindowMode
     let active = true
 
+    if (restoringAccount) {
+      setWorkspaceReady(false)
+
+      return
+    }
+
     if (state.authenticated) {
       // Mount the workspace only after native bounds are restored. Otherwise
       // its responsive layout observes the login width and collapses panes.
+      setWorkspaceReady(false)
       void Promise.resolve(setMode?.('workspace'))
         .then(() => {
           if (active) {
@@ -86,7 +110,7 @@ export function AccountFlow({ actions, children, refreshEnabled = true }: Accoun
       active = false
       observer.disconnect()
     }
-  }, [state.authenticated])
+  }, [actions, restoringAccount, state.authenticated])
 
   return (
     <AccountContext.Provider value={actions}>
@@ -101,9 +125,12 @@ export function AccountFlow({ actions, children, refreshEnabled = true }: Accoun
           </div>
         </Activity>
       )}
-      {state.authenticated && workspaceReady ? null : state.authenticated ? (
-        <main className="grid h-screen place-items-center bg-(--ui-chat-surface-background)">
-          <p role="status">{windowError ? copy.errors.unavailable : copy.loadingStatus}</p>
+      {state.authenticated && workspaceReady ? null : state.authenticated || restoringAccount ? (
+        <main
+          className="grid h-screen place-items-center bg-(--ui-chat-surface-background)"
+          data-account-restoring-page=""
+        >
+          {windowError ? <p role="status">{copy.errors.unavailable}</p> : <PageLoader label={copy.loadingStatus} />}
         </main>
       ) : (
         <main
