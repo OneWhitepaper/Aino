@@ -79,7 +79,7 @@ jobs:
           # absent from the target branch; once main contains it this exception
           # expires and the normal admission rule applies again.
           UPSTREAM=f0d94882e89ab8d4098b5bb2f166adfb9ee0a0ab
-          CATALOG_TREE=8720bd9408fa59385d42e208cd7abf26d6bd0e60
+          CATALOG_TREE=095427b35a2a32a8df6f479f91661ec2b6f0d03e
           IMPORTING_UPSTREAM=false
           if git merge-base --is-ancestor "$UPSTREAM" HEAD^2 \
               && ! git merge-base --is-ancestor "$UPSTREAM" HEAD^1; then
