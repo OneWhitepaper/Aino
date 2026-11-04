@@ -1,6 +1,8 @@
 import { requestGatewayForAgent } from '@/store/gateway'
+import { platformModelCatalog } from '@/store/platform-models'
 import { isSessionGoneForBackgroundPolling } from '@/store/session-gone-latch'
 
+import { hasPlatformModelIdentity } from '../../shared/platform-contract'
 import type {
   BindPlatformModelInput,
   BindPlatformModelResult,
@@ -8,12 +10,15 @@ import type {
 } from '../../shared/platform-contract'
 
 const SAFE_PLATFORM_BINDING_CODES = new Set([
+  'DESKTOP_DEVICE_KEY_REVOKED',
+  'DESKTOP_DEVICE_KEY_VERSION_CONFLICT',
   'binding_cancelled',
   'insufficient_balance',
   'managed_auth_unavailable',
   'managed_balance_unavailable',
   'managed_credential_expired',
   'managed_credential_revoked',
+  'managed_credential_rejected',
   'model_unavailable',
   'not_authenticated',
   'platform_account_changed',
@@ -21,6 +26,21 @@ const SAFE_PLATFORM_BINDING_CODES = new Set([
   'stale_account_revision',
   'unsupported_gateway'
 ])
+
+export function reportPlatformCredentialRejection(code: string | undefined, ownerUserId?: string, credentialVersion?: number) {
+  if (
+    !code ||
+    !['managed_credential_revoked', 'managed_credential_rejected', 'DESKTOP_DEVICE_KEY_REVOKED'].includes(code)
+  ) {
+    return
+  }
+
+  const account = platformModelCatalog().account.get()
+
+  if (account?.account && account.model_identity_ready && ownerUserId === account.account.id && credentialVersion !== undefined && credentialVersion === account.model_identity_version) {
+    void window.hermesDesktop?.platformModels?.credentialRejected?.(account.revision, credentialVersion).catch(() => undefined)
+  }
+}
 
 function safeBindingCode(error: unknown): string | null {
   if (!error || typeof error !== 'object') {
@@ -44,13 +64,23 @@ function bindingFailure(error: unknown): BindPlatformModelResult {
   return { ok: false, error: { code: safeBindingCode(error) ?? 'gateway_binding_failed' } }
 }
 
+async function tryNativeBinding(bridge: NonNullable<Window['hermesDesktop']>['platformModels'], input: BindPlatformModelInput): Promise<BindPlatformModelResult | null> {
+  if (!bridge.nativeDeviceKeys) { return null }
+
+  try {
+    const result = await bridge.bind({ ...input, session_ticket: '' })
+
+    return result.ok || result.error.code !== 'binding_ticket_required' ? result : null
+  } catch (error) { return bindingFailure(error) }
+}
+
 /** Only the chat's owning socket can delegate a live session to Electron main. */
 export async function bindPlatformModel(
   input: BindPlatformModelInput,
   account: PlatformAccountSnapshot,
   request?: <T>(method: string, params?: Record<string, unknown>, timeoutMs?: number) => Promise<T>
 ): Promise<BindPlatformModelResult> {
-  if (account.phase !== 'signed_in' || !account.account || account.revision !== input.expected_account_revision) {
+  if (!hasPlatformModelIdentity(account) || account.revision !== input.expected_account_revision) {
     return { ok: false, error: { code: 'stale_account_revision' } }
   }
 
@@ -71,6 +101,10 @@ export async function bindPlatformModel(
   if (owner.user_id !== account.account.id || !owner.platform_origin) {
     return { ok: false, error: { code: 'platform_account_changed' } }
   }
+
+  const reused = await tryNativeBinding(desktop.platformModels, input)
+
+  if (reused) { return reused }
 
   const requestOwner =
     request ??

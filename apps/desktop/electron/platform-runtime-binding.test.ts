@@ -57,11 +57,15 @@ async function rig(
     allow?: boolean
     legacyGateway?: boolean
     imageGateway?: boolean
+    deviceGateway?: boolean
+    deviceRevoked?: boolean
     renewalFailures?: Array<{ status: number; code: string; retryAfter?: number }>
   } = {}
 ) {
   const received: Array<Record<string, unknown>> = []
   const credentials: Record<string, unknown>[] = []
+  const deviceRequests: Record<string, unknown>[] = []
+  let catalogRequests = 0
 
   let releaseLease = () => {}
 
@@ -86,6 +90,32 @@ async function rig(
   const revisions = new Map<string, number>()
   let valid = true
   let secret = 'fixture-inference-secret'
+
+  async function deviceReply(req: http.IncomingMessage, res: http.ServerResponse, send: (value: unknown) => void) {
+      let body = ''
+
+      for await (const chunk of req) {
+        body += chunk
+      }
+
+      deviceRequests.push(JSON.parse(body))
+
+      if (options.deviceRevoked) {
+        res.statusCode = 403
+        res.end(JSON.stringify({ code: 'DESKTOP_DEVICE_KEY_REVOKED', message: 'revoked' }))
+
+        return
+      }
+
+      return send({
+        key_id: 'device-key',
+        device_id: 'fixture-device',
+        version: 1,
+        status: 'active',
+        expires_at: null,
+        api_key: secret
+      })
+  }
 
   const server = http.createServer(async (req, res) => {
     const send = (data: unknown) => {
@@ -124,8 +154,29 @@ async function rig(
     }
 
     if (req.url === '/api/v1/desktop/models?include_images=true') {
-      return send([model])
+      catalogRequests++
+
+      return send([
+        model,
+        ...(options.deviceGateway && options.imageGateway
+          ? [
+              {
+                ...model,
+                id: 'fixture-image',
+                purpose: 'image',
+                api_mode: 'images_generations',
+                capabilities: { tools: false, vision: false, reasoning: false, image_generation: true }
+              }
+            ]
+          : [])
+      ])
     }
+
+    if (req.url === '/api/v1/desktop/bootstrap') {
+      return send({ capabilities: { managed_device_key: 1 } })
+    }
+
+    if (req.url === '/api/v1/desktop/device-keys') { return deviceReply(req, res, send) }
 
     if (req.url === '/api/v1/desktop/credentials') {
       let body = ''
@@ -227,6 +278,7 @@ async function rig(
             managed_model_binding: 1,
             binding_revision: claims,
             ...(options.imageGateway ? { managed_image_binding: 1 } : {}),
+            ...(options.deviceGateway ? { managed_device_key: 1 } : {}),
             ...(!options.legacyGateway ? { managed_model_context_window: true } : {})
           })
         } else if (req.method === 'session.bind_managed_model' || req.method === 'session.renew_managed_model') {
@@ -247,6 +299,9 @@ async function rig(
           }
 
           reply({ cleared: true })
+        } else if (req.method === 'session.managed_model_status') {
+          const active = purposeBindings.get(purpose)
+          reply({ reusable: active?.binding_revision === p.binding_revision && active?.credential_version === p.credential_version && active?.model_id === p.model_id })
         } else {
           reply({})
         }
@@ -288,6 +343,7 @@ async function rig(
   expect(await auth.initialize()).toMatchObject({ phase: 'signed_in' })
 
   const controller = createPlatformRuntimeBindingController({
+    nativeDeviceKeys: true,
     auth,
     origin,
     deviceId: () => 'fixture-device',
@@ -324,6 +380,8 @@ async function rig(
     window,
     input,
     credentials,
+    deviceRequests,
+    catalogRequests: () => catalogRequests,
     received,
     leaseReady,
     logoutReady,
@@ -337,6 +395,87 @@ async function rig(
     secret
   }
 }
+
+it('reuses one device key across 100 warm calls and windows without a lease or renewal', async () => {
+  const f = await rig({ deviceGateway: true })
+
+  for (let i = 0; i < 100; i++) {
+    const result = await f.controller.bind(
+      { ...f.input, expected_account_revision: f.auth.snapshot().revision },
+      i % 2 ? f.window : { isDestroyed: () => false }
+    )
+
+    expect(result).toMatchObject({ ok: true, expires_at: null })
+    expect(JSON.stringify(result)).not.toContain(f.secret)
+  }
+
+  expect(f.deviceRequests).toEqual([{ device_id: 'fixture-device' }])
+  expect(f.catalogRequests()).toBe(1)
+  expect(f.credentials).toHaveLength(0)
+  expect(f.binding()).toMatchObject({ credential_type: 'device', expires_at: null, api_key: f.secret })
+  vi.spyOn(Date, 'now').mockReturnValue(Date.now() + 30_001)
+  expect((await f.controller.bind({ ...f.input, expected_account_revision: f.auth.snapshot().revision }, { isDestroyed: () => false })).ok).toBe(true)
+  expect(f.catalogRequests()).toBe(2)
+  expect(f.deviceRequests).toHaveLength(1)
+})
+
+it('never sends a permanent key to remote gateways even when they advertise support', async () => {
+  const f = await rig({ deviceGateway: true, remote: true, allow: true })
+  expect((await f.controller.bind(f.input, f.window)).ok).toBe(true)
+  expect(f.deviceRequests).toHaveLength(0)
+  expect(f.credentials).toHaveLength(1)
+  expect(f.binding()!.expires_at).toEqual(expect.any(String))
+})
+
+it('uses the same permanent identity for images and chat with no expiry or renewal timer', async () => {
+  const f = await rig({ deviceGateway: true, imageGateway: true })
+  expect((await f.controller.bind(f.input, f.window)).ok).toBe(true)
+  const image = { ...f.input, model_id: 'fixture-image', purpose: 'image' as const }
+  expect((await f.controller.bind(image, f.window)).ok).toBe(true)
+  expect(f.purposeBinding('chat')).toMatchObject({ credential_id: 'device-key', api_key: f.secret })
+  expect(f.purposeBinding('image')).toMatchObject({
+    credential_id: 'device-key',
+    api_key: f.secret,
+    model_id: 'fixture-image'
+  })
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] })
+  await vi.advanceTimersByTimeAsync(24 * 3600_000)
+  expect(f.purposeBinding('chat')).toBeDefined()
+  expect(f.purposeBinding('image')).toBeDefined()
+  expect(f.credentials).toHaveLength(0)
+  expect(f.deviceRequests).toHaveLength(1)
+  expect(f.received.some(row => row.method === 'session.renew_managed_model')).toBe(false)
+})
+
+it('does not downgrade a revoked device identity to a lease or automatically replace it', async () => {
+  const f = await rig({ deviceGateway: true, deviceRevoked: true })
+
+  for (let i = 0; i < 2; i++) {
+    expect(await f.controller.bind(f.input, f.window)).toMatchObject({
+      ok: false,
+      error: { code: 'DESKTOP_DEVICE_KEY_REVOKED' }
+    })
+  }
+
+  expect(f.credentials).toHaveLength(0)
+  expect(f.deviceRequests).toEqual([{ device_id: 'fixture-device' }])
+})
+
+it('reuses a permanent binding only after confirming the live credential version on its socket', async () => {
+  const f = await rig({ deviceGateway: true })
+  expect((await f.controller.bind(f.input, f.window)).ok).toBe(true)
+  expect((await f.controller.bind({ ...f.input, session_ticket: '' }, f.window)).ok).toBe(true)
+  expect(f.received.filter(row => row.method === 'session.managed_model_status')).toHaveLength(1)
+  expect(f.received.filter(row => row.method === 'session.claim_managed_model')).toHaveLength(1)
+  expect(f.received.filter(row => row.method === 'session.bind_managed_model')).toHaveLength(1)
+})
+
+it('requires a fresh ticket before sending any permanent credential when no retained binding exists', async () => {
+  const f = await rig({ deviceGateway: true })
+  expect(await f.controller.bind({ ...f.input, session_ticket: '' }, f.window)).toMatchObject({ ok: false, error: { code: 'binding_ticket_required' } })
+  expect(f.deviceRequests).toHaveLength(0)
+  expect(f.credentials).toHaveLength(0)
+})
 
 it('renews on the retained controller socket without a renderer ticket and stops after clear', async () => {
   const f = await rig()
@@ -526,9 +665,15 @@ it('whitelists image purpose through existing model IPC and clears only its imag
   const handlers = new Map<string, (...args: any[]) => any>()
 
   const ipc = registerPlatformIpc({
-    ipc: { handle: (name, handler) => { handlers.set(name, handler) } }, auth: f.auth,
-    captcha: { acquire: async () => ({}) }, bindingController: f.controller,
-    fromWebContents: sender => sender === f.window.webContents ? f.window : null,
+    ipc: {
+      handle: (name, handler) => {
+        handlers.set(name, handler)
+      }
+    },
+    auth: f.auth,
+    captcha: { acquire: async () => ({}) },
+    bindingController: f.controller,
+    fromWebContents: sender => (sender === f.window.webContents ? f.window : null),
     trustedRendererUrl: f.window.webContents.mainFrame.url
   })
 

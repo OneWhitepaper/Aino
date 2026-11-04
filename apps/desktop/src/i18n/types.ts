@@ -5648,6 +5648,10 @@ tabActions: (title: string) => string
     defaultTag: string
     not_authenticated: string
     platform_account_changed: string
+    permanent: string
+    reauthorize: string
+    reauthorizeDescription: string
+    deviceRevoked: string
     bindingFailed: string
     unsupported: string
     rate: string

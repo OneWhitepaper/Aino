@@ -6,7 +6,9 @@ import logging
 
 from hermes_state_runtime import RuntimeStoreError
 from tui_gateway.managed_model_runtime import ManagedBindingError, get_registry, persisted_managed_model_metadata
-from tui_gateway.methods_managed_model import _binding, _managed_owner, _managed_purpose, _managed_text
+from tui_gateway.methods_managed_model import (
+    _binding, _managed_owner, _managed_positive_int, _managed_purpose, _managed_text,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -156,7 +158,7 @@ async def ticket(connection, ref, params):
             value = get_registry().issue(key, state, peer, owner, model_id, purpose=purpose)
         except (ManagedBindingError, ValueError, TypeError) as exc:
             raise RuntimeStoreError(str(exc)) from None
-    return {"session_ticket": value, "managed_model_binding": 1, 'managed_image_binding': 1}
+    return {"session_ticket": value, "managed_model_binding": 1, 'managed_image_binding': 1, 'managed_device_key': 1}
 
 
 async def claim(connection, ref, params):
@@ -171,7 +173,29 @@ async def claim(connection, ref, params):
         except (ManagedBindingError, ValueError, TypeError) as exc:
             raise RuntimeStoreError(str(exc)) from None
     return {"binding_revision": revision, "managed_model_binding": 1,
-            "managed_model_context_window": True, 'managed_image_binding': 1}
+            "managed_model_context_window": True, 'managed_image_binding': 1, 'managed_device_key': 1}
+
+
+async def status(connection, ref, params):
+    profile = params.get('profile')
+    if profile:
+        from pathlib import Path
+        from hermes_cli.profiles import profile_matches_home
+        if not profile_matches_home(profile, Path(connection.authority.profile_id)):
+            raise RuntimeStoreError('profile_mismatch')
+    purpose = _purpose(params)
+    live, _ = _owned(connection, ref, purpose=purpose)
+    async with live.mutation_lock:
+        _, state = _owned(connection, ref, purpose=purpose)
+        try:
+            reusable = get_registry().reusable(
+                binding_key(connection.authority, ref.session_id), state, connection.transport,
+                _managed_owner(params), _managed_text(params, 'model_id', 128),
+                _managed_positive_int(params, 'binding_revision'),
+                _managed_positive_int(params, 'credential_version'), purpose=purpose)
+        except (ManagedBindingError, ValueError, TypeError) as exc:
+            raise RuntimeStoreError(str(exc)) from None
+    return {'reusable': reusable, 'managed_device_key': 1}
 
 
 async def bind(connection, ref, params):
@@ -228,6 +252,7 @@ def handlers(connection):
     return {
         "session.managed_model_ticket": partial(ticket, connection),
         "session.claim_managed_model": partial(claim, connection),
+        'session.managed_model_status': partial(status, connection),
         "session.bind_managed_model": partial(bind, connection),
         "session.renew_managed_model": partial(renew, connection),
         "session.clear_managed_model": partial(clear, connection),

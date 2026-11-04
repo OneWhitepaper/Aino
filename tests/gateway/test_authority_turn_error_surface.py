@@ -133,3 +133,15 @@ def test_a_managed_worker_auth_failure_offers_the_agents_key_action(tmp_path, mo
 def test_a_successful_turn_completes_without_a_surface():
     complete = _complete('done', {'result': {'final_response': 'done', 'messages': []}, 'usage': {}})
     assert complete['status'] == 'complete' and 'error_surface' not in complete
+
+
+def test_device_rejection_preserves_actual_dispatch_version_through_authority_and_worker():
+    from agent.managed_worker import accept_result, result_frame
+
+    failure = {'failure_reason': 'managed_credential_rejected', 'failure_retryable': False,
+               'managed_credential_version': 7, 'error': 'Device authorization rejected'}
+    complete = _complete(*_authority_turn(Platform.LOCAL, failure))
+    assert complete['error_surface']['managed_credential_version'] == 7
+    accepted, usage = accept_result(result_frame({'final_response': '', 'failed': True, **failure}))
+    worker_complete = _complete('', {'result': {**accepted, 'local_viewer': True}, 'usage': usage})
+    assert worker_complete['error_surface']['managed_credential_version'] == 7

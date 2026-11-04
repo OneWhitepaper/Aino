@@ -3661,6 +3661,24 @@
       }
     },
     {
+      "name": "session.managed_model_status",
+      "summary": "",
+      "params": [
+        {
+          "name": "params",
+          "schema": {
+            "$ref": "#/components/schemas/ManagedModelStatusParams"
+          }
+        }
+      ],
+      "result": {
+        "name": "result",
+        "schema": {
+          "$ref": "#/components/schemas/ManagedModelStatusResult"
+        }
+      }
+    },
+    {
       "name": "session.managed_model_ticket",
       "summary": "",
       "params": [
@@ -7793,8 +7811,37 @@
             "type": "string"
           },
           "expires_at": {
-            "title": "Expires At",
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expires At"
+          },
+          "credential_type": {
+            "default": "lease",
+            "enum": [
+              "lease",
+              "device"
+            ],
+            "title": "Credential Type",
             "type": "string"
+          },
+          "credential_version": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Credential Version"
           },
           "model": {
             "title": "Model",
@@ -12234,6 +12281,11 @@
           "managed_image_binding": {
             "default": 1,
             "title": "Managed Image Binding",
+            "type": "integer"
+          },
+          "managed_device_key": {
+            "default": 1,
+            "title": "Managed Device Key",
             "type": "integer"
           }
         },
@@ -18908,6 +18960,18 @@
             "default": null,
             "title": "Model"
           },
+          "managed_credential_version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Managed Credential Version"
+          },
           "resets_at": {
             "anyOf": [
               {
@@ -19612,6 +19676,18 @@
             ],
             "default": null,
             "title": "Managed Image Binding"
+          },
+          "managed_device_key": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Managed Device Key"
           },
           "session_authority": {
             "anyOf": [
@@ -23376,6 +23452,82 @@
         "title": "ManagedCapabilities",
         "type": "object"
       },
+      "ManagedModelStatusParams": {
+        "additionalProperties": false,
+        "properties": {
+          "session_id": {
+            "title": "Session Id",
+            "type": "string"
+          },
+          "profile": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Profile"
+          },
+          "owner": {
+            "$ref": "#/components/schemas/PlatformOwner"
+          },
+          "model_id": {
+            "title": "Model Id",
+            "type": "string"
+          },
+          "purpose": {
+            "default": "chat",
+            "enum": [
+              "chat",
+              "image"
+            ],
+            "title": "Purpose",
+            "type": "string"
+          },
+          "binding_revision": {
+            "exclusiveMinimum": 0,
+            "title": "Binding Revision",
+            "type": "integer"
+          },
+          "credential_version": {
+            "exclusiveMinimum": 0,
+            "title": "Credential Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "session_id",
+          "owner",
+          "model_id",
+          "binding_revision",
+          "credential_version"
+        ],
+        "title": "ManagedModelStatusParams",
+        "type": "object"
+      },
+      "ManagedModelStatusResult": {
+        "additionalProperties": false,
+        "properties": {
+          "reusable": {
+            "title": "Reusable",
+            "type": "boolean"
+          },
+          "managed_device_key": {
+            "const": 1,
+            "default": 1,
+            "title": "Managed Device Key",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "reusable"
+        ],
+        "title": "ManagedModelStatusResult",
+        "type": "object"
+      },
       "ManagedModelTicketParams": {
         "additionalProperties": false,
         "properties": {
@@ -23434,6 +23586,11 @@
           "managed_image_binding": {
             "default": 1,
             "title": "Managed Image Binding",
+            "type": "integer"
+          },
+          "managed_device_key": {
+            "default": 1,
+            "title": "Managed Device Key",
             "type": "integer"
           }
         },
@@ -25978,6 +26135,30 @@
             ],
             "default": null,
             "title": "Detail"
+          },
+          "owner_user_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Owner User Id"
+          },
+          "managed_credential_version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Managed Credential Version"
           }
         },
         "required": [
@@ -50555,6 +50736,24 @@
         "name": "result",
         "schema": {
           "$ref": "#/components/schemas/CanonicalListResult"
+        }
+      }
+    },
+    {
+      "name": "session.managed_model_status",
+      "summary": "",
+      "params": [
+        {
+          "name": "params",
+          "schema": {
+            "$ref": "#/components/schemas/ManagedModelStatusParams"
+          }
+        }
+      ],
+      "result": {
+        "name": "result",
+        "schema": {
+          "$ref": "#/components/schemas/ManagedModelStatusResult"
         }
       }
     },

@@ -27,9 +27,10 @@ async def readiness(authority, actor, params, *, runtime):
 
     def probe():
         from gateway.run import _profile_runtime_scope
+        from hermes_cli.anon_challenge import background_caller
         from hermes_cli.main import _has_any_provider_configured
         from hermes_cli.runtime_readiness import check_runtime_readiness
-        with _profile_runtime_scope(Path(authority.profile_id)):
+        with _profile_runtime_scope(Path(authority.profile_id)), background_caller():
             try:
                 if runtime:
                     return check_runtime_readiness(params.get('provider') or None, strict_profile_scope=True)

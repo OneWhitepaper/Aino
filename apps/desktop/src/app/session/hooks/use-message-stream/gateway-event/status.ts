@@ -1,3 +1,4 @@
+import { reportPlatformCredentialRejection } from '@/api/platform-models'
 import { isSessionNotOwnedError } from '@/app/session/hooks/use-prompt-actions/utils'
 import { runtimeTranslations, translateNow } from '@/i18n'
 import { textPart, toChatMessages } from '@/lib/chat-messages'
@@ -430,6 +431,8 @@ export function handleStatusEvent(ctx: GatewayEventContext): boolean {
     // place instead of stacking. Account-wide signal — shown regardless of
     // which session is focused.
     const notice = event.payload as AgentNoticePayload | undefined
+
+    reportPlatformCredentialRejection(notice?.code, notice?.owner_user_id, notice?.managed_credential_version)
 
     showAgentNotice(notice)
 

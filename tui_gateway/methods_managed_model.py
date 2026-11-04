@@ -38,6 +38,13 @@ def _managed_purpose(params):
     return purpose
 
 
+def _managed_positive_int(params, name):
+    value = params.get(name)
+    if type(value) is not int or value <= 0:
+        raise ManagedBindingError('managed_binding_invalid')
+    return value
+
+
 def _image_selection(sid, session):
     from . import server
     from hermes_cli.config import load_config
@@ -95,26 +102,46 @@ def _managed_model_ticket(params, sid, session, peer):
         raise ManagedBindingError("managed_binding_forbidden")
     owner, model_id = _managed_owner(params), _managed_text(params, "model_id", 128)
     ticket = get_registry().issue(sid, session, peer, owner, model_id, purpose=_managed_purpose(params))
-    return {"session_ticket": ticket, "managed_model_binding": 1, 'managed_image_binding': 1}
+    return {"session_ticket": ticket, "managed_model_binding": 1, 'managed_image_binding': 1, 'managed_device_key': 1}
 
 
 @_managed_method("session.claim_managed_model")
 def _claim_managed_model(params, sid, session, peer):
     revision = get_registry().claim(sid, session, peer, _managed_text(params, "session_ticket"),
                                    _managed_owner(params), _managed_text(params, "model_id", 128), purpose=_managed_purpose(params))
-    return {"binding_revision": revision, "managed_model_binding": 1, "managed_model_context_window": True, 'managed_image_binding': 1}
+    return {"binding_revision": revision, "managed_model_binding": 1, "managed_model_context_window": True,
+            'managed_image_binding': 1, 'managed_device_key': 1}
+
+
+@_managed_method('session.managed_model_status')
+def _managed_model_status(params, sid, session, peer):
+    reusable = get_registry().reusable(
+        sid, session, peer, _managed_owner(params), _managed_text(params, 'model_id', 128),
+        _managed_positive_int(params, 'binding_revision'), _managed_positive_int(params, 'credential_version'),
+        purpose=_managed_purpose(params))
+    return {'reusable': reusable, 'managed_device_key': 1}
 
 
 def _binding(params, sid):
     from agent.image_gen_provider import valid_image_quality_options
     purpose = _managed_purpose(params)
     owner = _managed_owner(params)
-    expires = datetime.fromisoformat(_managed_text(params, "expires_at"))
-    if expires.tzinfo is None or expires <= datetime.now(UTC):
-        raise ManagedBindingError("managed_binding_expired")
-    revision = params.get("binding_revision")
-    if type(revision) is not int or revision <= 0:
-        raise ManagedBindingError("managed_binding_invalid")
+    credential_type = params.get('credential_type', 'lease')
+    if credential_type not in {'device', 'lease'}:
+        raise ManagedBindingError('managed_binding_invalid')
+    expires = None
+    credential_version = params.get('credential_version')
+    if credential_type == 'device':
+        if 'expires_at' not in params or params['expires_at'] is not None:
+            raise ManagedBindingError('managed_binding_invalid')
+        credential_version = _managed_positive_int(params, 'credential_version')
+    else:
+        if credential_version is not None:
+            raise ManagedBindingError('managed_binding_invalid')
+        expires = datetime.fromisoformat(_managed_text(params, "expires_at"))
+        if expires.tzinfo is None or expires <= datetime.now(UTC):
+            raise ManagedBindingError("managed_binding_expired")
+    revision = _managed_positive_int(params, 'binding_revision')
     mode = _managed_text(params, "api_mode")
     capabilities = params.get("capabilities")
     quality_options = capabilities.get("image_quality_options", []) if isinstance(capabilities, dict) else []
@@ -136,7 +163,8 @@ def _binding(params, sid):
         model=_managed_text(params, "model", 256), api_mode=mode, capabilities=dict(capabilities),
         credential_id=_managed_text(params, "credential_id"), api_key=_managed_text(params, "api_key", 4096),
         base_url=params["base_url"], expires_at=expires, binding_revision=revision,
-        context_window=context_window, purpose=purpose)
+        context_window=context_window, purpose=purpose, credential_type=credential_type,
+        credential_version=credential_version)
 
 
 @_managed_method("session.bind_managed_model")

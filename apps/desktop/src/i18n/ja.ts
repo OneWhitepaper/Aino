@@ -4622,6 +4622,10 @@ terminalDisconnectedBody:
     not_authenticated: 'このモデルを使うには Aino にログインしてください',
     platform_account_changed:
       '別のアカウントのモデルです。元のアカウントにログインするか、モデルを選び直してください。',
+    permanent: "有効期限なし",
+    reauthorize: "このデバイスを再認証",
+    reauthorizeDescription: "このデバイスのモデル認証を更新します。管理セッションが切れた場合は再度ログインしてください。",
+    deviceRevoked: "このデバイスのモデル認証が取り消されました。モデル設定で再認証してください。",
     bindingFailed: 'モデルの認証に失敗しました。メッセージは未送信です。モデルを選び直してください。',
     unsupported: 'この接続は Aino モデルに対応していません',
     rate: 'アカウント倍率',

@@ -58,6 +58,7 @@ class GatewayReadyPayload(Payload):
     heartbeat: bool | None = None  # WebSocket transport only
     managed_model_binding: int | None = None
     managed_image_binding: int | None = None
+    managed_device_key: int | None = None
     # WebSocket transport bound to a session authority: session verbs speak the canonical wire
     # (``runtime.describe`` / ``session.create source=…``), so an explicit attach must negotiate it.
     session_authority: bool | None = None
@@ -246,6 +247,7 @@ class ErrorSurface(Payload):
     retryable: bool
     provider: str | None = None
     model: str | None = None
+    managed_credential_version: int | None = None
     resets_at: float | None = None
     usage_limit: UsageLimit | None = None
     model_config = Payload.model_config | {"extra": "allow"}
@@ -505,6 +507,8 @@ class NotificationShowPayload(Payload):
     billing_source: str | None = None
     purpose: str | None = None
     detail: str | None = None
+    owner_user_id: str | None = None
+    managed_credential_version: int | None = None
 
 
 class NotificationClearPayload(Payload):

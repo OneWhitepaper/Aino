@@ -7,6 +7,15 @@ export interface PlatformAccountSnapshot {
   mode: 'production' | 'development'
   remember_state: 'encrypted' | 'session_only'
   error: null | { code: string; retry_after?: number }
+  /** Public authority hint only; the secret stays in Electron main. */
+  model_identity_ready?: boolean
+  model_identity_version?: number
+}
+
+export function hasPlatformModelIdentity(
+  snapshot: PlatformAccountSnapshot | null | undefined
+): snapshot is PlatformAccountSnapshot & { account: NonNullable<PlatformAccountSnapshot['account']> } {
+  return Boolean(snapshot?.account && (snapshot.phase === 'signed_in' || snapshot.model_identity_ready === true))
 }
 
 export interface PlatformCaptchaProof {
@@ -159,6 +168,9 @@ export interface PlatformModelPricing {
 }
 
 export interface PlatformModelsBridge {
+  nativeDeviceKeys?: true
+  reauthorize?(expectedAccountRevision: number): Promise<void>
+  credentialRejected?(expectedAccountRevision: number, credentialVersion: number): Promise<void>
   owner(expectedAccountRevision: number): Promise<{ platform_origin: string; user_id: string }>
   bind(input: BindPlatformModelInput & { session_ticket: string }): Promise<BindPlatformModelResult>
   clear(input: {
@@ -180,7 +192,7 @@ export interface BindPlatformModelInput {
 }
 
 export type BindPlatformModelResult =
-  | { ok: true; ready: true; model_id: string; billing_source: 'aino'; expires_at: string }
+  | { ok: true; ready: true; model_id: string; billing_source: 'aino'; expires_at: string | null }
   | { ok: false; error: { code: string } }
 
 export interface PlatformCaptchaBridge {
@@ -243,7 +255,7 @@ export interface PlatformBillingBridge {
 export interface PlatformDevice {
   device_id: string
   last_used_at: string
-  expires_at: string
+  expires_at: string | null
   revoked: boolean
   status?: 'active' | 'expired' | 'revoked'
 }

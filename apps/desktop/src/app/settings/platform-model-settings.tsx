@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 
 import { PlatformModelList, usePlatformModels } from '@/components/platform-model-list'
 import { Button } from '@/components/ui/button'
+import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { useI18n } from '@/i18n'
 import { ChevronDown } from '@/lib/icons'
@@ -35,12 +36,14 @@ export function PlatformModelSettings({ scopeProfile, selectedId, onSelect, disa
   const capability = managedModelRouteCapabilityFrom(managed, scope.route)
   const [open, setOpen] = useState(false)
   const [candidateId, setCandidateId] = useState(selectedId)
+  const [reauthorize, setReauthorize] = useState<number | null>(null)
   const candidate = catalog.models.find(model => model.id === candidateId)
   const selected = catalog.models.find(model => model.id === selectedId)
 
   useEffect(() => {
     setOpen(false)
     setCandidateId(selectedId)
+    setReauthorize(null)
   }, [scope.key, catalog.account?.account?.id, catalog.account?.revision, selectedId])
 
   return (
@@ -71,6 +74,29 @@ export function PlatformModelSettings({ scopeProfile, selectedId, onSelect, disa
           ? t.settings.model.defaultMain.ainoConnected
           : t.platformModels.not_authenticated}
       </p>
+      {window.hermesDesktop?.platformModels?.reauthorize && catalog.account?.phase === 'signed_in' && (
+        <Button disabled={disabled} onClick={() => setReauthorize(catalog.account!.revision)} size="sm" variant="outline">
+          {t.platformModels.reauthorize}
+        </Button>
+      )}
+      <ConfirmDialog
+        confirmLabel={t.platformModels.reauthorize}
+        description={t.platformModels.reauthorizeDescription}
+        onClose={() => setReauthorize(null)}
+        onConfirm={async () => {
+          if (!catalog.account || reauthorize === null) {
+            return
+          }
+
+          try {
+            await window.hermesDesktop?.platformModels?.reauthorize?.(reauthorize)
+          } catch {
+            throw new Error(t.platformModels.reauthorizeDescription)
+          }
+        }}
+        open={reauthorize !== null}
+        title={t.platformModels.reauthorize}
+      />
       <Dialog onOpenChange={setOpen} open={open}>
         <DialogContent bodyClassName="gap-0 p-0">
           <DialogHeader className="px-5 pt-5 pb-4">

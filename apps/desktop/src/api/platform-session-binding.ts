@@ -6,6 +6,7 @@ import type { SessionOwnerScope } from '@/store/session-request-router'
 import { $sessionStates } from '@/store/session-states'
 import type { SessionCreateResponse } from '@/types/hermes'
 
+import { hasPlatformModelIdentity } from '../../shared/platform-contract'
 import type { PlatformAccountSnapshot, PlatformModelPurpose } from '../../shared/platform-contract'
 
 import { bindPlatformModel } from './platform-models'
@@ -37,7 +38,7 @@ export async function bindSelectedPlatformSession(
   const catalog = platformModelCatalog()
   const account = catalog.account.get()
 
-  if (account?.phase !== 'signed_in' || !account.account) {
+  if (!hasPlatformModelIdentity(account)) {
     throw new PlatformSelectionError('not_authenticated')
   }
 

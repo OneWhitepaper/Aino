@@ -5,6 +5,7 @@
 // where retrying reproduces the failure.
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
+import { reportPlatformCredentialRejection } from '@/api/platform-models'
 import { applyProductBrand } from '@/lib/brand'
 import { $notifications } from '@/store/notifications'
 import { requestDesktopOnboarding } from '@/store/onboarding'
@@ -14,6 +15,7 @@ import type { GatewayEventContext } from './types'
 
 vi.mock('@/store/native-notifications', () => ({ dispatchNativeNotification: vi.fn() }))
 vi.mock('@/store/onboarding', () => ({ requestDesktopOnboarding: vi.fn() }))
+vi.mock('@/api/platform-models', () => ({ reportPlatformCredentialRejection: vi.fn() }))
 
 const OWNED_REFUSAL =
   'Session 20260909_095312_6b93f5 already has a live owner (tui, pid 32977, lease age 22m). ' +
@@ -49,9 +51,16 @@ function errorContext(message: string, code?: string) {
 afterEach(() => {
   $notifications.set([])
   vi.mocked(requestDesktopOnboarding).mockClear()
+  vi.mocked(reportPlatformCredentialRejection).mockClear()
 })
 
 describe('gateway `error` event → error card + toast', () => {
+  it('routes an image credential rejection using its own owner and request version', () => {
+    const { ctx } = errorContext('image')
+    ctx.event = { ...ctx.event, type: 'notification.show', payload: { text: 'Image authorization failed', level: 'error', kind: 'ttl', code: 'managed_credential_rejected', owner_user_id: 'image-account', managed_credential_version: 2, purpose: 'image' } } as GatewayEventContext['event']
+    handleStatusEvent(ctx)
+    expect(reportPlatformCredentialRejection).toHaveBeenCalledWith('managed_credential_rejected', 'image-account', 2)
+  })
   it('stamps SESSION_NOT_OWNED on a live-owner refusal so the card drops Retry', () => {
     const { ctx, failAssistantMessage } = errorContext(OWNED_REFUSAL)
 

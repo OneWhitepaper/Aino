@@ -6,6 +6,7 @@ import { platformModelSupportsPurpose } from '@/lib/platform-model-purpose'
 import { platformDefaultScope, type PlatformDefaultScopeInput } from '@/lib/platform-model-scope'
 import { readKey, writeKey } from '@/lib/storage'
 
+import { hasPlatformModelIdentity } from '../../shared/platform-contract'
 import type { PlatformAccountSnapshot, PlatformModel, PlatformModelPurpose } from '../../shared/platform-contract'
 
 import { createPlatformModelOwner, type PlatformModelOwner, samePlatformAccount } from './platform-model-owner'
@@ -96,7 +97,9 @@ function platformErrorKey(code: string) {
     insufficient_balance: 'platformModels.insufficient_balance',
     quota_exhausted: 'platformModels.quota_exhausted',
     unsupported_gateway: 'platformModels.unsupported',
-    model_unavailable: 'platformModels.unavailable'
+    model_unavailable: 'platformModels.unavailable',
+    DESKTOP_DEVICE_KEY_REVOKED: 'platformModels.deviceRevoked',
+    managed_credential_revoked: 'platformModels.deviceRevoked'
   } as const
 
   return keys[code as keyof typeof keys] ?? 'platformModels.bindingFailed'
@@ -109,7 +112,7 @@ export function requirePlatformSelection(
   ownerUserId: string,
   purpose: PlatformModelPurpose = 'chat'
 ): PlatformModel {
-  if (account?.phase !== 'signed_in' || !account.account) {
+  if (!hasPlatformModelIdentity(account)) {
     throw new PlatformSelectionError('not_authenticated')
   }
 
@@ -148,7 +151,7 @@ export function createPlatformModelCatalog(
   })
 
   const state = computed([account, result], (current, cached): PlatformCatalogState => {
-    if (current?.phase !== 'signed_in' || !current.account) {
+    if (!hasPlatformModelIdentity(current)) {
       return { phase: 'signed_out', models: [], error: null }
     }
 
@@ -160,7 +163,7 @@ export function createPlatformModelCatalog(
   const load = (options?: { force?: boolean }): Promise<void> => {
     const snapshot = account.get()
 
-    if (snapshot?.phase !== 'signed_in' || !snapshot.account) {
+    if (!hasPlatformModelIdentity(snapshot)) {
       return Promise.resolve()
     }
 

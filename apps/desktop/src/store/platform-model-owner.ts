@@ -1,6 +1,6 @@
 import { atom, computed, type ReadableAtom } from 'nanostores'
 
-import type { PlatformAccountSnapshot } from '../../shared/platform-contract'
+import { hasPlatformModelIdentity, type PlatformAccountSnapshot } from '../../shared/platform-contract'
 
 export interface PlatformModelOwner {
   user_id: string
@@ -13,8 +13,13 @@ export interface PlatformModelOwnerState {
 }
 
 export function samePlatformAccount(left: PlatformAccountSnapshot | null, right: PlatformAccountSnapshot | null) {
-  return left?.phase === 'signed_in' && right?.phase === 'signed_in' &&
-    left.revision === right.revision && left.mode === right.mode && left.account?.id === right.account?.id
+  return (
+    hasPlatformModelIdentity(left) &&
+    hasPlatformModelIdentity(right) &&
+    left.revision === right.revision &&
+    left.mode === right.mode &&
+    left.account?.id === right.account?.id
+  )
 }
 
 /** Main owns commercial identity; renderer caches only its public, revision-fenced answer. */
@@ -35,7 +40,9 @@ export function createPlatformModelOwner(
   const load = (): Promise<void> => {
     const snapshot = account.get()
 
-    if (snapshot?.phase !== 'signed_in' || !snapshot.account || state.get().phase === 'ready') {return Promise.resolve()}
+    if (!hasPlatformModelIdentity(snapshot) || state.get().phase === 'ready') {
+      return Promise.resolve()
+    }
 
     if (pending && samePlatformAccount(snapshot, pending.snapshot)) {return pending.promise}
     result.set({ snapshot, data: { phase: 'loading', owner: null } })

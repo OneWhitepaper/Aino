@@ -101,3 +101,57 @@ def test_canonical_scope_refuses_owner_changed_during_resolution(monkeypatch, bo
     monkeypatch.setattr(get_registry(), "get", bound)
     with conversation_image_scope(owner=(authority, "sid", 7)):
         assert current_image_binding() is None
+
+
+def test_image_rejection_uses_its_owner_and_cannot_outlive_scope():
+    from tui_gateway.managed_image_runtime import managed_image_scope, notify_image_credential_rejection
+    from tui_gateway.managed_model_runtime import ManagedModelOwner
+
+    binding = SimpleNamespace(purpose='image', expires_at=None,
+                              owner=ManagedModelOwner('https://aino.invalid', 'image-owner'))
+    notices = []
+    with managed_image_scope(lambda: binding, on_rejection=notices.append):
+        notify_image_credential_rejection('foreign-owner', 7)
+        notify_image_credential_rejection('image-owner', True)
+        notify_image_credential_rejection('image-owner', 0)
+        assert notices == []
+        notify_image_credential_rejection('image-owner', 7)
+        old_turn = copy_context()
+    old_turn.run(notify_image_credential_rejection, 'image-owner', 7)
+    notify_image_credential_rejection('image-owner', 7)
+    assert len(notices) == 1
+    assert notices[0]['owner_user_id'] == 'image-owner'
+    assert notices[0]['managed_credential_version'] == 7
+
+
+@pytest.mark.parametrize('boundary', ['generation', 'session', 'selection'])
+def test_image_rejection_cannot_notify_after_canonical_owner_changes(monkeypatch, boundary):
+    from hermes_state_runtime import RuntimeStoreError
+    from tui_gateway.managed_image_runtime import conversation_image_scope, notify_image_credential_rejection
+    from tui_gateway.managed_model_runtime import ManagedModelOwner, get_registry
+
+    notices = []
+    authority = SimpleNamespace(profile_id='profile', sessions={'sid': object()}, executing={'sid': 7})
+    binding = SimpleNamespace(purpose='image', expires_at=None,
+                              owner=ManagedModelOwner('https://aino.invalid', 'image-owner'))
+    available = [True]
+
+    def selected(*_args, **_kwargs):
+        if not available[0]:
+            raise RuntimeStoreError('managed_binding_forbidden')
+        return {}
+
+    monkeypatch.setattr('gateway.session_platform_model.managed_state', selected)
+    monkeypatch.setattr(get_registry(), 'get', lambda *_a, **_k: binding)
+    with conversation_image_scope(owner=(authority, 'sid', 7), on_rejection=notices.append):
+        notify_image_credential_rejection('image-owner', 7)
+        old_turn = copy_context()
+        if boundary == 'generation':
+            authority.executing['sid'] = 8
+        elif boundary == 'session':
+            authority.sessions.clear()
+        else:
+            available[0] = False
+        old_turn.run(notify_image_credential_rejection, 'image-owner', 7)
+    old_turn.run(notify_image_credential_rejection, 'image-owner', 7)
+    assert len(notices) == 1

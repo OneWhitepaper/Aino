@@ -15,6 +15,20 @@ import {
 
 afterEach(() => vi.restoreAllMocks())
 
+it('preserves model selection authority after management login expires only with the main-process identity hint', () => {
+  const account: PlatformAccountSnapshot = {
+    ...platformSnapshot(),
+    phase: 'reauth_required',
+    model_identity_ready: true
+  }
+
+  expect(requirePlatformSelection(account, [platformModel()], 'catalog-a', 'user-a').id).toBe('catalog-a')
+  expect(() =>
+    requirePlatformSelection({ ...account, model_identity_ready: false }, [platformModel()], 'catalog-a', 'user-a')
+  ).toThrow()
+  expect(() => requirePlatformSelection(account, [platformModel()], 'catalog-a', 'user-b')).toThrow()
+})
+
 it('reuses a ready catalog briefly but refreshes on demand, expiry and account revision changes', async () => {
   let now = 100_000
   vi.spyOn(Date, 'now').mockImplementation(() => now)

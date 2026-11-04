@@ -373,7 +373,11 @@ def _readiness_check(rid, params, probe, *, probe_key, wait_seconds):
         # Applied on the readiness pool thread: ContextVars do not cross threads, and
         # concurrent probes (different profiles) stay isolated exactly as they did when
         # each ran on its caller's handler thread.
-        with _session_profile_runtime_scope({"profile_home": str(home) if home is not None else None}):
+        from hermes_cli.anon_challenge import background_caller
+        with (
+            _session_profile_runtime_scope({"profile_home": str(home) if home is not None else None}),
+            background_caller(),
+        ):
             return probe(profile, {"profile": profile} if profile else {})
 
     return _readiness_share(rid, (probe_key, profile), run_probe, wait_seconds)

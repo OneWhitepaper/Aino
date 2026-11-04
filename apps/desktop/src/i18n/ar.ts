@@ -22,6 +22,12 @@ import { toolPanel } from './tool-panel'
 import { workspacePage } from './workspace-page'
 
 const arBaseOverrides = {
+  platformModels: {
+    permanent: "بلا انتهاء",
+    reauthorize: "إعادة تفويض هذا الجهاز",
+    reauthorizeDescription: "استبدل تفويض النماذج لهذا الجهاز. سجّل الدخول مجددًا إذا انتهت جلسة الإدارة.",
+    deviceRevoked: "تم إلغاء وصول هذا الجهاز إلى النماذج. أعد تفويضه من إعدادات النماذج.",
+  },
   platformDevices: { expired: 'منتهي الصلاحية' },
   appearancePage: appearancePage.ar,
   home: homeGuidance.ar,

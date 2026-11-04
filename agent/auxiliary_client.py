@@ -83,9 +83,7 @@ class _OpenAIProxy:
 OpenAI = _OpenAIProxy()
 
 
-# Availability probe mode: check_fns only need to know whether a client is RESOLVABLE, so
-# inside `aux_probe_mode()` constructors return a stub instead of importing openai + building
-# httpx/SSL (~0.3s on CLI startup). Stubs are never cached (see _store_cached_client).
+# Availability probes skip SDK/httpx construction (~0.3s); their stubs are never cached.
 _aux_probe_state = threading.local()
 
 
@@ -113,11 +111,13 @@ def _aux_probe_active() -> bool:
 
 @contextlib.contextmanager
 def aux_probe_mode():
-    """Resolve provider availability without constructing real SDK clients."""
+    """Resolve availability without SDK construction or interactive authentication waits."""
+    from hermes_cli.anon_challenge import background_caller
     prev = getattr(_aux_probe_state, "active", False)
     _aux_probe_state.active = True
     try:
-        yield
+        with background_caller():
+            yield
     finally:
         _aux_probe_state.active = prev
 

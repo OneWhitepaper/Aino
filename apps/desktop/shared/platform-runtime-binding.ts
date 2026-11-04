@@ -2,6 +2,7 @@ import type { JsonRpcGatewayClient } from '../../shared/src/json-rpc-gateway'
 
 import type { PlatformAuth } from './platform-auth'
 import { PlatformClientError, type PlatformModelLeaseDTO } from './platform-client'
+import { hasPlatformModelIdentity } from './platform-contract'
 import type { BindPlatformModelInput, BindPlatformModelResult, PlatformModel, PlatformModelPurpose } from './platform-contract'
 
 export interface PlatformBindingTarget {
@@ -16,6 +17,8 @@ export interface PlatformBindingWindow {
   isDestroyed(): boolean
 }
 export interface PlatformRuntimeBindingController {
+  credentialRejected(expectedAccountRevision: number, credentialVersion: number): Promise<void>
+  reauthorize(expectedAccountRevision: number): Promise<void>
   owner(expectedAccountRevision: number): { platform_origin: string; user_id: string }
   bind(
     input: BindPlatformModelInput & { session_ticket: string },
@@ -38,6 +41,8 @@ interface Binding {
   renewalAttempts?: number
   expiry?: ReturnType<typeof setTimeout>
   renewal?: ReturnType<typeof setTimeout>
+  device?: boolean
+  credentialVersion?: number
 }
 interface Slot {
   intent: number
@@ -49,6 +54,7 @@ interface ManagedBindingClaim {
   binding_revision?: number
   managed_model_context_window?: boolean
   managed_image_binding?: number
+  managed_device_key?: number
 }
 
 function requireManagedBindingClaim(claim: ManagedBindingClaim, purpose: PlatformModelPurpose = 'chat'): number {
@@ -60,6 +66,28 @@ function requireManagedBindingClaim(claim: ManagedBindingClaim, purpose: Platfor
   return claim.binding_revision!
 }
 
+function canRetainModelBinding(snapshot: ReturnType<PlatformAuth['snapshot']>) {
+  return snapshot.phase !== 'reauth_required' || snapshot.model_identity_ready === true
+}
+
+function deviceCredentialParams(version: number | undefined) {
+  return version === undefined ? {} : { credential_type: 'device', credential_version: version }
+}
+
+function bindingErrorCode(error: unknown) {
+  const codes = new Set(['binding_cancelled', 'binding_ticket_required', 'unsupported_gateway', 'invalid_binding_response'])
+
+  return error instanceof PlatformClientError ? error.code : error instanceof Error && codes.has(error.message) ? error.message : 'gateway_binding_failed'
+}
+
+function validBindingString(value: string) {
+  return typeof value === 'string' && value.length > 0 && value.length <= 256
+}
+
+function requireBindingTicket(ticket: string) {
+  if (!validBindingString(ticket)) { throw new Error('binding_ticket_required') }
+}
+
 function purposeParams(purpose: PlatformModelPurpose | undefined): { purpose?: 'image' } {
   if (purpose !== undefined && !['chat', 'image'].includes(purpose)) {
     throw new Error('invalid_platform_input')
@@ -69,6 +97,8 @@ function purposeParams(purpose: PlatformModelPurpose | undefined): { purpose?: '
 }
 
 export function createPlatformRuntimeBindingController(options: {
+  /** Only Electron main owns an OS-protected device credential. */
+  nativeDeviceKeys?: boolean
   auth: PlatformAuth
   origin: string
   deviceId(): string
@@ -79,6 +109,25 @@ export function createPlatformRuntimeBindingController(options: {
   const windows = new Map<PlatformBindingWindow, Map<string, Slot>>()
   let generation = auth.generation()
   let disposed = false
+  let models: { generation: number; expiresAt: number; promise: Promise<PlatformModel[]> } | undefined
+
+  function catalog() {
+    const generation = auth.generation()
+
+    if (!models || models.generation !== generation || models.expiresAt <= Date.now()) {
+      const promise = auth.models().catch(error => {
+        if (models?.promise === promise) {
+          models = undefined
+        }
+
+        throw error
+      })
+
+      models = { generation, expiresAt: Date.now() + 30_000, promise }
+    }
+
+    return models.promise
+  }
 
   function close(binding?: Binding) {
     if (!binding) {
@@ -104,7 +153,12 @@ export function createPlatformRuntimeBindingController(options: {
     slot.active = slot.pending = undefined
   }
 
-  function scope(input: { connection_id: string; profile: string; session_id: string; purpose?: PlatformModelPurpose }) {
+  function scope(input: {
+    connection_id: string
+    profile: string
+    session_id: string
+    purpose?: PlatformModelPurpose
+  }) {
     return JSON.stringify([input.connection_id, input.profile, input.session_id, input.purpose ?? 'chat'])
   }
 
@@ -134,15 +188,44 @@ export function createPlatformRuntimeBindingController(options: {
     return { lease, reuse }
   }
 
+  async function credentialForBinding(binding: Binding, claim: ManagedBindingClaim, modelId: string, purpose: { purpose?: 'image' }) {
+    if (!options.nativeDeviceKeys || binding.target.remote || claim.managed_device_key !== 1 || !(await auth.supportsDeviceKey())) {
+      return { ...await leaseForBinding(binding, modelId, purpose), deviceMode: false, credentialVersion: undefined }
+    }
+
+    const selected = (await catalog()).find(model => model.id === modelId && (model.purpose ?? 'chat') === (purpose.purpose ?? 'chat'))
+
+    if (!selected || selected.state !== 'available') { throw new PlatformClientError('model_unavailable') }
+    const key = await auth.ensureDeviceKey(options.deviceId())
+
+    const lease: Omit<PlatformModelLeaseDTO, 'expires_at'> & { expires_at: string | null } = {
+      model: selected, credential_id: key.key_id, api_key: key.api_key, base_url: `${options.origin}/v1`, expires_at: null
+    }
+
+    return { lease, reuse: false, deviceMode: true, credentialVersion: key.version }
+  }
+
+  async function reuseDeviceBinding(binding: Binding, params: Record<string, unknown>, revision: number) {
+    if (!binding.device || binding.target.remote || binding.credentialVersion !== auth.snapshot().model_identity_version) { return false }
+
+    const result = await binding.rpc.request<{ reusable?: boolean }>('session.managed_model_status', {
+      ...params, binding_revision: binding.revision, credential_version: binding.credentialVersion
+    })
+
+    return result.reusable === true && auth.snapshot().revision === revision
+  }
+
   function armLease(
     binding: Binding,
-    expiresAt: string,
+    expiresAt: string | null,
     expired: () => void,
     renew: () => Promise<void>,
     reuse = false
   ) {
     clearTimeout(binding.expiry)
     clearTimeout(binding.renewal)
+
+    if (expiresAt === null) { return }
     const ttl = Math.max(0, Date.parse(expiresAt) - Date.now())
     binding.expiry = setTimeout(expired, ttl)
     binding.expiry.unref?.()
@@ -162,17 +245,52 @@ export function createPlatformRuntimeBindingController(options: {
   }
 
   const unsubscribe = auth.subscribe(snapshot => {
-    if (generation !== auth.generation() || snapshot.phase === 'signed_out' || snapshot.phase === 'reauth_required') {
+    if (generation !== auth.generation() || snapshot.phase === 'signed_out') {
       generation = auth.generation()
       resetAll()
+    }
+
+    if (!snapshot.model_identity_ready) {
+      for (const slots of windows.values()) {
+        for (const slot of slots.values()) {
+          if (slot.active?.device) {
+            reset(slot)
+          }
+        }
+      }
     }
   })
 
   return {
+    async credentialRejected(expectedAccountRevision, credentialVersion) {
+      if (!options.nativeDeviceKeys) { throw new PlatformClientError('unsupported_desktop') }
+      const snapshot = auth.snapshot()
+
+      if (!snapshot.account || snapshot.revision !== expectedAccountRevision || snapshot.model_identity_version !== credentialVersion) {
+        return
+      }
+
+      await auth.rejectDeviceKey(options.deviceId(), credentialVersion)
+    },
+    async reauthorize(expectedAccountRevision) {
+      if (!options.nativeDeviceKeys) { throw new PlatformClientError('unsupported_desktop') }
+      const snapshot = auth.snapshot()
+
+      if (!snapshot.account || snapshot.phase !== 'signed_in' || snapshot.revision !== expectedAccountRevision) {
+        throw new PlatformClientError('platform_account_changed')
+      }
+
+      await auth.ensureDeviceKey(options.deviceId(), true)
+      resetAll()
+    },
     owner(expectedAccountRevision) {
       const snapshot = auth.snapshot()
 
-      if (snapshot.phase !== 'signed_in' || !snapshot.account || snapshot.revision !== expectedAccountRevision) {
+      if (
+        (snapshot.phase !== 'signed_in' && !snapshot.model_identity_ready) ||
+        !snapshot.account ||
+        snapshot.revision !== expectedAccountRevision
+      ) {
         throw new Error('invalid_platform_input')
       }
 
@@ -182,7 +300,7 @@ export function createPlatformRuntimeBindingController(options: {
       const failure = (code: string): BindPlatformModelResult => ({ ok: false, error: { code } })
       const snapshot = auth.snapshot()
 
-      if (!snapshot.account || snapshot.phase !== 'signed_in') {
+      if (!hasPlatformModelIdentity(snapshot)) {
         return failure('not_authenticated')
       }
 
@@ -199,8 +317,8 @@ export function createPlatformRuntimeBindingController(options: {
       }
 
       if (
-        ![input.session_id, input.model_id, input.session_ticket].every(
-          s => typeof s === 'string' && s.length > 0 && s.length <= 256
+        ![input.session_id, input.model_id].every(
+          validBindingString
         )
       ) {
         return failure('invalid_platform_input')
@@ -227,7 +345,7 @@ export function createPlatformRuntimeBindingController(options: {
         slot.intent === intent &&
         auth.generation() === expected &&
         auth.snapshot().account?.id === account &&
-        auth.snapshot().phase !== 'reauth_required' &&
+        canRetainModelBinding(auth.snapshot()) &&
         (!binding || binding.target.isCurrent())
 
       const check = () => {
@@ -247,6 +365,8 @@ export function createPlatformRuntimeBindingController(options: {
         if (slot.active?.target.fingerprint === target.fingerprint && slot.active.rpc.connectionState === 'open') {
           binding = slot.active
         } else {
+          requireBindingTicket(input.session_ticket)
+
           if (target.remote && !(await options.confirmRemote(window, target.host))) {
             return failure('remote_not_authorized')
           }
@@ -271,6 +391,15 @@ export function createPlatformRuntimeBindingController(options: {
 
         const params = { session_id: input.session_id, profile: target.profile, owner, model_id: input.model_id, ...purpose }
 
+        const reusable = await reuseDeviceBinding(binding, params, snapshot.revision)
+        check()
+
+        if (reusable) { slot.pending = undefined;
+
+ return { ok: true, ready: true, model_id: input.model_id, billing_source: 'aino', expires_at: null } }
+
+        requireBindingTicket(input.session_ticket)
+
         // Capability and live session authorization are proven BEFORE obtaining
         // the inference secret. Older gateways fail here without receiving a Key.
         const claim = await binding.rpc.request<ManagedBindingClaim>(
@@ -283,7 +412,8 @@ export function createPlatformRuntimeBindingController(options: {
         claimedRevision = requireManagedBindingClaim(claim, input.purpose)
         const supportsContextWindow = claim.managed_model_context_window === true
 
-        const { lease, reuse } = await leaseForBinding(binding, input.model_id, purpose)
+        const credential = await credentialForBinding(binding, claim, input.model_id, purpose)
+        const { lease, reuse, deviceMode } = credential
 
         check()
 
@@ -297,6 +427,7 @@ export function createPlatformRuntimeBindingController(options: {
             capabilities: lease.model.capabilities,
             ...(supportsContextWindow ? { context_window: lease.model.context_window } : {}),
             credential_id: lease.credential_id,
+            ...deviceCredentialParams(credential.credentialVersion),
             api_key: lease.api_key,
             base_url: lease.base_url,
             expires_at: lease.expires_at
@@ -314,7 +445,9 @@ export function createPlatformRuntimeBindingController(options: {
         }
 
         binding.revision = claimedRevision
-        binding.lease = lease
+        binding.device = deviceMode
+        binding.credentialVersion = credential.credentialVersion
+        binding.lease = deviceMode ? undefined : (lease as PlatformModelLeaseDTO)
         const retained = binding
         const revision = claimedRevision
         const stillOwned = () => current() && slot.active === retained && retained.revision === revision
@@ -351,21 +484,22 @@ export function createPlatformRuntimeBindingController(options: {
               return
             }
 
-            const renewed = await retained.rpc.request<{ bound?: boolean; model_id?: string; binding_revision?: number }>(
-              'session.renew_managed_model',
-              {
-                ...params,
-                binding_revision: revision,
-                model: next.model.model,
-                api_mode: next.model.api_mode,
-                capabilities: next.model.capabilities,
-                ...(supportsContextWindow ? { context_window: next.model.context_window } : {}),
-                credential_id: next.credential_id,
-                api_key: next.api_key,
-                base_url: next.base_url,
-                expires_at: next.expires_at
-              }
-            )
+            const renewed = await retained.rpc.request<{
+              bound?: boolean
+              model_id?: string
+              binding_revision?: number
+            }>('session.renew_managed_model', {
+              ...params,
+              binding_revision: revision,
+              model: next.model.model,
+              api_mode: next.model.api_mode,
+              capabilities: next.model.capabilities,
+              ...(supportsContextWindow ? { context_window: next.model.context_window } : {}),
+              credential_id: next.credential_id,
+              api_key: next.api_key,
+              base_url: next.base_url,
+              expires_at: next.expires_at
+            })
 
             if (!stillOwned()) {
               return
@@ -450,19 +584,14 @@ export function createPlatformRuntimeBindingController(options: {
           slot.pending = undefined
         }
 
-        const codes = new Set(['binding_cancelled', 'unsupported_gateway', 'invalid_binding_response'])
-
-        const code =
-          error instanceof PlatformClientError
-            ? error.code
-            : error instanceof Error && codes.has(error.message)
-              ? error.message
-              : 'gateway_binding_failed'
-
-        return failure(code)
+        return failure(bindingErrorCode(error))
       }
     },
-    list: () => auth.models(),
+    list() {
+      models = undefined
+
+      return catalog()
+    },
     clear(input, window) {
       const slots = windows.get(window)
       const key = scope(input)

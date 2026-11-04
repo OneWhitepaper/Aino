@@ -74,7 +74,7 @@ function rig(options: { useDefaultConfirm?: boolean; captcha?: boolean; delayCap
 
   const request = vi.fn(async (method: string, params: any) => {
     if (method === 'session.claim_managed_model') { return { managed_model_binding: options.claim ?? 1, managed_image_binding: 1,
-      managed_model_context_window: true, binding_revision: 2 } }
+      managed_model_context_window: true, managed_device_key: 1, binding_revision: 2 } }
 
     return { bound: true, model_id: params.model_id, binding_revision: params.binding_revision }
   })
@@ -100,6 +100,15 @@ function rig(options: { useDefaultConfirm?: boolean; captcha?: boolean; delayCap
 }
 
 describe('browser Aino account and gateway authority', () => {
+  it('never exposes native device reauthorization or obtains permanent keys even from a capable gateway', async () => {
+    const test = rig()
+    await test.login()
+    expect(test.bridge.platformModels).not.toHaveProperty('reauthorize')
+    expect(test.bridge.platformModels).not.toHaveProperty('credentialRejected')
+    expect((await test.bind()).ok).toBe(true)
+    expect(test.apiCalls.filter(call => call.url.endsWith('/desktop/credentials'))).toHaveLength(1)
+    expect(test.apiCalls.some(call => call.url.includes('/desktop/device-keys'))).toBe(false)
+  })
   it('requires real Aino login, keeps credentials out of storage and retains both catalogs and billing ownership', async () => {
     const storage = vi.spyOn(Storage.prototype, 'setItem')
     const test = rig()

@@ -1,4 +1,4 @@
-"""The existing managed registry's image lease, resolved for the exact executing turn."""
+"""The existing managed registry's image authority, resolved for the exact executing turn."""
 
 from contextlib import contextmanager
 from contextvars import ContextVar
@@ -9,25 +9,46 @@ _image_binding = ContextVar("managed_image_binding_resolver", default=None)
 
 
 @contextmanager
-def managed_image_scope(resolve):
-    token = _image_binding.set(resolve)
+def managed_image_scope(resolve, *, on_rejection=None):
+    active = [True]
+
+    def live_binding():
+        return resolve() if active[0] else None
+
+    token = _image_binding.set((live_binding, on_rejection))
     try:
         yield
     finally:
+        active[0] = False
         _image_binding.reset(token)
 
 
 def current_image_binding():
-    resolver = _image_binding.get()
-    binding = resolver() if resolver else None
+    scope = _image_binding.get()
+    binding = scope[0]() if scope else None
     if (binding is None or binding.purpose != "image"
-            or binding.expires_at <= datetime.now(UTC)):
+            or (binding.expires_at is not None and binding.expires_at <= datetime.now(UTC))):
         return None
     return binding
 
 
+def notify_image_credential_rejection(owner_user_id, credential_version):
+    scope = _image_binding.get()
+    if scope is None or scope[1] is None or type(credential_version) is not int or credential_version <= 0:
+        return
+    binding = current_image_binding()
+    if binding is None or binding.owner.user_id != owner_user_id:
+        return
+    scope[1]({
+        'text': 'Aino device authorization was rejected. Check this device\'s authorization in your account.',
+        'level': 'error', 'kind': 'sticky', 'key': 'aino.managed_credential_rejected',
+        'code': 'managed_credential_rejected', 'billing_source': 'aino', 'purpose': 'image',
+        'owner_user_id': owner_user_id, 'managed_credential_version': credential_version,
+    })
+
+
 @contextmanager
-def conversation_image_scope(*, owner=None, session_id=None, session=None):
+def conversation_image_scope(*, owner=None, session_id=None, session=None, on_rejection=None):
     """No ambient session lookup: the turn runner supplies the captured owner."""
     from .managed_model_runtime import get_registry
     active = [True]
@@ -67,7 +88,7 @@ def conversation_image_scope(*, owner=None, session_id=None, session=None):
             return binding if active[0] else None
         return None
 
-    with managed_image_scope(resolve):
+    with managed_image_scope(resolve, on_rejection=on_rejection):
         try:
             yield
         finally:

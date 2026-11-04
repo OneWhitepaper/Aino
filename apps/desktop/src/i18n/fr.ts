@@ -319,6 +319,12 @@ const configPageFieldDescriptions: Record<string, string> = defineFieldCopy({
 })
 
 const frBaseOverrides = {
+  platformModels: {
+    permanent: "Sans expiration",
+    reauthorize: "Réautoriser cet appareil",
+    reauthorizeDescription: "Remplacez l’autorisation des modèles de cet appareil. Reconnectez-vous si votre session de gestion a expiré.",
+    deviceRevoked: "L’accès aux modèles de cet appareil a été révoqué. Réautorisez-le dans les paramètres des modèles.",
+  },
   platformDevices: { expired: 'Expirée' },
   appearancePage: appearancePage.fr,
   home: homeGuidance.fr,

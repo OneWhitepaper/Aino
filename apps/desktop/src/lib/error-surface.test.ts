@@ -532,3 +532,7 @@ describe('error card actions: one main action, at most one second option', () =>
     )
   })
 })
+it('retains only a positive managed credential version from the failed request', () => {
+  expect(parseErrorSurface({ layer: 'auth', code: 'managed_credential_rejected', retryable: false, managed_credential_version: 2 })?.managedCredentialVersion).toBe(2)
+  expect(parseErrorSurface({ layer: 'auth', code: 'managed_credential_rejected', retryable: false, managed_credential_version: -1 })?.managedCredentialVersion).toBeUndefined()
+})

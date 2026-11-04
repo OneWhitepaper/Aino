@@ -75,7 +75,8 @@ _LEDGER_PASSTHROUGH_KEYS = (
 # Beside ``failure_reason`` and ``error``: what ``agent.error_surface.build_error_surface_from_result`` reads,
 # so the authority's ``message.complete`` carries the same error card the TUI path builds;
 # ``usage_window_message`` also marks a window-plan refusal for the chat rewording.
-_FAILURE_DESCRIPTOR_KEYS = ("free_tier", "failure_retryable", "failure_resets_at", "usage_window_message")
+_FAILURE_DESCRIPTOR_KEYS = ("free_tier", "failure_retryable", "failure_resets_at", "usage_window_message",
+                            "managed_credential_version")
 
 
 def _finite_viewer_turn() -> bool:
@@ -1037,7 +1038,8 @@ class TurnRunner(GatewayTurnProgressMixin, GatewaySessionAgentMixin):
             try:
                 from tui_gateway.managed_image_runtime import conversation_image_scope
                 with notification_turn(agent, muted=ctx.mute_notification_reply, session_id=ctx.session_id or ""), \
-                        conversation_image_scope(owner=self._approval_owner):
+                        conversation_image_scope(owner=self._approval_owner,
+                            on_rejection=lambda payload: self._publish_execution('notification.show', payload)):
                     from gateway.response_filters import silence_allowed
                     agent._silence_marker_needs_reply = not silence_allowed(
                         ctx.persist_user_display_kind, ctx.reply_expected)

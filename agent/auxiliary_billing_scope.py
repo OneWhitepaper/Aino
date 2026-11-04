@@ -65,6 +65,8 @@ class ManagedCredential:
     scope: BillingScope | None = None
     on_override: Callable[[str, str], None] | None = field(default=None, repr=False)
     get_context_window: Callable[[], int | None] | None = field(default=None, repr=False)
+    model_id: str | None = None
+    get_request_identity: Callable[[], tuple[str, str | None, int | None]] | None = field(default=None, repr=False)
 
     def __call__(self) -> str:
         return self.get_key()
@@ -103,8 +105,17 @@ class ManagedCredential:
             raise RuntimeError("managed_billing_scope_missing")
         self.validate_scope(scope)
         # Resolve again at dispatch: SDK retries and redirected requests are separate attempts.
-        request.headers["Authorization"] = "Bearer " + self()
+        secret, model_id, version = self.get_request_identity() if self.get_request_identity else (self(), self.model_id, None)
+        # Error handling must identify this attempt, even if its binding rotates in flight.
+        request.extensions['aino_managed_owner_user_id'] = self.user_id
+        request.extensions.pop('aino_managed_credential_version', None)
+        if version is not None:
+            request.extensions['aino_managed_credential_version'] = version
+        request.headers["Authorization"] = "Bearer " + secret
         request.headers.pop("x-api-key", None)
+        request.headers.pop("X-Aino-Model-ID", None)
+        if model_id is not None:
+            request.headers["X-Aino-Model-ID"] = model_id
         # Keep the original purpose enum compatible with servers predating task detail.
         request.headers.pop("X-Aino-Task", None)
         purpose = scope.purpose

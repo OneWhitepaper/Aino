@@ -22,6 +22,8 @@ export interface AgentNoticePayload {
   code?: string
   billing_source?: string
   purpose?: string
+  owner_user_id?: string
+  managed_credential_version?: number
   text?: string
   level?: string
   kind?: string

@@ -16,7 +16,8 @@ async def call(connection, method, **params):
 
 
 @pytest.mark.asyncio
-async def test_managed_create_binding_and_cold_resume_require_a_fresh_lease(tmp_path, monkeypatch):
+@pytest.mark.parametrize('credential_type', ['lease', 'device'])
+async def test_managed_create_binding_and_cold_resume_require_a_fresh_lease(tmp_path, monkeypatch, credential_type):
     from gateway.run import GatewayRunner
     from gateway.session_authority import initialize_session_authority
     from gateway.session_controls import AuthorityConnection
@@ -62,6 +63,7 @@ async def test_managed_create_binding_and_cold_resume_require_a_fresh_lease(tmp_
                            owner=owner, model_id='catalog-a',
                            session_ticket=ticket['result']['session_ticket'])
         assert 'result' in claim, claim
+        assert claim['result']['managed_device_key'] == 1
         replay = await call(controller, 'session.claim_managed_model', session_id=sid,
                             owner=owner, model_id='catalog-a',
                             session_ticket=ticket['result']['session_ticket'])
@@ -74,6 +76,8 @@ async def test_managed_create_binding_and_cold_resume_require_a_fresh_lease(tmp_
                        model='upstream-model', api_mode='chat_completions',
                        capabilities={'tools': True, 'vision': False, 'reasoning': False},
                        context_window=32000)
+        if credential_type == 'device':
+            binding.update(credential_type='device', credential_version=1, expires_at=None)
         bound = await call(controller, 'session.bind_managed_model', **binding)
         assert bound['result']['bound'], bound
         ready = await call(viewer, 'session.info', session_id=sid)
@@ -82,7 +86,33 @@ async def test_managed_create_binding_and_cold_resume_require_a_fresh_lease(tmp_
         options = await call(viewer, 'model.options', session_id=sid, include_session_info=True)
         assert options['result']['session_info']['model'] == 'upstream-model', options
         assert options['result']['session_info']['platform_owner'] == owner, options
+
+        # A built SDK agent uses the wire model; turn-end events must retain the
+        # catalog selection so attached clients do not select a different price group.
+        from gateway.session_local_inventory import publish_settled_info
+        agent = SimpleNamespace(model='upstream-model', provider='custom',
+                                base_url=binding['base_url'], api_mode='chat_completions',
+                                tools=[], _cached_system_prompt='', context_compressor=None)
+        published = []
+        turn = SimpleNamespace(_approval_owner=(authority, sid, 1),
+                               _publish_execution=lambda kind, info: published.append((kind, info)))
+        with monkeypatch.context() as patch:
+            patch.setattr(authority, 'agent', lambda _ref: agent)
+            publish_settled_info(turn, agent)
+        kind, settled = published[-1]
+        assert kind == 'session.info'
+        assert settled['model'] == 'upstream-model'
+        assert settled.get('model_source') == 'aino', settled
+        assert settled['model_id'] == 'catalog-a'
+        assert settled['provider'] == 'aino'
+        assert settled['platform_owner'] == owner
+        assert settled['model_status'] == 'ready'
         assert get_registry().get(binding_key(authority, sid)) is not None
+        from gateway.run_turn_prepare import _resolve_policy_agent_runtime
+        from gateway.session_policy import policy_for_source
+        live = authority.sessions[sid]
+        _, runtime = _resolve_policy_agent_runtime(runner, policy_for_source(runner, live.source), source=live.source)
+        assert runtime['api_key'].model_id == ('catalog-a' if credential_type == 'device' else None)
         other_profile = SimpleNamespace(profile_id=str(tmp_path / 'other-profile'))
         assert get_registry().get(binding_key(other_profile, sid)) is None
 

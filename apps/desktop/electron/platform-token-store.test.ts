@@ -31,6 +31,35 @@ function fixture(crypto?: Partial<PlatformTokenStoreCrypto>) {
 }
 
 describe('platform token storage', () => {
+  it('round-trips device secrets with their account and rejects malformed encrypted identities', async () => {
+    const { store, filePath } = fixture()
+
+    const key = {
+      user_id: '17',
+      key_id: 'device-key',
+      device_id: 'device',
+      api_key: 'device-secret',
+      version: 1,
+      status: 'active' as const,
+      expires_at: null
+    }
+
+    await store.save('https://fixture.test', {
+      accessToken: 'access',
+      refreshToken: 'refresh',
+      expiresAt: 123000,
+      deviceKeys: [key]
+    })
+    expect((await store.load('https://fixture.test'))?.deviceKeys).toEqual([key])
+    expect(fs.readFileSync(filePath, 'utf8')).not.toContain('device-secret')
+    await store.save('https://fixture.test', {
+      accessToken: 'access',
+      refreshToken: 'refresh',
+      expiresAt: 123000,
+      deviceKeys: [{ ...key, version: 0 }]
+    })
+    await expect(store.load('https://fixture.test')).rejects.toMatchObject({ code: 'secure_store_read_failed' })
+  })
   it('round-trips an encrypted token pair through an owner-only atomic file', async () => {
     const { filePath, store } = fixture()
     await store.save('https://api.agentera.com.cn', {

@@ -554,6 +554,7 @@ def _resolve_active_context_length() -> int:
     metadata cache (slightly stale is fine for picking a tier and avoids a ~200 ms
     /models probe per CLI startup); then the full live resolver.
     """
+    from hermes_cli.anon_challenge import background_caller
     try:
         model_id, model_cfg = _active_model_config()
         if not model_id:
@@ -572,7 +573,8 @@ def _resolve_active_context_length() -> int:
             # provider+base_url-only lookup so static fallbacks still apply.
             try:
                 from hermes_cli.runtime_provider import resolve_runtime_provider
-                rt = resolve_runtime_provider(requested=provider, target_model=model_id) or {}
+                with background_caller():
+                    rt = resolve_runtime_provider(requested=provider, target_model=model_id) or {}
                 base_url = str(rt.get("base_url") or base_url or "").strip()
                 api_key = str(rt.get("api_key") or "").strip()
             except Exception as rt_exc:
@@ -585,8 +587,9 @@ def _resolve_active_context_length() -> int:
                     return cached_ctx
             except Exception:
                 pass
-        return int(get_model_context_length(model_id, base_url=base_url, api_key=api_key,
-                                            config_context_length=config_ctx, provider=provider) or 0)
+        with background_caller():
+            return int(get_model_context_length(model_id, base_url=base_url, api_key=api_key,
+                                                config_context_length=config_ctx, provider=provider) or 0)
     except Exception as e:
         logger.debug("Could not resolve active context length: %s", e)
         return 0
