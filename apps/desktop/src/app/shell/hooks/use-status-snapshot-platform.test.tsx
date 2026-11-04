@@ -15,7 +15,7 @@ import type { PlatformAccountSnapshot } from '../../../../shared/platform-contra
 
 import { useStatusSnapshot } from './use-status-snapshot'
 
-vi.mock('@/hermes', () => ({ getStatus: vi.fn(), getGlobalModelInfo: vi.fn() }))
+vi.mock('@/hermes', () => ({ getStatus: vi.fn(), getGlobalModelInfo: vi.fn(), setApiRequestProfile: vi.fn() }))
 
 const scope = { connectionId: 'local', profile: 'default' }
 const noProvider = 'Hermes is not connected to any AI provider yet.'

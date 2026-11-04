@@ -79,16 +79,16 @@ jobs:
           # absent from the target branch; once main contains it this exception
           # expires and the normal admission rule applies again.
           UPSTREAM=f0d94882e89ab8d4098b5bb2f166adfb9ee0a0ab
-          CATALOG_TREE=2a79b62d15c80db97a4575820d940d2f42781078
+          CATALOG_TREE=8720bd9408fa59385d42e208cd7abf26d6bd0e60
           IMPORTING_UPSTREAM=false
           if git merge-base --is-ancestor "$UPSTREAM" HEAD^2 \
               && ! git merge-base --is-ancestor "$UPSTREAM" HEAD^1; then
             IMPORTING_UPSTREAM=true
-            # Aino compatibility commits may follow the release import;
-            # validation below switches to the trusted release's entire tree.
-            # Pin the reviewed import's exact catalog tree. Five entries differ
-            # from the release only by seven removed trailing blank lines; no
-            # entry data or source pin changed. Any further edit is rejected.
+            # Pin the reviewed import's exact catalog tree. It retains Aino's
+            # existing Experiential Labs entry and excludes AtmoRouter because
+            # its pinned repository could not be cloned during review. Other
+            # imported entries continue through the pinned-source gate below.
+            # Any unreviewed catalog edit is rejected.
             if [ "$(git rev-parse HEAD:plugin-catalog)" != "$CATALOG_TREE" ]; then
               echo "::error::upstream import changed plugin-catalog/ beyond reviewed v0.22.6"
               exit 1
