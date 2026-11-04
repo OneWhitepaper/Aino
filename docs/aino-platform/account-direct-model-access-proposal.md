@@ -113,7 +113,9 @@ Agent 继续通过现有受保护绑定协议使用模型。协议增加能力�
 - `APIKeyService` / `APIKeyAuthSnapshot` / `api_key_auth_cache_impl.go`：ristretto L1，默认 TTL **15 秒**；沿用 10% 抖动时最大 **16.5 秒**。Redis L2 默认 TTL **300 秒**，键前缀 `apikey:auth:*`，已有 singleflight。
 - `SubscribeAuthCacheInvalidation` 和 `auth:cache:invalidate`：跨实例删除 L1；`InvalidateAuthCacheByKey`、`InvalidateAuthCacheByUserID`、`InvalidateAuthCacheByGroupID` 仍是服务层失效入口。
 - `auth_cache_invalidation_outbox` 与现有数据库触发器：提交变更后持久记录失效，`AuthCacheInvalidationWorker` 补偿缓存删除与广播；不能只靠一次 Pub/Sub 消息。
-- `users.token_version` / `resolvedTokenVersion`：用户身份撤销版本；`RevokeDevice`、登录族退出及 `RevokeFamily`：设备和父登录授权撤销入口。设备撤销不等同于修改所有设备的用户版本。
+- `JWTClaims.TokenVersion` / `resolvedTokenVersion`：当前 `users` 表没有 `token_version` 列，该值由账户 email/password_hash 指纹派生；不能当作已有可任意递增的数据库撤销版本。改密等身份变化检查复用该派生值；退出及单设备撤销复用登录族状态、`RevokeDevice` 与 `RevokeFamily`，不修改其他设备的用户身份版本。
+
+当前 `ListDevices` 按桌面租约聚合设备，`RevokeDevice` 也从租约查找对应登录族后撤销；不是已经独立于租约的登录族设备索引。未来退役租约前，需要将设备元数据及查询接入现有登录族机制，保留设备列表和单设备撤销功能。
 
 #### 3.4.1 快照字段和缓存范围
 
@@ -124,7 +126,7 @@ Agent 继续通过现有受保护绑定协议使用模型。协议增加能力�
 | 现有身份与路由 | `APIKeyID`、`UserID`、`GroupID`、`DesktopManaged`，Key/User/Group 的状态及现有价格、白名单、额度配置投影 |
 | 桌面授权归属 | 凭据 ID、设备 ID、连接授权 ID、父登录族 ID、用途；继续保留聊天/生图与连接隔离 |
 | 生命周期 | Key 与租约到期时间、明确撤销状态/原因、父登录有效截止时间；本地时间即可拒绝已知过期项 |
-| 用户身份版本 | 签发时的 `TokenVersion` 与最近确认的 `users.token_version` 权威版本，用于拒绝改密、全账户退出等已撤销身份 |
+| 用户身份版本 | 签发时的 `TokenVersion` 与服务端 `resolvedTokenVersion` 派生值比对，拒绝改密等身份变化；全账户退出和单设备撤销另查相应登录族撤销投影，不能只靠该指纹 |
 | 设备/父登录撤销 | 设备授权版本和登录族撤销版本或 scoped tombstone；单设备撤销只能失效目标设备，不能仅靠用户 `token_version` 替代 |
 | 模型授权投影 | 用户可用分组、订阅资格及到期时间、目录版本、允许模型/用途、固定计费分组；`ResolveForUser` 复用该投影，避免每请求重建整个目录和报价 |
 | 新鲜度 | 权限源版本、`verified_at`、不可滑动的授权校验截止时间；L2 命中填充 L1 不得刷新权威校验时间 |
@@ -138,7 +140,7 @@ Agent 继续通过现有受保护绑定协议使用模型。协议增加能力�
 | 触发变更 | 应失效的内容与现有接入点 |
 | --- | --- |
 | 普通/托管 Key 禁用、删除、到期或租约撤销 | 对应 Key 快照及桌面投影；复用 Key 失效入口与 outbox，不影响其他 Key |
-| 用户封禁、改密、全账户退出、`users.token_version` 更新 | 用户身份/权限投影及其全部调用快照；复用用户级失效和现有用户/认证撤销入口 |
+| 用户封禁、改密、全账户退出或派生 `TokenVersion` 变化 | 用户身份/权限投影及其全部调用快照；复用用户级失效和现有用户/认证撤销入口，退出时覆盖登录族撤销投影 |
 | `RevokeDevice`、设备退出、父登录族失效/`RevokeFamily` | 对应设备/登录族版本或 tombstone 和绑定凭据投影；保留同账户其他设备 |
 | 用户分组授权、公开分组限制或专属倍率变化 | 用户权限及用户模型解析投影；复用 `InvalidateAuthCacheByUserID`，补齐变更事件覆盖 |
 | 订阅创建、取消、到期或适用分组变化 | 该账户订阅资格、目录解析与相应鉴权投影；复用订阅缓存，截止时间也在请求中校验 |
@@ -261,7 +263,7 @@ Redis L2 的 300 秒 TTL **不是允许旧桌面权限存活 300 秒**。桌面�
 | Aino-API `backend/internal/repository/desktop_credential_repo.go` | 未到三分之一 TTL 的有效租约复用为租约/Key 零行写入；不是零事务/零读取，失效清理另计 |
 | Aino-API `backend/internal/service/api_key_auth_cache_impl.go`、`api_key_auth_cache_invalidate.go` | ristretto L1、Redis L2、singleflight、Key/User/Group 失效扩展点 |
 | Aino-API `backend/internal/repository/api_key_cache.go`、`auth_cache_invalidation_outbox` 与现有触发器 | `apikey:auth:*`、`auth:cache:invalidate` 和持久化补偿；35 秒健康 SLA 为现有码事实，55 秒为拟议授权窗口验收值 |
-| Aino-API `backend/internal/repository/refresh_token_family.go`、`users.token_version`、`RevokeDevice` | 复用登录/设备撤销边界，避免模型请求扫描历史令牌集合 |
+| Aino-API `backend/internal/repository/refresh_token_family.go`、`auth_service.go` 的 `resolvedTokenVersion`、`RevokeDevice` | 复用登录/设备撤销边界，区分派生身份指纹与登录族撤销状态，避免模型请求扫描历史令牌集合 |
 | Aino-API `backend/ent/schema/usage_log.go` 与现有计费链 | 必填密钥关联的稳定兼容；账本不按会话重建 |
 
 本文件是通过方向评审后的修订方案，不是完成回执。当前行动为先交付批次 0 的实施 PR，并补齐批次 1 缓存投影设计；后续协议迁移按批次门禁推进。任何批次都不因本文件自动部署或发布桌面版本。
