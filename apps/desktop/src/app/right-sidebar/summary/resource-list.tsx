@@ -74,7 +74,7 @@ export function SummaryResourceList({ items, session }: { items: SummaryResource
         }
 
         if (preview) {
-          openPreview(preview, session.storedId, session.runtimeId, session.scope.profile)
+          openPreview(preview, session.storedId, session.runtimeId, session.scope.profile, { browser: 'matching-url' })
         }
       }
     } catch (error) {

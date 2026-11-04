@@ -11,6 +11,10 @@ import { Download, ZoomIn, ZoomOut } from '@/lib/icons'
 import { cn } from '@/lib/utils'
 import { $transcriptLightbox, closeTranscriptLightbox, openTranscriptLightbox } from '@/store/transcript-lightbox'
 
+// Keep room for the zoom toolbar without letting desktop gutters consume a compact window.
+const LIGHTBOX_BOUNDS =
+  'max-h-[calc(100dvh-clamp(5rem,16dvh,12rem))] max-w-[calc(100vw-clamp(1.5rem,12vw,12rem))]'
+
 export interface ZoomableImageProps extends ComponentProps<'img'> {
   containerClassName?: string
   slot?: string
@@ -169,7 +173,7 @@ export function ImageLightbox({
             </div>
           )
         }
-        className="w-auto max-h-[calc(100vh-12rem)] max-w-[calc(100vw-12rem)] border-0 bg-transparent! shadow-none!"
+        className={cn(LIGHTBOX_BOUNDS, 'w-auto border-0 bg-transparent! shadow-none!')}
         // The media-lightbox shell variant. styles.css paints every
         // [data-slot='dialog-content'] with the themed elevated background +
         // --shadow-md — fine for opaque dialogs, but this shell is meant to be
@@ -187,7 +191,8 @@ export function ImageLightbox({
           <img
             alt={alt ?? ''}
             className={cn(
-              'block max-h-[calc(100vh-12rem)] max-w-[calc(100vw-12rem)] select-none rounded-lg object-contain shadow-2xl',
+              LIGHTBOX_BOUNDS,
+              'block select-none rounded-lg object-contain shadow-2xl',
               panning && 'cursor-grabbing'
             )}
             onClick={onImageClick}

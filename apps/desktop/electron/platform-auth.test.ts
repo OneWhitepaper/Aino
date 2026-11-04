@@ -2,9 +2,9 @@ import http from 'node:http'
 
 import { afterEach, describe, expect, it } from 'vitest'
 
-import { createPlatformAuth } from './platform-auth'
-import { createPlatformClient } from './platform-client'
-import type { PlatformTokenSet, PlatformTokenStore } from './platform-token-store'
+import { createPlatformAuth } from '../shared/platform-auth'
+import { createPlatformClient } from '../shared/platform-client'
+import type { PlatformTokenSet, PlatformTokenStore } from '../shared/platform-token-contract'
 
 const servers: http.Server[] = []
 afterEach(async () => Promise.all(servers.splice(0).map(s => new Promise<void>(r => s.close(() => r())))))

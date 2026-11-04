@@ -52,6 +52,8 @@ export interface BootTranslations {
     details: string
     remoteTitle: string
     remoteDescription: string
+    webappTitle: string
+    webappDescription: string
     retry: string
     repairInstall: string
     useLocalGateway: string

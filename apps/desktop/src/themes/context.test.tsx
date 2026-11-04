@@ -202,3 +202,23 @@ describe('ThemeProvider highlight preview', () => {
     expect(cssVar('--theme-foreground')).toBe(painted)
   })
 })
+
+
+describe('Aino boot-failure palette', () => {
+  afterEach(cleanup)
+
+  it('persists the same palette the fixed desktop paints', () => {
+    window.localStorage.clear()
+    $activeGatewayProfile.set('default')
+    modePref.assign('default', 'dark')
+    render(<ThemeProvider><div /></ThemeProvider>)
+
+    const snapshot = JSON.parse(window.localStorage.getItem('hermes-boot-palette')!)
+    expect(snapshot).toEqual({
+      background: window.localStorage.getItem('aino-boot-background-v1'),
+      foreground: cssVar('--theme-foreground'),
+      accent: cssVar('--theme-midground'),
+      accentForeground: cssVar('--dt-midground-foreground')
+    })
+  })
+})

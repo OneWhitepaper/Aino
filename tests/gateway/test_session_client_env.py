@@ -432,6 +432,7 @@ def test_auto_started_gateway_does_not_inherit_client_behaviour_env(tmp_path, mo
     def popen(command, **kwargs):
         captured.update(kwargs['env'])
         return SimpleNamespace(pid=1)
+    monkeypatch.setattr(gateway_runtime_start, 'start_gateway_job', lambda *args, **kwargs: None)
     monkeypatch.setattr(gateway_runtime_start.subprocess, 'Popen', popen)
     for name in ('HERMES_EPHEMERAL_SYSTEM_PROMPT', 'HERMES_PREFILL_MESSAGES_FILE', 'HERMES_INFERENCE_PROVIDER',
                  'HERMES_ENABLE_PROJECT_PLUGINS', 'HERMES_TUI_CLIENT_ENV'):

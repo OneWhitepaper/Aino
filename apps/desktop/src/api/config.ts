@@ -200,7 +200,10 @@ export function saveHermesConfig(
 /** Capability-scoped counterpart of saveHermesConfig — writes the config of
  *  the profile/connection the Capabilities scope selector points at (possibly
  *  on another registered gateway), mirroring getHermesConfigRecord. */
-export function saveHermesConfigRecord(config: HermesConfigRecord, profile?: ProfileScope): Promise<{ ok: boolean }> {
+export function saveHermesConfigRecord(
+  config: HermesConfigRecord,
+  profile?: ProfileScope
+): Promise<{ ok: boolean }> {
   return window.hermesDesktop.api<{ ok: boolean }>({
     ...resolveConfigWriteScope(config, profile),
     path: '/api/config',
@@ -257,7 +260,13 @@ export function validateProviderCredential(
   value: string,
   apiKey?: string,
   profile?: ProfileScope
-): Promise<{ ok: boolean; reachable: boolean; message: string; models?: string[]; resolved_base_url?: string }> {
+): Promise<{
+  ok: boolean
+  reachable: boolean
+  message: string
+  models?: string[]
+  resolved_base_url?: string
+}> {
   return window.hermesDesktop.api<{
     ok: boolean
     reachable: boolean
@@ -331,10 +340,10 @@ export function listOAuthProviders(profile?: ProfileScope): Promise<OAuthProvide
 
 export function disconnectOAuthProvider(
   providerId: string,
-  profile?: null | string
+  profile?: ProfileScope
 ): Promise<{ ok: boolean; provider: string }> {
   return hermesApi<{ ok: boolean; provider: string }>({
-    ...profileScoped(profile),
+    ...capabilityScoped(profile),
     path: `/api/providers/oauth/${encodeURIComponent(providerId)}`,
     method: 'DELETE'
   })
@@ -387,7 +396,10 @@ export function pollOAuthSession(
 
 /** The free tier's handoff after a Nous sign-in. A long-poll: given `since`
  *  (the `updated_at` on screen) the backend answers once the record changes. */
-export function getNousHandoffStatus(since: null | string, profile?: ProfileScope): Promise<AppHandoffStatus> {
+export function getNousHandoffStatus(
+  since: null | string,
+  profile?: ProfileScope
+): Promise<AppHandoffStatus> {
   const query = new URLSearchParams({ wait: String(OAUTH_LONG_POLL_SECONDS), ...(since ? { since } : {}) })
 
   return window.hermesDesktop.api<AppHandoffStatus>({

@@ -1,49 +1,39 @@
-import { accountPage } from './account-page'
-import { appearancePage } from './appearance-page'
-import { configPagesFor } from './config-pages'
-import { homeGuidance } from './home-guidance'
-import { toolPanel } from './tool-panel'
-import { workspacePage } from './workspace-page'
-import { zhBilling } from './zh_billing_surface'
-import { zhMessaging } from './zh_messaging'
-import { sidebarMode } from './zh_sidebar_mode'
-import { zhSummary } from './zh_summary_surface'
-
-const accountErrors: Record<string, string> = {
-  INVALID_PHONE: '请输入有效的手机号。',
-  PHONE_REGION_UNSUPPORTED: '暂不支持该地区的手机号。',
-  SMS_UNAVAILABLE: '短信登录暂时不可用。',
-  SMS_DELIVERY_UNKNOWN: '暂时无法确认短信是否送达，请稍后再试。',
-  PHONE_CODE_INVALID: '验证码不正确。',
-  PHONE_CODE_EXPIRED: '验证码已过期，请重新获取。',
-  PHONE_CODE_EXHAUSTED: '验证码错误次数过多，请重新获取。',
-  invalid_credentials: '邮箱或密码不正确。',
-  second_factor_invalid: '身份验证器验证码不正确。',
-  captcha_cancelled: '已取消人机验证。',
-  captcha_provider_unsupported: '桌面端暂不支持站点当前的人机验证方式。',
-  network_timeout: '账户服务响应超时，请重试。',
-  network_unavailable: '无法连接账户服务，请检查网络后重试。',
-  reauthentication_required: '请重新登录以继续。'
-}
-
 // health: allow FILE_LINES -- locale data: translated copy for the usage-window plan UI (allowance gauges, Large/Free tags, the limit card), one key per string
 import { defineFieldCopy } from '@/app/settings/field-copy'
 
+import { accountPage } from './account-page'
+import { appearancePage } from './appearance-page'
+import { configPagesFor } from './config-pages'
 import { defineLocale, type TranslationOverrides } from './define-locale'
+import { homeGuidance } from './home-guidance'
 import { introZh } from './intro-zh'
+import { zhAccountErrors } from './platform-account-errors'
+import { toolPanel } from './tool-panel'
+import { workspacePage } from './workspace-page'
+import { zhBilling } from './zh_billing_surface'
 import { zhCatalog, zhSkillDeepLink } from './zh_catalog'
 import { zhClarify } from './zh_clarify'
 import { zhConnectorCard } from './zh_connector_card'
+import { zhCronControl } from './zh_cron_control'
+import { zhErrorCodes } from './zh_error_codes'
 import { zhErrorLayers } from './zh_error_layers'
 import { zhFirstRun } from './zh_first_run'
+import { zhGatewayHost } from './zh_gateway_host'
 import { zhLocalModels } from './zh_local_models'
+import { zhMemoryLayers } from './zh_memory_layers'
+import { zhMessaging } from './zh_messaging'
 import { zhModelMenu } from './zh_model_menu'
 import { zhModelSettings } from './zh_model_settings'
 import { zhNotices } from './zh_notices'
 import { zhNotifications } from './zh_notifications'
 import { zhOnboarding } from './zh_onboarding'
+import { zhPluginPreviewAccess } from './zh_plugin_preview_access'
+import { zhPluginUpdate } from './zh_plugin_update'
+import { zhPreviewWeb } from './zh_preview_web'
 import { zhProjects } from './zh_projects'
 import { zhSharedMetrics } from './zh_shared_metrics'
+import { sidebarMode } from './zh_sidebar_mode'
+import { zhSummary } from './zh_summary_surface'
 import { zhThemePicker } from './zh_theme_picker'
 import { zhUpdateChannel } from './zh_update_channel'
 
@@ -503,6 +493,8 @@ export const zhOverrides = {
       description: '后台网关没有启动。请尝试下面的恢复步骤；这里不会删除你的对话或设置。',
       remoteTitle: '需要重新登录远程网关',
       remoteDescription: '你的远程网关会话已过期。请重新登录以恢复连接。这些操作不会删除你的对话或设置。',
+      webappTitle: '连接此浏览器',
+      webappDescription: '在网关所在的电脑上运行 hermes webapp，为此浏览器授权访问。',
       retry: '重试',
       repairInstall: '修复安装',
       useLocalGateway: '使用本地网关',
@@ -626,6 +618,7 @@ export const zhOverrides = {
       microphoneConstraintsUnsupported: '此设备不支持当前麦克风约束。',
       microphoneFailed: '麦克风出错',
       microphoneInUse: '麦克风正被其他应用占用。',
+      microphoneNeedsHttps: '麦克风需要安全连接。请通过 HTTPS 或到 127.0.0.1 的 SSH 隧道打开 Webapp 后使用。',
       microphonePermissionDenied: '麦克风权限被拒绝。',
       microphoneStartFailed: '无法开始麦克风录音。',
       microphoneUnsupported: '当前运行环境不支持麦克风录音。',
@@ -891,7 +884,7 @@ export const zhOverrides = {
       advancedOutput: '输出限制',
       advancedDelegation: '子智能体',
       advancedDesktop: '桌面与启动',
-      gatewayConnection: '当前窗口',
+      gatewayConnection: '主网关',
       gatewayDevices: '已保存的连接',
       gatewayManagedUpdates: '远程更新',
       gatewayManagedUpdatesUnavailable: '远程更新需要支持托管 SSH 更新的桌面版本。',
@@ -1082,6 +1075,15 @@ export const zhOverrides = {
         versionLabel: '版本',
         reviewedPin: sha => (sha ? `已审核的固定提交 ${sha}` : '已审核的固定提交'),
         latestCommit: '最新提交',
+        sourceMoved: sha =>
+          sha ? `自你审阅后仓库已变更。请先审阅新版本（提交 ${sha}）再安装。` : '自你审阅后仓库已变更。正在读取新版本…',
+        legacyBackendConfirm:
+          '此后端比本应用旧，无法保证安装的就是你审阅过的版本：如果仓库此后有变更，安装的会是更新的版本。更新后端即可获得这一保证。',
+        installAnyway: '仍然安装',
+        partialInstall: sha =>
+          sha
+            ? `插件只安装了一部分：代理部分已安装在提交 ${sha}，但由于仓库在你审阅后有变更，桌面部分未能随之安装。在“高级”中打开强制重装，可用显示的版本替换两部分；或取消，仅保留代理部分。`
+            : '插件只安装了一部分：代理部分已安装，但由于仓库在你审阅后有变更，桌面部分未能随之安装。在“高级”中打开强制重装，可用显示的版本替换两部分；或取消，仅保留代理部分。',
         nothingToInstall: '此包在这里没有可安装的内容。'
       },
       errors: {
@@ -1120,7 +1122,7 @@ export const zhOverrides = {
     },
     appearance: {
       chatTextScaleTitle: '聊天文字大小',
-      chatTextScaleDesc: '相对于界面缩放调整对话文字和消息输入框的字号。侧边栏和控件大小保持不变。',
+      chatTextScaleDesc: '相对于全局界面缩放调整对话文字和消息输入框的字号。侧边栏和控件大小保持不变。',
       title: '外观',
       intro: '设置 Aino 桌面端的显示偏好。',
       colorMode: '颜色模式',
@@ -1133,7 +1135,7 @@ export const zhOverrides = {
       hideThreadTimelineDesc: '隐藏每个对话右侧边缘的导航条。',
       reasoningCollapsedTitle: '默认折叠推理过程',
       reasoningCollapsedDesc: '保留流式推理内容，但在您打开前保持折叠。',
-      uiScaleTitle: '界面缩放',
+      uiScaleTitle: '全局界面缩放',
       uiScaleDesc: (percent: number) =>
         `缩放整个应用的文字和界面。也可使用 Cmd/Ctrl 加 +、- 或 0 调整。当前：${percent}%`,
       sessionDensityTitle: '会话列表密度',
@@ -1743,6 +1745,7 @@ export const zhOverrides = {
       scopeNotRestored: (profile: string, error: string) => `工作区“${profile}”未恢复：${error}`
     },
     gateway: {
+      ...zhGatewayHost,
       loading: '正在加载运行服务设置…',
       unavailableTitle: '运行服务设置不可用',
       unavailableDesc: '此版本暂时无法读取运行服务设置。',
@@ -2318,7 +2321,7 @@ export const zhOverrides = {
       autoArchiveFailed: '无法更新自动归档设置',
       defaultDirTitle: '默认项目目录',
       defaultDirDesc: '新会话默认从此文件夹开始，除非你选择其他目录。留空则使用你的主目录。',
-      defaultDirUpdated: '默认项目目录已更新',
+      defaultDirUpdated: (shortcut: string | null) => '默认项目目录已更新' + (shortcut ? `（${shortcut}）` : ''),
       defaultsTo: label => `默认使用 ${label}。`,
       change: '更改',
       choose: '选择',
@@ -2434,6 +2437,7 @@ export const zhOverrides = {
       }
     },
     account: {
+      browserSessionOnly: '此浏览器仅在当前标签页内保持登录，关闭或刷新后需要重新登录。',
       displayNameLabel: '昵称',
       editDisplayName: '修改昵称',
       displayNameHint: '1–32 个字符，将显示在左下角。',
@@ -2475,7 +2479,7 @@ export const zhOverrides = {
       platformError: (code, retryAfter) =>
         code === 'SMS_RATE_LIMITED' && retryAfter !== undefined
           ? `请求过于频繁，请在 ${retryAfter} 秒后重试。`
-          : (accountErrors[code] ?? '账户请求失败，请重试。'),
+          : (zhAccountErrors[code] ?? '账户请求失败，请重试。'),
       errors: {
         invalid_identifier: '请输入有效的邮箱地址或手机号。',
         missing_code: '请先获取验证码，再输入验证码登录。',
@@ -2572,7 +2576,9 @@ export const zhOverrides = {
       fullConsequence: name => `全部内容——聊天界面、${name} 智能体以及所有配置、对话、密钥和日志`,
       couldNotStart: '无法开始卸载。'
     }
-  },
+  ,
+memoryLayers: zhMemoryLayers
+},
 
   skillDeepLink: zhSkillDeepLink,
   skills: {
@@ -2626,6 +2632,10 @@ export const zhOverrides = {
     changesApplyNewSessions: '更改将应用于新会话。',
     skillUpdated: '技能已更新',
     edit: '编辑',
+    lock: '锁定',
+    locked: '已锁定',
+    lockHint: '锁定期间，智能体无法更改此技能。你仍可以自己编辑。',
+    unlockedHint: '锁定后，智能体将无法更改此技能。你仍可以自己编辑。',
     archive: '归档',
     skillArchivedTitle: '技能已归档',
     skillArchivedMessage: '可通过 hermes curator restore 恢复。',
@@ -2633,6 +2643,8 @@ export const zhOverrides = {
     // top-level catalog keys above.
     tabPlugins: '插件',
     plugins: {
+      ...zhPluginPreviewAccess,
+      ...zhPluginUpdate,
       agentTitle: 'Agent 插件',
       agentBlurb: '为所选配置扩展 agent — 工具、钩子、模型提供方。重启网关后生效。',
       pageBlurb: '插件可以扩展本应用、agent，或两者 — 每一半都有自己的开关。',
@@ -3041,9 +3053,6 @@ export const zhOverrides = {
       resume: '恢复',
       runNow: '立即运行',
       memoryData: '记忆数据',
-      memoryDataDesc: '注入每个会话的内置记忆文件',
-      memoryProvider: name => `当前提供方：${name}`,
-      builtinMemory: '内置',
       memoryFile: '智能体记忆（MEMORY.md）',
       userFile: '用户画像（USER.md）',
       bytes: size => size,
@@ -3179,7 +3188,7 @@ export const zhOverrides = {
       gateway: gateway => `${gateway} 上的工作区`,
       gatewayUnreachable: gateway => `${gateway} · 无法连接`,
       onGateway: (name, gateway) => `${name} · ${gateway}`,
-      switchTo: (name, gateway) => `切换到 ${gateway} 上的 ${name}`,
+      switchTo: (name, gateway) => `打开 ${gateway} 上的 ${name}`,
       deleteOn: gateway => `（位于 ${gateway}）`,
       localDevice: '此设备（本地后端——若未安装 Hermes 则会安装，否则打开一个新会话）',
       switchDeviceTitle: '切换到此设备？',
@@ -3318,7 +3327,10 @@ export const zhOverrides = {
     profileNameRequired: '需要工作区名称',
 
     defaultProfileDeleteBlocked: '无法删除默认工作区。'
-  },
+  ,
+exportNeedsHost: name => `浏览器无法保存配置档案归档。请在 Hermes 主机上运行：hermes profile export ${name}`,
+notServedHere: '此处未提供'
+},
 
   modelAssignment: {
     saveFailed: 'Hermes 未保存该模型更改。',
@@ -3329,6 +3341,7 @@ export const zhOverrides = {
   },
 
   cron: {
+    control: zhCronControl,
     close: '关闭定时任务',
     title: '定时任务',
     count: count => `${count} 个任务`,
@@ -4552,6 +4565,8 @@ export const zhOverrides = {
     versionDetailsTitle: '版本详情',
     versionDetailsBody: '此安装在应用外部管理。请使用与安装时相同的方式更新。',
     versionDetailsVersion: '版本',
+    versionDetailsClient: '本设备',
+    versionDetailsBackend: '已连接的后端',
     versionDetailsCommit: '提交',
     versionDetailsBuildOrigin: '构建来源',
     versionDetailsDistribution: '发行版',
@@ -5008,6 +5023,16 @@ export const zhOverrides = {
   },
 
   rightSidebar: {
+    terminalReconnectSame: "终端连接已断开。按 Enter 重新连接到原来的 Shell。",
+    terminalExpired: "终端已过期或退出。按 Enter 创建新的 Shell。",
+    terminalSuperseded: "终端已在其他窗口中打开。按 Enter 将它切回此窗口。",
+    terminalDenied: "无权访问终端。请检查登录状态和配置分组，再按 Enter 重试。",
+    terminalCapacity: "终端数量已达上限。关闭其他终端后按 Enter 重试。",
+    terminalSignedOut: "Aino 登录已失效。请在此浏览器重新登录，再按 Enter 连接终端。",
+    terminalReconnecting: "终端连接已断开，正在重新连接到原来的 Shell…",
+    terminalStartRetry: (error: string) => "终端启动失败：" + error + "。按 Enter 重试。",
+    terminalCloseFailed: "无法关闭终端",
+    terminalDropUnquotable: (shell, paths) => `无法在 ${shell} 中安全地输入这些名称：${paths}`,
     terminalReadOnly: '只读输出',
     terminalReadOnlyHelp:
       '如需回应提示，请停止后台命令，再在新终端中运行。新终端会打开独立的 shell，不会连接到此进程。',
@@ -5058,10 +5083,21 @@ export const zhOverrides = {
     unableToReadPlaceholder: error => `无法读取 (${error})`,
 
     terminalStartFailed: error => `终端启动失败：${error}`
-  },
+  ,
+terminalNewOn: '新建终端于…',
+terminalGatewayRemoved: '已移除的网关',
+terminalGatewayRemovedBody:
+      '此终端所在的网关已被移除，无法重新打开。请关闭此标签页。',
+terminalGatewayNoShellBody:
+      '此网关不提供 Shell 访问，此终端无法重新打开。请关闭此标签页。',
+terminalDisconnectedBody:
+      '终端已断开。按 Enter 启动新的 shell；滚动记录会保留。'
+},
 
   preview: {
     tab: '预览',
+    imageFit: '适应面板',
+    imageActualSize: '原始大小（100%）',
     pin: '固定到工作区',
     unpin: '从工作区取消固定',
     closePane: '关闭预览面板',
@@ -5119,62 +5155,7 @@ export const zhOverrides = {
       sentTitle: '已发送到对话',
       sentMessage: count => `已将 ${count} 条日志添加到输入框`
     },
-    web: {
-      appFailedToBoot: '预览应用启动失败',
-      serverNotFound: '未找到服务器',
-      remoteLoopback:
-        '该地址指向运行智能体的那台机器，而不是本机。浏览器面板在本地加载页面，因此远程开发服务器需要端口转发或可访问的主机名。',
-      failedToLoad: '预览加载失败',
-      tryAgain: '重试',
-      restarting: 'Hermes 正在重启...',
-      askRestart: '让 Hermes 重启服务器',
-      lookingRestart: taskId => `Hermes 正在查找要重启的预览服务器 (${taskId})`,
-      restartingTitle: '正在重启预览服务器',
-      restartingMessage: 'Hermes 正在后台工作。可在预览控制台查看进度。',
-      startRestartFailed: message => `无法启动服务器重启：${message}`,
-      restartFailed: '服务器重启失败',
-      hideConsole: '隐藏预览控制台',
-      showConsole: '显示预览控制台',
-      hideDevTools: '隐藏预览 DevTools',
-      openDevTools: '打开预览 DevTools',
-      goBack: '后退',
-      goForward: '前进',
-      reload: '重新加载页面',
-      address: '地址',
-      addressPlaceholder: '输入地址',
-      blankPageBody: '在上方输入地址开始浏览，或让 Hermes 打开一个页面。',
-      finishedRestarting: message => `Hermes 已完成预览服务器重启${message ? `: ${message}` : ''}`,
-      failedRestarting: message => `服务器重启失败：${message}`,
-      unknownError: '未知错误',
-      restartedTitle: '预览服务器已重启',
-      reloadingNow: '正在重新加载预览。',
-      restartFailedTitle: '预览重启失败',
-      restartFailedMessage: 'Hermes 无法重启服务器。',
-      stillWorking: 'Hermes 仍在工作，但还没有收到重启结果。服务器命令可能正在前台运行。',
-      workspaceReloading: '工作区已变更，正在重新加载预览',
-      fileChanged: url => `文件已变更，正在重新加载预览：${url}`,
-      filesChanged: (count, url) => `${count} 个文件变更，正在重新加载预览：${url}`,
-      watchFailed: message => `无法监听预览文件：${message}`,
-      moduleMimeDescription:
-        '模块脚本使用了错误的 MIME 类型。这通常表示静态文件服务器正在服务 Vite/React 应用，而不是项目开发服务器。',
-      loadFailedConsole: (code, message) => `加载失败${code ? ` (${code})` : ''}: ${message}`,
-      unreachableDescription: '无法访问预览页面。',
-      openTarget: url => `打开 ${url}`,
-      fallbackTitle: '预览',
-      annotate: '标注',
-      annotateOn: '停止标注',
-      annotateNeedPage: '请先在内置浏览器中打开页面。',
-      annotateFailed: '无法开始标注',
-      commenting: '标注中',
-      addComments: count => (count === 1 ? '添加 1 条批注' : `添加 ${count} 条批注`),
-      commentPlaceholder: '添加批注…',
-      commentTitle: n => `批注 ${n}`,
-      saveComment: '保存',
-      cancelComment: '取消批注',
-      restartNoActiveSession: '没有活动会话，无法在后台重启。',
-
-      restartMissingTaskId: '后台重启未返回任务 ID。'
-    },
+    web: zhPreviewWeb,
     browserTab: '浏览器',
 
     desktopBridgeUnavailable: '桌面桥接不可用',
@@ -5302,7 +5283,9 @@ export const zhOverrides = {
       terminalDeck: '终端布局',
       quad: '四宫格'
     }
-  },
+  ,
+tabActions: title => `${title} 的操作`
+},
 
   contextMenu: {
     link: {
@@ -5350,6 +5333,7 @@ export const zhOverrides = {
       branchNewChat: '在新对话中分支',
       react: '回应',
       dismissError: '关闭错误',
+      responseStopped: '已暂停，当前进展已保留。',
       ...zhErrorLayers,
       errorGenericProvider: '模型服务',
       errorLayerBodies: {
@@ -5368,6 +5352,7 @@ export const zhOverrides = {
         runtime: '启动回复时发生内部错误。请重新发送；若持续出现，请发送诊断信息。'
       },
       errorCodes: {
+        ...zhErrorCodes,
         provider_policy_blocked: {
           title: '账户设置禁止使用此模型',
           body: provider => `${provider} 根据账户的数据或隐私设置拒绝了请求。请选择其他模型或提供方。`
@@ -5405,8 +5390,8 @@ export const zhOverrides = {
           body: provider => `${provider} 返回服务器错误，请稍后重试或切换提供方。`
         },
         timeout: {
-          title: '无法连接到 AI 服务',
-          body: provider => `无法连接到 ${provider}，或其未及时响应。请检查网络连接后重试。`
+          title: provider => `无法连接 ${provider}`,
+          body: provider => `Hermes 无法连接到 ${provider}。请检查网络连接后重试。`
         },
         ssl_cert_verification: {
           title: '安全连接失败',
@@ -5493,12 +5478,30 @@ export const zhOverrides = {
         usage_window: {
           title: '包含用量已用完',
           body: '你的方案包含的用量已用完，将在重置后恢复。在 /topup 中添加额度即可继续。'
-        },
-        workspace_unavailable: {
-          title: '此聊天的文件夹已不存在',
-          body: '此聊天使用的文件夹已被移动或删除，因此你的消息未被执行。请重新创建该文件夹，或使用“移动到项目”为聊天指定其他文件夹，然后重试。'
         }
       },
+      errorAuthKinds: {
+        api_key: {
+          title: provider => `${provider} 拒绝了你的 API 密钥`,
+          body: () => '已保存的密钥无效或已被撤销。请更新密钥，然后重新发送消息。'
+        },
+        oauth: {
+          title: provider => `重新登录 ${provider}`
+        }
+      },
+      errorDetails: '查看错误详情',
+      errorHideDetails: '隐藏错误详情',
+      errorDetailsCopy: '复制详情',
+      errorCopyRaw: '复制错误',
+      errorContinue: '继续',
+      errorOpenProviderSettings: provider => `打开 ${provider} 设置`,
+      errorOpenSetupGuide: '打开设置指南',
+      errorSetupGuideLink: '设置指南',
+      errorOpenModelSettings: '打开模型设置',
+      errorStartNewChatLink: '新建聊天',
+      errorChooseModelLink: '选择其他模型',
+      errorRetryAtResetShort: time => `于 ${time} 重试`,
+      errorRateLimitResetBody: (provider, time) => `你已达到 ${provider} 的速率限制，将于 ${time} 重置。`,
       errorRetry: '重试',
       errorSwitchToModel: (model, note) => (note ? `切换到 ${model}（${note}）` : `切换到 ${model}`),
       errorSwitchModelFailed: '无法切换模型',
@@ -5506,18 +5509,15 @@ export const zhOverrides = {
       errorUseCreditsFailed: '无法开启用额度继续',
       errorAddCredits: '添加额度',
       errorOpenBillingSettings: '打开账单设置',
-      errorLimitResets: time => `限额将于 ${time} 重置`,
-      errorRetryAtReset: time => `限额重置后重试（${time}）`,
       errorRetryScheduled: (time, wait) => `将于 ${time} 重试 — 还剩 ${wait}`,
       errorRetryScheduledCancel: '取消',
       errorStartNewSession: '开始新会话',
       errorSwitchProvider: '切换服务商',
       errorSignInAgain: provider => `重新登录 ${provider}`,
-      errorOauthExpired: provider => `您的 ${provider} 登录已过期或被撤销。请重新登录以继续对话。`,
+      errorOauthExpired: provider => `你的 ${provider} 登录已过期或被撤销。请重新登录以继续聊天。`,
       errorOpenLogs: '打开日志',
       errorOpenLogsFailed: '无法打开日志文件夹',
       errorOpenDesktopLogs: '打开桌面端日志',
-      errorCopyDiagnostics: '复制错误详情',
       errorSendDiagnostics: '发送诊断信息',
       filesChanged: count => `${count} 个文件已更改`,
       reviewChanges: '查看',
@@ -5584,16 +5584,6 @@ export const zhOverrides = {
       modelChangedTo: model => `模型已更改为 ${model}。`,
 
       modelChangedFrom: (previousModel, model) => `模型已从 ${previousModel} 更改为 ${model}。`,
-
-      errorAuthKinds: {
-        api_key: {
-          title: provider => `${provider} 拒绝了 API 密钥`,
-          body: provider => `${provider} 的密钥无效或已被撤销，请更新后重试。`
-        },
-        oauth: { title: provider => `${provider} 登录已过期` }
-      },
-
-      errorDetails: '详情',
 
       errorToastTitle: 'Aino 未能完成回复',
 
@@ -5941,11 +5931,17 @@ export const zhOverrides = {
   },
 
   desktop: {
+    localRuntimeUnavailableTitle: "本地运行环境不可用",
+    localRuntimeUnavailableDesktop: "请在设置 → 模型服务 → 本地模型中完成运行环境配置。",
+    localRuntimeUnavailableWebapp: "请在 Aino 桌面端配置本地模型，或在此浏览器选择托管模型。",
+    openLocalModels: "打开本地模型",
+    serviceAuthorizationTitle: "服务授权",
+    serviceAuthorizationDescription: "使用第三方服务自己的账户登录。此授权独立于你的 Aino 账户。",
     audioReadFailed: '无法读取录制的音频',
     sessionUnavailable: '会话不可用',
     createSessionFailed: '无法创建新会话',
     promptFailed: '提示词发送失败',
-    providerCredentialRequired: '发送第一条消息前请先添加提供方凭据。',
+    providerCredentialRequired: '请前往“设置 → 模型”检查当前模型及其授权后继续。',
     emptySlashCommand: '空斜杠命令',
     slashCommandIgnoredTitle: '命令未发送',
     slashCommandIgnoredBody: 'Slash 命令不能与附件同时使用。请移除附件或单独发送命令。',
@@ -6025,6 +6021,7 @@ export const zhOverrides = {
     noClipboardImage: '剪贴板中没有图片',
     clipboardPasteFailed: '粘贴剪贴板失败',
     dropFiles: '拖放文件',
+    dropFilesMore: (count: number) => `以及另外 ${count} 项`,
     handoff: {
       pickPlatform: '选择目标平台',
       success: platform => `已移交到 ${platform}。随时可在此处恢复。`,
@@ -6640,6 +6637,7 @@ export const zhOverrides = {
     refresh: '刷新设备',
     empty: '暂无设备授权',
     active: '有效',
+    expired: '已过期',
     revoked: '已撤销',
     lastUsed: '最近使用',
     expires: '到期时间',

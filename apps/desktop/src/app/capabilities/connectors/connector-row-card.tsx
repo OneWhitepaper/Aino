@@ -158,8 +158,8 @@ function CardLane({
   const fact = card.residency === 'hosted' && card.fact ? factText(copy, card.fact) : null
 
   return (
-    <div className="relative z-10 flex w-[7.75rem] shrink-0 flex-col items-end gap-1">
-      <span className="flex items-center gap-1.5 text-[0.6875rem] text-(--ui-text-secondary)">
+    <div className="connector-card-lane relative z-10 flex shrink-0 flex-col items-end gap-1">
+      <span className="flex min-w-0 max-w-full items-center gap-1.5 text-[0.6875rem] text-(--ui-text-secondary)">
         {withDot ? (
           <span aria-hidden className={cn('size-[5px] shrink-0 rounded-full', STATE_DOT[card.state])} />
         ) : null}

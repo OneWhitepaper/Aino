@@ -25,6 +25,8 @@ export const jaBoot = {
       ipcBridgeUnavailable: 'デスクトップ IPC ブリッジが利用できません。'
     },
     failure: {
+      webappTitle: 'このブラウザーを接続',
+      webappDescription: 'ゲートウェイのコンピューターで hermes webapp を実行し、このブラウザーを認証してください。',
       title: 'Hermes を起動できませんでした',
       description:
         'バックグラウンドゲートウェイが起動しませんでした。以下の回復手順をお試しください。チャットや設定は削除されません。',

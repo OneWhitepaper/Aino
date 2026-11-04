@@ -4,6 +4,7 @@ import type { HermesReadDirResult } from '@/global'
 import type * as HermesModule from '@/hermes'
 import { setRuntimeI18nLocale } from '@/i18n'
 import { $notifications, clearNotifications } from '@/store/notifications'
+import { $previewScriptGrants, grantPreviewScript } from '@/store/plugin-preview-grants'
 
 import { emitGatewayEvent } from './events'
 import { $pluginRecords, publishPlugin, setPluginEnabled } from './plugins-store'
@@ -96,8 +97,13 @@ describe('runtime plugin localization', () => {
   it('localizes the load failure title in Simplified Chinese', async () => {
     setRuntimeI18nLocale('zh')
     const restore = withBlobReroute()
+
     try {
-      const id = await loadRuntimePlugin("import value from 'unsupported-package'; export default value", 'demo')
+      const id = await loadRuntimePlugin(
+        "import value from 'unsupported-package'; export default value",
+        'demo'
+      )
+
       expect(id).toBeNull()
       expect($notifications.get()[0]?.title).toBe('插件“demo”加载失败')
     } finally {
@@ -136,14 +142,20 @@ describe('scanDiskPlugins (#66899)', () => {
     readDir.mockImplementation(async dir => {
       if (dir === '/local/.hermes/desktop-plugins') {
         return {
-          entries: [{ isDirectory: true, name: 'my-feature', path: '/local/.hermes/desktop-plugins/my-feature' }]
+          entries: [
+            { isDirectory: true, name: 'my-feature', path: '/local/.hermes/desktop-plugins/my-feature' }
+          ]
         }
       }
 
       if (dir === '/local/.hermes/desktop-plugins/my-feature') {
         return {
           entries: [
-            { isDirectory: false, name: 'README.md', path: '/local/.hermes/desktop-plugins/my-feature/README.md' }
+            {
+              isDirectory: false,
+              name: 'README.md',
+              path: '/local/.hermes/desktop-plugins/my-feature/README.md'
+            }
           ]
         }
       }
@@ -167,7 +179,9 @@ describe('scanDiskPlugins (#66899)', () => {
       if (dir === '/local/.hermes/desktop-plugins/odd') {
         // A folder literally named plugin.js — must resolve to "no entry".
         return {
-          entries: [{ isDirectory: true, name: 'plugin.js', path: '/local/.hermes/desktop-plugins/odd/plugin.js' }]
+          entries: [
+            { isDirectory: true, name: 'plugin.js', path: '/local/.hermes/desktop-plugins/odd/plugin.js' }
+          ]
         }
       }
 
@@ -187,7 +201,9 @@ describe('scanDiskPlugins (#66899)', () => {
 
     readDir.mockImplementation(async dir => {
       if (dir === root) {
-        return { entries: desktopEntryPresent ? [{ isDirectory: true, name: 'uni', path: `${root}/uni` }] : [] }
+        return {
+          entries: desktopEntryPresent ? [{ isDirectory: true, name: 'uni', path: `${root}/uni` }] : []
+        }
       }
 
       if (dir === `${root}/uni`) {
@@ -207,7 +223,13 @@ describe('scanDiskPlugins (#66899)', () => {
     ;(globalThis as unknown as { __uniRegister: unknown }).__uniRegister = register
     readFileText.mockImplementation(async file =>
       file.endsWith('.hermes-package.json')
-        ? { text: JSON.stringify({ package: 'uni-pkg', source: '/x/plugins/uni-pkg/desktop', sourceMtimeMs: 1 }) }
+        ? {
+            text: JSON.stringify({
+              package: 'uni-pkg',
+              source: '/x/plugins/uni-pkg/desktop',
+              sourceMtimeMs: 1
+            })
+          }
         : { text: 'export default { id: "uni", register: globalThis.__uniRegister }' }
     )
     watchPreviewFile.mockResolvedValue({ id: 'w-uni' })
@@ -239,7 +261,11 @@ describe('scanDiskPlugins (#66899)', () => {
 
       // Inventoried for Capabilities → Plugins with its package identity, but
       // the unified posture wins: installed-but-inert until the user toggles.
-      expect($pluginRecords.get().uni).toMatchObject({ kind: 'disk', status: 'disabled', packageName: 'uni-pkg' })
+      expect($pluginRecords.get().uni).toMatchObject({
+        kind: 'disk',
+        status: 'disabled',
+        packageName: 'uni-pkg'
+      })
       expect(register).not.toHaveBeenCalled()
 
       // The user's explicit enable still activates it.
@@ -488,7 +514,8 @@ describe('uninstallDiskPlugin (Plugins hub trash button)', () => {
     readFileText.mockResolvedValue({ text: 'export default { id: "gone", register() {} }' })
     watchPreviewFile.mockResolvedValue({ id: 'w-gone' })
     removeDesktopPlugin.mockReset()
-    ;(window.hermesDesktop as unknown as { removeDesktopPlugin: unknown }).removeDesktopPlugin = removeDesktopPlugin
+    ;(window.hermesDesktop as unknown as { removeDesktopPlugin: unknown }).removeDesktopPlugin =
+      removeDesktopPlugin
 
     await discoverRuntimePlugins()
     expect($pluginRecords.get().gone).toMatchObject({ kind: 'disk', status: 'loaded' })
@@ -500,8 +527,11 @@ describe('uninstallDiskPlugin (Plugins hub trash button)', () => {
     try {
       await seedStandalone()
       removeDesktopPlugin.mockResolvedValue({ ok: true })
+      grantPreviewScript('gone', 'https://mail.example.com')
 
       expect(await uninstallDiskPlugin('gone')).toEqual({ ok: true })
+      // A later plugin reusing the id asks again instead of inheriting the grant.
+      expect($previewScriptGrants.get().gone).toBeUndefined()
 
       // The folder name, never a path — Electron resolves it under the root.
       expect(removeDesktopPlugin).toHaveBeenCalledWith({ name: 'gone-soon' })
@@ -518,7 +548,10 @@ describe('uninstallDiskPlugin (Plugins hub trash button)', () => {
 
     try {
       await seedStandalone()
-      removeDesktopPlugin.mockResolvedValue({ ok: false, error: 'gone-soon is not inside the desktop-plugins folder' })
+      removeDesktopPlugin.mockResolvedValue({
+        ok: false,
+        error: 'gone-soon is not inside the desktop-plugins folder'
+      })
 
       expect(await uninstallDiskPlugin('gone')).toEqual({
         ok: false,
@@ -821,7 +854,10 @@ describe('register() failure isolation', () => {
       expect(counters[marker]).toBe(0)
 
       // The failure lands on the plugin's own row so the Plugins tab shows it.
-      expect($pluginRecords.get()['register-throw']).toMatchObject({ status: 'error', error: 'register boom' })
+      expect($pluginRecords.get()['register-throw']).toMatchObject({
+        status: 'error',
+        error: 'register boom'
+      })
 
       // Re-enabling neither rejects nor accumulates a second orphan.
       await expect(setPluginEnabled('register-throw', true)).resolves.toBeUndefined()
@@ -1027,7 +1063,10 @@ describe('loader hardening: hangs, leaks, duplicate ids, stale incarnations', ()
       await vi.advanceTimersByTimeAsync(10_000)
       await scan
 
-      expect($pluginRecords.get()['aaa-hang']).toMatchObject({ status: 'error', file: `${root}/aaa-hang/plugin.js` })
+      expect($pluginRecords.get()['aaa-hang']).toMatchObject({
+        status: 'error',
+        file: `${root}/aaa-hang/plugin.js`
+      })
       expect($pluginRecords.get()['aaa-hang']?.error).toMatch(/import timed out/)
       expect(counters.__afterHangRegister).toBe(1)
       expect($pluginRecords.get()['after-hang']).toMatchObject({ status: 'loaded' })
@@ -1096,7 +1135,9 @@ describe('loader hardening: hangs, leaks, duplicate ids, stale incarnations', ()
       expect(counters.__dupBeta).toBe(0)
       expect($pluginRecords.get().dup).toMatchObject({ status: 'loaded', file: `${root}/alpha/plugin.js` })
       expect($pluginRecords.get().beta).toMatchObject({ status: 'error', file: `${root}/beta/plugin.js` })
-      expect($pluginRecords.get().beta?.error).toMatch(/duplicate id "dup", already loaded from .*alpha\/plugin\.js/)
+      expect($pluginRecords.get().beta?.error).toMatch(
+        /duplicate id "dup", already loaded from .*alpha\/plugin\.js/
+      )
     } finally {
       unloadRuntimePlugin('dup')
       delete counters.__dupAlpha

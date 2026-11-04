@@ -1,3 +1,5 @@
+import type { Locator } from '@playwright/test'
+
 import { consumption, type EdgeContext, type NativeFaultState, sendPrompt, sendToolTurn } from './platform-account-edge-proof'
 import { type NativeState } from './platform-real-api'
 import { expect, type Page } from './test'
@@ -28,8 +30,9 @@ export async function observeInferenceAlerts(page: Page) {
 
     const scan = () => {
       for (const alert of document.querySelectorAll('[role="alert"]')) {
-        const message = (alert.querySelector('details > div') ??
-          alert.querySelector(':scope > div:first-child > div > .min-w-0'))?.textContent?.trim() ?? ''
+        const message = (alert.querySelector('[data-slot="aui_error-details"] code') ??
+          alert.querySelector('details pre') ??
+          alert.querySelector('[data-slot="alert-description"] > p'))?.textContent?.trim() ?? ''
 
         const text = alert.textContent?.trim() ?? ''
 
@@ -47,6 +50,18 @@ export async function observeInferenceAlerts(page: Page) {
 async function settled(page: Page) {
   await expect(page.locator('[contenteditable="true"]').first().locator('xpath=ancestor::form')
     .getByRole('button', { name: 'Stop', exact: true })).toHaveCount(0, { timeout: 45_000 })
+}
+
+async function revealErrorDetails(card: Locator, message: string) {
+  const details = card.locator('[data-slot="aui_error-details"]')
+  const toggle = card.locator('button.aui-error-card-toggle')
+  await expect(details).toBeHidden()
+  await expect(toggle).toHaveAccessibleName('View error details')
+  await expect(toggle).toHaveAttribute('aria-expanded', 'false')
+  await toggle.click()
+  await expect(toggle).toHaveAttribute('aria-expanded', 'true')
+  await expect(toggle).toHaveAccessibleName('Hide error details')
+  await expect(details.getByText(message, { exact: true })).toBeVisible()
 }
 
 async function recoveredTurn(page: Page, api: EdgeContext['api'], before: NativeState) {
@@ -81,7 +96,7 @@ export async function verifyInferenceFailures({ launched, api }: EdgeContext) {
     await sendPrompt(page, `Read the same fixture file while checking HTTP ${status} recovery.`)
 
     if (status === 503) {
-      // v0.22.4 parks an undelivered transient failure on its bounded recovery
+      // The backend parks an undelivered transient failure on its bounded recovery
       // ladder. Restore the fixture while that existing, visible wait is active.
       await expect(page.getByText(/Provider temporarily unavailable.*retrying automatically/).last()).toBeVisible({ timeout: 45_000 })
       const waiting = await api.control<FailureFaults>('faults')
@@ -107,9 +122,9 @@ export async function verifyInferenceFailures({ launched, api }: EdgeContext) {
     await settled(page)
     const card = page.getByRole('alert').filter({ has: page.getByText(expectedMessage, { exact: true }) })
     await expect(card).toHaveCount(1)
-    await expect(card.getByText('The AI service is busy', { exact: true })).toBeVisible()
-    await card.getByText('Details', { exact: true }).click()
-    await expect(card.getByText(expectedMessage, { exact: true })).toBeVisible()
+    await expect(card.getByText('Aino is busy right now', { exact: true })).toBeVisible()
+    await expect(card.getByText(/^You've hit Aino's rate limit\. It resets at .+\.$/)).toBeVisible()
+    await revealErrorDetails(card, expectedMessage)
     const failed = await api.control<FailureFaults>('faults')
     const attempts = failed.authenticated_inference_attempts - faultsBefore.authenticated_inference_attempts
     expect(attempts).toBeGreaterThan(1)
@@ -124,7 +139,7 @@ export async function verifyInferenceFailures({ launched, api }: EdgeContext) {
       expect(intervals.every(interval => interval >= 2000)).toBe(true)
     }
 
-    const retry = page.locator('button.aui-error-action').filter({ hasText: /^Retry$/ }).last()
+    const retry = card.getByRole('button', { name: 'Retry', exact: true })
     await expect(retry).toBeVisible()
     await api.control('faults', JSON.stringify({ inference_http_status: 0, inference_http_failures: 0, inference_retry_after_seconds: 0 }))
     expect(completeConsumption(await api.control<NativeState>('state'))).toEqual(completeConsumption(before))
@@ -140,7 +155,7 @@ export async function verifyInferenceFailures({ launched, api }: EdgeContext) {
   const faultsBeforeBalance = await api.control<FailureFaults>('faults')
   await api.control('faults', JSON.stringify({ hold_inference_before_auth: true }))
   await sendPrompt(page, 'Read the same file after checking the current account balance.')
-  await expect.poll(async () => (await api.control<FailureFaults>('faults')).inference_waiting).toBe(1)
+  await expect.poll(async () => (await api.control<FailureFaults>('faults')).inference_waiting, { timeout: 45_000 }).toBe(1)
   await api.control('balance', JSON.stringify({ state: 'exhausted' }))
   const empty = await api.control<NativeState>('state')
   expect(Number(empty.balance)).toBe(0)
@@ -151,8 +166,7 @@ export async function verifyInferenceFailures({ launched, api }: EdgeContext) {
     'Aino balance or subscription quota is unavailable. Check your account or select another model.', { exact: true }) })
 
   await expect(balanceCard).toHaveCount(1)
-  await balanceCard.getByText('Details', { exact: true }).click()
-  await expect(balanceCard.getByText('Aino balance or subscription quota is unavailable. Check your account or select another model.', { exact: true })).toBeVisible()
+  await revealErrorDetails(balanceCard, 'Aino balance or subscription quota is unavailable. Check your account or select another model.')
   const denied = await api.control<NativeState>('state')
   expect(completeConsumption(denied)).toEqual(completeConsumption(empty))
   const deniedFaults = await api.control<FailureFaults>('faults')

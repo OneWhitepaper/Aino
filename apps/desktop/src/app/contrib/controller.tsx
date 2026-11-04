@@ -49,7 +49,16 @@ import { registry } from '@/contrib/registry'
 import { discoverRuntimePlugins } from '@/contrib/runtime-loader'
 import { LocalizedTabTitle, translateNow } from '@/i18n'
 import { newSessionTitle, sessionTitle as storedSessionTitle } from '@/lib/chat-runtime'
-import { Download, FileText, LayoutDashboard, PanelTop, SlidersHorizontal, Upload, Users, Zap } from '@/lib/icons'
+import {
+  Download,
+  FileText,
+  LayoutDashboard,
+  PanelTop,
+  SlidersHorizontal,
+  Upload,
+  Users,
+  Zap
+} from '@/lib/icons'
 import { type KeybindContribution, KEYBINDS_AREA } from '@/lib/keybinds/actions'
 import { TRANSCRIPT_DIRECTIVE_AREA, type TranscriptDirectiveContribution } from '@/lib/transcript-directives'
 import { setYoloEnabled } from '@/lib/yolo-session'
@@ -99,6 +108,7 @@ import {
   startUnrestoredTileTitleBackfill,
   watchSessionTiles,
   WorkspaceHeaderMenu,
+  workspaceTabActions,
   WorkspaceTabMenu
 } from '../chat/session-tile'
 import { AppContextMenu } from '../context-menu/app-context-menu'
@@ -113,6 +123,7 @@ import { TermsButterbar } from '../shell/terms-butterbar'
 import { BASIC_TREE, DEFAULT_TREE, registerLayoutPresets } from './layout-presets'
 import { bindLayoutSides } from './layout-sides'
 import { FilesPane, LogsPane, ReviewPaneContent } from './panes'
+import { PluginPreviewConsentDialog } from './plugin-preview-consent-dialog'
 import { ContribWiring, WiredPane } from './wiring'
 import { WorkspacePageHeaderHostContext } from './workspace-page-header'
 
@@ -223,6 +234,7 @@ registry.registerMany([
       placement: 'main',
       minWidth: '22vw',
       tabDrag: workspaceTabDrag,
+      tabActions: workspaceTabActions,
       tabWrap: wrapWorkspaceTab,
       headerMenu: () => <WorkspaceHeaderMenu />,
       uncloseable: true
@@ -374,7 +386,16 @@ registry.registerMany([
     label: 'Toggle profile rail',
     action: 'view.toggleProfileRail',
     icon: Users,
-    keywords: ['profile rail', 'profile bar', 'profile strip', 'profiles', 'sidebar', 'hide', 'show', 'chrome'],
+    keywords: [
+      'profile rail',
+      'profile bar',
+      'profile strip',
+      'profiles',
+      'sidebar',
+      'hide',
+      'show',
+      'chrome'
+    ],
     get: () => $profileRailVisible.get(),
     set: enabled => $profileRailVisible.set(enabled)
   }),
@@ -539,6 +560,7 @@ const syncWorkspaceTitle = () => {
       placement: 'main',
       minWidth: '22vw',
       tabDrag: workspaceTabDrag,
+      tabActions: workspaceTabActions,
       tabWrap: wrapWorkspaceTab,
       // The single-session header's visible ⋯ for the routed session; renders
       // nothing on a fresh draft (no session verbs to offer).
@@ -640,7 +662,9 @@ $terminalTakeover.listen(open => {
 })
 // Without the statusbar, the rail is the only way to switch profiles or gateways.
 $profiles.subscribe(profiles => setModeContext({ profileCount: profiles.length }))
-$connectionsRegistry.subscribe(registry => setModeContext({ connectionCount: registry?.connections.length ?? 0 }))
+$connectionsRegistry.subscribe(registry =>
+  setModeContext({ connectionCount: registry?.connections.length ?? 0 })
+)
 // ⌘K door onto the same pane the keybind and statusbar pill flip.
 registry.register(terminalPaletteToggle)
 
@@ -844,6 +868,7 @@ export function ContribController() {
       <ContribWiring>
         <AppContextMenu />
         <HudShell />
+        <PluginPreviewConsentDialog />
       </ContribWiring>
     )
   }
@@ -852,21 +877,25 @@ export function ContribController() {
     return (
       <ContribWiring>
         <BrowserPopoutShell />
+        <PluginPreviewConsentDialog />
       </ContribWiring>
     )
   }
 
   return (
     <SidebarProvider
-      className="h-screen min-h-0 flex-col bg-background"
+      className="h-full min-h-0 flex-col bg-background"
       onOpenChange={setSidebarOpen}
       open={sidebarOpen}
       style={{ '--sidebar-width': '100%' } as CSSProperties}
     >
       <ContribWiring>
         <AppContextMenu />
+        {/* App-owned answer to a plugin's ctx.preview.executeJavaScript. Plugins
+            run in every window kind, so each shell mounts it. */}
+        <PluginPreviewConsentDialog />
         <div
-          className="relative flex h-screen min-h-0 w-screen flex-col bg-(--ui-bg-chrome) text-(--ui-text-primary)"
+          className="relative flex h-full min-h-0 w-screen flex-col bg-(--ui-bg-chrome) text-(--ui-text-primary)"
           // Window-glass hook: this div and the sidebar-wrapper above it are
           // the app shell's two full-window opaque painters; the
           // [data-hermes-glass] rules in styles.css clear them so the tint
@@ -907,8 +936,14 @@ export function ContribController() {
               }}
             >
               <TitlebarSlot area="titleBar.left" className="flex h-full min-w-0 items-center gap-2" />
-              <TitlebarSlot area="titleBar.center" className="flex h-full min-w-0 w-full items-center gap-2" />
-              <TitlebarSlot area="titleBar.right" className="flex h-full min-w-0 items-center justify-end gap-2" />
+              <TitlebarSlot
+                area="titleBar.center"
+                className="flex h-full min-w-0 w-full items-center gap-2"
+              />
+              <TitlebarSlot
+                area="titleBar.right"
+                className="flex h-full min-w-0 items-center justify-end gap-2"
+              />
             </div>
           </div>
 

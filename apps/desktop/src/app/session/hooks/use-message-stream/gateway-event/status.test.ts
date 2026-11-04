@@ -88,9 +88,21 @@ describe('gateway `error` event → error card + toast', () => {
       'provider_not_configured'
     )
 
+    ctx.isActiveEvent = true
     handleStatusEvent(ctx)
 
     expect(requestDesktopOnboarding).toHaveBeenCalledTimes(1)
+  })
+
+  it.each(['background', 'foreign'] as const)('keeps %s credential errors with their own turn', source => {
+    const { ctx, failAssistantMessage } = errorContext('No usable credentials found.', 'provider_not_configured')
+
+    ctx.isActiveEvent = source !== 'background'
+    ctx.fromActiveSource = () => source !== 'foreign'
+    handleStatusEvent(ctx)
+
+    expect(requestDesktopOnboarding).not.toHaveBeenCalled()
+    expect(failAssistantMessage).toHaveBeenCalled()
   })
 
   it('does not route an unrelated failure to onboarding', () => {
@@ -113,5 +125,23 @@ describe('gateway `error` event → error card + toast', () => {
     const toast = $notifications.get()[0]
     expect(toast.message).toBe(serverCopy)
     expect(toast.detail).toBeUndefined()
+  })
+
+  it('raises no toast for the session on screen when its card explains the code (one event, one surface)', () => {
+    const { ctx, failAssistantMessage } = errorContext('[Errno 28] No space left on device')
+
+    handleStatusEvent({ ...ctx, isActiveEvent: true })
+
+    expect(failAssistantMessage).toHaveBeenCalledTimes(1)
+    expect($notifications.get()).toEqual([])
+  })
+
+  it("still toasts a bare error's server sentence on screen: the card copy is generic", () => {
+    const sentence = 'Another Hermes process holds the auth store lock. Wait for it to finish or close it, then retry.'
+    const { ctx } = errorContext(sentence)
+
+    handleStatusEvent({ ...ctx, isActiveEvent: true })
+
+    expect($notifications.get()).toEqual([expect.objectContaining({ message: sentence })])
   })
 })

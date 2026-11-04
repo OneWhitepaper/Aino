@@ -157,8 +157,7 @@ async function publicOwner(participant: IsolationParticipant) {
 async function selectAndSend(participant: IsolationParticipant) {
   const { page } = participant.launched
   await page.locator('[data-tour="model-pill"]').first().click()
-  await page.getByRole('button', { name: 'Aino models', exact: true }).click()
-  await page.getByRole('option', { name: /fixture-tool-model/ }).click()
+  await page.getByRole('menuitem', { name: /fixture-tool-model/ }).click()
   await sendPrompt(page, `Read ${participant.api.info.fixture_path} and verify its content.`)
 
   return performance.now()

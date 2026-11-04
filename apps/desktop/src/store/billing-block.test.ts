@@ -7,12 +7,7 @@ vi.mock('@/store/session', () => ({ setModelPickerOpen: vi.fn() }))
 import { openExternalLink } from '@/lib/external-link'
 import { setModelPickerOpen } from '@/store/session'
 
-import {
-  $billingBlock,
-  clearBillingBlock,
-  runBillingRecovery,
-  setBillingBlock
-} from './billing-block'
+import { $billingBlock, clearBillingBlock, runBillingRecovery, setBillingBlock } from './billing-block'
 
 function makeBlock(overrides: Partial<BillingBlock> = {}): BillingBlock {
   return {
@@ -46,10 +41,10 @@ test('clearBillingBlock with no arg clears any active block', () => {
   expect($billingBlock.get()).toBeNull()
 })
 
-test('runBillingRecovery sends managed account billing walls to model selection', () => {
+test('runBillingRecovery opens Nous service billing separately from Aino account recovery', () => {
   runBillingRecovery(makeBlock({ is_nous: true, provider: 'nous', provider_label: 'Nous Portal' }))
-  expect(setModelPickerOpen).toHaveBeenCalledWith(true)
-  expect(openExternalLink).not.toHaveBeenCalled()
+  expect(setModelPickerOpen).not.toHaveBeenCalled()
+  expect(openExternalLink).toHaveBeenCalledWith('https://portal.nousresearch.com/billing')
 })
 
 test('runBillingRecovery deep-links a third-party provider to its billing page', () => {

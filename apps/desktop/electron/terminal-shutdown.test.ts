@@ -44,6 +44,8 @@ it('keeps persisted tabs on app shutdown while ordinary shell exits still notify
   const host = registerTerminalIpc({
     activeSshTerminalTarget: () => null,
     ensureBackend: async () => undefined,
+    gatewayTarget: () => 'local',
+    ensureGatewayBackend: async () => undefined,
     findOnPath: () => null,
     sshBinary: () => 'ssh',
     getSshConnectionState: () => undefined,

@@ -281,3 +281,64 @@ describe('wake-word ear visibility', () => {
     expect((ear as HTMLButtonElement).disabled).toBe(true)
   })
 })
+
+describe('paused task primary action', () => {
+  it.each([false, true])('offers Continue in the empty primary slot with HUD=%s', hud => {
+    $hudMode.set(hud)
+    const resume = vi.fn()
+    renderControls({
+      canSubmit: false,
+      hasComposerPayload: false,
+      minimal: true,
+      continuation: { phase: 'paused', resume }
+    })
+
+    const button = screen.getByRole('button', { name: 'Continue' }) as HTMLButtonElement
+    expect(button.disabled).toBe(false)
+    expect(button.type).toBe('button')
+    expect(screen.queryByRole('button', { name: 'Send' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Start voice conversation' })).toBeNull()
+    fireEvent.click(button)
+    expect(resume).toHaveBeenCalledOnce()
+  })
+
+  it.each(['stopping', 'continuing'] as const)('waits for %s before allowing another continuation', phase => {
+    const resume = vi.fn()
+    renderControls({
+      hasComposerPayload: false,
+      continuation: { phase, resume }
+    })
+
+    const button = screen.getByRole('button', { name: 'Continue' }) as HTMLButtonElement
+    expect(button.disabled).toBe(true)
+    fireEvent.click(button)
+    expect(resume).not.toHaveBeenCalled()
+  })
+
+  it.each(['editingQueue', 'cardWaiting'] as const)('keeps %s on its existing primary action', mode => {
+    renderControls({
+      canSubmit: false,
+      hasComposerPayload: false,
+      [mode]: true,
+      continuation: { phase: 'paused', resume: vi.fn() }
+    })
+
+    expect(screen.queryByRole('button', { name: 'Continue' })).toBeNull()
+    expect(screen.getByRole('button', { name: 'Send' })).toBeTruthy()
+  })
+
+  it('keeps a typed or attached draft on the normal send path while paused', () => {
+    const resume = vi.fn()
+    renderControls({
+      hasComposerPayload: true,
+      continuation: { phase: 'paused', resume }
+    })
+
+    expect(screen.queryByRole('button', { name: 'Continue' })).toBeNull()
+    const send = screen.getByRole('button', { name: 'Send' }) as HTMLButtonElement
+    expect(send.type).toBe('submit')
+    expect(send.disabled).toBe(false)
+    fireEvent.click(send)
+    expect(resume).not.toHaveBeenCalled()
+  })
+})

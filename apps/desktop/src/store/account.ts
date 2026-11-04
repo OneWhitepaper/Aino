@@ -146,11 +146,19 @@ export function createAccountActions(adapter: AccountAdapter) {
   const load = (status: () => Promise<PlatformAccountSnapshot>) =>
     run(
       async () => {
-        const [statusResult, capabilitiesResult] = await Promise.allSettled([status(), adapter.capabilities()])
+        const expectedOperation = operation
 
-        if (statusResult.status === 'fulfilled') {
-          applySnapshot(statusResult.value)
-        }
+        // Native identity is already known on window reopen. Login options
+        // may need a network read, so they must not delay workspace recovery.
+        const identity = status().then(snapshot => {
+          if (expectedOperation === operation) {
+            applySnapshot(snapshot)
+          }
+
+          return snapshot
+        })
+
+        const [statusResult, capabilitiesResult] = await Promise.allSettled([identity, adapter.capabilities()])
 
         if (capabilitiesResult.status === 'rejected') {
           throw capabilitiesResult.reason

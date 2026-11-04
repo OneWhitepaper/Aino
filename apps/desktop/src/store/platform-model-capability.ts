@@ -45,8 +45,9 @@ interface PlatformCatalogReader {
   owner?: { state: { get(): { owner: { user_id: string; platform_origin: string } | null } } }
 }
 
-/** Catalog metadata is behavioral only after model id and stored owner agree. */
-export function verifiedPlatformModelFrom(
+/** Keep known presentation metadata through a same-revision refresh. Account,
+ *  model and origin still have to match; this never authorizes a request. */
+export function platformModelForDisplayFrom(
   catalog: PlatformCatalogReader,
   modelId: string,
   ownerUserId: string,
@@ -63,7 +64,7 @@ export function verifiedPlatformModelFrom(
     account.account?.id !== ownerUserId ||
     (platformOrigin !== undefined &&
       (!owner || owner.user_id !== ownerUserId || owner.platform_origin !== platformOrigin)) ||
-    state.phase !== 'ready'
+    (state.phase !== 'ready' && state.phase !== 'loading')
   ) {
     return null
   }
@@ -73,6 +74,18 @@ export function verifiedPlatformModelFrom(
       model => model.id === modelId && model.state === 'available' && platformModelSupportsPurpose(model, 'chat')
     ) ?? null
   )
+}
+
+/** Catalog metadata is behavioral only after fresh model and owner checks. */
+export function verifiedPlatformModelFrom(
+  catalog: PlatformCatalogReader,
+  modelId: string,
+  ownerUserId: string,
+  platformOrigin?: string
+): PlatformModel | null {
+  return catalog.state.get().phase === 'ready'
+    ? platformModelForDisplayFrom(catalog, modelId, ownerUserId, platformOrigin)
+    : null
 }
 
 export function verifiedPlatformModel(

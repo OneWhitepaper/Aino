@@ -114,9 +114,16 @@ def save_consent(enabled: bool, send: bool, config: dict | None = None) -> None:
         return
     send = enabled and send
     config_path = get_config_path()
-    user_config = require_readable_config_before_write(config_path)
-    set_answer(user_config, enabled, send)
-    _write_user_config(config_path, user_config)
+    from hermes_cli.config_backend import supports_file_tooling, write_config_keys
+    if supports_file_tooling():
+        user_config = require_readable_config_before_write(config_path)
+        set_answer(user_config, enabled, send)
+        _write_user_config(config_path, user_config)
+    else:
+        answer = {}
+        set_answer(answer, enabled, send)
+        write_config_keys(config_path, {f"telemetry.shared_metrics.{key}": value
+                                       for key, value in answer["telemetry"]["shared_metrics"].items()})
     if config is not None:
         set_answer(config, enabled, send)
     # Unconditional: a send key already false may still have an open consent window.

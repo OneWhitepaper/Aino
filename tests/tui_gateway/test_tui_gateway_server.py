@@ -13,6 +13,7 @@ from unittest.mock import Mock, patch
 
 import pytest
 
+from gateway.owner_identity import host_owner_subject as _owner
 from hermes_constants import reset_hermes_home_override, set_hermes_home_override
 from hermes_cli.active_sessions import active_session_registry_snapshot
 from hermes_cli.browser_connect import ChromeDebugLaunch
@@ -4723,18 +4724,17 @@ def _capture_make_agent_kwargs(monkeypatch) -> dict:
 
 
 @pytest.mark.parametrize("identity, user_id", [
-    ({"user_id": "oidc|abc123", "provider": "oidc"}, "oidc:oidc|abc123"),
-    ({"user_id": "alice", "provider": "basic"}, "basic:alice"),
-    ({"user_id": "alice", "provider": "oidc"}, "oidc:alice"),
+    ({"user_id": "oidc|abc123", "provider": "oidc"}, _owner()),
+    ({"user_id": "alice", "provider": "basic"}, _owner()),
+    ({"user_id": "alice", "provider": "oidc"}, _owner()),
     (None, None),
     ({"user_id": "server-internal", "provider": "server-internal"}, None),
     ({"user_id": "", "provider": "oidc"}, None),
     ({"user_id": "abc", "provider": ""}, None),
 ])
 def test_make_agent_passes_the_authenticated_dashboard_user_as_user_id(monkeypatch, identity, user_id):
-    """WSTransport.auth_identity reaches the agent as ``user_id`` prefixed with the login provider, so a
-    basic-auth ``alice`` and an OIDC ``alice`` stay two memory peers. The legacy token, stdio and the PTY
-    child's server-internal credential name no human, so the agent gets no user id for them."""
+    """A signed-in login is the machine owner (gateway.owner_identity): the agent gets native Desktop's OS subject
+    as ``user_id``. The legacy token, stdio and the PTY child's server-internal credential stay unstamped."""
     captured = _capture_make_agent_kwargs(monkeypatch)
     transport = types.SimpleNamespace(auth_identity=identity)
     monkeypatch.setitem(server._sessions, "sid-auth", {"session_key": "k", "transport": transport})
@@ -4781,11 +4781,11 @@ def test_make_agent_keeps_the_login_after_a_second_window_attaches_and_detaches(
 
     assert server._attach_session_transport(record, popout)
     server._make_agent("sid-popout", "k")
-    assert captured["user_id"] == "basic:alice"
+    assert captured["user_id"] == _owner()
 
     server._detach_session_transport(record, popout)
     server._make_agent("sid-popout", "k")
-    assert captured["user_id"] == "basic:alice"
+    assert captured["user_id"] == _owner()
 
 
 def test_build_branch_agent_carries_the_parent_login(monkeypatch, tmp_path):
@@ -4808,8 +4808,8 @@ def test_build_branch_agent_carries_the_parent_login(monkeypatch, tmp_path):
     finally:
         reset_transport(token)
 
-    assert captured["user_id"] == "basic:alice"
-    assert server._sessions["sid-branch"]["auth_user_id"] == "basic:alice"
+    assert captured["user_id"] == _owner()
+    assert server._sessions["sid-branch"]["auth_user_id"] == _owner()
 
 
 def test_deferred_session_record_stamps_the_creating_login():
@@ -4822,8 +4822,8 @@ def test_deferred_session_record_stamps_the_creating_login():
     finally:
         reset_transport(token)
 
-    assert record["auth_user_id"] == "oidc:carol"
-    assert server._session_auth_user_id(record) == "oidc:carol"
+    assert record["auth_user_id"] == _owner()
+    assert server._session_auth_user_id(record) == _owner()
     assert record["managed_model_params"] == managed_model_params
 
 
@@ -4834,7 +4834,7 @@ def test_compute_host_turn_frame_carries_the_session_login(monkeypatch):
 
     frame = server._compute_host_turn_frame("rid", "sid-host", record, "hello")
 
-    assert frame["auth_user_id"] == "basic:alice"
+    assert frame["auth_user_id"] == _owner()
 
 
 def test_attaching_a_different_login_keeps_the_creator_and_warns_once(monkeypatch):
@@ -4846,7 +4846,7 @@ def test_attaching_a_different_login_keeps_the_creator_and_warns_once(monkeypatc
     assert server._attach_session_transport(record, other)
     assert server._attach_session_transport(record, other)
 
-    assert server._session_auth_user_id(record) == "basic:alice"
+    assert server._session_auth_user_id(record) == _owner()
 
 
 def test_background_agent_kwargs_preserves_full_fallback_chain(monkeypatch):
@@ -18962,14 +18962,14 @@ def test_decode_attach_base64_helper():
     import base64 as _b64
 
     raw = _b64.b64encode(b"hello").decode("ascii")
-    assert server._decode_attach_base64(raw, mime_prefix="image/") == b"hello"
+    assert server._decode_attach_base64(raw, mime_prefix="image/", max_bytes=5) == b"hello"
     assert (
-        server._decode_attach_base64(f"data:image/png;base64,{raw}", mime_prefix="image/")
+        server._decode_attach_base64(f"data:image/png;base64,{raw}", mime_prefix="image/", max_bytes=5)
         == b"hello"
     )
     # whitespace inside payload is tolerated
-    assert server._decode_attach_base64(raw[:4] + "\n" + raw[4:], mime_prefix="image/") == b"hello"
-    assert server._decode_attach_base64("@@@", mime_prefix="image/") is None
+    assert server._decode_attach_base64(raw[:4] + "\n" + raw[4:], mime_prefix="image/", max_bytes=5) == b"hello"
+    assert server._decode_attach_base64("@@@", mime_prefix="image/", max_bytes=5) is None
 
 
 def test_sniff_image_ext_magic_and_filename():
@@ -18983,43 +18983,6 @@ def test_sniff_image_ext_magic_and_filename():
     assert server._sniff_image_ext(b"\x89PNG", "photo.jpeg") == ".jpeg"
 
 
-def test_slash_worker_close_reaps_zombie_and_closes_fds():
-    """A hung worker is SIGKILLed, the zombie reaped, all pipes closed — once."""
-    calls = {k: 0 for k in ("terminate", "kill", "wait", "stdin", "stdout", "stderr")}
-
-    class FakeStream:
-        def __init__(self, name):
-            self.name = name
-
-        def close(self):
-            calls[self.name] += 1
-
-    class FakeProc:
-        stdin, stdout, stderr = (FakeStream(n) for n in ("stdin", "stdout", "stderr"))
-
-        def poll(self):
-            return None  # always alive -> forces terminate then kill
-
-        def terminate(self):
-            calls["terminate"] += 1
-
-        def kill(self):
-            calls["kill"] += 1
-
-        def wait(self, timeout=None):
-            calls["wait"] += 1
-            raise subprocess.TimeoutExpired(cmd="x", timeout=timeout)
-
-    worker = object.__new__(server._SlashWorker)
-    worker.proc = FakeProc()
-
-    worker.close()
-    worker.close()  # idempotent
-
-    assert calls["terminate"] == 1
-    assert calls["kill"] == 1
-    assert calls["wait"] >= 2  # reaped after both terminate and kill
-    assert calls["stdin"] == calls["stdout"] == calls["stderr"] == 1
 
 
 def test_close_session_by_id_is_idempotent_and_full(monkeypatch):
@@ -20544,133 +20507,6 @@ def test_clarify_timeout_seconds_maps_non_positive_to_unlimited(monkeypatch, con
     monkeypatch.setattr("tools.clarify_gateway.get_clarify_timeout", lambda: configured)
 
     assert server._clarify_timeout_seconds() == expected
-
-
-def test_build_persist_message_with_image_refs_without_images_returns_text(monkeypatch):
-    """#70720: when no images are attached the persisted message is the raw
-    prompt — no @image directive prefix is introduced."""
-    assert server._build_persist_message_with_image_refs("what is this?", []) == "what is this?"
-    assert server._build_persist_message_with_image_refs("", []) == ""
-
-
-def test_build_persist_message_with_image_refs_appends_existing_paths(monkeypatch, tmp_path):
-    """Attached images that still exist on disk are persisted as trailing
-    ``@image:<path>`` directive lines so the desktop renders them after a
-    restart (instead of the vision-only enrichment that silently breaks)."""
-    img = tmp_path / "cat.png"
-    img.write_bytes(b"\x89PNG")
-
-    result = server._build_persist_message_with_image_refs("what is in this photo?", [str(img)])
-
-    assert result == f"what is in this photo?\n@image:{img}"
-
-
-def test_build_persist_message_with_image_refs_skips_missing_paths(monkeypatch, tmp_path):
-    """Only paths that still exist are persisted; a missing file must not
-    inject a dangling @image ref into the transcript."""
-    existing = tmp_path / "a.png"
-    existing.write_bytes(b"png")
-    missing = str(tmp_path / "gone.png")
-
-    result = server._build_persist_message_with_image_refs("compare them", [str(existing), missing])
-
-    assert result == f"compare them\n@image:{existing}"
-
-
-def test_build_persist_message_with_image_refs_without_text_is_refs_only(monkeypatch, tmp_path):
-    """A stand-alone attachment (no caption) persists as just the directive
-    line, so a bare image survives in history and is not dropped as empty."""
-    img = tmp_path / "only.png"
-    img.write_bytes(b"png")
-
-    assert server._build_persist_message_with_image_refs("", [str(img)]) == f"@image:{img}"
-
-
-def test_build_persist_message_quotes_paths_containing_spaces(tmp_path):
-    """The unquoted alternative in the directive pattern is ``\\S+``, so a path
-    with a space parses as a truncated ref with the tail left as loose text.
-    Desktop composer images live in the app's userData dir, which on macOS is
-    ``~/Library/Application Support/...`` — a space every time."""
-    img_dir = tmp_path / "Application Support" / "Hermes" / "composer-images"
-    img_dir.mkdir(parents=True)
-    img = img_dir / "cat.png"
-    img.write_bytes(b"png")
-
-    result = server._build_persist_message_with_image_refs("what is this?", [str(img)])
-
-    assert result == f"what is this?\n@image:`{img}`"
-
-
-def test_persist_user_message_mirrors_the_shape_sent_to_the_model(tmp_path):
-    """A native-vision turn sends ``content`` as a parts list, and the session
-    store ignores a plain-string override for a list payload. The override must
-    mirror the list shape (ref text + the original image parts) or it is
-    silently dropped and the attachment never reaches history."""
-    img = tmp_path / "cat.png"
-    img.write_bytes(b"png")
-    image_part = {"type": "image_url", "image_url": {"url": "data:image/png;base64,AAAA"}}
-    native_parts = [{"type": "text", "text": "api-only text"}, image_part]
-
-    override = server._build_persist_user_message("what is this?", [str(img)], native_parts)
-
-    assert override == [{"type": "text", "text": f"what is this?\n@image:{img}"}, image_part]
-
-
-def test_persist_user_message_stays_a_string_for_text_mode(tmp_path):
-    """Text-mode (vision-preprocessed) turns send a string, so the override
-    stays a string — the shape the session store rewrites directly."""
-    img = tmp_path / "cat.png"
-    img.write_bytes(b"png")
-
-    override = server._build_persist_user_message("what is this?", [str(img)], "enriched api-only text")
-
-    assert override == f"what is this?\n@image:{img}"
-
-
-def test_native_vision_turn_persists_a_renderable_image_ref(tmp_path):
-    """End to end through the real session-store flush: whichever image input
-    mode the turn used, the durable row carries an ``@image:`` ref the desktop
-    can render after a restart."""
-    from unittest.mock import MagicMock
-
-    from agent.image_routing import build_native_content_parts
-    from run_agent import AIAgent
-
-    img_dir = tmp_path / "Application Support" / "composer-images"
-    img_dir.mkdir(parents=True)
-    img = img_dir / "cat.png"
-    img.write_bytes(
-        bytes.fromhex(
-            "89504e470d0a1a0a0000000d494844520000000100000001080600000"
-            "01f15c4890000000a49444154789c6360000002000100ffff0300000600"
-            "0557bfabd40000000049454e44ae426082"
-        )
-    )
-    native_parts, skipped = build_native_content_parts("what is in this photo?", [str(img)])
-    assert not skipped
-
-    agent = AIAgent.__new__(AIAgent)
-    agent._session_db = MagicMock()
-    agent._session_db_created = True
-    agent.session_id = "s-1"
-    agent._last_flushed_db_idx = 0
-    agent._persist_disabled = False
-    agent._flushed_db_message_ids = set()
-    agent._flushed_db_message_session_id = None
-    agent._pending_cli_user_message = None
-    agent._persist_user_message_timestamp = None
-    agent._persist_user_message_idx = 0
-    agent._persist_user_message_override = server._build_persist_user_message(
-        "what is in this photo?", [str(img)], native_parts
-    )
-
-    agent._flush_messages_to_session_db([{"role": "user", "content": native_parts}], [])
-
-    written = agent._session_db.append_messages_batch.call_args.kwargs["messages"][0]["content"]
-    assert f"@image:`{img}`" in written
-    assert "what is in this photo?" in written
-    # The model keeps the pixels for the rest of the session.
-    assert any(part.get("type") == "image_url" for part in agent._persist_user_message_override)
 
 
 def test_prompt_submit_passes_persist_user_message_to_agent(monkeypatch):

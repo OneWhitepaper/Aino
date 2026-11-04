@@ -1,23 +1,15 @@
 import fs from 'node:fs'
 import path from 'node:path'
 
+import type { PlatformTokenSet, PlatformTokenStore } from '../shared/platform-token-contract'
+
 import { writeSecretFileAtomic } from './hardening'
 
-export interface PlatformTokenSet {
-  accessToken: string
-  refreshToken: string
-  expiresAt: number
-}
 export interface PlatformTokenStoreCrypto {
   isAvailable(): boolean
   backend(): string
   encrypt(plaintext: string): Buffer
   decrypt(ciphertext: Buffer): string
-}
-export interface PlatformTokenStore {
-  load(origin: string): Promise<PlatformTokenSet | null>
-  save(origin: string, tokens: PlatformTokenSet): Promise<'encrypted' | 'session_only'>
-  clear(origin: string): Promise<void>
 }
 export class PlatformTokenStoreError extends Error {
   constructor(public readonly code: 'secure_store_read_failed' | 'secure_store_write_failed') {

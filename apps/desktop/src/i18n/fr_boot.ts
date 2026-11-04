@@ -41,6 +41,8 @@ export const frBoot = {
         "Une partie de l'installation de Hermes est manquante. Choisissez Réparer l'installation pour la restaurer."
     },
     failure: {
+      webappTitle: 'Connecter ce navigateur',
+      webappDescription: 'Exécutez hermes webapp sur l’ordinateur de la passerelle pour autoriser ce navigateur.',
       title: "Hermes n'a pas pu démarrer",
       description:
         "Le gateway en arrière-plan n'a pas pu se lancer. Essayez l'une des étapes de récupération ci-dessous. Rien ici ne supprime vos conversations ou paramètres.",

@@ -1,8 +1,9 @@
 import { createHash } from 'node:crypto'
 
+import type { PlatformBindingTarget } from '../shared/platform-runtime-binding'
+
 import { buildGatewayWsUrlWithTicket } from './connection-config'
 import type { GatewayEndpoint } from './local-gateway'
-import type { PlatformBindingTarget } from './platform-runtime-binding'
 import { openPlatformGateway } from './platform-runtime-binding'
 
 export interface ManagedGatewayDescriptor {

@@ -282,7 +282,8 @@ export const ja: BotsMessages = {
     catalogInstalled: 'カタログ・インストール済み',
     catalog: 'カタログ',
     createAction: 'ボットを作成',
-    creating: '作成中…'
+    creating: '作成中…',
+    openBotChatInNewTab: 'ボットチャットを新しいタブで開く'
   },
   avatar: {
     classicShapes: 'クラシックシェイプ',
@@ -582,7 +583,9 @@ export const ja: BotsMessages = {
     youControl: 'あなたが操作中',
     otherControls: '別のビューアが操作中',
     agentControls: 'ボットが操作中',
-    controlTaken: '別のビューアが操作を引き継ぎました。閲覧のみ。'
+    controlTaken: '別のビューアが操作を引き継ぎました。閲覧のみ。',
+    needsHttps:
+      'ボットの画面には安全な接続が必要です。表示するには、Webapp を HTTPS か 127.0.0.1 への SSH トンネル経由で開いてください。'
   },
   cron: {
     untitled: '無題のジョブ',

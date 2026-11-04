@@ -14,7 +14,7 @@ import { startHttpsEdge } from '../../../apps/desktop/e2e/update/github-edge.ts'
 import { resolveDesktopHermesHome } from '../../../apps/desktop/electron/data-paths.mjs'
 import { applyBundleEnvironment } from '../../../apps/desktop/scripts/bundle-env.mjs'
 import { type ChatIdentity, readChatIdentity, runDesktopChatSmoke, waitForChatReady } from '../../../tests-js/scripts/desktop-chat-smoke.ts'
-import { assertBackendOrigin, localBackendProcess, readBundledBundleEnv, readInstallationCommit } from '../../../tests-js/scripts/desktop-smoke-process.ts'
+import { assertBackendOrigin, localBackendProcess, readBundledBundleEnv, readInstallationCommit, reusedDesktopBuildCommit } from '../../../tests-js/scripts/desktop-smoke-process.ts'
 import { validateMockUrl, writeEnvFile, writeMockProviderConfig } from '../../../tests-js/scripts/mock-provider-config.ts'
 import { type MockServer, startMockServer } from '../../../tests-js/scripts/mock-server.ts'
 import { signInPlatformFixture, startPlatformServer } from '../../../tests-js/scripts/platform-account-fixture.ts'
@@ -431,13 +431,14 @@ export async function runInstalledDesktopSmoke(options: SmokeOptions, launchApp:
     if (provenanceCommit !== options['expect-commit']) { throw new Error('Installed commit differs from --expect-commit') }
     // Trace only chat actions. Connection probes can return credential-bearing logs.
     await app.context().tracing.start({ screenshots: true, snapshots: false, sources: false })
-    const chat = await runDesktopChatSmoke(page, { mockUrl, phase: options.phase, outDir: out, expectCommit: options['expect-commit'], provenanceCommit })
+    const reusedBuildCommit = reusedDesktopBuildCommit(options.root, options.origin, provenanceCommit)
+    const chat = await runDesktopChatSmoke(page, { mockUrl, phase: options.phase, outDir: out, expectCommit: options['expect-commit'], provenanceCommit, reusedBuildCommit })
     let tool
     if (options['tool-smoke']) {
       const marker = path.join(options.home, `native-tool-${randomUUID()}.txt`)
       const content = `Native tool verified ${options['expect-commit']} ${randomUUID()}`
       const toolChat = await runDesktopChatSmoke(page, { mockUrl, phase: options.phase,
-        outDir: path.join(out, 'tool'), expectCommit: options['expect-commit'], provenanceCommit,
+        outDir: path.join(out, 'tool'), expectCommit: options['expect-commit'], provenanceCommit, reusedBuildCommit,
         prompt: `E2E_CALL(write_file)[${JSON.stringify({ path: marker, content })}]`, expectedReply: 'E2E_CALL_RESULT:' })
       if (fs.readFileSync(marker, 'utf8') !== content) { throw new Error('Native write_file did not produce the requested marker') }
       tool = { status: 'passed', name: 'write_file', marker, content, chat: toolChat }

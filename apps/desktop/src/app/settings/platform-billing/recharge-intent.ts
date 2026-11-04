@@ -1,3 +1,5 @@
+import { randomUuid } from '@hermes/shared'
+
 import type { PaymentQuoteInput, PlatformBillingScope } from '../../../../shared/platform-contract'
 
 export interface RechargeIntent extends PaymentQuoteInput {
@@ -128,7 +130,7 @@ export function createRechargeIntents(scope: PlatformBillingScope, environment?:
           amount: input.amount,
           payment_type: input.payment_type,
           order_type: 'balance',
-          client_order_id: crypto.randomUUID(),
+          client_order_id: randomUuid(),
           order_id: null
         }
 

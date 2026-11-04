@@ -1,8 +1,7 @@
 # Hermes Agent - Development Guide
 
-Global rules and area routing for Hermes development. Read each area's `AGENTS.md` before editing
-there. `python scripts/check` caps this file at 12k characters and root-to-area chains at 30k;
-put longer explanations in the developer guide.
+Read each area's `AGENTS.md` before editing. `python scripts/check` caps this file at 12k characters
+and root-to-area chains at 30k; put longer explanations in the developer guide.
 
 **Never give up on the right solution.**
 
@@ -14,7 +13,7 @@ learns across sessions (memory + skills), delegates to subagents, runs scheduled
 drives a real terminal and browser. It is extended primarily through **plugins and skills**,
 not by growing the core.
 
-Two invariants shape almost every design decision and are the lens for reviewing any change:
+Two invariants guide design and review:
 
 - **Per-conversation prompt caching is sacred.** Mutating past context, swapping toolsets,
   reloading memories or rebuilding the system prompt mid-conversation breaks the cached prefix and
@@ -36,10 +35,10 @@ god-file → module refactors; extending before duplicating (3+ PRs in one categ
 orchestrator); behaviour-contract tests; E2E with real imports against a temp `HERMES_HOME` for
 resolution, config, security and I/O changes; salvage by cherry-pick so authorship survives.
 
-**Aino reuses Hermes first.** Trace existing configuration, APIs, modules and extension points;
-extend minimally rather than duplicate managers, wrappers, tools or schedulers. Collaboration uses
-Hermes delegation, child lifecycle and result return. New code needs a concrete uncovered requirement
-and evidence that reuse cannot cover it. Extraction is allowed; redundant parallel mechanisms are not.
+**Aino reuses Hermes first.** Trace and minimally extend existing config, APIs, modules and extension
+points. Use Hermes delegation, child lifecycle and result return. New code requires an uncovered
+requirement and evidence reuse cannot satisfy it. Extract when useful; do not add parallel managers,
+wrappers, tools or schedulers.
 
 **Rejected even when well-built:** hooks with no concrete consumer; new `HERMES_*` env vars for
 non-secret config (`.env` is secrets only, behaviour goes in `config.yaml`); a new core tool when
@@ -63,17 +62,16 @@ unreachable otherwise).
 
 ## Development Environment
 
-`source ./activate` (fish: `activate.fish`, PowerShell: `activate.ps1`) provisions and activates the
-PM environment; pick an isolated `HERMES_HOME`/`HERMES_RUNTIME_DIR` first
-(`website/docs/reference/package-management.md#developer-workflow`). Tests need the separate test
-environment in `CONTRIBUTING.md`. **`python scripts/check`** runs every blocking lint check CI
-runs, with CI's pinned tools; `--install-hook pre-push` runs it on every push (re-run after
-pulling to refresh the hook). `# noqa` does not waive a ratchet finding:
-`# health: allow <RULE> -- <why>` does.
+Set isolated `HERMES_HOME`/`HERMES_RUNTIME_DIR`, then `source ./activate` (fish: `activate.fish`;
+PowerShell: `activate.ps1`) to provision and activate PM. See
+`website/docs/reference/package-management.md#developer-workflow`; prepare the separate test
+environment in `CONTRIBUTING.md`. **`python scripts/check`** runs blocking CI lint with pinned tools;
+`--install-hook pre-push` enables it before pushes (refresh after pulling). `# noqa` does not waive
+ratchet findings; use `# health: allow <RULE> -- <why>`.
 
 ## Project Structure
 
-Key entry points:
+Entry points:
 
 ```
 hermes-agent/

@@ -37,6 +37,8 @@ if TYPE_CHECKING:  # string annotations only; never imported at runtime (cycle)
 
 # Log-record parity with the origin module.
 logger = logging.getLogger("gateway.run")
+# ``_resolve_turn_agent_config``'s default tier: the runner's per-turn ``_service_tier``.
+_TIER_FROM_RUNNER = object()
 
 
 def _resolve_policy_agent_runtime(runner, policy, *, source=None, fallback=True) -> tuple[str, dict]:
@@ -242,9 +244,12 @@ class GatewayTurnPrepareMixin:
 
         return _recover_or_remember_model(self, skey, model), runtime_kwargs
 
-    def _resolve_turn_agent_config(self, user_message: str, model: str, runtime_kwargs: dict) -> dict:
+    def _resolve_turn_agent_config(self, user_message: str, model: str, runtime_kwargs: dict, *,
+                                   tier: Any = _TIER_FROM_RUNNER) -> dict:
         """Effective model/runtime config for one turn. With `/fast` priority on, fast-mode
-        ``request_overrides`` are deep-merged OVER the per-provider ones so both reach the model."""
+        ``request_overrides`` are deep-merged OVER the per-provider ones so both reach the model.
+        ``tier`` defaults to the runner's per-turn ``_service_tier``; an off-turn builder (a cold
+        ``/review``) passes the session's own instead of writing that shared slot."""
         from gateway.run import _deep_merge_request_overrides
         from agent.fast_mode import STATIC_TIERS
         from hermes_cli.models import resolve_fast_mode_overrides
@@ -266,7 +271,8 @@ class GatewayTurnPrepareMixin:
                 runtime["api_mode"], runtime["command"], tuple(runtime["args"]),
             ),
         }
-        tier = getattr(self, "_service_tier", None)
+        if tier is _TIER_FROM_RUNNER:
+            tier = getattr(self, "_service_tier", None)
         if tier not in STATIC_TIERS:
             # None / auto / cold: the bounded window is applied per request by agent.fast_mode.
             route["request_overrides"] = base_request_overrides
@@ -290,7 +296,14 @@ class GatewayTurnPrepareMixin:
         model = getattr(agent, "model", None)
         if not model:
             return
-        runtime = {k: getattr(agent, k, None) for k in ("provider", "base_url", "api_mode")}
+        from hermes_cli.runtime_provider_custom import session_provider_identity
+        runtime = {
+            "provider": session_provider_identity(getattr(agent, "provider", None),
+                                                  getattr(agent, "requested_provider", None),
+                                                  getattr(agent, "base_url", None), model),
+            "base_url": getattr(agent, "base_url", None),
+            "api_mode": getattr(agent, "api_mode", None),
+        }
         runtime["fallback_active"] = bool(getattr(agent, "_fallback_activated", False))
         runtime = {k: v for k, v in runtime.items() if v not in (None, "")}
         try:
@@ -622,8 +635,8 @@ class GatewayTurnPrepareMixin:
         model instruction, not authored text) — regardless of the toggle; only the in-context
         RENDER is gated behind gateway.message_timestamps.enabled (default OFF)."""
         from gateway.run import _load_gateway_config, _message_timestamps_enabled
-        from gateway.run_inbound import strip_discord_triggering_note
-        persist_user_message = None
+        from gateway.run_inbound import persist_inbound_user_message
+        persist_user_message = persist_inbound_user_message(event, None)
         persist_user_timestamp = None
         try:
             from hermes_time import get_timezone as _get_evt_tz
@@ -635,7 +648,7 @@ class GatewayTurnPrepareMixin:
             _evt_tz = _get_evt_tz()
             if message_text and isinstance(message_text, str):
                 _clean_message_text, _embedded_ts = _strip_msg_ts(message_text, tz=_evt_tz)
-                persist_user_message = strip_discord_triggering_note(event, _clean_message_text)
+                persist_user_message = persist_inbound_user_message(event, _clean_message_text)
                 _event_epoch = _coerce_msg_ts(getattr(event, "timestamp", None), tz=_evt_tz)
                 persist_user_timestamp = _event_epoch if _event_epoch is not None else _embedded_ts
                 if _message_timestamps_enabled(_load_gateway_config()):
@@ -705,6 +718,7 @@ class GatewayTurnPrepareMixin:
         # Keep human text separate from skills, sender metadata, and other model context.
         # With no text (e.g. voice-only), retain the existing enriched-message title fallback.
         title_user_message = event.text or None
+        event._gateway_authored_image_caption = event.text
 
         # Auto-load bound skill(s) only on NEW sessions; ongoing ones carry the content in history.
         _auto = getattr(event, "auto_skill", None)

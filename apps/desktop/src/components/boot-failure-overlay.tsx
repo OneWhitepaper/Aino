@@ -11,15 +11,29 @@ import { LogView } from '@/components/ui/log-view'
 import type { DesktopConnectionConfig, DesktopOauthLoginResult } from '@/global'
 import { useI18n } from '@/i18n'
 import { localizedBootFailureError } from '@/i18n/boot-errors'
+import { WEBAPP_LAUNCH_REQUIRED } from '@/lib/browser-launch-session'
 import { reestablishCloudAgentSession } from '@/lib/cloud-agent-session'
 import { DESKTOP_DOCS_URL } from '@/lib/docs'
 import { openExternalLink } from '@/lib/external-link'
-import { ChevronLeft, ExternalLink, FileText, Loader2, LogIn, RefreshCw, SlidersHorizontal, Wrench } from '@/lib/icons'
+import {
+  ChevronLeft,
+  ExternalLink,
+  FileText,
+  Loader2,
+  LogIn,
+  RefreshCw,
+  SlidersHorizontal,
+  Wrench
+} from '@/lib/icons'
 import { $desktopBoot } from '@/store/boot'
 import { notify, notifyError } from '@/store/notifications'
 import { $desktopOnboarding } from '@/store/onboarding'
 
-import { classifyLocalBootFailure, type LocalBootFailureCopy, localBootFailureCopy } from './boot-failure-cause'
+import {
+  classifyLocalBootFailure,
+  type LocalBootFailureCopy,
+  localBootFailureCopy
+} from './boot-failure-cause'
 import type { RemoteReauth } from './boot-failure-reauth'
 import {
   deriveProviderShape,
@@ -86,6 +100,38 @@ function BootFailureModal({
         </DialogPrimitive.Content>
       </DialogPrimitive.Portal>
     </DialogPrimitive.Root>
+  )
+}
+
+/** What the app shows over a failed startup: sign-in instructions for a signed-out Webapp tab,
+ * recovery steps for everything else. */
+export function StartupOverlay() {
+  const error = useStore($desktopBoot).error
+
+  return error?.includes(WEBAPP_LAUNCH_REQUIRED) ? <WebappSignInOverlay /> : <BootFailureOverlay />
+}
+
+/** A Webapp tab without a valid sign-in. The service is running, so there is nothing to recover or
+ * dismiss: only hermes webapp signs the tab in. */
+function WebappSignInOverlay() {
+  const copy = useI18n().t.boot.failure
+
+  return (
+    <BootFailureModal onDismiss={() => undefined}>
+      <div className="relative w-full max-w-[40rem] overflow-hidden rounded-xl border border-(--stroke-nous) bg-(--ui-chat-bubble-background) shadow-nous">
+        <div className="flex items-start gap-3 px-5 py-4">
+          <LogIn className="mt-0.5 size-5" />
+          <div>
+            <DialogPrimitive.Title asChild>
+              <h2 className="text-[0.9375rem] font-semibold tracking-tight">{copy.webappTitle}</h2>
+            </DialogPrimitive.Title>
+            <p className="mt-1 text-[0.8125rem] leading-5 text-(--ui-text-tertiary)">
+              {copy.webappDescription}
+            </p>
+          </div>
+        </div>
+      </div>
+    </BootFailureModal>
   )
 }
 
@@ -307,7 +353,10 @@ export function BootFailureOverlay() {
       } else {
         await desktop?.oauthLogoutConnectionConfig?.(remoteReauth.url)
 
-        const result: DesktopOauthLoginResult | undefined = await desktop?.oauthLoginConnectionConfig(remoteReauth.url)
+        const result: DesktopOauthLoginResult | undefined = await desktop?.oauthLoginConnectionConfig(
+          remoteReauth.url
+        )
+
         connected = result?.connected === true
         error = result?.error
       }
@@ -317,7 +366,11 @@ export function BootFailureOverlay() {
           await desktop?.resetBootstrap().catch(() => undefined)
         }
 
-        notify({ kind: 'success', title: t.boot.failure.signedInTitle, message: t.boot.failure.signedInMessage })
+        notify({
+          kind: 'success',
+          title: t.boot.failure.signedInTitle,
+          message: t.boot.failure.signedInMessage
+        })
         window.location.reload()
 
         return
@@ -326,7 +379,9 @@ export function BootFailureOverlay() {
       notify({
         kind: 'warning',
         title: t.boot.failure.signInIncompleteTitle,
-        message: error ? `${t.boot.failure.signInIncompleteMessage}: ${error}` : t.boot.failure.signInIncompleteMessage
+        message: error
+          ? `${t.boot.failure.signInIncompleteMessage}: ${error}`
+          : t.boot.failure.signInIncompleteMessage
       })
     } catch (err) {
       notifyError(err, t.boot.failure.signInFailed)
@@ -511,7 +566,11 @@ export function BootFailureOverlay() {
               </h2>
             </DialogPrimitive.Title>
             <p className="mt-1 text-[length:var(--aino-text-ui)] leading-5 text-(--ui-text-tertiary)">
-              {remoteReauth ? copy.remoteDescription : cloudDown ? copy.cloudDownDescription : copy.description}
+              {remoteReauth
+                ? copy.remoteDescription
+                : cloudDown
+                  ? copy.cloudDownDescription
+                  : copy.description}
             </p>
           </div>
         </div>
@@ -535,7 +594,12 @@ export function BootFailureOverlay() {
           <div className="grid gap-2">
             <div className="flex flex-wrap gap-2">
               {actions.map(action => (
-                <Button disabled={Boolean(busy)} key={action.key} onClick={action.onClick} variant={action.variant}>
+                <Button
+                  disabled={Boolean(busy)}
+                  key={action.key}
+                  onClick={action.onClick}
+                  variant={action.variant}
+                >
                   {action.busy && busy === action.busy ? <Loader2 className="animate-spin" /> : action.icon}
                   {action.label}
                 </Button>

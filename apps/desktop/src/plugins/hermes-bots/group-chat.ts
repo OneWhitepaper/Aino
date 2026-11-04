@@ -1,5 +1,3 @@
-import { atom, host } from '@hermes/plugin-sdk'
-
 /**
  * The group-chat room store: the room atoms, the durable record in plugin
  * storage, the bounded cross-client projection that rides the default
@@ -10,6 +8,9 @@ import { atom, host } from '@hermes/plugin-sdk'
  * updateGroupChat schedules it and the scheduler reads the same atom — one
  * store, one writer.
  */
+
+import { atom, host, randomUuid } from '@hermes/plugin-sdk'
+
 import { $botMeta, $lastRoster, botRosterKey } from './data'
 import { groupMemberReferencesConnection, markOrphanedGroupMemberDescriptor } from './hygiene'
 import { botsText } from './i18n'
@@ -381,6 +382,11 @@ export function groupChatSyncSnapshot(
         ...(member?.sourceScoped
           ? {
               sourceScoped: true
+            }
+          : {}),
+        ...(member?.hermesHandleTaken
+          ? {
+              hermesHandleTaken: true
             }
           : {})
       })),
@@ -1703,11 +1709,7 @@ export function setGroupChatImage(group: string, image: null | string | undefine
 }
 
 function groupChatEntryId(): string {
-  if (globalThis.crypto && typeof globalThis.crypto.randomUUID === 'function') {
-    return globalThis.crypto.randomUUID()
-  }
-
-  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`
+  return randomUuid()
 }
 
 /** The agent loop's "(empty)" terminal sentinel (empty_response_exhausted) is

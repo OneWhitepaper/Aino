@@ -55,6 +55,9 @@ that the mockup does not show.
 - The default Sessions/Agent Hub rail uses a shared 61px brand row below the
   native window controls. Its current title (Aino or the contributed pane name)
   opens the existing dropdown menu, with descriptions and a checked current item.
+  This two-option menu uses a compact 240px width capped by the viewport,
+  56px minimum rows, 14px names and 12px descriptions, with shared menu/control
+  corners. Long localized descriptions wrap rather than widening the menu.
   A lone pane has a static brand without a chevron. The host owns presentation;
   existing pane activation still owns chat and routines. Unknown guests, layout
   editing, detached panes and minimized zones retain the ordinary pane strip.
@@ -178,6 +181,19 @@ that the mockup does not show.
   chat, while an explicitly opened repository stays pinned until another explicit
   review action. Source/profile ownership gates filesystem actions; delayed reads
   cannot paint or open files from a previous project or machine.
+- **Summary output clicks preserve open work.** Different output URLs open
+  separate browser tabs; clicking the same output focuses its existing tab.
+  File identity and existing source/preview behavior stay authoritative.
+- **Connection and pause states explain the next step.** Cold startup uses the
+  Aino mark, localized phase and real progress. Reconnecting does not cover an
+  already usable shell. A stopped response keeps its announcement accessible
+  without a visual banner. The empty composer replaces its primary action with a circular Continue button;
+  new text or attachments retain the normal Send path. Stop settlement and a
+  pending continuation disable the control until the existing protocol allows it.
+- **Provider setup lives in Settings.** Missing credentials do not summon the
+  startup provider picker over the workspace. A request-time notice opens the
+  existing Model settings for its owner; explicit service authorization retains
+  the existing OAuth/API key flow. Account sign-in remains separate.
 - **Summary is a persistent workspace card.** Its list icon precedes Terminal
   and the right-sidebar toggle. The titlebar button alone opens and closes it;
   outside clicks, Escape, conversation switches and opening other panes leave
@@ -435,6 +451,13 @@ uses the existing dialog; sign-out reuses the shared confirmation and pending
 state. Wallet display may round its decimal string to two places, with the full
 authoritative amount available in the adjacent disclosure. Account changes
 retire local editors and existing billing scope boundaries remain authoritative.
+Initial account restoration is distinct from signed-out login. A newly created
+window keeps its workspace geometry and shared PageLoader until native identity
+is known; only confirmed sign-out or authentication recovery enters compact
+login mode. Restoring a known account does not wait for public login options to
+finish their network request. The workspace becomes visible after native bounds
+settle, including when its account action owner changes. Later sign-in loading
+keeps the existing form and second-factor input mounted.
 The ledger opens on orders; usage filters can be hidden without discarding
 their draft or applied query. Narrow containers stack the overview and turn
 ledger rows into readable records, retaining timestamps, currencies and actions.
@@ -480,14 +503,17 @@ hairline in `src/styles/aino-theme.css`. Tune those tokens and every peer inheri
 Don't add per-overlay `shadow-[…]` or `border-(--ui-stroke-secondary)`
 one-offs; if elevation needs to change, change the token.
 
-Menus, selects, dialogs, sheets and popovers share the same `shadow-nous` +
-`--stroke-nous` treatment and 16px panel radius (sheets round their exposed edge).
+Menus and selects use the shared 12px menu radius; dialogs, sheets and ordinary
+popovers use the 16px panel radius (sheets round their exposed edge). All share
+the same `shadow-nous` + `--stroke-nous` treatment.
 Every floating list —
 `DropdownMenu`, `Select`, and Popover + cmdk pickers
 (`<PopoverContent variant="menu">` + `<Command variant="menu">`) — paints
 through `src/components/ui/menu.ts`, so a list reads the same wherever it
 opens. Typed fields with suggestions use `ComboboxInput`, never
 `<input list>` + `<datalist>` (Chromium paints that as its own OS popup).
+Shared menu and popover surfaces cap their width to the viewport with 8px side
+gutters; long menu labels wrap instead of pushing actions outside the window.
 
 Drag affordances may use tokenized
 dashed targets and local blur. These are semantic surface classes, not licenses
@@ -583,6 +609,7 @@ trigger with a soft open fill; `icon-titlebar` uses the shared control radius).
 that sit inside a heading/sentence; replaces `h-auto px-0 py-0`), `micro`
 (status-stack/table-footers), and the icon family `icon` / `icon-xs` /
 `icon-sm` / `icon-lg` / `icon-titlebar`.
+`touch` provides a 44px minimum target for compact mobile navigation.
 
 **Tooltips only when hover teaches something new.** `<Tip>` is for discovery,
 not a tax on every icon. Ask: does hover reveal something the user cannot
@@ -729,6 +756,20 @@ blurred backdrop.
 
 ## Layout
 
+In the browser-hosted Desktop, composer controls retain 44px targets on
+coarse-pointer surfaces. Its collapse stages budget the actual control-size
+token; below the two-target width budget, the context menu and Send occupy
+separate rows rather than clipping or shrinking. Native Desktop keeps the
+compact stages sized for 24px controls.
+The voice engine split-button uses `--composer-voice-menu-size`: compact on
+desktop, matching `--composer-control-size` on touch surfaces.
+Narrow browser touch layouts show the current session tab with an open-tab
+count. Its menu exposes every tab, while the new-tab action remains beside it.
+In the browser-hosted Desktop, outside taps dismiss narrow sidebar overlays;
+cancelled or scrolling gestures do not. Native Desktop keeps its overlay until
+Escape, the toggle or hover-out. Touch transcript gestures select a pane without
+focusing its composer.
+
 - **Navigation rail:** new layouts open at 260px. Existing saved widths remain
   authoritative, and the supported 245px minimum is unchanged. A quiet gray rail
   continues into its portion of the native titlebar, with one continuous hairline at the content boundary.
@@ -861,6 +902,9 @@ binding and hovered/focused-zone resolver as the number shortcuts.
 
 Tab close buttons fade the label with a content mask, not a painted gradient.
 The tab reads its surface token directly so glass tint is painted only once.
+Close glyphs keep a 24px hit area, including session tabs wrapped in context menus.
+`PaneTab` owns its `data-slot` marker after forwarded props so composition cannot
+disable that width or the label mask.
 
 Sticky user messages clip covered scrolling content, including the gap above
 them. Their wrappers stay unpainted; only the rounded user bubble owns a fill.
@@ -898,16 +942,25 @@ so glass and message-bubble transparency do not reveal scrolling text.
 
 ## Chat typography
 
-Appearance → Typography keeps **UI Scale** as whole-window zoom (100% by
-default). **Chat Text Size** is a separate desktop-local multiplier (110% by
+Appearance → Theme & text keeps **Global UI Scale** as whole-window zoom (100% by
+default), including navigation, settings, controls and chat text. **Chat Text Size**
+is a separate desktop-local multiplier (100% by
 default) on conversation text and the composer editor, including floating and
 inline-edit composers.
 It does not resize the sidebar, settings, toolbars, media, or pane geometry.
+Navigation, session/project titles and the account name use the shared 14px UI
+role. Dates and supporting metadata retain the 12px caption role. Maximizing the
+window changes available space; the remembered global scale controls its size.
 Conversation size and line-height tokens are derived inside the transcript/editor
 from their root base tokens; do not multiply the global tokens or nest CSS zoom.
 `aino-theme.css` owns those base tokens through the existing 14/14/12px roles;
 the inner transcript/editor derives scaled values from them. Do not override only
 the final aliases on an outer chat surface: inner scopes recalculate them.
+
+The composer keeps verified model labels and capability controls in place while
+the same account's model catalog refreshes during send. Only presentation may
+read the retained catalog during loading; request preparation still requires a
+ready catalog. Account, backend-origin and revision changes invalidate that copy.
 
 ## Chat, tools & boot surfaces
 

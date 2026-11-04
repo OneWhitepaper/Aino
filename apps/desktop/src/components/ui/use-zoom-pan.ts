@@ -162,19 +162,22 @@ export function useZoomPan<T extends HTMLElement = HTMLElement>(options: UseZoom
 
   const zoomIn = useCallback(() => {
     fittedRef.current = false
-
-    const node = ref.current
-    const rect = node?.getBoundingClientRect()
-    zoomAt(BUTTON_STEP, rect ? rect.width / 2 : 0, rect ? rect.height / 2 : 0)
+    zoomAt(BUTTON_STEP)
   }, [zoomAt])
 
   const zoomOut = useCallback(() => {
     fittedRef.current = false
-
-    const node = ref.current
-    const rect = node?.getBoundingClientRect()
-    zoomAt(1 / BUTTON_STEP, rect ? rect.width / 2 : 0, rect ? rect.height / 2 : 0)
+    zoomAt(1 / BUTTON_STEP)
   }, [zoomAt])
+
+  // Unlike reset (which fits registered content), 1:1 stays at its natural
+  // size even when the stage is resized.
+  const actualSize = useCallback(() => {
+    fittedRef.current = false
+    setTransform({ scale: 1, x: 0, y: 0 })
+    setMoved(false)
+    setPanning(false)
+  }, [])
 
   // Native, non-passive wheel so we can preventDefault page scroll. Attached to
   // the surface node (ref) only while the viewer is enabled, so it never
@@ -335,6 +338,7 @@ export function useZoomPan<T extends HTMLElement = HTMLElement>(options: UseZoom
   }
 
   return {
+    actualSize,
     moved,
     panning,
     ref: refCallback,

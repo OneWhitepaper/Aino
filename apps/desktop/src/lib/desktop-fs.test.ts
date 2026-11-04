@@ -22,6 +22,7 @@ import {
   trashDesktopPath,
   writeDesktopFileText
 } from './desktop-fs'
+import { isBrowserHostedDesktop } from './platform'
 
 const readDir = vi.fn(async () => ({ entries: [{ name: 'local', path: '/local', isDirectory: true }] }))
 const readFileText = vi.fn(async (): Promise<unknown> => ({ path: '/local/file.txt', text: 'local', byteSize: 5 }))
@@ -83,6 +84,7 @@ describe('desktop filesystem facade', () => {
     stubBridge()
     $connection.set(null)
     setApiRequestConnection(null)
+    delete document.documentElement.dataset.hermesDesktopHost
   })
 
   afterEach(() => {
@@ -91,6 +93,7 @@ describe('desktop filesystem facade', () => {
     vi.clearAllMocks()
     $connection.set(null)
     setApiRequestConnection(null)
+    delete document.documentElement.dataset.hermesDesktopHost
     setDesktopFsRemotePicker(null)
   })
 
@@ -119,6 +122,26 @@ describe('desktop filesystem facade', () => {
     await expect(writeDesktopFileText('/local/file.txt', 'updated')).rejects.toThrow('保存功能不可用')
     await expect(renameDesktopPath('/local/file.txt', 'renamed.txt')).rejects.toThrow('重命名功能不可用')
     await expect(trashDesktopPath('/local/file.txt')).rejects.toThrow('删除功能不可用')
+  })
+
+  it('treats browser-hosted local Desktop as backend filesystem mode', async () => {
+    $connection.set({ mode: 'local', profile: 'phone' } as never)
+    document.documentElement.dataset.hermesDesktopHost = 'browser'
+    const remoteSelect = vi.fn(async () => ['/backend/project'])
+    setDesktopFsRemotePicker({ selectPaths: remoteSelect })
+
+    expect(isBrowserHostedDesktop()).toBe(true)
+    await expect(readDesktopDir('/backend')).resolves.toMatchObject({ entries: [{ name: 'remote' }] })
+    await expect(desktopDefaultCwd()).resolves.toEqual({ cwd: '/backend/project', branch: 'main' })
+    await expect(selectDesktopPaths({ defaultPath: '/backend', directories: true })).resolves.toEqual([
+      '/backend/project'
+    ])
+
+    expect(api).toHaveBeenCalledWith({ path: '/api/fs/list?path=%2Fbackend', profile: 'phone' })
+    expect(api).toHaveBeenCalledWith({ path: '/api/fs/default-cwd', profile: 'phone' })
+    expect(remoteSelect).toHaveBeenCalledWith({ defaultPath: '/backend', directories: true, multiple: false })
+    expect(readDir).not.toHaveBeenCalled()
+    expect(selectPaths).not.toHaveBeenCalled()
   })
 
   it('routes filesystem reads through authenticated backend REST in remote mode', async () => {

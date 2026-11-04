@@ -1,6 +1,7 @@
 import type { ModelOptionProvider } from '@hermes/shared'
 import { atom } from 'nanostores'
 
+import { invalidateAllConnectors } from '@/app/capabilities/connectors/data/keys'
 import {
   cancelOAuthSession,
   getGlobalModelOptions,
@@ -16,9 +17,12 @@ import {
 } from '@/hermes'
 import { translateNow } from '@/i18n'
 import { PRODUCT_NAME } from '@/lib/brand'
+import { writeClipboardText } from '@/lib/clipboard'
 import { restOfLongPollGap } from '@/lib/long-poll'
 import { isProviderSetupErrorMessage } from '@/lib/provider-setup-errors'
 import { evaluateRuntimeReadiness, type RuntimeReadinessResult } from '@/lib/runtime-readiness'
+import { readKey, writeKey } from '@/lib/storage'
+import { $activeConnectionId, selectConnection } from '@/store/connections'
 import {
   $freeTierStatus,
   ackFreeTierNotice,
@@ -26,18 +30,35 @@ import {
   refreshFreeTierStatus,
   setFreeTierRoute
 } from '@/store/free-tier'
-import { showFreeTierSignInResult } from '@/store/free-tier-sign-in'
+import { followHandoff, handoffStillMoving } from '@/store/free-tier-sign-in'
 import { $gatewayBootGeneration } from '@/store/live-sync'
+import { $localModelsEnabled } from '@/store/local-models-flag'
 import { setMainModelAssignment } from '@/store/model-assignment'
 import { dismissNotification, notify, notifyError } from '@/store/notifications'
 import { afterOnboardingSurfaceClear, onboardingSurfaceOpen } from '@/store/onboarding-presence'
 import { captureOnboardingScope, type OnboardingScope } from '@/store/onboarding-scope'
-import type { OAuthProvider, OAuthStartResponse } from '@/types/hermes'
+import { $activeGatewayProfile, normalizeProfileKey } from '@/store/profile'
+import { requestRoute } from '@/store/recovery-requests'
+import { setModelPickerOpen } from '@/store/session'
+import { setSettingsScope } from '@/store/settings-scope'
+import type { AppHandoffStatus, OAuthPollResponse, OAuthProvider, OAuthStartResponse } from '@/types/hermes'
 
 type PkceStart = Extract<OAuthStartResponse, { flow: 'pkce' }>
 type DeviceStart = Extract<OAuthStartResponse, { flow: 'device_code' }>
 
 export type OnboardingMode = 'apikey' | 'oauth'
+
+export interface OnboardingSignedIn {
+  email: null | string
+  handoff: AppHandoffStatus | null
+}
+
+function signedInFrom(result: OAuthPollResponse): OnboardingSignedIn | undefined {
+  const email = result.account_email ?? null
+  const handoff = result.handoff_status ?? null
+
+  return email || handoff ? { email, handoff } : undefined
+}
 
 export type OnboardingFlow =
   | { status: 'idle' }
@@ -59,9 +80,17 @@ export type OnboardingFlow =
       label: string
       providerSlug: string
       saving: boolean
+      // A Nous sign-in's account and what the free tier's apps did, shown on the screen it happened on.
+      signedIn?: OnboardingSignedIn
       status: 'confirming_model'
     }
-  | { detail?: string; message: string; provider?: OAuthProvider; start?: OAuthStartResponse; status: 'error' }
+  | {
+      detail?: string
+      message: string
+      provider?: OAuthProvider
+      start?: OAuthStartResponse
+      status: 'error'
+    }
 
 export interface DesktopOnboardingState {
   /** null until the first runtime check resolves. Seeded from localStorage so
@@ -140,31 +169,15 @@ function writeCachedConfigured(value: boolean) {
   }
 }
 
+// Through the storage choke point: the skip is a machine-level preference,
+// so every browser and origin of this machine honours it (#145600).
 function readCachedSkipped(): boolean {
-  if (typeof window === 'undefined') {
-    return false
-  }
-
-  try {
-    return window.localStorage.getItem(SKIP_CACHE_KEY) === '1'
-  } catch {
-    return false
-  }
+  return typeof window !== 'undefined' && readKey(SKIP_CACHE_KEY) === '1'
 }
 
 function writeCachedSkipped(value: boolean) {
-  if (typeof window === 'undefined') {
-    return
-  }
-
-  try {
-    if (value) {
-      window.localStorage.setItem(SKIP_CACHE_KEY, '1')
-    } else {
-      window.localStorage.removeItem(SKIP_CACHE_KEY)
-    }
-  } catch {
-    // localStorage unavailable — degrade silently.
+  if (typeof window !== 'undefined') {
+    writeKey(SKIP_CACHE_KEY, value ? '1' : null)
   }
 }
 
@@ -198,7 +211,10 @@ function captureContext(ctx: OnboardingContext): OnboardingContext & { scope: On
 function signInDidNotFinish(provider: OAuthProvider, raw: unknown): { message: string; detail?: string } {
   const detail = raw instanceof Error ? errMessage(raw) : typeof raw === 'string' ? raw.trim() : ''
 
-  return { message: translateNow('onboarding.signInDidNotFinish', provider.name), detail: detail || undefined }
+  return {
+    message: translateNow('onboarding.signInDidNotFinish', provider.name),
+    detail: detail || undefined
+  }
 }
 
 const patch = (update: Partial<DesktopOnboardingState>) =>
@@ -206,7 +222,8 @@ const patch = (update: Partial<DesktopOnboardingState>) =>
 
 const setFlow = (flow: OnboardingFlow) => patch(flow.status === 'idle' ? { flow } : { flow, reason: null })
 
-const sessionIdFor = (flow: OnboardingFlow) => ('start' in flow && flow.start ? flow.start.session_id : undefined)
+const sessionIdFor = (flow: OnboardingFlow) =>
+  'start' in flow && flow.start ? flow.start.session_id : undefined
 
 // The poll loop itself ends with its flow (see `pollSession`); only the expiry floor is a timer.
 function clearPoll() {
@@ -235,7 +252,10 @@ function schedulePollExpiry(start: DeviceStart, onExpire: () => void) {
   }, ttlMs)
 }
 
-async function checkRuntime(ctx: OnboardingContext, requestedProvider?: string): Promise<RuntimeReadinessResult> {
+async function checkRuntime(
+  ctx: OnboardingContext,
+  requestedProvider?: string
+): Promise<RuntimeReadinessResult> {
   return evaluateRuntimeReadiness(ctx.requestGateway, {
     defaultReason: DEFAULT_ONBOARDING_REASON,
     requestedProvider,
@@ -243,7 +263,10 @@ async function checkRuntime(ctx: OnboardingContext, requestedProvider?: string):
   })
 }
 
-function shouldPreserveConfiguredOnFallback(runtime: RuntimeReadinessResult, state: DesktopOnboardingState): boolean {
+function shouldPreserveConfiguredOnFallback(
+  runtime: RuntimeReadinessResult,
+  state: DesktopOnboardingState
+): boolean {
   // Non-authoritative transport fallback only: NEITHER probe answered, so the
   // round carries no evidence either way and must never be written down as
   // "unconfigured". This used to require an in-memory `configured === true`,
@@ -285,7 +308,10 @@ function isInsideBootRaceWindow(): boolean {
   return lastBootGenerationAt !== null && Date.now() - lastBootGenerationAt < BOOT_RACE_GRACE_MS
 }
 
-function shouldPreserveConfiguredOnBootRace(runtime: RuntimeReadinessResult, state: DesktopOnboardingState): boolean {
+function shouldPreserveConfiguredOnBootRace(
+  runtime: RuntimeReadinessResult,
+  state: DesktopOnboardingState
+): boolean {
   // The probes ANSWERED this time, but the round ran inside the backend's boot
   // window: the runtime_check resolved a route whose external secret source
   // (BWS) had not hydrated yet and reported ok:false for it. That is a
@@ -301,6 +327,53 @@ function shouldPreserveConfiguredOnBootRace(runtime: RuntimeReadinessResult, sta
     !state.requested &&
     isInsideBootRaceWindow()
   )
+}
+
+// The selected model is the managed local runtime and its server is down (Desktop closed and took
+// its server with it, still loading, or switched off). The provider IS set up, and provider sign-in
+// cannot start a local server, so this never opens onboarding: the app stays usable, the status bar
+// reads "inference unavailable", and a notice names the cause with the way forward.
+const LOCAL_RUNTIME_UNAVAILABLE = 'local_runtime_unavailable'
+const LOCAL_MODELS_ROUTE = '/settings?tab=providers&pview=local'
+
+const LOCAL_RUNTIME_NOTICE_ID = 'local-runtime-unavailable'
+
+function isLocalRuntimeDown(runtime: RuntimeReadinessResult, state: DesktopOnboardingState): boolean {
+  return (
+    runtime.source === 'runtime_check' && runtime.errorCode === LOCAL_RUNTIME_UNAVAILABLE && !state.requested
+  )
+}
+
+/** True while the verdict is "the local model server is down": a server that is starting or being
+ *  switched back on announces nothing to this window, so the readiness tracker keeps re-checking. */
+export function isLocalRuntimeUnavailable(runtime: RuntimeReadinessResult | null): boolean {
+  return runtime?.ready === false && runtime.errorCode === LOCAL_RUNTIME_UNAVAILABLE
+}
+
+/** Readiness answered ready: the server came up, so the notice raised while it was down goes. The
+ *  onboarding exemption means no onboarding round runs on recovery to clear it there. */
+export function settleLocalRuntimeNotice(runtime: RuntimeReadinessResult) {
+  if (runtime.ready) {
+    dismissNotification(LOCAL_RUNTIME_NOTICE_ID)
+  }
+}
+
+function keepConfiguredWithLocalRuntimeDown(reason: string) {
+  const pane = $localModelsEnabled.get()
+
+  writeCachedConfigured(true)
+  patch({ configured: true, reason })
+  notify({
+    action: pane
+      ? { label: translateNow('desktop.openLocalModels'), onClick: () => requestRoute(LOCAL_MODELS_ROUTE) }
+      : { label: translateNow('desktop.chooseModel'), onClick: () => setModelPickerOpen(true) },
+    id: LOCAL_RUNTIME_NOTICE_ID,
+    kind: 'warning',
+    message: translateNow(
+      pane ? 'desktop.localRuntimeUnavailableDesktop' : 'desktop.localRuntimeUnavailableWebapp'
+    ),
+    title: translateNow('desktop.localRuntimeUnavailableTitle')
+  })
 }
 
 function notifyReady(provider: string) {
@@ -327,7 +400,9 @@ function notifyGatewayTools(tools: string[] | undefined) {
   }
 
   const labels = tools.map(t => GATEWAY_TOOL_LABELS[t] ?? t)
-  const list = labels.length === 1 ? labels[0] : `${labels.slice(0, -1).join(', ')} and ${labels[labels.length - 1]}`
+
+  const list =
+    labels.length === 1 ? labels[0] : `${labels.slice(0, -1).join(', ')} and ${labels[labels.length - 1]}`
 
   notify({
     durationMs: 8000,
@@ -433,7 +508,8 @@ async function completeWithModelConfirm(
   // When true, a failing runtime check no longer blocks progression — the
   // user is allowed through onboarding regardless. Used by the API-key path,
   // where we intentionally don't validate the key (it blocked too many users).
-  ignoreRuntimeGate = false
+  ignoreRuntimeGate = false,
+  signedIn?: OnboardingSignedIn
 ) {
   const generation = flowGeneration
 
@@ -442,6 +518,9 @@ async function completeWithModelConfirm(
   if (!ctx.scope?.profile) {
     await ctx.requestGateway('reload.env').catch(() => undefined)
   }
+
+  // A sign-in can change the account the apps ride on.
+  invalidateAllConnectors()
 
   if (generation !== flowGeneration) {
     return
@@ -520,8 +599,40 @@ async function completeWithModelConfirm(
     providerSlug: defaults.providerSlug,
     currentModel: defaults.defaultModel,
     label: providerLabel,
-    saving: false
+    saving: false,
+    signedIn
   })
+
+  void followSignedInMove(signedIn, generation, ctx.scope)
+}
+
+// Keep the confirm screen's line about the moving apps current until the move settles or the screen goes.
+async function followSignedInMove(
+  signedIn: OnboardingSignedIn | undefined,
+  generation: number,
+  scope?: ProfileScope
+) {
+  const moving = signedIn?.handoff
+
+  if (!signedIn || !moving || !handoffStillMoving(moving)) {
+    return
+  }
+
+  const shown = () => {
+    const { flow } = $desktopOnboarding.get()
+
+    return generation === flowGeneration && flow.status === 'confirming_model' ? flow : null
+  }
+
+  const publish = (handoff: AppHandoffStatus) => {
+    const flow = shown()
+
+    if (flow) {
+      setFlow({ ...flow, signedIn: { email: signedIn.email, handoff } })
+    }
+  }
+
+  await followHandoff(moving, () => shown() !== null, publish, scope)
 }
 
 export function providerResolutionFailure(reason: null | string) {
@@ -571,12 +682,48 @@ async function refreshProviders() {
   await providersRefreshPromise
 }
 
+async function openProviderSettings(scope: OnboardingScope) {
+  const profile = normalizeProfileKey(scope.profile)
+
+  const landed = () =>
+    $activeConnectionId.get() === scope.connectionId && normalizeProfileKey($activeGatewayProfile.get()) === profile
+
+  const switchFailed = translateNow('profiles.switchProfileFailed', profile)
+
+  try {
+    if (!landed() && scope.connectionId) {
+      await selectConnection(scope.connectionId, { profile })
+    }
+
+    // A missing registry entry or a superseded pick can resolve without landing.
+    // Never open another computer's model settings in response to this warning.
+    if (!landed()) {
+      throw new Error(switchFailed)
+    }
+
+    setSettingsScope(profile)
+    requestRoute('/settings?tab=config:model')
+  } catch (error) {
+    notifyError(error, switchFailed)
+  }
+}
+
 export function requestDesktopOnboarding(reason = DEFAULT_ONBOARDING_REASON) {
-  // Not over first-run onboarding. The free account may still be in
-  // the making, and a credential probe that fires meanwhile would drop the
-  // provider picker over it; onboarding hands over to the picker
-  // itself when the account fails.
-  afterOnboardingSurfaceClear(() => patch({ reason: reason.trim() || DEFAULT_ONBOARDING_REASON, requested: true }))
+  // Let first-run account setup finish before offering the existing model settings.
+  const scope = captureOnboardingScope()
+
+  afterOnboardingSurfaceClear(() => {
+    patch({ reason: reason.trim() || DEFAULT_ONBOARDING_REASON, requested: true })
+    notify({
+      id: 'provider-settings-required',
+      kind: 'warning',
+      message: translateNow('chat.providerCredentialRequired'),
+      action: {
+        label: translateNow('titlebar.openSettings'),
+        onClick: () => openProviderSettings(scope)
+      }
+    })
+  })
 }
 
 /** Credential warning delivered passively (session create/activate/resume
@@ -584,8 +731,8 @@ export function requestDesktopOnboarding(reason = DEFAULT_ONBOARDING_REASON) {
  *  profile that has no provider configured. Popping the blocking onboarding
  *  overlay here punishes merely LOOKING at an unconfigured profile, so the
  *  warning is deferred instead: stashed until the user actually tries to
- *  chat, where the submit path consumes it and opens onboarding before the
- *  doomed send. The latest warning wins; a session event without a warning
+ *  chat, where the submit path consumes it and offers model settings before
+ *  the doomed send. The latest warning wins; a session event without a warning
  *  clears the stash (the profile became configured, or the user switched
  *  back to a healthy one). */
 let pendingCredentialWarning: null | string = null
@@ -604,7 +751,7 @@ export function requestDesktopOnboardingForCredentialWarning(reason: null | stri
 }
 
 /** Submit-time gate: returns the deferred credential warning (and clears it)
- *  so the caller can open onboarding instead of sending a prompt that the
+ *  so the caller can offer model settings instead of sending a prompt that the
  *  gateway already said will fail. Null when the active profile is healthy. */
 export function consumePendingCredentialWarning(): null | string {
   const warning = pendingCredentialWarning
@@ -714,6 +861,8 @@ export function closeManualOnboarding() {
 export function completeDesktopOnboarding(connected = false) {
   clearPoll()
   dismissNotification('runtime-not-ready')
+  dismissNotification('provider-settings-required')
+  dismissNotification(LOCAL_RUNTIME_NOTICE_ID)
   writeCachedConfigured(true)
 
   if (connected) {
@@ -806,8 +955,7 @@ export async function refreshOnboarding(ctx: OnboardingContext, stillWanted?: ()
         id: 'runtime-not-ready',
         kind: 'info',
         title: 'Runtime not ready',
-        message:
-          `${PRODUCT_NAME} could not verify the running backend on startup. Some features may be unavailable until the gateway is reachable.`
+        message: `${PRODUCT_NAME} could not verify the running backend on startup. Some features may be unavailable until the gateway is reachable.`
       })
     }
 
@@ -815,6 +963,12 @@ export async function refreshOnboarding(ctx: OnboardingContext, stillWanted?: ()
   }
 
   const reason = runtime.reason || state.reason || DEFAULT_ONBOARDING_REASON
+
+  if (isLocalRuntimeDown(runtime, state)) {
+    keepConfiguredWithLocalRuntimeDown(reason)
+
+    return false
+  }
 
   if (shouldPreserveConfiguredOnBootRace(runtime, state)) {
     // The backend answered inside its boot window with a not-ready that is
@@ -954,11 +1108,18 @@ export async function startProviderOAuth(provider: OAuthProvider, ctx: Onboardin
 
 // Long-poll a session-backed device-code flow until it resolves. The loop ends with its flow: a
 // cancel, a newer flow, or the local expiry floor all move the flow off this session's `polling`.
-async function pollSession(provider: OAuthProvider, start: DeviceStart, ctx: OnboardingContext, generation: number) {
+async function pollSession(
+  provider: OAuthProvider,
+  start: DeviceStart,
+  ctx: OnboardingContext,
+  generation: number
+) {
   const live = () => {
     const { flow } = $desktopOnboarding.get()
 
-    return generation === flowGeneration && flow.status === 'polling' && sessionIdFor(flow) === start.session_id
+    return (
+      generation === flowGeneration && flow.status === 'polling' && sessionIdFor(flow) === start.session_id
+    )
   }
 
   try {
@@ -973,15 +1134,13 @@ async function pollSession(provider: OAuthProvider, start: DeviceStart, ctx: Onb
       if (result.status === 'approved') {
         clearPoll()
         setFlow({ status: 'success', provider })
-        // A Nous sign-in that replaced the free tier shows what moved, the same screen the
-        // free-tier sign-in shows; onboarding carries on underneath.
-        showFreeTierSignInResult(result, ctx.scope)
-        await completeWithModelConfirm(ctx, provider.name, [provider.id], reason =>
-          setFlow({
-            status: 'error',
-            provider,
-            message: providerResolutionFailure(reason)
-          })
+        await completeWithModelConfirm(
+          ctx,
+          provider.name,
+          [provider.id],
+          reason => setFlow({ status: 'error', provider, message: providerResolutionFailure(reason) }),
+          false,
+          signedInFrom(result)
         )
 
         return
@@ -1079,7 +1238,7 @@ export function cancelOnboardingFlow() {
 
 async function copyAndFlash(text: string, predicate: (flow: OnboardingFlow) => boolean) {
   try {
-    await navigator.clipboard.writeText(text)
+    await writeClipboardText(text)
   } catch {
     return
   }
@@ -1300,7 +1459,10 @@ export async function saveOnboardingLocalEndpoint(
   }
 
   try {
-    await setMainModelAssignment({ provider: 'custom', model, base_url: resolvedUrl, api_key: key }, ctx.scope)
+    await setMainModelAssignment(
+      { provider: 'custom', model, base_url: resolvedUrl, api_key: key },
+      ctx.scope
+    )
 
     if (generation !== flowGeneration) {
       return { ok: false }
@@ -1416,9 +1578,13 @@ export async function confirmOnboardingModel(ctx: OnboardingContext) {
     // this file's non-blocking gateway calls. The alternative (silently
     // keeping the previous default) is still safer than the bug this fixes.
     try {
-      const res = await setMainModelAssignment({ provider: flow.providerSlug, model: flow.currentModel }, undefined, {
-        skipConfirmPrompt: true
-      })
+      const res = await setMainModelAssignment(
+        { provider: flow.providerSlug, model: flow.currentModel },
+        undefined,
+        {
+          skipConfirmPrompt: true
+        }
+      )
 
       notifyGatewayTools(res.gateway_tools)
     } catch (error) {

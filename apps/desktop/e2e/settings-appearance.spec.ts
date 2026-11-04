@@ -26,7 +26,7 @@ test('keeps the short reasoning label on one line beside its settings control', 
   const page = fixture!.page
 
   await page.evaluate(() => { window.location.hash = '#/settings?tab=config:model' })
-  const effortControl = page.getByRole('combobox', { name: '推理', exact: true })
+  const effortControl = page.getByRole('group', { name: '推理', exact: true })
   await expect(effortControl).toBeVisible({ timeout: 30_000 })
 
   // Measure the real localized text node, not the surrounding flex box or a
@@ -43,19 +43,30 @@ test('keeps the short reasoning label on one line beside its settings control', 
   })
 
   expect(lines).toBe(1)
+  await effortControl.getByRole('button', { name: '高', exact: true }).click()
+  await expect(effortControl.getByRole('button', { name: '高', exact: true })).toHaveAttribute('aria-pressed', 'true')
   await page.screenshot({ path: test.info().outputPath('settings-label.png') })
 })
 
-test('keeps routing controls with subagent defaults after the main model', async () => {
+test('keeps routing controls with subagent defaults on their model tab', async () => {
   const page = fixture!.page
   await page.evaluate(() => { window.location.hash = '#/settings?tab=config:model' })
-  const subagents = page.locator('#setting-section-delegation')
+  const mainTab = page.getByRole('tab', { name: '主模型', exact: true })
+  const subagentTab = page.getByRole('tab', { name: '子智能体', exact: true })
+  await expect(mainTab).toHaveAttribute('aria-selected', 'true')
+  await expect(page.getByRole('combobox', { name: '模型', exact: true })).toBeVisible()
+  expect(await mainTab.evaluate((control, label) => {
+    const following = Array.from(control.parentElement!.querySelectorAll('[role=tab]')).find(tab => tab.textContent === label)!
+
+    return Boolean(control.compareDocumentPosition(following) & Node.DOCUMENT_POSITION_FOLLOWING)
+  }, '子智能体')).toBe(true)
+  await subagentTab.click()
+  const subagents = page.getByRole('tabpanel', { name: '子智能体', exact: true })
+  await expect(subagentTab).toHaveAttribute('aria-selected', 'true')
   await expect(subagents.getByRole('radiogroup', { name: '路由', exact: true })).toBeVisible()
   await expect(subagents.getByText('子智能体默认设置', { exact: true })).toBeVisible()
   await expect(subagents.getByRole('combobox', { name: '提供方', exact: true })).toHaveCount(0)
-  expect(await page.getByRole('combobox', { name: '提供方', exact: true }).evaluate(control => {
-    const section = document.getElementById('setting-section-delegation')!
-
-    return Boolean(control.compareDocumentPosition(section) & Node.DOCUMENT_POSITION_FOLLOWING)
-  })).toBe(true)
+  await expect(subagents.getByRole('combobox', { name: '模型', exact: true })).toHaveCount(0)
+  await mainTab.click()
+  await expect(page.getByRole('combobox', { name: '模型', exact: true })).toBeVisible()
 })

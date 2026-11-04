@@ -338,11 +338,29 @@ function UpdateActions({ target, u, view }: UpdateActionsProps): ReactElement | 
 export function UpdateStatusCard({
   showReleaseNotes = true,
   target,
-  variant = 'default'
+  variant = 'default',
+  version
 }: {
   showReleaseNotes?: boolean
   target: UpdateTarget
   variant?: 'default' | 'compact'
+  version?: DesktopVersionInfo | null
+}): ReactElement {
+  if (target === 'client' && version?.bundleSwapPending) {
+    return <></>
+  }
+
+  return <UpdateStatusCardBody showReleaseNotes={showReleaseNotes} target={target} variant={variant} />
+}
+
+function UpdateStatusCardBody({
+  showReleaseNotes,
+  target,
+  variant
+}: {
+  showReleaseNotes: boolean
+  target: UpdateTarget
+  variant: 'default' | 'compact'
 }): ReactElement {
   const { t } = useI18n()
   const u = t.updates

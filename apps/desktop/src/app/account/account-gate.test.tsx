@@ -8,6 +8,7 @@ import { HermesGateway } from '@/hermes'
 import { I18nProvider } from '@/i18n'
 import { setPrimaryGateway, setPrimaryGatewayConnection } from '@/store/gateway'
 import { $gatewayState, setConnection, setGatewayState } from '@/store/session'
+import { deferred } from '@/test/deferred'
 import { stubResizeObserver } from '@/test/jsdom'
 
 import type {
@@ -100,6 +101,129 @@ afterEach(() => {
 })
 
 describe('standalone Aino account flow', () => {
+  it('waits for restored identity without showing sign-in or shrinking the window', async () => {
+    const current = deferred<PlatformAccountSnapshot>()
+    const bounds = deferred<boolean>()
+    const platformBridge = bridge(snapshot('signed_out'))
+    vi.mocked(platformBridge.status).mockReturnValue(current.promise)
+    vi.mocked(window.hermesDesktop.setAccountWindowMode!).mockReturnValue(bounds.promise)
+    const actions = createPlatformAccountActions(platformBridge)
+
+    renderFlow(actions)
+
+    expect(screen.queryByRole('main', { name: '登录 Aino' })).toBeNull()
+    expect(screen.queryByLabelText('手机号')).toBeNull()
+    expect(screen.getByRole('status', { name: '正在连接账户服务…' })).toBeTruthy()
+    expect(window.hermesDesktop.setAccountWindowMode).not.toHaveBeenCalled()
+
+    await act(async () => current.resolve(snapshot('loading')))
+    expect(screen.queryByLabelText('手机号')).toBeNull()
+    expect(window.hermesDesktop.setAccountWindowMode).not.toHaveBeenCalled()
+
+    await act(async () => {
+      vi.mocked(platformBridge.onChanged).mock.calls[0][0]({
+        ...snapshot('signed_in', { id: 'a', display_name: 'A', phone_masked: '', email: '' }),
+        revision: 2
+      })
+    })
+    expect(window.hermesDesktop.setAccountWindowMode).toHaveBeenCalledExactlyOnceWith('workspace')
+    expect(screen.queryByText('Workspace')).toBeNull()
+    expect(screen.queryByLabelText('手机号')).toBeNull()
+
+    await act(async () => bounds.resolve(true))
+    expect(screen.getByText('Workspace')).toBeTruthy()
+  })
+
+  it('keeps the confirmed sign-in form mounted while authenticating', async () => {
+    const platformBridge = bridge(snapshot('signed_out'))
+    const actions = createPlatformAccountActions(platformBridge)
+    renderFlow(actions)
+    const phone = await screen.findByLabelText('手机号')
+    fireEvent.change(phone, { target: { value: '+8613800138000' } })
+
+    await act(async () => {
+      vi.mocked(platformBridge.onChanged).mock.calls[0][0]({ ...snapshot('loading'), revision: 2 })
+    })
+
+    expect(screen.getByLabelText('手机号')).toBe(phone)
+    expect((phone as HTMLInputElement).value).toBe('+8613800138000')
+    expect(screen.queryByText('Workspace')).toBeNull()
+  })
+
+  it('waits for restored native bounds again when the account action owner changes', async () => {
+    const account = { id: 'a', display_name: 'A', phone_masked: '', email: '' }
+    const first = createPlatformAccountActions(bridge(snapshot('signed_in', account)))
+    const view = renderFlow(first, <input aria-label="Retained draft" />)
+    const draft = await screen.findByRole('textbox', { name: 'Retained draft' })
+    const current = deferred<PlatformAccountSnapshot>()
+    const bounds = deferred<boolean>()
+    const nextBridge = bridge(snapshot('signed_out'))
+    vi.mocked(nextBridge.status).mockReturnValue(current.promise)
+    vi.mocked(window.hermesDesktop.setAccountWindowMode!).mockReturnValueOnce(bounds.promise)
+    const next = createPlatformAccountActions(nextBridge)
+
+    view.rerender(
+      <I18nProvider configClient={null} initialLocale="zh">
+        <MemoryRouter>
+          <AccountFlow actions={next}>
+            <input aria-label="Retained draft" />
+          </AccountFlow>
+        </MemoryRouter>
+      </I18nProvider>
+    )
+    expect(screen.queryByRole('textbox', { name: 'Retained draft' })).toBeNull()
+    expect(draft.isConnected).toBe(true)
+
+    await act(async () => current.resolve(snapshot('signed_in', account)))
+    expect(screen.queryByRole('textbox', { name: 'Retained draft' })).toBeNull()
+
+    await act(async () => bounds.resolve(true))
+    expect(screen.getByRole('textbox', { name: 'Retained draft' })).toBe(draft)
+  })
+
+  it('awaits fresh native bounds when switching directly between cached authenticated account owners', async () => {
+    const account = { id: 'a', display_name: 'A', phone_masked: '', email: '' }
+    const first = createPlatformAccountActions(bridge(snapshot('signed_in', account)))
+    const next = createPlatformAccountActions(bridge(snapshot('signed_in', { ...account, id: 'b', display_name: 'B' })))
+    await next.refresh()
+    const view = renderFlow(first, <input aria-label="Retained draft" />)
+    const draft = await screen.findByRole('textbox', { name: 'Retained draft' })
+    const bounds = deferred<boolean>()
+    vi.mocked(window.hermesDesktop.setAccountWindowMode!).mockReturnValueOnce(bounds.promise)
+
+    view.rerender(
+      <I18nProvider configClient={null} initialLocale="zh">
+        <MemoryRouter>
+          <AccountFlow actions={next}>
+            <input aria-label="Retained draft" />
+          </AccountFlow>
+        </MemoryRouter>
+      </I18nProvider>
+    )
+
+    expect(window.hermesDesktop.setAccountWindowMode).toHaveBeenCalledTimes(2)
+    expect(screen.queryByRole('textbox', { name: 'Retained draft' })).toBeNull()
+    expect(draft.isConnected).toBe(true)
+
+    await act(async () => bounds.resolve(true))
+    expect(screen.getByRole('textbox', { name: 'Retained draft' })).toBe(draft)
+  })
+
+  it('exposes recovery after an initial status failure and can restore the workspace on retry', async () => {
+    const platformBridge = bridge(snapshot('signed_out'))
+    vi.mocked(platformBridge.status).mockRejectedValueOnce({ code: 'network_unavailable' })
+    vi.mocked(platformBridge.retry).mockResolvedValueOnce(
+      snapshot('signed_in', { id: 'a', display_name: 'A', phone_masked: '', email: '' })
+    )
+    const actions = createPlatformAccountActions(platformBridge)
+    renderFlow(actions)
+
+    expect((await screen.findByRole('alert')).textContent).toBe('无法连接账户服务，请检查网络后重试。')
+    fireEvent.click(screen.getByRole('button', { name: '重试' }))
+    expect(await screen.findByText('Workspace')).toBeTruthy()
+    expect(screen.queryByRole('main', { name: '登录 Aino' })).toBeNull()
+  })
+
   it('initializes legacy account policy only after its gateway opens', async () => {
     Object.defineProperty(window, 'hermesDesktop', {
       configurable: true,

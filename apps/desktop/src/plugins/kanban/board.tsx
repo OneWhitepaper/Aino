@@ -34,6 +34,7 @@ import {
   host,
   Input,
   isSubmitEnter,
+  KanbanCardBadges,
   Loader,
   SearchField,
   Select,
@@ -255,7 +256,8 @@ function Card({
   onOpen,
   onToggleSelect,
   selected,
-  task
+  task,
+  tenants
 }: {
   columns: string[]
   onDelete: (id: string) => void
@@ -264,6 +266,7 @@ function Card({
   onToggleSelect: (id: string) => void
   selected: boolean
   task: KanbanTask
+  tenants: readonly string[]
 }) {
   const k = useKanban()
   const [dragging, setDragging] = useState(false)
@@ -304,11 +307,14 @@ function Card({
           {(arc === 'running' || arc === 'stale') && !dragging && !selected && (
             <span aria-hidden className={cn('kanban-arc', arc === 'stale' && 'kanban-arc--stale')} />
           )}
+          <KanbanCardBadges card={task} tenants={tenants} />
           <span className="line-clamp-2 text-[length:var(--aino-text-ui)] font-medium leading-snug text-foreground">
             {task.title || task.id}
           </span>
           {summary && (
-            <span className="line-clamp-2 text-[length:var(--aino-text-caption)] leading-snug text-(--ui-text-tertiary)">{summary}</span>
+            <span className="line-clamp-2 text-[length:var(--aino-text-caption)] leading-snug text-(--ui-text-tertiary)">
+              {summary}
+            </span>
           )}
           <CardFooter arc={arc} task={task} />
         </div>
@@ -354,7 +360,8 @@ function Column({
   onOpen,
   onToggle,
   onToggleSelect,
-  selected
+  selected,
+  tenants
 }: {
   collapsed: boolean
   column: { name: string; tasks: KanbanTask[] }
@@ -367,6 +374,7 @@ function Column({
   onToggle: () => void
   onToggleSelect: (id: string) => void
   selected: ReadonlySet<string>
+  tenants: readonly string[]
 }) {
   const k = useKanban()
   const [over, setOver] = useState(false)
@@ -443,7 +451,9 @@ function Column({
           {label}
         </span>
         {column.tasks.length > 0 && (
-          <span className="text-[length:var(--aino-text-caption)] tabular-nums text-(--ui-text-quaternary)">{column.tasks.length}</span>
+          <span className="text-[length:var(--aino-text-caption)] tabular-nums text-(--ui-text-quaternary)">
+            {column.tasks.length}
+          </span>
         )}
       </button>
     )
@@ -452,7 +462,10 @@ function Column({
   return (
     <div
       {...dragHandlers}
-      className={cn('group/col flex h-full w-64 shrink-0 flex-col rounded-(--aino-radius-control) p-2 transition-colors', wash)}
+      className={cn(
+        'group/col flex h-full w-64 shrink-0 flex-col rounded-(--aino-radius-control) p-2 transition-colors',
+        wash
+      )}
     >
       <header className="mb-1.5 flex h-5 items-center gap-1.5 px-1">
         <span className="size-1.5 rounded-full" style={{ backgroundColor: meta.tone }} />
@@ -461,7 +474,9 @@ function Column({
             {label}
           </span>
         </Tip>
-        <span className="text-[length:var(--aino-text-caption)] tabular-nums text-(--ui-text-quaternary)">{column.tasks.length}</span>
+        <span className="text-[length:var(--aino-text-caption)] tabular-nums text-(--ui-text-quaternary)">
+          {column.tasks.length}
+        </span>
         <button
           aria-label={k.collapse(label)}
           className="ml-auto grid size-5 place-items-center rounded-(--aino-radius-control) text-(--ui-text-tertiary) opacity-0 transition-opacity hover:bg-(--chrome-action-hover) hover:text-foreground focus-visible:opacity-100 group-hover/col:opacity-100"
@@ -490,6 +505,7 @@ function Column({
                     onToggleSelect={onToggleSelect}
                     selected={selected.has(task.id)}
                     task={task}
+                    tenants={tenants}
                   />
                 ))}
               </div>
@@ -504,6 +520,7 @@ function Column({
                 onToggleSelect={onToggleSelect}
                 selected={selected.has(task.id)}
                 task={task}
+                tenants={tenants}
               />
             ))}
         {/* Jira-style lane add — dashed, faded in on lane hover. Opacity (not
@@ -1422,6 +1439,7 @@ export function KanbanBoardPage() {
                 onToggle={() => toggleLane(col.name, auto)}
                 onToggleSelect={toggleSelect}
                 selected={selected}
+                tenants={filtered.tenants}
               />
             )
           })}

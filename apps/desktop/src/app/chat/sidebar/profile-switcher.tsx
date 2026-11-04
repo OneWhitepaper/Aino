@@ -49,6 +49,7 @@ import { useResizeObserver } from '@/hooks/use-resize-observer'
 import { type Translations, useI18n } from '@/i18n'
 import { connectionDisplayLabel, sortConnectionsForDisplay } from '@/lib/connection-display'
 import { triggerHaptic } from '@/lib/haptics'
+import { hostHas } from '@/lib/host-capabilities'
 import { Loader2 } from '@/lib/icons'
 import { PROFILE_SWATCHES, profileColorSoft, resolveProfileColor } from '@/lib/profile-color'
 import { profileShortLabel } from '@/lib/profile-short-label'
@@ -106,6 +107,7 @@ import { buildRestGroups, countRestAgents, type FleetAgent, type FleetGroup, fle
 import { useLocalDeviceSwitch } from './local-device-switch'
 import { ProfileLaunchContextMenu, ProfileLaunchMenuSection } from './profile-launch-menu'
 import { ProfileRemoteOverrideDialog } from './profile-remote-override-dialog'
+import { ProfileRowGlyph, UnservedProfileNote, useUnservedProfiles } from './unserved-profiles'
 import { useFleetRoster } from './use-fleet-roster'
 import { useProfilePrewarm } from './use-profile-prewarm'
 import { useProfileRailRefreshOnActive } from './use-profile-rail-refresh-on-active'
@@ -116,6 +118,23 @@ const RAIL_GAP = 4 // px — matches gap-1 between squares.
 // drag targets, endless horizontal scroll), so the rail collapses to a compact
 // menu. Drag-reorder and long-press-recolor live only on the squares path.
 const PROFILE_DROPDOWN_THRESHOLD = 13
+
+// The Webapp always takes the dropdown: squares are a native-window gesture
+// surface (drag, hold-to-recolor), and in a browser tab they read as chrome.
+const ALWAYS_CONDENSED = !hostHas('profileRailSquares')
+
+// The home pill's profile when the multi-profile rail shows one: the default profile. A gateway that
+// does not serve default (one launched as another profile, in the Webapp) refuses the switch, so the
+// pill is then the plain all toggle, as on a gateway without a default.
+function servedHomeProfile(defaultProfile: ProfileInfo | undefined, unserved: ReadonlySet<string>) {
+  return defaultProfile && !unserved.has(normalizeProfileKey(defaultProfile.name)) ? defaultProfile : undefined
+}
+
+// The threshold counts the whole fleet: fourteen squares are fourteen squares
+// wherever they live.
+function railCondensed(profileCount: number, restGroups: readonly FleetGroup[]): boolean {
+  return ALWAYS_CONDENSED || profileCount + countRestAgents(restGroups) > PROFILE_DROPDOWN_THRESHOLD
+}
 
 // #91710: a profile that finished (or blocked, or is still working) while
 // another was selected carries an indicator on its rail square and dropdown
@@ -283,6 +302,7 @@ export function ProfileRail() {
   const { dialog: localDeviceDialog, request: requestLocalDevice } = useLocalDeviceSwitch()
 
   useFleetRoster(multipleConnections)
+  const unserved = useUnservedProfiles(profiles)
 
   const connections = registry?.connections
 
@@ -338,9 +358,7 @@ export function ProfileRail() {
 
   // Too many profiles for the square strip → collapse to the select. Declared
   // ahead of the wheel effect, which re-binds when the strip mounts/unmounts.
-  // The threshold counts the whole fleet: fourteen squares are fourteen
-  // squares wherever they live.
-  const condensed = profiles.length + countRestAgents(restGroups) > PROFILE_DROPDOWN_THRESHOLD
+  const condensed = railCondensed(profiles.length, restGroups)
 
   const measureScroll = useCallback(() => {
     const el = scrollRef.current
@@ -391,16 +409,14 @@ export function ProfileRail() {
       return
     }
 
-    // Probe spinner only. The dialog — install confirm or fresh-session cue —
-    // must be on screen before selectConnection replaces the center.
+    // Probe spinner only: This device prompts only when picking it would
+    // start the installer.
     const key = fleetRouteKey(agent.connectionId, agent.profile)
     setPendingRoute(key)
 
     void requestLocalDevice({
       connectionId: agent.connectionId,
-      label: agent.connectionLabel,
-      profile: agent.profile,
-      replaceCenter: agent.profile === 'default'
+      label: agent.connectionLabel
     }).then(accepted => {
       setPendingRoute(current => (current === key ? null : current))
 
@@ -441,6 +457,7 @@ export function ProfileRail() {
   const isAll = scope === ALL_PROFILES
   const activeKey = normalizeProfileKey(gatewayProfile)
   const defaultProfile = profiles.find(profile => profile.is_default)
+  const homeProfile = servedHomeProfile(defaultProfile, unserved)
   const onDefault = !isAll && activeKey === 'default'
 
   const named = sortByProfileOrder(
@@ -582,7 +599,7 @@ export function ProfileRail() {
 
       <ProfileHomePills
         activeConnectionId={activeConnectionId}
-        defaultProfile={defaultProfile}
+        defaultProfile={homeProfile}
         fleet={fleet}
         isAll={isAll}
         multiProfile={multiProfile}
@@ -607,6 +624,7 @@ export function ProfileRail() {
             // only door; every at-rest group already lists its own (#106017, #131632).
             profiles={fleet && defaultProfile ? [defaultProfile, ...named] : named}
             restGroups={restGroups}
+            unserved={unserved}
           />
         </div>
       ) : (
@@ -905,7 +923,8 @@ function ProfileDropdown({
   onSelect,
   onSelectRest,
   profiles,
-  restGroups
+  restGroups,
+  unserved
 }: {
   activeKey: null | string
   colors: Record<string, string>
@@ -919,6 +938,8 @@ function ProfileDropdown({
   profiles: ProfileInfo[]
   // Fleet: the other gateways' agents, each under its own section header.
   restGroups: readonly FleetGroup[]
+  /** Profiles the gateway lists but does not serve (the Webapp): shown, never picked. */
+  unserved: ReadonlySet<string>
 }) {
   const { t } = useI18n()
   const p = t.profiles
@@ -975,6 +996,7 @@ function ProfileDropdown({
               key={profile.name}
               label={profileLabel(profile)}
               name={profile.name}
+              unserved={unserved.has(normalizeProfileKey(profile.name))}
             />
           ))}
         </DropdownMenuRadioGroup>
@@ -1009,7 +1031,8 @@ function ProfileDropdownItem({
   hideStatus,
   isDefault,
   label,
-  name
+  name,
+  unserved
 }: {
   color: null | string
   connectionId: null | string
@@ -1019,6 +1042,7 @@ function ProfileDropdownItem({
   isDefault: boolean
   label: string
   name: string
+  unserved: boolean
 }) {
   const { t } = useI18n()
   const p = t.profiles
@@ -1030,17 +1054,19 @@ function ProfileDropdownItem({
     <ProfileLaunchContextMenu connectionId={connectionId} label={label} profile={name}>
       <DropdownMenuRadioItem
         className="min-w-0"
+        disabled={unserved}
         onPointerEnter={startPrewarm}
         onPointerLeave={cancelPrewarm}
         onPointerMove={notePointerMove}
         value={name}
       >
         <span className="flex min-w-0 items-center gap-1.5">
-          <ProfileGlyph aria-hidden="true" color={color} isDefault={isDefault} name={name} />
+          <ProfileRowGlyph color={color} isDefault={isDefault} name={name} unserved={unserved} />
           <span className="truncate">{label}</span>
           {summary && !hideStatus && <ProfileStatusDot summary={summary} />}
         </span>
         {statusText && <span className="sr-only">{`, ${statusText}`}</span>}
+        {unserved && <UnservedProfileNote />}
       </DropdownMenuRadioItem>
     </ProfileLaunchContextMenu>
   )
@@ -1093,7 +1119,7 @@ interface ProfilePillProps {
   glyph: string
   label: string
   onSelect: () => void
-  // Fleet at-rest: dimmed until hovered, like the at-rest squares beside it.
+  // Another gateway's pill: the same unselected weight as the squares beside it.
   muted?: boolean
   pending?: boolean
   slot?: string
@@ -1130,7 +1156,7 @@ function ProfilePill({
         className={cn(
           'bg-transparent text-(--ui-text-tertiary) hover:bg-(--ui-control-hover-background) hover:text-foreground',
           active && 'bg-(--ui-control-active-background) text-foreground',
-          muted && 'opacity-40 hover:opacity-100',
+          muted && 'opacity-55 hover:opacity-100',
           summary && !active && 'relative'
         )}
         data-connection-id={connectionId}
@@ -1235,8 +1261,8 @@ function FleetRestGroup({
     : `${group.needsSignIn ? `${p.fleet.gateway(label)} · ${t.settings.toolsets.needsSignIn}` : p.fleet.gatewayUnreachable(label)}${group.error ? `\n${group.error}` : ''}`
 
   const defaultKey = fleetRouteKey(group.connectionId, group.defaultAgent.profile)
-  // At rest, This device is a backend switch, not Home. The house glyph stays
-  // on the active gateway's default profile.
+  // Off the active gateway, This device wears its device glyph, not Home. The
+  // house glyph stays on the active gateway's default profile.
   const localDefault = group.kind === 'local'
 
   return (
@@ -1333,7 +1359,7 @@ function RestSquare({
                   <button
                     aria-busy={pending || undefined}
                     aria-label={statusText ? `${label}, ${statusText}` : label}
-                    className="relative grid size-5 shrink-0 select-none place-items-center rounded-[3px] text-[0.5625rem] font-semibold uppercase leading-none opacity-35 transition-opacity hover:opacity-100 aria-busy:opacity-100"
+                    className="relative grid size-5 shrink-0 select-none place-items-center rounded-[3px] text-[0.5625rem] font-semibold uppercase leading-none opacity-55 transition-opacity hover:opacity-100 aria-busy:opacity-100"
                     data-connection-id={agent.connectionId}
                     data-profile={agent.profile}
                     data-slot="profile-rail-rest-square"

@@ -245,6 +245,7 @@ export interface PlatformDevice {
   last_used_at: string
   expires_at: string
   revoked: boolean
+  status?: 'active' | 'expired' | 'revoked'
 }
 
 export interface PlatformDeviceOwner {

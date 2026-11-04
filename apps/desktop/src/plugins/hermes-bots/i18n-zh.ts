@@ -267,7 +267,8 @@ export const zh: BotsMessages = {
     catalogInstalled: '目录 · 已安装',
     catalog: '目录',
     createAction: '创建机器人',
-    creating: '创建中…'
+    creating: '创建中…',
+    openBotChatInNewTab: '在新标签页中打开机器人聊天'
   },
   avatar: {
     classicShapes: '经典形状',
@@ -555,7 +556,8 @@ export const zh: BotsMessages = {
     youControl: '你正在控制',
     otherControls: '另一位查看者正在控制',
     agentControls: '机器人正在控制',
-    controlTaken: '另一位查看者已接管控制。仅可观看。'
+    controlTaken: '另一位查看者已接管控制。仅可观看。',
+    needsHttps: '机器人屏幕需要安全连接。请通过 HTTPS 或到 127.0.0.1 的 SSH 隧道打开 Webapp 后查看。'
   },
   cron: {
     untitled: '未命名任务',

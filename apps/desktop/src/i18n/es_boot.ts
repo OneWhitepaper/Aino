@@ -40,6 +40,8 @@ export const esBoot = {
       installMissing: 'Falta parte de la instalación de Hermes. Elige Reparar instalación para restaurarla.'
     },
     failure: {
+      webappTitle: 'Conectar este navegador',
+      webappDescription: 'Ejecuta hermes webapp en el equipo de la pasarela para autorizar este navegador.',
       title: 'Hermes no pudo iniciarse',
       description:
         'El servicio en segundo plano de Hermes no arrancó. Prueba uno de los pasos de recuperación de abajo. Nada de esto elimina tus chats ni tus ajustes.',

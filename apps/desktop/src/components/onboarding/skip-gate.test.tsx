@@ -52,7 +52,7 @@ describe('DesktopOnboardingOverlay first-run skip gate', () => {
     expect(screen.queryByText(HEADER)).toBeNull()
   })
 
-  it('still opens when a real credential wall asked for it', () => {
+  it('keeps configuration in settings when a credential wall asks for recovery', () => {
     // `requested` is only ever set by the submit-time deferred credential
     // warning or a stream that reported a provider setup error — never by a
     // passive readiness round. A durable skip must not swallow those.
@@ -60,6 +60,6 @@ describe('DesktopOnboardingOverlay first-run skip gate', () => {
 
     render(<DesktopOnboardingOverlay enabled profile="default" requestGateway={pendingGateway} />)
 
-    expect(screen.getByText(HEADER)).toBeTruthy()
+    expect(screen.queryByText(HEADER)).toBeNull()
   })
 })

@@ -1,5 +1,6 @@
 import { useStore } from '@nanostores/react'
 import { act, cleanup, render, screen, waitFor } from '@testing-library/react'
+import type { ComponentProps } from 'react'
 import { afterEach, expect, it } from 'vitest'
 
 import { platformAccountActions } from '@/api/platform'
@@ -15,7 +16,17 @@ import { platformModel, platformSnapshot } from '@/test/platform-model'
 
 import type { PlatformAccountSnapshot, PlatformModel } from '../../../shared/platform-contract'
 
-import { DesktopOnboardingOverlay } from '.'
+import { usePlatformOnboardingReady } from './use-platform-onboarding'
+
+import { DesktopOnboardingOverlay as Overlay } from '.'
+
+let platformReady = false
+
+function DesktopOnboardingOverlay(props: ComponentProps<typeof Overlay>) {
+  platformReady = usePlatformOnboardingReady(props.enabled)
+
+  return <Overlay {...props} />
+}
 
 markOnboardingDecided()
 
@@ -100,7 +111,8 @@ it('follows the active socket capability when a fresh local workspace retains th
 
   const view = render(<ActiveRouteOnboarding />)
 
-  await waitFor(() => expect(view.container.childElementCount).toBe(0))
+  await waitFor(() => expect(platformReady).toBe(true))
+  expect(view.container.childElementCount).toBe(0)
 
   const workspaceGateway = { connectionState: 'open' }
 
@@ -114,7 +126,7 @@ it('follows the active socket capability when a fresh local workspace retains th
     setConnection({ connectionId: 'local', mode: 'local', profile: 'fixture-workspace' } as never)
   })
 
-  expect(screen.getByRole('button', { name: "I'll choose a provider later" })).toBeTruthy()
+  expect(platformReady).toBe(false)
 
   act(() =>
     recordGatewayReadyCapability(
@@ -123,7 +135,8 @@ it('follows the active socket capability when a fresh local workspace retains th
     )
   )
 
-  await waitFor(() => expect(view.container.childElementCount).toBe(0))
+  await waitFor(() => expect(platformReady).toBe(true))
+  expect(view.container.childElementCount).toBe(0)
   expect($desktopOnboarding.get().configured).toBe(false)
 })
 
@@ -135,7 +148,7 @@ it('reveals the workspace when the exact backend becomes ready for an available 
 
   const view = render(<DesktopOnboardingOverlay enabled profile="default" requestGateway={requestGateway} />)
 
-  expect(screen.getByRole('button', { name: "I'll choose a provider later" })).toBeTruthy()
+  expect(platformReady).toBe(false)
 
   act(() =>
     recordGatewayReadyCapability(
@@ -143,14 +156,15 @@ it('reveals the workspace when the exact backend becomes ready for an available 
       { type: 'gateway.ready', payload: { managed_model_binding: 1 } }
     )
   )
-  expect(screen.getByRole('button', { name: "I'll choose a provider later" })).toBeTruthy()
+  expect(platformReady).toBe(false)
   act(() =>
     recordGatewayReadyCapability(
       { connectionId: 'source-a', profile: 'default' },
       { type: 'gateway.ready', payload: { managed_model_binding: 1 } }
     )
   )
-  await waitFor(() => expect(view.container.childElementCount).toBe(0))
+  await waitFor(() => expect(platformReady).toBe(true))
+  expect(view.container.childElementCount).toBe(0)
   expect($desktopOnboarding.get().configured).toBe(false)
   expect(window.localStorage.getItem('hermes-desktop-onboarded-v1')).toBeNull()
   expect(window.localStorage.getItem('hermes-onboarding-skipped-v1')).toBeNull()
@@ -159,7 +173,7 @@ it('reveals the workspace when the exact backend becomes ready for an available 
   expect(screen.getByRole('button', { name: 'Close' })).toBeTruthy()
 })
 
-it('does not adopt a late foreign catalog or treat an unavailable model as configured', async () => {
+it.each(['insufficient_balance', 'quota_exhausted'] as const)('does not adopt a late foreign catalog or initially treat %s as configured', async limitedState => {
   let resolve!: (models: PlatformModel[]) => void
   let calls = 0
 
@@ -170,7 +184,7 @@ it('does not adopt a late foreign catalog or treat an unavailable model as confi
       ? new Promise<PlatformModel[]>(done => {
           resolve = done
         })
-      : Promise.resolve([{ ...platformModel(), state: 'insufficient_balance' }])
+      : Promise.resolve([{ ...platformModel(), state: limitedState }])
   })
 
   setPrimaryGateway({ connectionState: 'open' } as never, 'default')
@@ -185,9 +199,9 @@ it('does not adopt a late foreign catalog or treat an unavailable model as confi
   changeAccount(platformSnapshot('user-b', 2))
   await act(async () => resolve([platformModel()]))
   await waitFor(() => expect(calls).toBe(2))
-  expect(screen.getByRole('button', { name: "I'll choose a provider later" })).toBeTruthy()
+  expect(platformReady).toBe(false)
   changeAccount({ ...platformSnapshot('user-b', 3), phase: 'signed_out', account: null })
-  expect(screen.getByRole('button', { name: "I'll choose a provider later" })).toBeTruthy()
+  expect(platformReady).toBe(false)
 })
 
 it('keeps a verified platform workspace reachable during offline recovery without enabling model selection or dismissing manual setup', async () => {
@@ -201,7 +215,8 @@ it('keeps a verified platform workspace reachable during offline recovery withou
     { type: 'gateway.ready', payload: { managed_model_binding: 1 } }
   )
   const view = render(<DesktopOnboardingOverlay enabled profile="default" requestGateway={requestGateway} />)
-  await waitFor(() => expect(view.container.childElementCount).toBe(0))
+  await waitFor(() => expect(platformReady).toBe(true))
+  expect(view.container.childElementCount).toBe(0)
 
   const offline: PlatformAccountSnapshot = { ...platformSnapshot('user-a', 2), phase: 'offline' }
   changeAccount(offline)
@@ -220,12 +235,13 @@ it('keeps a verified platform workspace reachable during offline recovery withou
   expect(view.container.childElementCount).toBe(0)
   expect(platformModelCatalog().state.get().models).toEqual([])
   await act(async () => reloaded.resolve([platformModel()]))
-  await waitFor(() => expect(view.container.childElementCount).toBe(0))
+  await waitFor(() => expect(platformReady).toBe(true))
+  expect(view.container.childElementCount).toBe(0)
   expect($desktopOnboarding.get().configured).toBe(false)
   expect(window.localStorage.getItem('hermes-desktop-onboarded-v1')).toBeNull()
 
   changeAccount({ ...platformSnapshot('user-a', 5), phase: 'signed_out', account: null })
-  expect(screen.getByRole('button', { name: "I'll choose a provider later" })).toBeTruthy()
+  expect(platformReady).toBe(false)
 })
 
 it('never lends offline readiness to another identity, gateway route, unsupported owner, or account bridge', async () => {
@@ -247,34 +263,36 @@ it('never lends offline readiness to another identity, gateway route, unsupporte
     { type: 'gateway.ready', payload: { managed_model_binding: 1 } }
   )
   const view = render(<DesktopOnboardingOverlay enabled profile="default" requestGateway={requestGateway} />)
-  const picker = () => screen.getByRole('button', { name: "I'll choose a provider later" })
+  const ready = () => platformReady
   let revision = 1
   const offline = (): PlatformAccountSnapshot => ({ ...platformSnapshot('user-a', ++revision), phase: 'offline' })
 
   const verifyAgain = async () => {
     changeAccount(platformSnapshot('user-a', ++revision))
-    await waitFor(() => expect(view.container.childElementCount).toBe(0))
+    await waitFor(() => expect(platformReady).toBe(true))
+    expect(view.container.childElementCount).toBe(0)
     changeAccount(offline())
     expect(view.container.childElementCount).toBe(0)
   }
 
-  await waitFor(() => expect(view.container.childElementCount).toBe(0))
+  await waitFor(() => expect(platformReady).toBe(true))
+  expect(view.container.childElementCount).toBe(0)
   await verifyAgain()
   changeAccount({ ...offline(), account: platformSnapshot('user-b').account })
-  expect(picker()).toBeTruthy()
+  expect(ready()).toBe(false)
   changeAccount(offline())
-  expect(picker()).toBeTruthy()
+  expect(ready()).toBe(false)
 
   await verifyAgain()
   act(() => setPrimaryGatewayConnectionId('source-b'))
-  expect(picker()).toBeTruthy()
+  expect(ready()).toBe(false)
   act(() =>
     recordGatewayReadyCapability(
       { connectionId: 'source-b', profile: 'default' },
       { type: 'gateway.ready', payload: { managed_model_binding: 1 } }
     )
   )
-  expect(picker()).toBeTruthy()
+  expect(ready()).toBe(false)
 
   await verifyAgain()
   act(() =>
@@ -283,44 +301,80 @@ it('never lends offline readiness to another identity, gateway route, unsupporte
       { type: 'gateway.ready', payload: {} }
     )
   )
-  expect(picker()).toBeTruthy()
+  expect(ready()).toBe(false)
   act(() =>
     recordGatewayReadyCapability(
       { connectionId: 'source-b', profile: 'default' },
       { type: 'gateway.ready', payload: { managed_model_binding: 1 } }
     )
   )
-  expect(picker()).toBeTruthy()
+  expect(ready()).toBe(false)
 
   await verifyAgain()
   changeAccount({ ...offline(), mode: 'production' })
-  expect(picker()).toBeTruthy()
+  expect(ready()).toBe(false)
 
   await verifyAgain()
   changeAccount({ ...offline(), phase: 'reauth_required' })
-  expect(picker()).toBeTruthy()
+  expect(ready()).toBe(false)
   changeAccount(offline())
-  expect(picker()).toBeTruthy()
+  expect(ready()).toBe(false)
 
   await verifyAgain()
-  models = [{ ...platformModel(), state: 'insufficient_balance' }]
+  models = [{ ...platformModel(), state: 'unavailable' }]
   changeAccount(platformSnapshot('user-a', ++revision))
-  await waitFor(() => expect(picker()).toBeTruthy())
+  await waitFor(() => expect(ready()).toBe(false))
   changeAccount(offline())
-  expect(picker()).toBeTruthy()
+  expect(ready()).toBe(false)
   models = [platformModel()]
 
   await verifyAgain()
   catalogUnavailable = true
   changeAccount(platformSnapshot('user-a', ++revision))
-  await waitFor(() => expect(picker()).toBeTruthy())
+  await waitFor(() => expect(ready()).toBe(false))
   changeAccount(offline())
-  expect(picker()).toBeTruthy()
+  expect(ready()).toBe(false)
   catalogUnavailable = false
 
   await verifyAgain()
   view.unmount()
   await installAccount(async () => [platformModel()], offline())
   render(<DesktopOnboardingOverlay enabled profile="default" requestGateway={requestGateway} />)
-  expect(picker()).toBeTruthy()
+  expect(ready()).toBe(false)
+})
+
+it.each(['insufficient_balance', 'quota_exhausted'] as const)('keeps account recovery reachable after verified tools become %s without authorizing their use', async limitedState => {
+  let models = [platformModel()]
+  const changeAccount = await installAccount(async () => models)
+  setPrimaryGateway({ connectionState: 'open' } as never, 'default')
+  setPrimaryGatewayConnectionId('source-a')
+  recordGatewayReadyCapability(
+    { connectionId: 'source-a', profile: 'default' },
+    { type: 'gateway.ready', payload: { managed_model_binding: 1 } }
+  )
+  const view = render(<DesktopOnboardingOverlay enabled profile="default" requestGateway={requestGateway} />)
+  await waitFor(() => expect(platformReady).toBe(true))
+  expect(view.container.childElementCount).toBe(0)
+
+  models = [{ ...platformModel(), state: limitedState }]
+  const limitedAccount = platformSnapshot('user-a', 2)
+  changeAccount(limitedAccount)
+  await waitFor(() => expect(platformModelCatalog().state.get().models[0]?.state).toBe(limitedState))
+  expect(view.container.childElementCount).toBe(0)
+  expect(() => requirePlatformSelection(limitedAccount, models, 'catalog-a', 'user-a')).toThrow()
+  expect($desktopOnboarding.get().configured).toBe(false)
+  expect(window.localStorage.getItem('hermes-desktop-onboarded-v1')).toBeNull()
+  expect(window.localStorage.getItem('hermes-onboarding-skipped-v1')).toBeNull()
+
+  act(() => $desktopOnboarding.set({ ...$desktopOnboarding.get(), manual: true }))
+  expect(screen.getByRole('button', { name: 'Close' })).toBeTruthy()
+  act(() => $desktopOnboarding.set({ ...$desktopOnboarding.get(), manual: false }))
+  expect(view.container.childElementCount).toBe(0)
+
+  changeAccount(platformSnapshot('user-b', 3))
+  await waitFor(() => expect(platformModelCatalog().state.get().models[0]?.state).toBe(limitedState))
+  expect(platformReady).toBe(false)
+  changeAccount(platformSnapshot('user-a', 4))
+  await waitFor(() => expect(platformModelCatalog().state.get().models[0]?.state).toBe(limitedState))
+  expect(platformReady).toBe(false)
 })

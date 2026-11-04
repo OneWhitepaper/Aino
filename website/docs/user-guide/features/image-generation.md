@@ -64,6 +64,27 @@ from the desktop image settings. A failed Aino authorization never silently swit
 provider. Changes that enable a previously unavailable tool take effect in a new
 conversation, preserving the current conversation's cached tool definition.
 
+### Native 2K and 4K dimensions
+
+With an Aino or OpenAI image model selected, start a new conversation after
+updating and ask for exact pixels, for example:
+
+> Generate a portrait at native 2048 × 3072 pixels. Do not enlarge it with
+> interpolation, and report the actual output dimensions.
+
+The existing `image_generate` tool accepts `size: "2048x3072"` for this request.
+Other examples include `2048x2048`, `3840x2160`, and `4096x4096`; availability
+depends on the selected model and upstream service. The same size control works
+with reference-image edits. An explicit size overrides the landscape, square or
+portrait preset; leaving it unspecified keeps the existing defaults.
+
+The result reports `requested_size` and `actual_size` from the saved original
+image. If the upstream returns different dimensions, the agent should explain
+the mismatch. If dimensions cannot be read, `actual_size` is unknown. A billing
+label such as “2K” does not establish native pixel dimensions. Aino preserves an
+unsupported-size error so you can choose another size or model; it does not
+silently reduce the request, regenerate, or enlarge the result locally.
+
 :::tip Nous Subscribers
 If you have a paid [Nous Portal](https://portal.nousresearch.com) subscription, you can use image generation through the **[Tool Gateway](tool-gateway.md)** without a FAL API key. Your model selection persists across both paths. New installs can run `hermes setup --portal` to log in and turn on every gateway tool at once; existing installs can pick **Nous Subscription** as the image-gen backend via `hermes tools`.
 

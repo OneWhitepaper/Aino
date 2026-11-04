@@ -117,7 +117,7 @@ const zhHantBaseOverrides = {
       allApps: '全部應用程式',
       receiptConnected: apps => `已連接：${apps}`,
       receiptNone: '未連接新的應用程式',
-      receiptTimedOut: '5 分鐘後已關閉',
+      receiptTimedOut: '10 分鐘後已關閉',
       finishInBrowser: '請在瀏覽器中完成',
       signInFailed: '連接失敗，點擊重試'
     }
@@ -286,6 +286,7 @@ const zhHantBaseOverrides = {
     refresh: '重新整理裝置',
     empty: '尚無裝置授權',
     active: '有效',
+    expired: '已過期',
     revoked: '已撤銷',
     lastUsed: '最近使用',
     expires: '到期時間',

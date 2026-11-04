@@ -5,8 +5,11 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vite
 
 import { $terminalTakeover, setTerminalTakeover } from '@/app/right-sidebar/store'
 import { $activeTerminalId, $terminals } from '@/app/right-sidebar/terminal/terminals'
+import { PANE_TOGGLE_REVEAL_EVENT } from '@/components/pane-shell'
+import { $narrowOverlayPaneIds } from '@/components/pane-shell/narrow-overlay-state'
 import { findGroup, group, split } from '@/components/pane-shell/tree/model'
 import { ToolPanelControls } from '@/components/pane-shell/tree/renderer/tool-panel-controls'
+import { $narrowViewport } from '@/components/pane-shell/tree/store'
 import {
   $dismissedPanes,
   $hiddenTreePanes,
@@ -17,7 +20,8 @@ import {
 } from '@/components/pane-shell/tree/store'
 import { registry } from '@/contrib/registry'
 import { I18nProvider } from '@/i18n'
-import { $fileBrowserOpen } from '@/store/layout'
+import { $fileBrowserOpen, $leftSideOpen, CHAT_SIDEBAR_PANE_ID, FILE_BROWSER_PANE_ID } from '@/store/layout'
+import { REVIEW_PANE_ID } from '@/store/review'
 import { $summaryOpen } from '@/store/summary'
 import { setTitlebarAppActionsSide } from '@/store/titlebar-app-actions'
 import { stubResizeObserver } from '@/test/jsdom'
@@ -50,7 +54,11 @@ describe('titlebar terminal toggle', () => {
     $dismissedPanes.set(new Set())
     $hiddenTreePanes.set(new Set())
     $layoutTree.set(split('column', [group(['workspace']), group(['terminal'], { minimized: true })]))
-    const terminals = [{ auto: true, cwd: '/project', id: 'running-shell', kind: 'user' as const, title: 'zsh' }]
+
+    const terminals = [
+      { auto: true, cwd: '/project', id: 'running-shell', kind: 'user' as const, title: 'zsh' }
+    ]
+
     $terminals.set(terminals)
     $activeTerminalId.set('running-shell')
 
@@ -95,7 +103,11 @@ describe('titlebar terminal toggle', () => {
     )
     $fileBrowserOpen.set(true)
     setTerminalTakeover(true)
-    const terminals = [{ auto: true, cwd: '/project', id: 'retained-shell', kind: 'user' as const, title: 'zsh' }]
+
+    const terminals = [
+      { auto: true, cwd: '/project', id: 'retained-shell', kind: 'user' as const, title: 'zsh' }
+    ]
+
     $terminals.set(terminals)
     $activeTerminalId.set('retained-shell')
 
@@ -368,9 +380,109 @@ describe('TitlebarControls fixed clusters', () => {
 })
 
 describe('titlebar app-action cluster', () => {
+  beforeEach(() => {
+    vi.stubGlobal('hermesDesktop', { ...window.hermesDesktop, hud: { open: vi.fn() } })
+  })
+
   afterEach(() => {
+    $narrowViewport.set(false)
+    $narrowOverlayPaneIds.set(new Set())
     setTitlebarAppActionsSide('right')
     cleanup()
+    vi.unstubAllGlobals()
+    delete window.document.documentElement.dataset.hermesDesktopHost
+  })
+
+  // A narrow native window keeps main's titlebar: the side buttons read the
+  // docked sides and flip the overlay through the shared ⌘B/⌘J toggle, whatever
+  // the overlay shows, and carry no aria-expanded.
+  it('names and toggles the sides from docked state in a narrow native window, as on main', () => {
+    vi.stubGlobal(
+      'matchMedia',
+      vi.fn().mockReturnValue({ matches: true, addEventListener: vi.fn(), removeEventListener: vi.fn() })
+    )
+    $narrowViewport.set(true)
+    $narrowOverlayPaneIds.set(new Set([CHAT_SIDEBAR_PANE_ID, REVIEW_PANE_ID]))
+    const intents: unknown[] = []
+    const listener = (event: Event) => intents.push((event as CustomEvent).detail)
+    window.addEventListener(PANE_TOGGLE_REVEAL_EVENT, listener)
+
+    try {
+      renderControls('/')
+
+      const sidebar = screen.getByRole('button', {
+        name: $leftSideOpen.get() ? 'Hide sidebar' : 'Show sidebar'
+      })
+
+      const rightSidebar = screen.getByRole('button', {
+        name: $fileBrowserOpen.get() ? 'Hide right sidebar' : 'Show right sidebar'
+      })
+
+      expect(sidebar.hasAttribute('aria-expanded')).toBe(false)
+      expect(rightSidebar.hasAttribute('aria-expanded')).toBe(false)
+      fireEvent.click(sidebar)
+      fireEvent.click(rightSidebar)
+      expect(intents).toEqual([
+        { id: CHAT_SIDEBAR_PANE_ID, mode: 'toggle' },
+        { id: FILE_BROWSER_PANE_ID, mode: 'toggle' }
+      ])
+    } finally {
+      window.removeEventListener(PANE_TOGGLE_REVEAL_EVENT, listener)
+    }
+  })
+
+  it('names the narrow sidebar action from its visible overlay, not docked state', () => {
+    window.document.documentElement.dataset.hermesDesktopHost = 'browser'
+    $narrowViewport.set(true)
+    renderControls('/')
+    const left = screen.getByLabelText('Window controls')
+    expect(within(left).getByRole('button', { name: 'Show sidebar' }).getAttribute('aria-expanded')).toBe(
+      'false'
+    )
+    act(() => $narrowOverlayPaneIds.set(new Set([CHAT_SIDEBAR_PANE_ID])))
+    expect(within(left).getByRole('button', { name: 'Hide sidebar' }).getAttribute('aria-expanded')).toBe(
+      'true'
+    )
+    act(() => $narrowOverlayPaneIds.set(new Set()))
+    expect(within(left).getByRole('button', { name: 'Show sidebar' })).toBeTruthy()
+  })
+
+  it('explicitly closes a visible overlay rather than pinning a hover reveal', () => {
+    window.document.documentElement.dataset.hermesDesktopHost = 'browser'
+    vi.stubGlobal(
+      'matchMedia',
+      vi.fn().mockReturnValue({ matches: true, addEventListener: vi.fn(), removeEventListener: vi.fn() })
+    )
+    $narrowViewport.set(true)
+    $narrowOverlayPaneIds.set(new Set([CHAT_SIDEBAR_PANE_ID]))
+    const intents: unknown[] = []
+    const listener = (event: Event) => intents.push((event as CustomEvent).detail)
+    window.addEventListener(PANE_TOGGLE_REVEAL_EVENT, listener)
+
+    try {
+      renderControls('/')
+      fireEvent.click(screen.getByRole('button', { name: 'Hide sidebar' }))
+      expect(intents).toEqual([{ id: CHAT_SIDEBAR_PANE_ID, mode: 'close' }])
+    } finally {
+      window.removeEventListener(PANE_TOGGLE_REVEAL_EVENT, listener)
+    }
+  })
+
+  it('hides a review-only right sidebar instead of opening files', () => {
+    window.document.documentElement.dataset.hermesDesktopHost = 'browser'
+    $narrowViewport.set(true)
+    $narrowOverlayPaneIds.set(new Set([REVIEW_PANE_ID]))
+    const intents: unknown[] = []
+    const listener = (event: Event) => intents.push((event as CustomEvent).detail)
+    window.addEventListener(PANE_TOGGLE_REVEAL_EVENT, listener)
+
+    try {
+      renderControls('/')
+      fireEvent.click(screen.getByRole('button', { name: 'Hide right sidebar' }))
+      expect(intents).toEqual([{ id: 'review', mode: 'close' }])
+    } finally {
+      window.removeEventListener(PANE_TOGGLE_REVEAL_EVENT, listener)
+    }
   })
 
   it('defaults layout, HUD, and haptics to the right so the left titlebar stays free for tabs', () => {
@@ -400,5 +512,19 @@ describe('titlebar app-action cluster', () => {
     expect(within(left).getByLabelText('Layout editor')).toBeTruthy()
     expect(within(left).getByLabelText('HUD mode')).toBeTruthy()
     expect(within(right).queryByLabelText('Mute haptics')).toBeNull()
+  })
+
+  it('keeps HUD hidden in the browser on either app-action side', () => {
+    vi.stubGlobal('hermesDesktop', { ...window.hermesDesktop, hud: undefined })
+    renderControls('/')
+
+    expect(screen.queryByLabelText('HUD mode')).toBeNull()
+    expect(screen.getByLabelText('Layout editor')).toBeTruthy()
+
+    // Each side assembles its own cluster, so the move must keep the filter.
+    act(() => setTitlebarAppActionsSide('left'))
+    expect(screen.queryByLabelText('HUD mode')).toBeNull()
+    expect(within(screen.getByLabelText('Window controls')).getByLabelText('Layout editor')).toBeTruthy()
+    expect(screen.getByLabelText('Layout editor')).toBeTruthy()
   })
 })

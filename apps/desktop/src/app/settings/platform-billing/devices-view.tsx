@@ -53,6 +53,29 @@ function pageVisible() {
   return document.visibilityState !== 'hidden'
 }
 
+function deviceStatus(device: PlatformDevice) {
+  // Older APIs report expired credentials as revoked, even while their sign-in remains revocable.
+  return (
+    device.status ?? (Date.parse(device.expires_at) <= Date.now() ? 'expired' : device.revoked ? 'revoked' : 'active')
+  )
+}
+
+function mergeDeviceAuthorizations(rows: PlatformDevice[], previous: PlatformDevice[] = []) {
+  const revoked = new Map(
+    previous.filter(device => device.status === 'revoked').map(device => [device.device_id, device.expires_at])
+  )
+
+  return rows.map(device => {
+    // Legacy revocation can update last_used_at; only an expired, revoked response needs disambiguation.
+    return !device.status &&
+      device.revoked &&
+      Date.parse(device.expires_at) <= Date.now() &&
+      revoked.get(device.device_id) === device.expires_at
+      ? { ...device, status: 'revoked' as const }
+      : device
+  })
+}
+
 function DeviceList({ scope, bridge, accountBridge }: PlatformDevicesProps & { bridge: PlatformDevicesBridge }) {
   const { t, locale } = useI18n()
   const copy = t.platformDevices
@@ -83,12 +106,18 @@ function DeviceList({ scope, bridge, accountBridge }: PlatformDevicesProps & { b
     setError(null)
 
     try {
+      const queryKey = [...platformBillingQueryKey({ origin, user_id: user, generation }), 'devices']
+
       const rows = await queryClient.fetchQuery({
-        queryKey: [...platformBillingQueryKey({ origin, user_id: user, generation }), 'devices'],
+        queryKey,
         staleTime: 0,
         retry: false,
         networkMode: 'always',
-        queryFn: () => bridge.list({ expected_user_id: user, expected_generation: generation })
+        queryFn: async () =>
+          mergeDeviceAuthorizations(
+            await bridge.list({ expected_user_id: user, expected_generation: generation }),
+            queryClient.getQueryData<PlatformDevice[]>(queryKey)
+          )
       })
 
       if (alive.current && revision === readRevision.current && pageVisible()) {
@@ -143,7 +172,14 @@ function DeviceList({ scope, bridge, accountBridge }: PlatformDevicesProps & { b
       if (alive.current) {
         setSelected(null)
         setRevoked(true)
-        await queryClient.cancelQueries({ queryKey: [...platformBillingQueryKey(scope), 'devices'], exact: true })
+        const queryKey = [...platformBillingQueryKey(scope), 'devices']
+        await queryClient.cancelQueries({ queryKey, exact: true })
+
+        const confirmed = queryClient.setQueryData<PlatformDevice[]>(queryKey, rows =>
+          rows?.map(device => (device.device_id === id ? { ...device, status: 'revoked', revoked: true } : device))
+        )
+
+        setDevices(confirmed ?? null)
         await read()
       }
     } catch (failure) {
@@ -282,37 +318,39 @@ function DeviceList({ scope, bridge, accountBridge }: PlatformDevicesProps & { b
         {devices?.length === 0 && <p className="text-sm text-muted-foreground">{copy.empty}</p>}
         {devices && devices.length > 0 && (
           <div className="account-devices-list" role="list">
-            {devices.map(device => (
-              <div className="account-device" key={device.device_id} role="listitem">
-                <div className="account-device-main">
-                  <div className="account-device-identity">
-                    <span>{device.device_id}</span>
-                    <Pill tone={device.revoked ? 'muted' : 'success'}>
-                      {device.revoked ? copy.revoked : copy.active}
-                    </Pill>
+            {devices.map(device => {
+              const status = deviceStatus(device)
+
+              return (
+                <div className="account-device" key={device.device_id} role="listitem">
+                  <div className="account-device-main">
+                    <div className="account-device-identity">
+                      <span>{device.device_id}</span>
+                      <Pill tone={status === 'active' ? 'success' : 'muted'}>{copy[status]}</Pill>
+                    </div>
+                    <Button
+                      disabled={status === 'revoked' || busy || loading || !!stepUp}
+                      onClick={() => {
+                        setSelected(device.device_id)
+                        setError(null)
+                      }}
+                      size="sm"
+                      variant="ghost"
+                    >
+                      {copy.revoke}
+                    </Button>
                   </div>
-                  <Button
-                    disabled={device.revoked || busy || loading || !!stepUp}
-                    onClick={() => {
-                      setSelected(device.device_id)
-                      setError(null)
-                    }}
-                    size="sm"
-                    variant="ghost"
-                  >
-                    {copy.revoke}
-                  </Button>
+                  <div className="account-device-times">
+                    <span>
+                      {copy.lastUsed}: {new Date(device.last_used_at).toLocaleString(locale)}
+                    </span>
+                    <span>
+                      {copy.expires}: {new Date(device.expires_at).toLocaleString(locale)}
+                    </span>
+                  </div>
                 </div>
-                <div className="account-device-times">
-                  <span>
-                    {copy.lastUsed}: {new Date(device.last_used_at).toLocaleString(locale)}
-                  </span>
-                  <span>
-                    {copy.expires}: {new Date(device.expires_at).toLocaleString(locale)}
-                  </span>
-                </div>
-              </div>
-            ))}
+              )
+            })}
           </div>
         )}
         {selected && (

@@ -26,6 +26,7 @@ def test_unmanaged_runtime_drops_session_config_bypass_flags(tmp_path, monkeypat
     def spawn(command, **kwargs):
         captured.update(kwargs)
         return child
+    monkeypatch.setattr(start, 'start_gateway_job', lambda *args, **kwargs: None)
     monkeypatch.setattr(start.subprocess, 'Popen', spawn)
     assert start.spawn_unmanaged_gateway(tmp_path, deadline=time.monotonic() + 5) is child
     assert all(key not in captured['env'] for key in flags)

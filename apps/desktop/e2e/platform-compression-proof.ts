@@ -56,8 +56,7 @@ function renderedUserMessageCount(page: Page): Promise<number> {
 
 async function selectFixtureModel(page: Page) {
   await page.locator('[data-tour="model-pill"]').first().click()
-  await page.getByRole('button', { name: 'Aino models', exact: true }).click()
-  await page.getByRole('option', { name: /fixture-tool-model/ }).click()
+  await page.getByRole('menuitem', { name: /fixture-tool-model/ }).click()
   await expect(page.locator('[data-tour="model-pill"]').first()).toContainText('fixture-tool-model')
 }
 

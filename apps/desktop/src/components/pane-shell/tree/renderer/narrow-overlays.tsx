@@ -11,6 +11,7 @@ import { type MouseEventHandler, useCallback, useEffect, useMemo, useState } fro
 
 import { openToolPanelChooser, TOOL_CHOOSER_PANE } from '@/app/right-sidebar/tool-panel-actions'
 import { $workspaceIsPage, workspacePageKeepsPane } from '@/app/routes'
+import { useTitlebarHeight } from '@/app/shell/use-touch-titlebar'
 import { Codicon } from '@/components/ui/codicon'
 import { PaneStripGlyph, PaneTab, PaneTabLabel, PaneTabStrip } from '@/components/ui/pane-tab'
 import { ContribBoundary, ContribRender } from '@/contrib/react/boundary'
@@ -19,12 +20,15 @@ import { useContributions } from '@/contrib/react/use-contributions'
 import type { Contribution } from '@/contrib/types'
 import { useI18n } from '@/i18n'
 import { localizedPaneTitle } from '@/i18n/contributions'
+import { ESCAPE_PRIORITY, isTopEscapeLayer } from '@/lib/escape-layers'
+import { hostHas } from '@/lib/host-capabilities'
 import { cn } from '@/lib/utils'
 import { $chatOnboardingSolo } from '@/store/onboarding-intro'
 import { $paneStates } from '@/store/panes'
 
 import { $layoutEditMode } from '../../edit-mode'
 import { useWindowControlsOverlap } from '../../geometry'
+import { $narrowOverlayPaneIds } from '../../narrow-overlay-state'
 import { NO_PANE_GROUP, SidebarBrandContext } from '../../pane-visibility'
 import { allPaneIds, findGroup, findGroupOfPane, type GroupNode, type LayoutNode } from '../model'
 import { $hiddenTreePanes, $layoutTree, $narrowViewport, activateTreePane, closeTabPane } from '../store'
@@ -112,7 +116,19 @@ function collapsedZonePanes(
   return { group: zone, panes: shown.length > 0 ? shown : [revealed] }
 }
 
+function overlayTabsNeedScroll(
+  narrow: boolean,
+  solo: boolean,
+  revealed: boolean,
+  compactSidebar: boolean,
+  toolPanel: boolean,
+  tabCount: number
+): boolean {
+  return narrow && !solo && revealed && !compactSidebar && (toolPanel || tabCount > 1)
+}
+
 export function NarrowOverlays() {
+  const titlebarHeight = useTitlebarHeight()
   const narrow = useStore($narrowViewport)
   const solo = useStore($chatOnboardingSolo)
   const tree = useStore($layoutTree)
@@ -131,6 +147,7 @@ export function NarrowOverlays() {
   // an absolute drag-region spacer so the band stays a window-drag target).
   const overlayRef = useRef<HTMLDivElement>(null)
   const tabsRef = useRef<HTMLDivElement>(null)
+  const outsidePress = useRef<{ id: number; x: number; y: number } | null>(null)
   const wcOverlap = useWindowControlsOverlap(overlayRef, reveal !== null)
 
   const onMouseLeave = useCallback<MouseEventHandler<HTMLDivElement>>(event => {
@@ -178,10 +195,18 @@ export function NarrowOverlays() {
   const modePanes = sidebarModePanes(revealedGroup?.panes ?? [], zonePanes, !editMode)
   const compactSidebar = modePanes.length > 0
   useActiveTabVisible(tabsRef, revealed?.id ?? '', {
-    enabled: narrow && !solo && Boolean(revealed) && !compactSidebar && (toolPanel || zonePanes.length > 1),
+    enabled: overlayTabsNeedScroll(narrow, solo, Boolean(revealed), compactSidebar, toolPanel, zonePanes.length),
     last: zonePanes.at(-1)?.id === revealed?.id,
     tabCount: zonePanes.length
   })
+  useEffect(() => {
+    const active = narrow && !solo && reveal ? collapsibles.find(p => p.id === reveal.id) : undefined
+    const zone = active && tree ? findGroupOfPane(tree, active.id) : null
+    const visible = active ? collapsibles.filter(p => (zone ? zone.panes.includes(p.id) : p.id === active.id)) : []
+    $narrowOverlayPaneIds.set(new Set(visible.flatMap(p => [p.id, ...(paneChrome(p).revealAliases ?? [])])))
+
+    return () => $narrowOverlayPaneIds.set(new Set())
+  }, [narrow, solo, reveal, collapsibles, tree])
 
   if (!narrow || solo || collapsibles.length === 0) {
     return null
@@ -204,6 +229,45 @@ export function NarrowOverlays() {
 
   return (
     <>
+      {/* A touch screen has no hover to leave the overlay by, so the browser
+          host closes it on a tap outside. Native Desktop lets that click reach
+          the app and keeps the overlay until Escape, the toggle or hover-out. */}
+      {revealed && hostHas('tapOutsideDismiss') && (
+        <div
+          aria-hidden="true"
+          className="absolute inset-0 z-30"
+          data-narrow-overlay-backdrop=""
+          onPointerCancel={() => {
+            outsidePress.current = null
+          }}
+          onPointerDown={event => {
+            if (event.button === 0 && isTopEscapeLayer(ESCAPE_PRIORITY.narrowOverlay)) {
+              // Dismissal must not focus the transcript or input underneath.
+              event.preventDefault()
+              outsidePress.current = { id: event.pointerId, x: event.clientX, y: event.clientY }
+            }
+          }}
+          onPointerLeave={() => {
+            outsidePress.current = null
+          }}
+          onPointerMove={event => {
+            const press = outsidePress.current
+
+            if (press && Math.hypot(event.clientX - press.x, event.clientY - press.y) > 8) {
+              outsidePress.current = null
+            }
+          }}
+          onPointerUp={event => {
+            const press = outsidePress.current
+            outsidePress.current = null
+
+            if (press?.id === event.pointerId && isTopEscapeLayer(ESCAPE_PRIORITY.narrowOverlay)) {
+              event.preventDefault()
+              setReveal(null)
+            }
+          }}
+        />
+      )}
       {/* Hover-intent strips on each edge that has a collapsed pane. */}
       {sides.map(side => (
         <div
@@ -242,7 +306,11 @@ export function NarrowOverlays() {
           // (macOS traffic lights); the spacer above keeps that band
           // draggable, mirroring TreeGroup's reservation.
           style={{
-            paddingTop: wcOverlap ? wcOverlap.y + wcOverlap.height : undefined,
+            paddingTop: hostHas('narrowOverlayChrome')
+              ? titlebarHeight
+              : wcOverlap
+                ? wcOverlap.y + wcOverlap.height
+                : undefined,
             width: `min(${overlayWidth}, 85vw)`
           }}
         >

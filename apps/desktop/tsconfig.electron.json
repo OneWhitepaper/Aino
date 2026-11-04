@@ -24,6 +24,8 @@
     "package.json",
     "../shared/src/ansi.ts",
     "../shared/src/data-url-read-max.ts",
+    "../shared/src/external-url.ts",
+    "../shared/src/file-url.ts",
     "../shared/src/translucency.ts",
     "../shared/src/json-rpc-gateway.ts",
     "../shared/src/json-rpc-channel.ts",

@@ -3,8 +3,9 @@ import { type ComponentProps, useId } from 'react'
 import { Switch } from '@/components/ui/switch'
 import { useI18n } from '@/i18n'
 
-/** Visible action copy stays attached to the actual controlled switch. Both
- *  labels share one grid cell so the control never shifts when it flips. */
+/** The caption names the switch's current STATE (On/Off), never the action a
+ *  click would take: a verb ("Disable") beside a lit switch reads as "this is
+ *  disabled". Both captions share one grid cell so the control never shifts. */
 export function CatalogSwitch(props: ComponentProps<typeof Switch>) {
   const id = useId()
   const { t } = useI18n()
@@ -15,8 +16,8 @@ export function CatalogSwitch(props: ComponentProps<typeof Switch>) {
       htmlFor={id}
     >
       <span className="grid justify-items-end [&>*]:col-start-1 [&>*]:row-start-1">
-        <span className={props.checked ? undefined : 'invisible'}>{t.catalog.disable}</span>
-        <span className={props.checked ? 'invisible' : undefined}>{t.catalog.enable}</span>
+        <span className={props.checked ? undefined : 'invisible'}>{t.common.on}</span>
+        <span className={props.checked ? 'invisible' : undefined}>{t.common.off}</span>
       </span>
       <Switch size="xs" {...props} id={id} />
     </label>

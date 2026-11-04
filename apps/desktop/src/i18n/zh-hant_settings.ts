@@ -3,6 +3,7 @@ import { defineFieldCopy } from '@/app/settings/field-copy'
 import { configPagesFor } from './config-pages'
 import type { TranslationOverrides } from './define-locale'
 import { zhHantDelegationRouting } from './zh-hant_delegation_routing'
+import { zhHantMemoryLayers } from './zh-hant_memory_layers'
 import { zhHantUpdateChannel } from './zh-hant_update_channel'
 
 const configPageFieldLabels: Record<string, string> = defineFieldCopy({
@@ -327,7 +328,7 @@ export const zhHantSettings = {
       advancedOutput: '輸出限制',
       advancedDelegation: '子代理',
       advancedDesktop: '桌面與啟動',
-      gatewayConnection: '目前視窗',
+      gatewayConnection: '主要閘道',
       gatewayDevices: '已儲存的連線',
       gatewayManagedUpdates: '遠端更新',
       gatewayManagedUpdatesUnavailable: '遠端更新需要支援受管理 SSH 更新的桌面版本。',
@@ -367,6 +368,14 @@ export const zhHantSettings = {
         versionLabel: '版本',
         reviewedPin: sha => (sha ? `已審核的固定提交 ${sha}` : '已審核的固定提交'),
         latestCommit: '最新提交',
+        sourceMoved: sha => (sha ? `自你審閱後儲存庫已變更。請先審閱新版本（提交 ${sha}）再安裝。` : '自你審閱後儲存庫已變更。正在讀取新版本…'),
+        legacyBackendConfirm:
+          '此後端比本應用程式舊，無法保證安裝的就是你審閱過的版本：如果儲存庫之後有變更，安裝的會是較新的版本。更新後端即可獲得這項保證。',
+        installAnyway: '仍要安裝',
+        partialInstall: sha =>
+          sha
+            ? `外掛只安裝了一部分：代理部分已安裝在提交 ${sha}，但由於儲存庫在你審閱後有變更，桌面部分未能隨之安裝。在「進階」中開啟強制重新安裝，可用顯示的版本取代兩部分；或取消，只保留代理部分。`
+            : '外掛只安裝了一部分：代理部分已安裝，但由於儲存庫在你審閱後有變更，桌面部分未能隨之安裝。在「進階」中開啟強制重新安裝，可用顯示的版本取代兩部分；或取消，只保留代理部分。',
         nothingToInstall: '此套件在這裡沒有可安裝的內容。'
       }
     },
@@ -525,6 +534,17 @@ export const zhHantSettings = {
           description: 'Hermes 在背景時，桌面外掛傳送了通知。'
         }
       },
+      browserPermission: {
+        title: '瀏覽器通知',
+        allow: '允許',
+        states: {
+          default: '分頁在背景時由此瀏覽器顯示提醒。在你允許之前，只有分頁標題會閃爍。',
+          granted: '已允許。此分頁在背景時會顯示提醒，分頁標題也會閃爍。',
+          denied: '已在此瀏覽器的網站設定中被封鎖。分頁標題仍會閃爍。',
+          insecure: '需要 HTTPS，例如 Tailscale serve。使用一般 HTTP 時只有分頁標題會閃爍。',
+          unsupported: '此瀏覽器無法顯示通知。分頁標題仍會閃爍。'
+        }
+      },
       test: '傳送測試通知',
       testTitle: 'Hermes',
       testBody: '通知運作正常。',
@@ -578,7 +598,7 @@ export const zhHantSettings = {
     },
     appearance: {
       chatTextScaleTitle: '聊天文字大小',
-      chatTextScaleDesc: '相對於介面縮放調整對話文字和訊息輸入框的字級。側邊欄與控制項大小保持不變。',
+      chatTextScaleDesc: '相對於全域介面縮放調整對話文字和訊息輸入框的字級。側邊欄與控制項大小保持不變。',
       title: '外觀',
       intro: '設定 Aino 桌面端的顯示偏好。',
       colorMode: '色彩模式',
@@ -591,7 +611,7 @@ export const zhHantSettings = {
       hideThreadTimelineDesc: '隱藏每個對話右側邊緣的導覽列。',
       reasoningCollapsedTitle: '預設摺疊推理過程',
       reasoningCollapsedDesc: '保留串流推理內容，但在您開啟前維持摺疊。',
-      uiScaleTitle: '介面縮放',
+      uiScaleTitle: '全域介面縮放',
       uiScaleDesc: (percent: number) =>
         `縮放整個應用程式的文字與介面。也可使用 Cmd/Ctrl 加 +、- 或 0 調整。目前：${percent}%`,
       sessionDensityTitle: '工作階段列表密度',
@@ -980,6 +1000,9 @@ export const zhHantSettings = {
       loading: '正在載入閘道設定...',
       unavailableTitle: '閘道設定不可用',
       unavailableDesc: '桌面 IPC 橋接器未公開閘道設定。',
+      webappHostTitle: 'Hermes 主機',
+      webappHostDesc:
+        'Webapp 一律使用提供它的 Hermes 主機。如需切換閘道、登入 Hermes Cloud 或管理已儲存的連線，請使用 Hermes Desktop 應用程式。',
       title: '閘道連線',
       envOverride: '環境變數覆寫',
       intro:
@@ -1082,7 +1105,40 @@ export const zhHantSettings = {
       sshErrUpdateRequired: '使用 Desktop SSH 連線前，請更新遠端主機上的 Hermes。',
       sshErrInteractiveAuth:
         'Tailscale SSH 需要互動式瀏覽器驗證。請在終端機執行 `ssh <host> true` 完成驗證後重試——Hermes 以非互動方式執行 SSH。',
-      sshErrUnknown: 'SSH 連線失敗。'
+      sshErrUnknown: 'SSH 連線失敗。',
+      webAccess: {
+        title: '網頁存取',
+        intro: '用手機或其他電腦，以你的 Nous 帳戶登入並開啟這台電腦上的 Hermes。登入的人可以在這台電腦上執行指令。',
+        failed: '無法變更網頁存取',
+        running: '執行中',
+        stopped: '已停止',
+        starting: '正在啟動',
+        stopping: '正在停止',
+        restartNeeded: '需要重新啟動',
+        unavailable: '無法使用',
+        notRunningDetail: '啟動後即可從其他裝置開啟 Hermes。',
+        needsNous: "請先在「模型服務 → 服務授權」登入你的 Nous 帳戶。",
+        runningLan: '在同一網路中的裝置上開啟此網址。',
+        runningPublic: '透過你的網址提供服務。',
+        runningLocal: '只有這台電腦可以開啟。要從其他裝置開啟，請先停止，再重新啟動。',
+        pendingOn: '已儲存。閘道重新啟動後將提供網頁應用程式。',
+        pendingOff: '已關閉，但閘道在重新啟動前仍會繼續提供網頁應用程式。',
+        unavailableDetail: reason => `閘道無法提供網頁應用程式：${reason}`,
+        restartBusy: '已儲存。有對話正在進行，因此閘道沒有重新啟動。對話結束後請選擇「重新啟動閘道」。',
+        restartFailed: '已儲存，但閘道無法重新啟動。請選擇「重新啟動閘道」重試。',
+        restartFailedBecause: reason => `閘道無法重新啟動：${reason}`,
+        startTimedOut: '閘道未能在 90 秒內提供網頁應用程式。',
+        stopTimedOut: '閘道未能在 90 秒內停止提供網頁應用程式。',
+        start: '啟動',
+        stop: '停止',
+        restartGateway: '重新啟動閘道',
+        modeLan: '目前網路',
+        modeLanDetail: url => `你的 Wi-Fi 中的裝置可開啟 ${url}。僅在你信任的網路中使用。`,
+        lanUnencrypted: '連線未加密：同一網路中的其他人可能讀取你傳送和接收的內容。',
+        noLan: '這台電腦沒有其他裝置可以連到的網路位址。',
+        modePublic: '我自己的網址',
+        modePublicDetail: port => `你已有的 HTTPS 網址（例如 Tailscale Serve 或通道），並轉送到 http://127.0.0.1:${port}。`
+      }
     },
     keys: {
       loading: '正在載入 API 金鑰和憑證...',
@@ -1679,7 +1735,7 @@ export const zhHantSettings = {
       autoArchiveFailed: '無法更新自動封存設定',
       defaultDirTitle: '預設專案目錄',
       defaultDirDesc: '新工作階段預設從此資料夾開始，除非您選擇其他目錄。留空則使用您的家目錄。',
-      defaultDirUpdated: '預設專案目錄已更新',
+      defaultDirUpdated: () => '預設專案目錄已更新',
       defaultsTo: label => `預設使用 ${label}。`,
       change: '變更',
       choose: '選擇',
@@ -1825,7 +1881,9 @@ export const zhHantSettings = {
       emailVerifiedLabel: '已驗證電子郵件',
       offlineDescription: '目前顯示上次驗證的帳戶資料，恢復網路後可重試更新。',
       platformError: (code, retryAfter) =>
-        code === 'SMS_RATE_LIMITED' && retryAfter !== undefined
+        code === 'captcha_browser_unavailable'
+          ? '目前站點需要透過 Aino 桌面端完成人機驗證，請開啟桌面端登入。'
+          : code === 'SMS_RATE_LIMITED' && retryAfter !== undefined
           ? `請求過於頻繁，請在 ${retryAfter} 秒後重試。`
           : '帳戶請求失敗，請重試。',
       errors: {
@@ -1869,7 +1927,9 @@ export const zhHantSettings = {
       wechatUnavailable: '微信登入尚未開放。',
       switchIdentifier: '切換電子郵件 / 電話'
     }
-  },
+  ,
+memoryLayers: zhHantMemoryLayers
+},
 
   modelPicker: {
     title: '切換模型',

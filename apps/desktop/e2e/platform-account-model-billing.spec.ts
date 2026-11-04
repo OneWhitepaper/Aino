@@ -12,7 +12,7 @@ import { observeInferenceAlerts, verifyInferenceFailures } from './platform-infe
 import { assertIsolationAlerts, type IsolationParticipant, observeIsolationAlerts, verifyConcurrentIsolation, verifyRetainedHistoryIsolation } from './platform-isolation-proof'
 import { assertLateLeaseAlerts, observeLateLeaseAlerts, verifyLateLeaseAcrossAccountSwitch } from './platform-late-lease-proof'
 import { launchGuardedPackagedDesktop, PACKAGED_PLATFORM_ORIGIN, packagedBackendEvidence, packagedExecutable, startPackagedTransport } from './platform-packaged-api'
-import { auditFixtureText, fixtureEnvironment, installLoopbackNodeGuard, installLoopbackPythonGuard, isExpectedBlockedThemeFontRequest, KNOWN_BLOCKED_THEME_FONT_URL, launchGuardedDesktop, type NativeState, type NativeTransportAudit, persistedFixtureText, startRealPlatformAPI } from './platform-real-api'
+import { auditFixtureText, fixtureEnvironment, guardedPlatformPython, installLoopbackNodeGuard, installLoopbackPythonGuard, isExpectedBlockedThemeFontRequest, KNOWN_BLOCKED_THEME_FONT_URL, launchGuardedDesktop, type NativeState, type NativeTransportAudit, persistedFixtureText, startRealPlatformAPI } from './platform-real-api'
 import { verifyWebsiteWallet } from './platform-website-wallet'
 import { seedPlatformWorkspace, stopFixtureGateway, verifyPlatformWorkspace } from './platform-workspace-proof'
 import { allowErrorBanners, expect, type Page, test } from './test'
@@ -168,6 +168,8 @@ function prepareNativePlatformEnvironment(
   env.HERMES_HOME = sandbox.hermesHome
   env.HERMES_DESKTOP_CWD = path.dirname(api.info.fixture_path)
   env.PYTHONPATH = installLoopbackPythonGuard(sandbox.root)
+  env.HERMES_DESKTOP_PYTHON = guardedPlatformPython(sandbox.root, env.PYTHONPATH,
+    env.HERMES_DESKTOP_PYTHON || path.resolve(import.meta.dirname, '../../../.venv/bin/python'))
 
   return {
     env,
@@ -249,10 +251,16 @@ async function rechargeNativeWallet(
   await page.getByRole('button', { name: /^My account/ }).click()
   await page.getByRole('button', { name: 'Recharge', exact: true }).click()
   await page.getByRole('textbox', { name: 'Recharge amount', exact: true }).fill('20')
-  await page.getByRole('button', { name: 'Get quote', exact: true }).click()
-  await expect(page.getByRole('button', { name: 'Confirm order', exact: true })).toBeEnabled()
-  expect((await api.control<NativeState>('state')).orders).toBe(before.orders)
-  await page.getByRole('button', { name: 'Confirm order', exact: true }).click()
+  const quote = page.getByRole('dialog', { name: 'Recharge', exact: true }).locator('dl')
+  await expect(quote.getByText('Amount to pay', { exact: true }).locator('+ dd')).toHaveText('20.5 CNY')
+  await expect(quote.getByText('Fee', { exact: true }).locator('+ dd')).toHaveText('0.5 CNY')
+  await expect(quote.getByText('Amount credited', { exact: true }).locator('+ dd')).toHaveText('2.8 USD')
+  const proceed = page.getByRole('button', { name: 'Proceed to payment', exact: true })
+  await expect(proceed).toBeEnabled()
+  const previewed = await api.control<NativeState>('state')
+  expect({ orders: previewed.orders, payment_calls: previewed.payment_calls, usage_calls: previewed.usage_calls, balance: previewed.balance })
+    .toEqual({ orders: before.orders, payment_calls: before.payment_calls, usage_calls: before.usage_calls, balance: before.balance })
+  await proceed.click()
   await expect.poll(async () => (await api.control<NativeState>('state')).payment_calls).toBe(before.payment_calls + 1)
   // The fixture sends the real signed callback twice through the payment handler.
   await api.control('pay', '')
@@ -1084,6 +1092,7 @@ for (const sameSite of [true, false]) {
       if (sameSite) {
         await left.page.getByRole('button', { name: /^My account/ }).click()
         await left.page.getByRole('button', { name: 'Sign out', exact: true }).click()
+        await left.page.getByRole('dialog', { name: 'Sign out', exact: true }).getByRole('button', { name: 'Sign out', exact: true }).click()
         await expect.poll(async () => (await left.page.evaluate(() => (window as unknown as NativeWindow).hermesDesktop.platformAccount.status())).phase).toBe('signed_out')
         await signInForThisSession(left.page, sites[1], codeTimes[1], sites[1].info.secondary_phone)
         await waitForAppReady(left as never, 120_000)
@@ -1310,8 +1319,7 @@ test('real API account, native managed lease, Python tool roundtrip and wallet',
     expect(snapshot.account?.id).toBe(String(initial.user_id))
     expect(initial.balance).toBe('10.00000000')
     await page.locator('[data-tour="model-pill"]').click()
-    await page.getByRole('button', { name: 'Aino models', exact: true }).click()
-    await page.getByRole('option', { name: /fixture-tool-model/ }).click()
+    await page.getByRole('menuitem', { name: /fixture-tool-model/ }).click()
     await expect(page.locator('[data-tour="model-pill"]')).toContainText('fixture-tool-model')
     await page.screenshot({ path: testInfo.outputPath('platform-native-home-light.png') })
 
@@ -1395,7 +1403,7 @@ test('real API account, native managed lease, Python tool roundtrip and wallet',
     // The recovery pair above proves platform history and billing before any
     // custom provider exists. A third real launch is the supported reload path.
     writeMockProviderConfig(sandbox.hermesHome, byok.url, '  language: en')
-    writeEnvFile(sandbox.hermesHome)
+    writeEnvFile(sandbox.hermesHome, 'e2e-mock-key', byok.url)
     stage = 'custom-provider-restart'
     const byokPythonGuardPids = pythonGuardPids(sandbox)
 
@@ -1409,7 +1417,6 @@ test('real API account, native managed lease, Python tool roundtrip and wallet',
     expect((await customProvider.evaluate(() => (window as unknown as NativeWindow).hermesDesktop.platformAccount.status())).account?.id).toBe(snapshot.account!.id)
     stage = 'custom-provider-switch'
     await customProvider.locator('[data-tour="model-pill"]').first().click()
-    await customProvider.getByRole('button', { name: 'Custom models', exact: true }).click()
     await customProvider.getByRole('menuitem', { name: /Mock Model/ }).first().click()
     const beforeBYOK = await api.control<NativeState>('state')
     const byokComposer = customProvider.locator('[contenteditable="true"]').first()

@@ -1,14 +1,17 @@
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { I18nProvider } from '@/i18n'
+import { I18nProvider, TRANSLATIONS } from '@/i18n'
 import { stubResizeObserver } from '@/test/jsdom'
 
 import type { PlatformPublicCapabilities } from '../../../shared/platform-contract'
 
 import { AccountLoginCard } from './account-login-card'
 
-beforeEach(stubResizeObserver)
+beforeEach(() => {
+  stubResizeObserver()
+  globalThis.document.documentElement.dataset.hermesDesktopHost = 'native'
+})
 
 const capabilities: PlatformPublicCapabilities = {
   desktop_api_version: 1,
@@ -32,6 +35,7 @@ afterEach(() => {
   cleanup()
   vi.useRealTimers()
   vi.unstubAllGlobals()
+  delete globalThis.document.documentElement.dataset.hermesDesktopHost
 })
 
 function renderCard(overrides: Partial<React.ComponentProps<typeof AccountLoginCard>> = {}) {
@@ -63,6 +67,33 @@ function renderCard(overrides: Partial<React.ComponentProps<typeof AccountLoginC
 }
 
 describe('AccountLoginCard', () => {
+  it.each(['phone', 'existing'] as const)('explains browser session-only login in the %s flow', async flow => {
+    globalThis.document.documentElement.dataset.hermesDesktopHost = 'browser'
+    const { props } = renderCard()
+
+    expect(screen.getByText(TRANSLATIONS.zh.settings.account.browserSessionOnly)).toBeTruthy()
+    expect(screen.queryByRole('checkbox', { name: '在此设备保持登录' })).toBeNull()
+
+    if (flow === 'existing') {
+      fireEvent.click(screen.getByRole('button', { name: '已有账户登录' }))
+      expect(screen.getByText(TRANSLATIONS.zh.settings.account.browserSessionOnly)).toBeTruthy()
+      expect(screen.queryByRole('checkbox', { name: '在此设备保持登录' })).toBeNull()
+      fireEvent.change(screen.getByLabelText('邮箱'), { target: { value: 'member@example.test' } })
+      fireEvent.change(screen.getByLabelText('密码'), { target: { value: 'password' } })
+      await act(async () => fireEvent.click(screen.getByRole('button', { name: '继续' })))
+      expect(props.onLoginExisting).toHaveBeenCalledWith(expect.objectContaining({ remember: false }))
+
+      return
+    }
+
+    fireEvent.change(screen.getByLabelText('手机号'), { target: { value: '+8613800138000' } })
+    fireEvent.click(screen.getByRole('checkbox', { name: '同意用户协议和隐私政策' }))
+    fireEvent.click(screen.getByRole('button', { name: '发送验证码' }))
+    fireEvent.change(await screen.findByLabelText('验证码'), { target: { value: '246810' } })
+    fireEvent.click(screen.getByRole('button', { name: '登录' }))
+    expect(props.onVerifyPhoneCode).toHaveBeenCalledWith(expect.objectContaining({ remember: false }))
+  })
+
   it('opens registration without signing in and keeps failed launches from masking later login attempts', async () => {
     const openExternal = vi.fn().mockResolvedValueOnce(undefined).mockRejectedValue(new Error('Could not open browser'))
 
@@ -145,6 +176,8 @@ describe('AccountLoginCard', () => {
     expect(screen.getByRole('button', { name: '发送验证码' })).toBeTruthy()
     expect(screen.getByRole('button', { name: '已有账户登录' })).toBeTruthy()
     expect(screen.getByRole('button', { name: '切换微信登录' })).toBeTruthy()
+    expect(screen.getByRole('checkbox', { name: '在此设备保持登录' }).getAttribute('data-state')).toBe('checked')
+    expect(screen.queryByText(TRANSLATIONS.zh.settings.account.browserSessionOnly)).toBeNull()
   })
 
   it('uses agreement, invitation and code-length policy for phone verification', async () => {

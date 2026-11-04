@@ -352,7 +352,6 @@ export const arChrome = {
       ownedByProfile: profile => `مملوكة للملف الشخصي ${profile}`,
       untitledChat: id => `محادثة ${id}`,
       handoffOrigin: platform => `قادمة من ${platform}`,
-      continuationOrigin: 'متابعة تلقائية — تم ضغط هذه المحادثة ومتابعتها',
       renamed: 'تمت إعادة التسمية',
       renameFailed: 'فشلت إعادة التسمية',
       renameTitle: 'إعادة تسمية الجلسة',
@@ -526,6 +525,16 @@ export const arChrome = {
     }
   },
   rightSidebar: {
+    terminalReconnectSame: "انقطع اتصال الطرفية. اضغط Enter للاتصال بنفس الصدفة.",
+    terminalExpired: "انتهت الطرفية أو انتهت صلاحيتها. اضغط Enter لإنشاء صدفة جديدة.",
+    terminalSuperseded: "الطرفية متصلة في نافذة أخرى. اضغط Enter لاستعادتها هنا.",
+    terminalDenied: "رُفض الوصول إلى الطرفية. تحقق من تسجيل الدخول والملف ثم اضغط Enter.",
+    terminalCapacity: "بلغ عدد الطرفيات الحد الأقصى. أغلق طرفية أخرى ثم اضغط Enter.",
+    terminalSignedOut: "تم تسجيل الخروج. سجّل الدخول مجددًا في هذا المتصفح ثم اضغط Enter.",
+    terminalReconnecting: "انقطع اتصال الطرفية. جارٍ الاتصال بنفس الصدفة…",
+    terminalStartRetry: (error: string) => "تعذر بدء الطرفية: " + error + ". اضغط Enter للمحاولة مجددًا.",
+    terminalCloseFailed: "تعذر إغلاق الطرفية",
+    terminalDropUnquotable: (shell, paths) => `لا يمكن كتابة هذه الأسماء بأمان في ${shell}: ${paths}`,
     terminalReadOnly: 'مخرجات للقراءة فقط',
     terminalReadOnlyHelp:
       'للرد على المطالبات، أوقف الأمر الذي يعمل في الخلفية وشغّله في طرفية جديدة. تفتح الطرفية الجديدة صدفة منفصلة ولا تتصل بهذه العملية.',
@@ -568,7 +577,16 @@ export const arChrome = {
     terminalHide: 'إخفاء الطرفية',
     addToChat: 'إضافة للمحادثة',
     terminalStartFailed: (error: string) => `فشل تشغيل الطرفية: ${error}`
-  },
+  ,
+terminalNewOn: 'طرفية جديدة على…',
+terminalGatewayRemoved: 'بوابة محذوفة',
+terminalGatewayRemovedBody:
+      'حُذفت البوابة التي كانت تعمل عليها هذه الطرفية، لذا لا يمكن إعادة فتحها. أغلق علامة التبويب هذه.',
+terminalGatewayNoShellBody:
+      'لا توفر هذه البوابة وصولاً إلى الصدفة، لذا لا يمكن إعادة فتح هذه الطرفية. أغلق علامة التبويب هذه.',
+terminalDisconnectedBody:
+      'انقطع اتصال الطرفية. اضغط Enter لبدء صدفة جديدة؛ يُحفظ سجل التمرير.'
+},
   zones: {
     sidebarModeMenu: 'تبديل وضع المحادثة',
     sidebarSessionsDescription: 'المشاريع والملفات والمحادثات اليومية',
@@ -617,7 +635,8 @@ export const arChrome = {
     saveApply: 'حفظ وتطبيق',
     notExpressible: 'هذا الترتيب متشابك — لا يمكن تمثيله كتقسيمات متداخلة بعد',
     zoneCount: count => `${count} مناطق`,
-    tabCount: count => `${count} تبويبات`
+    tabCount: count => `${count} تبويبات`,
+    tabActions: title => `إجراءات ${title}`
   },
   contextMenu: {
     link: {

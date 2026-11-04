@@ -1,7 +1,7 @@
-import { writeEnvFile, writeMockProviderConfig } from '../../../tests-js/scripts/mock-provider-config'
 import { mkdirSync } from 'node:fs'
 import path from 'node:path'
 
+import { writeEnvFile, writeMockProviderConfig } from '../../../tests-js/scripts/mock-provider-config'
 import { startMockServer } from '../../../tests-js/scripts/mock-server'
 
 import {
@@ -9,9 +9,8 @@ import {
   createSandbox,
   launchDesktop,
   type MockBackendFixture,
-  waitForAppReady,
-
-  } from './fixtures'
+  waitForAppReady
+} from './fixtures'
 import { expect, test } from './test'
 
 test('the signed-in account remains accessible across Sessions and Agent Hub', async () => {
@@ -31,12 +30,14 @@ test('the signed-in account remains accessible across Sessions and Agent Hub', a
       'desktop:\n  repo_scan_enabled: false\naccount:\n  dev_mode: true'
     )
     writeEnvFile(sandbox.hermesHome)
+
     const env = buildAppEnv(sandbox, {
       HOME: isolatedHome,
       XDG_CONFIG_HOME: path.join(isolatedHome, '.config'),
       XDG_DATA_HOME: path.join(isolatedHome, '.local/share'),
       HERMES_SHARED_AUTH_DIR: path.join(sandbox.hermesHome, 'shared')
     })
+
     delete env.CODEX_HOME
     delete env.CLAUDE_CONFIG_DIR
     delete env.HERMES_DESKTOP_DEV_SERVER
@@ -61,10 +62,17 @@ test('the signed-in account remains accessible across Sessions and Agent Hub', a
 
     const footer = page.locator('[data-slot="sidebar-identity-footer"]:visible')
     const account = footer.getByRole('button', { name: /^My account/ })
+    const modeHeader = page.locator('[data-sidebar-mode-header]:visible')
+
+    const selectMode = async (name: 'Aino' | 'Agent Hub') => {
+      await modeHeader.getByRole('button').click()
+      await page.getByRole('menuitemradio', { name: new RegExp(`^${name}(?:\\s|$)`) }).click()
+      await expect(modeHeader).toContainText(name)
+    }
+
     await expect(footer).toHaveCount(1)
     const accountLabel = await account.getAttribute('aria-label')
-    await page.locator('[data-tree-tab="hermes-bots:pane"]:visible').click()
-    await expect(page.locator('[data-tree-tab="hermes-bots:pane"]:visible')).toHaveAttribute('aria-selected', 'true')
+    await selectMode('Agent Hub')
     await expect(footer).toHaveCount(1)
     await expect(account).toHaveAttribute('aria-label', accountLabel!)
     await page.screenshot({ path: test.info().outputPath('agent-hub-account.png') })
@@ -73,21 +81,18 @@ test('the signed-in account remains accessible across Sessions and Agent Hub', a
     await expect(page).toHaveURL(/#\/settings\?tab=account$/)
     await expect(page.getByRole('button', { name: 'Edit nickname', exact: true })).toBeVisible()
     await page.getByRole('button', { name: 'Close settings', exact: true }).click()
-    await expect(page.locator('[data-tree-tab="hermes-bots:pane"]:visible')).toHaveAttribute('aria-selected', 'true')
+    await expect(modeHeader).toContainText('Agent Hub')
     await footer.getByRole('button', { name: 'Open settings', exact: true }).click()
     await expect(page).toHaveURL(/#\/settings$/)
     await page.getByRole('button', { name: 'Close settings', exact: true }).click()
 
-    await page.locator('[data-tree-tab="sessions"]:visible').click()
+    await selectMode('Aino')
     await expect(footer).toHaveCount(1)
     await expect(account).toHaveAttribute('aria-label', accountLabel!)
     await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setSize(600, 800, false))
     await expect.poll(() => page.evaluate(() => innerWidth)).toBeLessThan(640)
     await page.keyboard.press(process.platform === 'darwin' ? 'Meta+b' : 'Control+b')
-    const overlayTab = page.locator('[data-narrow-overlay-tab="hermes-bots:pane"]')
-    await expect(overlayTab).toBeVisible()
-    await overlayTab.click()
-    await expect(overlayTab).toHaveAttribute('aria-selected', 'true')
+    await selectMode('Agent Hub')
     await expect(footer).toHaveCount(1)
     await expect(account).toHaveAttribute('aria-label', accountLabel!)
     const bounds = await footer.boundingBox()

@@ -41,6 +41,8 @@ export const deBoot = {
         'Ein Teil der Hermes-Installation fehlt. Wählen Sie „Installation reparieren“, um sie wiederherzustellen.'
     },
     failure: {
+      webappTitle: 'Diesen Browser verbinden',
+      webappDescription: 'Führe hermes webapp auf dem Gateway-Computer aus, um diesen Browser zu autorisieren.',
       title: 'Hermes konnte nicht gestartet werden',
       description:
         'Das Hintergrund-Gateway ist nicht gestartet. Probieren Sie einen der Wiederherstellungsschritte unten. Keiner davon löscht Ihre Chats oder Einstellungen.',

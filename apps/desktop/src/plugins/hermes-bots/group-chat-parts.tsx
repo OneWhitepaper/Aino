@@ -159,6 +159,9 @@ interface GroupMentionInputProps {
   'aria-label'?: string
   autoFocus?: boolean
   className?: string
+  disabled?: boolean
+  /** The exact token a member's mention inserts, for rooms that resolve only frozen handles. */
+  handleFor?: (member: GroupMember) => string | undefined
   members: GroupMember[]
   onChange: (value: string) => void
   onPaste?: (event: ClipboardEvent<HTMLTextAreaElement>) => void
@@ -174,7 +177,7 @@ interface GroupMentionInputProps {
  *  the strings parseGroupChatMentions resolves. Keyboard: Up/Down navigate,
  *  Enter/Tab insert (Enter falls through to submit when the popover is
  *  closed), Escape dismisses. */
-export function GroupMentionInput({ members, onChange, onSubmitDraft, value, ...inputProps }: GroupMentionInputProps) {
+export function GroupMentionInput({ handleFor, members, onChange, onSubmitDraft, value, ...inputProps }: GroupMentionInputProps) {
   const b = useBots()
   const allMeta: Record<string, BotMeta> = useValue($botMeta)
   const inputRef = useRef<HTMLTextAreaElement | null>(null)
@@ -196,7 +199,7 @@ export function GroupMentionInput({ members, onChange, onSubmitDraft, value, ...
       const handle = String(botHandle(member.name, member) || '').trim()
       const display = displayName(member, botRosterMeta(member, allMeta))
       // Renamed members complete on their friendly tag; parser resolves both.
-      const tag = String(botMentionTag(member) || handle).trim()
+      const tag = String(handleFor?.(member) ?? (botMentionTag(member) || handle)).trim()
 
       if (!tag) {
         continue
@@ -258,11 +261,11 @@ export function GroupMentionInput({ members, onChange, onSubmitDraft, value, ...
   return (
     <div className="relative min-w-0 flex-1">
       {open ? (
-        <div className="absolute bottom-full left-0 z-50 mb-1 max-h-48 w-64 overflow-y-auto rounded-lg border border-(--ui-stroke-secondary) bg-(--ui-bg-elevated) py-1 shadow-md">
+        <div className="absolute bottom-full left-0 z-50 mb-1 max-h-48 w-64 max-w-full overflow-y-auto rounded-(--aino-radius-menu) border border-(--stroke-nous) bg-(--ui-bg-elevated) py-1 shadow-nous">
           {options.map((option, index) => (
             <RowButton
               className={cn(
-                'flex w-full items-baseline gap-2 px-2 py-1 text-left text-xs',
+                'flex w-full min-w-0 items-baseline gap-2 px-2 py-1 text-left text-xs',
                 index === active ? 'bg-(--ui-control-hover-background) text-foreground' : 'text-(--ui-text-secondary)'
               )} // preventDefault on mousedown so the input keeps focus.
               key={option.handle}
@@ -272,8 +275,8 @@ export function GroupMentionInput({ members, onChange, onSubmitDraft, value, ...
               }}
               onMouseEnter={() => setSelected(index)}
             >
-              <span className="font-medium">{`@${option.handle}`}</span>
-              <span className="truncate text-[length:var(--aino-text-caption)] text-(--ui-text-tertiary)">{option.meta}</span>
+              <span className="min-w-0 wrap-anywhere font-medium">{`@${option.handle}`}</span>
+              <span className="min-w-0 truncate text-[length:var(--aino-text-caption)] text-(--ui-text-tertiary)">{option.meta}</span>
             </RowButton>
           ))}
         </div>

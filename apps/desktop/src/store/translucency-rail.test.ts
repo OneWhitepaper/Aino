@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 vi.hoisted(() => {
   Object.defineProperty(window, 'hermesDesktop', {
     configurable: true,
-    value: { glassSupported: true }
+    value: { glassSupported: true, translucencySupported: true }
   })
 })
 

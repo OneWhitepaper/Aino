@@ -4,11 +4,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { I18nProvider, setRuntimeI18nLocale, translateNow } from '@/i18n'
 import { en } from '@/i18n/en'
 import { applyProductBrand } from '@/lib/brand'
+import { WEBAPP_LAUNCH_REQUIRED } from '@/lib/browser-launch-session'
 import { $desktopBoot } from '@/store/boot'
 import { $notifications } from '@/store/notifications'
 import { $desktopOnboarding } from '@/store/onboarding'
 
-import { BootFailureOverlay } from './boot-failure-overlay'
+import { BootFailureOverlay, StartupOverlay } from './boot-failure-overlay'
 
 // Remote-backend users hit a hard boot failure that isn't OAuth reauth (token
 // auth, wrong URL, unreachable host). The recovery screen must let them fix the
@@ -151,7 +152,9 @@ describe('BootFailureOverlay', () => {
     render(<BootFailureOverlay />)
     const error = $desktopBoot.get().error
 
-    fireEvent.keyDown(screen.getByRole('dialog', { name: applyProductBrand(en.boot.failure.title) }), { key: 'Escape' })
+    fireEvent.keyDown(screen.getByRole('dialog', { name: applyProductBrand(en.boot.failure.title) }), {
+      key: 'Escape'
+    })
 
     expect(screen.queryByRole('dialog')).toBeNull()
     expect($desktopBoot.get().error).toBe(error)
@@ -254,7 +257,10 @@ describe('BootFailureOverlay', () => {
     const gatewayUrl = 'https://agent-1.agents.nousresearch.com'
     const logout = vi.fn().mockResolvedValue({ ok: true, connected: false })
     const nativeLogin = vi.fn().mockResolvedValue({ ok: true, connected: false })
-    const cloudStatus = vi.fn().mockResolvedValue({ portalBaseUrl: 'https://portal.nousresearch.com', signedIn: false })
+
+    const cloudStatus = vi
+      .fn()
+      .mockResolvedValue({ portalBaseUrl: 'https://portal.nousresearch.com', signedIn: false })
 
     const cloudLogin = vi.fn().mockResolvedValue({
       ok: true,
@@ -291,6 +297,45 @@ describe('BootFailureOverlay', () => {
       expect(cloudStatus).toHaveBeenCalledTimes(1)
       expect(cloudLogin).toHaveBeenCalledTimes(1)
       expect(nativeLogin).not.toHaveBeenCalled()
+    } finally {
+      restore()
+    }
+  })
+
+  it('asks a signed-out Webapp tab to sign in instead of offering recovery for a working service', async () => {
+    const restore = stubDesktop({ mode: 'local' })
+    $desktopBoot.set({
+      error: WEBAPP_LAUNCH_REQUIRED,
+      fakeMode: false,
+      message: 'boot failed',
+      phase: 'renderer.error',
+      progress: 40,
+      running: false,
+      timestamp: Date.now(),
+      visible: true
+    })
+
+    try {
+      render(<StartupOverlay />)
+      expect(await screen.findByText(applyProductBrand(en.boot.failure.webappTitle))).toBeTruthy()
+      expect(screen.getByText(applyProductBrand(en.boot.failure.webappDescription))).toBeTruthy()
+      expect(screen.queryByText(applyProductBrand(en.boot.failure.title))).toBeNull()
+      expect(screen.queryByRole('button', { name: /retry/i })).toBeNull()
+      expect(screen.queryByRole('button', { name: /repair/i })).toBeNull()
+      expect(screen.queryByRole('button', { name: /logs/i })).toBeNull()
+      expect(screen.queryByRole('button', { name: /close/i })).toBeNull()
+    } finally {
+      restore()
+    }
+  })
+
+  it('shows the recovery steps for any other startup failure', async () => {
+    const restore = stubDesktop({ mode: 'local' })
+
+    try {
+      render(<StartupOverlay />)
+      expect(await screen.findByText(applyProductBrand(en.boot.failure.title))).toBeTruthy()
+      expect(screen.queryByText(applyProductBrand(en.boot.failure.webappTitle))).toBeNull()
     } finally {
       restore()
     }
@@ -379,7 +424,12 @@ describe('BootFailureOverlay', () => {
 
   it('offers "Reinstall the app" on a bundled install only when the payload itself is damaged', async () => {
     const openExternal = vi.fn().mockResolvedValue(undefined)
-    const restore = stubDesktop({ mode: 'local' }, { getBootstrapState: async () => bundledState, openExternal })
+
+    const restore = stubDesktop(
+      { mode: 'local' },
+      { getBootstrapState: async () => bundledState, openExternal }
+    )
+
     $desktopBoot.set({
       ...$desktopBoot.get(),
       error:
@@ -404,7 +454,10 @@ describe('BootFailureOverlay', () => {
 
   it('a bundled install with an unrelated failure gets neither Repair nor Reinstall', async () => {
     const restore = stubDesktop({ mode: 'local' }, { getBootstrapState: async () => bundledState })
-    $desktopBoot.set({ ...$desktopBoot.get(), error: 'listen EADDRINUSE: address already in use 127.0.0.1:8642' })
+    $desktopBoot.set({
+      ...$desktopBoot.get(),
+      error: 'listen EADDRINUSE: address already in use 127.0.0.1:8642'
+    })
 
     try {
       render(<BootFailureOverlay />)
@@ -419,51 +472,56 @@ describe('BootFailureOverlay', () => {
     }
   })
 
-  it.each(['refused', 'thrown', 'unavailable'])('preserves a %s repair failure without reloading', async failure => {
-    const reload = vi.fn()
-    const originalLocation = Object.getOwnPropertyDescriptor(window, 'location')!
-    Object.defineProperty(window, 'location', {
-      configurable: true,
-      value: { ...window.location, reload }
-    })
+  it.each(['refused', 'thrown', 'unavailable'])(
+    'preserves a %s repair failure without reloading',
+    async failure => {
+      const reload = vi.fn()
+      const originalLocation = Object.getOwnPropertyDescriptor(window, 'location')!
+      Object.defineProperty(window, 'location', {
+        configurable: true,
+        value: { ...window.location, reload }
+      })
 
-    const repair =
-      failure === 'unavailable'
-        ? undefined
-        : vi.fn(async () => {
-            if (failure === 'thrown') {
-              throw new Error('installer permission denied')
-            }
+      const repair =
+        failure === 'unavailable'
+          ? undefined
+          : vi.fn(async () => {
+              if (failure === 'thrown') {
+                throw new Error('installer permission denied')
+              }
 
-            return { ok: false, error: 'bundled-immutable' }
-          })
+              return { ok: false, error: 'bundled-immutable' }
+            })
 
-    const restore = stubDesktop({ mode: 'local' }, { repairBootstrap: repair })
+      const restore = stubDesktop({ mode: 'local' }, { repairBootstrap: repair })
 
-    try {
-      render(<BootFailureOverlay />)
-      fireEvent.click(await screen.findByRole('button', { name: /repair install/i }))
+      try {
+        render(<BootFailureOverlay />)
+        fireEvent.click(await screen.findByRole('button', { name: /repair install/i }))
 
-      const message =
-        failure === 'thrown'
-          ? 'installer permission denied'
-          : failure === 'refused'
-            ? en.boot.failure.bundledReinstallHint
-            : en.boot.errors.ipcBridgeUnavailable
+        const message =
+          failure === 'thrown'
+            ? 'installer permission denied'
+            : failure === 'refused'
+              ? en.boot.failure.bundledReinstallHint
+              : en.boot.errors.ipcBridgeUnavailable
 
-      await waitFor(() =>
-        expect($notifications.get()).toEqual(
-          expect.arrayContaining([expect.objectContaining({ kind: 'error', message: applyProductBrand(message) })])
+        await waitFor(() =>
+          expect($notifications.get()).toEqual(
+            expect.arrayContaining([
+              expect.objectContaining({ kind: 'error', message: applyProductBrand(message) })
+            ])
+          )
         )
-      )
-      expect(reload).not.toHaveBeenCalled()
-      expect(screen.getByRole('button', { name: /repair install/i }).hasAttribute('disabled')).toBe(false)
-    } finally {
-      restore()
-      Object.defineProperty(window, 'location', originalLocation)
-      $notifications.set([])
+        expect(reload).not.toHaveBeenCalled()
+        expect(screen.getByRole('button', { name: /repair install/i }).hasAttribute('disabled')).toBe(false)
+      } finally {
+        restore()
+        Object.defineProperty(window, 'location', originalLocation)
+        $notifications.set([])
+      }
     }
-  })
+  )
 
   it('reloads after an accepted repair', async () => {
     const reload = vi.fn()
@@ -473,7 +531,10 @@ describe('BootFailureOverlay', () => {
       value: { ...window.location, reload }
     })
 
-    const restore = stubDesktop({ mode: 'local' }, { repairBootstrap: vi.fn().mockResolvedValue({ ok: true }) })
+    const restore = stubDesktop(
+      { mode: 'local' },
+      { repairBootstrap: vi.fn().mockResolvedValue({ ok: true }) }
+    )
 
     try {
       render(<BootFailureOverlay />)

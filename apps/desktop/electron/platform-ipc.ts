@@ -1,3 +1,5 @@
+import type { PlatformAuth } from '../shared/platform-auth'
+import { PlatformClientError } from '../shared/platform-client'
 import type {
   BindPlatformModelResult,
   PlatformAccountIpcResult,
@@ -5,14 +7,11 @@ import type {
   PlatformCaptchaProof,
   PlatformModel
 } from '../shared/platform-contract'
-
-import type { PlatformAuth } from './platform-auth'
-import { PlatformClientError } from './platform-client'
-import { parsePlatformDeviceId } from './platform-device-contract'
-import { openPlatformCheckout } from './platform-payment'
-import { parsePaymentQuoteInput, parsePlatformCreateOrderInput, parsePlatformOrderId, parsePlatformOrderQuery } from './platform-payment-contract'
-import type { PlatformRuntimeBindingController } from './platform-runtime-binding'
-import { parsePlatformUsageQuery } from './platform-usage-contract'
+import { parsePlatformDeviceId } from '../shared/platform-device-contract'
+import { openPlatformCheckout } from '../shared/platform-payment'
+import { parsePaymentQuoteInput, parsePlatformCreateOrderInput, parsePlatformOrderId, parsePlatformOrderQuery } from '../shared/platform-payment-contract'
+import type { PlatformRuntimeBindingController } from '../shared/platform-runtime-binding'
+import { parsePlatformUsageQuery } from '../shared/platform-usage-contract'
 
 interface IpcLike {
   handle(channel: string, handler: (...args: any[]) => unknown): void

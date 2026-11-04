@@ -15,6 +15,7 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import type { HermesGitBaseBranch } from '@/global'
 import { useI18n } from '@/i18n'
+import type { GitOwnerRoute } from '@/lib/desktop-git'
 import { $repoStatus } from '@/store/coding-status'
 import { listBaseBranches } from '@/store/projects'
 
@@ -25,11 +26,14 @@ import { listBaseBranches } from '@/store/projects'
 // selected value via `value` / `onValueChange`.
 export function BaseBranchPicker({
   disabled,
+  owner,
   repoPath,
   onValueChange,
   value
 }: {
   disabled?: boolean
+  /** The gateway owning `repoPath` when it is another gateway's project. */
+  owner?: GitOwnerRoute
   repoPath: string
   onValueChange: (value: string) => void
   value: string
@@ -61,7 +65,7 @@ export function BaseBranchPicker({
     }
 
     setLoading(true)
-    listBaseBranches(repoPath)
+    listBaseBranches(repoPath, owner)
       .then(list => {
         if (active) {
           setBranches(list)
@@ -81,7 +85,7 @@ export function BaseBranchPicker({
     return () => {
       active = false
     }
-  }, [repoPath])
+  }, [owner, repoPath])
 
   // Default to the remote default (origin/HEAD). Fall back to the local
   // default branch (main/master) when no remote exists. Only an EMPTY value
@@ -134,7 +138,7 @@ export function BaseBranchPicker({
           >
             <Codicon className="shrink-0 text-(--ui-text-tertiary)" name="git-branch" size="0.8rem" />
             <span className="shrink-0">{parts.before}</span>
-            <span className="shrink-0 text-primary underline-offset-4 decoration-current/20 group-hover:underline">
+            <span className="min-w-0 truncate text-primary underline-offset-4 decoration-current/20 group-hover:underline">
               {loading ? '...' : value}
             </span>
             <Codicon className="shrink-0 text-(--ui-text-tertiary)" name="chevron-down" size="0.75rem" />

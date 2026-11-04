@@ -59,6 +59,25 @@ test.beforeAll(async () => {
   mkdirSync(path.join(folder, 'notes'), { recursive: true })
   writeFileSync(path.join(folder, 'notes', 'draft.md'), '# File pane preview\n')
   writeFileSync(path.join(folder, longName), '# A long filename\n')
+
+  const image = await page.evaluate(() => {
+    const canvas = document.createElement('canvas')
+    canvas.width = 1200
+    canvas.height = 600
+    const context = canvas.getContext('2d')!
+    context.fillStyle = '#dbeafe'
+    context.fillRect(0, 0, 600, 600)
+    context.fillStyle = '#dcfce7'
+    context.fillRect(600, 0, 600, 600)
+    context.fillStyle = '#111827'
+    context.font = '48px sans-serif'
+    context.fillText('LEFT · 1200 × 600', 40, 100)
+    context.fillText('RIGHT', 900, 500)
+
+    return canvas.toDataURL('image/png').split(',')[1]
+  })
+
+  writeFileSync(path.join(folder, 'zoom-grid.png'), Buffer.from(image, 'base64'))
   await app.evaluate(({ dialog }, selectedFolder) => {
     dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [selectedFolder] })
   }, folder)
@@ -343,4 +362,49 @@ test('file rows retain expand, preview, rename and attach operations with stable
   expect(tab!.y + tab!.height, 'the full tab and its close target fit the restored panel').toBeLessThanOrEqual(
     restored!.y + restored!.height
   )
+})
+
+test('file images stay centred when fitted and support actual-size zoom and drag in the panel', async ({ browserName: _browserName }, testInfo) => {
+  const { page } = fixture
+  await page.locator('[data-project-tree]:visible').getByText('zoom-grid.png', { exact: true }).dblclick()
+  const viewer = page.locator('[data-slot="preview-image"]:visible')
+  const image = viewer.getByRole('img', { name: 'zoom-grid.png' })
+  const actualSize = viewer.getByRole('button', { name: 'Actual size (100%)', exact: true })
+
+  const geometry = () => image.evaluate(el => {
+    const stage = el.parentElement!.parentElement!.parentElement!
+    const rect = el.getBoundingClientRect()
+    const bounds = stage.getBoundingClientRect()
+
+    return {
+      width: rect.width,
+      left: rect.left,
+      centred: Math.abs(rect.x + rect.width / 2 - bounds.x - bounds.width / 2) < 1 &&
+        Math.abs(rect.y + rect.height / 2 - bounds.y - bounds.height / 2) < 1,
+      fits: rect.left >= bounds.left && rect.right <= bounds.right && rect.top >= bounds.top && rect.bottom <= bounds.bottom
+    }
+  })
+
+  await expect(image).toBeVisible()
+  await expect.poll(async () => (await geometry()).centred).toBe(true)
+  expect((await geometry()).fits).toBe(true)
+  const fittedWidth = (await geometry()).width
+  await viewer.getByRole('button', { name: 'Zoom in', exact: true }).click()
+  expect((await geometry()).width).toBeCloseTo(fittedWidth * 1.25, 0)
+  expect((await geometry()).centred).toBe(true)
+  await actualSize.click()
+  await expect(actualSize).toHaveText('100%')
+  expect((await geometry()).width).toBeCloseTo(1200, 0)
+  const bounds = await viewer.boundingBox()
+  const before = (await geometry()).left
+  await page.mouse.move(bounds!.x + bounds!.width / 2, bounds!.y + bounds!.height / 2)
+  await page.mouse.down()
+  await page.mouse.move(bounds!.x + bounds!.width / 2 + 60, bounds!.y + bounds!.height / 2 + 30, { steps: 5 })
+  await page.mouse.up()
+  expect((await geometry()).left - before).toBeCloseTo(60, 0)
+  await page.screenshot({ path: testInfo.outputPath('file-image-actual-size.png') })
+  await viewer.getByRole('button', { name: 'Fit to panel', exact: true }).click()
+  await expect.poll(async () => (await geometry()).centred && (await geometry()).fits).toBe(true)
+  await page.screenshot({ path: testInfo.outputPath('file-image-fitted.png') })
+  expect(rendererErrors).toEqual([])
 })

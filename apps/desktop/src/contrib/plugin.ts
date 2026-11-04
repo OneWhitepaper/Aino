@@ -24,23 +24,34 @@ import {
   runPluginAppAction
 } from '@/lib/keybinds/plugin-actions'
 import { readKey, writeKey } from '@/lib/storage'
-import { dispatchPluginNativeNotification, type PluginNativeNotificationInput } from '@/store/native-notifications'
+import {
+  dispatchPluginNativeNotification,
+  type PluginNativeNotificationInput
+} from '@/store/native-notifications'
 import { $petActive } from '@/store/pet'
 import { clearPetMessages, type PetSayOptions, sayPetMessage } from '@/store/pet-plugin-messages'
 
 import { type GatewayEventListener, onGatewayEvent } from './events'
+import { createPluginFiles, type PluginFiles } from './plugin-files'
 import type { PluginLocalizedMetadata } from './plugin-metadata'
+import { createPluginPreview, type PluginPreview } from './plugin-preview'
 import { $pluginRecords } from './plugins-store'
 import { registry } from './registry'
 import { type PluginSettingsPage, settingsPageContribution } from './settings-pages'
 
+export type { PluginFileEntry, PluginFiles, PluginFilesResult, PluginFolder } from './plugin-files'
 export type { PluginLocalizedCopy, PluginLocalizedMetadata } from './plugin-metadata'
+export type { PluginPreview } from './plugin-preview'
 import type { Contribution } from './types'
 
 export type { PluginSettingsPage, PluginSettingsSubpage } from './settings-pages'
 export type { PluginRestOptions } from '@/hermes'
 export type { HermesOpenTarget } from '@/lib/hermes-open-target'
-export type { PluginAppActionId, PluginAppActionInfo, PluginRunActionResult } from '@/lib/keybinds/plugin-actions'
+export type {
+  PluginAppActionId,
+  PluginAppActionInfo,
+  PluginRunActionResult
+} from '@/lib/keybinds/plugin-actions'
 export type { PluginNativeNotificationInput, PluginNotificationAction } from '@/store/native-notifications'
 export type { PetMessageTone, PetSayOptions } from '@/store/pet-plugin-messages'
 
@@ -173,8 +184,18 @@ export interface PluginContext {
   runAction: (id: PluginAppActionId) => PluginRunActionResult
   /** The actions `runAction` accepts, with their localized labels. */
   listActions: () => PluginAppActionInfo[]
+  /** Run JavaScript in the preview Browser page. Closed unless the plugin
+   *  declares `capabilities: ['preview.executeJavaScript']`, and even then
+   *  the app asks the user once per page origin before anything runs.
+   *  Feature-detect on older hosts: `ctx.preview?.executeJavaScript`. */
+  preview: PluginPreview
   /** Plugin-scoped persistence. */
   storage: PluginStorage
+  /** Folder-scoped file access: this plugin's own data folder plus folders
+   *  the user grants it through the app's picker, by relative path. The app
+   *  checks every call; nothing outside those folders (or inside Hermes'
+   *  own data) is reachable. Feature-detect on older hosts: `ctx.files?.…`. */
+  files: PluginFiles
   /** Plugin-scoped i18n: ship + register locale bundles under this plugin,
    *  resolved against the app's active locale — no core `en.ts` edit. */
   i18n: PluginI18n
@@ -195,6 +216,10 @@ export interface HermesPlugin {
    *  for opt-in plugins: they inventory in Capabilities ▸ Plugins, off until the
    *  user flips the switch. */
   defaultEnabled?: boolean
+  /** Sensitive doors this plugin uses, declared up front so the app can show
+   *  them and gate them. Today: `'preview.executeJavaScript'` (`ctx.preview`).
+   *  A door the plugin did not declare refuses every call. */
+  capabilities?: readonly string[]
   /** Called once at load; wire contributions through `ctx`. */
   register: (ctx: PluginContext) => void
 }
@@ -240,7 +265,9 @@ function createPluginOs(pluginId: string): PluginOs {
   }
 
   // Same shape as `attempt`, for the pickers that answer with a path.
-  const attemptPath = async (run: (bridge: NonNullable<typeof window.hermesDesktop>) => Promise<null | string>) => {
+  const attemptPath = async (
+    run: (bridge: NonNullable<typeof window.hermesDesktop>) => Promise<null | string>
+  ) => {
     const bridge = typeof window === 'undefined' ? undefined : window.hermesDesktop
 
     if (!bridge) {
@@ -349,9 +376,21 @@ function createPluginLifetime(track: (dispose: () => void) => () => void) {
   }
 }
 
+/** The declared capabilities of a plugin export, strings only. */
+export function declaredCapabilities(plugin: Pick<HermesPlugin, 'capabilities'>): string[] {
+  return Array.isArray(plugin.capabilities)
+    ? plugin.capabilities.filter((entry): entry is string => typeof entry === 'string')
+    : []
+}
+
 /** Build the scoped context handed to a plugin's `register`. `onDispose`
- *  receives every registration's disposer (the loader's unload/reload hook). */
-export function createPluginContext(pluginId: string, onDispose?: (dispose: () => void) => void): PluginContext {
+ *  receives every registration's disposer (the loader's unload/reload hook);
+ *  `capabilities` is what the plugin declared (`declaredCapabilities`). */
+export function createPluginContext(
+  pluginId: string,
+  onDispose?: (dispose: () => void) => void,
+  capabilities: readonly string[] = []
+): PluginContext {
   const source = `plugin:${pluginId}`
   const scope = (c: PluginContribution): Contribution => ({ ...c, id: `${pluginId}:${c.id}`, source })
 
@@ -375,7 +414,9 @@ export function createPluginContext(pluginId: string, onDispose?: (dispose: () =
     pet: createPluginPet(pluginId, track),
     runAction: id => runPluginAppAction(pluginId, id),
     listActions: listPluginAppActions,
+    preview: createPluginPreview(pluginId, capabilities),
     storage: createPluginStorage(pluginId),
+    files: createPluginFiles(pluginId),
     i18n: createPluginI18n(pluginId, track)
   }
 }

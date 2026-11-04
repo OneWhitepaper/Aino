@@ -129,7 +129,7 @@ class MyBackendImageGenProvider(ImageGenProvider):
         # text-only: {"modalities": ["text"], "max_reference_images": 0}.
         # Optional keys: "supports_upscale" (bool) adds an `upscale` param, and
         # "creative_controls" lists the controls you honor from `creativity`,
-        # `intensity`, `complexity`, `movement`, `thinking`, `resolution`. Only declared controls appear
+        # `intensity`, `complexity`, `movement`, `thinking`, `resolution`, `size`. Only declared controls appear
         # in the schema and reach generate() as kwargs. "source_image_role": "style"
         # tells the model that image inputs set the look and are not edited.
         return {"modalities": ["text", "image"], "max_reference_images": 4}
@@ -249,6 +249,21 @@ Full contract in `agent/image_gen_provider.py`. The methods you'll typically ove
 | `get_setup_schema()` | — | minimal | Picker metadata + env-var prompts |
 | `generate(prompt, aspect_ratio, **kwargs)` | ✅ | — | The call |
 
+### Explicit pixel dimensions
+
+The OpenAI and Aino providers declare `creative_controls: ["size"]`. The optional
+`size` kwarg accepts `auto` or positive pixel dimensions such as `2048x2048`,
+`2048x3072`, `3840x2160`, or `4096x4096`. An explicit value overrides the
+`aspect_ratio` preset for both generation and reference-image editing. Omission
+keeps the existing square, landscape and portrait defaults. Size syntax is
+validated before credential lookup or an API request; supported dimensions still
+depend on the selected model and upstream endpoint. An unsupported size is an
+error, without a fallback to a smaller size or local interpolation.
+
+Declare this protocol capability independently of a turn's credentials. Tool
+schemas are frozen for each conversation; newly exposed controls take effect in
+a new conversation rather than changing an existing cached prompt.
+
 ## Response format
 
 `generate()` must return a dict built via `success_response()` or `error_response()`. Both live in `agent/image_gen_provider.py`.
@@ -278,6 +293,13 @@ error_response(
 ```
 
 The tool wrapper JSON-serializes the dict and hands it to the LLM. Errors are surfaced as the tool result; the LLM decides how to explain them to the user.
+
+OpenAI and Aino results retain `size` as the requested value and also return
+`requested_size`, `actual_size`, and the desktop-compatible `pixel_size` alias.
+The latter two describe the cached original image's pixel dimensions, or `None`
+when they cannot be read. Report an upstream size mismatch to the user; neither
+a requested size nor a billing tier proves the output dimensions. Keep the
+original image bytes unchanged.
 
 ## Handling base64 vs URL output
 

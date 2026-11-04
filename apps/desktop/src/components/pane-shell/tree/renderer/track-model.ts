@@ -18,6 +18,17 @@ import { isToolPanelGroup } from '../tool-panel-policy'
 
 import type { FloatingAnchor } from './floating-rect'
 
+/** Renders a pane's tab menu as a controlled dropdown on `trigger` (an
+ *  anchor the caller owns). Stays mounted while closed, so a dialog the menu
+ *  opened (rename, delete confirm) outlives the menu. */
+export interface TabActionsMenuProps {
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  trigger: React.ReactElement
+}
+
+export type TabActionsMenu = (props: TabActionsMenuProps) => React.ReactNode
+
 export const MIN_PANE_PX = 80
 
 /**
@@ -92,6 +103,11 @@ interface PaneChrome extends PaneSizing {
    *  strip keeps right-click as its menu surface). A null/undefined render is
    *  fine: a fresh draft has no session verbs to offer. */
   headerMenu?: () => React.ReactNode
+  /** The SAME tab menu as `tabWrap`'s, opened from a button instead of a
+   *  right-click — the phone tab picker has no strip to right-click. Resolved
+   *  when the picker opens: undefined = no menu for this tab right now (the
+   *  main tab on a fresh draft). */
+  tabActions?: () => TabActionsMenu | undefined
   /** Extra rows at the top of the zone tab menu. Called when the menu opens
    *  against the right-clicked pane — a Browser tab's Open-in-external, without
    *  replacing Reload / Close / the strip. */

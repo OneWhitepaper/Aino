@@ -1,10 +1,12 @@
 import { atom } from 'nanostores'
 import { expect, it } from 'vitest'
 
+import { deferred } from '../test/deferred'
 import { platformModel, platformSnapshot } from '../test/platform-model'
 
 import {
   platformErrorSurface,
+  platformModelForDisplayFrom,
   platformRecoveryAction,
   platformRecoveryActionForCode,
   verifiedPlatformModelFrom
@@ -22,6 +24,32 @@ it('requires a ready catalog model and its stored account owner', async () => {
 
   account.set(platformSnapshot('user-b', 2))
   expect(verifiedPlatformModelFrom(catalog, 'catalog-a', 'user-a')).toBeNull()
+})
+
+it('retains only same-revision presentation metadata during refresh while request authorization waits', async () => {
+  const account = atom(platformSnapshot())
+  const refresh = deferred<ReturnType<typeof platformModel>[]>()
+  let reads = 0
+
+  const catalog = createPlatformModelCatalog(
+    account,
+    () => (++reads === 1 ? Promise.resolve([platformModel()]) : refresh.promise),
+    async () => ({ user_id: 'user-a', platform_origin: 'http://127.0.0.1:7001' })
+  )
+
+  await catalog.load()
+  const loading = catalog.load()
+
+  expect(platformModelForDisplayFrom(catalog, 'catalog-a', 'user-a', 'http://127.0.0.1:7001')?.id).toBe('catalog-a')
+  expect(verifiedPlatformModelFrom(catalog, 'catalog-a', 'user-a', 'http://127.0.0.1:7001')).toBeNull()
+  expect(platformModelForDisplayFrom(catalog, 'catalog-a', 'other-user', 'http://127.0.0.1:7001')).toBeNull()
+  expect(platformModelForDisplayFrom(catalog, 'catalog-a', 'user-a', 'http://127.0.0.1:7002')).toBeNull()
+
+  account.set(platformSnapshot('user-a', 2))
+  expect(platformModelForDisplayFrom(catalog, 'catalog-a', 'user-a', 'http://127.0.0.1:7001')).toBeNull()
+  refresh.resolve([platformModel()])
+  await loading
+  expect(platformModelForDisplayFrom(catalog, 'catalog-a', 'user-a', 'http://127.0.0.1:7001')).toBeNull()
 })
 
 it.each([

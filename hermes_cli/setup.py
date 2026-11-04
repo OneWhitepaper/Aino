@@ -545,10 +545,9 @@ def setup_telemetry(config: dict):
     _info(*_SEND_CONSENT_EXPLAINER)
     # The answer is written to config.yaml here, not by the caller's later save: that save strips
     # values equal to the defaults, so a "no" would vanish and every surface would ask again.
-    from hermes_cli.observability.shared_metrics_consent import save_consent
+    from hermes_cli.observability.shared_metrics_consent import consent_state, save_consent
 
-    shared_metrics = _sub_dict(_sub_dict(config, "telemetry"), "shared_metrics")
-    sharing = shared_metrics.get("enabled") is True and shared_metrics.get("send") is True and shared_metrics.get("recipient") == "aino"
+    sharing = consent_state(config)["send"]
     # One answer for both keys: off also withdraws send consent and stops collection.
     share = prompt_yes_no("Send shared metrics to Aino?", default=sharing)
     save_consent(share, share, config)
@@ -738,7 +737,10 @@ def _run_setup_wizard_impl(args):
         label, runner = _FIRST_TIME_MODES[setup_mode]
         if runner is not None:
             from hermes_cli import setup_quick
-            _run_setup_steps([(label, lambda: getattr(setup_quick, runner)(config, hermes_home, is_existing))])
+            # Quick Setup offers to keep a model the import brought (Full setup acknowledges it below).
+            run_args = (config, hermes_home, is_existing) + (
+                (imported_from,) if runner == "_run_first_time_quick_setup" else ())
+            _run_setup_steps([(label, lambda: getattr(setup_quick, runner)(*run_args))])
             _record_setup_completed(config)
             return
     _run_full_setup(config, hermes_home, is_existing=is_existing, imported_from=imported_from)

@@ -1,10 +1,12 @@
 import type { Translations } from '@/i18n'
 import type { UpstreamTranslations } from '@/i18n/types'
+import { hostHas } from '@/lib/host-capabilities'
 import { NATIVE_NOTIFICATION_KINDS } from '@/store/native-notifications'
 import { canUseQuickEntry } from '@/store/quick-entry'
 import { TRANSLUCENCY_SUPPORTED } from '@/store/translucency'
 
 import type { AppearanceSubpageId } from './appearance-subpages'
+import { nativeHostOnly } from './other-subpages'
 import type { SettingsView } from './types'
 
 interface SettingCopy {
@@ -22,7 +24,9 @@ export interface SettingDefinition {
 }
 
 type AppearanceCopy = UpstreamTranslations['settings']['appearance']
-type TitledKey = { [K in keyof AppearanceCopy]: K extends `${infer Base}Title` ? Base : never }[keyof AppearanceCopy]
+type TitledKey = {
+  [K in keyof AppearanceCopy]: K extends `${infer Base}Title` ? Base : never
+}[keyof AppearanceCopy]
 
 // Most Appearance rows read `<key>Title` / `<key>Desc` straight from the
 // appearance catalog; a Desc that is a formatter (uiScale) is left to the row.
@@ -69,8 +73,16 @@ export const SETTINGS_MANIFEST = {
       keywords: ['locale'],
       copy: t => ({ label: t.language.label, description: t.language.description })
     },
-    introSplash: appearanceSetting('general', ['splash', 'wordmark', 'empty chat', 'new chat'], 'introSplash'),
-    modelPricing: appearanceSetting('general', ['price', 'cost', 'tokens', 'model picker', 'cache'], 'modelPricing'),
+    introSplash: appearanceSetting(
+      'general',
+      ['splash', 'wordmark', 'empty chat', 'new chat'],
+      'introSplash'
+    ),
+    modelPricing: appearanceSetting(
+      'general',
+      ['price', 'cost', 'tokens', 'model picker', 'cache'],
+      'modelPricing'
+    ),
     resumeLastSession: appearanceSetting(
       'general',
       ['resume', 'reopen', 'launch', 'startup', 'last chat', 'session'],
@@ -81,10 +93,17 @@ export const SETTINGS_MANIFEST = {
     theme: {
       subpage: 'theme',
       keywords: ['color mode', 'light', 'dark'],
-      copy: t => ({ label: t.settings.appearance.colorMode, description: t.settings.appearance.colorModeDesc })
+      copy: t => ({
+        label: t.settings.appearance.colorMode,
+        description: t.settings.appearance.colorModeDesc
+      })
     },
     uiScale: appearanceSetting('typography', ['zoom', 'size'], 'uiScale'),
-    chatTextScale: appearanceSetting('typography', ['chat', 'text', 'font', 'size', 'scale', 'zoom'], 'chatTextScale'),
+    chatTextScale: appearanceSetting(
+      'typography',
+      ['chat', 'text', 'font', 'size', 'scale', 'zoom'],
+      'chatTextScale'
+    ),
     chatFont: appearanceSetting('typography', ['font', 'typeface', 'family', 'text'], 'chatFont'),
     terminalFont: appearanceSetting(
       'typography',
@@ -111,7 +130,10 @@ export const SETTINGS_MANIFEST = {
       subpage: 'window-layout',
       keywords: ['tray', 'background', 'minimize', 'dock', 'taskbar', 'menu bar'],
       available: () => Boolean(window.hermesDesktop?.minimizeToTray),
-      copy: t => ({ label: t.settings.config.minimizeToTrayTitle, description: t.settings.config.minimizeToTrayDesc })
+      copy: t => ({
+        label: t.settings.config.minimizeToTrayTitle,
+        description: t.settings.config.minimizeToTrayDesc
+      })
     },
     translucency: {
       ...appearanceSetting('window-layout', ['opacity', 'transparent', 'glass', 'blur'], 'translucency'),
@@ -128,7 +150,11 @@ export const SETTINGS_MANIFEST = {
       ['composer', 'floating', 'drag', 'popout', 'pop out', 'dock', 'lock', 'peel', 'input'],
       'composerPopout'
     ),
-    userBubble: appearanceSetting('chat-display', ['opacity', 'transparent', 'message', 'bubble'], 'userBubble'),
+    userBubble: appearanceSetting(
+      'chat-display',
+      ['opacity', 'transparent', 'message', 'bubble'],
+      'userBubble'
+    ),
     textDirection: appearanceSetting(
       'chat-display',
       ['rtl', 'ltr', 'right to left', 'left to right', 'bidi', 'arabic', 'hebrew', 'persian', 'align'],
@@ -140,7 +166,11 @@ export const SETTINGS_MANIFEST = {
       'hideThreadTimeline'
     ),
     reactions: appearanceSetting('chat-display', ['emoji', 'tapback', 'react', 'reactions'], 'reactions'),
-    vibeHearts: appearanceSetting('chat-display', ['hearts', 'vibe', 'celebrate', 'confetti', 'fun'], 'vibeHearts'),
+    vibeHearts: appearanceSetting(
+      'chat-display',
+      ['hearts', 'vibe', 'celebrate', 'confetti', 'fun'],
+      'vibeHearts'
+    ),
     toolView: appearanceSetting('chat-display', ['tool display', 'technical'], 'toolView'),
     hideCodeDiffs: appearanceSetting(
       'chat-display',
@@ -156,14 +186,20 @@ export const SETTINGS_MANIFEST = {
     pet: {
       subpage: 'pet',
       keywords: ['pet', 'mascot', 'petdex', 'companion', 'buddy'],
-      copy: t => ({ label: t.settings.appearance.pet.chooseTitle, description: t.settings.appearance.pet.chooseDesc })
+      copy: t => ({
+        label: t.settings.appearance.pet.chooseTitle,
+        description: t.settings.appearance.pet.chooseDesc
+      })
     }
   },
   chat: {
     attachmentSize: {
       subpage: 'attachments',
       keywords: ['attachment', 'image', 'preview', 'upload', 'file size', 'limit', 'MB'],
-      copy: t => ({ label: t.settings.config.attachmentSizeTitle, description: t.settings.config.attachmentSizeDesc })
+      copy: t => ({
+        label: t.settings.config.attachmentSizeTitle,
+        description: t.settings.config.attachmentSizeDesc
+      })
     }
   },
   advanced: {
@@ -181,13 +217,19 @@ export const SETTINGS_MANIFEST = {
       subpage: 'desktop',
       keywords: ['quick entry', 'global shortcut', 'spotlight', 'summon', 'prompt anywhere'],
       available: canUseQuickEntry,
-      copy: t => ({ label: t.settings.quickEntry.enabledTitle, description: t.settings.quickEntry.enabledDesc })
+      copy: t => ({
+        label: t.settings.quickEntry.enabledTitle,
+        description: t.settings.quickEntry.enabledDesc
+      })
     },
     quickEntryShortcut: {
       subpage: 'desktop',
       keywords: ['quick entry', 'shortcut', 'hotkey', 'keybind', 'chord'],
       available: canUseQuickEntry,
-      copy: t => ({ label: t.settings.quickEntry.shortcutTitle, description: t.settings.quickEntry.shortcutDesc })
+      copy: t => ({
+        label: t.settings.quickEntry.shortcutTitle,
+        description: t.settings.quickEntry.shortcutDesc
+      })
     },
     warmBotBackends: {
       subpage: 'runtime',
@@ -217,14 +259,20 @@ export const SETTINGS_MANIFEST = {
       subpage: 'screen-capture',
       keywords: ['screenshot', 'screen capture', 'window', 'attach', 'command keys'],
       available: () => Boolean(window.hermesDesktop?.screenshot),
-      copy: t => ({ label: t.settings.screenshot.enabledTitle, description: t.settings.screenshot.enabledDesc })
+      copy: t => ({
+        label: t.settings.screenshot.enabledTitle,
+        description: t.settings.screenshot.enabledDesc
+      })
     }
   },
   notifications: {
     enableAll: {
       subpage: 'alerts',
       keywords: ['notifications', 'alerts', 'native', 'banner', 'mute', 'do not disturb'],
-      copy: t => ({ label: t.settings.notifications.enableAll, description: t.settings.notifications.enableAllDesc })
+      copy: t => ({
+        label: t.settings.notifications.enableAll,
+        description: t.settings.notifications.enableAllDesc
+      })
     },
     ...Object.fromEntries(
       NATIVE_NOTIFICATION_KINDS.map(kind => [
@@ -239,6 +287,15 @@ export const SETTINGS_MANIFEST = {
         } satisfies SettingDefinition
       ])
     ),
+    browserPermission: {
+      subpage: 'alerts',
+      keywords: ['notifications', 'browser', 'permission', 'allow', 'tab', 'flash'],
+      available: () => hostHas('browserNotifications'),
+      copy: t => ({
+        label: t.settings.notifications.browserPermission.title,
+        description: t.settings.notifications.browserPermission.states.default
+      })
+    },
     muteSounds: {
       subpage: 'sounds',
       keywords: ['mute', 'silence', 'quiet', 'sound', 'chime', 'wake', 'haptics'],
@@ -260,16 +317,33 @@ export const SETTINGS_MANIFEST = {
     autoArchive: {
       subpage: 'archived',
       keywords: ['archive', 'stale', 'cleanup', 'old chats', 'days', 'after'],
-      copy: t => ({ label: t.settings.sessions.autoArchiveTitle, description: t.settings.sessions.autoArchiveDesc })
+      copy: t => ({
+        label: t.settings.sessions.autoArchiveTitle,
+        description: t.settings.sessions.autoArchiveDesc
+      })
     }
   },
   gateway: {
     connectionMode: {
+      available: nativeHostOnly,
       subpage: 'connection',
-      keywords: ['gateway', 'connection', 'local', 'cloud', 'remote', 'ssh', 'url', 'token', 'host', 'port', 'key'],
+      keywords: [
+        'gateway',
+        'connection',
+        'local',
+        'cloud',
+        'remote',
+        'ssh',
+        'url',
+        'token',
+        'host',
+        'port',
+        'key'
+      ],
       copy: t => ({ label: t.settings.gateway.modeTitle, description: t.settings.gateway.intro })
     },
     keychainEncryption: {
+      available: nativeHostOnly,
       subpage: 'connection',
       keywords: ['keychain', 'encrypt', 'secrets', 'secure storage', 'plain text'],
       copy: t => ({
@@ -278,6 +352,7 @@ export const SETTINGS_MANIFEST = {
       })
     },
     diagnostics: {
+      available: nativeHostOnly,
       subpage: 'connection',
       keywords: ['diagnostics', 'logs', 'debug', 'report', 'troubleshoot'],
       copy: t => ({ label: t.settings.gateway.diagnostics, description: t.settings.gateway.diagnosticsDesc })
@@ -315,7 +390,9 @@ export const settingId = (view: ManifestViewKey, key: string) => `${view}.${keba
 export const notificationKindSettingId = (kind: (typeof NATIVE_NOTIFICATION_KINDS)[number]) =>
   settingId('notifications', `kind-${kind}`)
 
-type SettingIds = { readonly [V in ManifestViewKey]: { readonly [K in keyof (typeof SETTINGS_MANIFEST)[V]]: string } }
+type SettingIds = {
+  readonly [V in ManifestViewKey]: { readonly [K in keyof (typeof SETTINGS_MANIFEST)[V]]: string }
+}
 
 /** `SETTING_IDS.appearance.tips === 'appearance.tips'` — the id a row carries and a palette hit targets. */
 export const SETTING_IDS = Object.fromEntries(

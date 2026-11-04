@@ -11,7 +11,7 @@ from unittest.mock import MagicMock
 
 from agent.turn_truncation import continue_codex_incomplete
 from tests.agent.test_run_agent_codex_responses import (
-    _build_copilot_agent,
+    _build_relay_agent,
     _codex_message_response,
     _codex_max_output_incomplete_response,
 )
@@ -104,7 +104,7 @@ def _codex_truncated_tool_call_response():
 def test_codex_truncated_tool_call_is_retried_with_boosted_output_budget(monkeypatch):
     """A tool call cut off by max_output_tokens on the Responses wire gets the same
     budget-boost retry as chat modes instead of a refused partial turn (#91770)."""
-    agent = _build_copilot_agent(monkeypatch)
+    agent = _build_relay_agent(monkeypatch)
     agent.max_tokens = 1000
     responses = [_codex_truncated_tool_call_response(), _codex_message_response("Done.")]
     seen_caps: list = []
@@ -127,7 +127,7 @@ def test_codex_truncated_tool_call_is_retried_with_boosted_output_budget(monkeyp
 def test_codex_text_only_max_output_incomplete_keeps_codex_continuation(monkeypatch):
     """Text truncation is not rerouted: it stays on the Codex incomplete continuation and
     never takes the length path's nudge (no double continuation, #91770)."""
-    agent = _build_copilot_agent(monkeypatch)
+    agent = _build_relay_agent(monkeypatch)
     responses = [_codex_max_output_incomplete_response("Partial"), _codex_message_response("rest.")]
     monkeypatch.setattr(agent, "_interruptible_api_call", lambda api_kwargs: responses.pop(0))
 

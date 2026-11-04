@@ -60,6 +60,8 @@ export const enBoot = {
       remoteTitle: 'Remote gateway sign-in required',
       remoteDescription:
         'Your remote gateway session has expired. Sign in again to reconnect. Nothing here deletes your chats or settings.',
+      webappTitle: 'Connect this browser',
+      webappDescription: 'Run hermes webapp on the gateway computer to authorize this browser.',
       retry: 'Retry',
       repairInstall: 'Repair install',
       useLocalGateway: 'Use local gateway',

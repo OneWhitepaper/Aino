@@ -8,7 +8,7 @@ import { useI18n } from '@/i18n'
 import { quickModelOptions } from '@/lib/chat-runtime'
 import { currentModelCapabilities, modelOptionsQueryKey, requestModelOptions } from '@/lib/model-options'
 import { useStoresSelector } from '@/lib/use-session-slice'
-import { verifiedPlatformModel } from '@/store/platform-model-capability'
+import { platformModelForDisplayFrom } from '@/store/platform-model-capability'
 import { platformModelCatalog } from '@/store/platform-models'
 import { $currentPlatformOrigin, $currentPlatformOwner } from '@/store/session'
 import { $sessionStates } from '@/store/session-states'
@@ -90,7 +90,7 @@ export function useChatBarState({
       const owner = state ? (state.platformModel?.ownerUserId ?? '') : $currentPlatformOwner.get()
       const origin = state ? state.platformModel?.platformOrigin : $currentPlatformOrigin.get()
 
-      return Boolean(verifiedPlatformModel(currentModel, owner, origin)?.capabilities.reasoning)
+      return Boolean(platformModelForDisplayFrom(catalog, currentModel, owner, origin)?.capabilities.reasoning)
     }
   )
 
@@ -137,5 +137,4 @@ export function useChatBarState({
       supportsReasoning
     ]
   )
-
 }

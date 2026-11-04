@@ -1,3 +1,4 @@
+import { arCronControl } from './ar_cron_control'
 import type { TranslationOverrides } from './define-locale'
 
 export const arCommandCenter = {
@@ -401,18 +402,20 @@ export const arCommandCenter = {
     exported: 'تم تصدير الملف الشخصي',
     failedImport: 'فشل استيراد الملف الشخصي',
     failedExport: 'فشل تصدير الملف الشخصي',
+    exportNeedsHost: name => `لا يمكن للمتصفح حفظ أرشيف الملف الشخصي. على مضيف Hermes، شغّل: hermes profile export ${name}`,
     allProfiles: 'كل الملفات الشخصية',
     showAllProfiles: 'إظهار كل الملفات الشخصية',
+    notServedHere: 'غير متاح هنا',
     switchToProfile: name => `التبديل إلى ${name}`,
     switchToConnection: name => `التبديل إلى ${name}`,
     switchConnectionFailed: name => `تعذّر الاتصال بـ ${name}`,
     manageProfiles: 'إدارة الملفات الشخصية',
     fleet: {
+      switchDeviceTitle: "التبديل إلى هذا الجهاز؟",
+      switchDeviceDesc: "يفتح هذا جلسة جديدة على هذا الكمبيوتر. تبقى المحادثة الحالية على خدمة التشغيل الأخرى.",
+      switchDeviceConfirm: "تبديل",
       localDevice: 'هذا الجهاز (خلفية محلية — تثبّت Hermes إن كان مفقودًا، وإلا تفتح جلسة جديدة)',
-      switchDeviceTitle: 'التبديل إلى هذا الجهاز؟',
-      switchDeviceDesc: 'يفتح هذا جلسة جديدة على هذا الحاسوب. تبقى المحادثة الحالية على البوابة الأخرى.',
-      switchDeviceConfirm: 'تبديل',
-      installDeviceTitle: 'التبديل إلى هذا الجهاز؟',
+      installDeviceTitle: 'تثبيت Hermes على هذا الجهاز؟',
       installDeviceDesc: 'سيُثبَّت Hermes محليًا ثم تُفتح جلسة جديدة على هذا الحاسوب. لا يبدأ التثبيت قبل التأكيد.',
       installDeviceConfirm: 'تثبيت محليًا',
       connectExistingInstead: 'الاتصال بموجود بدلًا من ذلك'
@@ -537,6 +540,7 @@ export const arCommandCenter = {
     advanced: 'مساحات العمل المتقدمة'
   },
   cron: {
+    control: arCronControl,
     close: 'إغلاق',
     search: 'بحث',
     loading: 'جار التحميل...',

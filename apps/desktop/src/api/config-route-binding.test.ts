@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import {
+  disconnectOAuthProvider,
   getHermesConfigRecord,
   peekConfigReadOrigin,
   saveHermesConfig,
@@ -28,6 +29,23 @@ describe('config read/write route binding', () => {
     setApiRequestProfile(null)
     vi.restoreAllMocks()
     Reflect.deleteProperty(window, 'hermesDesktop')
+  })
+
+  it('disconnects service credentials on the captured route after the foreground changes', async () => {
+    const owner = { connectionId: 'connection-a', profile: 'research' }
+    setApiRequestConnection('connection-b')
+    setApiRequestProfile('default')
+
+    await disconnectOAuthProvider('nous', owner)
+
+    expect(api).toHaveBeenCalledWith(
+      expect.objectContaining({
+        connectionId: 'connection-a',
+        profile: 'research',
+        method: 'DELETE',
+        path: '/api/providers/oauth/nous'
+      })
+    )
   })
 
   it('config record read from A cannot be written to B after primary changes', async () => {

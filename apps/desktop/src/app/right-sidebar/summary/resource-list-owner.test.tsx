@@ -51,7 +51,8 @@ it('opens a summary resource for its captured Bot chat owner after tool focus mo
       expect.objectContaining({ kind: 'url', url: 'https://example.com/reference' }),
       'bot-chat',
       'bot-runtime',
-      'research'
+      'research',
+      { browser: 'matching-url' }
     )
   )
 })

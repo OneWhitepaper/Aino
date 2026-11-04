@@ -94,6 +94,7 @@ def _persist_install(name: str, cfg: dict[str, Any], env: dict[str, str]) -> Non
     """Keep the configuration and card credentials together if either write fails."""
     from hermes_cli import config as config_module
     from hermes_cli.mcp_config import _save_mcp_server
+    from hermes_cli.config_backend import ConfigBackendUnavailable, refusing_locked_omissions, supports_file_tooling
     from tools.connectors.mcp import _save_env
     from utils import atomic_write_bytes
 
@@ -101,13 +102,17 @@ def _persist_install(name: str, cfg: dict[str, Any], env: dict[str, str]) -> Non
         config_module.require_env_writable(key, "set")
     config_path, env_path = config_module.get_config_path(), config_module.get_env_path()
     with config_module._CONFIG_LOCK, config_module._env_write_lock(env_path):
-        before = {path: path.read_bytes() if path.exists() else None for path in (config_path, env_path)}
+        before = {env_path: env_path.read_bytes() if env_path.exists() else None}
+        if supports_file_tooling():
+            before[config_path] = config_path.read_bytes() if config_path.exists() else None  # config-reader: ok — byte-exact rollback, gated by supports_file_tooling()
         old_values = {key: config_module.get_env_value(key) for key in env}
         try:
-            if not _save_mcp_server(name, cfg):
-                raise _invalid(f"'{name}' was rejected: suspicious command/args configuration")
+            # Commit config last: a non-file backend's atomic refusal must restore every card secret.
             _save_env(env)
-        except Exception:
+            with refusing_locked_omissions("mcp_servers"):
+                if not _save_mcp_server(name, cfg):
+                    raise _invalid(f"'{name}' was rejected: suspicious command/args configuration")
+        except (Exception, ConfigBackendUnavailable):
             for path, data in before.items():
                 if data is None:
                     path.unlink(missing_ok=True)

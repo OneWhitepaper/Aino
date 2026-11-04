@@ -127,7 +127,7 @@ def notification_admission(tmp_path, monkeypatch):
     ("interim", 0), ("watch", 0),
 ])
 def test_a_notification_rejected_before_turn_start_stays_pending(
-    notification_admission, event_kind, refund_failures, monkeypatch,
+    notification_admission, event_kind, refund_failures, monkeypatch, request,
 ):
     """Repeated real credential refusals keep one live copy and spend no delivery attempts."""
     env = notification_admission
@@ -137,6 +137,11 @@ def test_a_notification_rejected_before_turn_start_stays_pending(
         session_key="owner", parent_session_id="owner", origin_ui_session_id=env.sid,
         runner=lambda: {"status": "completed", "summary": "retained result"})
     event = events.get(timeout=10)
+    if event_kind != "durable":
+        # This case exercises a different notice while the final result is held off-queue.
+        # Discarding that final would correctly trigger the upstream orphan-recovery sweep.
+        ad.mark_copy_held(handle["delegation_id"])
+        request.addfinalizer(lambda: ad.unmark_copy_held(handle["delegation_id"]))
     if event_kind == "interim":
         event = {**event, "task_failure_notice": True, "results": [
             {"task_index": 0, "status": "error", "error": "child failed"}]}

@@ -978,9 +978,6 @@
     "zh",
     "zh-hant"
   ],
-  "assistant.thread.errorCopyDiagnostics": [
-    "ru"
-  ],
   "assistant.thread.errorDetails": [
     "ar",
     "ja",
@@ -1070,9 +1067,6 @@
   "assistant.thread.errorLayers.streaming": [
     "ru"
   ],
-  "assistant.thread.errorLimitResets": [
-    "ru"
-  ],
   "assistant.thread.errorOauthExpired": [
     "ru"
   ],
@@ -1100,9 +1094,6 @@
     "ru"
   ],
   "assistant.thread.errorRetry": [
-    "ru"
-  ],
-  "assistant.thread.errorRetryAtReset": [
     "ru"
   ],
   "assistant.thread.errorRetryScheduled": [
@@ -3422,6 +3413,26 @@
   "boot.failure.remoteFailureHint": [
     "ar"
   ],
+  "boot.failure.webappDescription": [
+    "ar",
+    "de",
+    "es",
+    "fr",
+    "ja",
+    "ru",
+    "zh",
+    "zh-hant"
+  ],
+  "boot.failure.webappTitle": [
+    "ar",
+    "de",
+    "es",
+    "fr",
+    "ja",
+    "ru",
+    "zh",
+    "zh-hant"
+  ],
   "boot.updateHold.checkAgain": [
     "ar",
     "ja",
@@ -4533,11 +4544,6 @@
     "ja",
     "zh-hant"
   ],
-  "commandCenter.maintenance.builtinMemory": [
-    "ar",
-    "ja",
-    "zh-hant"
-  ],
   "commandCenter.maintenance.bytes": [
     "ar",
     "ja",
@@ -4633,17 +4639,7 @@
     "ja",
     "zh-hant"
   ],
-  "commandCenter.maintenance.memoryDataDesc": [
-    "ar",
-    "ja",
-    "zh-hant"
-  ],
   "commandCenter.maintenance.memoryFile": [
-    "ar",
-    "ja",
-    "zh-hant"
-  ],
-  "commandCenter.maintenance.memoryProvider": [
     "ar",
     "ja",
     "zh-hant"
@@ -12560,6 +12556,56 @@
   "rightSidebar.terminalCloseOthers": [
     "ar"
   ],
+  "rightSidebar.terminalDropControl": [
+    "ar",
+    "de",
+    "es",
+    "fr",
+    "ja",
+    "ru",
+    "zh",
+    "zh-hant"
+  ],
+  "rightSidebar.terminalDropControlTitle": [
+    "ar",
+    "de",
+    "es",
+    "fr",
+    "ja",
+    "ru",
+    "zh",
+    "zh-hant"
+  ],
+  "rightSidebar.terminalDropTooLarge": [
+    "ar",
+    "de",
+    "es",
+    "fr",
+    "ja",
+    "ru",
+    "zh",
+    "zh-hant"
+  ],
+  "rightSidebar.terminalDropTooLargeTitle": [
+    "ar",
+    "de",
+    "es",
+    "fr",
+    "ja",
+    "ru",
+    "zh",
+    "zh-hant"
+  ],
+  "rightSidebar.terminalDropUploadFailed": [
+    "ar",
+    "de",
+    "es",
+    "fr",
+    "ja",
+    "ru",
+    "zh",
+    "zh-hant"
+  ],
   "rightSidebar.terminalNew": [
     "ar"
   ],
@@ -17284,26 +17330,6 @@
   "settings.notifications.kinds.plugin.label": [
     "ar"
   ],
-  "settings.plugins.disable": [
-    "ar",
-    "de",
-    "es",
-    "fr",
-    "ja",
-    "ru",
-    "zh",
-    "zh-hant"
-  ],
-  "settings.plugins.enable": [
-    "ar",
-    "de",
-    "es",
-    "fr",
-    "ja",
-    "ru",
-    "zh",
-    "zh-hant"
-  ],
   "settings.plugins.errors.backendHomeMissing": [
     "ar",
     "de",
@@ -19130,11 +19156,6 @@
     "es",
     "fr",
     "ru"
-  ],
-  "sidebar.row.continuationOrigin": [
-    "ja",
-    "ru",
-    "zh-hant"
   ],
   "sidebar.row.hideTabBar": [
     "ja",

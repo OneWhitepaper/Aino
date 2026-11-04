@@ -6,7 +6,11 @@ interface ContextBreakdownOptions {
   busy: boolean
   enabled: boolean
   identityKey?: string
-  requestGateway: <T = unknown>(method: string, params?: Record<string, unknown>, timeoutMs?: number) => Promise<T>
+  requestGateway: <T = unknown>(
+    method: string,
+    params?: Record<string, unknown>,
+    timeoutMs?: number
+  ) => Promise<T>
   refreshKey?: string
   sessionId: null | string
   suspended?: boolean
@@ -46,8 +50,8 @@ const LIVE_REFRESH_INTERVAL_MS = 2_000
  *  `invalidateContextBreakdown` bumps a per-session generation that both
  *  call sites (slash.ts after a successful compress, lifecycle.ts on
  *  reclaim) fire, forcing an immediate refetch. An untrustworthy answer —
- *  an outright failure, or a ZEROED breakdown from the backend's
- *  agent-is-None branch (`context_max: 0`) — retries on a bounded backoff;
+ *  an outright failure, or a ZEROED breakdown (`context_max: 0` and no
+ *  categories) — retries on a bounded backoff;
  *  once the ladder is exhausted the cached breakdown is EVICTED so the
  *  meter goes dark honestly rather than showing numbers known to be
  *  stale. */
@@ -266,7 +270,14 @@ export function useContextBreakdown({
           return
         }
 
-        setFetched({ breakdown, generation, requestGateway, requestVersion, identityKey, sessionId: runtimeId })
+        setFetched({
+          breakdown,
+          generation,
+          requestGateway,
+          requestVersion,
+          identityKey,
+          sessionId: runtimeId
+        })
         setLoading(false)
       } catch (error) {
         if (cancelled) {
@@ -312,7 +323,17 @@ export function useContextBreakdown({
         clearTimeout(timer)
       }
     }
-  }, [busy, enabled, generation, identityKey, requestGateway, requestVersion, refreshKey, sessionId, suspended])
+  }, [
+    busy,
+    enabled,
+    generation,
+    identityKey,
+    requestGateway,
+    requestVersion,
+    refreshKey,
+    sessionId,
+    suspended
+  ])
 
   return {
     breakdown:

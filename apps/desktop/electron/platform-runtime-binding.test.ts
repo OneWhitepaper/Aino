@@ -3,12 +3,13 @@ import http from 'node:http'
 import { afterEach, expect, it, vi } from 'vitest'
 import { WebSocketServer } from 'ws'
 
+import { createPlatformAuth } from '../shared/platform-auth'
+import { createPlatformClient } from '../shared/platform-client'
 import type { PlatformModel } from '../shared/platform-contract'
+import { createPlatformRuntimeBindingController } from '../shared/platform-runtime-binding'
 
-import { createPlatformAuth } from './platform-auth'
-import { createPlatformClient } from './platform-client'
 import { registerPlatformIpc } from './platform-ipc'
-import { createPlatformRuntimeBindingController, openPlatformGateway } from './platform-runtime-binding'
+import { openPlatformGateway } from './platform-runtime-binding'
 
 const cleanup: Array<() => void | Promise<void>> = []
 afterEach(async () => {

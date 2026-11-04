@@ -2,7 +2,7 @@ import http from 'node:http'
 
 import { afterEach, describe, expect, it } from 'vitest'
 
-import { createPlatformClient, resolvePlatformOrigin } from './platform-client'
+import { createPlatformClient, resolvePlatformOrigin } from '../shared/platform-client'
 
 const servers: http.Server[] = []
 

@@ -1,25 +1,15 @@
 {
   "cli-code.claude": {
     "prompt_tokens": {
-      "context": 249,
-      "stable": 2117,
-      "volatile": 1813
+      "context": 134,
+      "stable": 2029,
+      "volatile": 1268
     },
-    "tool_tokens": 13876,
+    "tool_tokens": 11840,
     "tools": [
-      "browser_back",
       "browser_cdp",
-      "browser_click",
-      "browser_console",
       "browser_dialog",
       "browser_exec",
-      "browser_get_images",
-      "browser_navigate",
-      "browser_press",
-      "browser_scroll",
-      "browser_snapshot",
-      "browser_type",
-      "browser_vision",
       "clarify",
       "delegate_task",
       "execute_code",
@@ -45,24 +35,14 @@
   "cli.claude": {
     "prompt_tokens": {
       "context": 0,
-      "stable": 1441,
-      "volatile": 1813
+      "stable": 1238,
+      "volatile": 1268
     },
-    "tool_tokens": 13876,
+    "tool_tokens": 11840,
     "tools": [
-      "browser_back",
       "browser_cdp",
-      "browser_click",
-      "browser_console",
       "browser_dialog",
       "browser_exec",
-      "browser_get_images",
-      "browser_navigate",
-      "browser_press",
-      "browser_scroll",
-      "browser_snapshot",
-      "browser_type",
-      "browser_vision",
       "clarify",
       "delegate_task",
       "execute_code",
@@ -88,24 +68,14 @@
   "cli.gemini": {
     "prompt_tokens": {
       "context": 0,
-      "stable": 1863,
-      "volatile": 1811
+      "stable": 1660,
+      "volatile": 1266
     },
-    "tool_tokens": 13876,
+    "tool_tokens": 11840,
     "tools": [
-      "browser_back",
       "browser_cdp",
-      "browser_click",
-      "browser_console",
       "browser_dialog",
       "browser_exec",
-      "browser_get_images",
-      "browser_navigate",
-      "browser_press",
-      "browser_scroll",
-      "browser_snapshot",
-      "browser_type",
-      "browser_vision",
       "clarify",
       "delegate_task",
       "execute_code",
@@ -131,24 +101,14 @@
   "cli.gpt": {
     "prompt_tokens": {
       "context": 0,
-      "stable": 2694,
-      "volatile": 1809
+      "stable": 2491,
+      "volatile": 1264
     },
-    "tool_tokens": 14032,
+    "tool_tokens": 11996,
     "tools": [
-      "browser_back",
       "browser_cdp",
-      "browser_click",
-      "browser_console",
       "browser_dialog",
       "browser_exec",
-      "browser_get_images",
-      "browser_navigate",
-      "browser_press",
-      "browser_scroll",
-      "browser_snapshot",
-      "browser_type",
-      "browser_vision",
       "clarify",
       "delegate_task",
       "execute_code",
@@ -174,24 +134,14 @@
   "cli.hermes": {
     "prompt_tokens": {
       "context": 0,
-      "stable": 1441,
-      "volatile": 1813
+      "stable": 1238,
+      "volatile": 1268
     },
-    "tool_tokens": 13876,
+    "tool_tokens": 11840,
     "tools": [
-      "browser_back",
       "browser_cdp",
-      "browser_click",
-      "browser_console",
       "browser_dialog",
       "browser_exec",
-      "browser_get_images",
-      "browser_navigate",
-      "browser_press",
-      "browser_scroll",
-      "browser_snapshot",
-      "browser_type",
-      "browser_vision",
       "clarify",
       "delegate_task",
       "execute_code",
@@ -217,24 +167,14 @@
   "cron.claude": {
     "prompt_tokens": {
       "context": 0,
-      "stable": 1313,
-      "volatile": 1813
+      "stable": 1225,
+      "volatile": 1268
     },
-    "tool_tokens": 13876,
+    "tool_tokens": 11840,
     "tools": [
-      "browser_back",
       "browser_cdp",
-      "browser_click",
-      "browser_console",
       "browser_dialog",
       "browser_exec",
-      "browser_get_images",
-      "browser_navigate",
-      "browser_press",
-      "browser_scroll",
-      "browser_snapshot",
-      "browser_type",
-      "browser_vision",
       "clarify",
       "delegate_task",
       "execute_code",
@@ -260,24 +200,14 @@
   "desktop.claude": {
     "prompt_tokens": {
       "context": 0,
-      "stable": 1826,
-      "volatile": 1814
+      "stable": 1737,
+      "volatile": 1269
     },
-    "tool_tokens": 14510,
+    "tool_tokens": 12496,
     "tools": [
-      "browser_back",
       "browser_cdp",
-      "browser_click",
-      "browser_console",
       "browser_dialog",
       "browser_exec",
-      "browser_get_images",
-      "browser_navigate",
-      "browser_press",
-      "browser_scroll",
-      "browser_snapshot",
-      "browser_type",
-      "browser_vision",
       "clarify",
       "delegate_task",
       "execute_code",
@@ -304,24 +234,14 @@
   "discord.claude": {
     "prompt_tokens": {
       "context": 0,
-      "stable": 1346,
-      "volatile": 1814
+      "stable": 1257,
+      "volatile": 1269
     },
-    "tool_tokens": 13876,
+    "tool_tokens": 11840,
     "tools": [
-      "browser_back",
       "browser_cdp",
-      "browser_click",
-      "browser_console",
       "browser_dialog",
       "browser_exec",
-      "browser_get_images",
-      "browser_navigate",
-      "browser_press",
-      "browser_scroll",
-      "browser_snapshot",
-      "browser_type",
-      "browser_vision",
       "clarify",
       "delegate_task",
       "execute_code",
@@ -347,24 +267,14 @@
   "telegram.claude": {
     "prompt_tokens": {
       "context": 0,
-      "stable": 1378,
-      "volatile": 1814
+      "stable": 1290,
+      "volatile": 1269
     },
-    "tool_tokens": 13876,
+    "tool_tokens": 11840,
     "tools": [
-      "browser_back",
       "browser_cdp",
-      "browser_click",
-      "browser_console",
       "browser_dialog",
       "browser_exec",
-      "browser_get_images",
-      "browser_navigate",
-      "browser_press",
-      "browser_scroll",
-      "browser_snapshot",
-      "browser_type",
-      "browser_vision",
       "clarify",
       "delegate_task",
       "execute_code",

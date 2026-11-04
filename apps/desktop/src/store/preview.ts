@@ -1,3 +1,4 @@
+import { randomUuid } from '@hermes/shared'
 import { atom, computed } from 'nanostores'
 
 import { dismissTreePane, isPaneVisible, restoreTreePane } from '@/components/pane-shell/tree/store'
@@ -77,6 +78,11 @@ export interface PreviewTarget {
   /** Runtime-only target that cannot be restored from persisted state. */
   transient?: boolean
   url: string
+}
+
+export interface PreviewOpenOptions {
+  /** Resource lists preserve earlier pages; ordinary links navigate the current Browser. */
+  browser?: 'current' | 'matching-url'
 }
 
 export interface PreviewServerRestart {
@@ -857,8 +863,7 @@ const isBrowserTab = (tab: PreviewTab): boolean => tab.target.kind === 'url'
  *  handed out twice, so per-tab state keyed by it (`$browserPages`, the console
  *  buffer) cannot resurface under a later tab if a close ever fails to wipe it. */
 function mintBrowserTabId(): RightRailTabId {
-  const unique =
-    globalThis.crypto?.randomUUID?.() ?? `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`
+  const unique = randomUuid()
 
   return `url:browser-${unique}`
 }
@@ -869,7 +874,11 @@ function mintBrowserTabId(): RightRailTabId {
  *  ask for (the strip's "+"), the way they are in a real browser. `tabs` is
  *  the opening session's visible set: another session's Browser is never
  *  taken over. */
-function browserTabFor(tabs: readonly PreviewTab[]): PreviewTab | undefined {
+function browserTabFor(tabs: readonly PreviewTab[], resourceUrl?: string): PreviewTab | undefined {
+  if (resourceUrl !== undefined) {
+    return tabs.find(tab => isBrowserTab(tab) && ($browserPages.get()[tab.id]?.url ?? tab.target.url) === resourceUrl)
+  }
+
   const active = tabs.find(tab => tab.id === $rightRailActiveTabId.get())
 
   return active && isBrowserTab(active) ? active : tabs.findLast(isBrowserTab)
@@ -930,7 +939,8 @@ export function openPreview(
   runtimeId: null | string = $activeSessionId.get(),
   /** The asking agent's profile, when it is not the chat on screen: only that
    *  profile's pins may be reused. Omitted = the viewed profile. */
-  profile?: null | string
+  profile?: null | string,
+  options?: PreviewOpenOptions
 ) {
   // Stamp the tip, not an alias: the alias map is memory-only, so a tab
   // stamped with a rotated-away id would be orphaned by the next relaunch.
@@ -947,9 +957,11 @@ export function openPreview(
     viewKey
   )
 
+  const reuseBrowserResource = target.kind === 'url' && options?.browser === 'matching-url'
+
   const existing =
     target.kind === 'url'
-      ? browserTabFor(visible)
+      ? browserTabFor(visible, reuseBrowserResource ? target.url : undefined)
       : target.kind === 'file'
         ? fileTabFor(visible, target)
         : current.find(tab => tab.id === previewTabId(target))
@@ -963,7 +975,9 @@ export function openPreview(
     // An artifact is one tab per artifact; opening it from another session
     // re-owns it, or the session that just asked for it would not see it.
     sessionId: (existing?.pinned ? existing.sessionId : owner) ?? undefined,
-    target: withRenderMode(target, existing?.target)
+    // A page already showing this resource is only re-fronted: changing its launch target
+    // would reload the guest after an in-page navigation and discard its live state.
+    target: reuseBrowserResource && existing ? existing.target : withRenderMode(target, existing?.target)
   }
 
   $previewTabs.set(existing ? current.map(item => (item === existing ? tab : item)) : [...current, tab])
