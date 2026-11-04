@@ -86,6 +86,27 @@ async def test_managed_create_binding_and_cold_resume_require_a_fresh_lease(tmp_
         options = await call(viewer, 'model.options', session_id=sid, include_session_info=True)
         assert options['result']['session_info']['model'] == 'upstream-model', options
         assert options['result']['session_info']['platform_owner'] == owner, options
+
+        # A built SDK agent uses the wire model; turn-end events must retain the
+        # catalog selection so attached clients do not select a different price group.
+        from gateway.session_local_inventory import publish_settled_info
+        agent = SimpleNamespace(model='upstream-model', provider='custom',
+                                base_url=binding['base_url'], api_mode='chat_completions',
+                                tools=[], _cached_system_prompt='', context_compressor=None)
+        published = []
+        turn = SimpleNamespace(_approval_owner=(authority, sid, 1),
+                               _publish_execution=lambda kind, info: published.append((kind, info)))
+        with monkeypatch.context() as patch:
+            patch.setattr(authority, 'agent', lambda _ref: agent)
+            publish_settled_info(turn, agent)
+        kind, settled = published[-1]
+        assert kind == 'session.info'
+        assert settled['model'] == 'upstream-model'
+        assert settled.get('model_source') == 'aino', settled
+        assert settled['model_id'] == 'catalog-a'
+        assert settled['provider'] == 'aino'
+        assert settled['platform_owner'] == owner
+        assert settled['model_status'] == 'ready'
         assert get_registry().get(binding_key(authority, sid)) is not None
         from gateway.run_turn_prepare import _resolve_policy_agent_runtime
         from gateway.session_policy import policy_for_source

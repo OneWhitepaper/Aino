@@ -492,6 +492,9 @@ def local_session_info(authority, ref):
         if warning := ' '.join(filter(None, notices)):
             info['config_warning'] = warning
     info.update(_classic_cli_fields(authority, ref, live, agent, policy))
+    # Every live projection must retain the catalog identity beside the SDK wire model.
+    from gateway.session_platform_model import managed_info
+    info.update(managed_info(authority, ref.session_id))
     return info
 
 
