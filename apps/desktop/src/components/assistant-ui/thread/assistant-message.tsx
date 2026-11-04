@@ -46,7 +46,6 @@ import { AGENT_MESSAGE_RE } from '@/components/assistant-ui/thread/user-message'
 import { isApprovalActivity, isCurrentTurnMessage } from '@/components/assistant-ui/tool/approval-activity'
 import { TooltipIconButton } from '@/components/assistant-ui/tooltip-icon-button'
 import { PreviewAttachment } from '@/components/chat/preview-attachment'
-import { SCAFFOLD_GLYPH_CLASS, SCAFFOLD_LABEL_CLASS } from '@/components/chat/scaffold-row'
 import { ActionsMenu, renderActionItem } from '@/components/ui/actions-menu'
 import { Button } from '@/components/ui/button'
 import { Codicon } from '@/components/ui/codicon'
@@ -76,7 +75,6 @@ import {
   GitForkIcon,
   Loader2Icon,
   MoreHorizontal,
-  Pause,
   RefreshCwIcon,
   SmilePlusIcon,
   VolumeXIcon,
@@ -400,15 +398,11 @@ const StoppedNotice: FC = () => {
     <div
       aria-label={t.assistant.thread.responseStopped}
       aria-live="polite"
-      className="flex min-w-0 items-center gap-(--conversation-glyph-gap) py-2 text-(--conversation-scaffold-icon)"
-      data-conversation-scaffold=""
+      className="sr-only"
       data-slot="aui_assistant-message-stopped"
       role="status"
     >
-      <span aria-hidden="true" className={SCAFFOLD_GLYPH_CLASS}>
-        <Pause className="size-(--conversation-glyph-size)" />
-      </span>
-      <span className={SCAFFOLD_LABEL_CLASS}>{t.assistant.thread.responseStopped}</span>
+      {t.assistant.thread.responseStopped}
     </div>
   )
 }

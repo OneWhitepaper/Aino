@@ -7,11 +7,21 @@ import { I18nProvider } from '@/i18n/context'
 import { en } from '@/i18n/en'
 import { $taskPauses, claimTaskContinuation } from '@/store/task-pause'
 
-import { TASK_CONTINUATION_TEXT, TaskPauseNotice } from './task-pause-notice'
+import { TASK_CONTINUATION_TEXT, useTaskContinuation } from './use-task-continuation'
 
 vi.mock('@/app/session/hooks/use-prompt-actions/submission-destination', () => ({
   captureSubmissionDestination: (_sessionId: string, requestGateway: unknown) => ({ requestGateway, scopeKey: 'owner' })
 }))
+
+function ContinuationHarness(props: Parameters<typeof useTaskContinuation>[0]) {
+  const continuation = useTaskContinuation(props)
+
+  return continuation ? (
+    <button disabled={continuation.phase !== 'paused'} onClick={() => void continuation.resume()} type="button">
+      {en.common.continue}
+    </button>
+  ) : null
+}
 
 beforeEach(() => $taskPauses.set({}))
 afterEach(cleanup)
@@ -36,7 +46,7 @@ test('Continue waits for Stop settlement, submits once with exact hidden token, 
 
   const view = (sessionId = 'session') => (
     <I18nProvider configClient={{ getConfig: async () => ({}), saveConfig: async () => ({ ok: true }) }}>
-      <TaskPauseNotice disabled={false} gateway={gateway} onSubmit={onSubmit} profile="work" sessionId={sessionId} />
+      <ContinuationHarness gateway={gateway} onSubmit={onSubmit} profile="work" sessionId={sessionId} />
     </I18nProvider>
   )
 
@@ -47,7 +57,6 @@ test('Continue waits for Stop settlement, submits once with exact hidden token, 
     rendered = render(view())
   })
   expect((screen.getByRole('button', { name: en.common.continue }) as HTMLButtonElement).disabled).toBe(true)
-  expect(screen.getByText(en.composer.taskPausing)).toBeTruthy()
   await act(async () => {
     protocol.result('session.interrupt', interrupt, { execution_generation: 3 })
     protocol.event({
@@ -130,7 +139,7 @@ test.each(['accepted', 'refused', 'rejected'])(
     await act(async () => {
       render(
         <I18nProvider configClient={{ getConfig: async () => ({}), saveConfig: async () => ({ ok: true }) }}>
-          <TaskPauseNotice disabled={false} gateway={gateway} onSubmit={onSubmit} profile="work" sessionId="session" />
+          <ContinuationHarness gateway={gateway} onSubmit={onSubmit} profile="work" sessionId="session" />
         </I18nProvider>
       )
     })

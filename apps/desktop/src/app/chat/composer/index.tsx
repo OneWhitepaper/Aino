@@ -77,6 +77,7 @@ import { useMiddlewareSubmit } from './hooks/use-middleware-submit'
 import { useSlashCompletions } from './hooks/use-slash-completions'
 import { useStatusDrawer } from './hooks/use-status-drawer'
 import { useSessionStatusPresence } from './hooks/use-status-presence'
+import { useTaskContinuation } from './hooks/use-task-continuation'
 import { shouldConvertPasteToAttachment } from './large-paste'
 import { ActionBadges } from './micro-actions'
 import { chipTypedPathOnSpace, pathifyRefs } from './path-refs'
@@ -97,7 +98,6 @@ import { ComposerStatusStack } from './status-stack'
 import { CodingStatusRow } from './status-stack/coding-row'
 import { StatusDrawerContent, StatusDrawerToggle } from './status-stack/drawer'
 import { SuggestionPills } from './suggestion-pills'
-import { TaskPauseNotice } from './task-pause-notice'
 import { extractClipboardImageBlobs, openDirectiveScope } from './text-utils'
 import { composerTextEntryProps, touchTapFocusHandlers } from './touch-text-entry'
 import { ComposerTriggerPopover } from './trigger-popover'
@@ -1116,6 +1116,8 @@ export function ChatBar({
     />
   )
 
+  const continuation = useTaskContinuation({ gateway, sessionId, profile, onSubmit: onSubmitProp })
+
   const controls = (
     <ComposerControls
       autoSpeak={autoSpeak}
@@ -1124,6 +1126,7 @@ export function ChatBar({
       canSubmit={canSubmit}
       cardWaiting={cardWaiting}
       compactModelPill={poppedOut || compactPill}
+      continuation={continuation}
       conversation={{
         active: voiceConversationActive,
         level: conversation.level,
@@ -1135,6 +1138,7 @@ export function ChatBar({
         status: conversation.status
       }}
       disabled={disabled}
+      editingQueue={Boolean(queueEdit)}
       foldVoice={foldVoice}
       hasComposerPayload={hasComposerPayload}
       hideModelPill={guidedChat}
@@ -1481,13 +1485,6 @@ export function ChatBar({
                     additions beside the "+" menu and before the controls.
                     All four render nothing until something contributes. */}
                   <ContribSlot area={COMPOSER_AREAS.top} />
-                  <TaskPauseNotice
-                    disabled={disabled || busy}
-                    gateway={gateway}
-                    onSubmit={onSubmitProp}
-                    profile={profile}
-                    sessionId={sessionId}
-                  />
                   <RestoredDraftNotice
                     freshDraft={activeQueueSessionKey === null}
                     onUndone={clearDraft}

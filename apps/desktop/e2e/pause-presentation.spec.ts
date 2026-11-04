@@ -1,4 +1,4 @@
-/** Pause feedback stays in the transcript column and resumes through the existing continuation. */
+/** Paused tasks resume from the primary composer button without a visual status banner. */
 import { type MockBackendFixture, setupMockBackend, waitForAppReady } from './fixtures'
 import { expect, test } from './test'
 
@@ -11,7 +11,7 @@ test.afterEach(async () => {
   fixture = null
 })
 
-test('shows a localized aligned pause notice and continues preserved progress', async () => {
+test('resumes preserved progress from the primary composer button without a pause banner', async () => {
   test.slow()
   const testInfo = test.info()
   fixture = await setupMockBackend({
@@ -40,34 +40,49 @@ test('shows a localized aligned pause notice and continues preserved progress', 
   await composer.getByRole('button', { name: '停止', exact: true }).click()
   mock.releaseHeldStream()
 
-  const notice = page.locator('[data-slot="aui_assistant-message-stopped"]:visible')
+  const notice = page.locator('[data-slot="aui_assistant-message-stopped"]')
   await expect(notice).toHaveText('已暂停，当前进展已保留。')
   await expect(notice).toHaveAttribute('role', 'status')
+  expect((await notice.boundingBox())!.height).toBeLessThanOrEqual(1)
   await expect(page.getByText('Response stopped', { exact: true })).toHaveCount(0)
-  const paused = composer.locator('[data-slot="task-pause-notice"]')
-  await expect(paused).toContainText('任务已暂停，可从已有进展继续。')
-  const continuation = paused.getByRole('button', { name: '继续', exact: true })
+  await expect(composer.locator('[data-slot="task-pause-notice"]')).toHaveCount(0)
+  const continuation = composer.getByRole('button', { name: '继续', exact: true })
 
   await expect(continuation).toBeEnabled({ timeout: 30_000 })
+  await expect(continuation).toHaveAttribute('type', 'button')
+  const editor = composer.locator('[data-slot="composer-rich-input"]')
 
-  const alignment = await notice.evaluate(element => {
-    const body = element.closest('[data-slot="aui_assistant-message-content"]')!
-    const notice = element.getBoundingClientRect()
-    const content = body.getBoundingClientRect()
+  await editor.fill('先检查另一个文件')
+  await expect(composer.getByRole('button', { name: '发送', exact: true })).toBeEnabled()
+  await expect(continuation).toHaveCount(0)
+  await editor.fill('')
+  await expect(continuation).toBeEnabled()
 
-    return { left: notice.left - content.left, fits: notice.right <= content.right + 1 }
+  const geometry = await continuation.evaluate(element => {
+    const button = element.getBoundingClientRect()
+    const controls = element.closest('.aino-composer-controls')!.getBoundingClientRect()
+    const style = getComputedStyle(element)
+
+    return {
+      square: Math.abs(button.width - button.height),
+      radius: parseFloat(style.borderRadius),
+      width: button.width,
+      right: controls.right - button.right,
+      glyph: element.querySelector('[data-aino-icon="PlayFilled"]') !== null
+    }
   })
 
-  expect(alignment.left).toBeCloseTo(0)
-  expect(alignment.fits).toBe(true)
+  expect(geometry.square).toBeLessThan(1)
+  expect(geometry.radius).toBeGreaterThanOrEqual(geometry.width / 2)
+  expect(geometry.right).toBeLessThanOrEqual(1)
+  expect(geometry.glyph).toBe(true)
   await page.screenshot({ path: testInfo.outputPath('paused-desktop.png') })
   await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setSize(920, 720))
-  await expect(notice).toBeVisible()
   await expect(continuation).toBeInViewport()
   await page.screenshot({ path: testInfo.outputPath('paused-compact.png') })
 
   await continuation.click()
-  await expect(paused).toHaveCount(0)
+  await expect(continuation).toHaveCount(0)
   await expect(page.getByText('已继续处理剩余步骤。', { exact: true })).toBeVisible({ timeout: 90_000 })
   await expect(page.locator('vite-error-overlay')).toHaveCount(0)
   expect(rendererErrors).toEqual([])

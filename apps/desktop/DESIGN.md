@@ -186,8 +186,10 @@ that the mockup does not show.
   File identity and existing source/preview behavior stay authoritative.
 - **Connection and pause states explain the next step.** Cold startup uses the
   Aino mark, localized phase and real progress. Reconnecting does not cover an
-  already usable shell. A stopped response uses an aligned, quiet pause row;
-  the composer retains its existing Continue action without another nested card.
+  already usable shell. A stopped response keeps its announcement accessible
+  without a visual banner. The empty composer replaces its primary action with a circular Continue button;
+  new text or attachments retain the normal Send path. Stop settlement and a
+  pending continuation disable the control until the existing protocol allows it.
 - **Provider setup lives in Settings.** Missing credentials do not summon the
   startup provider picker over the workspace. A request-time notice opens the
   existing Model settings for its owner; explicit service authorization retains

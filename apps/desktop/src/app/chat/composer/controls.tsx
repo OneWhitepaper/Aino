@@ -7,13 +7,14 @@ import { Tip, TipKeybindLabel } from '@/components/ui/tooltip'
 import { useI18n } from '@/i18n'
 import { triggerHaptic } from '@/lib/haptics'
 import { hostHas } from '@/lib/host-capabilities'
-import { Ear, EarOff, iconSize, ListPlus, Loader2, Square } from '@/lib/icons'
+import { Ear, EarOff, iconSize, ListPlus, Loader2, PlayFilled, Square } from '@/lib/icons'
 import { cn } from '@/lib/utils'
 import { recordAction } from '@/store/desktop-metrics'
 import { $hudMode, closeHud, resetHudLayout } from '@/store/hud'
 import { $wakeWord, toggleWakeWord } from '@/store/wake-word'
 
 import { ACTIVE_ICON_BTN, GHOST_ICON_BTN, PRIMARY_ICON_BTN } from './control-classes'
+import type { TaskContinuationControl } from './hooks/use-task-continuation'
 import type { ConversationStatus } from './hooks/use-voice-conversation'
 import { ModelPill } from './model-pill'
 import { ReasoningPill } from './reasoning-pill'
@@ -58,7 +59,9 @@ export function ComposerControls({
   cardWaiting = false,
   compactModelPill = false,
   conversation,
+  continuation,
   disabled,
+  editingQueue = false,
   foldVoice = false,
   hasComposerPayload,
   hideModelPill = false,
@@ -78,7 +81,9 @@ export function ComposerControls({
   cardWaiting?: boolean
   compactModelPill?: boolean
   conversation: ConversationProps
+  continuation?: TaskContinuationControl | null
   disabled: boolean
+  editingQueue?: boolean
   foldVoice?: boolean
   hasComposerPayload: boolean
   hideModelPill?: boolean
@@ -102,7 +107,8 @@ export function ComposerControls({
     )
   }
 
-  const showVoicePrimary = !busy && !hasComposerPayload && hudMode
+  const resumeTask = composerContinuation(continuation, hasComposerPayload, editingQueue, cardWaiting)
+  const showVoicePrimary = !busy && !hasComposerPayload && hudMode && !resumeTask
   // Steer is just send: a payload keeps the Send affordance mid-turn. Stop
   // only when the composer is empty and a turn is running.
   const showStop = busy && !hasComposerPayload
@@ -183,7 +189,9 @@ export function ComposerControls({
           </Button>
         </Tip>
       ) : null}
-      {showVoicePrimary ? (
+      {resumeTask ? (
+        <TaskContinueButton busy={busy} continuation={resumeTask} disabled={disabled} />
+      ) : showVoicePrimary ? (
         <StartVoiceButton disabled={disabled} label={c.startVoice} onStart={conversation.onStart} />
       ) : (
         <Tip
@@ -221,6 +229,48 @@ export function ComposerControls({
           things you can press. */}
       {hudMode ? <HudWindowButtons /> : null}
     </div>
+  )
+}
+
+function composerContinuation(
+  continuation: TaskContinuationControl | null | undefined,
+  hasPayload: boolean,
+  editingQueue: boolean,
+  cardWaiting: boolean
+) {
+  return hasPayload || editingQueue || cardWaiting ? null : continuation
+}
+
+function TaskContinueButton({
+  busy,
+  continuation,
+  disabled
+}: {
+  busy: boolean
+  continuation: TaskContinuationControl
+  disabled: boolean
+}) {
+  const { t } = useI18n()
+  const pending = continuation.phase !== 'paused'
+
+  return (
+    <Tip label={t.common.continue} placement="control">
+      <Button
+        aria-busy={pending}
+        aria-label={t.common.continue}
+        className={PRIMARY_ICON_BTN}
+        data-slot="composer-continue"
+        disabled={disabled || busy || pending}
+        onClick={() => {
+          triggerHaptic('submit')
+          void continuation.resume()
+        }}
+        onMouseDown={keepEditorFocus}
+        type="button"
+      >
+        {pending ? <Loader2 className="size-4 animate-spin" /> : <PlayFilled className="size-4" viewBox="16 14 20 20" />}
+      </Button>
+    </Tip>
   )
 }
 

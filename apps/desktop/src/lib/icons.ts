@@ -179,6 +179,7 @@ export const PencilIcon = Pencil
 export const PencilLine = Pencil
 export const Pin = designIcon('Pushpin')
 export const Play = designIcon('Play')
+export const PlayFilled = designIcon('PlayFilled')
 export const Plug = designIcon('Link')
 export const Plus = designIcon('Plus')
 export const Power = designIcon('Power')

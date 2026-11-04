@@ -285,6 +285,28 @@ Image verification runs off the canonical owner event loop.
   inspected at desktop and narrow widths in light/dark; it follows real progress
   and unmounts on connection. No paid inference is used.
 
+## Composer continuation presentation follow-up
+
+The later reference replaces the visible pause rows with one circular Play action
+in the composer's existing primary slot. A paused reply retains its accessible
+announcement without occupying visual space. The button uses Aino's shared action
+palette and the approved Play triangle. Text and attachments retain the normal
+Send path; queue editing, waiting cards and voice conversations keep their own
+controls. The existing continuation was extracted to
+`apps/desktop/src/app/chat/composer/hooks/use-task-continuation.ts`, preserving
+owner/profile routing, exact tokens, synchronous duplicate protection and failed
+submission recovery. Its subscription reads only that owner's pause state.
+
+- Four primary-control regressions fail on the earlier implementation and pass
+  with the new control. Related UI/continuation/protocol/draft suites pass **156
+  tests in ten files**. Typechecks, changed-file ESLint and renderer build pass.
+- Isolated Electron acceptance passes in **11 seconds**: stop the stream, wait
+  for settlement, confirm no visible pause rows, type a new draft to restore
+  Send, clear it to restore Play, then continue the original task. Desktop and
+  compact screenshots verify the round action remains at the right edge.
+  No renderer error or framework overlay appears; all account/model traffic is
+  synthetic and local. Release remains on hold.
+
 ## Validation boundary and release hold
 
 - This verifies source integration on macOS ARM64, not a newly signed/notarized
