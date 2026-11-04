@@ -16,8 +16,6 @@ from pathlib import Path
 import hermes_yaml as yaml
 import pytest
 
-pytestmark = pytest.mark.platforms("linux")
-
 ROOT = Path(__file__).resolve().parents[2]
 # CATALOG_CI_WORKFLOW points the harness at another workflow copy (e.g.
 # `git show origin/main:...`) to prove a case fails on the old gate.
@@ -33,10 +31,12 @@ def _step(name_prefix: str) -> str:
             if step.get("name", "").startswith(name_prefix):
                 # The workflow expands ${{ github.base_ref }} before bash sees it.
                 text = step["run"].replace("${{ github.base_ref }}", "main")
-                # Substitute only the reviewed-release assignment, so a release
-                # bump cannot silently disconnect the fixture's commit graph.
+                # Replace reviewed pins only at their assignments, keeping the
+                # fixture's commit graph and catalog snapshot aligned.
                 if upstream := os.environ.get("CATALOG_CI_UPSTREAM"):
                     text = re.sub(r"(?m)^UPSTREAM=[0-9a-f]{40}$", f"UPSTREAM={upstream}", text)
+                if catalog_tree := os.environ.get("CATALOG_CI_TREE"):
+                    text = re.sub(r"(?m)^CATALOG_TREE=[0-9a-f]{40}$", f"CATALOG_TREE={catalog_tree}", text)
                 return text
     raise LookupError(name_prefix)
 
@@ -192,6 +192,7 @@ def _shadowed_parser_import(tp, origin, sha):
     return _entry(tp, "evil.yaml", sha, repo=origin.as_uri()), "repo must be an https:// git URL"
 
 
+@pytest.mark.platforms("linux")
 @pytest.mark.parametrize("case", [
     _traversal_subdir, _symlinked_subdir, _symlink_behind_in_clone_link, _tag_object_sha,
     _newline_sha, _log_forging_repo, _symlinked_entry_file, _self_updater_in_spaced_dir,
@@ -210,6 +211,7 @@ def test_bypass_fails_the_gate(tmp_path, origin, case):
     assert not any(line.startswith("::error::forged") for line in res.stdout.splitlines())
 
 
+@pytest.mark.platforms("linux")
 def test_one_entry_cannot_skip_or_impersonate_the_others(tmp_path, origin):
     """Plugin code that drains stdin must not consume the remaining entry list,
     and an entry whose parser dies must fail itself rather than inherit the
@@ -233,6 +235,7 @@ def test_one_entry_cannot_skip_or_impersonate_the_others(tmp_path, origin):
     assert f"PASS: {crash}" not in res.stdout
 
 
+@pytest.mark.platforms("linux")
 @pytest.mark.parametrize("fields", [
     {"subdir": "plugin"},
     {"subdir": ""},
@@ -249,6 +252,7 @@ def test_legit_entry_passes_the_gate(tmp_path, origin, fields):
     assert f"PASS: {entry}" in res.stdout
 
 
+@pytest.mark.platforms("linux")
 @pytest.mark.parametrize("mut", [
     {}, {"subdir": None}, {"subdir": "../x"}, {"subdir": 5},
     {"repo": "https://x/y\n::error::x"}, {"sha": "a" * 40 + "\n"},
@@ -290,6 +294,7 @@ def _typechange(repo):
 NEW = {"plugin-catalog/new.yaml": "name: new\n"}
 
 
+@pytest.mark.platforms("posix")
 @pytest.mark.parametrize("change, rc, listed, text", [
     (_rename, 0, ["plugin-catalog/renamed.yaml"], None),
     (_typechange, 0, ["plugin-catalog/old.yaml"], None),
@@ -331,32 +336,42 @@ def test_changed_entries_step(tmp_path, change, rc, listed, text):
         assert text in res.stdout
 
 
-def _import_merge(tmp_path: Path, *, changes=None) -> tuple[Path, str, str]:
+def _import_merge(tmp_path: Path, *, changes=None, trim_catalog: bool = False) -> tuple[Path, str, str, str]:
     """Model Aino main, an upstream merge plus compatibility fix, and GitHub's merge."""
     repo = tmp_path / "import"
     _write(repo, {"plugin-catalog/base.yaml": "name: base\n", "code.py": "base = 1\n"})
     _git(repo, "init", "-qb", "main")
     _commit(repo, "common base")
     _git(repo, "checkout", "-qb", "release")
-    _write(repo, {"plugin-catalog/imported.yaml": "name: imported\n", "code.py": "release = 1\n"})
+    _write(repo, {"plugin-catalog/imported.yaml": "name: imported\n\n", "code.py": "release = 1\n"})
     release = _commit(repo, "reviewed release")
     _git(repo, "checkout", "-q", "main")
     _write(repo, {"aino.py": "aino = True\n"})
     base = _commit(repo, "existing Aino application")
     _git(repo, "checkout", "-qb", "pr")
     _git(repo, "merge", "-q", "--no-ff", "-m", "import release", "release")
-    _write(repo, {"code.py": "aino_compatibility = True\n", **(changes or {})})
+    _write(repo, {"code.py": "aino_compatibility = True\n"})
+    if trim_catalog:
+        _write(repo, {"plugin-catalog/imported.yaml": "name: imported\n"})
     _commit(repo, "Aino compatibility after import")
+    # Capture the reviewed snapshot before injecting an unreviewed mutation.
+    catalog_tree = _git(repo, "rev-parse", "HEAD:plugin-catalog")
+    if changes:
+        _write(repo, changes)
+        _commit(repo, "unreviewed mutation")
     _git(repo, "checkout", "-q", "main")
     _git(repo, "merge", "-q", "--no-ff", "-m", "GitHub PR merge", "pr")
     _git(repo, "checkout", "-q", "--detach")
     _git(repo, "update-ref", "refs/remotes/origin/main", base)
-    return repo, release, base
+    return repo, release, base, catalog_tree
 
 
-def test_aino_import_validates_from_reviewed_tree(tmp_path, monkeypatch):
-    repo, release, _ = _import_merge(tmp_path)
+@pytest.mark.platforms("posix")
+@pytest.mark.parametrize("trim_catalog", [False, True], ids=["release-catalog", "reviewed-whitespace-cleanup"])
+def test_aino_import_validates_from_reviewed_tree(tmp_path, monkeypatch, trim_catalog):
+    repo, release, _, catalog_tree = _import_merge(tmp_path, trim_catalog=trim_catalog)
     monkeypatch.setenv("CATALOG_CI_UPSTREAM", release)
+    monkeypatch.setenv("CATALOG_CI_TREE", catalog_tree)
     out = tmp_path / "gh-output.txt"
     out.touch()
     res = _run(_step("Find changed catalog"), tmp_path, repo,
@@ -378,18 +393,22 @@ def test_aino_import_validates_from_reviewed_tree(tmp_path, monkeypatch):
     assert not (repo / "aino.py").exists()
     assert not (repo / "shadow.py").exists()
     assert out.read_text(encoding="utf-8") == output
-    assert (repo / "plugin-catalog/imported.yaml").is_file()
+    assert (repo / "plugin-catalog/imported.yaml").read_text() == "name: imported\n\n"
 
 
+@pytest.mark.platforms("posix")
 @pytest.mark.parametrize("changes, error", [
     ({"plugin-catalog/evil.yaml": "name: evil\n"}, "changed plugin-catalog/"),
     ({"plugin-catalog/imported.yaml": "name: tampered\n"}, "changed plugin-catalog/"),
+    ({"plugin-catalog/imported.yaml": "name: imported\n\n\n"}, "changed plugin-catalog/"),
     ({"scripts/scan_plugin_payloads.py": "print('PASS')\n"}, "changed catalog enforcement inputs"),
+    ({"scripts/validate_plugin_catalog.py": "print('PASS')\n"}, "changed catalog enforcement inputs"),
     ({".github/actions/setup-pm/action.yml": "runs: malicious\n"}, "changed catalog enforcement inputs"),
 ])
 def test_import_with_catalog_or_enforcement_changes_is_rejected(tmp_path, monkeypatch, changes, error):
-    repo, release, _ = _import_merge(tmp_path, changes=changes)
+    repo, release, _, catalog_tree = _import_merge(tmp_path, changes=changes)
     monkeypatch.setenv("CATALOG_CI_UPSTREAM", release)
+    monkeypatch.setenv("CATALOG_CI_TREE", catalog_tree)
     out = tmp_path / "gh-output.txt"
     out.touch()
     res = _run(_step("Find changed catalog"), tmp_path, repo,
@@ -399,8 +418,9 @@ def test_import_with_catalog_or_enforcement_changes_is_rejected(tmp_path, monkey
     assert "validation_ref=" not in out.read_text(encoding="utf-8")
 
 
+@pytest.mark.platforms("posix")
 def test_reviewed_import_exception_expires_once_main_contains_release(tmp_path, monkeypatch):
-    repo, release, _ = _import_merge(tmp_path)
+    repo, release, _, catalog_tree = _import_merge(tmp_path)
     _git(repo, "checkout", "-qb", "target", release)
     _write(repo, {"target.txt": "main\n"})
     target = _commit(repo, "main after release")
@@ -412,6 +432,7 @@ def test_reviewed_import_exception_expires_once_main_contains_release(tmp_path, 
     _git(repo, "checkout", "-q", "--detach")
     _git(repo, "update-ref", "refs/remotes/origin/main", target)
     monkeypatch.setenv("CATALOG_CI_UPSTREAM", release)
+    monkeypatch.setenv("CATALOG_CI_TREE", catalog_tree)
     out = tmp_path / "gh-output.txt"
     out.touch()
     res = _run(_step("Find changed catalog"), tmp_path, repo,
