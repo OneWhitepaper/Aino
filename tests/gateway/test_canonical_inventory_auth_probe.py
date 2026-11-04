@@ -63,7 +63,10 @@ async def test_gui_create_inventory_does_not_wait_for_auxiliary_auth(tmp_path, m
 
 
 @pytest.mark.asyncio
-async def test_setup_readiness_returns_before_a_pending_challenge_and_gui_create(tmp_path, monkeypatch):
+@pytest.mark.parametrize("metadata_provider", ["nous", "moa"])
+async def test_setup_readiness_returns_before_a_pending_challenge_and_gui_create(
+    tmp_path, monkeypatch, metadata_provider,
+):
     from gateway import run
     from gateway.config import GatewayConfig
     from gateway.session import SessionStore
@@ -79,7 +82,11 @@ async def test_setup_readiness_returns_before_a_pending_challenge_and_gui_create
     claimed_trial(monkeypatch)
     portal.challenge_required = True
     portal.challenge_never_clears = True
-    (home / "config.yaml").write_text('model: {default: nous/welcome, provider: nous}\n')
+    config = ('model: {default: nous/welcome, provider: nous}\n' if metadata_provider == "nous" else
+              'model: {default: ensemble, provider: moa}\n'
+              'moa:\n  presets:\n    ensemble:\n'
+              '      aggregator: {provider: nous, model: nous/welcome}\n')
+    (home / "config.yaml").write_text(config)
     monkeypatch.setattr(anon_challenge, "present", lambda _challenge: None)
 
     def reject_interactive_wait(_challenge):
