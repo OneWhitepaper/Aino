@@ -1325,7 +1325,7 @@ const frBaseOverrides = {
       reasoningCollapsedTitle: 'Réduire le raisonnement par défaut',
       reasoningCollapsedDesc:
         "Conserver le raisonnement diffusé en continu sans le développer tant que vous ne l'ouvrez pas.",
-      uiScaleTitle: "Échelle de l'interface",
+      uiScaleTitle: "Échelle globale de l'interface",
       uiScaleDesc: (percent: number) =>
         `Redimensionne le texte et les contrôles dans toute l'application. Cmd/Ctrl avec +, - et 0 fonctionne aussi. Actuel : ${percent}%.`,
       sessionDensityTitle: 'Densité de la liste des sessions',

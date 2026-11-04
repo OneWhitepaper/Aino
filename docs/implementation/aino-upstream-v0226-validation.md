@@ -307,6 +307,35 @@ submission recovery. Its subscription reads only that owner's pause state.
   No renderer error or framework overlay appears; all account/model traffic is
   synthetic and local. Release remains on hold.
 
+## Composer model stability and navigation typography
+
+- Sending with Aino image generation enabled refreshes the shared model catalog.
+  The composer previously treated its temporary `loading` phase as a loss of
+  reasoning support, unmounting the effort control and shifting the model row.
+  Presentation now retains the matching account/origin/revision's cached
+  capabilities while refreshing. Request preparation still requires `ready`;
+  refreshed capability changes and account changes remain authoritative.
+- The real hook and model/effort controls reproduce the disappearing control on
+  the base and keep the same DOM controls through a delayed refresh after the
+  fix. Catalog tests also cover a changed account, origin, revision and stale
+  response. Seven focused UI files pass **35 tests**.
+- Navigation, session/project titles and the account name now use the shared
+  14px UI role. Removed sidebar overrides that had reduced them to 12–13px;
+  timestamps and supporting metadata keep their caption size.
+- Chat Text Size was intentionally independent of whole-window zoom. Retained
+  both controls and renamed the latter **Global UI Scale** in every locale,
+  with explicit guidance for navigation/settings versus message/editor text.
+  Existing saved preferences, setting IDs and deep links remain compatible.
+- Real Electron typography acceptance fails on the base (13px navigation versus
+  14px editor), then passes after the fix. It checks maximization, navigation,
+  session/account text, independent 125% chat sizing, global 125% Electron zoom,
+  reload persistence and compact-window editor bounds. The existing full
+  pause/type/clear/continue acceptance also passes. No renderer errors appear.
+- Typechecks, changed-file ESLint, renderer build and development main bundling
+  pass. Validation uses a disposable local account and mock inference; the normal
+  user's account, model preferences and API checkout are untouched. No release
+  or version change is part of this follow-up.
+
 ## Validation boundary and release hold
 
 - This verifies source integration on macOS ARM64, not a newly signed/notarized

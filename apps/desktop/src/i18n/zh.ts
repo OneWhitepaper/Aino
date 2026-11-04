@@ -1122,7 +1122,7 @@ export const zhOverrides = {
     },
     appearance: {
       chatTextScaleTitle: '聊天文字大小',
-      chatTextScaleDesc: '相对于界面缩放调整对话文字和消息输入框的字号。侧边栏和控件大小保持不变。',
+      chatTextScaleDesc: '相对于全局界面缩放调整对话文字和消息输入框的字号。侧边栏和控件大小保持不变。',
       title: '外观',
       intro: '设置 Aino 桌面端的显示偏好。',
       colorMode: '颜色模式',
@@ -1135,7 +1135,7 @@ export const zhOverrides = {
       hideThreadTimelineDesc: '隐藏每个对话右侧边缘的导航条。',
       reasoningCollapsedTitle: '默认折叠推理过程',
       reasoningCollapsedDesc: '保留流式推理内容，但在您打开前保持折叠。',
-      uiScaleTitle: '界面缩放',
+      uiScaleTitle: '全局界面缩放',
       uiScaleDesc: (percent: number) =>
         `缩放整个应用的文字和界面。也可使用 Cmd/Ctrl 加 +、- 或 0 调整。当前：${percent}%`,
       sessionDensityTitle: '会话列表密度',

@@ -935,16 +935,25 @@ so glass and message-bubble transparency do not reveal scrolling text.
 
 ## Chat typography
 
-Appearance → Typography keeps **UI Scale** as whole-window zoom (100% by
-default). **Chat Text Size** is a separate desktop-local multiplier (110% by
+Appearance → Theme & text keeps **Global UI Scale** as whole-window zoom (100% by
+default), including navigation, settings, controls and chat text. **Chat Text Size**
+is a separate desktop-local multiplier (100% by
 default) on conversation text and the composer editor, including floating and
 inline-edit composers.
 It does not resize the sidebar, settings, toolbars, media, or pane geometry.
+Navigation, session/project titles and the account name use the shared 14px UI
+role. Dates and supporting metadata retain the 12px caption role. Maximizing the
+window changes available space; the remembered global scale controls its size.
 Conversation size and line-height tokens are derived inside the transcript/editor
 from their root base tokens; do not multiply the global tokens or nest CSS zoom.
 `aino-theme.css` owns those base tokens through the existing 14/14/12px roles;
 the inner transcript/editor derives scaled values from them. Do not override only
 the final aliases on an outer chat surface: inner scopes recalculate them.
+
+The composer keeps verified model labels and capability controls in place while
+the same account's model catalog refreshes during send. Only presentation may
+read the retained catalog during loading; request preparation still requires a
+ready catalog. Account, backend-origin and revision changes invalidate that copy.
 
 ## Chat, tools & boot surfaces
 

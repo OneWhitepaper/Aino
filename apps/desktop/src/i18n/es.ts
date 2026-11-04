@@ -1324,7 +1324,7 @@ const esBaseOverrides = {
       hideThreadTimelineDesc: 'Oculta las barras de navegación del borde derecho de cada conversación.',
       reasoningCollapsedTitle: 'Contraer el razonamiento por defecto',
       reasoningCollapsedDesc: 'Mantiene disponible el razonamiento transmitido sin expandirlo hasta que lo abras.',
-      uiScaleTitle: 'Escala de la interfaz',
+      uiScaleTitle: 'Escala global de la interfaz',
       uiScaleDesc: percent =>
         `Escala el texto y los controles de toda la app. También funciona Cmd/Ctrl con +, - y 0. Actual: ${percent}%.`,
       sessionDensityTitle: 'Densidad de la lista de sesiones',

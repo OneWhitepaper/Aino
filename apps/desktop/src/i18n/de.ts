@@ -1304,7 +1304,7 @@ const deBaseOverrides = {
     appearance: {
       chatTextScaleTitle: 'Chat-Textgröße',
       chatTextScaleDesc:
-        'Skaliert Unterhaltungstext und Nachrichteneingabe relativ zur UI-Skalierung. Seitenleisten und Bedienelemente behalten ihre Größe.',
+        'Skaliert Unterhaltungstext und Nachrichteneingabe relativ zur globalen UI-Skalierung. Seitenleisten und Bedienelemente behalten ihre Größe.',
       title: 'Darstellung',
       intro: 'Nur für Desktop. Modus ist die Helligkeit; Theme ist Farbpalette und Chat-Design.',
       colorMode: 'Farbmodus',
@@ -1318,7 +1318,7 @@ const deBaseOverrides = {
       hideThreadTimelineDesc: 'Blendet die Navigationsbalken am rechten Rand jeder Unterhaltung aus.',
       reasoningCollapsedTitle: 'Gedanken standardmäßig einklappen',
       reasoningCollapsedDesc: 'Gestreamte Gedankengänge verfügbar halten, ohne sie aufzuklappen, bis Sie sie öffnen.',
-      uiScaleTitle: 'UI-Skalierung',
+      uiScaleTitle: 'Globale UI-Skalierung',
       uiScaleDesc: (percent: number) =>
         `Skaliert Text und Bedienelemente in der gesamten App. Cmd/Ctrl mit +, - und 0 funktioniert ebenfalls. Aktuell: ${percent}%.`,
       sessionDensityTitle: 'Dichte der Session-Liste',

@@ -598,7 +598,7 @@ export const zhHantSettings = {
     },
     appearance: {
       chatTextScaleTitle: '聊天文字大小',
-      chatTextScaleDesc: '相對於介面縮放調整對話文字和訊息輸入框的字級。側邊欄與控制項大小保持不變。',
+      chatTextScaleDesc: '相對於全域介面縮放調整對話文字和訊息輸入框的字級。側邊欄與控制項大小保持不變。',
       title: '外觀',
       intro: '設定 Aino 桌面端的顯示偏好。',
       colorMode: '色彩模式',
@@ -611,7 +611,7 @@ export const zhHantSettings = {
       hideThreadTimelineDesc: '隱藏每個對話右側邊緣的導覽列。',
       reasoningCollapsedTitle: '預設摺疊推理過程',
       reasoningCollapsedDesc: '保留串流推理內容，但在您開啟前維持摺疊。',
-      uiScaleTitle: '介面縮放',
+      uiScaleTitle: '全域介面縮放',
       uiScaleDesc: (percent: number) =>
         `縮放整個應用程式的文字與介面。也可使用 Cmd/Ctrl 加 +、- 或 0 調整。目前：${percent}%`,
       sessionDensityTitle: '工作階段列表密度',

@@ -991,7 +991,7 @@ export const en: Translations = {
     appearance: {
       chatTextScaleTitle: 'Chat Text Size',
       chatTextScaleDesc:
-        'Scales conversation text and the message editor relative to UI Scale. Sidebars and controls stay the same size.',
+        'Scales conversation text and the message editor relative to Global UI Scale. Sidebars and controls stay the same size.',
       title: 'Appearance',
       intro: 'Display preferences for Aino Desktop.',
       colorMode: 'Color Mode',
@@ -1004,7 +1004,7 @@ export const en: Translations = {
       hideThreadTimelineDesc: 'Hide the navigation bars along the right edge of each conversation.',
       reasoningCollapsedTitle: 'Collapse thinking by default',
       reasoningCollapsedDesc: 'Keep streamed reasoning available without expanding it until you open it.',
-      uiScaleTitle: 'UI Scale',
+      uiScaleTitle: 'Global UI Scale',
       uiScaleDesc: (percent: number) =>
         `Scales text and controls across the whole app. Cmd/Ctrl with +, - and 0 also works. Current: ${percent}%.`,
       sessionDensityTitle: 'Session List Density',

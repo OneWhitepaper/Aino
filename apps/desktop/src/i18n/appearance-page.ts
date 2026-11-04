@@ -65,8 +65,9 @@ export const appearancePage: Record<BundledLocale, AppearancePageCopy> = {
       pets: 'Desktop pets'
     },
     reading: 'Reading & scaling',
-    uiScaleDescription: 'Adjust the size of the whole application.',
-    chatTextDescription: 'Adjust only message and composer text.',
+    uiScaleDescription: 'Scale the entire app, including navigation, settings, controls and chat text.',
+    chatTextDescription:
+      'Adjust message and composer text independently. Use Global UI Scale for navigation and settings.',
     uiFontTitle: 'Interface & chat font',
     uiFontDescription: 'Use a font installed on this device. Leave blank for the system font.',
     uiFontPlaceholder: 'System default font',
@@ -121,8 +122,8 @@ export const appearancePage: Record<BundledLocale, AppearancePageCopy> = {
     description: '让 Aino 更适合你的阅读和工作习惯。',
     categories: { theme: '主题与文字', layout: '窗口与布局', chat: '聊天显示', habits: '习惯与引导', pets: '桌面宠物' },
     reading: '阅读与缩放',
-    uiScaleDescription: '调整整个应用的大小。',
-    chatTextDescription: '只调整消息和输入框文字。',
+    uiScaleDescription: '统一调整导航、设置、控件和聊天文字的大小。',
+    chatTextDescription: '单独调整消息和输入框文字；导航与设置请使用上方的全局界面缩放。',
     uiFontTitle: '界面与聊天字体',
     uiFontDescription: '使用此设备已安装的字体，留空沿用系统字体。',
     uiFontPlaceholder: '系统默认字体',
@@ -174,8 +175,8 @@ export const appearancePage: Record<BundledLocale, AppearancePageCopy> = {
     description: '讓 Aino 更適合你的閱讀和工作習慣。',
     categories: { theme: '主題與文字', layout: '視窗與版面', chat: '聊天顯示', habits: '習慣與引導', pets: '桌面寵物' },
     reading: '閱讀與縮放',
-    uiScaleDescription: '調整整個應用程式的大小。',
-    chatTextDescription: '只調整訊息和輸入框文字。',
+    uiScaleDescription: '統一調整導覽、設定、控制項與聊天文字的大小。',
+    chatTextDescription: '單獨調整訊息與輸入框文字；導覽與設定請使用上方的全域介面縮放。',
     uiFontTitle: '介面與聊天字型',
     uiFontDescription: '使用此裝置已安裝的字型，留空沿用系統字型。',
     uiFontPlaceholder: '系統預設字型',
@@ -233,8 +234,9 @@ export const appearancePage: Record<BundledLocale, AppearancePageCopy> = {
       pets: 'デスクトップペット'
     },
     reading: '文字と表示倍率',
-    uiScaleDescription: 'アプリ全体の大きさを調整します。',
-    chatTextDescription: 'メッセージと入力欄の文字だけを調整します。',
+    uiScaleDescription: 'ナビゲーション、設定、操作ボタン、チャットをまとめて拡大・縮小します。',
+    chatTextDescription:
+      'メッセージと入力欄の文字を個別に調整します。ナビゲーションや設定にはアプリ全体の表示倍率を使います。',
     uiFontTitle: '画面とチャットのフォント',
     uiFontDescription: 'この端末にあるフォントを使用します。空欄ではシステムフォントを使います。',
     uiFontPlaceholder: 'システム標準のフォント',
@@ -294,8 +296,8 @@ export const appearancePage: Record<BundledLocale, AppearancePageCopy> = {
       pets: 'حيوانات سطح المكتب'
     },
     reading: 'القراءة والتكبير',
-    uiScaleDescription: 'اضبط حجم التطبيق بالكامل.',
-    chatTextDescription: 'اضبط نص الرسائل وحقل الكتابة فقط.',
+    uiScaleDescription: 'اضبط حجم التطبيق بالكامل، بما فيه التنقل والإعدادات وعناصر التحكم ونص المحادثة.',
+    chatTextDescription: 'اضبط نص الرسائل وحقل الكتابة بشكل مستقل. استخدم مقياس الواجهة للتنقل والإعدادات.',
     uiFontTitle: 'خط الواجهة والمحادثة',
     uiFontDescription: 'استخدم خطًا مثبتًا على هذا الجهاز. اترك الحقل فارغًا لخط النظام.',
     uiFontPlaceholder: 'خط النظام الافتراضي',
@@ -354,8 +356,9 @@ export const appearancePage: Record<BundledLocale, AppearancePageCopy> = {
       pets: 'Питомцы'
     },
     reading: 'Чтение и масштаб',
-    uiScaleDescription: 'Измените размер всего приложения.',
-    chatTextDescription: 'Измените только текст сообщений и поля ввода.',
+    uiScaleDescription: 'Измените размер всего приложения: навигации, настроек, элементов управления и чата.',
+    chatTextDescription:
+      'Отдельно измените текст сообщений и поля ввода. Для навигации и настроек используйте масштаб всего интерфейса.',
     uiFontTitle: 'Шрифт интерфейса и чата',
     uiFontDescription: 'Используйте установленный на устройстве шрифт. Пустое поле означает системный шрифт.',
     uiFontPlaceholder: 'Системный шрифт',
@@ -417,8 +420,9 @@ export const appearancePage: Record<BundledLocale, AppearancePageCopy> = {
       pets: 'Compagnons de bureau'
     },
     reading: 'Lecture et échelle',
-    uiScaleDescription: 'Réglez la taille de toute l’application.',
-    chatTextDescription: 'Réglez uniquement le texte des messages et de la saisie.',
+    uiScaleDescription: 'Redimensionnez toute l’application : navigation, paramètres, commandes et texte du chat.',
+    chatTextDescription:
+      'Réglez séparément le texte des messages et de la saisie. Pour la navigation et les paramètres, utilisez l’échelle globale.',
     uiFontTitle: 'Police de l’interface et du chat',
     uiFontDescription: 'Utilisez une police installée sur cet appareil. Laissez vide pour la police système.',
     uiFontPlaceholder: 'Police système par défaut',
@@ -480,8 +484,10 @@ export const appearancePage: Record<BundledLocale, AppearancePageCopy> = {
       pets: 'Desktop-Begleiter'
     },
     reading: 'Lesen und Skalierung',
-    uiScaleDescription: 'Ändern Sie die Größe der gesamten Anwendung.',
-    chatTextDescription: 'Ändern Sie nur den Text in Nachrichten und im Eingabefeld.',
+    uiScaleDescription:
+      'Skalieren Sie die gesamte App, einschließlich Navigation, Einstellungen, Bedienelementen und Chattext.',
+    chatTextDescription:
+      'Passen Sie Nachrichten und Eingabefeld separat an. Verwenden Sie die globale UI-Skalierung für Navigation und Einstellungen.',
     uiFontTitle: 'Schrift für Oberfläche und Chat',
     uiFontDescription: 'Verwenden Sie eine auf diesem Gerät installierte Schrift. Leer bedeutet Systemschrift.',
     uiFontPlaceholder: 'Standardschrift des Systems',
@@ -543,8 +549,10 @@ export const appearancePage: Record<BundledLocale, AppearancePageCopy> = {
       pets: 'Mascotas de escritorio'
     },
     reading: 'Lectura y escala',
-    uiScaleDescription: 'Ajusta el tamaño de toda la aplicación.',
-    chatTextDescription: 'Ajusta solo el texto de los mensajes y del cuadro de entrada.',
+    uiScaleDescription:
+      'Ajusta toda la aplicación, incluida la navegación, los ajustes, los controles y el texto del chat.',
+    chatTextDescription:
+      'Ajusta los mensajes y el cuadro de entrada por separado. Para la navegación y los ajustes, usa la escala global.',
     uiFontTitle: 'Fuente de interfaz y chat',
     uiFontDescription: 'Usa una fuente instalada en este dispositivo. Déjalo vacío para usar la del sistema.',
     uiFontPlaceholder: 'Fuente predeterminada del sistema',

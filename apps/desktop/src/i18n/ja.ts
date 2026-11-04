@@ -753,7 +753,7 @@ const jaBaseOverrides = {
     appearance: {
       chatTextScaleTitle: 'チャットの文字サイズ',
       chatTextScaleDesc:
-        'UI スケールを基準に、会話とメッセージ入力欄の文字を拡大縮小します。サイドバーや操作ボタンのサイズは変わりません。',
+        'アプリ全体の表示倍率を基準に、会話とメッセージ入力欄の文字を拡大縮小します。サイドバーや操作ボタンのサイズは変わりません。',
       title: '外観',
       intro: 'Aino デスクトップの表示設定です。',
       colorMode: 'カラーモード',
@@ -766,7 +766,7 @@ const jaBaseOverrides = {
       hideThreadTimelineDesc: '各会話の右端にあるナビゲーションバーを非表示にします。',
       reasoningCollapsedTitle: '思考ブロックをデフォルトで折りたたむ',
       reasoningCollapsedDesc: 'ストリーミング中の推論を、開くまで折りたたんだまま利用できるようにします。',
-      uiScaleTitle: 'UI スケール',
+      uiScaleTitle: 'アプリ全体の表示倍率',
       uiScaleDesc: (percent: number) =>
         `アプリ全体の文字と UI を拡大縮小します。Cmd/Ctrl と +、-、0 でも変更できます。現在: ${percent}%`,
       sessionDensityTitle: 'セッションリストの密度',
