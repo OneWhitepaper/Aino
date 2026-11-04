@@ -17,6 +17,8 @@ export interface PlatformCatalogState {
 }
 
 const PLATFORM_DEFAULT_PREFIX = 'aino.desktop.platform-default.'
+// This is presentation freshness only; the API still authorizes every model call.
+const PLATFORM_CATALOG_TTL_MS = 30_000
 
 function currentOrigin(accountId: string, mode: string): string | null {
   const catalog = platformModelCatalog()
@@ -139,9 +141,10 @@ export function createPlatformModelCatalog(
   const sameAccount = samePlatformAccount
   const owner = createPlatformModelOwner(account, lookupOwner)
 
-  const result = atom<{ snapshot: PlatformAccountSnapshot | null; data: PlatformCatalogState }>({
+  const result = atom<{ snapshot: PlatformAccountSnapshot | null; data: PlatformCatalogState; expiresAt: number }>({
     snapshot: null,
-    data: { phase: 'idle', models: [], error: null }
+    data: { phase: 'idle', models: [], error: null },
+    expiresAt: 0
   })
 
   const state = computed([account, result], (current, cached): PlatformCatalogState => {
@@ -154,7 +157,7 @@ export function createPlatformModelCatalog(
 
   let pending: { snapshot: PlatformAccountSnapshot; promise: Promise<void> } | null = null
 
-  const load = (): Promise<void> => {
+  const load = (options?: { force?: boolean }): Promise<void> => {
     const snapshot = account.get()
 
     if (snapshot?.phase !== 'signed_in' || !snapshot.account) {
@@ -165,17 +168,32 @@ export function createPlatformModelCatalog(
       return pending.promise
     }
 
-    result.set({ snapshot, data: { ...state.get(), phase: 'loading', error: null } })
+    const cached = result.get()
+
+    if (
+      !options?.force &&
+      sameAccount(snapshot, cached.snapshot) &&
+      cached.data.phase === 'ready' &&
+      cached.expiresAt > Date.now()
+    ) {
+      return Promise.resolve()
+    }
+
+    result.set({ snapshot, data: { ...state.get(), phase: 'loading', error: null }, expiresAt: 0 })
 
     const promise = Promise.all([list(), owner.load()])
       .then(([models]) => {
         if (sameAccount(account.get(), snapshot)) {
-          result.set({ snapshot, data: { phase: 'ready', models, error: null } })
+          result.set({
+            snapshot,
+            data: { phase: 'ready', models, error: null },
+            expiresAt: Date.now() + PLATFORM_CATALOG_TTL_MS
+          })
         }
       })
       .catch(() => {
         if (sameAccount(account.get(), snapshot)) {
-          result.set({ snapshot, data: { ...state.get(), phase: 'error', error: 'catalog_unavailable' } })
+          result.set({ snapshot, data: { ...state.get(), phase: 'error', error: 'catalog_unavailable' }, expiresAt: 0 })
         }
       })
       .finally(() => {
@@ -189,7 +207,9 @@ export function createPlatformModelCatalog(
     return promise
   }
 
-  return { state, account, owner, load }
+  const refresh = () => load({ force: true })
+
+  return { state, account, owner, load, refresh }
 }
 
 const unavailable = createPlatformModelCatalog(atom<PlatformAccountSnapshot | null>(null), async () => [])

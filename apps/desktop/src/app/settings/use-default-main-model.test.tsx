@@ -59,7 +59,7 @@ it('retains the applied built-in display during a same-owner refresh while block
   list.mockReturnValueOnce(new Promise(resolve => (complete = resolve)))
   let refresh!: Promise<void>
   act(() => {
-    refresh = catalog.load()
+    refresh = result.current.platform.refresh()
   })
 
   expect(result.current.platform.phase).toBe('loading')
@@ -88,7 +88,7 @@ it('does not retain the refresh display for another route or account revision', 
   list.mockReturnValue(new Promise(resolve => (complete = resolve)))
   let refresh!: Promise<void>
   act(() => {
-    refresh = catalog.load()
+    refresh = result.current.platform.refresh()
   })
   expect(result.current.appliedPlatformId).toBe('catalog-a')
   rerender({ profile: 'other-profile' })

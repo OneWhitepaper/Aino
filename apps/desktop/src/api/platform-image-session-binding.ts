@@ -26,6 +26,18 @@ export async function preparePlatformImageSession(
 
   try {
     const config = await getHermesConfigRecord(captured.route, { includeDefaults: false })
+    const agent = config.agent
+
+    const disabled =
+      agent && typeof agent === 'object' && !Array.isArray(agent)
+        ? (agent as Record<string, unknown>).disabled_toolsets
+        : undefined
+
+    // This is an explicit tool exclusion, never a guess from the user's wording.
+    if ((Array.isArray(disabled) ? disabled : [disabled]).includes('image_gen')) {
+      return
+    }
+
     const rawImage = config.image_gen
 
     if (!rawImage || typeof rawImage !== 'object' || Array.isArray(rawImage)) {

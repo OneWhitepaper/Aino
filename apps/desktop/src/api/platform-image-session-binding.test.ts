@@ -1,5 +1,6 @@
 import { afterEach, expect, it, vi } from 'vitest'
 
+import { notify } from '@/store/notifications'
 import { platformModelCatalog } from '@/store/platform-models'
 import { $sessionStates } from '@/store/session-states'
 import { platformModel, platformSnapshot } from '@/test/platform-model'
@@ -89,3 +90,21 @@ it('keeps normal chat available when image binding fails and skips non-Aino imag
   await preparePlatformSessionRequest('writer', 'prompt.submit', { session_id: 'runtime' }, request)
   expect(bind).not.toHaveBeenCalled()
 })
+
+it.each([{ disabled: ['image_gen'] }, { disabled: 'image_gen' }])(
+  'skips image authorization when the owning profile explicitly disables image generation ($disabled)',
+  async ({ disabled }) => {
+    const bind = await install()
+    vi.mocked(getHermesConfigRecord).mockResolvedValue({
+      image_gen: { provider: 'aino', model: 'image-catalog' },
+      agent: { disabled_toolsets: disabled }
+    })
+    const request = vi.fn()
+
+    await preparePlatformSessionRequest('writer', 'prompt.submit', { session_id: 'text-only' }, request)
+
+    expect(bind).not.toHaveBeenCalled()
+    expect(request).not.toHaveBeenCalled()
+    expect(notify).not.toHaveBeenCalled()
+  }
+)

@@ -1,5 +1,5 @@
 import { atom } from 'nanostores'
-import { expect, it, vi } from 'vitest'
+import { afterEach, expect, it, vi } from 'vitest'
 
 import { rescopeConnectionScopedStores } from '@/lib/connection-scoped'
 
@@ -12,6 +12,62 @@ import {
   requirePlatformSelection,
   writePlatformDefault
 } from './platform-models'
+
+afterEach(() => vi.restoreAllMocks())
+
+it('reuses a ready catalog briefly but refreshes on demand, expiry and account revision changes', async () => {
+  let now = 100_000
+  vi.spyOn(Date, 'now').mockImplementation(() => now)
+  const account = atom<PlatformAccountSnapshot | null>(platformSnapshot())
+  const list = vi.fn(async () => [platformModel()])
+  const lookupOwner = async () => ({ user_id: account.get()!.account!.id, platform_origin: 'http://127.0.0.1:7001' })
+  const catalog = createPlatformModelCatalog(account, list, lookupOwner)
+
+  await catalog.load()
+
+  for (let index = 0; index < 100; index++) {
+    await catalog.load()
+  }
+
+  expect(list).toHaveBeenCalledTimes(1)
+
+  await catalog.load({ force: true })
+  expect(list).toHaveBeenCalledTimes(2)
+  now += 29_999
+  await catalog.load()
+  expect(list).toHaveBeenCalledTimes(2)
+  now += 1
+  await catalog.load()
+  expect(list).toHaveBeenCalledTimes(3)
+
+  account.set(platformSnapshot('user-a', 2))
+  await catalog.load()
+  expect(list).toHaveBeenCalledTimes(4)
+  account.set(platformSnapshot('user-b', 3))
+  expect(catalog.state.get().models).toEqual([])
+  await catalog.load()
+  expect(list).toHaveBeenCalledTimes(5)
+})
+
+it('does not reuse the successful freshness deadline after a failed explicit refresh', async () => {
+  const account = atom<PlatformAccountSnapshot | null>(platformSnapshot())
+
+  const list = vi
+    .fn()
+    .mockResolvedValueOnce([platformModel()])
+    .mockRejectedValueOnce(new Error('unavailable'))
+    .mockResolvedValueOnce([platformModel('updated')])
+
+  const catalog = createPlatformModelCatalog(account, list)
+
+  await catalog.load()
+  await catalog.load({ force: true })
+  expect(catalog.state.get().phase).toBe('error')
+  await catalog.load()
+
+  expect(catalog.state.get().models.map(model => model.id)).toEqual(['updated'])
+  expect(list).toHaveBeenCalledTimes(3)
+})
 
 it('isolates defaults by account, connection, profile and exact platform origin', () => {
   const developmentA = 'http://127.0.0.1:7001'
@@ -33,7 +89,14 @@ it('isolates defaults by account, connection, profile and exact platform origin'
   localStorage.setItem('aino.desktop.platform-default.user-a', 'legacy-model')
   expect(readPlatformDefault('user-a', undefined, 'production', 'https://api.agentera.com.cn')).toBe('legacy-model')
   expect(readPlatformDefault('user-a', 'work', 'production', 'https://api.agentera.com.cn')).toBeNull()
-  expect(readPlatformDefault('user-a', { connectionId: 'remote-b', profile: 'default' }, 'production', 'https://api.agentera.com.cn')).toBeNull()
+  expect(
+    readPlatformDefault(
+      'user-a',
+      { connectionId: 'remote-b', profile: 'default' },
+      'production',
+      'https://api.agentera.com.cn'
+    )
+  ).toBeNull()
   rescopeConnectionScopedStores({ mode: 'remote', baseUrl: 'https://legacy.example', profile: 'default' })
   expect(readPlatformDefault('user-a', undefined, 'development', developmentA)).toBeNull()
   writePlatformDefault('user-a', 'legacy-remote-work', 'work', 'development', developmentA)

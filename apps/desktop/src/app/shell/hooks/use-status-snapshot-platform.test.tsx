@@ -220,7 +220,7 @@ it('rechecks when an external catalog refresh revokes availability and clears re
 
   await waitFor(() => expect(result.current.inferenceStatus?.ready).toBe(true))
   platform.list.mockResolvedValue([{ ...platformModel(), state: 'quota_exhausted' }])
-  await act(async () => platformModelCatalog().load())
+  await act(async () => platformModelCatalog().refresh())
   await waitFor(() => expect(result.current.inferenceStatus?.ready).toBe(false))
 
   rerender({ state: 'closed' })
