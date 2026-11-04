@@ -5,6 +5,7 @@ import { MemoryRouter } from 'react-router'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 
 import type { HermesApiRequest, HermesConnection } from '@/global'
+import type * as SessionStore from '@/store/session'
 import type { LocalCatalogModel, LocalModelsStatus, LocalRuntimeJob } from '@/types/hermes'
 
 vi.mock('@/hermes', async (): Promise<object> => ({
@@ -19,14 +20,21 @@ vi.mock('@/store/profile', async (): Promise<object> => {
   // default here so the settings surfaces render without the non-default warning.
   return {
     $activeGatewayProfile: atom<string>('work'),
+    $profileScope: atom<string>('work'),
     $profiles: atom([{ name: 'work', is_default: true }]),
+    $showAllProfiles: atom(false),
     normalizeProfileKey: (name: string | null | undefined): string => (name ?? '').trim() || 'default'
   }
 })
-vi.mock('@/store/session', async (): Promise<object> => {
+vi.mock('@/store/session', async (importOriginal): Promise<object> => {
+  const actual = await importOriginal<typeof SessionStore>()
   const { atom } = await import('nanostores')
 
-  return { $connection: atom<HermesConnection | null>(null), $defaultReasoningEffort: atom<string>('') }
+  return {
+    ...actual,
+    $connection: atom<HermesConnection | null>(null),
+    $defaultReasoningEffort: atom<string>('')
+  }
 })
 vi.mock('@/store/notifications', (): object => ({ notify: vi.fn(), notifyError: vi.fn() }))
 

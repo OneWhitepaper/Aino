@@ -1,12 +1,23 @@
 vi.mock('@/store/profile', async (): Promise<object> => {
   const { atom } = await import('nanostores')
 
-  return { $activeGatewayProfile: atom<string>('default') }
+  return {
+    $activeGatewayProfile: atom<string>('default'),
+    $profileScope: atom<string>('default'),
+    $profiles: atom([{ name: 'default', is_default: true }]),
+    $showAllProfiles: atom(false),
+    normalizeProfileKey: (name: string | null | undefined): string => (name ?? '').trim() || 'default'
+  }
 })
-vi.mock('@/store/session', async (): Promise<object> => {
+vi.mock('@/store/session', async (importOriginal): Promise<object> => {
+  const actual = await importOriginal<typeof SessionStore>()
   const { atom } = await import('nanostores')
 
-  return { $connection: atom(null), $defaultReasoningEffort: atom<string>('') }
+  return {
+    ...actual,
+    $connection: atom(null),
+    $defaultReasoningEffort: atom<string>('')
+  }
 })
 
 import type { QueryClient } from '@tanstack/react-query'
@@ -29,6 +40,7 @@ import {
   setVisibleModels
 } from '@/store/model-visibility'
 import { $defaultReasoningEffort } from '@/store/session'
+import type * as SessionStore from '@/store/session'
 import type { LocalRuntimeJob } from '@/types/hermes'
 
 import { ModelCatalogMenu, ModelMenuCloseContext, type ModelMenuController } from './model-catalog-menu'

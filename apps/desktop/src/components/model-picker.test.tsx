@@ -22,6 +22,7 @@ import { ModelPickerDialog } from './model-picker'
 const seededJobs: { current: readonly LocalRuntimeJob[] } = vi.hoisted(() => ({ current: [] }))
 
 vi.mock('@/hermes', () => ({
+  setApiRequestProfile: vi.fn(),
   getLocalModelsJobs: vi.fn(async () => ({ jobs: [...seededJobs.current] })),
   getLocalModelsStatus: vi.fn().mockResolvedValue({ loading: {} })
 }))

@@ -19,6 +19,7 @@ import { deferred } from '../../../test/deferred'
 import { useStatusSnapshot } from './use-status-snapshot'
 
 vi.mock('@/hermes', () => ({
+  setApiRequestProfile: vi.fn(),
   getStatus: vi.fn()
 }))
 
@@ -240,8 +241,10 @@ describe('useStatusSnapshot', () => {
 
     expect(result.current.inferenceStatus).toMatchObject({
       ready: false,
-      reason: '发送第一条消息前请先添加提供方凭据。'
+      reason: TRANSLATIONS.zh.desktop.providerCredentialRequired,
+      source: 'runtime_check'
     })
+    expect(result.current.inferenceStatus?.reason).not.toBe(TRANSLATIONS.en.desktop.providerCredentialRequired)
   })
 
   it('clears readiness immediately when the gateway disconnects', async () => {
