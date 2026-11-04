@@ -1,6 +1,7 @@
 import type { ErrorSurface } from '@/lib/error-surface'
 import { platformModelSupportsPurpose } from '@/lib/platform-model-purpose'
 
+import { hasPlatformModelIdentity } from '../../shared/platform-contract'
 import type { PlatformModel } from '../../shared/platform-contract'
 
 import { platformModelCatalog, PlatformSelectionError } from './platform-models'
@@ -18,7 +19,9 @@ export function platformRecoveryActionForCode(code: string): PlatformRecoveryAct
       'not_authenticated',
       'managed_auth_unavailable',
       'managed_credential_expired',
-      'managed_credential_revoked'
+      'managed_credential_revoked',
+      'DESKTOP_DEVICE_KEY_REVOKED',
+      'managed_credential_rejected'
     ].includes(code)
   ) {
     return 'account'
@@ -60,7 +63,7 @@ export function platformModelForDisplayFrom(
   if (
     !modelId ||
     !ownerUserId ||
-    account?.phase !== 'signed_in' ||
+    !hasPlatformModelIdentity(account) ||
     account.account?.id !== ownerUserId ||
     (platformOrigin !== undefined &&
       (!owner || owner.user_id !== ownerUserId || owner.platform_origin !== platformOrigin)) ||
@@ -110,6 +113,7 @@ export function platformErrorSurface(error: unknown): ErrorSurface | null {
       : error.code === 'managed_auth_unavailable' ||
           error.code === 'managed_credential_expired' ||
           error.code === 'managed_credential_revoked' ||
+          error.code === 'managed_credential_rejected' ||
           error.code === 'not_authenticated'
         ? 'auth'
         : 'gateway'

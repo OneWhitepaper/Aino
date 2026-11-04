@@ -1,4 +1,4 @@
-"""Short-lived, transport-delegated model authority; never persisted with sessions."""
+"""Transport-delegated model authority; secrets are never persisted with sessions."""
 
 from dataclasses import dataclass, field
 from datetime import datetime, UTC
@@ -28,10 +28,12 @@ class ManagedModelBinding:
     credential_id: str
     api_key: str = field(repr=False)
     base_url: str
-    expires_at: datetime
+    expires_at: datetime | None
     binding_revision: int
     context_window: int | None = None
     purpose: str = 'chat'
+    credential_type: str = 'lease'
+    credential_version: int | None = None
 
 
 @dataclass
@@ -87,7 +89,7 @@ def _interrupt(binding, session):
 
 def resolve_managed_runtime(binding: ManagedModelBinding, *, now: float) -> dict:
     """Resolve a lease at a Unix timestamp, without consulting ambient credentials."""
-    if binding.expires_at.timestamp() <= now:
+    if binding.expires_at is not None and binding.expires_at.timestamp() <= now:
         return {"credential_expired": True}
     modes = {"chat_completions": "chat_completions", "anthropic_messages": "anthropic_messages",
              "responses": "codex_responses"}
@@ -207,8 +209,14 @@ class ManagedModelRegistry:
                     or binding.binding_revision != a.revision or binding.owner != a.owner
                     or binding.model_id != a.model_id):
                 raise ManagedBindingError("managed_binding_stale")
-            seconds = (binding.expires_at - datetime.now(UTC)).total_seconds()
-            if not 0 < seconds <= 3605:
+            permanent = binding.credential_type == 'device' and binding.expires_at is None
+            version = binding.credential_version
+            if ((binding.credential_type == 'device' and (type(version) is not int or version <= 0))
+                    or (binding.credential_type == 'lease' and version is not None)):
+                raise ManagedBindingError('managed_binding_invalid')
+            seconds = None if permanent else (
+                (binding.expires_at - datetime.now(UTC)).total_seconds() if binding.expires_at else 0)
+            if binding.credential_type not in {'device', 'lease'} or (not permanent and not 0 < seconds <= 3605):
                 raise ManagedBindingError("managed_binding_expired")
             previous = self._active.get(key)
             if binding.purpose == 'chat' and session.get("running") and (not previous or
@@ -219,10 +227,12 @@ class ManagedModelRegistry:
             self._cancel(a)
             self._pending.pop(key)
             a.binding = binding
+            a.timer = None
             self._active[key] = a
-            a.timer = threading.Timer(seconds, self._expire, args=(key, a))
-            a.timer.daemon = True
-            a.timer.start()
+            if seconds is not None:
+                a.timer = threading.Timer(seconds, self._expire, args=(key, a))
+                a.timer.daemon = True
+                a.timer.start()
 
     @staticmethod
     def _validate_runtime(binding, session):
@@ -242,7 +252,10 @@ class ManagedModelRegistry:
             now = datetime.now(UTC)
             if (not a or a.session is not session or a.peer is not session.get("transport")
                     or session.get("_closing") or a.controller is not peer
-                    or a.revision != binding.binding_revision or a.binding.expires_at <= now
+                    or a.revision != binding.binding_revision
+                    or binding.credential_type != 'lease' or a.binding.credential_type != 'lease'
+                    or a.binding.expires_at is None or binding.expires_at is None
+                    or a.binding.expires_at <= now
                     or any(getattr(a.binding, k) != getattr(binding, k) for k in
                            ("owner", "model_id", "model", "api_mode", "base_url", "capabilities"))
                     or not 0 < (binding.expires_at - now).total_seconds() <= 3605
@@ -277,13 +290,40 @@ class ManagedModelRegistry:
                 return None
             if (a.session.get("_closing") or a.peer is not a.session.get("transport")
                     or (session is not None and session is not a.session)
-                    or a.binding.expires_at <= datetime.now(UTC)):
+                    or (a.binding.expires_at is not None and a.binding.expires_at <= datetime.now(UTC))):
                 expired = self._active.pop(key)
                 self._cancel(expired)
             else:
                 return a.binding
         _interrupt(expired.binding, expired.session)
         return None
+
+    def reusable(self, sid, session, peer, owner, model_id, revision, credential_version, *, purpose='chat'):
+        """Confirm this controller still owns the exact permanent binding without mutating it."""
+        key = self._key(sid, purpose)
+        if (type(revision) is not int or revision <= 0
+                or type(credential_version) is not int or credential_version <= 0):
+            raise ManagedBindingError('managed_binding_invalid')
+        with self._lock:
+            selection = session.get('managed_image_params' if purpose == 'image' else 'managed_model_params')
+            a = self._active.get(key)
+            if (not selection or key in self._pending or not a or a.session is not session
+                    or a.peer is not session.get('transport')
+                    or session.get('_closing') or a.controller is not peer
+                    or a.owner != owner or a.model_id != model_id or a.revision != revision
+                    or (purpose == 'chat' and session.get('managed_pending_switch'))):
+                return False
+            binding = a.binding
+            if (binding is None or binding.credential_type != 'device' or binding.expires_at is not None
+                    or binding.credential_version != credential_version):
+                return False
+            try:
+                if transport_principal(a.peer) != transport_principal(peer):
+                    return False
+                self._validate_selection(session, owner, model_id, purpose)
+            except ManagedBindingError:
+                return False
+            return True
 
     def clear(self, session_id, binding_revision, peer, *, purpose='chat'):
         key = self._key(session_id, purpose)

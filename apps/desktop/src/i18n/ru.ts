@@ -324,6 +324,12 @@ const configPageFieldDescriptions: Record<string, string> = defineFieldCopy({
 })
 
 const ruBaseOverrides = {
+  platformModels: {
+    permanent: "Без срока действия",
+    reauthorize: "Повторно авторизовать устройство",
+    reauthorizeDescription: "Замените авторизацию моделей на этом устройстве. Если сеанс управления истёк, войдите снова.",
+    deviceRevoked: "Доступ этого устройства к моделям отозван. Повторно авторизуйте его в настройках моделей.",
+  },
   platformDevices: { expired: 'Срок истёк' },
   appearancePage: appearancePage.ru,
   home: homeGuidance.ru,

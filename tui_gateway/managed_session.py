@@ -79,6 +79,11 @@ def runtime_for_session(sid):
     def current_key():
         return current_binding().api_key
 
+    def request_identity():
+        current = current_binding()
+        return (current.api_key, current.model_id if current.credential_type == 'device' else None,
+                current.credential_version)
+
     def on_override(provider, purpose):
         current_key()
         server._emit("notification.show", sid, {
@@ -91,7 +96,9 @@ def runtime_for_session(sid):
     runtime["api_key"] = ManagedCredential(
         current_key, binding.owner.user_id, usage_session_id(session),
         binding.model, binding.base_url, runtime["api_mode"], bool(binding.capabilities.get("vision")),
-        on_override=on_override, get_context_window=lambda: current_binding().context_window)
+        on_override=on_override, get_context_window=lambda: current_binding().context_window,
+        model_id=binding.model_id if binding.credential_type == 'device' else None,
+        get_request_identity=request_identity)
     return runtime.pop("model"), runtime
 
 

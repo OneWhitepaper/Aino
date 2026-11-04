@@ -20,6 +20,10 @@ export function parsePlatformDevices(value: unknown): PlatformDevice[] {
     }
 
     for (const field of ['last_used_at', 'expires_at']) {
+      if (field === 'expires_at' && row[field] === null) {
+        continue
+      }
+
       if (typeof row[field] !== 'string' || !Number.isFinite(Date.parse(row[field]))) {
         throw new PlatformClientError('invalid_response')
       }

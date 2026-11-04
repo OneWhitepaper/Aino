@@ -32,7 +32,8 @@ def rig(tmp_path, monkeypatch):
         model_id="image-catalog-id", model="upstream-image", api_mode="images_generations",
         capabilities={"tools": False, "vision": False, "reasoning": False, "image_generation": True},
         credential_id="image-lease", api_key="image-secret", base_url="https://aino.invalid/v1",
-        expires_at=datetime.now(UTC) + timedelta(minutes=5), binding_revision=7, purpose="image")
+        expires_at=datetime.now(UTC) + timedelta(minutes=5),
+        binding_revision=7, purpose="image", credential_type='lease', credential_version=None)
     try:
         yield SimpleNamespace(binding=binding, home=tmp_path, scope=billing_scope.get())
     finally:
@@ -40,9 +41,9 @@ def rig(tmp_path, monkeypatch):
 
 
 @contextmanager
-def image_scope(binding):
+def image_scope(binding, **kwargs):
     from tui_gateway.managed_image_runtime import managed_image_scope
-    with managed_image_scope(lambda: binding):
+    with managed_image_scope(lambda: binding, **kwargs):
         yield
 
 
@@ -50,7 +51,8 @@ def plugin():
     return importlib.import_module("plugins.image_gen.aino").AinoImageGenProvider()
 
 
-def test_image_lease_drives_existing_tool_cache_and_billing(rig, monkeypatch):
+@pytest.mark.parametrize('credential_type', ['lease', 'device'])
+def test_image_lease_drives_existing_tool_cache_and_billing(rig, monkeypatch, credential_type):
     from agent.image_gen_registry import register_provider
     from tools.image_generation_tool import _handle_image_generate
 
@@ -62,6 +64,10 @@ def test_image_lease_drives_existing_tool_cache_and_billing(rig, monkeypatch):
     monkeypatch.setattr("agent.process_bootstrap.build_keepalive_http_client",
                         lambda *_args, **_kwargs: httpx.Client(transport=httpx.MockTransport(serve)))
     provider = plugin()
+    rig.binding.credential_type = credential_type
+    if credential_type == 'device':
+        rig.binding.expires_at = None
+        rig.binding.credential_version = 1
     monkeypatch.setattr("tools.image_generation_tool._get_plugin_provider", lambda *_a, **_k: provider)
     register_provider(provider)
     with image_scope(rig.binding):
@@ -73,6 +79,7 @@ def test_image_lease_drives_existing_tool_cache_and_billing(rig, monkeypatch):
     request = requests[0]
     assert request.url.path == "/v1/images/generations"
     assert request.headers["authorization"] == "Bearer image-secret"
+    assert request.headers.get('X-Aino-Model-ID') == ('image-catalog-id' if credential_type == 'device' else None)
     assert request.headers["x-aino-purpose"] == "image"
     assert request.headers["x-aino-turn-id"] == rig.scope.turn_id
     assert json.loads(request.content) == {"model": "upstream-image", "prompt": "一只橙色的小猫",
@@ -130,3 +137,61 @@ def test_byok_chat_keeps_aino_image_charge_receipt(rig, monkeypatch):
         assert metadata["non_aino_model_calls"] is True
     finally:
         billing_scope.reset(token)
+
+
+@pytest.mark.parametrize('code', [
+    'API_KEY_DISABLED', 'INVALID_API_KEY', 'USER_INACTIVE', 'DESKTOP_DEVICE_KEY_REVOKED',
+])
+def test_image_rejection_notifies_actual_device_owner_and_version_for_byok_chat(rig, monkeypatch, code):
+    from agent.auxiliary_billing_scope import BillingScope, billing_scope
+    from tui_gateway.contracts.events import NotificationShowPayload
+
+    notices, requests = [], []
+    rig.binding.credential_type = 'device'
+    rig.binding.credential_version = 7
+    rig.binding.expires_at = None
+    token = billing_scope.set(BillingScope('turn', None, 'byok-session', str(uuid4()), 'chat'))
+
+    def serve(request):
+        requests.append(request)
+        rig.binding.credential_version = 8
+        rig.binding.api_key = 'rotated-secret'
+        return httpx.Response(401, json={'error': {'code': code, 'message': 'image-secret upstream detail'}})
+
+    monkeypatch.setattr('agent.process_bootstrap.build_keepalive_http_client',
+                        lambda *_a, **_k: httpx.Client(transport=httpx.MockTransport(serve)))
+    try:
+        with image_scope(rig.binding, on_rejection=notices.append):
+            result = plugin().generate('一只猫')
+    finally:
+        billing_scope.reset(token)
+
+    assert result['success'] is False and len(requests) == 1
+    assert len(notices) == 1
+    assert notices[0]['code'] == 'managed_credential_rejected'
+    assert notices[0]['owner_user_id'] == 'account-1'
+    assert notices[0]['managed_credential_version'] == 7
+    assert notices[0]['purpose'] == 'image'
+    NotificationShowPayload.model_validate(notices[0])
+    assert 'secret' not in json.dumps([result, notices])
+    assert 'upstream detail' not in json.dumps([result, notices])
+
+
+@pytest.mark.parametrize('code,version', [
+    ('upstream_auth_failed', 7), ('INSUFFICIENT_BALANCE', 7), ('INVALID_API_KEY', None),
+    ('INVALID_API_KEY', True), ('INVALID_API_KEY', 0),
+])
+def test_image_upstream_billing_and_unversioned_failures_never_suspend_device(rig, monkeypatch, code, version):
+    notices = []
+    rig.binding.credential_type = 'device' if version is not None else 'lease'
+    rig.binding.credential_version = version
+
+    def serve(_request):
+        return httpx.Response(401, json={'error': {'code': code, 'message': 'image-secret'}})
+
+    monkeypatch.setattr('agent.process_bootstrap.build_keepalive_http_client',
+                        lambda *_a, **_k: httpx.Client(transport=httpx.MockTransport(serve)))
+    with image_scope(rig.binding, on_rejection=notices.append):
+        result = plugin().generate('一只猫')
+    assert result['success'] is False
+    assert notices == []

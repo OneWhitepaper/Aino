@@ -4694,7 +4694,7 @@ const platformCaptcha = createPlatformCaptcha({
   randomNonce: () => crypto.randomBytes(32).toString('base64url')
 })
 
-const platformBindingController = createPlatformRuntimeBindingController({
+const platformBindingController = createPlatformRuntimeBindingController({ nativeDeviceKeys: true,
   auth: platformAuth,
   origin: platformClient.origin,
   deviceId: () => desktopInstallationId,

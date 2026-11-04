@@ -36,6 +36,7 @@ LAYER_DISK = "disk"
 # clients' per-code copy names the real fix (`continue`, smaller steps, /retry).
 _REASON_TO_LAYER = {
     "managed_credential_expired": LAYER_AUTH, "managed_credential_revoked": LAYER_AUTH,
+    "managed_credential_rejected": LAYER_AUTH,
     "managed_auth_unavailable": LAYER_AUTH, "managed_balance_unavailable": LAYER_BILLING,
     "auth": LAYER_AUTH, "auth_permanent": LAYER_AUTH, "billing": LAYER_BILLING, "billing_unverified": LAYER_BILLING,
     "loop_error": LAYER_GATEWAY, "interpreter_shutdown": LAYER_GATEWAY, "session_busy": LAYER_GATEWAY,
@@ -207,6 +208,9 @@ def build_error_surface_from_result(result: Any, provider: str = "", model: str 
         if not isinstance(retryable, bool):
             retryable = reason not in _NON_RETRYABLE_REASONS
         surface = _surface(_result_layer(reason, error_text, provider), reason, retryable, provider, model)
+        version = result.get('managed_credential_version')
+        if type(version) is int and version > 0:
+            surface['managed_credential_version'] = version
         # When the provider named the moment its limit lifts (Retry-After / ``resets_at``,
         # ``agent/turn_recovery.py::_stamp_limit_reset``) the card can say "Limit resets at HH:mm"
         # next to Retry instead of leaving the user to guess (#98852). Epoch seconds.

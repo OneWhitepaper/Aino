@@ -381,6 +381,26 @@ export function registerPlatformIpc({
   })
 
   if (bindingController) {
+    ipc.handle('aino:platform-models:credential-rejected', async (event, revision, version) => {
+      try {
+        authorize(event)
+        await bindingController.credentialRejected(revision, version)
+
+        return { ok: true, value: undefined }
+      } catch (error) {
+        return { ok: false, error: safeIpcError(error) }
+      }
+    })
+    ipc.handle('aino:platform-models:reauthorize', async (event, revision) => {
+      try {
+        authorize(event)
+        await bindingController.reauthorize(revision)
+
+        return { ok: true, value: undefined }
+      } catch (error) {
+        return { ok: false, error: safeIpcError(error) }
+      }
+    })
     ipc.handle('aino:platform-models:owner', (event, revision) => {
       try {
         authorize(event)
@@ -400,7 +420,7 @@ export function registerPlatformIpc({
           profile: boundedString(value, 'profile', 256),
           session_id: field(value, 'session_id', 256),
           model_id: field(value, 'model_id', 256),
-          session_ticket: field(value, 'session_ticket', 256),
+          session_ticket: boundedString(value, 'session_ticket', 256),
           expected_account_revision:
             typeof value.expected_account_revision === 'number' ? value.expected_account_revision : 0,
           ...modelPurpose(value)
@@ -503,6 +523,8 @@ export function registerPlatformIpc({
         ipc.removeHandler?.('aino:platform-models:list')
         ipc.removeHandler?.('aino:platform-models:clear')
         ipc.removeHandler?.('aino:platform-models:owner')
+        ipc.removeHandler?.('aino:platform-models:reauthorize')
+        ipc.removeHandler?.('aino:platform-models:credential-rejected')
       }
     }
   }

@@ -20,8 +20,16 @@ import type { PlatformUsagePage, PlatformUsageQuery } from './platform-contract'
 import { parsePlatformDeviceId, parsePlatformDevices } from './platform-device-contract'
 import { parseDiagnosticReceipt } from './platform-diagnostic-receipt'
 import { parsePlatformModel } from './platform-model-contract'
-import { parsePaymentQuote, parsePaymentQuoteInput, parsePlatformCreateOrderInput, parsePlatformOrder, parsePlatformOrderId, parsePlatformOrderPage, parsePlatformOrderQuery } from './platform-payment-contract'
-import type { PlatformTokenSet } from './platform-token-contract'
+import {
+  parsePaymentQuote,
+  parsePaymentQuoteInput,
+  parsePlatformCreateOrderInput,
+  parsePlatformOrder,
+  parsePlatformOrderId,
+  parsePlatformOrderPage,
+  parsePlatformOrderQuery
+} from './platform-payment-contract'
+import type { PlatformDeviceKey, PlatformTokenSet } from './platform-token-contract'
 import { parsePlatformUsagePage, parsePlatformUsageQuery } from './platform-usage-contract'
 
 export const PLATFORM_PRODUCTION_ORIGIN = 'https://api.agentera.com.cn'
@@ -72,6 +80,12 @@ export interface PlatformClient {
   logout(refreshToken: string): Promise<void>
   models(accessToken: string): Promise<PlatformModel[]>
   modelLease(accessToken: string, input: PlatformLeaseInput): Promise<PlatformModelLeaseDTO>
+  supportsDeviceKey(accessToken: string): Promise<boolean>
+  deviceKey(
+    accessToken: string,
+    input: { device_id: string; rotate?: boolean; expected_version?: number; reauthorize?: boolean }
+  ): Promise<PlatformDeviceKey>
+  deviceKeyState(accessToken: string, deviceId: string): Promise<PlatformDeviceKey>
 }
 
 export interface PlatformLeaseInput {
@@ -335,8 +349,50 @@ export function createPlatformClient({
     return value ? { ...value } : {}
   }
 
+  function deviceKey(value: unknown, deviceId: string): PlatformDeviceKey {
+    const data = object(value)
+    const version = positiveNumberField(data.version)
+
+    if (
+      data.device_id !== deviceId ||
+      !Number.isSafeInteger(version) ||
+      data.expires_at !== null ||
+      !['active', 'revoked'].includes(String(data.status))
+    ) {
+      throw new PlatformClientError('invalid_response')
+    }
+
+    return {
+      key_id: stringField(data.key_id),
+      device_id: deviceId,
+      version,
+      status: data.status as 'active' | 'revoked',
+      expires_at: null,
+      ...(data.api_key === undefined ? {} : { api_key: stringField(data.api_key) })
+    }
+  }
+
   return {
     origin,
+    async supportsDeviceKey(token) {
+      try {
+        const data = object(await request('GET', '/desktop/bootstrap', undefined, token))
+
+        return data.capabilities !== undefined && object(data.capabilities).managed_device_key === 1
+      } catch (error) {
+        if (error instanceof PlatformClientError && ['http_404', 'NOT_FOUND'].includes(error.code)) {
+          return false
+        }
+
+        throw error
+      }
+    },
+    async deviceKey(token, input) {
+      return deviceKey(await request('POST', '/desktop/device-keys', input, token), input.device_id)
+    },
+    async deviceKeyState(token, id) {
+      return deviceKey(await request('GET', `/desktop/device-keys/${parsePlatformDeviceId(id)}`, undefined, token), id)
+    },
     async uploadDiagnostics(token, bundle) {
       // Bundles are much larger than account JSON; give slow links time without changing login deadlines.
       return parseDiagnosticReceipt(await request('POST', '/desktop/diagnostics', { bundle_base64: validateDiagnostics(bundle) }, token, 120_000))

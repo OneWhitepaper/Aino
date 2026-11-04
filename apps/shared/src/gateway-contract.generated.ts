@@ -18,6 +18,7 @@ export interface ManagedModelTicketResult {
   session_ticket: string
   managed_model_binding: number
   managed_image_binding?: number
+  managed_device_key?: number
 }
 export interface ClaimManagedModelParams {
   session_id: string
@@ -32,6 +33,7 @@ export interface ClaimManagedModelResult {
   managed_model_binding: number
   managed_model_context_window?: boolean
   managed_image_binding?: number
+  managed_device_key?: number
 }
 export interface BindManagedModelParams {
   session_id: string
@@ -43,7 +45,9 @@ export interface BindManagedModelParams {
   credential_id: string
   api_key: string
   base_url: string
-  expires_at: string
+  expires_at: string | null
+  credential_type?: 'lease' | 'device'
+  credential_version?: number | null
   model: string
   api_mode: 'chat_completions' | 'responses' | 'anthropic_messages' | 'images_generations'
   capabilities: ManagedCapabilities
@@ -69,6 +73,19 @@ export interface ClearManagedModelParams {
 }
 export interface ClearManagedModelResult {
   cleared: boolean
+}
+export interface ManagedModelStatusParams {
+  session_id: string
+  profile?: string | null
+  owner: PlatformOwner
+  model_id: string
+  purpose?: 'chat' | 'image'
+  binding_revision: number
+  credential_version: number
+}
+export interface ManagedModelStatusResult {
+  reusable: boolean
+  managed_device_key?: 1
 }
 /** Any method the desktop may route to a named profile (``requestGatewayForProfile`` adds ``profile``). */
 export interface ProfileParams {
@@ -5817,6 +5834,7 @@ export interface GatewayReadyPayload {
   heartbeat?: boolean | null
   managed_model_binding?: number | null
   managed_image_binding?: number | null
+  managed_device_key?: number | null
   session_authority?: boolean | null
 }
 /** ``agent/onboarding_record.py::_transition``: the run ``run_id`` stopped being in progress. ``stored_session_id`` is its chat at the compression tip. ``done``: the first-task card was answered; ``skipped``: Skip setup; ``replaced``: a rerun opened a new run; ``deleted``: its chat was deleted. */
@@ -5918,6 +5936,7 @@ export interface ErrorSurface {
   retryable: boolean
   provider?: string | null
   model?: string | null
+  managed_credential_version?: number | null
   resets_at?: number | null
   usage_limit?: UsageLimit | null
   [key: string]: unknown
@@ -6097,6 +6116,8 @@ export interface NotificationShowPayload {
   billing_source?: string | null
   purpose?: string | null
   detail?: string | null
+  owner_user_id?: string | null
+  managed_credential_version?: number | null
 }
 export interface NotificationClearPayload {
   key: string
@@ -6688,6 +6709,7 @@ export interface RpcMethods {
   'session.interrupt': { params: SessionInterruptParams; result: SessionInterruptResult }
   /** Human-facing stored sessions, most recent first (sub-agent / kanban sources denied). */
   'session.list': { params: SessionListParams; result: SessionListResult }
+  'session.managed_model_status': { params: ManagedModelStatusParams; result: ManagedModelStatusResult }
   'session.managed_model_ticket': { params: ManagedModelTicketParams; result: ManagedModelTicketResult }
   /** Most recent human-facing session; errors fold into a null session_id. */
   'session.most_recent': { params: SessionMostRecentParams; result: SessionMostRecentResult }
@@ -7026,6 +7048,7 @@ export const RPC_METHODS = [
   'session.history',
   'session.interrupt',
   'session.list',
+  'session.managed_model_status',
   'session.managed_model_ticket',
   'session.most_recent',
   'session.redirect',
@@ -7159,6 +7182,7 @@ export interface CanonicalRpcMethods {
   'session.info': { params: CanonicalSessionInfoParams; result: CanonicalSessionInfo }
   'session.interrupt': { params: CanonicalControlParams; result: CanonicalSessionHandle }
   'session.list': { params: CanonicalListParams; result: CanonicalListResult }
+  'session.managed_model_status': { params: ManagedModelStatusParams; result: ManagedModelStatusResult }
   /** Revision-fenced, retry-idempotent session edit (rename, archive, sidebar, branch, delete, rewind, reset, model, reasoning, workspace, edit_policy, compress, import). */
   'session.mutate': { params: SessionMutateParams; result: SessionMutateResult }
   /** Local operator only: the owner deletes the ended sessions `hermes sessions prune` selected, skipping busy sessions and retained reset owners. */
@@ -7218,6 +7242,7 @@ export const CANONICAL_RPC_METHODS = [
   'session.info',
   'session.interrupt',
   'session.list',
+  'session.managed_model_status',
   'session.mutate',
   'session.prune',
   'session.redirect',

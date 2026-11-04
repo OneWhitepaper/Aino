@@ -320,6 +320,12 @@ const configPageFieldDescriptions: Record<string, string> = defineFieldCopy({
 })
 
 const esBaseOverrides = {
+  platformModels: {
+    permanent: "Sin caducidad",
+    reauthorize: "Volver a autorizar este dispositivo",
+    reauthorizeDescription: "Sustituye la autorización de modelos de este dispositivo. Inicia sesión si tu sesión de gestión ha caducado.",
+    deviceRevoked: "Se ha revocado el acceso a modelos de este dispositivo. Autorízalo de nuevo en los ajustes de modelos.",
+  },
   platformDevices: { expired: 'Caducada' },
   appearancePage: appearancePage.es,
   home: homeGuidance.es,

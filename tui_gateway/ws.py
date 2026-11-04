@@ -655,6 +655,7 @@ async def handle_ws(ws: Any, *, auth_identity: dict | None = None, subprotocol: 
                 "skin": skin_payload, "change_events": True, "heartbeat": True, "replay_epoch": replay_epoch(),
                 "managed_model_binding": 1,
                 'managed_image_binding': 1,
+                'managed_device_key': 1,
                 **({"session_authority": True} if authority_connection is not None else {}),
             }},
         })

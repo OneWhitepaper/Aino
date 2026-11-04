@@ -16,7 +16,8 @@ async def call(connection, method, **params):
 
 
 @pytest.mark.asyncio
-async def test_managed_create_binding_and_cold_resume_require_a_fresh_lease(tmp_path, monkeypatch):
+@pytest.mark.parametrize('credential_type', ['lease', 'device'])
+async def test_managed_create_binding_and_cold_resume_require_a_fresh_lease(tmp_path, monkeypatch, credential_type):
     from gateway.run import GatewayRunner
     from gateway.session_authority import initialize_session_authority
     from gateway.session_controls import AuthorityConnection
@@ -62,6 +63,7 @@ async def test_managed_create_binding_and_cold_resume_require_a_fresh_lease(tmp_
                            owner=owner, model_id='catalog-a',
                            session_ticket=ticket['result']['session_ticket'])
         assert 'result' in claim, claim
+        assert claim['result']['managed_device_key'] == 1
         replay = await call(controller, 'session.claim_managed_model', session_id=sid,
                             owner=owner, model_id='catalog-a',
                             session_ticket=ticket['result']['session_ticket'])
@@ -74,6 +76,8 @@ async def test_managed_create_binding_and_cold_resume_require_a_fresh_lease(tmp_
                        model='upstream-model', api_mode='chat_completions',
                        capabilities={'tools': True, 'vision': False, 'reasoning': False},
                        context_window=32000)
+        if credential_type == 'device':
+            binding.update(credential_type='device', credential_version=1, expires_at=None)
         bound = await call(controller, 'session.bind_managed_model', **binding)
         assert bound['result']['bound'], bound
         ready = await call(viewer, 'session.info', session_id=sid)
@@ -83,6 +87,11 @@ async def test_managed_create_binding_and_cold_resume_require_a_fresh_lease(tmp_
         assert options['result']['session_info']['model'] == 'upstream-model', options
         assert options['result']['session_info']['platform_owner'] == owner, options
         assert get_registry().get(binding_key(authority, sid)) is not None
+        from gateway.run_turn_prepare import _resolve_policy_agent_runtime
+        from gateway.session_policy import policy_for_source
+        live = authority.sessions[sid]
+        _, runtime = _resolve_policy_agent_runtime(runner, policy_for_source(runner, live.source), source=live.source)
+        assert runtime['api_key'].model_id == ('catalog-a' if credential_type == 'device' else None)
         other_profile = SimpleNamespace(profile_id=str(tmp_path / 'other-profile'))
         assert get_registry().get(binding_key(other_profile, sid)) is None
 

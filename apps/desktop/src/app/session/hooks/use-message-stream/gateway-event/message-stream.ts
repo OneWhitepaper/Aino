@@ -1,5 +1,6 @@
 import { type BillingBlock, mergeUsage } from '@hermes/shared'
 
+import { reportPlatformCredentialRejection } from '@/api/platform-models'
 import { noteTurnSettled } from '@/app/session/hooks/use-session-actions/settled-turns'
 import { burstVibeHearts } from '@/components/chat/vibe-hearts'
 import { translateNow } from '@/i18n'
@@ -440,6 +441,11 @@ export function handleMessageStreamEvent(ctx: GatewayEventContext): boolean {
     // plan's limit is said once, by the turn's error card (its buttons are the
     // ways on); a toast and banner would only repeat it.
     const usageWindowWall = parseErrorSurface(payload?.error_surface)?.code === 'usage_window'
+    reportPlatformCredentialRejection(
+      parseErrorSurface(payload?.error_surface)?.code,
+      $sessionStates.get()[sessionId]?.platformModel?.ownerUserId,
+      parseErrorSurface(payload?.error_surface)?.managedCredentialVersion
+    )
 
     if (payload?.billing && !usageWindowWall) {
       surfaceBillingBlock(sessionId, payload.billing, !isActiveEvent)

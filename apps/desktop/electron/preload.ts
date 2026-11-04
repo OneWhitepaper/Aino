@@ -71,6 +71,11 @@ contextBridge.exposeInMainWorld('hermesDesktop', {
     }
   },
   platformModels: {
+    nativeDeviceKeys: true,
+    credentialRejected: async (revision, version) =>
+      unwrapPlatformAccountIpc(await ipcRenderer.invoke('aino:platform-models:credential-rejected', revision, version)),
+    reauthorize: async revision =>
+      unwrapPlatformAccountIpc(await ipcRenderer.invoke('aino:platform-models:reauthorize', revision)),
     owner: async revision => unwrapPlatformAccountIpc(await ipcRenderer.invoke('aino:platform-models:owner', revision)),
     bind: input => ipcRenderer.invoke('aino:platform-models:bind', input),
     list: async () => unwrapPlatformAccountIpc(await ipcRenderer.invoke('aino:platform-models:list')),

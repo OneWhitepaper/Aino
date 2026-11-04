@@ -59,11 +59,19 @@ class AinoImageGenProvider(OpenAIImageGenProvider):
         if binding is None:
             raise RuntimeError("awaiting_managed_image_credentials")
         identity = (binding.owner, binding.model_id, binding.model, binding.base_url)
-        def key():
+        def current_binding():
             current = current_image_binding()
             if current is None or identity != (current.owner, current.model_id, current.model, current.base_url):
                 raise RuntimeError("awaiting_managed_image_credentials")
-            return current.api_key
+            return current
+
+        def key():
+            return current_binding().api_key
+
+        def request_identity():
+            current = current_binding()
+            return (current.api_key, current.model_id if current.credential_type == 'device' else None,
+                    current.credential_version)
 
         scope = billing_scope.get()
         if scope is None:
@@ -79,7 +87,9 @@ class AinoImageGenProvider(OpenAIImageGenProvider):
             scope.calls.bind_managed_owner(binding.owner.user_id, scope.session_id)
             scope.calls.record_non_aino_model_call()
         credential = ManagedCredential(key, binding.owner.user_id, scope.session_id, binding.model,
-                                       binding.base_url, binding.api_mode, False, scope=scope)
+                                       binding.base_url, binding.api_mode, False, scope=scope,
+                                       model_id=binding.model_id if binding.credential_type == 'device' else None,
+                                       get_request_identity=request_identity)
         return binding.base_url, credential
 
     def _client(self, openai, base_url, api_key):
@@ -91,6 +101,11 @@ class AinoImageGenProvider(OpenAIImageGenProvider):
         return client.with_options(max_retries=0, timeout=300.0)
 
     def _api_failure(self, exc, verb):
+        from agent.managed_inference_errors import managed_credential_rejection
+        from tui_gateway.managed_image_runtime import notify_image_credential_rejection
+
+        if rejected := managed_credential_rejection(exc):
+            notify_image_credential_rejection(*rejected)
         status = getattr(exc, "status_code", None)
         if status == 400 and verb == "editing":
             return "Aino 未能接受这次改图请求，请检查原图、图片尺寸、参数及所选模型是否支持图片编辑。"

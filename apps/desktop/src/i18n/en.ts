@@ -6154,6 +6154,10 @@ tabActions: title => `Actions for ${title}`
     not_authenticated: 'Sign in to Aino before using this model',
     platform_account_changed:
       'This model belongs to another account. Sign in to the original account or choose a model again.',
+    permanent: "No expiration",
+    reauthorize: "Reauthorize this device",
+    reauthorizeDescription: "Replace this device’s model authorization. Sign in again if your management session has expired.",
+    deviceRevoked: "This device’s model access was revoked. Reauthorize it in Model settings.",
     bindingFailed: 'Model authorization failed. Your message has not been sent. Select the model again to retry.',
     unsupported: 'This connection does not support Aino models',
     rate: 'Account rate',

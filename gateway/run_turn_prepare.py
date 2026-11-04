@@ -75,13 +75,20 @@ def _resolve_policy_agent_runtime(runner, policy, *, source=None, fallback=True)
                 raise RuntimeStoreError('awaiting_managed_credentials')
             return held
 
+        def request_identity():
+            held = current()
+            return (held.api_key, held.model_id if held.credential_type == 'device' else None,
+                    held.credential_version)
+
         runtime = resolve_managed_runtime(binding, now=time.time())
         if runtime.get('credential_expired'):
             raise RuntimeStoreError('awaiting_managed_credentials')
         runtime['api_key'] = ManagedCredential(
             lambda: current().api_key, binding.owner.user_id, str(uuid5(NAMESPACE_OID, key)),
             binding.model, binding.base_url, runtime['api_mode'], bool(binding.capabilities.get('vision')),
-            get_context_window=lambda: current().context_window)
+            get_context_window=lambda: current().context_window,
+            model_id=binding.model_id if binding.credential_type == 'device' else None,
+            get_request_identity=request_identity)
         return binding.model, _runtime_agent_kwargs(runtime)
     # A follow_profile_config session's route is the profile's current one, model and endpoint from one read.
     frozen, model = policy.effective(authority)

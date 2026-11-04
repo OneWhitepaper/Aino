@@ -13,7 +13,7 @@ import type {
   PlatformDeviceOwner,
   PlatformPublicCapabilities
 } from './platform-contract'
-import type { PlatformTokenSet, PlatformTokenStore } from './platform-token-contract'
+import type { PlatformDeviceKey, PlatformTokenSet, PlatformTokenStore } from './platform-token-contract'
 
 interface RetainedAccount {
   credentials: PlatformTokenSet
@@ -35,6 +35,9 @@ export interface PlatformAuth {
   listUsage(input: Parameters<PlatformClient['listUsage']>[1], expectedUserId: string): ReturnType<PlatformClient['listUsage']>
   models(): ReturnType<PlatformClient['models']>
   modelLease(input: PlatformLeaseInput): ReturnType<PlatformClient['modelLease']>
+  ensureDeviceKey(deviceId: string, reauthorize?: boolean): Promise<PlatformDeviceKey & { api_key: string }>
+  supportsDeviceKey(): Promise<boolean>
+  rejectDeviceKey(deviceId: string, credentialVersion: number): Promise<void>
   initialize(): Promise<PlatformAccountSnapshot>
   generation(): number
   snapshot(): PlatformAccountSnapshot
@@ -59,7 +62,11 @@ export interface PlatformAuth {
     phone: string
     captcha_proof?: PlatformCaptchaProof
   }): ReturnType<PlatformClient['requestBindingCode']>
-  submitStepUp(input: { totp_code: string; expected_user_id?: string; expected_generation?: number }): Promise<PlatformAccountSnapshot>
+  submitStepUp(input: {
+    totp_code: string
+    expected_user_id?: string
+    expected_generation?: number
+  }): Promise<PlatformAccountSnapshot>
   bindPhone(input: { phone: string; challenge_id: string; code: string }): Promise<PlatformAccountSnapshot>
   logout(): Promise<PlatformAccountSnapshot>
 }
@@ -76,6 +83,12 @@ export function createPlatformAuth({
   let tokens: PlatformTokenSet | null = null
   let pendingSecondFactor: { tempToken: string; remember: boolean } | null = null
   let generation = 0
+  let catalog: { generation: number; models: Awaited<ReturnType<PlatformClient['models']>> } | null = null
+  const deviceFlights = new Map<string, Promise<PlatformDeviceKey & { api_key: string }>>()
+  const revokedDevices = new Set<string>()
+  const suspendedDevices = new Set<string>()
+  const deviceIntents = new Map<string, number>()
+  let deviceCapability: Promise<boolean> | undefined
 
   let refreshFlight: {
     generation: number
@@ -97,8 +110,8 @@ export function createPlatformAuth({
 
   const listeners = new Set<(snapshot: PlatformAccountSnapshot) => void>()
 
-  function publish(patch: Partial<PlatformAccountSnapshot>) {
-    current = { ...current, ...patch, revision: current.revision + 1 }
+  function publish(patch: Partial<PlatformAccountSnapshot>, advanceRevision = true) {
+    current = { ...current, ...patch, revision: current.revision + (advanceRevision ? 1 : 0) }
 
     for (const listener of listeners) {
       try {
@@ -171,6 +184,12 @@ export function createPlatformAuth({
       throw new PlatformClientError('auth_attempt_superseded')
     }
 
+    if (current.account?.id === profile.id && tokens?.deviceKeys) {
+      next.deviceKeys = tokens.deviceKeys
+      next.deviceModels = tokens.deviceModels
+      next.deviceAccount = profile
+    }
+
     const rememberState = await storeTokens(next, remember, expected)
 
     if (!rememberState || expected !== generation) {
@@ -180,7 +199,20 @@ export function createPlatformAuth({
     tokens = next
     pendingSecondFactor = null
 
-    return publish({ phase: 'signed_in', account: profile, remember_state: rememberState, error: null })
+    for (const scope of suspendedDevices) {
+      if (JSON.parse(scope)[1] === profile.id) {
+        suspendedDevices.delete(scope)
+      }
+    }
+
+    return publish({
+      phase: 'signed_in',
+      account: profile,
+      remember_state: rememberState,
+      error: null,
+      model_identity_ready: Boolean(next.deviceKeys?.some(key => key.user_id === profile.id)),
+      model_identity_version: next.deviceKeys?.find(key => key.user_id === profile.id)?.version
+    })
   }
 
   async function finishExchange(
@@ -232,6 +264,17 @@ export function createPlatformAuth({
 
     const promise = (async () => {
       const next = await client.refresh(previous.refreshToken)
+
+      if (previous.deviceKeys) {
+        next.deviceKeys = previous.deviceKeys
+      }
+
+      if (previous.deviceAccount) {
+        next.deviceAccount = previous.deviceAccount
+        next.deviceModels = previous.deviceModels
+      }
+
+      if (previous.suspendedDevices) { next.suspendedDevices = previous.suspendedDevices }
       const rememberState = await storeTokens(next, remember, expected)
 
       if (!rememberState || expected !== generation) {
@@ -317,6 +360,8 @@ export function createPlatformAuth({
       tokens && current.account ? { credentials: tokens, snapshot: current } : null
 
     const expected = ++generation
+    deviceFlights.clear()
+    deviceCapability = undefined
     pendingSecondFactor = null
 
     if (previous) {
@@ -388,10 +433,156 @@ export function createPlatformAuth({
     return result
   }
 
+  async function ensureDeviceKey(
+    deviceId: string,
+    reauthorize = false
+  ): Promise<PlatformDeviceKey & { api_key: string }> {
+    const userId = current.account?.id
+
+    if (!userId) {
+      throw new PlatformClientError('authentication_required', true)
+    }
+
+    const scope = JSON.stringify([client.origin, userId, deviceId])
+    const active = deviceFlights.get(scope)
+
+    if (active) {
+      return active
+    }
+
+    const intent = deviceIntents.get(scope) ?? 0
+    const cached = tokens?.deviceKeys?.find(key => key.user_id === userId && key.device_id === deviceId)
+
+    if (!reauthorize && revokedDevices.has(scope)) {
+      throw new PlatformClientError('DESKTOP_DEVICE_KEY_REVOKED')
+    }
+
+    if (!reauthorize && suspendedDevices.has(scope)) {
+      throw new PlatformClientError('managed_credential_rejected')
+    }
+
+    if (!reauthorize && cached) {
+      return cached
+    }
+
+    if (reauthorize) {
+      generation++
+      publish({ model_identity_ready: false, model_identity_version: undefined })
+    }
+
+    const expected = generation
+
+    const check = () => {
+      if (generation !== expected || current.account?.id !== userId || (deviceIntents.get(scope) ?? 0) !== intent) {
+        throw new PlatformClientError('auth_attempt_superseded')
+      }
+    }
+
+    const promise = (async () => {
+      try {
+        let key = reauthorize
+          ? await authenticated(async token => {
+              const state = await client.deviceKeyState(token, deviceId)
+
+              return client.deviceKey(token, {
+                device_id: deviceId,
+                expected_version: state.version,
+                ...(state.status === 'revoked' ? { reauthorize: true } : { rotate: true })
+              })
+            }, false)
+          : await authenticated(token => client.deviceKey(token, { device_id: deviceId }), false)
+
+        check()
+
+        if (key.status === 'revoked') {
+          throw new PlatformClientError('DESKTOP_DEVICE_KEY_REVOKED')
+        }
+
+        if (!key.api_key) {
+          key = await authenticated(
+            token => client.deviceKey(token, { device_id: deviceId, rotate: true, expected_version: key.version }),
+            false
+          )
+          check()
+        }
+
+        if (key.status !== 'active' || !key.api_key) {
+          throw new PlatformClientError('invalid_response')
+        }
+
+        const retained = { ...key, api_key: key.api_key, user_id: userId }
+        const previous = requireTokens()
+
+        const next = {
+          ...previous,
+          deviceAccount: current.account!,
+          suspendedDevices: previous.suspendedDevices?.filter(device => device.user_id !== userId || device.device_id !== deviceId),
+          deviceModels: catalog?.models ?? previous.deviceModels,
+          deviceKeys: [
+            ...(previous.deviceKeys ?? []).filter(key => key.user_id !== userId || key.device_id !== deviceId),
+            retained
+          ]
+        }
+
+        if (current.remember_state === 'encrypted') {
+          await persist(async () => {
+            check()
+            await tokenStore.save(client.origin, next)
+          })
+          check()
+        }
+
+        tokens = next
+        revokedDevices.delete(scope)
+        suspendedDevices.delete(scope)
+
+        if (reauthorize) { publish({ model_identity_ready: true, model_identity_version: key.version }) }
+        // This hint adds no account authority; keep in-flight account fences intact.
+        else { publish({ model_identity_ready: true, model_identity_version: key.version }, false) }
+
+        return retained
+      } catch (error) {
+        if (error instanceof PlatformClientError && error.code === 'DESKTOP_DEVICE_KEY_REVOKED') {
+          revokedDevices.add(scope)
+        }
+
+        throw error
+      }
+    })()
+
+    deviceFlights.set(scope, promise)
+
+    try {
+      return await promise
+    } finally {
+      if (deviceFlights.get(scope) === promise) {
+        deviceFlights.delete(scope)
+      }
+    }
+  }
+
   const api: PlatformAuth = {
     uploadDiagnostics: (bundle, owner) => deviceOperation(owner, token => client.uploadDiagnostics(token, bundle), false),
     listDevices: owner => deviceOperation(owner, token => client.listDevices(token), true),
-    revokeDevice: (id, owner) => deviceOperation(owner, token => client.revokeDevice(token, id), false),
+    async revokeDevice(id, owner) {
+      const result = await deviceOperation(owner, token => client.revokeDevice(token, id), false)
+      const key = tokens?.deviceKeys?.find(key => key.device_id === id && key.user_id === owner.expected_user_id)
+
+      if (key) {
+        const scope = JSON.stringify([client.origin, key.user_id, id])
+        revokedDevices.add(scope)
+        deviceIntents.set(scope, (deviceIntents.get(scope) ?? 0) + 1)
+        tokens!.deviceKeys = tokens!.deviceKeys!.filter(row => row !== key)
+
+        if (current.remember_state === 'encrypted') {
+          await persist(() => tokenStore.save(client.origin, tokens!))
+        }
+
+        publish({ model_identity_ready: Boolean(tokens?.deviceKeys?.length) })
+      }
+
+      return result
+    },
     quote: (input, owner) => paymentOperation(owner, token => client.quote(token, input), true),
     async createOrder(input, owner) {
       const scope = api.billingScope(owner)
@@ -433,7 +624,75 @@ export function createPlatformAuth({
 
       return authenticated(token => client.listUsage(token, input), true)
     },
-    models: () => authenticated(token => client.models(token), true),
+    async models() {
+      if (current.phase !== 'signed_in' && current.model_identity_ready && catalog?.generation === generation) {
+        return catalog.models
+      }
+
+      if (current.phase !== 'signed_in' && current.model_identity_ready && tokens?.deviceModels) {
+        return tokens.deviceModels
+      }
+
+      const models = await authenticated(token => client.models(token), true)
+      catalog = { generation, models }
+
+      return models
+    },
+    ensureDeviceKey,
+    async rejectDeviceKey(deviceId, credentialVersion) {
+      if (current.model_identity_version !== credentialVersion || !current.model_identity_ready) { return }
+      const userId = current.account?.id
+
+      if (!userId) {
+        return
+      }
+
+      const scope = JSON.stringify([client.origin, userId, deviceId])
+
+      if (revokedDevices.has(scope) || suspendedDevices.has(scope)) {
+        return
+      }
+
+      // A confirmed inference rejection suspends reuse until management can inspect it.
+      suspendedDevices.add(scope)
+      deviceIntents.set(scope, (deviceIntents.get(scope) ?? 0) + 1)
+      const expected = generation
+
+      if (tokens?.deviceKeys) {
+        tokens.deviceKeys = tokens.deviceKeys.filter(key => key.user_id !== userId || key.device_id !== deviceId)
+      }
+
+      if (tokens) { tokens.suspendedDevices = [...(tokens.suspendedDevices ?? []), { user_id: userId, device_id: deviceId }] }
+      publish({ model_identity_ready: false })
+
+      if (tokens && current.remember_state === 'encrypted') {
+        await persist(async () => {
+          if (expected === generation && tokens) { await tokenStore.save(client.origin, tokens) }
+        })
+      }
+
+      if (expected !== generation || current.account?.id !== userId) { return }
+      const state = await authenticated(token => client.deviceKeyState(token, deviceId), true)
+
+      if (expected !== generation || current.account?.id !== userId) { return }
+
+      if (state.status === 'revoked') {
+        revokedDevices.add(scope)
+        suspendedDevices.delete(scope)
+      }
+    },
+    supportsDeviceKey() {
+      if (tokens?.deviceKeys?.some(key => key.user_id === current.account?.id)) {
+        return Promise.resolve(true)
+      }
+
+      deviceCapability ??= authenticated(token => client.supportsDeviceKey(token), true).catch(error => {
+        deviceCapability = undefined
+        throw error
+      })
+
+      return deviceCapability
+    },
     modelLease: input => authenticated(token => client.modelLease(token, input), true),
     async initialize() {
       const expected = ++generation
@@ -451,7 +710,21 @@ export function createPlatformAuth({
         }
 
         tokens = restored
-        current = { ...current, remember_state: 'encrypted' }
+
+        for (const device of restored.suspendedDevices ?? []) {
+          suspendedDevices.add(JSON.stringify([client.origin, device.user_id, device.device_id]))
+        }
+
+        current = {
+          ...current,
+          remember_state: 'encrypted',
+          ...(restored.deviceAccount && restored.deviceKeys?.length
+            ? {
+                account: restored.deviceAccount,
+                model_identity_ready: true, model_identity_version: restored.deviceKeys[0].version
+              }
+            : {})
+        }
 
         if (restored.expiresAt <= now() + 30_000) {
           return api.refresh()
@@ -459,7 +732,15 @@ export function createPlatformAuth({
 
         const profile = await client.profile(restored.accessToken)
 
-        return expected === generation ? publish({ phase: 'signed_in', account: profile, error: null }) : current
+        return expected === generation
+          ? publish({
+              phase: 'signed_in',
+              account: profile,
+              error: null,
+              model_identity_ready: Boolean(tokens?.deviceKeys?.some(key => key.user_id === profile.id)),
+              model_identity_version: tokens?.deviceKeys?.find(key => key.user_id === profile.id)?.version
+            })
+          : current
       } catch (error) {
         if (expected !== generation) {
           return current
@@ -592,11 +873,22 @@ export function createPlatformAuth({
 
       const previousSnapshot = current
       generation += 1
+
+      if (tokens) {
+        delete tokens.deviceKeys
+        delete tokens.deviceModels
+        delete tokens.deviceAccount
+        delete tokens.suspendedDevices
+      }
+
+      catalog = null
+      deviceCapability = undefined
+      deviceFlights.clear()
       pendingSecondFactor = null
       refreshFlight = null
       // Retire local runtime authority before durable token deletion or remote
       // revocation can stall. Controllers observe the generation via publish().
-      publish({})
+      publish({ model_identity_ready: false })
 
       let promise!: Promise<PlatformAccountSnapshot>
       promise = (async () => {

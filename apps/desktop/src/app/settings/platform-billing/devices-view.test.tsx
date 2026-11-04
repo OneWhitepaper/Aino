@@ -243,7 +243,7 @@ it('lets explicit server state and renewed authorizations replace local revoke k
 })
 
 it('shows a concurrent new legacy authorization returned after revoke as active', async () => {
-  let current = { ...device, expires_at: '2020-09-16T02:00:00Z', revoked: true }
+  let current: PlatformDevice = { ...device, expires_at: '2020-09-16T02:00:00Z', revoked: true }
   const list = vi.fn(async () => [current])
 
   const revoke = vi.fn(async () => {

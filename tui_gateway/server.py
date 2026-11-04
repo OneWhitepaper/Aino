@@ -1511,7 +1511,7 @@ def _session_info(agent, session: dict | None = None) -> dict:
         "version": "", "release_date": "", "update_behind": None, "update_command": "",
         "usage": _session_usage_snapshot(session),
         "profile_name": profile_name_for_home(sess.get("profile_home")) or _current_profile_name(),
-        "capabilities": {"managed_model_binding": 1, 'managed_image_binding': 1},
+        "capabilities": {"managed_model_binding": 1, 'managed_image_binding': 1, 'managed_device_key': 1},
     }
     from .managed_session import model_status
     runtime_sid = next((sid for sid, record in list(_sessions.items()) if record is sess), None)

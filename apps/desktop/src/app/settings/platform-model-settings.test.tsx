@@ -81,3 +81,19 @@ it('gates the picker using the inspected profile rather than another supported p
   expect((screen.getByRole('button', { name: 'Confirm choice' }) as HTMLButtonElement).disabled).toBe(true)
   expect(onSelect).not.toHaveBeenCalled()
 })
+
+it('reauthorizes the native device only after an explicit confirmation with its account revision', async () => {
+  await installCatalog()
+  const reauthorize = vi.fn(async () => undefined)
+  window.hermesDesktop.platformModels.reauthorize = reauthorize
+  render(
+    <I18nProvider configClient={null} initialLocale="en">
+      <PlatformModelSettings onSelect={() => {}} scopeProfile="work" selectedId="chosen" />
+    </I18nProvider>
+  )
+  fireEvent.click(await screen.findByRole('button', { name: 'Reauthorize this device' }))
+  expect(reauthorize).not.toHaveBeenCalled()
+  const dialog = screen.getByRole('dialog')
+  fireEvent.click(Array.from(dialog.querySelectorAll('button')).find(button => button.textContent === 'Reauthorize this device')!)
+  await waitFor(() => expect(reauthorize).toHaveBeenCalledWith(platformSnapshot().revision))
+})

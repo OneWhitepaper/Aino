@@ -56,7 +56,12 @@ function pageVisible() {
 function deviceStatus(device: PlatformDevice) {
   // Older APIs report expired credentials as revoked, even while their sign-in remains revocable.
   return (
-    device.status ?? (Date.parse(device.expires_at) <= Date.now() ? 'expired' : device.revoked ? 'revoked' : 'active')
+    device.status ??
+    (device.expires_at !== null && Date.parse(device.expires_at) <= Date.now()
+      ? 'expired'
+      : device.revoked
+        ? 'revoked'
+        : 'active')
   )
 }
 
@@ -69,6 +74,7 @@ function mergeDeviceAuthorizations(rows: PlatformDevice[], previous: PlatformDev
     // Legacy revocation can update last_used_at; only an expired, revoked response needs disambiguation.
     return !device.status &&
       device.revoked &&
+      device.expires_at !== null &&
       Date.parse(device.expires_at) <= Date.now() &&
       revoked.get(device.device_id) === device.expires_at
       ? { ...device, status: 'revoked' as const }
@@ -345,7 +351,10 @@ function DeviceList({ scope, bridge, accountBridge }: PlatformDevicesProps & { b
                       {copy.lastUsed}: {new Date(device.last_used_at).toLocaleString(locale)}
                     </span>
                     <span>
-                      {copy.expires}: {new Date(device.expires_at).toLocaleString(locale)}
+                      {copy.expires}:{' '}
+                      {device.expires_at === null
+                        ? t.platformModels.permanent
+                        : new Date(device.expires_at).toLocaleString(locale)}
                     </span>
                   </div>
                 </div>

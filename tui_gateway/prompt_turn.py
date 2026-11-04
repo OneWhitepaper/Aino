@@ -829,7 +829,8 @@ def _invoke_agent(
         from agent.notification_presentation import notification_turn, event_presentation_muted
         from tui_gateway.managed_image_runtime import conversation_image_scope
         with notification_turn(agent, muted=event_presentation_muted("message.delta", sid), session_id=sid), \
-                conversation_image_scope(session_id=sid, session=session):
+                conversation_image_scope(session_id=sid, session=session,
+                                         on_rejection=lambda payload: _emit('notification.show', sid, payload)):
             st.result = agent.run_conversation(run_message, **st.run_kwargs)
             # A held last line that never became a marker is part of the reply: deliver it.
             if hold is not None and (rest := hold.finish()) and not getattr(agent, "_mute_notification_reply", False):

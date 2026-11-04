@@ -6,7 +6,7 @@ from pydantic import Field
 
 from .base import Result
 from .common import ProfileParams, SessionParams
-from .registry import method
+from .registry import canonical_method, method
 
 
 class PlatformOwner(Result):
@@ -32,6 +32,7 @@ class ManagedModelTicketResult(Result):
     session_ticket: str
     managed_model_binding: int
     managed_image_binding: int = 1
+    managed_device_key: int = 1
 
 
 class ClaimManagedModelParams(ManagedModelTicketParams):
@@ -43,6 +44,7 @@ class ClaimManagedModelResult(Result):
     managed_model_binding: int
     managed_model_context_window: bool = False
     managed_image_binding: int = 1
+    managed_device_key: int = 1
 
 
 class BindManagedModelParams(ManagedModelTicketParams):
@@ -50,7 +52,9 @@ class BindManagedModelParams(ManagedModelTicketParams):
     credential_id: str
     api_key: str
     base_url: str
-    expires_at: str
+    expires_at: str | None
+    credential_type: Literal['lease', 'device'] = 'lease'
+    credential_version: int | None = Field(default=None, gt=0, strict=True)
     model: str
     api_mode: Literal["chat_completions", "responses", "anthropic_messages", 'images_generations']
     capabilities: ManagedCapabilities
@@ -72,11 +76,23 @@ class ClearManagedModelResult(Result):
     cleared: bool
 
 
+class ManagedModelStatusParams(ManagedModelTicketParams):
+    binding_revision: int = Field(gt=0, strict=True)
+    credential_version: int = Field(gt=0, strict=True)
+
+
+class ManagedModelStatusResult(Result):
+    reusable: bool
+    managed_device_key: Literal[1] = 1
+
+
 method("session.managed_model_ticket", params=ManagedModelTicketParams, result=ManagedModelTicketResult)
 method("session.claim_managed_model", params=ClaimManagedModelParams, result=ClaimManagedModelResult)
 method("session.bind_managed_model", params=BindManagedModelParams, result=BindManagedModelResult)
 method("session.renew_managed_model", params=BindManagedModelParams, result=BindManagedModelResult)
 method("session.clear_managed_model", params=ClearManagedModelParams, result=ClearManagedModelResult)
+method('session.managed_model_status', params=ManagedModelStatusParams, result=ManagedModelStatusResult)
+canonical_method('session.managed_model_status', params=ManagedModelStatusParams, result=ManagedModelStatusResult)
 
 
 class AccountPublic(Result):

@@ -91,6 +91,8 @@ export const ERROR_CODE_KEYS = [
 export type ErrorCodeKey = (typeof ERROR_CODE_KEYS)[number]
 
 export interface ErrorSurface {
+  /** Version of the exact managed device credential used by the failed request. */
+  managedCredentialVersion?: number
   layer: ErrorSurfaceLayer
   /** Specific failure code (a FailoverReason value or site-specific code). */
   code: string
@@ -190,6 +192,7 @@ export function parseErrorSurface(value: unknown): ErrorSurface | null {
     resets_at?: unknown
     retryable?: unknown
     usage_limit?: unknown
+    managed_credential_version?: unknown
   }
 
   const layer = typeof raw.layer === 'string' ? (raw.layer as ErrorSurfaceLayer) : null
@@ -212,6 +215,7 @@ export function parseErrorSurface(value: unknown): ErrorSurface | null {
       : {}),
     ...(typeof raw.api_key_env === 'string' && raw.api_key_env ? { apiKeyEnv: raw.api_key_env } : {}),
     ...(typeof raw.message === 'string' && raw.message.trim() ? { message: raw.message.trim() } : {}),
+    ...(typeof raw.managed_credential_version === 'number' && Number.isSafeInteger(raw.managed_credential_version) && raw.managed_credential_version > 0 ? { managedCredentialVersion: raw.managed_credential_version } : {}),
     ...(typeof raw.resets_at === 'number' && Number.isFinite(raw.resets_at) && raw.resets_at > 0
       ? { resetsAt: raw.resets_at }
       : {}),
