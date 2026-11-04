@@ -40,6 +40,19 @@ def _row(text="I will inspect the files."):
     }
 
 
+def _seed_commentary_history(home):
+    from hermes_state import SessionDB
+
+    db = SessionDB(home / "state.db")
+    try:
+        db.create_session("sid", source="desktop")
+        prompt_id = db.append_message("sid", "user", "Inspect the files.", timestamp=0)
+        db.append_message("sid", **_row())
+        return prompt_id
+    finally:
+        db.close()
+
+
 def test_rest_history_separates_public_commentary_without_changing_source():
     row = _row()
     projected = _project_for_display([row])[0]
@@ -131,10 +144,10 @@ def test_rest_pages_bind_the_history_owner_for_messages_and_around(
 ):
     from hermes_cli import config as config_mod
     from hermes_cli.web_routers import sessions
-    import hermes_state_timeline
+    from hermes_state import SessionDB
 
-    row = _row()
     homes = {name: tmp_path / name for name in ("visible", "hidden")}
+    prompts = {profile: _seed_commentary_history(home) for profile, home in homes.items()}
     monkeypatch.setattr(
         sessions, "_cron_profile_home", lambda profile: (profile, homes[profile])
     )
@@ -149,24 +162,9 @@ def test_rest_pages_bind_the_history_owner_for_messages_and_around(
         },
     )
 
-    class FakeDB:
-        def resolve_session_id(self, sid):
-            return sid
-
-        def resolve_resume_session_id(self, sid):
-            return sid
-
-        def get_messages(self, *args, **kwargs):
-            return [row]
-
     monkeypatch.setattr(
-        sessions, "_with_db", lambda profile, fn, read_only: fn(FakeDB())
-    )
-    monkeypatch.setattr(sessions, "_timeline_session_id", lambda db, sid, owner: sid)
-    monkeypatch.setattr(
-        hermes_state_timeline,
-        "get_session_messages_around",
-        lambda *args, **kwargs: {"messages": [row], "pagination": {}},
+        sessions, "_open_session_db_for_profile",
+        lambda profile, read_only: SessionDB(homes[profile] / "state.db", read_only=read_only),
     )
 
     async def exercise():
@@ -183,10 +181,10 @@ def test_rest_pages_bind_the_history_owner_for_messages_and_around(
                 include_compacted=True,
             )
             around = await sessions.get_session_messages_around(
-                "sid", row_id=1, profile=profile, limit=120
+                "sid", row_id=prompts[profile], profile=profile, limit=120
             )
-            assert page["messages"][0]["display_commentary"] == expected
-            assert around["messages"][0]["display_commentary"] == expected
+            assert page["messages"][-1]["display_commentary"] == expected
+            assert around["messages"][-1]["display_commentary"] == expected
             assert page["profile"] == around["profile"] == profile
 
     asyncio.run(exercise())
@@ -195,10 +193,12 @@ def test_rest_pages_bind_the_history_owner_for_messages_and_around(
 def test_unscoped_rest_history_uses_custom_home_of_its_database(monkeypatch, tmp_path):
     from hermes_cli import config as config_mod
     from hermes_cli.web_routers import sessions
-    from hermes_constants import reset_hermes_home_override, set_hermes_home_override
-    import hermes_state_timeline
+    import hermes_state
 
     custom, default = tmp_path / "custom", tmp_path / "default"
+    prompt_id = _seed_commentary_history(custom)
+    monkeypatch.setenv("HERMES_HOME", str(custom))
+    monkeypatch.setattr(hermes_state, "DEFAULT_DB_PATH", custom / "state.db")
     monkeypatch.setattr(
         sessions, "_cron_profile_home", lambda profile: ("default", default)
     )
@@ -210,27 +210,6 @@ def test_unscoped_rest_history_uses_custom_home_of_its_database(monkeypatch, tmp
                 "show_commentary": str(get_hermes_home_override()) != str(custom)
             }
         },
-    )
-    row = _row()
-
-    class FakeDB:
-        def resolve_session_id(self, sid):
-            return sid
-
-        def resolve_resume_session_id(self, sid):
-            return sid
-
-        def get_messages(self, *args, **kwargs):
-            return [row]
-
-    monkeypatch.setattr(
-        sessions, "_with_db", lambda profile, fn, read_only: fn(FakeDB())
-    )
-    monkeypatch.setattr(sessions, "_timeline_session_id", lambda db, sid, owner: sid)
-    monkeypatch.setattr(
-        hermes_state_timeline,
-        "get_session_messages_around",
-        lambda *args, **kwargs: {"messages": [row], "pagination": {}},
     )
 
     async def exercise():
@@ -244,18 +223,14 @@ def test_unscoped_rest_history_uses_custom_home_of_its_database(monkeypatch, tmp
         )
         around = await sessions.get_session_messages_around(
             "sid",
-            row_id=1,
+            row_id=prompt_id,
             profile=None,
             limit=120,
         )
-        assert page["messages"][0]["display_commentary"] == []
-        assert around["messages"][0]["display_commentary"] == []
+        assert page["messages"][-1]["display_commentary"] == []
+        assert around["messages"][-1]["display_commentary"] == []
 
-    token = set_hermes_home_override(str(custom))
-    try:
-        asyncio.run(exercise())
-    finally:
-        reset_hermes_home_override(token)
+    asyncio.run(exercise())
 
 
 def test_cold_resume_uses_the_resumed_session_home(monkeypatch, tmp_path):

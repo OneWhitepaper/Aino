@@ -72,25 +72,25 @@ jobs:
             exit 1
           fi
 
-          # A v0.22.5 upstream import is the one reviewed exception to the
+          # A v0.22.6 upstream import is the one reviewed exception to the
           # entry-PR data-only rule.  GitHub checks out the PR merge commit, so
           # its second parent is the proposed PR head and its first parent is
           # the target branch.  The release must be present in the PR head but
           # absent from the target branch; once main contains it this exception
           # expires and the normal admission rule applies again.
-          UPSTREAM=bf0203a794a07aac3ff764972ab9087baa4e4f4e
+          UPSTREAM=f0d94882e89ab8d4098b5bb2f166adfb9ee0a0ab
+          CATALOG_TREE=2a79b62d15c80db97a4575820d940d2f42781078
           IMPORTING_UPSTREAM=false
           if git merge-base --is-ancestor "$UPSTREAM" HEAD^2 \
               && ! git merge-base --is-ancestor "$UPSTREAM" HEAD^1; then
             IMPORTING_UPSTREAM=true
             # Aino compatibility commits may follow the release import;
             # validation below switches to the trusted release's entire tree.
-            # The catalog is data from the reviewed release verbatim.  This
-            # rejects a release import with a locally added or edited entry,
-            # while still allowing every imported entry to pass the clone and
-            # pinned-source checks below.
-            if ! git diff --quiet "$UPSTREAM" -- plugin-catalog/; then
-              echo "::error::upstream import changed plugin-catalog/ beyond reviewed v0.22.5"
+            # Pin the reviewed import's exact catalog tree. Five entries differ
+            # from the release only by seven removed trailing blank lines; no
+            # entry data or source pin changed. Any further edit is rejected.
+            if [ "$(git rev-parse HEAD:plugin-catalog)" != "$CATALOG_TREE" ]; then
+              echo "::error::upstream import changed plugin-catalog/ beyond reviewed v0.22.6"
               exit 1
             fi
             # The import must use the release's reviewed enforcement inputs.

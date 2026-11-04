@@ -106,12 +106,16 @@ def test_provider_switch_reshapes_the_schema_at_once(monkeypatch):
     """The ElevenLabs fields come from config at every listing: a switch right after an OpenAI
     listing must add them, and switching back must drop them."""
     import os
+    import sys
+    from types import ModuleType
 
     import model_tools
     from hermes_constants import get_hermes_home
 
     monkeypatch.setenv("ELEVENLABS_API_KEY", "el-test-key")
     monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
+    # This schema contract needs an available SDK; tests forbid first-use installs.
+    monkeypatch.setitem(sys.modules, "elevenlabs", ModuleType("elevenlabs"))
     config_path = get_hermes_home() / "config.yaml"
 
     def tts_props(provider: str, stamp: int) -> set:

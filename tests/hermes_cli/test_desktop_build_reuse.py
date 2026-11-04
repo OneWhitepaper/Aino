@@ -21,7 +21,7 @@ REPOSITORY = Path(__file__).resolve().parents[2]
 COPIED = (
     "scripts/build/freshness.mjs", "scripts/build/frontend-common.mjs", "scripts/build/desktop-reuse.mjs",
     "apps/desktop/scripts/write-build-stamp.mjs", "apps/desktop/scripts/bundle-env.mjs",
-    "apps/desktop/scripts/utils.mjs", "apps/desktop/product-identity.cjs",
+    "apps/desktop/scripts/utils.mjs", "apps/desktop/product-identity.cjs", "apps/desktop/brand.json",
     "scripts/msix-shared.mjs", "scripts/release-content-types.json",
 )
 
