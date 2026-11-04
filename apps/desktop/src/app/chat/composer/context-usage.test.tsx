@@ -151,6 +151,8 @@ describe('composer context usage', () => {
       await screen.findByRole('button', { name: '上下文用量 · 已用 12%' })
       capacity = 200_000
       await act(() => platformModelCatalog().load())
+      expect(screen.getByRole('button', { name: '上下文用量 · 已用 12%' })).toBeTruthy()
+      await act(() => platformModelCatalog().refresh())
       await screen.findByRole('button', { name: '上下文用量 · 已用 6%' })
       act(() => {
         view.$model.set('catalog-b')

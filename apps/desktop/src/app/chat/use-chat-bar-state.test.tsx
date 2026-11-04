@@ -43,7 +43,7 @@ afterEach(() => {
   setCurrentPlatformOwner('')
 })
 
-it('keeps known model controls in place while send preparation refreshes the same account catalog', async () => {
+it('keeps known model controls in place during an explicit refresh of the same account catalog', async () => {
   const model = platformModel()
   model.capabilities.reasoning = true
   const refreshed = deferred<PlatformModel[]>()
@@ -75,11 +75,16 @@ it('keeps known model controls in place while send preparation refreshes the sam
   const reasoningButton = screen.getByTestId('reasoning-pill')
   let refresh!: Promise<void>
 
+  await act(() => catalog.load())
+  expect(catalog.state.get().phase).toBe('ready')
+  expect(list).toHaveBeenCalledTimes(1)
+
   act(() => {
-    refresh = catalog.load()
+    refresh = catalog.refresh()
   })
 
   expect(catalog.state.get().phase).toBe('loading')
+  expect(list).toHaveBeenCalledTimes(2)
   expect(screen.getByRole('button', { name: /catalog-a/i })).toBe(modelButton)
   expect(screen.getByText(model.display_name)).toBeTruthy()
   expect(screen.queryByTestId('reasoning-pill')).toBe(reasoningButton)

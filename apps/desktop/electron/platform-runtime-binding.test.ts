@@ -18,6 +18,7 @@ afterEach(async () => {
   }
 
   vi.useRealTimers()
+  vi.restoreAllMocks()
 })
 
 const model: PlatformModel = {
@@ -48,14 +49,17 @@ const model: PlatformModel = {
   }
 }
 
-async function rig(options: {
-  delayLeaseAt?: number
-  delayLogout?: boolean
-  remote?: boolean
-  allow?: boolean
-  legacyGateway?: boolean
-  imageGateway?: boolean
-} = {}) {
+async function rig(
+  options: {
+    delayLeaseAt?: number
+    delayLogout?: boolean
+    remote?: boolean
+    allow?: boolean
+    legacyGateway?: boolean
+    imageGateway?: boolean
+    renewalFailures?: Array<{ status: number; code: string; retryAfter?: number }>
+  } = {}
+) {
   const received: Array<Record<string, unknown>> = []
   const credentials: Record<string, unknown>[] = []
 
@@ -132,10 +136,40 @@ async function rig(options: {
 
       credentials.push(JSON.parse(body))
 
+      const failure = credentials.length > 1 ? options.renewalFailures?.shift() : undefined
+
+      if (failure) {
+        if (failure.status === 0) {
+          req.socket.destroy()
+
+          return
+        }
+
+        res.statusCode = failure.status
+        res.setHeader('content-type', 'application/json')
+
+        if (failure.retryAfter !== undefined) {
+          res.setHeader('retry-after', failure.retryAfter)
+        }
+
+        res.end(JSON.stringify({ code: failure.code, message: 'fixture failure' }))
+
+        return
+      }
+
       const purpose = credentials.at(-1)?.purpose === 'image' ? 'image' : 'chat'
 
-      const leasedModel = purpose === 'image' ? { ...model, purpose, api_mode: 'images_generations',
-        capabilities: { tools: false, vision: false, reasoning: false, image_generation: true } } : model
+      const selectedModel = { ...model, id: String(credentials.at(-1)?.model_id) }
+
+      const leasedModel =
+        purpose === 'image'
+          ? {
+              ...selectedModel,
+              purpose,
+              api_mode: 'images_generations',
+              capabilities: { tools: false, vision: false, reasoning: false, image_generation: true }
+            }
+          : selectedModel
 
       const reply = () =>
         send({
@@ -306,6 +340,7 @@ async function rig(options: {
 
 it('renews on the retained controller socket without a renderer ticket and stops after clear', async () => {
   const f = await rig()
+  vi.spyOn(Math, 'random').mockReturnValue(0)
   vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
   expect((await f.controller.bind(f.input, f.window)).ok).toBe(true)
   const first = f.binding()
@@ -357,7 +392,9 @@ it('uses real auth HTTP and shared WebSocket serialization without exposing the 
   )
 
   expect(renewed.ok).toBe(true)
-  expect(f.credentials[1].connection_grant_id).toBe(f.credentials[0].connection_grant_id)
+  expect(f.credentials).toHaveLength(1)
+  expect(f.received.filter(row => row.method === 'session.claim_managed_model')).toHaveLength(2)
+  expect(f.received.filter(row => row.method === 'session.bind_managed_model')).toHaveLength(2)
 })
 
 it('does not obtain credentials for an unauthorized remote, wrong session, or stale account', async () => {
@@ -406,7 +443,7 @@ it('revokes active and pending gateway authority before a remote logout resolves
   expect(f.binding()).toMatchObject({ session_id: f.input.session_id })
 
   const pending = f.controller.bind(
-    { ...f.input, expected_account_revision: f.auth.snapshot().revision },
+    { ...f.input, model_id: 'other', expected_account_revision: f.auth.snapshot().revision },
     f.window
   )
 
@@ -457,6 +494,7 @@ it('keeps model IPC restricted to the registered main frame and strips extra ren
 
 it('keeps image bind, renewal and clear isolated from the retained chat socket', async () => {
   const f = await rig({ imageGateway: true })
+  vi.spyOn(Math, 'random').mockReturnValue(0)
   vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] })
   expect((await f.controller.bind(f.input, f.window)).ok).toBe(true)
   const chat = f.purposeBinding('chat')
@@ -532,4 +570,156 @@ it('logging out revokes both chat and image authority without persisting or retu
   await f.auth.logout()
   await vi.waitFor(() => expect([f.purposeBinding('chat'), f.purposeBinding('image')]).toEqual([undefined, undefined]))
   expect(JSON.stringify(f.auth.snapshot())).not.toContain(f.secret)
+})
+
+it('reuses a live lease for repeated turns while still claiming each turn and rejecting a bad ticket', async () => {
+  const f = await rig()
+  expect((await f.controller.bind(f.input, f.window)).ok).toBe(true)
+
+  for (let turn = 0; turn < 100; turn++) {
+    expect((await f.controller.bind(f.input, f.window)).ok).toBe(true)
+  }
+
+  expect(f.credentials).toHaveLength(1)
+  expect(f.received.filter(row => row.method === 'session.claim_managed_model')).toHaveLength(101)
+
+  const revisions = f.received
+    .filter(row => row.method === 'session.bind_managed_model')
+    .map(row => row.binding_revision)
+
+  expect(new Set(revisions).size).toBe(101)
+  expect((await f.controller.bind({ ...f.input, session_ticket: 'bad-ticket' }, f.window)).ok).toBe(false)
+  expect(f.credentials).toHaveLength(1)
+  expect((await f.controller.bind({ ...f.input, model_id: 'other' }, f.window)).ok).toBe(true)
+  expect(f.credentials).toHaveLength(2)
+})
+
+it('jitter spreads renewal after the reuse threshold and cached turns do not postpone it', async () => {
+  const f = await rig()
+  vi.spyOn(Math, 'random').mockReturnValue(0.5)
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] })
+  expect((await f.controller.bind(f.input, f.window)).ok).toBe(true)
+  await vi.advanceTimersByTimeAsync(10 * 60_000)
+  expect((await f.controller.bind(f.input, f.window)).ok).toBe(true)
+  expect(f.credentials).toHaveLength(1)
+  await vi.advanceTimersByTimeAsync(11 * 60_000)
+  expect(f.credentials).toHaveLength(1)
+  await vi.advanceTimersByTimeAsync(60_000)
+  await vi.waitFor(() => expect(f.credentials).toHaveLength(2))
+  await vi.waitFor(() => expect(f.received.filter(row => row.method === 'session.renew_managed_model')).toHaveLength(1))
+})
+
+it('retries transient renewal failures finitely without extending the current deadline', async () => {
+  const f = await rig({ renewalFailures: Array.from({ length: 10 }, () => ({ status: 503, code: 'http_503' })) })
+  vi.spyOn(Math, 'random').mockReturnValue(0)
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] })
+  expect((await f.controller.bind(f.input, f.window)).ok).toBe(true)
+  await vi.advanceTimersByTimeAsync(20 * 60_000)
+  await vi.waitFor(() => expect(f.credentials).toHaveLength(2))
+
+  for (const count of [3, 4, 5]) {
+    await vi.advanceTimersByTimeAsync(10_000)
+    await vi.waitFor(() => expect(f.credentials).toHaveLength(count))
+  }
+
+  expect(f.binding()).toBeTruthy()
+  expect((await f.controller.bind(f.input, f.window)).ok).toBe(true)
+  await vi.advanceTimersByTimeAsync(10_000)
+  expect(f.credentials).toHaveLength(5)
+  await vi.advanceTimersByTimeAsync(40 * 60_000)
+  await vi.waitFor(() => expect(f.binding()).toBeUndefined())
+  expect(f.credentials).toHaveLength(5)
+})
+
+it('stops a forbidden renewal without retrying or silently replacing the grant', async () => {
+  const f = await rig({ renewalFailures: [{ status: 403, code: 'DESKTOP_CREDENTIAL_REVOKED' }] })
+  vi.spyOn(Math, 'random').mockReturnValue(0)
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] })
+  expect((await f.controller.bind(f.input, f.window)).ok).toBe(true)
+  await vi.advanceTimersByTimeAsync(20 * 60_000)
+  await vi.waitFor(() => expect(f.credentials).toHaveLength(2))
+  await vi.waitFor(() => expect(f.binding()).toBeUndefined())
+  await vi.advanceTimersByTimeAsync(40 * 60_000)
+  expect(f.credentials).toHaveLength(2)
+})
+
+it('ignores a late renewal after a cached turn has claimed a newer binding revision', async () => {
+  const f = await rig({ delayLeaseAt: 2 })
+  vi.spyOn(Math, 'random').mockReturnValue(0)
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] })
+  expect((await f.controller.bind(f.input, f.window)).ok).toBe(true)
+  await vi.advanceTimersByTimeAsync(20 * 60_000)
+  await f.leaseReady
+  expect((await f.controller.bind(f.input, f.window)).ok).toBe(true)
+  const claimed = f.binding()!.binding_revision
+  f.releaseLease()
+  await vi.waitFor(() => expect(f.credentials).toHaveLength(2))
+  await vi.advanceTimersByTimeAsync(100)
+  expect(f.binding()!.binding_revision).toBe(claimed)
+  expect(
+    f.received.filter(row => row.method === 'session.renew_managed_model' && row.binding_revision !== claimed)
+  ).toHaveLength(0)
+})
+
+it('recovers from one transient renewal failure on the retained scope', async () => {
+  const f = await rig({ renewalFailures: [{ status: 503, code: 'http_503' }] })
+  vi.spyOn(Math, 'random').mockReturnValue(0)
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] })
+  expect((await f.controller.bind(f.input, f.window)).ok).toBe(true)
+  await vi.advanceTimersByTimeAsync(20 * 60_000)
+  await vi.waitFor(() => expect(f.credentials).toHaveLength(2))
+  await vi.advanceTimersByTimeAsync(5000)
+  await vi.waitFor(() => expect(f.received.filter(row => row.method === 'session.renew_managed_model')).toHaveLength(1))
+  expect(f.credentials).toHaveLength(3)
+  expect(f.credentials[2]).toEqual(f.credentials[0])
+  expect(f.binding()).toBeTruthy()
+})
+
+it('retains the third retry deadline across a cached turn during backoff', async () => {
+  const f = await rig({ renewalFailures: Array.from({ length: 3 }, () => ({ status: 503, code: 'http_503' })) })
+  vi.spyOn(Math, 'random').mockReturnValue(0)
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] })
+  expect((await f.controller.bind(f.input, f.window)).ok).toBe(true)
+  await vi.advanceTimersByTimeAsync(20 * 60_000)
+  await vi.waitFor(() => expect(f.credentials).toHaveLength(2))
+  await vi.advanceTimersByTimeAsync(1100)
+  await vi.waitFor(() => expect(f.credentials).toHaveLength(3))
+  await vi.advanceTimersByTimeAsync(2100)
+  await vi.waitFor(() => expect(f.credentials).toHaveLength(4))
+  await vi.advanceTimersByTimeAsync(1000)
+  expect((await f.controller.bind(f.input, f.window)).ok).toBe(true)
+  await vi.advanceTimersByTimeAsync(2100)
+  expect(f.credentials).toHaveLength(4)
+  await vi.advanceTimersByTimeAsync(1100)
+  await vi.waitFor(() => expect(f.credentials).toHaveLength(5))
+  await vi.waitFor(() => expect(f.received.filter(row => row.method === 'session.renew_managed_model')).toHaveLength(1))
+})
+
+it('does not restart a renewal that cannot retry before the existing lease expires', async () => {
+  const f = await rig({ renewalFailures: [{ status: 429, code: 'http_429', retryAfter: 3600 }] })
+  vi.spyOn(Math, 'random').mockReturnValue(0)
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] })
+  expect((await f.controller.bind(f.input, f.window)).ok).toBe(true)
+  await vi.advanceTimersByTimeAsync(20 * 60_000)
+  await vi.waitFor(() => expect(f.credentials).toHaveLength(2))
+  await vi.advanceTimersByTimeAsync(500)
+  expect((await f.controller.bind(f.input, f.window)).ok).toBe(true)
+  await vi.advanceTimersByTimeAsync(10_000)
+  expect(f.credentials).toHaveLength(2)
+  await vi.advanceTimersByTimeAsync(40 * 60_000)
+  await vi.waitFor(() => expect(f.binding()).toBeUndefined())
+})
+
+it('restores the account after a disconnected renewal before allowing the next turn', async () => {
+  const f = await rig({ renewalFailures: [{ status: 0, code: 'network_unavailable' }] })
+  vi.spyOn(Math, 'random').mockReturnValue(0)
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] })
+  expect((await f.controller.bind(f.input, f.window)).ok).toBe(true)
+  await vi.advanceTimersByTimeAsync(20 * 60_000)
+  await vi.waitFor(() => expect(f.auth.snapshot().phase).toBe('offline'))
+  await vi.advanceTimersByTimeAsync(5000)
+  await vi.waitFor(() => expect(f.received.filter(row => row.method === 'session.renew_managed_model')).toHaveLength(1))
+  expect(f.auth.snapshot().phase).toBe('signed_in')
+  expect((await f.controller.bind({ ...f.input, expected_account_revision: f.auth.snapshot().revision }, f.window)).ok).toBe(true)
+  expect(f.credentials).toHaveLength(3)
 })

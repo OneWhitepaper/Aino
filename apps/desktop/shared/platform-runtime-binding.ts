@@ -1,7 +1,7 @@
 import type { JsonRpcGatewayClient } from '../../shared/src/json-rpc-gateway'
 
 import type { PlatformAuth } from './platform-auth'
-import { PlatformClientError } from './platform-client'
+import { PlatformClientError, type PlatformModelLeaseDTO } from './platform-client'
 import type { BindPlatformModelInput, BindPlatformModelResult, PlatformModel, PlatformModelPurpose } from './platform-contract'
 
 export interface PlatformBindingTarget {
@@ -33,6 +33,9 @@ interface Binding {
   grant: string
   revision: number
   session: string
+  lease?: PlatformModelLeaseDTO
+  renewalAt?: number
+  renewalAttempts?: number
   expiry?: ReturnType<typeof setTimeout>
   renewal?: ReturnType<typeof setTimeout>
 }
@@ -84,6 +87,7 @@ export function createPlatformRuntimeBindingController(options: {
 
     clearTimeout(binding.expiry)
     clearTimeout(binding.renewal)
+    binding.lease = undefined
     // Socket ownership on the gateway clears both pending claims and active
     // bindings even if the network cannot deliver a final clear RPC.
     binding.rpc.close()
@@ -114,13 +118,46 @@ export function createPlatformRuntimeBindingController(options: {
     windows.clear()
   }
 
-  function armLease(binding: Binding, expiresAt: string, expired: () => void, renew: () => Promise<void>) {
+  async function leaseForBinding(binding: Binding, modelId: string, purpose: { purpose?: 'image' }) {
+    const cachedLease = binding.lease
+    const reuse = cachedLease?.model.id === modelId && Date.parse(cachedLease.expires_at) > Date.now()
+
+    const lease = reuse
+      ? cachedLease
+      : await auth.modelLease({
+          model_id: modelId,
+          device_id: options.deviceId(),
+          connection_grant_id: binding.grant,
+          ...purpose
+        })
+
+    return { lease, reuse }
+  }
+
+  function armLease(
+    binding: Binding,
+    expiresAt: string,
+    expired: () => void,
+    renew: () => Promise<void>,
+    reuse = false
+  ) {
     clearTimeout(binding.expiry)
     clearTimeout(binding.renewal)
     const ttl = Math.max(0, Date.parse(expiresAt) - Date.now())
     binding.expiry = setTimeout(expired, ttl)
     binding.expiry.unref?.()
-    binding.renewal = setTimeout(() => void renew(), Math.min(20 * 60_000, Math.max(5_000, ttl / 3)))
+
+    if (!reuse) {
+      // Renewal before one third of the lease would only return its original deadline.
+      binding.renewalAt = Date.now() + Math.min(ttl - 1000, Math.max(5000, ttl / 3) * (1 + Math.random() * 0.2))
+      binding.renewalAttempts = 0
+    }
+
+    if (binding.renewalAt === undefined) {
+      return
+    }
+
+    binding.renewal = setTimeout(() => void renew(), Math.max(0, binding.renewalAt - Date.now()))
     binding.renewal.unref?.()
   }
 
@@ -231,6 +268,7 @@ export function createPlatformRuntimeBindingController(options: {
 
         slot.pending = binding
         const owner = { platform_origin: options.origin, user_id: account }
+
         const params = { session_id: input.session_id, profile: target.profile, owner, model_id: input.model_id, ...purpose }
 
         // Capability and live session authorization are proven BEFORE obtaining
@@ -245,12 +283,7 @@ export function createPlatformRuntimeBindingController(options: {
         claimedRevision = requireManagedBindingClaim(claim, input.purpose)
         const supportsContextWindow = claim.managed_model_context_window === true
 
-        const lease = await auth.modelLease({
-          model_id: input.model_id,
-          device_id: options.deviceId(),
-          connection_grant_id: binding.grant,
-          ...purpose
-        })
+        const { lease, reuse } = await leaseForBinding(binding, input.model_id, purpose)
 
         check()
 
@@ -281,6 +314,7 @@ export function createPlatformRuntimeBindingController(options: {
         }
 
         binding.revision = claimedRevision
+        binding.lease = lease
         const retained = binding
         const revision = claimedRevision
         const stillOwned = () => current() && slot.active === retained && retained.revision === revision
@@ -298,6 +332,14 @@ export function createPlatformRuntimeBindingController(options: {
           }
 
           try {
+            if (auth.snapshot().phase === 'offline') {
+              await auth.retry()
+
+              if (!stillOwned()) {
+                return
+              }
+            }
+
             const next = await auth.modelLease({
               model_id: input.model_id,
               device_id: options.deviceId(),
@@ -335,19 +377,48 @@ export function createPlatformRuntimeBindingController(options: {
               return
             }
 
+            retained.lease = next
             armLease(retained, next.expires_at, expire, renew)
           } catch (error) {
-            // No retry loop: a network failure retains the current lease only
-            // until its original deadline. Confirmed auth loss revokes now.
-            if (error instanceof PlatformClientError && error.authentication) {
+            if (!stillOwned()) {
+              return
+            }
+
+            const retryable =
+              error instanceof PlatformClientError &&
+              ([
+                'network_unavailable',
+                'network_timeout',
+                'http_429',
+                'DESKTOP_AUTH_UNAVAILABLE',
+                'SERVICE_UNAVAILABLE'
+              ].includes(error.code) ||
+                /^http_5\d\d$/.test(error.code))
+
+            if (!retryable) {
               expire()
+
+              return
+            }
+
+            const attempt = retained.renewalAttempts ?? 0
+            const delay = Math.max(1000 * 2 ** attempt, (error.retryAfter ?? 0) * 1000) * (1 + Math.random() * 0.2)
+
+            if (attempt < 3 && Date.now() + delay + 1000 < Date.parse(retained.lease!.expires_at)) {
+              retained.renewalAttempts = attempt + 1
+              retained.renewalAt = Date.now() + delay
+              retained.renewal = setTimeout(() => void renew(), delay)
+              retained.renewal.unref?.()
+            } else {
+              // Cached turns must not restart an exhausted retry budget.
+              retained.renewalAt = undefined
             }
           }
         }
 
         slot.active = binding
         slot.pending = undefined
-        armLease(retained, lease.expires_at, expire, renew)
+        armLease(retained, lease.expires_at, expire, renew, reuse)
 
         return { ok: true, ready: true, model_id: input.model_id, billing_source: 'aino', expires_at: lease.expires_at }
       } catch (error) {

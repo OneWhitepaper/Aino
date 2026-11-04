@@ -34,7 +34,7 @@ export function usePlatformModels(purpose: PlatformModelPurpose = 'chat') {
     ...state,
     models: state.models.filter(model => platformModelSupportsPurpose(model, purpose)),
     account,
-    refresh: catalog.load
+    refresh: catalog.refresh
   }
 }
 

@@ -38,7 +38,7 @@ it('retains only same-revision presentation metadata during refresh while reques
   )
 
   await catalog.load()
-  const loading = catalog.load()
+  const loading = catalog.load({ force: true })
 
   expect(platformModelForDisplayFrom(catalog, 'catalog-a', 'user-a', 'http://127.0.0.1:7001')?.id).toBe('catalog-a')
   expect(verifiedPlatformModelFrom(catalog, 'catalog-a', 'user-a', 'http://127.0.0.1:7001')).toBeNull()
