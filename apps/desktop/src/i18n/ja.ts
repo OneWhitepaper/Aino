@@ -4435,6 +4435,7 @@ terminalDisconnectedBody:
     refresh: 'デバイスを更新',
     empty: '認証済みデバイスはありません',
     active: '有効',
+    expired: '有効期限切れ',
     revoked: '取消済み',
     lastUsed: '最終使用',
     expires: '有効期限',

@@ -364,6 +364,39 @@ submission recovery. Its subscription reads only that owner's pause state.
 - No native close/tray/background-work semantics, credentials, API checkout or
   release version changed. The integration branch remains on release hold.
 
+## Desktop managed key lifecycle
+
+- Traced the stable installation device ID and scoped connection grants. A live
+  session reuses and renews its key; different sessions, purposes and grants keep
+  their existing isolation. The accumulation came from expired or revoked keys
+  remaining in the API management list, including a misleading active badge.
+- API companion work is isolated on `codex/desktop-credential-hygiene`. Issuance
+  and user key management retire inactive managed keys with the existing
+  tombstone/soft-delete path, retaining credentials, revocation fences and usage
+  references. The website separates personal and desktop-managed keys. Archived
+  managed metadata remains available to authorized billing history, with no
+  secret returned or restored to authentication.
+- Desktop device responses accept an optional explicit `active`, `expired` or
+  `revoked` status. Natural expiry remains revocable. Older APIs retain a
+  successful revoke confirmation in the existing account-scoped query cache,
+  scoped to the device and expiry; a new authorization or explicit server state
+  supersedes it. Every locale and the desktop language-pack key inventory agree.
+- Regression cases were proven red before the fixes. **24 desktop tests** cover
+  API/IPC parsing, expired-device revocation, old-API timestamp changes, newly
+  expired authorizations, account isolation, scoped key renewal and key inventory.
+  A real Electron sandbox also verifies all three states, revokes a legacy expired
+  device, refreshes it and retains the revoked state and all three history rows.
+  API frontend validation passes **66 tests**, types, changed-file lint and
+  production build. Real disposable PostgreSQL/Redis integration verifies
+  retirement across grants, same-scope recovery, active-key protection, revoked
+  families, chat/image isolation and historical usage/ownership checks.
+- Local website checks at 1440px and 390px verify ordinary/managed filtering,
+  expired badges and managed empty state, without renderer errors or horizontal
+  page overflow. Browser plugin is unavailable; existing Playwright and installed
+  Chrome provide the validation. No production keys, balance or account settings
+  were changed. Online cleanup starts only after a separately authorized API
+  deployment; no release, push or deployment is included here.
+
 ## Validation boundary and release hold
 
 - This verifies source integration on macOS ARM64, not a newly signed/notarized

@@ -6637,6 +6637,7 @@ tabActions: title => `${title} 的操作`
     refresh: '刷新设备',
     empty: '暂无设备授权',
     active: '有效',
+    expired: '已过期',
     revoked: '已撤销',
     lastUsed: '最近使用',
     expires: '到期时间',

@@ -5971,6 +5971,7 @@ tabActions: title => `Actions for ${title}`
     refresh: 'Refresh devices',
     empty: 'No device authorizations',
     active: 'Active',
+    expired: 'Expired',
     revoked: 'Revoked',
     lastUsed: 'Last used',
     expires: 'Expires',

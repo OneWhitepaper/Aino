@@ -104,7 +104,13 @@ async function rig() {
     }
 
     reply([
-      { ...device, ...(mode === 'malformed' ? { revoked: 'false' } : {}), api_key: 'secret-fixture', user: { id: 17 } }
+      {
+        ...device,
+        ...(mode === 'malformed' ? { revoked: 'false' } : {}),
+        ...(mode.startsWith('status-') ? { status: mode.slice('status-'.length) } : {}),
+        api_key: 'secret-fixture',
+        user: { id: 17 }
+      }
     ])
   })
 
@@ -226,6 +232,19 @@ it('projects only safe device summaries and fences every operation to the truste
   await pending
   f.ipc.dispose()
   expect(f.handlers.has('aino:platform-devices:list')).toBe(false)
+})
+
+it('preserves explicit device status across the API and IPC boundary while rejecting unknown states', async () => {
+  const f = await rig()
+
+  for (const status of ['active', 'expired', 'revoked']) {
+    f.mode(`status-${status}`)
+    expect(await f.invoke('list')).toEqual([{ ...device, status }])
+  }
+
+  f.mode('status-unknown')
+  await expect(f.invoke('list')).rejects.toMatchObject({ code: 'invalid_response' })
+  f.ipc.dispose()
 })
 
 it('never replays revoke after auth or timeout, preserves step-up failures, and clears runtime only for successful self-revoke', async () => {

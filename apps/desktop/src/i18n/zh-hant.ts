@@ -286,6 +286,7 @@ const zhHantBaseOverrides = {
     refresh: '重新整理裝置',
     empty: '尚無裝置授權',
     active: '有效',
+    expired: '已過期',
     revoked: '已撤銷',
     lastUsed: '最近使用',
     expires: '到期時間',

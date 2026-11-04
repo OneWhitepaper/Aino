@@ -319,6 +319,7 @@ const configPageFieldDescriptions: Record<string, string> = defineFieldCopy({
 })
 
 const frBaseOverrides = {
+  platformDevices: { expired: 'Expirée' },
   appearancePage: appearancePage.fr,
   home: homeGuidance.fr,
   toolPanel: toolPanel['fr'],

@@ -25,11 +25,16 @@ export function parsePlatformDevices(value: unknown): PlatformDevice[] {
       }
     }
 
+    if (row.status !== undefined && row.status !== 'active' && row.status !== 'expired' && row.status !== 'revoked') {
+      throw new PlatformClientError('invalid_response')
+    }
+
     return {
       device_id: parsePlatformDeviceId(row.device_id, 'invalid_response'),
       last_used_at: row.last_used_at,
       expires_at: row.expires_at,
-      revoked: row.revoked
+      revoked: row.revoked,
+      ...(row.status !== undefined ? { status: row.status } : {})
     }
   })
 }

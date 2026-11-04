@@ -3117,6 +3117,7 @@
     "platformDevices.confirmDescription",
     "platformDevices.confirmTitle",
     "platformDevices.empty",
+    "platformDevices.expired",
     "platformDevices.expires",
     "platformDevices.failed",
     "platformDevices.lastUsed",

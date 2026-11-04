@@ -324,6 +324,7 @@ const configPageFieldDescriptions: Record<string, string> = defineFieldCopy({
 })
 
 const ruBaseOverrides = {
+  platformDevices: { expired: 'Срок истёк' },
   appearancePage: appearancePage.ru,
   home: homeGuidance.ru,
   toolPanel: toolPanel['ru'],

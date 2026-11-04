@@ -22,6 +22,7 @@ import { toolPanel } from './tool-panel'
 import { workspacePage } from './workspace-page'
 
 const arBaseOverrides = {
+  platformDevices: { expired: 'منتهي الصلاحية' },
   appearancePage: appearancePage.ar,
   home: homeGuidance.ar,
   toolPanel: toolPanel['ar'],

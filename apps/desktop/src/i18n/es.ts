@@ -320,6 +320,7 @@ const configPageFieldDescriptions: Record<string, string> = defineFieldCopy({
 })
 
 const esBaseOverrides = {
+  platformDevices: { expired: 'Caducada' },
   appearancePage: appearancePage.es,
   home: homeGuidance.es,
   toolPanel: toolPanel['es'],
