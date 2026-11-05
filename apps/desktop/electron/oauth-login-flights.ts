@@ -23,6 +23,8 @@
  *     competing window, and a repeat click focuses the open one.
  */
 
+import { NativeAuthChangedError } from './native-access-token'
+
 export type LoginIntent = 'background' | 'foreground'
 
 /** A started login: its outcome, plus a way to put its window in front of the user. */
@@ -73,6 +75,7 @@ export function loginFlightKey(partition: string, baseUrl: string): string {
 interface Flight {
   result: Promise<unknown>
   reveal: () => void
+  cancel: () => void
 }
 
 export class OauthLoginFlights {
@@ -82,6 +85,7 @@ export class OauthLoginFlights {
   private readonly joinTimeoutMs: number
   private readonly inFlight = new Map<string, Flight>()
   private readonly failures = new Map<string, { consecutive: number; blockedUntil: number }>()
+  private generation = 0
 
   constructor(options: OauthLoginFlightsOptions = {}) {
     this.now = options.now ?? Date.now
@@ -98,6 +102,14 @@ export class OauthLoginFlights {
     const failure = this.failures.get(key)
 
     return failure ? Math.max(0, failure.blockedUntil - this.now()) : 0
+  }
+
+  retire(): void {
+    this.generation++
+
+    for (const flight of this.inFlight.values()) { flight.cancel() }
+    this.inFlight.clear()
+    this.failures.clear()
   }
 
   /** `start` runs only when `key` has no flight; joiners never open a window. */
@@ -130,20 +142,25 @@ export class OauthLoginFlights {
       return Promise.reject(error)
     }
 
-    const result: Promise<T> = attempt.result.then(
+    const generation = this.generation
+    let cancel!: () => void
+    const cancelled = new Promise<never>((_resolve, reject) => { cancel = () => reject(new NativeAuthChangedError()) })
+
+    const result: Promise<T> = Promise.race([attempt.result, cancelled]).then(
       value => {
+        if (generation !== this.generation) { throw new NativeAuthChangedError() }
         this.failures.delete(key)
 
         return value
       },
       error => {
-        this.recordFailure(key)
+        if (generation === this.generation) { this.recordFailure(key) }
 
         throw error
       }
     )
 
-    const flight: Flight = { result, reveal: attempt.reveal }
+    const flight: Flight = { result, reveal: attempt.reveal, cancel }
     this.inFlight.set(key, flight)
 
     const release = (): void => {

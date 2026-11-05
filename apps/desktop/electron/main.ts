@@ -542,7 +542,7 @@ import {
 } from './remote-liveness'
 import { resolveRemoteOauthTicket, rosterSourceEnumerationTimeoutMs } from './remote-oauth-ticket'
 import { createRemoteOwnerCache } from './remote-owner-cache'
-import { remoteSessionCookies } from './remote-session-cookies'
+import { remoteSessionCookies, type RemoteSessionCookieScope } from './remote-session-cookies'
 import {
   applyRemoteRequestHeaders,
   attachRemoteRequestHeaderListener,
@@ -4733,9 +4733,15 @@ function newAccountWindow(options: Electron.BrowserWindowConstructorOptions): Br
 }
 
 let accountRehomeInProgress = false
+const nativeLoginControllers = new Set<AbortController>()
 
 async function retireAccountWorkspace(): Promise<void> {
   accountRehomeInProgress = true
+  remoteSessionCookies.retire()
+  oauthLoginFlights.retire()
+  recoverCloudCookieSession.retire()
+  retirePortalSession()
+  for (const controller of nativeLoginControllers) { controller.abort() }
 
   for (const win of BrowserWindow.getAllWindows()) { win.hide(); win.destroy() }
   disposeMcpOauthCallbacks()
@@ -5396,12 +5402,15 @@ async function gatewayAuthProviders(baseUrl, headers = {}) {
 // waitForHermesReady how to read a 401 — rejected session vs gated route.
 async function buildReadinessHealthProbe(baseUrl, authMode, token) {
   if (authMode === 'oauth') {
+    const scope = remoteSessionCookies.scope(resolveOauthPartitionForUrl(baseUrl))
+
     return {
       // fetchJson takes the bearer via `options.bearer` — a raw `headers`
       // option is ignored, so passing one here would silently probe
       // uncredentialed and reintroduce the 401 loop.
       probeHealth: (url: string, options: any = {}) =>
         requestWithOauthFallback(baseUrl, {
+          assertCurrent: scope.assertCurrent,
           ensureNativeAccessToken,
           requestWithBearer: (bearer: string) => fetchJson(url, null, { ...options, bearer }),
           requestWithCookie: () => fetchJsonViaOauthSession(url, options)
@@ -6358,23 +6367,23 @@ const oauthSessionsByPartition = new Map()
 
 function resolveOauthPartitionForUrl(url, { connectionId = '', pendingAuthMode = '', pendingKind = '' } = {}) {
   try {
-    return resolveOauthPartition(url, {
+    return accountPartition(resolveOauthPartition(url, {
       connectionId,
       pendingAuthMode,
       pendingKind,
       registry: readDesktopConnectionsRegistry(),
       v1RemoteUrl: readDesktopConnectionConfig()?.remote?.url
-    })
+    }))
   } catch {
     // A broken registry read must never take cookie auth down with it.
-    return OAUTH_SESSION_PARTITION
+    return accountPartition(OAUTH_SESSION_PARTITION)
   }
 }
 
 function getOauthSessionForUrl(url, { connectionId = '', pendingAuthMode = '', pendingKind = '' } = {}) {
   const partition = resolveOauthPartitionForUrl(url, { connectionId, pendingAuthMode, pendingKind })
 
-  if (partition === OAUTH_SESSION_PARTITION) {
+  if (partition === accountPartition(OAUTH_SESSION_PARTITION)) {
     return getOauthSession()
   }
 
@@ -6385,7 +6394,7 @@ function getOauthSessionForUrl(url, { connectionId = '', pendingAuthMode = '', p
   let sess = oauthSessionsByPartition.get(partition)
 
   if (!sess) {
-    sess = session.fromPartition(accountPartition(partition))
+    sess = session.fromPartition(partition)
     oauthSessionsByPartition.set(partition, sess)
     installRemoteHeaderRulesOnSession(sess)
   }
@@ -6451,45 +6460,38 @@ function warmOauthCookieStore(url?) {
 // the in-memory mirror, keyed by the SAME partition the jar belongs to.
 // Best-effort: a failed read just means the next response's Set-Cookie
 // capture populates the mirror instead.
-async function captureRemoteSessionCookiesIntoMirror(sess, partition, baseUrl) {
-  if (!sess || !partition) {
-    return
-  }
+async function captureRemoteSessionCookiesIntoMirror(sess, scope: RemoteSessionCookieScope, baseUrl) {
+  if (!sess || !scope.isCurrent()) { return }
 
   try {
-    remoteSessionCookies.recordFromJar(partition, baseUrl, await sess.cookies.get({ url: baseUrl }))
+    await scope.captureFromJar(baseUrl, () => sess.cookies.get({ url: baseUrl }))
   } catch (error) {
-    rememberLog(`Remote session cookie mirror capture failed: ${error?.message || error}`)
+    if (scope.isCurrent()) { rememberLog(`Remote session cookie mirror capture failed: ${error?.message || error}`) }
   }
 }
 
-async function hasOauthSessionCookie(baseUrl, { connectionId = '', pendingAuthMode = '', pendingKind = '' } = {}) {
-  const sess = getOauthSessionForUrl(baseUrl, { connectionId, pendingAuthMode, pendingKind })
+async function sessionCookiesMatch(sess, scope: RemoteSessionCookieScope, baseUrl, matches = cookiesHaveSession) {
+  if (!sess || !scope.isCurrent()) { return false }
 
-  if (!sess) {
-    return false
-  }
-
-  const parsed = new URL(baseUrl)
+  let cookies
 
   try {
-    // Query by URL so the cookie jar applies Domain/Path/Secure scoping for us.
-    const cookies = await sess.cookies.get({ url: baseUrl })
-
-    return cookiesHaveSession(cookies)
+    cookies = await sess.cookies.get({ url: baseUrl })
   } catch {
-    // Fall back to a host match if the URL query path errors.
-    try {
-      const cookies = await sess.cookies.get({ domain: parsed.hostname })
+    if (!scope.isCurrent()) { return false }
 
-      return cookiesHaveSession(cookies)
-    } catch {
-      return false
-    }
+    try { cookies = await sess.cookies.get({ domain: new URL(baseUrl).hostname }) }
+    catch { return false }
   }
+
+  return scope.isCurrent() && matches(cookies)
 }
 
-// Like hasOauthSessionCookie, but returns true when EITHER a live access-token
+function hasOauthSessionCookie(baseUrl, identity = {}) {
+  return sessionCookiesMatch(getOauthSessionForUrl(baseUrl, identity), remoteSessionCookies.scope(resolveOauthPartitionForUrl(baseUrl, identity)), baseUrl)
+}
+
+// Returns true when EITHER a live access-token
 // cookie OR a (longer-lived) refresh-token cookie is present. This is the right
 // "is the user signed in at all?" check: an expired AT with a live RT is still
 // a connectable session because the gateway rotates a fresh AT server-side on
@@ -6503,23 +6505,8 @@ async function hasLiveOauthSession(baseUrl) {
     return false
   }
 
-  const parsed = new URL(baseUrl)
-
-  const readLive = async () => {
-    try {
-      const cookies = await sess.cookies.get({ url: baseUrl })
-
-      return cookiesHaveLiveSession(cookies)
-    } catch {
-      try {
-        const cookies = await sess.cookies.get({ domain: parsed.hostname })
-
-        return cookiesHaveLiveSession(cookies)
-      } catch {
-        return false
-      }
-    }
-  }
+  const scope = remoteSessionCookies.scope(resolveOauthPartitionForUrl(baseUrl))
+  const readLive = () => sessionCookiesMatch(sess, scope, baseUrl, cookiesHaveLiveSession)
 
   // First read against the (possibly still-hydrating) jar.
   if (await readLive()) {
@@ -6533,9 +6520,12 @@ async function hasLiveOauthSession(baseUrl) {
   // trusting a negative, force the store to hydrate and re-read a couple of
   // times with a short backoff. A genuinely signed-out user still resolves
   // false quickly (≤ ~180ms); a signed-in user racing the load now wins.
+  if (!scope.isCurrent()) { return false }
   await warmOauthCookieStore(baseUrl)
 
   for (const delayMs of [30, 60, 90]) {
+    if (!scope.isCurrent()) { return false }
+
     if (await readLive()) {
       return true
     }
@@ -6547,6 +6537,8 @@ async function hasLiveOauthSession(baseUrl) {
 }
 
 async function clearOauthSession(baseUrl) {
+  const scope = remoteSessionCookies.scope(resolveOauthPartitionForUrl(baseUrl))
+  scope.clear(baseUrl)
   const sess = getOauthSessionForUrl(baseUrl)
 
   if (!sess) {
@@ -6583,8 +6575,10 @@ function openOauthLoginWindow(
   const identity = { connectionId, pendingAuthMode, pendingKind }
   const unattended = background || !canShowInteractiveOauthLogin()
   const partition = resolveOauthPartitionForUrl(baseUrl, identity)
+  const scope = remoteSessionCookies.scope(partition)
 
   return oauthLoginFlights.run(loginFlightKey(partition, baseUrl), unattended ? 'background' : 'foreground', () => {
+    scope.assertCurrent()
     const sess = app.isReady() ? getOauthSessionForUrl(baseUrl, identity) : null
 
     if (!sess) {
@@ -6611,7 +6605,7 @@ function openOauthLoginWindow(
               webSecurity: true
             }
           }),
-        hasSessionCookie: () => hasOauthSessionCookie(baseUrl, identity),
+        hasSessionCookie: () => sessionCookiesMatch(sess, scope, baseUrl),
         isExpectedNavigationAbort: isExpectedOauthNavigationAbort,
         loadOptionsFor: loginUrl => {
           const loginHeaders = headersForRemoteRequest(loginUrl)
@@ -6623,7 +6617,7 @@ function openOauthLoginWindow(
         },
         log: rememberLog,
         // #61457: mirror the fresh cookies before the jar can drop them again.
-        onLanded: () => void captureRemoteSessionCookiesIntoMirror(sess, partition, baseUrl),
+        onLanded: () => void captureRemoteSessionCookiesIntoMirror(sess, scope, baseUrl),
         // A crashed sign-in renderer never settles the promise; log it (#81290).
         onWindowCreated: win =>
           installWindowRendererLifecycle(win as BrowserWindow, { kind: 'oauth', callbacks: { log: rememberLog } })
@@ -6654,10 +6648,12 @@ function openOauthLoginWindow(
 //      no-replay rule of requestWithOauthFallback.
 function fetchJsonViaOauthSession(url, options: any = {}) {
   const partition = resolveOauthPartitionForUrl(url)
+  const scope = remoteSessionCookies.scope(partition)
+  const sess = getOauthSessionForUrl(url)
 
   const attempt = (): Promise<unknown> =>
     new Promise((resolve, reject) => {
-      const sess = getOauthSessionForUrl(url)
+      scope.assertCurrent()
 
       if (!sess) {
         reject(new Error('OAuth session partition is unavailable.'))
@@ -6698,7 +6694,7 @@ function fetchJsonViaOauthSession(url, options: any = {}) {
 
       // Explicit mirror cookies ride last so an existing caller-supplied
       // Cookie header still wins, and the mirror never clobbers intent.
-      const mirroredCookies = remoteSessionCookies.cookieHeaderFor(partition, url)
+      const mirroredCookies = scope.cookieHeaderFor(url)
 
       if (mirroredCookies && headerBag.Cookie === undefined && headerBag.cookie === undefined) {
         headerBag.Cookie = mirroredCookies
@@ -6727,9 +6723,9 @@ function fetchJsonViaOauthSession(url, options: any = {}) {
           url,
           isTimedOut: (): boolean => timedOut,
           clearTimer: (): void => clearTimeout(timer),
-          resolve,
+          resolve: value => { if (scope.isCurrent()) { resolve(value) } else { reject(new NativeAuthChangedError()) } },
           reject,
-          onSetCookies: setCookie => remoteSessionCookies.record(partition, url, setCookie)
+          onSetCookies: setCookie => scope.record(url, setCookie)
         })
       })
       request.on('error', error => {
@@ -6752,11 +6748,12 @@ function fetchJsonViaOauthSession(url, options: any = {}) {
     const origin = new URL(url).origin
 
     return retryCookie401WithLogin(error, options, {
+      assertCurrent: scope.assertCurrent,
       // One burst shares one clear: a joiner must not wipe the mirror the
       // running window is about to fill.
       clearCookies: () => {
         if (!oauthLoginFlights.isRunning(loginFlightKey(partition, origin))) {
-          remoteSessionCookies.clear(partition, url)
+          scope.clear(url)
         }
       },
       login: async () => {
@@ -6963,6 +6960,7 @@ async function saveGatewayFile(payload: GatewayFileSavePayload = {}): Promise<Ga
 
       if (connection.authMode === 'oauth') {
         return requestWithOauthFallback(connection.baseUrl, {
+          assertCurrent: remoteSessionCookies.scope(resolveOauthPartitionForUrl(connection.baseUrl)).assertCurrent,
           ensureNativeAccessToken,
           requestWithBearer: (bearer: string): Promise<GatewayFileSaveResult> =>
             downloadViaTokenToFile(url, null, context, deps, { bearer }),
@@ -7018,17 +7016,25 @@ const recoverCloudCookieSession = createCloudSessionRecovery({
   hasNativeSession,
   onRecovered: baseUrl => rememberLog(`[cloud] saved gateway session recovered for ${hostLabelFromBaseUrl(baseUrl)}`),
   restoreCookieSession: async baseUrl => {
+    const scope = remoteSessionCookies.scope(resolveOauthPartitionForUrl(baseUrl))
+
     // The saved portal identity is the authority for cookie agent sessions.
     // Roster polling must never reveal an interactive sign-in window.
     if (!(await hasLivePortalSession())) {
       return false
     }
 
-    if (!(await hasPortalAccessToken()) && !(await renewPortalAccessSilently())) {
+    scope.assertCurrent()
+    const hasAccess = await hasPortalAccessToken()
+    scope.assertCurrent()
+
+    if (!hasAccess && !(await renewPortalAccessSilently())) {
       return false
     }
 
+    scope.assertCurrent()
     await openOauthLoginWindow(baseUrl, { silent: true, background: true })
+    scope.assertCurrent()
 
     return true
   }
@@ -7037,10 +7043,12 @@ const recoverCloudCookieSession = createCloudSessionRecovery({
 // Native bearer first (including one forced 401 rotation), OAuth cookie second.
 // Transient ticket POST failures keep their bounded retry before Cloud recovery.
 async function mintGatewayWsTicket(baseUrl: string, headers: Record<string, string> = {}): Promise<string> {
+  const scope = remoteSessionCookies.scope(resolveOauthPartitionForUrl(baseUrl))
+
   return recoverCloudCookieSession(baseUrl, () =>
     withTransientRetries(
       (): Promise<string> =>
-        mintOauthGatewayWsTicket(baseUrl, { ensureNativeAccessToken, fetchJson, fetchJsonViaOauthSession }, headers),
+        mintOauthGatewayWsTicket(baseUrl, { assertCurrent: scope.assertCurrent, ensureNativeAccessToken, fetchJson, fetchJsonViaOauthSession }, headers),
       {
         isRetryable: (error: Error): boolean =>
           !(error instanceof NativeAuthChangedError) && !isGatewayAuthRejection(error)
@@ -7092,7 +7100,7 @@ async function freshGatewayWsUrl(profile, webContentsId) {
 // Existing Nous-hosted connections still use portal SSO during recovery. New
 // cloud discovery and account-level instance selection have been retired.
 
-const { hasLivePortalSession, hasPortalAccessToken, renewPortalAccessSilently, openPortalLoginWindow } =
+const { hasLivePortalSession, hasPortalAccessToken, renewPortalAccessSilently, openPortalLoginWindow, retire: retirePortalSession } =
   createPortalSession({
     isReady: () => app.isReady(),
     getOauthSession,
@@ -7106,6 +7114,8 @@ const { hasLivePortalSession, hasPortalAccessToken, renewPortalAccessSilently, o
 // Kept only for compatibility with connections saved by older Aino versions.
 async function cloudAgentSilentSignIn(dashboardUrl, { background = false } = {}) {
   const baseUrl = normalizeRemoteBaseUrl(dashboardUrl)
+  const scope = remoteSessionCookies.scope(resolveOauthPartitionForUrl(baseUrl))
+  const sess = getOauthSessionForUrl(baseUrl)
 
   // A live portal session is required to refresh the hosted connection.
   if (!(await hasLivePortalSession())) {
@@ -7114,14 +7124,20 @@ async function cloudAgentSilentSignIn(dashboardUrl, { background = false } = {})
     throw err
   }
 
+  scope.assertCurrent()
   // Renew short-lived portal access before opening the saved instance login.
-  if (!(await hasPortalAccessToken())) {
+  const hasAccess = await hasPortalAccessToken()
+  scope.assertCurrent()
+
+  if (!hasAccess) {
     await renewPortalAccessSilently()
   }
 
+  scope.assertCurrent()
   await openOauthLoginWindow(baseUrl, { silent: true, background })
+  scope.assertCurrent()
 
-  return { baseUrl, connected: await hasOauthSessionCookie(baseUrl) }
+  return { baseUrl, connected: await sessionCookiesMatch(sess, scope, baseUrl) }
 }
 
 // ---------------------------------------------------------------------------
@@ -14646,6 +14662,7 @@ async function fetchJsonForBackend(
     }
 
     return requestWithOauthFallback(descriptor.baseUrl, {
+      assertCurrent: remoteSessionCookies.scope(resolveOauthPartitionForUrl(descriptor.baseUrl)).assertCurrent,
       ensureNativeAccessToken,
       requestWithBearer: (bearer: string) => fetchJson(url, null, { ...options, bearer }),
       requestWithCookie: () => fetchJsonViaOauthSession(url, options)
@@ -14677,7 +14694,9 @@ ipcMain.handle('hermes:connection-config:oauth-login', async (_event, rawUrl, ra
   //     to the embedded flow — one sign-in action opens at most one window.
   const baseUrl = normalizeRemoteBaseUrl(rawUrl)
   // Order login attempts without interrupting rotation of the existing session.
-  const authIsCurrent: () => boolean = nativeAccessTokenCoordinator.beginLogin(baseUrl)
+  const nativeAuthIsCurrent = nativeAccessTokenCoordinator.beginLogin(baseUrl)
+  const accountScope = remoteSessionCookies.scope(accountPartition(OAUTH_SESSION_PARTITION))
+  const authIsCurrent = () => nativeAuthIsCurrent() && accountScope.isCurrent()
 
   // A registry-editor sign-in can run BEFORE the draft connection is saved:
   // settle the id the save will reuse (returned so the renderer pins it into
@@ -14728,6 +14747,9 @@ ipcMain.handle('hermes:connection-config:oauth-login', async (_event, rawUrl, ra
   }
 
   if (strategy === 'native') {
+    const controller = new AbortController()
+    nativeLoginControllers.add(controller)
+
     try {
       const tokens = await runNativeLogin(baseUrl, {
         // Route the browser-open through the single external-open path so it
@@ -14747,7 +14769,7 @@ ipcMain.handle('hermes:connection-config:oauth-login', async (_event, rawUrl, ra
         },
         postJson: (url, body, opts) => postJsonNoAuth(url, body, opts),
         rememberLog
-      })
+      }, { signal: controller.signal })
 
       if (!authIsCurrent()) {
         throw new NativeAuthChangedError()
@@ -14768,6 +14790,8 @@ ipcMain.handle('hermes:connection-config:oauth-login', async (_event, rawUrl, ra
         connected: false,
         connectionId: loginConnectionId || undefined
       }
+    } finally {
+      nativeLoginControllers.delete(controller)
     }
   }
 
@@ -17331,6 +17355,7 @@ function quitIfNoSurfaceLeft() {
   if (
     shouldQuitOnLastChatClosed({
       platform: process.platform,
+      accountRehomeInProgress,
       isQuittingForHandoff,
       remainingChatWindows: chatWindows.size + browserWindows.size,
       quitInProgress

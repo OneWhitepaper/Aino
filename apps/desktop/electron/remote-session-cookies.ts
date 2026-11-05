@@ -32,6 +32,19 @@
  * never cross into a newly selected one.
  */
 
+import { NativeAuthChangedError } from './native-access-token'
+
+type JarCookie = { name?: unknown; value?: unknown; path?: unknown }
+
+export interface RemoteSessionCookieScope {
+  assertCurrent(): void
+  isCurrent(): boolean
+  record(url: string, setCookie: string | string[] | undefined | null): void
+  captureFromJar(url: string, read: () => Promise<JarCookie[] | null | undefined>): Promise<void>
+  cookieHeaderFor(url: string): string | null
+  clear(url?: string): void
+}
+
 export interface ParsedCookie {
   name: string
   value: string
@@ -142,6 +155,31 @@ export function cookiePathMatches(cookiePath: string, requestPath: string): bool
 export class RemoteSessionCookieStore {
   /** partition → origin → cookie name → mirrored cookie */
   private readonly byPartition = new Map<string, Map<string, Map<string, MirroredCookie>>>()
+  private generation = 0
+
+  /** A late response stays retired even if the same account's jar is reopened. */
+  scope(partition: string): RemoteSessionCookieScope {
+    const generation = this.generation
+    const isCurrent = () => this.generation === generation
+
+    return {
+      isCurrent,
+      assertCurrent: () => { if (!isCurrent()) { throw new NativeAuthChangedError() } },
+      record: (url, cookies) => { if (isCurrent()) { this.record(partition, url, cookies) } },
+      captureFromJar: async (url, read) => {
+        const cookies = await read()
+
+        if (isCurrent()) { this.recordFromJar(partition, url, cookies) }
+      },
+      cookieHeaderFor: url => isCurrent() ? this.cookieHeaderFor(partition, url) : null,
+      clear: url => { if (isCurrent()) { this.clear(partition, url) } }
+    }
+  }
+
+  retire(): void {
+    this.generation++
+    this.clear()
+  }
 
   private jarFor(partition: string, origin: string, create: boolean): Map<string, MirroredCookie> | undefined {
     let origins = this.byPartition.get(partition)
@@ -196,7 +234,7 @@ export class RemoteSessionCookieStore {
   recordFromJar(
     partition: string,
     url: string,
-    cookies: Array<{ name?: unknown; value?: unknown; path?: unknown }> | null | undefined
+    cookies: JarCookie[] | null | undefined
   ): void {
     const origin = originKeyFor(url)
 

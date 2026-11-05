@@ -6,6 +6,7 @@ import { type NativeAccessTokenOptions, NativeAuthChangedError } from './native-
 import { shouldRotateNativeTokenAfterRejection } from './native-auth-decisions'
 
 export interface OauthRestRequestDeps<T> {
+  assertCurrent?: () => void
   ensureNativeAccessToken: (baseUrl: string, options?: NativeAccessTokenOptions) => Promise<string | null>
   requestWithBearer: (accessToken: string) => Promise<T>
   requestWithCookie: () => Promise<T>
@@ -44,16 +45,33 @@ function markStaleAppToken(error: unknown): void {
 export async function requestWithOauthFallback<T>(baseUrl: string, deps: OauthRestRequestDeps<T>): Promise<T> {
   let nativeAccessToken: string | null
 
+  const requestWithCookie = async () => {
+    deps.assertCurrent?.()
+    const result = await deps.requestWithCookie()
+    deps.assertCurrent?.()
+
+    return result
+  }
+
+  deps.assertCurrent?.()
+
   try {
     nativeAccessToken = await deps.ensureNativeAccessToken(baseUrl)
   } catch (error) {
-    return cookieFallback(deps.requestWithCookie, error)
+    deps.assertCurrent?.()
+
+    return cookieFallback(requestWithCookie, error)
   }
 
-  return nativeAccessToken ? deps.requestWithBearer(nativeAccessToken) : deps.requestWithCookie()
+  deps.assertCurrent?.()
+  const result = await (nativeAccessToken ? deps.requestWithBearer(nativeAccessToken) : requestWithCookie())
+  deps.assertCurrent?.()
+
+  return result
 }
 
 export interface MintGatewayWsTicketDeps {
+  assertCurrent?: () => void
   ensureNativeAccessToken: OauthRestRequestDeps<unknown>['ensureNativeAccessToken']
   fetchJson: (url: string, token: string | null, options: any) => Promise<any>
   fetchJsonViaOauthSession: (url: string, options: any) => Promise<any>
@@ -74,19 +92,23 @@ export function canShowInteractiveOauthLogin(): boolean {
 export async function retryCookie401WithLogin<T>(
   error: unknown,
   options: { method?: unknown; replayOn401?: unknown },
-  actions: { clearCookies: () => void; login: () => Promise<unknown>; retry: () => Promise<T> }
+  actions: { clearCookies: () => void; login: () => Promise<unknown>; retry: () => Promise<T>; assertCurrent?: () => void }
 ): Promise<T> {
   if (!canShowInteractiveOauthLogin() || !shouldReplayAfterCookie401(error, options)) {
     throw error
   }
 
+  actions.assertCurrent?.()
   actions.clearCookies()
 
   try {
     await actions.login()
   } catch {
+    actions.assertCurrent?.()
     throw error
   }
+
+  actions.assertCurrent?.()
 
   return actions.retry()
 }
@@ -138,6 +160,7 @@ export async function mintGatewayWsTicket(
 
   const ticketFrom = async (request: Promise<any>): Promise<string> => {
     const body = await request
+    deps.assertCurrent?.()
 
     if (!body?.ticket || typeof body.ticket !== 'string') {
       throw new Error('Gateway did not return a WS ticket.')
@@ -146,10 +169,20 @@ export async function mintGatewayWsTicket(
     return body.ticket
   }
 
-  const mintWithBearer = (bearer: string) => ticketFrom(deps.fetchJson(url, null, { ...options, bearer }))
-  const requestWithCookie = () => ticketFrom(deps.fetchJsonViaOauthSession(url, options))
+  const mintWithBearer = (bearer: string) => {
+    deps.assertCurrent?.()
+
+    return ticketFrom(deps.fetchJson(url, null, { ...options, bearer }))
+  }
+
+  const requestWithCookie = () => {
+    deps.assertCurrent?.()
+
+    return ticketFrom(deps.fetchJsonViaOauthSession(url, options))
+  }
 
   return requestWithOauthFallback(baseUrl, {
+    assertCurrent: deps.assertCurrent,
     ensureNativeAccessToken: deps.ensureNativeAccessToken,
     requestWithCookie,
     requestWithBearer: async nativeAt => {
@@ -167,6 +200,8 @@ export async function mintGatewayWsTicket(
             forceRefresh: true,
             rejectedAccessToken: nativeAt
           })
+
+          deps.assertCurrent?.()
 
           if (!rotatedAt || rotatedAt === nativeAt) {
             throw error

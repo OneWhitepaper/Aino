@@ -56,14 +56,16 @@ export function shouldQuitOnLastChatClosed({
   platform,
   isQuittingForHandoff,
   remainingChatWindows,
-  quitInProgress
+  quitInProgress,
+  accountRehomeInProgress = false
 }: {
   platform: NodeJS.Platform | string
   isQuittingForHandoff: boolean
   remainingChatWindows: number
   quitInProgress: boolean
+  accountRehomeInProgress?: boolean
 }): boolean {
-  return platform !== 'darwin' && !isQuittingForHandoff && !quitInProgress && remainingChatWindows === 0
+  return platform !== 'darwin' && !isQuittingForHandoff && !quitInProgress && !accountRehomeInProgress && remainingChatWindows === 0
 }
 
 /**
