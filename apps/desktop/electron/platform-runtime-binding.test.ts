@@ -91,6 +91,15 @@ async function rig(
   let valid = true
   let secret = 'fixture-inference-secret'
 
+  async function waitForLease(request: number) {
+    if (options.delayLeaseAt === request) {
+      await new Promise<void>(resolve => {
+        releaseLease = resolve
+        leaseStarted()
+      })
+    }
+  }
+
   async function deviceReply(req: http.IncomingMessage, res: http.ServerResponse, send: (value: unknown) => void) {
       let body = ''
 
@@ -185,9 +194,12 @@ async function rig(
         body += chunk
       }
 
-      credentials.push(JSON.parse(body))
+      const credential = JSON.parse(body)
+      credentials.push(credential)
 
       const failure = credentials.length > 1 ? options.renewalFailures?.shift() : undefined
+
+      await waitForLease(credentials.length)
 
       if (failure) {
         if (failure.status === 0) {
@@ -208,9 +220,9 @@ async function rig(
         return
       }
 
-      const purpose = credentials.at(-1)?.purpose === 'image' ? 'image' : 'chat'
+      const purpose = credential.purpose === 'image' ? 'image' : 'chat'
 
-      const selectedModel = { ...model, id: String(credentials.at(-1)?.model_id) }
+      const selectedModel = { ...model, id: String(credential.model_id) }
 
       const leasedModel =
         purpose === 'image'
@@ -222,22 +234,14 @@ async function rig(
             }
           : selectedModel
 
-      const reply = () =>
-        send({
-          credential_id: 'lease-1',
-          api_key: secret,
-          base_url: origin + '/v1',
-          expires_at: new Date(Date.now() + 3600_000).toISOString(),
-          model: leasedModel,
-          ...(purpose === 'image' ? { purpose } : {})
-        })
-
-      if (options.delayLeaseAt === credentials.length) {
-        releaseLease = reply
-        leaseStarted()
-      } else {
-        reply()
-      }
+      send({
+        credential_id: 'lease-1',
+        api_key: secret,
+        base_url: origin + '/v1',
+        expires_at: new Date(Date.now() + 3600_000).toISOString(),
+        model: leasedModel,
+        ...(purpose === 'image' ? { purpose } : {})
+      })
 
       return
     }
@@ -776,6 +780,48 @@ it('retries transient renewal failures finitely without extending the current de
   expect(f.credentials).toHaveLength(5)
 })
 
+it.each([
+  { request: 2, retry: true },
+  { request: 5, retry: false }
+])('retains the renewal retry budget across a cached claim during request $request', async ({ request, retry }) => {
+  const f = await rig({
+    delayLeaseAt: request,
+    renewalFailures: Array.from({ length: request - 1 }, () => ({ status: 503, code: 'http_503' }))
+  })
+
+  const leases = vi.spyOn(f.auth, 'modelLease')
+  vi.spyOn(Math, 'random').mockReturnValue(0)
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] })
+  expect((await f.controller.bind(f.input, f.window)).ok).toBe(true)
+  await vi.advanceTimersByTimeAsync(20 * 60_000)
+  await vi.waitFor(() => expect(f.credentials).toHaveLength(2))
+
+  for (let count = 3; count <= request; count++) {
+    await vi.advanceTimersByTimeAsync(10_000)
+    await vi.waitFor(() => expect(f.credentials).toHaveLength(count))
+  }
+
+  await f.leaseReady
+  const pending = leases.mock.results.at(-1)!.value as ReturnType<typeof f.auth.modelLease>
+  expect((await f.controller.bind(f.input, f.window)).ok).toBe(true)
+  const revision = f.binding()!.binding_revision
+  f.releaseLease()
+  await expect(pending).rejects.toMatchObject({ code: 'http_503' })
+  await vi.advanceTimersByTimeAsync(1)
+  expect(leases).toHaveBeenCalledTimes(request)
+
+  if (retry) {
+    await vi.advanceTimersByTimeAsync(1000)
+    await vi.waitFor(() => expect(f.received.filter(row => row.method === 'session.renew_managed_model')).toHaveLength(1))
+    expect(f.credentials).toHaveLength(3)
+    expect(f.binding()!.binding_revision).toBe(revision)
+  } else {
+    await vi.advanceTimersByTimeAsync(40 * 60_000)
+    await vi.waitFor(() => expect(f.binding()).toBeUndefined())
+    expect(leases).toHaveBeenCalledTimes(5)
+  }
+})
+
 it('stops a forbidden renewal without retrying or silently replacing the grant', async () => {
   const f = await rig({ renewalFailures: [{ status: 403, code: 'DESKTOP_CREDENTIAL_REVOKED' }] })
   vi.spyOn(Math, 'random').mockReturnValue(0)
@@ -800,6 +846,8 @@ it('ignores a late renewal after a cached turn has claimed a newer binding revis
   f.releaseLease()
   await vi.waitFor(() => expect(f.credentials).toHaveLength(2))
   await vi.advanceTimersByTimeAsync(100)
+  await vi.waitFor(() => expect(f.received.filter(row => row.method === 'session.renew_managed_model')).toHaveLength(1))
+  expect(f.credentials).toHaveLength(3)
   expect(f.binding()!.binding_revision).toBe(claimed)
   expect(
     f.received.filter(row => row.method === 'session.renew_managed_model' && row.binding_revision !== claimed)
