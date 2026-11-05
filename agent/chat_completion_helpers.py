@@ -16,7 +16,6 @@ import logging
 import math
 import os
 import re
-import sys
 import threading
 import time
 import uuid
@@ -31,9 +30,12 @@ from agent.error_classifier import (
     _extract_status_code)
 from agent.sdk_transform_bypass import bypass_chat_sdk_request_transform
 from agent.errors import EmptyStreamError
+from agent.chat_completion_summary import managed_summary_call, summary_text
 from agent.chat_completion_helpers_relay import _with_stream_emitters
 from agent.chat_completion_local import _streams_llamacpp, stale_giveup
 from agent.chat_completion_headers import _chat_completion_capturing_headers
+from agent.chat_completion_stream_errors import (
+    rejects_stream_options, anthropic_connection_error_types, is_sse_connection_error)
 from agent.chat_completion_stream_monitor import StreamingWaitMonitor, StreamLifetimeExceeded
 from agent.transports.chat_completions import is_router_timeout_shim, router_timeout_shim_may_follow
 from agent.fast_mode import effective_request_overrides
@@ -2210,36 +2212,13 @@ def _iteration_summary_api_messages(agent, messages: list) -> list:
     return api_messages
 
 
-def _managed_summary_call(agent, api_request_id: str, request, callback, *, retry_count: int):
-    from agent import relay_llm
-    return relay_llm.execute_current(
-        request, callback,
-        name=str(getattr(agent, "provider", "") or "provider"), model_name=str(getattr(agent, "model", "") or ""),
-        metadata={"api_mode": str(getattr(agent, "api_mode", "") or "chat_completions"),
-            "api_request_id": api_request_id, "call_role": "iteration_summary", "retry_count": retry_count},
-        defer_logical_completion=True,
-    )
-
-
-def _summary_text(agent, response, **normalize_kwargs) -> str:
-    if is_router_timeout_shim(response):
-        # Router failure in a 200 envelope (#68396): an empty summary takes the retry slot.
-        logger.warning("Iteration summary returned a router timeout shim; retrying")
-        return ""
-    normalized = agent._get_transport().normalize_response(response, **normalize_kwargs)
-    if normalized.tool_calls:
-        # No summary path executes tool calls; log so a tool-only response that falls into the
-        # empty-summary retry is diagnosable.
-        logger.warning("Iteration summary emitted tool calls; discarding them")
-    return (normalized.content or "").strip()
-
-
 def _codex_summary_attempt(agent, api_messages: list, api_request_id: str):
     def _attempt(retry_count: int) -> str:
         codex_kwargs = agent._build_api_kwargs(api_messages)
         # Keep the ordinary tools/control block to preserve the cached prefix. The transport
-        # omits controls when tools are absent; _summary_text discards returned tool calls.
-        return _summary_text(agent, agent._interruptible_api_call(codex_kwargs))
+        # omits controls when tools are absent; summary_text discards returned tool calls.
+        return summary_text(agent, managed_summary_call(
+            agent, api_request_id, codex_kwargs, agent._interruptible_api_call, retry_count=retry_count))
     return _attempt
 
 
@@ -2250,9 +2229,9 @@ def _anthropic_summary_attempt(agent, api_messages: list, api_request_id: str):
             reasoning_config=agent.reasoning_config, is_oauth=agent._is_anthropic_oauth,
             preserve_dots=agent._anthropic_preserve_dots(), base_url=getattr(agent, "_anthropic_base_url", None))
         ant_kw = _merge_nous_portal_messages_extra_body(agent, ant_kw, api_messages)
-        response = _managed_summary_call(
+        response = managed_summary_call(
             agent, api_request_id, ant_kw, agent._interruptible_api_call, retry_count=retry_count)
-        return _summary_text(agent, response, strip_tool_prefix=agent._is_anthropic_oauth)
+        return summary_text(agent, response, strip_tool_prefix=agent._is_anthropic_oauth)
     return _attempt
 
 
@@ -2272,10 +2251,10 @@ def _chat_summary_attempt(agent, api_messages: list, api_request_id: str):
     def _attempt(retry_count: int) -> str:
         # Use the ordinary request-local lifecycle: a summary can be interrupted
         # during a long prefill without closing the shared primary client.
-        response = _managed_summary_call(
+        response = managed_summary_call(
             agent, api_request_id, summary_kwargs, agent._interruptible_api_call,
             retry_count=retry_count)
-        return _summary_text(agent, response)
+        return summary_text(agent, response)
     return _attempt
 
 
@@ -2327,6 +2306,9 @@ def handle_max_iterations(agent, messages: list, api_call_count: int) -> str:
             messages.pop()
         raise
     except Exception as e:
+        from agent.managed_inference_errors import raise_managed_operation_error
+        from agent.auxiliary_billing_scope import ManagedCredential
+        raise_managed_operation_error(e, managed=isinstance(getattr(agent, "api_key", None), ManagedCredential))
         logger.warning("Failed to get summary response: %s", e)
         from agent.turn_failure_copy import site_copy
         final_response = site_copy("max_iterations_no_summary", limit=agent.max_iterations)
@@ -2418,23 +2400,6 @@ def _build_partial_stream_stub(role, full_content, full_reasoning, model_name, u
 # connection lost."}}) surface as SDK APIError without a status_code (unlike
 # APIStatusError). They mean the upstream stream died: retry with a fresh
 # connection like an httpx drop.
-_SSE_CONN_PHRASES = ("connection lost", "connection reset", "connection closed", "connection terminated",
-    "network error", "network connection", "terminated", "peer closed", "broken pipe",
-    "upstream connect error")
-
-
-def _rejects_stream_options(exc: BaseException) -> bool:
-    """A 400/422 whose body names ``stream_options`` as an unknown/extra field: strict
-    OpenAI-compatible endpoints (Azure AI Foundry MaaS, Pydantic ``extra_forbidden``) reject
-    the usage extension outright (#9705). Distinct from "stream not supported", which flips
-    the whole session to non-streaming."""
-    if getattr(exc, "status_code", None) not in (400, 422):
-        return False
-    body = f"{getattr(exc, 'body', '') or ''} {exc}".lower()
-    return "stream_options" in body and any(
-        k in body for k in ("extra", "not supported", "unrecognized", "unexpected", "unknown"))
-
-
 def _wait_stream_retry_backoff(agent, delay: float) -> None:
     """Sleep ``delay`` seconds in 0.1s steps, returning early as soon as the agent
     is interrupted (so /stop is never held hostage by a backoff; the retry loop's
@@ -2445,21 +2410,6 @@ def _wait_stream_retry_backoff(agent, delay: float) -> None:
         if remaining <= 0:
             return
         time.sleep(min(0.1, remaining))
-
-
-def _anthropic_connection_error_types() -> tuple:
-    # An Anthropic error instance implies the SDK is already imported; never import
-    # (or lazy-install) it from inside an error handler.
-    anthropic = sys.modules.get("anthropic")
-    return (anthropic.APIConnectionError,) if anthropic is not None else ()
-
-
-def _is_sse_connection_error(exc: BaseException) -> bool:
-    from openai import APIError as _APIError
-    if not isinstance(exc, _APIError) or getattr(exc, "status_code", None):
-        return False
-    err_lower = str(exc).lower()
-    return any(phrase in err_lower for phrase in _SSE_CONN_PHRASES)
 
 
 def _relay_stream_identity(agent, name_default: str) -> dict:
@@ -3276,6 +3226,10 @@ class _StreamingCall(StreamingWaitMonitor):
 
             full_reasoning = extract_reasoning(self.agent, SimpleNamespace(content=full_content))
         mock_tool_calls, has_truncated_tool_args = self._assemble_tool_calls(tool_calls_acc, finish_reason)
+        from agent.auxiliary_billing_scope import ManagedCredential
+        from agent.managed_inference_errors import ManagedOperationUnknown
+        if finish_reason is None and isinstance(getattr(self.agent, "api_key", None), ManagedCredential):
+            raise ManagedOperationUnknown()
         # Zero-chunk guard: nothing usable = upstream error / malformed SSE.
         if finish_reason is None and not content_parts and not reasoning_parts and not refusal_parts and not tool_calls_acc:
             raise EmptyStreamError(
@@ -3541,19 +3495,23 @@ class _StreamingCall(StreamingWaitMonitor):
         if self._request_cancelled["value"]:
             logger.debug("Streaming worker caught %s after request cancellation — exiting without retry.", type(e).__name__)
             return False
+        from agent.managed_inference_errors import managed_terminal_error
+        if terminal := managed_terminal_error(self.agent, e):
+            self.result["error"] = terminal
+            return False
         e = self._as_lifetime_error(e)  # a cap kill: transient, and its copy names the setting
         _is_timeout = isinstance(e, (_httpx.ReadTimeout, _httpx.ConnectTimeout, _httpx.PoolTimeout, StreamLifetimeExceeded))
         # ReadError: abort/reset mid-body (stale-kill shutdown under a parked reader, ECONNRESET) — retry loop owns it.
         # anthropic.APIConnectionError: the Anthropic SDK wraps connect/read drops
         # (incl. stale-kill aborts) in its own type, not httpx's.
         _is_conn_err = isinstance(e, (_httpx.ConnectError, _httpx.ReadError, _httpx.RemoteProtocolError, ConnectionError,
-                                      *_anthropic_connection_error_types()))
+                                      *anthropic_connection_error_types()))
         _is_stream_parse_err = self.agent._is_provider_stream_parse_error(e)
         _is_empty_stream = isinstance(e, EmptyStreamError)
-        _is_sse_conn_err = not _is_timeout and not _is_conn_err and _is_sse_connection_error(e)
+        _is_sse_conn_err = not _is_timeout and not _is_conn_err and is_sse_connection_error(e)
         _is_transient = _is_timeout or _is_conn_err or _is_sse_conn_err or _is_stream_parse_err
 
-        if not self.deltas_were_sent["yes"] and not getattr(self.agent, "_stream_options_unsupported", False) and _rejects_stream_options(e):
+        if not self.deltas_were_sent["yes"] and not getattr(self.agent, "_stream_options_unsupported", False) and rejects_stream_options(e):
             # Nothing streamed yet: drop the usage extension for this session and re-open.
             self.agent._stream_options_unsupported = True
             self._compat_retries = 1
@@ -3629,6 +3587,9 @@ class _StreamingCall(StreamingWaitMonitor):
         that decision, so a pending stop must not buy one more request.
         True = handled (caller must not overwrite result); False = propagate ``e``.
         """
+        from agent.auxiliary_billing_scope import ManagedCredential
+        if isinstance(getattr(self.agent, "api_key", None), ManagedCredential):
+            return False
         if getattr(self.agent, "_interrupt_requested", False):
             return False
         if _streams_llamacpp(self.agent):
@@ -3934,6 +3895,9 @@ class _StreamingCall(StreamingWaitMonitor):
             error, response = self._abandon_error, None
             self._forget_invisible_deltas(error)  # nothing visible: retry, not a stub
         if error is not None:
+            from agent.managed_inference_errors import managed_terminal_error
+            if terminal := managed_terminal_error(self.agent, error):
+                raise terminal
             if self.deltas_were_sent["yes"]:
                 return self._partial_stream_stub(error)
             raise error

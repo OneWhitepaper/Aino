@@ -95,6 +95,15 @@ def failed_turn_notice(turn_messages: Any) -> str:
     return FAILED_TURN_NOTICE
 
 
+def durable_failed_turn_content(result, turn_messages):
+    """An uncertain managed response retains what was delivered and its uncertainty."""
+    if result.get("failure_reason") == "managed_operation_unknown":
+        partial = result.get("final_response") if result.get("partial") else None
+        error = str(result.get("error") or "")
+        return str(partial) + "\n\n" + error if partial else error
+    return failed_turn_notice(turn_messages)
+
+
 def provider_label_for(provider: Any) -> str:
     """Human-friendly provider name for chat copy (``"OpenRouter"``, ``"Nous Portal"``…)."""
     from hermes_cli.models import provider_label
@@ -118,6 +127,7 @@ class ExitFailure(NamedTuple):
 # (exit-reason prefix, failure_reason, retryable, fails_turn). Prefix match: several reasons
 # carry a parenthesised detail (``local_processing_error(...)``).
 _EXIT_REASON_FAILURES: tuple[tuple[str, str, bool, bool], ...] = (
+    ("managed_operation_unknown", "managed_operation_unknown", False, True),
     # Advisory: the reasoning-only text may literally be the answer, and cron stays silent.
     ("empty_response_exhausted", "empty_response", True, False),
     ("all_retries_exhausted_no_response", FailoverReason.server_error.value, True, True),

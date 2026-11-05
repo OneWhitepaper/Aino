@@ -20,6 +20,7 @@ from agent.transports.hermes_tools_mcp_server import HERMES_TOOLS_MCP_SERVER_NAM
 from agent.sdk_transform_bypass import bypass_sdk_request_transform
 from agent.stream_diag import buffer_connect_exhausted_notice
 from agent.usage_anchor import set_usage_anchor
+from agent.managed_inference_errors import raise_managed_agent_operation_error, require_managed_stream_completion
 
 logger = logging.getLogger(__name__)
 _codex_watchdog_state_var: contextvars.ContextVar[Any | None] = contextvars.ContextVar(
@@ -1111,6 +1112,7 @@ class _CodexResponseAssembler:
         return [entry[2] for entry in indexed]
 
     def result(self) -> SimpleNamespace:
+        require_managed_stream_completion(self.saw_terminal)
         # Successful completion orders all output, even when no calls remain pending.
         # Done items stay authoritative; only successful streams settle missing done events.
         output: list[Any] = self._settled_output() if self.saw_response_completed else list(self.output_items)
@@ -1428,6 +1430,7 @@ def run_codex_stream(agent, api_kwargs: dict, client: Any = None, on_first_delta
                     on_event=_fenced(_on_event), interrupt_check=_interrupt_or_superseded,
                 )
             except transport_errors as exc:
+                raise_managed_agent_operation_error(agent, exc)
                 if attempt >= max_stream_retries:
                     _log_failure(exc)
                     raise
@@ -1439,12 +1442,14 @@ def run_codex_stream(agent, api_kwargs: dict, client: Any = None, on_first_delta
                 if not intercepted_events:  # zero-event attempt: never resend a pathological payload silently
                     api_kwargs = _prune_zero_event_retry_payload(api_kwargs, attempt + 1, max_stream_retries + 1)
                 continue
-            except RuntimeError:
+            except RuntimeError as exc:
+                raise_managed_agent_operation_error(agent, exc)
                 # "No terminal response"; Relay may still hold a finalizer-assembled response.
                 if event_stream is not None and event_stream.final_response is not None:
                     return event_stream.final_response
                 raise
             except _APIConnectionError as exc:
+                raise_managed_agent_operation_error(agent, exc)
                 # The SDK wraps every connect/receive failure (``raise APIConnectionError from err``), so the
                 # raw ``transport_errors`` branch above never sees a pre-stream failure. Before the stream
                 # opened nothing is billed, so one fresh physical request is safe (#103673); once the writer

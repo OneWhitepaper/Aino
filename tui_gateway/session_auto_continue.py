@@ -55,6 +55,18 @@ def _auto_continue_note(prompt: str) -> str:
             f"finish the task. The interrupted request was:]\n\n{prompt}")
 
 
+def _ac_has_terminal_tool_failure(history: list) -> bool:
+    """Only the latest user turn can veto recovery; a later explicit request starts fresh."""
+    from agent.tool_result_classification import is_terminal_tool_failure
+
+    for message in reversed(history):
+        if message.get("role") == "user":
+            return False
+        if message.get("role") == "tool" and is_terminal_tool_failure(message):
+            return True
+    return False
+
+
 def _maybe_schedule_auto_continue(sid: str, session: dict, session_key: str) -> dict | None:
     """Kick off a continuation turn for a crash-interrupted session (session.resume cold paths). Returns a descriptor
     for the resume payload when scheduled, else None. The turn runs on a background thread after the deferred agent
@@ -76,6 +88,9 @@ def _maybe_schedule_auto_continue(sid: str, session: dict, session_key: str) -> 
         logger.info("auto-continue for %s held back: marker writer pid %s is still alive (reader pid %s); the "
                     "marker is ownership evidence and the owner clears it", session_key,
                     marker.get("writer_pid"), os.getpid())
+        return None
+    if _ac_has_terminal_tool_failure(session.get("history") or []):
+        clear_turn_marker(home, session_key)
         return None
     enabled, freshness_secs, max_attempts = _auto_continue_config()
     age = time.time() - marker["started_at"]

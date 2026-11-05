@@ -42,6 +42,7 @@ from agent.context_compressor_tail import (
 )
 from agent.context_compressor_telemetry import CompressionTelemetryMixin
 from agent.error_classifier import FailoverReason, classify_api_error
+from agent.managed_inference_errors import ManagedOperationUnknown
 from agent.micro_compaction import MicroCompactionMixin
 from agent.prompt_builder import STEER_DISPLAY_KIND
 from agent.model_metadata import (
@@ -737,8 +738,8 @@ def _classify_summary_failure(e: Exception) -> _SummaryFailureKind:
         # Malformed/non-JSON bodies (HTML 502 as application/json) surface as JSONDecodeError or
         # APIResponseValidationError "expecting value"; treat as transient.
         json_decode=isinstance(e, json.JSONDecodeError) or "expecting value" in err,
-        # httpx premature-close errors are transient; treat like a timeout, not a 60s cooldown.
-        streaming_closed=_is_connection_error(e) and not stall,
+        # Unknown managed outcomes must preserve the transcript like terminal transport failures.
+        streaming_closed=(isinstance(e, ManagedOperationUnknown) or _is_connection_error(e)) and not stall,
         # HTTP 200 with empty body from a degraded provider, plus the sibling "no usable response"
         # shapes from _validate_llm_response.
         empty_content=isinstance(e, RuntimeError) and any(
@@ -3826,6 +3827,8 @@ Summary generation was unavailable, so this is a best-effort deterministic fallb
         # failure so it routes through the same main-model fallback + cooldown machinery as a transport
         # error, rather than replacing real context with an empty summary.
         if not content.strip():
+            if _aux_route.get("provider") == "aino" or (not _aux_route.get("provider") and isinstance(self.api_key, ManagedCredential)):
+                raise ManagedOperationUnknown()
             raise RuntimeError(f"Context compression LLM returned empty content {where}")
         if _is_refusal_response(response, content):
             # Treat a refusal as unusable content. This deliberately reuses the
@@ -4065,14 +4068,8 @@ Write only the summary body. Do not include any preamble or prefix."""
         from agent.conversation_compression import _raise_if_stale_attempt
 
         _raise_if_stale_attempt(self)
-        # Only a genuine no-provider RuntimeError gets the long cooldown; empty/invalid-response
-        # RuntimeErrors are transient and must get the main-model retry below first.
-        # ``call_llm`` raises ``RuntimeError`` for two very different cases: 1. 2. An empty/invalid response
-        # from a configured provider (``_validate_llm_response`` empty-``choices``/``None``, or our
-        # empty-``content`` guard above) — a transient/proxy fault that should fall back to the main model
-        # first, exactly like the transport errors handled below. Only (1) belongs in the long no-provider
-        # cooldown; (2) and every other exception flow into the generic fallback logic so they get a
-        # main-model retry before any cooldown. (#11978, #11914)
+        # An absent provider needs the long cooldown; an empty/invalid response from a configured
+        # provider is transient and gets the main-model retry before cooldown (#11978, #11914).
         if isinstance(e, RuntimeError) and "no llm provider configured" in str(e).lower():
             self._record_compression_failure_cooldown(_SUMMARY_FAILURE_COOLDOWN_SECONDS, "no auxiliary LLM provider configured")
             self._last_summary_error = "no auxiliary LLM provider configured"
@@ -4095,8 +4092,7 @@ Write only the summary body. Do not include any preamble or prefix."""
                 "summary_model=%s main_model=%s base_url=%s err=%s",
                 self.provider or "auto", self.summary_model or "(main)", self.model, self.base_url or "default", e,
             )
-        # A distinct summary model gets ONE main-model retry: a specific reason for known transient classes,
-        # else a best-effort "failed" retry — losing N turns is worse than one extra summary attempt.
+        # A distinct summary model gets ONE main-model retry unless a managed outcome is unknown.
         from agent.auxiliary_billing_scope import ManagedCredential
         # ``provider: auto`` resolves a model per call WITHOUT setting ``summary_model``; use the model the
         # aux lane actually resolved so an auto route that keeps returning empty content (a proxy channel
@@ -4106,9 +4102,9 @@ Write only the summary body. Do not include any preamble or prefix."""
         ).strip()
         if (_route_model and _route_model != self.model
                 and not isinstance(self.api_key, ManagedCredential)
+                and not isinstance(e, ManagedOperationUnknown)
                 and not getattr(self, "_summary_model_fallen_back", False)):
             self._fallback_to_main_for_compression(e, kind.fallback_reason(), failed_model=_route_model)
-            # Retry immediately on the main model.
             return self._generate_summary(turns_to_summarize, focus_topic=focus_topic, memory_context=memory_context)
 
         # Transient errors: short cooldown for JSON-decode/streaming-closed/empty-content. Timeouts escalate
@@ -4153,6 +4149,9 @@ Write only the summary body. Do not include any preamble or prefix."""
             "Failed to generate context summary: %s. Further summary attempts paused for %d seconds.", e,
             _transient_cooldown,
         )
+        if isinstance(e, ManagedOperationUnknown):
+            self._last_compress_aborted = True
+            raise e
         return None
 
     @staticmethod

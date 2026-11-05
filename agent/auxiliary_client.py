@@ -36,6 +36,7 @@ from agent.error_classifier import (
 from agent.auxiliary_error_shapes import (
     _botocore_error, _exc_http_status, _is_invalid_aux_response_error, _is_statusless_structured_provider_error,
 )
+from agent.auxiliary_retry import should_retry_same_provider, stop_managed_auxiliary_replay, ladder_step_call
 from agent.auxiliary_managed_local import _is_managed_local_endpoint
 from agent.auxiliary_reasoning_floor import remember_reasoning_floor, with_reasoning_floor
 from agent.auxiliary_structured_output import _route_key, _without_structured_output_format, remember_structured_output_rejection
@@ -2556,7 +2557,9 @@ def _relay_aux_call_scope(args: tuple, kwargs: dict):
         "api_mode": "chat_completions",
     })
     try:
-        yield
+        from agent.auxiliary_billing_scope import managed_operation_scope
+        with managed_operation_scope(_RELAY_AUX_CALL_CONTEXT.get()["request_id"]):
+            yield
     except BaseException as exc:
         _fail_relay_auxiliary_call(exc)
         raise
@@ -6947,6 +6950,7 @@ def _create_with_progress(
     try:
         return _create_with_progress_once(client, kwargs, task, force_stream=force_stream)
     except Exception as exc:
+        stop_managed_auxiliary_replay(client, exc)
         affordable = _affordable_max_tokens_from_error(exc)
         if affordable is None:
             raise
@@ -7010,6 +7014,7 @@ def _create_with_progress_once(
     try:
         chunks = client.chat.completions.create(**stream_kwargs)
     except Exception as exc:
+        stop_managed_auxiliary_replay(client, exc)
         # Genuine provider failures aren't streaming's fault — surface unchanged so the
         # recovery chains see the same error as a plain call.
         if (force_stream or _is_transient_transport_error(exc) or _is_auth_error(exc)
@@ -7176,6 +7181,8 @@ class _ChatStreamAccumulator:
         return made_progress
 
     def finish(self) -> Any:
+        from agent.managed_inference_errors import require_managed_stream_completion
+        require_managed_stream_completion(self.finish_reason)
         tool_calls = None
         if self.tool_calls_acc:
             tool_calls = [
@@ -7241,6 +7248,7 @@ async def _acreate_with_progress(
     try:
         chunks = await client.chat.completions.create(**stream_kwargs)
     except Exception as exc:
+        stop_managed_auxiliary_replay(client, exc)
         # Only a rejected stream NEGOTIATION falls back to a plain call (mirrors the sync wrapper); a
         # failure mid-consumption below reaches the classified recovery ladder instead of silently
         # re-sending the whole prompt non-streaming.
@@ -7999,36 +8007,17 @@ def _plan_aux_call(
     return req, retry_kwargs, candidate_kwargs
 
 
-def _should_retry_same_provider(task: Optional[str], exc: Exception, tag: str) -> bool:
-    """True when ``exc`` is a transient transport blip worth a same-provider retry; critical-path
-    tasks skip it on a full-budget timeout (``_should_skip_same_provider_retry``) and go straight
-    to fallback."""
-    if not _is_transient_transport_error(exc):
-        return False
-    if _should_skip_same_provider_retry(task, exc):
-        logger.info("Auxiliary %s%s: timeout on the critical path; "
-                    "skipping same-provider retry and falling back: %s", task, tag, exc)
-        return False
-    return True
-
-
-def _ladder_step_call(
-    step: _LadderStep, req: _PreparedAuxRequest, retry_kwargs: dict[str, Any], candidate_kwargs: dict[str, Any],
-) -> tuple[str, tuple, dict[str, Any]]:
-    """Resolve a ladder step into ``(kind, args, kwargs)`` for the sync/async performer."""
-    if step.kind == "call":
-        return "call", step.args, dict(provider=req.resolved_provider, api_mode=req.resolved_api_mode)
-    if step.kind == "retry_same_provider":
-        retry_provider, retry_model = step.args
-        return "retry", (), dict(retry_kwargs, resolved_provider=retry_provider, resolved_model=retry_model)
-    return "fallback", step.args, candidate_kwargs
-
-
 def _start_recovery_ladder(
     first_err: Exception, req: _PreparedAuxRequest, retry_kwargs: dict[str, Any], *,
     task: Optional[str], async_mode: bool, route_info: Optional[dict[str, str]],
 ):
     """Build the recovery-ladder generator for a failed primary request."""
+    if req.request_provider == "aino":
+        from agent.managed_inference_errors import raise_managed_operation_error
+        raise_managed_operation_error(first_err, managed=True)
+        # Parameter strips also reissue the request. A managed operation cannot
+        # change its body or switch channels after it has been dispatched.
+        raise first_err
     return _aux_recovery_ladder(
         first_err, client=req.client, kwargs=req.kwargs, task=task, async_mode=async_mode,
         base_info=req.base_info, resolved_provider=req.resolved_provider,
@@ -8101,7 +8090,7 @@ def _call_llm_impl(
         try:
             return _primary(provider=request_provider, base_url=req.base_info)
         except Exception as transient_err:
-            if not _should_retry_same_provider(task, transient_err, ""):
+            if not should_retry_same_provider(task, transient_err, "", managed=request_provider == "aino"):
                 raise
             _max_transient_retries = _transient_retry_count()
             _last_transient = transient_err
@@ -8114,13 +8103,15 @@ def _call_llm_impl(
                 try:
                     return _primary()
                 except Exception as retry_transient:
+                    from agent.managed_inference_errors import raise_managed_operation_error
+                    raise_managed_operation_error(retry_transient, managed=request_provider == "aino")
                     if not _is_transient_transport_error(retry_transient):
                         raise
                     _last_transient = retry_transient
             raise _last_transient
     except Exception as first_err:
         def _perform(step: _LadderStep) -> Any:
-            kind, args, kw = _ladder_step_call(step, req, retry_kwargs, candidate_kwargs)
+            kind, args, kw = ladder_step_call(step, req, retry_kwargs, candidate_kwargs)
             if kind == "call":
                 return _validate_llm_response(_relay_sync_completion(*args, **kw), task)
             if kind == "retry":
@@ -8261,14 +8252,14 @@ async def _async_call_llm_impl(
             return await _primary(provider=request_provider, base_url=req.base_info)
         except Exception as transient_err:
             # The async Codex adapter wraps the sync stream via to_thread: same TimeoutError here.
-            if not _should_retry_same_provider(task, transient_err, " (async)"):
+            if not should_retry_same_provider(task, transient_err, " (async)", managed=request_provider == "aino"):
                 raise
             logger.info("Auxiliary %s (async): transient transport error; retrying "
                         "once on the same provider before fallback: %s", task or "call", transient_err)
             return await _primary()
     except Exception as first_err:
         async def _perform(step: _LadderStep) -> Any:
-            kind, args, kw = _ladder_step_call(step, req, retry_kwargs, candidate_kwargs)
+            kind, args, kw = ladder_step_call(step, req, retry_kwargs, candidate_kwargs)
             if kind == "call":
                 import asyncio
                 return await asyncio.to_thread(_validate_llm_response, await _relay_async_completion(*args, **kw), task)

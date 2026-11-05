@@ -21,6 +21,7 @@ from agent.message_content import flatten_message_text
 from agent.message_metadata import append_message, stamp_message_timestamp
 from agent.message_sanitization import _sanitize_surrogates
 from agent.served_model import result_model_fields
+from agent.managed_inference_errors import ManagedOperationUnknown
 
 # Verification-continuation nudges (verify-on-stop / pre_verify) must be stripped from
 # returned/live history to avoid role-alternation breaks; the assistant response is
@@ -161,6 +162,9 @@ def _resolve_budget_fallback(
             _summary_start = time.time()
             try:
                 final_response = agent._handle_max_iterations(messages, api_call_count)
+            except ManagedOperationUnknown as error:
+                _turn_exit_reason = "managed_operation_unknown"
+                final_response = str(error)
             except InterruptedError:
                 # The turn ends interrupted, so the pending interrupt message is returned
                 # for requeue instead of being cleared behind a fallback summary. A redirect
