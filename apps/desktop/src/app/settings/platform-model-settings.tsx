@@ -24,6 +24,11 @@ interface PlatformModelSettingsProps {
   disabled?: boolean
 }
 
+interface ReauthorizationIntent {
+  accountId: string
+  scopeKey: string
+}
+
 /** The catalog only edits a draft; the parent owns the single default Apply action. */
 export function PlatformModelSettings({ scopeProfile, selectedId, onSelect, disabled }: PlatformModelSettingsProps) {
   const { t } = useI18n()
@@ -36,15 +41,20 @@ export function PlatformModelSettings({ scopeProfile, selectedId, onSelect, disa
   const capability = managedModelRouteCapabilityFrom(managed, scope.route)
   const [open, setOpen] = useState(false)
   const [candidateId, setCandidateId] = useState(selectedId)
-  const [reauthorize, setReauthorize] = useState<number | null>(null)
+  const [reauthorize, setReauthorize] = useState<ReauthorizationIntent | null>(null)
+  const accountId = catalog.account?.account?.id
   const candidate = catalog.models.find(model => model.id === candidateId)
   const selected = catalog.models.find(model => model.id === selectedId)
 
   useEffect(() => {
     setOpen(false)
     setCandidateId(selectedId)
-    setReauthorize(null)
   }, [scope.key, catalog.account?.account?.id, catalog.account?.revision, selectedId])
+
+  // Issuance advances the revision before it settles; only a new owner cancels the intent.
+  useEffect(() => {
+    setReauthorize(null)
+  }, [scope.key, accountId])
 
   return (
     <>
@@ -74,24 +84,44 @@ export function PlatformModelSettings({ scopeProfile, selectedId, onSelect, disa
           ? t.settings.model.defaultMain.ainoConnected
           : t.platformModels.not_authenticated}
       </p>
-      {window.hermesDesktop?.platformModels?.reauthorize && catalog.account?.phase === 'signed_in' && (
-        <Button disabled={disabled} onClick={() => setReauthorize(catalog.account!.revision)} size="sm" variant="outline">
+      {window.hermesDesktop?.platformModels?.reauthorize && catalog.account?.phase === 'signed_in' && accountId && (
+        <Button
+          disabled={disabled}
+          onClick={() => setReauthorize({ accountId, scopeKey: scope.key })}
+          size="sm"
+          variant="outline"
+        >
           {t.platformModels.reauthorize}
         </Button>
       )}
       <ConfirmDialog
         confirmLabel={t.platformModels.reauthorize}
         description={t.platformModels.reauthorizeDescription}
-        onClose={() => setReauthorize(null)}
+        key={JSON.stringify([scope.key, accountId])}
+        onClose={() => setReauthorize(current => (current === reauthorize ? null : current))}
         onConfirm={async () => {
-          if (!catalog.account || reauthorize === null) {
+          if (
+            !catalog.account ||
+            reauthorize === null ||
+            reauthorize.accountId !== accountId ||
+            reauthorize.scopeKey !== scope.key
+          ) {
             return
           }
 
           try {
-            await window.hermesDesktop?.platformModels?.reauthorize?.(reauthorize)
-          } catch {
-            throw new Error(t.platformModels.reauthorizeDescription)
+            await window.hermesDesktop?.platformModels?.reauthorize?.(catalog.account.revision)
+          } catch (error) {
+            const code =
+              error && typeof error === 'object' && 'code' in error && typeof error.code === 'string'
+                ? error.code
+                : 'platform_error'
+
+            const reason = ['RECENT_AUTH_REQUIRED', 'not_authenticated', 'refresh_token_revoked'].includes(code)
+              ? 'reauthentication_required'
+              : code
+
+            throw new Error(t.settings.account.platformError(reason))
           }
         }}
         open={reauthorize !== null}
