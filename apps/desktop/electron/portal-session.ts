@@ -1,5 +1,6 @@
 import type { BrowserWindow, BrowserWindowConstructorOptions, Session } from 'electron'
 
+import { NativeAuthChangedError } from './native-access-token'
 import { isExpectedOauthNavigationAbort } from './oauth-navigation'
 import { cookiesHavePortalSession, portalAccessCookies, type PortalCookie } from './portal-cookies'
 import { installWindowRendererLifecycle } from './window-renderer-lifecycle'
@@ -19,6 +20,11 @@ interface CookieWindowOptions {
   show: boolean
   pollMs: number
   deadlineMs?: number
+}
+
+interface PortalScope {
+  session: Session | null
+  assertCurrent: () => void
 }
 
 type CookieWindowOutcome = 'landed' | 'closed' | 'timeout' | Error
@@ -44,11 +50,25 @@ export function createPortalSession({
   createWindow,
   rememberLog
 }: PortalSessionDependencies) {
+  let generation = 0
+
+  const captureScope = (): PortalScope => {
+    const expectedGeneration = generation
+
+    return {
+      session: getOauthSession(),
+      assertCurrent: () => {
+        if (generation !== expectedGeneration) { throw new NativeAuthChangedError() }
+      }
+    }
+  }
+
   // One reader for every portal-cookie question so the failure rungs cannot
   // drift between callers: URL-scoped first, host-scoped when Chromium rejects
   // the URL form, empty when the jar is unreadable.
-  async function readPortalCookies() {
-    const sess = getOauthSession()
+  async function readPortalCookies(scope: PortalScope) {
+    scope.assertCurrent()
+    const sess = scope.session
 
     if (!sess) {
       return []
@@ -57,11 +77,21 @@ export function createPortalSession({
     const portalBaseUrl = resolvePortalBaseUrl()
 
     try {
-      return await sess.cookies.get({ url: portalBaseUrl })
+      const cookies = await sess.cookies.get({ url: portalBaseUrl })
+      scope.assertCurrent()
+
+      return cookies
     } catch {
+      scope.assertCurrent()
+
       try {
-        return await sess.cookies.get({ domain: new URL(portalBaseUrl).hostname })
+        const cookies = await sess.cookies.get({ domain: new URL(portalBaseUrl).hostname })
+        scope.assertCurrent()
+
+        return cookies
       } catch {
+        scope.assertCurrent()
+
         return []
       }
     }
@@ -69,18 +99,19 @@ export function createPortalSession({
 
   // A persisted Chromium jar hydrates lazily; warm and retry before reporting
   // signed-out on a cold start. Both access and refresh credentials count here.
-  async function hasLivePortalSession() {
-    if (!getOauthSession()) {
+  async function hasLivePortalSession(scope = captureScope()) {
+    if (!scope.session) {
       return false
     }
 
-    const readPortal = async () => cookiesHavePortalSession(await readPortalCookies())
+    const readPortal = async () => cookiesHavePortalSession(await readPortalCookies(scope))
 
     if (await readPortal()) {
       return true
     }
 
     await warmOauthCookieStore()
+    scope.assertCurrent()
 
     for (const delayMs of [30, 60, 90]) {
       if (await readPortal()) {
@@ -93,12 +124,12 @@ export function createPortalSession({
     return readPortal()
   }
 
-  async function readAccessCookies() {
-    return portalAccessCookies(await readPortalCookies())
+  async function readAccessCookies(scope: PortalScope) {
+    return portalAccessCookies(await readPortalCookies(scope))
   }
 
-  async function hasPortalAccessToken() {
-    return (await readAccessCookies()).length > 0
+  async function hasPortalAccessToken(scope = captureScope()) {
+    return (await readAccessCookies(scope)).length > 0
   }
 
   // A portal window has done its job only when the jar holds an access cookie
@@ -106,15 +137,17 @@ export function createPortalSession({
   // token the server already rejected can sit unexpired in Chromium's jar, and
   // trusting it would close the login window before the user signs in, or
   // report a renewal that never happened.
-  async function hasNewAccessCookie(previous: PortalCookie[]) {
-    const access = await readAccessCookies()
+  async function hasNewAccessCookie(scope: PortalScope, previous: PortalCookie[]) {
+    const access = await readAccessCookies(scope)
 
     return access.some(cookie => !previous.some(old => old.name === cookie.name && old.value === cookie.value))
   }
 
   // The portal owns provider selection, provisioning and refresh redirects;
   // Desktop only watches the jar for a new access cookie.
-  function driveCookieWindow(sess: Session, previous: PortalCookie[], options: CookieWindowOptions) {
+  function driveCookieWindow(scope: PortalScope, previous: PortalCookie[], options: CookieWindowOptions) {
+    scope.assertCurrent()
+    const sess = scope.session
     const portalBaseUrl = resolvePortalBaseUrl()
 
     return new Promise<CookieWindowOutcome>(resolve => {
@@ -147,8 +180,12 @@ export function createPortalSession({
       }
 
       const checkCookie = async () => {
-        if (!settled && (await hasNewAccessCookie(previous))) {
-          finish('landed')
+        try {
+          if (!settled && (await hasNewAccessCookie(scope, previous))) {
+            finish('landed')
+          }
+        } catch (error) {
+          finish(error instanceof Error ? error : new Error(String(error)))
         }
       }
 
@@ -209,29 +246,33 @@ export function createPortalSession({
   let portalAccessRenewal: Promise<boolean> | null = null
 
   async function renewPortalAccessSilently({ force = false }: { force?: boolean } = {}) {
-    const sess = getOauthSession()
+    const scope = captureScope()
 
-    if (!isReady() || !sess) {
+    if (!isReady() || !scope.session) {
       return false
     }
 
     // No renewal material at all → nothing to renew; interactive login is
     // genuinely required.
-    if (!(await hasLivePortalSession())) {
+    if (!(await hasLivePortalSession(scope))) {
       return false
     }
 
-    if (!force && (await hasPortalAccessToken())) {
+    if (!force && (await hasPortalAccessToken(scope))) {
       return true
     }
 
-    portalAccessRenewal ??= (async () => {
-      const previous = await readAccessCookies()
+    scope.assertCurrent()
+
+    if (portalAccessRenewal) { return portalAccessRenewal }
+
+    const renewal = (async () => {
+      const previous = await readAccessCookies(scope)
 
       // Hard deadline: this window is never revealed, so an unrenewable session
       // (revoked refresh token, portal down) must resolve false rather than
       // hang the discovery call behind an invisible window.
-      const outcome = await driveCookieWindow(sess, previous, {
+      const outcome = await driveCookieWindow(scope, previous, {
         kind: 'portal-renew',
         title: 'Renewing Nous Cloud session…',
         show: false,
@@ -239,16 +280,20 @@ export function createPortalSession({
         deadlineMs: 12_000
       })
 
+      scope.assertCurrent()
+
       const ok = outcome === 'landed'
 
       rememberLog(`[cloud] silent portal access renewal ${ok ? 'succeeded' : 'did not complete'}`)
 
       return ok
     })().finally(() => {
-      portalAccessRenewal = null
+      if (portalAccessRenewal === renewal) { portalAccessRenewal = null }
     })
 
-    return portalAccessRenewal
+    portalAccessRenewal = renewal
+
+    return renewal
   }
 
   // Drive a one-time interactive portal sign-in in the OAuth partition. Unlike
@@ -262,23 +307,28 @@ export function createPortalSession({
       throw new Error('Desktop is not ready to start a Nous Cloud sign-in.')
     }
 
-    const sess = getOauthSession()
+    const scope = captureScope()
 
-    if (!sess) {
+    if (!scope.session) {
       throw new Error('OAuth session partition is unavailable.')
     }
 
-    const outcome = await driveCookieWindow(sess, await readAccessCookies(), {
+    const outcome = await driveCookieWindow(scope, await readAccessCookies(scope), {
       kind: 'portal',
       title: 'Sign in to Nous Cloud',
       show: true,
       pollMs: 750
     })
 
+    scope.assertCurrent()
+
     if (outcome !== 'landed') {
       throw outcome instanceof Error ? outcome : new Error('Sign-in window closed before authentication completed.')
     }
   }
 
-  return { hasLivePortalSession, hasPortalAccessToken, renewPortalAccessSilently, openPortalLoginWindow }
+  return {
+    hasLivePortalSession, hasPortalAccessToken, renewPortalAccessSilently, openPortalLoginWindow,
+    retire: () => { generation += 1; portalAccessRenewal = null }
+  }
 }

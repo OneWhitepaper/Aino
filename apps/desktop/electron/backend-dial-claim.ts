@@ -25,6 +25,10 @@ export class BackendDialClaims {
     return this.#inflightByKey.has(key)
   }
 
+  async drain(): Promise<void> {
+    await Promise.allSettled([...this.#inflightByKey.values()])
+  }
+
   run<T>(key: string, dial: () => Promise<T> | T): Promise<T> {
     const existing = this.#inflightByKey.get(key) as Promise<T> | undefined
 

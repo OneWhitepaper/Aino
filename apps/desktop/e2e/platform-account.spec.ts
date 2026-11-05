@@ -4,15 +4,16 @@ import * as path from 'node:path'
 import { writeEnvFile, writeMockProviderConfig } from '../../../tests-js/scripts/mock-provider-config'
 import { startMockServer } from '../../../tests-js/scripts/mock-server'
 import { signInPlatformFixture, startPlatformServer } from '../../../tests-js/scripts/platform-account-fixture'
+import { resolveDesktopHermesHome } from '../electron/data-paths.mjs'
 
 import {
   buildAppEnv,
   createSandbox,
   launchDesktop,
-  waitForAppReady,
-
-  } from './fixtures'
-import { expect, test } from './test'
+  waitForAppReady
+} from './fixtures'
+import { replaceAccountWindow } from './platform-account-window'
+import { expect, installErrorBannerGuard, test } from './test'
 
 interface NativeAccountWindow {
   hermesDesktop: {
@@ -30,12 +31,18 @@ test('uses the real native platform bridge across windows without a gateway-owne
   const sandbox = createSandbox('platform-account')
   const inference = await startMockServer()
   const platform = await startPlatformServer()
+
+  const accountHome = resolveDesktopHermesHome({ home: sandbox.root, accountWorkspace: {
+    userData: sandbox.userDataDir, origin: platform.origin, userId: '17'
+  } })
+
   const diagnostics: string[] = []
   let launched: Awaited<ReturnType<typeof launchDesktop>> | null = null
 
   try {
-    writeMockProviderConfig(sandbox.hermesHome, inference.url, '  language: en', 'desktop:\n  repo_scan_enabled: false')
-    writeEnvFile(sandbox.hermesHome)
+    writeMockProviderConfig(accountHome, inference.url, '  language: en', 'desktop:\n  repo_scan_enabled: false')
+    writeEnvFile(accountHome)
+
     fs.writeFileSync(
       path.join(sandbox.userDataDir, 'platform-development.json'),
       JSON.stringify({ enabled: true, origin: platform.origin }),
@@ -66,7 +73,9 @@ test('uses the real native platform bridge across windows without a gateway-owne
     launched = null
 
     launched = await launchDesktop(env)
-    const { app, page } = launched
+    const { app } = launched
+    let { page } = launched
+    app.on('window', installErrorBannerGuard)
     page.on('console', message => diagnostics.push(`console ${message.type()}: ${message.text()}`))
     page.on('pageerror', error => diagnostics.push(`pageerror: ${error.stack ?? error.message}`))
     page.on('requestfailed', request => diagnostics.push(`requestfailed: ${request.url()} ${request.failure()?.errorText}`))
@@ -85,7 +94,8 @@ test('uses the real native platform bridge across windows without a gateway-owne
     const loginBounds = await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]!.getBounds())
     expect(loginBounds.width).toBeLessThanOrEqual(360)
 
-    await signInPlatformFixture(page)
+    page = await signInPlatformFixture(app, page)
+    launched.page = page
     expect(platform.requests.some(item => item.path === '/desktop/captcha')).toBe(false)
     await waitForAppReady({ app, page } as never, 120_000)
 
@@ -123,9 +133,11 @@ test('uses the real native platform bridge across windows without a gateway-owne
     await page.screenshot({ path: testInfo.outputPath('platform-account-native.png') })
 
     await page.getByRole('button', { name: 'Sign out', exact: true }).click()
-    await page.getByRole('dialog', { name: 'Sign out', exact: true }).getByRole('button', { name: 'Sign out', exact: true }).click()
+    page = await replaceAccountWindow(launched, current => current.getByRole('dialog', { name: 'Sign out', exact: true })
+      .getByRole('button', { name: 'Sign out', exact: true }).click())
     await expect(page.getByRole('textbox', { name: 'Phone number', exact: true })).toBeVisible()
-    await expect(peer.getByRole('textbox', { name: 'Phone number', exact: true })).toBeVisible()
+    expect(peer.isClosed()).toBe(true)
+    expect(app.windows()).toHaveLength(1)
     await app.close()
     launched = null
 
@@ -134,7 +146,7 @@ test('uses the real native platform bridge across windows without a gateway-owne
     await expect(restarted.page.getByRole('textbox', { name: 'Phone number', exact: true })).toBeVisible()
   } finally {
     await testInfo.attach('native-startup-diagnostics', { body: diagnostics.join('\n'), contentType: 'text/plain' })
-    const logs = path.join(sandbox.hermesHome, 'logs')
+    const logs = path.join(accountHome, 'logs')
 
     if (fs.existsSync(logs)) {
       fs.cpSync(logs, testInfo.outputPath('backend-logs'), { recursive: true })

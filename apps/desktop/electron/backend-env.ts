@@ -127,6 +127,11 @@ function readTextOrEmpty(fsModule, file) {
   }
 }
 
+const ACCOUNT_ROUTING_ENV_NAMES = new Set([
+  'HERMES_HOME', 'HERMES_DESKTOP_REMOTE_URL', 'HERMES_DESKTOP_REMOTE_TOKEN',
+  'HERMES_DESKTOP_CWD', 'HERMES_PROFILE', 'HERMES_CONFIG_PATH'
+])
+
 /**
  * Parent env for a local `hermes serve` child of `profile` (#68367).
  *
@@ -145,6 +150,7 @@ function readTextOrEmpty(fsModule, file) {
  */
 function profileBackendParentEnv({
   hermesHome,
+  sourceHermesHome,
   profile,
   currentEnv = process.env,
   platform = process.platform,
@@ -158,26 +164,31 @@ function profileBackendParentEnv({
   }
 
   const fold = platform === 'win32' ? (value: string) => value.toUpperCase() : (value: string) => value
-  const inheritedHome = currentEnv?.HERMES_HOME ? resolveHermesHomePath(currentEnv.HERMES_HOME, { pathModule }) : null
-  const launchHome = inheritedHome && isProfileHome(inheritedHome, pathModule) ? inheritedHome : hermesHome
+  const inheritedHomeKey = Object.keys(env).find(key => fold(key) === 'HERMES_HOME')
+  const inheritedHome = inheritedHomeKey ? resolveHermesHomePath(env[inheritedHomeKey], { pathModule }) : null
+  const launchHome = sourceHermesHome || (inheritedHome && isProfileHome(inheritedHome, pathModule) ? inheritedHome : hermesHome)
   const name = profile || readTextOrEmpty(fsModule, pathModule.join(hermesHome, 'active_profile')).trim()
   const targetHome = !name || name === 'default' ? hermesHome : pathModule.join(hermesHome, 'profiles', name)
 
-  if (fold(pathModule.resolve(launchHome)) === fold(pathModule.resolve(targetHome))) {
+  if (!sourceHermesHome && fold(pathModule.resolve(launchHome)) === fold(pathModule.resolve(targetHome))) {
     return env
   }
 
   const launchOwned = new Set(
-    ['.env', '.op.env']
-      .flatMap(file => dotenvKeyNames(readTextOrEmpty(fsModule, pathModule.join(launchHome, file))))
+    [...new Set([launchHome, sourceHermesHome && inheritedHome].filter(Boolean))]
+      .flatMap(home => ['.env', '.op.env'].flatMap(file => dotenvKeyNames(readTextOrEmpty(fsModule, pathModule.join(home, file)))))
       .filter(key => !PROCESS_ENV_NAMES.has(key.toUpperCase()))
       .map(fold)
   )
 
   for (const key of Object.keys(env)) {
-    if (launchOwned.has(fold(key))) {
+    if (launchOwned.has(fold(key)) || sourceHermesHome && ACCOUNT_ROUTING_ENV_NAMES.has(fold(key))) {
       delete env[key]
     }
+  }
+
+  if (sourceHermesHome) {
+    env.HERMES_HOME = hermesHome
   }
 
   return env

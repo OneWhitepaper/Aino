@@ -12,7 +12,7 @@ test('the ensure client inherits the caller-scrubbed parent env, not the raw Des
   const printEnv = ['-e', 'process.stdout.write(JSON.stringify({ leak: process.env.LEAK ?? null, home: process.env.HERMES_HOME, own: process.env.OWN }))']
 
   const result = await runGatewayEnsure(
-    { command: process.execPath, args: printEnv, env: { OWN: '1' }, shell: false },
+    { command: process.execPath, args: printEnv, env: { OWN: '1', HERMES_HOME: '/previous-account' }, shell: false },
     process.cwd(),
     '/home/x/.hermes',
     { PATH: process.env.PATH ?? '', OWN: '0' }

@@ -1,4 +1,5 @@
 import { waitForAppReady } from './fixtures'
+import { nativeAccountObservations, replaceAccountWindow } from './platform-account-window'
 import { type launchGuardedDesktop, type NativeState, type startRealPlatformAPI } from './platform-real-api'
 import { expect, type Page } from './test'
 
@@ -142,7 +143,7 @@ export async function observeNativeRuntime(page: Page) {
     })
   }
 
-  await page.addInitScript(observe)
+  await page.context().addInitScript(observe)
   await page.evaluate(observe)
 }
 
@@ -229,7 +230,11 @@ function accountOperation(page: Page, operation: 'retry' | 'logout') {
     } catch (error) {
       return { ok: false, phase: '', id: null, code: String((error as { code?: unknown }).code ?? '') }
     }
-  }, operation)
+  }, operation).catch(error => {
+    if (!page.isClosed()) { throw error }
+
+    return { ok: false, phase: '', id: null, code: 'renderer_context_lost' }
+  })
 }
 
 async function observeAccount(page: Page) {
@@ -246,11 +251,14 @@ async function observeAccount(page: Page) {
   })
 }
 
-async function peerWindow(launched: Launch) {
+async function peerWindow(launched: Launch, signedIn = true) {
   await launched.page.evaluate(() => (window as unknown as EdgeWindow).hermesDesktop.openWindow())
   await expect.poll(() => launched.app.windows().length).toBe(2)
   const peer = launched.app.windows().find(candidate => candidate !== launched.page)!
-  await waitForAppReady({ app: launched.app, page: peer } as never, 60_000)
+
+  if (signedIn) { await waitForAppReady({ app: launched.app, page: peer } as never, 60_000) }
+  else { await expect(peer.getByRole('textbox', { name: 'Phone number', exact: true })).toBeVisible() }
+
   await Promise.all([observeAccount(launched.page), observeAccount(peer)])
 
   return peer
@@ -338,6 +346,7 @@ export async function verifyConcurrentAccountLifecycle({ launched, api, accountI
     JSON.stringify({ profile_401_for_current_access: true, hold_refresh_response: true, hold_logout_response: true })
   )
   const beforeLate = await api.control<NativeFaultState>('faults')
+  const lateOperationOffset = (await nativeAccountObservations(launched.app)).length
   const lateRefreshes = pages.map(candidate => accountOperation(candidate, 'retry'))
   await expect.poll(async () => (await api.control<NativeFaultState>('faults')).profile_401s).toBeGreaterThanOrEqual(beforeLate.profile_401s + 2)
   await expect.poll(async () => (await api.control<NativeFaultState>('faults')).refresh_waiting).toBe(1)
@@ -350,29 +359,44 @@ export async function verifyConcurrentAccountLifecycle({ launched, api, accountI
   await expect.poll(() => runtimeStatus(page)).toBe('awaiting_managed_credentials')
   const localRejection = await accountOperation(peer, 'retry')
   expect(localRejection).toMatchObject({ ok: false, code: 'logout_in_progress' })
-  await api.control('faults', JSON.stringify({ hold_logout_response: false }))
+  await replaceAccountWindow(launched, async () => {
+    await api.control('faults', JSON.stringify({ hold_logout_response: false }))
 
-  for (const result of await Promise.all(logouts)) {
-    expect(result).toMatchObject({ ok: true, phase: 'signed_out', id: null })
-  }
-
-  await bothAccount(pages, 'signed_out', null)
+    for (const result of await Promise.all(logouts)) {
+      if (result.code === 'renderer_context_lost') { continue }
+      expect(result).toMatchObject({ ok: true, phase: 'signed_out', id: null })
+    }
+  })
+  expect(pages.every(candidate => candidate.isClosed())).toBe(true)
+  await bothAccount([launched.page], 'signed_out', null)
+  const signedOut = await account(launched.page)
   await api.control('faults', JSON.stringify({ profile_401_for_current_access: false, hold_refresh_response: false }))
 
   for (const result of await Promise.all(lateRefreshes)) {
+    if (result.code === 'renderer_context_lost') { continue }
     expect(result).toMatchObject({ ok: false, code: 'auth_attempt_superseded' })
   }
 
-  await bothAccount(pages, 'signed_out', null)
+  // The API counts the delivered late response; the new native snapshot must
+  // remain signed out even though the original renderer cannot receive it.
+  await expect.poll(async () => (await api.control<NativeFaultState>('faults')).refresh_responses)
+    .toBe(before.refresh_responses + 2)
+  await expect.poll(async () => (await nativeAccountObservations(launched.app)).slice(lateOperationOffset)
+    .filter(entry => entry.operation === 'retry' && entry.code === 'auth_attempt_superseded' && entry.completed).length).toBe(2)
+  const nativeOperations = (await nativeAccountObservations(launched.app)).slice(lateOperationOffset)
+  expect(nativeOperations.filter(entry => entry.operation === 'logout')).toHaveLength(2)
+  expect(nativeOperations.filter(entry => entry.operation === 'logout')
+    .every(entry => entry.completed && entry.ok && entry.phase === 'signed_out' && entry.userId === null)).toBe(true)
+  expect(await account(launched.page)).toEqual(signedOut)
   const retired = await api.control<{ http_status: number; revoked: boolean }>('probe-retired-lease', '')
   expect(retired).toMatchObject({ http_status: 401, revoked: true })
+  const signedOutPeer = await peerWindow(launched, false)
+  await bothAccount([launched.page, signedOutPeer], 'signed_out', null)
 
-  for (const candidate of pages) {
+  for (const candidate of [launched.page, signedOutPeer]) {
     await expect(candidate.getByRole('textbox', { name: 'Phone number', exact: true })).toBeVisible()
     const events = await candidate.evaluate(() => (window as unknown as EdgeWindow).edgeAccountEvents)
-    const signedOut = events.findIndex(event => event.phase === 'signed_out')
-    expect(signedOut).toBeGreaterThanOrEqual(0)
-    expect(events.slice(signedOut).every(event => event.phase === 'signed_out' && event.id === null)).toBe(true)
+    expect(events.every(event => event.phase === 'signed_out' && event.id === null)).toBe(true)
   }
 
   const final = await api.control<NativeState>('state')
@@ -386,6 +410,8 @@ export async function verifyConcurrentAccountLifecycle({ launched, api, accountI
     single_flight_refresh: true,
     single_flight_logout: true,
     late_refresh_rejected: true,
+    old_renderers_closed: true,
+    native_operations: nativeOperations,
     runtime_cleared_before_logout_response: true,
     retired,
     initial: consumption(initial),
@@ -395,7 +421,7 @@ export async function verifyConcurrentAccountLifecycle({ launched, api, accountI
 }
 
 export async function verifyOfflineAndAuthorizationRecovery({ launched, api, accountId, signInAgain }: EdgeContext) {
-  const { page } = launched
+  let { page } = launched
   const peer = await peerWindow(launched)
   const pages = [page, peer]
   const initial = await sendToolTurn(page, api)
@@ -471,11 +497,15 @@ export async function verifyOfflineAndAuthorizationRecovery({ launched, api, acc
   await recovery.click()
   await expect(page.getByRole('button', { name: 'Sign out', exact: true })).toBeVisible()
   await page.getByRole('button', { name: 'Sign out', exact: true }).click()
-  await page.getByRole('dialog', { name: 'Sign out', exact: true }).getByRole('button', { name: 'Sign out', exact: true }).click()
-  await bothAccount(pages, 'signed_out', null)
+  page = await replaceAccountWindow(launched, current => current.getByRole('dialog', { name: 'Sign out', exact: true })
+    .getByRole('button', { name: 'Sign out', exact: true }).click())
+  expect(pages.every(candidate => candidate.isClosed())).toBe(true)
+  await bothAccount([page], 'signed_out', null)
   await signInAgain()
-  await bothAccount(pages, 'signed_in', accountId)
+  page = launched.page
   await waitForAppReady(launched as never, 60_000)
+  const recoveredPeer = await peerWindow(launched)
+  await bothAccount([page, recoveredPeer], 'signed_in', accountId)
   expect(consumption(await api.control<NativeState>('state'))).toEqual(consumption(initial))
   expect((await api.control<NativeFaultState>('faults')).inference_requests).toBe(beforeRevocation.inference_requests + 1)
   const recovered = await sendToolTurn(page, api)

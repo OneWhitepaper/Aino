@@ -1,6 +1,6 @@
 import * as http from 'node:http'
 
-import { expect, type Page } from '@playwright/test'
+import { type ElectronApplication, expect, type Page } from '@playwright/test'
 
 export function startPlatformServer() {
   const requests: Array<{ method: string; path: string; body: Record<string, unknown> }> = []
@@ -130,14 +130,24 @@ export function startPlatformServer() {
   })
 }
 
-/** Real UI and native auth bridge, session-only synthetic credentials. */
-export async function signInPlatformFixture(page: Page) {
+/** Real native login retires the invoking renderer; return its account-owned replacement. */
+export async function signInPlatformFixture(app: ElectronApplication, page: Page): Promise<Page> {
   await page.getByRole('textbox', { name: 'Phone number', exact: true }).fill('+8613800138000')
   await page.getByRole('checkbox', { name: 'Agree to the user agreement and privacy policy', exact: true }).check()
   await page.getByRole('checkbox', { name: 'Keep me signed in on this device', exact: true }).uncheck()
   await page.getByRole('button', { name: 'Send code', exact: true }).click()
   await expect(page.getByRole('textbox', { name: 'Verification code', exact: true })).toBeVisible()
   await page.getByRole('textbox', { name: 'Verification code', exact: true }).fill('246810')
-  await page.getByRole('button', { name: 'Sign in', exact: true }).click()
-  await expect(page.getByRole('button', { name: 'My account · Native member', exact: true })).toBeVisible({ timeout: 120_000 })
+  const nextWindow = app.waitForEvent('window', { timeout: 120_000 })
+
+  const submit = page.getByRole('button', { name: 'Sign in', exact: true }).click().catch(error => {
+    if (!page.isClosed()) { throw error }
+  })
+
+  const [workspace] = await Promise.all([nextWindow, submit])
+
+  await expect.poll(() => page.isClosed()).toBe(true)
+  await expect(workspace.getByRole('button', { name: 'My account · Native member', exact: true })).toBeVisible({ timeout: 120_000 })
+
+  return workspace
 }

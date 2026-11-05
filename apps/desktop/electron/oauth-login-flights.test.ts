@@ -1,5 +1,3 @@
-import { readFileSync } from 'node:fs'
-
 import { afterEach, expect, test, vi } from 'vitest'
 
 import {
@@ -187,15 +185,21 @@ test('the flight key is the jar plus the gateway origin', () => {
   expect(loginFlightKey(`${JAR}-conn-x`, GATEWAY)).not.toBe(KEY)
 })
 
-// main.ts is not importable under vitest; pin which callers count as unattended.
-test('refused requests and the boot cascade sign in hidden; only user actions may show a window', () => {
-  const source = readFileSync(new URL('./main.ts', import.meta.url), 'utf8')
-  const fetchStart = source.indexOf('function fetchJsonViaOauthSession(')
-  const fetchBody = source.slice(fetchStart, source.indexOf('\n}\n', fetchStart))
-  const bootStart = source.indexOf('async function waitForRemoteHermes(')
-  const bootBody = source.slice(bootStart, source.indexOf('\n}\n', bootStart))
+test('retiring login flights cancels old waiters and late outcomes cannot affect a reused account jar', async () => {
+  const flights = new OauthLoginFlights()
+  const old = deferred<string>()
+  const first = flights.run(KEY, 'foreground', fakeWindows(() => old.promise).start)
+  const rejected = expect(first).rejects.toThrow('Authentication changed')
+  flights.retire()
+  await rejected
+  expect(flights.isRunning(KEY)).toBe(false)
 
-  expect(fetchBody).toContain('openOauthLoginWindow(origin, { silent: true, background: true })')
-  expect(bootBody).toContain('cloudAgentSilentSignIn(remote.baseUrl, { background: true })')
-  expect(source).toContain("unattended ? 'background' : 'foreground'")
+  const fresh = deferred<string>()
+  const next = flights.run(KEY, 'background', fakeWindows(() => fresh.promise).start)
+  old.reject(new Error('late old account rejection'))
+  await Promise.resolve()
+  expect(flights.isRunning(KEY)).toBe(true)
+  expect(flights.cooldownRemainingMs(KEY)).toBe(0)
+  fresh.resolve('new account')
+  await expect(next).resolves.toBe('new account')
 })

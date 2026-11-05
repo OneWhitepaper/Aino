@@ -6,7 +6,7 @@ import { registerUiPreferencesIpc } from './ui-preferences'
 
 /** `hermesHome` is main's resolved ROOT home (never a profile's), the one the
  *  Webapp's Python server resolves too. */
-export function registerMachineUiPreferences(hermesHome: string): () => void {
+export function registerMachineUiPreferences(hermesHome: string | (() => string)): () => void {
   return registerUiPreferencesIpc({
     ipcMain,
     hermesHome,

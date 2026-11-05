@@ -37,15 +37,23 @@ export function registerNativeNotifications({
   platform = process.platform
 }: NotificationHost): { dispose: () => void } {
   const dedupeIntervalMs = 1000
-  const isDuplicateNotification = createEventDeduper(dedupeIntervalMs)
+  let isDuplicateNotification = createEventDeduper(dedupeIntervalMs)
   const deliveries = new Map<string, Promise<boolean>>()
-  const linux = platform === 'linux' ? createLinuxNotifications() : undefined
+  let linux = platform === 'linux' ? createLinuxNotifications() : undefined
   const notifications = createNotificationRegistry({ releaseOnClose: Boolean(linux) })
+  let generation = 0
 
   ipcMain.handle('hermes:notify', async (event, payload: HermesNotification) => {
+    const ownerGeneration = generation
     // The source renderer owns runtime bindings and plugin callbacks.
     const sourceWindow = BrowserWindow.fromWebContents(event.sender)
-    const targetWindow = () => (sourceWindow && !sourceWindow.isDestroyed() ? sourceWindow : getMainWindow())
+
+    const targetWindow = () =>
+      ownerGeneration === generation
+        ? sourceWindow && !sourceWindow.isDestroyed()
+          ? sourceWindow
+          : getMainWindow()
+        : null
 
     if (!linux && !Notification.isSupported()) {
       return false
@@ -132,7 +140,10 @@ export function registerNativeNotifications({
     requestAttention(targetWindow())
 
     // Peers share the actual outcome, including pending/failed Linux delivery.
-    const delivery = Promise.resolve(notification.show()).then(result => result !== false)
+    const delivery = Promise.resolve(notification.show()).then(
+      result => ownerGeneration === generation && result !== false
+    )
+
     deliveries.set(key, delivery)
     setTimeout(() => {
       if (deliveries.get(key) === delivery) {
@@ -143,5 +154,17 @@ export function registerNativeNotifications({
     return delivery
   })
 
-  return { dispose: () => linux?.dispose() }
+  return {
+    dispose: () => {
+      generation++
+      notifications.closeAll()
+      deliveries.clear()
+      isDuplicateNotification = createEventDeduper(dedupeIntervalMs)
+      linux?.dispose()
+
+      if (linux) {
+        linux = createLinuxNotifications()
+      }
+    }
+  }
 }

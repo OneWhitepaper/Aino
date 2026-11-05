@@ -10,12 +10,10 @@ const RELEASE_EVENTS = ['click', 'action', 'failed']
 const NOTIFICATION_RETENTION_TTL_MS = 10 * 60 * 1000
 
 export function createNotificationRegistry({ ttlMs = NOTIFICATION_RETENTION_TTL_MS, releaseOnClose = false } = {}) {
-  const live = new Set<RetainedNotification>()
+  const live = new Map<RetainedNotification, () => void>()
   const releaseEvents = releaseOnClose ? [...RELEASE_EVENTS, 'close'] : RELEASE_EVENTS
 
   function retain(notification: RetainedNotification): void {
-    live.add(notification)
-
     const release = () => {
       clearTimeout(timer)
       live.delete(notification)
@@ -35,8 +33,16 @@ export function createNotificationRegistry({ ttlMs = NOTIFICATION_RETENTION_TTL_
       release()
     }, ttlMs)
 
+    live.set(notification, release)
     timer.unref()
   }
 
-  return { retain, has: (notification: RetainedNotification) => live.has(notification) }
+  function closeAll(): void {
+    for (const [notification, release] of [...live]) {
+      notification.close()
+      release()
+    }
+  }
+
+  return { retain, closeAll, has: (notification: RetainedNotification) => live.has(notification) }
 }

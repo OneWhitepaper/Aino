@@ -57,6 +57,11 @@ export interface RemoteRevalidationResult {
  */
 export class RemoteRevalidationCoordinator {
   readonly #inflightByConnection = new WeakMap<object, Promise<unknown>>()
+  readonly #pending = new Set<Promise<unknown>>()
+
+  async drain(): Promise<void> {
+    while (this.#pending.size) { await Promise.allSettled([...this.#pending]) }
+  }
 
   run<T>(connection: object, task: () => Promise<T>): Promise<T> {
     const existing = this.#inflightByConnection.get(connection) as Promise<T> | undefined
@@ -68,11 +73,14 @@ export class RemoteRevalidationCoordinator {
     const pending = Promise.resolve().then(task)
 
     const clear = () => {
+      this.#pending.delete(pending)
+
       if (this.#inflightByConnection.get(connection) === pending) {
         this.#inflightByConnection.delete(connection)
       }
     }
 
+    this.#pending.add(pending)
     this.#inflightByConnection.set(connection, pending)
     // Clean up on both outcomes without creating an unhandled rejected branch.
     void pending.then(clear, clear)

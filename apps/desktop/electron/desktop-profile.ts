@@ -127,15 +127,17 @@ export function registerDesktopProfilePreferenceIpc(
 // The legacy profile field records last use. defaultRoute is an explicit,
 // app-wide preference, never changed by switching workspaces in any window.
 export function createDesktopProfilePreferences(
-  configPath: string,
+  configPathSource: string | (() => string),
   options: {
     onDefaultChanged?: (route: DesktopProfileRoute | null) => void
     validateRoute?: (route: DesktopProfileRoute) => void
   } = {}
 ) {
+  const configPath = () => typeof configPathSource === 'function' ? configPathSource() : configPathSource
+
   function read(strict = false): Record<string, unknown> {
     try {
-      const value = JSON.parse(fs.readFileSync(configPath, 'utf8'))
+      const value = JSON.parse(fs.readFileSync(configPath(), 'utf8'))
 
       return value && typeof value === 'object' && !Array.isArray(value) ? value : {}
     } catch (error) {
@@ -148,10 +150,10 @@ export function createDesktopProfilePreferences(
   }
 
   function write(value: Record<string, unknown>) {
-    fs.mkdirSync(path.dirname(configPath), { recursive: true })
-    const temporaryPath = `${configPath}.tmp`
+    fs.mkdirSync(path.dirname(configPath()), { recursive: true })
+    const temporaryPath = `${configPath()}.tmp`
     fs.writeFileSync(temporaryPath, JSON.stringify(value, null, 2), 'utf8')
-    fs.renameSync(temporaryPath, configPath)
+    fs.renameSync(temporaryPath, configPath())
   }
 
   function getDefault(): DesktopProfileRoute | null {

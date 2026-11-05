@@ -3,6 +3,7 @@ import { EventEmitter } from 'node:events'
 import type { BrowserWindow, Session } from 'electron'
 import { expect, test, vi } from 'vitest'
 
+import { NativeAuthChangedError } from './native-access-token'
 import { createPortalSession } from './portal-session'
 
 vi.mock('./window-renderer-lifecycle', () => ({
@@ -72,4 +73,29 @@ test('a real portal load failure still ends sign-in', async () => {
 
   await expect(portal.openPortalLoginWindow()).rejects.toThrow(error.message)
   expect(win.isDestroyed()).toBe(true)
+})
+
+test('retirement during a cookie read cannot create a late login window in the next account', async () => {
+  let releaseCookies!: (cookies: { name: string; value: string }[]) => void
+  const oldRead = new Promise<{ name: string; value: string }[]>(resolve => { releaseCookies = resolve })
+  let session = { cookies: { get: () => oldRead } } as unknown as Session
+  const createWindow = vi.fn()
+
+  const portal = createPortalSession({
+    isReady: () => true,
+    getOauthSession: () => session,
+    resolvePortalBaseUrl: () => 'https://portal.example.test',
+    warmOauthCookieStore: async () => {},
+    createWindow,
+    rememberLog: () => {}
+  })
+
+  const old = portal.openPortalLoginWindow()
+  const rejection = expect(old).rejects.toBeInstanceOf(NativeAuthChangedError)
+  portal.retire()
+  session = { cookies: { get: async () => [{ name: 'nas-session', value: 'other-account' }] } } as unknown as Session
+  portal.retire()
+  releaseCookies([])
+  await rejection
+  expect(createWindow).not.toHaveBeenCalled()
 })

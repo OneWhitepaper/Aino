@@ -1,12 +1,13 @@
 // data-paths.mjs — the pure path-resolution core, shared by the desktop app
 // (via data-paths.ts, a typed re-export) and the CI smoke driver (which runs
 // under Node's type-stripping and therefore cannot import the app's
-// extensionless TypeScript directly). No Electron imports here; only node:path.
+// extensionless TypeScript directly). No Electron imports here; only Node built-ins.
 //
 // data-paths.ts re-exports these names and adds the TypeScript-facing
 // `HermesHomeOptions` interface. Keep the two in lockstep: every behavior in
 // this file is exercised by data-paths.test.ts through the re-export.
 
+import { createHash } from 'node:crypto'
 import path from 'node:path'
 import brand from '../brand.json' with { type: 'json' }
 
@@ -39,8 +40,13 @@ export function resolveDesktopUserData(defaultPath, env = process.env) {
     : defaultPath + (env.HERMES_DATA_DIR_SUFFIX || '')
 }
 
-export function resolveDesktopHermesHome({ home, env = process.env, platform = process.platform, readWindowsHome = () => null }) {
+export function resolveDesktopHermesHome({ home, env = process.env, platform = process.platform, readWindowsHome = () => null, accountWorkspace }) {
   const paths = platform === 'win32' ? path.win32 : path.posix
+  if (accountWorkspace) {
+    const { userData, origin, userId } = accountWorkspace
+    const scope = userId === null ? 'signed-out' : createHash('sha256').update(JSON.stringify([new URL(origin).origin, userId])).digest('hex')
+    return paths.join(paths.resolve(userData), 'account-workspaces', scope, 'home')
+  }
   if (env.HERMES_HOME) {
     return normalizeHermesHomeRoot(env.HERMES_HOME, paths)
   }

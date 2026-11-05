@@ -1,4 +1,5 @@
 import { isNousCloudAgentUrl } from './backend-health'
+import { NativeAuthChangedError } from './native-access-token'
 
 interface CloudRecoveryDeps {
   hasNativeSession: (baseUrl: string) => boolean
@@ -12,13 +13,27 @@ export function createCloudSessionRecovery(deps: CloudRecoveryDeps) {
   const inflight = new Map<string, Promise<boolean>>()
   const failedAt = new Map<string, number>()
   const now = deps.now ?? Date.now
+  let generation = 0
 
-  return async <T>(baseUrl: string, mint: () => Promise<T>): Promise<T> => {
+  const run = async <T>(baseUrl: string, mint: () => Promise<T>): Promise<T> => {
+    const expectedGeneration = generation
+
+    const assertCurrent = () => {
+      if (expectedGeneration !== generation) {
+        throw new NativeAuthChangedError()
+      }
+    }
+
     const hadNativeSession = deps.hasNativeSession(baseUrl)
 
     try {
-      return await mint()
+      const result = await mint()
+      assertCurrent()
+
+      return result
     } catch (error) {
+      assertCurrent()
+
       if (
         !isNousCloudAgentUrl(baseUrl) ||
         hadNativeSession ||
@@ -38,20 +53,35 @@ export function createCloudSessionRecovery(deps: CloudRecoveryDeps) {
         }
 
         recovery = Promise.resolve()
-          .then(() => deps.restoreCookieSession(baseUrl))
-          .catch(() => false)
+          .then(() => {
+            assertCurrent()
+
+            return deps.restoreCookieSession(baseUrl)
+          })
+          .catch(() => {
+            assertCurrent()
+
+            return false
+          })
           .then(restored => {
+            assertCurrent()
+
             if (!restored) {
               failedAt.set(baseUrl, now())
             }
 
             return restored
           })
-          .finally(() => inflight.delete(baseUrl))
+          .finally(() => {
+            if (inflight.get(baseUrl) === recovery) { inflight.delete(baseUrl) }
+          })
         inflight.set(baseUrl, recovery)
       }
 
-      if (!(await recovery)) {
+      const restored = await recovery
+      assertCurrent()
+
+      if (!restored) {
         throw error
       }
 
@@ -63,14 +93,24 @@ export function createCloudSessionRecovery(deps: CloudRecoveryDeps) {
 
       try {
         const ticket = await mint()
+        assertCurrent()
         failedAt.delete(baseUrl)
         deps.onRecovered?.(baseUrl)
 
         return ticket
       } catch (retryError) {
+        assertCurrent()
         failedAt.set(baseUrl, now())
         throw retryError
       }
     }
   }
+
+  run.retire = () => {
+    generation += 1
+    inflight.clear()
+    failedAt.clear()
+  }
+
+  return run
 }

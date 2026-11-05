@@ -9,6 +9,7 @@
 
 import assert from 'node:assert/strict'
 import { EventEmitter } from 'node:events'
+import http from 'node:http'
 
 import { test } from 'vitest'
 
@@ -170,4 +171,69 @@ test('runNativeLogin fails if the browser cannot be opened', async () => {
     }),
     /could not open the system browser/i
   )
+})
+
+test('runNativeLogin cancellation leaves no listener or browser launch, including during binding', async () => {
+  for (const beforeBind of [true, false]) {
+    const controller = new AbortController()
+    const lifecycle: { server?: http.Server; opened: boolean } = { opened: false }
+
+    if (beforeBind) {
+      controller.abort()
+    }
+
+    const promise = runNativeLogin('https://gw.example.com', {
+      openExternal: async () => { lifecycle.opened = true },
+      postJson: async () => ({}),
+      createServer: ((handler: http.RequestListener) => {
+        lifecycle.server = http.createServer(handler)
+
+        return lifecycle.server
+      }) as typeof http.createServer,
+      timeoutMs: 100
+    }, { signal: controller.signal })
+
+    const outcome = promise.then(tokens => tokens, error => error)
+    controller.abort()
+
+    try {
+      const result = await Promise.race([outcome, new Promise(resolve => setImmediate(() => resolve('pending')))])
+      assert.equal(result?.name, 'AbortError')
+      await new Promise(resolve => setImmediate(resolve))
+      assert.equal(lifecycle.server?.listening ?? false, false)
+      assert.equal(lifecycle.opened, false)
+    } finally {
+      lifecycle.server?.close()
+    }
+  }
+})
+
+test('runNativeLogin cancellation rejects while token exchange is pending and ignores its late result', async () => {
+  const { createServer, state } = makeFakeServerFactory()
+  const controller = new AbortController()
+  let authorizeUrl = ''
+  let releaseToken!: (body: unknown) => void
+  const token = new Promise(resolve => { releaseToken = resolve })
+
+  const promise = runNativeLogin('https://gw.example.com', {
+    openExternal: async url => { authorizeUrl = url },
+    postJson: async () => token,
+    createServer,
+    timeoutMs: 100
+  }, { signal: controller.signal })
+
+  const outcome = promise.then(tokens => tokens, error => error)
+  const expectedState = new URL(authorizeUrl).searchParams.get('state')!
+  state.hitCallback(`code=old-account-code&state=${encodeURIComponent(expectedState)}`)
+  controller.abort()
+
+  try {
+    const result = await Promise.race([outcome, new Promise(resolve => setImmediate(() => resolve('pending')))])
+    assert.equal(result?.name, 'AbortError')
+    assert.equal(state.closed, true)
+    releaseToken({ access_token: 'late-old-account-token', expires_at: 1893456000 })
+    assert.equal((await outcome).name, 'AbortError')
+  } finally {
+    releaseToken({ access_token: 'late-old-account-token', expires_at: 1893456000 })
+  }
 })

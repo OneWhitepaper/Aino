@@ -73,13 +73,18 @@ export interface NativeLoginDeps {
  * /auth/native/authorize with our PKCE challenge + loopback redirect_uri →
  * await the ?code= redirect → verify state → POST /auth/native/token with the
  * verifier → return tokens. Rejects on timeout, state mismatch, a gateway
- * error param, or a token-exchange failure. Always tears the listener down.
+ * error param, token-exchange failure, or optional signal cancellation.
+ * Always tears the listener down.
  */
 export async function runNativeLogin(
   baseUrl: string,
   deps: NativeLoginDeps,
-  opts: { provider?: string } = {}
+  opts: { provider?: string; signal?: AbortSignal } = {}
 ): Promise<NativeTokenSet> {
+  if (opts.signal?.aborted) {
+    throw new DOMException('Native sign-in cancelled.', 'AbortError')
+  }
+
   const createServer = deps.createServer || http.createServer
   const timeoutMs = deps.timeoutMs ?? DEFAULT_LOGIN_TIMEOUT_MS
   const log = deps.rememberLog || (() => undefined)
@@ -89,6 +94,7 @@ export async function runNativeLogin(
 
   return new Promise<NativeTokenSet>((resolve, reject) => {
     let settled = false
+    let exchanging = false
     let timer: NodeJS.Timeout | null = null
 
     const server = createServer((req, res) => {
@@ -101,7 +107,7 @@ export async function runNativeLogin(
       res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' })
       res.end(DONE_HTML)
 
-      if (settled) {
+      if (settled || exchanging) {
         return
       }
 
@@ -129,7 +135,10 @@ export async function runNativeLogin(
     const cleanup = () => {
       if (timer) {
         clearTimeout(timer)
+        timer = null
       }
+
+      opts.signal?.removeEventListener('abort', abort)
 
       try {
         server.close()
@@ -149,28 +158,47 @@ export async function runNativeLogin(
     }
 
     const finishWith = (produce: () => Promise<NativeTokenSet>) => {
-      if (settled) {
+      if (settled || exchanging) {
         return
       }
 
-      settled = true
+      exchanging = true
       // Keep the listener up just long enough to have answered the browser,
       // then redeem the code out-of-band.
       produce()
         .then(tokens => {
+          if (settled) {
+            return
+          }
+
+          settled = true
           cleanup()
           resolve(tokens)
         })
         .catch(error => {
-          cleanup()
-          reject(error instanceof Error ? error : new Error(String(error)))
+          fail(error instanceof Error ? error : new Error(String(error)))
         })
     }
 
+    const abort = () => fail(new DOMException('Native sign-in cancelled.', 'AbortError'))
+
     server.on('error', err => fail(err instanceof Error ? err : new Error(String(err))))
+    opts.signal?.addEventListener('abort', abort, { once: true })
+
+    if (opts.signal?.aborted) {
+      abort()
+
+      return
+    }
 
     // Bind an ephemeral loopback port, then open the browser.
     server.listen(0, '127.0.0.1', () => {
+      if (settled) {
+        cleanup()
+
+        return
+      }
+
       const addr = server.address() as AddressInfo | null
 
       if (!addr || typeof addr === 'string') {

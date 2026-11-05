@@ -39,6 +39,8 @@ interface Binding {
   lease?: PlatformModelLeaseDTO
   renewalAt?: number
   renewalAttempts?: number
+  renewing?: boolean
+  renewLease?: () => Promise<void>
   expiry?: ReturnType<typeof setTimeout>
   renewal?: ReturnType<typeof setTimeout>
   device?: boolean
@@ -94,6 +96,71 @@ function purposeParams(purpose: PlatformModelPurpose | undefined): { purpose?: '
   }
 
   return purpose === 'image' ? { purpose } : {}
+}
+
+function retryableRenewalError(error: unknown): error is PlatformClientError {
+  return error instanceof PlatformClientError &&
+    ([
+      'network_unavailable',
+      'network_timeout',
+      'http_429',
+      'DESKTOP_AUTH_UNAVAILABLE',
+      'SERVICE_UNAVAILABLE'
+    ].includes(error.code) || /^http_5\d\d$/.test(error.code))
+}
+
+function recordRenewalRetry(binding: Binding, error: PlatformClientError) {
+  const attempt = binding.renewalAttempts ?? 0
+  const delay = Math.max(1000 * 2 ** attempt, (error.retryAfter ?? 0) * 1000) * (1 + Math.random() * 0.2)
+
+  if (attempt < 3 && Date.now() + delay + 1000 < Date.parse(binding.lease!.expires_at)) {
+    binding.renewalAttempts = attempt + 1
+    binding.renewalAt = Date.now() + delay
+  } else {
+    // Cached turns must not restart an exhausted retry budget.
+    binding.renewalAt = undefined
+  }
+}
+
+function scheduleRenewal(binding: Binding) {
+  clearTimeout(binding.renewal)
+
+  if (binding.renewing || binding.renewalAt === undefined) {
+    return
+  }
+
+  binding.renewal = setTimeout(() => void binding.renewLease?.(), Math.max(0, binding.renewalAt - Date.now()))
+  binding.renewal.unref?.()
+}
+
+function armLease(
+  binding: Binding,
+  expiresAt: string | null,
+  expired: () => void,
+  renew: () => Promise<void>,
+  reuse = false
+) {
+  clearTimeout(binding.expiry)
+  clearTimeout(binding.renewal)
+  binding.renewLease = renew
+
+  if (expiresAt === null) {
+    binding.renewalAt = undefined
+
+    return
+  }
+
+  const ttl = Math.max(0, Date.parse(expiresAt) - Date.now())
+  binding.expiry = setTimeout(expired, ttl)
+  binding.expiry.unref?.()
+
+  if (!reuse) {
+    // Renewal before one third of the lease would only return its original deadline.
+    binding.renewalAt = Date.now() + Math.min(ttl - 1000, Math.max(5000, ttl / 3) * (1 + Math.random() * 0.2))
+    binding.renewalAttempts = 0
+  }
+
+  scheduleRenewal(binding)
 }
 
 export function createPlatformRuntimeBindingController(options: {
@@ -213,35 +280,6 @@ export function createPlatformRuntimeBindingController(options: {
     })
 
     return result.reusable === true && auth.snapshot().revision === revision
-  }
-
-  function armLease(
-    binding: Binding,
-    expiresAt: string | null,
-    expired: () => void,
-    renew: () => Promise<void>,
-    reuse = false
-  ) {
-    clearTimeout(binding.expiry)
-    clearTimeout(binding.renewal)
-
-    if (expiresAt === null) { return }
-    const ttl = Math.max(0, Date.parse(expiresAt) - Date.now())
-    binding.expiry = setTimeout(expired, ttl)
-    binding.expiry.unref?.()
-
-    if (!reuse) {
-      // Renewal before one third of the lease would only return its original deadline.
-      binding.renewalAt = Date.now() + Math.min(ttl - 1000, Math.max(5000, ttl / 3) * (1 + Math.random() * 0.2))
-      binding.renewalAttempts = 0
-    }
-
-    if (binding.renewalAt === undefined) {
-      return
-    }
-
-    binding.renewal = setTimeout(() => void renew(), Math.max(0, binding.renewalAt - Date.now()))
-    binding.renewal.unref?.()
   }
 
   const unsubscribe = auth.subscribe(snapshot => {
@@ -460,15 +498,31 @@ export function createPlatformRuntimeBindingController(options: {
         }
 
         const renew = async () => {
-          if (!stillOwned()) {
+          if (!stillOwned() || retained.renewing) {
             return
           }
+
+          const renewingLease = retained.lease!
+
+          const sameLease = () => slot.active === retained && retained.lease === renewingLease &&
+            auth.generation() === expected && !window.isDestroyed() && retained.target.isCurrent()
+
+          const handoff = () => {
+            if (sameLease()) { retained.renewalAt = Date.now() }
+          }
+
+          // A cached claim may replace the revision while this request is in
+          // flight; it must not turn the fired deadline into another request.
+          retained.renewing = true
+          retained.renewalAt = undefined
 
           try {
             if (auth.snapshot().phase === 'offline') {
               await auth.retry()
 
               if (!stillOwned()) {
+                handoff()
+
                 return
               }
             }
@@ -481,6 +535,8 @@ export function createPlatformRuntimeBindingController(options: {
             })
 
             if (!stillOwned()) {
+              handoff()
+
               return
             }
 
@@ -502,6 +558,8 @@ export function createPlatformRuntimeBindingController(options: {
             })
 
             if (!stillOwned()) {
+              handoff()
+
               return
             }
 
@@ -514,39 +572,28 @@ export function createPlatformRuntimeBindingController(options: {
             retained.lease = next
             armLease(retained, next.expires_at, expire, renew)
           } catch (error) {
-            if (!stillOwned()) {
+            if (!sameLease()) {
               return
             }
 
-            const retryable =
-              error instanceof PlatformClientError &&
-              ([
-                'network_unavailable',
-                'network_timeout',
-                'http_429',
-                'DESKTOP_AUTH_UNAVAILABLE',
-                'SERVICE_UNAVAILABLE'
-              ].includes(error.code) ||
-                /^http_5\d\d$/.test(error.code))
-
-            if (!retryable) {
-              expire()
+            if (!stillOwned() && !(error instanceof PlatformClientError)) {
+              handoff()
 
               return
             }
 
-            const attempt = retained.renewalAttempts ?? 0
-            const delay = Math.max(1000 * 2 ** attempt, (error.retryAfter ?? 0) * 1000) * (1 + Math.random() * 0.2)
+            if (!retryableRenewalError(error)) {
+              reset(slot)
+              slots.delete(key)
 
-            if (attempt < 3 && Date.now() + delay + 1000 < Date.parse(retained.lease!.expires_at)) {
-              retained.renewalAttempts = attempt + 1
-              retained.renewalAt = Date.now() + delay
-              retained.renewal = setTimeout(() => void renew(), delay)
-              retained.renewal.unref?.()
-            } else {
-              // Cached turns must not restart an exhausted retry budget.
-              retained.renewalAt = undefined
+              return
             }
+
+            recordRenewalRetry(retained, error)
+          } finally {
+            retained.renewing = false
+
+            if (slot.active === retained) { scheduleRenewal(retained) }
           }
         }
 

@@ -8,8 +8,9 @@ import * as path from 'node:path'
 import { _electron, type ElectronApplication } from '@playwright/test'
 import type { BrowserWindow as NativeWindow } from 'electron'
 
-import { fixtureEnvironment, isExpectedBlockedThemeFontRequest, KNOWN_BLOCKED_THEME_FONT_URL, type NativeTransportAudit } from './platform-real-api'
-import { processStartMarkerWithEnvironment } from './platform-workspace-proof'
+import { accountTemplateBootstrap, fixtureOwnershipFiles } from './platform-account-home'
+import { fixtureEnvironment, isExpectedBlockedThemeFontRequest, KNOWN_BLOCKED_THEME_FONT_URL, type NativeTransportAudit, observeDebuggerDetach } from './platform-real-api'
+import { inspectGatewayIdentity, processStartMarkerWithEnvironment } from './platform-workspace-proof'
 import { installErrorBannerGuard } from './test'
 import { startHttpsEdge } from './update/github-edge'
 
@@ -95,9 +96,8 @@ function ownedPackageCleanup(app: ElectronApplication, env: Record<string, strin
     const main = processes.find(identity => identity.role === 'main')
 
     if (!main) { throw new Error('Missing package main process identity') }
-    const ownershipFile = path.join(env.HERMES_DESKTOP_USER_DATA_DIR, 'backend-ownership.json')
 
-    if (fs.existsSync(ownershipFile)) {
+    for (const ownershipFile of fixtureOwnershipFiles(env.HERMES_DESKTOP_USER_DATA_DIR)) {
       const ownership = JSON.parse(fs.readFileSync(ownershipFile, 'utf8')) as {
         backends?: Array<OwnedProcess & { nonce?: string; profile?: string; parentPid?: number; parentStartMarker?: string }>
       }
@@ -234,15 +234,34 @@ export function packagedExecutable(appPath: string) {
 export async function packagedBackendEvidence(env: Record<string, string>, appPath: string) {
   const stamp = JSON.parse(fs.readFileSync(path.join(appPath, 'Contents/Resources/install-stamp.json'), 'utf8'))
   const python = path.join(appPath, 'Contents/Resources/agent-payload', stamp.runtime.storePython)
-  const ownership = JSON.parse(fs.readFileSync(path.join(env.HERMES_DESKTOP_USER_DATA_DIR, 'backend-ownership.json'), 'utf8'))
   const evidence = []
+  const ownerFile = path.join(env.HERMES_HOME, 'gateway.pid')
 
-  for (const backend of ownership.backends ?? []) {
-    if (!backend.nonce || !backend.profile || !await sameProcess(backend)) {throw new Error('Invalid owned backend identity')}
-    const command = execFileSync('/bin/ps', ['-ww', '-p', String(backend.pid), '-o', 'command='], { encoding: 'utf8' }).trim()
+  if (fs.existsSync(ownerFile)) {
+    const owner = inspectGatewayIdentity({ root: env.HOME, hermesHome: env.HERMES_HOME,
+      userDataDir: env.HERMES_DESKTOP_USER_DATA_DIR, cleanup: () => undefined })
 
-    if (!command.startsWith(python + ' ')) {throw new Error('Backend did not use the bundled interpreter')}
-    evidence.push({ pid: backend.pid, startMarker: backend.startMarker, command, python })
+    if (!owner) { throw new Error('Packaged account gateway owner is unavailable') }
+    const command = execFileSync('/bin/ps', ['-ww', '-p', String(owner.pid), '-o', 'command='], { encoding: 'utf8' }).trim()
+
+    if (!command.startsWith(python + ' ')) {throw new Error('Gateway did not use the bundled interpreter')}
+    evidence.push({ pid: owner.pid, startMarker: await processStartMarkerWithEnvironment(owner.pid, fixtureEnvironment()), command, python })
+  }
+
+  for (const file of fixtureOwnershipFiles(env.HERMES_DESKTOP_USER_DATA_DIR)) {
+    const ownership = JSON.parse(fs.readFileSync(file, 'utf8'))
+
+    for (const backend of ownership.backends ?? []) {
+      if (evidence.some(entry => entry.pid === backend.pid)) { continue }
+
+      if (!await sameProcess(backend)) { continue }
+
+      if (!backend.nonce || !backend.profile) {throw new Error('Invalid owned backend identity')}
+      const command = execFileSync('/bin/ps', ['-ww', '-p', String(backend.pid), '-o', 'command='], { encoding: 'utf8' }).trim()
+
+      if (!command.startsWith(python + ' ')) {throw new Error('Backend did not use the bundled interpreter')}
+      evidence.push({ pid: backend.pid, startMarker: backend.startMarker, command, python })
+    }
   }
 
   if (!evidence.length) {throw new Error('No live bundled backend')}
@@ -271,6 +290,7 @@ export async function preparePackagedHarness(
   const backendLauncher = path.join(appPath, 'Contents/Resources/agent-payload', stamp.runtime.commands.hermes)
   const expectedEntry = path.join(appPath, 'Contents/Resources/app.asar/dist/electron-main.mjs')
   fs.writeFileSync(guard, `
+${accountTemplateBootstrap(env)}
 const fs = require('node:fs'), path = require('node:path');
 const electron = require('electron'), {app, session} = electron;
 if (!app.isPackaged || app.isReady()) throw new Error('Guard must install on package before ready');
@@ -300,9 +320,8 @@ function auditMarker(name, host) {
 }
 app.on('web-contents-created',(_event,contents)=>{
  try {
-  contents.debugger.attach('1.3');let tearingDown=false;
-  contents.once('destroyed',()=>{tearingDown=true});app.once('before-quit',()=>{tearingDown=true});
-  contents.debugger.on('detach',()=>{if(!tearingDown&&!contents.isDestroyed())auditMarker('font-observer-error','unexpected-detach')});
+  contents.debugger.attach('1.3');
+  (${observeDebuggerDetach.toString()})(contents,app,error=>auditMarker('font-observer-error',error));
   contents.debugger.on('message',(_event,method,params)=>{
    if(method!=='Network.requestWillBeSent')return;
    try {

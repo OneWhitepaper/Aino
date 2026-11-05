@@ -3,6 +3,7 @@ import * as fs from 'node:fs'
 import * as path from 'node:path'
 
 import { type Sandbox, waitForAppReady } from './fixtures'
+import { activeAccountSandbox, fixtureHomes } from './platform-account-home'
 import { fixtureEnvironment, type launchGuardedDesktop, type NativeState, type startRealPlatformAPI } from './platform-real-api'
 import { expect, type Page } from './test'
 
@@ -86,7 +87,7 @@ function gatewayPython(): string {
   return process.env.HERMES_DESKTOP_PYTHON || path.join(REPO_ROOT, '.venv', 'bin', 'python')
 }
 
-function inspectGatewayIdentity(sandbox: Sandbox): GatewayIdentity | null {
+export function inspectGatewayIdentity(sandbox: Sandbox): GatewayIdentity | null {
   const output = execFileSync(gatewayPython(), ['-c', GATEWAY_IDENTITY_SCRIPT, sandbox.hermesHome], {
     cwd: REPO_ROOT, env: gatewayEnvironment(sandbox), encoding: 'utf8', timeout: 30_000
   })
@@ -110,6 +111,10 @@ function readGatewayIdentity(sandbox: Sandbox): GatewayIdentity {
 }
 
 export function stopFixtureGateway(sandbox: Sandbox): void {
+  for (const home of fixtureHomes(sandbox)) { stopHomeGateway({ ...sandbox, hermesHome: home }) }
+}
+
+function stopHomeGateway(sandbox: Sandbox): void {
   if (!fs.existsSync(path.join(sandbox.hermesHome, 'gateway.pid'))) {return}
 
   if (inspectGatewayIdentity(sandbox) === null) {return}
@@ -160,6 +165,7 @@ export async function verifyPlatformWorkspace(
   accountID: string,
   screenshotPath: string
 ) {
+  sandbox = await activeAccountSandbox(sandbox, launched)
   const { page } = launched
   const before = await api.control<NativeState>('state')
   const gatewayOwner = readGatewayIdentity(sandbox)

@@ -76,7 +76,7 @@ export function createPluginWsUrlHandler(deps: {
   ensureRegistryBackend: (connectionId: unknown, profile: unknown) => Promise<ResolvedBackend>
   forgetLocalGatewayDescriptor: (profile: unknown) => Promise<void> | void
   forgetRegistryLocalGatewayDescriptor: (connectionId: unknown, profile: unknown) => Promise<void> | void
-  launchHome: string
+  launchHome: string | (() => string)
   mint?: typeof mintLocalGatewayTicket
   prepare: (origin: string, path: string, ticket: string, webContentsId: number) => string
 }) {
@@ -93,7 +93,7 @@ export function createPluginWsUrlHandler(deps: {
       return await localGatewayDial({
         ensure,
         forget: () => (connectionId ? deps.forgetRegistryLocalGatewayDescriptor(connectionId, profile) : deps.forgetLocalGatewayDescriptor(profile)),
-        launchHome: deps.launchHome,
+        launchHome: typeof deps.launchHome === 'function' ? deps.launchHome() : deps.launchHome,
         mint: deps.mint,
         prepare: (baseUrl, ticket) => deps.prepare(baseUrl, path, ticket, webContentsId),
         profile: typeof profile === 'string' ? profile : '',

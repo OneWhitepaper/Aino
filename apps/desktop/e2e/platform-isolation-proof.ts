@@ -1,4 +1,5 @@
 import { account, sendPrompt } from './platform-account-edge-proof'
+import { nativeBindingObservations } from './platform-account-window'
 import type { launchGuardedDesktop, NativeState, startRealPlatformAPI } from './platform-real-api'
 import { expect, type Page } from './test'
 
@@ -30,6 +31,7 @@ interface Faults { inference_waiting: number; gate_timeouts: number; credential_
 interface ObservedWindow {
   hermesDesktop: {
     platformModels: { owner(revision: number): Promise<Owner> }
+    api<T>(request: { path: string }): Promise<T>
   }
   edgeRuntime?: { socket: WebSocket; id: string }
   isolationAlerts: Array<{ message: string; expected: boolean }>
@@ -41,6 +43,8 @@ export interface IsolationHistory {
   owner: Owner
   revision: number
   runtimeId: string
+  storedSessionId: string
+  bindingEvidence: Awaited<ReturnType<typeof nativeBindingObservations>>
   fixtureContent: string
   state: IsolationState
 }
@@ -178,15 +182,35 @@ async function settledFreshDraft(participant: IsolationParticipant, before: Isol
   expect(rows.every(row => row.desktop_session_id.length > 0 && row.desktop_turn_id.length > 0)).toBe(true)
   expect(units(before.balance) - units(after.balance)).toBe(units(after.usage_cost) - units(before.usage_cost))
   expect(rows.reduce((sum, row) => sum + units(row.actual_cost), 0n)).toBe(units(before.balance) - units(after.balance))
-  // A fresh draft binds once in createPlatformDraft, then the routed first
-  // prompt rebinds through preparePlatformSessionRequest before submission.
-  // Each binding obtains a lease; the two inference calls must add no others.
-  expect(after.credential_requests - before.credential_requests).toBe(2)
-  expect(after.credential_successes - before.credential_successes).toBe(2)
+  // Both draft and prompt still claim the session. The existing live-lease
+  // cache (95329aa3e7) reuses the first lease for that second binding.
+  await assertFreshLeaseBinding(participant)
+  expect(after.credential_requests - before.credential_requests).toBe(1)
+  expect(after.credential_successes - before.credential_successes).toBe(1)
   expect(after.inference_requests).toBe(before.inference_requests + 2)
   expect(after.orders).toBe(before.orders)
 
   return after
+}
+
+export async function assertFreshLeaseBinding(participant: IsolationParticipant) {
+  const observed = await runtime(participant.launched.page)
+
+  const bindings = (await nativeBindingObservations(participant.launched.app))
+    .filter(entry => entry.sessionId === observed.id)
+
+  // Ticket negotiation may precede the two authorized bindings. It must not
+  // obtain another lease or obscure a different native binding failure.
+  expect(bindings.every(entry => entry.completed)).toBe(true)
+  expect(bindings.filter(entry => !entry.ok).every(entry => entry.code === 'binding_ticket_required')).toBe(true)
+  const successful = bindings.filter(entry => entry.ok)
+  expect(successful.length).toBeGreaterThanOrEqual(2)
+  expect(successful.every(entry => entry.code === null && typeof entry.expiresAt === 'string')).toBe(true)
+  expect(new Set(bindings.map(entry => entry.revision)).size).toBe(1)
+  expect(Date.parse(successful[0].expiresAt!)).toBeGreaterThan(Date.now())
+  expect(new Set(successful.map(entry => entry.expiresAt)).size).toBe(1)
+
+  return bindings
 }
 
 export async function captureIsolationHistory(participant: IsolationParticipant): Promise<IsolationHistory> {
@@ -195,8 +219,55 @@ export async function captureIsolationHistory(participant: IsolationParticipant)
   expect(observed.owner).toEqual(identity.owner)
   expect(observed.status).toBe('ready')
 
-  return { url: participant.launched.page.url(), ...identity, runtimeId: observed.id,
+  const url = participant.launched.page.url()
+  const storedSessionId = decodeURIComponent(new URL(url).hash.slice(1).split('?')[0].replace(/^\//, ''))
+  expect(storedSessionId).not.toBe('')
+
+  const detail = await participant.launched.page.evaluate(id =>
+    (window as unknown as ObservedWindow).hermesDesktop.api<{ id: string }>({
+      path: `/api/sessions/${encodeURIComponent(id)}?profile=default`
+    }), storedSessionId)
+
+  expect(detail.id).toBe(storedSessionId)
+
+  const bindingEvidence = (await nativeBindingObservations(participant.launched.app)).filter(entry => entry.sessionId === observed.id)
+
+  return { url, ...identity, runtimeId: observed.id, storedSessionId, bindingEvidence,
     fixtureContent: participant.api.info.fixture_content, state: await state(participant) }
+}
+
+/** A stale link or known ID cannot bypass the account's physical history root. */
+export async function historyUnavailable(page: Page, history: IsolationHistory) {
+  const proof = await page.evaluate(async id => {
+    const api = (window as unknown as ObservedWindow).hermesDesktop.api
+    const listed = await api<{ sessions: Array<{ id: string }> }>({ path: '/api/sessions?profile=default&limit=100' })
+
+    const search = await api<{ results: Array<{ session_id: string }> }>({
+      path: `/api/sessions/search?profile=default&q=${encodeURIComponent(id)}`
+    })
+
+    const reads = []
+
+    for (const suffix of ['', '/messages']) {
+      try {
+        const data = await api({ path: `/api/sessions/${encodeURIComponent(id)}${suffix}?profile=default` })
+        reads.push({ suffix, data })
+      } catch (error) {
+        reads.push({ suffix, rejected: String(error) })
+      }
+    }
+
+    return { listed: listed.sessions.map(row => row.id), search: search.results.map(row => row.session_id), reads }
+  }, history.storedSessionId)
+
+  expect(proof.listed).not.toContain(history.storedSessionId)
+  expect(proof.search).toEqual([])
+
+  for (const read of proof.reads) {
+    expect(read).toEqual({ suffix: read.suffix, rejected: expect.stringMatching(/404/) })
+  }
+
+  return proof
 }
 
 export async function verifyConcurrentIsolation(left: IsolationParticipant, right: IsolationParticipant) {
@@ -262,7 +333,8 @@ export async function verifyConcurrentIsolation(left: IsolationParticipant, righ
 export async function verifyRetainedHistoryIsolation(
   current: IsolationParticipant,
   prior: IsolationHistory,
-  priorAPI: API
+  priorAPI: API,
+  restorePrior: () => Promise<IsolationParticipant>
 ) {
   const identity = await publicOwner(current)
   expect(identity.owner).not.toEqual(prior.owner)
@@ -271,14 +343,9 @@ export async function verifyRetainedHistoryIsolation(
   await assertIsolationAlerts(current.launched)
   await current.launched.page.goto(prior.url)
   const { page } = current.launched
-  await expect(page.getByText(`Verified ${prior.fixtureContent}`, { exact: false }).first()).toBeVisible({ timeout: 60_000 })
-  await expect(page.getByText(`This chat belongs to the original Aino account ${prior.owner.user_id}. You can read its local history, but cannot send with the current account.`, { exact: true })).toBeVisible()
-  // The production composer fences foreign history before submitting at all.
-  // Keep that guard intact; a synthetic RPC would bypass the behavior under test.
-  await expect(page.locator('[contenteditable="false"][aria-disabled="true"]').first()).toBeVisible()
-  await expect(page.locator('[contenteditable="true"]')).toHaveCount(0)
-  const recover = page.getByRole('button', { name: 'New chat with current account', exact: true }).first()
-  await expect(recover).toBeVisible()
+  await expect(page.locator('[contenteditable="true"]').first()).toBeVisible({ timeout: 60_000 })
+  await expect(page.getByText(`Verified ${prior.fixtureContent}`, { exact: false })).toHaveCount(0)
+  const unavailable = await historyUnavailable(page, prior)
   const denied = await Promise.all([state(priorParticipant), state(current)])
 
   for (const index of [0, 1]) {
@@ -287,7 +354,7 @@ export async function verifyRetainedHistoryIsolation(
     expect(denied[index].inference_requests).toBe(before[index].inference_requests)
   }
 
-  await recover.click()
+  await page.evaluate(() => { window.location.hash = '/' })
   await selectAndSend(current)
   const recovered = await settledFreshDraft(current, denied[1])
   const history = await captureIsolationHistory(current)
@@ -295,6 +362,24 @@ export async function verifyRetainedHistoryIsolation(
   expect(history.runtimeId).not.toBe(prior.runtimeId)
   expect(ledger(await state(priorParticipant))).toEqual(ledger(before[0]))
 
-  return { old_owner: prior.owner, current_owner: identity.owner, history_visible: true,
-    rejected_before_credentials_and_inference: true, explicit_new_chat_recovers: true, before, denied, recovered, history }
+  const restored = await restorePrior()
+  expect((await publicOwner(restored)).owner).toEqual(prior.owner)
+  await restored.launched.page.goto(prior.url)
+  await expect(restored.launched.page.getByText(`Verified ${prior.fixtureContent}`, { exact: false }).first()).toBeVisible({ timeout: 60_000 })
+
+  const restoredMessages = await restored.launched.page.evaluate(id =>
+    (window as unknown as ObservedWindow).hermesDesktop.api<{ session_id: string; messages: unknown[] }>({
+      path: `/api/sessions/${encodeURIComponent(id)}/messages?profile=default`
+    }), prior.storedSessionId)
+
+  expect(restoredMessages.session_id).toBe(prior.storedSessionId)
+  expect(JSON.stringify(restoredMessages.messages)).toContain(prior.fixtureContent)
+  const reverseUnavailable = await historyUnavailable(restored.launched.page, history)
+  expect(ledger(await state(restored))).toEqual(ledger(before[0]))
+  expect(ledger(await state(current))).toEqual(ledger(recovered))
+  await assertIsolationAlerts(restored.launched)
+
+  return { old_owner: prior.owner, current_owner: identity.owner, history_visible: false,
+    rejected_before_credentials_and_inference: true, explicit_new_chat_recovers: true,
+    original_account_history_restored: true, unavailable, reverseUnavailable, before, denied, recovered, history }
 }

@@ -144,4 +144,33 @@ describe('RemoteSessionCookieStore', () => {
     store.clear()
     expect(store.cookieHeaderFor(CONN_A, 'https://gw.example.com/')).toBeNull()
   })
+
+  it('retirement clears credentials and rejects late captures even after returning to the same account', async () => {
+    const store = new RemoteSessionCookieStore()
+    const gateway = 'https://gw.example.com'
+    const partitionA = `${LEGACY}-account-alpha`
+    const partitionB = `${LEGACY}-account-beta`
+    const accountA = store.scope(partitionA)
+    accountA.record(gateway, 'hermes_session=private-alpha; Path=/')
+    let deliver!: (value: Array<{ name: string; value: string }>) => void
+    const pending = accountA.captureFromJar(gateway, () => new Promise(resolve => { deliver = resolve }))
+
+    store.retire()
+    expect(store.cookieHeaderFor(partitionA, gateway)).toBeNull()
+    const accountB = store.scope(partitionB)
+    expect(accountB.cookieHeaderFor(gateway)).toBeNull()
+    accountB.record(gateway, 'hermes_session=private-beta; Path=/')
+    accountA.record(gateway, 'hermes_session=late-response-alpha; Path=/')
+    expect(accountB.cookieHeaderFor(gateway)).toBe('hermes_session=private-beta')
+
+    store.retire()
+    const returnedA = store.scope(partitionA)
+    deliver([{ name: 'hermes_session', value: 'late-jar-alpha' }])
+    await pending
+    expect(returnedA.cookieHeaderFor(gateway)).toBeNull()
+    expect(() => accountA.assertCurrent()).toThrow('Authentication changed')
+    returnedA.record(gateway, 'hermes_session=fresh-alpha; Path=/')
+    accountA.clear(gateway)
+    expect(returnedA.cookieHeaderFor(gateway)).toBe('hermes_session=fresh-alpha')
+  })
 })

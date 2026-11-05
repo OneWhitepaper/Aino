@@ -7,6 +7,8 @@ import type { TestInfo } from '@playwright/test'
 import { parse } from 'yaml'
 
 import { buildAppEnv, createSandbox, type Sandbox, waitForAppReady } from './fixtures'
+import { activeAccountSandbox, fixtureAccountTemplate, fixtureHomes, seedFixtureMetadata } from './platform-account-home'
+import { replaceAccountWindow } from './platform-account-window'
 import {
   auditFixtureText,
   fixtureEnvironment,
@@ -61,6 +63,11 @@ function prepareImageEnvironment(sandbox: Sandbox, api: API) {
     'auxiliary:', '  title_generation:', '    enabled: false', ''
   ].join('\n'), { mode: 0o600 })
   fs.writeFileSync(path.join(sandbox.hermesHome, '.env'), '', { mode: 0o600 })
+  const template = fixtureAccountTemplate(sandbox)
+  fs.mkdirSync(template, { mode: 0o700 })
+  fs.copyFileSync(path.join(sandbox.hermesHome, 'config.yaml'), path.join(template, 'config.yaml'))
+  fs.writeFileSync(path.join(template, '.env'), '', { mode: 0o600 })
+  seedFixtureMetadata(template)
   fs.writeFileSync(path.join(sandbox.userDataDir, 'platform-development.json'), JSON.stringify({
     enabled: true, origin: api.info.origin
   }), { mode: 0o600 })
@@ -76,6 +83,7 @@ function prepareImageEnvironment(sandbox: Sandbox, api: API) {
   }
 
   env.HERMES_HOME = sandbox.hermesHome
+  env.AINO_E2E_ACCOUNT_TEMPLATE = template
   env.HERMES_DESKTOP_CWD = path.dirname(api.info.fixture_path)
   env.PYTHONPATH = installLoopbackPythonGuard(sandbox.root)
   env.HERMES_DESKTOP_PYTHON = guardedPlatformPython(sandbox.root, env.PYTHONPATH,
@@ -84,7 +92,8 @@ function prepareImageEnvironment(sandbox: Sandbox, api: API) {
   return { env, nodeGuard: installLoopbackNodeGuard(sandbox.root) }
 }
 
-async function signIn(page: Page, api: API) {
+async function signIn(launched: Launch, api: API) {
+  let { page } = launched
   await expect(page.getByRole('textbox', { name: 'Phone number', exact: true })).toBeVisible({ timeout: 90_000 })
   await page.getByRole('checkbox', { name: 'Keep me signed in on this device', exact: true }).uncheck()
   await page.getByRole('textbox', { name: 'Phone number', exact: true }).fill(api.info.phone)
@@ -92,7 +101,7 @@ async function signIn(page: Page, api: API) {
   const code = await api.control<{ code: string }>('code')
 
   await page.getByRole('textbox', { name: 'Verification code', exact: true }).fill(code.code)
-  await page.getByRole('button', { name: 'Sign in', exact: true }).click()
+  page = await replaceAccountWindow(launched, current => current.getByRole('button', { name: 'Sign in', exact: true }).click())
   await expect.poll(() => page.evaluate(async () => {
     const state = await (window as unknown as AccountWindow).hermesDesktop.platformAccount.status()
 
@@ -176,15 +185,21 @@ function fixtureSources(apiRoot: string) {
   })
 }
 
-function assertNativeImageGuards(sandbox: Sandbox, launched: Launch) {
-  const markers = fs.readdirSync(sandbox.hermesHome).filter(name => name.includes('network-guard-active'))
-  const guards = Object.fromEntries(markers.map(name => [name, fs.readFileSync(path.join(sandbox.hermesHome, name), 'utf8').trim().split('\n')]))
+async function assertNativeImageGuards(sandbox: Sandbox, launched: Launch) {
+  const active = await activeAccountSandbox(sandbox, launched)
+  const guards: Record<string, string[]> = {}
+
+  for (const home of fixtureHomes(sandbox)) {
+    for (const marker of fs.existsSync(home) ? fs.readdirSync(home).filter(name => name.includes('network-guard-active')) : []) {
+      guards[marker] = [...(guards[marker] ?? []), ...fs.readFileSync(path.join(home, marker), 'utf8').trim().split('\n')]
+    }
+  }
 
   for (const marker of ['node-network-guard-active', 'chromium-network-guard-active']) {
     expect(guards[marker]).toContain(String(launched.app.process().pid))
   }
 
-  const owner = JSON.parse(fs.readFileSync(path.join(sandbox.hermesHome, 'gateway.pid'), 'utf8')) as { pid: number }
+  const owner = JSON.parse(fs.readFileSync(path.join(active.hermesHome, 'gateway.pid'), 'utf8')) as { pid: number }
 
   expect(guards['python-network-guard-active']).toContain(String(owner.pid))
 
@@ -220,19 +235,23 @@ test('native account image selection generates and edits through the real manage
 
     advance('launch')
     launched = await launchGuardedDesktop(prepared.env, prepared.nodeGuard)
-    const { app, page, transportAudit } = launched
+    const { app, transportAudit } = launched
 
-    page.on('pageerror', error => diagnostics.push(error.message))
-    page.on('console', message => diagnostics.push(message.text()))
+    app.on('window', current => {
+      current.on('pageerror', error => diagnostics.push(error.message))
+      current.on('console', message => diagnostics.push(message.text()))
+    })
     app.process().stdout?.on('data', value => diagnostics.push(String(value)))
     app.process().stderr?.on('data', value => diagnostics.push(String(value)))
     advance('sign-in')
-    await signIn(page, api)
+    await signIn(launched, api)
+    const { page } = launched
+    const active = await activeAccountSandbox(sandbox, launched)
     advance('gateway-ready')
     await waitForAppReady(launched as never, 120_000)
-    assertNativeImageGuards(sandbox, launched)
+    await assertNativeImageGuards(sandbox, launched)
     advance('image-model-and-quality')
-    await selectImageModel(page, sandbox)
+    await selectImageModel(page, active)
     await page.screenshot({ path: testInfo.outputPath('native-image-model-auto.png') })
     advance('text-model')
     await page.getByRole('button', { name: 'Close settings', exact: true }).click()
@@ -270,13 +289,15 @@ test('native account image selection generates and edits through the real manage
     expect(generated).toMatchObject({ width: 32, height: 32, pixels: [34, 153, 221, 255] })
     expect(edited).toMatchObject({ width: 32, height: 32, pixels: [221, 153, 34, 255] })
     expect(state.usage_ledger.filter(row => row.desktop_purpose === 'image')).toHaveLength(2)
-    const guards = assertNativeImageGuards(sandbox, launched)
+    const guards = await assertNativeImageGuards(sandbox, launched)
     expect(await collectErrorBanners(page)).toEqual([])
     await Promise.all(transportAudit.pending)
     expect(transportAudit.unexpectedRendererDestinations).toEqual([])
 
-    for (const marker of ['blocked-network.txt', 'blocked-node-network.txt', 'blocked-chromium-network.txt']) {
-      expect(fs.existsSync(path.join(sandbox.hermesHome, marker)), marker).toBe(false)
+    for (const home of fixtureHomes(sandbox)) {
+      for (const marker of ['blocked-network.txt', 'blocked-node-network.txt', 'blocked-chromium-network.txt']) {
+        expect(fs.existsSync(path.join(home, marker)), `${home}/${marker}`).toBe(false)
+      }
     }
 
     await page.screenshot({ path: testInfo.outputPath('native-edited-image.png') })
@@ -310,8 +331,12 @@ test('native account image selection generates and edits through the real manage
     await attachJSON(testInfo, 'native-image-api-fixture-sources', apiSources)
     await attachJSON(testInfo, 'native-image-receipt', { ...evidence, persisted_audit: persistedAudit })
   } catch (error) {
-    const logs = path.join(sandbox.hermesHome, 'logs')
-    const runtime = fs.existsSync(logs) ? persistedFixtureText(logs) : []
+    const runtime = fixtureHomes(sandbox).flatMap(home => {
+      const logs = path.join(home, 'logs')
+
+      return fs.existsSync(logs) ? persistedFixtureText(logs) : []
+    })
+
     const state = await api.control<ImageState>('state')
     const page = launched?.page
     const renderer = page ? { url: page.url(), body: await page.locator('body').innerText() } : null

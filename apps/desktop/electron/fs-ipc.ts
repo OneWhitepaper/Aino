@@ -24,7 +24,8 @@ import { gitRootForIpc } from './git-root'
 import { registerPluginFilesIpc } from './plugin-files-ipc'
 
 export interface FsIpcDeps {
-  hermesHome: string
+  hermesHome: string | (() => string)
+  userData?: () => string
   readActiveDesktopProfile: () => null | string
   expandUserPath: (value: string) => string
   resolveRequestedPathForIpc: (value: string, options: { purpose: string }) => string
@@ -33,13 +34,16 @@ export interface FsIpcDeps {
 }
 
 export function registerFsIpc({
-  hermesHome,
+  hermesHome: homeSource,
+  userData = () => app.getPath('userData'),
   readActiveDesktopProfile,
   expandUserPath,
   resolveRequestedPathForIpc,
   directoryExists,
   resolveGitBinary
 }: FsIpcDeps) {
+  const home = () => typeof homeSource === 'function' ? homeSource() : homeSource
+
   ipcMain.handle('hermes:fs:readDir', async (_event, dirPath) => readDirForIpc(dirPath))
 
   // `ctx.files`: a plugin's own data folder plus folders the user grants it.
@@ -54,9 +58,9 @@ export function registerFsIpc({
         window.webContents.send('hermes:pluginFiles:changed', change)
       }
     },
-    userDataDir: () => app.getPath('userData'),
+    userDataDir: userData,
     hermesHomes: () => [
-      hermesHome,
+      home(),
       platformDefaultHermesHome(app.getPath('home')),
       path.join(app.getPath('home'), '.hermes')
     ],
@@ -164,7 +168,7 @@ export function registerFsIpc({
     const profile =
       named && (named === 'default' || DESKTOP_PROFILE_NAME_RE.test(named)) ? named : readActiveDesktopProfile()
 
-    const base = profile && profile !== 'default' ? path.join(hermesHome, 'profiles', profile) : hermesHome
+    const base = profile && profile !== 'default' ? path.join(home(), 'profiles', profile) : home()
 
     return ensureDir(path.join(base, dirName))
   }
@@ -175,9 +179,9 @@ export function registerFsIpc({
   // Earlier builds scoped it per profile; anything left in those folders is
   // moved up once so it does not silently vanish on a profile switch.
   async function desktopPluginsRoot(): Promise<string> {
-    const root = await ensureDir(path.join(hermesHome, DESKTOP_PLUGINS_DIR))
-    await migrateProfileScopedDesktopPlugins(hermesHome, root)
-    await reconcileUnifiedDesktopHalves(hermesHome, root)
+    const root = await ensureDir(path.join(home(), DESKTOP_PLUGINS_DIR))
+    await migrateProfileScopedDesktopPlugins(home(), root)
+    await reconcileUnifiedDesktopHalves(home(), root)
 
     return root
   }
@@ -189,9 +193,9 @@ export function registerFsIpc({
   // package without waiting for the next root resolution. Answers which
   // packages' halves it refused too, so the install dialog can say so.
   ipcMain.handle('hermes:fs:reconcileDesktopPlugins', async () => {
-    const root = await ensureDir(path.join(hermesHome, DESKTOP_PLUGINS_DIR))
+    const root = await ensureDir(path.join(home(), DESKTOP_PLUGINS_DIR))
 
-    return reconcileDesktopHalvesReport(hermesHome, root)
+    return reconcileDesktopHalvesReport(home(), root)
   })
 
   // The LOCAL logs root (`<HERMES_HOME>/logs`, profile-aware) — the error
@@ -232,7 +236,7 @@ export function registerFsIpc({
   // Uninstall a standalone desktop plugin by FOLDER NAME under the app-level
   // root. The renderer never passes a path; containment is re-checked inside.
   ipcMain.handle('hermes:plugin:removeDesktop', async (_event, payload) =>
-    removeDesktopPlugin(path.join(hermesHome, DESKTOP_PLUGINS_DIR), payload?.name)
+    removeDesktopPlugin(path.join(home(), DESKTOP_PLUGINS_DIR), payload?.name)
   )
 
   // Rename a file/folder in place. The renderer passes the existing path + a new

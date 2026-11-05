@@ -120,13 +120,11 @@ export interface PluginFiles {
 }
 
 
-export function createPluginFiles(deps: PluginFilesDeps): PluginFiles {
-  const platform = deps.platform ?? process.platform
-  const { inside, insideLoose, same, segments } = pathTools(platform)
-  const baseDir = () => path.join(deps.userDataDir(), 'plugin-files')
-  const storeFile = () => path.join(baseDir(), 'grants.json')
+type Store = Record<string, PluginFolderGrant[]>
 
-  type Store = Record<string, PluginFolderGrant[]>
+function createPluginGrantStore(userData: string) {
+  const baseDir = path.join(userData, 'plugin-files')
+  const storeFile = path.join(baseDir, 'grants.json')
   let store: null | Store = null
   let loading: null | Promise<Store> = null
   let writes: Promise<unknown> = Promise.resolve()
@@ -139,7 +137,7 @@ export function createPluginFiles(deps: PluginFilesDeps): PluginFiles {
     // A missing or unreadable-as-JSON record is no grants (fail closed). Any
     // other read error is thrown, so a later write never replaces a record
     // it could not read.
-    const raw = await fs.promises.readFile(storeFile(), 'utf8').catch(error => {
+    const raw = await fs.promises.readFile(storeFile, 'utf8').catch(error => {
       if (errnoCode(error) === 'ENOENT') {
         return '{}'
       }
@@ -176,10 +174,10 @@ export function createPluginFiles(deps: PluginFilesDeps): PluginFiles {
     const next = writes.then(async () => {
       const grants = fresh(structuredClone({ ...(await load()) }))
       const result = change(grants)
-      await fs.promises.mkdir(baseDir(), { recursive: true })
-      const tmp = `${storeFile()}.${process.pid}.tmp`
+      await fs.promises.mkdir(baseDir, { recursive: true })
+      const tmp = `${storeFile}.${process.pid}.tmp`
       await fs.promises.writeFile(tmp, JSON.stringify({ version: 1, grants }, null, 2), { mode: 0o600 })
-      await fs.promises.rename(tmp, storeFile())
+      await fs.promises.rename(tmp, storeFile)
       store = grants
 
       return result
@@ -190,8 +188,29 @@ export function createPluginFiles(deps: PluginFilesDeps): PluginFiles {
     return next
   }
 
-  const protectedRoots = async (): Promise<string[]> =>
-    realRoots([...deps.protectedRoots(), deps.userDataDir(), ...systemRoots(platform)])
+  return { userData, baseDir, load, mutate }
+}
+
+export function createPluginFiles(deps: PluginFilesDeps): PluginFiles {
+  const platform = deps.platform ?? process.platform
+  const { inside, insideLoose, same, segments } = pathTools(platform)
+  const stores = new Map<string, ReturnType<typeof createPluginGrantStore>>()
+
+  // Cache and pending writes belong to the account that started the operation.
+  const currentStore = () => {
+    const userData = path.resolve(deps.userDataDir())
+    let store = stores.get(userData)
+
+    if (!store) {
+      store = createPluginGrantStore(userData)
+      stores.set(userData, store)
+    }
+
+    return store
+  }
+
+  const protectedRoots = async (userData: string, homes: string[]): Promise<string[]> =>
+    realRoots([...homes, userData, ...systemRoots(platform)])
 
   // A second spelling of this machine's files that no realpath comparison can
   // match: a WSL share or a loopback/device path on Windows.
@@ -211,10 +230,12 @@ export function createPluginFiles(deps: PluginFilesDeps): PluginFiles {
   // inside it must still avoid (none for the plugin's own data folder, whose
   // root already excludes every sibling).
   const openFolder = async (pluginId: string, folder: unknown): Promise<{ root: string; avoid: string[] }> => {
-    const roots = await realRoots(deps.protectedRoots())
+    const account = currentStore()
+    const homes = deps.protectedRoots()
+    const roots = await realRoots(homes)
 
     if (folder === PLUGIN_DATA_FOLDER) {
-      const dir = path.join(baseDir(), 'data', dataDirName(pluginId))
+      const dir = path.join(account.baseDir, 'data', dataDirName(pluginId))
       await fs.promises.mkdir(dir, { recursive: true })
 
       return { root: await fs.promises.realpath(dir), avoid: roots }
@@ -222,7 +243,7 @@ export function createPluginFiles(deps: PluginFilesDeps): PluginFiles {
 
     const grant =
       typeof folder === 'string' && GRANT_ID_RE.test(folder)
-        ? (await load())[pluginId]?.find(row => row.id === folder)
+        ? (await account.load())[pluginId]?.find(row => row.id === folder)
         : undefined
 
     if (!grant) {
@@ -241,7 +262,7 @@ export function createPluginFiles(deps: PluginFilesDeps): PluginFiles {
       return refuse('folder-changed', 'The granted folder was moved or replaced; grant it again.')
     }
 
-    const avoid = await protectedRoots()
+    const avoid = await protectedRoots(account.userData, homes)
 
     if (overlapsProtected(real, avoid)) {
       return refuse('protected', 'That folder overlaps Hermes data and cannot be used by a plugin.')
@@ -342,11 +363,13 @@ export function createPluginFiles(deps: PluginFilesDeps): PluginFiles {
     async grants(pluginId) {
       const key = typeof pluginId === 'string' ? pluginId : ''
 
-      return [...((await load())[key] ?? [])]
+      return [...((await currentStore().load())[key] ?? [])]
     },
 
     addGrant: (pluginId, picked) =>
       answer(async () => {
+        const account = currentStore()
+        const homes = deps.protectedRoots()
         const key = pluginKey(pluginId)
         const real = await realpathOrNull(String(picked || ''))
 
@@ -358,7 +381,7 @@ export function createPluginFiles(deps: PluginFilesDeps): PluginFiles {
           return fail('protected', 'That is a system folder and cannot be shared with a plugin.')
         }
 
-        const roots = await protectedRoots()
+        const roots = await protectedRoots(account.userData, homes)
 
         if (overlapsProtected(real, roots) || (await overlapsByIdentity(real, roots))) {
           return fail('protected', 'That folder holds Hermes data and cannot be shared with a plugin.')
@@ -370,7 +393,7 @@ export function createPluginFiles(deps: PluginFilesDeps): PluginFiles {
           return fail('protected', 'That folder holds keys or credentials and cannot be shared with a plugin.')
         }
 
-        return mutate(grants => {
+        return account.mutate(grants => {
           const rows = (grants[key] ??= [])
           const existing = rows.find(row => same(row.path, real))
 
@@ -392,7 +415,7 @@ export function createPluginFiles(deps: PluginFilesDeps): PluginFiles {
       }),
 
     revoke: (pluginId, folderId) =>
-      mutate(grants => {
+      currentStore().mutate(grants => {
         const key = typeof pluginId === 'string' ? pluginId : ''
         const rows = grants[key] ?? []
         const kept = folderId === undefined ? [] : rows.filter(row => row.id !== folderId)

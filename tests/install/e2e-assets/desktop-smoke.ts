@@ -352,6 +352,32 @@ function seedSmokeProviders(options: SmokeOptions, predictedHome: string | undef
   }
 }
 
+function seedSmokeAccount(options: SmokeOptions, predictedHome: string | undefined, mockUrl: string): string | undefined {
+  if (!options['platform-account']) { return predictedHome }
+  // Seed fixture config directly into this known account; shared history is never adopted.
+  const accountHome = resolveDesktopHermesHome({ home: options.home, accountWorkspace: {
+    userData: options['user-data'], origin: 'https://api.agentera.com.cn', userId: '17'
+  } })
+  assertSmokeHermesHome(accountHome, { ...options, home: accountHome })
+  writeMockProviderConfig(accountHome, mockUrl, '  language: en')
+  writeEnvFile(accountHome, 'e2e-mock-key', mockUrl)
+
+  return accountHome
+}
+
+async function prepareSmokeWindow(
+  app: ElectronApplication,
+  account: Awaited<ReturnType<typeof prepareAccountFixture>>,
+  log: (message: string) => void
+): Promise<Page> {
+  let page = await pickAppWindow(app, log)
+  page.on('pageerror', (error: Error): void => { log(error.message) })
+  await prepareWindowForInput(app, page)
+  if (account) { page = await account.signIn(app, page) }
+
+  return page
+}
+
 // `launchApp` is a parameter so a test can substitute a failing launcher and
 // exercise the seeding that happens before the launch without touching Playwright.
 export async function runInstalledDesktopSmoke(options: SmokeOptions, launchApp: LaunchElectron = (launch) => _electron.launch(launch)): Promise<void> {
@@ -396,14 +422,12 @@ export async function runInstalledDesktopSmoke(options: SmokeOptions, launchApp:
     // bundle env, predict the home the app will actually resolve and seed that
     // too, refusing to seed a non-empty one.
     seedSmokeProviders(options, predictedHome, mockUrl)
+    predictedHome = seedSmokeAccount(options, predictedHome, mockUrl)
     app = await launchApp({ ...launch, timeout: 120_000 })
     app.process().stdout?.on('data', (chunk: Buffer): void => { consoleLines.push(redact(chunk.toString())) })
     app.process().stderr?.on('data', (chunk: Buffer): void => { consoleLines.push(redact(chunk.toString())) })
 
-    page = await pickAppWindow(app, (message: string): void => { consoleLines.push(redact(message)) })
-    page.on('pageerror', (error: Error): void => { consoleLines.push(redact(error.message)) })
-    await prepareWindowForInput(app, page)
-    await account?.signIn(page)
+    page = await prepareSmokeWindow(app, account, (message: string): void => { consoleLines.push(redact(message)) })
     await waitForChatReady(page)
     const running = await verifyRunningDesktop(app, options, launch, predictedHome)
     options = runningOptions(options, running)

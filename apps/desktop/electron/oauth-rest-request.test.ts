@@ -11,6 +11,7 @@ import {
   shouldReplayAfterCookie401,
   withoutInteractiveOauthLogin
 } from './oauth-rest-request'
+import { RemoteSessionCookieStore } from './remote-session-cookies'
 
 const GATE_401 = () =>
   httpStatusError(
@@ -163,6 +164,38 @@ test('failed foreground re-login returns the original gate refusal without retry
   expect(retries).toBe(0)
 })
 
+test('cookie recovery cannot clear, log in or replay after its account scope retires', async () => {
+  for (const duringLogin of [false, true]) {
+    const store = new RemoteSessionCookieStore()
+    const scope = store.scope('persist:oauth-account-alpha')
+    const events: string[] = []
+    let finishLogin!: () => void
+    const login = new Promise<void>(resolve => { finishLogin = resolve })
+
+    if (!duringLogin) { store.retire() }
+
+    const pending = retryCookie401WithLogin(GATE_401(), {}, {
+      assertCurrent: scope.assertCurrent,
+      clearCookies: () => { events.push('clear') },
+      login: () => { events.push('login');
+
+ return login },
+      retry: async () => { events.push('retry');
+
+ return 'wrong-account' }
+    })
+
+    const rejected = expect(pending).rejects.toBeInstanceOf(NativeAuthChangedError)
+    store.retire()
+    store.scope('persist:oauth-account-beta')
+    store.retire()
+    store.scope('persist:oauth-account-alpha')
+    finishLogin()
+    await rejected
+    expect(events).toEqual(duringLogin ? ['clear', 'login'] : [])
+  }
+})
+
 test('ws-ticket minting vouches for replay on a cookie 401', async () => {
   let seen: any
 
@@ -178,6 +211,43 @@ test('ws-ticket minting vouches for replay on a cookie 401', async () => {
 
   expect(seen.method).toBe('POST')
   expect(seen.replayOn401).toBe(true)
+})
+
+test('native auth resolution cannot start cookie fallback after its account retires', async () => {
+  for (const rejectNative of [false, true]) {
+    const store = new RemoteSessionCookieStore()
+    const scope = store.scope('persist:oauth-account-alpha')
+    let resolveNative!: (token: string | null) => void
+    let rejectToken!: (error: Error) => void
+
+    const native = new Promise<string | null>((resolve, reject) => {
+      resolveNative = resolve
+      rejectToken = reject
+    })
+
+    const calls: string[] = []
+
+    const pending = requestWithOauthFallback('https://gw.test', {
+      assertCurrent: scope.assertCurrent,
+      ensureNativeAccessToken: () => native,
+      requestWithBearer: async () => { calls.push('bearer');
+
+ return 'wrong-account' },
+      requestWithCookie: async () => { calls.push('cookie');
+
+ return 'wrong-account' }
+    })
+
+    const rejection = expect(pending).rejects.toBeInstanceOf(NativeAuthChangedError)
+    store.retire()
+    store.scope('persist:oauth-account-beta')
+    store.retire()
+    store.scope('persist:oauth-account-alpha')
+
+    if (rejectNative) { rejectToken(new Error('native unavailable')) } else { resolveNative(null) }
+    await rejection
+    expect(calls).toEqual([])
+  }
 })
 
 test('native failures remain transport failures unless an independent cookie session succeeds', async () => {

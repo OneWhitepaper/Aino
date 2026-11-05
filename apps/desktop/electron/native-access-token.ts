@@ -120,6 +120,9 @@ export function createNativeAccessTokenCoordinator(deps: NativeAccessTokenCoordi
   return {
     ensure,
     beginLogin,
+    invalidateAll: () => {
+      for (const key of new Set([...authEpochs.keys(), ...loginEpochs.keys(), ...refreshFlights.keys()])) { beginExplicitAuthChange(key) }
+    },
     storeTokens: (rawBaseUrl: string, tokens: NativeTokenSet) => {
       const baseUrl = deps.normalizeBaseUrl(rawBaseUrl)
       beginExplicitAuthChange(baseUrl)

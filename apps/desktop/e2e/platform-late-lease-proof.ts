@@ -1,6 +1,7 @@
 import { waitForAppReady } from './fixtures'
 import { account, type NativeFaultState, sendPrompt, sendToolTurn } from './platform-account-edge-proof'
-import { captureIsolationHistory } from './platform-isolation-proof'
+import { nativeBindingObservations, replaceAccountWindow } from './platform-account-window'
+import { assertFreshLeaseBinding, captureIsolationHistory, historyUnavailable } from './platform-isolation-proof'
 import type { launchGuardedDesktop, NativeState, startRealPlatformAPI } from './platform-real-api'
 import { expect } from './test'
 
@@ -26,7 +27,7 @@ interface OwnerState extends NativeState {
   credential_successes: number
   inference_requests: number
   inference_responses: number
-  usage_ledger: Array<{ user_id: number; desktop_session_id: string; desktop_turn_id: string; actual_cost: string }>
+  usage_ledger: Array<{ user_id: number; api_key_id: number; desktop_session_id: string; desktop_turn_id: string; actual_cost: string }>
 }
 
 interface LateLeaseWindow {
@@ -102,13 +103,14 @@ function units(value: string) {
 }
 
 export async function verifyLateLeaseAcrossAccountSwitch({ launched, api, accountId, signInOther }: LateLeaseContext) {
-  const { page } = launched
+  let { page } = launched
   const state = (id: string) => api.control<OwnerState>(`state?user_id=${encodeURIComponent(id)}`)
   const faults = () => api.control<LeaseFaults>('faults')
   await sendToolTurn(page, api)
   const history = await captureIsolationHistory({ launched, api, accountId })
   const before = await state(accountId)
   const beforeFaults = await faults()
+  const bindingOffset = (await nativeBindingObservations(launched.app)).length
   // The API fixture must count completed HTTP writes, not only successful
   // credential creation; a canceled request is not a delivered stale response.
   expect(Number.isSafeInteger(beforeFaults.credential_responses)).toBe(true)
@@ -117,8 +119,8 @@ export async function verifyLateLeaseAcrossAccountSwitch({ launched, api, accoun
 
   try {
     // Use a genuine ticket from the original renderer socket and the public
-    // native binding bridge. Retain its real completion across the account
-    // switch: stale-view notification suppression is not completion evidence.
+    // native binding bridge. The independent main-process observer retains
+    // completion evidence after the original renderer is destroyed.
     const pendingBinding = page.evaluate(async input => {
       const target = window as unknown as LateLeaseWindow
       const runtime = target.edgeRuntime
@@ -173,12 +175,42 @@ export async function verifyLateLeaseAcrossAccountSwitch({ launched, api, accoun
     expect(held.inference_requests).toBe(beforeFaults.inference_requests)
     expect(ledger(await state(accountId))).toEqual(ledger(before))
 
-    const signedOut = await page.evaluate(() => (window as unknown as LateLeaseWindow).hermesDesktop.platformAccount.logout())
+    const originalPage = page
+
+    const signingOut = replaceAccountWindow(launched, current => current.evaluate(() =>
+      (window as unknown as LateLeaseWindow).hermesDesktop.platformAccount.logout()))
+
+    await expect.poll(() => originalPage.isClosed()).toBe(true)
+    const beforeRelease = await faults()
+    expect(beforeRelease.credential_waiting).toBe(1)
+    expect(beforeRelease.credential_responses).toBe(held.credential_responses)
+    expect(beforeRelease.gate_cancellations).toBe(beforeFaults.gate_cancellations)
+    expect(beforeRelease.gate_timeouts).toBe(beforeFaults.gate_timeouts)
+
+    // Re-homing drains native data IPC before admitting the next account.
+    // Deliver the held HTTP reply after destruction, while that barrier holds.
+    await api.control('faults', JSON.stringify({ hold_credential_response: false }))
+    gateReleased = true
+    await expect.poll(async () => (await faults()).credential_responses).toBe(beforeFaults.credential_responses + 1)
+    page = await signingOut
+    const rendererResult = await pendingBinding
+    expect(rendererResult).toEqual({ completed: false, ok: false, code: 'renderer_context_lost' })
+    const bindingResults = (await nativeBindingObservations(launched.app)).slice(bindingOffset)
+    expect(bindingResults).toEqual([{ sessionId: history.runtimeId, revision: history.revision,
+      completed: true, ok: false, code: 'auth_attempt_superseded' }])
+    const signedOut = await account(page)
     expect(signedOut).toMatchObject({ phase: 'signed_out', account: null })
     expect(signedOut.revision).toBeGreaterThan(history.revision)
     await expect(page.getByRole('textbox', { name: 'Phone number', exact: true })).toBeVisible()
-    expect((await faults()).credential_waiting).toBe(1)
+    const rejected = await faults()
+    expect(rejected.credential_waiting).toBe(0)
+    expect(rejected.gate_cancellations).toBe(beforeFaults.gate_cancellations)
+    expect(rejected.gate_timeouts).toBe(beforeFaults.gate_timeouts)
+    expect(rejected.inference_requests).toBe(beforeFaults.inference_requests)
+    expect(ledger(await state(accountId))).toEqual(ledger(before))
+
     await signInOther()
+    page = launched.page
     await waitForAppReady(launched as never, 60_000)
     const switched = await account(page)
     expect(switched.phase).toBe('signed_in')
@@ -187,24 +219,6 @@ export async function verifyLateLeaseAcrossAccountSwitch({ launched, api, accoun
     expect(switched.revision).toBeGreaterThan(signedOut.revision)
     const nextId = switched.account!.id
     const nextBefore = await state(nextId)
-    const beforeRelease = await faults()
-    expect(beforeRelease.credential_waiting).toBe(1)
-    expect(beforeRelease.credential_responses).toBe(held.credential_responses)
-    expect(beforeRelease.gate_cancellations).toBe(beforeFaults.gate_cancellations)
-    expect(beforeRelease.gate_timeouts).toBe(beforeFaults.gate_timeouts)
-
-    await page.evaluate(() => { (window as unknown as LateLeaseWindow).lateLeaseResponseReleased = true })
-    await api.control('faults', JSON.stringify({ hold_credential_response: false }))
-    gateReleased = true
-    await expect.poll(async () => (await faults()).credential_responses).toBe(beforeFaults.credential_responses + 1)
-    const bindingResult = await pendingBinding
-    expect(bindingResult).toEqual({ completed: true, ok: false, code: 'auth_attempt_superseded' })
-    const rejected = await faults()
-    expect(rejected.credential_waiting).toBe(0)
-    expect(rejected.gate_cancellations).toBe(beforeFaults.gate_cancellations)
-    expect(rejected.gate_timeouts).toBe(beforeFaults.gate_timeouts)
-    expect(rejected.inference_requests).toBe(beforeFaults.inference_requests)
-    expect(ledger(await state(accountId))).toEqual(ledger(before))
     expect(ledger(await state(nextId))).toEqual(ledger(nextBefore))
     expect(await account(page)).toEqual(switched)
     await assertLateLeaseAlerts(launched)
@@ -212,16 +226,16 @@ export async function verifyLateLeaseAcrossAccountSwitch({ launched, api, accoun
     expect(staleAlerts.filter(entry => entry.expected).length).toBeLessThanOrEqual(1)
 
     await page.goto(history.url)
-    await expect(page.getByText(`Verified ${api.info.fixture_content}`, { exact: false }).first()).toBeVisible({ timeout: 60_000 })
-    await expect(page.getByText(`This chat belongs to the original Aino account ${accountId}. You can read its local history, but cannot send with the current account.`, { exact: true })).toBeVisible()
-    await expect(page.locator('[contenteditable="true"]')).toHaveCount(0)
+    await expect(page.locator('[contenteditable="true"]').first()).toBeVisible({ timeout: 60_000 })
+    await expect(page.getByText(`Verified ${api.info.fixture_content}`, { exact: false })).toHaveCount(0)
+    const unavailableHistory = await historyUnavailable(page, history)
     expect(ledger(await state(accountId))).toEqual(ledger(before))
     expect(ledger(await state(nextId))).toEqual(ledger(nextBefore))
     const beforeRecovery = await faults()
     expect(beforeRecovery.inference_requests).toBe(rejected.inference_requests)
     expect(beforeRecovery.credential_requests).toBe(rejected.credential_requests)
 
-    await page.getByRole('button', { name: 'New chat with current account', exact: true }).first().click()
+    await page.evaluate(() => { window.location.hash = '/' })
     await page.locator('[data-tour="model-pill"]').first().click()
     await page.getByRole('menuitem', { name: /fixture-tool-model/ }).click()
     await sendPrompt(page, `Read ${api.info.fixture_path} and verify its content.`)
@@ -233,11 +247,15 @@ export async function verifyLateLeaseAcrossAccountSwitch({ launched, api, accoun
     const rows = recovered.usage_ledger.slice(nextBefore.usage_ledger.length)
     expect(rows).toHaveLength(2)
     expect(rows.every(row => String(row.user_id) === nextId && row.desktop_session_id && row.desktop_turn_id)).toBe(true)
+    const oldKeyIds = new Set(before.usage_ledger.map(row => row.api_key_id))
+    expect(rows.every(row => row.api_key_id > 0 && !oldKeyIds.has(row.api_key_id))).toBe(true)
     expect(new Set(rows.map(row => row.desktop_turn_id)).size).toBe(1)
     expect(new Set(rows.map(row => row.desktop_session_id)).size).toBe(1)
     expect(rows.reduce((sum, row) => sum + units(row.actual_cost), 0n)).toBe(units(nextBefore.balance) - units(recovered.balance))
     expect(units(recovered.usage_cost) - units(nextBefore.usage_cost)).toBe(units(nextBefore.balance) - units(recovered.balance))
-    expect(recovered.credential_requests).toBe(nextBefore.credential_requests + 2)
+    const recoveredBindings = await assertFreshLeaseBinding({ launched, api, accountId: nextId })
+    expect(recovered.credential_requests).toBe(nextBefore.credential_requests + 1)
+    expect(recovered.credential_successes).toBe(nextBefore.credential_successes + 1)
     expect(recovered.inference_requests).toBe(nextBefore.inference_requests + 2)
     expect(recovered.orders).toBe(nextBefore.orders)
     const nextHistory = await captureIsolationHistory({ launched, api, accountId: nextId })
@@ -247,8 +265,10 @@ export async function verifyLateLeaseAcrossAccountSwitch({ launched, api, accoun
 
     return { old_owner: { ...history.owner }, current_owner: { ...nextHistory.owner }, old_runtime_id: history.runtimeId,
       current_runtime_id: nextHistory.runtimeId, signed_out_revision: signedOut.revision,
-      switched_revision: switched.revision, late_response_delivered_after_switch: true,
-      binding_result: bindingResult, stale_binding_rejected_without_inference: true, explicit_new_chat_recovers: true,
+      switched_revision: switched.revision, late_response_delivered_during_switch: true,
+      old_renderer_closed: true, native_binding_results: bindingResults, renderer_result: rendererResult,
+      recovered_binding_reuse: recoveredBindings,
+      unavailable_history: unavailableHistory, stale_binding_rejected_without_inference: true, explicit_new_chat_recovers: true,
       before: ledger(before), next_before: ledger(nextBefore), recovered: ledger(recovered),
       faults: { before: beforeFaults, held, before_release: beforeRelease, rejected, final: await faults() },
       audit: { expected_stale_alerts: staleAlerts.filter(entry => entry.expected).length, unexpected_alerts: 0 } }

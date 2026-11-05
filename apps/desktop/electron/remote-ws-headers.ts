@@ -171,7 +171,7 @@ export function createRemoteWsHeaderStore(limit = 100) {
     return headers
   }
 
-  return { headersFor, remember }
+  return { headersFor, remember, clear: () => headersByUrl.clear() }
 }
 
 /** Lower-cased header names this session injected, keyed by webRequest id. */

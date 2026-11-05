@@ -69,3 +69,33 @@ it('dismisses an expired notification before releasing it and releases failed de
   expect(failed.close).not.toHaveBeenCalled()
   expect(vi.getTimerCount()).toBe(0)
 })
+
+it('account retirement closes and releases every notification while allowing later deliveries', () => {
+  vi.useFakeTimers()
+  const registry = createNotificationRegistry()
+
+  const notifications = [
+    Object.assign(new EventEmitter(), { close: vi.fn() }),
+    Object.assign(new EventEmitter(), { close: vi.fn() })
+  ]
+
+  for (const notification of notifications) {
+    registry.retain(notification)
+  }
+
+  registry.closeAll()
+
+  for (const notification of notifications) {
+    expect(registry.has(notification)).toBe(false)
+    expect(notification.close).toHaveBeenCalledOnce()
+    expect(notification.eventNames()).toEqual([])
+  }
+
+  expect(vi.getTimerCount()).toBe(0)
+  const current = Object.assign(new EventEmitter(), { close: vi.fn() })
+  registry.retain(current)
+  expect(registry.has(current)).toBe(true)
+  current.emit('failed')
+  expect(registry.has(current)).toBe(false)
+  expect(vi.getTimerCount()).toBe(0)
+})

@@ -8,7 +8,7 @@ import type { HermesNotification } from './notification-types'
 const host = vi.hoisted(() => ({
   handle: vi.fn(),
   fromWebContents: vi.fn(),
-  shown: [] as EventEmitter[]
+  shown: [] as Array<EventEmitter & { close: () => void }>
 }))
 
 vi.mock('electron', () => ({
@@ -21,6 +21,10 @@ vi.mock('electron', () => ({
 
     show() {
       host.shown.push(this)
+    }
+
+    close() {
+      this.emit('close')
     }
   }
 }))
@@ -155,4 +159,55 @@ it('flashes an unfocused source window until it regains focus, and leaves a focu
   source.isFocused.mockReturnValue(true)
   await notify(event, { kind: 'turnDone', sessionId: 'c', title: 'Hermes finished' })
   expect(source.flashFrame).toHaveBeenCalledTimes(2)
+})
+
+it.each(['darwin', 'win32'] as const)('retires %s notifications before another account opens', async platform => {
+  const previous = windowStub()
+  const current = windowStub()
+  let main = previous
+  host.fromWebContents.mockReturnValue(previous)
+  const focusWindow = vi.fn()
+
+  const nativeNotifications = registerNativeNotifications({
+    getMainWindow: () => main as unknown as BrowserWindow,
+    focusWindow,
+    platform
+  })
+
+  const notify = host.handle.mock.calls[0][1] as (
+    event: IpcMainInvokeEvent,
+    payload: HermesNotification
+  ) => Promise<boolean>
+
+  const payload: HermesNotification = {
+    kind: 'plugin',
+    sessionId: 'same-local-id',
+    title: 'Private account event',
+    activate: '/private-tool',
+    actions: [{ id: 'open', text: 'Open', activate: '/private-tool/detail' }]
+  }
+
+  await notify({ sender: previous.webContents } as unknown as IpcMainInvokeEvent, payload)
+  const retired = host.shown[0]
+  const closeRetired = vi.spyOn(retired, 'close')
+  previous.isDestroyed.mockReturnValue(true)
+  main = current
+  host.fromWebContents.mockReturnValue(current)
+
+  nativeNotifications.dispose()
+  retired.emit('click')
+  retired.emit('action', { actionIndex: 0 }, undefined)
+
+  expect(current.webContents.send).not.toHaveBeenCalled()
+  expect(previous.webContents.send).not.toHaveBeenCalled()
+  expect(focusWindow).not.toHaveBeenCalled()
+  expect(closeRetired).toHaveBeenCalledOnce()
+
+  // A fresh account may reuse a local event ID within the dedupe interval.
+  expect(await notify({ sender: current.webContents } as unknown as IpcMainInvokeEvent, payload)).toBe(true)
+  expect(host.shown).toHaveLength(2)
+  host.shown[1].emit('click')
+  expect(current.webContents.send).toHaveBeenCalledWith('hermes:focus-session', 'same-local-id')
+  expect(focusWindow).toHaveBeenCalledWith(current)
+  nativeNotifications.dispose()
 })

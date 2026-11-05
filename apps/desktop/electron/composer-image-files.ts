@@ -110,14 +110,14 @@ export async function saveImageFromUrl(rawUrl, parent: BrowserWindow) {
   return true
 }
 
-export async function writeComposerImage(buffer, ext = '.png', name = '') {
+export async function writeComposerImage(buffer, ext = '.png', name = '', dataRoot = app.getPath('userData')) {
   const rawExt = String(ext || '.png')
     .trim()
     .toLowerCase()
 
   const normalizedExt = rawExt.startsWith('.') ? rawExt : `.${rawExt}`
   const safeExt = /^\.[a-z0-9]{1,5}$/.test(normalizedExt) ? normalizedExt : '.png'
-  const dir = path.join(app.getPath('userData'), 'composer-images')
+  const dir = path.join(dataRoot, 'composer-images')
   await fs.promises.mkdir(dir, { recursive: true })
   const stamp = composerImageTimestamp()
   const random = crypto.randomBytes(3).toString('hex')

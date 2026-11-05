@@ -7,6 +7,8 @@ import { startMockServer } from '../../../tests-js/scripts/mock-server'
 
 import { buildAppEnv, createSandbox, waitForAppReady,  } from './fixtures'
 import { assertEdgeAlerts, observeEdgeAlerts, observeNativeRuntime, sendPrompt, sendToolTurn, verifyConcurrentAccountLifecycle, verifyOfflineAndAuthorizationRecovery } from './platform-account-edge-proof'
+import { activeAccountSandbox, fixtureAccountTemplate, fixtureHomes, seedFixtureMetadata } from './platform-account-home'
+import { replaceAccountWindow } from './platform-account-window'
 import { verifyNativeCompressionAfterRestart, verifyNativeCompressionBeforeRestart } from './platform-compression-proof'
 import { observeInferenceAlerts, verifyInferenceFailures } from './platform-inference-failure-proof'
 import { assertIsolationAlerts, type IsolationParticipant, observeIsolationAlerts, verifyConcurrentIsolation, verifyRetainedHistoryIsolation } from './platform-isolation-proof'
@@ -64,17 +66,10 @@ async function assertNoBlockedTransport(sandbox: ReturnType<typeof createSandbox
   expect(launchAudits.flatMap(audit => audit.unexpectedRendererDestinations)).toEqual([])
   expect(launchAudits.flatMap(audit => audit.knownBlockedThemeFontHosts).every(host => host === 'fonts.googleapis.com')).toBe(true)
 
-  for (const marker of ['blocked-network.txt', 'blocked-node-network.txt']) {
-    expect(deniedDestinations(sandbox, marker), `${marker}: denied destinations`).toEqual([])
-  }
-
-  const profilesRoot = path.join(sandbox.hermesHome, 'profiles')
-
-  for (const profile of fs.existsSync(profilesRoot) ? fs.readdirSync(profilesRoot, { withFileTypes: true }) : []) {
-    if (!profile.isDirectory()) { continue }
-    const profileSandbox = { ...sandbox, hermesHome: path.join(profilesRoot, profile.name) }
-
-    expect(deniedDestinations(profileSandbox, 'blocked-network.txt'), `${profile.name}: denied Python destinations`).toEqual([])
+  for (const home of fixtureHomes(sandbox)) {
+    for (const marker of ['blocked-network.txt', 'blocked-node-network.txt']) {
+      expect(deniedDestinations({ ...sandbox, hermesHome: home }, marker), `${home}/${marker}: denied destinations`).toEqual([])
+    }
   }
 
   const unexpectedChromiumHosts = deniedDestinations(sandbox, 'blocked-chromium-network.txt')
@@ -107,18 +102,19 @@ function assertChromiumGuardProof(sandbox: ReturnType<typeof createSandbox>, mai
 }
 
 function pythonGuardPids(sandbox: ReturnType<typeof createSandbox>): Set<number> {
-  const markerPath = path.join(sandbox.hermesHome, 'python-network-guard-active')
+  return new Set(fixtureHomes(sandbox).flatMap(home => {
+    const markerPath = path.join(home, 'python-network-guard-active')
 
-  if (!fs.existsSync(markerPath)) { return new Set() }
-
-  return new Set(fs.readFileSync(markerPath, 'utf8').split('\n').flatMap(value => {
+    return fs.existsSync(markerPath) ? fs.readFileSync(markerPath, 'utf8').split('\n') : []
+  }).flatMap(value => {
     const pid = Number(value)
 
     return Number.isInteger(pid) && pid > 0 ? [pid] : []
   }))
 }
 
-function assertNewGuardedBackend(sandbox: ReturnType<typeof createSandbox>, priorGuardPids: Set<number>) {
+async function assertNewGuardedBackend(sandbox: ReturnType<typeof createSandbox>, priorGuardPids: Set<number>, launched: NativeLaunch) {
+  sandbox = await activeAccountSandbox(sandbox, launched)
   const gatewayPidPath = path.join(sandbox.hermesHome, 'gateway.pid')
 
   if (fs.existsSync(gatewayPidPath)) {
@@ -133,7 +129,7 @@ function assertNewGuardedBackend(sandbox: ReturnType<typeof createSandbox>, prio
     return
   }
 
-  const ownershipPath = path.join(sandbox.userDataDir, 'backend-ownership.json')
+  const ownershipPath = path.join(path.dirname(sandbox.hermesHome), 'desktop', 'backend-ownership.json')
   const ownership = JSON.parse(fs.readFileSync(ownershipPath, 'utf8')) as { backends?: Array<{ pid?: unknown }> }
 
   const backendPids = new Set((ownership.backends ?? []).flatMap(entry => {
@@ -157,6 +153,12 @@ function prepareNativePlatformEnvironment(
   fs.writeFileSync(path.join(sandbox.hermesHome, 'config.yaml'), `updates:\n  check: false\ndisplay:\n  language: en\n${compression}auxiliary:\n  title_generation:\n    enabled: false\n`, { mode: 0o600 })
   fs.writeFileSync(path.join(sandbox.hermesHome, '.env'), '', { mode: 0o600 })
   seedPlatformWorkspace(sandbox)
+  const template = fixtureAccountTemplate(sandbox)
+  fs.mkdirSync(template, { mode: 0o700 })
+  fs.copyFileSync(path.join(sandbox.hermesHome, 'config.yaml'), path.join(template, 'config.yaml'))
+  fs.writeFileSync(path.join(template, '.env'), '', { mode: 0o600 })
+  seedPlatformWorkspace({ ...sandbox, hermesHome: template })
+  seedFixtureMetadata(template)
   fs.writeFileSync(path.join(sandbox.userDataDir, 'platform-development.json'), JSON.stringify({ enabled: true, origin: api.info.origin }), { mode: 0o600 })
   const inherited = buildAppEnv(sandbox)
   const env: Record<string, string> = { ...fixtureEnvironment(), HOME: sandbox.root }
@@ -166,6 +168,7 @@ function prepareNativePlatformEnvironment(
   }
 
   env.HERMES_HOME = sandbox.hermesHome
+  env.AINO_E2E_ACCOUNT_TEMPLATE = template
   env.HERMES_DESKTOP_CWD = path.dirname(api.info.fixture_path)
   env.PYTHONPATH = installLoopbackPythonGuard(sandbox.root)
   env.HERMES_DESKTOP_PYTHON = guardedPlatformPython(sandbox.root, env.PYTHONPATH,
@@ -216,7 +219,8 @@ async function auditRenderer(page: Page, api: Awaited<ReturnType<typeof startRea
   return audit
 }
 
-async function signInForThisSession(page: Page, api: Awaited<ReturnType<typeof startRealPlatformAPI>>, previousCodeAt = 0, phone = api.info.phone) {
+async function signInForThisSession(launched: NativeLaunch, api: Awaited<ReturnType<typeof startRealPlatformAPI>>, previousCodeAt = 0, phone = api.info.phone) {
+  let { page } = launched
   await expect(page.getByRole('textbox', { name: 'Phone number', exact: true })).toBeVisible({ timeout: 90_000 })
   await page.getByRole('checkbox', { name: 'Keep me signed in on this device', exact: true }).uncheck()
   await page.getByRole('textbox', { name: 'Phone number', exact: true }).fill(phone)
@@ -230,7 +234,7 @@ async function signInForThisSession(page: Page, api: Awaited<ReturnType<typeof s
   const code = await api.control<{ code: string }>('code')
   expect(/^\d{6}$/.test(code.code)).toBe(true)
   await page.getByRole('textbox', { name: 'Verification code', exact: true }).fill(code.code)
-  await page.getByRole('button', { name: 'Sign in', exact: true }).click()
+  page = await replaceAccountWindow(launched, current => current.getByRole('button', { name: 'Sign in', exact: true }).click())
   await expect.poll(async () => {
     const account = await page.evaluate(() => (window as unknown as NativeWindow).hermesDesktop.platformAccount.status())
 
@@ -435,9 +439,9 @@ test('real API workspace switch preserves platform account across native windows
     launched = await launchGuardedDesktop(prepared.env, prepared.nodeGuard)
     launchAudits.push(observeNativeLaunch(launched, consoleLines))
     assertNativeGuardsReady(sandbox, launched.app)
-    await signInForThisSession(launched.page, api)
+    await signInForThisSession(launched, api)
     await waitForAppReady(launched as never, 120_000)
-    assertNewGuardedBackend(sandbox, prepared.pythonGuardPids)
+    await assertNewGuardedBackend(sandbox, prepared.pythonGuardPids, launched)
 
     const initialAccount = await launched.page.evaluate(() => (window as unknown as NativeWindow).hermesDesktop.platformAccount.status())
     const initial = await api.control<NativeState>('state')
@@ -552,9 +556,9 @@ test('native compression ledger survives close and resume with a fresh binding',
     launchAudits.push(observeNativeLaunch(launched, consoleLines))
     assertNativeGuardsReady(sandbox, launched.app)
     await observeNativeRuntime(launched.page)
-    const firstCodeAt = await signInForThisSession(launched.page, api)
+    const firstCodeAt = await signInForThisSession(launched, api)
     await waitForAppReady(launched as never, 120_000)
-    assertNewGuardedBackend(sandbox, prepared.pythonGuardPids)
+    await assertNewGuardedBackend(sandbox, prepared.pythonGuardPids, launched)
 
     const receipt = await verifyNativeCompressionBeforeRestart(launched.page, api)
     const sessionUrl = launched.page.url()
@@ -566,9 +570,9 @@ test('native compression ledger survives close and resume with a fresh binding',
     launchAudits.push(observeNativeLaunch(launched, consoleLines))
     assertNativeGuardsReady(sandbox, launched.app)
     await observeNativeRuntime(launched.page)
-    await signInForThisSession(launched.page, api, firstCodeAt)
+    await signInForThisSession(launched, api, firstCodeAt)
     await waitForAppReady(launched as never, 120_000)
-    assertNewGuardedBackend(sandbox, resumedPythonGuardPids)
+    await assertNewGuardedBackend(sandbox, resumedPythonGuardPids, launched)
     await launched.page.goto(sessionUrl)
     const resumed = await verifyNativeCompressionAfterRestart(launched.page, api, receipt)
     const billing = await launched.page.evaluate(id => (window as unknown as NativeWindow).hermesDesktop.platformBilling.summary({ expected_user_id: id }), receipt.user_id)
@@ -657,16 +661,16 @@ for (const scenario of [
       assertNativeGuardsReady(sandbox, launched.app)
       await observeEdgeAlerts(launched, scenario.verify === verifyOfflineAndAuthorizationRecovery)
       await observeNativeRuntime(launched.page)
-      const codeAt = await signInForThisSession(launched.page, api)
+      const codeAt = await signInForThisSession(launched, api)
       await waitForAppReady(launched as never, 120_000)
-      assertNewGuardedBackend(sandbox, prepared.pythonGuardPids)
+      await assertNewGuardedBackend(sandbox, prepared.pythonGuardPids, launched)
       const initialAccount = await launched.page.evaluate(() => (window as unknown as NativeWindow).hermesDesktop.platformAccount.status())
       const active = launched
       const fixture = api
 
       const proof = await scenario.verify({
         launched, api, accountId: initialAccount.account!.id,
-        signInAgain: async () => { await signInForThisSession(active.page, fixture, codeAt) }
+        signInAgain: async () => { await signInForThisSession(active, fixture, codeAt) }
       })
 
       await assertEdgeAlerts(launched)
@@ -759,7 +763,7 @@ test('packaged default sandbox supports platform login tools and history restart
     edge = await startPackagedTransport(sandbox.root, api.info.origin)
     Object.assign(prepared.env, edge.env)
     // Use Hermes' existing route-specific CA setting, keeping certificate verification enabled.
-    fs.appendFileSync(path.join(sandbox.hermesHome, 'config.yaml'),
+    fs.appendFileSync(path.join(fixtureAccountTemplate(sandbox), 'config.yaml'),
       `providers:\n  aino:\n    base_url: ${PACKAGED_PLATFORM_ORIGIN}/v1\n    ssl_ca_cert: ${JSON.stringify(edge.caBundle)}\n`)
     let previousCodeAt = 0
     let historyURL = ''
@@ -802,9 +806,10 @@ test('packaged default sandbox supports platform login tools and history restart
 
       expect(mode).toEqual({ adapter: 'platform', mode: 'production' })
       stage = `login-${index}`
-      previousCodeAt = await signInForThisSession(launched.page, api, previousCodeAt)
+      previousCodeAt = await signInForThisSession(launched, api, previousCodeAt)
       await waitForAppReady(launched as never, 120_000)
-      const backend = await packagedBackendEvidence(prepared.env, packagePath!)
+      const active = await activeAccountSandbox(sandbox, launched)
+      const backend = await packagedBackendEvidence({ ...prepared.env, HERMES_HOME: active.hermesHome }, packagePath!)
       expect(fs.existsSync(path.join(sandbox.hermesHome, 'packaged-sandbox-launches')),
         'Bundled backend must enter the OS sandbox before any prompt').toBe(true)
       stage = `tool-turn-${index}`
@@ -915,15 +920,15 @@ test('native late lease cannot revive the signed-out account after replacement l
     assertNativeGuardsReady(sandbox, launched.app)
     await observeLateLeaseAlerts(launched)
     await observeNativeRuntime(launched.page)
-    await signInForThisSession(launched.page, api)
+    await signInForThisSession(launched, api)
     await waitForAppReady(launched as never, 120_000)
-    assertNewGuardedBackend(sandbox, prepared.pythonGuardPids)
+    await assertNewGuardedBackend(sandbox, prepared.pythonGuardPids, launched)
     const account = await launched.page.evaluate(() => (window as unknown as NativeWindow).hermesDesktop.platformAccount.status())
     const active = launched
     const fixture = api
 
     const proof = await verifyLateLeaseAcrossAccountSwitch({ launched, api, accountId: account.account!.id,
-      signInOther: async () => { await signInForThisSession(active.page, fixture, 0, fixture.info.secondary_phone) } })
+      signInOther: async () => { await signInForThisSession(active, fixture, 0, fixture.info.secondary_phone) } })
 
     await assertLateLeaseAlerts(launched)
     const charge = await verifyVisibleCharge(launched.page, api, proof.current_owner.user_id)
@@ -990,9 +995,9 @@ test('native inference failures: balance, rate limit and service recovery', asyn
     launchAudits.push(observeNativeLaunch(launched, consoleLines))
     assertNativeGuardsReady(sandbox, launched.app)
     await observeInferenceAlerts(launched.page)
-    await signInForThisSession(launched.page, api)
+    await signInForThisSession(launched, api)
     await waitForAppReady(launched as never, 120_000)
-    assertNewGuardedBackend(sandbox, prepared.pythonGuardPids)
+    await assertNewGuardedBackend(sandbox, prepared.pythonGuardPids, launched)
     const account = await launched.page.evaluate(() => (window as unknown as NativeWindow).hermesDesktop.platformAccount.status())
 
     const proof = await verifyInferenceFailures({ launched, api, accountId: account.account!.id,
@@ -1072,9 +1077,9 @@ for (const sameSite of [true, false]) {
         await observeIsolationAlerts(launched)
         await observeNativeRuntime(launched.page)
         const phone = sameSite && index === 1 ? sites[index].info.secondary_phone : sites[index].info.phone
-        codeTimes[index] = await signInForThisSession(launched.page, sites[index], 0, phone)
+        codeTimes[index] = await signInForThisSession(launched, sites[index], 0, phone)
         await waitForAppReady(launched as never, 120_000)
-        assertNewGuardedBackend(sandboxes[index], prepared[index].pythonGuardPids)
+        await assertNewGuardedBackend(sandboxes[index], prepared[index].pythonGuardPids, launched)
         const snapshot = await launched.page.evaluate(() => (window as unknown as NativeWindow).hermesDesktop.platformAccount.status())
         expect(snapshot.account?.id).toBeTruthy()
         participants.push({ launched, api: sites[index], accountId: snapshot.account!.id })
@@ -1092,9 +1097,10 @@ for (const sameSite of [true, false]) {
       if (sameSite) {
         await left.page.getByRole('button', { name: /^My account/ }).click()
         await left.page.getByRole('button', { name: 'Sign out', exact: true }).click()
-        await left.page.getByRole('dialog', { name: 'Sign out', exact: true }).getByRole('button', { name: 'Sign out', exact: true }).click()
+        await replaceAccountWindow(left, page => page.getByRole('dialog', { name: 'Sign out', exact: true })
+          .getByRole('button', { name: 'Sign out', exact: true }).click())
         await expect.poll(async () => (await left.page.evaluate(() => (window as unknown as NativeWindow).hermesDesktop.platformAccount.status())).phase).toBe('signed_out')
-        await signInForThisSession(left.page, sites[1], codeTimes[1], sites[1].info.secondary_phone)
+        await signInForThisSession(left, sites[1], codeTimes[1], sites[1].info.secondary_phone)
         await waitForAppReady(left as never, 120_000)
       } else {
         await assertNoBlockedTransport(sandboxes[0], launchAudits[0])
@@ -1109,16 +1115,43 @@ for (const sameSite of [true, false]) {
         assertNativeGuardsReady(sandboxes[0], restarted.app)
         await observeIsolationAlerts(restarted)
         await observeNativeRuntime(restarted.page)
-        await signInForThisSession(restarted.page, sites[1], codeTimes[1])
+        await signInForThisSession(restarted, sites[1], codeTimes[1])
         await waitForAppReady(restarted as never, 120_000)
-        assertNewGuardedBackend(sandboxes[0], priorPids)
+        await assertNewGuardedBackend(sandboxes[0], priorPids, restarted)
       }
 
       stage = 'retained-history-and-new-chat'
 
       const retained = await verifyRetainedHistoryIsolation({
         launched: launches[0]!, api: sites[1], accountId: participants[1].accountId
-      }, previous, sites[0])
+      }, previous, sites[0], async () => {
+        stage = 'restore-original-account'
+        let restored = launches[0]!
+
+        if (sameSite) {
+          await restored.page.getByRole('button', { name: /^My account/ }).click()
+          await restored.page.getByRole('button', { name: 'Sign out', exact: true }).click()
+          await replaceAccountWindow(restored, page => page.getByRole('dialog', { name: 'Sign out', exact: true })
+            .getByRole('button', { name: 'Sign out', exact: true }).click())
+        } else {
+          await assertNoBlockedTransport(sandboxes[0], launchAudits[0])
+          await restored.app.close()
+          launches[0] = null
+          fs.writeFileSync(path.join(sandboxes[0].userDataDir, 'platform-development.json'),
+            JSON.stringify({ enabled: true, origin: sites[0].info.origin }), { mode: 0o600 })
+          restored = await launchGuardedDesktop(prepared[0].env, prepared[0].nodeGuard)
+          launches[0] = restored
+          launchAudits[0].push(observeNativeLaunch(restored, consoleLines[0]))
+          assertNativeGuardsReady(sandboxes[0], restored.app)
+          await observeIsolationAlerts(restored)
+          await observeNativeRuntime(restored.page)
+        }
+
+        await signInForThisSession(restored, sites[0], codeTimes[0])
+        await waitForAppReady(restored as never, 120_000)
+
+        return { launched: restored, api: sites[0], accountId: previous.owner.user_id }
+      })
 
       const transports = []
 
@@ -1208,10 +1241,10 @@ test('desktop recharge reaches the same wallet through independent website login
     launched = await launchGuardedDesktop(prepared.env, prepared.nodeGuard)
     launchAudits.push(observeNativeLaunch(launched, consoleLines))
     assertNativeGuardsReady(sandbox, launched.app)
-    const codeAt = await signInForThisSession(launched.page, api)
+    const codeAt = await signInForThisSession(launched, api)
 
     await waitForAppReady(launched as never, 120_000)
-    assertNewGuardedBackend(sandbox, prepared.pythonGuardPids)
+    await assertNewGuardedBackend(sandbox, prepared.pythonGuardPids, launched)
     const account = await launched.page.evaluate(() => (window as unknown as NativeWindow).hermesDesktop.platformAccount.status())
     const recharge = await rechargeNativeWallet(launched.page, api, account.account!.id, testInfo.outputPath('desktop-recharge.png'))
 
@@ -1306,16 +1339,18 @@ test('real API account, native managed lease, Python tool roundtrip and wallet',
     const { env, nodeGuard, pythonGuardPids: firstPythonGuardPids } = prepared
 
     launched = await launchGuardedDesktop(env, nodeGuard)
-    const { app, page } = launched
+    const { app } = launched
     launchAudits.push(observeNativeLaunch(launched, consoleLines))
     assertNativeGuardsReady(sandbox, app)
     stage = 'session-only-login'
-    const firstCodeAt = await signInForThisSession(page, api)
+    const firstCodeAt = await signInForThisSession(launched, api)
+    const { page } = launched
     stage = 'workspace-ready'
     await waitForAppReady({ app, page } as never, 120_000)
-    assertNewGuardedBackend(sandbox, firstPythonGuardPids)
+    await assertNewGuardedBackend(sandbox, firstPythonGuardPids, launched)
     const snapshot = await page.evaluate(() => (window as unknown as NativeWindow).hermesDesktop.platformAccount.status())
     const initial = await api.control<NativeState>('state')
+    const initialAccountHome = (await activeAccountSandbox(sandbox, launched)).hermesHome
     expect(snapshot.account?.id).toBe(String(initial.user_id))
     expect(initial.balance).toBe('10.00000000')
     await page.locator('[data-tour="model-pill"]').click()
@@ -1366,16 +1401,16 @@ test('real API account, native managed lease, Python tool roundtrip and wallet',
     stage = 'restart-platform-history'
     await app.close()
     launched = null
-    expect(fs.readFileSync(path.join(sandbox.hermesHome, 'config.yaml'), 'utf8')).not.toContain(byok.url)
+    expect(fs.readFileSync(path.join(initialAccountHome, 'config.yaml'), 'utf8')).not.toContain(byok.url)
     const resumedPythonGuardPids = pythonGuardPids(sandbox)
 
     launched = await launchGuardedDesktop(env, nodeGuard)
-    const restarted = launched.page
     launchAudits.push(observeNativeLaunch(launched, consoleLines))
     assertNativeGuardsReady(sandbox, launched.app)
-    const secondCodeAt = await signInForThisSession(restarted, api, firstCodeAt)
+    const secondCodeAt = await signInForThisSession(launched, api, firstCodeAt)
+    const restarted = launched.page
     await waitForAppReady(launched as never, 120_000)
-    assertNewGuardedBackend(sandbox, resumedPythonGuardPids)
+    await assertNewGuardedBackend(sandbox, resumedPythonGuardPids, launched)
     expect((await restarted.evaluate(() => (window as unknown as NativeWindow).hermesDesktop.platformAccount.status())).account?.id).toBe(snapshot.account!.id)
     await restarted.goto(sessionUrl)
     await expect(restarted.getByText(`Verified ${api.info.fixture_content}`, { exact: false }).first()).toBeVisible({ timeout: 60_000 })
@@ -1402,18 +1437,18 @@ test('real API account, native managed lease, Python tool roundtrip and wallet',
 
     // The recovery pair above proves platform history and billing before any
     // custom provider exists. A third real launch is the supported reload path.
-    writeMockProviderConfig(sandbox.hermesHome, byok.url, '  language: en')
-    writeEnvFile(sandbox.hermesHome, 'e2e-mock-key', byok.url)
+    writeMockProviderConfig(initialAccountHome, byok.url, '  language: en')
+    writeEnvFile(initialAccountHome, 'e2e-mock-key', byok.url)
     stage = 'custom-provider-restart'
     const byokPythonGuardPids = pythonGuardPids(sandbox)
 
     launched = await launchGuardedDesktop(env, nodeGuard)
-    const customProvider = launched.page
     launchAudits.push(observeNativeLaunch(launched, consoleLines))
     assertNativeGuardsReady(sandbox, launched.app)
-    const thirdCodeAt = await signInForThisSession(customProvider, api, secondCodeAt)
+    const thirdCodeAt = await signInForThisSession(launched, api, secondCodeAt)
+    const customProvider = launched.page
     await waitForAppReady(launched as never, 120_000)
-    assertNewGuardedBackend(sandbox, byokPythonGuardPids)
+    await assertNewGuardedBackend(sandbox, byokPythonGuardPids, launched)
     expect((await customProvider.evaluate(() => (window as unknown as NativeWindow).hermesDesktop.platformAccount.status())).account?.id).toBe(snapshot.account!.id)
     stage = 'custom-provider-switch'
     await customProvider.locator('[data-tour="model-pill"]').first().click()
@@ -1428,7 +1463,7 @@ test('real API account, native managed lease, Python tool roundtrip and wallet',
     expect(afterBYOK.balance).toBe(beforeBYOK.balance)
     expect(afterBYOK.model_calls).toBe(beforeBYOK.model_calls)
     expect(afterBYOK.usage_calls).toBe(beforeBYOK.usage_calls)
-    expect(fs.readFileSync(path.join(sandbox.hermesHome, 'config.yaml'), 'utf8')).toContain(byok.url)
+    expect(fs.readFileSync(path.join(initialAccountHome, 'config.yaml'), 'utf8')).toContain(byok.url)
     const byokAudit = await auditRenderer(customProvider, api)
     stage = 'website-wallet'
     const website = await verifyWebsiteWallet({ api, frontendDist: path.join(process.env.AINO_NATIVE_API_ROOT || path.resolve(repoRoot, '../Aino-API'), 'backend/internal/web/dist'), previousCodeAt: thirdCodeAt, screenshotPath: testInfo.outputPath('platform-website-wallet.png') })
@@ -1450,10 +1485,13 @@ test('real API account, native managed lease, Python tool roundtrip and wallet',
     const failure = { run_id: api.info.run_id, stage, state, account }
     fs.writeFileSync(path.join(api.dir, 'native-failure.json'), JSON.stringify(failure, null, 2), { mode: 0o600 })
     const diagnostics: string[] = [...consoleLines]
-    const logDir = path.join(sandbox.hermesHome, 'logs')
 
-    for (const entry of fs.existsSync(logDir) ? fs.readdirSync(logDir, { withFileTypes: true }) : []) {
-      if (entry.isFile() && entry.name.endsWith('.log')) { diagnostics.push(fs.readFileSync(path.join(sandbox.hermesHome, 'logs', entry.name), 'utf8')) }
+    for (const home of fixtureHomes(sandbox)) {
+      const logDir = path.join(home, 'logs')
+
+      for (const entry of fs.existsSync(logDir) ? fs.readdirSync(logDir, { withFileTypes: true }) : []) {
+        if (entry.isFile() && entry.name.endsWith('.log')) { diagnostics.push(fs.readFileSync(path.join(logDir, entry.name), 'utf8')) }
+      }
     }
 
     const text = diagnostics.join('\n')

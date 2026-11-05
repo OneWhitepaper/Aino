@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 
 import { createCloudSessionRecovery } from './cloud-session-recovery'
+import { NativeAuthChangedError } from './native-access-token'
 
 const cloud = 'https://test-agent.agents.nousresearch.com'
 const rejection = (statusCode = 401) => Object.assign(new Error('rejected'), { statusCode })
@@ -103,5 +104,41 @@ describe('Cloud cookie session recovery', () => {
     await expect(run(cloud, mint)).rejects.toBe(error)
     expect(restore).toHaveBeenCalledTimes(2)
     expect(mint).toHaveBeenCalledTimes(4)
+  })
+
+  it('retires old recovery without sharing its flight or cooldown with the next account', async () => {
+    let releaseOld!: (restored: boolean) => void
+    let releaseNew!: (restored: boolean) => void
+
+    const restore = vi.fn()
+      .mockImplementationOnce(() => new Promise<boolean>(resolve => { releaseOld = resolve }))
+      .mockImplementationOnce(() => new Promise<boolean>(resolve => { releaseNew = resolve }))
+      .mockResolvedValue(true)
+
+    const run = createCloudSessionRecovery({ hasNativeSession: () => false, restoreCookieSession: restore })
+    const oldMint = vi.fn().mockRejectedValueOnce(rejection()).mockResolvedValue('old-ticket')
+    const old = run(cloud, oldMint)
+    const oldRejected = expect(old).rejects.toBeInstanceOf(NativeAuthChangedError)
+    await vi.waitFor(() => expect(restore).toHaveBeenCalledTimes(1))
+    run.retire()
+
+    const mintA = vi.fn().mockRejectedValueOnce(rejection()).mockResolvedValue('new-ticket-a')
+    const nextA = run(cloud, mintA)
+    await vi.waitFor(() => expect(restore).toHaveBeenCalledTimes(2))
+    releaseOld(false)
+    await oldRejected
+
+    const mintB = vi.fn().mockRejectedValueOnce(rejection()).mockResolvedValue('new-ticket-b')
+    const nextB = run(cloud, mintB)
+    await new Promise(resolve => setImmediate(resolve))
+    expect(restore).toHaveBeenCalledTimes(2)
+    releaseNew(true)
+    expect(await Promise.all([nextA, nextB])).toEqual(['new-ticket-a', 'new-ticket-b'])
+    expect(oldMint).toHaveBeenCalledTimes(1)
+
+    run.retire()
+    const returned = vi.fn().mockRejectedValueOnce(rejection()).mockResolvedValue('returned-account-ticket')
+    expect(await run(cloud, returned)).toBe('returned-account-ticket')
+    expect(restore).toHaveBeenCalledTimes(3)
   })
 })

@@ -25,6 +25,7 @@ function rig() {
 
   const auth: any = {
     snapshot: () => snapshot,
+    generation: vi.fn(() => 1),
     subscribe: (listener: any) => {
       changed = listener
 
@@ -111,7 +112,8 @@ describe('platform account IPC', () => {
     expect(await handler(f.event, { ...input, page_size: 101 })).toMatchObject({ ok: false })
     expect(await handler(f.event, { ...input, expected_user_id: '' })).toMatchObject({ ok: false })
     expect(await handler({ ...f.event, senderFrame: {} }, input)).toMatchObject({
-      ok: false, error: { code: 'unauthorized_platform_ipc' }
+      ok: false,
+      error: { code: 'unauthorized_platform_ipc' }
     })
     expect(f.auth.listUsage).toHaveBeenCalledTimes(1)
     f.controller.dispose()
@@ -207,6 +209,32 @@ describe('platform account IPC', () => {
         captcha_proof: { turnstile_token: 'renderer-proof' }
       })
     ).rejects.toThrow('renderer_captcha_proof_rejected')
+  })
+
+  it.each(['window', 'account'] as const)('rejects a captcha continuation after its %s changes', async change => {
+    const f = rig()
+    let releaseProof!: (proof: { turnstile_token: string }) => void
+    f.captcha.acquire.mockReturnValueOnce(
+      new Promise(resolve => {
+        releaseProof = resolve
+      })
+    )
+    ;(f.event.senderFrame as any).url = 'http://127.0.0.1:5174/'
+
+    const pending = f.invoke('request-binding-code', { phone: '13900000000' })
+
+    if (change === 'window') {
+      f.controller.unregisterWindow(f.win as any)
+    } else {
+      f.auth.generation.mockReturnValue(2)
+    }
+
+    releaseProof({ turnstile_token: 'late-proof' })
+
+    await expect(pending).rejects.toMatchObject({
+      code: change === 'window' ? 'unauthorized_platform_ipc' : 'auth_attempt_superseded'
+    })
+    expect(f.auth.requestBindingCode).not.toHaveBeenCalled()
   })
 
   it('rejects malformed account input before opening captcha', async () => {
