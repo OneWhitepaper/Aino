@@ -168,10 +168,17 @@ def run_tool_round(
     from agent.prepared_compaction import maybe_prepare
     maybe_prepare(agent, messages, origin="tool-batch")
 
+    tool_results_start = len(messages)
     agent._execute_tool_calls(assistant_message, messages, effective_task_id, api_call_count)
     from hermes_cli.observability.shared_metrics_harness import finish_tool_round
 
     finish_tool_round(agent)
+
+    from agent.tool_result_classification import is_terminal_tool_failure
+    from agent.managed_inference_errors import ManagedOperationUnknown, managed_failure_result
+    if any(row.get("role") == "tool" and is_terminal_tool_failure(row)
+           for row in messages[tool_results_start:]):
+        return _verdict("return", managed_failure_result(agent, ManagedOperationUnknown(), messages, api_call_count))
 
     if getattr(agent, "_incremental_persistence_failed", False):
         # Tool result could not be made canonical: never send the in-memory result to

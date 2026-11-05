@@ -41,6 +41,9 @@ def handle_outer_loop_error(
     ``min(_MAX_OUTER_LOOP_ERRORS, max_iterations)`` escaped exceptions. The assistant
     message is never appended here: a prefill/interim assistant may already be the tail
     (assistant→assistant); ``finalize_turn`` appends only when safe."""
+    from agent.managed_inference_errors import ManagedOperationUnknown
+    if isinstance(e, ManagedOperationUnknown):
+        raise e
     from agent.conversation_loop import (
         _API_CALL_MODULES, _LOCAL_PROCESSING_MODULES, _MAX_OUTER_LOOP_ERRORS,
         _is_interpreter_shutdown_error, _ra,

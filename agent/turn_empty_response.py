@@ -215,6 +215,13 @@ def recover_empty_response(
         final_response = final
         return _verdict("break")
 
+    from agent.managed_inference_errors import ManagedOperationUnknown, managed_failure_result
+    from agent.auxiliary_billing_scope import ManagedCredential
+    if isinstance(getattr(agent, "api_key", None), ManagedCredential) and (
+        managed_result := managed_failure_result(agent, ManagedOperationUnknown(), messages, api_call_count)
+    ):
+        return _verdict("return", managed_result)
+
     # Post-tool-call empty (no prior content, or only mid-task narration): nudge once.
     _prior_was_tool = any(m.get("role") == "tool" for m in messages[-5:])
     # Ollama puts <think> in content, not reasoning_content, so _has_structured misses

@@ -1,11 +1,12 @@
 """Session-bound inference authority and request correlation, not model context."""
 
 from contextvars import ContextVar
+from contextlib import contextmanager
 from dataclasses import dataclass, field, replace
 import json
 from typing import Callable
 from urllib.parse import urlsplit
-from uuid import uuid4
+from uuid import UUID, uuid4, uuid5
 
 from agent.usage_correlation import TurnCallTracker
 
@@ -21,10 +22,41 @@ class BillingScope:
 
 
 billing_scope: ContextVar[BillingScope | None] = ContextVar("billing_scope", default=None)
+_managed_operation: ContextVar[dict | None] = ContextVar("managed_operation", default=None)
+_OPERATION_NAMESPACE = UUID("dcd70bd4-1d3a-4c18-9cf4-af75a27ac24f")
 _CREDENTIAL_UNSET = object()
 _DETAILED_TASKS = frozenset({"session_summary", "approval", "mcp", "tts_audio_tags", "side_question"})
 _PURPOSES = {"title_generation": "title", "compression": "compression", "vision": "vision",
              "delegation": "delegation", "chat": "chat", **{task: task for task in _DETAILED_TASKS}}
+
+
+@contextmanager
+def managed_operation_scope(logical_id):
+    """Reuse an existing logical request identity across its physical attempts."""
+    token = _managed_operation.set({"logical_id": str(logical_id), "dispatched": False})
+    try:
+        yield
+    finally:
+        _managed_operation.reset(token)
+
+
+def managed_operation_dispatched():
+    operation = _managed_operation.get()
+    return bool(operation and operation["dispatched"])
+
+
+def _prepare_operation(request, credential):
+    operation = _managed_operation.get()
+    if operation is not None:
+        identity = json.dumps([credential.user_id, credential.session_id, operation["logical_id"]])
+        operation_id = str(uuid5(_OPERATION_NAMESPACE, identity))
+        operation["dispatched"] = True
+    else:
+        # Keep an unscoped SDK request's identity if it is dispatched again;
+        # a new explicit call gets its own operation.
+        operation_id = request.extensions.get("aino_managed_operation_id") or str(uuid4())
+    request.extensions["aino_managed_operation_id"] = operation_id
+    request.headers["X-Aino-Operation-ID"] = operation_id
 
 
 def _image_request_model(request):
@@ -122,6 +154,7 @@ class ManagedCredential:
         if purpose in _DETAILED_TASKS:
             request.headers["X-Aino-Task"] = purpose
             purpose = "other_auxiliary"
+        _prepare_operation(request, self)
         call_id = str(uuid4())
         request.headers.update({"X-Aino-Session-Id": scope.session_id,
                                 "X-Aino-Turn-Id": scope.turn_id,
@@ -159,12 +192,19 @@ def configure_managed_http(kwargs: dict, credential, *, async_mode: bool = False
     if "http_client" not in kwargs:
         kwargs["http_client"] = httpx.AsyncClient() if async_mode else httpx.Client()
     client = kwargs["http_client"]
+    client._aino_managed_credential = credential
     if async_mode:
         async def prepare(request):
             credential.prepare_request(request)
     else:
         prepare = credential.prepare_request
     client.event_hooks["request"].append(prepare)
+
+
+def managed_http_client(client):
+    """SDKs keep the injected HTTP client at their existing transport seam."""
+    http = getattr(client, "_client", client)
+    return isinstance(getattr(http, "_aino_managed_credential", None), ManagedCredential)
 
 
 def managed_runtime(runtime):

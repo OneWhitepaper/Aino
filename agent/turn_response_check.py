@@ -130,6 +130,12 @@ def check_api_response(
 
     response_invalid, error_details = validate_response_shape(agent, response)
     if response_invalid:
+        from agent.managed_inference_errors import ManagedOperationUnknown, managed_failure_result
+        from agent.auxiliary_billing_scope import ManagedCredential
+        if isinstance(getattr(agent, "api_key", None), ManagedCredential) and (
+            managed_result := managed_failure_result(agent, ManagedOperationUnknown(), messages, api_call_count)
+        ):
+            return _verdict("return", managed_result)
         _iv = retry_invalid_response(
             agent, response=response, error_details=error_details, _retry=_retry,
             thinking_spinner=thinking_spinner, messages=messages, api_messages=api_messages,

@@ -3782,9 +3782,7 @@ def _run_summary_phase(
     commit_fence: Optional[CompressionCommitFence], hard_cancel_event: Any, system_message: str,
     attempt: _Attempt,
 ) -> _SummaryPhase:
-    """Adopt a grown durable parent, gather memory context and run the summarizer.
-    A hard cancel restores the compressor snapshot + live list, records a stall backoff while the lease is
-    still held, and aborts; any other failure restores the live list, releases the lease and re-raises."""
+    """Run the summary under its lease; cancellation restores state, other failures restore messages and raise."""
     pre_msg_count = len(messages)
     _activity_heartbeat: Optional[_CompressionActivityHeartbeat] = None
     messages_before_compression = None
@@ -3804,8 +3802,7 @@ def _run_summary_phase(
                 pre_msg_count = len(messages)
                 # Estimate was for the stale snapshot; force re-derivation from adopted rows.
                 approx_tokens = 0
-                # Adopted list is fully durable: re-anchor persist idx at the end so the post-
-                # compression flush skips it; run_agent marker sync realigns _session_messages.
+                # The adopted list is fully durable, so its next flush starts at the end.
                 agent._persist_user_message_idx = len(messages)
         memory_context = _pre_compress_memory_context(agent, messages, checkpoint_required)
         compress_fn, compress_kwargs = _resolve_compress_call(
@@ -3860,6 +3857,9 @@ def _run_summary_phase(
         return _SummaryPhase(messages=messages, abort_prompt=_existing_system_prompt(agent, system_message))
     except BaseException as _compress_exc:
         _restore_messages_snapshot(messages, messages_before_compression)
+        from agent.managed_inference_errors import ManagedOperationUnknown
+        if isinstance(_compress_exc, ManagedOperationUnknown):
+            _compress_exc.messages = messages
         _stop_heartbeat("context compression failed")
         lease.release()
         _emit_aborted_attempt_telemetry(

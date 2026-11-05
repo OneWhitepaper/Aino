@@ -42,6 +42,36 @@ def is_guardrail_refusal(result: Any) -> bool:
     return isinstance(data, dict) and data.get(GUARDRAIL_REFUSAL_KEY) is True
 
 
+def has_unknown_managed_operation(result: Any) -> bool:
+    """A tool's uncertain paid operation must stop automatic turn continuation."""
+    data = result
+    if isinstance(data, str):
+        try:
+            data = json.loads(data)
+        except ValueError:
+            return False
+    return (isinstance(data, dict) and data.get("success") is False
+            and data.get("failure_reason") == "managed_operation_unknown"
+            and data.get("failure_retryable") is False)
+
+
+def stamp_terminal_tool_failure(message: dict, result: Any) -> None:
+    """Keep the terminal verdict outside tool content that can spill or gain hints."""
+    if has_unknown_managed_operation(result):
+        metadata = message.get("display_metadata")
+        message["display_metadata"] = {
+            **(metadata if isinstance(metadata, dict) else {}),
+            "terminal_failure": {"failure_reason": "managed_operation_unknown", "failure_retryable": False},
+        }
+
+
+def is_terminal_tool_failure(message: dict) -> bool:
+    metadata = message.get("display_metadata")
+    failure = metadata.get("terminal_failure") if isinstance(metadata, dict) else None
+    return (isinstance(failure, dict) and failure.get("failure_reason") == "managed_operation_unknown"
+            and failure.get("failure_retryable") is False)
+
+
 # A quoted "error"/"failed" in a result's head marks it failed UNLESS it is a key whose value is
 # empty: success payloads routinely carry ``"error": null`` per item (web_extract) or a
 # ``"failed": 0`` count, and a bare substring test flagged every one of them.

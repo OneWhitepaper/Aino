@@ -20,6 +20,7 @@ from agent.codex_responses_adapter import _summarize_user_message_for_log
 from agent.fast_mode import begin_turn as begin_fast_mode_turn
 from agent.message_metadata import append_message, without_persistence_fields
 from agent.message_sanitization import _repair_tool_call_arguments, _sanitize_surrogates
+from agent.managed_inference_errors import ManagedOperationUnknown, managed_failure_result
 from agent.model_metadata import MINIMUM_CONTEXT_LENGTH, _estimate_tools_tokens_rough
 from agent.process_bootstrap import _install_safe_stdio
 from agent.prompt_builder import RUNTIME_ENVIRONMENT_END, RUNTIME_ENVIRONMENT_HEADING
@@ -45,7 +46,7 @@ from agent.turn_scripted_prelude import Prelude, play_prelude
 from agent.turn_api_call import handle_api_interrupt, nous_rate_limit_guard, perform_api_call
 from agent.turn_api_error import handle_api_error
 from agent.turn_api_request import build_api_request
-from agent.turn_failure_copy import FAILED_TURN_DISPLAY_KIND, OPEN_TURN_TAIL_ROLES, failed_turn_notice, site_copy
+from agent.turn_failure_copy import FAILED_TURN_DISPLAY_KIND, OPEN_TURN_TAIL_ROLES, durable_failed_turn_content, site_copy
 from agent.turn_final_response import finish_text_response
 from agent.turn_finalizer import finalize_turn
 from agent.turn_iteration_prep import (
@@ -1851,6 +1852,10 @@ def run_conversation(
                 title_user_message=title_user_message,
                 prelude=prelude,
             )
+        except ManagedOperationUnknown as error:
+            messages = getattr(error, "messages", None) or getattr(agent, "_session_messages", None) or list(conversation_history or [])
+            result = managed_failure_result(agent, error, messages, getattr(agent, "_api_call_count", 0))
+            agent._persist_session(messages, conversation_history)
         finally:
             end_voice_turn_route(agent)
     settle_held_final(agent, result)
@@ -1942,7 +1947,7 @@ def _close_durable_failed_turn(agent, result: Any) -> None:
         start = result.get("current_turn_user_idx")
         turn_messages = messages[start:] if isinstance(start, int) and 0 <= start < len(messages) else messages
         boundary = {
-            "role": "assistant", "content": failed_turn_notice(turn_messages), "display_kind": FAILED_TURN_DISPLAY_KIND,
+            "role": "assistant", "content": durable_failed_turn_content(result, turn_messages), "display_kind": FAILED_TURN_DISPLAY_KIND,
         }
         if failure := _failed_turn_display_metadata(agent, result):
             boundary["display_metadata"] = failure

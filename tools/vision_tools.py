@@ -768,6 +768,7 @@ def _aux_call_kwargs(messages: list, model: Optional[str], default_timeout: floa
     except Exception:
         pass
     return {"task": "vision", "messages": messages, "temperature": temperature, "timeout": timeout,
+            "route_info": {},
             **({"model": model} if model else {})}
 
 
@@ -825,6 +826,9 @@ async def _call_vision_llm(call_kwargs: dict, empty_log: str, response=None):
         response = await async_call_llm(**call_kwargs)
     analysis = extract_content_or_reasoning(response)
     if not analysis:
+        if (call_kwargs.get("route_info") or {}).get("provider") == "aino":
+            from agent.managed_inference_errors import ManagedOperationUnknown
+            raise ManagedOperationUnknown()
         logger.warning(empty_log)
         analysis = extract_content_or_reasoning(await async_call_llm(**call_kwargs))
     return analysis
@@ -850,6 +854,8 @@ async def _run_analysis(
         _debug.save()
         return json.dumps(result, indent=2, ensure_ascii=False)
 
+    from agent.managed_inference_errors import ManagedOperationUnknown
+
     try:
         from tools.interrupt import is_interrupted
         if is_interrupted():
@@ -865,6 +871,11 @@ async def _run_analysis(
             result["scale_note"] = scale_note
         debug_call_data.update(success=True, analysis_length=analysis_length)
         return finish(result)
+    except ManagedOperationUnknown as error:
+        debug_call_data["error"] = str(error)
+        return finish({"success": False, "error": str(error), "analysis": str(error),
+                       "error_type": "managed_operation_unknown",
+                       "failure_reason": "managed_operation_unknown", "failure_retryable": False})
     except Exception as e:
         error_msg = f"Error analyzing {kind}: {e!s}"
         logger.error("%s", error_msg, exc_info=True)

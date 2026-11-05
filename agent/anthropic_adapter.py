@@ -879,6 +879,9 @@ def create_anthropic_message(
         except TimeoutError:
             raise
         except Exception as exc:
+            from agent.auxiliary_billing_scope import managed_http_client
+            from agent.managed_inference_errors import raise_managed_operation_error
+            raise_managed_operation_error(exc, managed=managed_http_client(client))
             if not _is_stream_unavailable_error(exc):
                 raise
             logger.debug(

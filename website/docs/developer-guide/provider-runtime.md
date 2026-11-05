@@ -181,6 +181,25 @@ When an auxiliary task is configured with provider `main`, Hermes resolves that 
 
 ## Fallback models
 
+Desktop Aino requests carry a stable `X-Aino-Operation-ID` for one logical call and a fresh
+`X-Aino-Call-ID` for every physical attempt. The request hook in `agent/auxiliary_billing_scope.py`
+derives the operation UUID from the existing primary or auxiliary request identity, without
+changing model context. Once an accepted request has an uncertain outcome, the Desktop stops
+stream reconnects, non-streaming probes, auxiliary negotiation retries and provider fallback.
+It retains partial text and a non-retryable `managed_operation_unknown` failure in SessionDB.
+An uncertain tool inference also stops its owning turn: the tool-result commit captures the
+terminal verdict in display metadata before content spill or hints can alter its JSON shape.
+For managed image generation, empty accepted results and cache-save failures stop the turn;
+source-image loading failures before dispatch keep their existing behavior.
+An uncertain compression call also stops the owning turn before further inference, including
+when its main model uses BYOK; the accepted input and original transcript remain available.
+Only proven pre-send connect or pool failures retain automatic retry. An explicit new request
+has a new operation identity; old clients without the header retain their previous behavior.
+
+`agent/auxiliary_retry.py` owns auxiliary retry eligibility and ladder-step dispatch;
+`agent/chat_completion_stream_errors.py` owns stream error shapes, and
+`agent/chat_completion_summary.py` owns iteration-summary dispatch and validation.
+
 Hermes supports a configured fallback provider chain — a list of `(provider, model)` entries tried in order when the primary model encounters errors. The legacy single-pair `fallback_model` dict is still accepted for back-compat (and migrated on first write).
 
 ### How it works internally
