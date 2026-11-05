@@ -96,7 +96,7 @@ export interface NativeState {
 }
 
 export function fixtureEnvironment(): Record<string, string> {
-  const allowed = ['PATH', 'TMPDIR', 'DISPLAY', 'XDG_RUNTIME_DIR', 'SHELL', 'USER', 'LOGNAME', 'DOCKER_HOST', 'DOCKER_CONTEXT']
+  const allowed = ['PATH', 'TMPDIR', 'DISPLAY', 'XAUTHORITY', 'XDG_RUNTIME_DIR', 'SHELL', 'USER', 'LOGNAME', 'DOCKER_HOST', 'DOCKER_CONTEXT']
 
   const env: Record<string, string> = { LANG: 'en_US.UTF-8', TZ: 'UTC', AWS_EC2_METADATA_DISABLED: 'true',
     AWS_METADATA_SERVICE_TIMEOUT: '1', AWS_METADATA_SERVICE_NUM_ATTEMPTS: '1' }
