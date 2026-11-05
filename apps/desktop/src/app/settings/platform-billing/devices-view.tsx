@@ -251,6 +251,7 @@ function DeviceList({ scope, bridge, accountBridge }: PlatformDevicesProps & { b
         <ChevronRight aria-hidden="true" className="account-devices-chevron" />
       </summary>
       <div className="account-devices-body">
+        <p className="account-devices-description">{t.accountPage.deviceCredentialDescription}</p>
         <div className="account-devices-toolbar">
           <span>{t.accountPage.deviceIdentifier}</span>
           <Button disabled={loading || busy} onClick={() => void read()} size="sm" variant="ghost">
@@ -341,13 +342,19 @@ function DeviceList({ scope, bridge, accountBridge }: PlatformDevicesProps & { b
                     </Button>
                   </div>
                   <div className="account-device-times">
+                    {status === 'active' && <span>{t.accountPage.deviceAutoRenew}</span>}
                     <span>
                       {copy.lastUsed}: {new Date(device.last_used_at).toLocaleString(locale)}
                     </span>
-                    <span>
-                      {copy.expires}: {new Date(device.expires_at).toLocaleString(locale)}
-                    </span>
                   </div>
+                  <details className="account-device-details">
+                    <summary>{t.accountPage.deviceCredentialDetails}</summary>
+                    <div className="account-device-times">
+                      <span>
+                        {copy.expires}: {new Date(device.expires_at).toLocaleString(locale)}
+                      </span>
+                    </div>
+                  </details>
                 </div>
               )
             })}

@@ -11,6 +11,9 @@ export interface AccountPageTranslations {
   subscriptionActive: string
   devicesDescription: string
   deviceIdentifier: string
+  deviceCredentialDescription: string
+  deviceAutoRenew: string
+  deviceCredentialDetails: string
   historyTitle: string
   historyDescription: string
   refreshHistory: string

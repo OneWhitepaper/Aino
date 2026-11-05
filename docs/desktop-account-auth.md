@@ -69,6 +69,11 @@ Device actions are fenced to the expected user and generation. Revoking the
 current device invalidates managed runtime bindings; normal website API keys
 and custom provider configuration are not treated as desktop leases.
 
+Device authorization shows active, expired and revoked states separately. Active
+rows explain that Aino renews temporary model credentials while in use; exact
+credential deadlines are available under temporary credential details. These
+deadlines describe model access, not whether the account is signed in.
+
 See the [user guide](aino-platform-user-guide.md) and
 [current implementation status](implementation/aino-platform-progress.md) for
 capability limits and outstanding end-to-end/platform checks. Fixture receipts
