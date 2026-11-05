@@ -8,8 +8,9 @@
  */
 
 import type * as HermesSdk from '@hermes/plugin-sdk'
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
-import { atom } from 'nanostores'
+import { host } from '@hermes/plugin-sdk'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import type { WritableAtom } from 'nanostores'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 
 import { translateBotsIn } from './i18n-test-helper'
@@ -18,6 +19,7 @@ const { notify, requestProfile } = vi.hoisted(() => ({ notify: vi.fn(), requestP
 
 vi.mock('@hermes/plugin-sdk', async importOriginal => {
   const sdk = await importOriginal<typeof HermesSdk>()
+  const { atom } = await import('nanostores')
 
   return {
     ...sdk,
@@ -25,7 +27,7 @@ vi.mock('@hermes/plugin-sdk', async importOriginal => {
       ...sdk.host,
       notify,
       requestProfile,
-      state: { ...sdk.host.state, connectionId: atom<null | string>('local'), profile: atom('default') }
+      state: { ...sdk.host.state, connectionId: atom<null | string>('local'), profile: atom('default'), gateway: atom('open') }
     },
     usePluginI18n: () => translateBotsIn('en')
   }
@@ -40,6 +42,7 @@ let rooms: (typeof room)[] = []
 let refuse = ''
 
 beforeEach(() => {
+  (host.state.gateway as WritableAtom<string>).set('open')
   rooms = [room]
   refuse = ''
   requestProfile.mockImplementation(async (_route: unknown, method: string, params: { room_id?: string }) => {
@@ -63,6 +66,30 @@ beforeEach(() => {
 
     return {}
   })
+})
+
+it('waits for the gateway before loading restored group rows and refreshes when it opens', async () => {
+  const gateway = host.state.gateway as WritableAtom<string>
+  gateway.set('closed')
+  render(<CanonicalGroupList onOpen={vi.fn()} />)
+  expect(requestProfile).not.toHaveBeenCalled()
+  expect(screen.queryByRole('alert')).toBeNull()
+
+  await act(async () => { gateway.set('open') })
+  expect(await screen.findByRole('button', { name: 'Launch crew' })).toBeTruthy()
+  expect(screen.queryByRole('alert')).toBeNull()
+})
+
+it('shows a live group lookup error and retries it after the gateway reconnects', async () => {
+  requestProfile.mockRejectedValueOnce(new Error('group lookup refused'))
+  render(<CanonicalGroupList onOpen={vi.fn()} />)
+  expect((await screen.findByRole('alert')).textContent).toBe('group lookup refused')
+
+  const gateway = host.state.gateway as WritableAtom<string>
+  await act(async () => { gateway.set('connecting') })
+  await act(async () => { gateway.set('open') })
+  expect(await screen.findByRole('button', { name: 'Launch crew' })).toBeTruthy()
+  expect(screen.queryByRole('alert')).toBeNull()
 })
 
 afterEach(() => {

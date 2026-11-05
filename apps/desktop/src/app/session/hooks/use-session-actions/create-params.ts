@@ -1,5 +1,4 @@
-import { platformAccountActions } from '@/api/platform'
-import { type PlatformDraftAuthority } from '@/api/platform-session-binding'
+import { capturePlatformDraftAuthority, type PlatformDraftAuthority } from '@/api/platform-session-binding'
 import { translateNow } from '@/i18n'
 import { resolveModelDefault } from '@/lib/model-default'
 import { platformDefaultScope } from '@/lib/platform-model-scope'
@@ -58,34 +57,18 @@ function resolveCreateProfile(
 }
 
 async function capturePlatformCreateAuthority(
-  catalog: ReturnType<typeof platformModelCatalog>,
   platformOwner: string,
   platformOrigin: string,
   generation: number,
   enforceGeneration: boolean
 ): Promise<PlatformDraftAuthority> {
-  const accountBridge = window.hermesDesktop?.platformAccount
+  const authority = await capturePlatformDraftAuthority(platformOwner, platformOrigin)
 
-  if (accountBridge) {
-    // A picker can precede a missed IPC account publication. Refresh before
-    // capturing draft authority so the native revision and owner agree.
-    await platformAccountActions(accountBridge).refresh()
-  }
-
-  await catalog.load()
-  const authoritativeOwner = catalog.owner.state.get().owner
-  const account = catalog.account.get()
-
-  if (
-    (enforceGeneration && generation !== getComposerSelectionGeneration()) ||
-    !authoritativeOwner || account?.phase !== 'signed_in' || account.account?.id !== authoritativeOwner.user_id ||
-    !platformOwner || !platformOrigin || platformOwner !== authoritativeOwner.user_id ||
-    platformOrigin !== authoritativeOwner.platform_origin
-  ) {
+  if (enforceGeneration && generation !== getComposerSelectionGeneration()) {
     throw new PlatformSelectionError('platform_account_changed')
   }
 
-  return { account, owner: authoritativeOwner }
+  return authority
 }
 
 export async function desktopSessionCreateParams(
@@ -170,7 +153,7 @@ export async function desktopSessionCreateParams(
 
   if (selection.provider === 'aino') {
     platformAuthority = await capturePlatformCreateAuthority(
-      catalog, platformOwner, platformOrigin, generation, includeComposerSelection === true
+      platformOwner, platformOrigin, generation, includeComposerSelection === true
     )
     platformOwner = platformAuthority.owner.user_id
     platformOrigin = platformAuthority.owner.platform_origin

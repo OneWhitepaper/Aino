@@ -15,6 +15,7 @@ import { translateNow } from '@/i18n/runtime'
 import { type ChatMessage, chatMessageText, toChatMessages } from '@/lib/chat-messages'
 import { markReasoningEffortPending } from '@/lib/chat-runtime'
 import { type GuardedModelSwitchResult, surfaceModelSwitchConfirm } from '@/lib/guarded-model-switch'
+import { platformModelStatePatch } from '@/lib/platform-session-model'
 import { noteMessageSent } from '@/store/desktop-metrics'
 import { notify } from '@/store/notifications'
 import {
@@ -571,6 +572,7 @@ export function useSessionTileDelegate({
               ...(typeof info?.cwd === 'string' ? { cwd: info.cwd } : {}),
               ...(typeof info?.model === 'string' ? { model: info.model } : {}),
               ...(typeof info?.provider === 'string' ? { provider: info.provider } : {}),
+              ...platformModelStatePatch(info),
               ...(typeof info?.reasoning_effort === 'string'
                 ? { reasoningEffort: info.reasoning_effort, reasoningEffortPending: false }
                 : {}),

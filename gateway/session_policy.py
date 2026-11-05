@@ -982,16 +982,26 @@ def route_launch_key(authority, policy, config):
     return launch_key(authority, policy)
 
 
+def _valid_policy_model(policy):
+    # A following chat can precede model setup; its owning profile supplies the route at use time.
+    if policy.model is None:
+        return policy.follows_profile
+    return isinstance(policy.model, str) and bool(policy.model.strip())
+
+
 def restore_policy(data):
     """Reject incomplete private policy rather than rebuilding from current defaults."""
     try:
         policy = LocalSessionPolicy(**data)
+        for value in (policy.config_json, policy.request_json, policy.terminal_json):
+            if not isinstance(json.loads(value), dict):
+                raise ValueError('invalid policy object')
         from gateway.session_a2a import is_forward_policy
         surfaces = {**SURFACES, 'cron': 'cron', 'kanban': 'cli', 'bot_room': 'bot_room'}
         if ((not is_forward_policy(policy) and
              (policy.source not in surfaces or policy.platform != surfaces[policy.source]))
                 or not isinstance(policy.cwd, str) or not Path(policy.cwd).is_absolute()
-                or not isinstance(policy.model, str) or not policy.model.strip()
+                or not _valid_policy_model(policy)
                 or not isinstance(policy.toolsets, (list, tuple))
                 or any(not isinstance(name, str) for name in policy.toolsets)
                 or type(policy.safe_mode) is not bool or type(policy.ignore_user_config) is not bool
@@ -1004,9 +1014,6 @@ def restore_policy(data):
                 or (policy.safe_mode and not policy.ignore_user_config)):
             raise ValueError('invalid policy')
         from dataclasses import replace
-        for value in (policy.config_json, policy.request_json, policy.terminal_json):
-            if not isinstance(json.loads(value), dict):
-                raise ValueError('invalid policy object')
         terminal = json.loads(policy.terminal_json)
         if terminal_uses_host_cwd(terminal) and terminal.get('TERMINAL_CWD') != policy.cwd:
             raise ValueError('terminal policy mismatch')

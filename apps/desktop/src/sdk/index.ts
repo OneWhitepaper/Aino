@@ -110,6 +110,7 @@ import { composerHost } from './composer'
 import { $focusedAwaitingResponse, $focusedBusy } from './focused-turn'
 import { i18nHost } from './i18n'
 import { planPluginOpenSession } from './plugin-open-session-plan'
+import { requestPluginActiveGateway } from './plugin-session-create'
 import { dropLeftoverProfilePrefs, warmProfile } from './profile-local'
 import {
   type PluginProfileRequestOptions,
@@ -1486,15 +1487,7 @@ export const host = {
    *  the app itself uses. Lazy: resolves the LIVE socket per call. `timeoutMs`
    *  overrides the socket's 30 s default for RPCs that legitimately run longer
    *  (session.compress); unset keeps the default. */
-  request: async <T>(method: string, params: Record<string, unknown> = {}, timeoutMs?: number): Promise<T> => {
-    const gateway = $gateway.get()
-
-    if (!gateway) {
-      throw new Error(`Aino gateway unavailable`)
-    }
-
-    return timeoutMs === undefined ? gateway.request<T>(method, params) : gateway.request<T>(method, params, timeoutMs)
-  },
+  request: requestPluginActiveGateway,
 
   /** The LIVE gateway instance for the active profile (null before the first
    *  socket opens). Most plugins want `host.request`; this exists for SDK

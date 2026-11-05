@@ -9,6 +9,7 @@ import type { SessionCreateResponse } from '@/types/hermes'
 import { hasPlatformModelIdentity } from '../../shared/platform-contract'
 import type { PlatformAccountSnapshot, PlatformModelPurpose } from '../../shared/platform-contract'
 
+import { platformAccountActions } from './platform'
 import { bindPlatformModel } from './platform-models'
 
 type Request = <T>(method: string, params?: Record<string, unknown>, timeoutMs?: number) => Promise<T>
@@ -16,6 +17,32 @@ type Request = <T>(method: string, params?: Record<string, unknown>, timeoutMs?:
 export interface PlatformDraftAuthority {
   account: PlatformAccountSnapshot
   owner: PlatformModelOwner
+}
+
+/** Capture the native account authority after resolving a draft's model default. */
+export async function capturePlatformDraftAuthority(
+  platformOwner: string,
+  platformOrigin: string
+): Promise<PlatformDraftAuthority> {
+  const accountBridge = window.hermesDesktop?.platformAccount
+
+  if (accountBridge) {
+    await platformAccountActions(accountBridge).refresh()
+  }
+
+  const catalog = platformModelCatalog()
+  await catalog.load()
+  const owner = catalog.owner.state.get().owner
+  const account = catalog.account.get()
+
+  if (
+    !owner || account?.phase !== 'signed_in' || account.account?.id !== owner.user_id ||
+    !platformOwner || !platformOrigin || platformOwner !== owner.user_id || platformOrigin !== owner.platform_origin
+  ) {
+    throw new PlatformSelectionError('platform_account_changed')
+  }
+
+  return { account, owner }
 }
 
 function target(owner: SessionOwnerScope, sessionId: string) {
