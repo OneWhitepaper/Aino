@@ -37,7 +37,7 @@ function filePreviewKind(ext: string, mimeType: string, binary: boolean) {
 }
 
 interface PreviewFileTargetDeps {
-  hermesHome: string
+  hermesHome: string | (() => string)
   resolveHermesCwd: () => string
   fileExists: (value: string) => boolean
   directoryExists: (value: string) => boolean
@@ -87,7 +87,7 @@ export function createPreviewTargetResolver({
     // `base` (the working dir), so such a ref never exists there and the
     // preview/download 404s even though the file is present on disk (#115609).
     if (!fileExists(resolved) && !directoryExists(resolved)) {
-      for (const candidate of homeRelativeAttachmentCandidates(raw, app.getPath('home'), hermesHome)) {
+      for (const candidate of homeRelativeAttachmentCandidates(raw, app.getPath('home'), typeof hermesHome === 'function' ? hermesHome() : hermesHome)) {
         if (fileExists(candidate)) {
           resolved = candidate
 

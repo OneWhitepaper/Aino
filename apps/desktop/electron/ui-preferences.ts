@@ -1,9 +1,9 @@
-// Machine-level UI preferences (#145213): one JSON document beside the ROOT
+// Root-home UI preferences (#145213): one JSON document beside the ROOT
 // Hermes home, shared by native Desktop (this module, over the typed preload
 // capability) and every browser that opens this machine's Webapp (the Python
 // twin `hermes_cli/ui_preferences.py`, over `/api/ui-preferences`). Not per
 // profile, not per gateway connection: a Desktop connected to a remote gateway
-// still reads and writes ITS OWN machine's file.
+// still uses its own runtime root. Platform Desktop gives each account its own root.
 //
 // On-disk contract, kept in lockstep with the Python writer:
 //   { "version": 1, "generation": <str>, "revision": <int>, "values": { <key>: <string> } }
@@ -300,7 +300,7 @@ interface IpcMainLike {
 
 export interface UiPreferencesIpcDeps {
   ipcMain: IpcMainLike
-  hermesHome: string
+  hermesHome: string | (() => string)
   /** Every app window's webContents; changes are pushed to all of them. */
   broadcast: (snapshot: UiPreferencesSnapshot) => void
 }
@@ -309,15 +309,16 @@ export interface UiPreferencesIpcDeps {
  * `hermes:ui-preferences:*` — the renderer's only door to the store: a
  * synchronous first-paint snapshot, a read, and a validated per-key write. A
  * write made here, or by the Webapp's Python process on this machine (seen by
- * a cheap stat poll), is pushed to every window so open ones follow live.
+ * a cheap poll), is pushed to every window so open ones follow live.
  */
 export function registerUiPreferencesIpc({ ipcMain, hermesHome, broadcast }: UiPreferencesIpcDeps): () => void {
-  const file = uiPreferencesPath(uiPreferencesRoot(hermesHome))
+  const file = () => uiPreferencesPath(uiPreferencesRoot(typeof hermesHome === 'function' ? hermesHome() : hermesHome))
+  const watchedFile = file()
 
   const stamp = (snapshot: null | UiPreferencesSnapshot) =>
     snapshot ? `${snapshot.generation ?? ''}:${snapshot.revision}:${snapshot.exists}` : null
 
-  let last = stamp(tryReadUiPreferences(file))
+  let last = stamp(tryReadUiPreferences(file()))
 
   const publish = (snapshot: null | UiPreferencesSnapshot) => {
     const next = stamp(snapshot)
@@ -329,20 +330,28 @@ export function registerUiPreferencesIpc({ ipcMain, hermesHome, broadcast }: UiP
   }
 
   ipcMain.on('hermes:ui-preferences:snapshot', event => {
-    event.returnValue = tryReadUiPreferences(file)
+    event.returnValue = tryReadUiPreferences(file())
   })
-  ipcMain.handle('hermes:ui-preferences:read', () => readUiPreferences(file))
+  ipcMain.handle('hermes:ui-preferences:read', () => readUiPreferences(file()))
   ipcMain.handle('hermes:ui-preferences:write', async (_event, payload) => {
-    const snapshot = await writeUiPreferences(file, parseUiPreferencesWrite(payload))
+    const snapshot = await writeUiPreferences(file(), parseUiPreferencesWrite(payload))
 
     publish(snapshot)
 
     return snapshot
   })
 
-  const onStat = () => publish(tryReadUiPreferences(file))
+  const onStat = () => publish(tryReadUiPreferences(file()))
 
-  fs.watchFile(file, { interval: WATCH_INTERVAL_MS, persistent: false }, onStat)
+  if (typeof hermesHome === 'function') {
+    // A hard account re-home replaces the backing file without registering IPC again.
+    const timer = setInterval(onStat, WATCH_INTERVAL_MS)
+    timer.unref()
 
-  return () => fs.unwatchFile(file, onStat)
+    return () => clearInterval(timer)
+  }
+
+  fs.watchFile(watchedFile, { interval: WATCH_INTERVAL_MS, persistent: false }, onStat)
+
+  return () => fs.unwatchFile(watchedFile, onStat)
 }

@@ -126,7 +126,11 @@ describe('standalone Aino account flow', () => {
         revision: 2
       })
     })
-    expect(window.hermesDesktop.setAccountWindowMode).toHaveBeenCalledExactlyOnceWith('workspace')
+    expect(window.hermesDesktop.setAccountWindowMode).toHaveBeenCalledExactlyOnceWith('workspace', undefined, {
+      userId: 'a',
+      mode: 'development',
+      revision: 2
+    })
     expect(screen.queryByText('Workspace')).toBeNull()
     expect(screen.queryByLabelText('手机号')).toBeNull()
 
@@ -150,7 +154,7 @@ describe('standalone Aino account flow', () => {
     expect(screen.queryByText('Workspace')).toBeNull()
   })
 
-  it('waits for restored native bounds again when the account action owner changes', async () => {
+  it('retires the workspace while a replacement account bridge restores its owner', async () => {
     const account = { id: 'a', display_name: 'A', phone_masked: '', email: '' }
     const first = createPlatformAccountActions(bridge(snapshot('signed_in', account)))
     const view = renderFlow(first, <input aria-label="Retained draft" />)
@@ -172,13 +176,13 @@ describe('standalone Aino account flow', () => {
       </I18nProvider>
     )
     expect(screen.queryByRole('textbox', { name: 'Retained draft' })).toBeNull()
-    expect(draft.isConnected).toBe(true)
+    expect(draft.isConnected).toBe(false)
 
     await act(async () => current.resolve(snapshot('signed_in', account)))
     expect(screen.queryByRole('textbox', { name: 'Retained draft' })).toBeNull()
 
     await act(async () => bounds.resolve(true))
-    expect(screen.getByRole('textbox', { name: 'Retained draft' })).toBe(draft)
+    expect(screen.getByRole('textbox', { name: 'Retained draft' })).not.toBe(draft)
   })
 
   it('awaits fresh native bounds when switching directly between cached authenticated account owners', async () => {
@@ -201,12 +205,12 @@ describe('standalone Aino account flow', () => {
       </I18nProvider>
     )
 
-    expect(window.hermesDesktop.setAccountWindowMode).toHaveBeenCalledTimes(2)
+    await waitFor(() => expect(window.hermesDesktop.setAccountWindowMode).toHaveBeenCalledTimes(2))
     expect(screen.queryByRole('textbox', { name: 'Retained draft' })).toBeNull()
-    expect(draft.isConnected).toBe(true)
+    expect(draft.isConnected).toBe(false)
 
     await act(async () => bounds.resolve(true))
-    expect(screen.getByRole('textbox', { name: 'Retained draft' })).toBe(draft)
+    expect(screen.getByRole('textbox', { name: 'Retained draft' })).not.toBe(draft)
   })
 
   it('exposes recovery after an initial status failure and can restore the workspace on retry', async () => {
@@ -270,7 +274,7 @@ describe('standalone Aino account flow', () => {
     expect(request).toHaveBeenCalledWith('account.status', {})
   })
 
-  it('preserves a mounted draft and attachments through the separate login window', async () => {
+  it('discards the previous account draft and attachments before another account signs in', async () => {
     const account = { id: 'a', display_name: 'A', phone_masked: '', email: '' }
     const platformBridge = bridge(snapshot('signed_in', account))
     const actions = createPlatformAccountActions(platformBridge)
@@ -303,18 +307,127 @@ describe('standalone Aino account flow', () => {
     const changed = vi.mocked(platformBridge.onChanged).mock.calls[0][0]
     await act(async () => changed({ ...snapshot('signed_out'), revision: 2 }))
     expect(screen.queryByRole('textbox', { name: 'Draft' })).toBeNull()
-    expect(draft.isConnected).toBe(true)
-    expect(draft.closest('[inert]')).not.toBeNull()
+    expect(draft.isConnected).toBe(false)
     fireEvent.keyDown(window, { key: 'Enter' })
     expect(shortcut).not.toHaveBeenCalled()
     expect(window.hermesDesktop.setAccountWindowMode).toHaveBeenCalledWith('login', expect.any(Number))
     await act(async () => changed({ ...snapshot('signed_in', { ...account, id: 'b' }), revision: 3 }))
-    await waitFor(() => expect(screen.getByRole('textbox', { name: 'Draft' })).toBe(draft))
-    expect(draft.textContent).toBe('Unsent project work')
-    expect(attachment.files?.[0]).toBe(file)
+    await waitFor(() => expect(screen.getByRole('textbox', { name: 'Draft' })).not.toBe(draft))
+    expect(screen.getByRole('textbox', { name: 'Draft' }).textContent).toBe('')
+    expect((screen.getByLabelText('Attachments') as HTMLInputElement).files).toHaveLength(0)
     fireEvent.keyDown(window, { key: 'Enter' })
     expect(shortcut).toHaveBeenCalledOnce()
-    expect(window.hermesDesktop.setAccountWindowMode).toHaveBeenLastCalledWith('workspace')
+    expect(window.hermesDesktop.setAccountWindowMode).toHaveBeenLastCalledWith('workspace', undefined, {
+      userId: 'b',
+      mode: 'development',
+      revision: 3
+    })
+  })
+
+  it('retires old account contents on a direct same-bridge identity change before native scope acknowledgment', async () => {
+    const account = { id: 'a', display_name: 'A', phone_masked: '', email: '' }
+    const platformBridge = bridge(snapshot('signed_in', account))
+    const actions = createPlatformAccountActions(platformBridge)
+    renderFlow(actions, <input aria-label="Account draft" />)
+    const oldDraft = await screen.findByRole('textbox', { name: 'Account draft' })
+    fireEvent.change(oldDraft, { target: { value: 'private A work' } })
+    const ready = deferred<boolean>()
+    vi.mocked(window.hermesDesktop.setAccountWindowMode!).mockReturnValueOnce(ready.promise)
+
+    await act(async () => {
+      vi.mocked(platformBridge.onChanged).mock.calls[0][0]({
+        ...snapshot('signed_in', { ...account, id: 'b' }),
+        revision: 2
+      })
+    })
+
+    expect(oldDraft.isConnected).toBe(false)
+    expect(screen.queryByRole('textbox', { name: 'Account draft' })).toBeNull()
+    expect(window.hermesDesktop.setAccountWindowMode).toHaveBeenCalledTimes(2)
+    await act(async () => ready.resolve(true))
+    const currentDraft = screen.getByRole('textbox', { name: 'Account draft' }) as HTMLInputElement
+    expect(currentDraft).not.toBe(oldDraft)
+    expect(currentDraft.value).toBe('')
+  })
+
+  it.each(['refused', 'rejected'] as const)('keeps account contents gated when native scope is %s', async result => {
+    const account = { id: 'a', display_name: 'A', phone_masked: '', email: '' }
+    const platformBridge = bridge(snapshot('signed_in', account))
+    const native = vi.mocked(window.hermesDesktop.setAccountWindowMode!)
+
+    if (result === 'refused') {
+      native.mockResolvedValue(false)
+    } else {
+      native.mockRejectedValue(new Error('scope switch failed'))
+    }
+
+    renderFlow(createPlatformAccountActions(platformBridge), <p>Private account workspace</p>)
+    await waitFor(() =>
+      expect(native).toHaveBeenCalledWith('workspace', undefined, { userId: 'a', mode: 'development', revision: 1 })
+    )
+    await act(async () => {})
+    expect(screen.queryByText('Private account workspace')).toBeNull()
+  })
+
+  it('ignores an old native acknowledgment after the account changes', async () => {
+    const account = { id: 'a', display_name: 'A', phone_masked: '', email: '' }
+    const platformBridge = bridge(snapshot('signed_in', account))
+    const oldReady = deferred<boolean>()
+    const newReady = deferred<boolean>()
+    vi.mocked(window.hermesDesktop.setAccountWindowMode!)
+      .mockReturnValueOnce(oldReady.promise)
+      .mockReturnValueOnce(newReady.promise)
+    renderFlow(createPlatformAccountActions(platformBridge), <p>Account workspace</p>)
+    await waitFor(() => expect(window.hermesDesktop.setAccountWindowMode).toHaveBeenCalledTimes(1))
+    await act(async () => {
+      vi.mocked(platformBridge.onChanged).mock.calls[0][0]({
+        ...snapshot('signed_in', { ...account, id: 'b' }),
+        revision: 2
+      })
+    })
+    await act(async () => oldReady.resolve(true))
+    expect(screen.queryByText('Account workspace')).toBeNull()
+    expect(window.hermesDesktop.setAccountWindowMode).toHaveBeenCalledTimes(2)
+    await act(async () => newReady.resolve(true))
+    expect(screen.getByText('Account workspace')).toBeTruthy()
+  })
+
+  it('renews a pending native acknowledgment against the latest same-owner revision', async () => {
+    const account = { id: 'a', display_name: 'A', phone_masked: '', email: '' }
+    const platformBridge = bridge(snapshot('signed_in', account))
+    const oldReady = deferred<boolean>()
+    const newReady = deferred<boolean>()
+    vi.mocked(window.hermesDesktop.setAccountWindowMode!)
+      .mockReturnValueOnce(oldReady.promise)
+      .mockReturnValueOnce(newReady.promise)
+    renderFlow(createPlatformAccountActions(platformBridge), <p>Account workspace</p>)
+    await waitFor(() => expect(window.hermesDesktop.setAccountWindowMode).toHaveBeenCalledTimes(1))
+    await act(async () => {
+      vi.mocked(platformBridge.onChanged).mock.calls[0][0]({ ...snapshot('signed_in', account), revision: 2 })
+    })
+    await act(async () => oldReady.resolve(true))
+    expect(screen.queryByText('Account workspace')).toBeNull()
+    expect(window.hermesDesktop.setAccountWindowMode).toHaveBeenLastCalledWith('workspace', undefined, {
+      userId: 'a',
+      mode: 'development',
+      revision: 2
+    })
+    await act(async () => newReady.resolve(true))
+    expect(screen.getByText('Account workspace')).toBeTruthy()
+  })
+
+  it('retains the same owner draft across token refresh and offline recovery', async () => {
+    const account = { id: 'a', display_name: 'A', phone_masked: '', email: '' }
+    const platformBridge = bridge(snapshot('signed_in', account))
+    renderFlow(createPlatformAccountActions(platformBridge), <input aria-label="Account draft" />)
+    const draft = (await screen.findByRole('textbox', { name: 'Account draft' })) as HTMLInputElement
+    fireEvent.change(draft, { target: { value: 'same owner work' } })
+    const changed = vi.mocked(platformBridge.onChanged).mock.calls[0][0]
+    await act(async () => changed({ ...snapshot('offline', account), revision: 2 }))
+    await act(async () => changed({ ...snapshot('signed_in', account), revision: 3 }))
+    expect(screen.getByRole('textbox', { name: 'Account draft' })).toBe(draft)
+    expect(draft.value).toBe('same owner work')
+    expect(window.hermesDesktop.setAccountWindowMode).toHaveBeenCalledTimes(1)
   })
 
   it('keeps the platform identity when the agent connection changes', async () => {

@@ -51,6 +51,7 @@ interface CallbackResult {
 
 interface PendingListener {
   result: CallbackResult | null
+  senderId: number
   server: http.Server
   settled: boolean
   waiters: Array<(result: CallbackResult) => void>
@@ -58,6 +59,7 @@ interface PendingListener {
 
 const pending = new Map<string, PendingListener>()
 let nextId = 1
+let listenerGeneration = 0
 
 function settle(id: string, result: CallbackResult) {
   const entry = pending.get(id)
@@ -96,12 +98,13 @@ function dispose(id: string) {
 
 export function registerMcpOauthCallbackIpc() {
   // Bind a one-shot loopback listener; resolves { id, redirectUri }.
-  ipcMain.handle('hermes:mcp-oauth:listen', async () => {
+  ipcMain.handle('hermes:mcp-oauth:listen', async event => {
     if (pending.size >= MAX_PENDING_LISTENERS) {
       throw new Error('Too many MCP OAuth listeners are already pending')
     }
 
     const id = String(nextId++)
+    const generation = listenerGeneration
 
     const server = http.createServer((req, res) => {
       res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' })
@@ -138,18 +141,24 @@ export function registerMcpOauthCallbackIpc() {
       server.listen(0, '127.0.0.1', () => resolve())
     })
 
+    // Account retirement can run while the loopback socket is still binding.
+    if (generation !== listenerGeneration) {
+      server.close()
+      throw new Error('MCP OAuth listener cancelled')
+    }
+
     const port = (server.address() as AddressInfo).port
 
-    pending.set(id, { result: null, server, settled: false, waiters: [] })
+    pending.set(id, { result: null, senderId: event.sender.id, server, settled: false, waiters: [] })
 
     return { id, redirectUri: `http://127.0.0.1:${port}/callback` }
   })
 
   // Resolve when the redirect arrives (or timeout). Safe to call once per id.
-  ipcMain.handle('hermes:mcp-oauth:wait', async (_event, id, timeoutMs) => {
+  ipcMain.handle('hermes:mcp-oauth:wait', async (event, id, timeoutMs) => {
     const entry = pending.get(String(id || ''))
 
-    if (!entry) {
+    if (!entry || entry.senderId !== event.sender.id) {
       return { code: null, error: 'listener not found', iss: null, state: null }
     }
 
@@ -180,9 +189,23 @@ export function registerMcpOauthCallbackIpc() {
   })
 
   // Tear a listener down without waiting (user cancelled, flow errored).
-  ipcMain.handle('hermes:mcp-oauth:cancel', (_event, id) => {
+  ipcMain.handle('hermes:mcp-oauth:cancel', (event, id) => {
+    const entry = pending.get(String(id || ''))
+
+    if (!entry || entry.senderId !== event.sender.id) {
+      return false
+    }
+
     dispose(String(id || ''))
 
     return true
   })
+
+  return () => {
+    listenerGeneration += 1
+
+    for (const id of pending.keys()) {
+      dispose(id)
+    }
+  }
 }

@@ -14,6 +14,7 @@ import type { UpdateRunReport } from '../electron/updater/update-metrics'
 import type { WindowSizeMode } from '../electron/window-size-types'
 import type {
   PlatformAccountBridge,
+  PlatformAccountWindowOwner,
   PlatformBillingBridge,
   PlatformDevicesBridge,
   PlatformDiagnosticsBridge,
@@ -331,7 +332,9 @@ declare global {
           title: string
         } | null
       } | null>
-      setAccountWindowMode?: (mode: 'login' | 'workspace', height?: number) => Promise<boolean>
+      setAccountWindowMode?: (
+        mode: 'login' | 'workspace', height?: number, expected?: PlatformAccountWindowOwner
+      ) => Promise<boolean>
       readFileDataUrl: (filePath: string) => Promise<string | HermesReadFileErrorResult>
       /** Remote non-image attach: higher dedicated cap than preview/Settings default. */
       readFileDataUrlForAttach?: (filePath: string) => Promise<string | HermesReadFileErrorResult>

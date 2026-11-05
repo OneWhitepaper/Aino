@@ -23,15 +23,17 @@ vi.mock('electron', () => ({
 
 const { registerMcpOauthCallbackIpc } = await import('./mcp-oauth-callback-ipc')
 
-registerMcpOauthCallbackIpc()
+const disposeAll = registerMcpOauthCallbackIpc()
 
-const invoke = (channel: string, ...args: unknown[]) => {
+const invokeFrom = (senderId: number, channel: string, ...args: unknown[]) => {
   const fn = handlers.get(channel)
 
   assert.ok(fn, `handler registered for ${channel}`)
 
-  return fn!({}, ...args)
+  return fn!({ sender: { id: senderId } }, ...args)
 }
+
+const invoke = (channel: string, ...args: unknown[]) => invokeFrom(1, channel, ...args)
 
 test('listen binds a loopback listener and wait resolves with the redirect params', async () => {
   const { id, redirectUri } = (await invoke('hermes:mcp-oauth:listen')) as { id: string; redirectUri: string }
@@ -141,4 +143,71 @@ test('wait times out when no callback arrives', async () => {
 
   assert.equal(result.code, null)
   assert.match(String(result.error), /timeout/)
+})
+
+test('only the originating renderer can cancel or collect its OAuth callback', async () => {
+  const { id, redirectUri } = (await invoke('hermes:mcp-oauth:listen')) as { id: string; redirectUri: string }
+
+  try {
+    assert.equal(await invokeFrom(2, 'hermes:mcp-oauth:cancel', id), false)
+    await fetch(`${redirectUri}?code=private-code&state=private-state`)
+
+    assert.deepEqual(await invokeFrom(2, 'hermes:mcp-oauth:wait', id, 1000), {
+      code: null,
+      error: 'listener not found',
+      iss: null,
+      state: null
+    })
+    assert.deepEqual(await invoke('hermes:mcp-oauth:wait', id, 1000), {
+      code: 'private-code',
+      error: null,
+      iss: null,
+      state: 'private-state'
+    })
+  } finally {
+    await invoke('hermes:mcp-oauth:cancel', id)
+  }
+})
+
+test('retiring an account cancels every callback, including a listener still starting', async () => {
+  const first = (await invoke('hermes:mcp-oauth:listen')) as { id: string; redirectUri: string }
+  const second = (await invokeFrom(2, 'hermes:mcp-oauth:listen')) as { id: string; redirectUri: string }
+
+  const starting = Promise.resolve(invoke('hermes:mcp-oauth:listen')).then(
+    value => ({ value }) as { error?: Error; value?: { id: string } },
+    error => ({ error }) as { error?: Error; value?: { id: string } }
+  )
+
+  const firstWait = invoke('hermes:mcp-oauth:wait', first.id, 1000)
+  const secondWait = invokeFrom(2, 'hermes:mcp-oauth:wait', second.id, 1000)
+
+  try {
+    disposeAll()
+
+    for (const result of await Promise.all([firstWait, secondWait])) {
+      assert.deepEqual(result, { code: null, error: 'cancelled', iss: null, state: null })
+    }
+
+    await assert.rejects(fetch(`${first.redirectUri}?code=old-code`))
+    await assert.rejects(fetch(`${second.redirectUri}?code=old-code`))
+    assert.match(String((await starting).error), /cancelled/)
+    assert.equal(
+      ((await invoke('hermes:mcp-oauth:wait', first.id, 1000)) as { error: string }).error,
+      'listener not found'
+    )
+
+    const current = (await invoke('hermes:mcp-oauth:listen')) as { id: string; redirectUri: string }
+
+    await fetch(`${current.redirectUri}?code=current-code`)
+    assert.equal(((await invoke('hermes:mcp-oauth:wait', current.id, 1000)) as { code: string }).code, 'current-code')
+  } finally {
+    await invoke('hermes:mcp-oauth:cancel', first.id)
+    await invokeFrom(2, 'hermes:mcp-oauth:cancel', second.id)
+
+    const started = await starting
+
+    if (started.value) {
+      await invoke('hermes:mcp-oauth:cancel', started.value.id)
+    }
+  }
 })

@@ -12,6 +12,7 @@ export interface HermesHomeOptions {
   platform?: NodeJS.Platform
   directoryExists?: (directory: string) => boolean
   readWindowsHome?: () => string | null
+  accountWorkspace?: { userData: string; origin: string; userId: string | null }
 }
 
 export function resolveDesktopHermesHome(options: HermesHomeOptions): string

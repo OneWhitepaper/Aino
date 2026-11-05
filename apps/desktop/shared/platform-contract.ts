@@ -1,5 +1,11 @@
 export type PlatformAccountPhase = 'signed_out' | 'loading' | 'signed_in' | 'offline' | 'reauth_required'
 
+export interface PlatformAccountWindowOwner {
+  userId: string
+  mode: 'production' | 'development'
+  revision: number
+}
+
 export interface PlatformAccountSnapshot {
   revision: number
   phase: PlatformAccountPhase

@@ -39,6 +39,7 @@ export interface QuickEntrySubmitRelay {
   begin: (forward: (correlationId: string) => void) => Promise<QuickEntrySubmitRelayResult>
   acknowledge: (correlationId: string, result: QuickEntrySubmitRelayResult) => void
   pendingCount: () => number
+  retire: () => void
   /** Correlations whose outcome is UNKNOWN: the relay timed out but the backend
    *  may still have accepted the prompt. Kept so a late ack reconciles instead
    *  of being silently dropped. */
@@ -100,6 +101,15 @@ export function createQuickEntrySubmitRelay(options: {
         pending.set(correlationId, { resolve, timer })
         forward(correlationId)
       })
+    },
+    retire() {
+      for (const request of pending.values()) {
+        clearTimeout(request.timer)
+        request.resolve({ ok: false, code: 'account_changed', retryable: false })
+      }
+
+      pending.clear()
+      reconcilable.clear()
     },
     pendingCount() {
       return pending.size

@@ -37,6 +37,7 @@ export interface LocalBackendLifecycle<Child> {
   signal: AbortSignal
   assertCanStart: () => void
   hasPending: () => boolean
+  drain: () => Promise<void>
   start: <T>(run: () => Promise<T>, scope?: string) => Promise<T>
   recycle: <T>(scope: string, run: () => Promise<T>) => Promise<T>
   pendingRecycle: (scope: string) => Promise<void> | undefined
@@ -121,6 +122,9 @@ export function createLocalBackendLifecycle<Child>(
 
   return {
     signal: controller.signal,
+    drain: async () => {
+      while (starts.size || recycles.size) { await Promise.allSettled([...starts.keys(), ...recycles.values()]) }
+    },
     assertCanStart: (): void => controller.signal.throwIfAborted(),
     hasPending: (): boolean =>
       starts.size > 0 || recycles.size > 0 || children.size > 0 || stops.size > 0 || shutdown.isPending(),

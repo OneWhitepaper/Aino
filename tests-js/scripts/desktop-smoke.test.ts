@@ -7,6 +7,7 @@ import yaml from 'js-yaml'
 import { expect, test } from 'vitest'
 
 import brand from '../../apps/desktop/brand.json' with { type: 'json' }
+import { resolveDesktopHermesHome } from '../../apps/desktop/electron/data-paths.mjs'
 import { assertAppImageIdentity, candidateSmokeHermesHomes, predictSmokeHermesHome, resolveSmokeLaunch, runInstalledDesktopSmoke, smokeEnvironment } from '../../tests/install/e2e-assets/desktop-smoke.ts'
 import { sourceRuntimeSettleCommand } from '../../tests/install/e2e-assets/source-runtime-settle.mjs'
 import { assertUpdateWindowBackendOrigin, assertUpdateWindowProcess } from '../../tests/install/e2e-assets/update-window-chat.mjs'
@@ -867,7 +868,16 @@ test('platform account smoke uses verified TLS proxy and pins UI language before
       expect(launch.env?.HTTPS_PROXY).toMatch(/^http:\/\/127\.0\.0\.1:/)
       expect(fs.readFileSync(launch.env!.NODE_EXTRA_CA_CERTS!, 'utf8')).toContain('BEGIN CERTIFICATE')
       expect(launch.env?.NODE_TLS_REJECT_UNAUTHORIZED).not.toBe('0')
-      expect(yaml.load(fs.readFileSync(path.join(home, 'config.yaml'), 'utf8'))).toMatchObject({ display: { language: 'en' } })
+
+      const accountHome = resolveDesktopHermesHome({ home, accountWorkspace: {
+        userData: path.join(root, 'user-data'), origin: 'https://api.agentera.com.cn', userId: '17'
+      } })
+
+      expect(yaml.load(fs.readFileSync(path.join(accountHome, 'config.yaml'), 'utf8'))).toMatchObject({
+        display: { language: 'en' }, model: { provider: 'custom' }
+      })
+      expect(fs.readFileSync(path.join(accountHome, '.env'), 'utf8')).toContain('MOCK_API_KEY=e2e-mock-key')
+      expect(fs.existsSync(path.join(accountHome, 'state.db'))).toBe(false)
       throw new Error('fixture launch deliberately stopped')
     })).rejects.toThrow('fixture launch deliberately stopped')
     expect(launched).toBe(true)

@@ -20,6 +20,7 @@ export interface RemoteOwnerCache {
   /** Record a lookup result, FIFO-evicting the oldest entry past `limit`. */
   remember(sessionId: string, profile: null | string): void
   /** Test/inspection hook: current size. */
+  clear(): void
   size(): number
 }
 
@@ -43,6 +44,7 @@ export function createRemoteOwnerCache({
 
       entries.set(sessionId, { at: now(), profile })
     },
+    clear: () => entries.clear(),
     size: () => entries.size
   }
 }

@@ -1,5 +1,5 @@
 import { useStore } from '@nanostores/react'
-import { Activity, type ReactNode, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { type ReactNode, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router'
 
 import { createLegacyDevelopmentAccountActions, platformAccountActions } from '@/api/platform'
@@ -11,6 +11,8 @@ import { $activeConnectionId } from '@/store/connections'
 import { requestGatewayForAgent } from '@/store/gateway'
 import { $gatewayState } from '@/store/session'
 
+import type { PlatformAccountSnapshot } from '../../../shared/platform-contract'
+
 import { AccountContext } from './account-context'
 import { AccountLoginCard } from './account-login-card'
 
@@ -18,6 +20,12 @@ export interface AccountFlowProps {
   actions: AccountActions
   children: ReactNode
   refreshEnabled?: boolean
+}
+
+function accountWorkspaceIdentity(state: AccountState, snapshot: PlatformAccountSnapshot | null): string | null {
+  return state.authenticated && state.account && snapshot?.account?.id === state.account.id
+    ? JSON.stringify([snapshot.mode, state.account.id])
+    : null
 }
 
 function useAccountRestoration(actions: AccountActions, state: AccountState) {
@@ -37,14 +45,31 @@ function useAccountRestoration(actions: AccountActions, state: AccountState) {
 
 export function AccountFlow({ actions, children, refreshEnabled = true }: AccountFlowProps) {
   const state = useStore(actions.state)
+  const snapshot = useStore(actions.snapshot)
   const { t } = useI18n()
   const copy = t.settings.account
   const navigate = useNavigate()
   const loginContent = useRef<HTMLDivElement>(null)
   const [windowError, setWindowError] = useState(false)
-  const [workspaceReady, setWorkspaceReady] = useState(false)
-  const [workspaceMounted, setWorkspaceMounted] = useState(false)
+  const [workspace, setWorkspace] = useState<{ actions: AccountActions; identity: string } | null>(null)
   const restoringAccount = useAccountRestoration(actions, state)
+
+  const identity = accountWorkspaceIdentity(state, snapshot)
+
+  const workspaceReady =
+    !restoringAccount && identity !== null && workspace?.actions === actions && workspace.identity === identity
+
+  const expectedOwner = useMemo(
+    () =>
+      snapshot?.account && state.adapter === 'platform'
+        ? {
+            userId: snapshot.account.id,
+            mode: snapshot.mode,
+            revision: snapshot.revision
+          }
+        : undefined,
+    [snapshot, state.adapter]
+  )
 
   useEffect(() => {
     if (refreshEnabled) {
@@ -55,22 +80,31 @@ export function AccountFlow({ actions, children, refreshEnabled = true }: Accoun
   useLayoutEffect(() => {
     const setMode = window.hermesDesktop?.setAccountWindowMode
     let active = true
+    setWindowError(false)
+
+    if (workspaceReady) {
+      return
+    }
 
     if (restoringAccount) {
-      setWorkspaceReady(false)
+      setWorkspace(null)
 
       return
     }
 
-    if (state.authenticated) {
-      // Mount the workspace only after native bounds are restored. Otherwise
-      // its responsive layout observes the login width and collapses panes.
-      setWorkspaceReady(false)
-      void Promise.resolve(setMode?.('workspace'))
-        .then(() => {
+    if (identity !== null) {
+      // Native acceptance binds the window's data scope as well as its bounds.
+      // A late acknowledgment must never reveal another account's subtree.
+      setWorkspace(null)
+      void Promise.resolve()
+        .then(() => setMode?.('workspace', undefined, expectedOwner))
+        .then(ready => {
           if (active) {
-            setWorkspaceReady(true)
-            setWorkspaceMounted(true)
+            if (ready === true) {
+              setWorkspace({ actions, identity })
+            } else {
+              setWindowError(true)
+            }
           }
         })
         .catch(() => {
@@ -84,7 +118,7 @@ export function AccountFlow({ actions, children, refreshEnabled = true }: Accoun
       }
     }
 
-    setWorkspaceReady(false)
+    setWorkspace(null)
 
     if (!setMode) {
       return
@@ -110,20 +144,14 @@ export function AccountFlow({ actions, children, refreshEnabled = true }: Accoun
       active = false
       observer.disconnect()
     }
-  }, [actions, restoringAccount, state.authenticated])
+  }, [actions, expectedOwner, identity, restoringAccount, workspaceReady])
 
   return (
     <AccountContext.Provider value={actions}>
-      {workspaceMounted && (
-        <Activity mode={state.authenticated && workspaceReady ? 'visible' : 'hidden'}>
-          <div
-            className="contents"
-            hidden={!state.authenticated || !workspaceReady}
-            inert={!state.authenticated || !workspaceReady}
-          >
-            {children}
-          </div>
-        </Activity>
+      {workspaceReady && (
+        <div className="contents" key={identity}>
+          {children}
+        </div>
       )}
       {state.authenticated && workspaceReady ? null : state.authenticated || restoringAccount ? (
         <main

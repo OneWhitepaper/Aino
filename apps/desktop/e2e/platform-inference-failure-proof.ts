@@ -18,7 +18,7 @@ interface FailureWindow {
 }
 
 export async function observeInferenceAlerts(page: Page) {
-  await page.evaluate(() => {
+  const observe = () => {
     const target = window as unknown as FailureWindow
     target.inferenceAlerts = []
 
@@ -42,9 +42,16 @@ export async function observeInferenceAlerts(page: Page) {
       }
     }
 
-    scan()
-    new MutationObserver(scan).observe(document.body, { childList: true, subtree: true, characterData: true })
-  })
+    const start = () => {
+      scan()
+      new MutationObserver(scan).observe(document.body, { childList: true, subtree: true, characterData: true })
+    }
+
+    if (document.body) { start() } else { document.addEventListener('DOMContentLoaded', start, { once: true }) }
+  }
+
+  await page.context().addInitScript(observe)
+  await page.evaluate(observe)
 }
 
 async function settled(page: Page) {

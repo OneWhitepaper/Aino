@@ -68,9 +68,9 @@ export function preparedJournal(userData: string, origin: string) {
   }
 }
 
-export function registerPreparedSubmissions() {
+export function registerPreparedSubmissions(userData: () => string = () => app.getPath('userData')) {
   const store = (event: Electron.IpcMainInvokeEvent) =>
-    preparedJournal(app.getPath('userData'), new URL(event.senderFrame!.url).origin)
+    preparedJournal(userData(), new URL(event.senderFrame!.url).origin)
 
   ipcMain.handle('hermes:prepared-submissions:read', event => JSON.stringify(store(event).read()))
   ipcMain.handle('hermes:prepared-submissions:update', (event, key: string, entry: string | null) => {

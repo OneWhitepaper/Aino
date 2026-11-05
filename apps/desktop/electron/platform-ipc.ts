@@ -157,14 +157,25 @@ export function registerPlatformIpc({
     return { phone: field(value, 'phone', 64) }
   }
 
-  async function withCaptcha(raw: unknown, input: Record<string, unknown>, operation: (next: any) => unknown) {
+  async function withCaptcha(
+    event: any,
+    raw: unknown,
+    input: Record<string, unknown>,
+    operation: (next: any) => unknown
+  ) {
     const source = record(raw)
 
     if (source.captcha_proof && Object.keys(source.captcha_proof as object).length > 0) {
       throw new Error('renderer_captcha_proof_rejected')
     }
 
+    const generation = auth.generation()
     const proof = await captcha.acquire()
+    authorize(event)
+
+    if (generation !== auth.generation()) {
+      throw new PlatformClientError('auth_attempt_superseded')
+    }
 
     return operation({ ...input, captcha_proof: proof })
   }
@@ -188,7 +199,7 @@ export function registerPlatformIpc({
     'request-phone-code': (event, input) => {
       authorize(event)
 
-      return withCaptcha(input, phone(input), next => auth.requestPhoneCode(next))
+      return withCaptcha(event, input, phone(input), next => auth.requestPhoneCode(next))
     },
     'verify-phone-code': (event, input) => {
       authorize(event)
@@ -210,6 +221,7 @@ export function registerPlatformIpc({
       const value = record(input)
 
       return withCaptcha(
+        event,
         input,
         {
           email: field(value, 'email', 320),
@@ -232,7 +244,7 @@ export function registerPlatformIpc({
     'request-binding-code': (event, input) => {
       authorize(event)
 
-      return withCaptcha(input, phone(input), next => auth.requestBindingCode(next))
+      return withCaptcha(event, input, phone(input), next => auth.requestBindingCode(next))
     },
     'submit-step-up': (event, input) => {
       authorize(event)

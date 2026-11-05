@@ -7,6 +7,8 @@ import { pathToFileURL } from 'node:url'
 import { _electron } from '@playwright/test'
 
 import { findElectron } from './fixtures'
+import { accountTemplateBootstrap } from './platform-account-home'
+import { nativeBindingObserverBootstrap } from './platform-account-window'
 import { prepareNativeProtocolOverlay } from './platform-native-protocol-overlay'
 import { installErrorBannerGuard } from './test'
 
@@ -33,6 +35,25 @@ export function isExpectedBlockedThemeFontRequest(request: ChromiumRequestShape)
     && request.resourceType === 'stylesheet'
     && !request.hasUploadData
     && !request.hasAuthorization
+}
+
+interface DebuggerAuditTarget {
+  once(event: 'destroyed', listener: () => void): unknown
+  isDestroyed(): boolean
+  debugger: { on(event: 'detach', listener: () => void): unknown }
+}
+
+/** A retired account detaches CDP immediately before webContents destruction. */
+export function observeDebuggerDetach(contents: DebuggerAuditTarget,
+  app: { once(event: 'before-quit', listener: () => void): unknown }, report: (error: string) => void): void {
+  let tearingDown = false
+  contents.once('destroyed', () => { tearingDown = true })
+  app.once('before-quit', () => { tearingDown = true })
+  contents.debugger.on('detach', () => {
+    setImmediate(() => {
+      if (!tearingDown && !contents.isDestroyed()) { report('unexpected-detach') }
+    })
+  })
 }
 
 export interface NativeManifest {
@@ -76,7 +97,9 @@ export interface NativeState {
 
 export function fixtureEnvironment(): Record<string, string> {
   const allowed = ['PATH', 'TMPDIR', 'DISPLAY', 'XDG_RUNTIME_DIR', 'SHELL', 'USER', 'LOGNAME', 'DOCKER_HOST', 'DOCKER_CONTEXT']
-  const env: Record<string, string> = { LANG: 'en_US.UTF-8', TZ: 'UTC' }
+
+  const env: Record<string, string> = { LANG: 'en_US.UTF-8', TZ: 'UTC', AWS_EC2_METADATA_DISABLED: 'true',
+    AWS_METADATA_SERVICE_TIMEOUT: '1', AWS_METADATA_SERVICE_NUM_ATTEMPTS: '1' }
 
   for (const key of allowed) { if (process.env[key]) { env[key] = process.env[key]! } }
 
@@ -191,6 +214,8 @@ export async function launchGuardedDesktop(env: Record<string, string>, guardPat
   // Electron deliberately ignores NODE_OPTIONS --require. The fixture entry
   // installs transport policy before importing the unchanged real main bundle.
   fs.writeFileSync(entry, `require(${JSON.stringify(guardPath)});
+${accountTemplateBootstrap(env)}
+${nativeBindingObserverBootstrap()}
 const { app, session } = require('electron');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -205,12 +230,7 @@ function auditMarker(name, host) {
 app.on('web-contents-created', (_event, contents) => {
   try {
     contents.debugger.attach('1.3');
-    let tearingDown = false;
-    contents.once('destroyed', () => { tearingDown = true; });
-    app.once('before-quit', () => { tearingDown = true; });
-    contents.debugger.on('detach', () => {
-      if (!tearingDown && !contents.isDestroyed()) auditMarker('font-observer-error', 'unexpected-detach');
-    });
+    (${observeDebuggerDetach.toString()})(contents, app, error => auditMarker('font-observer-error', error));
     contents.debugger.on('message', (_event, method, params) => {
       if (method !== 'Network.requestWillBeSent') return;
       try {

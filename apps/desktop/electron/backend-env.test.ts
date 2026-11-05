@@ -274,3 +274,40 @@ test('Windows matches profile homes and dotenv names case-insensitively', () => 
   assert.deepEqual(scoped('default'), currentEnv)
   assert.deepEqual(scoped('urbot'), { HERMES_HOME: currentEnv.HERMES_HOME, Path: 'C:\\Windows' })
 })
+
+test('an account workspace drops launch-root and launch-profile credentials and routing', () => {
+  withHermesRoot({ '.env': 'ROOT_SECRET=first\n', 'profiles/work/.op.env': 'PROFILE_SECRET=second\n' }, root => {
+    const accountHome = path.join(root, 'account-workspace')
+
+    const env = profileBackendParentEnv({
+      hermesHome: accountHome,
+      sourceHermesHome: root,
+      currentEnv: {
+        HERMES_HOME: path.join(root, 'profiles', 'work'),
+        ROOT_SECRET: 'first', PROFILE_SECRET: 'second', PATH: '/usr/bin',
+        HERMES_DESKTOP_REMOTE_URL: 'https://old.invalid', HERMES_DESKTOP_REMOTE_TOKEN: 'old-token',
+        HERMES_DESKTOP_CWD: '/old/project', HERMES_PROFILE: 'work', HERMES_CONFIG_PATH: '/old/config.yaml'
+      }
+    })
+
+    assert.deepEqual(env, { HERMES_HOME: accountHome, PATH: '/usr/bin' })
+  })
+})
+
+test('account re-homing removes Windows routing overrides regardless of environment-name casing', () => {
+  const home = 'C:\\accounts\\beta'
+
+  const env = profileBackendParentEnv({
+    hermesHome: home,
+    sourceHermesHome: 'C:\\legacy',
+    platform: 'win32',
+    currentEnv: {
+      Hermes_Home: 'C:\\legacy', Path: 'C:\\Windows',
+      Hermes_Desktop_Remote_Url: 'https://old.invalid', Hermes_Desktop_Remote_Token: 'old-token',
+      Hermes_Desktop_Cwd: 'C:\\old', Hermes_Profile: 'work', Hermes_Config_Path: 'C:\\old\\config.yaml'
+    },
+    fsModule: { readFileSync() { throw Object.assign(new Error('missing'), { code: 'ENOENT' }) } }
+  })
+
+  assert.deepEqual(env, { HERMES_HOME: home, Path: 'C:\\Windows' })
+})
