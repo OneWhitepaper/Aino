@@ -140,7 +140,11 @@ export function notePrimaryRider(
   rides: boolean,
   confirmed = true
 ): boolean {
-  if (!currentPrimary || !samePrimary(owner, currentPrimary)) {
+  // Before the primary socket has been installed there is no route identity
+  // to compare against. This is the normal startup path for a secondary
+  // profile: let it continue to its own backend. Once a primary exists, a
+  // changed owner is a real re-home race and must still abort the stale probe.
+  if (currentPrimary && !samePrimary(owner, currentPrimary)) {
     throw new Error('Gateway route changed while resolving the profile; retry the request')
   }
 
