@@ -114,3 +114,37 @@ No production migration, real-account history upload, model charge, installer
 publication, or merge is part of this validation. A pilot must separately verify
 the deployed migration and endpoints, installed runtime packaging, and the actual
 account/device rollout before release expansion.
+
+## Final integration repairs (2026-11-06)
+
+`tests/gateway/test_cloud_sync_compression.py` now exercises actual canonical
+creation on A, adoption and continuation on B, `session.mutate(compress)` on B,
+and import back to A. Both an ordinary advance and divergent A/B compression
+pass warm resume/submission and another resume/submission after A's daemon
+restarts. Conversations have a title; A retains its own policy and identity,
+and the divergent local transcript remains a conflict copy. The loopback model
+request after restart includes B's post-compression turn. Portable source labels
+come from the existing local creation policy, not the gateway's live `local`
+transport label. Receipt/routing reconciliation remains under existing idle and
+lineage guards.
+
+The real PostgreSQL/native/Python consumer additionally exercises a persisted
+three-operation preparation against three current documents of approximately
+6 MiB each. Each document has two compression segments below the ordinary 5 MiB
+per-session import limit. The combined conflict receipts exceed 16 MiB. The
+fixture drops the first typed size-error response, restarts after the durable
+split, and restarts again after applying a page that includes another operation
+still waiting in the local outbox. All three offline edits survive exactly once;
+the original operation IDs replay identical receipts, and an unrelated later
+conversation uploads successfully. This is real transport/database evidence,
+using synthetic accounts and isolated local homes.
+
+After these repairs, the targeted Python suite passed **68 tests in 11 files**,
+including the five canonical continuation cases and existing lineage refusal
+contracts. Native coordinator/private-pipe tests passed **8 tests in 3 files**.
+The real consumer reported `recovered_operations=3`, continued messages `2`,
+conflict copies `1`, attachment bytes `68`, and account isolation `true`.
+Focused API service/handler/route/migration tests and the broader desktop and
+diagnostic PostgreSQL integration tests passed. Electron TypeScript, targeted
+ESLint, all 14 repository checks, and Go lint passed. The release boundaries
+above remain unchanged.

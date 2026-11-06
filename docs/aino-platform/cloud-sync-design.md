@@ -46,7 +46,12 @@ bounded (16 MiB request and response, 8 MiB document). Pagination also observes
 the byte budget; a response filled by operation receipts can leave the cursor
 unchanged and return `has_more=true`. A per-account serialized revision counter
 must advance in the same transaction as writes, so pagination cannot miss an
-earlier uncommitted write. The server derives user ownership solely from JWT auth.
+earlier uncommitted write. If the operation receipts alone exceed that budget, the
+server rolls back the exchange with HTTP 413 `DESKTOP_SYNC_REBATCH`. Native can
+then durably split an older pending multi-operation preparation while retaining
+each operation's identity and exact content. New preparations send one operation,
+which guarantees space for its bounded receipt. A persisted response is never
+split. The server derives user ownership solely from JWT auth.
 
 ```json
 {"cursor":"12","has_more":false,"results":[
@@ -75,7 +80,7 @@ at-rest protection apply; this release does not claim end-to-end encryption.
 ## Local synchronization boundary
 
 Python module `hermes_cli.cloud_sync` exposes a bounded JSON stdin/stdout interface
-for native desktop use. Operations are `prepare`, `read_blob`, `apply`, and `status`; the request
+for native desktop use. Operations are `prepare`, `read_blob`, `apply`, `rebatch`, and `status`; the request
 contains explicit `home` and `ui_root` resolved by native account isolation, never
 an arbitrary renderer path. `prepare` returns an exchange request and required
 blob descriptors; `read_blob` reads one staged upload through the bounded private

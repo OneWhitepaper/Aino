@@ -194,6 +194,15 @@ def portable_segments(db, conn, ids, home, ui_root):
         if row is None:
             continue
         item = {k: row[k] for k in SESSION_FIELDS}
+        # The gateway's live transport label is not the human creating surface.
+        from hermes_state_local import POLICY_PREFIX, local_lineage_owner
+        saved = conn.execute('SELECT value FROM state_meta WHERE key=?',
+                             (POLICY_PREFIX + local_lineage_owner(conn, sid),)).fetchone()
+        if saved is not None:
+            from hermes_state_local_lineage import validate_local_lineage
+            receipt = json.loads(saved[0])
+            validate_local_lineage(conn, receipt)
+            item['source'] = receipt['policy']['source']
         if item['parent_session_id'] not in ids:
             item['parent_session_id'] = None
         item['model_config'] = model_config(row['model_config'])
@@ -243,7 +252,11 @@ def remap_conflict(segments, key, revision):
             return {k: remap(v, k if field != 'tool_call_uids' else field) for k, v in value.items()}
         return value
     result = remap(segments)
+    parents = {segment.get('parent_session_id') for segment in result}
+    title = next((segment['title'] for segment in reversed(result) if segment.get('title')), 'Conversation')
     for segment in result:
-        segment['title'] = (segment.get('title') or 'Conversation') + ' (sync conflict)'
+        # A compression lineage has one visible title; giving every ancestor the
+        # same fallback violates SessionDB's unique title constraint.
+        segment['title'] = None if segment['id'] in parents else title + ' (sync conflict)'
         segment['hidden'] = 0
     return result

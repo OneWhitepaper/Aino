@@ -5,7 +5,7 @@ exactly one JSON response; diagnostics go to stderr. Input and output are bounde
 to 32 MiB. No tokens or credentials are accepted. Native passes its trusted,
 account-isolated absolute `home` and `ui_root` paths on every call.
 
-Common request: `{"version":1,"action":"prepare|apply|status|read_blob","home":"/absolute/account/home","ui_root":"/absolute/account/ui"}`.
+Common request: `{"version":1,"action":"prepare|apply|status|read_blob|rebatch","home":"/absolute/account/home","ui_root":"/absolute/account/ui"}`.
 Errors: `{"ok":false,"error":{"code":"invalid_request|sync_failed","message":"..."}}`
 (exit 1). Successful responses have `ok:true`.
 
@@ -25,9 +25,26 @@ Response:
 preparations return identical operations/cursor/uploads on retry after restart.
 Only one unapplied preparation is active: another request ID returns that active
 preparation's request ID (native MUST echo the returned ID to apply). A transport
-failure leaves the preparation pending. There are at most 16 operations per
-exchange and 50 changes per page. Status issues identify blocked conversations
+failure leaves the preparation pending. New preparations contain at most one operation per
+exchange (each conflict can independently return an 8 MiB document) and 50 changes per page. Status issues identify blocked conversations
 and unavailable media; blocked snapshots are never acknowledged as uploaded.
+
+## rebatch
+
+Only after the API returns HTTP 413 `DESKTOP_SYNC_REBATCH`, native calls `rebatch`
+with the rejected preparation's `request_id`. The server has rolled back the entire
+exchange. The adapter replaces that response-less multi-operation envelope with a
+new request ID and its first unchanged operation. Every original operation remains
+in the durable outbox, including its ID, payload, base revision and attachments.
+Subsequent preparations drain one operation at a time. This handles preparations
+persisted by the older 16-operation client as well as newly created ones.
+
+The split commits atomically. A lost rebatch reply can be retried with the old ID
+while the replacement preparation is pending; `prepare` after restart returns the
+replacement. An old envelope's late response is rejected. A preparation with an
+already persisted response is never split or discarded, and continues its exact
+application/download retry. Generic transport, quota and invalid-input errors do
+not authorize rebatching.
 
 ## apply
 
@@ -106,3 +123,11 @@ compression and admission guards. Local crash markers and execution state never
 travel in the document. Restored default-home settings remain device-local; model
 choice is retained in each conversation, and named profiles carry allowlisted
 model/name/description metadata.
+
+For a conversation already owned locally, incoming compression history is bound to
+the receiving device's own canonical route/principal. Its receipt and routing tip
+advance together with the imported rows, before retired divergent segments are
+removed. The existing policy and credentials remain local. Export uses the trusted
+local creation policy's surface label, so a gateway live label of `local` does not
+prevent adoption on another device. Conflict copies keep one unique visible title
+per compression chain.

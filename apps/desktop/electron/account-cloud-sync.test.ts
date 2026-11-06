@@ -97,3 +97,28 @@ test('a bounded four-page poll remains pending until remaining cloud pages arriv
   expect(sync.snapshot()).toMatchObject({ state: 'pending', pending: 1 })
   await sync.stop()
 })
+
+test('a typed size rollback durably re-batches only its pending legacy preparation', async () => {
+  const { auth, local, sync } = setup()
+  const legacy = { ok: true, request_id: 'old', exchange: { operations: [{}, {}, {}] }, uploads: [], status }
+  let recovered = false
+  local.mockImplementation(async (_home, input) => {
+    if (input.action === 'rebatch') {
+      expect(input.request_id).toBe('old')
+      recovered = true
+
+      return { ok: true, status: { state: 'pending', pending: 3, issues: [] } }
+    }
+
+    if (input.action === 'prepare') { return recovered ? { ...legacy, request_id: 'single', exchange: { operations: [{}] } } : legacy }
+    expect(input.request_id).toBe('single')
+
+    return { ok: true, status }
+  })
+  auth.syncExchange.mockRejectedValueOnce(Object.assign(new Error(), { code: 'DESKTOP_SYNC_REBATCH' }))
+  sync.start(home('A')); await sync.retry()
+  expect(sync.snapshot().state).toBe('synced')
+  expect(local.mock.calls.filter(call => call[1].action === 'rebatch')).toHaveLength(1)
+  expect(local.mock.calls.filter(call => call[1].action === 'apply')).toHaveLength(1)
+  await sync.stop()
+})

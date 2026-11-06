@@ -414,9 +414,11 @@ def test_initial_backlog_is_bounded_and_status_stays_pending(tmp_path):
         db.append_message(sid, 'user', 'hello')
     cloud = Cloud()
     prepared = call(home, 'prepare', request_id=str(uuid.uuid4()))
-    assert len(prepared['exchange']['operations']) == 16
+    assert len(prepared['exchange']['operations']) == 1
     result = call(home, 'apply', request_id=prepared['request_id'], response=cloud.exchange(prepared['exchange']))
     assert result['status']['state'] == 'pending'
-    assert sync(home, cloud)['status']['state'] == 'synced'
+    for _ in range(16):
+        result = sync(home, cloud)
+    assert result['status']['state'] == 'synced'
     assert len(cloud.records) == 17
     db.close()

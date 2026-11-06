@@ -118,7 +118,19 @@ export function createAccountCloudSync({ auth, local, deviceId, intervalMs = 15_
       publish({ pending: prepared.status.pending })
       const context = { auth, owner, signal, call, guard }
       await uploadBlobs(prepared, context)
-      const response = prepared.pending_response ?? await auth.syncExchange(prepared.exchange, owner, signal)
+      let response: SyncResponse
+
+      try { response = prepared.pending_response ?? await auth.syncExchange(prepared.exchange, owner, signal) }
+      catch (error) {
+        guard()
+
+        if ((error as { code?: string }).code !== 'DESKTOP_SYNC_REBATCH' || prepared.pending_response || prepared.exchange.operations.length < 2) { throw error }
+        const recovered = await call({ action: 'rebatch', request_id: prepared.request_id })
+        publish(localStatus(recovered))
+
+        continue
+      }
+
       guard()
       const initial = await call({ action: 'apply', request_id: prepared.request_id, response })
       publish(changes(initial))

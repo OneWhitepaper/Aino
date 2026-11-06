@@ -12,7 +12,7 @@ def dispatch(request):
     from hermes_cli.cloud_sync_engine import exchange_local
     if not isinstance(request, dict) or request.get('version') != 1:
         raise ValueError('unsupported sync request version')
-    actions = {'prepare', 'apply', 'status', 'read_blob'}
+    actions = {'prepare', 'apply', 'status', 'read_blob', 'rebatch'}
     if request.get('action') not in actions:
         raise ValueError('unsupported sync action')
     allowed = {'version', 'action', 'home', 'ui_root', 'request_id', 'device_id', 'response', 'blobs', 'sha256'}

@@ -10,7 +10,9 @@ import { createPlatformClient } from '../shared/platform-client'
 
 import { createAccountCloudSync } from './account-cloud-sync'
 import { createCloudSyncLocalAdapter } from './account-cloud-sync-local'
+import type { AccountWorkspace } from './account-workspace'
 import { prepareAccountWorkspace } from './account-workspace'
+import { recoverLargeConflicts } from './cloud-sync-recovery-consumer'
 
 interface Fixture { origin: string; user_id: string; token: string; other_user_id: string; other_token: string }
 
@@ -22,11 +24,12 @@ export async function runCloudSyncConsumer(fixture: Fixture, repo: string, pytho
 
   for (const workspace of [a, b, other]) { prepareAccountWorkspace(workspace) }
 
-  const run = (workspace: typeof a, script: string) => execFileSync(python, ['-P', '-c',
+  const run = (workspace: AccountWorkspace, script: string) => execFileSync(python, ['-P', '-c',
     `import os,json\nfrom pathlib import Path\nfrom hermes_state import SessionDB\nh=Path(os.environ['HERMES_HOME'])\ndb=SessionDB(h/'state.db')\n${script}\ndb.close()`],
   { cwd: repo, env: { ...process.env, ...env, HERMES_HOME: workspace.home }, encoding: 'utf8' }).trim()
 
   let offline = false, loseResponse = true
+  const recoveryFault = { dropRebatch: false, dropped: 0 }
 
   const proxy = http.createServer(async (req, res) => {
     if (offline) { req.socket.destroy();
@@ -45,6 +48,10 @@ export async function runCloudSyncConsumer(fixture: Fixture, repo: string, pytho
       const body = Buffer.from(await upstream.arrayBuffer())
 
       if (loseResponse && req.url?.endsWith('/sync/exchange') && upstream.ok) { loseResponse = false; req.socket.destroy();
+
+ return }
+
+      if (recoveryFault.dropRebatch && body.includes('DESKTOP_SYNC_REBATCH')) { recoveryFault.dropRebatch = false; recoveryFault.dropped++; req.socket.destroy();
 
  return }
 
@@ -74,7 +81,7 @@ export async function runCloudSyncConsumer(fixture: Fixture, repo: string, pytho
 
   const requireState = (expected = 'synced') => { if (sync.snapshot().state !== expected) { throw new Error(`sync_${sync.snapshot().state}_${sync.snapshot().error}`) } }
 
-  const settle = async (workspace: typeof a) => {
+  const settle = async (workspace: AccountWorkspace) => {
     sync.start(workspace)
 
     for (let attempt = 0; attempt < 8; attempt++) { await sync.retry();
@@ -106,6 +113,7 @@ export async function runCloudSyncConsumer(fixture: Fixture, repo: string, pytho
     const conflictCount = Number(run(b, "print(db._conn.execute(\"SELECT COUNT(*) FROM sessions WHERE title LIKE '%sync conflict%'\").fetchone()[0])"))
 
     if (conflictCount < 1) { throw new Error('conflict_not_preserved') }
+    const recoveredOperations = await recoverLargeConflicts({ a, b, auth, local, run, settle, fault: recoveryFault })
     const otherAuth = await authentication(fixture.other_token)
 
     if (otherAuth.snapshot().account?.id !== fixture.other_user_id) { throw new Error('other_fixture_identity_mismatch') }
@@ -115,7 +123,7 @@ export async function runCloudSyncConsumer(fixture: Fixture, repo: string, pytho
 
     if (Number(run(other, 'print(db.session_count())')) !== 0) { throw new Error('cross_account_history_leak') }
 
-    return { continued_messages: continued.length, conflict_copies: conflictCount, attachment_bytes: png.length, account_isolation: true }
+    return { recovered_operations: recoveredOperations, continued_messages: continued.length, conflict_copies: conflictCount, attachment_bytes: png.length, account_isolation: true }
   } finally {
     await Promise.all(coordinators.map(coordinator => coordinator.stop())); proxy.closeAllConnections(); await new Promise<void>(resolve => proxy.close(() => resolve()))
     rmSync(root, { recursive: true, force: true })

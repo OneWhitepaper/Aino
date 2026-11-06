@@ -127,7 +127,7 @@ def prepare(home, state, request):
         size += cost
         selected.append(operation)
         uploads.update(required)
-        if len(selected) == 16:
+        if len(selected) == 1:
             break
     state['preparation'] = {'request_id': request_id,
         'exchange': {'version': 1, 'device_id': state['device_id'], 'after': state['cursor'],
@@ -135,12 +135,38 @@ def prepare(home, state, request):
     return preparation_result(state)
 
 
+def rebatch(state, request):
+    """A typed server rollback retires only the envelope, never its immutable operations."""
+    request_id = uuid_text(request.get('request_id'))
+    prepared = state.get('preparation')
+    if prepared and prepared.get('rebatched_from') == request_id:
+        return preparation_result(state)
+    if (not prepared or prepared['request_id'] != request_id or 'response' in prepared
+            or len(prepared['exchange']['operations']) < 2):
+        raise ValueError('preparation cannot be rebatched')
+    operation = prepared['exchange']['operations'][0]
+    prepared['exchange']['operations'] = [operation]
+    prepared['uploads'] = list((operation.get('payload') or {}).get('attachments', []))
+    prepared['request_id'] = str(uuid.uuid4())
+    prepared['rebatched_from'] = request_id
+    return preparation_result(state)
+
+
 def preparation_result(state):
     result = {'ok': True, **state['preparation'], 'status': status(state)}
     result.pop('response_hash', None)
+    result.pop('rebatched_from', None)
     if 'response' in result:
         result['pending_response'] = result.pop('response')
     return result
+
+
+def read_blob_result(home, request):
+    from hermes_cli.cloud_sync_apply import load_blob
+    blob = load_blob(home, request['sha256'])
+    if blob is None:
+        raise ValueError('unknown staged blob')
+    return {'ok': True, **blob}
 
 
 def exchange_local(request):
@@ -182,20 +208,15 @@ def exchange_local(request):
                 if state.get('preparation') and device_id != state['device_id']:
                     raise ValueError('device_id changed during pending preparation')
                 state['device_id'] = device_id
-            action = request['action']
-            if action == 'status':
-                result = {'ok': True, 'status': status(state)}
-            elif action == 'prepare':
-                result = prepare(home, state, request)
-            elif action == 'read_blob':
-                from hermes_cli.cloud_sync_apply import load_blob
-                blob = load_blob(home, request['sha256'])
-                if blob is None:
-                    raise ValueError('unknown staged blob')
-                result = {'ok': True, **blob}
-            else:
-                from hermes_cli.cloud_sync_apply import apply
-                result = apply(db, conn, home, ui_root, state, request)
+            from hermes_cli.cloud_sync_apply import apply
+            handlers = {
+                'status': lambda: {'ok': True, 'status': status(state)},
+                'prepare': lambda: prepare(home, state, request),
+                'rebatch': lambda: rebatch(state, request),
+                'read_blob': lambda: read_blob_result(home, request),
+                'apply': lambda: apply(db, conn, home, ui_root, state, request),
+            }
+            result = handlers[request['action']]()
             put_meta(conn, STATE_KEY, state)
             return result
         return db._execute_write(perform)

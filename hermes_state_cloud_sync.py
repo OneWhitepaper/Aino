@@ -68,6 +68,9 @@ def import_rows(db, conn, segments, profile, *, replace=False):
         sid = raw['id']
         if retired_in(conn, sid):
             raise ValueError('remote history attempts to resurrect a locally deleted identity')
+        if not replace and raw.get('title'):
+            from hermes_state_titles import next_title_in_lineage
+            raw = dict(raw, title=next_title_in_lineage(conn, raw['title']))
         if replace:
             conn.execute('DELETE FROM messages WHERE session_id=?', (sid,))
         db._import_session_row(conn, raw, messages, sid, replace_existing=replace)
@@ -76,6 +79,40 @@ def import_rows(db, conn, segments, profile, *, replace=False):
         if raw.get('parent_session_id'):
             parents.append((sid, raw['parent_session_id']))
     db._attach_import_parents(conn, parents)
+
+
+def local_target_snapshot(conn, root):
+    from hermes_state_local import POLICY_PREFIX, local_lineage_owner
+    from hermes_state_local_lineage import validate_local_lineage, _routed_entry
+    receipt = get_meta(conn, POLICY_PREFIX + local_lineage_owner(conn, root))
+    if receipt is None:
+        return None
+    tip = validate_local_lineage(conn, receipt)
+    routed = _routed_entry(conn, receipt['route'], tip)
+    if routed is None:
+        raise ValueError('local conversation route changed')
+    return receipt, routed
+
+
+def reconcile_local_target(conn, root, remote_ids, saved):
+    """Bind imported history to this device's existing owner, never the remote writer."""
+    if saved is None:
+        return
+    from hermes_state_local_lineage import _untracked_steps, validate_local_lineage, _commit_local_target
+    receipt, routed = saved
+    old_lineage = receipt.get('lineage', [receipt['session_id']])
+    steps = _untracked_steps(conn, root, [])
+    if steps is None or {root, *steps} != set(remote_ids) or root not in old_lineage:
+        raise ValueError('remote history is not one local compression lineage')
+    lineage = old_lineage[:old_lineage.index(root)] + [root, *steps]
+    for sid in remote_ids:
+        conn.execute('UPDATE sessions SET session_key=?,chat_id=?,user_id=?,chat_type=?,origin_json=? WHERE id=?',
+                     (receipt['route'], receipt['session_id'], receipt['principal_id'],
+                      'dm', dumps(receipt['entry']['origin']), sid))
+    receipt['lineage'] = lineage
+    receipt['entry'] = dict(receipt['entry'], session_id=lineage[-1])
+    validate_local_lineage(conn, receipt)
+    _commit_local_target(conn, receipt, dict(routed, session_id=lineage[-1]))
 
 
 def apply_record(db, conn, record, home, ui_root, profile, *, portable_hash=None):
@@ -126,9 +163,16 @@ def apply_record(db, conn, record, home, ui_root, profile, *, portable_hash=None
             conn.execute('DELETE FROM sessions WHERE id=?', (sid,))
         changed.extend(existing)
     elif local_hash != remote_hash:
+        saved_target = local_target_snapshot(conn, root)
+        # Move a title with its lineage tip without colliding with the replaced tip.
+        for sid in existing:
+            conn.execute('UPDATE sessions SET title=NULL WHERE id=?', (sid,))
         # Imported rows are history, never new admissions or resumable crash markers.
         import_rows(db, conn, record['payload']['segments'], profile, replace=True)
         removed = set(existing) - set(remote_ids)
+        for sid in removed:
+            conn.execute('UPDATE sessions SET parent_session_id=NULL WHERE id=?', (sid,))
+        reconcile_local_target(conn, root, remote_ids, saved_target)
         retire_sessions(conn, list(removed))
         for sid in removed:
             db._bump_conversation_generation(conn, sid, 'session_reset')
