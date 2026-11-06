@@ -178,10 +178,15 @@ it('drops the pending discovery result after the dialog is cancelled', async () 
 
 it('clears the credential draft on owner change and rejects the previous owner completion', async () => {
   const pending = deferred<{ providers: ModelOptionProvider[] }>()
+  const nextCatalog = deferred<{ providers: ModelOptionProvider[] }>()
   const nextOwner = { connectionId: 'another-host', profile: 'writer' }
   api.options.mockImplementation(async (options?: { refresh?: boolean }, scope?: { connectionId?: string }) => {
     if (options?.refresh && scope?.connectionId === owner.connectionId) {
       return pending.promise
+    }
+
+    if (scope?.connectionId === nextOwner.connectionId) {
+      return nextCatalog.promise
     }
 
     return { providers: [] }
@@ -193,7 +198,9 @@ it('clears the credential draft on owner change and rejects the previous owner c
   await waitFor(() => expect(api.env).toHaveBeenCalledWith(nextOwner))
   await act(async () => pending.resolve({ providers: [connected] }))
 
-  expect(screen.getByLabelText<HTMLInputElement>(/^API key$/i).value).toBe('')
+  expect(screen.queryByLabelText(/^API key$/i)).toBeNull()
+  await act(async () => nextCatalog.resolve({ providers: [] }))
+  expect((await screen.findByLabelText<HTMLInputElement>(/^API key$/i)).value).toBe('')
   expect(screen.queryByRole('combobox', { name: 'Model name' })).toBeNull()
   expect(screen.queryByRole('status')).toBeNull()
   expect(onConfigSaved).not.toHaveBeenCalled()
