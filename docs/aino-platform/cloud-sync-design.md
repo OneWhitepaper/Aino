@@ -42,7 +42,9 @@ envelope (`data`). Request:
 All revisions/cursors are decimal strings. Keys are 1–256 ASCII characters from
 `[A-Za-z0-9._:/-]`. Device IDs are bounded nonempty strings. Operation IDs are UUIDs.
 At most 16 operations and 50 returned changes per exchange; requests/documents are
-bounded (16 MiB request, 8 MiB document). A per-account serialized revision counter
+bounded (16 MiB request and response, 8 MiB document). Pagination also observes
+the byte budget; a response filled by operation receipts can leave the cursor
+unchanged and return `has_more=true`. A per-account serialized revision counter
 must advance in the same transaction as writes, so pagination cannot miss an
 earlier uncommitted write. The server derives user ownership solely from JWT auth.
 
@@ -73,14 +75,18 @@ at-rest protection apply; this release does not claim end-to-end encryption.
 ## Local synchronization boundary
 
 Python module `hermes_cli.cloud_sync` exposes a bounded JSON stdin/stdout interface
-for native desktop use. Operations are `prepare`, `apply`, and `status`; the request
+for native desktop use. Operations are `prepare`, `read_blob`, `apply`, and `status`; the request
 contains explicit `home` and `ui_root` resolved by native account isolation, never
 an arbitrary renderer path. `prepare` returns an exchange request and required
-blob uploads, `apply` consumes the server response and downloaded blobs, commits
+blob descriptors; `read_blob` reads one staged upload through the bounded private
+pipe. `apply` consumes the server response and downloaded blobs, commits
 receipts/cursor with local changes, and returns changed session/profile IDs and
 status. Exact shapes are shared in the implementation plan and fixture tests.
 The Python adapter is responsible for its durable outbox, cursor, content hashes,
-pending downloads, and local conflict copies. Native code owns network retries,
+pending downloads, and local conflict copies. An incomplete application retains
+its exact response durably and returns it on the next preparation, including
+after restart. Downloaded blobs accumulate on disk so a large attachment set
+need not cross the pipe in one response. Native code owns network retries,
 account generation fencing, worker cancellation and UI status publication.
 
 Export full archival flags and context (`include_inactive=True`), preserve message
@@ -103,6 +109,8 @@ the global profile directory or credentials. Attachments are explicit portable
 references to uploaded blobs; only regular files within the owning home or UI
 attachment directories may be read, without following escaping symlinks. Remote
 files are written into a private account media directory with hash-based names.
+Display copies use a safe extension derived from file content so existing media
+rendering works without trusting a sender-provided filename or path.
 Missing/oversized attachments are reported, never silently marked synchronized.
 Running tools and uncertain side effects become history only; opening a restored
 chat does not execute them. A new user submission is required for any model turn.
