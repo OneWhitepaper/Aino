@@ -159,8 +159,7 @@ def publish_profile(home, profile):
     title = meta.pop('bot_title', None)
     write_profile_meta(directory, **{k: v for k, v in meta.items() if k in META_FIELDS})
     if title:
-        import yaml
-        current = yaml.safe_load((directory / 'profile.yaml').read_text(encoding='utf-8-sig')) or {}
+        current = read_config_doc(directory / 'profile.yaml') or {}
         current.setdefault('ui_meta', {}).setdefault('hermes-bots', {})['title'] = title
         atomic_yaml_write(directory / 'profile.yaml', current, sort_keys=False)
     if profile.get('config'):
