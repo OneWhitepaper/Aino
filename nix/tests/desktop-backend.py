@@ -1,14 +1,20 @@
-"""Launch the packaged desktop with a competing mutable install."""
+"""Launch the Nix desktop with a competing mutable install and a local account."""
 import contextlib
+from http.server import ThreadingHTTPServer
+import json
 import os
 from pathlib import Path
 import signal
+import socket
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 
 from hermes_cli.desktop_identity import DESKTOP_PRODUCT_NAME
+
+from desktop_account_fixture import _PlatformFixture, _authenticate_fixture
 
 
 def _processes_under(home: Path) -> list[int]:
@@ -51,11 +57,23 @@ with tempfile.TemporaryDirectory(prefix="hermes-desktop-backend-") as temporary:
     launcher.chmod(0o755)
     runtime = home / "runtime"
     runtime.mkdir(mode=0o700)
+    user_data = home / "electron"
+    user_data.mkdir()
+    platform = ThreadingHTTPServer(("127.0.0.1", 0), _PlatformFixture)
+    threading.Thread(target=platform.serve_forever, daemon=True).start()
+    # Nix ships a directory app loaded by Electron, so the existing native
+    # development-origin config applies; the platform auth adapter stays on.
+    (user_data / "platform-development.json").write_text(json.dumps({
+        "enabled": True, "origin": f"http://127.0.0.1:{platform.server_port}",
+    }))
+    with socket.socket() as probe:
+        probe.bind(("127.0.0.1", 0))
+        cdp_port = probe.getsockname()[1]
     env = {
         "PATH": os.environ["PATH"],
         "HOME": str(home),
         "HERMES_HOME": str(hermes_home),
-        "HERMES_DESKTOP_USER_DATA_DIR": str(home / "electron"),
+        "HERMES_DESKTOP_USER_DATA_DIR": str(user_data),
         "XDG_RUNTIME_DIR": str(runtime),
         "XDG_CONFIG_HOME": str(home / ".config"),
         "XDG_CACHE_HOME": str(home / ".cache"),
@@ -69,16 +87,17 @@ with tempfile.TemporaryDirectory(prefix="hermes-desktop-backend-") as temporary:
     log_path = home / "desktop-output.log"
     with log_path.open("w") as log:
         child = subprocess.Popen(
-            ["cage", "--", desktop, "--no-sandbox", "--disable-gpu", "--ozone-platform=wayland"],
+            ["cage", "--", desktop, "--no-sandbox", "--disable-gpu", "--ozone-platform=wayland",
+             f"--remote-debugging-port={cdp_port}", "--remote-debugging-address=127.0.0.1"],
             cwd=home, env=env, stdout=log, stderr=subprocess.STDOUT,
             start_new_session=True,
         )
         try:
+            _authenticate_fixture(cdp_port, log_path, child)
             deadline = time.monotonic() + 90
             while time.monotonic() < deadline:
                 output = log_path.read_text()
-                desktop_log = hermes_home / "logs" / "desktop.log"
-                if desktop_log.exists():
+                for desktop_log in home.rglob("desktop.log"):
                     output += desktop_log.read_text()
                 assert "WRONG_BACKEND_SELECTED" not in output, output
                 assert child.poll() is None, output
@@ -92,6 +111,8 @@ with tempfile.TemporaryDirectory(prefix="hermes-desktop-backend-") as temporary:
             else:
                 raise AssertionError(f"Desktop did not start its backend:\n{output}")
         finally:
+            platform.shutdown()
+            platform.server_close()
             os.killpg(child.pid, signal.SIGTERM)
             try:
                 child.wait(timeout=15)
