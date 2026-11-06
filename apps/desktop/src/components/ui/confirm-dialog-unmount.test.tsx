@@ -1,9 +1,13 @@
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
-import { afterEach, expect, test, vi } from 'vitest'
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 
-afterEach(cleanup)
+beforeEach(() => vi.useFakeTimers())
+afterEach(() => {
+  cleanup()
+  vi.useRealTimers()
+})
 
 vi.mock('@/i18n', () => ({
   useI18n: () => ({
@@ -14,44 +18,87 @@ vi.mock('@/i18n', () => ({
   })
 }))
 
-// ConfirmDialog schedules window.setTimeout(onClose, 600) after a successful
-// confirm. The timer had no cleanup, so an unmount inside that window left it
-// pending. In CI it came due after the environment was gone. The setState
-// path of React then touched `window`:
-//
-//   ReferenceError: window is not defined
-//    at resolveUpdatePriority (react-dom-client.development.js:1308)
-//    at dispatchSetState
-//    at Timeout.t4 [as _onTimeout] session-actions-menu.tsx:574
-//
-// The frame at session-actions-menu.tsx:574 is the `onClose` prop of
-// DeleteSessionDialog. The owner of the timer is this component.
-//
-// This test confirms, unmounts inside the 600ms window, and then lets the
-// timer come due on the dead tree.
-test('the close timer does not fire after unmount', async () => {
-  vi.useFakeTimers()
+test.each(['unmount', 'reopen', 'stay open'] as const)('owns the done beat until %s', async leave => {
   const onClose = vi.fn()
   const onConfirm = vi.fn()
 
-  render(<ConfirmDialog confirmLabel="Delete" onClose={onClose} onConfirm={onConfirm} open title="Delete session" />)
+  const dialog = (open: boolean) => (
+    <ConfirmDialog confirmLabel="Delete" onClose={onClose} onConfirm={onConfirm} open={open} title="Delete session" />
+  )
 
-  fireEvent.click(screen.getByRole('button', { name: 'Delete' }))
+  const view = render(dialog(true))
 
-  // Not waitFor: it polls on real timers, and the fake timers of this test
-  // never let it advance. onConfirm runs synchronously inside the click, and
-  // one microtask turn is enough for the await in run() to settle and reach
-  // the setTimeout.
-  await Promise.resolve()
-  await Promise.resolve()
-  expect(onConfirm).toHaveBeenCalled()
-
-  // Unmount while the close timer is still pending.
-  cleanup()
-
-  // Let the timer come due on the unmounted tree.
-  vi.advanceTimersByTime(1000)
-
+  await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Delete' })))
+  expect(screen.getByRole('button', { name: 'Done' }).hasAttribute('disabled')).toBe(true)
+  act(() => vi.advanceTimersByTime(599))
   expect(onClose).not.toHaveBeenCalled()
-  vi.useRealTimers()
+
+  if (leave === 'unmount') {
+    view.unmount()
+  } else if (leave === 'reopen') {
+    view.rerender(dialog(false))
+    view.rerender(dialog(true))
+  }
+
+  act(() => vi.advanceTimersByTime(1))
+  expect(onClose).toHaveBeenCalledTimes(leave === 'stay open' ? 1 : 0)
 })
+
+const settlements = [
+  { dismissOnConfirm: false, outcome: 'success' },
+  { dismissOnConfirm: false, outcome: 'error' },
+  { dismissOnConfirm: true, outcome: 'success' },
+  { dismissOnConfirm: true, outcome: 'error' }
+] as const
+
+test.each(settlements.flatMap(settlement => (['unmount', 'reopen'] as const).map(leave => ({ ...settlement, leave }))))(
+  'ignores $outcome after $leave (dismissOnConfirm: $dismissOnConfirm)',
+  async ({ dismissOnConfirm, leave, outcome }) => {
+    let resolve!: () => void
+    let reject!: (error: Error) => void
+
+    const pending = new Promise<void>((yes, no) => {
+      resolve = yes
+      reject = no
+    })
+
+    const onClose = vi.fn()
+    const onConfirm = () => pending
+
+    const dialog = (open: boolean) => (
+      <ConfirmDialog
+        dismissOnConfirm={dismissOnConfirm}
+        onClose={onClose}
+        onConfirm={onConfirm}
+        open={open}
+        title="Delete session"
+      />
+    )
+
+    const view = render(dialog(true))
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm' }))
+
+    if (leave === 'unmount') {
+      view.unmount()
+    } else {
+      view.rerender(dialog(false))
+      view.rerender(dialog(true))
+    }
+
+    // A caller may remove the dialog before its confirmation promise settles.
+    await act(async () => {
+      if (outcome === 'success') {
+        resolve()
+      } else {
+        reject(new Error('Old confirmation failed'))
+      }
+    })
+    act(() => vi.advanceTimersByTime(600))
+    expect(onClose).not.toHaveBeenCalled()
+
+    if (leave === 'reopen') {
+      expect(screen.getByRole('button', { name: 'Confirm' }).hasAttribute('disabled')).toBe(false)
+      expect(screen.queryByText('Old confirmation failed')).toBeNull()
+    }
+  }
+)

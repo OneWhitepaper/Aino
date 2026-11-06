@@ -39,6 +39,11 @@ interface ConfirmSecondaryAction {
   onClick: () => void
 }
 
+interface ConfirmationLifecycle {
+  active: boolean
+  closeTimer: null | number
+}
+
 // Shared confirmation dialog: opens focused on Confirm, Enter confirms (from
 // anywhere in the dialog), Esc/Cancel/backdrop dismiss. Owns the pending → done
 // → close beat and inline error, so callers pass only an async onConfirm that
@@ -60,7 +65,7 @@ export function ConfirmDialog({
 }: ConfirmDialogProps) {
   const { t } = useI18n()
   const confirmRef = useRef<HTMLButtonElement>(null)
-  const closeTimerRef = useRef<null | number>(null)
+  const lifecycleRef = useRef<ConfirmationLifecycle | null>(null)
   const [status, setStatus] = useState<'done' | 'idle' | 'saving'>('idle')
   const [error, setError] = useState<null | string>(null)
   const busy = status === 'saving' || status === 'done'
@@ -69,59 +74,62 @@ export function ConfirmDialog({
   const resolvedDoneLabel = doneLabel ?? t.common.done
   const resolvedCancelLabel = cancelLabel ?? t.common.cancel
 
+  // Each opening owns its async results and done timer. A confirmation can
+  // remove this dialog before resolving, or finish after another opening.
+  // The ref holds a lifecycle token, not a mirror of reactive state.
+  // eslint-disable-next-line no-restricted-syntax
   useEffect(() => {
-    if (open) {
-      setStatus('idle')
-      setError(null)
+    if (!open) {
+      return
+    }
+
+    const lifecycle: ConfirmationLifecycle = { active: true, closeTimer: null }
+    lifecycleRef.current = lifecycle
+    setStatus('idle')
+    setError(null)
+
+    return () => {
+      lifecycle.active = false
+
+      if (lifecycle.closeTimer !== null) {
+        window.clearTimeout(lifecycle.closeTimer)
+      }
     }
   }, [open])
 
-  // Cancel the pending close timer on unmount. The timer below holds the
-  // "done" beat visible for 600ms, and an unmount inside that window used to
-  // leave it armed. It then called onClose on a tree that is gone, which
-  // reaches setState in the parent. Under vitest the environment can be torn
-  // down first, and React then reads `window` during the update and throws
-  // ReferenceError.
-  // The write below is a timer handle, and not a mirror of a reactive value.
-  // It happens on unmount only, and it clears the handle this component owns.
-  // eslint-disable-next-line no-restricted-syntax
-  useEffect(() => {
-    return () => {
-      if (closeTimerRef.current !== null) {
-        window.clearTimeout(closeTimerRef.current)
-        closeTimerRef.current = null
-      }
-    }
-  }, [])
-
   async function run() {
-    if (busy) {
+    const lifecycle = lifecycleRef.current
+
+    if (busy || !lifecycle?.active) {
       return
     }
 
     setError(null)
 
-    if (dismissOnConfirm) {
-      try {
-        await onConfirm()
-        onClose()
-      } catch (err) {
-        setError(err instanceof Error ? err.message : t.errors.genericFailure)
-      }
-
-      return
+    if (!dismissOnConfirm) {
+      setStatus('saving')
     }
-
-    setStatus('saving')
 
     try {
       await onConfirm()
-      setStatus('done')
-      closeTimerRef.current = window.setTimeout(() => {
-        closeTimerRef.current = null
+
+      if (!lifecycle.active) {
+        return
+      }
+
+      if (dismissOnConfirm) {
         onClose()
-      }, 600)
+
+        return
+      }
+
+      setStatus('done')
+      lifecycle.closeTimer = window.setTimeout(onClose, 600)
     } catch (err) {
+      if (!lifecycle.active) {
+        return
+      }
+
       setStatus('idle')
       setError(err instanceof Error ? err.message : t.errors.genericFailure)
     }
