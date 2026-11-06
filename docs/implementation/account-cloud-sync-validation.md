@@ -148,3 +148,16 @@ Focused API service/handler/route/migration tests and the broader desktop and
 diagnostic PostgreSQL integration tests passed. Electron TypeScript, targeted
 ESLint, all 14 repository checks, and Go lint passed. The release boundaries
 above remain unchanged.
+
+The reset-boundary continuation adds two native canonical cases in
+`tests/gateway/test_cloud_sync_reset.py`. A performs a real `session.mutate(reset)`;
+B continues and compresses either the post-reset group or the older group. Sync
+back to A completes while preserving the original logical owner, local reset
+edge/metadata/timestamp, and the later reset target when applicable. A resumes
+and submits both warm and after a daemon restart; model context remains on the
+correct side of `/new`. Both cases failed on the preceding implementation and
+passed after local reset-boundary reconciliation. The existing compression,
+rebatching and execution-guard tests remain part of the affected regression run.
+The reset follow-up's affected suite passed **71 tests across 13 files**, with one
+Linux-only daemon test skipped on macOS; both new reset cases ran. All 14 repository
+checks passed with zero code-health blockers or advisories.

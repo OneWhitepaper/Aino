@@ -83,7 +83,7 @@ def import_rows(db, conn, segments, profile, *, replace=False):
 
 def local_target_snapshot(conn, root):
     from hermes_state_local import POLICY_PREFIX, local_lineage_owner
-    from hermes_state_local_lineage import validate_local_lineage, _routed_entry
+    from hermes_state_local_lineage import validate_local_lineage, _routed_entry, _untracked_steps
     receipt = get_meta(conn, POLICY_PREFIX + local_lineage_owner(conn, root))
     if receipt is None:
         return None
@@ -91,20 +91,43 @@ def local_target_snapshot(conn, root):
     routed = _routed_entry(conn, receipt['route'], tip)
     if routed is None:
         raise ValueError('local conversation route changed')
-    return receipt, routed
+    lineage = receipt.get('lineage', [receipt['session_id']])
+    group = [root, *_untracked_steps(conn, root, [])]
+    start = lineage.index(root)
+    stop = start + len(group)
+    if lineage[start:stop] != group:
+        raise ValueError('local compression group differs from receipt')
+    ended_at = conn.execute('SELECT ended_at FROM sessions WHERE id=?', (group[-1],)).fetchone()[0]
+    return receipt, routed, lineage[:start], lineage[stop:], ended_at
+
+
+def restore_reset_edge(conn, parent, child):
+    config = conn.execute('SELECT model_config FROM sessions WHERE id=?', (child,)).fetchone()[0]
+    config = json.loads(config or '{}')
+    config['_reset_from'] = parent
+    conn.execute('UPDATE sessions SET parent_session_id=?,model_config=?,runtime_revision=runtime_revision+1 WHERE id=?',
+                 (parent, dumps(config), child))
 
 
 def reconcile_local_target(conn, root, remote_ids, saved):
     """Bind imported history to this device's existing owner, never the remote writer."""
     if saved is None:
-        return
+        return []
     from hermes_state_local_lineage import _untracked_steps, validate_local_lineage, _commit_local_target
-    receipt, routed = saved
-    old_lineage = receipt.get('lineage', [receipt['session_id']])
+    receipt, routed, prefix, suffix, ended_at = saved
     steps = _untracked_steps(conn, root, [])
-    if steps is None or {root, *steps} != set(remote_ids) or root not in old_lineage:
+    if steps is None or {root, *steps} != set(remote_ids):
         raise ValueError('remote history is not one local compression lineage')
-    lineage = old_lineage[:old_lineage.index(root)] + [root, *steps]
+    group = [root, *steps]
+    # Reset boundaries are device-local; portable documents contain only one
+    # compression group, so neither adjoining boundary comes from the sender.
+    if prefix:
+        restore_reset_edge(conn, prefix[-1], root)
+    if suffix:
+        restore_reset_edge(conn, group[-1], suffix[0])
+        conn.execute("UPDATE sessions SET end_reason='session_reset',ended_at=? WHERE id=?",
+                     (ended_at, group[-1]))
+    lineage = prefix + group + suffix
     for sid in remote_ids:
         conn.execute('UPDATE sessions SET session_key=?,chat_id=?,user_id=?,chat_type=?,origin_json=? WHERE id=?',
                      (receipt['route'], receipt['session_id'], receipt['principal_id'],
@@ -113,6 +136,7 @@ def reconcile_local_target(conn, root, remote_ids, saved):
     receipt['entry'] = dict(receipt['entry'], session_id=lineage[-1])
     validate_local_lineage(conn, receipt)
     _commit_local_target(conn, receipt, dict(routed, session_id=lineage[-1]))
+    return suffix[:1]
 
 
 def apply_record(db, conn, record, home, ui_root, profile, *, portable_hash=None):
@@ -172,7 +196,7 @@ def apply_record(db, conn, record, home, ui_root, profile, *, portable_hash=None
         removed = set(existing) - set(remote_ids)
         for sid in removed:
             conn.execute('UPDATE sessions SET parent_session_id=NULL WHERE id=?', (sid,))
-        reconcile_local_target(conn, root, remote_ids, saved_target)
+        changed.extend(reconcile_local_target(conn, root, remote_ids, saved_target))
         retire_sessions(conn, list(removed))
         for sid in removed:
             db._bump_conversation_generation(conn, sid, 'session_reset')

@@ -131,3 +131,11 @@ removed. The existing policy and credentials remain local. Export uses the trust
 local creation policy's surface label, so a gateway live label of `local` does not
 prevent adoption on another device. Conflict copies keep one unique visible title
 per compression chain.
+
+A local `/new` reset is a boundary between compression documents, while the local
+receipt retains one logical owner across those documents. Replacing a document
+preserves the receipt's earlier and later groups. Its incoming root reconnects to
+the locally retained reset parent; a retained later reset reconnects to the new
+group tip with its local `_reset_from` marker and original reset timestamp. An
+older group's remote continuation never makes it the active target of a later
+local reset. These edges come only from the validated receiving-device receipt.
