@@ -4,7 +4,7 @@ import json
 import threading
 import time
 from urllib.error import URLError
-from urllib.request import urlopen
+from urllib.request import ProxyHandler, build_opener
 
 from websockets.exceptions import ConnectionClosed
 from websockets.sync.client import connect
@@ -47,7 +47,7 @@ class _PlatformFixture(BaseHTTPRequestHandler):
 
 
 def _evaluate(target, expression):
-    with connect(target["webSocketDebuggerUrl"], open_timeout=2) as websocket:
+    with connect(target["webSocketDebuggerUrl"], open_timeout=2, proxy=None) as websocket:
         websocket.send(json.dumps({"id": 1, "method": "Runtime.evaluate", "params": {
             "expression": expression, "awaitPromise": True, "returnByValue": True,
         }}))
@@ -62,17 +62,24 @@ def _evaluate(target, expression):
 
 def _authenticate_fixture(port, log_path, child):
     login_started = False
+    # Nix build environments deliberately poison proxy variables. Both CDP
+    # transports connect only to this fixture's loopback listener.
+    opener = build_opener(ProxyHandler({}))
+    last_observation = "No CDP target observed"
     deadline = time.monotonic() + 90
     while time.monotonic() < deadline:
         assert child.poll() is None, log_path.read_text()
         assert "NIX_FIXTURE_LOGIN_FAILED" not in log_path.read_text(), log_path.read_text()
         try:
-            with urlopen(f"http://127.0.0.1:{port}/json/list", timeout=2) as response:
+            with opener.open(f"http://127.0.0.1:{port}/json/list", timeout=2) as response:
                 targets = json.load(response)
+            last_observation = f"CDP target types: {[target['type'] for target in targets]}"
             for target in targets:
                 if target["type"] != "page" or not target["url"].startswith("file:"):
                     continue
                 status = _evaluate(target, "window.hermesDesktop?.platformAccount.status() ?? null")
+                phase = status.get("phase") if status else "bridge not loaded"
+                last_observation = f"Desktop account phase: {phase}; login started: {login_started}"
                 if status and status["phase"] == "signed_in":
                     assert login_started and status["account"]["id"] == "17", status
                     print("PASS: signed-out desktop refused backend data before native fixture login")
@@ -96,7 +103,7 @@ def _authenticate_fixture(port, log_path, child):
                 _evaluate(target, """setTimeout(() => void window.hermesDesktop.platformAccount.loginExisting({
                     email: 'nix@example.test', password: 'inert-fixture-password', remember: false
                 }).catch(error => console.error('NIX_FIXTURE_LOGIN_FAILED', error)), 0); true""")
-        except (URLError, ConnectionClosed, TimeoutError):
-            pass
+        except (URLError, ConnectionClosed, TimeoutError) as error:
+            last_observation = f"CDP transport error: {type(error).__name__}: {error}"
         threading.Event().wait(0.1)
-    raise AssertionError(f"Desktop account fixture did not become ready:\n{log_path.read_text()}")
+    raise AssertionError(f"Desktop account fixture did not become ready ({last_observation}):\n{log_path.read_text()}")
