@@ -1,7 +1,6 @@
 """Launch the Nix desktop with a competing mutable install and a local account."""
 import contextlib
 from http.server import ThreadingHTTPServer
-import json
 import os
 from pathlib import Path
 import signal
@@ -14,7 +13,7 @@ import time
 
 from hermes_cli.desktop_identity import DESKTOP_PRODUCT_NAME
 
-from desktop_account_fixture import _PlatformFixture, _authenticate_fixture
+from desktop_account_fixture import _PlatformFixture, _authenticate_fixture, _install_platform_transport
 
 
 def _processes_under(home: Path) -> list[int]:
@@ -61,14 +60,12 @@ with tempfile.TemporaryDirectory(prefix="hermes-desktop-backend-") as temporary:
     user_data.mkdir()
     platform = ThreadingHTTPServer(("127.0.0.1", 0), _PlatformFixture)
     threading.Thread(target=platform.serve_forever, daemon=True).start()
-    # Nix ships a directory app loaded by Electron, so the existing native
-    # development-origin config applies; the platform auth adapter stays on.
-    (user_data / "platform-development.json").write_text(json.dumps({
-        "enabled": True, "origin": f"http://127.0.0.1:{platform.server_port}",
-    }))
     with socket.socket() as probe:
         probe.bind(("127.0.0.1", 0))
         cdp_port = probe.getsockname()[1]
+    with socket.socket() as probe:
+        probe.bind(("127.0.0.1", 0))
+        inspector_port = probe.getsockname()[1]
     env = {
         "PATH": os.environ["PATH"],
         "HOME": str(home),
@@ -88,11 +85,13 @@ with tempfile.TemporaryDirectory(prefix="hermes-desktop-backend-") as temporary:
     with log_path.open("w") as log:
         child = subprocess.Popen(
             ["cage", "--", desktop, "--no-sandbox", "--disable-gpu", "--ozone-platform=wayland",
-             f"--remote-debugging-port={cdp_port}", "--remote-debugging-address=127.0.0.1"],
+             f"--remote-debugging-port={cdp_port}", "--remote-debugging-address=127.0.0.1",
+             f"--inspect-brk=127.0.0.1:{inspector_port}"],
             cwd=home, env=env, stdout=log, stderr=subprocess.STDOUT,
             start_new_session=True,
         )
         try:
+            _install_platform_transport(inspector_port, f"http://127.0.0.1:{platform.server_port}", log_path, child)
             _authenticate_fixture(cdp_port, log_path, child)
             deadline = time.monotonic() + 90
             while time.monotonic() < deadline:
