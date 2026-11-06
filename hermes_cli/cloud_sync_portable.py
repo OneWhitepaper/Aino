@@ -50,11 +50,13 @@ def digest(value):
 def safe_child(root, *parts):
     """Reject symlinked components, including private destinations already on disk."""
     root = Path(root)
+    if '..' in root.parts or any('..' in Path(part).parts for part in parts):
+        raise ValueError('parent traversal is not an owned path')
     if root.is_symlink():
         raise ValueError('symlinked account root')
     root = root.resolve()
     target = root.joinpath(*parts)
-    if not target.is_relative_to(root):
+    if not target.is_relative_to(root) or not target.resolve().is_relative_to(root):
         raise ValueError('path escapes account home')
     current = root
     for part in target.relative_to(root).parts:
@@ -66,6 +68,8 @@ def safe_child(root, *parts):
 
 def read_owned(path, roots):
     path = Path(path)
+    if '..' in path.parts:
+        raise ValueError('parent traversal is not an owned attachment')
     root = next((r for r in roots if path.is_relative_to(r)), None)
     if root is None:
         raise ValueError('attachment is outside owned directories')
@@ -89,6 +93,8 @@ def read_owned(path, roots):
 
 
 def _open_regular(path):
+    if '..' in path.parts:
+        raise ValueError('parent traversal is not an owned path')
     if os.open not in os.supports_dir_fd:
         return os.open(path, os.O_RDONLY | getattr(os, 'O_NOFOLLOW', 0))
     parent = os.open(path.anchor, os.O_RDONLY | os.O_DIRECTORY)

@@ -28,28 +28,26 @@ def blob_path(home, sha):
 
 
 def store_blob(home, item):
-    import os
+    from hermes_cli.cloud_sync_media import publish_media
     sha = item['sha256']
     path = blob_path(home, sha)
     data = base64.b64decode(item['data_base64'], validate=True)
     if len(data) > MAX_BLOB or hashlib.sha256(data).hexdigest() != sha:
         raise ValueError('blob size or SHA256 mismatch')
-    path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
-    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC | getattr(os, 'O_NOFOLLOW', 0), 0o600)
-    with os.fdopen(fd, 'wb') as stream:
-        stream.write(data)
-        stream.flush()
-        os.fsync(stream.fileno())
+    publish_media(home, path, data)
 
 
 def load_blob(home, sha):
-    from hermes_cli.cloud_sync_portable import read_owned
+    from hermes_cli.cloud_sync_portable import AttachmentTooLarge, read_owned
     path = blob_path(home, sha)
     if not path.exists():
         return None
-    data = read_owned(path, (home,))
+    try:
+        data = read_owned(path, (home,))
+    except AttachmentTooLarge:
+        return None
     if hashlib.sha256(data).hexdigest() != sha:
-        raise ValueError('stored blob SHA256 mismatch')
+        return None
     return {'sha256': sha, 'data_base64': base64.b64encode(data).decode()}
 
 
@@ -127,13 +125,15 @@ def validate_response(preparation, response):
             op, record = operations[result['operation_id']], result['record']
             if op['deleted'] != record['deleted'] or op.get('payload') != record.get('payload'):
                 raise ValueError('applied operation content differs from preparation')
+    if any(revision(record['revision']) > cursor for record in changes):
+        raise ValueError('change revision exceeds cursor')
     records = [r['record'] for r in results] + changes
     hashes = set()
     for record in records:
         parts = record['key'].split('/')
         if len(parts) != 3 or parts[0] != 'conversation' or any(not NAME.fullmatch(p) for p in parts[1:]) or len(record['key']) > 256:
             raise ValueError('invalid conversation key')
-        if not 0 < revision(record['revision']) <= cursor or not isinstance(record.get('deleted'), bool):
+        if not 0 < revision(record['revision']) or not isinstance(record.get('deleted'), bool):
             raise ValueError('invalid record revision or deletion flag')
         if record['deleted']:
             if record.get('payload') is not None:
@@ -200,11 +200,8 @@ def materialize(document, source_home, target_home):
         store_blob(target_home, blob)
         data = base64.b64decode(blob['data_base64'], validate=True)
         display_path = safe_child(target_home, 'cloud-sync', 'media', attachment['sha256'] + media_suffix(data))
-        if not display_path.exists():
-            import os
-            fd = os.open(display_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, 'O_NOFOLLOW', 0), 0o600)
-            with os.fdopen(fd, 'wb') as stream:
-                stream.write(data)
+        from hermes_cli.cloud_sync_media import publish_media
+        publish_media(target_home, display_path, data)
     def local_ref(value):
         if not value.startswith('cloud-blob:'):
             raise ValueError('remote attachment path is not portable')

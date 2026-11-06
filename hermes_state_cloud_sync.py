@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import json
 
-from hermes_cli.cloud_sync_portable import digest, dumps, payload, remap_conflict
+from hermes_cli.cloud_sync_portable import SESSION_FIELDS, digest, dumps, payload, remap_conflict
 from hermes_state_mutation_guards import delete_targets, require_idle
 
 PREFIX = 'cloud_sync.record.v1.'
@@ -13,7 +13,7 @@ GENERATION = 'cloud_sync.generation.v1.'
 def replacement_import_sql(sql, params):
     """Keep local execution/routing columns while replacing validated portable columns."""
     return sql + ' ON CONFLICT(id) DO UPDATE SET ' + ', '.join(
-        f'{key}=excluded.{key}' for key in params if key != 'id')
+        f'{key}=excluded.{key}' for key in params if key != 'id' and key in (*SESSION_FIELDS, 'model_config'))
 
 
 def get_meta(conn, key, default=None):
