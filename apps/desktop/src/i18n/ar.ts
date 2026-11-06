@@ -14,6 +14,7 @@ import { arConnectors } from './ar_connectors'
 import { arDiagnostics } from './ar_diagnostics'
 import { arFirstRun } from './ar_first_run'
 import { arSettings } from './ar_settings'
+import { cloudSync } from './cloud-sync'
 import { defineLocale, type TranslationOverrides } from './define-locale'
 import { homeGuidance } from './home-guidance'
 import { messagingDirectory } from './messaging-directory'
@@ -33,6 +34,7 @@ const arBaseOverrides = {
   home: homeGuidance.ar,
   toolPanel: toolPanel['ar'],
   workspacePage: workspacePage.ar,
+  cloudSync: cloudSync['ar'],
   accountPage: accountPage['ar'],
   platformRecharge: {
     description: 'تُحسب المبالغ تلقائيًا بعد الإدخال. راجع مبلغ الدفع والمبلغ الذي سيُضاف إلى الرصيد قبل الدفع.',

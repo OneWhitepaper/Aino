@@ -3,6 +3,7 @@ import { FIELD_DESCRIPTIONS, FIELD_LABELS } from '@/app/settings/constants'
 
 import { accountPage } from './account-page'
 import { appearancePage } from './appearance-page'
+import { cloudSync } from './cloud-sync'
 import { configPagesFor } from './config-pages'
 import { enAppTour } from './en_app_tour'
 import { enBilling } from './en_billing'
@@ -51,6 +52,7 @@ export const en: Translations = {
   appearancePage: appearancePage.en,
   toolPanel: toolPanel['en'],
   workspacePage: workspacePage.en,
+  cloudSync: cloudSync['en'],
   accountPage: accountPage['en'],
   externalOpenFailed: enExternalOpenFailed,
   sharedMetrics: enSharedMetrics,

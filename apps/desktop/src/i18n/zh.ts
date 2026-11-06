@@ -3,6 +3,7 @@ import { defineFieldCopy } from '@/app/settings/field-copy'
 
 import { accountPage } from './account-page'
 import { appearancePage } from './appearance-page'
+import { cloudSync } from './cloud-sync'
 import { configPagesFor } from './config-pages'
 import { defineLocale, type TranslationOverrides } from './define-locale'
 import { homeGuidance } from './home-guidance'
@@ -319,6 +320,7 @@ export const zhOverrides = {
   appearancePage: appearancePage.zh,
   toolPanel: toolPanel['zh'],
   workspacePage: workspacePage.zh,
+  cloudSync: cloudSync['zh'],
   accountPage: accountPage['zh'],
   connectorOffer: {
     heading: '保留已连接的应用',

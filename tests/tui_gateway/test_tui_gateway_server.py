@@ -18,6 +18,7 @@ from hermes_constants import reset_hermes_home_override, set_hermes_home_overrid
 from hermes_cli.active_sessions import active_session_registry_snapshot
 from hermes_cli.browser_connect import ChromeDebugLaunch
 from tools import async_delegation as ad
+from tests.tui_gateway.test_tui_gateway_server_deep_truncate import _mk_merge_fake_db, no_background_turn, no_cloud_imports
 from tui_gateway import server
 from tui_gateway.transport import bind_transport, reset_transport
 
@@ -3686,6 +3687,7 @@ def test_lazy_child_watch_resume_serves_candidate_inclusive_display(monkeypatch,
     assert texts == ["child prompt", "child substantive answer", "child terse reply"]
 
 
+@pytest.mark.usefixtures("no_cloud_imports")
 def test_session_resume_deferred_history_acknowledges_and_reuses(monkeypatch):
     history_started = threading.Event()
     release_history = threading.Event()
@@ -6727,6 +6729,7 @@ def test_prompt_submit_refuses_unconfirmed_nonempty_truncation(monkeypatch):
         server._sessions.pop("unconfirmed-trunc-sid", None)
 
 
+@pytest.mark.usefixtures("no_cloud_imports")
 def test_prompt_submit_truncates_by_message_id(monkeypatch):
     """#82756: truncate_before_message_id resolves target message and cuts history accurately."""
     replaced = []
@@ -6984,6 +6987,7 @@ def test_prompt_submit_refuses_ordinal_only_when_durable_history_is_unstamped(mo
         server._sessions.pop("unstamped-durable-sid", None)
 
 
+@pytest.mark.usefixtures("no_cloud_imports", "no_background_turn")
 def test_prompt_submit_truncates_by_row_id(monkeypatch):
     """#82959: prompt.submit with truncate_before_row_id must cut at the target row id."""
     replaced = []
@@ -7036,6 +7040,7 @@ def test_prompt_submit_truncates_by_row_id(monkeypatch):
         server._sessions.pop("row-id-trunc-sid", None)
 
 
+@pytest.mark.usefixtures("no_cloud_imports", "no_background_turn")
 def test_prompt_submit_truncates_by_string_row_id(monkeypatch):
     """#82959: String row IDs in history match correctly against integer truncate_before_row_id."""
     replaced = []
@@ -7165,6 +7170,7 @@ def test_prompt_submit_row_id_not_found(monkeypatch):
         server._sessions.pop("missing-row-sid", None)
 
 
+@pytest.mark.usefixtures("no_cloud_imports", "no_background_turn")
 def test_prompt_submit_resolves_row_id_absorbed_into_marker_merge(monkeypatch):
     """#94486: after a mid-session model switch, the marker is persisted as
     role=user (#48338) and the next real user row merges into it under
@@ -7258,34 +7264,7 @@ def test_prompt_submit_resolves_row_id_absorbed_into_marker_merge(monkeypatch):
         server._sessions.pop("merged-marker-sid", None)
 
 
-def _mk_merge_fake_db(verbatim, repaired, replaced):
-    """SessionDB stand-in answering exactly like the real store: the repaired view
-    (what `_load_durable_truncation_history` historically loaded) has the user;user
-    run merged away, the un-repaired view keeps every physical row."""
-
-    class _FakeDB:
-        def get_messages_as_conversation(
-            self,
-            key,
-            include_ancestors=False,
-            repair_alternation=False,
-            include_row_ids=False,
-            **_kwargs,
-        ) -> list:
-            import copy as _copy
-
-            assert key == "session-key"
-            assert include_row_ids is True
-            return _copy.deepcopy(repaired if repair_alternation else verbatim)
-
-        def replace_messages(
-            self, key, messages, active_only=False, archive_dropped=False, **_kwargs
-        ):
-            replaced.append((key, list(messages)))
-
-    return _FakeDB()
-
-
+@pytest.mark.usefixtures("no_cloud_imports", "no_background_turn")
 def test_prompt_submit_resolves_row_id_swallowed_by_marker_merge(monkeypatch):
     """#94486 (live-session shape): model-switch markers persist as role=user
     (#48338), so the just-sent prompt forms a user;user run that
@@ -7375,6 +7354,7 @@ def test_prompt_submit_resolves_row_id_swallowed_by_marker_merge(monkeypatch):
         server._sessions.pop("marker-merge-sid", None)
 
 
+@pytest.mark.usefixtures("no_cloud_imports", "no_background_turn")
 def test_prompt_submit_resolves_row_id_swallowed_by_plain_user_merge(monkeypatch):
     """Same swallowed-id class with NO display marker: an interrupted turn
     persists no assistant row, the user's resend lands as a second consecutive
@@ -7551,6 +7531,7 @@ def test_prompt_submit_refuses_empty_truncation_without_confirm(monkeypatch):
         server._sessions.pop("empty-trunc-sid", None)
 
 
+@pytest.mark.usefixtures("no_cloud_imports")
 def test_prompt_submit_empty_truncation_allowed_with_confirm(monkeypatch):
     """Intentional restore/regenerate of the first user turn may wipe history."""
 
@@ -8250,6 +8231,7 @@ def test_run_prompt_submit_requeues_all_unstarted_notifications_with_real_thread
             process_registry._poll_observed.discard(event["session_id"])
 
 
+@pytest.mark.usefixtures("no_cloud_imports")
 def test_run_prompt_submit_delivers_completion_owned_through_compression_lineage(
     monkeypatch, tmp_path
 ):
@@ -8801,6 +8783,7 @@ def test_session_title_set_errors_when_row_lookup_fails_after_noop(monkeypatch):
         server._sessions.pop("sid", None)
 
 
+@pytest.mark.usefixtures("no_cloud_imports")
 def test_session_create_drops_pending_title_on_valueerror(monkeypatch):
     """When set_session_title raises ValueError during post-message title flush,
     pending_title should be dropped (non-retryable). Updated for post-#18370
@@ -13792,6 +13775,7 @@ def test_prompt_submit_snapshots_history_after_pending_model_switch(monkeypatch)
         server._sessions.pop("sid", None)
 
 
+@pytest.mark.usefixtures("no_cloud_imports")
 def test_prompt_submit_can_truncate_before_user_ordinal(monkeypatch):
     """Desktop user-message edits should restart the turn from the edited user."""
 
@@ -14009,6 +13993,7 @@ def test_prompt_submit_refuses_turn_when_truncate_persist_fails(monkeypatch):
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.usefixtures("no_cloud_imports")
 def test_prompt_submit_truncate_ordinal_skips_display_kind_rows(monkeypatch):
     """truncate_before_user_ordinal must count only real user turns.
 
@@ -14110,6 +14095,7 @@ def test_prompt_submit_truncate_ordinal_skips_display_kind_rows(monkeypatch):
         server._sessions.pop("sid", None)
 
 
+@pytest.mark.usefixtures("no_cloud_imports")
 def test_prompt_submit_truncate_translates_display_prefix_ordinal(monkeypatch):
     """Full-lineage Desktop ordinals must truncate the tip segment (#82462).
 
@@ -14254,6 +14240,7 @@ def test_prompt_submit_truncate_oor_includes_structured_user_turn_count(monkeypa
         server._sessions.pop("sid", None)
 
 
+@pytest.mark.usefixtures("no_cloud_imports")
 def test_prompt_submit_row_id_accepts_full_lineage_ordinal(monkeypatch):
     """Desktop sends rowId + a full-lineage ordinal; both must agree (#82462).
 
@@ -14655,6 +14642,7 @@ def test_interrupt_before_agent_ready_prevents_late_turn_start(monkeypatch):
     try:
         monkeypatch.setattr(server.threading, "Thread", _FakeThread)
         monkeypatch.setattr(server, "_emit", lambda *args, **kwargs: None)
+        monkeypatch.setattr(server, "_get_db", lambda: None)
         monkeypatch.setattr(server, "_ensure_session_db_row", lambda session: None)
         monkeypatch.setattr(server, "_persist_branch_seed", lambda session: None)
         monkeypatch.setattr(server, "_start_agent_build", lambda sid, session: None)
@@ -14725,6 +14713,7 @@ def test_cancelled_turn_before_agent_ready_emits_error_event(monkeypatch):
     try:
         monkeypatch.setattr(server.threading, "Thread", _FakeThread)
         monkeypatch.setattr(server, "_emit", lambda *args, **kwargs: emitted.append(args))
+        monkeypatch.setattr(server, "_get_db", lambda: None)
         monkeypatch.setattr(server, "_ensure_session_db_row", lambda session: None)
         monkeypatch.setattr(server, "_persist_branch_seed", lambda session: None)
         monkeypatch.setattr(server, "_start_agent_build", lambda sid, session: None)
@@ -14797,6 +14786,7 @@ def test_session_not_running_before_agent_ready_emits_error_event(monkeypatch):
     try:
         monkeypatch.setattr(server.threading, "Thread", _FakeThread)
         monkeypatch.setattr(server, "_emit", lambda *args, **kwargs: emitted.append(args))
+        monkeypatch.setattr(server, "_get_db", lambda: None)
         monkeypatch.setattr(server, "_ensure_session_db_row", lambda session: None)
         monkeypatch.setattr(server, "_persist_branch_seed", lambda session: None)
         monkeypatch.setattr(server, "_start_agent_build", lambda sid, session: None)
@@ -14883,6 +14873,7 @@ def test_slow_agent_build_delivers_prompt_instead_of_timing_out(monkeypatch):
     try:
         monkeypatch.setattr(server.threading, "Thread", _FakeThread)
         monkeypatch.setattr(server, "_emit", lambda *args, **kwargs: emitted.append(args))
+        monkeypatch.setattr(server, "_get_db", lambda: None)
         monkeypatch.setattr(server, "_ensure_session_db_row", lambda session: None)
         monkeypatch.setattr(server, "_persist_branch_seed", lambda session: None)
         monkeypatch.setattr(server, "_start_agent_build", lambda sid, session: None)
@@ -14958,6 +14949,7 @@ def test_slow_agent_build_emits_keyed_progress_notice(monkeypatch):
         # Every wait slice lands past the slow threshold.
         monkeypatch.setattr(server, "_AGENT_BUILD_SLOW_NOTICE_AFTER", 0.0)
         monkeypatch.setattr(server, "_emit", lambda *args, **kwargs: emitted.append(args))
+        monkeypatch.setattr(server, "_get_db", lambda: None)
         monkeypatch.setattr(server, "_ensure_session_db_row", lambda session: None)
         monkeypatch.setattr(server, "_persist_branch_seed", lambda session: None)
         monkeypatch.setattr(server, "_start_agent_build", lambda sid, session: None)
@@ -15030,6 +15022,7 @@ def test_agent_build_failure_surfaces_error_and_drops_turn(monkeypatch):
     try:
         monkeypatch.setattr(server.threading, "Thread", _FakeThread)
         monkeypatch.setattr(server, "_emit", lambda *args, **kwargs: emitted.append(args))
+        monkeypatch.setattr(server, "_get_db", lambda: None)
         monkeypatch.setattr(server, "_ensure_session_db_row", lambda session: None)
         monkeypatch.setattr(server, "_persist_branch_seed", lambda session: None)
         monkeypatch.setattr(server, "_start_agent_build", _failing_build)
@@ -20844,6 +20837,7 @@ def test_save_cfg_keeps_unicode_personalities_readable(tmp_path, monkeypatch):
     assert "\\u4f60" not in text
 
 
+@pytest.mark.usefixtures("no_cloud_imports")
 def test_personality_marker_does_not_shift_truncate_ordinal(monkeypatch):
     """A personality pivot must not occupy a slot in the ordinal address space.
 
@@ -20967,6 +20961,7 @@ def test_personality_marker_does_not_shift_truncate_ordinal(monkeypatch):
         server._sessions.pop("personality-ordinal-sid", None)
 
 
+@pytest.mark.usefixtures("no_cloud_imports")
 def test_prompt_submit_truncation_archives_instead_of_deleting(monkeypatch):
     """The rewind write must be recoverable, not a hard DELETE.
 
@@ -21159,6 +21154,7 @@ def test_prompt_submit_unmatched_message_id_refuses_even_with_ordinal(monkeypatc
         server._sessions.pop("synthetic-msg-id-sid", None)
 
 
+@pytest.mark.usefixtures("no_cloud_imports")
 def test_prompt_submit_row_id_resolves_via_db_when_memory_lacks_stamps(monkeypatch):
     """#82959: After turn rewrite strips _row_id, resolve against durable DB history."""
     replaced = []

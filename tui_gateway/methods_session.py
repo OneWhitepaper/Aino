@@ -878,9 +878,7 @@ def _resume_guard(ctx: _Resume) -> dict | None:
 
 
 def _resume_reuse_live(ctx: _Resume, sid: str, session: dict) -> dict:
-    """Reattach an already-live session under the resume lock (held across the client-gone check,
-    transport attach and reap cancel so grace expiry is atomic). _live_session_payload ATTACHES this
-    caller alongside the client(s) already streaming instead of taking the slot from them."""
+    """Reattach atomically under the resume lock, sharing the transport slot with existing clients."""
     with _session_resume_lock:
         return _resume_reuse_live_locked(ctx, sid, session)
 
@@ -890,6 +888,8 @@ def _resume_reuse_live_locked(ctx: _Resume, sid: str, session: dict) -> dict:
     if (refusal := _reattach_refusal(ctx.rid, sid, session)) is not None:
         return refusal
     _cancel_ws_orphan_reap(sid)  # unconditionally: the fast path must never race the reap Timer
+    from .session_cloud_sync import refresh_cloud_history
+    refresh_cloud_history(session, ctx.db, ctx.target, canonicalize_replay_history)
     payload = _live_session_payload(sid, session, cols=ctx.cols, touch=True, omit_messages=ctx.omit_messages,
                                     transport=current_transport() or _stdio_transport,
                                     inline_images=ctx.inline_images)

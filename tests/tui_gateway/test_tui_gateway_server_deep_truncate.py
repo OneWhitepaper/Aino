@@ -5,7 +5,21 @@ anchor can still name the wrong, stale row)."""
 import threading
 import types
 
+import pytest
+
 from tui_gateway import server
+
+
+@pytest.fixture
+def no_cloud_imports(monkeypatch):
+    # Truncation doubles expose only message operations; cloud refresh has its own DB tests.
+    monkeypatch.setattr("tui_gateway.session_cloud_sync.refresh_cloud_history", lambda *a, **kw: False)
+
+
+@pytest.fixture
+def no_background_turn(monkeypatch):
+    """Truncation-only cases must not execute their placeholder agent on a real thread."""
+    monkeypatch.setattr(server.threading, "Thread", lambda *a, **kw: types.SimpleNamespace(start=lambda: None))
 
 
 def _session(agent=None, **extra):
@@ -18,7 +32,7 @@ def _session(agent=None, **extra):
     }
 
 
-def test_prompt_submit_refuses_deep_truncation_without_confirm(monkeypatch):
+def test_prompt_submit_refuses_deep_truncation_without_confirm(no_cloud_imports, monkeypatch):
     # register() rebinds the handlers onto the server namespace, so the flag is read there.
     monkeypatch.setattr(server, "DEEP_TRUNCATE_ENFORCED", True)  # the next release's behaviour
     replaced = []
@@ -103,7 +117,7 @@ def test_deep_truncate_counts_every_durable_row_a_merged_carrier_holds(monkeypat
         server._sessions.pop("deep-carrier-sid", None)
 
 
-def test_prompt_submit_empty_truncation_allowed_with_confirm(monkeypatch):
+def test_prompt_submit_empty_truncation_allowed_with_confirm(no_cloud_imports, monkeypatch):
     """Intentional restore/regenerate of the first user turn may wipe history."""
 
     seen = {}
@@ -203,7 +217,7 @@ def test_archived_user_turns_counts_a_carrier_without_its_own_row_id():
         methods_prompt._load_durable_truncation_history = original
 
 
-def test_unconfirmed_deep_truncation_is_warn_only_this_release(monkeypatch, caplog):
+def test_unconfirmed_deep_truncation_is_warn_only_this_release(no_cloud_imports, monkeypatch, caplog):
     """Rollout (G15-B): an older client without confirm_deep_truncate keeps working for one release;
     the cut runs and the would-be refusal is logged."""
     import logging
@@ -233,3 +247,31 @@ def test_unconfirmed_deep_truncation_is_warn_only_this_release(monkeypatch, capl
     finally:
         server._sessions.pop("warn-only-sid", None)
 
+
+
+def _mk_merge_fake_db(verbatim, repaired, replaced):
+    """SessionDB stand-in answering exactly like the real store: the repaired view
+    (what `_load_durable_truncation_history` historically loaded) has the user;user
+    run merged away, the un-repaired view keeps every physical row."""
+
+    class _FakeDB:
+        def get_messages_as_conversation(
+            self,
+            key,
+            include_ancestors=False,
+            repair_alternation=False,
+            include_row_ids=False,
+            **_kwargs,
+        ) -> list:
+            import copy as _copy
+
+            assert key == "session-key"
+            assert include_row_ids is True
+            return _copy.deepcopy(repaired if repair_alternation else verbatim)
+
+        def replace_messages(
+            self, key, messages, active_only=False, archive_dropped=False, **_kwargs
+        ):
+            replaced.append((key, list(messages)))
+
+    return _FakeDB()

@@ -5,6 +5,7 @@ import { defineFieldCopy } from '@/app/settings/field-copy'
 
 import { accountPage } from './account-page'
 import { appearancePage } from './appearance-page'
+import { cloudSync } from './cloud-sync'
 import { configPagesFor } from './config-pages'
 import { deBoot } from './de_boot'
 import { deClarify } from './de_clarify'
@@ -329,6 +330,7 @@ const deBaseOverrides = {
   home: homeGuidance.de,
   toolPanel: toolPanel['de'],
   workspacePage: workspacePage.de,
+  cloudSync: cloudSync['de'],
   accountPage: accountPage['de'],
   platformRecharge: {
     description:

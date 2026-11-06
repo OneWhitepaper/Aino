@@ -2,6 +2,7 @@ import { mergeTranslations } from '@hermes/shared/i18n'
 
 import { accountPage } from './account-page'
 import { appearancePage } from './appearance-page'
+import { cloudSync } from './cloud-sync'
 import { defineLocale, type TranslationOverrides } from './define-locale'
 import { homeGuidance } from './home-guidance'
 import { introZhHant } from './intro-zh-hant'
@@ -28,6 +29,7 @@ const zhHantBaseOverrides = {
   home: homeGuidance['zh-hant'],
   toolPanel: toolPanel['zh-hant'],
   workspacePage: workspacePage['zh-hant'],
+  cloudSync: cloudSync['zh-hant'],
   accountPage: accountPage['zh-hant'],
   connectorOffer: {
     heading: '保留已連接的應用程式',

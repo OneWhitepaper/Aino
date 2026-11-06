@@ -5,6 +5,7 @@ import { defineFieldCopy } from '@/app/settings/field-copy'
 
 import { accountPage } from './account-page'
 import { appearancePage } from './appearance-page'
+import { cloudSync } from './cloud-sync'
 import { configPagesFor } from './config-pages'
 import { defineLocale, type TranslationOverrides } from './define-locale'
 import { esBoot } from './es_boot'
@@ -331,6 +332,7 @@ const esBaseOverrides = {
   home: homeGuidance.es,
   toolPanel: toolPanel['es'],
   workspacePage: workspacePage.es,
+  cloudSync: cloudSync['es'],
   accountPage: accountPage['es'],
   platformRecharge: {
     description:

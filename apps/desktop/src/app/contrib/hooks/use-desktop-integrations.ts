@@ -15,6 +15,7 @@ import { getSession } from '@/hermes'
 import { resolveDeepLinkAction } from '@/lib/deeplink-routes'
 import { pathFromHermesDeepLink, resolveHermesOpenPath } from '@/lib/hermes-open-target'
 import { storedSessionIdForNotification } from '@/lib/session-ids'
+import { connectCloudSync, onCloudHistoryChanged } from '@/store/cloud-sync'
 import { announceNewSessionDraftKey } from '@/store/composer'
 import { recordAction } from '@/store/desktop-metrics'
 import { onKeptRouteOpened } from '@/store/gateway-kept-routes'
@@ -616,6 +617,16 @@ export function useDesktopIntegrations({
 
     return () => unsubscribe?.()
   }, [])
+
+  useEffect(() => {
+    const bridge = window.hermesDesktop?.cloudSync
+
+    if (!bridge) { return }
+    const offHistory = onCloudHistoryChanged(() => { void refreshSessions() })
+    const off = connectCloudSync(bridge)
+
+    return () => { off(); offHistory() }
+  }, [refreshSessions])
 
   // Another window mutated the shared session list -> re-pull the sidebar.
   useEffect(() => {

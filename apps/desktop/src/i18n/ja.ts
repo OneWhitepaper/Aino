@@ -5,6 +5,7 @@ import { defineFieldCopy } from '@/app/settings/field-copy'
 
 import { accountPage } from './account-page'
 import { appearancePage } from './appearance-page'
+import { cloudSync } from './cloud-sync'
 import { configPagesFor } from './config-pages'
 import { defineLocale, type TranslationOverrides } from './define-locale'
 import { homeGuidance } from './home-guidance'
@@ -282,6 +283,7 @@ const jaBaseOverrides = {
   home: homeGuidance.ja,
   toolPanel: toolPanel['ja'],
   workspacePage: workspacePage.ja,
+  cloudSync: cloudSync['ja'],
   accountPage: accountPage['ja'],
   connectorOffer: {
     heading: '接続したアプリを保持',

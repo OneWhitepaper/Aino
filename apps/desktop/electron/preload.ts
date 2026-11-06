@@ -70,6 +70,16 @@ contextBridge.exposeInMainWorld('hermesDesktop', {
       return () => ipcRenderer.removeListener('aino:platform-account:changed', listener)
     }
   },
+  cloudSync: {
+    status: async () => unwrapPlatformAccountIpc(await ipcRenderer.invoke('aino:platform-sync:status')),
+    retry: async () => unwrapPlatformAccountIpc(await ipcRenderer.invoke('aino:platform-sync:retry')),
+    onChanged: callback => {
+      const listener = (_event, status) => callback(status)
+      ipcRenderer.on('aino:platform-sync:changed', listener)
+
+      return () => ipcRenderer.removeListener('aino:platform-sync:changed', listener)
+    }
+  },
   platformModels: {
     nativeDeviceKeys: true,
     credentialRejected: async (revision, version) =>

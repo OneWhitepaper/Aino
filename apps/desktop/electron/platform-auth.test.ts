@@ -89,10 +89,12 @@ async function createPlatformAuthTestRig(options: { delaySave?: boolean } = {}) 
     releaseSave = resolve
   })
 
+  let initialized = false
+
   const tokenStore: PlatformTokenStore = {
     load: async () => persisted,
     save: async (_origin, tokens) => {
-      if (options.delaySave) {
+      if (options.delaySave && initialized) {
         signalSaveStarted?.()
         await saveGate
       }
@@ -113,6 +115,7 @@ async function createPlatformAuthTestRig(options: { delaySave?: boolean } = {}) 
   })
 
   await auth.initialize()
+  initialized = true
 
   return {
     auth,

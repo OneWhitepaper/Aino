@@ -2,13 +2,11 @@ import type { ErrorCodeKey } from '@/lib/error-surface'
 import type { TipId } from '@/lib/tips/catalog'
 
 import type { AppearancePageCopy } from './appearance-page'
+import type { CloudSyncCopy } from './cloud-sync'
 // health: allow FILE_LINES -- the copy contract for the usage-window plan keys every locale adds (allowance gauges, Large/Free tags, the limit card)
-// Desktop i18n type contract.
-//
 // `Translations` is the single source of truth for every translatable string
 // surface. Fully translated locale files may satisfy this interface directly;
-// partial locales should use `defineLocale()` so missing desktop-only strings
-// fall back to English while new keys remain type-checked.
+// Partial locales use `defineLocale()` to fall back to English with typed keys.
 import type { ToolPanelCopy } from './tool-panel'
 import type { AccountPageTranslations } from './types_account_page'
 import type { AppTourTranslations } from './types_app_tour'
@@ -97,6 +95,7 @@ interface ModeOptionCopy {
 }
 
 export interface UpstreamTranslations extends NoticeTranslations {
+  cloudSync: CloudSyncCopy
   toolPanel: ToolPanelCopy
   appearancePage: AppearancePageCopy
   workspacePage: WorkspacePageCopy
