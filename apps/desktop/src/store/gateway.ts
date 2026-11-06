@@ -39,7 +39,11 @@ import {
   isPrimaryRider,
   notePrimaryRider,
   type PrimaryIdentity,
-  sharedPrimaryRoute
+  recordPrimaryReadyCapability,
+  resetPrimaryManagedCapability,
+  setPrimaryManagedCapabilityOwner,
+  sharedPrimaryRoute,
+  sharedRegistryPrimaryRoute
 } from '@/store/gateway-shared-route'
 import { notifyError, RECOVERY_ACTIONS } from '@/store/notifications'
 import { markNativeNotifyBaseline } from '@/store/notify-baseline'
@@ -48,11 +52,7 @@ import { setConnection, setGatewayState } from '@/store/session'
 import { stampSecondaryProfileOwner } from '@/store/session-event-provenance'
 export type { SpawnPriority } from './gateway-types'
 
-import {
-  recordGatewayCapabilityState,
-  recordGatewayReadyCapability,
-  resetGatewayManagedCapability
-} from './gateway-managed-capability'
+import { recordGatewayCapabilityState, recordGatewayReadyCapability } from './gateway-managed-capability'
 import type { RegistryConfig } from './gateway-registry-config'
 import type { Secondary } from './gateway-socket-entry'
 import type { GatewayRegistryState, SpawnPriority } from './gateway-types'
@@ -237,14 +237,14 @@ function primaryConnectionId(): null | string {
 
 // Taken BEFORE a route await, so a hint learned across a re-home stays bound
 // to the primary the route was resolved against.
-const primaryIdentity = (): PrimaryIdentity => ({ connectionId: primaryConnectionId(), gateway: g.primaryGateway })
+const primaryIdentity = (): PrimaryIdentity => ({
+  connectionId: primaryConnectionId(),
+  gateway: g.primaryGateway,
+  profile: g.primaryProfile
+})
 
 export function setPrimaryGateway(gateway: HermesGateway | null, profile = 'default'): void {
   const next = normKey(profile)
-
-  if (g.primaryGateway !== gateway || g.primaryProfile !== next) {
-    resetGatewayManagedCapability({ connectionId: primaryConnectionId(), profile: g.primaryProfile })
-  }
 
   if (g.primaryGateway !== gateway) {
     $primaryGatewayRoute.set({ connectionId: null, mode: null })
@@ -262,6 +262,7 @@ export function setPrimaryGateway(gateway: HermesGateway | null, profile = 'defa
 
   g.primaryGateway = gateway
   g.primaryProfile = next
+  setPrimaryManagedCapabilityOwner(primaryIdentity())
   g.$activeConnectionId.set(activeGatewayConnectionId())
 
   if (g.activeKey === g.primaryProfile) {
@@ -283,12 +284,8 @@ export function setPrimaryGatewayConnectionId(
   // the primary is in front.
   const next = (connectionId ?? '').trim() || null
 
-  if (next !== primaryConnectionId()) {
-    resetGatewayManagedCapability({ connectionId: primaryConnectionId(), profile: g.primaryProfile })
-    resetGatewayManagedCapability({ connectionId: next, profile: g.primaryProfile })
-  }
-
   $primaryGatewayRoute.set({ connectionId: next, mode: mode === 'local' || mode === 'remote' ? mode : null })
+  setPrimaryManagedCapabilityOwner(primaryIdentity())
   g.$activeConnectionId.set(activeGatewayConnectionId())
 
   // A re-home names the profile the primary will serve on its new machine;
@@ -338,62 +335,8 @@ function isPrimaryRegistryRoute(connectionId: null | string, profile: string): b
   return normKey(profile) === g.primaryProfile && Boolean(id) && id === primaryConnectionId()
 }
 
-/** True when `connectionId` is the window's already-attached source AND main
- *  says `profile` rides the backend that source's primary socket is already
- *  connected to — a one-host-many-profiles remote (`sharedRemote`, #96493) or
- *  the one local host backend that serves every local profile under
- *  multiplex-only (`sharedPrimary`, #118246). Either way a registry secondary
- *  would be a SECOND WebSocket to the SAME process: on a remote it accept/closes
- *  in ~30ms and never runs `session.create`; on the local host backend it joins
- *  the chat's transport fan-out and the renderer receives every event twice
- *  (garbled streaming text + a duplicate interim bubble, #120005). Isolated
- *  SSH/pooled backends (neither flag) still get their own secondary. */
-async function ridesPrimaryBackend(connectionId: null | string, profile: string): Promise<boolean> {
-  const id = String(connectionId ?? '').trim()
-  const key = normKey(profile)
-
-  if (!id || id !== primaryConnectionId()) {
-    return false
-  }
-
-  if (isPrimaryRegistryRoute(id, key)) {
-    return false
-  }
-
-  const desktop = window.hermesDesktop
-
-  if (!desktop?.getConnectionFor) {
-    return false
-  }
-
-  // Resolved per call, never cached: main answers the route per request
-  // (`resolveProfileBackendRoute` case 6 keeps a pooled backend for
-  // `HERMES_DESKTOP_ISOLATED_BACKEND=1`), and for a pooled profile this is the
-  // same dial `openSecondary` makes next, coalesced by main's claim key.
-  try {
-    const conn = await withTimeout(
-      desktop.getConnectionFor({ connectionId: id, profile: key }),
-      RECONNECT_ATTEMPT_TIMEOUT_MS,
-      `Timed out resolving the backend route for "${key}"`
-    )
-
-    const flags =
-      conn && typeof conn === 'object' ? (conn as { sharedPrimary?: boolean; sharedRemote?: boolean }) : null
-
-    return flags?.sharedRemote === true || flags?.sharedPrimary === true
-  } catch {
-    // Probe failed on a remote (or not-yet-classified) primary: a secondary at
-    // this already-attached source is the #96493 ghost WebSocket (accept/close,
-    // messages=1), so prefer the primary until a later probe can prove
-    // isolation (`sharedRemote: false`). A LOCAL primary must NOT get that
-    // fallback: when main routes the profile to a pooled child (isolated
-    // backend), the primary would still ACCEPT a `profile`-tagged
-    // session.create (profile_home multiplexing) and mint the session under
-    // its own pid, but the exact-owner route names the pool backend — after a
-    // renderer reload or a pool respawn the resume dials that backend and is
-    // refused SESSION_NOT_OWNED by a pid of the same Desktop (#101416).
-    return $primaryGatewayRoute.get().mode !== 'local'
-  }
+function ridesPrimaryBackend(connectionId: null | string, profile: string): Promise<boolean> {
+  return sharedRegistryPrimaryRoute(primaryIdentity(), $primaryGatewayRoute.get().mode, connectionId, profile)
 }
 
 async function requestOnPrimaryGateway<T>(
@@ -534,7 +477,10 @@ export function reportPrimaryGatewayState(gateway: HermesGateway, state: Connect
     return false
   }
 
-  recordGatewayCapabilityState({ connectionId: primaryConnectionId(), profile: g.primaryProfile }, state)
+  if (state !== 'open') {
+    resetPrimaryManagedCapability(primaryIdentity())
+  }
+
   reportGatewayState(g.primaryProfile, state)
 
   return true
@@ -545,7 +491,7 @@ export function reportPrimaryGatewayEvent(gateway: HermesGateway, event: Gateway
     return false
   }
 
-  recordGatewayReadyCapability({ connectionId: primaryConnectionId(), profile: g.primaryProfile }, event)
+  recordPrimaryReadyCapability(primaryIdentity(), event)
 
   return true
 }
@@ -1089,7 +1035,7 @@ async function gatewayForProfile(
     throw new Error(`Backend for "${key}" is reconnecting; retry after it settles.`)
   }
 
-  if (notePrimaryRider(primaryIdentity(), key, await sharedPrimaryRoute(key))) {
+  if (notePrimaryRider(primaryIdentity(), { profile: key }, await sharedPrimaryRoute(key))) {
     return { gateway: g.primaryGateway, key, release: noRelease, scopeProfile: true }
   }
 
@@ -1228,7 +1174,7 @@ export async function requestGatewayForAgent<T>(
     return requestGatewayForProfile<T>(key, method, params, timeoutMs, signal, { spawnPriority })
   }
 
-  if (notePrimaryRider(primaryIdentity(), scope, await ridesPrimaryBackend(connectionId, key))) {
+  if (await ridesPrimaryBackend(connectionId, key)) {
     traceAgentRoute(scope, 'primary-shared')
 
     return requestOnPrimaryGateway<T>(method, { ...params, profile: key }, timeoutMs, signal)
@@ -1861,7 +1807,7 @@ export async function ensureGatewayForProfile(profile: string): Promise<void> {
   // primary instead of dialing a doomed duplicate socket at the same
   // descriptor — $activeGatewayProfile still moves to `key`, so request
   // scoping and profile-aware surfaces behave identically.
-  if (await sharedPrimaryRoute(key)) {
+  if (notePrimaryRider(primaryIdentity(), { profile: key }, await sharedPrimaryRoute(key))) {
     applyActive(g.primaryProfile, activationEpoch)
 
     return

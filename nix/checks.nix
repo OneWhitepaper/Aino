@@ -1132,7 +1132,7 @@ json.dump(sorted(leaf_paths(DEFAULT_CONFIG)), sys.stdout, indent=2)
             fontDirectories = [ pkgs.dejavu_fonts ];
           };
         } ''
-          python3 ${./tests/desktop-backend.py} \
+          python3 ${./tests}/desktop-backend.py \
             ${self'.packages.desktop}/bin/hermes-desktop ${hermes-agent}/bin/hermes
           mkdir -p $out
         '';

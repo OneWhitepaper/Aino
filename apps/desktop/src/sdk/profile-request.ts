@@ -1,6 +1,7 @@
 import { requestGatewayForAgent, requestGatewayForProfile, type SpawnPriority } from '@/store/gateway'
 import { $profiles } from '@/store/profile'
 
+import { requestPluginSession } from './plugin-session-create'
 /** Plugin-facing profile routing for `host.requestProfile` and friends. */
 
 export interface PluginProfileRoute {
@@ -34,27 +35,35 @@ export async function requestPluginProfile<T>(
   // Preserve the exact call arity the pool tests pin: pass the deadline and the
   // dial options only when the caller set them, so a plain routed RPC keeps its
   // four-argument shape and a timeout-only caller its five-argument shape.
-  const dialProfile = (profile: string): Promise<T> =>
-    spawnPriority
-      ? requestGatewayForProfile<T>(profile, method, params, timeoutMs, undefined, { spawnPriority })
-      : timeoutMs === undefined
-        ? requestGatewayForProfile<T>(profile, method, params)
-        : requestGatewayForProfile<T>(profile, method, params, timeoutMs)
+  const dialProfile = (profile: string): Promise<T> => requestPluginSession<T>(
+    { connectionId: null, profile, targetProfile: profile },
+    <R>(requestMethod: string, payload: Record<string, unknown> = {}, deadline?: number) =>
+      spawnPriority
+        ? requestGatewayForProfile<R>(profile, requestMethod, payload, deadline, undefined, { spawnPriority })
+        : deadline === undefined
+          ? requestGatewayForProfile<R>(profile, requestMethod, payload)
+          : requestGatewayForProfile<R>(profile, requestMethod, payload, deadline),
+    method, params, timeoutMs, spawnPriority
+  )
 
   if (typeof route !== 'string') {
     if (!route.connectionId.trim() || !route.profile.trim() || !route.targetProfile.trim()) {
       throw new Error('Profile route must include connectionId, profile, and targetProfile')
     }
 
-    if (spawnPriority) {
-      return requestGatewayForAgent<T>(route.connectionId, route.profile, method, params, timeoutMs, undefined, {
-        spawnPriority
-      })
-    }
+    const captured = { ...route }
 
-    return timeoutMs === undefined
-      ? requestGatewayForAgent<T>(route.connectionId, route.profile, method, params)
-      : requestGatewayForAgent<T>(route.connectionId, route.profile, method, params, timeoutMs)
+    return requestPluginSession<T>(captured,
+      <R>(requestMethod: string, payload: Record<string, unknown> = {}, deadline?: number) =>
+        spawnPriority
+          ? requestGatewayForAgent<R>(captured.connectionId, captured.profile, requestMethod, payload, deadline, undefined, {
+              spawnPriority
+            })
+          : deadline === undefined
+            ? requestGatewayForAgent<R>(captured.connectionId, captured.profile, requestMethod, payload)
+            : requestGatewayForAgent<R>(captured.connectionId, captured.profile, requestMethod, payload, deadline),
+      method, params, timeoutMs, spawnPriority
+    )
   }
 
   const getAgentRoster = window.hermesDesktop?.getAgentRoster

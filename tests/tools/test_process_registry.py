@@ -1165,7 +1165,7 @@ class TestSpawnRewriteCompoundBackground:
         """A && B & must be rewritten to A && { B & } before Popen."""
         captured_cmd = []
 
-        def fake_popen(args, **kwargs):
+        def fake_spawn_job(_session, args, _persist_on_release, **kwargs):
             captured_cmd.append(args)
             proc = MagicMock()
             proc.pid = 1111
@@ -1175,8 +1175,9 @@ class TestSpawnRewriteCompoundBackground:
         fake_thread = MagicMock()
         fake_thread.daemon = False
 
+        # Capture this job's argv without intercepting the owner-death supervisor's Popen.
         with patch("tools.process_registry._find_shell", return_value="/bin/bash"), \
-             patch("subprocess.Popen", side_effect=fake_popen), \
+             patch.object(registry, "_spawn_job", side_effect=fake_spawn_job), \
              patch("threading.Thread", return_value=fake_thread), \
              patch.object(registry, "_write_checkpoint"):
             registry.spawn_local("cd /app && node server.js &>/tmp/srv.log &", cwd="/tmp")
@@ -1185,7 +1186,6 @@ class TestSpawnRewriteCompoundBackground:
         shell_cmd = captured_cmd[0]
         # The command passed to Popen should be the REWRITTEN version
         assert "&& { node server.js &>/tmp/srv.log & }" in shell_cmd[2]
-
 
     def test_pty_path_uses_rewritten_command(self, registry):
         """PTY spawn path must also use the rewritten command (issue #68915)."""

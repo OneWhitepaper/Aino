@@ -62,13 +62,17 @@ const {
   configureGatewayRegistry,
   disposeSecondariesForConnection,
   ensureGatewayForAgent,
+  requestGatewayForAgent,
   reportPrimaryGatewayEvent,
   reportPrimaryGatewayState,
   setPrimaryGateway,
   setPrimaryGatewayConnectionId
 } = await import('./gateway')
 
-const { clearGatewayManagedCapabilities, managedModelRouteCapability } = await import('./gateway-managed-capability')
+const { clearGatewayManagedCapabilities, managedImageRouteCapability, managedModelRouteCapability } =
+  await import('./gateway-managed-capability')
+
+const { sharedRegistryPrimaryRoute } = await import('./gateway-shared-route')
 
 function descriptor(connectionId: string, profile: string) {
   return {
@@ -95,8 +99,182 @@ beforeEach(() => {
 
 afterEach(() => {
   closeSecondaryGateways()
+  setPrimaryGateway(null)
   gatewayMocks.instances.length = 0
   Reflect.deleteProperty(window, 'hermesDesktop')
+})
+
+it.each(['before', 'after'])('shares ready evidence with a proven primary rider resolved %s ready', async timing => {
+  const request = vi.fn(async () => ({ ok: true }))
+  const gateway = { connectionState: 'open', request } as never
+  setPrimaryGateway(gateway, 'default')
+  setPrimaryGatewayConnectionId('local', 'local')
+  window.hermesDesktop!.getConnectionFor = vi.fn(
+    async ({ connectionId, profile }) =>
+      ({
+        ...descriptor(connectionId!, profile!),
+        sharedPrimary: true
+      }) as never
+  )
+  const ready = { type: 'gateway.ready', payload: { managed_model_binding: 1, managed_image_binding: 1 } }
+
+  if (timing === 'after') {
+    reportPrimaryGatewayEvent(gateway, ready as never)
+  }
+
+  await requestGatewayForAgent('local', 'writer', 'session.list')
+
+  if (timing === 'before') {
+    reportPrimaryGatewayEvent(gateway, ready as never)
+  }
+
+  expect(request).toHaveBeenCalledWith('session.list', { profile: 'writer' })
+  expect(managedModelRouteCapability({ connectionId: 'local', profile: 'writer' })).toBe('supported')
+  expect(managedImageRouteCapability({ connectionId: 'local', profile: 'writer' })).toBe('supported')
+  expect(managedModelRouteCapability({ connectionId: 'other-source', profile: 'writer' })).toBe('unknown')
+
+  reportPrimaryGatewayState(gateway, 'connecting')
+  expect(managedModelRouteCapability({ connectionId: 'local', profile: 'writer' })).toBe('unknown')
+  reportPrimaryGatewayEvent(gateway, { type: 'gateway.ready', payload: {} })
+  expect(managedModelRouteCapability({ connectionId: 'local', profile: 'writer' })).toBe('unsupported')
+
+  const replacement = { connectionState: 'open' } as never
+  setPrimaryGateway(replacement, 'default')
+  setPrimaryGatewayConnectionId('local', 'local')
+  reportPrimaryGatewayEvent(replacement, ready as never)
+  expect(managedModelRouteCapability({ connectionId: 'local', profile: 'writer' })).toBe('unknown')
+})
+
+it('publishes capability when activating a shared bot without a preceding RPC', async () => {
+  const gateway = { connectionState: 'open' } as never
+  setPrimaryGateway(gateway, 'default')
+  setPrimaryGatewayConnectionId('local', 'local')
+  window.hermesDesktop!.getConnectionFor = vi.fn(async () => ({ sharedPrimary: true }) as never)
+  reportPrimaryGatewayEvent(gateway, { type: 'gateway.ready', payload: { managed_model_binding: 1 } })
+
+  expect(await ensureGatewayForAgent('local', 'writer')).toBe(true)
+  expect(managedModelRouteCapability({ connectionId: 'local', profile: 'writer' })).toBe('supported')
+  expect(gatewayMocks.instances).toHaveLength(0)
+})
+
+it('does not transfer replacement ready evidence to a route resolved against the former primary', async () => {
+  const old = { connectionState: 'open', request: vi.fn(async () => ({})) } as never
+  setPrimaryGateway(old, 'default')
+  setPrimaryGatewayConnectionId('local', 'local')
+  let resolveRoute!: (value: never) => void
+  window.hermesDesktop!.getConnectionFor = vi.fn(
+    () =>
+      new Promise<never>(resolve => {
+        resolveRoute = resolve
+      })
+  )
+  const resolving = requestGatewayForAgent('local', 'writer', 'session.list')
+  const replacement = { connectionState: 'open', request: vi.fn(async () => ({})) } as never
+  setPrimaryGateway(replacement, 'default')
+  setPrimaryGatewayConnectionId('local', 'local')
+  reportPrimaryGatewayEvent(replacement, { type: 'gateway.ready', payload: { managed_model_binding: 1 } })
+  resolveRoute({ sharedPrimary: true } as never)
+  await expect(resolving).rejects.toThrow(/changed/i)
+
+  expect(managedModelRouteCapability({ connectionId: 'local', profile: 'writer' })).toBe('unknown')
+})
+
+it.each([true, false])(
+  'ignores a stale %s route result after the replacement has established the same bot route',
+  async shared => {
+    const old = { connectionState: 'open', request: vi.fn(async () => ({})) } as never
+    setPrimaryGateway(old, 'default')
+    setPrimaryGatewayConnectionId('local', 'local')
+    let finishOldProbe!: (value: never) => void
+
+    const probe = vi
+      .fn()
+      .mockImplementationOnce(
+        () =>
+          new Promise<never>(resolve => {
+            finishOldProbe = resolve
+          })
+      )
+      .mockResolvedValue({ sharedPrimary: true })
+
+    window.hermesDesktop!.getConnectionFor = probe
+
+    const oldRequest = sharedRegistryPrimaryRoute(
+      { connectionId: 'local', gateway: old, profile: 'default' },
+      'local',
+      'local',
+      'writer'
+    )
+
+    const replacement = { connectionState: 'open', request: vi.fn(async () => ({})) } as never
+    setPrimaryGateway(replacement, 'default')
+    setPrimaryGatewayConnectionId('local', 'local')
+    const ready = { type: 'gateway.ready', payload: { managed_model_binding: 1 } }
+    reportPrimaryGatewayEvent(replacement, ready as never)
+    await requestGatewayForAgent('local', 'writer', 'session.list')
+    expect(managedModelRouteCapability({ connectionId: 'local', profile: 'writer' })).toBe('supported')
+
+    finishOldProbe({ sharedPrimary: shared } as never)
+    await expect(oldRequest).rejects.toThrow(/changed/i)
+    expect(managedModelRouteCapability({ connectionId: 'local', profile: 'writer' })).toBe('supported')
+    reportPrimaryGatewayEvent(replacement, ready as never)
+    expect(managedModelRouteCapability({ connectionId: 'local', profile: 'writer' })).toBe('supported')
+  }
+)
+
+it.each(['remote', null] as const)(
+  'keeps unproven %s fallback routing without inferring managed-model support',
+  async mode => {
+    const request = vi.fn(async () => ({}))
+    const gateway = { connectionState: 'open', request } as never
+    setPrimaryGateway(gateway, 'default')
+    setPrimaryGatewayConnectionId('source', mode)
+    reportPrimaryGatewayEvent(gateway, { type: 'gateway.ready', payload: { managed_model_binding: 1 } })
+    window.hermesDesktop!.getConnectionFor = vi.fn(async () => {
+      throw new Error('route lookup unavailable')
+    })
+
+    await requestGatewayForAgent('source', 'unproven', 'session.list')
+    expect(request).toHaveBeenCalledWith('session.list', { profile: 'unproven' })
+    expect(managedModelRouteCapability({ connectionId: 'source', profile: 'unproven' })).toBe('unknown')
+    reportPrimaryGatewayEvent(gateway, { type: 'gateway.ready', payload: { managed_model_binding: 1 } })
+    expect(managedModelRouteCapability({ connectionId: 'source', profile: 'unproven' })).toBe('unknown')
+  }
+)
+
+it('retains current socket ready evidence when adopting its authoritative profile after connect', async () => {
+  const gateway = { connectionState: 'open' } as never
+  setPrimaryGateway(gateway, 'default')
+  setPrimaryGatewayConnectionId('local', 'local')
+  reportPrimaryGatewayEvent(gateway, { type: 'gateway.ready', payload: { managed_model_binding: 1 } })
+  window.hermesDesktop!.getConnectionFor = vi.fn(async () => ({ sharedPrimary: true }) as never)
+  await ensureGatewayForAgent('local', 'assistant')
+  setPrimaryGateway(gateway, 'writer')
+
+  expect(managedModelRouteCapability({ connectionId: 'local', profile: 'writer' })).toBe('supported')
+  expect(managedModelRouteCapability({ connectionId: 'local', profile: 'assistant' })).toBe('supported')
+})
+
+it('refuses a stale shared route instead of delivering the former source session.create to the replacement source', async () => {
+  const old = { connectionState: 'open', request: vi.fn(async () => ({})) } as never
+  setPrimaryGateway(old, 'default')
+  setPrimaryGatewayConnectionId('source-a', 'remote')
+  let finishOldProbe!: (value: never) => void
+  window.hermesDesktop!.getConnectionFor = vi.fn(
+    () =>
+      new Promise<never>(resolve => {
+        finishOldProbe = resolve
+      })
+  )
+  const oldRequest = requestGatewayForAgent('source-a', 'writer', 'session.create', { title: 'Bot Chat' })
+  const replacementRequest = vi.fn(async () => ({}))
+  const replacement = { connectionState: 'open', request: replacementRequest } as never
+  setPrimaryGateway(replacement, 'default')
+  setPrimaryGatewayConnectionId('source-b', 'remote')
+  finishOldProbe({ sharedRemote: true } as never)
+
+  await expect(oldRequest).rejects.toThrow(/changed/i)
+  expect(replacementRequest).not.toHaveBeenCalled()
 })
 
 it('keeps ready evidence on the exact connection/profile route and treats an older peer as unsupported', async () => {

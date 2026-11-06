@@ -29,7 +29,8 @@ vi.mock('@/store/confirm', () => ({ confirm: vi.fn(async () => false) }))
 vi.mock('@/store/gateway', async importActual => ({
   ...(await importActual<Record<string, unknown>>()),
   requestGatewayForAgent: vi.fn(),
-  requestGatewayForProfile: vi.fn()
+  requestGatewayForProfile: vi.fn(),
+  retainGatewayForSessionTurn: vi.fn(async () => () => undefined)
 }))
 
 const { getLatestSessionMessages, getSession, PROMPT_SUBMIT_REQUEST_TIMEOUT_MS } = await import('@/hermes')

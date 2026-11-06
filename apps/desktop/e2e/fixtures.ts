@@ -308,6 +308,8 @@ export async function launchDesktop(
       DESKTOP_ROOT, // `electron .` — the `.` is the desktop package dir
       '--disable-gpu',
       '--no-sandbox',
+      // Keep fixture credentials out of the host's macOS keychain.
+      '--use-mock-keychain',
       ...(legacyAccountDevelopment ? ['--aino-legacy-account-development'] : []),
     ],
     env,

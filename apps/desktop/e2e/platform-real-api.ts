@@ -220,6 +220,7 @@ const { app, session } = require('electron');
 const fs = require('node:fs');
 const path = require('node:path');
 const guardedSessions = new WeakSet();
+globalThis.__AINO_E2E_GATEWAY_READY_WINDOWS__ = new Set();
 const KNOWN_BLOCKED_THEME_FONT_URL = ${JSON.stringify(KNOWN_BLOCKED_THEME_FONT_URL)};
 const isExpectedThemeFont = ${isExpectedBlockedThemeFontRequest.toString()};
 function auditMarker(name, host) {
@@ -232,6 +233,14 @@ app.on('web-contents-created', (_event, contents) => {
     contents.debugger.attach('1.3');
     (${observeDebuggerDetach.toString()})(contents, app, error => auditMarker('font-observer-error', error));
     contents.debugger.on('message', (_event, method, params) => {
+      if (method === 'Network.webSocketFrameReceived') {
+        try {
+          const frame = JSON.parse(params.response.payloadData);
+          if (frame.method === 'event' && frame.params?.type === 'gateway.ready') {
+            globalThis.__AINO_E2E_GATEWAY_READY_WINDOWS__.add(contents.id);
+          }
+        } catch { /* Non-JSON WebSocket frames are not gateway ready events. */ }
+      }
       if (method !== 'Network.requestWillBeSent') return;
       try {
         const request = params.request;
@@ -278,7 +287,8 @@ app.whenReady().then(() => {
 app.setAppPath(${JSON.stringify(desktopRoot)});
 import(${JSON.stringify(mainURL)});
 `, { mode: 0o600 })
-  const app = await _electron.launch({ executablePath: findElectron(), args: [entry, '--disable-gpu', '--no-sandbox'], env, cwd: desktopRoot })
+  // Fixture credentials must never create items or prompt in the host's macOS keychain.
+  const app = await _electron.launch({ executablePath: findElectron(), args: [entry, '--disable-gpu', '--no-sandbox', '--use-mock-keychain'], env, cwd: desktopRoot })
   const transportAudit: NativeTransportAudit = { mainPid: app.process().pid!, unexpectedRendererDestinations: [], knownBlockedThemeFontHosts: [], pending: [] }
 
   // Cancellation stays at onBeforeRequest. Independently verify request headers;
