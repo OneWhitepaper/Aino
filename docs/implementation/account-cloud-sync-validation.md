@@ -161,3 +161,19 @@ rebatching and execution-guard tests remain part of the affected regression run.
 The reset follow-up's affected suite passed **71 tests across 13 files**, with one
 Linux-only daemon test skipped on macOS; both new reset cases ran. All 14 repository
 checks passed with zero code-health blockers or advisories.
+
+## Full-suite CI follow-up
+
+The first complete desktop CI run identified legacy fake-database tests that did
+not implement the new import-generation reader, a raw profile-metadata read, and
+an outdated generated locale key list. Fake-storage unit tests now isolate the
+no-import seam; the real database/cloud tests remain active. The full local TUI
+directory passed 3,134 tests, and the exact 17 large-server CI failures passed
+after focused thread isolation. The affected five-file suite passed 650 tests.
+
+Profile title restoration now uses the existing explicit-file backend reader,
+removing a dependency on unavailable PyYAML. Its regression verifies preserved
+profile/UI metadata, local configuration and secrets; the focused profile suite
+passed 136 tests. The locale key list was regenerated with the existing command,
+and its two checks passed. These results establish the local repairs; the final
+cloud CI run is reported in the pull request.
