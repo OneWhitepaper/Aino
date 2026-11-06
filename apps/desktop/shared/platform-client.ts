@@ -29,6 +29,7 @@ import {
   parsePlatformOrderPage,
   parsePlatformOrderQuery
 } from './platform-payment-contract'
+import { parseSyncResponse, SYNC_BLOB_LIMIT, SYNC_JSON_LIMIT, type SyncExchange, type SyncResponse } from './platform-sync-contract'
 import type { PlatformDeviceKey, PlatformTokenSet } from './platform-token-contract'
 import { parsePlatformUsagePage, parsePlatformUsageQuery } from './platform-usage-contract'
 
@@ -54,6 +55,8 @@ interface AuthExchange {
   tempToken?: string
 }
 export interface PlatformClient {
+  syncExchange(token: string, input: SyncExchange, signal: AbortSignal): Promise<SyncResponse>
+  syncBlob(token: string, hash: string, bytes: Uint8Array | null, signal: AbortSignal): Promise<Uint8Array>
   uploadDiagnostics(accessToken: string, bundle: string): Promise<PlatformDiagnosticReceipt>
   listDevices(accessToken: string): Promise<PlatformDevice[]>
   revokeDevice(accessToken: string, deviceId: string): Promise<{ revoked: true }>
@@ -194,6 +197,31 @@ export function resolvePlatformOrigin({
   return { origin, development: true }
 }
 
+async function readSyncBody(response: Response, limit: number): Promise<Uint8Array> {
+  const chunks: Uint8Array[] = []
+  let size = 0
+  const reader = response.body?.getReader()
+
+  if (reader) {
+    while (true) {
+      const chunk = await reader.read()
+
+      if (chunk.done) { break }
+      size += chunk.value.byteLength
+
+      if (size > limit) { await reader.cancel(); throw new PlatformClientError('sync_response_too_large') }
+      chunks.push(chunk.value)
+    }
+  }
+
+  const bytes = new Uint8Array(size)
+  let offset = 0
+
+  for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.byteLength }
+
+  return bytes
+}
+
 export function createPlatformClient({
   origin: rawOrigin,
   allowInsecureLoopback = false,
@@ -292,6 +320,43 @@ export function createPlatformClient({
     }
   }
 
+  async function syncRequest(token: string, endpoint: string, body: string | Uint8Array | null, signal: AbortSignal, blob: boolean) {
+    const controller = new AbortController()
+    const abort = () => controller.abort()
+    signal.addEventListener('abort', abort, { once: true })
+
+    if (signal.aborted) { abort() }
+    const timer = setTimeout(abort, 60_000)
+
+    try {
+      const response = await fetchImpl(`${origin}/api/v1/desktop/sync/${endpoint}`, {
+        method: body === null ? 'GET' : blob ? 'PUT' : 'POST', redirect: 'manual', signal: controller.signal,
+        headers: { authorization: `Bearer ${token}`, 'content-type': blob ? 'application/octet-stream' : 'application/json' },
+        body: body === null ? undefined : body as BodyInit
+      })
+
+      const bytes = await readSyncBody(response, !response.ok ? 65536 : blob ? SYNC_BLOB_LIMIT : SYNC_JSON_LIMIT)
+
+      if (!response.ok) {
+        let code = [404, 405, 501].includes(response.status) ? 'sync_unavailable' : `http_${response.status}`
+
+        try {
+          const error = JSON.parse(new TextDecoder().decode(bytes))
+          const reason = error.reason ?? error.code
+
+          if (typeof reason === 'string' && /^DESKTOP_SYNC_[A-Z_]{1,50}$/.test(reason)) { code = reason }
+        } catch { /* Older gateways may answer a non-JSON 404. */ }
+
+        throw new PlatformClientError(code, response.status === 401)
+      }
+
+      return bytes
+    } catch (error) {
+      if (error instanceof PlatformClientError) { throw error }
+      throw new PlatformClientError('network_unavailable')
+    } finally { clearTimeout(timer); signal.removeEventListener('abort', abort) }
+  }
+
   function tokens(value: unknown): PlatformTokenSet {
     const data = object(value)
 
@@ -374,6 +439,22 @@ export function createPlatformClient({
 
   return {
     origin,
+    async syncExchange(token, input, signal) {
+      const body = JSON.stringify(input)
+
+      if (new TextEncoder().encode(body).byteLength > SYNC_JSON_LIMIT) { throw new PlatformClientError('sync_request_too_large') }
+      const bytes = await syncRequest(token, 'exchange', body, signal, false)
+      const envelope = JSON.parse(new TextDecoder().decode(bytes))
+
+      if (envelope.code !== 0) { throw new PlatformClientError('invalid_response') }
+
+      return parseSyncResponse(envelope.data)
+    },
+    async syncBlob(token, hash, bytes, signal) {
+      if (!/^[a-f0-9]{64}$/.test(hash) || bytes && bytes.byteLength > SYNC_BLOB_LIMIT) { throw new PlatformClientError('invalid_sync_blob') }
+
+      return syncRequest(token, `blobs/${hash}`, bytes, signal, true)
+    },
     async supportsDeviceKey(token) {
       try {
         const data = object(await request('GET', '/desktop/bootstrap', undefined, token))

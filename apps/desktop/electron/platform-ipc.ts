@@ -11,6 +11,7 @@ import { parsePlatformDeviceId } from '../shared/platform-device-contract'
 import { openPlatformCheckout } from '../shared/platform-payment'
 import { parsePaymentQuoteInput, parsePlatformCreateOrderInput, parsePlatformOrderId, parsePlatformOrderQuery } from '../shared/platform-payment-contract'
 import type { PlatformRuntimeBindingController } from '../shared/platform-runtime-binding'
+import type { CloudSyncStatus } from '../shared/platform-sync-contract'
 import { parsePlatformUsageQuery } from '../shared/platform-usage-contract'
 
 interface IpcLike {
@@ -57,8 +58,10 @@ export function registerPlatformIpc({
   trustedRendererUrl,
   bindingController,
   currentDeviceId,
-  openPaymentBrowser
+  openPaymentBrowser,
+  cloudSync
 }: {
+  cloudSync?: { snapshot(): CloudSyncStatus; retry(): Promise<CloudSyncStatus>; subscribe(listener: (status: CloudSyncStatus) => void): () => void }
   ipc: IpcLike
   auth: PlatformAuth
   captcha: { acquire(): Promise<PlatformCaptchaProof> }
@@ -285,6 +288,15 @@ export function registerPlatformIpc({
     })
   }
 
+  for (const [name, operation] of Object.entries({ status: () => cloudSync?.snapshot(), retry: () => cloudSync?.retry() })) {
+    ipc.handle(`aino:platform-sync:${name}`, async event => {
+      try { authorize(event);
+
+ return { ok: true, value: await operation() } }
+      catch (error) { return { ok: false, error: safeIpcError(error) } }
+    })
+  }
+
   const deviceMethods = {
     list: (source: Record<string, unknown>) => auth.listDevices({
       expected_user_id: field(source, 'expected_user_id', 128), expected_generation: source.expected_generation as number
@@ -496,6 +508,14 @@ export function registerPlatformIpc({
     }
   })
 
+  const unsubscribeSync = cloudSync?.subscribe(status => {
+    for (const win of windows) {
+      if (!win.isDestroyed() && !win.webContents.isDestroyed() && sameRendererDocument(win.webContents.mainFrame.url, trustedRendererUrl)) {
+        win.webContents.send('aino:platform-sync:changed', status)
+      }
+    }
+  })
+
   function unregisterWindow(win: WindowLike) {
     bindingController?.releaseWindow(win)
     windows.delete(win)
@@ -523,6 +543,9 @@ export function registerPlatformIpc({
       }
 
       bindingController?.dispose()
+      ipc.removeHandler?.('aino:platform-sync:status')
+      ipc.removeHandler?.('aino:platform-sync:retry')
+      unsubscribeSync?.()
       unsubscribe()
       windows.clear()
 

@@ -20,6 +20,7 @@ import type {
   PlatformDiagnosticsBridge,
   PlatformModelsBridge
 } from '../shared/platform-contract'
+import type { CloudSyncBridge } from '../shared/platform-sync-contract'
 
 import type { UiPreferencesBridge } from './lib/ui-preferences/sync'
 import type { WakeIndicatorState } from './lib/wake-indicator'
@@ -43,6 +44,7 @@ export type DesktopMachineProfile = MachineProfile
 declare global {
   interface Window {
     hermesDesktop: {
+      cloudSync?: CloudSyncBridge
       platformAccount: PlatformAccountBridge
       platformModels: PlatformModelsBridge
       platformBilling?: PlatformBillingBridge

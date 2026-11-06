@@ -192,6 +192,7 @@ import {
   withoutTranscriptProvenance
 } from './transcript-provenance'
 import type { BranchLoadedSessionOptions, FreshSessionDraftOptions, SessionActionsOptions } from './types'
+import { useCloudHistory } from './use-cloud-history'
 import {
   appendLiveSessionProjection,
   cachedSessionRow,
@@ -216,10 +217,6 @@ import {
   upsertUnlistedSessionOwner
 } from './utils'
 
-// How long we keep creatingSessionRef after create/fork navigate before giving up
-// if the router never lands on the pending stored id (stuck navigate / lost race).
-const CREATE_GUARD_RELEASE_MS = 3_000
-
 export function useSessionActions({
   activeSessionId,
   activeSessionIdRef,
@@ -241,6 +238,7 @@ export function useSessionActions({
   syncSessionStateToView,
   updateSessionState
 }: SessionActionsOptions) {
+  useCloudHistory({ activeSessionIdRef, sessionStateByRuntimeIdRef, selectedStoredSessionIdRef, updateSessionState, syncSessionStateToView })
   const { t } = useI18n()
   const copy = t.desktop
   const resumeRequestRef = useRef(0)

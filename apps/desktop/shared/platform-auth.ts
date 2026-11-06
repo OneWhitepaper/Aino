@@ -21,6 +21,8 @@ interface RetainedAccount {
 }
 
 export interface PlatformAuth {
+  syncExchange(input: Parameters<PlatformClient['syncExchange']>[1], owner: PlatformDeviceOwner, signal: AbortSignal): ReturnType<PlatformClient['syncExchange']>
+  syncBlob(hash: string, bytes: Uint8Array | null, owner: PlatformDeviceOwner, signal: AbortSignal): ReturnType<PlatformClient['syncBlob']>
   uploadDiagnostics(bundle: string, owner: PlatformDeviceOwner): ReturnType<PlatformClient['uploadDiagnostics']>
   listDevices(owner: PlatformDeviceOwner): ReturnType<PlatformClient['listDevices']>
   revokeDevice(deviceId: string, owner: PlatformDeviceOwner): ReturnType<PlatformClient['revokeDevice']>
@@ -177,6 +179,21 @@ export function createPlatformAuth({
     return expected === generation ? rememberState : null
   }
 
+  async function rememberVerifiedProfile(profile: PlatformProfile, expected: number) {
+    const source = tokens
+
+    if (!source || expected !== generation) { return }
+    const next = { ...source, deviceAccount: profile }
+
+    if (current.remember_state === 'encrypted') {
+      await persist(async () => {
+        if (tokens === source && generation === expected) { await tokenStore.save(client.origin, next) }
+      })
+    }
+
+    if (tokens === source && generation === expected) { tokens = next }
+  }
+
   async function finishAuthentication(next: PlatformTokenSet, remember: boolean, expected: number) {
     const profile = await client.profile(next.accessToken)
 
@@ -187,9 +204,9 @@ export function createPlatformAuth({
     if (current.account?.id === profile.id && tokens?.deviceKeys) {
       next.deviceKeys = tokens.deviceKeys
       next.deviceModels = tokens.deviceModels
-      next.deviceAccount = profile
     }
 
+    next.deviceAccount = profile
     const rememberState = await storeTokens(next, remember, expected)
 
     if (!rememberState || expected !== generation) {
@@ -285,6 +302,7 @@ export function createPlatformAuth({
       current = { ...current, remember_state: rememberState }
 
       const profile = await client.profile(next.accessToken)
+      await rememberVerifiedProfile(profile, expected)
 
       if (expected !== generation) {
         throw new PlatformClientError('auth_attempt_superseded')
@@ -562,6 +580,8 @@ export function createPlatformAuth({
   }
 
   const api: PlatformAuth = {
+    syncExchange: (input, owner, signal) => deviceOperation(owner, token => client.syncExchange(token, input, signal), true),
+    syncBlob: (hash, bytes, owner, signal) => deviceOperation(owner, token => client.syncBlob(token, hash, bytes, signal), true),
     uploadDiagnostics: (bundle, owner) => deviceOperation(owner, token => client.uploadDiagnostics(token, bundle), false),
     listDevices: owner => deviceOperation(owner, token => client.listDevices(token), true),
     async revokeDevice(id, owner) {
@@ -718,10 +738,10 @@ export function createPlatformAuth({
         current = {
           ...current,
           remember_state: 'encrypted',
-          ...(restored.deviceAccount && restored.deviceKeys?.length
+          ...(restored.deviceAccount
             ? {
                 account: restored.deviceAccount,
-                model_identity_ready: true, model_identity_version: restored.deviceKeys[0].version
+                model_identity_ready: Boolean(restored.deviceKeys?.length), model_identity_version: restored.deviceKeys?.[0]?.version
               }
             : {})
         }
@@ -731,6 +751,7 @@ export function createPlatformAuth({
         }
 
         const profile = await client.profile(restored.accessToken)
+        await rememberVerifiedProfile(profile, expected)
 
         return expected === generation
           ? publish({

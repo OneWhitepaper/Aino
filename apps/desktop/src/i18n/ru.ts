@@ -5,6 +5,7 @@ import { defineFieldCopy } from '@/app/settings/field-copy'
 
 import { accountPage } from './account-page'
 import { appearancePage } from './appearance-page'
+import { cloudSync } from './cloud-sync'
 import { configPagesFor } from './config-pages'
 import { defineLocale, type TranslationOverrides } from './define-locale'
 import { homeGuidance } from './home-guidance'
@@ -335,6 +336,7 @@ const ruBaseOverrides = {
   home: homeGuidance.ru,
   toolPanel: toolPanel['ru'],
   workspacePage: workspacePage.ru,
+  cloudSync: cloudSync['ru'],
   accountPage: accountPage['ru'],
   platformRecharge: {
     description:

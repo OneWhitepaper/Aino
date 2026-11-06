@@ -1,5 +1,7 @@
 import { type ChildProcess, execFileSync, spawn } from 'node:child_process'
 
+import { createAccountCloudSync } from './account-cloud-sync'
+import { createCloudSyncLocalAdapter } from './account-cloud-sync-local'
 import type { GatewayEndpoint } from './local-gateway'
 import {
   configurePythonGatewayTicketClient,
@@ -11,7 +13,7 @@ import {
   runGatewayEnsure,
   runGatewayOwnerRestart
 } from './local-gateway'
-import { closeGatewayTicketBridges, createGatewayTicketResolver } from './local-gateway-python'
+import { closeGatewayTicketBridges, createGatewayTicketResolver, ticketRuntimeFor } from './local-gateway-python'
 import { createPluginWsUrlHandler } from './plugin-ws-url'
 const localGatewayDials = createLocalGatewayDials()
 configurePythonGatewayTicketClient(
@@ -54,8 +56,7 @@ import {
 } from 'electron'
 import type { Session } from 'electron'
 
-import { createPlatformAuth } from '../shared/platform-auth'
-import { createPlatformClient, resolvePlatformOrigin } from '../shared/platform-client'
+import { resolvePlatformOrigin } from '../shared/platform-client'
 import type { PlatformAccountWindowOwner } from '../shared/platform-contract'
 import { createPlatformRuntimeBindingController } from '../shared/platform-runtime-binding'
 
@@ -427,9 +428,8 @@ import { placePetOverlay, registerPetOverlayIpc } from './pet-overlay-ipc'
 import { platformBindingPrompt } from './platform-binding-prompt'
 import { resolvePlatformBindingTarget } from './platform-binding-target'
 import { createPlatformCaptcha } from './platform-captcha'
-import { validateDiagnosticBundle } from './platform-diagnostics-contract'
 import { registerPlatformIpc } from './platform-ipc'
-import { createPlatformTokenStore } from './platform-token-store'
+import { createNativePlatformAuth } from './platform-native-auth'
 import {
   buildRegistryProfileRoutes,
   isLocalEnumerationFailure,
@@ -4672,25 +4672,19 @@ function resolveRendererIndex() {
   return resolveRendererIndexWithMissing().index
 }
 
-const platformClient = createPlatformClient({
-  origin: platformOrigin.origin,
-  validateDiagnostics: validateDiagnosticBundle,
-  allowInsecureLoopback: platformOrigin.development
+const { client: platformClient, auth: platformAuth } = createNativePlatformAuth(platformOrigin, app.getPath('userData'), {
+  isAvailable: () => safeStorage.isEncryptionAvailable(),
+  backend: () => (process.platform === 'linux' ? safeStorage.getSelectedStorageBackend() : 'os'),
+  encrypt: value => safeStorage.encryptString(value),
+  decrypt: value => safeStorage.decryptString(value)
 })
 
-const platformTokenStore = createPlatformTokenStore({
-  filePath: path.join(app.getPath('userData'), 'platform-tokens.json'),
-  crypto: {
-    isAvailable: () => safeStorage.isEncryptionAvailable(),
-    backend: () => (process.platform === 'linux' ? safeStorage.getSelectedStorageBackend() : 'os'),
-    encrypt: value => safeStorage.encryptString(value),
-    decrypt: value => safeStorage.decryptString(value)
-  }
-})
+const accountCloudSync = createAccountCloudSync({ auth: platformAuth, deviceId: () => desktopInstallationId,
+  local: createCloudSyncLocalAdapter(async () => ticketRuntimeFor(await resolveHermesBackend([])), resolveHermesCwd) })
 
-const platformAuth = createPlatformAuth({ client: platformClient, tokenStore: platformTokenStore, now: Date.now })
+app.on('will-quit', () => { void accountCloudSync.stop() })
 
-const accountWorkspaceSwitch = createAccountWorkspaceSwitch({ initial: activeAccountWorkspace, resolve: userId => accountWorkspace(app.getPath('userData'), platformOrigin.origin, userId), retire: retireAccountWorkspace, activate: activateAccountWorkspace, ready: () => { accountRehomeInProgress = false; createWindow() } })
+const accountWorkspaceSwitch = createAccountWorkspaceSwitch({ initial: activeAccountWorkspace, resolve: userId => accountWorkspace(app.getPath('userData'), platformOrigin.origin, userId), retire: retireAccountWorkspace, activate: activateAccountWorkspace, ready: () => { accountRehomeInProgress = false; createWindow(); accountCloudSync.start(activeAccountWorkspace) } })
 platformAuth.subscribe(snapshot => {
   if (ACCOUNT_SCOPED && snapshot.phase !== 'loading') { void accountWorkspaceSwitch.change(snapshot.account?.id || null).catch(error => rememberLog(`Account workspace unavailable: ${error instanceof Error ? error.message : String(error)}`)) }
 })
@@ -4737,10 +4731,12 @@ const nativeLoginControllers = new Set<AbortController>()
 
 async function retireAccountWorkspace(): Promise<void> {
   accountRehomeInProgress = true
+  await accountCloudSync.stop()
   remoteSessionCookies.retire()
   oauthLoginFlights.retire()
   recoverCloudCookieSession.retire()
   retirePortalSession()
+
   for (const controller of nativeLoginControllers) { controller.abort() }
 
   for (const win of BrowserWindow.getAllWindows()) { win.hide(); win.destroy() }
@@ -4872,7 +4868,8 @@ const platformIpc = registerPlatformIpc({
   trustedRendererUrl: DEV_SERVER
     ? new URL('/', DEV_SERVER).toString()
     : pathToFileURL(resolveRendererIndex()).toString(),
-  bindingController: platformBindingController
+  bindingController: platformBindingController,
+  cloudSync: accountCloudSync
 })
 
 // True when `dir` lives inside the packaged app bundle / install tree.

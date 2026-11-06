@@ -5,6 +5,7 @@ import { defineFieldCopy } from '@/app/settings/field-copy'
 
 import { accountPage } from './account-page'
 import { appearancePage } from './appearance-page'
+import { cloudSync } from './cloud-sync'
 import { configPagesFor } from './config-pages'
 import { defineLocale, type TranslationOverrides } from './define-locale'
 import { frBoot } from './fr_boot'
@@ -330,6 +331,7 @@ const frBaseOverrides = {
   home: homeGuidance.fr,
   toolPanel: toolPanel['fr'],
   workspacePage: workspacePage.fr,
+  cloudSync: cloudSync['fr'],
   accountPage: accountPage['fr'],
   platformRecharge: {
     description:
