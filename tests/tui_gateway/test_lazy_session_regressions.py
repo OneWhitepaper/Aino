@@ -140,6 +140,8 @@ class TestPendingTitleValueError:
         )
 
         monkeypatch.setattr(server, "_get_db", lambda: mock_db)
+        # This title-error unit test has no durable cloud import state.
+        monkeypatch.setattr("tui_gateway.session_cloud_sync.refresh_cloud_history", lambda *a, **kw: False)
         monkeypatch.setattr(server, "_emit", lambda *a, **kw: None)
         monkeypatch.setattr(server, "make_stream_renderer", lambda cols: None)
         monkeypatch.setattr(server, "render_message", lambda raw, cols: None)
@@ -157,11 +159,13 @@ class TestPendingTitleValueError:
         monkeypatch.setattr(server.threading, "Thread", _ImmediateThread)
 
         try:
-            server.handle_request({
+            response = server.handle_request({
                 "id": "1",
                 "method": "prompt.submit",
                 "params": {"session_id": "sid", "text": "hello"},
             })
+            assert "result" in response, response
+            mock_db.set_session_title.assert_called_once_with("test-session", "My Title")
 
             # pending_title should be cleared on ValueError, not left wedged
             assert session.get("pending_title") is None, (
