@@ -9,18 +9,19 @@ import { dropTranscriptTail } from '@/store/transcript-tail-cache'
 
 import type { SessionActionsOptions } from './types'
 
+interface PendingInvalidation { failures: number; retryAt: number }
+
 /** Refresh display caches only. The runtime rehydrates its own context before the next turn. */
 export function useCloudHistory({ activeSessionIdRef, sessionStateByRuntimeIdRef, selectedStoredSessionIdRef, updateSessionState, syncSessionStateToView }: Pick<SessionActionsOptions,
   'activeSessionIdRef' | 'sessionStateByRuntimeIdRef' | 'selectedStoredSessionIdRef' | 'updateSessionState' | 'syncSessionStateToView'>) {
   useEffect(() => {
     let alive = true
-    const pending = new Map<string, number>()
+    const pending = new Map<string, PendingInvalidation>()
     const running = new Set<string>()
-    let revision = 0
 
     const refresh = () => {
       for (const [id, token] of pending) {
-        if (running.has(id)) { continue }
+        if (running.has(id) || token.retryAt > Date.now()) { continue }
         const owner = knownSessionOwner($sessions.get(), id)
 
         if (!owner || typeof owner !== 'string' && owner.connectionId && owner.connectionId !== 'local') { pending.delete(id);
@@ -58,11 +59,16 @@ export function useCloudHistory({ activeSessionIdRef, sessionStateByRuntimeIdRef
           }
 
           if (!retry) { pending.delete(id) }
-        }).catch(() => { pending.delete(id) }).finally(() => { running.delete(id) })
+        }).catch(() => {
+          // An older request must not consume or delay a newer invalidation.
+          if (!alive || pending.get(id) !== token) { return }
+          token.failures = Math.min(token.failures + 1, 6)
+          token.retryAt = Date.now() + Math.min(1_000 * 2 ** (token.failures - 1), 30_000)
+        }).finally(() => { running.delete(id) })
       }
     }
 
-    const off = onCloudHistoryChanged(event => { for (const id of event.changed_session_ids) { pending.set(id, ++revision) }; refresh() })
+    const off = onCloudHistoryChanged(event => { for (const id of event.changed_session_ids) { pending.set(id, { failures: 0, retryAt: 0 }) }; refresh() })
     const timer = setInterval(refresh, 1_000)
 
     return () => { alive = false; off(); clearInterval(timer) }
