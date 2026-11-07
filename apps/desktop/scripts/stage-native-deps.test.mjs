@@ -587,7 +587,7 @@ test('get-windows native install invokes node-pre-gyp directly from the package 
     const calls = []
     installGetWindowsNativeBinding(srcRoot, {
       spawn: (command, args, options) => {
-        calls.push({ command, args, options })
+        calls.push({ command, args: [fs.realpathSync(args[0]), ...args.slice(1)], options })
         return { status: 0 }
       }
     })

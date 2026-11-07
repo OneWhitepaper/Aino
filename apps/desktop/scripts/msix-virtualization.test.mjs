@@ -39,17 +39,24 @@ function taggedApp(tag) {
   return app
 }
 
-// A channel app dir: stageChannelManifest loads scripts/before-build.mjs from it,
-// so link the real scripts directory (a junction needs no privilege on Windows).
+// Keep the hook's repo-relative imports valid without requiring a file symlink,
+// which needs extra privileges on Windows.
 function channelApp() {
-  const app = fs.mkdtempSync(path.join(os.tmpdir(), 'msix-virt-channel-'))
-  roots.push(app)
-  fs.mkdirSync(path.join(app, 'assets'))
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'msix-virt-channel-'))
+  roots.push(root)
+  const app = path.join(root, 'apps', 'desktop')
+  fs.mkdirSync(path.join(app, 'assets'), { recursive: true })
   fs.mkdirSync(path.join(app, 'build/agent-payload'), { recursive: true })
+  fs.mkdirSync(path.join(app, 'scripts'))
   fs.copyFileSync(path.join(desktop, 'assets/msix-manifest.xml'), path.join(app, 'assets/msix-manifest.xml'))
+  fs.writeFileSync(
+    path.join(app, 'product-identity.cjs'),
+    "module.exports={store:false,light:false,displayName:'Hermes preview',appNamePascal:'HermesChannel',artifactNamePascal:'HermesChannel'}\n"
+  )
   fs.writeFileSync(path.join(app, 'build/agent-payload/manifest.json'), JSON.stringify({ launchers: ['hermes'] }))
   fs.writeFileSync(path.join(app, 'build/msix-extensions.xml'), '<Extensions />')
-  fs.symlinkSync(path.join(desktop, 'scripts'), path.join(app, 'scripts'), 'junction')
+  fs.symlinkSync(path.resolve(desktop, '../../scripts'), path.join(root, 'scripts'), 'junction')
+  fs.copyFileSync(path.join(desktop, 'scripts/before-build.mjs'), path.join(app, 'scripts/before-build.mjs'))
   return app
 }
 
