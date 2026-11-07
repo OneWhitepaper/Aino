@@ -98,4 +98,16 @@ describe('notifyBotOpenFailure', () => {
     expect(hostMock.navigate).toHaveBeenCalledWith('/settings?tab=gateway')
     expect(hostMock.notifyError).not.toHaveBeenCalled()
   })
+
+  it('model failures open model settings instead of gateway settings', async () => {
+    const { notifyBotOpenFailure } = await load()
+
+    notifyBotOpenFailure(new Error('model_unavailable: no usable model configured'), BOT, 'open')
+
+    const toast = lastToast()
+    expect(toast.action?.label).toBe('Configure model')
+    toast.action?.onClick()
+    expect(hostMock.navigate).toHaveBeenCalledWith('/settings?tab=config:model')
+    expect(toast.message).not.toContain('model_unavailable')
+  })
 })

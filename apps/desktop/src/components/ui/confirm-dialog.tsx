@@ -44,10 +44,9 @@ interface ConfirmationLifecycle {
   closeTimer: null | number
 }
 
-// Shared confirmation dialog: opens focused on Confirm, Enter confirms (from
-// anywhere in the dialog), Esc/Cancel/backdrop dismiss. Owns the pending → done
-// → close beat and inline error, so callers pass only an async onConfirm that
-// does the work.
+// Shared confirmation dialog: opens on the safe choice for destructive work
+// and keeps keyboard ownership with the focused control. Owns the pending →
+// done → close beat and inline error, so callers pass only an async onConfirm.
 export function ConfirmDialog({
   open,
   onClose,
@@ -64,6 +63,7 @@ export function ConfirmDialog({
   secondaryAction
 }: ConfirmDialogProps) {
   const { t } = useI18n()
+  const cancelRef = useRef<HTMLButtonElement>(null)
   const confirmRef = useRef<HTMLButtonElement>(null)
   const lifecycleRef = useRef<ConfirmationLifecycle | null>(null)
   const [status, setStatus] = useState<'done' | 'idle' | 'saving'>('idle')
@@ -138,22 +138,32 @@ export function ConfirmDialog({
   return (
     <Dialog onOpenChange={value => !value && !busy && onClose()} open={open}>
       <DialogContent
-        className="max-w-md"
+        className="max-w-md rounded-(--aino-radius-panel)"
         onKeyDown={event => {
-          // Enter/Space confirm regardless of which button holds focus
-          // (preventDefault stops a focused Cancel from swallowing it).
-          if ((event.key === 'Enter' || event.key === ' ') && !busy) {
+          // Native buttons already map Enter/Space to their own click. Only
+          // retain the convenient Enter shortcut when focus is on the dialog
+          // content itself; a focused Cancel must never confirm a destructive
+          // action when the user presses Space.
+          if (
+            event.key === 'Enter' &&
+            (event.target === event.currentTarget || event.target === confirmRef.current) &&
+            !busy
+          ) {
             event.preventDefault()
             void run()
           }
         }}
         onOpenAutoFocus={event => {
-          // Focus must land inside the dialog or the handler above never sees
-          // the key: it stays on whatever opened the dialog (a menu item, a
-          // sidebar row) and Enter re-triggers that instead. Radix's default
-          // would take the X — confirm is the button Enter maps to.
+          // Radix would focus the close button first. Destructive dialogs use
+          // the safe cancel action by default; ordinary dialogs keep the
+          // existing fast path on confirm.
           event.preventDefault()
-          confirmRef.current?.focus()
+
+          if (destructive) {
+            cancelRef.current?.focus()
+          } else {
+            confirmRef.current?.focus()
+          }
         }}
       >
         <DialogHeader>
@@ -171,8 +181,8 @@ export function ConfirmDialog({
           </div>
         )}
 
-        <DialogFooter>
-          <Button disabled={busy} onClick={onClose} type="button" variant="ghost">
+        <DialogFooter className="mt-2 border-t border-(--ui-stroke-tertiary) pt-3">
+          <Button disabled={busy} onClick={onClose} ref={cancelRef} type="button" variant="ghost">
             {resolvedCancelLabel}
           </Button>
           {secondaryAction && (

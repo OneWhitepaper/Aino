@@ -7,6 +7,7 @@ import {
   clearAgentNotice,
   nativeNoticeInput,
   noticeToToast,
+  sanitizeNoticeDetail,
   showAgentNotice,
   splitMeta,
   usageFraction
@@ -99,6 +100,14 @@ test('the leading severity glyph is stripped from the toast message', () => {
   expect(noticeToToast(usage({ level: 'success', text: '✓ Credit access restored' }))?.message).toBe(
     'Credit access restored'
   )
+})
+
+test('sanitizes command-shaped maintenance detail before it reaches a desktop card', () => {
+  expect(sanitizeNoticeDetail('会话历史仅占 1 MB。\n$ hermes /autoprune\n运行命令后重启桌面端。')).toBe(
+    '会话历史仅占 1 MB。\n运行命令后重启桌面端。'
+  )
+  expect(sanitizeNoticeDetail('$ hermes /autoprune\n/autoprune')).toBeUndefined()
+  expect(noticeToToast({ text: '⚠ 磁盘空间不足', detail: '$ hermes /autoprune\n/autoprune' })?.detail).toBeUndefined()
 })
 
 test('the trailing "· detail" is split off as a secondary meta line, not inlined', () => {

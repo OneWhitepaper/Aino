@@ -59,6 +59,33 @@ export function stripGlyph(text: string): string {
   return text.replace(LEADING_GLYPH, '')
 }
 
+/**
+ * Desktop notifications must not turn a backend maintenance suggestion into
+ * a terminal transcript. AionUi keeps the short notification user-facing and
+ * moves implementation details out of the primary surface; apply the same
+ * boundary here. Keep explanatory prose, drop command-like lines and cap the
+ * remaining detail so a low-disk notice cannot become a scrolling shell dump.
+ */
+export function sanitizeNoticeDetail(detail: string | undefined): string | undefined {
+  if (!detail?.trim()) {
+    return undefined
+  }
+
+  const lines = detail
+    .split(/\r?\n/)
+    .map(line => line.trim())
+    .filter(Boolean)
+    .filter(line => !/^(?:[$>#]|hermes\b|\/autoprune\b|(?:python|python3|sqlite3|rm|sudo)\b)/i.test(line))
+
+  const cleaned = lines.join('\n').trim()
+
+  if (!cleaned || /\/autoprune\b/i.test(cleaned)) {
+    return undefined
+  }
+
+  return cleaned.length > 320 ? `${cleaned.slice(0, 317).trimEnd()}…` : cleaned
+}
+
 /** A `$12.34` money token, as the Nous notice policy formats amounts. */
 const MONEY = /\$(\d+(?:\.\d{2})?)/g
 
@@ -131,9 +158,10 @@ export function noticeAccent(payload: AgentNoticePayload | undefined): string | 
  *   instead of stacking, and a key-matched `notification.clear` can dismiss it.
  */
 export function noticeToToast(payload: AgentNoticePayload | undefined): NotificationInput | null {
-  const text = payload?.code === 'auxiliary_billing_override' && payload.billing_source
-    ? translateNow('notifications.auxiliaryBillingSource', payload.billing_source)
-    : payload?.text?.trim()
+  const text =
+    payload?.code === 'auxiliary_billing_override' && payload.billing_source
+      ? translateNow('notifications.auxiliaryBillingSource', payload.billing_source)
+      : payload?.text?.trim()
 
   // A window plan's limit line is said by the refused turn's error card (same
   // sentence, with Open billing / Retry at reset); a toast would say it twice.
@@ -150,6 +178,7 @@ export function noticeToToast(payload: AgentNoticePayload | undefined): Notifica
   // convention (Sonner/shadcn): the primary status is the message and the detail
   // drops to a muted second line, instead of inlining a `·` separator.
   const [primary, meta] = splitMeta(stripGlyph(text))
+  const detail = sanitizeNoticeDetail(payload?.detail)
 
   return {
     // Icon + text tint by usage band (muted → orange → red); undefined keeps
@@ -162,7 +191,7 @@ export function noticeToToast(payload: AgentNoticePayload | undefined): Notifica
     kind: LEVEL_TO_TOAST_KIND[payload?.level ?? 'info'] ?? 'info',
     message: primary,
     meta,
-    ...(payload?.detail?.trim() ? { detail: payload.detail.trim() } : {})
+    ...(detail ? { detail } : {})
   }
 }
 

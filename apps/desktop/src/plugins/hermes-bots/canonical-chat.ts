@@ -214,12 +214,21 @@ function botModeGatewayNeedsUpdate(error: unknown) {
  *  profile-switcher.tsx reaches via SETTINGS_ROUTE; plugins don't import app
  *  routes, so the literal lives here). */
 const GATEWAY_SETTINGS_PATH = '/settings?tab=gateway'
+const MODEL_SETTINGS_PATH = '/settings?tab=config:model'
 
 /** Raw error text for the toast's muted `detail` line — never the body. */
 function errorDetail(error: unknown): string | undefined {
   const text = String((error as RpcErrorLike)?.message || error || '').trim()
 
   return text || undefined
+}
+
+function botModelNeedsSetup(error: unknown): boolean {
+  const message = String((error as RpcErrorLike)?.message || error || '')
+
+  return /model_unavailable|model unavailable|no (?:usable )?model|model (?:missing|not found|unconfigured)/i.test(
+    message
+  )
 }
 
 /** What the caller was doing when the open failed: `'reach'` — activating
@@ -229,10 +238,13 @@ export type BotOpenStep = 'open' | 'reach'
 
 /** Toast a failed bot open. Titles and bodies come from the plugin bundle and
  *  say what happened + what to do; the raw RPC/connection error only ever
- *  rides in `detail`. Every toast offers the Gateways settings tab. */
+ *  rides in `detail`. Model failures go to model settings, while connection
+ *  failures go to the gateway settings surface. */
 export function notifyBotOpenFailure(error: unknown, bot: RosterRow, step: BotOpenStep, botName?: string) {
-  const b = botsText().bot
-  const action = { label: b.openGateways, onClick: () => host.navigate(GATEWAY_SETTINGS_PATH) }
+  const text = botsText()
+  const b = text.bot
+  const modelAction = { label: text.editor.configureModel, onClick: () => host.navigate(MODEL_SETTINGS_PATH) }
+  const gatewayAction = { label: b.openGateways, onClick: () => host.navigate(GATEWAY_SETTINGS_PATH) }
   const detail = errorDetail(error)
 
   if (botModeGatewayNeedsUpdate(error)) {
@@ -242,7 +254,7 @@ export function notifyBotOpenFailure(error: unknown, bot: RosterRow, step: BotOp
       title: b.openNeedsUpdateTitle,
       message: b.openNeedsUpdateMessage(connectionLabel),
       ...(detail ? { detail } : {}),
-      action
+      action: gatewayAction
     })
 
     return
@@ -254,7 +266,19 @@ export function notifyBotOpenFailure(error: unknown, bot: RosterRow, step: BotOp
       title: b.openUnreachableTitle,
       message: b.openUnreachableMessage,
       ...(detail ? { detail } : {}),
-      action
+      action: gatewayAction
+    })
+
+    return
+  }
+
+  if (botModelNeedsSetup(error)) {
+    host.notify?.({
+      kind: 'error',
+      title: b.openChatFailedTitle(botName || bot.name),
+      message: text.editor.needsModel,
+      ...(detail ? { detail } : {}),
+      action: modelAction
     })
 
     return
@@ -265,7 +289,7 @@ export function notifyBotOpenFailure(error: unknown, bot: RosterRow, step: BotOp
     title: b.openChatFailedTitle(botName || bot.name),
     message: b.openChatFailedMessage,
     ...(detail ? { detail } : {}),
-    action
+    action: gatewayAction
   })
 }
 

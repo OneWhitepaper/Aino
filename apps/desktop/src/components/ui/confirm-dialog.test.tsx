@@ -47,4 +47,29 @@ describe('ConfirmDialog secondary action', () => {
     await waitFor(() => expect(onConfirm).toHaveBeenCalledTimes(1))
     expect(onSecondary).not.toHaveBeenCalled()
   })
+
+  it('opens destructive dialogs on Cancel and keeps Space from confirming', async () => {
+    const onConfirm = vi.fn()
+    const onClose = vi.fn()
+
+    render(
+      <ConfirmDialog
+        cancelLabel="Cancel"
+        confirmLabel="Delete"
+        destructive
+        onClose={onClose}
+        onConfirm={onConfirm}
+        open
+        title="Delete session?"
+      />
+    )
+
+    const cancel = await screen.findByRole('button', { name: 'Cancel' })
+    // eslint-disable-next-line no-restricted-globals -- focus ownership is the behavior under test
+    await waitFor(() => expect(document.activeElement).toBe(cancel))
+    fireEvent.keyDown(cancel, { key: ' ' })
+
+    expect(onConfirm).not.toHaveBeenCalled()
+    expect(onClose).not.toHaveBeenCalled()
+  })
 })

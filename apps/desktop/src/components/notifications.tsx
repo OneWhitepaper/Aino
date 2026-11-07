@@ -40,7 +40,19 @@ const tone: Record<NotificationKind, { icon: IconComponent; iconClass: string; v
   success: { icon: CheckCircle2, iconClass: 'text-(--ui-green)', variant: 'success' }
 }
 
-const STACK_SURFACE = 'pointer-events-auto border border-(--stroke-nous) bg-popover/95 shadow-nous backdrop-blur-md'
+const STACK_SURFACE =
+  'pointer-events-auto border border-(--ui-stroke-secondary) bg-(--ui-bg-elevated)/96 shadow-nous backdrop-blur-md'
+
+// AionUi keeps short Message feedback visually quiet while persistent,
+// actionable Notification cards use a light severity wash. Keep the meaning
+// in the surface and icon together; the body text stays readable in both
+// themes and the card never becomes a saturated banner.
+const NOTIFICATION_SURFACE: Record<NotificationKind, string> = {
+  error: 'border-(--ui-red)/25 bg-(--ui-red)/8',
+  info: 'border-(--ui-stroke-secondary) bg-(--ui-bg-elevated)',
+  success: 'border-(--ui-green)/25 bg-(--ui-green)/8',
+  warning: 'border-(--ui-yellow)/25 bg-(--ui-yellow)/8'
+}
 
 function partitionNotifications(notifications: AppNotification[]) {
   const defaultStack: AppNotification[] = []
@@ -103,11 +115,10 @@ export function NotificationStack() {
   )
 }
 
-// Portaled to <body> on the over-modal rung so a toast clears an open dialog —
-// see the top-center variant below for why.
+// Portaled to <body> on the over-modal rung so a toast clears an open dialog.
 const REGION_BASE = 'pointer-events-none fixed z-(--z-over-modal) flex gap-2'
 
-// Primary stack: top-center, collapsed to the latest toast with a "+N more"
+// Primary stack: top-right, collapsed to the latest toast with a "+N more"
 // expander + clear-all — the noisy/important surface (errors, warnings,
 // action toasts). Without the portal it lives inside the React root subtree,
 // which any body-level dialog/overlay portal paints over — so a toast fired
@@ -130,7 +141,7 @@ function TopCenterStack({
       aria-label={copy.region}
       className={cn(
         REGION_BASE,
-        'left-1/2 top-[calc(var(--titlebar-height,34px)+0.75rem)] w-[min(28rem,calc(100%-2rem))] -translate-x-1/2 flex-col p-1',
+        'right-4 top-[calc(var(--titlebar-height,34px)+0.75rem)] w-[min(25rem,calc(100%-2rem))] flex-col p-1',
         expanded && 'max-h-[70vh] overflow-y-auto overscroll-contain'
       )}
       role="region"
@@ -222,7 +233,7 @@ export function NotificationDeck({
       onSwipe={(notification, _side, action) => {
         void action.depart(() => userDismiss(notification.id))
       }}
-      surfaceClassName={cn(STACK_SURFACE, 'rounded-lg')}
+      surfaceClassName={cn(STACK_SURFACE, 'rounded-(--aino-radius-panel)')}
       swipeDirections={['left', 'right']}
     >
       {(notification, action) => <NotificationItem notification={notification} stack={action} />}
@@ -277,7 +288,10 @@ function NotificationItem({ notification, stack }: { notification: AppNotificati
   return (
     <Alert
       aria-live={!stack.active ? 'off' : notification.kind === 'error' ? 'assertive' : 'polite'}
-      className="grid-cols-[auto_minmax(0,1fr)_auto] border-0 bg-transparent pr-2.5 text-xs shadow-none"
+      className={cn(
+        'grid-cols-[auto_minmax(0,1fr)_auto] rounded-(--aino-radius-panel) border px-3.5 py-3 pr-2.5 text-xs shadow-none',
+        NOTIFICATION_SURFACE[notification.kind]
+      )}
       role={notification.kind === 'error' ? 'alert' : 'status'}
       variant={styles.variant}
     >
@@ -292,7 +306,7 @@ function NotificationItem({ notification, stack }: { notification: AppNotificati
             {notification.title}
           </AlertTitle>
         )}
-        <AlertDescription className="col-start-auto">
+        <AlertDescription className="col-start-auto text-(--ui-text-secondary)">
           <p className="m-0 wrap-break-word">{renderMessage(notification.message, accent)}</p>
           {notification.meta && <p className="m-0 text-xs text-muted-foreground tabular-nums">{notification.meta}</p>}
           {hasDetail && <NotificationDetail detail={notification.detail || ''} />}
@@ -358,7 +372,7 @@ function NotificationDetail({ detail }: { detail: string }) {
   return (
     <details className="mt-2 text-xs text-muted-foreground">
       <summary className="select-none font-medium text-muted-foreground hover:text-foreground">{copy.details}</summary>
-      <div className="mt-1 rounded-md bg-background/65 p-2">
+      <div className="mt-2 rounded-(--aino-radius-control) border border-(--ui-stroke-tertiary) bg-(--ui-chat-surface-background)/70 p-2.5">
         <pre
           className="max-h-32 overflow-y-auto overscroll-contain whitespace-pre-wrap wrap-break-word font-mono text-[0.6875rem] leading-relaxed"
           data-selectable-text="true"
