@@ -199,7 +199,11 @@ export function ScreenPortal({ bot }: { bot: RosterRow }) {
       </span>
       <span className="min-w-0 flex-1">
         <span className="block truncate text-xs font-medium">{t.screen.portalTitle}</span>
-        {subtitle ? <span className="block truncate text-[length:var(--aino-text-caption)] text-(--ui-text-tertiary)">{subtitle}</span> : null}
+        {subtitle ? (
+          <span className="block truncate text-[length:var(--aino-text-caption)] text-(--ui-text-tertiary)">
+            {subtitle}
+          </span>
+        ) : null}
       </span>
       <span className="flex shrink-0 items-center gap-1 text-[length:var(--aino-text-caption)] text-(--ui-text-tertiary) opacity-0 transition-opacity group-hover:opacity-100">
         {t.screen.portalOpen} <Codicon name="arrow-right" />

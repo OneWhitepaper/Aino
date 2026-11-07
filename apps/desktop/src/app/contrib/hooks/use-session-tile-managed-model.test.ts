@@ -40,28 +40,32 @@ function installTile(initial?: ClientSessionState) {
   const states = { current: new Map(initial ? [[runtimeId, initial]] : []) }
   const bindings = { current: new Map(initial ? [[storedId, runtimeId]] : []) }
 
-  const updateSessionState = vi.fn((id: string, updater: (state: ClientSessionState) => ClientSessionState, stored?: string) => {
-    const next = updater(states.current.get(id) ?? createClientSessionState(stored ?? storedId))
-    states.current.set(id, next)
-    bindings.current.set(next.storedSessionId!, id)
-    publishSessionState(id, next)
+  const updateSessionState = vi.fn(
+    (id: string, updater: (state: ClientSessionState) => ClientSessionState, stored?: string) => {
+      const next = updater(states.current.get(id) ?? createClientSessionState(stored ?? storedId))
+      states.current.set(id, next)
+      bindings.current.set(next.storedSessionId!, id)
+      publishSessionState(id, next)
 
-    return next
-  })
+      return next
+    }
+  )
 
   setSessionOwnerHint(storedId, route)
 
-  renderHook(() => useSessionTileDelegate({
-    archiveSession: vi.fn(),
-    branchLoadedSession: vi.fn(),
-    branchStoredSession: vi.fn(),
-    executeSlashCommand: vi.fn(),
-    removeSession: vi.fn(),
-    requestGateway: vi.fn(),
-    runtimeIdByStoredSessionIdRef: bindings,
-    sessionStateByRuntimeIdRef: states,
-    updateSessionState
-  } as never))
+  renderHook(() =>
+    useSessionTileDelegate({
+      archiveSession: vi.fn(),
+      branchLoadedSession: vi.fn(),
+      branchStoredSession: vi.fn(),
+      executeSlashCommand: vi.fn(),
+      removeSession: vi.fn(),
+      requestGateway: vi.fn(),
+      runtimeIdByStoredSessionIdRef: bindings,
+      sessionStateByRuntimeIdRef: states,
+      updateSessionState
+    } as never)
+  )
 
   return states
 }
@@ -88,53 +92,81 @@ it('restores a cold bot model owner and rebinds it before the first prompt', asy
     calls.push(method)
 
     if (method === 'session.resume') {
-      return { session_id: runtimeId, messages: [], info: {
-        provider: 'aino', model: 'wire-model', model_source: 'aino', model_id: 'catalog-a',
-        model_status: 'awaiting_managed_credentials', platform_owner: owner
-      } } as never
+      return {
+        session_id: runtimeId,
+        messages: [],
+        info: {
+          provider: 'aino',
+          model: 'wire-model',
+          model_source: 'aino',
+          model_id: 'catalog-a',
+          model_status: 'awaiting_managed_credentials',
+          platform_owner: owner
+        }
+      } as never
     }
 
     if (method === 'session.managed_model_ticket') {
       return { managed_model_binding: 1, session_ticket: 'fresh-ticket' } as never
     }
 
-    if (method === 'prompt.submit') { return { status: 'accepted' } as never }
+    if (method === 'prompt.submit') {
+      return { status: 'accepted' } as never
+    }
     throw new Error(`Unexpected request: ${method}`)
   })
   const states = installTile()
   const delegate = sessionTileDelegate()!
 
   expect(await delegate.resumeTile(storedId)).toBe(runtimeId)
-  await expect(delegate.submitToSession(runtimeId, 'Continue after restart')).resolves.toMatchObject({ runtimeSessionId: runtimeId })
+  await expect(delegate.submitToSession(runtimeId, 'Continue after restart')).resolves.toMatchObject({
+    runtimeSessionId: runtimeId
+  })
   expect(states.current.get(runtimeId)).toMatchObject({
-    model: 'catalog-a', provider: 'aino', platformModel: {
-      modelId: 'catalog-a', ownerUserId: owner.user_id,
-      platformOrigin: owner.platform_origin, status: 'awaiting_managed_credentials'
+    model: 'catalog-a',
+    provider: 'aino',
+    platformModel: {
+      modelId: 'catalog-a',
+      ownerUserId: owner.user_id,
+      platformOrigin: owner.platform_origin,
+      status: 'awaiting_managed_credentials'
     }
   })
   expect(calls).toEqual(['session.resume', 'session.managed_model_ticket', 'native.bind', 'prompt.submit'])
-  expect(bind).toHaveBeenCalledWith(expect.objectContaining({
-    connection_id: 'local', profile: 'fresh-bot', session_id: runtimeId, model_id: 'catalog-a'
-  }))
+  expect(bind).toHaveBeenCalledWith(
+    expect.objectContaining({
+      connection_id: 'local',
+      profile: 'fresh-bot',
+      session_id: runtimeId,
+      model_id: 'catalog-a'
+    })
+  )
 })
 
 it('clears an old managed selection when an authoritative tile resume reports a custom model', async () => {
   const initial = {
     ...createClientSessionState(storedId),
-    provider: 'aino', model: 'catalog-a',
+    provider: 'aino',
+    model: 'catalog-a',
     platformModel: {
-      modelId: 'catalog-a', ownerUserId: owner.user_id, platformOrigin: owner.platform_origin,
+      modelId: 'catalog-a',
+      ownerUserId: owner.user_id,
+      platformOrigin: owner.platform_origin,
       status: 'ready' as const
     }
   }
 
   vi.mocked(requestGatewayForAgent).mockResolvedValue({
-    session_id: runtimeId, messages: [], info: { provider: 'custom:local', model: 'local-model' }
+    session_id: runtimeId,
+    messages: [],
+    info: { provider: 'custom:local', model: 'local-model' }
   } as never)
   const states = installTile(initial)
 
   await sessionTileDelegate()!.resumeTile(storedId, { authoritativeSnapshot: true })
   expect(states.current.get(runtimeId)).toMatchObject({
-    model: 'local-model', provider: 'custom:local', platformModel: null
+    model: 'local-model',
+    provider: 'custom:local',
+    platformModel: null
   })
 })

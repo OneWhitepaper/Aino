@@ -88,7 +88,7 @@ class RestartFailed extends Error {
  *  until the old gateway exits it still answers with what it served before. A restart (`restartPid`)
  *  that exits first leaves the old gateway serving, so the wait ends there with its reason. */
 async function waitForRestart(owner: ResolvedOwner, restartPid?: number): Promise<WebAccessStatus> {
-  for (const deadline = Date.now() + RESTART_TIMEOUT_MS; Date.now() < deadline; ) {
+  for (const deadline = Date.now() + RESTART_TIMEOUT_MS; Date.now() < deadline;) {
     await new Promise(resolve => setTimeout(resolve, RESTART_POLL_MS))
     // The backend answering this may be the gateway being restarted.
     const status = await getWebAccessStatus(owner).catch(() => null)
@@ -124,7 +124,11 @@ export function WebAccessSettings(): ReactElement | null {
   // backend nor shows anything.
   const available = useWebAccessAvailable()
 
-  const { data: status, error, refetch } = useQuery({
+  const {
+    data: status,
+    error,
+    refetch
+  } = useQuery({
     enabled: available,
     queryFn: () => getWebAccessStatus(owner),
     queryKey: key,
@@ -159,7 +163,12 @@ export function WebAccessSettings(): ReactElement | null {
   return <WebAccessForm key={ownerKey} owner={owner} queryKey={key} status={status} w={w} />
 }
 
-type FormProps = { owner: ResolvedOwner; queryKey: readonly unknown[]; status: WebAccessStatus; w: WebAccessTranslations }
+type FormProps = {
+  owner: ResolvedOwner
+  queryKey: readonly unknown[]
+  status: WebAccessStatus
+  w: WebAccessTranslations
+}
 
 /** Where a start would serve the web app, as the saved config says: LAN unless it names a public URL. */
 function draftModeOf(status: WebAccessStatus): WebAccessMode {
@@ -252,7 +261,8 @@ function WebAccessForm({ owner, queryKey, status, w }: FormProps): ReactElement 
     }
   }
 
-  const start = () => void run('start', () => startWebAccess(mode, mode === 'public' ? publicUrl.trim() : undefined, owner))
+  const start = () =>
+    void run('start', () => startWebAccess(mode, mode === 'public' ? publicUrl.trim() : undefined, owner))
   const stop = () => void run('stop', () => stopWebAccess(owner))
   // A saved change the gateway has not applied yet: restart it, and nothing else.
   const restart = () => void run('restart', () => restartWebAccess(owner))
@@ -261,7 +271,11 @@ function WebAccessForm({ owner, queryKey, status, w }: FormProps): ReactElement 
     <SettingsContent>
       <SectionHeading icon={Network} page title={w.title} />
       <p className="mb-4 text-[length:var(--conversation-caption-font-size)] text-(--ui-text-tertiary)">{w.intro}</p>
-      <SettingsSection aside={<Pill tone={phase === 'serving' ? 'success' : 'muted'}>{pillLabel(phase, busy, w)}</Pill>} icon={Globe} title={w.title}>
+      <SettingsSection
+        aside={<Pill tone={phase === 'serving' ? 'success' : 'muted'}>{pillLabel(phase, busy, w)}</Pill>}
+        icon={Globe}
+        title={w.title}
+      >
         {/* A web app served on this computer only has no network address to choose until it stops. */}
         {status.mode !== 'local' && (
           <WhereRow
@@ -288,7 +302,15 @@ function WebAccessForm({ owner, queryKey, status, w }: FormProps): ReactElement 
             </Button>
           }
           description={describe(phase, status, w)}
-          title={phase === 'serving' ? <ExternalLink href={url} native showExternalIcon>{url}</ExternalLink> : url || w.title}
+          title={
+            phase === 'serving' ? (
+              <ExternalLink href={url} native showExternalIcon>
+                {url}
+              </ExternalLink>
+            ) : (
+              url || w.title
+            )
+          }
         />
       </SettingsSection>
     </SettingsContent>

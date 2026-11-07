@@ -1470,8 +1470,8 @@ const jaBaseOverrides = {
         code === 'captcha_browser_unavailable'
           ? 'このサイトの認証には Aino デスクトップアプリが必要です。デスクトップアプリを開いてログインしてください。'
           : code === 'SMS_RATE_LIMITED' && retryAfter !== undefined
-          ? `リクエストが多すぎます。${retryAfter} 秒後に再試行してください。`
-          : 'アカウントのリクエストに失敗しました。再試行してください。',
+            ? `リクエストが多すぎます。${retryAfter} 秒後に再試行してください。`
+            : 'アカウントのリクエストに失敗しました。再試行してください。',
       errors: {
         invalid_identifier: '有効なメールアドレスまたは電話番号を入力してください。',
         missing_code: '先にコードを取得し、入力してログインしてください。',
@@ -1512,10 +1512,9 @@ const jaBaseOverrides = {
       wechatTitle: 'WeChat ログイン',
       wechatUnavailable: 'WeChat ログインはまだ利用できません。',
       switchIdentifier: 'メール / 電話番号に切り替え'
-    }
-  ,
-memoryLayers: jaMemoryLayers
-},
+    },
+    memoryLayers: jaMemoryLayers
+  },
 
   skillDeepLink: jaSkillDeepLink,
   skills: {
@@ -2050,9 +2049,9 @@ memoryLayers: jaMemoryLayers
     switchConnectionFailed: name => `${name} に接続できませんでした`,
     manageProfiles: 'プロファイルを管理…',
     fleet: {
-      switchDeviceTitle: "このデバイスに切り替えますか？",
-      switchDeviceDesc: "このコンピューターで新しいセッションを開きます。現在の会話は別の実行サービスに残ります。",
-      switchDeviceConfirm: "切り替え",
+      switchDeviceTitle: 'このデバイスに切り替えますか？',
+      switchDeviceDesc: 'このコンピューターで新しいセッションを開きます。現在の会話は別の実行サービスに残ります。',
+      switchDeviceConfirm: '切り替え',
       localDevice:
         'このデバイス（ローカルバックエンド — Hermes が無ければインストールし、あれば新しいセッションを開きます）',
       installDeviceTitle: 'このデバイスに Hermes をインストールしますか？',
@@ -3373,15 +3372,15 @@ memoryLayers: jaMemoryLayers
   },
 
   rightSidebar: {
-    terminalReconnectSame: "端末が切断されました。Enter で同じシェルに再接続します。",
-    terminalExpired: "端末が期限切れまたは終了しました。Enter で新しいシェルを作成します。",
-    terminalSuperseded: "端末は別のウィンドウに接続されています。Enter でこちらに戻します。",
-    terminalDenied: "端末へのアクセスが拒否されました。ログインとプロファイルを確認し、Enter で再試行してください。",
-    terminalCapacity: "端末数の上限です。他の端末を閉じ、Enter で再試行してください。",
-    terminalSignedOut: "ログアウトしました。このブラウザーで再ログインし、Enter で再接続してください。",
-    terminalReconnecting: "端末が切断されました。同じシェルに再接続しています…",
-    terminalStartRetry: (error: string) => "端末を起動できませんでした: " + error + "。Enter で再試行してください。",
-    terminalCloseFailed: "端末を閉じられませんでした",
+    terminalReconnectSame: '端末が切断されました。Enter で同じシェルに再接続します。',
+    terminalExpired: '端末が期限切れまたは終了しました。Enter で新しいシェルを作成します。',
+    terminalSuperseded: '端末は別のウィンドウに接続されています。Enter でこちらに戻します。',
+    terminalDenied: '端末へのアクセスが拒否されました。ログインとプロファイルを確認し、Enter で再試行してください。',
+    terminalCapacity: '端末数の上限です。他の端末を閉じ、Enter で再試行してください。',
+    terminalSignedOut: 'ログアウトしました。このブラウザーで再ログインし、Enter で再接続してください。',
+    terminalReconnecting: '端末が切断されました。同じシェルに再接続しています…',
+    terminalStartRetry: (error: string) => '端末を起動できませんでした: ' + error + '。Enter で再試行してください。',
+    terminalCloseFailed: '端末を閉じられませんでした',
     terminalDropUnquotable: (shell, paths) => `これらの名前は ${shell} に安全に入力できません: ${paths}`,
     terminalReadOnly: '読み取り専用の出力',
     terminalReadOnlyHelp:
@@ -3428,17 +3427,16 @@ memoryLayers: jaMemoryLayers
     terminalCloseOthers: '他を閉じる',
     terminalCloseAll: 'すべて閉じる',
     addToChat: 'チャットに追加',
-    terminalStartFailed: error => `ターミナルの起動に失敗しました: ${error}`
-  ,
-terminalNewOn: '新しいターミナルを開く場所…',
-terminalGatewayRemoved: '削除されたゲートウェイ',
-terminalGatewayRemovedBody:
+    terminalStartFailed: error => `ターミナルの起動に失敗しました: ${error}`,
+    terminalNewOn: '新しいターミナルを開く場所…',
+    terminalGatewayRemoved: '削除されたゲートウェイ',
+    terminalGatewayRemovedBody:
       'このターミナルが動作していたゲートウェイは削除されたため、再度開けません。このタブを閉じてください。',
-terminalGatewayNoShellBody:
+    terminalGatewayNoShellBody:
       'このゲートウェイにはシェルアクセスがないため、このターミナルは再度開けません。このタブを閉じてください。',
-terminalDisconnectedBody:
+    terminalDisconnectedBody:
       'ターミナルが切断されました。Enter キーで新しいシェルを開始します。スクロールバックは保持されます。'
-},
+  },
 
   preview: {
     tab: 'プレビュー',
@@ -4123,12 +4121,13 @@ terminalDisconnectedBody:
   },
 
   desktop: {
-    localRuntimeUnavailableTitle: "ローカル実行環境を利用できません",
-    localRuntimeUnavailableDesktop: "設定 → モデルサービス → ローカルモデルで実行環境を設定してください。",
-    localRuntimeUnavailableWebapp: "Aino デスクトップでローカルモデルを設定するか、このブラウザーでホスト型モデルを選んでください。",
-    openLocalModels: "ローカルモデルを開く",
-    serviceAuthorizationTitle: "サービス認証",
-    serviceAuthorizationDescription: "外部サービス自身のアカウントでログインします。Aino アカウントとは別の認証です。",
+    localRuntimeUnavailableTitle: 'ローカル実行環境を利用できません',
+    localRuntimeUnavailableDesktop: '設定 → モデルサービス → ローカルモデルで実行環境を設定してください。',
+    localRuntimeUnavailableWebapp:
+      'Aino デスクトップでローカルモデルを設定するか、このブラウザーでホスト型モデルを選んでください。',
+    openLocalModels: 'ローカルモデルを開く',
+    serviceAuthorizationTitle: 'サービス認証',
+    serviceAuthorizationDescription: '外部サービス自身のアカウントでログインします。Aino アカウントとは別の認証です。',
     audioReadFailed: '録音した音声を読み取れませんでした',
     sessionUnavailable: 'セッションが利用できません',
     createSessionFailed: '新しいセッションを作成できませんでした',
@@ -4624,10 +4623,11 @@ terminalDisconnectedBody:
     not_authenticated: 'このモデルを使うには Aino にログインしてください',
     platform_account_changed:
       '別のアカウントのモデルです。元のアカウントにログインするか、モデルを選び直してください。',
-    permanent: "有効期限なし",
-    reauthorize: "このデバイスを再認証",
-    reauthorizeDescription: "このデバイスのモデル認証を更新します。管理セッションが切れた場合は再度ログインしてください。",
-    deviceRevoked: "このデバイスのモデル認証が取り消されました。モデル設定で再認証してください。",
+    permanent: '有効期限なし',
+    reauthorize: 'このデバイスを再認証',
+    reauthorizeDescription:
+      'このデバイスのモデル認証を更新します。管理セッションが切れた場合は再度ログインしてください。',
+    deviceRevoked: 'このデバイスのモデル認証が取り消されました。モデル設定で再認証してください。',
     bindingFailed: 'モデルの認証に失敗しました。メッセージは未送信です。モデルを選び直してください。',
     unsupported: 'この接続は Aino モデルに対応していません',
     rate: 'アカウント倍率',

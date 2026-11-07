@@ -92,7 +92,12 @@ export function canShowInteractiveOauthLogin(): boolean {
 export async function retryCookie401WithLogin<T>(
   error: unknown,
   options: { method?: unknown; replayOn401?: unknown },
-  actions: { clearCookies: () => void; login: () => Promise<unknown>; retry: () => Promise<T>; assertCurrent?: () => void }
+  actions: {
+    clearCookies: () => void
+    login: () => Promise<unknown>
+    retry: () => Promise<T>
+    assertCurrent?: () => void
+  }
 ): Promise<T> {
   if (!canShowInteractiveOauthLogin() || !shouldReplayAfterCookie401(error, options)) {
     throw error

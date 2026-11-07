@@ -27,7 +27,11 @@ const SAFE_PLATFORM_BINDING_CODES = new Set([
   'unsupported_gateway'
 ])
 
-export function reportPlatformCredentialRejection(code: string | undefined, ownerUserId?: string, credentialVersion?: number) {
+export function reportPlatformCredentialRejection(
+  code: string | undefined,
+  ownerUserId?: string,
+  credentialVersion?: number
+) {
   if (
     !code ||
     !['managed_credential_revoked', 'managed_credential_rejected', 'DESKTOP_DEVICE_KEY_REVOKED'].includes(code)
@@ -37,8 +41,16 @@ export function reportPlatformCredentialRejection(code: string | undefined, owne
 
   const account = platformModelCatalog().account.get()
 
-  if (account?.account && account.model_identity_ready && ownerUserId === account.account.id && credentialVersion !== undefined && credentialVersion === account.model_identity_version) {
-    void window.hermesDesktop?.platformModels?.credentialRejected?.(account.revision, credentialVersion).catch(() => undefined)
+  if (
+    account?.account &&
+    account.model_identity_ready &&
+    ownerUserId === account.account.id &&
+    credentialVersion !== undefined &&
+    credentialVersion === account.model_identity_version
+  ) {
+    void window.hermesDesktop?.platformModels
+      ?.credentialRejected?.(account.revision, credentialVersion)
+      .catch(() => undefined)
   }
 }
 
@@ -64,14 +76,21 @@ function bindingFailure(error: unknown): BindPlatformModelResult {
   return { ok: false, error: { code: safeBindingCode(error) ?? 'gateway_binding_failed' } }
 }
 
-async function tryNativeBinding(bridge: NonNullable<Window['hermesDesktop']>['platformModels'], input: BindPlatformModelInput): Promise<BindPlatformModelResult | null> {
-  if (!bridge.nativeDeviceKeys) { return null }
+async function tryNativeBinding(
+  bridge: NonNullable<Window['hermesDesktop']>['platformModels'],
+  input: BindPlatformModelInput
+): Promise<BindPlatformModelResult | null> {
+  if (!bridge.nativeDeviceKeys) {
+    return null
+  }
 
   try {
     const result = await bridge.bind({ ...input, session_ticket: '' })
 
     return result.ok || result.error.code !== 'binding_ticket_required' ? result : null
-  } catch (error) { return bindingFailure(error) }
+  } catch (error) {
+    return bindingFailure(error)
+  }
 }
 
 /** Only the chat's owning socket can delegate a live session to Electron main. */
@@ -104,7 +123,9 @@ export async function bindPlatformModel(
 
   const reused = await tryNativeBinding(desktop.platformModels, input)
 
-  if (reused) { return reused }
+  if (reused) {
+    return reused
+  }
 
   const requestOwner =
     request ??

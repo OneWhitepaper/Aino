@@ -59,7 +59,13 @@ beforeEach(() => {
   )
   $sessionStates.set({ [RUNTIME]: { storedSessionId: STORED } as never })
   setSessionOwnerHint(STORED, OWNER)
-  $onboardingSession.set({ owner: OWNER, connectionId: 'local', runId: 'run-research', runtimeId: RUNTIME, storedId: STORED })
+  $onboardingSession.set({
+    owner: OWNER,
+    connectionId: 'local',
+    runId: 'run-research',
+    runtimeId: RUNTIME,
+    storedId: STORED
+  })
 })
 
 afterEach(() => {

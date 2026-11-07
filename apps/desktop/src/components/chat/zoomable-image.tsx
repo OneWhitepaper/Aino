@@ -12,8 +12,7 @@ import { cn } from '@/lib/utils'
 import { $transcriptLightbox, closeTranscriptLightbox, openTranscriptLightbox } from '@/store/transcript-lightbox'
 
 // Keep room for the zoom toolbar without letting desktop gutters consume a compact window.
-const LIGHTBOX_BOUNDS =
-  'max-h-[calc(100dvh-clamp(5rem,16dvh,12rem))] max-w-[calc(100vw-clamp(1.5rem,12vw,12rem))]'
+const LIGHTBOX_BOUNDS = 'max-h-[calc(100dvh-clamp(5rem,16dvh,12rem))] max-w-[calc(100vw-clamp(1.5rem,12vw,12rem))]'
 
 export interface ZoomableImageProps extends ComponentProps<'img'> {
   containerClassName?: string

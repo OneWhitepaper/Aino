@@ -37,7 +37,11 @@ export function jobTitle(job: CronJob): string {
   const pick = (v: unknown) => (typeof v === 'string' ? v.trim() : '')
 
   return (
-    pick(job.name) || truncateText(pick(job.prompt), 60) || truncateText(pick(job.script), 60) || job.id || translateNow('cron.jobFallbackTitle')
+    pick(job.name) ||
+    truncateText(pick(job.prompt), 60) ||
+    truncateText(pick(job.script), 60) ||
+    job.id ||
+    translateNow('cron.jobFallbackTitle')
   )
 }
 

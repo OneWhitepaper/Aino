@@ -517,7 +517,9 @@ function ArtifactImageCard({ artifact, failedImage, onImageError, onOpenChat }: 
           <div className="truncate text-[length:var(--conversation-caption-font-size)] font-medium">
             {artifact.label}
           </div>
-          <div className="mt-0.5 truncate text-[length:var(--aino-text-caption)] text-(--ui-text-tertiary)">{artifact.value}</div>
+          <div className="mt-0.5 truncate text-[length:var(--aino-text-caption)] text-(--ui-text-tertiary)">
+            {artifact.value}
+          </div>
         </div>
 
         <div className="truncate text-[length:var(--aino-text-caption)] text-(--ui-text-tertiary)">

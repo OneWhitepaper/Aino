@@ -2,7 +2,14 @@ import { translateNow } from '@/i18n'
 import { firstStringField } from '@/lib/text'
 import { extractToolErrorMessage } from '@/lib/tool-result-summary'
 
-import { compactPreview, fileEditBasename, findFirstUrl, hostnameOf, isFileEditTool, parseMaybeObject } from './fallback-model'
+import {
+  compactPreview,
+  fileEditBasename,
+  findFirstUrl,
+  hostnameOf,
+  isFileEditTool,
+  parseMaybeObject
+} from './fallback-model'
 import { skillActivityTitle } from './skill-activity'
 
 /**
@@ -25,7 +32,11 @@ export function isToolCallPart<T extends { type: string }>(part: T): part is Ext
 
 type WebCategory = 'search' | 'read' | 'browse' | 'interact' | 'analyze'
 type RunCategory = WebCategory | 'delegate' | 'edit' | 'explore' | 'other' | 'run'
-interface CategoryCopy { count: (count: number) => string; past: string; present: string }
+interface CategoryCopy {
+  count: (count: number) => string
+  past: string
+  present: string
+}
 
 export interface ToolRunCopy {
   search?: CategoryCopy
@@ -42,7 +53,18 @@ export interface ToolRunCopy {
 
 // Clause order is fixed so the same run always reads the same way, whichever
 // category happens to be live.
-const CATEGORY_ORDER: readonly RunCategory[] = ['edit', 'explore', 'search', 'read', 'browse', 'interact', 'analyze', 'run', 'delegate', 'other']
+const CATEGORY_ORDER: readonly RunCategory[] = [
+  'edit',
+  'explore',
+  'search',
+  'read',
+  'browse',
+  'interact',
+  'analyze',
+  'run',
+  'delegate',
+  'other'
+]
 
 const DEFAULT_COPY: ToolRunCopy = {
   delegate: { count: count => `${count} task${count === 1 ? '' : 's'}`, past: 'Delegated', present: 'Delegating' },
@@ -56,7 +78,11 @@ const WEB_COPY: Record<WebCategory, CategoryCopy> = {
   search: { count: count => `${count} ${count === 1 ? 'query' : 'queries'}`, past: 'Searched', present: 'Searching' },
   read: { count: count => `${count} page${count === 1 ? '' : 's'}`, past: 'Read', present: 'Reading' },
   browse: { count: count => `${count} page${count === 1 ? '' : 's'}`, past: 'Opened', present: 'Opening' },
-  interact: { count: count => `${count} browser action${count === 1 ? '' : 's'}`, past: 'Performed', present: 'Performing' },
+  interact: {
+    count: count => `${count} browser action${count === 1 ? '' : 's'}`,
+    past: 'Performed',
+    present: 'Performing'
+  },
   analyze: { count: count => `${count} image${count === 1 ? '' : 's'}`, past: 'Analyzed', present: 'Analyzing' }
 }
 
@@ -75,7 +101,9 @@ const TOOL_CATEGORY: Record<string, RunCategory> = {
 }
 
 function toolCategory(toolName: string): RunCategory {
-  return isFileEditTool(toolName) ? 'edit' : TOOL_CATEGORY[toolName] ?? (toolName.startsWith('browser_') ? 'interact' : 'other')
+  return isFileEditTool(toolName)
+    ? 'edit'
+    : (TOOL_CATEGORY[toolName] ?? (toolName.startsWith('browser_') ? 'interact' : 'other'))
 }
 
 function unitCount(tool: ToolCallLike): number {

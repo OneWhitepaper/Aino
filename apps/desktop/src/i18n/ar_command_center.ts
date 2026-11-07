@@ -402,7 +402,8 @@ export const arCommandCenter = {
     exported: 'تم تصدير الملف الشخصي',
     failedImport: 'فشل استيراد الملف الشخصي',
     failedExport: 'فشل تصدير الملف الشخصي',
-    exportNeedsHost: name => `لا يمكن للمتصفح حفظ أرشيف الملف الشخصي. على مضيف Hermes، شغّل: hermes profile export ${name}`,
+    exportNeedsHost: name =>
+      `لا يمكن للمتصفح حفظ أرشيف الملف الشخصي. على مضيف Hermes، شغّل: hermes profile export ${name}`,
     allProfiles: 'كل الملفات الشخصية',
     showAllProfiles: 'إظهار كل الملفات الشخصية',
     notServedHere: 'غير متاح هنا',
@@ -411,9 +412,9 @@ export const arCommandCenter = {
     switchConnectionFailed: name => `تعذّر الاتصال بـ ${name}`,
     manageProfiles: 'إدارة الملفات الشخصية',
     fleet: {
-      switchDeviceTitle: "التبديل إلى هذا الجهاز؟",
-      switchDeviceDesc: "يفتح هذا جلسة جديدة على هذا الكمبيوتر. تبقى المحادثة الحالية على خدمة التشغيل الأخرى.",
-      switchDeviceConfirm: "تبديل",
+      switchDeviceTitle: 'التبديل إلى هذا الجهاز؟',
+      switchDeviceDesc: 'يفتح هذا جلسة جديدة على هذا الكمبيوتر. تبقى المحادثة الحالية على خدمة التشغيل الأخرى.',
+      switchDeviceConfirm: 'تبديل',
       localDevice: 'هذا الجهاز (خلفية محلية — تثبّت Hermes إن كان مفقودًا، وإلا تفتح جلسة جديدة)',
       installDeviceTitle: 'تثبيت Hermes على هذا الجهاز؟',
       installDeviceDesc: 'سيُثبَّت Hermes محليًا ثم تُفتح جلسة جديدة على هذا الحاسوب. لا يبدأ التثبيت قبل التأكيد.',

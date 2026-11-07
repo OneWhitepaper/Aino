@@ -14,13 +14,7 @@ import { SettingsProfileScope } from './profile-scope'
 import { ServiceAuthorization } from './service-authorization'
 import { ThirdPartyModelSettings } from './third-party-model-settings'
 
-export const PROVIDER_VIEWS = [
-  'third-party',
-  'custom-endpoints',
-  'local',
-  'service-authorization',
-  'accounts'
-] as const
+export const PROVIDER_VIEWS = ['third-party', 'custom-endpoints', 'local', 'service-authorization', 'accounts'] as const
 
 export type ProviderView = (typeof PROVIDER_VIEWS)[number]
 
@@ -34,12 +28,7 @@ function availableView(view: ProviderView): ProviderSection {
   return view === 'local' && !$localModelsEnabled.get() ? 'custom-endpoints' : view
 }
 
-export function ProvidersSettings({
-  onClose,
-  onConfigSaved,
-  onMainModelChanged,
-  view
-}: ProvidersSettingsProps) {
+export function ProvidersSettings({ onClose, onConfigSaved, onMainModelChanged, view }: ProvidersSettingsProps) {
   const { t, locale } = useI18n()
   const copy = modelSourceCopy(locale)
   const profile = useStore($settingsRequestProfile)
@@ -90,11 +79,7 @@ export function ProvidersSettings({
           onToggle={() => toggleSection('custom-endpoints')}
           sectionId="provider-section-custom-endpoints"
         >
-          <CustomEndpointsSettings
-            embedded
-            onConfigSaved={onConfigSaved}
-            onMainModelChanged={onMainModelChanged}
-          />
+          <CustomEndpointsSettings embedded onConfigSaved={onConfigSaved} onMainModelChanged={onMainModelChanged} />
         </SettingsDisclosure>
         <SettingsDisclosure
           expanded={expandedSections.has('service-authorization')}

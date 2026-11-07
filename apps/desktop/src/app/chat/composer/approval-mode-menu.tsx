@@ -3,11 +3,7 @@ import { useCallback, useEffect, useState } from 'react'
 
 import { ApprovalModeIcon, ApprovalModeOptions } from '@/app/shell/approval-mode-menu'
 import { Button } from '@/components/ui/button'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuTrigger
-} from '@/components/ui/dropdown-menu'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { useI18n } from '@/i18n'
 import { ChevronDown } from '@/lib/icons'
 import { cn } from '@/lib/utils'
@@ -88,7 +84,10 @@ export function ApprovalModeMenu({
       <DropdownMenuTrigger asChild>
         <Button
           aria-label={copy.ariaLabel(labels[mode])}
-          className={cn(!compact && 'text-[length:var(--aino-text-label)] font-normal', mode === 'off' && 'approval-mode-trigger-warning')}
+          className={cn(
+            !compact && 'text-[length:var(--aino-text-label)] font-normal',
+            mode === 'off' && 'approval-mode-trigger-warning'
+          )}
           data-slot="composer-approval-mode"
           disabled={disabled || saving}
           size={compact ? 'icon-xs' : 'sm'}
@@ -105,7 +104,11 @@ export function ApprovalModeMenu({
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="approval-mode-menu" side="top">
-        <ApprovalModeOptions disabled={disabled || saving} mode={mode} onValueChange={value => void selectMode(value)} />
+        <ApprovalModeOptions
+          disabled={disabled || saving}
+          mode={mode}
+          onValueChange={value => void selectMode(value)}
+        />
       </DropdownMenuContent>
     </DropdownMenu>
   )

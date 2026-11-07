@@ -5,10 +5,7 @@ import { resumeAccountConnect } from '@/app/capabilities/connectors/data/deep-li
 import { closeActiveTab } from '@/app/chat/close-tab'
 import { commandFocusedPreview } from '@/app/chat/right-rail/preview-nav'
 import { openSession } from '@/app/open-session'
-import {
-  commandFocusedTerminal,
-  wordEraseFocusedTerminal
-} from '@/app/right-sidebar/terminal/terminal-context-menu'
+import { commandFocusedTerminal, wordEraseFocusedTerminal } from '@/app/right-sidebar/terminal/terminal-context-menu'
 import { openConnectionDoneLink } from '@/components/assistant-ui/connector-tool'
 import { $diskPluginsScanPending } from '@/contrib/runtime-loader'
 import { getSession } from '@/hermes'
@@ -51,23 +48,14 @@ import { isBrowserWindow, isHudWindow, isPeerInstanceWindow, isSecondaryWindow }
 import type { SessionInfo } from '@/types/hermes'
 
 import { requestComposerFocus, requestComposerInsert } from '../../chat/composer/focus'
-import {
-  appViewForPath,
-  isRouteBlockingSurface,
-  NEW_CHAT_ROUTE,
-  routeSessionId,
-  sessionRoute
-} from '../../routes'
+import { appViewForPath, isRouteBlockingSurface, NEW_CHAT_ROUTE, routeSessionId, sessionRoute } from '../../routes'
 
 import { resolveRememberedSessionId } from './remembered-session'
 
 // Trailing window that folds a burst of kept-route opens into one list refresh.
 const KEPT_ROUTE_REFRESH_COALESCE_MS = 400
 
-type RememberedSession = Pick<
-  SessionInfo,
-  '_lineage_root_id' | 'id' | 'parent_session_id' | 'profile' | 'source'
->
+type RememberedSession = Pick<SessionInfo, '_lineage_root_id' | 'id' | 'parent_session_id' | 'profile' | 'source'>
 
 interface DesktopIntegrationsParams {
   activeProfile: string
@@ -115,8 +103,7 @@ function rememberCurrentNavigation({
     // source, not parenthood, is the discriminator.
     const routedRow = sessions.find(session => sessionMatchesStoredId(session, routedSessionId))
 
-    const rememberedSessionId =
-      routedRow?.source === 'subagent' ? routedRow.parent_session_id || null : routedSessionId
+    const rememberedSessionId = routedRow?.source === 'subagent' ? routedRow.parent_session_id || null : routedSessionId
 
     if (rememberedSessionId) {
       setRememberedSessionId(rememberedSessionId, activeProfile)
@@ -150,9 +137,7 @@ export function useDesktopIntegrations({
   sessions,
   sessionsLoading
 }: DesktopIntegrationsParams): boolean {
-  const [initialNavigationReady, setInitialNavigationReady] = useState(
-    () => isHudWindow() || isBrowserWindow()
-  )
+  const [initialNavigationReady, setInitialNavigationReady] = useState(() => isHudWindow() || isBrowserWindow())
 
   // Update polling — populates $desktopVersion/$updateStatus, which feed the
   // statusbar version pill and the update toasts. Also honors the main
@@ -225,10 +210,7 @@ export function useDesktopIntegrations({
         const last = getRememberedSessionId(activeProfile)
 
         const restorableNonSessionRoute =
-          !!route &&
-          route !== NEW_CHAT_ROUTE &&
-          !routeSession &&
-          !isRouteBlockingSurface(appViewForPath(route))
+          !!route && route !== NEW_CHAT_ROUTE && !routeSession && !isRouteBlockingSurface(appViewForPath(route))
 
         // Boot adoption can publish renderer.ready before its async session
         // refresh completes. Keep the restore latch open until ownership can be
@@ -287,15 +269,13 @@ export function useDesktopIntegrations({
           }
         }
 
-        const restorableRouteSession =
-          routeSession && rowFor(routeSession)?.source !== 'subagent' ? routeSession : null
+        const restorableRouteSession = routeSession && rowFor(routeSession)?.source !== 'subagent' ? routeSession : null
 
         if (
           route &&
           route !== NEW_CHAT_ROUTE &&
           !isRouteBlockingSurface(appViewForPath(route)) &&
-          (!routeSession ||
-            (restorableRouteSession && sessionBelongsToProfile(sessions, routeSession, activeProfile)))
+          (!routeSession || (restorableRouteSession && sessionBelongsToProfile(sessions, routeSession, activeProfile)))
         ) {
           // The user may have started typing on the fresh chat while the
           // backend was still coming up; the composer moves that draft onto
@@ -403,13 +383,11 @@ export function useDesktopIntegrations({
         // Reloads and runtime recovery can leave only the shared mirror bound.
         const viaLocalMap = storedSessionIdForNotification(sessionId, runtimeIdByStoredSessionId.current)
 
-        const storedId =
-          viaLocalMap !== sessionId ? viaLocalMap : (storedSessionIdForRuntimeId(sessionId) ?? sessionId)
+        const storedId = viaLocalMap !== sessionId ? viaLocalMap : (storedSessionIdForRuntimeId(sessionId) ?? sessionId)
 
         // A notification reveals a tab; it must not reclassify a Bot chat.
         const scope =
-          $sessionTiles.get().find(tile => tile.storedSessionId === storedId) ??
-          $botChatScopes.get()[storedId]
+          $sessionTiles.get().find(tile => tile.storedSessionId === storedId) ?? $botChatScopes.get()[storedId]
 
         if (isRouteBlockingSurface(appViewForPath(locationPathname))) {
           navigate(sessionRoute($selectedStoredSessionId.get() ?? ''), { replace: true })
@@ -503,9 +481,7 @@ export function useDesktopIntegrations({
           return openConnectionDoneLink(action.op, navigate, runtimeId => {
             const viaLocalMap = storedSessionIdForNotification(runtimeId, runtimeIdByStoredSessionId.current)
 
-            return viaLocalMap !== runtimeId
-              ? viaLocalMap
-              : (storedSessionIdForRuntimeId(runtimeId) ?? runtimeId)
+            return viaLocalMap !== runtimeId ? viaLocalMap : (storedSessionIdForRuntimeId(runtimeId) ?? runtimeId)
           })
         })
 
@@ -621,11 +597,18 @@ export function useDesktopIntegrations({
   useEffect(() => {
     const bridge = window.hermesDesktop?.cloudSync
 
-    if (!bridge) { return }
-    const offHistory = onCloudHistoryChanged(() => { void refreshSessions() })
+    if (!bridge) {
+      return
+    }
+    const offHistory = onCloudHistoryChanged(() => {
+      void refreshSessions()
+    })
     const off = connectCloudSync(bridge)
 
-    return () => { off(); offHistory() }
+    return () => {
+      off()
+      offHistory()
+    }
   }, [refreshSessions])
 
   // Another window mutated the shared session list -> re-pull the sidebar.

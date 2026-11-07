@@ -321,10 +321,11 @@ const configPageFieldDescriptions: Record<string, string> = defineFieldCopy({
 
 const frBaseOverrides = {
   platformModels: {
-    permanent: "Sans expiration",
-    reauthorize: "Réautoriser cet appareil",
-    reauthorizeDescription: "Remplacez l’autorisation des modèles de cet appareil. Reconnectez-vous si votre session de gestion a expiré.",
-    deviceRevoked: "L’accès aux modèles de cet appareil a été révoqué. Réautorisez-le dans les paramètres des modèles.",
+    permanent: 'Sans expiration',
+    reauthorize: 'Réautoriser cet appareil',
+    reauthorizeDescription:
+      'Remplacez l’autorisation des modèles de cet appareil. Reconnectez-vous si votre session de gestion a expiré.',
+    deviceRevoked: 'L’accès aux modèles de cet appareil a été révoqué. Réautorisez-le dans les paramètres des modèles.'
   },
   platformDevices: { expired: 'Expirée' },
   appearancePage: appearancePage.fr,
@@ -2538,10 +2539,9 @@ const frBaseOverrides = {
           enable: 'Utiliser mon profil'
         }
       }
-    }
-  ,
-memoryLayers: frMemoryLayers
-},
+    },
+    memoryLayers: frMemoryLayers
+  },
   skills: {
     tabSkills: 'Skills',
     tabToolsets: 'Outils',
@@ -3375,9 +3375,10 @@ memoryLayers: frMemoryLayers
     manageProfiles: 'Gérer les profils…',
     connectGateway: 'Connecter un autre gateway Hermes…',
     fleet: {
-      switchDeviceTitle: "Passer à cet appareil ?",
-      switchDeviceDesc: "Ouvre une nouvelle session sur cet ordinateur. La conversation actuelle reste sur l’autre service.",
-      switchDeviceConfirm: "Changer",
+      switchDeviceTitle: 'Passer à cet appareil ?',
+      switchDeviceDesc:
+        'Ouvre une nouvelle session sur cet ordinateur. La conversation actuelle reste sur l’autre service.',
+      switchDeviceConfirm: 'Changer',
       allOnGateway: 'Tous les profils de cette gateway',
       gateway: gateway => `Profils sur ${gateway}`,
       gatewayUnreachable: gateway => `${gateway} · inaccessible`,
@@ -4845,15 +4846,16 @@ memoryLayers: frMemoryLayers
     }
   },
   rightSidebar: {
-    terminalReconnectSame: "Terminal déconnecté. Appuyez sur Entrée pour retrouver le même shell.",
-    terminalExpired: "Terminal expiré ou fermé. Appuyez sur Entrée pour créer un nouveau shell.",
-    terminalSuperseded: "Terminal connecté dans une autre fenêtre. Appuyez sur Entrée pour le reprendre ici.",
-    terminalDenied: "Accès au terminal refusé. Vérifiez la connexion et le profil, puis appuyez sur Entrée.",
-    terminalCapacity: "Limite de terminaux atteinte. Fermez un autre terminal puis appuyez sur Entrée.",
-    terminalSignedOut: "Déconnecté. Reconnectez-vous dans ce navigateur, puis appuyez sur Entrée.",
-    terminalReconnecting: "Terminal déconnecté. Reconnexion au même shell…",
-    terminalStartRetry: (error: string) => "Échec du démarrage du terminal : " + error + ". Appuyez sur Entrée pour réessayer.",
-    terminalCloseFailed: "Impossible de fermer le terminal",
+    terminalReconnectSame: 'Terminal déconnecté. Appuyez sur Entrée pour retrouver le même shell.',
+    terminalExpired: 'Terminal expiré ou fermé. Appuyez sur Entrée pour créer un nouveau shell.',
+    terminalSuperseded: 'Terminal connecté dans une autre fenêtre. Appuyez sur Entrée pour le reprendre ici.',
+    terminalDenied: 'Accès au terminal refusé. Vérifiez la connexion et le profil, puis appuyez sur Entrée.',
+    terminalCapacity: 'Limite de terminaux atteinte. Fermez un autre terminal puis appuyez sur Entrée.',
+    terminalSignedOut: 'Déconnecté. Reconnectez-vous dans ce navigateur, puis appuyez sur Entrée.',
+    terminalReconnecting: 'Terminal déconnecté. Reconnexion au même shell…',
+    terminalStartRetry: (error: string) =>
+      'Échec du démarrage du terminal : ' + error + '. Appuyez sur Entrée pour réessayer.',
+    terminalCloseFailed: 'Impossible de fermer le terminal',
     terminalDropUnquotable: (shell, paths) =>
       `Impossible de saisir ces noms en toute sécurité dans ${shell} : ${paths}`,
     aria: 'Barre latérale droite',
@@ -5622,12 +5624,14 @@ memoryLayers: frMemoryLayers
     vaultCodeConfirm: 'Saisir le code'
   },
   desktop: {
-    localRuntimeUnavailableTitle: "Environnement local indisponible",
-    localRuntimeUnavailableDesktop: "Configurez-le dans Paramètres → Fournisseurs → Modèles locaux.",
-    localRuntimeUnavailableWebapp: "Configurez les modèles locaux dans Aino Desktop ou choisissez un modèle hébergé dans ce navigateur.",
-    openLocalModels: "Ouvrir les modèles locaux",
-    serviceAuthorizationTitle: "Autorisation des services",
-    serviceAuthorizationDescription: "Connectez-vous avec le compte propre à chaque service externe. Ces autorisations sont distinctes du compte Aino.",
+    localRuntimeUnavailableTitle: 'Environnement local indisponible',
+    localRuntimeUnavailableDesktop: 'Configurez-le dans Paramètres → Fournisseurs → Modèles locaux.',
+    localRuntimeUnavailableWebapp:
+      'Configurez les modèles locaux dans Aino Desktop ou choisissez un modèle hébergé dans ce navigateur.',
+    openLocalModels: 'Ouvrir les modèles locaux',
+    serviceAuthorizationTitle: 'Autorisation des services',
+    serviceAuthorizationDescription:
+      'Connectez-vous avec le compte propre à chaque service externe. Ces autorisations sont distinctes du compte Aino.',
     audioReadFailed: "Impossible de lire l'audio enregistré",
     sessionUnavailable: 'Session indisponible',
     createSessionFailed: 'Impossible de créer une nouvelle session',

@@ -171,7 +171,13 @@ export async function startOnboarding(
     }
 
     // The request stays alive past the way out: its answer names the run the skip ends.
-    const started = await startPlatformOnboarding(requestOwner, params, intro ? NO_DEADLINE : undefined, () => skipped, owner ?? undefined)
+    const started = await startPlatformOnboarding(
+      requestOwner,
+      params,
+      intro ? NO_DEADLINE : undefined,
+      () => skipped,
+      owner ?? undefined
+    )
 
     if (skipped) {
       await requestOwner('onboarding.skip', { session_id: started.session_id })
@@ -276,12 +282,19 @@ async function readAndStart(
       params.assume_fresh = true
     }
 
-    const state = await requestForSessionProfile<OnboardingRunStateResult>(options?.owner === null ? 'default' : options?.owner, request, 'onboarding.state', params, NO_DEADLINE)
+    const state = await requestForSessionProfile<OnboardingRunStateResult>(
+      options?.owner === null ? 'default' : options?.owner,
+      request,
+      'onboarding.state',
+      params,
+      NO_DEADLINE
+    )
     disarm()
 
-    const managedEligible = !state.eligible && state.run && window.hermesDesktop?.accountAdapter === 'platform'
-      ? Boolean((await resolveModelDefault(options?.owner ?? 'default')).platform)
-      : false
+    const managedEligible =
+      !state.eligible && state.run && window.hermesDesktop?.accountAdapter === 'platform'
+        ? Boolean((await resolveModelDefault(options?.owner ?? 'default')).platform)
+        : false
 
     if (!released && state.run && (state.eligible || managedEligible)) {
       await startOnboarding(request, resume, { ...options, freshLaunch: true })
@@ -340,7 +353,9 @@ export function endOnboarding(outcome: 'done' | 'skipped'): void {
  *  skip leaves the run going, so Skip setup stays on offer; the caller reports the error. */
 export async function skipOnboarding(request: OnboardingRequest, runtimeId: string): Promise<void> {
   const owner = $onboardingSession.get()?.owner
-  await requestForSessionProfile(owner === null ? 'default' : owner, request, 'onboarding.skip', { session_id: runtimeId })
+  await requestForSessionProfile(owner === null ? 'default' : owner, request, 'onboarding.skip', {
+    session_id: runtimeId
+  })
   leaveSkipped(owner)
 }
 
@@ -368,7 +383,11 @@ export async function reconcileOnboarding(request: OnboardingRequest): Promise<v
     return
   }
 
-  const state = await requestForSessionProfile<OnboardingRunStateResult>(session.owner === null ? 'default' : session.owner, request, 'onboarding.state')
+  const state = await requestForSessionProfile<OnboardingRunStateResult>(
+    session.owner === null ? 'default' : session.owner,
+    request,
+    'onboarding.state'
+  )
 
   if ($onboardingSession.get() === session && state.run_id !== session.runId) {
     endOnboarding('skipped')

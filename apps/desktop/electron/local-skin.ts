@@ -209,6 +209,10 @@ export function registerLocalSkinIpc(
   primaryProfile: () => null | string | undefined
 ): void {
   ipcMain.on('hermes:skin:local', event => {
-    event.returnValue = readLocalSkinPayload(typeof hermesHome === 'function' ? hermesHome() : hermesHome, windowProfile(event.sender.id), primaryProfile())
+    event.returnValue = readLocalSkinPayload(
+      typeof hermesHome === 'function' ? hermesHome() : hermesHome,
+      windowProfile(event.sender.id),
+      primaryProfile()
+    )
   })
 }

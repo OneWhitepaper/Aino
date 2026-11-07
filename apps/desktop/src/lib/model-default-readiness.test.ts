@@ -36,12 +36,14 @@ beforeEach(() => {
 })
 
 it('keeps text inference unavailable when the account only offers image generation', async () => {
-  catalog.models.models = [{
-    ...platformModel('image'),
-    purpose: 'image',
-    api_mode: 'images_generations',
-    capabilities: { ...platformModel().capabilities, image_generation: true }
-  }]
+  catalog.models.models = [
+    {
+      ...platformModel('image'),
+      purpose: 'image',
+      api_mode: 'images_generations',
+      capabilities: { ...platformModel().capabilities, image_generation: true }
+    }
+  ]
   const requestGateway = vi.fn()
   const result = await evaluateModelDefaultReadiness(requestGateway, 'default')
 

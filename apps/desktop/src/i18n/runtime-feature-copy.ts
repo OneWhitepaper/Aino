@@ -130,7 +130,8 @@ export const runtimeFeatureCopy = {
     },
     settings: {
       account: {
-        browserSessionOnly: 'La connexion est conservée uniquement jusqu’à la fermeture ou au rechargement de cet onglet.',
+        browserSessionOnly:
+          'La connexion est conservée uniquement jusqu’à la fermeture ou au rechargement de cet onglet.',
         platformError: (code, retryAfter) =>
           code === 'captcha_browser_unavailable'
             ? 'Ce site exige une vérification dans l’application de bureau Aino. Ouvrez-la pour vous connecter.'

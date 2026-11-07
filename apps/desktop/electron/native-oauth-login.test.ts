@@ -182,18 +182,27 @@ test('runNativeLogin cancellation leaves no listener or browser launch, includin
       controller.abort()
     }
 
-    const promise = runNativeLogin('https://gw.example.com', {
-      openExternal: async () => { lifecycle.opened = true },
-      postJson: async () => ({}),
-      createServer: ((handler: http.RequestListener) => {
-        lifecycle.server = http.createServer(handler)
+    const promise = runNativeLogin(
+      'https://gw.example.com',
+      {
+        openExternal: async () => {
+          lifecycle.opened = true
+        },
+        postJson: async () => ({}),
+        createServer: ((handler: http.RequestListener) => {
+          lifecycle.server = http.createServer(handler)
 
-        return lifecycle.server
-      }) as typeof http.createServer,
-      timeoutMs: 100
-    }, { signal: controller.signal })
+          return lifecycle.server
+        }) as typeof http.createServer,
+        timeoutMs: 100
+      },
+      { signal: controller.signal }
+    )
 
-    const outcome = promise.then(tokens => tokens, error => error)
+    const outcome = promise.then(
+      tokens => tokens,
+      error => error
+    )
     controller.abort()
 
     try {
@@ -213,16 +222,27 @@ test('runNativeLogin cancellation rejects while token exchange is pending and ig
   const controller = new AbortController()
   let authorizeUrl = ''
   let releaseToken!: (body: unknown) => void
-  const token = new Promise(resolve => { releaseToken = resolve })
+  const token = new Promise(resolve => {
+    releaseToken = resolve
+  })
 
-  const promise = runNativeLogin('https://gw.example.com', {
-    openExternal: async url => { authorizeUrl = url },
-    postJson: async () => token,
-    createServer,
-    timeoutMs: 100
-  }, { signal: controller.signal })
+  const promise = runNativeLogin(
+    'https://gw.example.com',
+    {
+      openExternal: async url => {
+        authorizeUrl = url
+      },
+      postJson: async () => token,
+      createServer,
+      timeoutMs: 100
+    },
+    { signal: controller.signal }
+  )
 
-  const outcome = promise.then(tokens => tokens, error => error)
+  const outcome = promise.then(
+    tokens => tokens,
+    error => error
+  )
   const expectedState = new URL(authorizeUrl).searchParams.get('state')!
   state.hitCallback(`code=old-account-code&state=${encodeURIComponent(expectedState)}`)
   controller.abort()

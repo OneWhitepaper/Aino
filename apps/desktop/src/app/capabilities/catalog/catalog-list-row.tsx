@@ -23,10 +23,7 @@ export function CatalogListRow({ entry, accentIndex, selected, action, onOpen }:
   const { t } = useI18n()
 
   return (
-    <div
-      className={cn('catalog-list-row', CARD_ACCENTS[accentIndex % CARD_ACCENTS.length])}
-      data-entry-id={entry.id}
-    >
+    <div className={cn('catalog-list-row', CARD_ACCENTS[accentIndex % CARD_ACCENTS.length])} data-entry-id={entry.id}>
       <RowButton
         aria-haspopup="dialog"
         aria-label={catalogDisplayName(entry)}

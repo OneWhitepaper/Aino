@@ -94,7 +94,9 @@ export async function confirmSendDiagnostics(): Promise<void> {
 
     const owner = await diagnostics.scope()
 
-    if (!stillCurrent()) { return }
+    if (!stillCurrent()) {
+      return
+    }
 
     const extraFiles = await collectLocalExtras()
 
@@ -125,7 +127,9 @@ export async function confirmSendDiagnostics(): Promise<void> {
       expected_generation: owner.generation
     })
 
-    if (!stillCurrent()) { return }
+    if (!stillCurrent()) {
+      return
+    }
 
     $sendDiagnostics.set({
       ...current,

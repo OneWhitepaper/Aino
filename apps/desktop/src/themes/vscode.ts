@@ -87,6 +87,7 @@ export function parseVscodeTheme(text: string): VscodeColorTheme {
     parsed = JSON.parse(stripped)
   } catch (error) {
     const localized = new Error(translateNow('settings.appearance.themeImportErrors.invalidJson'))
+
     ;(localized as Error & { cause?: unknown }).cause = error
     throw localized
   }

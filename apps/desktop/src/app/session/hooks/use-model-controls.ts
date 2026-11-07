@@ -210,7 +210,8 @@ export function useModelControls({
       let selectionGeneration: number | null = null
 
       const selectionIsCurrent = () =>
-        profileRefreshEpochRef.current === profileRefreshEpoch && isCurrentDraftScope(scopeKey) &&
+        profileRefreshEpochRef.current === profileRefreshEpoch &&
+        isCurrentDraftScope(scopeKey) &&
         getComposerSelectionGeneration() === selectionGeneration
 
       try {

@@ -301,7 +301,8 @@ export function readableError(
   const unwrapped = raw.match(/Error invoking remote method '[^']+': Error: (.+)$/)?.[1] ?? raw
   const cleaned = cleanErrorText(unwrapped)
   const rpcData = error && typeof error === 'object' ? (error as { data?: unknown }).data : undefined
-  const rpcError = rpcData && typeof rpcData === 'object' ? rpcData as { detail?: unknown; reason?: unknown } : undefined
+  const rpcError =
+    rpcData && typeof rpcData === 'object' ? (rpcData as { detail?: unknown; reason?: unknown }) : undefined
   const rpcDetail = typeof rpcError?.detail === 'string' ? cleanErrorText(rpcError.detail) : undefined
   const detail = rpcDetail ?? cleaned.match(/"detail"\s*:\s*"([^"]+)"/)?.[1] ?? cleaned
   const reason = typeof rpcError?.reason === 'string' ? rpcError.reason : undefined

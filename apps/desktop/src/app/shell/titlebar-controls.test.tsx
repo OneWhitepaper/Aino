@@ -55,9 +55,7 @@ describe('titlebar terminal toggle', () => {
     $hiddenTreePanes.set(new Set())
     $layoutTree.set(split('column', [group(['workspace']), group(['terminal'], { minimized: true })]))
 
-    const terminals = [
-      { auto: true, cwd: '/project', id: 'running-shell', kind: 'user' as const, title: 'zsh' }
-    ]
+    const terminals = [{ auto: true, cwd: '/project', id: 'running-shell', kind: 'user' as const, title: 'zsh' }]
 
     $terminals.set(terminals)
     $activeTerminalId.set('running-shell')
@@ -104,9 +102,7 @@ describe('titlebar terminal toggle', () => {
     $fileBrowserOpen.set(true)
     setTerminalTakeover(true)
 
-    const terminals = [
-      { auto: true, cwd: '/project', id: 'retained-shell', kind: 'user' as const, title: 'zsh' }
-    ]
+    const terminals = [{ auto: true, cwd: '/project', id: 'retained-shell', kind: 'user' as const, title: 'zsh' }]
 
     $terminals.set(terminals)
     $activeTerminalId.set('retained-shell')
@@ -436,13 +432,9 @@ describe('titlebar app-action cluster', () => {
     $narrowViewport.set(true)
     renderControls('/')
     const left = screen.getByLabelText('Window controls')
-    expect(within(left).getByRole('button', { name: 'Show sidebar' }).getAttribute('aria-expanded')).toBe(
-      'false'
-    )
+    expect(within(left).getByRole('button', { name: 'Show sidebar' }).getAttribute('aria-expanded')).toBe('false')
     act(() => $narrowOverlayPaneIds.set(new Set([CHAT_SIDEBAR_PANE_ID])))
-    expect(within(left).getByRole('button', { name: 'Hide sidebar' }).getAttribute('aria-expanded')).toBe(
-      'true'
-    )
+    expect(within(left).getByRole('button', { name: 'Hide sidebar' }).getAttribute('aria-expanded')).toBe('true')
     act(() => $narrowOverlayPaneIds.set(new Set()))
     expect(within(left).getByRole('button', { name: 'Show sidebar' })).toBeTruthy()
   })

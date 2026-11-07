@@ -5,13 +5,7 @@ import { translateNow } from '@/i18n'
 import { hostHas } from '@/lib/host-capabilities'
 import { RECONNECT_ATTEMPT_TIMEOUT_MS, withTimeout } from '@/lib/with-timeout'
 
-import {
-  $apiRequestScope,
-  getApiRequestConnection,
-  getApiRequestProfile,
-  hermesApi,
-  profileScoped
-} from './client'
+import { $apiRequestScope, getApiRequestConnection, getApiRequestProfile, hermesApi, profileScoped } from './client'
 
 /** Resolve the ACTIVE backend's connection descriptor, (connectionId,
  *  profile)-scoped — mirroring how store/profile resolves $connection: a
@@ -77,11 +71,7 @@ function pluginPathSuffix(caller: string, path: string): string {
  *  plugin's API or a core route through it. Profile-aware like every desktop
  *  REST call. Broader reach (core endpoints, another namespace) is the future
  *  declared-capability seam; today the namespace IS the boundary. */
-export async function pluginRest<T>(
-  pluginId: string,
-  path: string,
-  opts: PluginRestOptions = {}
-): Promise<T> {
+export async function pluginRest<T>(pluginId: string, path: string, opts: PluginRestOptions = {}): Promise<T> {
   if (!window.hermesDesktop?.api) {
     throw new Error(translateNow('settings.plugins.errors.desktopUnavailable'))
   }

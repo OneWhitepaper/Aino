@@ -266,7 +266,9 @@ export function AvatarPicker({ shape, color, image, onShape, onColor, onImage, g
               {genBusy ? b.avatar.generating : b.avatar.generate}
             </Button>
             {describe.trim() ? null : (
-              <div className="text-center text-[length:var(--aino-text-caption)] text-(--ui-text-tertiary)">{b.bot.descriptionHint}</div>
+              <div className="text-center text-[length:var(--aino-text-caption)] text-(--ui-text-tertiary)">
+                {b.bot.descriptionHint}
+              </div>
             )}
           </div>
         ) : (

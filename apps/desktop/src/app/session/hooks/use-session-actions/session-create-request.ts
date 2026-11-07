@@ -21,9 +21,10 @@ export function sessionCreateOwnerRequest(
   requestGateway: RequestGateway
 ): RequestGateway {
   return route || managedProfileOnly
-    ? (method, payload) => requestGatewayForAgent(
-        route?.connectionId ?? null, profile, method, payload, undefined, undefined, { spawnPriority: 'foreground' }
-      )
+    ? (method, payload) =>
+        requestGatewayForAgent(route?.connectionId ?? null, profile, method, payload, undefined, undefined, {
+          spawnPriority: 'foreground'
+        })
     : requestGateway
 }
 

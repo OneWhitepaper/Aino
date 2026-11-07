@@ -4,11 +4,7 @@ import { type ReactNode, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useI18n } from '@/i18n'
-import {
-  COMPLETION_SOUND_VARIANTS,
-  localizedCompletionSoundName,
-  previewCompletionSound
-} from '@/lib/completion-sound'
+import { COMPLETION_SOUND_VARIANTS, localizedCompletionSoundName, previewCompletionSound } from '@/lib/completion-sound'
 import { triggerHaptic } from '@/lib/haptics'
 import { hostHas } from '@/lib/host-capabilities'
 import { Bell, Play, Volume2 } from '@/lib/icons'
@@ -54,12 +50,7 @@ function BrowserPermissionRow() {
     <ListRow
       action={
         permission === 'default' ? (
-          <Button
-            onClick={() => void askBrowserNotificationPermission()}
-            size="sm"
-            type="button"
-            variant="outline"
-          >
+          <Button onClick={() => void askBrowserNotificationPermission()} size="sm" type="button" variant="outline">
             {copy.allow}
           </Button>
         ) : undefined
@@ -192,13 +183,7 @@ export function NotificationsSettings({ subpage }: NotificationsSettingsProps = 
 
       {showAlerts && (
         <div className="mt-4 flex flex-col gap-2">
-          <Button
-            className="self-start"
-            onClick={() => void runTest()}
-            size="sm"
-            type="button"
-            variant="outline"
-          >
+          <Button className="self-start" onClick={() => void runTest()} size="sm" type="button" variant="outline">
             <Bell />
             {copy.test}
           </Button>

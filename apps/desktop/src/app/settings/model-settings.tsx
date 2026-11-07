@@ -271,7 +271,9 @@ function ProviderKeyHint({ needsSetup, setupIsApiKey, selectedProviderRow }: Pro
   const { t } = useI18n()
 
   return needsSetup && setupIsApiKey && selectedProviderRow ? (
-    <p className="mt-2 text-xs text-muted-foreground">{t.settings.model.providerNeedsApiKey(selectedProviderRow.name)}</p>
+    <p className="mt-2 text-xs text-muted-foreground">
+      {t.settings.model.providerNeedsApiKey(selectedProviderRow.name)}
+    </p>
   ) : null
 }
 
@@ -928,7 +930,11 @@ export function ModelSettings({
         startProviderSetup={startProviderSetup}
         switchProvider={switchProvider}
       />
-      <ProviderKeyHint needsSetup={needsSetup} selectedProviderRow={selectedProviderRow} setupIsApiKey={setupIsApiKey} />
+      <ProviderKeyHint
+        needsSetup={needsSetup}
+        selectedProviderRow={selectedProviderRow}
+        setupIsApiKey={setupIsApiKey}
+      />
     </div>
   )
 

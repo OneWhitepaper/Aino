@@ -2,7 +2,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { setRuntimeI18nLocale } from '@/i18n'
 import { $gateway } from '@/store/gateway'
-import { $sendDiagnostics, confirmSendDiagnostics, dismissSendDiagnostics, requestSendDiagnostics } from '@/store/send-diagnostics'
+import {
+  $sendDiagnostics,
+  confirmSendDiagnostics,
+  dismissSendDiagnostics,
+  requestSendDiagnostics
+} from '@/store/send-diagnostics'
 
 const receipt = { id: '22c5a21b-bfaa-476e-92fd-3e408c6effb8', expires_at: '2026-11-07T00:00:00Z' }
 const originalDesktop = window.hermesDesktop
@@ -12,9 +17,13 @@ function rig() {
   const request = vi.fn().mockResolvedValue({ ok: true, bundle_base64: 'redacted-gzip' })
   const scope = vi.fn().mockResolvedValue({ user_id: '17', generation: 4, origin: 'https://api.agentera.com.cn' })
   const upload = vi.fn().mockResolvedValue(receipt)
-  Object.defineProperty(window, 'hermesDesktop', { configurable: true, value: {
-    platformDiagnostics: { scope, upload }, getRecentLogs: vi.fn().mockResolvedValue({ lines: ['synthetic boot'] })
-  } })
+  Object.defineProperty(window, 'hermesDesktop', {
+    configurable: true,
+    value: {
+      platformDiagnostics: { scope, upload },
+      getRecentLogs: vi.fn().mockResolvedValue({ lines: ['synthetic boot'] })
+    }
+  })
   $gateway.set({ request } as never)
 
   return { request, scope, upload }
@@ -35,10 +44,19 @@ describe('Aino diagnostic consent and upload', () => {
     expect(f.upload).not.toHaveBeenCalled()
     await confirmSendDiagnostics()
     await confirmSendDiagnostics()
-    expect(f.request).toHaveBeenCalledExactlyOnceWith('diagnostics.collect', {
-      error_context: 'synthetic error', extra_files: { 'desktop.log': 'synthetic boot' }
-    }, 120_000)
-    expect(f.upload).toHaveBeenCalledExactlyOnceWith({ bundle_base64: 'redacted-gzip', expected_user_id: '17', expected_generation: 4 })
+    expect(f.request).toHaveBeenCalledExactlyOnceWith(
+      'diagnostics.collect',
+      {
+        error_context: 'synthetic error',
+        extra_files: { 'desktop.log': 'synthetic boot' }
+      },
+      120_000
+    )
+    expect(f.upload).toHaveBeenCalledExactlyOnceWith({
+      bundle_base64: 'redacted-gzip',
+      expected_user_id: '17',
+      expected_generation: 4
+    })
     expect($sendDiagnostics.get()).toMatchObject({ phase: 'done', result: { uploadId: receipt.id } })
   })
   it('does not collect for a signed-out account or missing native capability', async () => {
@@ -72,7 +90,12 @@ describe('Aino diagnostic consent and upload', () => {
   it('dismissal during collection prevents uploading', async () => {
     const f = rig()
     let resolve!: (value: unknown) => void
-    f.request.mockImplementation(() => new Promise(r => { resolve = r }))
+    f.request.mockImplementation(
+      () =>
+        new Promise(r => {
+          resolve = r
+        })
+    )
     requestSendDiagnostics()
     const pending = confirmSendDiagnostics()
     await vi.waitFor(() => expect(f.request).toHaveBeenCalled())
@@ -85,7 +108,12 @@ describe('Aino diagnostic consent and upload', () => {
   it('ignores a late upload result after dismissal and a new dialog', async () => {
     const f = rig()
     let resolve!: (value: unknown) => void
-    f.upload.mockImplementation(() => new Promise(r => { resolve = r }))
+    f.upload.mockImplementation(
+      () =>
+        new Promise(r => {
+          resolve = r
+        })
+    )
     requestSendDiagnostics()
     const pending = confirmSendDiagnostics()
     await vi.waitFor(() => expect(f.upload).toHaveBeenCalled())

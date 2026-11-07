@@ -78,9 +78,7 @@ const EMPTY_STATE: GatewaySettingsState = {
   sshRemoteProfile: ''
 }
 
-export function normalizeGatewaySettingsState(
-  config: SavedGatewaySettings | null | undefined
-): GatewaySettingsState {
+export function normalizeGatewaySettingsState(config: SavedGatewaySettings | null | undefined): GatewaySettingsState {
   if (!config || typeof config !== 'object') {
     return { ...EMPTY_STATE }
   }
@@ -775,9 +773,7 @@ function GatewayConnectionSettings({ embedded, standalone }: { embedded: boolean
             action={
               <Input
                 className={cn('h-8 font-mono', CONTROL_TEXT)}
-                onChange={event =>
-                  setState(current => ({ ...current, sshRemoteHermesPath: event.target.value }))
-                }
+                onChange={event => setState(current => ({ ...current, sshRemoteHermesPath: event.target.value }))}
                 placeholder={g.sshHermesPathPlaceholder}
                 value={state.sshRemoteHermesPath}
               />

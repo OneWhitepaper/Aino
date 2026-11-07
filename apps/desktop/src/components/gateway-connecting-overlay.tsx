@@ -266,7 +266,5 @@ export function GatewayConnectingOverlay() {
     return null
   }
 
-  return (
-    <ConnectingOverlayView boot={boot} onExit={onExit} phase={phase} starting={introStarting} />
-  )
+  return <ConnectingOverlayView boot={boot} onExit={onExit} phase={phase} starting={introStarting} />
 }

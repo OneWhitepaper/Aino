@@ -65,7 +65,13 @@ export function shouldQuitOnLastChatClosed({
   quitInProgress: boolean
   accountRehomeInProgress?: boolean
 }): boolean {
-  return platform !== 'darwin' && !isQuittingForHandoff && !quitInProgress && !accountRehomeInProgress && remainingChatWindows === 0
+  return (
+    platform !== 'darwin' &&
+    !isQuittingForHandoff &&
+    !quitInProgress &&
+    !accountRehomeInProgress &&
+    remainingChatWindows === 0
+  )
 }
 
 /**

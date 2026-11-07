@@ -8,7 +8,14 @@ interface SidebarPanelLabelProps extends React.ComponentProps<'span'> {
   meta?: React.ReactNode
 }
 
-export function SidebarPanelLabel({ children, className, dotClassName, tone = 'accent', meta, ...props }: SidebarPanelLabelProps) {
+export function SidebarPanelLabel({
+  children,
+  className,
+  dotClassName,
+  tone = 'accent',
+  meta,
+  ...props
+}: SidebarPanelLabelProps) {
   return (
     <span
       className={cn(

@@ -268,7 +268,11 @@ function TaskContinueButton({
         onMouseDown={keepEditorFocus}
         type="button"
       >
-        {pending ? <Loader2 className="size-4 animate-spin" /> : <PlayFilled className="size-4" viewBox="16 14 20 20" />}
+        {pending ? (
+          <Loader2 className="size-4 animate-spin" />
+        ) : (
+          <PlayFilled className="size-4" viewBox="16 14 20 20" />
+        )}
       </Button>
     </Tip>
   )
