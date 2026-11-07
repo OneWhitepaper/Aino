@@ -341,7 +341,7 @@ describe('installDesktopPluginFromGit', () => {
     expect(fs.existsSync(path.join(appRoot, installed.pluginName!, 'plugin.js'))).toBe(true)
 
     // A plain replacement tree still replaces it.
-    fs.rmSync(path.join(repo, 'desktop', 'leak.txt'))
+    fs.unlinkSync(path.join(repo, 'desktop', 'leak.txt'))
     fs.writeFileSync(path.join(repo, 'desktop', 'panel.js'), 'replaced\n')
     git('add', '-A')
     git('-c', 'user.email=f@example.com', '-c', 'user.name=F', 'commit', '-qm', 'plain')

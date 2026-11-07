@@ -260,9 +260,10 @@ describe('a swap before the final look is refused too', () => {
 
     expect(read).toMatchObject({ ok: false })
     expect(JSON.stringify(read)).not.toContain('hermes-secret')
+    expect(fs.lstatSync(notes).isSymbolicLink()).toBe(true)
 
     vi.restoreAllMocks()
-    fs.rmSync(notes)
+    fs.unlinkSync(notes)
     fs.renameSync(path.join(vault, 'notes-old'), notes)
     afterRealpath(note, swap)
 

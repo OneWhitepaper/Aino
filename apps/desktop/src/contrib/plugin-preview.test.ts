@@ -11,6 +11,7 @@ import {
   revokePreviewScript
 } from '@/store/plugin-preview-grants'
 import { closeRightRail, openPreview } from '@/store/preview'
+import { pageStorage } from '@/test/page-storage'
 
 import { createPluginContext } from './plugin'
 import { dropPlugin, publishPlugin } from './plugins-store'
@@ -70,6 +71,7 @@ beforeEach(() => {
 })
 
 afterEach(() => {
+  vi.restoreAllMocks()
   unbindRunner?.()
   unbindRunner = undefined
 
@@ -251,7 +253,7 @@ describe('ctx.preview.executeJavaScript', () => {
 
     grantPreviewScript(id, 'https://mail.example.com')
 
-    const setItem = vi.spyOn(window.localStorage, 'setItem').mockImplementation(() => {
+    const setItem = vi.spyOn(pageStorage(), 'setItem').mockImplementation(() => {
       throw new DOMException('quota', 'QuotaExceededError')
     })
 

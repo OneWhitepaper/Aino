@@ -1,10 +1,16 @@
 import { afterEach, expect, test, vi } from 'vitest'
 
+import { pageStorage } from '@/test/page-storage'
+
 import { listPreparedImageDrafts, type PreparedSubmission, preparedSubmissionKey, readPreparedSubmission, removePreparedSubmission, writePreparedSubmission } from './prepared-submissions'
 import { storedJournal } from './prepared-submissions-test-utils'
 import type { SubmissionDestination } from './submission-destination'
 
-afterEach(() => { vi.unstubAllGlobals(); localStorage.clear() })
+afterEach(() => {
+  vi.restoreAllMocks()
+  vi.unstubAllGlobals()
+  localStorage.clear()
+})
 
 test('image recovery never offers expanded slash intent as an ordinary draft and leaves its exact journal intact', async () => {
   vi.stubGlobal('hermesDesktop', undefined)
@@ -33,7 +39,7 @@ test('a browser journal read lists the storage keys once, however many stores it
   }
 
   await removePreparedSubmission('c', 'c')
-  const key = vi.spyOn(window.localStorage, 'key')
+  const key = vi.spyOn(pageStorage(), 'key')
   expect((await readPreparedSubmission('a'))?.text).toBe('a')
   expect(await readPreparedSubmission('c')).toBeUndefined()
   expect(key).toHaveBeenCalledTimes(2 * window.localStorage.length)
