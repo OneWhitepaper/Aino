@@ -54,7 +54,11 @@ it('translates the live filter menu while preserving selected values and the cur
   expect(screen.queryByText(TRANSLATIONS.en.sidebar.profileRail)).toBeNull()
   expect(screen.queryByText(TRANSLATIONS.en.ui.actions.markAllRead)).toBeNull()
   fireEvent.keyDown(screen.getByRole('menuitem', { name: TRANSLATIONS.ja.ui.actions.status }), { key: 'ArrowRight' })
-  expect(screen.getByRole('menuitemcheckbox', { name: TRANSLATIONS.ja.ui.actions.labels.needsInput }).getAttribute('aria-checked')).toBe('true')
+  expect(
+    screen
+      .getByRole('menuitemcheckbox', { name: TRANSLATIONS.ja.ui.actions.labels.needsInput })
+      .getAttribute('aria-checked')
+  ).toBe('true')
   expect(screen.queryByRole('menuitemcheckbox', { name: zh.needsInput })).toBeNull()
   expect($sidebarOrdering.get()).toBe('manual')
 })

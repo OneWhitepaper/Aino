@@ -25,6 +25,7 @@ vi.mock('@/store/starmap', () => ({ reloadOpenStarmapGraph: vi.fn(), resetStarma
 
 const { applyDesktopOverlay, buildDesktopOverlay, exportProfileBundle, runExportProfileFlow } =
   await import('./profile-share')
+
 const { $profileColors, setProfileColor } = await import('./profile')
 const { modePref, skinPref } = await import('@/themes/context')
 const { $userThemes } = await import('@/themes/user-themes')
@@ -123,7 +124,10 @@ describe('runExportProfileFlow', () => {
     const { runExportProfileFlow } = await import('./profile-share')
     const { $notifications } = await import('./notifications')
     seedWebappSession('served-token')
-    vi.stubGlobal('fetch', vi.fn(async () => new Response('{}')))
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response('{}'))
+    )
 
     try {
       expect(installBrowserDesktopBridge()).toBe(true)

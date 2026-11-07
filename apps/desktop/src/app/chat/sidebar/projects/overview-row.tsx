@@ -57,10 +57,7 @@ export function projectIcon({ color, icon, isAuto, isNoProject }: SidebarProject
 
   return (
     <SidebarRowLeadGlyph style={color ? { color } : undefined}>
-      <Codicon
-        name={icon || (isNoProject ? 'home' : isAuto ? 'repo' : 'folder')}
-        size={SIDEBAR_LEAD_ICON_SIZE}
-      />
+      <Codicon name={icon || (isNoProject ? 'home' : isAuto ? 'repo' : 'folder')} size={SIDEBAR_LEAD_ICON_SIZE} />
     </SidebarRowLeadGlyph>
   )
 }

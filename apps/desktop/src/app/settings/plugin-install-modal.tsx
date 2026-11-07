@@ -28,13 +28,7 @@ import {
   openPluginInstallRequest,
   type PluginInstallRequest
 } from '@/store/plugin-install-request'
-import {
-  $activeGatewayProfile,
-  $profiles,
-  $profileScope,
-  normalizeProfileKey,
-  profileLabel
-} from '@/store/profile'
+import { $activeGatewayProfile, $profiles, $profileScope, normalizeProfileKey, profileLabel } from '@/store/profile'
 import { $connection } from '@/store/session'
 
 import { PluginInstallDetails } from './plugin-install-details'
@@ -73,9 +67,7 @@ function repoName(repo: string): string {
 }
 
 function pluginTitle(request: PluginInstallRequest, probe: null | ProbeResult): string {
-  return (
-    request.title || request.catalogName || probe?.agentName || probe?.desktopName || repoName(request.repo)
-  )
+  return request.title || request.catalogName || probe?.agentName || probe?.desktopName || repoName(request.repo)
 }
 
 /** The inspection's one-line reason, when it could not read the repository. An environment that cannot
@@ -97,9 +89,9 @@ function nothingInstallable(request: PluginInstallRequest, probe: null | ProbeRe
 }
 
 function ProbeWarnings({ copy, probe }: { copy: InstallModalCopy; probe: null | ProbeResult }) {
-  const warnings = [
-    ...new Set([...(probe?.warnings ?? []), probe?.insecure ? copy.insecureWarning : ''])
-  ].filter(Boolean)
+  const warnings = [...new Set([...(probe?.warnings ?? []), probe?.insecure ? copy.insecureWarning : ''])].filter(
+    Boolean
+  )
 
   if (!probe?.ok || warnings.length === 0) {
     return null
@@ -189,10 +181,7 @@ export function PluginInstallModal() {
       }}
       open={request !== null && !onSettings}
     >
-      <DialogContent
-        className="max-w-lg"
-        onOpenAutoFocus={request?.repo ? preventCloseButtonAutoFocus : undefined}
-      >
+      <DialogContent className="max-w-lg" onOpenAutoFocus={request?.repo ? preventCloseButtonAutoFocus : undefined}>
         {request && !request.repo && (
           <>
             <DialogHeader>
@@ -433,8 +422,7 @@ interface InstallGate {
 function installEnabled(gate: InstallGate): boolean {
   const { force, installing, partial, pinInvalid, probe, rereview, uncertain, verified } = gate
 
-  const reviewed =
-    rereview === 'idle' ? verified || Boolean(probe?.ok) : rereview === 'shown' && Boolean(probe?.ok)
+  const reviewed = rereview === 'idle' ? verified || Boolean(probe?.ok) : rereview === 'shown' && Boolean(probe?.ok)
 
   return !installing && !uncertain && !pinInvalid && (!partial || force) && reviewed
 }

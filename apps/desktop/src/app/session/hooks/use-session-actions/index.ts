@@ -238,7 +238,13 @@ export function useSessionActions({
   syncSessionStateToView,
   updateSessionState
 }: SessionActionsOptions) {
-  useCloudHistory({ activeSessionIdRef, sessionStateByRuntimeIdRef, selectedStoredSessionIdRef, updateSessionState, syncSessionStateToView })
+  useCloudHistory({
+    activeSessionIdRef,
+    sessionStateByRuntimeIdRef,
+    selectedStoredSessionIdRef,
+    updateSessionState,
+    syncSessionStateToView
+  })
   const { t } = useI18n()
   const copy = t.desktop
   const resumeRequestRef = useRef(0)

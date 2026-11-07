@@ -15,14 +15,18 @@ export interface PluginSessionCreateRoute {
 type Request = <T>(method: string, params?: Record<string, unknown>, timeoutMs?: number) => Promise<T>
 
 function usesPluginPlatformDefault(method: string, params: Record<string, unknown>): boolean {
-  if (window.hermesDesktop?.accountAdapter !== 'platform' || platformModelCatalog().account.get()?.phase !== 'signed_in') {
+  if (
+    window.hermesDesktop?.accountAdapter !== 'platform' ||
+    platformModelCatalog().account.get()?.phase !== 'signed_in'
+  ) {
     return false
   }
 
   return method === 'setup.runtime_check'
     ? !params.provider
-    : method === 'session.create' && params.follow_profile_config === true &&
-      !['model', 'provider', 'model_source', 'model_id'].some(key => Boolean(params[key]))
+    : method === 'session.create' &&
+        params.follow_profile_config === true &&
+        !['model', 'provider', 'model_source', 'model_id'].some(key => Boolean(params[key]))
 }
 
 async function resolvePluginActiveRoute(route: PluginSessionCreateRoute): Promise<PluginSessionCreateRoute> {
@@ -34,13 +38,17 @@ async function resolvePluginActiveRoute(route: PluginSessionCreateRoute): Promis
 
   const routes = await getProfileRoutes([route.profile, route.targetProfile])
   const sourceRoutes = routes.filter(candidate => candidate.connectionId === route.connectionId)
-  const active = sourceRoutes.find(candidate => candidate.profile === route.profile && candidate.targetProfile === route.targetProfile)
+  const active = sourceRoutes.find(
+    candidate => candidate.profile === route.profile && candidate.targetProfile === route.targetProfile
+  )
 
   if (active) {
     return { ...active }
   }
 
-  const target = sourceRoutes.filter(candidate => candidate.profile === route.targetProfile && candidate.targetProfile === route.targetProfile)
+  const target = sourceRoutes.filter(
+    candidate => candidate.profile === route.targetProfile && candidate.targetProfile === route.targetProfile
+  )
 
   if (target.length !== 1) {
     throw new PlatformSelectionError('unsupported_gateway')
@@ -68,7 +76,8 @@ async function requestPluginRuntimeReadiness<T>(
   spawnPriority?: SpawnPriority
 ): Promise<T> {
   const assertAccount = pluginAccountFence()
-  const targetProfile = typeof params.profile === 'string' && params.profile.trim() ? params.profile.trim() : route.targetProfile
+  const targetProfile =
+    typeof params.profile === 'string' && params.profile.trim() ? params.profile.trim() : route.targetProfile
   const release = await retainGatewayForAgent(route.connectionId, route.profile, { spawnPriority })
 
   try {
@@ -86,9 +95,12 @@ async function requestPluginRuntimeReadiness<T>(
     }
 
     return await (timeoutMs === undefined
-      ? request<T>('setup.runtime_check', params) : request<T>('setup.runtime_check', params, timeoutMs))
+      ? request<T>('setup.runtime_check', params)
+      : request<T>('setup.runtime_check', params, timeoutMs))
   } catch (error) {
-    if (!(error instanceof PlatformSelectionError)) { throw error }
+    if (!(error instanceof PlatformSelectionError)) {
+      throw error
+    }
 
     return { ok: false, error: error.message, error_code: error.code } as T
   } finally {
@@ -112,11 +124,12 @@ export async function requestPluginActiveGateway<T>(
 
   const profile = normalizeProfileKey($activeGatewayProfile.get())
 
-  const targetProfile = typeof params.profile === 'string' && params.profile.trim()
-    ? params.profile.trim() : profile
+  const targetProfile = typeof params.profile === 'string' && params.profile.trim() ? params.profile.trim() : profile
 
   let route: PluginSessionCreateRoute = {
-    connectionId: connection?.connectionId || (connection?.mode === 'local' ? 'local' : null), profile, targetProfile
+    connectionId: connection?.connectionId || (connection?.mode === 'local' ? 'local' : null),
+    profile,
+    targetProfile
   }
 
   let request: Request = (requestMethod, payload, deadline) =>
@@ -129,9 +142,10 @@ export async function requestPluginActiveGateway<T>(
 
     if (route.profile !== profile) {
       const captured = route
-      request = (requestMethod, payload = {}, deadline) => deadline === undefined
-        ? requestGatewayForAgent(captured.connectionId, captured.profile, requestMethod, payload)
-        : requestGatewayForAgent(captured.connectionId, captured.profile, requestMethod, payload, deadline)
+      request = (requestMethod, payload = {}, deadline) =>
+        deadline === undefined
+          ? requestGatewayForAgent(captured.connectionId, captured.profile, requestMethod, payload)
+          : requestGatewayForAgent(captured.connectionId, captured.profile, requestMethod, payload, deadline)
     }
   }
 
@@ -147,7 +161,7 @@ export async function requestPluginSession<T>(
   timeoutMs?: number,
   spawnPriority?: SpawnPriority
 ): Promise<T> {
-  const send = () => timeoutMs === undefined ? request<T>(method, params) : request<T>(method, params, timeoutMs)
+  const send = () => (timeoutMs === undefined ? request<T>(method, params) : request<T>(method, params, timeoutMs))
 
   if (!usesPluginPlatformDefault(method, params)) {
     return send()
@@ -164,29 +178,37 @@ export async function requestPluginSession<T>(
   try {
     assertAccount()
     const scope = { ...(route.connectionId ? { connectionId: route.connectionId } : {}), profile: route.targetProfile }
-    const resolved = await resolveModelDefault(scope, { connectionId: route.connectionId ?? undefined, profile: route.profile })
+    const resolved = await resolveModelDefault(scope, {
+      connectionId: route.connectionId ?? undefined,
+      profile: route.profile
+    })
     assertAccount()
 
     if (!resolved.platform) {
       return await send()
     }
 
-    const authority = await capturePlatformDraftAuthority(resolved.platform.ownerUserId, resolved.platform.platformOrigin)
+    const authority = await capturePlatformDraftAuthority(
+      resolved.platform.ownerUserId,
+      resolved.platform.platformOrigin
+    )
     assertAccount()
     const owner = route.connectionId ? { connectionId: route.connectionId, profile: route.profile } : route.profile
 
     const createRequest: Request = (requestMethod, payload, requestTimeout) =>
       requestMethod === 'session.create' && timeoutMs !== undefined
         ? request(requestMethod, payload, timeoutMs)
-        : requestTimeout === undefined ? request(requestMethod, payload) : request(requestMethod, payload, requestTimeout)
+        : requestTimeout === undefined
+          ? request(requestMethod, payload)
+          : request(requestMethod, payload, requestTimeout)
 
-    return await createPlatformDraft(
+    return (await createPlatformDraft(
       createRequest,
       { ...capturedParams, profile: route.targetProfile, model_source: 'aino', model_id: resolved.platform.modelId },
       resolved.platform.ownerUserId,
       owner,
       authority
-    ) as T
+    )) as T
   } finally {
     release()
   }

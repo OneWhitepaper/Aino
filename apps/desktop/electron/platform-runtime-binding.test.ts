@@ -101,29 +101,29 @@ async function rig(
   }
 
   async function deviceReply(req: http.IncomingMessage, res: http.ServerResponse, send: (value: unknown) => void) {
-      let body = ''
+    let body = ''
 
-      for await (const chunk of req) {
-        body += chunk
-      }
+    for await (const chunk of req) {
+      body += chunk
+    }
 
-      deviceRequests.push(JSON.parse(body))
+    deviceRequests.push(JSON.parse(body))
 
-      if (options.deviceRevoked) {
-        res.statusCode = 403
-        res.end(JSON.stringify({ code: 'DESKTOP_DEVICE_KEY_REVOKED', message: 'revoked' }))
+    if (options.deviceRevoked) {
+      res.statusCode = 403
+      res.end(JSON.stringify({ code: 'DESKTOP_DEVICE_KEY_REVOKED', message: 'revoked' }))
 
-        return
-      }
+      return
+    }
 
-      return send({
-        key_id: 'device-key',
-        device_id: 'fixture-device',
-        version: 1,
-        status: 'active',
-        expires_at: null,
-        api_key: secret
-      })
+    return send({
+      key_id: 'device-key',
+      device_id: 'fixture-device',
+      version: 1,
+      status: 'active',
+      expires_at: null,
+      api_key: secret
+    })
   }
 
   const server = http.createServer(async (req, res) => {
@@ -185,7 +185,9 @@ async function rig(
       return send({ capabilities: { managed_device_key: 1 } })
     }
 
-    if (req.url === '/api/v1/desktop/device-keys') { return deviceReply(req, res, send) }
+    if (req.url === '/api/v1/desktop/device-keys') {
+      return deviceReply(req, res, send)
+    }
 
     if (req.url === '/api/v1/desktop/credentials') {
       let body = ''
@@ -305,7 +307,12 @@ async function rig(
           reply({ cleared: true })
         } else if (req.method === 'session.managed_model_status') {
           const active = purposeBindings.get(purpose)
-          reply({ reusable: active?.binding_revision === p.binding_revision && active?.credential_version === p.credential_version && active?.model_id === p.model_id })
+          reply({
+            reusable:
+              active?.binding_revision === p.binding_revision &&
+              active?.credential_version === p.credential_version &&
+              active?.model_id === p.model_id
+          })
         } else {
           reply({})
         }
@@ -314,7 +321,9 @@ async function rig(
     socket.on('close', () => {
       bound = undefined
 
-      for (const purpose of socketPurposes) { purposeBindings.delete(purpose) }
+      for (const purpose of socketPurposes) {
+        purposeBindings.delete(purpose)
+      }
     })
   })
   await new Promise<void>(r => server.listen(0, '127.0.0.1', r))
@@ -418,7 +427,14 @@ it('reuses one device key across 100 warm calls and windows without a lease or r
   expect(f.credentials).toHaveLength(0)
   expect(f.binding()).toMatchObject({ credential_type: 'device', expires_at: null, api_key: f.secret })
   vi.spyOn(Date, 'now').mockReturnValue(Date.now() + 30_001)
-  expect((await f.controller.bind({ ...f.input, expected_account_revision: f.auth.snapshot().revision }, { isDestroyed: () => false })).ok).toBe(true)
+  expect(
+    (
+      await f.controller.bind(
+        { ...f.input, expected_account_revision: f.auth.snapshot().revision },
+        { isDestroyed: () => false }
+      )
+    ).ok
+  ).toBe(true)
   expect(f.catalogRequests()).toBe(2)
   expect(f.deviceRequests).toHaveLength(1)
 })
@@ -476,7 +492,10 @@ it('reuses a permanent binding only after confirming the live credential version
 
 it('requires a fresh ticket before sending any permanent credential when no retained binding exists', async () => {
   const f = await rig({ deviceGateway: true })
-  expect(await f.controller.bind({ ...f.input, session_ticket: '' }, f.window)).toMatchObject({ ok: false, error: { code: 'binding_ticket_required' } })
+  expect(await f.controller.bind({ ...f.input, session_ticket: '' }, f.window)).toMatchObject({
+    ok: false,
+    error: { code: 'binding_ticket_required' }
+  })
   expect(f.deviceRequests).toHaveLength(0)
   expect(f.credentials).toHaveLength(0)
 })
@@ -511,7 +530,9 @@ it('keeps binding compatible with gateways that do not accept context metadata',
 
 it('uses real auth HTTP and shared WebSocket serialization without exposing the lease in public results', async () => {
   const f = await rig()
-  expect(await f.controller.list()).toEqual([{ ...model, purpose: 'chat', capabilities: { ...model.capabilities, image_generation: false } }])
+  expect(await f.controller.list()).toEqual([
+    { ...model, purpose: 'chat', capabilities: { ...model.capabilities, image_generation: false } }
+  ])
   const response = await f.controller.bind(f.input, f.window)
   expect(response).toMatchObject({ ok: true, ready: true, model_id: model.id, billing_source: 'aino' })
   expect(f.credentials[0]).toMatchObject({
@@ -645,14 +666,20 @@ it('keeps image bind, renewal and clear isolated from the retained chat socket',
   const result = await f.controller.bind(imageInput, f.window)
   expect(result).toMatchObject({ ok: true, ready: true })
   expect(f.purposeBinding('chat')).toBe(chat)
-  expect(f.purposeBinding('image')).toMatchObject({ purpose: 'image', api_mode: 'images_generations', api_key: f.secret })
+  expect(f.purposeBinding('image')).toMatchObject({
+    purpose: 'image',
+    api_mode: 'images_generations',
+    api_key: f.secret
+  })
   expect(f.credentials).toHaveLength(2)
   expect(f.credentials[0]).not.toHaveProperty('purpose')
   expect(f.credentials[1]).toMatchObject({ purpose: 'image' })
   expect(JSON.stringify(result)).not.toContain(f.secret)
   await vi.advanceTimersByTimeAsync(20 * 60_000)
   await vi.waitFor(() => expect(f.received.filter(row => row.method === 'session.renew_managed_model')).toHaveLength(2))
-  expect(f.received.filter(row => row.method === 'session.renew_managed_model' && row.purpose === 'image')).toHaveLength(1)
+  expect(
+    f.received.filter(row => row.method === 'session.renew_managed_model' && row.purpose === 'image')
+  ).toHaveLength(1)
   f.controller.clear(imageInput, f.window)
   await vi.waitFor(() => expect(f.purposeBinding('image')).toBeUndefined())
   expect(f.purposeBinding('chat')).toBeTruthy()
@@ -660,7 +687,10 @@ it('keeps image bind, renewal and clear isolated from the retained chat socket',
 
 it('refuses image binding before obtaining a secret when the gateway lacks its capability', async () => {
   const f = await rig()
-  expect(await f.controller.bind({ ...f.input, purpose: 'image' }, f.window)).toMatchObject({ ok: false, error: { code: 'unsupported_gateway' } })
+  expect(await f.controller.bind({ ...f.input, purpose: 'image' }, f.window)).toMatchObject({
+    ok: false,
+    error: { code: 'unsupported_gateway' }
+  })
   expect(f.credentials).toHaveLength(0)
 })
 
@@ -691,7 +721,10 @@ it('whitelists image purpose through existing model IPC and clears only its imag
   expect(f.purposeBinding('image')).toMatchObject({ purpose: 'image', api_key: f.secret })
   expect(JSON.stringify(result)).not.toContain(f.secret)
   const before = f.credentials.length
-  expect(await bind(event, { ...f.input, purpose: 'other' })).toMatchObject({ ok: false, error: { code: 'invalid_platform_input' } })
+  expect(await bind(event, { ...f.input, purpose: 'other' })).toMatchObject({
+    ok: false,
+    error: { code: 'invalid_platform_input' }
+  })
   expect(f.credentials).toHaveLength(before)
   await handlers.get('aino:platform-models:clear')!(event, { ...f.input, purpose: 'image' })
   await vi.waitFor(() => expect(f.purposeBinding('image')).toBeUndefined())
@@ -812,7 +845,9 @@ it.each([
 
   if (retry) {
     await vi.advanceTimersByTimeAsync(1000)
-    await vi.waitFor(() => expect(f.received.filter(row => row.method === 'session.renew_managed_model')).toHaveLength(1))
+    await vi.waitFor(() =>
+      expect(f.received.filter(row => row.method === 'session.renew_managed_model')).toHaveLength(1)
+    )
     expect(f.credentials).toHaveLength(3)
     expect(f.binding()!.binding_revision).toBe(revision)
   } else {
@@ -913,6 +948,8 @@ it('restores the account after a disconnected renewal before allowing the next t
   await vi.advanceTimersByTimeAsync(5000)
   await vi.waitFor(() => expect(f.received.filter(row => row.method === 'session.renew_managed_model')).toHaveLength(1))
   expect(f.auth.snapshot().phase).toBe('signed_in')
-  expect((await f.controller.bind({ ...f.input, expected_account_revision: f.auth.snapshot().revision }, f.window)).ok).toBe(true)
+  expect(
+    (await f.controller.bind({ ...f.input, expected_account_revision: f.auth.snapshot().revision }, f.window)).ok
+  ).toBe(true)
   expect(f.credentials).toHaveLength(3)
 })

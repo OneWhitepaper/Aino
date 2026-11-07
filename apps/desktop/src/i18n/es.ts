@@ -322,10 +322,12 @@ const configPageFieldDescriptions: Record<string, string> = defineFieldCopy({
 
 const esBaseOverrides = {
   platformModels: {
-    permanent: "Sin caducidad",
-    reauthorize: "Volver a autorizar este dispositivo",
-    reauthorizeDescription: "Sustituye la autorización de modelos de este dispositivo. Inicia sesión si tu sesión de gestión ha caducado.",
-    deviceRevoked: "Se ha revocado el acceso a modelos de este dispositivo. Autorízalo de nuevo en los ajustes de modelos.",
+    permanent: 'Sin caducidad',
+    reauthorize: 'Volver a autorizar este dispositivo',
+    reauthorizeDescription:
+      'Sustituye la autorización de modelos de este dispositivo. Inicia sesión si tu sesión de gestión ha caducado.',
+    deviceRevoked:
+      'Se ha revocado el acceso a modelos de este dispositivo. Autorízalo de nuevo en los ajustes de modelos.'
   },
   platformDevices: { expired: 'Caducada' },
   appearancePage: appearancePage.es,
@@ -2520,10 +2522,9 @@ const esBaseOverrides = {
           enable: 'Usar mi perfil'
         }
       }
-    }
-  ,
-memoryLayers: esMemoryLayers
-},
+    },
+    memoryLayers: esMemoryLayers
+  },
   skills: {
     tabSkills: 'Skills',
     tabToolsets: 'Conjuntos de herramientas',
@@ -3357,9 +3358,9 @@ memoryLayers: esMemoryLayers
     manageProfiles: 'Gestionar perfiles...',
     connectGateway: 'Gestionar gateways…',
     fleet: {
-      switchDeviceTitle: "¿Cambiar a este dispositivo?",
-      switchDeviceDesc: "Abre una sesión nueva en este equipo. La conversación actual permanece en el otro servicio.",
-      switchDeviceConfirm: "Cambiar",
+      switchDeviceTitle: '¿Cambiar a este dispositivo?',
+      switchDeviceDesc: 'Abre una sesión nueva en este equipo. La conversación actual permanece en el otro servicio.',
+      switchDeviceConfirm: 'Cambiar',
       allOnGateway: 'Todos los perfiles de este gateway',
       gateway: (gateway: string) => `Perfiles en ${gateway}`,
       gatewayUnreachable: (gateway: string) => `${gateway} · inaccesible`,
@@ -4819,15 +4820,16 @@ memoryLayers: esMemoryLayers
     }
   },
   rightSidebar: {
-    terminalReconnectSame: "Terminal desconectada. Pulsa Intro para volver al mismo shell.",
-    terminalExpired: "La terminal caducó o terminó. Pulsa Intro para crear un nuevo shell.",
-    terminalSuperseded: "La terminal está conectada en otra ventana. Pulsa Intro para recuperarla aquí.",
-    terminalDenied: "Acceso a la terminal denegado. Revisa la sesión y el perfil y pulsa Intro.",
-    terminalCapacity: "Se alcanzó el límite de terminales. Cierra otra terminal y pulsa Intro.",
-    terminalSignedOut: "Sesión cerrada. Inicia sesión de nuevo en este navegador y pulsa Intro.",
-    terminalReconnecting: "Terminal desconectada. Reconectando al mismo shell…",
-    terminalStartRetry: (error: string) => "No se pudo iniciar la terminal: " + error + ". Pulsa Intro para reintentar.",
-    terminalCloseFailed: "No se pudo cerrar la terminal",
+    terminalReconnectSame: 'Terminal desconectada. Pulsa Intro para volver al mismo shell.',
+    terminalExpired: 'La terminal caducó o terminó. Pulsa Intro para crear un nuevo shell.',
+    terminalSuperseded: 'La terminal está conectada en otra ventana. Pulsa Intro para recuperarla aquí.',
+    terminalDenied: 'Acceso a la terminal denegado. Revisa la sesión y el perfil y pulsa Intro.',
+    terminalCapacity: 'Se alcanzó el límite de terminales. Cierra otra terminal y pulsa Intro.',
+    terminalSignedOut: 'Sesión cerrada. Inicia sesión de nuevo en este navegador y pulsa Intro.',
+    terminalReconnecting: 'Terminal desconectada. Reconectando al mismo shell…',
+    terminalStartRetry: (error: string) =>
+      'No se pudo iniciar la terminal: ' + error + '. Pulsa Intro para reintentar.',
+    terminalCloseFailed: 'No se pudo cerrar la terminal',
     terminalDropUnquotable: (shell, paths) =>
       `Estos nombres no se pueden escribir de forma segura en ${shell}: ${paths}`,
     aria: 'Barra lateral derecha',
@@ -5597,12 +5599,14 @@ memoryLayers: esMemoryLayers
     vaultCodeConfirm: 'Introducir código'
   },
   desktop: {
-    localRuntimeUnavailableTitle: "Entorno local no disponible",
-    localRuntimeUnavailableDesktop: "Configura el entorno en Ajustes → Proveedores → Modelos locales.",
-    localRuntimeUnavailableWebapp: "Configura los modelos locales en Aino Desktop o elige un modelo alojado en este navegador.",
-    openLocalModels: "Abrir modelos locales",
-    serviceAuthorizationTitle: "Autorización de servicios",
-    serviceAuthorizationDescription: "Inicia sesión con la cuenta propia de cada servicio externo. Estas autorizaciones son independientes de tu cuenta Aino.",
+    localRuntimeUnavailableTitle: 'Entorno local no disponible',
+    localRuntimeUnavailableDesktop: 'Configura el entorno en Ajustes → Proveedores → Modelos locales.',
+    localRuntimeUnavailableWebapp:
+      'Configura los modelos locales en Aino Desktop o elige un modelo alojado en este navegador.',
+    openLocalModels: 'Abrir modelos locales',
+    serviceAuthorizationTitle: 'Autorización de servicios',
+    serviceAuthorizationDescription:
+      'Inicia sesión con la cuenta propia de cada servicio externo. Estas autorizaciones son independientes de tu cuenta Aino.',
     audioReadFailed: 'No se pudo leer el audio grabado',
     sessionUnavailable: 'Sesión no disponible',
     createSessionFailed: 'No se pudo crear una sesión nueva',

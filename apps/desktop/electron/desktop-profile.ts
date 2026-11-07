@@ -133,7 +133,7 @@ export function createDesktopProfilePreferences(
     validateRoute?: (route: DesktopProfileRoute) => void
   } = {}
 ) {
-  const configPath = () => typeof configPathSource === 'function' ? configPathSource() : configPathSource
+  const configPath = () => (typeof configPathSource === 'function' ? configPathSource() : configPathSource)
 
   function read(strict = false): Record<string, unknown> {
     try {
@@ -248,7 +248,11 @@ export function createDesktopProfilePreferences(
 
     const existing = readConnectionProfiles()
 
-    if (!DESKTOP_PROFILE_NAME_RE.test(profile) || existing[connectionId] === profile || !isKnownConnection(connectionId)) {
+    if (
+      !DESKTOP_PROFILE_NAME_RE.test(profile) ||
+      existing[connectionId] === profile ||
+      !isKnownConnection(connectionId)
+    ) {
       return
     }
 

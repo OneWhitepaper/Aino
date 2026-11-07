@@ -1,14 +1,14 @@
 // The right sidebar's copy (file tree, folder picker, terminals); `Translations.rightSidebar`.
 export interface RightSidebarTranslations {
-    terminalReconnectSame: string
-    terminalExpired: string
-    terminalSuperseded: string
-    terminalDenied: string
-    terminalCapacity: string
-    terminalSignedOut: string
-    terminalReconnecting: string
-    terminalStartRetry: (error: string) => string
-    terminalCloseFailed: string
+  terminalReconnectSame: string
+  terminalExpired: string
+  terminalSuperseded: string
+  terminalDenied: string
+  terminalCapacity: string
+  terminalSignedOut: string
+  terminalReconnecting: string
+  terminalStartRetry: (error: string) => string
+  terminalCloseFailed: string
 
   aria: string
   panelsAria: string

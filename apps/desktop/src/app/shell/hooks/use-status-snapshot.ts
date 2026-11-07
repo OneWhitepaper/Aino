@@ -8,10 +8,7 @@ import { platformDefaultScope } from '@/lib/platform-model-scope'
 import { type RuntimeReadinessResult } from '@/lib/runtime-readiness'
 import { isSignedOutStatus } from '@/lib/signed-out-status'
 import { $freeTierStatus, refreshFreeTierStatus, setFreeTierRoute } from '@/store/free-tier'
-import {
-  $gatewayManagedCapabilities,
-  managedModelRouteCapabilityFrom
-} from '@/store/gateway-managed-capability'
+import { $gatewayManagedCapabilities, managedModelRouteCapabilityFrom } from '@/store/gateway-managed-capability'
 import { $setupReadyTick } from '@/store/live-sync'
 import { dismissNotification, notify } from '@/store/notifications'
 import { $desktopOnboarding, isLocalRuntimeUnavailable, settleLocalRuntimeNotice } from '@/store/onboarding'
@@ -82,8 +79,7 @@ export function useStatusSnapshot(
       readinessAnswered = next !== null && !localDown
 
       if (localDown) {
-        localRecheckAt =
-          Date.now() + LOCAL_DOWN_RECHECK_MS[Math.min(localDownStreak, LOCAL_DOWN_RECHECK_MS.length - 1)]
+        localRecheckAt = Date.now() + LOCAL_DOWN_RECHECK_MS[Math.min(localDownStreak, LOCAL_DOWN_RECHECK_MS.length - 1)]
         localDownStreak += 1
       } else {
         resetLocalBackoff()

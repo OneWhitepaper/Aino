@@ -27,7 +27,12 @@ vi.mock('@hermes/plugin-sdk', async importOriginal => {
       ...sdk.host,
       notify,
       requestProfile,
-      state: { ...sdk.host.state, connectionId: atom<null | string>('local'), profile: atom('default'), gateway: atom('open') }
+      state: {
+        ...sdk.host.state,
+        connectionId: atom<null | string>('local'),
+        profile: atom('default'),
+        gateway: atom('open')
+      }
     },
     usePluginI18n: () => translateBotsIn('en')
   }
@@ -42,7 +47,7 @@ let rooms: (typeof room)[] = []
 let refuse = ''
 
 beforeEach(() => {
-  (host.state.gateway as WritableAtom<string>).set('open')
+  ;(host.state.gateway as WritableAtom<string>).set('open')
   rooms = [room]
   refuse = ''
   requestProfile.mockImplementation(async (_route: unknown, method: string, params: { room_id?: string }) => {
@@ -75,7 +80,9 @@ it('waits for the gateway before loading restored group rows and refreshes when 
   expect(requestProfile).not.toHaveBeenCalled()
   expect(screen.queryByRole('alert')).toBeNull()
 
-  await act(async () => { gateway.set('open') })
+  await act(async () => {
+    gateway.set('open')
+  })
   expect(await screen.findByRole('button', { name: 'Launch crew' })).toBeTruthy()
   expect(screen.queryByRole('alert')).toBeNull()
 })
@@ -86,8 +93,12 @@ it('shows a live group lookup error and retries it after the gateway reconnects'
   expect((await screen.findByRole('alert')).textContent).toBe('group lookup refused')
 
   const gateway = host.state.gateway as WritableAtom<string>
-  await act(async () => { gateway.set('connecting') })
-  await act(async () => { gateway.set('open') })
+  await act(async () => {
+    gateway.set('connecting')
+  })
+  await act(async () => {
+    gateway.set('open')
+  })
   expect(await screen.findByRole('button', { name: 'Launch crew' })).toBeTruthy()
   expect(screen.queryByRole('alert')).toBeNull()
 })

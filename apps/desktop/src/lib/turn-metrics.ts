@@ -30,14 +30,18 @@ const NUMBER_FIELDS = [
 ] as const
 
 export function parseTurnMetrics(value: unknown): TurnMetrics | undefined {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) {return undefined}
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return undefined
+  }
   const raw = value as Record<string, unknown>
   const metrics: TurnMetrics = {}
 
   for (const key of NUMBER_FIELDS) {
     const number = raw[key]
 
-    if (typeof number === 'number' && Number.isFinite(number) && number >= 0) {metrics[key] = number}
+    if (typeof number === 'number' && Number.isFinite(number) && number >= 0) {
+      metrics[key] = number
+    }
   }
 
   const billing = parseTurnBilling(raw.billing)
@@ -50,14 +54,23 @@ export function parseTurnMetrics(value: unknown): TurnMetrics | undefined {
     metrics.non_aino_model_calls = true
   }
 
-  if (!Object.keys(metrics).length) {return undefined}
+  if (!Object.keys(metrics).length) {
+    return undefined
+  }
 
-  if (typeof raw.context_estimated === 'boolean') {metrics.context_estimated = raw.context_estimated}
+  if (typeof raw.context_estimated === 'boolean') {
+    metrics.context_estimated = raw.context_estimated
+  }
 
   return metrics
 }
 
 export function turnMetricsEquivalent(a?: TurnMetrics, b?: TurnMetrics): boolean {
-  return a === b || (NUMBER_FIELDS.every(key => a?.[key] === b?.[key]) && a?.context_estimated === b?.context_estimated &&
-    a?.non_aino_model_calls === b?.non_aino_model_calls && turnBillingEquivalent(a?.billing, b?.billing))
+  return (
+    a === b ||
+    (NUMBER_FIELDS.every(key => a?.[key] === b?.[key]) &&
+      a?.context_estimated === b?.context_estimated &&
+      a?.non_aino_model_calls === b?.non_aino_model_calls &&
+      turnBillingEquivalent(a?.billing, b?.billing))
+  )
 }

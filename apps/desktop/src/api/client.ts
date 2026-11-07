@@ -12,7 +12,15 @@ import { translateNow } from '@/i18n/runtime'
 import { PRODUCT_NAME } from '@/lib/brand'
 import { clearTaskPause, type TaskContinuation } from '@/store/task-pause'
 
-import { CanonicalDesktopProtocol, canonicalProfile, canonicalPromptParams, canonicalSessionKey, openGatewaySocket, recordCanonicalOwner, splitRewindSubmit } from './canonical-protocol'
+import {
+  CanonicalDesktopProtocol,
+  canonicalProfile,
+  canonicalPromptParams,
+  canonicalSessionKey,
+  openGatewaySocket,
+  recordCanonicalOwner,
+  splitRewindSubmit
+} from './canonical-protocol'
 
 // Desktop startup fires a burst of read-only data calls (config, profiles,
 // model info/options, cron) the moment the backend passes readiness. On a
@@ -44,7 +52,10 @@ export const GATEWAY_NOT_CONNECTED_MESSAGE = `${PRODUCT_NAME} gateway is not con
 // answered through `approval.respond` / `clarify.respond`. The renderer only
 // knows server→client REQUESTS (#110521), so each prompt event is delivered to
 // the same `onRequest` registry as a request whose `respond` issues the RPC.
-const CANONICAL_PROMPT_EVENTS: Record<string, 'approval' | 'clarify'> = { 'approval.request': 'approval', 'clarify.request': 'clarify' }
+const CANONICAL_PROMPT_EVENTS: Record<string, 'approval' | 'clarify'> = {
+  'approval.request': 'approval',
+  'clarify.request': 'clarify'
+}
 
 const ATTACH_REQUIRED = new Set([
   'prompt.submit',
@@ -76,7 +87,9 @@ const LEGACY_STRIP: Record<string, string[]> = {
 function legacyParams(method: string, params: Record<string, unknown>): Record<string, unknown> {
   const strip = LEGACY_STRIP[method]
 
-  if (!strip || !strip.some(key => key in params)) { return params }
+  if (!strip || !strip.some(key => key in params)) {
+    return params
+  }
 
   return Object.fromEntries(Object.entries(params).filter(([key]) => !strip.includes(key)))
 }
@@ -92,10 +105,14 @@ function requestDeadline(timeoutMs: number | undefined): number {
 function remainingRequestBudget(deadline: number, signal?: AbortSignal): number {
   signal?.throwIfAborted()
 
-  if (deadline === Number.POSITIVE_INFINITY) { return 0 }
+  if (deadline === Number.POSITIVE_INFINITY) {
+    return 0
+  }
   const remaining = deadline - Date.now()
 
-  if (remaining <= 0) { throw new Error(`${PRODUCT_NAME} gateway request timed out`) }
+  if (remaining <= 0) {
+    throw new Error(`${PRODUCT_NAME} gateway request timed out`)
+  }
 
   return remaining
 }
@@ -126,17 +143,24 @@ export class HermesGateway extends JsonRpcGatewayClient {
     }
   }
 
-  private deliverCanonicalPrompt(event: { type: string; session_id?: string; profile?: string; payload?: unknown }, replayed: boolean) {
+  private deliverCanonicalPrompt(
+    event: { type: string; session_id?: string; profile?: string; payload?: unknown },
+    replayed: boolean
+  ) {
     const kind = CANONICAL_PROMPT_EVENTS[event.type]
     const p = event.payload as Record<string, unknown> | undefined
     const sid = event.session_id
 
-    if (!kind || !p || !sid || typeof p.prompt_id !== 'string') { return }
+    if (!kind || !p || !sid || typeof p.prompt_id !== 'string') {
+      return
+    }
     const id = p.prompt_id
     const profile = canonicalProfile(event.profile)
     const generation = this.connectionGeneration
 
-    if (this.deliveredPrompts.has(id)) { return }
+    if (this.deliveredPrompts.has(id)) {
+      return
+    }
     this.deliveredPrompts.set(id, { sessionId: sid, profile })
     const params = canonicalPromptParams(kind, sid, p)
 
@@ -148,42 +172,61 @@ export class HermesGateway extends JsonRpcGatewayClient {
       params,
       replayed,
       respond: result => {
-        if (settled || generation !== this.connectionGeneration) { return }
+        if (settled || generation !== this.connectionGeneration) {
+          return
+        }
         settled = true
 
         // A clarify reply without an answer (skip, Stop, cancel) is the empty answer the
         // authority records as skipped; `clarify.respond` refuses a missing field.
-        const answer = kind === 'clarify'
-          ? { answer: typeof result.answer === 'string' ? result.answer : '' }
-          : { choice: result.choice }
+        const answer =
+          kind === 'clarify'
+            ? { answer: typeof result.answer === 'string' ? result.answer : '' }
+            : { choice: result.choice }
 
-        void this.request(`${kind}.respond`, { session_id: sid, profile, request_id: id, ...answer })
-          .catch(() => this.recoverCanonicalPrompt(id, sid, profile, generation))
+        void this.request(`${kind}.respond`, { session_id: sid, profile, request_id: id, ...answer }).catch(() =>
+          this.recoverCanonicalPrompt(id, sid, profile, generation)
+        )
       },
       // A card this window declined (a stopped session) is not delivered: the next authoritative
       // snapshot that still lists the prompt shows it again. Only answered prompts stay deduplicated.
       fail: () => {
-        if (settled) { return }
+        if (settled) {
+          return
+        }
         settled = true
 
-        if (generation === this.connectionGeneration) { this.deliveredPrompts.delete(id) }
+        if (generation === this.connectionGeneration) {
+          this.deliveredPrompts.delete(id)
+        }
       }
     }
 
     recordCanonicalOwner(request, this.displayProfiles.get(canonicalSessionKey(sid, profile)) ?? profile)
 
     for (const handler of this.promptHandlers) {
-      if (handler(request) !== false) { return }
+      if (handler(request) !== false) {
+        return
+      }
     }
   }
 
-  private async recoverCanonicalPrompt(id: string, sessionId: string, profile: string, generation: number): Promise<void> {
-    if (generation !== this.connectionGeneration || !this.deliveredPrompts.has(id)) { return }
+  private async recoverCanonicalPrompt(
+    id: string,
+    sessionId: string,
+    profile: string,
+    generation: number
+  ): Promise<void> {
+    if (generation !== this.connectionGeneration || !this.deliveredPrompts.has(id)) {
+      return
+    }
     this.deliveredPrompts.delete(id)
 
     // A lost reply may have committed. Reopen a card only if the authority's
     // snapshot still lists it; never resend an approval from a cached event.
-    try { await this.request('session.resume', { session_id: sessionId, profile }) } catch {
+    try {
+      await this.request('session.resume', { session_id: sessionId, profile })
+    } catch {
       // A disconnected socket will reconcile its pending prompts on reattach.
     }
   }
@@ -207,7 +250,9 @@ export class HermesGateway extends JsonRpcGatewayClient {
     const cursors = this.getSeqWatermarks()
 
     for (const [epoch, owner] of this.replayProfiles) {
-      if (!(owner.sessionId in cursors)) { this.replayProfiles.delete(epoch) }
+      if (!(owner.sessionId in cursors)) {
+        this.replayProfiles.delete(epoch)
+      }
     }
   }
 
@@ -227,7 +272,9 @@ export class HermesGateway extends JsonRpcGatewayClient {
     const parked = this.canonical && event.session_id ? this.parkedFrames.get(key) : undefined
 
     const deliver = () => {
-      if (!this.canonical || this.normalizeCanonicalEvent(event)) { handler(event) }
+      if (!this.canonical || this.normalizeCanonicalEvent(event)) {
+        handler(event)
+      }
     }
 
     if (parked) {
@@ -239,7 +286,6 @@ export class HermesGateway extends JsonRpcGatewayClient {
       this.parkedFrames.get(key)?.push(deliver)
     }
   }
-
 
   private rememberSessionProfile(sessionId: string, profile: unknown): void {
     const profiles = this.sessionProfiles.get(sessionId) ?? new Set<string>()
@@ -254,13 +300,15 @@ export class HermesGateway extends JsonRpcGatewayClient {
   private snapshotRoute(params: Record<string, unknown>, snapshot: any): Record<string, unknown> {
     const sid = snapshot?.session_id
 
-    if (typeof sid !== 'string') { return params }
+    if (typeof sid !== 'string') {
+      return params
+    }
     const previous = canonicalProfile(params.profile)
     const replayOwner = this.replayProfiles.get(snapshot.replay_epoch)
     const named = snapshot.info?.profile_name
 
-    const profile = typeof named === 'string' && named ? named :
-      replayOwner?.sessionId === sid ? replayOwner.profile : previous
+    const profile =
+      typeof named === 'string' && named ? named : replayOwner?.sessionId === sid ? replayOwner.profile : previous
 
     this.profileAliases.set(canonicalSessionKey(sid, previous), profile)
 
@@ -278,12 +326,17 @@ export class HermesGateway extends JsonRpcGatewayClient {
   }
 
   private normalizeCanonicalEvent(event: GatewayEvent): boolean {
-    if (!event.session_id) { return true }
+    if (!event.session_id) {
+      return true
+    }
     const owner = event.replay_epoch ? this.replayProfiles.get(event.replay_epoch) : undefined
     const profiles = this.sessionProfiles.get(event.session_id)
 
-    let profile = owner?.sessionId === event.session_id ? owner.profile : this.eventRoutes.get(event) ??
-      (profiles?.size === 1 ? profiles.values().next().value : profiles?.size ? undefined : 'default')
+    let profile =
+      owner?.sessionId === event.session_id
+        ? owner.profile
+        : (this.eventRoutes.get(event) ??
+          (profiles?.size === 1 ? profiles.values().next().value : profiles?.size ? undefined : 'default'))
 
     if (profile === undefined) {
       this.reconcileAmbiguousEvent(event.session_id, event.replay_epoch)
@@ -304,18 +357,23 @@ export class HermesGateway extends JsonRpcGatewayClient {
   private reconcileAmbiguousEvent(sessionId: string, epoch?: string): void {
     const key = JSON.stringify([sessionId, epoch])
 
-    if (this.reconciledEpochs.has(key)) { return }
+    if (this.reconciledEpochs.has(key)) {
+      return
+    }
     this.reconciledEpochs.add(key)
     this.parkedFrames.set(key, [])
     const generation = this.connectionGeneration
 
     // A new/unknown replay epoch cannot choose between equal stored IDs. One
     // authoritative snapshot per known owner recovers cards and establishes routes.
-    const probes = [...this.sessionProfiles.get(sessionId) ?? []].map(profile =>
-      this.request('session.resume', { session_id: sessionId, profile }))
+    const probes = [...(this.sessionProfiles.get(sessionId) ?? [])].map(profile =>
+      this.request('session.resume', { session_id: sessionId, profile })
+    )
 
     void Promise.allSettled(probes).then(results => {
-      if (generation !== this.connectionGeneration) { return }
+      if (generation !== this.connectionGeneration) {
+        return
+      }
       const parked = this.parkedFrames.get(key) ?? []
       this.parkedFrames.delete(key)
 
@@ -326,7 +384,9 @@ export class HermesGateway extends JsonRpcGatewayClient {
         return
       }
 
-      for (const deliver of parked) { deliver() }
+      for (const deliver of parked) {
+        deliver()
+      }
     })
   }
 
@@ -335,11 +395,18 @@ export class HermesGateway extends JsonRpcGatewayClient {
   }
 
   taskPauseKey(sessionId: string, profile?: string | null): string | null {
-    if (!this.canonical) { return null }
+    if (!this.canonical) {
+      return null
+    }
     const profiles = this.sessionProfiles.get(sessionId)
 
-    if (!profile && profiles && profiles.size > 1) { return null }
-    const params = this.routeCanonicalParams('session.interrupt', { session_id: sessionId, ...(profile ? { profile } : {}) })
+    if (!profile && profiles && profiles.size > 1) {
+      return null
+    }
+    const params = this.routeCanonicalParams('session.interrupt', {
+      session_id: sessionId,
+      ...(profile ? { profile } : {})
+    })
 
     return this.protocol.taskPauseKey(sessionId, params.profile)
   }
@@ -371,7 +438,9 @@ export class HermesGateway extends JsonRpcGatewayClient {
 
       // The shared client's reconnect cursor predates the new socket's
       // attachments. Never route an unknown old cursor to the launch profile.
-      if (!owner || owner.sessionId !== params.session_id) { throw new Error('Replay owner unavailable; reopen the session') }
+      if (!owner || owner.sessionId !== params.session_id) {
+        throw new Error('Replay owner unavailable; reopen the session')
+      }
       params = { ...params, profile: owner.profile }
     }
 
@@ -386,10 +455,14 @@ export class HermesGateway extends JsonRpcGatewayClient {
     const profiles = this.sessionProfiles.get(String(sid ?? ''))
 
     if (params.profile === undefined && profiles?.size) {
-      if (profiles.size !== 1) { throw new Error('Session ID belongs to several profiles; select its owner profile before continuing') }
+      if (profiles.size !== 1) {
+        throw new Error('Session ID belongs to several profiles; select its owner profile before continuing')
+      }
       const profile = profiles.values().next().value!
 
-      if (profile !== 'default') { params = { ...params, profile } }
+      if (profile !== 'default') {
+        params = { ...params, profile }
+      }
     }
 
     if (typeof sid === 'string' && ['session.resume', 'session.activate'].includes(method)) {
@@ -401,9 +474,16 @@ export class HermesGateway extends JsonRpcGatewayClient {
     return params
   }
 
-  override async request<T>(method: string, params: Record<string, unknown> = {}, timeoutMs?: number, signal?: AbortSignal): Promise<T> {
+  override async request<T>(
+    method: string,
+    params: Record<string, unknown> = {},
+    timeoutMs?: number,
+    signal?: AbortSignal
+  ): Promise<T> {
     if (!this.canonical) {
-      if (params.continuation_of) { throw new Error('Task continuation requires the canonical gateway') }
+      if (params.continuation_of) {
+        throw new Error('Task continuation requires the canonical gateway')
+      }
 
       return super.request<T>(method, legacyParams(method, params), timeoutMs, signal)
     }
@@ -414,19 +494,27 @@ export class HermesGateway extends JsonRpcGatewayClient {
     const rewind = method === 'prompt.submit' ? splitRewindSubmit(params) : null
 
     if (rewind) {
-      if (rewind.rewind) { await this.request('session.rewind', rewind.rewind, remainingRequestBudget(deadline, signal), signal) }
+      if (rewind.rewind) {
+        await this.request('session.rewind', rewind.rewind, remainingRequestBudget(deadline, signal), signal)
+      }
 
       return this.request<T>('prompt.submit', rewind.submit, remainingRequestBudget(deadline, signal), signal)
     }
 
     // A question's owner is immutable even when a second profile attaches an
     // equal stored session ID while the first card remains open.
-    const promptOwner = method === 'clarify.lock' ? this.deliveredPrompts.get(String(params.request_id ?? '')) : undefined
+    const promptOwner =
+      method === 'clarify.lock' ? this.deliveredPrompts.get(String(params.request_id ?? '')) : undefined
 
     if (promptOwner) {
       const answer = typeof params.answer === 'string' ? params.answer : ''
 
-      return this.request<T>('clarify.respond', { session_id: promptOwner.sessionId, profile: promptOwner.profile, request_id: params.request_id, answer }, timeoutMs, signal)
+      return this.request<T>(
+        'clarify.respond',
+        { session_id: promptOwner.sessionId, profile: promptOwner.profile, request_id: params.request_id, answer },
+        timeoutMs,
+        signal
+      )
     }
 
     params = this.routeCanonicalParams(method, params)
@@ -441,12 +529,16 @@ export class HermesGateway extends JsonRpcGatewayClient {
     // retained rewind is keyed under its name, which a redial forgets until the attach.
     const local = this.protocol.localAnswer(method, params)
 
-    if (local) { return local as T }
+    if (local) {
+      return local as T
+    }
 
     // The clarify card answers a whole question set as one form: declared, the owner asks the
     // turn's multi-question clarify as ONE request; undeclared, one card per question. An older
     // owner refuses the unknown key, so it rides only where `client.capabilities` advertised it.
-    if (method === 'prompt.submit' && this.backendClarifyBatch) { params = { ...params, clarify_batch: true } }
+    if (method === 'prompt.submit' && this.backendClarifyBatch) {
+      params = { ...params, clarify_batch: true }
+    }
 
     let prepared = this.protocol.prepare(method, params)
     const wireMethod = this.protocol.wire(method, prepared)
@@ -457,7 +549,9 @@ export class HermesGateway extends JsonRpcGatewayClient {
       try {
         result = await super.request<T>(wireMethod, prepared, remainingRequestBudget(deadline, signal), signal)
       } catch (error) {
-        if (!this.protocol.retryableFence(prepared, error)) { throw error }
+        if (!this.protocol.retryableFence(prepared, error)) {
+          throw error
+        }
         // The refusal carried the owner's current fences: one retry at them, never a loop.
         this.protocol.failure(prepared, error)
         this.requireConnectionGeneration(generation)
@@ -478,11 +572,19 @@ export class HermesGateway extends JsonRpcGatewayClient {
         return this.request(m, p, remainingRequestBudget(deadline, signal), signal)
       }
 
-      const settled = await this.protocol.settle(method, prepared, this.protocol.result(method, prepared, result), followUp) as T
+      const settled = (await this.protocol.settle(
+        method,
+        prepared,
+        this.protocol.result(method, prepared, result),
+        followUp
+      )) as T
       this.requireConnectionGeneration(generation)
 
       if (method === 'session.resume' || method === 'session.create' || method === 'session.activate') {
-        this.adoptAttachedSnapshot(settled as { session_id?: string; prompts?: Array<Record<string, unknown>> }, prepared.profile)
+        this.adoptAttachedSnapshot(
+          settled as { session_id?: string; prompts?: Array<Record<string, unknown>> },
+          prepared.profile
+        )
       }
 
       return settled
@@ -494,14 +596,27 @@ export class HermesGateway extends JsonRpcGatewayClient {
     }
   }
 
-  private clearFailedTaskPause(method: string, params: Record<string, unknown>, prepared: Record<string, unknown>, error: unknown): void {
-    const reason = (error as { data?: { reason?: string }; message?: string })?.data?.reason ?? (error as Error)?.message
+  private clearFailedTaskPause(
+    method: string,
+    params: Record<string, unknown>,
+    prepared: Record<string, unknown>,
+    error: unknown
+  ): void {
+    const reason =
+      (error as { data?: { reason?: string }; message?: string })?.data?.reason ?? (error as Error)?.message
 
-    if (method !== 'session.interrupt' && !(params.continuation_of && reason === 'stale_continuation')) { return }
+    if (method !== 'session.interrupt' && !(params.continuation_of && reason === 'stale_continuation')) {
+      return
+    }
 
-    const key = this.taskPauseKey(String(params.session_id), typeof params.profile === 'string' ? params.profile : undefined)
+    const key = this.taskPauseKey(
+      String(params.session_id),
+      typeof params.profile === 'string' ? params.profile : undefined
+    )
 
-    if (!key) { return }
+    if (!key) {
+      return
+    }
 
     if (method === 'session.interrupt' && typeof prepared.execution_generation === 'number') {
       clearTaskPause(key, prepared.execution_generation)
@@ -511,31 +626,56 @@ export class HermesGateway extends JsonRpcGatewayClient {
   }
 
   private requireConnectionGeneration(generation: number): void {
-    if (generation !== this.connectionGeneration) { throw new Error(`${PRODUCT_NAME} gateway connection changed; reopen the session`) }
+    if (generation !== this.connectionGeneration) {
+      throw new Error(`${PRODUCT_NAME} gateway connection changed; reopen the session`)
+    }
   }
 
   // Resume the session (and, for branch-like methods, its parent) on THIS socket before a
   // method that needs an authority subscription here.
-  private async attachForRequest(method: string, params: Record<string, unknown>, deadline: number, signal?: AbortSignal): Promise<void> {
+  private async attachForRequest(
+    method: string,
+    params: Record<string, unknown>,
+    deadline: number,
+    signal?: AbortSignal
+  ): Promise<void> {
     const sid = typeof params.session_id === 'string' ? params.session_id : null
 
-    const resume = (sessionId: string) => this.request('session.resume', {
-      session_id: sessionId, defer_history: true, omit_messages: true,
-      ...(params.profile ? { profile: params.profile } : {})
-    }, remainingRequestBudget(deadline, signal), signal)
+    const resume = (sessionId: string) =>
+      this.request(
+        'session.resume',
+        {
+          session_id: sessionId,
+          defer_history: true,
+          omit_messages: true,
+          ...(params.profile ? { profile: params.profile } : {})
+        },
+        remainingRequestBudget(deadline, signal),
+        signal
+      )
 
     if (sid && ATTACH_REQUIRED.has(method) && !this.attached.has(canonicalSessionKey(sid, params.profile))) {
       await resume(sid)
     }
 
-    const parent = PARENT_ATTACH_REQUIRED.has(method) ? params.parent_session_id ?? params.session_id ?? params.session_key : null
+    const parent = PARENT_ATTACH_REQUIRED.has(method)
+      ? (params.parent_session_id ?? params.session_id ?? params.session_key)
+      : null
 
     if (typeof parent === 'string' && parent && !this.attached.has(canonicalSessionKey(parent, params.profile))) {
       await resume(parent)
     }
   }
 
-  private adoptAttachedSnapshot(settled: { session_id?: string; replay_epoch?: string; info?: { profile_name?: string }; prompts?: Array<Record<string, unknown>> }, profile?: unknown): void {
+  private adoptAttachedSnapshot(
+    settled: {
+      session_id?: string
+      replay_epoch?: string
+      info?: { profile_name?: string }
+      prompts?: Array<Record<string, unknown>>
+    },
+    profile?: unknown
+  ): void {
     // Prompts still open on the authority re-deliver like `open_requests` after a reconnect.
     const sid = settled.session_id
 
@@ -552,8 +692,11 @@ export class HermesGateway extends JsonRpcGatewayClient {
       }
     }
 
-    for (const prompt of (settled.prompts ?? [])) {
-      this.deliverCanonicalPrompt({ type: `${prompt.kind}.request`, session_id: sid, profile: canonicalProfile(profile), payload: prompt }, true)
+    for (const prompt of settled.prompts ?? []) {
+      this.deliverCanonicalPrompt(
+        { type: `${prompt.kind}.request`, session_id: sid, profile: canonicalProfile(profile), payload: prompt },
+        true
+      )
     }
   }
 
@@ -573,14 +716,18 @@ export class HermesGateway extends JsonRpcGatewayClient {
       socketFactory: openGatewaySocket
     })
     this.onEvent(event => {
-      if (!this.canonical) { return }
+      if (!this.canonical) {
+        return
+      }
 
       if (event.type in CANONICAL_PROMPT_EVENTS) {
         this.deliverCanonicalPrompt({ ...event, profile: this.eventRoutes.get(event) }, false)
       } else if (event.type.endsWith('.settled')) {
         const id = (event.payload as { prompt_id?: unknown } | undefined)?.prompt_id
 
-        if (typeof id === 'string') { this.deliveredPrompts.delete(id) }
+        if (typeof id === 'string') {
+          this.deliveredPrompts.delete(id)
+        }
       }
     })
   }
@@ -878,5 +1025,7 @@ export function sessionFileOwnerScope(id: string): { connectionId?: string; prof
 
   const connectionId = String(owner.connectionId ?? '').trim()
 
-  return connectionId && connectionId !== (ambientOwnerConnectionId() ?? 'local') ? { connectionId, profile } : { profile }
+  return connectionId && connectionId !== (ambientOwnerConnectionId() ?? 'local')
+    ? { connectionId, profile }
+    : { profile }
 }

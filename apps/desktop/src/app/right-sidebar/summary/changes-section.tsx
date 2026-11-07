@@ -109,13 +109,7 @@ export function ChangesSection({ embedded = false, session }: { embedded?: boole
 
   if (files.length === 0) {
     return (
-      <SummarySection
-        embedded={embedded}
-        emptyMessage={copy.noChanges}
-        icon={Code}
-        state="empty"
-        title={copy.title}
-      />
+      <SummarySection embedded={embedded} emptyMessage={copy.noChanges} icon={Code} state="empty" title={copy.title} />
     )
   }
 

@@ -135,8 +135,11 @@ async function mount({ refuse = false } = {}) {
   }
 
   const rest = installRestBridge(request =>
-    request.path.endsWith('/messages') ? { messages: persisted, session_id: 'stored-new' }
-      : request.path === '/api/model/info' ? { model: 'fixture-model', provider: 'fixture-provider' } : {}
+    request.path.endsWith('/messages')
+      ? { messages: persisted, session_id: 'stored-new' }
+      : request.path === '/api/model/info'
+        ? { model: 'fixture-model', provider: 'fixture-provider' }
+        : {}
   )
 
   let ready!: Ready

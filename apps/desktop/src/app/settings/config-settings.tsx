@@ -33,11 +33,7 @@ import { $keepAwakeMode, type KeepAwakeMode, setKeepAwakeMode } from '@/store/ke
 import { refreshMemoryStatus } from '@/store/memory-status'
 import { notify, notifyError } from '@/store/notifications'
 import { $activeGatewayProfile, normalizeProfileKey } from '@/store/profile'
-import {
-  repoDiscoveryPolicyFromConfig,
-  repoDiscoveryPolicySignature,
-  scanAndRecordRepos
-} from '@/store/projects'
+import { repoDiscoveryPolicyFromConfig, repoDiscoveryPolicySignature, scanAndRecordRepos } from '@/store/projects'
 import { $settingsRequestProfile } from '@/store/settings-scope'
 import type { ConfigFieldSchema, HermesConfigRecord } from '@/types/hermes'
 
@@ -109,9 +105,7 @@ export function ConfigSettings({
   const showModelNavigation = activeSectionId === 'model' && subpage === undefined
   const modelSubpage = showModelNavigation ? resolveSettingsSubpage('config:model', searchParams) : subpage
 
-  const legacyModelPage = showModelNavigation
-    ? settingsSubpageForLegacyLink('config:model', searchParams)
-    : undefined
+  const legacyModelPage = showModelNavigation ? settingsSubpageForLegacyLink('config:model', searchParams) : undefined
 
   const configPage =
     isConfigPageSection(activeSectionId) && subpage === undefined
@@ -140,11 +134,7 @@ export function ConfigSettings({
     <ConfigSettingsInner
       activeSectionId={activeSectionId}
       afterContent={
-        <ModelImageGenerationSettings
-          activeSectionId={activeSectionId}
-          profile={scopeProfile}
-          subpage={modelSubpage}
-        >
+        <ModelImageGenerationSettings activeSectionId={activeSectionId} profile={scopeProfile} subpage={modelSubpage}>
           {afterContent}
         </ModelImageGenerationSettings>
       }
@@ -487,8 +477,7 @@ function useConfigPagePresentation({
   const showModelSettings =
     activeSectionId === 'model' && (subpage === undefined || ['main', 'auxiliary', 'moa'].includes(subpage))
 
-  const showDesktopSettings =
-    activeSectionId === 'advanced' && (subpage === undefined || subpage === 'desktop')
+  const showDesktopSettings = activeSectionId === 'advanced' && (subpage === undefined || subpage === 'desktop')
 
   const showAttachments = activeSectionId === 'chat' && (subpage === undefined || subpage === 'attachments')
   const showSharedMetrics = activeSectionId === 'safety' && (subpage === undefined || subpage === 'privacy')
@@ -499,9 +488,7 @@ function useConfigPagePresentation({
     desktop: showDesktopSettings ? (
       <>
         <ListRow
-          action={
-            <SegmentedControl onChange={setKeepAwakeMode} options={keepAwakeOptions} value={keepAwakeMode} />
-          }
+          action={<SegmentedControl onChange={setKeepAwakeMode} options={keepAwakeOptions} value={keepAwakeMode} />}
           description={c.keepAwakeDesc}
           id={settingElementId(SETTING_IDS.advanced.keepAwake)}
           title={c.keepAwakeTitle}
@@ -583,9 +570,7 @@ function ConfigSettingsInner({
     // Base key when following the active profile (matches every pre-existing
     // consumer); suffixed only for an explicit scope override.
     queryKey:
-      scopeProfile == null
-        ? ['hermes-config-schema']
-        : ['hermes-config-schema', normalizeProfileKey(scopeProfile)],
+      scopeProfile == null ? ['hermes-config-schema'] : ['hermes-config-schema', normalizeProfileKey(scopeProfile)],
     queryFn: () => getHermesConfigSchema(scopeProfile),
     staleTime: 5 * 60 * 1000
   })
@@ -615,9 +600,7 @@ function ConfigSettingsInner({
     if (loadedConfig && !configSeeded.current) {
       configSeeded.current = true
       configBaselineRef.current = loadedConfig
-      savedDiscoverySignatureRef.current = repoDiscoveryPolicySignature(
-        repoDiscoveryPolicyFromConfig(loadedConfig)
-      )
+      savedDiscoverySignatureRef.current = repoDiscoveryPolicySignature(repoDiscoveryPolicyFromConfig(loadedConfig))
       setConfig(loadedConfig)
     }
   }, [loadedConfig])
@@ -646,9 +629,7 @@ function ConfigSettingsInner({
         }
 
         setElevenLabsVoiceOptions(result.voices.map(voice => voice.voice_id))
-        setElevenLabsVoiceLabels(
-          Object.fromEntries(result.voices.map(voice => [voice.voice_id, voice.label]))
-        )
+        setElevenLabsVoiceLabels(Object.fromEntries(result.voices.map(voice => [voice.voice_id, voice.label])))
       })
       .catch(() => {
         if (!cancelled) {
@@ -670,9 +651,7 @@ function ConfigSettingsInner({
     const v = saveVersion
     const snapshot = config
 
-    const discoveryProfile = normalizeProfileKey(
-      writeScope?.profile ?? scopeProfile ?? $activeGatewayProfile.get()
-    )
+    const discoveryProfile = normalizeProfileKey(writeScope?.profile ?? scopeProfile ?? $activeGatewayProfile.get())
 
     const discoveryConnectionId = writeScope?.connectionId ?? $activeConnectionId.get()
 
@@ -701,11 +680,7 @@ function ConfigSettingsInner({
           writeConfigCache(snapshot)
           const savedScope = writeScope ?? scopeProfile
 
-          recordSettingsSaved(
-            patch,
-            schema ?? {},
-            typeof savedScope === 'string' ? savedScope : savedScope?.profile
-          )
+          recordSettingsSaved(patch, schema ?? {}, typeof savedScope === 'string' ? savedScope : savedScope?.profile)
 
           // The Memory summary's "active" provider is the saved one; reread it.
           if ('memory' in patch) {
@@ -792,14 +767,8 @@ function ConfigSettingsInner({
 
   const handleImport = useConfigImport(config, schema, updateConfig, importFile, onImportConsumed)
 
-  const {
-    showModelSettings,
-    showDesktopSettings,
-    showAttachments,
-    showSharedMetrics,
-    pageSlots,
-    visibleFields
-  } = useConfigPagePresentation({ activeSectionId, afterContent, subpage, fields, config })
+  const { showModelSettings, showDesktopSettings, showAttachments, showSharedMetrics, pageSlots, visibleFields } =
+    useConfigPagePresentation({ activeSectionId, afterContent, subpage, fields, config })
 
   const FieldControl = unifiedPage ? ConfigPageField : ConfigField
 
@@ -827,11 +796,7 @@ function ConfigSettingsInner({
           <div className="scroll-mt-6" data-settings-row="" id={`setting-field-${key}`} key={key}>
             {key === 'delegation.model' ? (
               <SubagentModelGate scope={writeScope ?? scopeProfile}>
-                <DelegationRouteRow
-                  config={config}
-                  onConfigChange={updateConfig}
-                  scope={writeScope ?? scopeProfile}
-                />
+                <DelegationRouteRow config={config} onConfigChange={updateConfig} scope={writeScope ?? scopeProfile} />
               </SubagentModelGate>
             ) : (
               <FieldControl
@@ -950,12 +915,7 @@ function ConfigSettingsInner({
       <SettingsContent>
         <SettingsProfileScope className="mb-5" />
         {visibleFields.length > 0 ? (
-          <WorkspaceSettings
-            config={config}
-            fields={visibleFields}
-            onConfigChange={updateConfig}
-            subpage={subpage}
-          />
+          <WorkspaceSettings config={config} fields={visibleFields} onConfigChange={updateConfig} subpage={subpage} />
         ) : (
           <EmptyState description={c.emptyDesc} title={c.emptyTitle} />
         )}
@@ -1011,17 +971,12 @@ function ConfigSettingsInner({
     groupContent.set(
       group.id,
       <section
-        className={
-          activeSectionId === 'model' ? 'model-settings-schema mb-6 scroll-mt-6' : 'mb-6 scroll-mt-6'
-        }
+        className={activeSectionId === 'model' ? 'model-settings-schema mb-6 scroll-mt-6' : 'mb-6 scroll-mt-6'}
         id={`setting-section-${group.id}`}
         key={group.id}
       >
         {subpage === undefined && !(inlineModelFields && group.id === 'main') && (
-          <SectionHeading
-            icon={settingsSubpageIcon(group, Settings2)}
-            title={t.settings.subpages[group.labelKey]}
-          />
+          <SectionHeading icon={settingsSubpageIcon(group, Settings2)} title={t.settings.subpages[group.labelKey]} />
         )}
         {renderFieldGroup(entries, extra)}
       </section>
@@ -1031,8 +986,7 @@ function ConfigSettingsInner({
   // Curated fields added before their category metadata still remain editable.
   const ungroupedFields = groupedFields.get('__other__') ?? []
 
-  const showEmptyState =
-    visibleFields.length === 0 && !showModelSettings && !showDesktopSettings && !showAttachments
+  const showEmptyState = visibleFields.length === 0 && !showModelSettings && !showDesktopSettings && !showAttachments
 
   return (
     <SettingsContent>

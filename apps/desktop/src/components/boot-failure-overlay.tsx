@@ -15,25 +15,12 @@ import { WEBAPP_LAUNCH_REQUIRED } from '@/lib/browser-launch-session'
 import { reestablishCloudAgentSession } from '@/lib/cloud-agent-session'
 import { DESKTOP_DOCS_URL } from '@/lib/docs'
 import { openExternalLink } from '@/lib/external-link'
-import {
-  ChevronLeft,
-  ExternalLink,
-  FileText,
-  Loader2,
-  LogIn,
-  RefreshCw,
-  SlidersHorizontal,
-  Wrench
-} from '@/lib/icons'
+import { ChevronLeft, ExternalLink, FileText, Loader2, LogIn, RefreshCw, SlidersHorizontal, Wrench } from '@/lib/icons'
 import { $desktopBoot } from '@/store/boot'
 import { notify, notifyError } from '@/store/notifications'
 import { $desktopOnboarding } from '@/store/onboarding'
 
-import {
-  classifyLocalBootFailure,
-  type LocalBootFailureCopy,
-  localBootFailureCopy
-} from './boot-failure-cause'
+import { classifyLocalBootFailure, type LocalBootFailureCopy, localBootFailureCopy } from './boot-failure-cause'
 import type { RemoteReauth } from './boot-failure-reauth'
 import {
   deriveProviderShape,
@@ -125,9 +112,7 @@ function WebappSignInOverlay() {
             <DialogPrimitive.Title asChild>
               <h2 className="text-[0.9375rem] font-semibold tracking-tight">{copy.webappTitle}</h2>
             </DialogPrimitive.Title>
-            <p className="mt-1 text-[0.8125rem] leading-5 text-(--ui-text-tertiary)">
-              {copy.webappDescription}
-            </p>
+            <p className="mt-1 text-[0.8125rem] leading-5 text-(--ui-text-tertiary)">{copy.webappDescription}</p>
           </div>
         </div>
       </div>
@@ -353,9 +338,7 @@ export function BootFailureOverlay() {
       } else {
         await desktop?.oauthLogoutConnectionConfig?.(remoteReauth.url)
 
-        const result: DesktopOauthLoginResult | undefined = await desktop?.oauthLoginConnectionConfig(
-          remoteReauth.url
-        )
+        const result: DesktopOauthLoginResult | undefined = await desktop?.oauthLoginConnectionConfig(remoteReauth.url)
 
         connected = result?.connected === true
         error = result?.error
@@ -379,9 +362,7 @@ export function BootFailureOverlay() {
       notify({
         kind: 'warning',
         title: t.boot.failure.signInIncompleteTitle,
-        message: error
-          ? `${t.boot.failure.signInIncompleteMessage}: ${error}`
-          : t.boot.failure.signInIncompleteMessage
+        message: error ? `${t.boot.failure.signInIncompleteMessage}: ${error}` : t.boot.failure.signInIncompleteMessage
       })
     } catch (err) {
       notifyError(err, t.boot.failure.signInFailed)
@@ -566,11 +547,7 @@ export function BootFailureOverlay() {
               </h2>
             </DialogPrimitive.Title>
             <p className="mt-1 text-[length:var(--aino-text-ui)] leading-5 text-(--ui-text-tertiary)">
-              {remoteReauth
-                ? copy.remoteDescription
-                : cloudDown
-                  ? copy.cloudDownDescription
-                  : copy.description}
+              {remoteReauth ? copy.remoteDescription : cloudDown ? copy.cloudDownDescription : copy.description}
             </p>
           </div>
         </div>
@@ -594,12 +571,7 @@ export function BootFailureOverlay() {
           <div className="grid gap-2">
             <div className="flex flex-wrap gap-2">
               {actions.map(action => (
-                <Button
-                  disabled={Boolean(busy)}
-                  key={action.key}
-                  onClick={action.onClick}
-                  variant={action.variant}
-                >
+                <Button disabled={Boolean(busy)} key={action.key} onClick={action.onClick} variant={action.variant}>
                   {action.busy && busy === action.busy ? <Loader2 className="animate-spin" /> : action.icon}
                   {action.label}
                 </Button>

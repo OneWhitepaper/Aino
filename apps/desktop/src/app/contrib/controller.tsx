@@ -49,16 +49,7 @@ import { registry } from '@/contrib/registry'
 import { discoverRuntimePlugins } from '@/contrib/runtime-loader'
 import { LocalizedTabTitle, translateNow } from '@/i18n'
 import { newSessionTitle, sessionTitle as storedSessionTitle } from '@/lib/chat-runtime'
-import {
-  Download,
-  FileText,
-  LayoutDashboard,
-  PanelTop,
-  SlidersHorizontal,
-  Upload,
-  Users,
-  Zap
-} from '@/lib/icons'
+import { Download, FileText, LayoutDashboard, PanelTop, SlidersHorizontal, Upload, Users, Zap } from '@/lib/icons'
 import { type KeybindContribution, KEYBINDS_AREA } from '@/lib/keybinds/actions'
 import { TRANSCRIPT_DIRECTIVE_AREA, type TranscriptDirectiveContribution } from '@/lib/transcript-directives'
 import { setYoloEnabled } from '@/lib/yolo-session'
@@ -386,16 +377,7 @@ registry.registerMany([
     label: 'Toggle profile rail',
     action: 'view.toggleProfileRail',
     icon: Users,
-    keywords: [
-      'profile rail',
-      'profile bar',
-      'profile strip',
-      'profiles',
-      'sidebar',
-      'hide',
-      'show',
-      'chrome'
-    ],
+    keywords: ['profile rail', 'profile bar', 'profile strip', 'profiles', 'sidebar', 'hide', 'show', 'chrome'],
     get: () => $profileRailVisible.get(),
     set: enabled => $profileRailVisible.set(enabled)
   }),
@@ -662,9 +644,7 @@ $terminalTakeover.listen(open => {
 })
 // Without the statusbar, the rail is the only way to switch profiles or gateways.
 $profiles.subscribe(profiles => setModeContext({ profileCount: profiles.length }))
-$connectionsRegistry.subscribe(registry =>
-  setModeContext({ connectionCount: registry?.connections.length ?? 0 })
-)
+$connectionsRegistry.subscribe(registry => setModeContext({ connectionCount: registry?.connections.length ?? 0 }))
 // ⌘K door onto the same pane the keybind and statusbar pill flip.
 registry.register(terminalPaletteToggle)
 
@@ -936,14 +916,8 @@ export function ContribController() {
               }}
             >
               <TitlebarSlot area="titleBar.left" className="flex h-full min-w-0 items-center gap-2" />
-              <TitlebarSlot
-                area="titleBar.center"
-                className="flex h-full min-w-0 w-full items-center gap-2"
-              />
-              <TitlebarSlot
-                area="titleBar.right"
-                className="flex h-full min-w-0 items-center justify-end gap-2"
-              />
+              <TitlebarSlot area="titleBar.center" className="flex h-full min-w-0 w-full items-center gap-2" />
+              <TitlebarSlot area="titleBar.right" className="flex h-full min-w-0 items-center justify-end gap-2" />
             </div>
           </div>
 

@@ -27,12 +27,14 @@ export async function startPlatformOnboarding(
     throw new PlatformSelectionError('platform_account_changed')
   }
 
-  const startParams = managed ? {
-    ...params,
-    model_source: 'aino' as const,
-    model_id: String(prepared.params.model_id),
-    platform_owner: authority!.owner
-  } : params
+  const startParams = managed
+    ? {
+        ...params,
+        model_source: 'aino' as const,
+        model_id: String(prepared.params.model_id),
+        platform_owner: authority!.owner
+      }
+    : params
 
   const started = await request<OnboardingStartResult>('onboarding.start', startParams, timeout)
 
@@ -44,12 +46,19 @@ export async function startPlatformOnboarding(
     throw new PlatformSelectionError('platform_account_changed')
   }
 
-  await bindSelectedPlatformSession(owner ?? 'default', started.session_id, {
-    modelId: String(prepared.params.model_id),
-    ownerUserId: prepared.platformOwner,
-    platformOrigin: authority.owner.platform_origin,
-    status: 'awaiting_managed_credentials'
-  }, request, true, authority.account)
+  await bindSelectedPlatformSession(
+    owner ?? 'default',
+    started.session_id,
+    {
+      modelId: String(prepared.params.model_id),
+      ownerUserId: prepared.platformOwner,
+      platformOrigin: authority.owner.platform_origin,
+      status: 'awaiting_managed_credentials'
+    },
+    request,
+    true,
+    authority.account
+  )
 
   if (skipped()) {
     return started

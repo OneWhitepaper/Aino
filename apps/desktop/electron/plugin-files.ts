@@ -119,7 +119,6 @@ export interface PluginFiles {
   run: (pluginId: unknown, request: PluginFilesRequest) => Promise<PluginFilesResult>
 }
 
-
 type Store = Record<string, PluginFolderGrant[]>
 
 function createPluginGrantStore(userData: string) {

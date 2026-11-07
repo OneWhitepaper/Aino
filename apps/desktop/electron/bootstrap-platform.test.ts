@@ -35,9 +35,15 @@ test('bundledRuntimeImportCheck selects platform-specific import checks', () => 
 })
 
 test('resolveDesktopAccountAdapter accepts fixed-code auth only from an explicit unpackaged development launch', () => {
-  assert.equal(resolveDesktopAccountAdapter({ isPackaged: false, argv: ['electron', '--aino-legacy-account-development'] }), 'legacy-development')
+  assert.equal(
+    resolveDesktopAccountAdapter({ isPackaged: false, argv: ['electron', '--aino-legacy-account-development'] }),
+    'legacy-development'
+  )
   assert.equal(resolveDesktopAccountAdapter({ isPackaged: false, argv: ['electron'] }), 'platform')
-  assert.equal(resolveDesktopAccountAdapter({ isPackaged: true, argv: ['Aino', '--aino-legacy-account-development'] }), 'platform')
+  assert.equal(
+    resolveDesktopAccountAdapter({ isPackaged: true, argv: ['Aino', '--aino-legacy-account-development'] }),
+    'platform'
+  )
 })
 
 test('detectRemoteDisplay keeps GPU on for local sessions', () => {

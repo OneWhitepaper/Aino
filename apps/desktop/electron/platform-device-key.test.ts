@@ -8,12 +8,33 @@ import type { PlatformModel } from '../shared/platform-contract'
 import type { PlatformTokenSet } from '../shared/platform-token-contract'
 
 function platformModel(id = 'catalog-a'): PlatformModel {
-  return { id, model: 'wire-model', display_name: 'Fixture Model', provider_label: 'Fixture',
-    api_mode: 'chat_completions', state: 'available', reason_code: null, is_default: true,
-    context_window: 10000, max_output_tokens: 1000, capabilities: { tools: true, vision: false, reasoning: false },
-    billing_source: 'balance', pricing: { currency: 'USD', unit: 'million_tokens', input: '1.20', output: '2.40',
-      cache_read: null, cache_write: null, effective_user_rate: '1', detail_available: true,
-      tiers: [], time_pricing: null, group_peak: null } }
+  return {
+    id,
+    model: 'wire-model',
+    display_name: 'Fixture Model',
+    provider_label: 'Fixture',
+    api_mode: 'chat_completions',
+    state: 'available',
+    reason_code: null,
+    is_default: true,
+    context_window: 10000,
+    max_output_tokens: 1000,
+    capabilities: { tools: true, vision: false, reasoning: false },
+    billing_source: 'balance',
+    pricing: {
+      currency: 'USD',
+      unit: 'million_tokens',
+      input: '1.20',
+      output: '2.40',
+      cache_read: null,
+      cache_write: null,
+      effective_user_rate: '1',
+      detail_available: true,
+      tiers: [],
+      time_pricing: null,
+      group_peak: null
+    }
+  }
 }
 
 const device = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee'
@@ -25,7 +46,15 @@ afterEach(async () => {
   }
 })
 
-async function rig(options: { remember?: boolean; metadataOnly?: boolean; revoked?: boolean; delay?: boolean; delayRotation?: boolean } = {}) {
+async function rig(
+  options: {
+    remember?: boolean
+    metadataOnly?: boolean
+    revoked?: boolean
+    delay?: boolean
+    delayRotation?: boolean
+  } = {}
+) {
   let persisted: PlatformTokenSet | null =
     options.remember === false
       ? null
@@ -48,37 +77,41 @@ async function rig(options: { remember?: boolean; metadataOnly?: boolean; revoke
   let revoked = options.revoked ?? false
   let managementExpired = false
 
-  function replyDevice(req: http.IncomingMessage, body: Record<string, unknown>, send: (data: unknown, code?: string | number, status?: number) => void) {
-      requests.push({ method: req.method!, body, account: req.headers.authorization! })
+  function replyDevice(
+    req: http.IncomingMessage,
+    body: Record<string, unknown>,
+    send: (data: unknown, code?: string | number, status?: number) => void
+  ) {
+    requests.push({ method: req.method!, body, account: req.headers.authorization! })
 
-      if (revoked && !body.reauthorize && req.method === 'POST') {
-        return send(null, 'DESKTOP_DEVICE_KEY_REVOKED', 403)
-      }
+    if (revoked && !body.reauthorize && req.method === 'POST') {
+      return send(null, 'DESKTOP_DEVICE_KEY_REVOKED', 403)
+    }
 
-      if (body.rotate || body.reauthorize) {
-        version++
-        revoked = false
-      }
+    if (body.rotate || body.reauthorize) {
+      version++
+      revoked = false
+    }
 
-      const result = {
-        key_id: 'one-key',
-        device_id: device,
-        version,
-        status: revoked ? 'revoked' : 'active',
-        expires_at: null,
-        ...(req.method === 'POST' && (!options.metadataOnly || body.rotate || body.reauthorize)
-          ? { api_key: `secret-${version}` }
-          : {})
-      }
+    const result = {
+      key_id: 'one-key',
+      device_id: device,
+      version,
+      status: revoked ? 'revoked' : 'active',
+      expires_at: null,
+      ...(req.method === 'POST' && (!options.metadataOnly || body.rotate || body.reauthorize)
+        ? { api_key: `secret-${version}` }
+        : {})
+    }
 
-      if ((options.delay && requests.length === 1) || (options.delayRotation && version === 2 && req.method === 'POST')) {
-        release = () => send(result)
-        started()
+    if ((options.delay && requests.length === 1) || (options.delayRotation && version === 2 && req.method === 'POST')) {
+      release = () => send(result)
+      started()
 
-        return
-      }
+      return
+    }
 
-      return send(result)
+    return send(result)
   }
 
   const server = http.createServer(async (req, res) => {

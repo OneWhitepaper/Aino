@@ -334,9 +334,9 @@ export const zhHantCommandCenter = {
     switchConnectionFailed: name => `無法連線至 ${name}`,
     manageProfiles: '管理設定檔…',
     fleet: {
-      switchDeviceTitle: "切換到此裝置？",
-      switchDeviceDesc: "這會在此電腦開啟新會話。目前的對話會保留在另一個執行服務上。",
-      switchDeviceConfirm: "切換",
+      switchDeviceTitle: '切換到此裝置？',
+      switchDeviceDesc: '這會在此電腦開啟新會話。目前的對話會保留在另一個執行服務上。',
+      switchDeviceConfirm: '切換',
       localDevice: '此裝置（本機後端——若未安裝 Hermes 則會安裝，否則開啟新的工作階段）',
       installDeviceTitle: '在此裝置上安裝 Hermes？',
       installDeviceDesc: '這會在本機安裝 Hermes，然後在這台電腦上開啟新的工作階段。確認之前不會開始安裝。',

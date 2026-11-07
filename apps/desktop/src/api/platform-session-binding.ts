@@ -36,8 +36,13 @@ export async function capturePlatformDraftAuthority(
   const account = catalog.account.get()
 
   if (
-    !owner || account?.phase !== 'signed_in' || account.account?.id !== owner.user_id ||
-    !platformOwner || !platformOrigin || platformOwner !== owner.user_id || platformOrigin !== owner.platform_origin
+    !owner ||
+    account?.phase !== 'signed_in' ||
+    account.account?.id !== owner.user_id ||
+    !platformOwner ||
+    !platformOrigin ||
+    platformOwner !== owner.user_id ||
+    platformOrigin !== owner.platform_origin
   ) {
     throw new PlatformSelectionError('platform_account_changed')
   }

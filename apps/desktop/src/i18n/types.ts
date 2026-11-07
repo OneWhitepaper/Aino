@@ -4397,18 +4397,18 @@ export interface UpstreamTranslations extends NoticeTranslations {
 
     terminalStartFailed: (error: string) => string
 
-terminalNewOn: string
-terminalGatewayRemoved: string
-terminalGatewayRemovedBody: string
-terminalGatewayNoShellBody: string
-terminalDisconnectedBody: string
-terminalDropUploadFailed: (name: string) => string
-terminalDropTooLargeTitle: string
-terminalDropTooLarge: (names: string, limit: string) => string
-terminalDropControlTitle: string
-terminalDropControl: (paths: string) => string
-terminalDropUnquotable: (shell: string, paths: string) => string
-}
+    terminalNewOn: string
+    terminalGatewayRemoved: string
+    terminalGatewayRemovedBody: string
+    terminalGatewayNoShellBody: string
+    terminalDisconnectedBody: string
+    terminalDropUploadFailed: (name: string) => string
+    terminalDropTooLargeTitle: string
+    terminalDropTooLarge: (names: string, limit: string) => string
+    terminalDropControlTitle: string
+    terminalDropControl: (paths: string) => string
+    terminalDropUnquotable: (shell: string, paths: string) => string
+  }
 
   preview: {
     tab: string
@@ -4657,8 +4657,8 @@ terminalDropUnquotable: (shell: string, paths: string) => string
       quad: string
     }
 
-tabActions: (title: string) => string
-}
+    tabActions: (title: string) => string
+  }
 
   contextMenu: {
     link: {

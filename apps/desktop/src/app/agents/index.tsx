@@ -68,7 +68,10 @@ function streamGlyph(entry: SubagentStreamEntry): ReactNode {
 
   if (entry.kind === 'thinking') {
     return (
-      <span aria-hidden className="font-mono text-[length:var(--aino-text-caption)] leading-none text-muted-foreground/70">
+      <span
+        aria-hidden
+        className="font-mono text-[length:var(--aino-text-caption)] leading-none text-muted-foreground/70"
+      >
         …
       </span>
     )
@@ -325,7 +328,13 @@ function StreamLine({
   return (
     <div className="flex min-w-0 items-baseline gap-2 text-[0.72rem] leading-relaxed" ref={enterRef}>
       {glyph ? <span className="flex h-[0.95rem] shrink-0 items-center">{glyph}</span> : null}
-      <span className={cn('min-w-0 flex-1 wrap-anywhere', tone, isMono && 'font-mono text-[length:var(--aino-text-caption)]')}>
+      <span
+        className={cn(
+          'min-w-0 flex-1 wrap-anywhere',
+          tone,
+          isMono && 'font-mono text-[length:var(--aino-text-caption)]'
+        )}
+      >
         {entry.text}
         {active ? (
           <GlyphSpinner
@@ -391,7 +400,12 @@ export function SubagentRow({ node, depth = 0, nowMs }: { node: SubagentNode; de
             </FadeText>
           ) : null}
         </span>
-        {running ? <ActivityTimerText className="mt-1 shrink-0 text-[length:var(--aino-text-caption)]" seconds={durationSeconds} /> : null}
+        {running ? (
+          <ActivityTimerText
+            className="mt-1 shrink-0 text-[length:var(--aino-text-caption)]"
+            seconds={durationSeconds}
+          />
+        ) : null}
       </button>
 
       {visibleRows.length > 0 ? (
@@ -414,7 +428,10 @@ export function SubagentRow({ node, depth = 0, nowMs }: { node: SubagentNode; de
             {t.agents.files}
           </p>
           {fileLines.slice(0, 8).map(line => (
-            <p className="wrap-break-word font-mono text-[length:var(--aino-text-caption)] leading-relaxed text-muted-foreground/80" key={line}>
+            <p
+              className="wrap-break-word font-mono text-[length:var(--aino-text-caption)] leading-relaxed text-muted-foreground/80"
+              key={line}
+            >
               {line}
             </p>
           ))}

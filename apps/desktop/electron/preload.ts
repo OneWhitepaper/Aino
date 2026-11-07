@@ -161,7 +161,8 @@ contextBridge.exposeInMainWorld('hermesDesktop', {
   openSessionWindow: (sessionId, opts) => ipcRenderer.invoke('hermes:window:openSession', sessionId, opts),
   openSessionInTerminal: (sessionId, opts) => ipcRenderer.invoke('hermes:window:openInTerminal', sessionId, opts),
   openWindow: (options?: DesktopProfileRoute) => ipcRenderer.invoke('hermes:window:openInstance', options),
-  setAccountWindowMode: (mode, height, expected) => ipcRenderer.invoke('aino:account:windowMode', mode, height, expected),
+  setAccountWindowMode: (mode, height, expected) =>
+    ipcRenderer.invoke('aino:account:windowMode', mode, height, expected),
   openBrowserWindow: tabId => ipcRenderer.invoke('hermes:window:openBrowser', tabId),
   windowRelay: {
     send: payload => ipcRenderer.send('hermes:window:relay', payload),

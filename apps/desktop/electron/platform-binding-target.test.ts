@@ -91,13 +91,18 @@ it('mints a fresh OAuth ticket for every socket and carries resolver-owned upgra
 it('opens native controller sockets with fresh private tickets for the selected workspace', async () => {
   const server = http.createServer()
 
-  const wss = new WebSocketServer({ server, handleProtocols: protocols =>
-    protocols.has('hermes-gateway-v1') ? 'hermes-gateway-v1' : false })
+  const wss = new WebSocketServer({
+    server,
+    handleProtocols: protocols => (protocols.has('hermes-gateway-v1') ? 'hermes-gateway-v1' : false)
+  })
 
   const requests: Array<{ url?: string; protocols?: string }> = []
-  wss.on('connection', (_socket, request) => requests.push({
-    url: request.url, protocols: request.headers['sec-websocket-protocol']
-  }))
+  wss.on('connection', (_socket, request) =>
+    requests.push({
+      url: request.url,
+      protocols: request.headers['sec-websocket-protocol']
+    })
+  )
   await new Promise<void>(r => server.listen(0, '127.0.0.1', r))
   const base = `http://127.0.0.1:${(server.address() as { port: number }).port}`
   let minted = 0
@@ -108,7 +113,9 @@ it('opens native controller sockets with fresh private tickets for the selected 
     readConfiguration: () => 'local',
     readIdentity: () => 'same-user',
     resolve: async () => ({
-      mode: 'local', authMode: 'native', baseUrl: base,
+      mode: 'local',
+      authMode: 'native',
+      baseUrl: base,
       wsUrl: base.replace('http:', 'ws:') + '/api/ws?native_dial=unminted',
       gatewayEndpoint: { profile_id: '/fixture/home' } as never
     }),
@@ -132,7 +139,9 @@ it('opens native controller sockets with fresh private tickets for the selected 
       { url: '/api/ws?native_dial=controller', protocols: 'hermes-gateway-v1,hermes-gateway-ticket.fresh-2' }
     ])
   } finally {
-    for (const socket of wss.clients) {socket.terminate()}
+    for (const socket of wss.clients) {
+      socket.terminate()
+    }
     await new Promise<void>(r => wss.close(() => r()))
     await new Promise<void>(r => server.close(() => r()))
   }

@@ -165,7 +165,9 @@ export function renderRosterContent({
                       matchingHiddenBots.map((bot: RosterRow) => renderBotRow(bot, 'hidden:'))
                     )
                   ) : (
-                    <div className="px-2 py-2 text-[length:var(--aino-text-caption)] text-(--ui-text-tertiary)">{b.roster.noHiddenMatch}</div>
+                    <div className="px-2 py-2 text-[length:var(--aino-text-caption)] text-(--ui-text-tertiary)">
+                      {b.roster.noHiddenMatch}
+                    </div>
                   )
                 ) : null}
               </div>

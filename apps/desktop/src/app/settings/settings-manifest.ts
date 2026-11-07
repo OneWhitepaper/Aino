@@ -73,16 +73,8 @@ export const SETTINGS_MANIFEST = {
       keywords: ['locale'],
       copy: t => ({ label: t.language.label, description: t.language.description })
     },
-    introSplash: appearanceSetting(
-      'general',
-      ['splash', 'wordmark', 'empty chat', 'new chat'],
-      'introSplash'
-    ),
-    modelPricing: appearanceSetting(
-      'general',
-      ['price', 'cost', 'tokens', 'model picker', 'cache'],
-      'modelPricing'
-    ),
+    introSplash: appearanceSetting('general', ['splash', 'wordmark', 'empty chat', 'new chat'], 'introSplash'),
+    modelPricing: appearanceSetting('general', ['price', 'cost', 'tokens', 'model picker', 'cache'], 'modelPricing'),
     resumeLastSession: appearanceSetting(
       'general',
       ['resume', 'reopen', 'launch', 'startup', 'last chat', 'session'],
@@ -99,11 +91,7 @@ export const SETTINGS_MANIFEST = {
       })
     },
     uiScale: appearanceSetting('typography', ['zoom', 'size'], 'uiScale'),
-    chatTextScale: appearanceSetting(
-      'typography',
-      ['chat', 'text', 'font', 'size', 'scale', 'zoom'],
-      'chatTextScale'
-    ),
+    chatTextScale: appearanceSetting('typography', ['chat', 'text', 'font', 'size', 'scale', 'zoom'], 'chatTextScale'),
     chatFont: appearanceSetting('typography', ['font', 'typeface', 'family', 'text'], 'chatFont'),
     terminalFont: appearanceSetting(
       'typography',
@@ -150,11 +138,7 @@ export const SETTINGS_MANIFEST = {
       ['composer', 'floating', 'drag', 'popout', 'pop out', 'dock', 'lock', 'peel', 'input'],
       'composerPopout'
     ),
-    userBubble: appearanceSetting(
-      'chat-display',
-      ['opacity', 'transparent', 'message', 'bubble'],
-      'userBubble'
-    ),
+    userBubble: appearanceSetting('chat-display', ['opacity', 'transparent', 'message', 'bubble'], 'userBubble'),
     textDirection: appearanceSetting(
       'chat-display',
       ['rtl', 'ltr', 'right to left', 'left to right', 'bidi', 'arabic', 'hebrew', 'persian', 'align'],
@@ -166,11 +150,7 @@ export const SETTINGS_MANIFEST = {
       'hideThreadTimeline'
     ),
     reactions: appearanceSetting('chat-display', ['emoji', 'tapback', 'react', 'reactions'], 'reactions'),
-    vibeHearts: appearanceSetting(
-      'chat-display',
-      ['hearts', 'vibe', 'celebrate', 'confetti', 'fun'],
-      'vibeHearts'
-    ),
+    vibeHearts: appearanceSetting('chat-display', ['hearts', 'vibe', 'celebrate', 'confetti', 'fun'], 'vibeHearts'),
     toolView: appearanceSetting('chat-display', ['tool display', 'technical'], 'toolView'),
     hideCodeDiffs: appearanceSetting(
       'chat-display',
@@ -327,19 +307,7 @@ export const SETTINGS_MANIFEST = {
     connectionMode: {
       available: nativeHostOnly,
       subpage: 'connection',
-      keywords: [
-        'gateway',
-        'connection',
-        'local',
-        'cloud',
-        'remote',
-        'ssh',
-        'url',
-        'token',
-        'host',
-        'port',
-        'key'
-      ],
+      keywords: ['gateway', 'connection', 'local', 'cloud', 'remote', 'ssh', 'url', 'token', 'host', 'port', 'key'],
       copy: t => ({ label: t.settings.gateway.modeTitle, description: t.settings.gateway.intro })
     },
     keychainEncryption: {

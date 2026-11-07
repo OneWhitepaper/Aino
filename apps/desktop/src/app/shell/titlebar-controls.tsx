@@ -12,12 +12,7 @@ import titlebarSidebarToggleIcon from '@/assets/aino-home/titlebar-sidebar-toggl
 import titlebarSwapIcon from '@/assets/aino-home/titlebar-swap.svg'
 import { AinoDesignIcon } from '@/components/aino-design-icon'
 import { toggleLayoutEditMode } from '@/components/pane-shell/edit-mode'
-import {
-  $paneVisible,
-  $treeSideVisible,
-  resetLayoutTree,
-  togglePaneVisible
-} from '@/components/pane-shell/tree/store'
+import { $paneVisible, $treeSideVisible, resetLayoutTree, togglePaneVisible } from '@/components/pane-shell/tree/store'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Tip, TipKeybindLabel } from '@/components/ui/tooltip'
@@ -72,11 +67,7 @@ export interface TitlebarTool extends Tiered {
 }
 
 export type TitlebarToolSide = 'left' | 'right'
-export type SetTitlebarToolGroup = (
-  id: string,
-  tools: readonly TitlebarTool[],
-  side?: TitlebarToolSide
-) => void
+export type SetTitlebarToolGroup = (id: string, tools: readonly TitlebarTool[], side?: TitlebarToolSide) => void
 
 interface TitlebarControlsProps extends ComponentProps<'div'> {
   leftTools?: readonly TitlebarTool[]
@@ -97,11 +88,7 @@ function LayoutGlyph({ modHeld }: { modHeld: boolean }) {
       <span className={cn('relative hidden', modHeld && 'group-hover/tool:inline-flex')}>
         <AinoDesignIcon className="size-[18px]" src={titlebarLayoutIcon} />
         <span className="absolute -bottom-1 -right-1.5 grid place-items-center rounded-full bg-(--ui-bg-chrome) p-px">
-          <TitlebarIcon
-            className="-scale-x-100"
-            name="refresh"
-            size={titlebarIconSizeCss(TITLEBAR_ICON_BADGE_SCALE)}
-          />
+          <TitlebarIcon className="-scale-x-100" name="refresh" size={titlebarIconSizeCss(TITLEBAR_ICON_BADGE_SCALE)} />
         </span>
       </span>
     </>
@@ -348,10 +335,7 @@ export function TitlebarControls({ leftTools = [], tools = [] }: TitlebarControl
           <Slot area="titleBar.left" />
         </div>
         <div
-          className={cn(
-            titlebarToolClusterClass,
-            'right-(--titlebar-tools-right) top-(--titlebar-controls-top)'
-          )}
+          className={cn(titlebarToolClusterClass, 'right-(--titlebar-tools-right) top-(--titlebar-controls-top)')}
           data-titlebar-cluster="right"
         >
           <Slot area="titleBar.right" />
@@ -410,25 +394,15 @@ export function TitlebarControls({ leftTools = [], tools = [] }: TitlebarControl
           <TitlebarToolButton key={tool.id} navigate={navigate} tool={tool} />
         ))}
         {shown({ tier: 'advanced' }) && <SummaryToggle />}
-        {visibleTool(terminalTool) && (
-          <TitlebarToolButton navigate={navigate} tool={terminalTool} />
-        )}
-        {visibleTool(rightSidebarTool) && (
-          <TitlebarToolButton navigate={navigate} tool={rightSidebarTool} />
-        )}
+        {visibleTool(terminalTool) && <TitlebarToolButton navigate={navigate} tool={terminalTool} />}
+        {visibleTool(rightSidebarTool) && <TitlebarToolButton navigate={navigate} tool={rightSidebarTool} />}
         <Slot area="titleBar.right" />
       </div>
     </>
   )
 }
 
-function TitlebarToolButton({
-  navigate,
-  tool
-}: {
-  navigate: ReturnType<typeof useNavigate>
-  tool: TitlebarTool
-}) {
+function TitlebarToolButton({ navigate, tool }: { navigate: ReturnType<typeof useNavigate>; tool: TitlebarTool }) {
   // Titlebar actions never show an active background — state reads from the
   // icon itself (e.g. the mute/unmute glyph). aria-pressed still carries it
   // for a11y.
