@@ -5,6 +5,7 @@ import { BotRow } from './bot-row'
 import {
   $botChatFocused,
   $botsPaneVisible,
+  $editingBot,
   $focusedBotOwner,
   $openBotChat,
   $rosterHydrated,
@@ -241,7 +242,8 @@ export function BotsPane() {
   const activeConnectionId = host.state.connectionId?.get?.() || 'local'
   const [createOpen, setCreateOpen] = useState(false)
   const [groupCreateOpen, setGroupCreateOpen] = useState(false)
-  const [editing, setEditing] = useState<null | RosterRow>(null)
+  const editing = useValue($editingBot)
+  const setEditing = $editingBot.set
   // `path` is the profile directory the gateway reports on a profiles.list row;
   // it is not part of the shared RosterRow model, so it rides as an extra here.
   const [deleting, setDeleting] = useState<null | (RosterRow & { path?: string })>(null)
@@ -420,8 +422,35 @@ export function BotsPane() {
 
   const groupChatMembers = groupChatName ? groupChatMemberBots(groupChatName, roster, allMeta) : []
 
+  const dialogs = renderRosterDialogs({
+    b,
+    t,
+    createOpen,
+    setCreateOpen,
+    groupCreateOpen,
+    setGroupCreateOpen,
+    editing,
+    setEditing,
+    deleting,
+    setDeleting,
+    deletingGroup,
+    setDeletingGroup,
+    grouping,
+    setGrouping,
+    sectionDialog,
+    setSectionDialog,
+    roster,
+    activeSourceRoster,
+    refetch
+  })
+
   if (shouldRenderGroupChatInPane(groupChatName) && groupChatMembers.length) {
-    return <GroupChatWorkspace group={groupChatName} members={groupChatMembers} origin={groupOpenOrigin(groupChatName)} />
+    return (
+      <>
+        <GroupChatWorkspace group={groupChatName} members={groupChatMembers} origin={groupOpenOrigin(groupChatName)} />
+        {dialogs}
+      </>
+    )
   }
 
   const renderBotRow = (bot: RosterRow, keyPrefix = '') => (
@@ -530,27 +559,7 @@ export function BotsPane() {
         renderUserSections,
         renderHiddenGatewaySection
       })}
-      {renderRosterDialogs({
-        b,
-        t,
-        createOpen,
-        setCreateOpen,
-        groupCreateOpen,
-        setGroupCreateOpen,
-        editing,
-        setEditing,
-        deleting,
-        setDeleting,
-        deletingGroup,
-        setDeletingGroup,
-        grouping,
-        setGrouping,
-        sectionDialog,
-        setSectionDialog,
-        roster,
-        activeSourceRoster,
-        refetch
-      })}
+      {dialogs}
     </div>
   )
 }

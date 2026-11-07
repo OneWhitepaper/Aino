@@ -27,6 +27,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 // eslint-disable-next-line no-restricted-imports
 import { I18nProvider } from '@/i18n'
 
+import { $editingBot } from './bot-state'
 import type * as DataModule from './data'
 import type * as RoutingModule from './routing'
 import type { RosterRow } from './types'
@@ -104,6 +105,7 @@ vi.mock('./routing', async importOriginal => {
 })
 
 const plugin = (await import('./plugin')).default
+const originalDesktop = window.hermesDesktop
 
 interface Registration {
   area: string
@@ -175,6 +177,67 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.useRealTimers()
+  window.hermesDesktop = originalDesktop
+  $editingBot.set(null)
+})
+
+it('clears an open editor when the signed-in account changes and on plugin teardown', async () => {
+  const snapshot = (revision: number, id: null | string) => ({
+    revision,
+    phase: id ? ('signed_in' as const) : ('signed_out' as const),
+    account: id ? { id, display_name: id, phone_masked: '', email: '' } : null,
+    mode: 'production',
+    remember_state: 'encrypted',
+    error: null
+  })
+
+  type Snapshot = ReturnType<typeof snapshot>
+  let publish!: (value: Snapshot) => void
+  const unbind = vi.fn()
+
+  const bridge = {
+    status: vi.fn(async () => snapshot(1, 'account-a')),
+    onChanged: vi.fn((listener: (value: Snapshot) => void) => {
+      publish = listener
+
+      return unbind
+    })
+  }
+
+  window.hermesDesktop = {
+    ...originalDesktop,
+    accountAdapter: 'platform',
+    platformAccount: bridge as unknown as typeof window.hermesDesktop.platformAccount
+  } as typeof window.hermesDesktop
+
+  const bot = {
+    name: 'private-bot',
+    route: { connectionId: 'local', mode: 'local', profile: 'private-bot' }
+  } as RosterRow
+
+  $editingBot.set(bot)
+  paneStores()
+  const harness = recordingContext()
+
+  plugin.register(harness.ctx)
+  await Promise.resolve()
+  expect($editingBot.get()).toBeNull()
+
+  $editingBot.set(bot)
+  publish(snapshot(2, 'account-b'))
+  expect($editingBot.get()).toBeNull()
+
+  $editingBot.set(bot)
+  const accountB = snapshot(3, 'account-b')
+  publish({ ...accountB, account: { ...accountB.account!, display_name: 'Account B' } })
+  expect($editingBot.get()).toBe(bot)
+
+  publish({ ...snapshot(4, 'account-b'), mode: 'development' })
+  expect($editingBot.get()).toBeNull()
+
+  harness.dispose()
+  expect(unbind).toHaveBeenCalledOnce()
+  expect($editingBot.get()).toBeNull()
 })
 
 describe('the Bots pane dock', () => {

@@ -104,7 +104,7 @@ export function NotificationStack() {
 
   return (
     <>
-      <TopCenterStack
+      <TopRightStack
         copy={copy}
         expanded={expanded}
         notifications={defaultStack}
@@ -123,7 +123,7 @@ const REGION_BASE = 'pointer-events-none fixed z-(--z-over-modal) flex gap-2'
 // action toasts). Without the portal it lives inside the React root subtree,
 // which any body-level dialog/overlay portal paints over — so a toast fired
 // while a dialog is open was invisible.
-function TopCenterStack({
+function TopRightStack({
   copy,
   expanded,
   notifications,

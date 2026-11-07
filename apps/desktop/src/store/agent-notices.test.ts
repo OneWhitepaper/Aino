@@ -13,6 +13,7 @@ import {
   usageFraction
 } from './agent-notices'
 import { $notifications, clearNotifications } from './notifications'
+import { $routeRequest } from './recovery-requests'
 
 function usage(overrides: Partial<AgentNoticePayload> = {}): AgentNoticePayload {
   return {
@@ -107,7 +108,38 @@ test('sanitizes command-shaped maintenance detail before it reaches a desktop ca
     '会话历史仅占 1 MB。\n运行命令后重启桌面端。'
   )
   expect(sanitizeNoticeDetail('$ hermes /autoprune\n/autoprune')).toBeUndefined()
+  expect(sanitizeNoticeDetail("Hermes couldn't save the session data.")).toBe("Hermes couldn't save the session data.")
   expect(noticeToToast({ text: '⚠ 磁盘空间不足', detail: '$ hermes /autoprune\n/autoprune' })?.detail).toBeUndefined()
+})
+
+test('the backend low-disk notice offers Maintenance without exposing terminal instructions', () => {
+  const toast = noticeToToast({
+    key: 'sessions.auto_prune',
+    id: 'sessions.auto_prune',
+    text: '⚠ Low disk (0.5 GB free) · /autoprune on|off|later',
+    detail: [
+      'Your session history (state.db) uses 0.01 GB.',
+      'Pruning will not help right now: there is no session history to delete. Something else is filling this disk.',
+      'Deleted history frees space inside state.db; to give it back to the disk, run `hermes sessions optimize` with other Hermes windows closed.',
+      '/autoprune on to enable, /autoprune off to keep everything (never asked again), /autoprune later to be reminded in a week.'
+    ].join('\n'),
+    level: 'warn',
+    kind: 'sticky',
+    ttl_ms: null
+  })
+
+  expect(toast).toMatchObject({
+    id: 'sessions.auto_prune',
+    message: 'Low disk (0.5 GB free)',
+    kind: 'warning',
+    durationMs: 0
+  })
+  expect(toast?.meta).toBeUndefined()
+  expect(toast?.detail).toContain('Something else is filling this disk.')
+  expect(toast?.detail).not.toMatch(/autoprune|hermes sessions optimize/)
+  expect(toast?.action).toBeDefined()
+  toast?.action?.onClick()
+  expect($routeRequest.get()?.path).toBe('/command-center?section=maintenance')
 })
 
 test('the trailing "· detail" is split off as a secondary meta line, not inlined', () => {

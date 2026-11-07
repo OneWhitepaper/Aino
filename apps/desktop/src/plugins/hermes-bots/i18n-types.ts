@@ -216,6 +216,7 @@ export type BotsMessages = {
     openUnreachableMessage: string
     openChatFailedTitle: (botName: string) => string
     openChatFailedMessage: string
+    openModelUnavailableMessage: string
     openGateways: string
     /** Stands under the bot's name in a chat it has not spoken in yet. */
     chatEmpty: string

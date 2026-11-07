@@ -55,11 +55,41 @@ export const BOTS_LOCALES: PluginLocaleBundles = {
   ja,
   zh,
   'zh-hant': zhHant,
-  ar: { canonical: CANONICAL_GROUP_LOCALES.ar },
-  ru: { canonical: CANONICAL_GROUP_LOCALES.ru },
-  fr: { canonical: CANONICAL_GROUP_LOCALES.fr },
-  de: { canonical: CANONICAL_GROUP_LOCALES.de },
-  es: { canonical: CANONICAL_GROUP_LOCALES.es }
+  ar: {
+    canonical: CANONICAL_GROUP_LOCALES.ar,
+    bot: {
+      openModelUnavailableMessage:
+        'لا يتوفر نموذج قابل للاستخدام لهذا الروبوت. افتح «متقدم» في إعداداته لاختيار مزوّد ونموذج.'
+    }
+  },
+  ru: {
+    canonical: CANONICAL_GROUP_LOCALES.ru,
+    bot: {
+      openModelUnavailableMessage:
+        'У этого бота нет доступной модели. Откройте «Дополнительно» в его настройках и выберите провайдера и модель.'
+    }
+  },
+  fr: {
+    canonical: CANONICAL_GROUP_LOCALES.fr,
+    bot: {
+      openModelUnavailableMessage:
+        'Ce bot n’a aucun modèle utilisable. Ouvrez les options avancées de ses paramètres pour choisir un fournisseur et un modèle.'
+    }
+  },
+  de: {
+    canonical: CANONICAL_GROUP_LOCALES.de,
+    bot: {
+      openModelUnavailableMessage:
+        'Für diesen Bot ist kein nutzbares Modell verfügbar. Öffne „Erweitert“ in seinen Einstellungen und wähle einen Anbieter und ein Modell.'
+    }
+  },
+  es: {
+    canonical: CANONICAL_GROUP_LOCALES.es,
+    bot: {
+      openModelUnavailableMessage:
+        'Este bot no tiene un modelo disponible. Abre las opciones avanzadas de su configuración para elegir un proveedor y un modelo.'
+    }
+  }
 }
 
 export type BotsText = Bound<BotsMessages>

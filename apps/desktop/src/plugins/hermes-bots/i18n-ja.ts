@@ -216,6 +216,8 @@ export const ja: BotsMessages = {
     openUnreachableMessage: 'オンラインか確認して、もう一度お試しください。',
     openChatFailedTitle: botName => `${botName} のチャットを開けませんでした`,
     openChatFailedMessage: 'もう一度お試しください。',
+    openModelUnavailableMessage:
+      'このボットには利用可能なモデルがありません。設定の「詳細」でプロバイダーとモデルを選択してください。',
     openGateways: 'ゲートウェイを開く',
     chatEmpty: '何か書いて始めましょう。',
     kickoff: 'こんにちは、自己紹介をしてください！',

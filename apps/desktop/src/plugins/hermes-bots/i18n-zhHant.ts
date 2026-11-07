@@ -205,6 +205,7 @@ export const zhHant: BotsMessages = {
     openUnreachableMessage: '請確認它在線上後再試一次。',
     openChatFailedTitle: botName => `無法開啟 ${botName} 的聊天`,
     openChatFailedMessage: '請再試一次。',
+    openModelUnavailableMessage: '這個機器人沒有可用模型。請開啟設定，在「進階」中選擇模型提供者和模型。',
     openGateways: '開啟閘道',
     chatEmpty: '說點什麼開始吧。',
     kickoff: '你好，介紹一下你自己吧！',

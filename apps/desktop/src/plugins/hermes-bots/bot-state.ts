@@ -46,6 +46,8 @@ export const $selectedRosterHydrated = atom(false)
 export const $rosterHydrated = atom(false)
 /** Mirrors host.paneVisibility('hermes-bots:pane') — wired in register(). */
 export const $botsPaneVisible = atom(false)
+/** The roster and failure-recovery actions open the same profile editor. */
+export const $editingBot = atom<RosterRow | null>(null)
 /** An explicit open landed: {key, openedRegistryId, openedSessionId}. The
  *  registry id is empty for the legacy newChat draft fallback and for a click
  *  that came back to the bot's already-open tabs (only openedSessionId set — no

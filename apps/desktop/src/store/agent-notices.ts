@@ -1,6 +1,12 @@
 import { translateNow } from '@/i18n'
 import type { NativeNotificationInput } from '@/store/native-notifications'
-import { dismissNotification, type NotificationInput, type NotificationKind, notify } from '@/store/notifications'
+import {
+  dismissNotification,
+  type NotificationInput,
+  type NotificationKind,
+  notify,
+  RECOVERY_ACTIONS
+} from '@/store/notifications'
 
 /**
  * Wire shape of a `notification.show` payload — the driver-agnostic
@@ -75,11 +81,12 @@ export function sanitizeNoticeDetail(detail: string | undefined): string | undef
     .split(/\r?\n/)
     .map(line => line.trim())
     .filter(Boolean)
-    .filter(line => !/^(?:[$>#]|hermes\b|\/autoprune\b|(?:python|python3|sqlite3|rm|sudo)\b)/i.test(line))
+    .filter(line => !/^(?:[$>#](?:\s|$)|(?:python|python3|sqlite3|rm|sudo)\b)/i.test(line))
+    .filter(line => !/(?:\/autoprune\b|`(?:hermes|python3?|sqlite3|rm|sudo)\s)/i.test(line))
 
   const cleaned = lines.join('\n').trim()
 
-  if (!cleaned || /\/autoprune\b/i.test(cleaned)) {
+  if (!cleaned) {
     return undefined
   }
 
@@ -190,7 +197,8 @@ export function noticeToToast(payload: AgentNoticePayload | undefined): Notifica
     id: payload?.key || payload?.id,
     kind: LEVEL_TO_TOAST_KIND[payload?.level ?? 'info'] ?? 'info',
     message: primary,
-    meta,
+    meta: sanitizeNoticeDetail(meta),
+    ...(payload?.key === 'sessions.auto_prune' ? { action: RECOVERY_ACTIONS.openMaintenance() } : {}),
     ...(detail ? { detail } : {})
   }
 }

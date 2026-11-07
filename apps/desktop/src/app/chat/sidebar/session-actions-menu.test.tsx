@@ -350,7 +350,7 @@ describe('SessionActionsMenu', () => {
     await waitFor(() => expect(onArchive).toHaveBeenCalledTimes(1))
   })
 
-  it('confirms with the Enter key and cancels with Escape', async () => {
+  it('focuses Cancel on delete, confirms Enter on Delete, and cancels with Escape', async () => {
     const onDelete = vi.fn()
     render(
       <SessionActionsMenu onDelete={onDelete} sessionId="s1" title="My session">
@@ -374,17 +374,21 @@ describe('SessionActionsMenu', () => {
     expect(await screen.queryByRole('dialog')).toBeNull()
     expect(onDelete).not.toHaveBeenCalled()
 
-    // Re-open and confirm with Enter at wherever focus actually is. Firing on
-    // the dialog node would pass even when the menu leaves focus on the row
-    // trigger — where Enter re-activates the row instead of confirming.
+    // Re-opening must focus the safe action. Deletion requires moving focus
+    // to Delete before pressing Enter.
     fireEvent.pointerDown(trigger, { button: 0, pointerType: 'mouse' })
     fireEvent.pointerUp(trigger, { button: 0, pointerType: 'mouse' })
     fireEvent.click(trigger)
     fireEvent.click(await screen.findByRole('menuitem', { name: /delete/i }))
 
     const reopened = await screen.findByRole('dialog')
+    const cancel = within(reopened).getByRole('button', { name: 'Cancel' })
     // eslint-disable-next-line no-restricted-globals -- asserting real focus requires the live document
-    await waitFor(() => expect(reopened.contains(document.activeElement)).toBe(true))
+    await waitFor(() => expect(document.activeElement).toBe(cancel))
+    fireEvent.keyDown(cancel, { key: 'Enter' })
+    expect(onDelete).not.toHaveBeenCalled()
+
+    within(reopened).getByRole('button', { name: 'Delete' }).focus()
     // eslint-disable-next-line no-restricted-globals -- asserting real focus requires the live document
     fireEvent.keyDown(document.activeElement!, { key: 'Enter' })
 

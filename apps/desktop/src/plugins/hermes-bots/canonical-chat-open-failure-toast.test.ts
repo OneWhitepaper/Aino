@@ -2,7 +2,7 @@
  * notifyBotOpenFailure copy contract (desktop-34): every failed bot open
  * toasts a plain-words title + next step from the plugin bundle, keeps the raw
  * RPC/connection error in `detail` only, never says "gateway", and offers the
- * Gateways settings tab as its action.
+ * the appropriate recovery surface as its action.
  */
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -10,7 +10,14 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RosterRow } from './types'
 
 const { hostMock, pluginCtx } = vi.hoisted(() => ({
-  hostMock: { navigate: vi.fn(), notify: vi.fn(), notifyError: vi.fn(), openSession: vi.fn(), request: vi.fn() },
+  hostMock: {
+    navigate: vi.fn(),
+    notify: vi.fn(),
+    notifyError: vi.fn(),
+    openSession: vi.fn(),
+    request: vi.fn(),
+    revealPane: vi.fn()
+  },
   pluginCtx: { current: null as null | { i18n?: { t: (key: string, ...args: unknown[]) => string } } }
 }))
 
@@ -40,6 +47,7 @@ vi.mock('./data', () => ({
 }))
 
 vi.mock('./shared', () => ({ getPluginCtx: () => pluginCtx.current }))
+vi.mock('./bot-state', async () => ({ $editingBot: (await import('nanostores')).atom(null) }))
 
 type Toast = {
   kind?: string
@@ -99,15 +107,19 @@ describe('notifyBotOpenFailure', () => {
     expect(hostMock.notifyError).not.toHaveBeenCalled()
   })
 
-  it('model failures open model settings instead of gateway settings', async () => {
+  it('model failures reveal the owning bot editor instead of ambient settings', async () => {
     const { notifyBotOpenFailure } = await load()
+    const { $editingBot } = await import('./bot-state')
 
     notifyBotOpenFailure(new Error('model_unavailable: no usable model configured'), BOT, 'open')
 
     const toast = lastToast()
     expect(toast.action?.label).toBe('Configure model')
-    toast.action?.onClick()
-    expect(hostMock.navigate).toHaveBeenCalledWith('/settings?tab=config:model')
+    await toast.action?.onClick()
+    expect($editingBot.get()).toBe(BOT)
+    expect(hostMock.revealPane).toHaveBeenCalledWith('hermes-bots:pane')
+    expect(hostMock.navigate).not.toHaveBeenCalled()
     expect(toast.message).not.toContain('model_unavailable')
+    expect(toast.message).not.toContain('introduction')
   })
 })

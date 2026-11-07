@@ -30,6 +30,7 @@ import { startFaceClock, stopFaceClock } from './avatar'
 import {
   $botChatFocused,
   $botsPaneVisible,
+  $editingBot,
   $focusedBotOwner,
   $openBotChat,
   $selectedBot,
@@ -91,6 +92,47 @@ import type { GroupChat, RosterRow } from './types'
 import { loadBotSections } from './user-sections'
 
 const tabBotsMask = `url(${JSON.stringify(tabBotsIcon)})`
+
+function clearEditorOnAccountChange() {
+  const bridge = typeof window === 'undefined' ? undefined : window.hermesDesktop?.platformAccount
+
+  if (!bridge || window.hermesDesktop?.accountAdapter === 'legacy-development') {
+    return () => $editingBot.set(null)
+  }
+
+  let identity: string | null | undefined
+  let revision = -1
+
+  const applySnapshot = (snapshot: Awaited<ReturnType<typeof bridge.status>>) => {
+    if (snapshot.revision < revision) {
+      return
+    }
+
+    const nextUserId =
+      ['signed_in', 'offline'].includes(snapshot.phase) && snapshot.account ? snapshot.account.id : null
+
+    const nextIdentity = nextUserId === null ? null : JSON.stringify([snapshot.mode, nextUserId])
+
+    if (identity === undefined || identity !== nextIdentity) {
+      $editingBot.set(null)
+    }
+
+    identity = nextIdentity
+    revision = snapshot.revision
+  }
+
+  const unbind = bridge.onChanged(applySnapshot)
+
+  void bridge
+    .status()
+    .then(applySnapshot)
+    .catch(() => undefined)
+
+  return () => {
+    unbind()
+    $editingBot.set(null)
+  }
+}
 
 /** The approved Agent Hub glyph lives with the bundled plugin so the plugin fence
  * remains honest: this module imports only its own assets and the public SDK. */
@@ -177,6 +219,7 @@ export default {
       ctx.onDispose(stopFaceClock)
       ctx.onDispose(stopBotRelay)
       ctx.onDispose(stopScreenAutoRaise)
+      ctx.onDispose(clearEditorOnAccountChange())
     }
 
     // @-mention autocomplete: typing "@rese…" in ANY composer offers the

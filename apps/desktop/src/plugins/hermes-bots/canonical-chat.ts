@@ -214,7 +214,6 @@ function botModeGatewayNeedsUpdate(error: unknown) {
  *  profile-switcher.tsx reaches via SETTINGS_ROUTE; plugins don't import app
  *  routes, so the literal lives here). */
 const GATEWAY_SETTINGS_PATH = '/settings?tab=gateway'
-const MODEL_SETTINGS_PATH = '/settings?tab=config:model'
 
 /** Raw error text for the toast's muted `detail` line — never the body. */
 function errorDetail(error: unknown): string | undefined {
@@ -238,12 +237,21 @@ export type BotOpenStep = 'open' | 'reach'
 
 /** Toast a failed bot open. Titles and bodies come from the plugin bundle and
  *  say what happened + what to do; the raw RPC/connection error only ever
- *  rides in `detail`. Model failures go to model settings, while connection
+ *  rides in `detail`. Model failures open the owning bot's editor, while connection
  *  failures go to the gateway settings surface. */
 export function notifyBotOpenFailure(error: unknown, bot: RosterRow, step: BotOpenStep, botName?: string) {
   const text = botsText()
   const b = text.bot
-  const modelAction = { label: text.editor.configureModel, onClick: () => host.navigate(MODEL_SETTINGS_PATH) }
+
+  const modelAction = {
+    label: text.editor.configureModel,
+    onClick: async () => {
+      const { $editingBot } = await import('./bot-state')
+      $editingBot.set(bot)
+      host.revealPane('hermes-bots:pane')
+    }
+  }
+
   const gatewayAction = { label: b.openGateways, onClick: () => host.navigate(GATEWAY_SETTINGS_PATH) }
   const detail = errorDetail(error)
 
@@ -276,7 +284,7 @@ export function notifyBotOpenFailure(error: unknown, bot: RosterRow, step: BotOp
     host.notify?.({
       kind: 'error',
       title: b.openChatFailedTitle(botName || bot.name),
-      message: text.editor.needsModel,
+      message: b.openModelUnavailableMessage,
       ...(detail ? { detail } : {}),
       action: modelAction
     })
