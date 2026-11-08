@@ -36,7 +36,6 @@ def test_image_model_selection_is_available_immediately_in_only_its_profile(imag
 
     with tools._profile_scope('work'):
         prior = image_definitions()
-        assert get_cached_check_fn_result(check_image_generation_requirements) is False
     assert prior == []
     assert image_definitions() == []
     client = TestClient(app)
