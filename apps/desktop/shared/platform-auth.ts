@@ -38,7 +38,7 @@ export interface PlatformAuth {
   models(): ReturnType<PlatformClient['models']>
   modelLease(input: PlatformLeaseInput): ReturnType<PlatformClient['modelLease']>
   ensureDeviceKey(deviceId: string, reauthorize?: boolean): Promise<PlatformDeviceKey & { api_key: string }>
-  supportsDeviceKey(): Promise<boolean>
+  supportsDeviceKey(deviceId: string): Promise<boolean>
   rejectDeviceKey(deviceId: string, credentialVersion: number): Promise<void>
   initialize(): Promise<PlatformAccountSnapshot>
   generation(): number
@@ -76,11 +76,14 @@ export interface PlatformAuth {
 export function createPlatformAuth({
   client,
   tokenStore,
-  now
+  now,
+  nativeDeviceId
 }: {
   client: PlatformClient
   tokenStore: PlatformTokenStore
   now: () => number
+  /** Only the native desktop prepares a device credential after a fresh login. */
+  nativeDeviceId?: () => string
 }): PlatformAuth {
   let tokens: PlatformTokenSet | null = null
   let pendingSecondFactor: { tempToken: string; remember: boolean } | null = null
@@ -89,8 +92,9 @@ export function createPlatformAuth({
   const deviceFlights = new Map<string, Promise<PlatformDeviceKey & { api_key: string }>>()
   const revokedDevices = new Set<string>()
   const suspendedDevices = new Set<string>()
+  const rolloutDeniedDevices = new Set<string>()
+  const deviceCapabilities = new Map<string, Promise<boolean>>()
   const deviceIntents = new Map<string, number>()
-  let deviceCapability: Promise<boolean> | undefined
 
   let refreshFlight: {
     generation: number
@@ -222,7 +226,7 @@ export function createPlatformAuth({
       }
     }
 
-    return publish({
+    publish({
       phase: 'signed_in',
       account: profile,
       remember_state: rememberState,
@@ -230,6 +234,28 @@ export function createPlatformAuth({
       model_identity_ready: Boolean(next.deviceKeys?.some(key => key.user_id === profile.id)),
       model_identity_version: next.deviceKeys?.find(key => key.user_id === profile.id)?.version
     })
+
+    await prepareLoginDeviceKey(profile.id, expected)
+
+    if (expected !== generation) { throw new PlatformClientError('auth_attempt_superseded') }
+
+    return current
+  }
+
+  async function prepareLoginDeviceKey(userId: string, expected: number) {
+    if (!nativeDeviceId) { return }
+    const ownsLogin = () => expected === generation && current.account?.id === userId
+
+    try {
+      const deviceId = nativeDeviceId()
+
+      // Creation or recovery requires recent authentication; do not defer it to the first prompt.
+      if (await api.supportsDeviceKey(deviceId) && ownsLogin()) { await ensureDeviceKey(deviceId) }
+    } catch (error) {
+      if (!ownsLogin() || error instanceof PlatformClientError && error.code === 'DESKTOP_DEVICE_KEY_ROLLOUT_DENIED') { return }
+      // Account login already succeeded. Preserve it and expose the model-credential failure.
+      publish({ error: safeError(error), ...(error instanceof PlatformClientError && error.authentication ? {} : { phase: 'signed_in' }) }, false)
+    }
   }
 
   async function finishExchange(
@@ -379,7 +405,8 @@ export function createPlatformAuth({
 
     const expected = ++generation
     deviceFlights.clear()
-    deviceCapability = undefined
+    deviceCapabilities.clear()
+    rolloutDeniedDevices.clear()
     pendingSecondFactor = null
 
     if (previous) {
@@ -564,6 +591,10 @@ export function createPlatformAuth({
           revokedDevices.add(scope)
         }
 
+        if (error instanceof PlatformClientError && error.code === 'DESKTOP_DEVICE_KEY_ROLLOUT_DENIED') {
+          rolloutDeniedDevices.add(scope)
+        }
+
         throw error
       }
     })()
@@ -701,17 +732,30 @@ export function createPlatformAuth({
         suspendedDevices.delete(scope)
       }
     },
-    supportsDeviceKey() {
-      if (tokens?.deviceKeys?.some(key => key.user_id === current.account?.id)) {
+    supportsDeviceKey(deviceId) {
+      const userId = current.account?.id
+
+      if (!userId) { return Promise.resolve(false) }
+
+      if (tokens?.deviceKeys?.some(key => key.user_id === userId && key.device_id === deviceId)) {
         return Promise.resolve(true)
       }
 
-      deviceCapability ??= authenticated(token => client.supportsDeviceKey(token), true).catch(error => {
-        deviceCapability = undefined
-        throw error
-      })
+      const scope = JSON.stringify([client.origin, userId, deviceId])
 
-      return deviceCapability
+      if (rolloutDeniedDevices.has(scope)) { return Promise.resolve(false) }
+
+      let capability = deviceCapabilities.get(scope)
+
+      if (!capability) {
+        capability = authenticated(token => client.supportsDeviceKey(token, deviceId), true).catch(error => {
+          deviceCapabilities.delete(scope)
+          throw error
+        })
+        deviceCapabilities.set(scope, capability)
+      }
+
+      return capability
     },
     modelLease: input => authenticated(token => client.modelLease(token, input), true),
     async initialize() {
@@ -903,7 +947,8 @@ export function createPlatformAuth({
       }
 
       catalog = null
-      deviceCapability = undefined
+      deviceCapabilities.clear()
+      rolloutDeniedDevices.clear()
       deviceFlights.clear()
       pendingSecondFactor = null
       refreshFlight = null

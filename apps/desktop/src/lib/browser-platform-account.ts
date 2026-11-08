@@ -123,8 +123,17 @@ export function createBrowserPlatformBridge(options: {
     requestBindingCode: async input => auth.requestBindingCode({ ...input, captcha_proof: await captcha() }),
     submitStepUp: input => auth.submitStepUp(input),
     bindPhone: input => auth.bindPhone(input),
-    logout: async () => {
+    logout: async expectedOwner => {
       await initialized
+      const current = auth.snapshot()
+
+      if (
+        expectedOwner !== undefined &&
+        (current.account?.id !== expectedOwner?.userId || current.mode !== expectedOwner?.mode ||
+          current.revision !== expectedOwner?.revision)
+      ) {
+        throw new PlatformClientError('platform_account_changed')
+      }
 
       return auth.logout()
     },

@@ -59,6 +59,35 @@ interface ManagedBindingClaim {
   managed_device_key?: number
 }
 
+type BindingFailureStage = 'route' | 'gateway_connect' | 'gateway_reuse' | 'gateway_claim' | 'device_key_capability' | 'model_catalog' | 'device_key' | 'model_lease' | 'gateway_bind'
+
+const SAFE_BINDING_DIAGNOSTIC_CODES = new Set([
+  'DESKTOP_DEVICE_KEY_REVOKED', 'DESKTOP_DEVICE_KEY_VERSION_CONFLICT', 'auth_attempt_superseded',
+  'authentication_refreshed_retry_required', 'binding_cancelled', 'binding_ticket_required',
+  'DESKTOP_DEVICE_KEY_ROLLOUT_DENIED',
+  'RECENT_AUTH_REQUIRED',
+  'insufficient_balance', 'invalid_binding_response', 'invalid_params', 'invalid_response',
+  'managed_auth_unavailable', 'managed_balance_unavailable', 'managed_binding_forbidden',
+  'managed_credential_expired', 'managed_credential_rejected', 'managed_credential_revoked',
+  'model_unavailable', 'network_timeout', 'network_unavailable', 'not_authenticated', 'not_found',
+  'permission_denied', 'platform_account_changed', 'quota_exhausted', 'stale_account_revision',
+  'storage_unavailable', 'unsupported_gateway'
+])
+
+function bindingDiagnosticCode(error: unknown): string {
+  const record = error && typeof error === 'object' ? error as { code?: unknown; data?: unknown; message?: unknown } : {}
+  const data = record.data && typeof record.data === 'object' ? record.data as Record<string, unknown> : {}
+  const nested = data.error && typeof data.error === 'object' ? data.error as Record<string, unknown> : {}
+  const candidates = [record.code, data.reason, data.code, nested.reason, nested.code, record.message]
+  const code = candidates.find(value => typeof value === 'string' && SAFE_BINDING_DIAGNOSTIC_CODES.has(value))
+
+  if (typeof code === 'string') { return code }
+
+  if (typeof record.code === 'string' && /^http_[45]\d\d$/.test(record.code)) { return record.code }
+
+  return typeof record.code === 'number' && Number.isSafeInteger(record.code) ? `rpc_${record.code}` : 'unknown'
+}
+
 function requireManagedBindingClaim(claim: ManagedBindingClaim, purpose: PlatformModelPurpose = 'chat'): number {
   if (claim.managed_model_binding !== 1 || (purpose === 'image' && claim.managed_image_binding !== 1)
     || !Number.isSafeInteger(claim.binding_revision) || claim.binding_revision! <= 0) {
@@ -166,6 +195,8 @@ function armLease(
 export function createPlatformRuntimeBindingController(options: {
   /** Only Electron main owns an OS-protected device credential. */
   nativeDeviceKeys?: boolean
+  /** Receives only a fixed stage and an allowlisted error code; never request data. */
+  onBindingFailure?: (failure: { stage: BindingFailureStage; code: string }) => void
   auth: PlatformAuth
   origin: string
   deviceId(): string
@@ -177,6 +208,12 @@ export function createPlatformRuntimeBindingController(options: {
   let generation = auth.generation()
   let disposed = false
   let models: { generation: number; expiresAt: number; promise: Promise<PlatformModel[]> } | undefined
+
+  function reportBindingFailure(stage: BindingFailureStage, code: string, error: unknown) {
+    if (code !== 'binding_ticket_required') {
+      options.onBindingFailure?.({ stage, code: bindingDiagnosticCode(error) })
+    }
+  }
 
   function catalog() {
     const generation = auth.generation()
@@ -239,31 +276,64 @@ export function createPlatformRuntimeBindingController(options: {
     windows.clear()
   }
 
-  async function leaseForBinding(binding: Binding, modelId: string, purpose: { purpose?: 'image' }) {
+  async function leaseForBinding(
+    binding: Binding,
+    modelId: string,
+    purpose: { purpose?: 'image' },
+    setStage: (stage: BindingFailureStage) => void
+  ) {
     const cachedLease = binding.lease
     const reuse = cachedLease?.model.id === modelId && Date.parse(cachedLease.expires_at) > Date.now()
 
-    const lease = reuse
-      ? cachedLease
-      : await auth.modelLease({
-          model_id: modelId,
-          device_id: options.deviceId(),
-          connection_grant_id: binding.grant,
-          ...purpose
-        })
+    if (reuse && cachedLease) {
+      return { lease: cachedLease, reuse }
+    }
+
+    setStage('model_lease')
+
+    const lease = await auth.modelLease({
+      model_id: modelId,
+      device_id: options.deviceId(),
+      connection_grant_id: binding.grant,
+      ...purpose
+    })
 
     return { lease, reuse }
   }
 
-  async function credentialForBinding(binding: Binding, claim: ManagedBindingClaim, modelId: string, purpose: { purpose?: 'image' }) {
-    if (!options.nativeDeviceKeys || binding.target.remote || claim.managed_device_key !== 1 || !(await auth.supportsDeviceKey())) {
-      return { ...await leaseForBinding(binding, modelId, purpose), deviceMode: false, credentialVersion: undefined }
+  async function credentialForBinding(
+    binding: Binding,
+    claim: ManagedBindingClaim,
+    modelId: string,
+    purpose: { purpose?: 'image' },
+    setStage: (stage: BindingFailureStage) => void
+  ) {
+    if (!options.nativeDeviceKeys || binding.target.remote || claim.managed_device_key !== 1) {
+      return { ...await leaseForBinding(binding, modelId, purpose, setStage), deviceMode: false, credentialVersion: undefined }
     }
 
+    setStage('device_key_capability')
+
+    if (!(await auth.supportsDeviceKey(options.deviceId()))) {
+      return { ...await leaseForBinding(binding, modelId, purpose, setStage), deviceMode: false, credentialVersion: undefined }
+    }
+
+    setStage('model_catalog')
     const selected = (await catalog()).find(model => model.id === modelId && (model.purpose ?? 'chat') === (purpose.purpose ?? 'chat'))
 
     if (!selected || selected.state !== 'available') { throw new PlatformClientError('model_unavailable') }
-    const key = await auth.ensureDeviceKey(options.deviceId())
+    setStage('device_key')
+    let key: Awaited<ReturnType<PlatformAuth['ensureDeviceKey']>>
+
+    try {
+      key = await auth.ensureDeviceKey(options.deviceId())
+    } catch (error) {
+      if (!(error instanceof PlatformClientError) || error.code !== 'DESKTOP_DEVICE_KEY_ROLLOUT_DENIED') { throw error }
+
+      setStage('model_lease')
+
+      return { ...await leaseForBinding(binding, modelId, purpose, setStage), deviceMode: false, credentialVersion: undefined }
+    }
 
     const lease: Omit<PlatformModelLeaseDTO, 'expires_at'> & { expires_at: string | null } = {
       model: selected, credential_id: key.key_id, api_key: key.api_key, base_url: `${options.origin}/v1`, expires_at: null
@@ -376,6 +446,7 @@ export function createPlatformRuntimeBindingController(options: {
       const intent = ++slot.intent
       let binding: Binding | undefined
       let claimedRevision = 0
+      let stage: BindingFailureStage = 'route'
 
       const current = () =>
         !disposed &&
@@ -415,6 +486,7 @@ export function createPlatformRuntimeBindingController(options: {
             throw new Error('binding_cancelled')
           }
 
+          stage = 'gateway_connect'
           const rpc = await target.open()
           binding = { target, rpc, grant: crypto.randomUUID(), revision: 0, session: input.session_id }
 
@@ -429,17 +501,22 @@ export function createPlatformRuntimeBindingController(options: {
 
         const params = { session_id: input.session_id, profile: target.profile, owner, model_id: input.model_id, ...purpose }
 
+        stage = 'gateway_reuse'
         const reusable = await reuseDeviceBinding(binding, params, snapshot.revision)
         check()
 
-        if (reusable) { slot.pending = undefined;
+        if (reusable) {
+          slot.pending = undefined
 
- return { ok: true, ready: true, model_id: input.model_id, billing_source: 'aino', expires_at: null } }
+          return { ok: true, ready: true, model_id: input.model_id, billing_source: 'aino', expires_at: null }
+        }
 
         requireBindingTicket(input.session_ticket)
 
         // Capability and live session authorization are proven BEFORE obtaining
         // the inference secret. Older gateways fail here without receiving a Key.
+        stage = 'gateway_claim'
+
         const claim = await binding.rpc.request<ManagedBindingClaim>(
           'session.claim_managed_model',
           { ...params, session_ticket: input.session_ticket }
@@ -450,10 +527,12 @@ export function createPlatformRuntimeBindingController(options: {
         claimedRevision = requireManagedBindingClaim(claim, input.purpose)
         const supportsContextWindow = claim.managed_model_context_window === true
 
-        const credential = await credentialForBinding(binding, claim, input.model_id, purpose)
+        const credential = await credentialForBinding(binding, claim, input.model_id, purpose, value => { stage = value })
         const { lease, reuse, deviceMode } = credential
 
         check()
+
+        stage = 'gateway_bind'
 
         const result = await binding.rpc.request<{ bound?: boolean; model_id?: string; binding_revision?: number }>(
           'session.bind_managed_model',
@@ -603,6 +682,8 @@ export function createPlatformRuntimeBindingController(options: {
 
         return { ok: true, ready: true, model_id: input.model_id, billing_source: 'aino', expires_at: lease.expires_at }
       } catch (error) {
+        const code = bindingErrorCode(error)
+
         if (binding && claimedRevision) {
           // A late response must only clear its own revision, never a newer bind.
           await binding.rpc
@@ -631,7 +712,9 @@ export function createPlatformRuntimeBindingController(options: {
           slot.pending = undefined
         }
 
-        return failure(bindingErrorCode(error))
+        reportBindingFailure(stage, code, error)
+
+        return failure(code)
       }
     },
     list() {

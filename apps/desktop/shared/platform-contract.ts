@@ -114,7 +114,7 @@ export interface PlatformAccountBridge {
     expected_generation?: number
   }): Promise<PlatformAccountSnapshot>
   bindPhone(input: { phone: string; challenge_id: string; code: string }): Promise<PlatformAccountSnapshot>
-  logout(): Promise<PlatformAccountSnapshot>
+  logout(expectedOwner?: PlatformAccountWindowOwner): Promise<PlatformAccountSnapshot>
   onChanged(listener: (snapshot: PlatformAccountSnapshot) => void): () => void
 }
 

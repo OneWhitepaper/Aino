@@ -4,6 +4,7 @@ import type {
   PhoneChallengeDTO,
   PhoneVerifyDTO,
   PlatformAccountSnapshot,
+  PlatformAccountWindowOwner,
   PlatformAuthResult,
   PlatformPublicCapabilities
 } from '../../shared/platform-contract'
@@ -41,7 +42,7 @@ export interface AccountAdapter {
   loginExisting(input: { email: string; password: string; remember: boolean }): Promise<PlatformAuthResult>
   completeSecondFactor(code: string): Promise<PlatformAccountSnapshot>
   updateProfile(displayName: string): Promise<PlatformAccountSnapshot>
-  logout(): Promise<PlatformAccountSnapshot>
+  logout(expectedOwner?: PlatformAccountWindowOwner): Promise<PlatformAccountSnapshot>
   onChanged(listener: (snapshot: PlatformAccountSnapshot) => void): () => void
 }
 
@@ -202,7 +203,7 @@ export function createAccountActions(adapter: AccountAdapter) {
       ),
     completeSecondFactor: (code: string) => run(() => adapter.completeSecondFactor(code.trim()), applySnapshot),
     updateProfile: (displayName: string) => run(() => adapter.updateProfile(displayName.trim()), applySnapshot),
-    logout: () => run(() => adapter.logout(), applySnapshot)
+    logout: (expectedOwner?: PlatformAccountWindowOwner) => run(() => adapter.logout(expectedOwner), applySnapshot)
   }
 }
 

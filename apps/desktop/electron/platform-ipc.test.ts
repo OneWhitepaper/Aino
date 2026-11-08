@@ -100,6 +100,35 @@ function rig() {
 describe('platform account IPC', () => {
   beforeEach(() => vi.restoreAllMocks())
 
+  it('rejects stale sign-in recovery owners at the native boundary before logging out', async () => {
+    for (const change of ['account', 'revision', 'mode'] as const) {
+      const f = rig()
+
+      ;(f.event.senderFrame as any).url = 'http://127.0.0.1:5174/'
+      const expected = { userId: f.snapshot.account.id, revision: f.snapshot.revision, mode: f.snapshot.mode }
+
+      if (change === 'account') { f.snapshot.account.id = 'another-account' }
+
+      if (change === 'revision') { f.snapshot.revision++ }
+
+      if (change === 'mode') { f.snapshot.mode = 'production' }
+      // The renderer has not received the new native snapshot yet.
+      await expect(f.invoke('logout', expected)).rejects.toMatchObject({ code: 'platform_account_changed' })
+      expect(f.auth.logout).not.toHaveBeenCalled()
+      f.controller.dispose()
+    }
+  })
+
+  it('accepts an unchanged recovery owner and preserves ordinary logout', async () => {
+    const f = rig()
+
+    ;(f.event.senderFrame as any).url = 'http://127.0.0.1:5174/'
+    await f.invoke('logout', { userId: f.snapshot.account.id, revision: f.snapshot.revision, mode: f.snapshot.mode })
+    await f.invoke('logout')
+    expect(f.auth.logout).toHaveBeenCalledTimes(2)
+    f.controller.dispose()
+  })
+
   it('scopes usage reads to trusted windows, whitelists query fields and disposes the handler', async () => {
     const f = rig()
 

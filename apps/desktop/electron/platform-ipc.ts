@@ -4,6 +4,7 @@ import type {
   BindPlatformModelResult,
   PlatformAccountIpcResult,
   PlatformAccountSnapshot,
+  PlatformAccountWindowOwner,
   PlatformCaptchaProof,
   PlatformModel
 } from '../shared/platform-contract'
@@ -13,6 +14,8 @@ import { parsePaymentQuoteInput, parsePlatformCreateOrderInput, parsePlatformOrd
 import type { PlatformRuntimeBindingController } from '../shared/platform-runtime-binding'
 import type { CloudSyncStatus } from '../shared/platform-sync-contract'
 import { parsePlatformUsageQuery } from '../shared/platform-usage-contract'
+
+import { matchesAccountWindowOwner } from './account-workspace'
 
 interface IpcLike {
   handle(channel: string, handler: (...args: any[]) => unknown): void
@@ -271,8 +274,18 @@ export function registerPlatformIpc({
         code: field(value, 'code', 64)
       })
     },
-    logout: event => {
+    logout: (event, input) => {
       authorize(event)
+
+      if (input !== undefined) {
+        const owner = record(input)
+
+        if (!matchesAccountWindowOwner(auth.snapshot(), {
+          userId: field(owner, 'userId', 128),
+          mode: owner.mode as PlatformAccountWindowOwner['mode'],
+          revision: owner.revision as number
+        })) { throw new PlatformClientError('platform_account_changed') }
+      }
 
       return auth.logout()
     }

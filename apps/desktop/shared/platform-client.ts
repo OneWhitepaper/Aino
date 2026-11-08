@@ -83,7 +83,7 @@ export interface PlatformClient {
   logout(refreshToken: string): Promise<void>
   models(accessToken: string): Promise<PlatformModel[]>
   modelLease(accessToken: string, input: PlatformLeaseInput): Promise<PlatformModelLeaseDTO>
-  supportsDeviceKey(accessToken: string): Promise<boolean>
+  supportsDeviceKey(accessToken: string, deviceId: string): Promise<boolean>
   deviceKey(
     accessToken: string,
     input: { device_id: string; rotate?: boolean; expected_version?: number; reauthorize?: boolean }
@@ -455,9 +455,9 @@ export function createPlatformClient({
 
       return syncRequest(token, `blobs/${hash}`, bytes, signal, true)
     },
-    async supportsDeviceKey(token) {
+    async supportsDeviceKey(token, deviceId) {
       try {
-        const data = object(await request('GET', '/desktop/bootstrap', undefined, token))
+        const data = object(await request('GET', `/desktop/bootstrap?device_id=${encodeURIComponent(deviceId)}`, undefined, token))
 
         return data.capabilities !== undefined && object(data.capabilities).managed_device_key === 1
       } catch (error) {

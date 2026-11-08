@@ -13,6 +13,7 @@ export const enAccountErrors: Record<string, string> = {
   captcha_browser_unavailable: 'This site requires verification in the Aino desktop app. Open the desktop app to sign in.',
   network_timeout: 'The account service timed out. Try again.',
   network_unavailable: 'The account service is offline. Check your connection and retry.',
+  RECENT_AUTH_REQUIRED: 'Sign in again to continue.',
   reauthentication_required: 'Sign in again to continue.'
 }
 
@@ -31,5 +32,6 @@ export const zhAccountErrors: Record<string, string> = {
   captcha_browser_unavailable: '当前站点需要通过 Aino 桌面端完成人机验证，请打开桌面端登录。',
   network_timeout: '账户服务响应超时，请重试。',
   network_unavailable: '无法连接账户服务，请检查网络后重试。',
+  RECENT_AUTH_REQUIRED: '请重新登录以继续。',
   reauthentication_required: '请重新登录以继续。'
 }

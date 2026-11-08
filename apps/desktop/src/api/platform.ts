@@ -28,7 +28,7 @@ export function createPlatformAccountActions(bridge: PlatformAccountBridge) {
     loginExisting: input => bridge.loginExisting(input),
     completeSecondFactor: code => bridge.completeSecondFactor({ totp_code: code }),
     updateProfile: displayName => bridge.updateProfile({ display_name: displayName }),
-    logout: () => bridge.logout(),
+    logout: expectedOwner => bridge.logout(expectedOwner),
     onChanged: listener => bridge.onChanged(listener)
   }
 

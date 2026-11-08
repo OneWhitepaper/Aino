@@ -100,6 +100,29 @@ function rig(options: { useDefaultConfirm?: boolean; captcha?: boolean; delayCap
 }
 
 describe('browser Aino account and gateway authority', () => {
+  it.each(['userId', 'mode', 'revision'] as const)('rejects a stale logout owner after %s changes', async field => {
+    const test = rig()
+    await test.login()
+    const snapshot = await test.bridge.platformAccount.status()
+    const expected = { userId: snapshot.account!.id, mode: snapshot.mode, revision: snapshot.revision }
+    const stale = { ...expected, [field]: field === 'userId' ? 'other-user' : field === 'mode' ? 'development' : expected.revision - 1 }
+
+    await expect(test.bridge.platformAccount.logout(stale)).rejects.toMatchObject({ code: 'platform_account_changed' })
+    expect(test.apiCalls.some(call => call.url.endsWith('/auth/logout'))).toBe(false)
+    expect(await test.bridge.platformAccount.status()).toEqual(snapshot)
+  })
+
+  it('allows an owner-matched logout through the existing browser account lifecycle', async () => {
+    const test = rig()
+    await test.login()
+    const snapshot = await test.bridge.platformAccount.status()
+
+    await expect(test.bridge.platformAccount.logout({
+      userId: snapshot.account!.id, mode: snapshot.mode, revision: snapshot.revision
+    })).resolves.toMatchObject({ phase: 'signed_out', account: null })
+    expect(test.apiCalls.filter(call => call.url.endsWith('/auth/logout'))).toHaveLength(1)
+  })
+
   it('never exposes native device reauthorization or obtains permanent keys even from a capable gateway', async () => {
     const test = rig()
     await test.login()

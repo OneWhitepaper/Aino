@@ -62,7 +62,7 @@ contextBridge.exposeInMainWorld('hermesDesktop', {
     requestBindingCode: input => invokePlatformAccount('request-binding-code', input),
     submitStepUp: input => invokePlatformAccount('submit-step-up', input),
     bindPhone: input => invokePlatformAccount('bind-phone', input),
-    logout: () => invokePlatformAccount('logout'),
+    logout: expectedOwner => invokePlatformAccount('logout', expectedOwner),
     onChanged: callback => {
       const listener = (_event, snapshot) => callback(snapshot)
       ipcRenderer.on('aino:platform-account:changed', listener)

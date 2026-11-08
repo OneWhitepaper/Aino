@@ -9,13 +9,17 @@ import { act, fireEvent, render, screen, waitFor, within } from '@testing-librar
 import { useEffect, useState } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { platformAccountActions } from '@/api/platform'
 import { en } from '@/i18n/en'
+import { $notifications } from '@/store/notifications'
 import { $onboardingPhase } from '@/store/onboarding-phase'
 import { $onboardingSession } from '@/store/onboarding-session'
 import { $reasoningCollapsedByDefault, setShowReasoningFromConfig } from '@/store/reasoning-disclosure'
 import { $activeSessionId } from '@/store/session'
 import { $toolDisclosureStates } from '@/store/tool-view'
+import { platformSnapshot } from '@/test/platform-model'
 
+import type { PlatformAccountBridge } from '../../../../shared/platform-contract'
 import { stubThreadEnvironment, stubThreadViewportSize, ThreadRuntime } from '../test-utils'
 
 import { MESSAGE_PARTS_COMPONENTS } from './message-parts'
@@ -592,6 +596,59 @@ describe('assistant-ui streaming renderer', () => {
 
     expect(screen.getByRole('button', { name: 'Choose model' }).getAttribute('data-action')).toBe(action)
     expect(screen.queryByRole('button', { name: 'Retry' })).toBeNull()
+  })
+
+  it.each([false, true])('offers explicit recent-auth recovery and keeps logout failures visible (%s)', async fails => {
+    const previousDesktop = window.hermesDesktop
+    const account = platformSnapshot()
+
+    const logout = vi.fn(async () => {
+      if (fails) {
+        throw Object.assign(new Error('private upstream detail'), { code: 'network_unavailable' })
+      }
+
+      return { ...account, revision: 2, phase: 'signed_out' as const, account: null }
+    })
+
+    const bridge = {
+      status: async () => account,
+      capabilities: async () => ({}),
+      onChanged: () => () => {},
+      logout
+    } as unknown as PlatformAccountBridge
+
+    Object.defineProperty(window, 'hermesDesktop', { configurable: true, value: { platformAccount: bridge } })
+    $notifications.set([])
+
+    try {
+      const actions = platformAccountActions(bridge)
+      await actions.refresh()
+      render(<MessageHarness message={assistantManagedErrorMessage('RECENT_AUTH_REQUIRED')} />)
+
+      const signIn = screen.getByRole('button', { name: 'Sign in again' })
+      expect(signIn.getAttribute('data-action')).toBe('sign-in')
+      expect(screen.queryByRole('button', { name: 'Retry' })).toBeNull()
+      expect(screen.queryByRole('button', { name: 'Choose model' })).toBeNull()
+      expect(logout).not.toHaveBeenCalled()
+
+      fireEvent.click(signIn)
+
+      await waitFor(() => expect(logout).toHaveBeenCalledTimes(1))
+      expect(logout).toHaveBeenCalledWith({ userId: 'user-a', mode: 'development', revision: 1 })
+      await waitFor(() => {
+        if (fails) {
+          expect($notifications.get()).toEqual(expect.arrayContaining([
+            expect.objectContaining({ kind: 'error', message: 'The account service is offline. Check your connection and retry.' })
+          ]))
+          expect(actions.state.get().authenticated).toBe(true)
+        } else {
+          expect(actions.state.get()).toMatchObject({ phase: 'signed_out', authenticated: false })
+        }
+      })
+    } finally {
+      Object.defineProperty(window, 'hermesDesktop', { configurable: true, value: previousDesktop })
+      $notifications.set([])
+    }
   })
 
   it('omits the dismiss control when no onDismissError handler is supplied', () => {
