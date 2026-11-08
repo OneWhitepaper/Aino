@@ -19,6 +19,7 @@ from pm import paths
 from pm.lock import Facts, Lockfile
 
 
+@pytest.mark.live
 @pytest.mark.platforms("windows", arch="arm64")
 def test_live_pinned_cuda_download_pause_resume_and_execute(tmp_path, monkeypatch, record_property):
     home = tmp_path / "home"
