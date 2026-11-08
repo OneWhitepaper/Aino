@@ -5,6 +5,7 @@ import { type FC, useState } from 'react'
 
 import { useSessionView } from '@/app/chat/session-view'
 import { resolveSessionOwner } from '@/app/session/hooks/use-session-actions/utils'
+import { GeneratedImageMetadata } from '@/components/chat/generated-image-metadata'
 import { DiffusionCanvas } from '@/components/chat/image-generation-placeholder'
 import { ImageActionButton, ImageLightbox } from '@/components/chat/zoomable-image'
 import { useImageDownload } from '@/hooks/use-image-download'
@@ -88,33 +89,36 @@ export const GeneratedImage: FC<{ aspectRatio?: string; result?: unknown }> = ({
   // Nothing will fill the frame, so collapse to the link line.
   if (failed && image) {
     return (
-      <a
-        className="mt-2 ref inline-block wrap-anywhere"
-        href="#"
-        onClick={event => {
-          event.preventDefault()
+      <>
+        <a
+          className="mt-2 ref inline-block wrap-anywhere"
+          href="#"
+          onClick={event => {
+            event.preventDefault()
 
-          // A gateway file saves through the host bridge, like every other
-          // remote media open: its URL form carries the connection token,
-          // which must never land in a browser's history. A relative path
-          // saves through it too, from the chat's own working directory,
-          // which only a save naming that session resolves it in. A data:
-          // image carries its own bytes and saves them, as its download button does.
-          if (/^data:/i.test(image)) {
-            void download()
-          } else if (isRemoteGateway() && isFileMediaPath(image)) {
-            void downloadGatewayMediaFile(image).catch(error => notifyError(error, copy.imageDownloadFailed))
-          } else if (isRemoteGateway() && !isInlineMediaSrc(image)) {
-            void sessionFileOrigin(storedSessionId, runtimeId)
-              .then(origin => downloadGatewayMediaFile(image, origin))
-              .catch(error => notifyError(error, copy.imageDownloadFailed))
-          } else {
-            void window.hermesDesktop?.openExternal(mediaExternalUrl(image))
-          }
-        }}
-      >
-        {copy.openImage}: {mediaName(image)}
-      </a>
+            // A gateway file saves through the host bridge, like every other
+            // remote media open: its URL form carries the connection token,
+            // which must never land in a browser's history. A relative path
+            // saves through it too, from the chat's own working directory,
+            // which only a save naming that session resolves it in. A data:
+            // image carries its own bytes and saves them, as its download button does.
+            if (/^data:/i.test(image)) {
+              void download()
+            } else if (isRemoteGateway() && isFileMediaPath(image)) {
+              void downloadGatewayMediaFile(image).catch(error => notifyError(error, copy.imageDownloadFailed))
+            } else if (isRemoteGateway() && !isInlineMediaSrc(image)) {
+              void sessionFileOrigin(storedSessionId, runtimeId)
+                .then(origin => downloadGatewayMediaFile(image, origin))
+                .catch(error => notifyError(error, copy.imageDownloadFailed))
+            } else {
+              void window.hermesDesktop?.openExternal(mediaExternalUrl(image))
+            }
+          }}
+        >
+          {copy.openImage}: {mediaName(image)}
+        </a>
+        <GeneratedImageMetadata result={result} />
+      </>
     )
   }
 
@@ -160,6 +164,7 @@ export const GeneratedImage: FC<{ aspectRatio?: string; result?: unknown }> = ({
           <ImageActionButton className="group-hover/image:opacity-100" copy={copy} onClick={download} saving={saving} />
         )}
       </span>
+      {!pending && <GeneratedImageMetadata result={result} />}
       {src && (
         <ImageLightbox
           alt={t.ui.accessibility.generatedImage}

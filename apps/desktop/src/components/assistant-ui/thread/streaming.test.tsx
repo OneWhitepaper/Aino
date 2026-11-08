@@ -7,15 +7,18 @@ import {
 } from '@assistant-ui/react'
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { useEffect, useState } from 'react'
+import { MemoryRouter } from 'react-router'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { platformAccountActions } from '@/api/platform'
+import { I18nProvider } from '@/i18n'
 import { en } from '@/i18n/en'
+import { getRuntimeI18nLocale, setRuntimeI18nLocale } from '@/i18n/runtime'
 import { $notifications } from '@/store/notifications'
 import { $onboardingPhase } from '@/store/onboarding-phase'
 import { $onboardingSession } from '@/store/onboarding-session'
 import { $reasoningCollapsedByDefault, setShowReasoningFromConfig } from '@/store/reasoning-disclosure'
-import { $activeSessionId } from '@/store/session'
+import { $activeSessionId, $modelPickerOpen } from '@/store/session'
 import { $toolDisclosureStates } from '@/store/tool-view'
 import { platformSnapshot } from '@/test/platform-model'
 
@@ -597,6 +600,35 @@ describe('assistant-ui streaming renderer', () => {
     expect(screen.getByRole('button', { name: 'Choose model' }).getAttribute('data-action')).toBe(action)
     expect(screen.queryByRole('button', { name: 'Retry' })).toBeNull()
   })
+
+  it.each(['managed_billing_unavailable', 'managed_subscription_expired', 'managed_model_access_denied'])(
+    'offers account and available model selection without replay for %s', code => {
+      const previousLocale = getRuntimeI18nLocale()
+
+      const mounted = render(
+        <MemoryRouter>
+          <I18nProvider configClient={null} initialLocale="zh">
+            <MessageHarness message={assistantManagedErrorMessage(code)} />
+          </I18nProvider>
+        </MemoryRouter>
+      )
+
+      try {
+        expect(screen.getByRole('button', { name: '我的账户' }).getAttribute('data-action')).toBe('account')
+        const picker = screen.getByRole('button', { name: '选择模型' })
+        expect(picker.getAttribute('data-action')).toBe('picker')
+        expect(screen.queryByRole('button', { name: '重试' })).toBeNull()
+        expect(screen.queryByRole('button', { name: '切换服务商' })).toBeNull()
+        $modelPickerOpen.set(false)
+        fireEvent.click(picker)
+        expect($modelPickerOpen.get()).toBe(true)
+      } finally {
+        mounted.unmount()
+        $modelPickerOpen.set(false)
+        setRuntimeI18nLocale(previousLocale)
+      }
+    }
+  )
 
   it.each([false, true])('offers explicit recent-auth recovery and keeps logout failures visible (%s)', async fails => {
     const previousDesktop = window.hermesDesktop

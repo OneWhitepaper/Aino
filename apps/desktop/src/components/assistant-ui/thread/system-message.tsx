@@ -9,6 +9,7 @@ import { Codicon } from '@/components/ui/codicon'
 import { LogView } from '@/components/ui/log-view'
 import { ToolIcon } from '@/components/ui/tool-icon'
 import { useI18n } from '@/i18n'
+import { localizedFailedTurnNotice } from '@/i18n/failed-turn-notices'
 import { LinkifiedText } from '@/lib/external-link'
 import { cn } from '@/lib/utils'
 import type { ModelSwitchDisplayMetadata } from '@/types/hermes'
@@ -66,11 +67,13 @@ export const BackgroundResult: FC<BackgroundResultProps> = ({ text, report, proc
 }
 
 export const SystemMessage: FC = () => {
-  const { t } = useI18n()
-  const text = useAuiState(s => messageContentText(s.message.content))
+  const { t, locale } = useI18n()
+  const sourceText = useAuiState(s => messageContentText(s.message.content))
+  const failedTurnNotice = useAuiState(s => s.message.metadata.custom?.failedTurnNotice === true)
   const asyncResult = useAuiState(s => s.message.metadata.custom?.asyncResult)
   const modelSwitch = useAuiState(s => s.message.metadata.custom?.modelSwitch) as ModelSwitchDisplayMetadata | undefined
   const processResult = useAuiState(s => s.message.metadata.custom?.asyncResultKind === 'process')
+  const text = localizedFailedTurnNotice(locale, sourceText, failedTurnNotice)
 
   if (!text) {
     return null
@@ -78,6 +81,7 @@ export const SystemMessage: FC = () => {
 
   if (modelSwitch) {
     const { model, previous_model: previousModel } = modelSwitch
+
     const label = model
       ? previousModel
         ? t.assistant.thread.modelChangedFrom(previousModel, model)

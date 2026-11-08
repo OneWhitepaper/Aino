@@ -7,6 +7,8 @@ import { type Translations, useI18n } from '@/i18n'
 import type { PlatformUsageRow } from '../../../../shared/platform-contract'
 import { Pill } from '../primitives'
 
+import { UsageImageDetails } from './usage-image-details'
+
 interface UsageViewProps {
   rows: PlatformUsageRow[]
   truncated?: boolean
@@ -95,6 +97,7 @@ function UsageDetails({ row }: { row: PlatformUsageRow }) {
 
   return (
     <div className="account-usage-details">
+      <UsageImageDetails row={row} />
       <dl className="account-usage-counters">
         {counters.map(([label, value]) => (
           <div key={label}>
@@ -232,6 +235,7 @@ export function UsageView({ rows, truncated = false, variant = 'compact' }: Usag
                 <span className="min-w-0 text-right text-xs text-muted-foreground">
                   <UsageTime value={row.created_at} />
                 </span>
+                <UsageImageDetails compact row={row} />
               </li>
             )
           })}

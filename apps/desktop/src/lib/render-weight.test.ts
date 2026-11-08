@@ -39,6 +39,22 @@ describe('messageStoreWeight', () => {
 })
 
 describe('messagePaintWeight', () => {
+  it('budgets a single bridged image call as its visible image card', () => {
+    const args = { prompt: 'A blue circle' }
+    const result = { image: `data:image/png;base64,${'A'.repeat(100_000)}` }
+    const direct = [{ type: 'tool-call', toolName: 'image_generate', args, result }]
+
+    const bridged = [
+      {
+        type: 'tool-call',
+        toolName: 'tool_call',
+        args: { calls: [{ name: 'image_generate', arguments: args }] },
+        result
+      }
+    ]
+
+    expect(messagePaintWeight(bridged)).toBe(messagePaintWeight(direct))
+  })
   it('prices a settled activity row as the one line it renders, not its payload', () => {
     const heavy = messagePaintWeight([bigResult(RENDER_WEIGHT_CHARS * 100)])
 

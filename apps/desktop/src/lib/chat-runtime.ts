@@ -481,6 +481,7 @@ export function toRuntimeMessage(message: ChatMessage): ThreadMessage {
         custom: {
           ...timelineMeta,
           ...(message.modelSwitch ? { modelSwitch: message.modelSwitch } : {}),
+          ...(message.failedTurnNotice ? { failedTurnNotice: true } : {}),
           ...(message.asyncResult ? { asyncResult: message.asyncResult } : {}),
           ...(message.asyncResultKind ? { asyncResultKind: message.asyncResultKind } : {})
         }

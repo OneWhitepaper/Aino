@@ -1187,6 +1187,12 @@ ready catalog. Account, backend-origin and revision changes invalidate that copy
   from the chip to the floating pill; leaving both dismisses it.
 - A tool result may expose an inline action that opens a preview. It must not
   open the rail automatically.
+- Generated image results show verified output pixels separately from requested
+  dimensions, including replayed results. A mismatch preserves the original image
+  and is explained inline; requested sizes never stand in for unknown output.
+  Per-turn and account receipts use the API's image size, tier, breakdown and
+  size source. Quality labels are not billing tiers; missing historical evidence
+  remains unknown and the renderer never recalculates a charge.
 - Tool rows reserve destructive red for explicit failures. Missing read paths and
   ambiguous exit-1 results use neutral notices, with details still available.
   Errors described inside returned data are not tool failures. Expanded failures

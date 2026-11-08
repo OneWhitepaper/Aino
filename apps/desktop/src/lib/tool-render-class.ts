@@ -8,6 +8,8 @@
  * rather than inside either one.
  */
 
+import { generatedImageToolArgs } from '@/lib/generated-images'
+
 const FILE_EDIT_TOOL_NAMES = new Set(['edit_file', 'patch', 'write_file'])
 
 /** Renders a diff — the deliverable of the turn, and the one card whose cost scales. */
@@ -46,11 +48,19 @@ export function isCardToolName(toolName: string): toolName is CardToolName {
   return (CARD_TOOL_NAMES as readonly string[]).includes(toolName)
 }
 
+export function resolveCardToolName(toolName: string, args?: unknown): CardToolName | null {
+  if (generatedImageToolArgs(toolName, args)) {
+    return 'image_generate'
+  }
+
+  return isCardToolName(toolName) ? toolName : null
+}
+
 // Name the run splitter uses for a manage_connections part it has classified as a card.
 export const CONNECTION_CARD_KEY = 'manage_connections:card'
 
-export function isCardTool(toolName: string): boolean {
-  return isCardToolName(toolName) || toolName === CONNECTION_CARD_KEY || isFileEditTool(toolName)
+export function isCardTool(toolName: string, args?: unknown): boolean {
+  return resolveCardToolName(toolName, args) !== null || toolName === CONNECTION_CARD_KEY || isFileEditTool(toolName)
 }
 
 // Activity tools that render nothing at all: `todo` parts are hoisted to a

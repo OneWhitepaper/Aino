@@ -196,7 +196,9 @@ export function ResponseMessages({ components, indices }: ResponseMessagesProps)
 
             return (
               !!s.tools.toolUIs?.[part.toolName]?.length ||
-              (isCardTool(part.toolName) && !isFileEditTool(part.toolName) && part.toolName !== 'delegate_task') ||
+              (isCardTool(part.toolName, part.args) &&
+                !isFileEditTool(part.toolName) &&
+                part.toolName !== 'delegate_task') ||
               toolNeedsAttention(part as unknown as ToolPart)
             )
           })

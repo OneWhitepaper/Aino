@@ -1,5 +1,6 @@
 import { platformAccountActions } from '@/api/platform'
 import { translateNow } from '@/i18n'
+import { PRODUCT_NAME } from '@/lib/brand'
 import type { ErrorSurface } from '@/lib/error-surface'
 import { platformModelSupportsPurpose } from '@/lib/platform-model-purpose'
 
@@ -8,7 +9,7 @@ import type { PlatformModel } from '../../shared/platform-contract'
 
 import { platformModelCatalog, PlatformSelectionError } from './platform-models'
 
-export type PlatformRecoveryAction = 'account' | 'sign-in' | 'new-chat' | 'picker' | 'rebind'
+export type PlatformRecoveryAction = 'account' | 'account-models' | 'sign-in' | 'new-chat' | 'picker' | 'rebind'
 
 /** Capture the failed request's owner; a stale recovery must not sign out another account. */
 export function createPlatformSignInRecovery(): () => Promise<void> {
@@ -44,6 +45,10 @@ export function createPlatformSignInRecovery(): () => Promise<void> {
 
 /** One deterministic recovery policy shared by pre-submit and retained turn errors. */
 export function platformRecoveryActionForCode(code: string): PlatformRecoveryAction | null {
+  if (['managed_billing_unavailable', 'managed_subscription_expired', 'managed_model_access_denied'].includes(code)) {
+    return 'account-models'
+  }
+
   if (code === 'RECENT_AUTH_REQUIRED') {
     return 'sign-in'
   }
@@ -143,10 +148,17 @@ export function platformErrorSurface(error: unknown): ErrorSurface | null {
     return null
   }
 
+  if (error.code === 'model_unavailable') {
+    return { code: 'model_not_found', layer: 'provider', retryable: false, providerLabel: PRODUCT_NAME }
+  }
+
   const layer =
     error.code === 'insufficient_balance' ||
     error.code === 'quota_exhausted' ||
-    error.code === 'managed_balance_unavailable'
+    error.code === 'managed_balance_unavailable' ||
+    error.code === 'managed_billing_unavailable' ||
+    error.code === 'managed_subscription_expired' ||
+    error.code === 'managed_model_access_denied'
       ? 'billing'
       : error.code === 'managed_auth_unavailable' ||
           error.code === 'RECENT_AUTH_REQUIRED' ||

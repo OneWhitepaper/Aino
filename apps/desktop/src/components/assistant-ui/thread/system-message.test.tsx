@@ -22,6 +22,21 @@ $displayTimestamps.set(true)
 const timestamp = new Date('2026-05-01T00:00:00.000Z')
 stubThreadEnvironment()
 
+const failedTurnNotices = [
+  [
+    'Your request was not processed. Send it again if you still want me to carry it out.',
+    '本次请求未得到处理。如仍需执行，请重新发送。'
+  ],
+  [
+    'This turn did not complete. Some actions may already have run; verify their effects before resending.',
+    '本回合未完成。部分操作可能已经执行，请先核实结果，再决定是否重新发送。'
+  ],
+  [
+    'An automated delivery was interrupted and was not run again. Some actions may already have run; verify their effects.',
+    '一次自动投递已中断，未再次执行。部分操作可能已经执行，请先核实其结果。'
+  ]
+] as const
+
 function Harness({
   locale = 'en',
   text = '',
@@ -67,6 +82,47 @@ function expectTimestampSeparated(container: HTMLElement, precedingText: string)
 }
 
 afterEach(cleanup)
+
+describe('failed-turn boundary localization', () => {
+  it.each(failedTurnNotices)(
+    'localizes the owned boundary without changing its durable content: %s',
+    (text, translated) => {
+      const stored: SessionMessage = {
+        role: 'assistant',
+        content: text,
+        display_kind: 'failed_turn',
+        timestamp: timestamp.getTime() / 1000
+      }
+
+      const projected = toChatMessages([stored])[0]
+      const { container } = render(<Harness locale="zh" stored={stored} />)
+      expect(container.querySelector('[data-role="system"]')?.textContent).toContain(translated)
+      expect(container.textContent).not.toContain(text)
+      expect(projected.parts).toMatchObject([{ type: 'text', text }])
+      expect(stored.content).toBe(text)
+      expect(toRuntimeMessage(projected).content).toMatchObject([{ type: 'text', text }])
+    }
+  )
+
+  it.each([
+    { role: 'assistant', content: failedTurnNotices[0][0] },
+    { role: 'system', content: failedTurnNotices[0][0] },
+    { role: 'assistant', display_kind: 'failed_turn', content: `Provider output: ${failedTurnNotices[1][0]}` }
+  ] as const)('preserves ordinary model replies and unknown boundary content (%s)', stored => {
+    const { container } = render(<Harness locale="zh" stored={{ ...stored, timestamp: 1 }} />)
+    expect(container.textContent).toContain(stored.content)
+  })
+
+  it('keeps the English boundary unchanged for English users', () => {
+    const { container } = render(
+      <Harness
+        stored={{ role: 'assistant', content: failedTurnNotices[1][0], display_kind: 'failed_turn', timestamp: 1 }}
+      />
+    )
+
+    expect(container.querySelector('[data-role="system"]')?.textContent).toContain(failedTurnNotices[1][0])
+  })
+})
 
 describe('background report inline code', () => {
   // The report body is the same `aui-md prose` markdown renderer the
@@ -178,6 +234,7 @@ describe('slash output face', () => {
   it('renders a usage-window /usage block (plan gauges) monospace', () => {
     const output =
       'Session Token Usage\nInput tokens:                 13,527\n\nNous Plan\nToday  [||        ]  20% used'
+
     const { container } = render(<Harness text={`slash:/usage\n${output}`} />)
 
     expect(body(container)?.className).toContain('font-mono')

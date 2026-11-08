@@ -3,7 +3,7 @@
 from types import SimpleNamespace
 
 import httpx
-from openai import AuthenticationError
+from openai import AuthenticationError, PermissionDeniedError
 import pytest
 
 from agent.auxiliary_billing_scope import BillingScope, ManagedCredential
@@ -62,3 +62,29 @@ def test_unversioned_lease_failure_cannot_reject_a_current_device_key():
     result = managed_failure_result(SimpleNamespace(api_key=key), error, [], 1)
     assert 'managed_credential_version' not in result
     assert 'managed_credential_version' not in build_error_surface_from_result(result)
+
+
+@pytest.mark.parametrize(('code', 'reason'), [
+    ('DESKTOP_BILLING_UNAVAILABLE', 'managed_billing_unavailable'),
+    ('SUBSCRIPTION_EXPIRED', 'managed_subscription_expired'),
+    ('DESKTOP_MODEL_NOT_ALLOWED', 'managed_model_access_denied'),
+    ('DESKTOP_QUOTA_EXHAUSTED', 'managed_balance_unavailable'),
+])
+@pytest.mark.parametrize('nested', [False, True])
+def test_account_entitlement_refusal_is_not_an_upstream_auth_failure(code, reason, nested):
+    key = ManagedCredential(lambda: 'secret', 'user', 'session', 'model', 'https://aino.invalid/v1',
+                            'chat_completions', False, model_id='catalog')
+    request = httpx.Request('POST', key.base_url + '/chat/completions')
+    body = {'code': code, 'message': 'selected platform model is not available to this account'}
+    error = PermissionDeniedError('private upstream detail', response=httpx.Response(403, request=request),
+                                  body={'error': body} if nested else body)
+    history = [{'role': 'user', 'content': 'original'}]
+    result = managed_failure_result(SimpleNamespace(api_key=key), error, history, 1)
+    assert result['failure_reason'] == reason
+    assert result['failure_retryable'] is False
+    assert result['messages'] is history
+    assert managed_credential_rejection(error) is None
+    surface = build_error_surface_from_result(result, provider='aino', model='model')
+    assert surface['code'] == reason and surface['layer'] == 'billing'
+    assert surface['retryable'] is False
+    assert 'secret' not in str(result) and 'private upstream detail' not in str(result)

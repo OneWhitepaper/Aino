@@ -75,6 +75,18 @@ export const zhHantAssistant = {
         streaming: '回覆完成前連線已中斷。請重試以重新傳送。'
       },
       errorCodes: {
+        managed_billing_unavailable: {
+          title: "方案狀態無法使用",
+          body: "請到「我的帳戶」查看訂閱和到期情況。恢復後重新傳送，或選擇其他可用模型。"
+        },
+        managed_subscription_expired: {
+          title: "方案已到期",
+          body: "請到「我的帳戶」續訂，恢復後重新傳送，或選擇其他可用模型。"
+        },
+        managed_model_access_denied: {
+          title: "目前模型暫無使用權限",
+          body: "目前方案或帳戶無法使用此模型。請到「我的帳戶」查看，或選擇其他可用模型。"
+        },
         auth: {
           title: provider => `${provider} 拒絕了你的 API 金鑰`,
           body: () => '已儲存的金鑰無效或已被撤銷。請更新金鑰，然後重新傳送訊息。'

@@ -38,6 +38,8 @@ _REASON_TO_LAYER = {
     "managed_credential_expired": LAYER_AUTH, "managed_credential_revoked": LAYER_AUTH,
     "managed_credential_rejected": LAYER_AUTH,
     "managed_auth_unavailable": LAYER_AUTH, "managed_balance_unavailable": LAYER_BILLING,
+    "managed_billing_unavailable": LAYER_BILLING, "managed_subscription_expired": LAYER_BILLING,
+    "managed_model_access_denied": LAYER_BILLING,
     "auth": LAYER_AUTH, "auth_permanent": LAYER_AUTH, "billing": LAYER_BILLING, "billing_unverified": LAYER_BILLING,
     "loop_error": LAYER_GATEWAY, "interpreter_shutdown": LAYER_GATEWAY, "session_busy": LAYER_GATEWAY,
     "gateway_connection": LAYER_GATEWAY, "host_error": LAYER_GATEWAY, "workspace_unavailable": LAYER_GATEWAY,
@@ -58,6 +60,7 @@ _FREE_TIER_RETRYABLE_KINDS = {"rate_limited", "at_capacity", "outage"}
 # only: current backends stamp the classifier's verdict in ``failure_retryable``.
 # Kept in sync with ``classify_api_error``'s retryable=False verdicts.
 _NON_RETRYABLE_REASONS = {
+    "managed_billing_unavailable", "managed_subscription_expired", "managed_model_access_denied",
     "auth", "auth_permanent", "billing", "billing_unverified", "content_policy_blocked",
     "provider_policy_blocked", "data_policy_denied", "model_not_found", "format_error", "ssl_cert_verification",
     "context_overflow", "interpreter_shutdown", "upstream_blocked",

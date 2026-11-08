@@ -235,6 +235,12 @@ export interface PlatformUsageRow {
   output_tokens?: number | null
   cache_creation_tokens?: number | null
   cache_read_tokens?: number | null
+  image_count?: number | null
+  image_size?: string | null
+  image_input_size?: string | null
+  image_output_size?: string | null
+  image_size_source?: string | null
+  image_size_breakdown?: Record<string, number> | null
 }
 
 export interface PlatformUsagePage {

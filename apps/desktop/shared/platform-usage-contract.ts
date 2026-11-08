@@ -24,6 +24,25 @@ function integer(value: unknown, min = 0): number {
   return typeof value === 'number' && Number.isSafeInteger(value) && value >= min ? value : invalid()
 }
 
+function imageUsage(row: Record<string, unknown>) {
+  const breakdown = row.image_size_breakdown == null ? null : object(row.image_size_breakdown)
+
+  if (breakdown && Object.keys(breakdown).length > 16) {
+    return invalid()
+  }
+
+  return {
+    image_count: row.image_count == null ? null : integer(row.image_count),
+    image_size: nullableText(row.image_size),
+    image_input_size: nullableText(row.image_input_size),
+    image_output_size: nullableText(row.image_output_size),
+    image_size_source: nullableText(row.image_size_source),
+    image_size_breakdown: breakdown
+      ? Object.fromEntries(Object.entries(breakdown).map(([key, value]) => [text(key), integer(value)]))
+      : null
+  }
+}
+
 export function parsePlatformUsageQuery(raw: unknown): PlatformUsageQuery {
   const input = object(raw)
   const page = integer(input.page, 1)
@@ -121,7 +140,8 @@ export function parsePlatformUsagePage(value: unknown): PlatformUsagePage {
       input_tokens: row.input_tokens == null ? null : integer(row.input_tokens),
       output_tokens: row.output_tokens == null ? null : integer(row.output_tokens),
       cache_creation_tokens: row.cache_creation_tokens == null ? null : integer(row.cache_creation_tokens),
-      cache_read_tokens: row.cache_read_tokens == null ? null : integer(row.cache_read_tokens)
+      cache_read_tokens: row.cache_read_tokens == null ? null : integer(row.cache_read_tokens),
+      ...imageUsage(row)
     }
   })
 

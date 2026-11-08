@@ -4,6 +4,18 @@ type ThreadCopy = Translations['assistant']['thread']
 
 // The error card's per-code title and body (lib/error-surface-copy.ts), keyed by error_surface.code.
 export const zhErrorCodes: Partial<ThreadCopy['errorCodes']> = {
+  managed_billing_unavailable: {
+    title: "套餐状态不可用",
+    body: "请到“我的账户”查看订阅和到期情况。恢复后重新发送，或选择其他可用模型。"
+  },
+  managed_subscription_expired: {
+    title: "套餐已到期",
+    body: "请到“我的账户”续订，恢复后重新发送，或选择其他可用模型。"
+  },
+  managed_model_access_denied: {
+    title: "当前模型暂无使用权限",
+    body: "当前套餐或账户暂无该模型的使用权限。请到“我的账户”查看，或选择其他可用模型。"
+  },
   auth: {
     title: provider => `${provider} 拒绝了你的 API 密钥`,
     body: () => '已保存的密钥无效或已被撤销。请更新密钥，然后重新发送消息。'

@@ -37,6 +37,8 @@ const COMPARED_FIELDS = [
   // Structured failure layer — drives the error card's title and action row,
   // so a change (e.g. resume replay attaching the descriptor) must repaint.
   'errorSurface',
+  // The renderer localizes backend-authored failure boundaries only when marked.
+  'failedTurnNotice',
   'hidden',
   'branchGroupId',
   'interim',
@@ -155,8 +157,9 @@ export function chatReactionsEquivalent(a: ChatMessage['reactions'], b: ChatMess
   )
 }
 
-function errorSurfacesEquivalent(a: ChatMessage, b: ChatMessage): boolean {
+function failureMetadataEquivalent(a: ChatMessage, b: ChatMessage): boolean {
   return !(
+    a.failedTurnNotice !== b.failedTurnNotice ||
     (a.errorSurface?.layer ?? null) !== (b.errorSurface?.layer ?? null) ||
     (a.errorSurface?.code ?? null) !== (b.errorSurface?.code ?? null) ||
     (a.errorSurface?.retryable ?? null) !== (b.errorSurface?.retryable ?? null)
@@ -173,7 +176,7 @@ export function chatMessagesEquivalent(a: ChatMessage, b: ChatMessage): boolean 
     a.recovered !== b.recovered ||
     a.pending !== b.pending ||
     a.error !== b.error ||
-    !errorSurfacesEquivalent(a, b) ||
+    !failureMetadataEquivalent(a, b) ||
     a.hidden !== b.hidden ||
     a.branchGroupId !== b.branchGroupId ||
     a.timestamp !== b.timestamp ||

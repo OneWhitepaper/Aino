@@ -955,16 +955,16 @@ function PlatformRecoveryActions({ recovery }: { recovery: ReturnType<typeof pla
           {t.boot.errors.signInAgain}
         </button>
       )}
-      {recovery === 'account' && inRouter && <AccountRecoveryAction label={t.platformModels.myAccount} />}
+      {(recovery === 'account' || recovery === 'account-models') && inRouter && <AccountRecoveryAction label={t.platformModels.myAccount} />}
       {recovery === 'new-chat' && (
         <button className="aui-error-action" data-action="new-chat" onClick={requestFreshSession} type="button">
           {t.platformModels.newChatCurrentAccount}
         </button>
       )}
-      {(recovery === 'picker' || recovery === 'rebind') && (
+      {(recovery === 'picker' || recovery === 'rebind' || recovery === 'account-models') && (
         <button
           className="aui-error-action"
-          data-action={recovery}
+          data-action={recovery === 'account-models' ? 'picker' : recovery}
           onClick={() => setModelPickerOpen(true)}
           type="button"
         >

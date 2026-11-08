@@ -15,6 +15,10 @@ _CODES = {
     "DESKTOP_CREDENTIAL_REVOKED": "managed_credential_revoked",
     "DESKTOP_CREDENTIAL_SCOPE": "managed_credential_revoked",
     "DESKTOP_AUTH_UNAVAILABLE": "managed_auth_unavailable",
+    "DESKTOP_BILLING_UNAVAILABLE": "managed_billing_unavailable",
+    "SUBSCRIPTION_EXPIRED": "managed_subscription_expired",
+    "DESKTOP_MODEL_NOT_ALLOWED": "managed_model_access_denied",
+    "DESKTOP_QUOTA_EXHAUSTED": "managed_balance_unavailable",
     "INSUFFICIENT_BALANCE": "managed_balance_unavailable",
     "SUBSCRIPTION_NOT_FOUND": "managed_balance_unavailable",
     "SUBSCRIPTION_INVALID": "managed_balance_unavailable",
@@ -36,6 +40,9 @@ _MESSAGES = {
     "managed_auth_unavailable": "Aino authorization is temporarily unavailable. Your conversation is preserved.",
     "managed_upstream_auth_failed": "The Aino model channel rejected authentication. Select another model or retry later.",
     "managed_balance_unavailable": "Aino balance or subscription quota is unavailable. Check your account or select another model.",
+    "managed_billing_unavailable": "The Aino plan status is unavailable. Check the subscription and expiry in My Account, or select an available model.",
+    "managed_subscription_expired": "The Aino subscription has expired. Renew it in My Account, or select an available model.",
+    "managed_model_access_denied": "Your current Aino plan or account cannot use this model. Check My Account, or select an available model.",
 }
 
 

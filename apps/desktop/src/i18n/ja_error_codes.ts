@@ -4,6 +4,18 @@ type ThreadCopy = Translations['assistant']['thread']
 
 // The error card's per-code title and body (lib/error-surface-copy.ts), keyed by error_surface.code.
 export const jaErrorCodes: Partial<ThreadCopy['errorCodes']> = {
+  managed_billing_unavailable: {
+    title: "プランの状態を確認できません",
+    body: "「マイアカウント」で契約と有効期限を確認してください。利用権が回復してから再送するか、利用可能な別のモデルを選択してください。"
+  },
+  managed_subscription_expired: {
+    title: "プランの有効期限が切れました",
+    body: "「マイアカウント」で契約を更新してから再送するか、利用可能な別のモデルを選択してください。"
+  },
+  managed_model_access_denied: {
+    title: "このモデルを利用する権限がありません",
+    body: "現在のプランまたはアカウントではこのモデルを利用できません。「マイアカウント」を確認するか、利用可能な別のモデルを選択してください。"
+  },
   cron_session_read_only: {
     title: 'このチャットはスケジュールされたジョブ用です',
     body: 'このチャットはそのジョブの実行専用のため、メッセージは実行されませんでした。送信するには新しいチャットを開始してください。'
