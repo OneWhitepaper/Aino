@@ -122,6 +122,9 @@ export function ModelMenuPanel({ onFollowDefaultModel, ...props }: ModelMenuPane
     }
 
     setRefreshing(true)
+    // Aino's account catalog is independent of the local/third-party runtime
+    // catalog. Restore subscription rows even when that backend is slow or down.
+    const platformRefresh = window.hermesDesktop?.platformModels ? platform.refresh() : Promise.resolve()
 
     try {
       const queryKey = modelOptionsQueryKey(profile, activeSessionId, ownerConnectionId)
@@ -137,15 +140,12 @@ export function ModelMenuPanel({ onFollowDefaultModel, ...props }: ModelMenuPane
       // The refreshed catalog is a hint list, never a reason to move the pick:
       // a custom slug the row lacks is still what the user selected.
       queryClient.setQueryData<ModelOptionsResult>(queryKey, next)
-
-      if (window.hermesDesktop?.platformModels) {
-        await platform.refresh()
-      }
     } catch {
       // Network/backend hiccup — fall back to a plain invalidate so the next
       // open re-fetches (still cached, but no worse than before).
       void queryClient.invalidateQueries({ queryKey: ['model-options'] })
     } finally {
+      await platformRefresh
       setRefreshing(false)
     }
   }

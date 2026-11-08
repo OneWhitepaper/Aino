@@ -4677,7 +4677,7 @@ const { client: platformClient, auth: platformAuth } = createNativePlatformAuth(
   backend: () => (process.platform === 'linux' ? safeStorage.getSelectedStorageBackend() : 'os'),
   encrypt: value => safeStorage.encryptString(value),
   decrypt: value => safeStorage.decryptString(value)
-})
+}, () => desktopInstallationId)
 
 const accountCloudSync = createAccountCloudSync({ auth: platformAuth, deviceId: () => desktopInstallationId,
   local: createCloudSyncLocalAdapter(async () => ticketRuntimeFor(await resolveHermesBackend([])), resolveHermesCwd) })
@@ -4852,8 +4852,8 @@ const platformBindingController = createPlatformRuntimeBindingController({ nativ
           profile: routeProfile
         })
     }),
-  confirmRemote: async (window, host) =>
-    (await dialog.showMessageBox(window as BrowserWindow, platformBindingPrompt(app.getLocale(), host))).response === 1
+  confirmRemote: async (window, host) => (await dialog.showMessageBox(window as BrowserWindow, platformBindingPrompt(app.getLocale(), host))).response === 1,
+  onBindingFailure: failure => rememberLog(`[platform-model-binding] stage=${failure.stage} code=${failure.code}`)
 })
 
 app.on('will-quit', () => platformBindingController.dispose())

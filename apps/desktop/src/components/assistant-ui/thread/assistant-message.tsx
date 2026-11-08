@@ -92,7 +92,7 @@ import { DESKTOP_BUTTON_ACTIONS, recordAction } from '@/store/desktop-metrics'
 import { openFreeTierSignIn } from '@/store/free-tier-sign-in'
 import { notifyError } from '@/store/notifications'
 import { startManualProviderOAuth } from '@/store/onboarding'
-import { platformRecoveryActionForCode } from '@/store/platform-model-capability'
+import { createPlatformSignInRecovery, platformRecoveryActionForCode } from '@/store/platform-model-capability'
 import { $activeGatewayProfile, normalizeProfileKey, requestFreshSession } from '@/store/profile'
 import { sessionApprovalRequest } from '@/store/prompts'
 import { requestSendDiagnostics } from '@/store/send-diagnostics'
@@ -939,19 +939,32 @@ const ScheduledRetryAction: FC<{ className: string; resetsAt: number }> = ({ cla
 function PlatformRecoveryActions({ recovery }: { recovery: ReturnType<typeof platformRecoveryActionForCode> }) {
   const { t } = useI18n()
   const inRouter = useInRouterContext()
+  const signIn = useMemo(() => (recovery === 'sign-in' ? createPlatformSignInRecovery() : null), [recovery])
 
   return (
     <>
-      {recovery === 'account' && inRouter && <AccountRecoveryAction label={t.platformModels.myAccount} />}
+      {signIn && (
+        <button
+          className="aui-error-action"
+          data-action="sign-in"
+          onClick={() => {
+            void signIn().catch(error => notifyError(error, t.boot.errors.signInAgain))
+          }}
+          type="button"
+        >
+          {t.boot.errors.signInAgain}
+        </button>
+      )}
+      {(recovery === 'account' || recovery === 'account-models') && inRouter && <AccountRecoveryAction label={t.platformModels.myAccount} />}
       {recovery === 'new-chat' && (
         <button className="aui-error-action" data-action="new-chat" onClick={requestFreshSession} type="button">
           {t.platformModels.newChatCurrentAccount}
         </button>
       )}
-      {(recovery === 'picker' || recovery === 'rebind') && (
+      {(recovery === 'picker' || recovery === 'rebind' || recovery === 'account-models') && (
         <button
           className="aui-error-action"
-          data-action={recovery}
+          data-action={recovery === 'account-models' ? 'picker' : recovery}
           onClick={() => setModelPickerOpen(true)}
           type="button"
         >

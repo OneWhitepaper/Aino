@@ -29,7 +29,12 @@ import { $hudMode } from '@/store/hud'
 import { clearNotifications, notify, notifyError } from '@/store/notifications'
 import { consumePendingCredentialWarning, requestDesktopOnboarding } from '@/store/onboarding'
 import { trackPendingSubmission } from '@/store/pending-submissions'
-import { platformErrorSurface, platformRecoveryAction, verifiedPlatformModel } from '@/store/platform-model-capability'
+import {
+  createPlatformSignInRecovery,
+  platformErrorSurface,
+  platformRecoveryAction,
+  verifiedPlatformModel
+} from '@/store/platform-model-capability'
 import { PlatformSelectionError } from '@/store/platform-models'
 import { requestFreshSession } from '@/store/profile'
 import { isStoredTranscriptReadOnly } from '@/store/read-only-transcript'
@@ -301,21 +306,27 @@ function acceptsImageAttachments(
 function notifySubmitFailure(err: unknown, copy: Translations['desktop']): void {
   if (err instanceof PlatformSelectionError) {
     const recovery = platformRecoveryAction(err)
+    const signIn = recovery === 'sign-in' ? createPlatformSignInRecovery() : null
+
     notify({
       kind: 'error',
       title: copy.promptFailed,
       message: err.message,
       action: {
-        label:
-          recovery === 'account'
+        label: signIn
+          ? translateNow('boot.errors.signInAgain')
+          : recovery === 'account'
             ? translateNow('platformModels.myAccount')
             : recovery === 'new-chat'
               ? translateNow('platformModels.newChatCurrentAccount')
               : recovery === 'rebind'
                 ? translateNow('platformModels.retry')
                 : copy.chooseModel,
-        onClick:
-          recovery === 'account'
+        onClick: signIn
+          ? () => {
+              void signIn().catch(error => notifyError(error, translateNow('boot.errors.signInAgain')))
+            }
+          : recovery === 'account'
             ? () => requestRoute(`${SETTINGS_ROUTE}?tab=account`)
             : recovery === 'new-chat'
               ? requestFreshSession

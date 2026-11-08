@@ -59,10 +59,14 @@ async function rig(
     imageGateway?: boolean
     deviceGateway?: boolean
     deviceRevoked?: boolean
+    deviceRecentAuthRequired?: boolean
+    deviceRolloutDenied?: boolean
+    deviceKeyIssuanceDenied?: boolean
     renewalFailures?: Array<{ status: number; code: string; retryAfter?: number }>
   } = {}
 ) {
   const received: Array<Record<string, unknown>> = []
+  const bindingFailures: Array<{ stage: string; code: string }> = []
   const credentials: Record<string, unknown>[] = []
   const deviceRequests: Record<string, unknown>[] = []
   let catalogRequests = 0
@@ -101,6 +105,14 @@ async function rig(
   }
 
   async function deviceReply(req: http.IncomingMessage, res: http.ServerResponse, send: (value: unknown) => void) {
+      if (options.deviceKeyIssuanceDenied) {
+        deviceRequests.push({ device_id: 'fixture-device' })
+        res.statusCode = 403
+        res.end(JSON.stringify({ code: 'DESKTOP_DEVICE_KEY_ROLLOUT_DENIED', message: 'rollout closed' }))
+
+        return
+      }
+
       let body = ''
 
       for await (const chunk of req) {
@@ -109,9 +121,9 @@ async function rig(
 
       deviceRequests.push(JSON.parse(body))
 
-      if (options.deviceRevoked) {
+      if (options.deviceRevoked || options.deviceRecentAuthRequired) {
         res.statusCode = 403
-        res.end(JSON.stringify({ code: 'DESKTOP_DEVICE_KEY_REVOKED', message: 'revoked' }))
+        res.end(JSON.stringify({ code: options.deviceRecentAuthRequired ? 'RECENT_AUTH_REQUIRED' : 'DESKTOP_DEVICE_KEY_REVOKED', message: 'fixture authorization required' }))
 
         return
       }
@@ -125,6 +137,8 @@ async function rig(
         api_key: secret
       })
   }
+
+  const deviceCapabilities = options.deviceRolloutDenied ? {} : { managed_device_key: 1 }
 
   const server = http.createServer(async (req, res) => {
     const send = (data: unknown) => {
@@ -181,8 +195,8 @@ async function rig(
       ])
     }
 
-    if (req.url === '/api/v1/desktop/bootstrap') {
-      return send({ capabilities: { managed_device_key: 1 } })
+    if (req.url?.startsWith('/api/v1/desktop/bootstrap')) {
+      return send({ capabilities: deviceCapabilities })
     }
 
     if (req.url === '/api/v1/desktop/device-keys') { return deviceReply(req, res, send) }
@@ -270,7 +284,7 @@ async function rig(
           socket.send(JSON.stringify({ jsonrpc: '2.0', id: req.id, error: { code: 4403, message: secret } }) + '\n')
 
         if (req.method === 'session.claim_managed_model') {
-          if (p.session_id !== 'owned-session' || p.session_ticket !== 'owned-ticket' || p.owner.user_id !== '17') {
+          if (!['owned-session', 'second-session'].includes(p.session_id) || p.session_ticket !== 'owned-ticket' || p.owner.user_id !== '17') {
             reject()
 
             continue
@@ -348,6 +362,7 @@ async function rig(
 
   const controller = createPlatformRuntimeBindingController({
     nativeDeviceKeys: true,
+    onBindingFailure: failure => bindingFailures.push(failure),
     auth,
     origin,
     deviceId: () => 'fixture-device',
@@ -387,6 +402,7 @@ async function rig(
     deviceRequests,
     catalogRequests: () => catalogRequests,
     received,
+    bindingFailures,
     leaseReady,
     logoutReady,
     releaseLease: () => releaseLease(),
@@ -463,6 +479,48 @@ it('does not downgrade a revoked device identity to a lease or automatically rep
 
   expect(f.credentials).toHaveLength(0)
   expect(f.deviceRequests).toEqual([{ device_id: 'fixture-device' }])
+  expect(f.bindingFailures).toEqual([
+    { stage: 'device_key', code: 'DESKTOP_DEVICE_KEY_REVOKED' },
+    { stage: 'device_key', code: 'DESKTOP_DEVICE_KEY_REVOKED' }
+  ])
+  expect(JSON.stringify(f.bindingFailures)).not.toContain(f.secret)
+})
+
+it('preserves recent-auth recovery and a credential-free diagnostic without falling back to a lease', async () => {
+  const f = await rig({ deviceGateway: true, deviceRecentAuthRequired: true })
+  expect(await f.controller.bind(f.input, f.window)).toMatchObject({ ok: false, error: { code: 'RECENT_AUTH_REQUIRED' } })
+  expect(f.bindingFailures).toEqual([{ stage: 'device_key', code: 'RECENT_AUTH_REQUIRED' }])
+  expect(f.credentials).toHaveLength(0)
+  expect(f.binding()).toBeUndefined()
+  expect(JSON.stringify(f.bindingFailures)).not.toContain(f.secret)
+})
+
+it('uses a temporary lease without requesting a device key when Aino-API excludes this device from rollout', async () => {
+  const f = await rig({ deviceGateway: true, deviceRolloutDenied: true })
+
+  expect(await f.controller.bind(f.input, f.window)).toMatchObject({ ok: true, expires_at: expect.any(String) })
+  expect(f.deviceRequests).toEqual([])
+  expect(f.credentials).toHaveLength(1)
+  expect(f.binding()).toMatchObject({ credential_id: 'lease-1', expires_at: expect.any(String) })
+  expect(f.bindingFailures).toEqual([])
+
+  expect(await f.controller.bind({ ...f.input, session_id: 'second-session' }, f.window)).toMatchObject({ ok: true })
+  expect(f.deviceRequests).toHaveLength(0)
+  expect(f.credentials).toHaveLength(2)
+})
+
+it('falls back to a temporary lease only when stale capability data is rejected by the API rollout gate', async () => {
+  const f = await rig({ deviceGateway: true, deviceKeyIssuanceDenied: true })
+
+  expect(await f.auth.supportsDeviceKey('fixture-device')).toBe(true)
+  expect(await f.controller.bind(f.input, f.window)).toMatchObject({ ok: true, expires_at: expect.any(String) })
+  expect(f.deviceRequests).toEqual([{ device_id: 'fixture-device' }])
+  expect(f.credentials).toHaveLength(1)
+  expect(f.binding()).toMatchObject({ credential_id: 'lease-1', expires_at: expect.any(String) })
+
+  expect(await f.controller.bind({ ...f.input, session_id: 'second-session' }, f.window)).toMatchObject({ ok: true })
+  expect(f.deviceRequests).toHaveLength(1)
+  expect(f.credentials).toHaveLength(2)
 })
 
 it('reuses a permanent binding only after confirming the live credential version on its socket', async () => {

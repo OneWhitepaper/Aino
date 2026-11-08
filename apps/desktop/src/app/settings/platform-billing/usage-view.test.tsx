@@ -29,6 +29,88 @@ const receipt: PlatformUsageRow = {
   cache_read_tokens: null
 }
 
+it('shows image output and server billing tier without equating provider quality with billing', () => {
+  const imageReceipt = {
+    ...receipt,
+    desktop_purpose: 'image',
+    model: 'Nano Banana 2',
+    actual_cost_decimal: '0.201',
+    image_count: 1,
+    image_input_size: '1536x1024',
+    image_output_size: '1264x848',
+    image_size: '2K',
+    image_size_source: 'output',
+    image_size_breakdown: { '2K': 1 }
+  }
+
+  render(
+    <I18nProvider configClient={null} initialLocale="zh">
+      <UsageView rows={[imageReceipt]} variant="table" />
+    </I18nProvider>
+  )
+  fireEvent.click(screen.getByRole('button', { name: '查看详情' }))
+  expect(screen.getByText('实际输出尺寸', { selector: 'dt' }).parentElement?.textContent).toContain('1264 × 848 px')
+  expect(screen.getByText('请求尺寸').parentElement?.textContent).toContain('1536 × 1024 px')
+  expect(screen.getByText('图片尺寸档位').parentElement?.textContent).toContain('2K × 1')
+  expect(screen.getByText('尺寸记录依据').parentElement?.textContent).toContain('实际输出尺寸')
+  expect(screen.getByText(/画质名称不等同于图片尺寸档位/)).toBeTruthy()
+  expect(screen.getByText('0.201 USD')).toBeTruthy()
+})
+
+it('shows actual image size, server tier and its source in the per-turn cost popover', () => {
+  render(
+    <I18nProvider configClient={null} initialLocale="zh">
+      <UsageView
+        rows={[
+          {
+            ...receipt,
+            desktop_purpose: 'image',
+            image_output_size: '1264x848',
+            image_size: '2K',
+            image_size_source: 'output'
+          }
+        ]}
+      />
+    </I18nProvider>
+  )
+  expect(screen.getByText(/实际输出尺寸: 1264 × 848 px · 图片尺寸档位: 2K/)).toBeTruthy()
+  expect(screen.getByText('尺寸记录依据: 实际输出尺寸')).toBeTruthy()
+})
+
+it('keeps reserved image token counters out of the billing tier breakdown', () => {
+  render(
+    <I18nProvider configClient={null} initialLocale="zh">
+      <UsageView
+        rows={[
+          {
+            ...receipt,
+            desktop_purpose: 'image',
+            image_size: '4K',
+            image_size_breakdown: { '4K': 1, image_cache_read_tokens: 40 }
+          }
+        ]}
+      />
+    </I18nProvider>
+  )
+  expect(screen.getByText(/图片尺寸档位: 4K × 1/)).toBeTruthy()
+  expect(screen.queryByText(/image_cache_read_tokens/)).toBeNull()
+})
+
+it.each([undefined, '1536x1024'])(
+  'does not invent output dimensions or a billing tier for historical image receipts (%s)',
+  image_size => {
+    render(
+      <I18nProvider configClient={null} initialLocale="zh">
+        <UsageView rows={[{ ...receipt, desktop_purpose: 'image', image_size }]} variant="table" />
+      </I18nProvider>
+    )
+    fireEvent.click(screen.getByRole('button', { name: '查看详情' }))
+    expect(screen.getByText('实际输出尺寸').parentElement?.textContent).toContain('未记录')
+    expect(screen.getByText('图片尺寸档位').parentElement?.textContent).toContain('未记录')
+    expect(screen.queryByText('2K')).toBeNull()
+  }
+)
+
 it('shows dated table records with precise purposes and expandable, copyable evidence without inventing missing tokens', async () => {
   const writeText = vi.fn().mockResolvedValue(undefined)
   Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } })

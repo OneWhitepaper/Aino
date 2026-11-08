@@ -205,6 +205,15 @@ function isMachineNotice(displayKind: SessionMessage['display_kind']): boolean {
   return displayKind !== undefined && (NOTICE_DISPLAY_KINDS as readonly string[]).includes(displayKind)
 }
 
+function typedNoticeMetadata(message: SessionMessage): Pick<ChatMessage, 'modelSwitch' | 'failedTurnNotice'> {
+  return {
+    ...(message.display_kind === 'model_switch'
+      ? { modelSwitch: modelSwitchMetadata(message.display_metadata) }
+      : {}),
+    ...(message.display_kind === 'failed_turn' ? { failedTurnNotice: true as const } : {})
+  }
+}
+
 // A remote backend older than this app serves display_metadata as raw JSON text,
 // and `in` throws on a primitive — which used to fail the whole session resume.
 function parseDisplayMetadata(metadata: SessionMessage['display_metadata']): null | Record<string, unknown> {
@@ -725,9 +734,7 @@ export function toChatMessages(messages: SessionMessage[]): ChatMessage[] {
       ...(message.display_kind === 'async_delegation_complete' || message.display_kind === 'process_complete'
         ? { asyncResult: asyncResultBody(displayContentForMessage(message.role, message.content || content)) }
         : {}),
-      ...(message.display_kind === 'model_switch'
-        ? { modelSwitch: modelSwitchMetadata(message.display_metadata) }
-        : {}),
+      ...typedNoticeMetadata(message),
       timestamp: earliestTimestamp(message.timestamp, ...parts.map(part => part.timestamp)),
       ...(rowId !== undefined ? { rowId } : {}),
       ...(rowIds.length ? { sourceRowIds: rowIds } : {}),

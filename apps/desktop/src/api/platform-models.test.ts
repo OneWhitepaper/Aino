@@ -68,8 +68,9 @@ it('requests the ticket on the session owner route before calling the native bin
   })
 
   const bridge: PlatformModelsBridge = { owner: async () => owner, bind, clear: async () => {}, list: async () => [] }
+  const logLine = vi.fn()
   Object.defineProperty(window, 'hermesDesktop', {
-    value: { platformModels: bridge },
+    value: { platformModels: bridge, logLine },
     writable: true,
     configurable: true
   })
@@ -90,7 +91,20 @@ it('requests the ticket on the session owner route before calling the native bin
 
   expect(failed).toEqual({ ok: false, error: { code: 'gateway_binding_failed' } })
   expect(JSON.stringify(failed)).not.toContain('raw remote error')
+  expect(logLine).toHaveBeenCalledWith('[platform-model-binding] stage=gateway_ticket code=unknown')
+  expect(JSON.stringify(logLine.mock.calls)).not.toContain('raw remote error')
   expect(bind).not.toHaveBeenCalled()
+
+  logLine.mockClear()
+  vi.mocked(requestGatewayForAgent).mockRejectedValue(new JsonRpcGatewayError('private gateway message', {
+    code: 4403,
+    data: { reason: 'managed_binding_forbidden', session_id: 'private-session' }
+  }))
+  const denied = await bindPlatformModel(input, account)
+  expect(denied).toEqual({ ok: false, error: { code: 'gateway_binding_failed' } })
+  expect(logLine).toHaveBeenCalledWith('[platform-model-binding] stage=gateway_ticket code=managed_binding_forbidden')
+  expect(JSON.stringify(logLine.mock.calls)).not.toContain('private gateway message')
+  expect(JSON.stringify(logLine.mock.calls)).not.toContain('private-session')
 })
 
 it('preserves a structured missing-session ticket error for stale-runtime recovery', async () => {
@@ -267,6 +281,7 @@ it.each([
 
 it.each([
   ['quota_exhausted', 'quota_exhausted'],
+  ['RECENT_AUTH_REQUIRED', 'RECENT_AUTH_REQUIRED'],
   ['untrusted_remote_code', 'gateway_binding_failed']
 ] as const)('sanitizes resolved native bind failures to the stable allowlist', async (remoteCode, expectedCode) => {
   const account: PlatformAccountSnapshot = {

@@ -2,6 +2,8 @@ import { type ThreadMessage } from '@assistant-ui/react'
 import { cleanup, fireEvent, render, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
+import { I18nProvider } from '@/i18n'
+import { setRuntimeI18nLocale } from '@/i18n/runtime'
 import { toChatMessages } from '@/lib/chat-messages'
 import { toRuntimeMessage } from '@/lib/chat-runtime'
 import { $reasoningCollapsedByDefault, setShowReasoningFromConfig } from '@/store/reasoning-disclosure'
@@ -48,7 +50,72 @@ describe('conversation activity presentation', () => {
     setShowReasoningFromConfig(true)
   })
 
-  afterEach(cleanup)
+  afterEach(() => {
+    cleanup()
+    setRuntimeI18nLocale('en')
+  })
+
+  it('replays a bridged image_generate as one visible image with measured size and requested-size mismatch', () => {
+    const image = 'https://example.test/aino_g14-Nano-Banana-2_20261108_145431_a62c3aae.png'
+    const prompt = 'A single solid blue circle centered on a pure white background.'
+
+    const messages = toChatMessages([
+      {
+        role: 'assistant',
+        content: '',
+        timestamp: 1,
+        tool_calls: [
+          {
+            id: 'image-call',
+            type: 'function',
+            function: {
+              name: 'tool_call',
+              arguments: JSON.stringify({ calls: [{ name: 'image_generate', arguments: { prompt } }] })
+            }
+          }
+        ]
+      },
+      {
+        role: 'tool',
+        tool_call_id: 'image-call',
+        tool_name: 'image_generate',
+        timestamp: 2,
+        content: JSON.stringify({
+          success: true,
+          image,
+          model: 'g14-Nano-Banana-2',
+          prompt,
+          aspect_ratio: 'landscape',
+          modality: 'text',
+          provider: 'aino',
+          size: '1536x1024',
+          quality: 'auto',
+          requested_size: '1536x1024',
+          actual_size: '1264x848',
+          pixel_size: '1264x848',
+          size_note:
+            'Requested 1536x1024; returned image is 1264x848. The requested resolution was not delivered. No local resizing was applied.'
+        })
+      },
+      { role: 'assistant', content: `Here is the image. ![Generated image](${image})`, timestamp: 3 }
+    ]).map(toRuntimeMessage)
+
+    const { container } = render(
+      <I18nProvider configClient={null} initialLocale="zh">
+        <ThreadRuntime messages={messages}>
+          <Thread />
+        </ThreadRuntime>
+      </I18nProvider>
+    )
+
+    const actual = within(container).getByText('实际尺寸：1264 × 848 px')
+    expect(actual.closest('[data-slot="aui_thinking-disclosure"]')).toBeNull()
+    expect(within(container).getByText('请求尺寸：1536 × 1024 px')).toBeTruthy()
+    expect(within(container).getByText('上游返回的尺寸与请求不同，已保留原图。')).toBeTruthy()
+    expect(container.querySelectorAll('[data-slot="aui_generated-image"]')).toHaveLength(1)
+    expect(container.querySelectorAll('img')).toHaveLength(1)
+    expect(container.textContent).not.toContain('4 more fields')
+  })
 
   it.each([
     ['delegate_task', { goal: 'Review sources' }],

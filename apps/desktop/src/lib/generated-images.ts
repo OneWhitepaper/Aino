@@ -1,6 +1,7 @@
 import type { MediaImageDimensions } from '@/lib/media'
 
 type ToolLike = {
+  args?: unknown
   result?: unknown
   toolName?: unknown
   type?: unknown
@@ -48,13 +49,32 @@ function unique(values: string[]): string[] {
 }
 
 function imageResult(part: ToolLike): Record<string, unknown> | null {
-  if (part.type !== 'tool-call' || part.toolName !== 'image_generate') {
+  if (part.type !== 'tool-call' || !generatedImageToolArgs(part.toolName, part.args)) {
     return null
   }
 
   const record = recordFromUnknown(part.result)
 
   return record && record.success !== false ? record : null
+}
+
+/** Live calls use image_generate; replayed deferred calls keep the model's
+ * single-call tool_call envelope. Mixed batches are not a single image card. */
+export function generatedImageToolArgs(toolName: unknown, args: unknown): Record<string, unknown> | null {
+  if (toolName !== 'image_generate' && toolName !== 'tool_call') {
+    return null
+  }
+
+  const input = recordFromUnknown(args) ?? {}
+
+  if (toolName === 'image_generate') {
+    return input
+  }
+
+  const calls = Array.isArray(input.calls) ? input.calls : [input]
+  const call = recordFromUnknown(calls[0])
+
+  return calls.length === 1 && call?.name === 'image_generate' ? (recordFromUnknown(call.arguments) ?? {}) : null
 }
 
 /** Display source for a completed `image_generate` result (host path wins). */
@@ -72,7 +92,16 @@ export function generatedImageFromResult(result: unknown): string | null {
  * Never use requested_size/size or aspect_ratio as intrinsic metadata. */
 export function generatedImageDimensionsFromResult(result: unknown): MediaImageDimensions | undefined {
   const record = recordFromUnknown(result)
-  const match = typeof record?.pixel_size === 'string' ? /^(\d+)x(\d+)$/.exec(record.pixel_size) : null
+
+  if (!record || record.success === false) {
+    return undefined
+  }
+
+  return imageDimensions(record.pixel_size) ?? imageDimensions(record.actual_size)
+}
+
+function imageDimensions(value: unknown): MediaImageDimensions | undefined {
+  const match = typeof value === 'string' ? /^(\d+)x(\d+)$/.exec(value) : null
 
   return match &&
     Number.isSafeInteger(Number(match[1])) &&
@@ -81,6 +110,23 @@ export function generatedImageDimensionsFromResult(result: unknown): MediaImageD
     Number(match[2]) > 0
     ? { width: Number(match[1]), height: Number(match[2]) }
     : undefined
+}
+
+export function generatedImageDetailsFromResult(result: unknown) {
+  const record = recordFromUnknown(result)
+
+  if (!record || record.success === false) {
+    return null
+  }
+
+  const requested = record.requested_size ?? record.size
+  const requestedDimensions = imageDimensions(requested)
+
+  return {
+    actual: generatedImageDimensionsFromResult(record),
+    requested: requestedDimensions ? `${requestedDimensions.width}x${requestedDimensions.height}` : null,
+    managed: record.provider === 'aino'
+  }
 }
 
 /** Every path/URL a generated image might appear as in prose, for de-duping. */

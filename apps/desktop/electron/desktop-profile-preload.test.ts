@@ -54,3 +54,14 @@ test('the native preload exposes routed peer opening and default preference even
   unsubscribe()
   assert.deepEqual(electron.ipcRenderer.removeListener.mock.lastCall, [channel, listener])
 })
+
+test('the native preload preserves the optional logout owner across IPC', async () => {
+  await import('./preload')
+  const [, bridge] = electron.contextBridge.exposeInMainWorld.mock.calls[0]
+  const expectedOwner = { userId: 'user-a', mode: 'production', revision: 9 }
+
+  await bridge.platformAccount.logout(expectedOwner)
+  assert.deepEqual(electron.ipcRenderer.invoke.mock.lastCall, ['aino:platform-account:logout', expectedOwner])
+  await bridge.platformAccount.logout()
+  assert.deepEqual(electron.ipcRenderer.invoke.mock.lastCall, ['aino:platform-account:logout', undefined])
+})

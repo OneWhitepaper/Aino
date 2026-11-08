@@ -25,7 +25,7 @@ afterEach(async () => {
   }
 })
 
-async function rig(options: { remember?: boolean; metadataOnly?: boolean; revoked?: boolean; delay?: boolean; delayRotation?: boolean } = {}) {
+async function rig(options: { remember?: boolean; metadataOnly?: boolean; revoked?: boolean; rolloutDenied?: boolean; deviceKeyDenied?: boolean; delay?: boolean; delayRotation?: boolean; warmLogin?: boolean } = {}) {
   let persisted: PlatformTokenSet | null =
     options.remember === false
       ? null
@@ -44,12 +44,36 @@ async function rig(options: { remember?: boolean; metadataOnly?: boolean; revoke
   })
 
   const requests: Array<{ method: string; body: Record<string, unknown>; account: string }> = []
+  const bootstrapDevices: Array<string | null> = []
   let version = 1
   let revoked = options.revoked ?? false
   let managementExpired = false
+  let recentAuthentication = true
+  let mutationFailure: string | null = null
+
+  function deviceResponse(method: string, mutation: boolean) {
+    return {
+      key_id: 'one-key',
+      device_id: device,
+      version,
+      status: revoked ? 'revoked' : 'active',
+      expires_at: null,
+      ...(method === 'POST' && (!options.metadataOnly || mutation)
+        ? { api_key: `secret-${version}` }
+        : {})
+    }
+  }
 
   function replyDevice(req: http.IncomingMessage, body: Record<string, unknown>, send: (data: unknown, code?: string | number, status?: number) => void) {
       requests.push({ method: req.method!, body, account: req.headers.authorization! })
+
+      if (req.method === 'POST' && (body.rotate || body.reauthorize) && (!recentAuthentication || mutationFailure)) {
+        return send(null, mutationFailure ?? 'RECENT_AUTH_REQUIRED', 403)
+      }
+
+      if (options.deviceKeyDenied && req.method === 'POST') {
+        return send(null, 'DESKTOP_DEVICE_KEY_ROLLOUT_DENIED', 403)
+      }
 
       if (revoked && !body.reauthorize && req.method === 'POST') {
         return send(null, 'DESKTOP_DEVICE_KEY_REVOKED', 403)
@@ -60,16 +84,7 @@ async function rig(options: { remember?: boolean; metadataOnly?: boolean; revoke
         revoked = false
       }
 
-      const result = {
-        key_id: 'one-key',
-        device_id: device,
-        version,
-        status: revoked ? 'revoked' : 'active',
-        expires_at: null,
-        ...(req.method === 'POST' && (!options.metadataOnly || body.rotate || body.reauthorize)
-          ? { api_key: `secret-${version}` }
-          : {})
-      }
+      const result = deviceResponse(req.method!, Boolean(body.rotate || body.reauthorize))
 
       if ((options.delay && requests.length === 1) || (options.delayRotation && version === 2 && req.method === 'POST')) {
         release = () => send(result)
@@ -97,6 +112,8 @@ async function rig(options: { remember?: boolean; metadataOnly?: boolean; revoke
     }
 
     if (req.url === '/api/v1/auth/login') {
+      recentAuthentication = true
+
       return send({
         access_token: `access-${body.email === 'other@example.com' ? 23 : 17}`,
         refresh_token: 'refresh',
@@ -125,8 +142,12 @@ async function rig(options: { remember?: boolean; metadataOnly?: boolean; revoke
       return send([platformModel()])
     }
 
-    if (req.url === '/api/v1/desktop/bootstrap') {
-      return send({ capabilities: { managed_device_key: 1 } })
+    const url = new URL(req.url!, 'http://localhost')
+
+    if (url.pathname === '/api/v1/desktop/bootstrap') {
+      bootstrapDevices.push(url.searchParams.get('device_id'))
+
+      return send({ capabilities: options.rolloutDenied ? {} : { managed_device_key: 1 } })
     }
 
     if (req.url?.startsWith('/api/v1/desktop/device-keys')) {
@@ -144,6 +165,7 @@ async function rig(options: { remember?: boolean; metadataOnly?: boolean; revoke
     createPlatformAuth({
       client: createPlatformClient({ origin, allowInsecureLoopback: true }),
       now: Date.now,
+      ...(options.warmLogin ? { nativeDeviceId: () => device } : {}),
       tokenStore: {
         load: async () => (persisted ? structuredClone(persisted) : null),
         save: async (_origin, value) => {
@@ -168,17 +190,63 @@ async function rig(options: { remember?: boolean; metadataOnly?: boolean; revoke
     auth,
     createAuth,
     requests,
+    bootstrapDevices,
     persisted: () => persisted,
     ready,
     release: () => release(),
     revoke: () => {
       revoked = true
     },
+    expireRecentAuthentication: () => { recentAuthentication = false },
+    failDeviceMutation: (code: string | null) => { mutationFailure = code },
     expireManagement: () => {
       managementExpired = true
     }
   }
 }
+
+it('prepares and persists the device key during login so the first later conversation needs no recent-login mutation', async () => {
+  const f = await rig({ metadataOnly: true, warmLogin: true })
+  const loggedIn = await f.auth.loginExisting({ email: 'fixture@example.com', password: 'password', remember: true })
+  expect(loggedIn).toMatchObject({ status: 'signed_in', snapshot: { model_identity_ready: true } })
+  expect(f.requests.map(request => request.body)).toEqual([
+    { device_id: device }, { device_id: device, rotate: true, expected_version: 1 }
+  ])
+  f.expireRecentAuthentication()
+  const restarted = f.createAuth()
+  await restarted.initialize()
+  expect(await restarted.ensureDeviceKey(device)).toMatchObject({ version: 2, api_key: 'secret-2' })
+  expect(f.requests).toHaveLength(2)
+})
+
+it('prepares only the new account key when switching accounts and rejects a late prior-login response', async () => {
+  const f = await rig({ metadataOnly: true, warmLogin: true, delay: true })
+  const first = f.auth.loginExisting({ email: 'fixture@example.com', password: 'password', remember: true }).catch(error => error)
+  await f.ready
+  expect(await f.auth.loginExisting({ email: 'other@example.com', password: 'password', remember: true }))
+    .toMatchObject({ status: 'signed_in', snapshot: { account: { id: '23' }, model_identity_ready: true } })
+  f.release()
+  expect(await first).toMatchObject({ code: 'auth_attempt_superseded' })
+  expect(f.persisted()?.deviceKeys).toMatchObject([{ user_id: '23', api_key: 'secret-2' }])
+  expect(f.requests.slice(1).every(request => request.account === 'Bearer access-23')).toBe(true)
+  f.expireRecentAuthentication()
+  expect(await f.auth.ensureDeviceKey(device)).toMatchObject({ api_key: 'secret-2' })
+  expect(f.requests).toHaveLength(3)
+})
+
+it('retains successful account login and a visible key failure, then recovers on a fresh login', async () => {
+  const f = await rig({ metadataOnly: true, warmLogin: true })
+  f.failDeviceMutation('RECENT_AUTH_REQUIRED')
+  expect(await f.auth.loginExisting({ email: 'fixture@example.com', password: 'password', remember: true }))
+    .toMatchObject({ status: 'signed_in', snapshot: { phase: 'signed_in', account: { id: '17' }, model_identity_ready: false, error: { code: 'RECENT_AUTH_REQUIRED' } } })
+  expect(f.persisted()?.deviceKeys).toBeUndefined()
+  f.failDeviceMutation(null)
+  expect(await f.auth.loginExisting({ email: 'fixture@example.com', password: 'password', remember: true }))
+    .toMatchObject({ status: 'signed_in', snapshot: { model_identity_ready: true, error: null } })
+  f.expireRecentAuthentication()
+  expect(await f.auth.ensureDeviceKey(device)).toMatchObject({ api_key: 'secret-2' })
+  expect(f.requests).toHaveLength(4)
+})
 
 it('shares concurrent first acquisition and persists the secret only for remembered accounts', async () => {
   const f = await rig()
@@ -214,6 +282,30 @@ it('requires an explicit reauthorization for a revoked device, retaining the key
     api_key: 'secret-2'
   })
   expect(f.requests.at(-1)?.body).toEqual({ device_id: device, expected_version: 1, reauthorize: true })
+})
+
+it('checks device-key capability for the requested installation', async () => {
+  const f = await rig()
+  const secondDevice = 'bbbbbbbb-cccc-dddd-eeee-ffffffffffff'
+
+  expect(await f.auth.supportsDeviceKey(device)).toBe(true)
+  expect(await f.auth.supportsDeviceKey(device)).toBe(true)
+  expect(await f.auth.supportsDeviceKey(secondDevice)).toBe(true)
+  expect(f.bootstrapDevices).toEqual([device, secondDevice])
+})
+
+it('remembers a device-specific rollout denial and stops attempting permanent-key issuance', async () => {
+  const f = await rig({ rolloutDenied: true, deviceKeyDenied: true })
+
+  await expect(f.auth.ensureDeviceKey(device)).rejects.toMatchObject({ code: 'DESKTOP_DEVICE_KEY_ROLLOUT_DENIED' })
+  expect(await f.auth.supportsDeviceKey(device)).toBe(false)
+  expect(await f.auth.supportsDeviceKey(device)).toBe(false)
+  expect(f.requests).toHaveLength(1)
+  expect(f.bootstrapDevices).toEqual([])
+
+  await f.auth.loginExisting({ email: 'fixture@example.com', password: 'password', remember: true })
+  expect(await f.auth.supportsDeviceKey(device)).toBe(false)
+  expect(f.bootstrapDevices).toEqual([device])
 })
 
 it.each(['logout', 'account'] as const)(
@@ -304,6 +396,6 @@ it('keeps a remembered model identity and catalog after management expiry and ap
   })
   expect(await restarted.ensureDeviceKey(device)).toMatchObject({ api_key: 'secret-1' })
   expect(await restarted.models()).toEqual(models)
-  expect(await restarted.supportsDeviceKey()).toBe(true)
+  expect(await restarted.supportsDeviceKey(device)).toBe(true)
   expect(f.requests).toHaveLength(1)
 })

@@ -3,6 +3,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 
 import { ComposerScopeProvider, MAIN_COMPOSER_SCOPE } from '@/app/chat/composer/scope'
 import { MarkdownImage, MessageTextContent } from '@/components/assistant-ui/markdown-text'
+import { I18nProvider } from '@/i18n'
 import { $connection } from '@/store/session'
 
 import { GeneratedImage } from './generated-image-result'
@@ -33,6 +34,30 @@ const cases = [
   { kind: 'markdown', hint: 'intrinsic' },
   { kind: 'generated', hint: 'intrinsic' }
 ]
+
+it.each([false, true])(
+  'shows delivered dimensions and mismatch independently of the agent prose (history=%s)',
+  history => {
+    const result = {
+      success: true,
+      provider: 'aino',
+      image: 'data:image/png;base64,AAAA',
+      requested_size: '1536x1024',
+      actual_size: '1264x848'
+    }
+
+    const mounted = render(
+      <I18nProvider configClient={null} initialLocale="zh">
+        <GeneratedImage result={history ? JSON.stringify(result) : result} />
+      </I18nProvider>
+    )
+
+    expect(mounted.container.textContent).toContain('实际尺寸：1264 × 848 px')
+    expect(mounted.container.textContent).toContain('请求尺寸：1536 × 1024 px')
+    expect(mounted.container.textContent).toContain('上游返回的尺寸与请求不同，已保留原图。')
+    expect(mounted.container.textContent).toContain('画质名称不等同于图片尺寸档位')
+  }
+)
 
 function content(kind: string, path: string, hint?: string) {
   if (kind === 'generated') {

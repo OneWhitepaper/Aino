@@ -26,17 +26,22 @@ import { createToolAttentionReader, ResponseProcessParts } from '@/components/as
 import { TimelineTimestamp } from '@/components/assistant-ui/thread/timeline-timestamp'
 import { DelegateTool } from '@/components/assistant-ui/tool/delegate'
 import { ToolFallback, ToolGroupSlot } from '@/components/assistant-ui/tool/fallback'
-import { parseMaybeObject, toolCallFailed, type ToolPart, toolPreviewOutcome } from '@/components/assistant-ui/tool/fallback-model'
+import {
+  parseMaybeObject,
+  toolCallFailed,
+  type ToolPart,
+  toolPreviewOutcome
+} from '@/components/assistant-ui/tool/fallback-model'
 import { formatElapsed, useElapsedSeconds, useMeasuredDuration } from '@/components/chat/activity-timer'
 import { ActivityTimerText } from '@/components/chat/activity-timer-text'
 import { GeneratedImage } from '@/components/chat/generated-image-result'
 import { SCAFFOLD_LABEL_CLASS, SCAFFOLD_META_CLASS, ScaffoldRow } from '@/components/chat/scaffold-row'
 import { useI18n } from '@/i18n'
 import { connectorCalls, mcpTargets, toolLabels } from '@/lib/connector-tools'
-import { generatedImageFromResult } from '@/lib/generated-images'
+import { generatedImageFromResult, generatedImageToolArgs } from '@/lib/generated-images'
 import { separateGluedReasoningBlocks } from '@/lib/reasoning-blocks'
 import { isTodoToolName } from '@/lib/todos'
-import { type CardToolName, isCardTool, isCardToolName, isSilentTool } from '@/lib/tool-render-class'
+import { type CardToolName, isCardTool, isSilentTool, resolveCardToolName } from '@/lib/tool-render-class'
 import { useEnterAnimation } from '@/lib/use-enter-animation'
 import { cn } from '@/lib/utils'
 import { onboardingChatStore } from '@/store/onboarding-session'
@@ -53,7 +58,8 @@ const settledWithoutResult = ({ completedAt, result }: TimelineToolCallProps): b
   result === undefined && completedAt !== undefined
 
 const ImageGenerateTool: FC<TimelineToolCallProps> = props => {
-  const { args, completedAt, result, timestamp } = props
+  const { completedAt, result, timestamp } = props
+  const args = generatedImageToolArgs(props.toolName, props.args) ?? props.args
   const aspectRatio = typeof args?.aspect_ratio === 'string' ? args.aspect_ratio : undefined
 
   // The image card owns successful generations. Failed or malformed results
@@ -184,8 +190,10 @@ const ChainToolFallback: FC<TimelineToolCallProps> = props => {
     return null
   }
 
-  if (isCardToolName(props.toolName)) {
-    const ToolCard = TOOL_CARDS[props.toolName]
+  const cardName = resolveCardToolName(props.toolName, props.args)
+
+  if (cardName) {
+    const ToolCard = TOOL_CARDS[cardName]
 
     return <ToolCard {...props} />
   }
@@ -202,7 +210,7 @@ const ChainToolFallback: FC<TimelineToolCallProps> = props => {
   // The tool feed (reads, searches, commands) follows display.tool_progress,
   // never show_reasoning. Cards, approvals, and failed calls the user must act
   // on remain regardless.
-  if (!showToolActivity && !failedCallNeedsUser(props) && !isCardTool(props.toolName)) {
+  if (!showToolActivity && !failedCallNeedsUser(props) && !isCardTool(props.toolName, props.args)) {
     return null
   }
 
@@ -515,7 +523,7 @@ const groupActivityParts =
     // Decisions, deliverables and failures retain their own place in the
     // transcript. Registered tool UIs also own their visibility and lifecycle.
     const standalone =
-      isCardTool(part.toolName) ||
+      isCardTool(part.toolName, part.args) ||
       isSilentTool(part.toolName) ||
       part.status.type === 'requires-action' ||
       !!context.toolUIs?.[part.toolName]?.length ||

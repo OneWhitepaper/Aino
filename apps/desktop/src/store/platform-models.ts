@@ -84,7 +84,11 @@ export function writePlatformDefault(
 
 export class PlatformSelectionError extends Error {
   constructor(readonly code: string) {
-    super(translateNow(platformErrorKey(code)))
+    super(
+      code === 'RECENT_AUTH_REQUIRED'
+        ? translateNow('settings.account.platformError', 'reauthentication_required')
+        : translateNow(platformErrorKey(code))
+    )
     this.name = 'PlatformSelectionError'
   }
 }

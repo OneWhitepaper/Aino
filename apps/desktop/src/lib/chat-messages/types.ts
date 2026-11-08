@@ -1,5 +1,11 @@
 import type { ThreadMessageLike } from '@assistant-ui/react'
-import { type BillingBlock, type MessageCompletePayload, type PersistedTurn, type StatusUpdatePayload, type ToolLabel } from '@hermes/shared'
+import {
+  type BillingBlock,
+  type MessageCompletePayload,
+  type PersistedTurn,
+  type StatusUpdatePayload,
+  type ToolLabel
+} from '@hermes/shared'
 
 import type { ErrorSurface } from '@/lib/error-surface'
 import type { ToolResultMetadata } from '@/lib/tool-result-metadata'
@@ -43,6 +49,8 @@ export type ChatMessage = {
   asyncResult?: string
   /** Backend-authored model transition, separate from model-facing context. */
   modelSwitch?: ModelSwitchDisplayMetadata
+  /** Backend-authored failed-turn boundary; its fixed copy is localized only while rendering. */
+  failedTurnNotice?: true
   asyncResultKind?: 'process'
   timestamp?: number
   completedAt?: number

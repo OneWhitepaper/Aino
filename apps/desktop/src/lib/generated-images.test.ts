@@ -2,10 +2,23 @@ import { describe, expect, it } from 'vitest'
 
 import {
   dedupeGeneratedImageEchoesInParts,
+  generatedImageDimensionsFromResult,
   generatedImageEchoSources,
   generatedImageFromResult,
   stripGeneratedImageEchoes
 } from './generated-images'
+
+it('uses verified output dimensions from live and serialized results, never the requested size', () => {
+  const result = { success: true, actual_size: '1264x848', requested_size: '1536x1024', size: '1536x1024' }
+  expect(generatedImageDimensionsFromResult(result)).toEqual({ width: 1264, height: 848 })
+  expect(generatedImageDimensionsFromResult(JSON.stringify(result))).toEqual({ width: 1264, height: 848 })
+
+  for (const actual_size of [null, '1K', '0x848', 'Infinityx848', '9007199254740992x848']) {
+    expect(generatedImageDimensionsFromResult({ ...result, actual_size })).toBeUndefined()
+  }
+
+  expect(generatedImageDimensionsFromResult({ ...result, success: false })).toBeUndefined()
+})
 
 describe('generatedImageFromResult', () => {
   it('prefers the host-visible image path', () => {
@@ -85,6 +98,15 @@ describe('stripGeneratedImageEchoes', () => {
 })
 
 describe('generatedImageEchoSources', () => {
+  it('recognizes one bridged image call without treating a mixed tool batch as a single image', () => {
+    const image = { image: '/host/circle.png', success: true }
+    const call = { name: 'image_generate', arguments: { prompt: 'A blue circle on white' } }
+    const part = { type: 'tool-call', toolName: 'tool_call', args: { calls: [call] }, result: image }
+    expect(generatedImageEchoSources([part])).toEqual(['/host/circle.png'])
+    expect(
+      generatedImageEchoSources([{ ...part, args: { calls: [call, { name: 'read_file', arguments: {} }] } }])
+    ).toEqual([])
+  })
   it('collects every path variant the model might restate', () => {
     expect(
       generatedImageEchoSources([

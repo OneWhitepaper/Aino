@@ -30,6 +30,9 @@ export const ERROR_CODE_KEYS = [
   'auth',
   'auth_permanent',
   'billing',
+  'managed_billing_unavailable',
+  'managed_subscription_expired',
+  'managed_model_access_denied',
   'rate_limit',
   'upstream_rate_limit',
   'overloaded',
@@ -486,6 +489,9 @@ export function providerSettingsUrl(surface?: ErrorSurface | null): string | und
 
 // One main action + at most one second option per code (Error System Overhaul).
 const CODE_ACTIONS: Partial<Record<ErrorCodeKey, ErrorCardActions>> = {
+  managed_billing_unavailable: { primary: 'choose_model' },
+  managed_subscription_expired: { primary: 'choose_model' },
+  managed_model_access_denied: { primary: 'choose_model' },
   billing: { primary: 'open_billing', secondary: 'switch_provider' },
   content_policy_blocked: { primary: 'edit_message' },
   context_overflow: { primary: 'compress', secondary: 'start_new_session' },

@@ -19,6 +19,27 @@ const codes = [
   'ssl_cert_verification'
 ] as const
 
+it('explains an Aino account entitlement refusal without calling it a provider or key failure', () => {
+  const surface = parseErrorSurface({ layer: 'billing', code: 'managed_billing_unavailable', retryable: false })
+  const copy = errorCardText(TRANSLATIONS.zh.assistant.thread, surface)
+  expect(copy.title).toBe('套餐状态不可用')
+  expect(copy.body).toContain('我的账户')
+  expect(copy.body).toContain('到期')
+  expect(copy.body).not.toMatch(/API 密钥|服务商错误|充值余额/)
+
+  const expired = errorCardText(TRANSLATIONS.zh.assistant.thread, {
+    layer: 'billing', code: 'managed_subscription_expired', retryable: false
+  })
+
+  expect(expired.title).toBe('套餐已到期')
+
+  const previous = errorCardText(TRANSLATIONS.zh.assistant.thread, {
+    layer: 'provider', code: 'managed_upstream_auth_failed', retryable: false
+  })
+
+  expect(previous.title).not.toBe('套餐已到期')
+})
+
 it.each(['zh', 'zh-hant', 'ja'] as const)(
   'renders provider errors in %s without losing the failing provider identity',
   locale => {

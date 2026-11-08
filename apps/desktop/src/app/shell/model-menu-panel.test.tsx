@@ -172,6 +172,59 @@ it('lists Aino models once when the managed catalog also has a provider row', as
   expect(content.queryByText('Catalog A', { selector: '[data-model-menu-name]' })).toBeNull()
 })
 
+it.each(['rejected', 'pending'] as const)(
+  'refreshes restored Aino models independently of a %s runtime catalog refresh',
+  async runtimeStatus => {
+    const walletModel = { ...platformModel('wallet'), display_name: 'Wallet model' }
+    const restoredModel = { ...platformModel('restored'), display_name: 'Restored subscription model' }
+    const list = vi.fn(async () => [walletModel])
+
+    Object.defineProperty(window, 'hermesDesktop', {
+      configurable: true,
+      value: {
+        platformAccount: {
+          status: async () => platformSnapshot(),
+          capabilities: async () => ({}),
+          onChanged: () => () => undefined
+        },
+        platformModels: {
+          list,
+          owner: async () => ({ user_id: 'user-a', platform_origin: 'https://fixture.test' })
+        }
+      }
+    })
+    await platformAccountActions(window.hermesDesktop.platformAccount).refresh()
+    recordGatewayReadyCapability(
+      { profile: 'default' },
+      { type: 'gateway.ready', payload: { managed_model_binding: 1 } }
+    )
+    $currentProvider.set('aino')
+    $currentModel.set('wallet')
+    const { content, onSelectModel } = renderPanel()
+    await content.findByText('Wallet model', { selector: '.aino-model-menu-name' })
+    await content.findByText('DeepSeek Chat')
+    list.mockResolvedValue([walletModel, restoredModel])
+    const runtimeRefresh = deferred<{ providers: typeof MOCK_PROVIDERS }>()
+    getGlobalModelOptions.mockImplementationOnce(() => runtimeRefresh.promise)
+
+    try {
+      fireEvent.click(content.getByRole('menuitem', { name: 'Refresh models' }))
+
+      if (runtimeStatus === 'rejected') {
+        await act(async () => runtimeRefresh.reject(new Error('runtime catalog unavailable')))
+      }
+
+      await content.findByText('Restored subscription model', { selector: '.aino-model-menu-name' })
+      expect(list).toHaveBeenCalledTimes(2)
+      expect(onSelectModel).not.toHaveBeenCalled()
+      expect($currentModel.get()).toBe('wallet')
+      expect($currentProvider.get()).toBe('aino')
+    } finally {
+      await act(async () => runtimeRefresh.resolve({ providers: MOCK_PROVIDERS }))
+    }
+  }
+)
+
 it('keeps the current provider recovery row when its saved credential is unavailable', async () => {
   $currentProvider.set('google')
   $currentModel.set('gemini-3.1-pro')

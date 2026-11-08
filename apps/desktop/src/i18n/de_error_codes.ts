@@ -4,6 +4,18 @@ type ThreadCopy = Translations['assistant']['thread']
 
 // The error card's per-code title and body (lib/error-surface-copy.ts), keyed by error_surface.code.
 export const deErrorCodes: Partial<ThreadCopy['errorCodes']> = {
+  managed_billing_unavailable: {
+    title: "Planstatus nicht verfügbar",
+    body: "Prüfen Sie Abonnement und Ablaufdatum unter Mein Konto. Senden Sie nach Wiederherstellung des Zugriffs erneut oder wählen Sie ein verfügbares Modell."
+  },
+  managed_subscription_expired: {
+    title: "Ihr Plan ist abgelaufen",
+    body: "Verlängern Sie das Abonnement unter Mein Konto und senden Sie danach erneut, oder wählen Sie ein verfügbares Modell."
+  },
+  managed_model_access_denied: {
+    title: "Dieses Modell ist für Ihr Konto nicht verfügbar",
+    body: "Ihr aktueller Plan oder Ihr Konto erlaubt dieses Modell nicht. Prüfen Sie Mein Konto oder wählen Sie ein verfügbares Modell."
+  },
   cron_session_read_only: {
     title: 'Dieser Chat gehört zu einer geplanten Aufgabe',
     body: 'Er führt nur diese Aufgabe aus, daher wurde Ihre Nachricht nicht ausgeführt. Starten Sie einen neuen Chat, um sie zu senden.'

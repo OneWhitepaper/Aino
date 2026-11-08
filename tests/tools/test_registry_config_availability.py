@@ -3,14 +3,31 @@
 from copy import deepcopy
 import json
 from pathlib import Path
+import time
 
 import pytest
 
 
+class _Clock:
+    """Keep file-cache signatures fresh without changing probe TTL clocks."""
+
+    def __init__(self, now):
+        self.now = now
+
+    def time_ns(self):
+        return self.now
+
+    def __getattr__(self, name):
+        return getattr(time, name)
+
+
 @pytest.fixture
 def image_profiles(tmp_path, monkeypatch):
+    import utils
     from hermes_cli.config import atomic_config_replace
 
+    # Test config edits, not the unchanged file's racy digest settling after 2 s.
+    monkeypatch.setattr(utils, 'time', _Clock(time.time_ns()))
     launch = tmp_path / '.hermes'
     work = launch / 'profiles' / 'work'
     work.mkdir(parents=True)

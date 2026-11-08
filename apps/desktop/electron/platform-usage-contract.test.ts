@@ -2,6 +2,55 @@ import { expect, it } from 'vitest'
 
 import { parsePlatformUsagePage, parsePlatformUsageQuery } from '../shared/platform-usage-contract'
 
+it('preserves authoritative image billing evidence and accepts older receipts without it', () => {
+  const row = {
+    id: 10944,
+    request_id: 'image-request',
+    model: 'Nano Banana 2',
+    currency: 'USD',
+    actual_cost_decimal: '0.201',
+    settlement_status: 'settled',
+    created_at: '2026-11-08T06:54:31Z',
+    image_count: 1,
+    image_size: '2K',
+    image_input_size: '1536x1024',
+    image_output_size: '1264x848',
+    image_size_source: 'output',
+    image_size_breakdown: { '2K': 1 }
+  }
+
+  const page = (item: unknown) => ({ items: [item], total: 1, page: 1, page_size: 50 })
+  expect(parsePlatformUsagePage(page(row)).items[0]).toMatchObject({
+    image_count: 1,
+    image_size: '2K',
+    image_input_size: '1536x1024',
+    image_output_size: '1264x848',
+    image_size_source: 'output',
+    image_size_breakdown: { '2K': 1 }
+  })
+
+  const legacy = {
+    ...row,
+    image_count: undefined,
+    image_size: undefined,
+    image_input_size: null,
+    image_output_size: undefined,
+    image_size_source: undefined,
+    image_size_breakdown: undefined
+  }
+
+  expect(parsePlatformUsagePage(page(legacy)).items[0]).toMatchObject({
+    image_count: null,
+    image_size: null,
+    image_input_size: null,
+    image_output_size: null,
+    image_size_source: null,
+    image_size_breakdown: null
+  })
+  expect(() => parsePlatformUsagePage(page({ ...row, image_count: -1 }))).toThrow()
+  expect(() => parsePlatformUsagePage(page({ ...row, image_size_breakdown: { '2K': -1 } }))).toThrow()
+})
+
 it('accepts only bounded usage filters, never caller-selected users or credentials', () => {
   expect(
     parsePlatformUsageQuery({
