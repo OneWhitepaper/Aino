@@ -7,7 +7,7 @@ from urllib.error import URLError
 from urllib.parse import urlsplit
 from urllib.request import ProxyHandler, build_opener
 
-from websockets.exceptions import ConnectionClosed
+from websockets.exceptions import ConnectionClosed, InvalidStatus
 from websockets.sync.client import connect
 
 
@@ -209,6 +209,14 @@ def _authenticate_fixture(port, log_path, child):
                     email: 'nix@example.test', password: 'inert-fixture-password', remember: false
                 }).then(result => { window.__nixFixtureLogin = { phase: result.status }; },
                     error => { window.__nixFixtureLogin = { phase: 'failed', code: error?.code ?? 'unknown' }; }); true""")
+        except InvalidStatus as error:
+            # Account rehoming retires the signed-out renderer. CDP can still
+            # list its target briefly, then reject the WebSocket with HTTP 500.
+            # Rediscover on the next bounded iteration, never treat this as
+            # authentication success or retry other handshake failures.
+            if not login_started or error.response.status_code != 500:
+                raise
+            last_observation = f"Retired login target: {error}"
         except (URLError, ConnectionClosed, TimeoutError) as error:
             last_observation = f"CDP transport error: {type(error).__name__}: {error}"
         threading.Event().wait(0.1)
