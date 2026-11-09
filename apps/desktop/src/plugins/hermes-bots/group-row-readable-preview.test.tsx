@@ -28,11 +28,30 @@ it('uses the speaker’s own source name and readable mentions while preserving 
     'studio::builder': { title: '设计师' },
     'studio::u6d4b-u8bd5': { title: '审阅助手' }
   })
-  $groupChats.set({ Team: { log: [{ at: 1, from: { kind: 'member', name: 'builder', source: '工作室' }, text }], watermarks: {} } })
-  render(<GroupRow active={false} group="Team" members={[
-    { name: 'builder', connectionId: 'studio', connectionLabel: '工作室', remoteSource: true, sourceScoped: true },
-    { name: 'u6d4b-u8bd5', handle: 'u6d4b-u8bd5', connectionId: 'studio', connectionLabel: '工作室', remoteSource: true, sourceScoped: true }
-  ]} needsYou={false} onDisband={vi.fn()} onNewSection={vi.fn()} onOpen={vi.fn()} />)
+  $groupChats.set({
+    Team: { log: [{ at: 1, from: { kind: 'member', name: 'builder', source: '工作室' }, text }], watermarks: {} }
+  })
+  render(
+    <GroupRow
+      active={false}
+      group="Team"
+      members={[
+        { name: 'builder', connectionId: 'studio', connectionLabel: '工作室', remoteSource: true, sourceScoped: true },
+        {
+          name: 'u6d4b-u8bd5',
+          handle: 'u6d4b-u8bd5',
+          connectionId: 'studio',
+          connectionLabel: '工作室',
+          remoteSource: true,
+          sourceScoped: true
+        }
+      ]}
+      needsYou={false}
+      onDisband={vi.fn()}
+      onNewSection={vi.fn()}
+      onOpen={vi.fn()}
+    />
+  )
 
   expect(screen.getByText('设计师: Please ask @审阅助手 for a review')).toBeTruthy()
   expect(screen.queryByText(/Wrong local builder/)).toBeNull()

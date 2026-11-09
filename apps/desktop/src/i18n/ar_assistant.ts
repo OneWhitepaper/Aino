@@ -64,16 +64,16 @@ export const arAssistant = {
       },
       errorCodes: {
         managed_billing_unavailable: {
-          title: "حالة الاشتراك غير متاحة",
-          body: "تحقق من الاشتراك وتاريخ انتهائه في حسابي. بعد استعادة الوصول أرسل رسالتك مجددًا، أو اختر نموذجًا متاحًا."
+          title: 'حالة الاشتراك غير متاحة',
+          body: 'تحقق من الاشتراك وتاريخ انتهائه في حسابي. بعد استعادة الوصول أرسل رسالتك مجددًا، أو اختر نموذجًا متاحًا.'
         },
         managed_subscription_expired: {
-          title: "انتهت صلاحية اشتراكك",
-          body: "جدّد الاشتراك في حسابي ثم أرسل رسالتك مجددًا، أو اختر نموذجًا متاحًا."
+          title: 'انتهت صلاحية اشتراكك',
+          body: 'جدّد الاشتراك في حسابي ثم أرسل رسالتك مجددًا، أو اختر نموذجًا متاحًا.'
         },
         managed_model_access_denied: {
-          title: "هذا النموذج غير متاح لحسابك",
-          body: "لا يتيح اشتراكك أو حسابك الحالي هذا النموذج. راجع حسابي أو اختر نموذجًا متاحًا."
+          title: 'هذا النموذج غير متاح لحسابك',
+          body: 'لا يتيح اشتراكك أو حسابك الحالي هذا النموذج. راجع حسابي أو اختر نموذجًا متاحًا.'
         },
         auth: {
           title: provider => `رفض ${provider} مفتاح API الخاص بك`,
@@ -150,8 +150,7 @@ export const arAssistant = {
         },
         truncated: {
           title: 'انقطع الرد قبل اكتماله',
-          body: (_provider, model) =>
-            `توقف ${model || 'النموذج'} قبل أن يُنهي ردّه. اختر «متابعة» ليكمل من حيث توقف.`
+          body: (_provider, model) => `توقف ${model || 'النموذج'} قبل أن يُنهي ردّه. اختر «متابعة» ليكمل من حيث توقف.`
         },
         invalid_response: {
           title: 'تعذّرت قراءة الرد',
@@ -515,17 +514,17 @@ export const arAssistant = {
           pending: 'جار تحرير الملف',
           pendingAction: 'جار التحرير'
         }
+      },
+      runSummary: {
+        search: { count: (count: number) => count + ' استعلامات', past: 'تم البحث', present: 'جارٍ البحث' },
+        read: { count: (count: number) => count + ' صفحات', past: 'تمت القراءة', present: 'جارٍ القراءة' },
+
+        browse: { count: (count: number) => count + ' صفحات', past: 'تم الفتح', present: 'جارٍ الفتح' },
+
+        interact: { count: (count: number) => count + ' إجراءات متصفح', past: 'تم التنفيذ', present: 'جارٍ التنفيذ' },
+
+        analyze: { count: (count: number) => count + ' صور', past: 'تم التحليل', present: 'جارٍ التحليل' }
       }
-    ,
-"runSummary":{"search":{count: (count: number) => count + " استعلامات", past: "تم البحث", present: "جارٍ البحث"},
-"read":{count: (count: number) => count + " صفحات", past: "تمت القراءة", present: "جارٍ القراءة"},
-
-"browse":{count: (count: number) => count + " صفحات", past: "تم الفتح", present: "جارٍ الفتح"},
-
-"interact":{count: (count: number) => count + " إجراءات متصفح", past: "تم التنفيذ", present: "جارٍ التنفيذ"},
-
-"analyze":{count: (count: number) => count + " صور", past: "تم التحليل", present: "جارٍ التحليل"},
-},
-}
+    }
   }
 } satisfies Pick<TranslationOverrides, 'assistant'>

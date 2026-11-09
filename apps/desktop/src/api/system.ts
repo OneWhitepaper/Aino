@@ -317,7 +317,6 @@ export interface DebugShareResponse {
   auto_delete_seconds: number | null
 }
 
-
 export function runDebugShare(): Promise<DebugShareResponse> {
   return hermesApi<DebugShareResponse>({
     ...profileScoped(),

@@ -84,11 +84,7 @@ function aliyunRuntimeHosts(policy: CaptchaPolicy) {
   return []
 }
 
-export function isPlatformCaptchaRequestAllowed(
-  rawUrl: string,
-  platformOrigin: string,
-  policy: CaptchaPolicy
-) {
+export function isPlatformCaptchaRequestAllowed(rawUrl: string, platformOrigin: string, policy: CaptchaPolicy) {
   let url: URL
 
   try {
@@ -506,10 +502,7 @@ export function createPlatformCaptcha({
             () => ({ type: 'load_failed' as const })
           )
 
-        const first = await Promise.race([
-          load,
-          pending.then(proof => ({ type: 'proof' as const, proof }))
-        ])
+        const first = await Promise.race([load, pending.then(proof => ({ type: 'proof' as const, proof }))])
 
         if (first.type === 'load_failed') {
           broker.cancel(win, 'captcha_load_failed')

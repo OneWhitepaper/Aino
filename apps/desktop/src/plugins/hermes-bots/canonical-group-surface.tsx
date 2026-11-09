@@ -81,7 +81,12 @@ export interface CanonicalGroupSurfaceProps {
   onStop: () => void
 }
 
-function surfacePresentation(state: CanonicalGroupSurfaceState | null, restored: boolean, busy: boolean, pending: boolean) {
+function surfacePresentation(
+  state: CanonicalGroupSurfaceState | null,
+  restored: boolean,
+  busy: boolean,
+  pending: boolean
+) {
   const members = state?.room.members ?? []
   const phases = canonicalMemberPhases(state?.driver_status)
   const working = !!state?.driver_status?.working || phases.size > 0
@@ -143,7 +148,13 @@ export function CanonicalGroupSurface(props: CanonicalGroupSurfaceProps) {
   )
 
   const files = groupFiles.length ? (
-    <CanonicalGroupAttachments attachments={groupFiles} binding={binding} disabled={!visible} downloads={offersGroupMethod(props.methods, 'groups.attachment.download')} readOnly />
+    <CanonicalGroupAttachments
+      attachments={groupFiles}
+      binding={binding}
+      disabled={!visible}
+      downloads={offersGroupMethod(props.methods, 'groups.attachment.download')}
+      readOnly
+    />
   ) : undefined
 
   const info = (
@@ -156,8 +167,16 @@ export function CanonicalGroupSurface(props: CanonicalGroupSurfaceProps) {
       driver={state?.driver_status}
       files={files}
       id={infoId}
-      management={<CanonicalGroupRoomSettings autoRouting={!!state?.driver_status?.routing_modes?.includes('auto')} binding={binding}
-        context={state?.context} disabled={busy || !offersGroupMethod(props.methods, 'groups.context')} members={members.map(member => ({ ...member, display_name: nameFor(member) }))} onSaved={props.onRefresh} />}
+      management={
+        <CanonicalGroupRoomSettings
+          autoRouting={!!state?.driver_status?.routing_modes?.includes('auto')}
+          binding={binding}
+          context={state?.context}
+          disabled={busy || !offersGroupMethod(props.methods, 'groups.context')}
+          members={members.map(member => ({ ...member, display_name: nameFor(member) }))}
+          onSaved={props.onRefresh}
+        />
+      }
       onClose={() => setInfoOpen(false)}
       onDisband={onDisband}
       onMention={locked ? undefined : mention}
@@ -258,9 +277,13 @@ export function CanonicalGroupSurface(props: CanonicalGroupSurfaceProps) {
                 members={members}
                 onMention={locked ? undefined : mention}
                 onReply={locked ? undefined : props.onReply}
-                pause={{ busy, stopping: props.stopping, maxContinues: state?.driver_status?.max_continues,
+                pause={{
+                  busy,
+                  stopping: props.stopping,
+                  maxContinues: state?.driver_status?.max_continues,
                   onContinue: offersGroupMethod(props.methods, 'groups.continue') ? props.onContinue : undefined,
-                  onStop: offersGroupSafetyMethod(props.methods, 'groups.stop') ? onStop : undefined }}
+                  onStop: offersGroupSafetyMethod(props.methods, 'groups.stop') ? onStop : undefined
+                }}
                 searchQuery={query}
               />
             </div>

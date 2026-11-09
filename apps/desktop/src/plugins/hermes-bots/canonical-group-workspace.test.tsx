@@ -32,11 +32,16 @@ vi.mock('@hermes/plugin-sdk', async () => {
     Button: (p: ComponentProps<'button'>) => <button {...p} />,
     Input: (p: ComponentProps<'input'>) => <input {...p} />,
     RowButton: (p: ComponentProps<'button'>) => <button type="button" {...p} />,
-    host: { ...gateway.host, requestProfile: captureGroupRequests(request).request } }
+    host: { ...gateway.host, requestProfile: captureGroupRequests(request).request }
+  }
 })
 import { host } from '@hermes/plugin-sdk'
 
-import { CANONICAL_GROUP_CAPABILITIES, LEGACY_STANDALONE_GROUP_CAPABILITIES, STANDALONE_GROUP_CAPABILITIES } from './canonical-group-contract-test-utils'
+import {
+  CANONICAL_GROUP_CAPABILITIES,
+  LEGACY_STANDALONE_GROUP_CAPABILITIES,
+  STANDALONE_GROUP_CAPABILITIES
+} from './canonical-group-contract-test-utils'
 import { $canonicalGroupBindings, registerCanonicalGroup } from './canonical-group-registry'
 import { attemptCanonicalGroupSend, prepareCanonicalGroupSend, readCanonicalGroupSend } from './canonical-group-send'
 import { CanonicalGroupWorkspace } from './canonical-group-workspace'
@@ -45,7 +50,12 @@ import { $groupChatWorkspace } from './group-chat'
 import { copyGroupMentions, GROUP_MENTION_CLIPBOARD_TYPE } from './group-chat-mention-clipboard'
 import { projectGroupMentions } from './group-chat-mentions'
 import { GroupChatWorkspace } from './group-chat-view'
-import { canonicalGroupComposerDraftKey, clearGroupComposerDrafts, groupComposerDraftSnapshot, updateGroupComposerDraft } from './group-panes'
+import {
+  canonicalGroupComposerDraftKey,
+  clearGroupComposerDrafts,
+  groupComposerDraftSnapshot,
+  updateGroupComposerDraft
+} from './group-panes'
 const originalDesktop = window.hermesDesktop
 beforeEach(() => {
   Object.defineProperty(window, 'hermesDesktop', { configurable: true, writable: true, value: undefined })
@@ -61,7 +71,12 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 // What gateway/session_group_controls.py answers for groups.send.
-const receipt = (params: { event_id?: string }) => ({ event: {}, client_event_id: params.event_id, accepted: true, driver_started: true })
+const receipt = (params: { event_id?: string }) => ({
+  event: {},
+  client_event_id: params.event_id,
+  accepted: true,
+  driver_started: true
+})
 
 it('preserves the unsent draft when only the room display name changes', async () => {
   request.mockImplementation(async (_route, method) =>
@@ -118,8 +133,13 @@ it('restores a frozen send after remount and retires only its acknowledged exact
   first.unmount()
   render(<CanonicalGroupWorkspace binding={binding} />)
   await screen.findByRole('button', { name: 'Retry' })
-  request.mockImplementation(async (_route, method, params) => method === 'groups.state'
-    ? { room: { name: 'Room' }, driver_status: {} } : method === 'groups.log' ? { events: [] } : receipt(params))
+  request.mockImplementation(async (_route, method, params) =>
+    method === 'groups.state'
+      ? { room: { name: 'Room' }, driver_status: {} }
+      : method === 'groups.log'
+        ? { events: [] }
+        : receipt(params)
+  )
   await waitFor(() => expect((screen.getByRole('button', { name: 'Retry' }) as HTMLButtonElement).disabled).toBe(false))
   fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
   await waitFor(async () => expect(await readCanonicalGroupSend(binding)).toBeUndefined())
@@ -163,8 +183,13 @@ it('blocks Send until journal restore and durable preparation complete', async (
   }
 
   window.hermesDesktop = { preparedSubmissions: native } as unknown as typeof window.hermesDesktop
-  request.mockImplementation(async (_route, method, params) => method === 'groups.state'
-    ? { room: { name: 'Room' }, driver_status: {} } : method === 'groups.log' ? { events: [] } : receipt(params))
+  request.mockImplementation(async (_route, method, params) =>
+    method === 'groups.state'
+      ? { room: { name: 'Room' }, driver_status: {} }
+      : method === 'groups.log'
+        ? { events: [] }
+        : receipt(params)
+  )
   render(<CanonicalGroupWorkspace binding={{ connectionId: 'remote', profile: 'team', roomId: 'new' }} />)
   await screen.findByText('Room')
   fireEvent.change(screen.getByRole('textbox'), { target: { value: 'New text' } })
@@ -334,14 +359,28 @@ const roomReads =
 
 it('answers model requests while a group is hidden without reloading its transcript', async () => {
   const members = [{ member_id: 'm1', profile: 'helper', handle: 'helper', display_name: 'Helper' }]
-  const pending = [{ request_id: 'request-1', session_id: 'private-group-session', member_id: 'm1', profile: 'helper', action: 'list' }]
-  request.mockImplementation(async (_route, method) => method === 'groups.state'
-    ? { room: { name: 'Room', members }, model_requests: pending, driver_status: { working: true } }
-    : { events: [] })
-  render(<CanonicalGroupWorkspace binding={{ connectionId: 'remote', profile: 'team', roomId: 'background-models' }} visible={false} />)
+  const pending = [
+    { request_id: 'request-1', session_id: 'private-group-session', member_id: 'm1', profile: 'helper', action: 'list' }
+  ]
+  request.mockImplementation(async (_route, method) =>
+    method === 'groups.state'
+      ? { room: { name: 'Room', members }, model_requests: pending, driver_status: { working: true } }
+      : { events: [] }
+  )
+  render(
+    <CanonicalGroupWorkspace
+      binding={{ connectionId: 'remote', profile: 'team', roomId: 'background-models' }}
+      visible={false}
+    />
+  )
   await waitFor(() => expect(respondModels).toHaveBeenCalledOnce())
-  expect(respondModels).toHaveBeenCalledWith(expect.objectContaining({ connectionId: 'remote', profile: 'team', targetProfile: 'team' }),
-    expect.any(Function), 'background-models', members, pending)
+  expect(respondModels).toHaveBeenCalledWith(
+    expect.objectContaining({ connectionId: 'remote', profile: 'team', targetProfile: 'team' }),
+    expect.any(Function),
+    'background-models',
+    members,
+    pending
+  )
   expect(request.mock.calls.some(call => call[1] === 'groups.log')).toBe(false)
 })
 
@@ -350,38 +389,66 @@ it('updates active status within a second without rereading unchanged history, t
   let latestSeq = 1
   let driver = { working: true, member_activity: [{ member_id: 'helper', status: 'running' }] }
   const events = [{ seq: 1, event_id: 'first', kind: 'message.member', payload: { text: 'Retained reply' } }]
-  request.mockImplementation(async (_route, method) => method === 'groups.state'
-    ? { room: { name: 'Room', latest_seq: latestSeq, members: [{ member_id: 'helper', profile: 'helper', handle: 'helper', display_name: 'Helper' }] }, driver_status: driver }
-    : { events: [...events] })
+  request.mockImplementation(async (_route, method) =>
+    method === 'groups.state'
+      ? {
+          room: {
+            name: 'Room',
+            latest_seq: latestSeq,
+            members: [{ member_id: 'helper', profile: 'helper', handle: 'helper', display_name: 'Helper' }]
+          },
+          driver_status: driver
+        }
+      : { events: [...events] }
+  )
 
-  await act(async () => { render(<CanonicalGroupWorkspace binding={{ connectionId: 'local', profile: 'team', roomId: 'live-status' }} />) })
+  await act(async () => {
+    render(<CanonicalGroupWorkspace binding={{ connectionId: 'local', profile: 'team', roomId: 'live-status' }} />)
+  })
   expect(screen.getByText('Retained reply')).toBeTruthy()
   driver = { working: true, member_activity: [{ member_id: 'helper', status: 'stopping' }] }
-  await act(async () => { await vi.advanceTimersByTimeAsync(1_000) })
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(1_000)
+  })
   expect(screen.getByRole('status').textContent).toContain('Stopping')
   expect(request.mock.calls.filter(call => call[1] === 'groups.log')).toHaveLength(1)
   expect(screen.getByText('Retained reply')).toBeTruthy()
 
   latestSeq = 2
   events.push({ seq: 2, event_id: 'second', kind: 'message.member', payload: { text: 'New reply' } })
-  await act(async () => { await vi.advanceTimersByTimeAsync(1_000) })
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(1_000)
+  })
   expect(screen.getByText('New reply')).toBeTruthy()
   expect(request.mock.calls.filter(call => call[1] === 'groups.log')).toHaveLength(2)
 
   driver = { working: false, member_activity: [] }
-  await act(async () => { await vi.advanceTimersByTimeAsync(1_000) })
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(1_000)
+  })
   expect(screen.queryByRole('status')).toBeNull()
   const readsAtIdle = request.mock.calls.filter(call => call[1] === 'groups.state').length
-  await act(async () => { await vi.advanceTimersByTimeAsync(1_000) })
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(1_000)
+  })
   expect(request.mock.calls.filter(call => call[1] === 'groups.state')).toHaveLength(readsAtIdle)
   expect(request.mock.calls.filter(call => call[1] === 'groups.log')).toHaveLength(2)
 })
 
 it('describes only a send restored from the journal as restored, never an ordinary in-flight send', async () => {
   let ack!: () => void
-  request.mockImplementation(async (_route, method, params) => roomReads()(method)
-    ?? (method === 'groups.send' ? new Promise(resolve => { ack = () => resolve(receipt(params)) }) : {}))
-  const view = render(<CanonicalGroupWorkspace binding={{ connectionId: 'remote', profile: 'team', roomId: 'ordinary' }} />)
+  request.mockImplementation(
+    async (_route, method, params) =>
+      roomReads()(method) ??
+      (method === 'groups.send'
+        ? new Promise(resolve => {
+            ack = () => resolve(receipt(params))
+          })
+        : {})
+  )
+  const view = render(
+    <CanonicalGroupWorkspace binding={{ connectionId: 'remote', profile: 'team', roomId: 'ordinary' }} />
+  )
   await waitFor(() => expect((screen.getByRole('textbox') as HTMLTextAreaElement).disabled).toBe(false))
   fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Hello' } })
   fireEvent.click(screen.getByRole('button', { name: 'Send' }))
@@ -398,7 +465,9 @@ it('describes only a send restored from the journal as restored, never an ordina
 
 it('drops the restored notice once the gateway proves the restored send posted nothing', async () => {
   const refusal = Object.assign(new Error('hosted room not found'), { code: 4111, data: { admitted: false } })
-  request.mockImplementation(async (_route, method) => roomReads()(method) ?? (method === 'groups.send' ? Promise.reject(refusal) : {}))
+  request.mockImplementation(
+    async (_route, method) => roomReads()(method) ?? (method === 'groups.send' ? Promise.reject(refusal) : {})
+  )
   const binding = { connectionId: 'remote', profile: 'team', roomId: 'restored-refused' }
   await prepareCanonicalGroupSend(binding, { text: 'Left over', attachments: [] })
   render(<CanonicalGroupWorkspace binding={binding} />)
@@ -411,7 +480,7 @@ it('drops the restored notice once the gateway proves the restored send posted n
   expect((screen.getByRole('textbox') as HTMLTextAreaElement).value).toBe('Left over')
 })
 
-it('renames the room and disbands it only through ConfirmDialog, which stays open with a failed disband\'s error', async () => {
+it("renames the room and disbands it only through ConfirmDialog, which stays open with a failed disband's error", async () => {
   const onBack = vi.fn()
   let disbands = 0
   request.mockImplementation(
@@ -475,9 +544,15 @@ it('drops a disbanded room from the sidebar list and its bindings, with the disb
   vi.mocked(host.notify).mockClear()
   let disbanded = false
   const room = { room_id: 'gone', name: 'Doomed', members: [] }
-  request.mockImplementation(async (_route, method) => method === 'groups.disband' ? (disbanded = true, {})
-    : method === 'groups.capabilities' ? { driver: true } : method === 'groups.list' ? { rooms: disbanded ? [] : [room], next_offset: null }
-      : roomReads()(method) ?? {})
+  request.mockImplementation(async (_route, method) =>
+    method === 'groups.disband'
+      ? ((disbanded = true), {})
+      : method === 'groups.capabilities'
+        ? { driver: true }
+        : method === 'groups.list'
+          ? { rooms: disbanded ? [] : [room], next_offset: null }
+          : (roomReads()(method) ?? {})
+  )
   renderGatewayRooms()
   await screen.findByRole('button', { name: 'Doomed' })
   const binding = { connectionId: 'local', profile: 'default', roomId: 'gone', roomName: 'Doomed' }
@@ -533,7 +608,9 @@ it('blocks unbound names through Enter and form submit, then sends the member ch
   fireEvent.mouseDown(screen.getByRole('option', { name: /测试/ }))
   expect(screen.queryByRole('alert')).toBeNull()
   fireEvent.keyDown(input, { key: 'Enter' })
-  await waitFor(() => expect(request.mock.calls.some(call => call[1] === 'groups.send' && call[2].payload.text === '@u6d4b ')).toBe(true))
+  await waitFor(() =>
+    expect(request.mock.calls.some(call => call[1] === 'groups.send' && call[2].payload.text === '@u6d4b ')).toBe(true)
+  )
 })
 
 it('retains two identically named recipients and reports punctuation-adjacent delivery correctly', async () => {
@@ -543,13 +620,19 @@ it('retains two identically named recipients and reports punctuation-adjacent de
   ]
 
   request.mockImplementation(async (_route, method) => roomReads(members)(method) ?? {})
-  const { container } = render(<CanonicalGroupWorkspace binding={{ connectionId: 'local', profile: 'team', roomId: 'same-name' }} />)
+  const { container } = render(
+    <CanonicalGroupWorkspace binding={{ connectionId: 'local', profile: 'team', roomId: 'same-name' }} />
+  )
   const input = screen.getByRole('textbox') as HTMLTextAreaElement
   await waitFor(() => expect(input.disabled).toBe(false))
   fireEvent.change(input, { target: { value: '(@a) hello a@b' } })
   expect(container.querySelector('.aino-group-recipients')?.textContent).toBe('Mentioned: 设计师 ×2')
   fireEvent.click(screen.getByRole('button', { name: 'Send' }))
-  await waitFor(() => expect(request.mock.calls.some(call => call[1] === 'groups.send' && call[2].payload.text === '(@a) hello a@b')).toBe(true))
+  await waitFor(() =>
+    expect(
+      request.mock.calls.some(call => call[1] === 'groups.send' && call[2].payload.text === '(@a) hello a@b')
+    ).toBe(true)
+  )
 })
 
 it('restores only same-room clipboard recipients and blocks a foreign name that collides with a local handle', async () => {
@@ -570,7 +653,11 @@ it('restores only same-room clipboard recipients and blocks a foreign name that 
   const copy = (scope: string) => {
     const copied = copyGroupMentions(projection, 0, projection.text.length, scope)
 
-    return { files: [], getData: (type: string) => type === 'text/plain' ? copied.text : type === GROUP_MENTION_CLIPBOARD_TYPE ? copied.envelope ?? '' : '' }
+    return {
+      files: [],
+      getData: (type: string) =>
+        type === 'text/plain' ? copied.text : type === GROUP_MENTION_CLIPBOARD_TYPE ? (copied.envelope ?? '') : ''
+    }
   }
 
   fireEvent.paste(input, { clipboardData: copy('another-room') })
@@ -584,7 +671,11 @@ it('restores only same-room clipboard recipients and blocks a foreign name that 
   expect(input.value).toBe('@b ')
   expect(screen.queryByRole('alert')).toBeNull()
   fireEvent.click(screen.getByRole('button', { name: 'Send' }))
-  await waitFor(() => expect(request.mock.calls.some(call => call[1] === 'groups.send' && call[2].payload.text === '@frozen-a ')).toBe(true))
+  await waitFor(() =>
+    expect(request.mock.calls.some(call => call[1] === 'groups.send' && call[2].payload.text === '@frozen-a ')).toBe(
+      true
+    )
+  )
 })
 
 it('retries already journaled bytes even when their old member is unavailable', async () => {
@@ -596,7 +687,11 @@ it('retries already journaled bytes even when their old member is unavailable', 
   await waitFor(() => expect((retry as HTMLButtonElement).disabled).toBe(false))
   expect(screen.queryByRole('alert')).toBeNull()
   fireEvent.click(retry)
-  await waitFor(() => expect(request.mock.calls.some(call => call[1] === 'groups.send' && call[2].payload.text === entry.params.payload.text)).toBe(true))
+  await waitFor(() =>
+    expect(
+      request.mock.calls.some(call => call[1] === 'groups.send' && call[2].payload.text === entry.params.payload.text)
+    ).toBe(true)
+  )
 })
 
 it('uploads pasted and dropped files through the room upload and previews committed images inline', async () => {
@@ -944,17 +1039,34 @@ it.each([
   ['the standalone server', STANDALONE_GROUP_CAPABILITIES, false, true],
   ['an older standalone server', LEGACY_STANDALONE_GROUP_CAPABILITIES, false, false]
 ])('offers Discard and attachments only where %s lists them', async (_surface, capabilities, discard, attachments) => {
-  const actions = [{ kind: 'discard', member_id: 'ops', task_id: 'unknown', execution_generation: 2 },
-    { kind: 'retry', member_id: 'qa', task_id: 'late', execution_generation: 1 }]
+  const actions = [
+    { kind: 'discard', member_id: 'ops', task_id: 'unknown', execution_generation: 2 },
+    { kind: 'retry', member_id: 'qa', task_id: 'late', execution_generation: 1 }
+  ]
 
-  const events = [{ seq: 1, room_id: 'surfaces', event_id: 'file-event', kind: 'message.member', actor: { kind: 'member', id: 'ops' },
-    payload: { attachments: [{ attachment_id: 'att_1', kind: 'file', name: 'notes.txt', mime: 'text/plain' }] } }]
+  const events = [
+    {
+      seq: 1,
+      room_id: 'surfaces',
+      event_id: 'file-event',
+      kind: 'message.member',
+      actor: { kind: 'member', id: 'ops' },
+      payload: { attachments: [{ attachment_id: 'att_1', kind: 'file', name: 'notes.txt', mime: 'text/plain' }] }
+    }
+  ]
 
   let answer!: (value: unknown) => void
-  request.mockImplementation(async (_route, method) => method === 'groups.capabilities'
-    ? new Promise(resolve => { answer = resolve })
-    : method === 'groups.state' ? { room: { name: 'Room' }, driver_status: { pending_actions: actions } }
-      : method === 'groups.log' ? { events } : {})
+  request.mockImplementation(async (_route, method) =>
+    method === 'groups.capabilities'
+      ? new Promise(resolve => {
+          answer = resolve
+        })
+      : method === 'groups.state'
+        ? { room: { name: 'Room' }, driver_status: { pending_actions: actions } }
+        : method === 'groups.log'
+          ? { events }
+          : {}
+  )
   render(<CanonicalGroupWorkspace binding={{ connectionId: 'remote', profile: 'team', roomId: 'surfaces' }} />)
   await screen.findByText('notes.txt')
   // Until the gateway says what it offers, no optional control is shown.
@@ -973,13 +1085,32 @@ it.each([
   expect(screen.getByRole('button', { name: /disband/i })).toBeTruthy()
 })
 
-it('keeps Stop and Deny while the gateway\'s methods cannot be read, and holds back Allow and room edits', async () => {
-  const approval = { kind: 'approval', member_id: 'ops', task_id: 'clean', execution_generation: 1, request_id: 'r-clean',
-    approval: { request_id: 'r-clean', command: 'rm -rf build', description: 'Clear the build folder', choices: ['once', 'deny'] } }
+it("keeps Stop and Deny while the gateway's methods cannot be read, and holds back Allow and room edits", async () => {
+  const approval = {
+    kind: 'approval',
+    member_id: 'ops',
+    task_id: 'clean',
+    execution_generation: 1,
+    request_id: 'r-clean',
+    approval: {
+      request_id: 'r-clean',
+      command: 'rm -rf build',
+      description: 'Clear the build folder',
+      choices: ['once', 'deny']
+    }
+  }
 
-  request.mockImplementation(async (_route, method) => method === 'groups.capabilities' ? Promise.reject(new Error('request timed out'))
-    : method === 'groups.state' ? { room: { name: 'Room' }, driver_status: { working: true, pending_actions: [approval] } }
-      : method === 'groups.log' ? { events: [] } : method === 'groups.stop' ? { cancelled: 1 } : { approved: true })
+  request.mockImplementation(async (_route, method) =>
+    method === 'groups.capabilities'
+      ? Promise.reject(new Error('request timed out'))
+      : method === 'groups.state'
+        ? { room: { name: 'Room' }, driver_status: { working: true, pending_actions: [approval] } }
+        : method === 'groups.log'
+          ? { events: [] }
+          : method === 'groups.stop'
+            ? { cancelled: 1 }
+            : { approved: true }
+  )
   render(<CanonicalGroupWorkspace binding={{ connectionId: 'remote', profile: 'team', roomId: 'unknown-methods' }} />)
   const card = (await screen.findByText('rm -rf build')).closest('[data-task-id]') as HTMLElement
   await waitFor(() => expect(request.mock.calls.some(c => c[1] === 'groups.capabilities')).toBe(true))
@@ -989,15 +1120,22 @@ it('keeps Stop and Deny while the gateway\'s methods cannot be read, and holds b
   const deny = within(card).getByRole('button', { name: 'Deny' }) as HTMLButtonElement
   await waitFor(() => expect(deny.disabled).toBe(false))
   fireEvent.click(deny)
-  await waitFor(() => expect(request.mock.calls.filter(c => c[1] === 'groups.approve').map(c => c[2].choice)).toEqual(['deny']))
+  await waitFor(() =>
+    expect(request.mock.calls.filter(c => c[1] === 'groups.approve').map(c => c[2].choice)).toEqual(['deny'])
+  )
   fireEvent.click(screen.getByRole('button', { name: 'Stop this round' }))
   await screen.findByText('Stop requested')
 })
 
 it('hides unadvertised header actions while working and ignores pasted files', async () => {
   const methods = ['groups.capabilities', 'groups.state', 'groups.log', 'groups.send']
-  request.mockImplementation(async (_route, method) => method === 'groups.capabilities' ? { driver: true, methods }
-    : method === 'groups.state' ? { room: { name: 'Room' }, driver_status: { working: true } } : roomReads()(method) ?? {})
+  request.mockImplementation(async (_route, method) =>
+    method === 'groups.capabilities'
+      ? { driver: true, methods }
+      : method === 'groups.state'
+        ? { room: { name: 'Room' }, driver_status: { working: true } }
+        : (roomReads()(method) ?? {})
+  )
   render(<CanonicalGroupWorkspace binding={{ connectionId: 'remote', profile: 'team', roomId: 'bare' }} />)
   await waitFor(() => expect(request.mock.calls.some(c => c[1] === 'groups.capabilities')).toBe(true))
   const box = screen.getByRole('textbox')
@@ -1005,7 +1143,9 @@ it('hides unadvertised header actions while working and ignores pasted files', a
   expect(screen.queryByRole('button', { name: 'Stop this round' })).toBeNull()
   expect(screen.queryByRole('button', { name: 'Rename' })).toBeNull()
   expect(screen.queryByRole('button', { name: /disband/i })).toBeNull()
-  fireEvent.paste(box, { clipboardData: { files: [new File(['a'], 'a.png', { type: 'image/png' })], types: ['Files'] } })
+  fireEvent.paste(box, {
+    clipboardData: { files: [new File(['a'], 'a.png', { type: 'image/png' })], types: ['Files'] }
+  })
   expect(request.mock.calls.some(c => c[1] === 'groups.attachment.upload')).toBe(false)
 })
 
@@ -1013,12 +1153,21 @@ it('reads only new log events, and the whole log again when the room authority c
   // The room polls every two seconds; the test moves the clock instead of waiting.
   vi.useFakeTimers({ shouldAdvanceTime: true, toFake: ['setTimeout', 'clearTimeout'] })
   const nextPoll = () => act(() => vi.advanceTimersByTimeAsync(2_000))
-  const message = (seq: number, text: string) => ({ seq, kind: 'message.member', actor: { kind: 'member', id: 'ops' }, payload: { text } })
+  const message = (seq: number, text: string) => ({
+    seq,
+    kind: 'message.member',
+    actor: { kind: 'member', id: 'ops' },
+    payload: { text }
+  })
   let epoch = 1
   let log = [message(1, 'First reply')]
-  request.mockImplementation(async (_route, method, params) => method === 'groups.state'
-    ? { room: { name: 'Room', authority_epoch: epoch, latest_seq: log.at(-1)!.seq }, driver_status: {} }
-    : method === 'groups.log' ? { events: log.filter(event => event.seq > params.since_seq), has_more: false } : {})
+  request.mockImplementation(async (_route, method, params) =>
+    method === 'groups.state'
+      ? { room: { name: 'Room', authority_epoch: epoch, latest_seq: log.at(-1)!.seq }, driver_status: {} }
+      : method === 'groups.log'
+        ? { events: log.filter(event => event.seq > params.since_seq), has_more: false }
+        : {}
+  )
   render(<CanonicalGroupWorkspace binding={{ connectionId: 'local', profile: 'team', roomId: 'long' }} />)
   await screen.findByText('First reply')
   log = [...log, message(2, 'Second reply')]
@@ -1038,20 +1187,39 @@ it('reads only new log events, and the whole log again when the room authority c
 })
 
 it('says what the room waits on beside the live work, never instead of it', async () => {
-  const members = [{ member_id: 'ops', profile: 'ops', handle: 'ops', display_name: 'Ops' },
-    { member_id: 'qa', profile: 'qa', handle: 'qa', display_name: 'QA' }]
+  const members = [
+    { member_id: 'ops', profile: 'ops', handle: 'ops', display_name: 'Ops' },
+    { member_id: 'qa', profile: 'qa', handle: 'qa', display_name: 'QA' }
+  ]
 
   let driver: Record<string, unknown> | undefined = {
-    running: true, working: true, blocked: true, member_activity: [{ member_id: 'ops', status: 'running' }],
+    running: true,
+    working: true,
+    blocked: true,
+    member_activity: [{ member_id: 'ops', status: 'running' }],
     pending_actions: [
       { kind: 'retry', member_id: 'qa', task_id: 'failed', execution_generation: 1 },
-      { kind: 'approval', member_id: 'ops', task_id: 'live', execution_generation: 1, request_id: 'r1', approval: { choices: ['deny'] } }
+      {
+        kind: 'approval',
+        member_id: 'ops',
+        task_id: 'live',
+        execution_generation: 1,
+        request_id: 'r1',
+        approval: { choices: ['deny'] }
+      }
     ]
   }
 
-  request.mockImplementation(async (_route, method) => method === 'groups.state'
-    ? { room: { name: 'Room', members }, driver_status: driver } : method === 'groups.log' ? { events: [] } : {})
-  const view = render(<CanonicalGroupWorkspace binding={{ connectionId: 'local', profile: 'team', roomId: 'waiting' }} />)
+  request.mockImplementation(async (_route, method) =>
+    method === 'groups.state'
+      ? { room: { name: 'Room', members }, driver_status: driver }
+      : method === 'groups.log'
+        ? { events: [] }
+        : {}
+  )
+  const view = render(
+    <CanonicalGroupWorkspace binding={{ connectionId: 'local', profile: 'team', roomId: 'waiting' }} />
+  )
   await screen.findByText('Blocked · 1 waiting for approval · Needs attention: 1')
   expect(screen.getByRole('status').textContent).toContain('Ops')
 
@@ -1062,29 +1230,45 @@ it('says what the room waits on beside the live work, never instead of it', asyn
   await screen.findByText('Group driver unavailable. Update or reconnect the owning gateway.')
 })
 
-it.each(['none', 'send', 'retry'] as const)('scopes a failed Stop intent across %s', async (next) => {
+it.each(['none', 'send', 'retry'] as const)('scopes a failed Stop intent across %s', async next => {
   const action = { kind: 'retry', member_id: 'ops', task_id: 'task', execution_generation: 1 }
   let stops = 0
   request.mockImplementation(async (_route, method, params) => {
-    if (method === 'groups.state') {return { room: { name: 'Room' }, driver_status: {
-      working: true, pending_actions: next === 'retry' ? [action] : []
-    } }}
+    if (method === 'groups.state') {
+      return {
+        room: { name: 'Room' },
+        driver_status: {
+          working: true,
+          pending_actions: next === 'retry' ? [action] : []
+        }
+      }
+    }
 
-    if (method === 'groups.log') {return { events: [] }}
+    if (method === 'groups.log') {
+      return { events: [] }
+    }
 
-    if (method === 'groups.send') {return { client_event_id: params.event_id, accepted: true, driver_started: true }}
+    if (method === 'groups.send') {
+      return { client_event_id: params.event_id, accepted: true, driver_started: true }
+    }
 
-    if (method === 'groups.retry') {return { retried: true }}
+    if (method === 'groups.retry') {
+      return { retried: true }
+    }
 
     if (method === 'groups.stop') {
-      if (++stops === 1) {throw new Error('Stop timed out')}
+      if (++stops === 1) {
+        throw new Error('Stop timed out')
+      }
 
       return { cancelled: 1 }
     }
 
     return {}
   })
-  render(<CanonicalGroupWorkspace binding={{ connectionId: 'local', profile: 'team', roomId: `stop-intent-${next}` }} />)
+  render(
+    <CanonicalGroupWorkspace binding={{ connectionId: 'local', profile: 'team', roomId: `stop-intent-${next}` }} />
+  )
   const stop = await screen.findByRole('button', { name: 'Stop this round' })
   fireEvent.click(stop)
   await screen.findByText('Stop timed out')
@@ -1111,16 +1295,26 @@ it('keeps one cancellation intent until Stop is confirmed, and fences again behi
   let deliver!: (value: unknown) => void
   let stops = 0
   request.mockImplementation(async (_route, method, params) => {
-    if (method === 'groups.state') {return { room: { name: 'Room' }, driver_status: { working: true } }}
+    if (method === 'groups.state') {
+      return { room: { name: 'Room' }, driver_status: { working: true } }
+    }
 
-    if (method === 'groups.log') {return { events: [] }}
+    if (method === 'groups.log') {
+      return { events: [] }
+    }
 
-    if (method === 'groups.send') {return new Promise(resolve => { deliver = resolve })}
+    if (method === 'groups.send') {
+      return new Promise(resolve => {
+        deliver = resolve
+      })
+    }
 
     if (method === 'groups.stop') {
       stops += 1
 
-      if (stops === 1) {throw new Error('request timed out: groups.stop')}
+      if (stops === 1) {
+        throw new Error('request timed out: groups.stop')
+      }
 
       return { cancelled: stops === 2 ? 2 : 0 }
     }
@@ -1156,23 +1350,31 @@ it('keeps one cancellation intent until Stop is confirmed, and fences again behi
 it('follows a retried Stop that replayed its lost fence with a fresh one when the room still works', async () => {
   let stops = 0
   request.mockImplementation(async (_route, method) => {
-    if (method === 'groups.state') {return { room: { name: 'Room' }, driver_status: { working: true } }}
+    if (method === 'groups.state') {
+      return { room: { name: 'Room' }, driver_status: { working: true } }
+    }
 
-    if (method === 'groups.log') {return { events: [] }}
+    if (method === 'groups.log') {
+      return { events: [] }
+    }
 
     if (method === 'groups.stop') {
       stops += 1
 
       // The first Stop committed but its reply was lost; work sent afterward is past its fence.
-      if (stops === 1) {throw new Error('request timed out: groups.stop')}
+      if (stops === 1) {
+        throw new Error('request timed out: groups.stop')
+      }
 
       return { cancelled: stops === 2 ? 0 : 1 }
     }
 
     return {}
   })
-  render(<CanonicalGroupWorkspace binding={{ connectionId: 'local', profile: 'team', roomId: 'stop-replay-late-work' }} />)
-  const stop = await screen.findByRole('button', { name: 'Stop this round' }) as HTMLButtonElement
+  render(
+    <CanonicalGroupWorkspace binding={{ connectionId: 'local', profile: 'team', roomId: 'stop-replay-late-work' }} />
+  )
+  const stop = (await screen.findByRole('button', { name: 'Stop this round' })) as HTMLButtonElement
   fireEvent.click(stop)
   await screen.findByText('request timed out: groups.stop')
   await waitFor(() => expect(stop.disabled).toBe(false))
@@ -1189,16 +1391,30 @@ it('holds the next Send until a Stop still fencing behind the last one has finis
   let releaseFirstStop!: () => void
   let stops = 0
   request.mockImplementation(async (_route, method, params) => {
-    if (method === 'groups.state') {return { room: { name: 'Room' }, driver_status: { working: true } }}
+    if (method === 'groups.state') {
+      return { room: { name: 'Room' }, driver_status: { working: true } }
+    }
 
-    if (method === 'groups.log') {return { events: [] }}
+    if (method === 'groups.log') {
+      return { events: [] }
+    }
 
-    if (method === 'groups.send') {return params.payload.text === 'A' ? new Promise(resolve => { deliver = resolve }) : receipt(params)}
+    if (method === 'groups.send') {
+      return params.payload.text === 'A'
+        ? new Promise(resolve => {
+            deliver = resolve
+          })
+        : receipt(params)
+    }
 
     if (method === 'groups.stop') {
       stops += 1
 
-      return stops === 1 ? new Promise(resolve => { releaseFirstStop = () => resolve({ cancelled: 1 }) }) : { cancelled: 0 }
+      return stops === 1
+        ? new Promise(resolve => {
+            releaseFirstStop = () => resolve({ cancelled: 1 })
+          })
+        : { cancelled: 0 }
     }
 
     return params
@@ -1215,10 +1431,14 @@ it('holds the next Send until a Stop still fencing behind the last one has finis
   await waitFor(() => expect(box.value).toBe(''))
   fireEvent.change(box, { target: { value: 'B' } })
   fireEvent.click(screen.getByRole('button', { name: 'Send' }))
-  await act(async () => { await new Promise(resolve => setTimeout(resolve, 50)) })
+  await act(async () => {
+    await new Promise(resolve => setTimeout(resolve, 50))
+  })
 
-  const order = () => request.mock.calls.filter(call => call[1] === 'groups.send' || call[1] === 'groups.stop')
-    .map(call => call[1] === 'groups.send' ? `send:${call[2].payload.text}` : 'stop')
+  const order = () =>
+    request.mock.calls
+      .filter(call => call[1] === 'groups.send' || call[1] === 'groups.stop')
+      .map(call => (call[1] === 'groups.send' ? `send:${call[2].payload.text}` : 'stop'))
 
   // While Stop still has to fence behind A, B does not leave: that fence would cancel it.
   expect(order()).toEqual(['send:A', 'stop'])
@@ -1233,9 +1453,19 @@ it('holds the next Send until a Stop still fencing behind the last one has finis
 it('reopens a message the gateway proved unsent as an editable draft, not a restored unconfirmed Send, on plain HTTP', async () => {
   vi.stubGlobal('crypto', { getRandomValues: crypto.getRandomValues.bind(crypto) })
   const binding = { connectionId: 'remote', profile: 'team', roomId: 'refused-reopen' }
-  const refusedBefore = Object.assign(new Error('refused'), { code: 4001, data: { reason: 'refused', admitted: false } })
-  request.mockImplementation(async (_route, method) => method === 'groups.state' ? { room: { name: 'Room' }, driver_status: { working: true } }
-    : method === 'groups.log' ? { events: [] } : method === 'groups.send' ? Promise.reject(refusedBefore) : {})
+  const refusedBefore = Object.assign(new Error('refused'), {
+    code: 4001,
+    data: { reason: 'refused', admitted: false }
+  })
+  request.mockImplementation(async (_route, method) =>
+    method === 'groups.state'
+      ? { room: { name: 'Room' }, driver_status: { working: true } }
+      : method === 'groups.log'
+        ? { events: [] }
+        : method === 'groups.send'
+          ? Promise.reject(refusedBefore)
+          : {}
+  )
   const view = render(<CanonicalGroupWorkspace binding={binding} />)
   let box = screen.getByRole('textbox') as HTMLTextAreaElement
   await waitFor(() => expect(box.disabled).toBe(false))
@@ -1252,8 +1482,13 @@ it('reopens a message the gateway proved unsent as an editable draft, not a rest
   expect(screen.queryByText(/unconfirmed send was restored/)).toBeNull()
   expect(screen.getByRole('button', { name: 'Send' })).toBeTruthy()
 
-  request.mockImplementation(async (_route, method, params) => method === 'groups.state'
-    ? { room: { name: 'Room' }, driver_status: { working: true } } : method === 'groups.log' ? { events: [] } : receipt(params))
+  request.mockImplementation(async (_route, method, params) =>
+    method === 'groups.state'
+      ? { room: { name: 'Room' }, driver_status: { working: true } }
+      : method === 'groups.log'
+        ? { events: [] }
+        : receipt(params)
+  )
   fireEvent.change(box, { target: { value: 'Edited draft' } })
   fireEvent.click(screen.getByRole('button', { name: 'Send' }))
   await waitFor(() => expect(box.value).toBe(''))
@@ -1270,20 +1505,28 @@ it('reopens a message the gateway proved unsent as an editable draft, not a rest
 const refusal = (reason: string, admitted?: false) =>
   Object.assign(new Error(reason), { code: 4001, data: { reason, ...(admitted === false ? { admitted } : {}) } })
 
-const frame = (message: string, code: number, data?: Record<string, unknown>) => Object.assign(new Error(message), { code, data })
+const frame = (message: string, code: number, data?: Record<string, unknown>) =>
+  Object.assign(new Error(message), { code, data })
 
 const MAYBE = 'This message may already have been sent. Retry sends the same message; it will not be posted twice.'
 const REFUSED = 'The gateway refused this message. Edit it and send again.'
-const FINISHED_ELSEWHERE = 'Another Desktop window already finished with this message. Check the conversation before sending it again.'
+const FINISHED_ELSEWHERE =
+  'Another Desktop window already finished with this message. Check the conversation before sending it again.'
 
 function room(sendReply: (params: Record<string, unknown>, attempt: number) => unknown) {
   let attempt = 0
   request.mockImplementation(async (_route, method, params) => {
-    if (method === 'groups.state') {return { room: { name: 'Room' }, driver_status: { working: true } }}
+    if (method === 'groups.state') {
+      return { room: { name: 'Room' }, driver_status: { working: true } }
+    }
 
-    if (method === 'groups.log') {return { events: [] }}
+    if (method === 'groups.log') {
+      return { events: [] }
+    }
 
-    if (method === 'groups.stop') {return { cancelled: 0 }}
+    if (method === 'groups.stop') {
+      return { cancelled: 0 }
+    }
 
     return method === 'groups.send' ? sendReply(params, ++attempt) : {}
   })
@@ -1293,24 +1536,33 @@ function room(sendReply: (params: Record<string, unknown>, attempt: number) => u
 function nativeJournal(beforeMutation?: (call: number, entry: string | null) => Promise<void> | void) {
   const journal: Record<string, unknown> = {}
   let calls = 0
-  window.hermesDesktop = { preparedSubmissions: {
-    read: async () => JSON.stringify(journal),
-    compareAndSet: async (key: string, expected: string | null, entry: string | null) => {
-      await beforeMutation?.(++calls, entry)
-      const current = Object.hasOwn(journal, key) ? JSON.stringify(journal[key]) : null
+  window.hermesDesktop = {
+    preparedSubmissions: {
+      read: async () => JSON.stringify(journal),
+      compareAndSet: async (key: string, expected: string | null, entry: string | null) => {
+        await beforeMutation?.(++calls, entry)
+        const current = Object.hasOwn(journal, key) ? JSON.stringify(journal[key]) : null
 
-      if (current !== (expected === null ? null : JSON.stringify(JSON.parse(expected)))) {return { applied: false, current }}
+        if (current !== (expected === null ? null : JSON.stringify(JSON.parse(expected)))) {
+          return { applied: false, current }
+        }
 
-      if (entry === null) {delete journal[key]} else {journal[key] = JSON.parse(entry)}
+        if (entry === null) {
+          delete journal[key]
+        } else {
+          journal[key] = JSON.parse(entry)
+        }
 
-      return { applied: true, current: entry }
+        return { applied: true, current: entry }
+      }
     }
-  } } as unknown as typeof window.hermesDesktop
+  } as unknown as typeof window.hermesDesktop
 
   return journal
 }
 
-const sentIds = () => request.mock.calls.filter(call => call[1] === 'groups.send').map(call => call[2].event_id as string)
+const sentIds = () =>
+  request.mock.calls.filter(call => call[1] === 'groups.send').map(call => call[2].event_id as string)
 const editor = (scope: HTMLElement) => within(scope).getByRole('textbox') as HTMLTextAreaElement
 
 async function openRoom(binding: { connectionId: string; profile: string; roomId: string }) {
@@ -1355,13 +1607,19 @@ it('treats a receipt whose journal cleanup failed as delivered, and sends a new 
 
 // AM2: a refused first request proves nothing once another window has dispatched the same intent,
 // also for a window opened after the refused one closed.
-it('keeps the identity while another window\'s request of the intent may have posted, also after the refused window closed', async () => {
+it("keeps the identity while another window's request of the intent may have posted, also after the refused window closed", async () => {
   const binding = { connectionId: 'local', profile: 'team', roomId: 'closed-dispatcher' }
   let refuseA!: () => void
 
-  room((_params, attempt) => attempt === 1
-    ? new Promise((_resolve, reject) => { refuseA = () => reject(refusal('permission_denied', false)) })
-    : attempt === 2 ? Promise.reject(new Error('request timed out: groups.send')) : Promise.reject(refusal('invalid_params', false)))
+  room((_params, attempt) =>
+    attempt === 1
+      ? new Promise((_resolve, reject) => {
+          refuseA = () => reject(refusal('permission_denied', false))
+        })
+      : attempt === 2
+        ? Promise.reject(new Error('request timed out: groups.send'))
+        : Promise.reject(refusal('invalid_params', false))
+  )
   const a = render(<CanonicalGroupWorkspace binding={binding} />)
   await within(a.container).findByText('Room')
   await typeAndSend(a.container, 'Please do this once')
@@ -1376,7 +1634,7 @@ it('keeps the identity while another window\'s request of the intent may have po
   await waitFor(async () => expect(JSON.stringify(await readCanonicalGroupSend(binding))).not.toBe(before))
 
   const c = await openRoom(binding)
-  const retry = await within(c).findByRole('button', { name: 'Retry' }) as HTMLButtonElement
+  const retry = (await within(c).findByRole('button', { name: 'Retry' })) as HTMLButtonElement
   await waitFor(() => expect(retry.disabled).toBe(false))
   fireEvent.click(retry)
   await waitFor(() => expect(sentIds()).toHaveLength(3))
@@ -1387,9 +1645,9 @@ it('keeps the identity while another window\'s request of the intent may have po
 })
 
 // AM3: a refused intent's words stay durable until the user replaces them with a new Send.
-it('hands a refused converged intent back for editing without losing either window\'s words', async () => {
+it("hands a refused converged intent back for editing without losing either window's words", async () => {
   const binding = { connectionId: 'local', profile: 'team', roomId: 'converged-refusal' }
-  room((params, attempt) => attempt === 1 ? Promise.reject(refusal('invalid_params', false)) : receipt(params))
+  room((params, attempt) => (attempt === 1 ? Promise.reject(refusal('invalid_params', false)) : receipt(params)))
   const scope = await openRoom(binding)
   await waitFor(() => expect(editor(scope).disabled).toBe(false))
   const other = await prepareCanonicalGroupSend(binding, { text: 'Too long for the gateway', attachments: [] })
@@ -1411,9 +1669,9 @@ it('hands a refused converged intent back for editing without losing either wind
 
 // AM3: another window retrying the refused intent before this window's edit is saved keeps both
 // this window's held words and its edit.
-it('keeps this window\'s held words when another window retries the refused intent it is editing', async () => {
+it("keeps this window's held words when another window retries the refused intent it is editing", async () => {
   const binding = { connectionId: 'local', profile: 'team', roomId: 'converged-retry' }
-  room((params, attempt) => attempt === 1 ? Promise.reject(refusal('invalid_params', false)) : receipt(params))
+  room((params, attempt) => (attempt === 1 ? Promise.reject(refusal('invalid_params', false)) : receipt(params)))
   const scope = await openRoom(binding)
   await waitFor(() => expect(editor(scope).disabled).toBe(false))
   const other = await prepareCanonicalGroupSend(binding, { text: 'Too long for the gateway', attachments: [] })
@@ -1435,9 +1693,13 @@ it('keeps this window\'s held words when another window retries the refused inte
 it('keeps a first Send refused after its room closed for the next open, as an editable draft', async () => {
   const binding = { connectionId: 'local', profile: 'team', roomId: 'closed-mid-send' }
   let refuse!: () => void
-  room((_params, attempt) => attempt === 1
-    ? new Promise((_resolve, reject) => { refuse = () => reject(refusal('invalid_params', false)) })
-    : Promise.reject(refusal('invalid_params', false)))
+  room((_params, attempt) =>
+    attempt === 1
+      ? new Promise((_resolve, reject) => {
+          refuse = () => reject(refusal('invalid_params', false))
+        })
+      : Promise.reject(refusal('invalid_params', false))
+  )
   const view = render(<CanonicalGroupWorkspace binding={binding} />)
   await within(view.container).findByText('Room')
   await typeAndSend(view.container, 'Typed before closing')
@@ -1467,7 +1729,7 @@ it.each([
   ['hermes serve refuses the payload', frame('user payload text must be a bounded string', 5112, { admitted: false })]
 ])('hands the words back for editing when %s before admitting the Send', async (_case, refused) => {
   const binding = { connectionId: 'local', profile: 'team', roomId: 'refused-before-admission' }
-  room((params, attempt) => attempt === 1 ? Promise.reject(refused) : receipt(params))
+  room((params, attempt) => (attempt === 1 ? Promise.reject(refused) : receipt(params)))
   const scope = await openRoom(binding)
   await typeAndSend(scope, 'Ended elsewhere')
   await within(scope).findByText(REFUSED)
@@ -1477,7 +1739,10 @@ it.each([
   expect(within(scope).queryByText(refused.message)).toBeNull()
   expect(within(scope).getByRole('button', { name: 'Send' })).toBeTruthy()
   // The words stay journaled until a new Send replaces them.
-  expect(await readCanonicalGroupSend(binding)).toMatchObject({ attempts: 0, params: { payload: { text: 'Ended elsewhere' } } })
+  expect(await readCanonicalGroupSend(binding)).toMatchObject({
+    attempts: 0,
+    params: { payload: { text: 'Ended elsewhere' } }
+  })
 })
 
 // AM4: the same reasons and codes also follow a committed user event, without `admitted: false`.
@@ -1487,7 +1752,7 @@ it.each([
   ['a failure from hermes serve', frame('storage is full', 5112)]
 ])('keeps the identity of a first Send after %s that does not prove nothing was admitted', async (_case, failed) => {
   const binding = { connectionId: 'local', profile: 'team', roomId: 'post-commit' }
-  room((params, attempt) => attempt === 1 ? Promise.reject(failed) : receipt(params))
+  room((params, attempt) => (attempt === 1 ? Promise.reject(failed) : receipt(params)))
   const scope = await openRoom(binding)
   await typeAndSend(scope, 'Second')
   await within(scope).findByText(MAYBE)
@@ -1501,7 +1766,10 @@ it.each([
 })
 
 it.each([
-  ['names another intent', (params: Record<string, unknown>) => ({ accepted: true, client_event_id: `${params.event_id}-other` })],
+  [
+    'names another intent',
+    (params: Record<string, unknown>) => ({ accepted: true, client_event_id: `${params.event_id}-other` })
+  ],
   ['is not accepted', (params: Record<string, unknown>) => ({ accepted: false, client_event_id: params.event_id })],
   ['is empty', () => undefined]
 ])('does not treat a reply that %s as delivered', async (_case, reply) => {
@@ -1519,9 +1787,18 @@ it('does not dispatch a Send still preparing when Stop is pressed, and keeps its
   const binding = { connectionId: 'local', profile: 'team', roomId: 'stop-while-preparing' }
   let entered!: () => void
   let release!: () => void
-  const preparing = new Promise<void>(resolve => { entered = resolve })
-  const gate = new Promise<void>(resolve => { release = resolve })
-  nativeJournal(async call => { if (call === 1) { entered(); await gate } })
+  const preparing = new Promise<void>(resolve => {
+    entered = resolve
+  })
+  const gate = new Promise<void>(resolve => {
+    release = resolve
+  })
+  nativeJournal(async call => {
+    if (call === 1) {
+      entered()
+      await gate
+    }
+  })
   room(params => receipt(params))
   const scope = await openRoom(binding)
   await typeAndSend(scope, 'Long task')
@@ -1547,7 +1824,12 @@ it('does not dispatch a Send still preparing when Stop is pressed, and keeps its
 
 it('fences no second time behind a Send the gateway refused before admitting it', async () => {
   let refuse!: () => void
-  room(() => new Promise((_resolve, reject) => { refuse = () => reject(refusal('invalid_params', false)) }))
+  room(
+    () =>
+      new Promise((_resolve, reject) => {
+        refuse = () => reject(refusal('invalid_params', false))
+      })
+  )
   const scope = await openRoom({ connectionId: 'local', profile: 'team', roomId: 'stop-refused' })
   await typeAndSend(scope, 'Never admitted')
   await waitFor(() => expect(sentIds()).toHaveLength(1))
@@ -1563,7 +1845,7 @@ it('never resends an intent another window already finished with', async () => {
   await prepareCanonicalGroupSend(binding, { text: 'From before a reload', attachments: [] })
   room(params => receipt(params))
   const scope = await openRoom(binding)
-  const retry = await within(scope).findByRole('button', { name: 'Retry' }) as HTMLButtonElement
+  const retry = (await within(scope).findByRole('button', { name: 'Retry' })) as HTMLButtonElement
   await waitFor(() => expect(retry.disabled).toBe(false))
   localStorage.clear() // the other window received its receipt and retired the slot
   fireEvent.click(retry)
@@ -1575,7 +1857,7 @@ it('never resends an intent another window already finished with', async () => {
 
 it('does not resend words handed back for editing once another window finished with their intent', async () => {
   const binding = { connectionId: 'local', profile: 'team', roomId: 'edited-elsewhere' }
-  room((params, attempt) => attempt === 1 ? Promise.reject(refusal('invalid_params', false)) : receipt(params))
+  room((params, attempt) => (attempt === 1 ? Promise.reject(refusal('invalid_params', false)) : receipt(params)))
   const scope = await openRoom(binding)
   await typeAndSend(scope, 'Handed back')
   await within(scope).findByText(REFUSED)
@@ -1603,31 +1885,67 @@ it('offers a read-only retry when the Send journal cannot be read, then restores
   await screen.findByText(/Saved messages couldn’t be loaded/)
   expect((screen.getByRole('textbox') as HTMLTextAreaElement).disabled).toBe(true)
   fireEvent.click(screen.getByRole('button', { name: 'Try loading again' }))
-  await waitFor(() => expect((screen.getByRole('textbox') as HTMLTextAreaElement).value).toBe(entry.params.payload.text))
+  await waitFor(() =>
+    expect((screen.getByRole('textbox') as HTMLTextAreaElement).value).toBe(entry.params.payload.text)
+  )
   expect(screen.queryByText(/Saved messages couldn’t be loaded/)).toBeNull()
   expect(screen.getByRole('button', { name: 'Retry' })).toBeTruthy()
   expect(compareAndSet).not.toHaveBeenCalled()
 })
 
 it('names the Bot behind each pending action and shows what an approval would allow before offering it', async () => {
-  const members = [{ member_id: 'ops', profile: 'ops', handle: 'ops', display_name: 'Ops Bot' },
+  const members = [
+    { member_id: 'ops', profile: 'ops', handle: 'ops', display_name: 'Ops Bot' },
     { member_id: 'qa', profile: 'qa', handle: 'qa', display_name: 'QA Bot' },
-    { member_id: 'guard', profile: 'guard', handle: 'guard', display_name: 'Guard Bot' }]
+    { member_id: 'guard', profile: 'guard', handle: 'guard', display_name: 'Guard Bot' }
+  ]
 
   const actions = [
-    { kind: 'approval', member_id: 'ops', task_id: 'clean', execution_generation: 3, request_id: 'r-clean',
-      approval: { request_id: 'r-clean', command: 'rm -rf build', description: 'Clear the build folder', choices: ['once', 'deny'] } },
-    { kind: 'approval', member_id: 'qa', task_id: 'vague', execution_generation: 1, request_id: 'r-vague',
-      approval: { description: 'Use a tool', choices: ['once', 'deny'] } },
+    {
+      kind: 'approval',
+      member_id: 'ops',
+      task_id: 'clean',
+      execution_generation: 3,
+      request_id: 'r-clean',
+      approval: {
+        request_id: 'r-clean',
+        command: 'rm -rf build',
+        description: 'Clear the build folder',
+        choices: ['once', 'deny']
+      }
+    },
+    {
+      kind: 'approval',
+      member_id: 'qa',
+      task_id: 'vague',
+      execution_generation: 1,
+      request_id: 'r-vague',
+      approval: { description: 'Use a tool', choices: ['once', 'deny'] }
+    },
     // A plugin `approve` rule (tools/approval.py request_tool_approval): a tool label and the plugin's words.
-    { kind: 'approval', member_id: 'guard', task_id: 'pwd', execution_generation: 4, request_id: 'r-pwd',
-      approval: { request_id: 'r-pwd', command: '<terminal> (plugin approval rule)', description: 'Approve running pwd', choices: ['once'] } },
+    {
+      kind: 'approval',
+      member_id: 'guard',
+      task_id: 'pwd',
+      execution_generation: 4,
+      request_id: 'r-pwd',
+      approval: {
+        request_id: 'r-pwd',
+        command: '<terminal> (plugin approval rule)',
+        description: 'Approve running pwd',
+        choices: ['once']
+      }
+    },
     { kind: 'retry', member_id: 'qa', task_id: 'late', execution_generation: 2 }
   ]
 
-  request.mockImplementation(async (_route, method) => method === 'groups.state'
-    ? { room: { name: 'Room', members }, driver_status: { pending_actions: actions } }
-    : method === 'groups.log' ? { events: [] } : { approved: true })
+  request.mockImplementation(async (_route, method) =>
+    method === 'groups.state'
+      ? { room: { name: 'Room', members }, driver_status: { pending_actions: actions } }
+      : method === 'groups.log'
+        ? { events: [] }
+        : { approved: true }
+  )
   render(<CanonicalGroupWorkspace binding={{ connectionId: 'local', profile: 'team', roomId: 'approvals' }} />)
 
   const clean = (await screen.findByText('rm -rf build')).closest('[data-task-id]') as HTMLElement
@@ -1641,7 +1959,9 @@ it('names the Bot behind each pending action and shows what an approval would al
   expect(screen.queryByText('ops')).toBeNull()
 
   // As in the chat approval card, the plugin's words stand in for its tool label.
-  const guarded = screen.getByText('Guard Bot is asking for approval. You decide.').closest('[data-task-id]') as HTMLElement
+  const guarded = screen
+    .getByText('Guard Bot is asking for approval. You decide.')
+    .closest('[data-task-id]') as HTMLElement
   expect(within(guarded).getByText('Approve running pwd')).toBeTruthy()
   expect(within(guarded).queryByText(/plugin approval rule/)).toBeNull()
   expect(within(guarded).queryByText('Action details are unavailable. Check again before allowing this.')).toBeNull()
@@ -1657,11 +1977,16 @@ it('names the Bot behind each pending action and shows what an approval would al
     fireEvent.click(allow)
     await waitFor(() => expect(request.mock.calls.filter(call => call[1] === 'groups.approve')).toHaveLength(index))
     expect(request.mock.calls.filter(call => call[1] === 'groups.approve')[index - 1][2]).toEqual({
-      room_id: 'approvals', member_id: member, task_id: task, execution_generation: generation, request_id: requestId, choice: 'once', profile: 'team'
+      room_id: 'approvals',
+      member_id: member,
+      task_id: task,
+      execution_generation: generation,
+      request_id: requestId,
+      choice: 'once',
+      profile: 'team'
     })
   }
 })
-
 
 const ABANDON = 'Abandon retry'
 const ABANDON_CHANGED = 'This pending message changed. Close this dialog and review it before trying again.'
@@ -1699,7 +2024,8 @@ it('requires confirmation to abandon a legacy send and never returns its uncerta
 })
 
 it.each(['attempts', 'payload', 'event_id', 'binding'] as const)(
-  'rejects abandonment when the confirmed %s changes, including repeated confirmation', async change => {
+  'rejects abandonment when the confirmed %s changes, including repeated confirmation',
+  async change => {
     const binding = { connectionId: 'local', profile: 'team', roomId: `abandon-race-${change}` }
     const journal = nativeJournal()
     room(receipt)
@@ -1708,19 +2034,29 @@ it.each(['attempts', 'payload', 'event_id', 'binding'] as const)(
     const dialog = await abandonDialog(scope)
     const changed = JSON.parse(JSON.stringify(prepared))
 
-    if (change === 'attempts') {changed.attempts++}
+    if (change === 'attempts') {
+      changed.attempts++
+    }
 
-    if (change === 'payload') {changed.params.payload.text = 'Different payload'}
+    if (change === 'payload') {
+      changed.params.payload.text = 'Different payload'
+    }
 
-    if (change === 'event_id') {changed.params.event_id = 'replacement'}
+    if (change === 'event_id') {
+      changed.params.event_id = 'replacement'
+    }
 
-    if (change === 'binding') {changed.binding.profile = 'other-owner'}
+    if (change === 'binding') {
+      changed.binding.profile = 'other-owner'
+    }
     journal[Object.keys(journal)[0]] = changed
     fireEvent.click(within(dialog).getByRole('button', { name: ABANDON }))
     await within(dialog).findByText(ABANDON_CHANGED)
     expect(Object.values(journal)).toEqual([changed])
     fireEvent.click(within(dialog).getByRole('button', { name: ABANDON }))
-    await waitFor(() => expect((within(dialog).getByRole('button', { name: ABANDON }) as HTMLButtonElement).disabled).toBe(false))
+    await waitFor(() =>
+      expect((within(dialog).getByRole('button', { name: ABANDON }) as HTMLButtonElement).disabled).toBe(false)
+    )
     expect(Object.values(journal)).toEqual([changed])
     expect((within(scope).getByRole('textbox', { hidden: true }) as HTMLTextAreaElement).disabled).toBe(true)
     expect(sentIds()).toEqual([])
@@ -1759,8 +2095,11 @@ it.each(['room', 'account'] as const)('invalidates an open abandon confirmation 
   const dialog = await abandonDialog(view.container)
   const confirm = within(dialog).getByRole('button', { name: ABANDON })
 
-  if (change === 'room') {view.rerender(<CanonicalGroupWorkspace binding={{ ...binding, roomId: 'other' }} />)}
-  else {act(() => clearGroupComposerDrafts())}
+  if (change === 'room') {
+    view.rerender(<CanonicalGroupWorkspace binding={{ ...binding, roomId: 'other' }} />)
+  } else {
+    act(() => clearGroupComposerDrafts())
+  }
 
   await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
   fireEvent.click(confirm)
@@ -1822,9 +2161,12 @@ it('keeps held and current same-text drafts when they target different reply thr
   await prepareCanonicalGroupSend(binding, { text: 'Uncertain message' })
   const key = canonicalGroupComposerDraftKey(binding)
   const heldReply = { name: 'Held recipient', quote: 'Held discussion', thread: 'held-thread' }
-  updateGroupComposerDraft(key, draft => ({ ...draft, main: 'Thanks',
+  updateGroupComposerDraft(key, draft => ({
+    ...draft,
+    main: 'Thanks',
     canonicalReply: { name: 'Current recipient', quote: 'Current discussion', thread: 'current-thread' },
-    canonicalHeld: { text: 'Thanks', attachments: [], reply: heldReply } }))
+    canonicalHeld: { text: 'Thanks', attachments: [], reply: heldReply }
+  }))
   const scope = await openRoom(binding)
   const dialog = await abandonDialog(scope)
   fireEvent.click(within(dialog).getByRole('button', { name: ABANDON }))

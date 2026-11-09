@@ -66,7 +66,8 @@ it('retains Files explicitly selected without a project when the panel reopens',
   const { tree, model, actions, layout } = await setup()
 
   tree.bindPaneVisibility(
-    'files', layout.$fileBrowserOpen,
+    'files',
+    layout.$fileBrowserOpen,
     () => layout.setFileBrowserOpen(false),
     () => layout.setFileBrowserOpen(true)
   )

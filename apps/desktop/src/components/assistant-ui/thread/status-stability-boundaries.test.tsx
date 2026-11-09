@@ -86,12 +86,14 @@ describe('stable thinking status yields to turn boundaries', () => {
     const row = container.querySelector<HTMLElement>('[data-slot="aui_turn-activity"]')
     expect(row?.dataset.state).toBe('active')
 
-    act(() => setApprovalRequest({
-      sessionId,
-      requestId: 'approval-boundary',
-      command: 'echo example',
-      description: 'Run the example command'
-    }))
+    act(() =>
+      setApprovalRequest({
+        sessionId,
+        requestId: 'approval-boundary',
+        command: 'echo example',
+        description: 'Run the example command'
+      })
+    )
     act(() => vi.advanceTimersByTime(3_000))
     expect(row?.dataset.state).toBe('idle')
 

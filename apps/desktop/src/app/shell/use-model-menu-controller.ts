@@ -236,10 +236,7 @@ export function useModelMenuController({
 
         if (dimension === 'effort' && current.effort === patch.effort) {
           setModelPreset(row.provider, row.model, { effort: confirmed.effort }, hostScope)
-        } else if (
-          dimension === 'speed' &&
-          modelPresetServiceTier(current) === modelPresetServiceTier(patch)
-        ) {
+        } else if (dimension === 'speed' && modelPresetServiceTier(current) === modelPresetServiceTier(patch)) {
           setModelPreset(
             row.provider,
             row.model,

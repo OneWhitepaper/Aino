@@ -112,7 +112,11 @@ import { i18nHost } from './i18n'
 import { restoreEmptyBotModelDefault } from './plugin-empty-bot-model'
 import { planPluginOpenSession } from './plugin-open-session-plan'
 import { requestPluginActiveGateway } from './plugin-session-create'
-import { navigatePluginSession, refreshPluginSessionAfterOpen, refreshVisiblePluginSession } from './plugin-session-navigation'
+import {
+  navigatePluginSession,
+  refreshPluginSessionAfterOpen,
+  refreshVisiblePluginSession
+} from './plugin-session-navigation'
 import { dropLeftoverProfilePrefs, warmProfile } from './profile-local'
 import {
   type PluginProfileRequestOptions,

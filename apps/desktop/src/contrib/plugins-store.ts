@@ -122,10 +122,7 @@ export function dropPlugin(id: string): void {
  *  install dialog's "Enable after install", the hub's Agent switch) turns the
  *  half on too instead of leaving a second switch to find. *keepUserChoice*
  *  leaves a half the user explicitly switched off alone. */
-export async function enablePackageDesktopHalf(
-  packageName: string,
-  { keepUserChoice = false } = {}
-): Promise<void> {
+export async function enablePackageDesktopHalf(packageName: string, { keepUserChoice = false } = {}): Promise<void> {
   const decisions = $pluginDecisions.get()
 
   for (const record of Object.values($pluginRecords.get())) {

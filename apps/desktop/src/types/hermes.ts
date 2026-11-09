@@ -1974,7 +1974,6 @@ export interface CuratorStatusResponse {
   archive_after_days: number | null
 }
 
-
 export interface ModelAssignmentResponse {
   /** Persisted endpoint URL for custom/local providers (echoed back). */
   base_url?: string

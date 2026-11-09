@@ -3,10 +3,7 @@ import { type CSSProperties, type ReactNode, useEffect } from 'react'
 
 import { $interfaceMode, shownInMode } from '@/store/interface-mode'
 import { $connection } from '@/store/session'
-import {
-  $titlebarAppActionsSide,
-  titlebarAppActionsClusterCounts
-} from '@/store/titlebar-app-actions'
+import { $titlebarAppActionsSide, titlebarAppActionsClusterCounts } from '@/store/titlebar-app-actions'
 import { isBrowserWindow, isHudWindow } from '@/store/windows'
 
 import { useWindowControlsOverlayWidth } from '../shell/hooks/use-window-controls-overlay-width'
@@ -55,10 +52,7 @@ export function WiringTitlebar({ children }: WiringTitlebarProps) {
   const rightTitlebarTools = useTitlebarToolContributions('right')
   const connection = useStore($connection)
 
-  const controlsPos = titlebarControlsPosition(
-    connection?.windowButtonPosition,
-    Boolean(connection?.isFullscreen)
-  )
+  const controlsPos = titlebarControlsPosition(connection?.windowButtonPosition, Boolean(connection?.isFullscreen))
 
   const controlsVars = useTitlebarControlsVars(controlsPos)
   // Windows/WSLg reserve native min/max/close on the right (AppShell parity:
@@ -76,8 +70,7 @@ export function WiringTitlebar({ children }: WiringTitlebarProps) {
 
   // WSLg: Electron's native overlay drifts its hit-region under RAIL, so the
   // renderer paints its own min/max/close (main decides via customWindowControls).
-  const customWindowControls =
-    connection?.customWindowControls ?? window.hermesDesktop?.windowControls?.custom ?? false
+  const customWindowControls = connection?.customWindowControls ?? window.hermesDesktop?.windowControls?.custom ?? false
 
   const appActionsSide = useStore($titlebarAppActionsSide)
   const interfaceMode = useStore($interfaceMode)
@@ -88,9 +81,7 @@ export function WiringTitlebar({ children }: WiringTitlebarProps) {
   const systemToolsWidth = titlebarToolsWidthCss(clusters.right)
 
   const titlebarToolsWidth =
-    paneToolCount > 0
-      ? `calc(${systemToolsWidth} + ${titlebarToolsWidthCss(paneToolCount)})`
-      : systemToolsWidth
+    paneToolCount > 0 ? `calc(${systemToolsWidth} + ${titlebarToolsWidthCss(paneToolCount)})` : systemToolsWidth
 
   const leftToolsWidth = titlebarToolsWidthCss(clusters.left)
 

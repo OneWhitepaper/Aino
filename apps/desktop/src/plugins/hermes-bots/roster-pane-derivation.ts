@@ -35,9 +35,16 @@ export interface RosterGroupRow {
 
 /** Gateway Group Chats as roster rows. They live on the active source, so a
  *  gateway filter naming another source hides them. */
-function gatewayGroupRows(
-  { gatewayRooms: rooms, gatewayRoomLive, roster, allMeta, query, gatewayFilter, rowKindFilter, activityFilter }: RosterRowsInput
-): RosterGroupRow[] {
+function gatewayGroupRows({
+  gatewayRooms: rooms,
+  gatewayRoomLive,
+  roster,
+  allMeta,
+  query,
+  gatewayFilter,
+  rowKindFilter,
+  activityFilter
+}: RosterRowsInput): RosterGroupRow[] {
   if (rowKindFilter === 'bots' || (gatewayFilter !== 'all' && rooms[0]?.binding.connectionId !== gatewayFilter)) {
     return []
   }
@@ -45,8 +52,16 @@ function gatewayGroupRows(
   const needle = query.trim().toLowerCase().replace(/^@/, '')
 
   return rooms
-    .filter(room => !needle || room.name.toLowerCase().includes(needle) ||
-      room.members.some(member => `${member.handle} ${canonicalMemberName(member, room.binding, roster, allMeta, room.binding.connectionId)}`.toLowerCase().includes(needle)))
+    .filter(
+      room =>
+        !needle ||
+        room.name.toLowerCase().includes(needle) ||
+        room.members.some(member =>
+          `${member.handle} ${canonicalMemberName(member, room.binding, roster, allMeta, room.binding.connectionId)}`
+            .toLowerCase()
+            .includes(needle)
+        )
+    )
     .map((room): RosterGroupRow => ({
       kind: 'group',
       gateway: room,
@@ -60,7 +75,10 @@ function gatewayGroupRows(
 }
 
 function gatewayRoomActive(room: GatewayGroupRoom, live: CanonicalRoomLive | undefined): boolean {
-  return Boolean(live?.working || live?.needsYou) || Boolean(room.updatedAt && Date.now() - room.updatedAt <= ACTIVE_WINDOW_S * 1000)
+  return (
+    Boolean(live?.working || live?.needsYou) ||
+    Boolean(room.updatedAt && Date.now() - room.updatedAt <= ACTIVE_WINDOW_S * 1000)
+  )
 }
 
 interface RosterRowsInput {
@@ -81,18 +99,18 @@ interface RosterRowsInput {
 
 export function deriveRosterRows(input: RosterRowsInput) {
   const {
-  roster,
-  allMeta,
-  gatewayFilter,
-  query,
-  activityFilter,
-  rowKindFilter,
-  groupRooms,
-  gatewayRooms,
-  activeRosterKeys,
-  gatewayOptions,
-  activityOf,
-  isPinned
+    roster,
+    allMeta,
+    gatewayFilter,
+    query,
+    activityFilter,
+    rowKindFilter,
+    groupRooms,
+    gatewayRooms,
+    activeRosterKeys,
+    gatewayOptions,
+    activityOf,
+    isPinned
   } = input
 
   const activeSourceRoster = roster.filter(bot => !bot.remoteSource)

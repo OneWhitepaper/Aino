@@ -8,8 +8,18 @@ import { confirm } from '@/store/confirm'
 
 import { platformBindingPrompt } from '../../electron/platform-binding-prompt'
 import { createPlatformAuth } from '../../shared/platform-auth'
-import { createPlatformClient, PLATFORM_PRODUCTION_ORIGIN, type PlatformClient, PlatformClientError } from '../../shared/platform-client'
-import type { PlatformAccountBridge, PlatformBillingBridge, PlatformDevicesBridge, PlatformModelsBridge } from '../../shared/platform-contract'
+import {
+  createPlatformClient,
+  PLATFORM_PRODUCTION_ORIGIN,
+  type PlatformClient,
+  PlatformClientError
+} from '../../shared/platform-client'
+import type {
+  PlatformAccountBridge,
+  PlatformBillingBridge,
+  PlatformDevicesBridge,
+  PlatformModelsBridge
+} from '../../shared/platform-contract'
 import { openPlatformCheckout } from '../../shared/platform-payment'
 import { createPlatformRuntimeBindingController } from '../../shared/platform-runtime-binding'
 
@@ -24,11 +34,15 @@ export function createBrowserPlatformBridge(options: {
 
   // Only the native main process can persist an encrypted refresh token. A browser
   // tab keeps its credentials inside the same auth controller, never web storage.
-  const auth = createPlatformAuth({ client, now: Date.now, tokenStore: {
-    load: async () => null,
-    save: async () => 'session_only',
-    clear: async () => undefined
-  } })
+  const auth = createPlatformAuth({
+    client,
+    now: Date.now,
+    tokenStore: {
+      load: async () => null,
+      save: async () => 'session_only',
+      clear: async () => undefined
+    }
+  })
 
   const initialized = auth.initialize()
   const deviceId = randomUuid()
@@ -41,11 +55,17 @@ export function createBrowserPlatformBridge(options: {
     origin: client.origin,
     deviceId: () => deviceId,
     confirmRemote: (_, host) => {
-      if (options.confirmRemote) { return options.confirmRemote(host) }
+      if (options.confirmRemote) {
+        return options.confirmRemote(host)
+      }
       const prompt = platformBindingPrompt(getRuntimeI18nLocale(), host)
 
-      return confirm({ title: prompt.message, description: prompt.detail,
-        cancelLabel: prompt.buttons[0], confirmLabel: prompt.buttons[1] })
+      return confirm({
+        title: prompt.message,
+        description: prompt.detail,
+        cancelLabel: prompt.buttons[0],
+        confirmLabel: prompt.buttons[1]
+      })
     },
     async resolveConnection(connectionId, requestedProfile) {
       requireBrowserConnection(connectionId)
@@ -82,9 +102,13 @@ export function createBrowserPlatformBridge(options: {
     const generation = auth.generation()
     const capabilities = await auth.capabilities()
 
-    if (disposed || generation !== auth.generation()) { throw new PlatformClientError('captcha_stale') }
+    if (disposed || generation !== auth.generation()) {
+      throw new PlatformClientError('captcha_stale')
+    }
 
-    if (intent !== captchaIntent) { throw new PlatformClientError('captcha_superseded') }
+    if (intent !== captchaIntent) {
+      throw new PlatformClientError('captcha_superseded')
+    }
 
     // The platform CAPTCHA page uses an isolated Electron preload. No browser
     // postMessage proof exchange is defined by that service contract yet.
@@ -129,7 +153,8 @@ export function createBrowserPlatformBridge(options: {
 
       if (
         expectedOwner !== undefined &&
-        (current.account?.id !== expectedOwner?.userId || current.mode !== expectedOwner?.mode ||
+        (current.account?.id !== expectedOwner?.userId ||
+          current.mode !== expectedOwner?.mode ||
           current.revision !== expectedOwner?.revision)
       ) {
         throw new PlatformClientError('platform_account_changed')
@@ -157,18 +182,23 @@ export function createBrowserPlatformBridge(options: {
     listOrders: input => auth.listOrders(input, input.expected_user_id),
     cancelOrder: input => auth.cancelOrder(input.order_id, input.expected_user_id),
     listUsage: async input => auth.listUsage(input, input.expected_user_id),
-    openCheckout: input => openPlatformCheckout({
-      auth, orderId: input.order_id, owner: input.expected_user_id,
-      openBrowser: async url => {
-        // Keeping the opener lets us detect popup blocking; remove it before
-        // navigating to the validated payment URL.
-        const popup = window.open('about:blank', '_blank')
+    openCheckout: input =>
+      openPlatformCheckout({
+        auth,
+        orderId: input.order_id,
+        owner: input.expected_user_id,
+        openBrowser: async url => {
+          // Keeping the opener lets us detect popup blocking; remove it before
+          // navigating to the validated payment URL.
+          const popup = window.open('about:blank', '_blank')
 
-        if (!popup) { throw new PlatformClientError('checkout_popup_blocked') }
-        popup.opener = null
-        popup.location.replace(url)
-      }
-    })
+          if (!popup) {
+            throw new PlatformClientError('checkout_popup_blocked')
+          }
+          popup.opener = null
+          popup.location.replace(url)
+        }
+      })
   }
 
   const platformDevices: PlatformDevicesBridge = {
@@ -176,7 +206,9 @@ export function createBrowserPlatformBridge(options: {
     revoke: async input => {
       const result = await auth.revokeDevice(input.device_id, input)
 
-      if (input.device_id.toLowerCase() === deviceId) { bindings.invalidateConnections() }
+      if (input.device_id.toLowerCase() === deviceId) {
+        bindings.invalidateConnections()
+      }
 
       return result
     }
@@ -200,7 +232,9 @@ export async function openBrowserPlatformGateway(wsUrl: string) {
       const url = new URL(raw)
       const ticket = url.searchParams.get('ticket')
 
-      if (!ticket || !url.searchParams.has('native_dial')) { throw new Error('Gateway ticket required') }
+      if (!ticket || !url.searchParams.has('native_dial')) {
+        throw new Error('Gateway ticket required')
+      }
       url.searchParams.delete('ticket')
 
       return new WebSocket(url.toString(), ['hermes-gateway-v1', `hermes-gateway-ticket.${ticket}`])

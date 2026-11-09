@@ -84,9 +84,6 @@ let connectionApplied: null | (() => void) = null
 let powerResume: null | (() => void) = null
 let backendExit: null | ((payload?: unknown) => void) = null
 
-
-
-
 function fakeDesktop() {
   let bootProgressHandler: ((payload: Record<string, unknown>) => void) | null = null
 

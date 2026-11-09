@@ -335,7 +335,9 @@ declare global {
         } | null
       } | null>
       setAccountWindowMode?: (
-        mode: 'login' | 'workspace', height?: number, expected?: PlatformAccountWindowOwner
+        mode: 'login' | 'workspace',
+        height?: number,
+        expected?: PlatformAccountWindowOwner
       ) => Promise<boolean>
       readFileDataUrl: (filePath: string) => Promise<string | HermesReadFileErrorResult>
       /** Remote non-image attach: higher dedicated cap than preview/Settings default. */

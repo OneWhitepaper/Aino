@@ -67,10 +67,7 @@ describe('Electron-owned locale copy', () => {
     )
     assert.equal(copy.remoteBackendReady('Aino'), '远程 Aino 后端已就绪')
     assert.equal(copy.resolvingRuntime('Aino'), '正在解析 Aino 运行时')
-    assert.equal(
-      copy.startingBackendVia('Aino', 'uv-managed runtime'),
-      '正在通过 uv-managed runtime 启动 Aino 后端'
-    )
+    assert.equal(copy.startingBackendVia('Aino', 'uv-managed runtime'), '正在通过 uv-managed runtime 启动 Aino 后端')
     assert.equal(copy.waitingBackendLaunch('Aino'), '正在等待 Aino 后端启动')
     assert.equal(copy.waitingBackendReady('Aino'), '正在等待 Aino 后端就绪')
     assert.equal(copy.backendReadyFinalizing('Aino'), 'Aino 后端已就绪，正在完成桌面启动')

@@ -6,24 +6,43 @@ const home = (userId: string) => ({ userId, key: userId, home: `/tmp/${userId}`,
 const status = { state: 'synced', pending: 0, issues: [] }
 const response = { cursor: '1', has_more: false, results: [], changes: [] }
 
-function deferred<T>() { let resolve!: (value: T) => void; const promise = new Promise<T>(r => { resolve = r });
+function deferred<T>() {
+  let resolve!: (value: T) => void
+  const promise = new Promise<T>(r => {
+    resolve = r
+  })
 
- return { promise, resolve } }
+  return { promise, resolve }
+}
 
 function setup() {
   let user = 'A'
   let generation = 1
 
-  const auth = { snapshot: () => ({ account: { id: user } }), generation: () => generation,
-    syncExchange: vi.fn(async () => response), syncBlob: vi.fn() }
+  const auth = {
+    snapshot: () => ({ account: { id: user } }),
+    generation: () => generation,
+    syncExchange: vi.fn(async () => response),
+    syncBlob: vi.fn()
+  }
 
-  const local = vi.fn(async (_home: any, input: any): Promise<any> => input.action === 'prepare'
-    ? { ok: true, request_id: 'stable', exchange: { operations: [] }, uploads: [], status }
-    : { ok: true, status, changed_session_ids: ['chat'], changed_profile_ids: ['default'] })
+  const local = vi.fn(async (_home: any, input: any): Promise<any> =>
+    input.action === 'prepare'
+      ? { ok: true, request_id: 'stable', exchange: { operations: [] }, uploads: [], status }
+      : { ok: true, status, changed_session_ids: ['chat'], changed_profile_ids: ['default'] }
+  )
 
   const sync = createAccountCloudSync({ auth: auth as any, local, deviceId: () => 'device' })
 
-  return { auth, local, sync, switchUser() { user = 'B'; generation++ } }
+  return {
+    auth,
+    local,
+    sync,
+    switchUser() {
+      user = 'B'
+      generation++
+    }
+  }
 }
 
 afterEach(() => vi.useRealTimers())
@@ -46,7 +65,8 @@ test('retirement drains A and fences late response before B starts', async () =>
   const pending = deferred<typeof response>()
   auth.syncExchange.mockReturnValueOnce(pending.promise)
   sync.start(home('A'))
-  await Promise.resolve(); await Promise.resolve()
+  await Promise.resolve()
+  await Promise.resolve()
   const stopped = sync.stop()
   switchUser()
   pending.resolve(response)
@@ -64,9 +84,11 @@ test('retry uses the durable prepared request and pending response after restart
   await sync.retry()
   expect(sync.snapshot().state).toBe('offline')
   await sync.stop()
-  local.mockImplementation(async (_home, input) => input.action === 'prepare'
-    ? { ok: true, request_id: 'stable', exchange: { operations: [] }, pending_response: response, status }
-    : { ok: true, status })
+  local.mockImplementation(async (_home, input) =>
+    input.action === 'prepare'
+      ? { ok: true, request_id: 'stable', exchange: { operations: [] }, pending_response: response, status }
+      : { ok: true, status }
+  )
   sync.start(home('A'))
   await sync.retry()
   expect(auth.syncExchange).toHaveBeenCalledTimes(1)
@@ -78,7 +100,8 @@ test('unsupported cloud sync stops automatic polling and keeps manual retry', as
   vi.useFakeTimers()
   const { auth, sync } = setup()
   auth.syncExchange.mockRejectedValueOnce(Object.assign(new Error(), { code: 'sync_unavailable' }))
-  sync.start(home('A')); await sync.retry()
+  sync.start(home('A'))
+  await sync.retry()
   expect(sync.snapshot().state).toBe('unavailable')
   await vi.advanceTimersByTimeAsync(60_000)
   expect(auth.syncExchange).toHaveBeenCalledTimes(1)
@@ -89,10 +112,13 @@ test('unsupported cloud sync stops automatic polling and keeps manual retry', as
 
 test('a bounded four-page poll remains pending until remaining cloud pages arrive', async () => {
   const { auth, local, sync } = setup()
-  local.mockImplementation(async (_home, input) => input.action === 'prepare'
-    ? { ok: true, request_id: 'stable', exchange: { operations: [] }, status }
-    : { ok: true, status, has_more: true })
-  sync.start(home('A')); await sync.retry()
+  local.mockImplementation(async (_home, input) =>
+    input.action === 'prepare'
+      ? { ok: true, request_id: 'stable', exchange: { operations: [] }, status }
+      : { ok: true, status, has_more: true }
+  )
+  sync.start(home('A'))
+  await sync.retry()
   expect(auth.syncExchange).toHaveBeenCalledTimes(4)
   expect(sync.snapshot()).toMatchObject({ state: 'pending', pending: 1 })
   await sync.stop()
@@ -110,13 +136,16 @@ test('a typed size rollback durably re-batches only its pending legacy preparati
       return { ok: true, status: { state: 'pending', pending: 3, issues: [] } }
     }
 
-    if (input.action === 'prepare') { return recovered ? { ...legacy, request_id: 'single', exchange: { operations: [{}] } } : legacy }
+    if (input.action === 'prepare') {
+      return recovered ? { ...legacy, request_id: 'single', exchange: { operations: [{}] } } : legacy
+    }
     expect(input.request_id).toBe('single')
 
     return { ok: true, status }
   })
   auth.syncExchange.mockRejectedValueOnce(Object.assign(new Error(), { code: 'DESKTOP_SYNC_REBATCH' }))
-  sync.start(home('A')); await sync.retry()
+  sync.start(home('A'))
+  await sync.retry()
   expect(sync.snapshot().state).toBe('synced')
   expect(local.mock.calls.filter(call => call[1].action === 'rebatch')).toHaveLength(1)
   expect(local.mock.calls.filter(call => call[1].action === 'apply')).toHaveLength(1)

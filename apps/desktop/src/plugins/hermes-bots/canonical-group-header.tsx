@@ -14,7 +14,12 @@ import {
 } from '@hermes/plugin-sdk'
 import { type ReactNode, useState } from 'react'
 
-import { type CanonicalDriverActivity, CanonicalGroupAttention, type CanonicalMemberPhase, canonicalMemberStatus } from './canonical-group-activity'
+import {
+  type CanonicalDriverActivity,
+  CanonicalGroupAttention,
+  type CanonicalMemberPhase,
+  canonicalMemberStatus
+} from './canonical-group-activity'
 import { useCanonicalGroupLabels } from './canonical-group-labels'
 import { CanonicalGroupAvatarStack, CanonicalMemberAvatar, useCanonicalMembers } from './canonical-group-members'
 import type { CanonicalGroupBinding, CanonicalRoom, CanonicalRoomMember } from './canonical-groups'
@@ -90,7 +95,10 @@ export function CanonicalGroupHeader({
               variant="ghost"
             >
               <CanonicalMemberAvatar binding={binding} member={member} size={24} />
-              <span>{nameFor(member)}{(member as { lead?: boolean }).lead && <small className="ml-2">{labels.leadBadge}</small>}</span>
+              <span>
+                {nameFor(member)}
+                {(member as { lead?: boolean }).lead && <small className="ml-2">{labels.leadBadge}</small>}
+              </span>
             </Button>
           ))}
           {members.length > 3 && (
@@ -234,7 +242,10 @@ export function CanonicalGroupInfo({
                     <li className="aino-group-info-member" data-phase={status?.phase || 'idle'} key={member.member_id}>
                       <CanonicalMemberAvatar binding={binding} member={member} />
                       <div className="aino-group-member-copy">
-                        <span className="aino-group-member-name">{name}{(member as { lead?: boolean }).lead && <small className="ml-2">{labels.leadBadge}</small>}</span>
+                        <span className="aino-group-member-name">
+                          {name}
+                          {(member as { lead?: boolean }).lead && <small className="ml-2">{labels.leadBadge}</small>}
+                        </span>
                         <span className="aino-group-member-phase">
                           {status?.label ?? (available ? labels.ready : labels.memberUnavailable)}
                         </span>
@@ -293,7 +304,10 @@ export function CanonicalGroupInfo({
                   <ul>
                     {members.map(member => (
                       <li className="aino-group-info-identifier" key={member.member_id}>
-                        <span>{nameFor(member)}{(member as { lead?: boolean }).lead && <small className="ml-2">{labels.leadBadge}</small>}</span>
+                        <span>
+                          {nameFor(member)}
+                          {(member as { lead?: boolean }).lead && <small className="ml-2">{labels.leadBadge}</small>}
+                        </span>
                         <code>@{member.handle}</code>
                       </li>
                     ))}

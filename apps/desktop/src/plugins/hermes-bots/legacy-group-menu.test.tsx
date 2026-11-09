@@ -6,7 +6,7 @@ import { translateBotsIn } from './i18n-test-helper'
 import { LegacyGroupMenu } from './legacy-group-menu'
 
 vi.mock('@hermes/plugin-sdk', async importOriginal => ({
-  ...await importOriginal<typeof HermesSdk>(),
+  ...(await importOriginal<typeof HermesSdk>()),
   usePluginI18n: () => translateBotsIn('zh')
 }))
 
@@ -23,7 +23,12 @@ it('opens every retained management action from one named entrance without runni
   const onDisband = vi.fn()
   render(<LegacyGroupMenu onDisband={onDisband} onMembers={onMembers} onSettings={onSettings} />)
 
-  const open = () => fireEvent.pointerDown(screen.getByRole('button', { name: '群聊信息' }), { button: 0, ctrlKey: false, pointerType: 'mouse' })
+  const open = () =>
+    fireEvent.pointerDown(screen.getByRole('button', { name: '群聊信息' }), {
+      button: 0,
+      ctrlKey: false,
+      pointerType: 'mouse'
+    })
   open()
   expect(screen.getAllByRole('menuitem')).toHaveLength(3)
   expect(onSettings).not.toHaveBeenCalled()

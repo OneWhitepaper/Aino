@@ -14,7 +14,8 @@ const LISTINGS = [
 
 describe('fenced code segmentation', () => {
   it.each(['md', 'markdown'])('preserves explicit %s source throughout streaming', language => {
-    const body = '# 排查任务\n\n- **账号**：核对目录\n- **模型**：`GLM-5.3-Flash`\n\n保留 $5、items[0] 和 https://example.com。'
+    const body =
+      '# 排查任务\n\n- **账号**：核对目录\n- **模型**：`GLM-5.3-Flash`\n\n保留 $5、items[0] 和 https://example.com。'
 
     for (const suffix of ['', '\n```']) {
       const source = `复制以下内容：\n\n\`\`\`${language}\n${body}${suffix}`

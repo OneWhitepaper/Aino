@@ -45,10 +45,26 @@ import { getPluginCtx } from './shared'
 
 type BotsMessages = LegacyBotsMessages & Pick<UpstreamBotsMessages, 'canonical' | 'crossGateway'>
 
-const en: BotsMessages = { ...legacyEn, canonical: CANONICAL_GROUP_LOCALES.en, crossGateway: CROSS_GATEWAY_GROUP_LOCALES.en }
-const ja: BotsMessages = { ...legacyJa, canonical: CANONICAL_GROUP_LOCALES.ja, crossGateway: CROSS_GATEWAY_GROUP_LOCALES.ja }
-const zh: BotsMessages = { ...legacyZh, canonical: CANONICAL_GROUP_LOCALES.zh, crossGateway: CROSS_GATEWAY_GROUP_LOCALES.zh }
-const zhHant: BotsMessages = { ...legacyZhHant, canonical: CANONICAL_GROUP_LOCALES['zh-hant'], crossGateway: CROSS_GATEWAY_GROUP_LOCALES['zh-hant'] }
+const en: BotsMessages = {
+  ...legacyEn,
+  canonical: CANONICAL_GROUP_LOCALES.en,
+  crossGateway: CROSS_GATEWAY_GROUP_LOCALES.en
+}
+const ja: BotsMessages = {
+  ...legacyJa,
+  canonical: CANONICAL_GROUP_LOCALES.ja,
+  crossGateway: CROSS_GATEWAY_GROUP_LOCALES.ja
+}
+const zh: BotsMessages = {
+  ...legacyZh,
+  canonical: CANONICAL_GROUP_LOCALES.zh,
+  crossGateway: CROSS_GATEWAY_GROUP_LOCALES.zh
+}
+const zhHant: BotsMessages = {
+  ...legacyZhHant,
+  canonical: CANONICAL_GROUP_LOCALES['zh-hant'],
+  crossGateway: CROSS_GATEWAY_GROUP_LOCALES['zh-hant']
+}
 
 /** Registered via `ctx.i18n.register` at plugin load (disposer tracked). */
 export const BOTS_LOCALES: PluginLocaleBundles = {

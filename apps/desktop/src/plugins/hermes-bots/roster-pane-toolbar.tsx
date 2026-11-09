@@ -11,7 +11,12 @@ import {
   Tip
 } from '@hermes/plugin-sdk'
 
-import { connectionName, groupSelectionElsewhere, seatableGroupBots, useGroupCapability } from './canonical-group-capabilities'
+import {
+  connectionName,
+  groupSelectionElsewhere,
+  seatableGroupBots,
+  useGroupCapability
+} from './canonical-group-capabilities'
 import { botSourceStatus } from './data'
 import type { useBots } from './i18n'
 import { setActivityToasts } from './roster-actions'
@@ -116,7 +121,12 @@ export function renderRosterToolbar({
                 <Codicon className="mr-1.5" name="hubot" />
                 {b.bot.newTitle}
               </DropdownMenuItem>
-              <NewGroupChatItem elsewhereNote={b.crossGateway.selectionElsewhere} label={b.group.newTitle} onSelect={() => setGroupCreateOpen(true)} roster={roster} />
+              <NewGroupChatItem
+                elsewhereNote={b.crossGateway.selectionElsewhere}
+                label={b.group.newTitle}
+                onSelect={() => setGroupCreateOpen(true)}
+                roster={roster}
+              />
               <DropdownMenuSeparator />
               <DropdownMenuItem onSelect={() => setSectionDialog({ mode: 'create' })}>
                 <Codicon className="mr-1.5" name="new-folder" />

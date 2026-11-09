@@ -458,13 +458,18 @@ describe('approval card (#91706)', () => {
     const profile = 'u6d4b-u8bd5'
     $botMeta.set({ [profile]: { title: '另一连接的助手' }, [`studio::${profile}`]: { title: '工作室测试助手' } })
     const member = { name: profile, connectionId: 'studio', sourceScoped: true, remoteSource: true }
-    render(<GroupClarifyCard entry={{ ...entry, member: profile, memberKey: `studio::${profile}` }} members={[member]} />)
+    render(
+      <GroupClarifyCard entry={{ ...entry, member: profile, memberKey: `studio::${profile}` }} members={[member]} />
+    )
 
     expect(screen.getByText('@工作室测试助手 wants to run a command:')).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'once' }))
-    await vi.waitFor(() => expect(notify).toHaveBeenCalledWith({
-      kind: 'error', message: 'Could not send the answer to @工作室测试助手: Connection interrupted'
-    }))
+    await vi.waitFor(() =>
+      expect(notify).toHaveBeenCalledWith({
+        kind: 'error',
+        message: 'Could not send the answer to @工作室测试助手: Connection interrupted'
+      })
+    )
     expect(notify.mock.calls.flatMap(call => call.map(String)).join(' ')).not.toContain(profile)
     expect(answer).toHaveBeenCalledWith(expect.objectContaining({ member: profile }), member, 'once')
   })

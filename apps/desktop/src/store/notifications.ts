@@ -461,7 +461,6 @@ function duplicateNotification(input: NotificationInput, kind: AppNotification['
               item.meta === input.meta
           )
       : undefined
-
 }
 
 function showNotification(input: NotificationInput, errorCategory: ErrorToastCategory | null): string {

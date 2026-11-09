@@ -10,7 +10,8 @@ import { isSessionGoneError } from './utils'
 
 /** End the owned turn before deleting its durable session; rollback interruption on a real refusal. */
 export async function closeRuntimeBeforeSessionDeletion(
-  closingRuntimeId: string, removedOwner: SessionOwnerScope,
+  closingRuntimeId: string,
+  removedOwner: SessionOwnerScope,
   { requestGateway, updateSessionState }: Pick<SessionActionsOptions, 'requestGateway' | 'updateSessionState'>
 ): Promise<void> {
   // Deleting a session must END its turn, not just drop the row.
@@ -56,6 +57,10 @@ export async function closeRuntimeBeforeSessionDeletion(
 }
 
 /** A listed row with no provable owner must never fall through to the primary backend. */
-export function sessionRemovalOwnerUnavailable(listed: boolean, stampedProfile: string | undefined, profile: string | null | undefined): boolean {
+export function sessionRemovalOwnerUnavailable(
+  listed: boolean,
+  stampedProfile: string | undefined,
+  profile: string | null | undefined
+): boolean {
   return listed && !stampedProfile && !profile?.trim() && $profiles.get().filter(item => item.name.trim()).length > 1
 }

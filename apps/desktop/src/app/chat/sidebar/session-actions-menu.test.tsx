@@ -322,7 +322,12 @@ describe('SessionActionsMenu', () => {
       'bot-chat': { workspaceMode: 'bots', workspaceOwnerKey: 'bot:right', workspaceTabTitle: 'Bot Chat' }
     })
     $sessionTiles.set([
-      { storedSessionId: 'other-chat', workspaceMode: 'bots', workspaceOwnerKey: 'bot:other', workspaceTabTitle: 'Bot Chat' }
+      {
+        storedSessionId: 'other-chat',
+        workspaceMode: 'bots',
+        workspaceOwnerKey: 'bot:other',
+        workspaceTabTitle: 'Bot Chat'
+      }
     ])
     render(
       <SessionActionsMenu onDelete={onDelete} renameable={false} sessionId="bot-chat" title="Bot Chat">
@@ -372,7 +377,11 @@ describe('SessionActionsMenu', () => {
 
   it('retains a rejected deletion in the original dialog for retry', async () => {
     const onDelete = vi.fn().mockRejectedValueOnce(new Error('Delete refused')).mockResolvedValue(undefined)
-    render(<SessionActionsMenu onDelete={onDelete} sessionId="s1" title="My session"><button>Actions</button></SessionActionsMenu>)
+    render(
+      <SessionActionsMenu onDelete={onDelete} sessionId="s1" title="My session">
+        <button>Actions</button>
+      </SessionActionsMenu>
+    )
     const trigger = screen.getByRole('button', { name: 'Actions' })
     fireEvent.pointerDown(trigger, { button: 0, pointerType: 'mouse' })
     fireEvent.pointerUp(trigger, { button: 0, pointerType: 'mouse' })

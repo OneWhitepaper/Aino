@@ -10,7 +10,12 @@ import type {
 } from '../shared/platform-contract'
 import { parsePlatformDeviceId } from '../shared/platform-device-contract'
 import { openPlatformCheckout } from '../shared/platform-payment'
-import { parsePaymentQuoteInput, parsePlatformCreateOrderInput, parsePlatformOrderId, parsePlatformOrderQuery } from '../shared/platform-payment-contract'
+import {
+  parsePaymentQuoteInput,
+  parsePlatformCreateOrderInput,
+  parsePlatformOrderId,
+  parsePlatformOrderQuery
+} from '../shared/platform-payment-contract'
 import type { PlatformRuntimeBindingController } from '../shared/platform-runtime-binding'
 import type { CloudSyncStatus } from '../shared/platform-sync-contract'
 import { parsePlatformUsageQuery } from '../shared/platform-usage-contract'
@@ -64,7 +69,11 @@ export function registerPlatformIpc({
   openPaymentBrowser,
   cloudSync
 }: {
-  cloudSync?: { snapshot(): CloudSyncStatus; retry(): Promise<CloudSyncStatus>; subscribe(listener: (status: CloudSyncStatus) => void): () => void }
+  cloudSync?: {
+    snapshot(): CloudSyncStatus
+    retry(): Promise<CloudSyncStatus>
+    subscribe(listener: (status: CloudSyncStatus) => void): () => void
+  }
   ipc: IpcLike
   auth: PlatformAuth
   captcha: { acquire(): Promise<PlatformCaptchaProof> }
@@ -126,9 +135,13 @@ export function registerPlatformIpc({
   }
 
   function modelPurpose(input: Record<string, unknown>): { purpose?: 'chat' | 'image' } {
-    if (input.purpose === undefined) { return {} }
+    if (input.purpose === undefined) {
+      return {}
+    }
 
-    if (input.purpose !== 'chat' && input.purpose !== 'image') { throw new Error('invalid_platform_input') }
+    if (input.purpose !== 'chat' && input.purpose !== 'image') {
+      throw new Error('invalid_platform_input')
+    }
 
     return { purpose: input.purpose }
   }
@@ -258,10 +271,12 @@ export function registerPlatformIpc({
 
       return auth.submitStepUp({
         totp_code: field(value, 'totp_code', 64),
-        ...(value.expected_user_id !== undefined || value.expected_generation !== undefined ? {
-          expected_user_id: field(value, 'expected_user_id', 128),
-          expected_generation: value.expected_generation as number
-        } : {})
+        ...(value.expected_user_id !== undefined || value.expected_generation !== undefined
+          ? {
+              expected_user_id: field(value, 'expected_user_id', 128),
+              expected_generation: value.expected_generation as number
+            }
+          : {})
       })
     },
     'bind-phone': (event, input) => {
@@ -280,11 +295,15 @@ export function registerPlatformIpc({
       if (input !== undefined) {
         const owner = record(input)
 
-        if (!matchesAccountWindowOwner(auth.snapshot(), {
-          userId: field(owner, 'userId', 128),
-          mode: owner.mode as PlatformAccountWindowOwner['mode'],
-          revision: owner.revision as number
-        })) { throw new PlatformClientError('platform_account_changed') }
+        if (
+          !matchesAccountWindowOwner(auth.snapshot(), {
+            userId: field(owner, 'userId', 128),
+            mode: owner.mode as PlatformAccountWindowOwner['mode'],
+            revision: owner.revision as number
+          })
+        ) {
+          throw new PlatformClientError('platform_account_changed')
+        }
       }
 
       return auth.logout()
@@ -301,27 +320,38 @@ export function registerPlatformIpc({
     })
   }
 
-  for (const [name, operation] of Object.entries({ status: () => cloudSync?.snapshot(), retry: () => cloudSync?.retry() })) {
+  for (const [name, operation] of Object.entries({
+    status: () => cloudSync?.snapshot(),
+    retry: () => cloudSync?.retry()
+  })) {
     ipc.handle(`aino:platform-sync:${name}`, async event => {
-      try { authorize(event);
+      try {
+        authorize(event)
 
- return { ok: true, value: await operation() } }
-      catch (error) { return { ok: false, error: safeIpcError(error) } }
+        return { ok: true, value: await operation() }
+      } catch (error) {
+        return { ok: false, error: safeIpcError(error) }
+      }
     })
   }
 
   const deviceMethods = {
-    list: (source: Record<string, unknown>) => auth.listDevices({
-      expected_user_id: field(source, 'expected_user_id', 128), expected_generation: source.expected_generation as number
-    }),
+    list: (source: Record<string, unknown>) =>
+      auth.listDevices({
+        expected_user_id: field(source, 'expected_user_id', 128),
+        expected_generation: source.expected_generation as number
+      }),
     revoke: async (source: Record<string, unknown>) => {
       const id = parsePlatformDeviceId(source.device_id)
 
       const result = await auth.revokeDevice(id, {
-        expected_user_id: field(source, 'expected_user_id', 128), expected_generation: source.expected_generation as number
+        expected_user_id: field(source, 'expected_user_id', 128),
+        expected_generation: source.expected_generation as number
       })
 
-      if (currentDeviceId?.().toLowerCase() === id) { bindingController?.invalidateConnections() }
+      if (currentDeviceId?.().toLowerCase() === id) {
+        bindingController?.invalidateConnections()
+      }
 
       return result
     }
@@ -352,9 +382,16 @@ export function registerPlatformIpc({
     'list-orders': (source, owner) => auth.listOrders(parsePlatformOrderQuery(source), owner),
     'cancel-order': (source, owner) => auth.cancelOrder(parsePlatformOrderId(field(source, 'order_id', 19)), owner),
     'open-checkout': (source, owner) => {
-      if (!openPaymentBrowser) { throw new PlatformClientError('checkout_unavailable') }
+      if (!openPaymentBrowser) {
+        throw new PlatformClientError('checkout_unavailable')
+      }
 
-      return openPlatformCheckout({ auth, orderId: parsePlatformOrderId(field(source, 'order_id', 19)), owner, openBrowser: openPaymentBrowser })
+      return openPlatformCheckout({
+        auth,
+        orderId: parsePlatformOrderId(field(source, 'order_id', 19)),
+        owner,
+        openBrowser: openPaymentBrowser
+      })
     }
   }
 
@@ -388,7 +425,10 @@ export function registerPlatformIpc({
       authorize(event)
       const source = record(input)
 
-      return { ok: true, value: await auth.listUsage(parsePlatformUsageQuery(source), field(source, 'expected_user_id', 128)) }
+      return {
+        ok: true,
+        value: await auth.listUsage(parsePlatformUsageQuery(source), field(source, 'expected_user_id', 128))
+      }
     } catch (error) {
       return { ok: false, error: safeIpcError(error) }
     }
@@ -408,10 +448,13 @@ export function registerPlatformIpc({
       authorize(event)
       const source = record(input)
 
-      return { ok: true, value: await auth.uploadDiagnostics(field(source, 'bundle_base64', 11_184_812), {
-        expected_user_id: field(source, 'expected_user_id', 128),
-        expected_generation: source.expected_generation as number
-      }) }
+      return {
+        ok: true,
+        value: await auth.uploadDiagnostics(field(source, 'bundle_base64', 11_184_812), {
+          expected_user_id: field(source, 'expected_user_id', 128),
+          expected_generation: source.expected_generation as number
+        })
+      }
     } catch (error) {
       return { ok: false, error: safeIpcError(error) }
     }
@@ -523,7 +566,11 @@ export function registerPlatformIpc({
 
   const unsubscribeSync = cloudSync?.subscribe(status => {
     for (const win of windows) {
-      if (!win.isDestroyed() && !win.webContents.isDestroyed() && sameRendererDocument(win.webContents.mainFrame.url, trustedRendererUrl)) {
+      if (
+        !win.isDestroyed() &&
+        !win.webContents.isDestroyed() &&
+        sameRendererDocument(win.webContents.mainFrame.url, trustedRendererUrl)
+      ) {
         win.webContents.send('aino:platform-sync:changed', status)
       }
     }

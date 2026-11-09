@@ -38,7 +38,12 @@ afterEach(() => {
 })
 
 it('keeps existing files and browser pages while each summary resource opens its own reusable tab', async () => {
-  openPreview({ kind: 'url', label: 'Working page', source: 'https://example.com/work', url: 'https://example.com/work' })
+  openPreview({
+    kind: 'url',
+    label: 'Working page',
+    source: 'https://example.com/work',
+    url: 'https://example.com/work'
+  })
   openPreview({ kind: 'file', label: 'notes.md', source: '/work/notes.md', url: 'file:///work/notes.md' })
   const original = $previewTabs.get()
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })

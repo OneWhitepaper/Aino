@@ -6,17 +6,25 @@ import { queryClient } from '@/lib/query-client'
 import { clearGatewayManagedCapabilities, recordGatewayReadyCapability } from '@/store/gateway-managed-capability'
 import { platformModelCatalog, readPlatformDefault, writePlatformDefault } from '@/store/platform-models'
 import { $activeSessionId, $currentModel, $currentProvider, $selectedStoredSessionId } from '@/store/session'
-import { $sessionStates, $sessionTiles, publishSessionState, type SessionTileDelegate, setSessionTileDelegate } from '@/store/session-states'
+import {
+  $sessionStates,
+  $sessionTiles,
+  publishSessionState,
+  type SessionTileDelegate,
+  setSessionTileDelegate
+} from '@/store/session-states'
 import { deferred } from '@/test/deferred'
 import { platformModel, platformSnapshot } from '@/test/platform-model'
 
 import { restoreEmptyBotModelDefault } from './plugin-empty-bot-model'
 
 const io = vi.hoisted(() => ({ row: vi.fn(), globalModel: vi.fn(), retain: vi.fn(), release: vi.fn(), rpc: vi.fn() }))
-vi.mock('@/api/sessions', async original => ({ ...await original<object>(), getSession: io.row }))
-vi.mock('@/hermes', async original => ({ ...await original<object>(), getGlobalModelInfo: io.globalModel }))
+vi.mock('@/api/sessions', async original => ({ ...(await original<object>()), getSession: io.row }))
+vi.mock('@/hermes', async original => ({ ...(await original<object>()), getGlobalModelInfo: io.globalModel }))
 vi.mock('@/store/gateway', async original => ({
-  ...await original<object>(), retainGatewayForAgent: io.retain, requestGatewayForAgent: io.rpc
+  ...(await original<object>()),
+  retainGatewayForAgent: io.retain,
+  requestGatewayForAgent: io.rpc
 }))
 
 const route = { connectionId: 'local', profile: 'bot', targetProfile: 'bot', mode: 'local' as const }
@@ -30,7 +38,13 @@ let bind: ReturnType<typeof vi.fn>
 let isCurrent: ReturnType<typeof vi.fn<() => boolean>>
 
 const row = () => ({
-  id: storedId, profile: 'bot', title: 'Bot Chat', hidden: 1, message_count: 0, model: '', model_config: null
+  id: storedId,
+  profile: 'bot',
+  title: 'Bot Chat',
+  hidden: 1,
+  message_count: 0,
+  model: '',
+  model_config: null
 })
 
 const run = () => restoreEmptyBotModelDefault({ storedSessionId: storedId, route, isCurrent })
@@ -46,10 +60,19 @@ beforeEach(async () => {
   $currentModel.set('ordinary-model')
   $currentProvider.set('ordinary-provider')
   $sessionTiles.set([{ storedSessionId: storedId, runtimeId, ownerRoute: route }] as never)
-  $sessionStates.set({ [runtimeId]: {
-    storedSessionId: storedId, messages: [], model: '', provider: '', platformModel: null,
-    busy: false, awaitingResponse: false, turnLive: false, reasoningEffort: ''
-  } } as never)
+  $sessionStates.set({
+    [runtimeId]: {
+      storedSessionId: storedId,
+      messages: [],
+      model: '',
+      provider: '',
+      platformModel: null,
+      busy: false,
+      awaitingResponse: false,
+      turnLive: false,
+      reasoningEffort: ''
+    }
+  } as never)
   setSessionTileDelegate({
     updateSession: (id: string, update: Parameters<SessionTileDelegate['updateSession']>[1]) => {
       const next = update($sessionStates.get()[id])
@@ -62,29 +85,48 @@ beforeEach(async () => {
   io.row.mockImplementation(async () => row())
   io.globalModel.mockResolvedValue({ model: '', provider: '' })
   io.retain.mockResolvedValue(io.release)
-  bind = vi.fn(async () => { backend.model_status = 'ready';
+  bind = vi.fn(async () => {
+    backend.model_status = 'ready'
 
- return { ok: true } })
-  Object.defineProperty(window, 'hermesDesktop', { configurable: true, value: {
-    accountAdapter: 'platform',
-    platformAccount: { status: async () => account, capabilities: async () => ({}), onChanged: () => () => undefined },
-    platformModels: {
-      list: async () => [platformModel()], owner: async () => owner, bind, clear: vi.fn()
+    return { ok: true }
+  })
+  Object.defineProperty(window, 'hermesDesktop', {
+    configurable: true,
+    value: {
+      accountAdapter: 'platform',
+      platformAccount: {
+        status: async () => account,
+        capabilities: async () => ({}),
+        onChanged: () => () => undefined
+      },
+      platformModels: {
+        list: async () => [platformModel()],
+        owner: async () => owner,
+        bind,
+        clear: vi.fn()
+      }
     }
-  } })
+  })
   await platformAccountActions(window.hermesDesktop.platformAccount).refresh()
   await platformModelCatalog().load()
   writePlatformDefault(account.account!.id, 'catalog-a', route, account.mode, owner.platform_origin)
   recordGatewayReadyCapability(route, { type: 'gateway.ready', payload: { managed_model_binding: 1 } })
   io.rpc.mockImplementation(async (_connection, _profile, method, params) => {
-    if (method === 'model.options') { return { providers: [], session_info: { ...backend } } }
+    if (method === 'model.options') {
+      return { providers: [], session_info: { ...backend } }
+    }
 
-    if (method === 'session.managed_model_ticket') { return { managed_model_binding: 1, session_ticket: 'fixture' } }
+    if (method === 'session.managed_model_ticket') {
+      return { managed_model_binding: 1, session_ticket: 'fixture' }
+    }
 
     if (method === 'config.set' && params.model_source === 'aino') {
       backend = {
-        provider: 'aino', model_source: 'aino', model_id: params.value,
-        model_status: 'awaiting_managed_credentials', platform_owner: owner
+        provider: 'aino',
+        model_source: 'aino',
+        model_id: params.value,
+        model_status: 'awaiting_managed_credentials',
+        platform_owner: owner
       }
 
       return {}
@@ -108,18 +150,37 @@ it('binds the existing empty canonical to its own saved default without a prompt
   expect(await run()).toBe(true)
   expect(io.row).toHaveBeenCalledWith(storedId, expect.objectContaining({ connectionId: 'local', profile: 'bot' }))
   expect(io.rpc.mock.calls.map(call => call[2])).toEqual([
-    'model.options', 'config.set', 'session.managed_model_ticket', 'model.options'
+    'model.options',
+    'config.set',
+    'session.managed_model_ticket',
+    'model.options'
   ])
   expect(io.rpc.mock.calls.find(call => call[2] === 'config.set')?.[3]).toEqual({
-    session_id: runtimeId, key: 'model', value: 'catalog-a', model_source: 'aino', confirm_expensive_model: true
+    session_id: runtimeId,
+    key: 'model',
+    value: 'catalog-a',
+    model_source: 'aino',
+    confirm_expensive_model: true
   })
-  expect(bind).toHaveBeenCalledWith(expect.objectContaining({
-    connection_id: 'local', profile: 'bot', session_id: runtimeId, model_id: 'catalog-a'
-  }))
+  expect(bind).toHaveBeenCalledWith(
+    expect.objectContaining({
+      connection_id: 'local',
+      profile: 'bot',
+      session_id: runtimeId,
+      model_id: 'catalog-a'
+    })
+  )
   expect($sessionStates.get()[runtimeId]).toMatchObject({
-    storedSessionId: storedId, model: 'catalog-a', provider: 'aino', messages: [], platformModel: { status: 'ready' }
+    storedSessionId: storedId,
+    model: 'catalog-a',
+    provider: 'aino',
+    messages: [],
+    platformModel: { status: 'ready' }
   })
-  expect(queryClient.getQueryData(modelOptionsQueryKey('bot', runtimeId, 'local'))).toMatchObject({ model: 'catalog-a', provider: 'aino' })
+  expect(queryClient.getQueryData(modelOptionsQueryKey('bot', runtimeId, 'local'))).toMatchObject({
+    model: 'catalog-a',
+    provider: 'aino'
+  })
   expect([$currentModel.get(), $currentProvider.get()]).toEqual(['ordinary-model', 'ordinary-provider'])
   expect(io.release).toHaveBeenCalledOnce()
   expect(await run()).toBe(false)
@@ -127,8 +188,13 @@ it('binds the existing empty canonical to its own saved default without a prompt
 })
 
 it.each([
-  { messages: [{ id: 'message' }] }, { busy: true }, { awaitingResponse: true }, { turnLive: true },
-  { model: 'selected-model' }, { provider: 'custom' }, { platformModel: { modelId: 'selected-model' } },
+  { messages: [{ id: 'message' }] },
+  { busy: true },
+  { awaitingResponse: true },
+  { turnLive: true },
+  { model: 'selected-model' },
+  { provider: 'custom' },
+  { platformModel: { modelId: 'selected-model' } },
   { storedSessionId: 'another-chat' }
 ])('preserves an existing or busy runtime: %j', async patch => {
   $sessionStates.set({ [runtimeId]: { ...$sessionStates.get()[runtimeId], ...patch } } as never)
@@ -139,11 +205,20 @@ it.each([
 })
 
 it.each([
-  { title: 'Ordinary chat' }, { hidden: false }, { message_count: 1 }, { message_count: undefined },
-  { profile: 'default' }, { model: 'saved-model' }, { model: undefined }, { id: 'another-chat' }, { model_config: undefined },
-  { model_config: '{broken' }, { model_config: { composer_override_profile: { model: '', provider: '' } } },
+  { title: 'Ordinary chat' },
+  { hidden: false },
+  { message_count: 1 },
+  { message_count: undefined },
+  { profile: 'default' },
+  { model: 'saved-model' },
+  { model: undefined },
+  { id: 'another-chat' },
+  { model_config: undefined },
+  { model_config: '{broken' },
+  { model_config: { composer_override_profile: { model: '', provider: '' } } },
   { model_config: { model_source: 'aino', model_id: 'saved-model' } },
-  { model_config: { reasoning_config: { effort: 'high' } } }, { parent_session_id: 'historical-parent' }
+  { model_config: { reasoning_config: { effort: 'high' } } },
+  { parent_session_id: 'historical-parent' }
 ])('does not treat an unproven or configured stored row as empty: %j', async patch => {
   io.row.mockResolvedValue({ ...row(), ...patch })
   expect(await run()).toBe(false)
@@ -152,14 +227,23 @@ it.each([
 })
 
 it('accepts the empty canonical follow-profile marker without changing approval settings', async () => {
-  io.row.mockResolvedValue({ ...row(), model_config: JSON.stringify({ follow_profile_config: true, yolo_mode: false }) })
+  io.row.mockResolvedValue({
+    ...row(),
+    model_config: JSON.stringify({ follow_profile_config: true, yolo_mode: false })
+  })
   expect(await run()).toBe(true)
   expect(io.rpc.mock.calls.filter(call => call[2] === 'config.set').map(call => call[3].key)).toEqual(['model'])
 })
 
 it('does not borrow the API default or the ordinary workspace default when the Bot has none', async () => {
   writePlatformDefault(account.account!.id, null, route, account.mode, owner.platform_origin)
-  writePlatformDefault(account.account!.id, 'catalog-a', { ...route, profile: 'default' }, account.mode, owner.platform_origin)
+  writePlatformDefault(
+    account.account!.id,
+    'catalog-a',
+    { ...route, profile: 'default' },
+    account.mode,
+    owner.platform_origin
+  )
   expect(await run()).toBe(false)
   expect(io.row).not.toHaveBeenCalled()
   expect(bind).not.toHaveBeenCalled()
@@ -167,19 +251,28 @@ it('does not borrow the API default or the ordinary workspace default when the B
 })
 
 it.each(['manual-pick', 'navigated', 'runtime-rebound', 'default-changed', 'account-changed'] as const)(
-  'abandons restoration when %s occurs during the stored read', async change => {
+  'abandons restoration when %s occurs during the stored read',
+  async change => {
     const pendingRow = deferred<ReturnType<typeof row>>()
     io.row.mockReturnValue(pendingRow.promise)
     const pending = run()
     await vi.waitFor(() => expect(io.row).toHaveBeenCalledOnce())
 
-    if (change === 'manual-pick') { publishSessionState(runtimeId, { ...$sessionStates.get()[runtimeId], model: 'manual' }) }
+    if (change === 'manual-pick') {
+      publishSessionState(runtimeId, { ...$sessionStates.get()[runtimeId], model: 'manual' })
+    }
 
-    if (change === 'navigated') { isCurrent.mockReturnValue(false) }
+    if (change === 'navigated') {
+      isCurrent.mockReturnValue(false)
+    }
 
-    if (change === 'runtime-rebound') { $sessionTiles.set([{ storedSessionId: storedId, runtimeId: 'new-runtime', ownerRoute: route }] as never) }
+    if (change === 'runtime-rebound') {
+      $sessionTiles.set([{ storedSessionId: storedId, runtimeId: 'new-runtime', ownerRoute: route }] as never)
+    }
 
-    if (change === 'default-changed') { writePlatformDefault(account.account!.id, 'catalog-b', route, account.mode, owner.platform_origin) }
+    if (change === 'default-changed') {
+      writePlatformDefault(account.account!.id, 'catalog-b', route, account.mode, owner.platform_origin)
+    }
 
     if (change === 'account-changed') {
       window.hermesDesktop.platformAccount.status = async () => platformSnapshot('user-b', 2)
@@ -222,7 +315,8 @@ it('preserves a user model pick made while the runtime verification is pending',
 })
 
 it.each([{ connectionId: 'foreign' }, { profile: 'different-bot' }, { targetProfile: 'different-backend' }])(
-  'does not touch a same-id tile belonging to another owner: %j', async patch => {
+  'does not touch a same-id tile belonging to another owner: %j',
+  async patch => {
     $sessionTiles.set([{ storedSessionId: storedId, runtimeId, ownerRoute: { ...route, ...patch } }] as never)
     expect(await run()).toBe(false)
     expect(io.row).not.toHaveBeenCalled()

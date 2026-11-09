@@ -533,9 +533,10 @@ const previewRead: Handler = ({ request, sessionId }) => {
   // A browser host has no pop-out and no readable surface to forward to, so
   // asking would only wait out the pop-out timeout before the same answer.
   void (async () => {
-    const result = hasLivePreviewSurface(owner) || !hostHas('webviewPreview')
-      ? await readActivePreview(opts, owner)
-      : ((await requestPopoutPreviewRead(opts, owner)) ?? (await readActivePreview(opts, owner)))
+    const result =
+      hasLivePreviewSurface(owner) || !hostHas('webviewPreview')
+        ? await readActivePreview(opts, owner)
+        : ((await requestPopoutPreviewRead(opts, owner)) ?? (await readActivePreview(opts, owner)))
 
     answerValue(request, result)
   })()
@@ -796,11 +797,17 @@ export const SERVER_REQUEST_HANDLERS: Record<string, Handler> = {
       return
     }
 
-    void answerPlatformConversationModelRequest({ connectionId: request.connectionId, profile: request.profile }, {
-      action,
-      ...(typeof request.params.query === 'string' ? { query: request.params.query } : {}),
-      ...(typeof request.params.provider === 'string' ? { provider: request.params.provider } : {})
-    }).then(result => request.respond({ ...result }), () => request.respond({ status: 'unavailable' }))
+    void answerPlatformConversationModelRequest(
+      { connectionId: request.connectionId, profile: request.profile },
+      {
+        action,
+        ...(typeof request.params.query === 'string' ? { query: request.params.query } : {}),
+        ...(typeof request.params.provider === 'string' ? { provider: request.params.provider } : {})
+      }
+    ).then(
+      result => request.respond({ ...result }),
+      () => request.respond({ status: 'unavailable' })
+    )
   },
   'display.install.sudo': displayInstallSudo,
   'preview.act': previewAct,

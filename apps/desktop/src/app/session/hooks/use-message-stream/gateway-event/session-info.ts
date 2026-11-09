@@ -552,8 +552,8 @@ export function handleSessionInfoEvent(ctx: GatewayEventContext): boolean {
     // during the turn instead of only jumping at message.complete.
     const usage = usageFromTick(payload as UsageTickPayload | undefined)
 
-    const normalizedUsage = usage &&
-      (Object.fromEntries(Object.entries(usage).filter(([, value]) => value !== null)) as Partial<UsageStats>)
+    const normalizedUsage =
+      usage && (Object.fromEntries(Object.entries(usage).filter(([, value]) => value !== null)) as Partial<UsageStats>)
 
     if (normalizedUsage && sessionId) {
       // Per-session twin first: a focused secondary tile reads this cache,

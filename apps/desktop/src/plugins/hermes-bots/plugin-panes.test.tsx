@@ -501,32 +501,29 @@ describe('entering Agent Hub', () => {
 })
 
 describe('returning to Sessions', () => {
-  it.each(['sessions-first', 'bots-first'])(
-    'drops a cold bot open only on selecting Sessions (%s)',
-    async order => {
-      const store = paneStores()
-      const harness = recordingContext()
-      const { $pendingBotOpen } = await import('./shared')
+  it.each(['sessions-first', 'bots-first'])('drops a cold bot open only on selecting Sessions (%s)', async order => {
+    const store = paneStores()
+    const harness = recordingContext()
+    const { $pendingBotOpen } = await import('./shared')
 
-      plugin.register(harness.ctx)
-      await settle()
-      store(`hermes-bots:pane`).set(true)
-      $pendingBotOpen.set({ generation: 1, key: 'local::bravo' })
+    plugin.register(harness.ctx)
+    await settle()
+    store(`hermes-bots:pane`).set(true)
+    $pendingBotOpen.set({ generation: 1, key: 'local::bravo' })
 
-      if (order === 'sessions-first') {
-        store('sessions').set(true)
-        store('hermes-bots:pane').set(false)
-      } else {
-        store('hermes-bots:pane').set(false)
-        store('sessions').set(true)
-      }
-
-      expect($pendingBotOpen.get()).toBeNull()
-      expect(mocks.setWorkspaceScope).toHaveBeenCalledWith('sessions')
-
-      harness.dispose()
+    if (order === 'sessions-first') {
+      store('sessions').set(true)
+      store('hermes-bots:pane').set(false)
+    } else {
+      store('hermes-bots:pane').set(false)
+      store('sessions').set(true)
     }
-  )
+
+    expect($pendingBotOpen.get()).toBeNull()
+    expect(mocks.setWorkspaceScope).toHaveBeenCalledWith('sessions')
+
+    harness.dispose()
+  })
 
   it.each(['bot', 'group'])('keeps the current %s workspace when its navigation sidebar is hidden', async kind => {
     const store = paneStores()

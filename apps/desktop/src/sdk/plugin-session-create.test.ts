@@ -22,12 +22,12 @@ const io = vi.hoisted(() => ({
 }))
 
 vi.mock('@/hermes', async original => ({
-  ...await original<Record<string, unknown>>(),
+  ...(await original<Record<string, unknown>>()),
   getGlobalModelInfo: io.globalModel
 }))
 
 vi.mock('@/store/gateway', async original => ({
-  ...await original<Record<string, unknown>>(),
+  ...(await original<Record<string, unknown>>()),
   retainGatewayForAgent: io.retain,
   requestGatewayForAgent: io.agent,
   requestGatewayForProfile: io.profile
@@ -42,37 +42,62 @@ function transport(method: string, params: Record<string, unknown> = {}) {
   io.order.push(method)
 
   if (method === 'session.create') {
-    return { session_id: 'bot-runtime', stored_session_id: 'bot-stored', info: {
-      model_source: params.model_source, model_id: params.model_id,
-      model_status: 'awaiting_managed_credentials'
-    } }
+    return {
+      session_id: 'bot-runtime',
+      stored_session_id: 'bot-stored',
+      info: {
+        model_source: params.model_source,
+        model_id: params.model_id,
+        model_status: 'awaiting_managed_credentials'
+      }
+    }
   }
 
   if (method === 'session.managed_model_ticket') {
     return { managed_model_binding: 1, session_ticket: 'private-ticket' }
   }
 
-  if (method === 'session.close') { return {} }
+  if (method === 'session.close') {
+    return {}
+  }
 
-  if (method === 'profiles.create') { return { ok: true, name: params.name } }
+  if (method === 'profiles.create') {
+    return { ok: true, name: params.name }
+  }
 
-  if (method === 'setup.runtime_check') { return { ok: false, error: 'No profile credential' } }
+  if (method === 'setup.runtime_check') {
+    return { ok: false, error: 'No profile credential' }
+  }
 
-  if (method === 'groups.capabilities') { return { methods: ['groups.prepare_model'] } }
+  if (method === 'groups.capabilities') {
+    return { methods: ['groups.prepare_model'] }
+  }
 
-  if (method === 'groups.state') { return { room: { members: [
-    { member_id: 'seat-a', profile: 'bot-a', target: { kind: 'local' } },
-    { member_id: 'seat-b', profile: 'bot-b', target: { kind: 'local' } }
-  ] } } }
+  if (method === 'groups.state') {
+    return {
+      room: {
+        members: [
+          { member_id: 'seat-a', profile: 'bot-a', target: { kind: 'local' } },
+          { member_id: 'seat-b', profile: 'bot-b', target: { kind: 'local' } }
+        ]
+      }
+    }
+  }
 
-  if (method === 'groups.prepare_model') { return {
-    profile: params.member_id === 'seat-a' ? 'bot-a' : 'bot-b',
-    session_id: `group-${params.member_id}`, model_id: params.model_id,
-    ...(params.follow_profile_config === true ? { follow_profile_config: true } : {}),
-    managed_model_binding: 1, session_ticket: `group-ticket-${params.member_id}`
-  } }
+  if (method === 'groups.prepare_model') {
+    return {
+      profile: params.member_id === 'seat-a' ? 'bot-a' : 'bot-b',
+      session_id: `group-${params.member_id}`,
+      model_id: params.model_id,
+      ...(params.follow_profile_config === true ? { follow_profile_config: true } : {}),
+      managed_model_binding: 1,
+      session_ticket: `group-ticket-${params.member_id}`
+    }
+  }
 
-  if (['groups.send', 'groups.retry', 'groups.approve', 'groups.stop'].includes(method)) { return { ok: true } }
+  if (['groups.send', 'groups.retry', 'groups.approve', 'groups.stop'].includes(method)) {
+    return { ok: true }
+  }
   throw new Error(`Unexpected ${method}`)
 }
 
@@ -88,7 +113,10 @@ beforeEach(async () => {
   })
   io.retain.mockImplementation(async (connectionId, profile) => {
     io.order.push('ready')
-    recordGatewayReadyCapability({ connectionId, profile }, { type: 'gateway.ready', payload: { managed_model_binding: 1 } } as never)
+    recordGatewayReadyCapability({ connectionId, profile }, {
+      type: 'gateway.ready',
+      payload: { managed_model_binding: 1 }
+    } as never)
 
     return io.release
   })
@@ -100,11 +128,18 @@ beforeEach(async () => {
 
     return { ok: true, ready: true, model_id: 'catalog-a', billing_source: 'aino' }
   })
-  Object.defineProperty(window, 'hermesDesktop', { configurable: true, value: {
-    accountAdapter: 'platform',
-    platformAccount: { status: async () => account, capabilities: async () => ({}), onChanged: () => () => undefined },
-    platformModels: { list: async () => [platformModel()], owner: async () => owner, bind: io.bind, clear: io.clear }
-  } })
+  Object.defineProperty(window, 'hermesDesktop', {
+    configurable: true,
+    value: {
+      accountAdapter: 'platform',
+      platformAccount: {
+        status: async () => account,
+        capabilities: async () => ({}),
+        onChanged: () => () => undefined
+      },
+      platformModels: { list: async () => [platformModel()], owner: async () => owner, bind: io.bind, clear: io.clear }
+    }
+  })
   await platformAccountActions(window.hermesDesktop.platformAccount).refresh()
   await platformModelCatalog().load()
   setCurrentProvider('another-provider')
@@ -124,14 +159,25 @@ it('binds each hosted member independently before sending the exact journaled gr
   await host.requestProfile(route, 'groups.send', params)
 
   expect(io.bind).toHaveBeenCalledTimes(2)
-  expect(io.bind).toHaveBeenNthCalledWith(1, expect.objectContaining({
-    connection_id: route.connectionId, profile: 'bot-a', session_id: 'group-seat-a',
-    model_id: 'catalog-a', session_ticket: 'group-ticket-seat-a'
-  }))
-  expect(io.bind).toHaveBeenNthCalledWith(2, expect.objectContaining({
-    connection_id: route.connectionId, profile: 'bot-b', session_id: 'group-seat-b',
-    session_ticket: 'group-ticket-seat-b'
-  }))
+  expect(io.bind).toHaveBeenNthCalledWith(
+    1,
+    expect.objectContaining({
+      connection_id: route.connectionId,
+      profile: 'bot-a',
+      session_id: 'group-seat-a',
+      model_id: 'catalog-a',
+      session_ticket: 'group-ticket-seat-a'
+    })
+  )
+  expect(io.bind).toHaveBeenNthCalledWith(
+    2,
+    expect.objectContaining({
+      connection_id: route.connectionId,
+      profile: 'bot-b',
+      session_id: 'group-seat-b',
+      session_ticket: 'group-ticket-seat-b'
+    })
+  )
   expect(io.order.at(-1)).toBe('groups.send')
   expect(io.agent.mock.lastCall?.slice(0, 4)).toEqual([route.connectionId, route.profile, 'groups.send', params])
   expect(io.agent.mock.lastCall?.[3]).toBe(params)
@@ -139,12 +185,20 @@ it('binds each hosted member independently before sending the exact journaled gr
     { profile: route.targetProfile, room_id: 'room-a', member_id: 'seat-a', model_id: 'catalog-a', owner },
     { profile: route.targetProfile, room_id: 'room-a', member_id: 'seat-b', model_id: 'catalog-a', owner }
   ])
-  expect(io.agent.mock.calls.some(call => call[2] === 'session.create' || call[2] === 'session.managed_model_ticket')).toBe(false)
+  expect(
+    io.agent.mock.calls.some(call => call[2] === 'session.create' || call[2] === 'session.managed_model_ticket')
+  ).toBe(false)
   expect(io.release).toHaveBeenCalledOnce()
 })
 
 it('restores only the failed member binding before retry after a runtime restart', async () => {
-  const params = { room_id: 'room-a', member_id: 'seat-a', task_id: 'old-task', execution_generation: 1, choice: 'once' }
+  const params = {
+    room_id: 'room-a',
+    member_id: 'seat-a',
+    task_id: 'old-task',
+    execution_generation: 1,
+    choice: 'once'
+  }
   await host.requestProfile(route, 'groups.retry', params)
   expect(io.bind).toHaveBeenCalledOnce()
   expect(io.order.at(-1)).toBe('groups.retry')
@@ -152,7 +206,13 @@ it('restores only the failed member binding before retry after a runtime restart
 })
 
 it('approves the existing task without switching its frozen model to a newer default', async () => {
-  const params = { room_id: 'room-a', member_id: 'seat-a', task_id: 'old-task', execution_generation: 1, choice: 'once' }
+  const params = {
+    room_id: 'room-a',
+    member_id: 'seat-a',
+    task_id: 'old-task',
+    execution_generation: 1,
+    choice: 'once'
+  }
   await host.requestProfile(route, 'groups.approve', params)
   expect(io.bind).not.toHaveBeenCalled()
   expect(io.globalModel).not.toHaveBeenCalled()
@@ -174,8 +234,9 @@ it('does not replace explicitly configured providers or prepare bindings for sto
 
 it('blocks group execution when one member cannot bind without retiring its exact intent', async () => {
   io.bind.mockResolvedValue({ ok: false, error: { code: 'insufficient_balance' } })
-  await expect(host.requestProfile(route, 'groups.send', { room_id: 'room-a', payload: { text: 'hello' } }))
-    .rejects.toMatchObject({ code: 'insufficient_balance', data: { admitted: false } })
+  await expect(
+    host.requestProfile(route, 'groups.send', { room_id: 'room-a', payload: { text: 'hello' } })
+  ).rejects.toMatchObject({ code: 'insufficient_balance', data: { admitted: false } })
   expect(io.agent.mock.calls.some(call => call[2] === 'groups.send')).toBe(false)
   expect(io.agent.mock.calls.some(call => call[2] === 'session.close')).toBe(false)
   expect(io.release).toHaveBeenCalledOnce()
@@ -205,50 +266,75 @@ it('fences account changes while a group member ticket is prepared', async () =>
   expect(io.agent.mock.calls.some(call => call[2] === 'groups.send')).toBe(false)
 })
 
-it.each(['retain', 'defaults', 'prepare'] as const)('proves a group Send admitted nothing when %s fails before dispatch', async phase => {
-  const failure = Object.freeze(Object.assign(new Error(`${phase} unavailable`), {
-    code: 4201, data: Object.freeze({ reason: 'unavailable', retryable: true })
-  }))
+it.each(['retain', 'defaults', 'prepare'] as const)(
+  'proves a group Send admitted nothing when %s fails before dispatch',
+  async phase => {
+    const failure = Object.freeze(
+      Object.assign(new Error(`${phase} unavailable`), {
+        code: 4201,
+        data: Object.freeze({ reason: 'unavailable', retryable: true })
+      })
+    )
 
-  if (phase === 'retain') { io.retain.mockRejectedValueOnce(failure) }
-  else if (phase === 'defaults') { io.globalModel.mockRejectedValueOnce(failure) }
-  else {
-    io.agent.mockImplementation(async (_connectionId, _profile, method, params) => {
-      if (method === 'groups.prepare_model') { throw failure }
+    if (phase === 'retain') {
+      io.retain.mockRejectedValueOnce(failure)
+    } else if (phase === 'defaults') {
+      io.globalModel.mockRejectedValueOnce(failure)
+    } else {
+      io.agent.mockImplementation(async (_connectionId, _profile, method, params) => {
+        if (method === 'groups.prepare_model') {
+          throw failure
+        }
 
-      return transport(method, params)
+        return transport(method, params)
+      })
+    }
+
+    await expect(
+      host.requestProfile(route, 'groups.send', { room_id: 'room-a', payload: { text: 'hello' } })
+    ).rejects.toMatchObject({
+      message: failure.message,
+      code: 4201,
+      data: { reason: 'unavailable', retryable: true, admitted: false }
     })
+    expect(failure.data).toEqual({ reason: 'unavailable', retryable: true })
+    expect(io.agent.mock.calls.some(call => call[2] === 'groups.send')).toBe(false)
+    expect(io.release).toHaveBeenCalledTimes(phase === 'retain' ? 0 : 1)
   }
-
-  await expect(host.requestProfile(route, 'groups.send', { room_id: 'room-a', payload: { text: 'hello' } }))
-    .rejects.toMatchObject({ message: failure.message, code: 4201, data: { reason: 'unavailable', retryable: true, admitted: false } })
-  expect(failure.data).toEqual({ reason: 'unavailable', retryable: true })
-  expect(io.agent.mock.calls.some(call => call[2] === 'groups.send')).toBe(false)
-  expect(io.release).toHaveBeenCalledTimes(phase === 'retain' ? 0 : 1)
-})
+)
 
 it('preserves the original error once group Send dispatch begins even if lease cleanup also fails', async () => {
   const failure = Object.assign(new Error('send result unknown'), { code: 4202, data: { reason: 'disconnected' } })
   io.agent.mockImplementation(async (_connectionId, _profile, method, params) => {
-    if (method === 'groups.send') { throw failure }
+    if (method === 'groups.send') {
+      throw failure
+    }
 
     return transport(method, params)
   })
-  io.release.mockImplementationOnce(() => { throw new Error('lease cleanup failed') })
+  io.release.mockImplementationOnce(() => {
+    throw new Error('lease cleanup failed')
+  })
   const warning = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
 
   try {
-    await expect(host.requestProfile(route, 'groups.send', { room_id: 'room-a', payload: { text: 'hello' } })).rejects.toBe(failure)
+    await expect(
+      host.requestProfile(route, 'groups.send', { room_id: 'room-a', payload: { text: 'hello' } })
+    ).rejects.toBe(failure)
     expect(failure.data).toEqual({ reason: 'disconnected' })
     expect(io.agent.mock.calls.filter(call => call[2] === 'groups.send')).toHaveLength(1)
     expect(io.release).toHaveBeenCalledOnce()
-  } finally { warning.mockRestore() }
+  } finally {
+    warning.mockRestore()
+  }
 })
 
 it('does not add a group Send admission marker to retry preparation failures', async () => {
   const failure = Object.assign(new Error('retry retain failed'), { code: 4203 })
   io.retain.mockRejectedValueOnce(failure)
-  await expect(host.requestProfile(route, 'groups.retry', { room_id: 'room-a', member_id: 'seat-a' })).rejects.toBe(failure)
+  await expect(host.requestProfile(route, 'groups.retry', { room_id: 'room-a', member_id: 'seat-a' })).rejects.toBe(
+    failure
+  )
   expect(failure).not.toHaveProperty('data')
 })
 
@@ -260,11 +346,19 @@ it('creates and binds a follow-profile Bot Chat using its exact default route wi
   expect(io.order).toEqual(['ready', 'defaults', 'session.create', 'session.managed_model_ticket', 'bind'])
   expect(io.globalModel).toHaveBeenCalledWith({ connectionId: route.connectionId, profile: route.targetProfile })
   expect(io.agent.mock.calls.find(call => call[2] === 'session.create')?.slice(0, 4)).toEqual([
-    route.connectionId, route.profile, 'session.create', { ...params, model_source: 'aino', model_id: 'catalog-a' }
+    route.connectionId,
+    route.profile,
+    'session.create',
+    { ...params, model_source: 'aino', model_id: 'catalog-a' }
   ])
-  expect(io.bind).toHaveBeenCalledWith(expect.objectContaining({
-    connection_id: route.connectionId, profile: route.profile, session_id: 'bot-runtime', model_id: 'catalog-a'
-  }))
+  expect(io.bind).toHaveBeenCalledWith(
+    expect.objectContaining({
+      connection_id: route.connectionId,
+      profile: route.profile,
+      session_id: 'bot-runtime',
+      model_id: 'catalog-a'
+    })
+  )
   expect(io.agent.mock.calls.some(call => call[2] === 'config.set')).toBe(false)
   expect(io.release).toHaveBeenCalledOnce()
 })
@@ -287,7 +381,10 @@ it('captures the ambient SDK owner before asynchronous defaults and binding', as
   const gatewayStore = await import('@/store/gateway')
   const ready = deferred<() => void>()
   io.retain.mockImplementation(async (connectionId, profile) => {
-    recordGatewayReadyCapability({ connectionId, profile }, { type: 'gateway.ready', payload: { managed_model_binding: 1 } } as never)
+    recordGatewayReadyCapability({ connectionId, profile }, {
+      type: 'gateway.ready',
+      payload: { managed_model_binding: 1 }
+    } as never)
 
     return ready.promise
   })
@@ -303,19 +400,30 @@ it('captures the ambient SDK owner before asynchronous defaults and binding', as
   expect(io.globalModel).toHaveBeenCalledWith({ connectionId: 'remote-a', profile: 'ambient-bot' })
   expect(io.bind).toHaveBeenCalledWith(expect.objectContaining({ connection_id: 'remote-a', profile: 'ambient-bot' }))
   expect(io.active.mock.calls.find(call => call[0] === 'session.create')?.[1]).toMatchObject({
-    profile: 'ambient-bot', follow_profile_config: true, model_source: 'aino', model_id: 'catalog-a'
+    profile: 'ambient-bot',
+    follow_profile_config: true,
+    model_source: 'aino',
+    model_id: 'catalog-a'
   })
 })
 
 it('closes and clears a failed managed draft on the original bot route', async () => {
   io.bind.mockResolvedValue({ ok: false, error: { code: 'insufficient_balance' } })
 
-  await expect(host.requestProfile(route, 'session.create', { follow_profile_config: true }))
-    .rejects.toMatchObject({ code: 'insufficient_balance' })
+  await expect(host.requestProfile(route, 'session.create', { follow_profile_config: true })).rejects.toMatchObject({
+    code: 'insufficient_balance'
+  })
   expect(io.agent.mock.calls.find(call => call[2] === 'session.close')?.slice(0, 4)).toEqual([
-    route.connectionId, route.profile, 'session.close', { session_id: 'bot-runtime' }
+    route.connectionId,
+    route.profile,
+    'session.close',
+    { session_id: 'bot-runtime' }
   ])
-  expect(io.clear).toHaveBeenCalledWith({ connection_id: route.connectionId, profile: route.profile, session_id: 'bot-runtime' })
+  expect(io.clear).toHaveBeenCalledWith({
+    connection_id: route.connectionId,
+    profile: route.profile,
+    session_id: 'bot-runtime'
+  })
   expect(io.release).toHaveBeenCalledOnce()
 })
 
@@ -350,7 +458,11 @@ it('refuses to bind a Bot Chat when the account changes while creation is in fli
 
   await expect(pending).rejects.toMatchObject({ code: 'platform_account_changed' })
   expect(io.bind).not.toHaveBeenCalled()
-  expect(io.clear).toHaveBeenCalledWith({ connection_id: route.connectionId, profile: route.profile, session_id: 'bot-runtime' })
+  expect(io.clear).toHaveBeenCalledWith({
+    connection_id: route.connectionId,
+    profile: route.profile,
+    session_id: 'bot-runtime'
+  })
   expect(io.release).toHaveBeenCalledOnce()
 })
 
@@ -375,9 +487,14 @@ it('inherits the cloned workspace saved Aino model without using the occupied co
   await host.requestProfile(source, 'profiles.create', { name: target.profile, clone_from: 'default' })
 
   expect(readPlatformDefault(account.account!.id, target, account.mode, owner.platform_origin)).toBe('catalog-a')
-  expect(await host.requestProfile(target, 'setup.runtime_check')).toMatchObject({ ok: true, provider: 'aino', model: 'catalog-a' })
-  expect(await host.requestProfile(target, 'session.create', { follow_profile_config: true }))
-    .toMatchObject({ info: { model_id: 'catalog-a', model_status: 'ready' } })
+  expect(await host.requestProfile(target, 'setup.runtime_check')).toMatchObject({
+    ok: true,
+    provider: 'aino',
+    model: 'catalog-a'
+  })
+  expect(await host.requestProfile(target, 'session.create', { follow_profile_config: true })).toMatchObject({
+    info: { model_id: 'catalog-a', model_status: 'ready' }
+  })
 })
 
 it('snapshots the source effective Aino default when only the API catalog supplies it', async () => {
@@ -417,26 +534,44 @@ it('does not replace the cloned third-party source with the Aino catalog default
   expect(readPlatformDefault(account.account!.id, route, account.mode, owner.platform_origin)).toBeNull()
 })
 
-it.each([
-  { clone_from: null },
-  { clone_from: 'default', model: 'explicit-model', provider: 'custom' }
-])('clears stale defaults without inheriting for fresh or explicitly configured bot: %j', async params => {
-  writePlatformDefault(account.account!.id, 'catalog-a', { connectionId: 'local', profile: 'default' }, account.mode, owner.platform_origin)
-  writePlatformDefault(account.account!.id, 'deleted-bot-model', route, account.mode, owner.platform_origin)
+it.each([{ clone_from: null }, { clone_from: 'default', model: 'explicit-model', provider: 'custom' }])(
+  'clears stale defaults without inheriting for fresh or explicitly configured bot: %j',
+  async params => {
+    writePlatformDefault(
+      account.account!.id,
+      'catalog-a',
+      { connectionId: 'local', profile: 'default' },
+      account.mode,
+      owner.platform_origin
+    )
+    writePlatformDefault(account.account!.id, 'deleted-bot-model', route, account.mode, owner.platform_origin)
 
-  await host.requestProfile(route, 'profiles.create', { name: route.profile, ...params })
+    await host.requestProfile(route, 'profiles.create', { name: route.profile, ...params })
 
-  expect(readPlatformDefault(account.account!.id, route, account.mode, owner.platform_origin)).toBeNull()
-})
+    expect(readPlatformDefault(account.account!.id, route, account.mode, owner.platform_origin)).toBeNull()
+  }
+)
 
 it('does not borrow clone preferences from another connection or copy a preference shadowed by a third-party model', async () => {
   window.hermesDesktop.platformModels.list = async () => [{ ...platformModel(), is_default: false }]
   await platformModelCatalog().refresh()
-  writePlatformDefault(account.account!.id, 'catalog-a', { connectionId: 'other-source', profile: 'default' }, account.mode, owner.platform_origin)
+  writePlatformDefault(
+    account.account!.id,
+    'catalog-a',
+    { connectionId: 'other-source', profile: 'default' },
+    account.mode,
+    owner.platform_origin
+  )
   await host.requestProfile(route, 'profiles.create', { name: route.profile, clone_from: 'default' })
   expect(readPlatformDefault(account.account!.id, route, account.mode, owner.platform_origin)).toBeNull()
 
-  writePlatformDefault(account.account!.id, 'catalog-a', { connectionId: 'local', profile: 'default' }, account.mode, owner.platform_origin)
+  writePlatformDefault(
+    account.account!.id,
+    'catalog-a',
+    { connectionId: 'local', profile: 'default' },
+    account.mode,
+    owner.platform_origin
+  )
   io.globalModel.mockResolvedValue({ model: 'third-party', provider: 'custom' })
   await host.requestProfile(route, 'profiles.create', { name: route.profile, clone_from: 'default' })
   expect(readPlatformDefault(account.account!.id, route, account.mode, owner.platform_origin)).toBeNull()
@@ -447,8 +582,9 @@ it('does not alter default preferences when profile creation fails or the accoun
   writePlatformDefault(account.account!.id, 'catalog-a', source, account.mode, owner.platform_origin)
   writePlatformDefault(account.account!.id, 'original-target', route, account.mode, owner.platform_origin)
   io.agent.mockRejectedValueOnce(new Error('profile already exists'))
-  await expect(host.requestProfile(source, 'profiles.create', { name: route.profile, clone_from: 'default' }))
-    .rejects.toThrow('profile already exists')
+  await expect(
+    host.requestProfile(source, 'profiles.create', { name: route.profile, clone_from: 'default' })
+  ).rejects.toThrow('profile already exists')
   expect(readPlatformDefault(account.account!.id, route, account.mode, owner.platform_origin)).toBe('original-target')
 
   const created = deferred<{ ok: boolean; name: string }>()
@@ -464,27 +600,39 @@ it('does not alter default preferences when profile creation fails or the accoun
 })
 
 it.each(['offline', 'reauth_required'] as const)(
-  'creates a managed Bot Chat with a retained device identity while management is %s', async phase => {
+  'creates a managed Bot Chat with a retained device identity while management is %s',
+  async phase => {
     const snapshot = { ...account, phase, model_identity_ready: true, model_identity_version: 1 }
     window.hermesDesktop.platformAccount.status = async () => snapshot
     await platformAccountActions(window.hermesDesktop.platformAccount).refresh()
 
-    expect(await host.requestProfile(route, 'setup.runtime_check', { profile: route.targetProfile }))
-      .toMatchObject({ ok: true, provider: 'aino', model: 'catalog-a' })
+    expect(await host.requestProfile(route, 'setup.runtime_check', { profile: route.targetProfile })).toMatchObject({
+      ok: true,
+      provider: 'aino',
+      model: 'catalog-a'
+    })
     const created = await host.requestProfile(route, 'session.create', { follow_profile_config: true })
 
     expect(created).toMatchObject({ info: { model_source: 'aino', model_id: 'catalog-a', model_status: 'ready' } })
-    expect(io.bind).toHaveBeenCalledWith(expect.objectContaining({ model_id: 'catalog-a', expected_account_revision: snapshot.revision }))
+    expect(io.bind).toHaveBeenCalledWith(
+      expect.objectContaining({ model_id: 'catalog-a', expected_account_revision: snapshot.revision })
+    )
     expect(io.agent.mock.calls.some(call => call[2] === 'setup.runtime_check')).toBe(false)
   }
 )
 
 it('never borrows an Aino model for an offline account without a retained device identity', async () => {
-  window.hermesDesktop.platformAccount.status = async () => ({ ...account, phase: 'offline', model_identity_ready: false })
+  window.hermesDesktop.platformAccount.status = async () => ({
+    ...account,
+    phase: 'offline',
+    model_identity_ready: false
+  })
   await platformAccountActions(window.hermesDesktop.platformAccount).refresh()
 
-  expect(await host.requestProfile(route, 'setup.runtime_check', { profile: route.targetProfile }))
-    .toEqual({ ok: false, error: 'No profile credential' })
+  expect(await host.requestProfile(route, 'setup.runtime_check', { profile: route.targetProfile })).toEqual({
+    ok: false,
+    error: 'No profile credential'
+  })
   expect(io.bind).not.toHaveBeenCalled()
 })
 
@@ -498,16 +646,20 @@ it('preserves the runtime failure for a configured third-party profile', async (
 })
 
 it.each(['setup.runtime_check', 'session.create'])(
-  'waits for the bot gateway capability before %s instead of requesting a profile API key', async method => {
+  'waits for the bot gateway capability before %s instead of requesting a profile API key',
+  async method => {
     vi.useFakeTimers()
     io.retain.mockResolvedValue(io.release)
     const params = { profile: route.targetProfile, follow_profile_config: true }
     let settled = false
-    const pending = host.requestProfile(route, method, params).finally(() => { settled = true })
+    const pending = host.requestProfile(route, method, params).finally(() => {
+      settled = true
+    })
     await vi.advanceTimersByTimeAsync(0)
 
     recordGatewayReadyCapability({ connectionId: 'other', profile: route.profile }, {
-      type: 'gateway.ready', payload: { managed_model_binding: 1 }
+      type: 'gateway.ready',
+      payload: { managed_model_binding: 1 }
     } as never)
     await vi.advanceTimersByTimeAsync(0)
     expect(settled).toBe(false)
@@ -516,9 +668,11 @@ it.each(['setup.runtime_check', 'session.create'])(
     recordGatewayReadyCapability(route, { type: 'gateway.ready', payload: { managed_model_binding: 1 } } as never)
     const result = await pending
 
-    expect(result).toMatchObject(method === 'session.create'
-      ? { info: { model_source: 'aino', model_id: 'catalog-a', model_status: 'ready' } }
-      : { ok: true, provider: 'aino', model: 'catalog-a' })
+    expect(result).toMatchObject(
+      method === 'session.create'
+        ? { info: { model_source: 'aino', model_id: 'catalog-a', model_status: 'ready' } }
+        : { ok: true, provider: 'aino', model: 'catalog-a' }
+    )
     expect(io.agent.mock.calls.some(call => call[2] === 'setup.runtime_check')).toBe(false)
     expect(io.release).toHaveBeenCalledOnce()
     // Let nanostores retire their short-lived subscriptions; the 20s handshake must already be gone.
@@ -548,8 +702,9 @@ it('refuses a Bot Chat on a gateway that explicitly lacks managed models', async
     return io.release
   })
 
-  await expect(host.requestProfile(route, 'session.create', { follow_profile_config: true }))
-    .rejects.toMatchObject({ code: 'unsupported_gateway' })
+  await expect(host.requestProfile(route, 'session.create', { follow_profile_config: true })).rejects.toMatchObject({
+    code: 'unsupported_gateway'
+  })
   expect(io.agent).not.toHaveBeenCalled()
   expect(io.bind).not.toHaveBeenCalled()
   expect(io.release).toHaveBeenCalledOnce()
@@ -560,7 +715,8 @@ it('does not create or bind under an account changed during the capability hands
   io.retain.mockResolvedValue(io.release)
 
   const pending = host.requestProfile(route, 'session.create', { follow_profile_config: true }).then(
-    result => ({ result }), error => ({ error })
+    result => ({ result }),
+    error => ({ error })
   )
 
   await vi.advanceTimersByTimeAsync(0)
@@ -579,7 +735,10 @@ it('does not create or bind under an account changed during the capability hands
 it('rejects an old account revision while waiting for the bot socket', async () => {
   const retained = deferred<() => void>()
   io.retain.mockImplementation(async (connectionId, profile) => {
-    recordGatewayReadyCapability({ connectionId, profile }, { type: 'gateway.ready', payload: { managed_model_binding: 1 } } as never)
+    recordGatewayReadyCapability({ connectionId, profile }, {
+      type: 'gateway.ready',
+      payload: { managed_model_binding: 1 }
+    } as never)
 
     return retained.promise
   })
@@ -596,8 +755,9 @@ it('rejects an old account revision while waiting for the bot socket', async () 
 it('rejects an old account revision refreshed during authority capture', async () => {
   window.hermesDesktop.platformAccount.status = async () => platformSnapshot('user-a', 2)
 
-  await expect(host.requestProfile(route, 'session.create', { follow_profile_config: true }))
-    .rejects.toMatchObject({ code: 'platform_account_changed' })
+  await expect(host.requestProfile(route, 'session.create', { follow_profile_config: true })).rejects.toMatchObject({
+    code: 'platform_account_changed'
+  })
   expect(io.agent.mock.calls.some(call => call[2] === 'session.create')).toBe(false)
   expect(io.release).toHaveBeenCalledOnce()
 })
@@ -613,8 +773,12 @@ it('keeps the active desktop alias distinct from the requested backend target', 
   await host.request('session.create', { profile: 'backend-target', follow_profile_config: true })
 
   expect(io.retain).toHaveBeenCalledWith('alias-source', 'desktop-alias', expect.anything())
-  expect(io.bind).toHaveBeenCalledWith(expect.objectContaining({ connection_id: 'alias-source', profile: 'desktop-alias' }))
-  expect(io.active.mock.calls.find(call => call[0] === 'session.create')?.[1]).toMatchObject({ profile: 'backend-target' })
+  expect(io.bind).toHaveBeenCalledWith(
+    expect.objectContaining({ connection_id: 'alias-source', profile: 'desktop-alias' })
+  )
+  expect(io.active.mock.calls.find(call => call[0] === 'session.create')?.[1]).toMatchObject({
+    profile: 'backend-target'
+  })
 })
 
 it('resolves a newly created bot through native routes before the cached roster knows it', async () => {
@@ -658,8 +822,9 @@ it('refuses a managed cross-profile create when native inventory cannot prove it
   gatewayStore.$gateway.set({ request: io.active } as never)
   window.hermesDesktop.getProfileRoutes = vi.fn(async () => [])
 
-  await expect(host.request('session.create', { profile: 'unresolved-bot', follow_profile_config: true }))
-    .rejects.toMatchObject({ code: 'unsupported_gateway' })
+  await expect(
+    host.request('session.create', { profile: 'unresolved-bot', follow_profile_config: true })
+  ).rejects.toMatchObject({ code: 'unsupported_gateway' })
   expect(io.agent).not.toHaveBeenCalled()
   expect(io.active).not.toHaveBeenCalled()
   expect(io.bind).not.toHaveBeenCalled()

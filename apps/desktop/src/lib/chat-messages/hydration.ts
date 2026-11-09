@@ -207,9 +207,7 @@ function isMachineNotice(displayKind: SessionMessage['display_kind']): boolean {
 
 function typedNoticeMetadata(message: SessionMessage): Pick<ChatMessage, 'modelSwitch' | 'failedTurnNotice'> {
   return {
-    ...(message.display_kind === 'model_switch'
-      ? { modelSwitch: modelSwitchMetadata(message.display_metadata) }
-      : {}),
+    ...(message.display_kind === 'model_switch' ? { modelSwitch: modelSwitchMetadata(message.display_metadata) } : {}),
     ...(message.display_kind === 'failed_turn' ? { failedTurnNotice: true as const } : {})
   }
 }

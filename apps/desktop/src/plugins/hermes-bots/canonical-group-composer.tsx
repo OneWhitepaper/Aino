@@ -16,7 +16,16 @@ import { fill, RoomReplyChip } from './group-room-ui'
 
 interface CanonicalGroupComposerProps extends Pick<
   CanonicalGroupSurfaceProps,
-  | 'onAbandonRetry' | 'sending' | 'methods' | 'stopping' | 'journalError' | 'notice' | 'sendHint' | 'reply' | 'onCancelReply' | 'onJournalReload'
+  | 'onAbandonRetry'
+  | 'sending'
+  | 'methods'
+  | 'stopping'
+  | 'journalError'
+  | 'notice'
+  | 'sendHint'
+  | 'reply'
+  | 'onCancelReply'
+  | 'onJournalReload'
   | 'binding'
   | 'state'
   | 'events'
@@ -41,8 +50,14 @@ interface CanonicalGroupComposerProps extends Pick<
   inputRef: RefObject<GroupMentionInputHandle | null>
 }
 
-function composerRecipients(draft: string, members: CanonicalRoomMember[], nameFor: (member: CanonicalRoomMember) => string,
-  labels: ReturnType<typeof useCanonicalGroupLabels>, pending: boolean, invalidPaste: boolean) {
+function composerRecipients(
+  draft: string,
+  members: CanonicalRoomMember[],
+  nameFor: (member: CanonicalRoomMember) => string,
+  labels: ReturnType<typeof useCanonicalGroupLabels>,
+  pending: boolean,
+  invalidPaste: boolean
+) {
   const identities = [
     ...members.map(member => ({ handle: member.handle, label: nameFor(member) })),
     { handle: 'everyone', label: labels.allMembers },
@@ -62,31 +77,35 @@ function composerRecipients(draft: string, members: CanonicalRoomMember[], nameF
     ? labels.pickerLabel
     : recipients.all
       ? `${labels.recipients} ${labels.allMembers}`
-      : `${labels.mentionedMembers} ${[...nameCounts].map(([label, count]) => count > 1 ? `${label} ×${count}` : label).join(', ')}`
+      : `${labels.mentionedMembers} ${[...nameCounts].map(([label, count]) => (count > 1 ? `${label} ×${count}` : label)).join(', ')}`
 
-  const mentionWarning = !pending && unresolved.length
-    ? invalidPaste ? labels.pastedMentionReset : labels.unresolvedMention
-    : ''
+  const mentionWarning =
+    !pending && unresolved.length ? (invalidPaste ? labels.pastedMentionReset : labels.unresolvedMention) : ''
 
   return { unresolved, recipientSummary, mentionWarning }
 }
 
-function canSubmitGroup({ restored, busy, stopping, uploading, state, pending, draft, attachments }: CanonicalGroupComposerProps, unresolved: ReturnType<typeof unresolvedGroupMentions>) {
-  return restored &&
+function canSubmitGroup(
+  { restored, busy, stopping, uploading, state, pending, draft, attachments }: CanonicalGroupComposerProps,
+  unresolved: ReturnType<typeof unresolvedGroupMentions>
+) {
+  return (
+    restored &&
     !busy &&
     !stopping &&
     !uploading &&
     !!state?.driver_status &&
     !state?.room.disbanded_at &&
     (pending || (!unresolved.length && (!!draft.trim() || attachments.length > 0)))
-
+  )
 }
 
 function CanonicalComposerNotices(props: CanonicalGroupComposerProps) {
   const { readError, error, state, onRefresh } = props
   const labels = useCanonicalGroupLabels()
 
-  return <>
+  return (
+    <>
       {(readError || error || (state && !state.driver_status)) && (
         <Alert className="mb-3" variant="warning">
           <Codicon aria-hidden className="mt-0.5 text-(--ui-yellow)" name="warning" />
@@ -102,9 +121,18 @@ function CanonicalComposerNotices(props: CanonicalGroupComposerProps) {
           </AlertDescription>
         </Alert>
       )}
-      <CanonicalGroupNotices error="" journalError={props.journalError ?? ''} labels={labels} notice={props.notice ?? ''}
-        onJournalReload={props.onJournalReload ?? onRefresh} onRefresh={onRefresh} readError="" unavailable={false} />
-  </>
+      <CanonicalGroupNotices
+        error=""
+        journalError={props.journalError ?? ''}
+        labels={labels}
+        notice={props.notice ?? ''}
+        onJournalReload={props.onJournalReload ?? onRefresh}
+        onRefresh={onRefresh}
+        readError=""
+        unavailable={false}
+      />
+    </>
+  )
 }
 
 function CanonicalComposerStatus(props: CanonicalGroupComposerProps) {
@@ -113,13 +141,26 @@ function CanonicalComposerStatus(props: CanonicalGroupComposerProps) {
   const members = state?.room.members ?? []
   const phases = canonicalMemberPhases(state?.driver_status)
 
-  return <>
-    <CanonicalComposerNotices {...props} />
-      <CanonicalGroupPendingActions binding={binding} busy={busy} methods={props.methods} onAction={onAction} onRefresh={onRefresh} state={state} visible={visible} />
+  return (
+    <>
+      <CanonicalComposerNotices {...props} />
+      <CanonicalGroupPendingActions
+        binding={binding}
+        busy={busy}
+        methods={props.methods}
+        onAction={onAction}
+        onRefresh={onRefresh}
+        state={state}
+        visible={visible}
+      />
       <CanonicalGroupWorkingLine
         binding={binding}
         busy={!!props.stopping}
-        driver={state?.driver_status ? { ...state.driver_status, working: state.driver_status.working || props.sending || props.stopping } : undefined}
+        driver={
+          state?.driver_status
+            ? { ...state.driver_status, working: state.driver_status.working || props.sending || props.stopping }
+            : undefined
+        }
         events={events}
         labels={labels}
         members={members}
@@ -131,17 +172,32 @@ function CanonicalComposerStatus(props: CanonicalGroupComposerProps) {
           {labels.restoredPendingSend}
         </p>
       )}
-      {props.pending && props.onAbandonRetry && <Button
-        disabled={busy || props.sending || props.stopping}
-        onClick={props.onAbandonRetry}
-        size="sm"
-        type="button"
-        variant="ghost"
-      >{labels.abandonRetry}</Button>}
-      {props.sendHint && <p aria-live="polite" className="aino-group-pending-send">{props.sendHint}</p>}
-      {props.reply && <RoomReplyChip cancelLabel={labels.cancelReply} label={fill(labels.replyingTo, { name: props.reply.name })}
-        onCancel={() => props.onCancelReply?.()} quote={props.reply.quote} />}
-  </>
+      {props.pending && props.onAbandonRetry && (
+        <Button
+          disabled={busy || props.sending || props.stopping}
+          onClick={props.onAbandonRetry}
+          size="sm"
+          type="button"
+          variant="ghost"
+        >
+          {labels.abandonRetry}
+        </Button>
+      )}
+      {props.sendHint && (
+        <p aria-live="polite" className="aino-group-pending-send">
+          {props.sendHint}
+        </p>
+      )}
+      {props.reply && (
+        <RoomReplyChip
+          cancelLabel={labels.cancelReply}
+          label={fill(labels.replyingTo, { name: props.reply.name })}
+          onCancel={() => props.onCancelReply?.()}
+          quote={props.reply.quote}
+        />
+      )}
+    </>
+  )
 }
 
 export function CanonicalGroupComposer(props: CanonicalGroupComposerProps) {
@@ -175,7 +231,14 @@ export function CanonicalGroupComposer(props: CanonicalGroupComposerProps) {
   const [invalidPaste, setInvalidPaste] = useState(false)
   const members = state?.room.members ?? []
 
-  const { unresolved, recipientSummary, mentionWarning } = composerRecipients(draft, members, nameFor, labels, pending, invalidPaste)
+  const { unresolved, recipientSummary, mentionWarning } = composerRecipients(
+    draft,
+    members,
+    nameFor,
+    labels,
+    pending,
+    invalidPaste
+  )
 
   const locked = !restored || busy || pending || !!state?.room.disbanded_at
 
@@ -191,7 +254,8 @@ export function CanonicalGroupComposer(props: CanonicalGroupComposerProps) {
     const files = [...(data?.files ?? [])]
 
     if (!files.length) {
-      return }
+      return
+    }
 
     event.preventDefault()
 
@@ -266,16 +330,16 @@ export function CanonicalGroupComposer(props: CanonicalGroupComposerProps) {
         <div className="aino-group-composer-toolbar">
           <div className="aino-group-composer-tools">
             {offersGroupMethod(props.methods, 'groups.attachment.upload') && (
-            <Button
-              aria-label={labels.attachFiles}
-              disabled={locked || uploading || !offersGroupMethod(props.methods, 'groups.attachment.upload')}
-              onClick={() => uploader.current?.pick()}
-              size="icon-sm"
-              type="button"
-              variant="ghost"
-            >
-              <Codicon name="attach" />
-            </Button>
+              <Button
+                aria-label={labels.attachFiles}
+                disabled={locked || uploading || !offersGroupMethod(props.methods, 'groups.attachment.upload')}
+                onClick={() => uploader.current?.pick()}
+                size="icon-sm"
+                type="button"
+                variant="ghost"
+              >
+                <Codicon name="attach" />
+              </Button>
             )}
             <Button
               aria-label={labels.reply}

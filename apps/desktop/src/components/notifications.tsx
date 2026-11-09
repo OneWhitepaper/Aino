@@ -516,5 +516,10 @@ function notificationSelectionState(selection: 'list' | AppNotification | null, 
 
   const panel = selection && selection !== 'list' ? (selectedItem ?? 'list') : selection
 
-  return { selectedItem, panel, panelKey: panel === 'list' ? 'list' : selectedItem?.id, detailId: selectedItem?.id ?? null }
+  return {
+    selectedItem,
+    panel,
+    panelKey: panel === 'list' ? 'list' : selectedItem?.id,
+    detailId: selectedItem?.id ?? null
+  }
 }

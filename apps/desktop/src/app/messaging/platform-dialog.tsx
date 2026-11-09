@@ -59,9 +59,11 @@ export function PlatformDialog({ platform, onClose, actions, children, busy }: P
             </span>
             <span>
               <StatusDot tone={platformStatusTone(platform)} />
-              {platform.relay_exclusive ? t.messaging.relayLink.title : platform.state
-                ? t.messaging.states[platform.state] || platform.state.replace(/_/g, ' ')
-                : t.messaging.unknown}
+              {platform.relay_exclusive
+                ? t.messaging.relayLink.title
+                : platform.state
+                  ? t.messaging.states[platform.state] || platform.state.replace(/_/g, ' ')
+                  : t.messaging.unknown}
             </span>
           </div>
           <div className="messaging-dialog-scroll">{children}</div>

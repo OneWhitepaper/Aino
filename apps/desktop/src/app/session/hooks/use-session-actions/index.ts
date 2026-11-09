@@ -238,7 +238,13 @@ export function useSessionActions({
   syncSessionStateToView,
   updateSessionState
 }: SessionActionsOptions) {
-  useCloudHistory({ activeSessionIdRef, sessionStateByRuntimeIdRef, selectedStoredSessionIdRef, updateSessionState, syncSessionStateToView })
+  useCloudHistory({
+    activeSessionIdRef,
+    sessionStateByRuntimeIdRef,
+    selectedStoredSessionIdRef,
+    updateSessionState,
+    syncSessionStateToView
+  })
   const { t } = useI18n()
   const copy = t.desktop
   const resumeRequestRef = useRef(0)
@@ -2784,9 +2790,7 @@ export function useSessionActions({
 
       // Listed profile-less row + multiple profiles + unresolved owner:
       // never fall through to the primary backend (fake already_absent).
-      if (
-        sessionRemovalOwnerUnavailable(Boolean(listed), stampedProfile, profile)
-      ) {
+      if (sessionRemovalOwnerUnavailable(Boolean(listed), stampedProfile, profile)) {
         const error = new Error(copy.sessionOwnershipUnavailable)
 
         if (options?.throwOnError) {
@@ -2848,7 +2852,10 @@ export function useSessionActions({
 
       try {
         if (closingRuntimeId) {
-          await closeRuntimeBeforeSessionDeletion(closingRuntimeId, removedOwner, { requestGateway, updateSessionState })
+          await closeRuntimeBeforeSessionDeletion(closingRuntimeId, removedOwner, {
+            requestGateway,
+            updateSessionState
+          })
         }
 
         const result = await deleteSession(storedSessionId, removedOwner)
@@ -2970,9 +2977,7 @@ export function useSessionActions({
       const stampedProfile = archived?.profile?.trim()
       const profile = stampedProfile || (await resolveSessionProfile(storedSessionId))
 
-      if (
-        sessionRemovalOwnerUnavailable(Boolean(listed), stampedProfile, profile)
-      ) {
+      if (sessionRemovalOwnerUnavailable(Boolean(listed), stampedProfile, profile)) {
         notifyError(new Error(copy.sessionOwnershipUnavailable), copy.archiveFailed)
 
         return

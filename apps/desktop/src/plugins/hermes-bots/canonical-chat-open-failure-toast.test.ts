@@ -82,7 +82,7 @@ describe('notifyBotOpenFailure', () => {
       const { notifyBotOpenFailure } = await load()
       notifyBotOpenFailure(Object.assign(new Error('账户需要检查'), { code }), BOT, 'open')
       const toast = lastToast()
-    expect(toast.action?.label).toBe('My Account')
+      expect(toast.action?.label).toBe('My Account')
       await toast.action?.onClick()
       expect(hostMock.navigate).toHaveBeenCalledWith('/settings?tab=account')
       expect(hostMock.revealPane).not.toHaveBeenCalled()

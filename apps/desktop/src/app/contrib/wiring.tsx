@@ -10,15 +10,7 @@
 
 import { useStore } from '@nanostores/react'
 import { useQueryClient } from '@tanstack/react-query'
-import {
-  lazy,
-  type ReactNode,
-  Suspense,
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef
-} from 'react'
+import { lazy, type ReactNode, Suspense, useCallback, useEffect, useMemo, useRef } from 'react'
 import { useLocation, useNavigate } from 'react-router'
 
 import { useAccountActions } from '@/app/account/account-context'
@@ -276,9 +268,7 @@ function useRecoveryRequestToasts(): void {
 
     if (backendRestartRequest > 0) {
       if ($connection.get()?.mode === 'remote') {
-        void reconnectGateway().catch(err =>
-          notifyError(err, translateNow('notifications.errors.restartHermesFailed'))
-        )
+        void reconnectGateway().catch(err => notifyError(err, translateNow('notifications.errors.restartHermesFailed')))
 
         return
       }
@@ -418,12 +408,7 @@ export function ContribWiring({ children }: { children: ReactNode }) {
         selectedStoredSessionIdRef,
         sessionStateByRuntimeIdRef
       }),
-    [
-      ambientRequestGateway,
-      runtimeIdByStoredSessionIdRef,
-      selectedStoredSessionIdRef,
-      sessionStateByRuntimeIdRef
-    ]
+    [ambientRequestGateway, runtimeIdByStoredSessionIdRef, selectedStoredSessionIdRef, sessionStateByRuntimeIdRef]
   )
 
   const requestGateway = useCallback<AmbientGatewayRequest>(
@@ -433,13 +418,8 @@ export function ContribWiring({ children }: { children: ReactNode }) {
     [dispatchSessionRpc]
   )
 
-  const {
-    loadMoreMessagingForPlatform,
-    loadMoreSessions,
-    refreshCronJobs,
-    refreshMessagingSessions,
-    refreshSessions
-  } = useSessionListActions({ profileScope })
+  const { loadMoreMessagingForPlatform, loadMoreSessions, refreshCronJobs, refreshMessagingSessions, refreshSessions } =
+    useSessionListActions({ profileScope })
 
   const { changeSessionCwd, refreshProjectBranch } = useCwdActions({
     activeSessionIdRef,
@@ -816,8 +796,7 @@ export function ContribWiring({ children }: { children: ReactNode }) {
 
   const resumeLastSession = configRecord.isPending
     ? undefined
-    : (configRecord.data?.display as { resume_last_session?: unknown } | undefined)?.resume_last_session !==
-      false
+    : (configRecord.data?.display as { resume_last_session?: unknown } | undefined)?.resume_last_session !== false
 
   const initialNavigationReady = useDesktopIntegrations({
     activeProfile: normalizeProfileKey(activeGatewayProfile),
@@ -1001,10 +980,7 @@ export function ContribWiring({ children }: { children: ReactNode }) {
   }, [])
 
   // The tab-strip "+" and ⌘T share one action (see `openNewSessionTab`).
-  const openNewSessionTab = useCallback(
-    () => openNewSessionTabAction(openNewSessionTile),
-    [openNewSessionTile]
-  )
+  const openNewSessionTab = useCallback(() => openNewSessionTabAction(openNewSessionTile), [openNewSessionTile])
 
   // Archive the selected session (rebindable `session.archive` hotkey).
   const archiveSelectedSession = useCallback(() => {
@@ -1088,8 +1064,7 @@ export function ContribWiring({ children }: { children: ReactNode }) {
       const listed = $sessions.get().find(session => sessionMatchesStoredId(session, sessionId))
 
       const isArchived =
-        listed?.archived === true ||
-        $archivedSessions.get().some(session => sessionMatchesStoredId(session, sessionId))
+        listed?.archived === true || $archivedSessions.get().some(session => sessionMatchesStoredId(session, sessionId))
 
       void (isArchived ? unarchiveSession(sessionId) : archiveSession(sessionId))
     },
@@ -1185,9 +1160,7 @@ export function ContribWiring({ children }: { children: ReactNode }) {
   // The voice cap changes only on config load; the gateway instance + all
   // chat reactivity are subscribed inside ChatRoutesSurface / ChatView.
   const chatRoutesNode = useMemo(
-    () => (
-      <ChatRoutesSurface actions={actions} maxVoiceRecordingSeconds={voiceMaxRecordingSeconds} />
-    ),
+    () => <ChatRoutesSurface actions={actions} maxVoiceRecordingSeconds={voiceMaxRecordingSeconds} />,
     [actions, voiceMaxRecordingSeconds]
   )
 
@@ -1244,11 +1217,7 @@ export function ContribWiring({ children }: { children: ReactNode }) {
     <ContribWiringContext.Provider value={api}>
       <AccountGate>
         {!isAuxiliaryWindow() && (
-          <FirstRunOnboarding
-            gatewayOpen={gatewayState === 'open'}
-            open={adoptSessionRoute}
-            request={requestGateway}
-          />
+          <FirstRunOnboarding gatewayOpen={gatewayState === 'open'} open={adoptSessionRoute} request={requestGateway} />
         )}
         <WiringTitlebar>{children}</WiringTitlebar>
 
@@ -1275,11 +1244,7 @@ export function ContribWiring({ children }: { children: ReactNode }) {
             requestGateway={requestGateway}
           />
         )}
-        <ModelPickerOverlay
-          gateway={gateway || undefined}
-          onSelect={selectModel}
-          requestGateway={requestGateway}
-        />
+        <ModelPickerOverlay gateway={gateway || undefined} onSelect={selectModel} requestGateway={requestGateway} />
         <SessionPickerOverlay onResume={sessionId => openSessionFromPicker(sessionId, navigate)} />
         <ModelVisibilityOverlay
           gateway={gateway || undefined}

@@ -7,7 +7,12 @@ import { markOnboardingDecided } from '@/store/onboarding-presence'
 import { $routeRequest } from '@/store/recovery-requests'
 import { $modelPickerOpen, setModelPickerOpen } from '@/store/session'
 
-import { $desktopOnboarding, type DesktopOnboardingState, type OnboardingContext, refreshOnboarding } from './onboarding'
+import {
+  $desktopOnboarding,
+  type DesktopOnboardingState,
+  type OnboardingContext,
+  refreshOnboarding
+} from './onboarding'
 
 markOnboardingDecided()
 

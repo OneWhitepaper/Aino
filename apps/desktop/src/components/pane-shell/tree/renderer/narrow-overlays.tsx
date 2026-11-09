@@ -33,7 +33,7 @@ import { $narrowOverlayPaneIds } from '../../narrow-overlay-state'
 import { NO_PANE_GROUP, SidebarBrandContext } from '../../pane-visibility'
 import { $workspaceMode, $workspaceOwnerKey } from '../../workspace-scope'
 import { allPaneIds, findGroup, findGroupOfPane, type GroupNode, type LayoutNode } from '../model'
-import { $hiddenTreePanes, $layoutTree, $narrowViewport, activateTreePane, closeTabPane} from '../store'
+import { $hiddenTreePanes, $layoutTree, $narrowViewport, activateTreePane, closeTabPane } from '../store'
 import { clearTabSelection } from '../tab-selection'
 import { isToolPanelGroup } from '../tool-panel-policy'
 import { workspaceShownPaneIds } from '../workspace-presentation'
@@ -384,7 +384,11 @@ function NarrowOverlayTabs({
   setReveal
 }: NarrowOverlayTabsProps) {
   const { locale, t } = useI18n()
-  const tabKeyboardProps = usePaneTabKeyboard(zonePanes.map(pane => pane.id), revealed.id, tabsRef)
+  const tabKeyboardProps = usePaneTabKeyboard(
+    zonePanes.map(pane => pane.id),
+    revealed.id,
+    tabsRef
+  )
 
   return (
     <>
@@ -452,7 +456,9 @@ function NarrowOverlayTabs({
                 data-narrow-overlay-tab={pane.id}
                 key={pane.id}
                 onActivate={() => {
-                  if (revealedGroup) {activateTreePane(revealedGroup.id, pane.id)}
+                  if (revealedGroup) {
+                    activateTreePane(revealedGroup.id, pane.id)
+                  }
                   setReveal(current => ({ id: pane.id, pinned: current?.pinned ?? false }))
                 }}
                 onClose={

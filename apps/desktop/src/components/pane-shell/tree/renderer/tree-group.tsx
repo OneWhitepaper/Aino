@@ -896,7 +896,13 @@ export function TreeGroup({
 
       {/* Keep the header INSIDE its zone: titlebar drops use the same panel
           bounds, strip refs, focus ownership and split geometry as the body. */}
-      {groupTabHeaderVisible({ headerVisible, hideSessionTabStrip, panelTopEdge, verticalCollapse, singleSessionHeader }) && (
+      {groupTabHeaderVisible({
+        headerVisible,
+        hideSessionTabStrip,
+        panelTopEdge,
+        verticalCollapse,
+        singleSessionHeader
+      }) && (
         <div
           className="relative flex min-w-0 shrink-0 bg-(--ui-sidebar-surface-background)"
           data-panel-header=""

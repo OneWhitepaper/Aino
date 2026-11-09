@@ -5,16 +5,16 @@ type ThreadCopy = Translations['assistant']['thread']
 // The error card's per-code title and body (lib/error-surface-copy.ts), keyed by error_surface.code.
 export const frErrorCodes: Partial<ThreadCopy['errorCodes']> = {
   managed_billing_unavailable: {
-    title: "État de l’abonnement indisponible",
-    body: "Vérifiez votre abonnement et sa date d’expiration dans Mon compte. Une fois l’accès rétabli, renvoyez le message ou choisissez un modèle disponible."
+    title: 'État de l’abonnement indisponible',
+    body: 'Vérifiez votre abonnement et sa date d’expiration dans Mon compte. Une fois l’accès rétabli, renvoyez le message ou choisissez un modèle disponible.'
   },
   managed_subscription_expired: {
-    title: "Votre abonnement a expiré",
-    body: "Renouvelez l’abonnement dans Mon compte, puis renvoyez le message, ou choisissez un modèle disponible."
+    title: 'Votre abonnement a expiré',
+    body: 'Renouvelez l’abonnement dans Mon compte, puis renvoyez le message, ou choisissez un modèle disponible.'
   },
   managed_model_access_denied: {
-    title: "Ce modèle n’est pas accessible à votre compte",
-    body: "Votre abonnement ou votre compte actuel ne permet pas ce modèle. Consultez Mon compte ou choisissez un modèle disponible."
+    title: 'Ce modèle n’est pas accessible à votre compte',
+    body: 'Votre abonnement ou votre compte actuel ne permet pas ce modèle. Consultez Mon compte ou choisissez un modèle disponible.'
   },
   cron_session_read_only: {
     title: 'Cette conversation appartient à une tâche planifiée',

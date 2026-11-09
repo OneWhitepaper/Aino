@@ -22,23 +22,19 @@ describe('canonical delivery recipients', () => {
     expect(canonicalMentionRecipients(text, members)).toEqual({ handles, all: false })
   })
 
-  it.each([
-    'Hello',
-    '@设计师 help',
-    '@Writer help',
-    '@alpha-extra',
-    '@alpha.',
-    '@writerone',
-    '@unknown'
-  ])('uses all members when no exact handle matches: %s', text => {
-    expect(canonicalMentionRecipients(text, members)).toEqual({
-      handles: ['Alpha', 'beta', 'writer:one'],
-      all: true
-    })
-  })
+  it.each(['Hello', '@设计师 help', '@Writer help', '@alpha-extra', '@alpha.', '@writerone', '@unknown'])(
+    'uses all members when no exact handle matches: %s',
+    text => {
+      expect(canonicalMentionRecipients(text, members)).toEqual({
+        handles: ['Alpha', 'beta', 'writer:one'],
+        all: true
+      })
+    }
+  )
 
   it.each(['@alpha @EVERYONE', '@beta email@ALL', '`@everyone` @writer:one'])(
-    'lets an exact broadcast override individual recipients: %s', text => {
+    'lets an exact broadcast override individual recipients: %s',
+    text => {
       expect(canonicalMentionRecipients(text, members)).toEqual({
         handles: ['Alpha', 'beta', 'writer:one'],
         all: true

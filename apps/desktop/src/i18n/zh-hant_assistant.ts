@@ -82,16 +82,16 @@ export const zhHantAssistant = {
       },
       errorCodes: {
         managed_billing_unavailable: {
-          title: "方案狀態無法使用",
-          body: "請到「我的帳戶」查看訂閱和到期情況。恢復後重新傳送，或選擇其他可用模型。"
+          title: '方案狀態無法使用',
+          body: '請到「我的帳戶」查看訂閱和到期情況。恢復後重新傳送，或選擇其他可用模型。'
         },
         managed_subscription_expired: {
-          title: "方案已到期",
-          body: "請到「我的帳戶」續訂，恢復後重新傳送，或選擇其他可用模型。"
+          title: '方案已到期',
+          body: '請到「我的帳戶」續訂，恢復後重新傳送，或選擇其他可用模型。'
         },
         managed_model_access_denied: {
-          title: "目前模型暫無使用權限",
-          body: "目前方案或帳戶無法使用此模型。請到「我的帳戶」查看，或選擇其他可用模型。"
+          title: '目前模型暫無使用權限',
+          body: '目前方案或帳戶無法使用此模型。請到「我的帳戶」查看，或選擇其他可用模型。'
         },
         auth: {
           title: provider => `${provider} 拒絕了你的 API 金鑰`,
@@ -170,8 +170,7 @@ export const zhHantAssistant = {
         },
         truncated: {
           title: '回覆被截斷',
-          body: (_provider, model) =>
-            `${model || '模型'}的回覆在完成前中斷了。按「繼續」即可從中斷處接續。`
+          body: (_provider, model) => `${model || '模型'}的回覆在完成前中斷了。按「繼續」即可從中斷處接續。`
         },
         invalid_response: {
           title: '無法讀取回覆',
@@ -544,18 +543,17 @@ export const zhHantAssistant = {
           count: count => `${count} 個指令`,
           past: '已執行',
           present: '正在執行'
-        }
-      ,
-"search":{count: (count: number) => count + " 次查詢", past: "已搜尋", present: "正在搜尋"},
+        },
+        search: { count: (count: number) => count + ' 次查詢', past: '已搜尋', present: '正在搜尋' },
 
-"read":{count: (count: number) => count + " 個網頁", past: "已讀取", present: "正在讀取"},
+        read: { count: (count: number) => count + ' 個網頁', past: '已讀取', present: '正在讀取' },
 
-"browse":{count: (count: number) => count + " 個網頁", past: "已開啟", present: "正在開啟"},
+        browse: { count: (count: number) => count + ' 個網頁', past: '已開啟', present: '正在開啟' },
 
-"interact":{count: (count: number) => count + " 次瀏覽器操作", past: "已執行", present: "正在執行"},
+        interact: { count: (count: number) => count + ' 次瀏覽器操作', past: '已執行', present: '正在執行' },
 
-"analyze":{count: (count: number) => count + " 張圖片", past: "已分析", present: "正在分析"},
-}
+        analyze: { count: (count: number) => count + ' 張圖片', past: '已分析', present: '正在分析' }
+      }
     }
   }
 } satisfies Pick<TranslationOverrides, 'assistant'>

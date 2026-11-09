@@ -22,7 +22,10 @@ export const $projectScope = persistentAtom<string>(PROJECT_SCOPE_KEY, ALL_PROJE
 })
 
 export let projectNavigationGeneration = 0
-export function advanceProjectNavigation(): void { projectNavigationGeneration += 1 }
+
+export function advanceProjectNavigation(): void {
+  projectNavigationGeneration += 1
+}
 
 export function exitProjectScope(): void {
   advanceProjectNavigation()

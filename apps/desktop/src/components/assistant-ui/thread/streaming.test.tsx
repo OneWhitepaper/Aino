@@ -602,7 +602,8 @@ describe('assistant-ui streaming renderer', () => {
   })
 
   it.each(['managed_billing_unavailable', 'managed_subscription_expired', 'managed_model_access_denied'])(
-    'offers account and available model selection without replay for %s', code => {
+    'offers account and available model selection without replay for %s',
+    code => {
       const previousLocale = getRuntimeI18nLocale()
 
       const mounted = render(
@@ -669,9 +670,14 @@ describe('assistant-ui streaming renderer', () => {
       expect(logout).toHaveBeenCalledWith({ userId: 'user-a', mode: 'development', revision: 1 })
       await waitFor(() => {
         if (fails) {
-          expect($notifications.get()).toEqual(expect.arrayContaining([
-            expect.objectContaining({ kind: 'error', message: 'The account service is offline. Check your connection and retry.' })
-          ]))
+          expect($notifications.get()).toEqual(
+            expect.arrayContaining([
+              expect.objectContaining({
+                kind: 'error',
+                message: 'The account service is offline. Check your connection and retry.'
+              })
+            ])
+          )
           expect(actions.state.get().authenticated).toBe(true)
         } else {
           expect(actions.state.get()).toMatchObject({ phase: 'signed_out', authenticated: false })

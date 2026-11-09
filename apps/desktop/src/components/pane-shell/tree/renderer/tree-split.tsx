@@ -29,7 +29,8 @@ import {
   persistTree,
   presetSplitWeights,
   setTreeGroupMinimized,
-  setTreeSplitWeights} from '../store'
+  setTreeSplitWeights
+} from '../store'
 import { $maximizedToolGroup, containsMaximizedToolGroup } from '../tool-panel-view'
 import { workspaceShownPaneIds } from '../workspace-presentation'
 

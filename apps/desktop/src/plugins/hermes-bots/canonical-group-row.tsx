@@ -70,29 +70,35 @@ export function CanonicalGroupRow({ active, onOpen, room }: CanonicalGroupRowPro
             <span className="aino-roster-group-copy">
               <span className="aino-group-roster-name">{room.name}</span>
               <span className="aino-roster-group-preview">{memberCount}</span>
-                {state ? (
-                  <span className="inline-flex shrink-0 items-center self-center text-[0.6875rem]" data-room-state={state}>
-                    {state === 'working' ? (
-                      <span aria-hidden="true" className="text-(--ui-accent)">
-                        <GlyphSpinner />
-                      </span>
-                    ) : (
-                      <Codicon
-                        className={state === 'failed' ? 'text-destructive' : 'text-(--ui-accent)'}
-                        name={state === 'failed' ? 'error' : 'bell-dot'}
-                      />
-                    )}
-                    <span className="sr-only">
-                      {state === 'working' ? labels.rowWorking : state === 'failed' ? labels.rowFailed : labels.rowNeedsYou}
+              {state ? (
+                <span
+                  className="inline-flex shrink-0 items-center self-center text-[0.6875rem]"
+                  data-room-state={state}
+                >
+                  {state === 'working' ? (
+                    <span aria-hidden="true" className="text-(--ui-accent)">
+                      <GlyphSpinner />
                     </span>
+                  ) : (
+                    <Codicon
+                      className={state === 'failed' ? 'text-destructive' : 'text-(--ui-accent)'}
+                      name={state === 'failed' ? 'error' : 'bell-dot'}
+                    />
+                  )}
+                  <span className="sr-only">
+                    {state === 'working'
+                      ? labels.rowWorking
+                      : state === 'failed'
+                        ? labels.rowFailed
+                        : labels.rowNeedsYou}
                   </span>
-                ) : null}
-                {room.updatedAt ? (
-                  <span className="shrink-0 text-[0.6875rem] text-(--ui-text-quaternary)">
-                    {rowAge(room.updatedAt, t.sidebar.row)}
-                  </span>
-                ) : null}
-
+                </span>
+              ) : null}
+              {room.updatedAt ? (
+                <span className="shrink-0 text-[0.6875rem] text-(--ui-text-quaternary)">
+                  {rowAge(room.updatedAt, t.sidebar.row)}
+                </span>
+              ) : null}
             </span>
           </Button>
         </ContextMenuTrigger>

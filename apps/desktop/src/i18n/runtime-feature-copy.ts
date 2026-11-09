@@ -137,7 +137,8 @@ export const runtimeFeatureCopy = {
       account: {
         ...accountLogin.fr,
         phoneAutoRegister: 'Les nouveaux numéros sont inscrits après vérification.',
-        browserSessionOnly: 'La connexion est conservée uniquement jusqu’à la fermeture ou au rechargement de cet onglet.',
+        browserSessionOnly:
+          'La connexion est conservée uniquement jusqu’à la fermeture ou au rechargement de cet onglet.',
         platformError: (code, retryAfter) =>
           code === 'captcha_browser_unavailable'
             ? 'Ce site exige une vérification dans l’application de bureau Aino. Ouvrez-la pour vous connecter.'
@@ -196,7 +197,10 @@ export const runtimeFeatureCopy = {
       }
     },
     settings: {
-      account: { ...accountLogin.ja, browserSessionOnly: 'このブラウザーのログインは、このタブを閉じるか再読み込みするまで有効です。' },
+      account: {
+        ...accountLogin.ja,
+        browserSessionOnly: 'このブラウザーのログインは、このタブを閉じるか再読み込みするまで有効です。'
+      },
       model: {
         imageGeneration: {
           qualityTitle: '画像品質',
@@ -372,7 +376,10 @@ export const runtimeFeatureCopy = {
       }
     },
     settings: {
-      account: { ...accountLogin['zh-hant'], browserSessionOnly: '此瀏覽器僅在目前分頁內保持登入，關閉或重新整理後需要重新登入。' },
+      account: {
+        ...accountLogin['zh-hant'],
+        browserSessionOnly: '此瀏覽器僅在目前分頁內保持登入，關閉或重新整理後需要重新登入。'
+      },
       model: {
         imageGeneration: {
           qualityTitle: '出圖品質',
