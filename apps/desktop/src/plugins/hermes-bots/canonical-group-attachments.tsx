@@ -60,12 +60,16 @@ export function CanonicalGroupAttachments({
   disabled,
   readOnly = false,
   trigger = 'button',
+  uploads = true,
+  downloads = true,
   ref
 }: {
   binding: CanonicalGroupBinding
   attachments: Attachment[]
   disabled: boolean
   trigger?: 'button' | 'none'
+  uploads?: boolean
+  downloads?: boolean
   // C21: the form holds Send while a selected file's manifest is not committed yet.
   onUploadingChange?: (uploading: boolean) => void
   // Paste and drop in the composer reuse this upload path.
@@ -186,7 +190,7 @@ export function CanonicalGroupAttachments({
 
   return (
     <div className="aino-group-attachments">
-      {!readOnly && (
+      {!readOnly && uploads && (
         <>
           <input
             hidden
@@ -220,7 +224,7 @@ export function CanonicalGroupAttachments({
           {readOnly && (
             <Button
               aria-label={`${labels.download} ${a.name}`}
-              disabled={disabled || busy || !a.attachment_id || !a.event_id}
+              disabled={disabled || busy || !downloads || !a.attachment_id || !a.event_id}
               onClick={() => void download(a)}
               size="icon-xs"
               type="button"

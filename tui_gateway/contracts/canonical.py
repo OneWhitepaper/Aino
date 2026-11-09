@@ -560,6 +560,14 @@ class GroupsModelRespondResult(Result):
 canonical_method('groups.model_respond', params=GroupsModelRespondParams, result=GroupsModelRespondResult,
                  doc='Answer the current room member model request with public model identities only.')
 
+# The standalone wire gives an explicit protocol refusal for these native controls; it never
+# forwards the request through a short-lived owner connection or advertises the capability.
+_NATIVE_GROUP_MODEL_REFUSAL = "Requires the persistent hermes-gateway-v1 controller; standalone returns native_controller_required."
+method('groups.prepare_model', params=GroupsPrepareModelParams, result=GroupsPrepareModelResult,
+       doc=_NATIVE_GROUP_MODEL_REFUSAL)
+method('groups.model_respond', params=GroupsModelRespondParams, result=GroupsModelRespondResult,
+       doc=_NATIVE_GROUP_MODEL_REFUSAL)
+
 
 class GroupsAttachmentUploadParams(RoomParams):
     upload_id: str

@@ -600,41 +600,23 @@ export function DesktopInstallOverlay({ enabled = true }: DesktopInstallOverlayP
     )
   }
 
-  const stages = state.manifest?.stages || []
-  const currentStage = stages.find(s => state.stages[s.name]?.state === 'running')?.name
-
-  const completedCount = stages.filter(
-    s => state.stages[s.name]?.state === 'succeeded' || state.stages[s.name]?.state === 'skipped'
-  ).length
-
-  const totalCount = stages.length
-  const failed = Boolean(state.error)
-  // Main writes a plain lead sentence and keeps the raw installer error after
-  // "Details:" (electron/bootstrap-failure-copy.ts); show them as two lines.
-  const [failureLead, failureDetail] = splitFailureDetails(state.error)
-  // Count the running stage as half-done so the bar advances *during* a long
-  // stage instead of sitting frozen at the last completed step while its logs
-  // stream (e.g. "0 of 2" pinned at 0% for the whole first stage).
-  const progressUnits = completedCount + (!failed && currentStage ? 0.5 : 0)
-  const progressPct = totalCount > 0 ? Math.round((progressUnits / totalCount) * 100) : 0
-  const currentStartedAt = currentStage ? state.stages[currentStage]?.startedAt : null
-  const currentElapsed = typeof currentStartedAt === 'number' ? formatElapsed(now - currentStartedAt) : ''
+  const {
+    stages,
+    currentStage,
+    completedCount,
+    totalCount,
+    failed,
+    failureLead,
+    failureDetail,
+    progressPct,
+    currentElapsed
+  } = bootstrapProgress(state, now)
 
   return (
     <div className="fixed inset-0 z-(--z-setup) flex items-center justify-center bg-background/90 backdrop-blur-md p-4">
       <div className="flex max-h-[85vh] w-full max-w-2xl flex-col overflow-hidden rounded-(--aino-radius-panel) border border-(--stroke-nous) bg-(--ui-bg-elevated) shadow-nous">
         {/* Header -- always visible, never scrolls */}
-        <div className="flex shrink-0 items-start gap-4 p-5 pb-4">
-          {!failed && <BrandMark className="size-11 shrink-0" />}
-          <div className="min-w-0">
-            <h2 className="text-[length:var(--aino-text-title)] font-semibold tracking-tight [overflow-wrap:anywhere]">
-              {failed ? copy.failedTitle : state.active ? copy.settingUpTitle : copy.finishingTitle}
-            </h2>
-            <p className="mt-1.5 text-[length:var(--aino-text-body)] leading-relaxed text-(--ui-text-secondary)">
-              {failed ? copy.failedDesc : copy.activeDesc}
-            </p>
-          </div>
-        </div>
+        <BootstrapProgressHeader active={state.active} failed={failed} />
 
         {/* Scrollable middle: progress, stages, error block, log */}
         <div
@@ -819,5 +801,57 @@ export function DesktopInstallOverlay({ enabled = true }: DesktopInstallOverlayP
         )}
       </div>
     </div>
+  )
+}
+
+function bootstrapProgress(state: DesktopBootstrapState, now: number) {
+  const stages = state.manifest?.stages || []
+  const currentStage = stages.find(s => state.stages[s.name]?.state === 'running')?.name
+
+  const completedCount = stages.filter(
+    s => state.stages[s.name]?.state === 'succeeded' || state.stages[s.name]?.state === 'skipped'
+  ).length
+
+  const totalCount = stages.length
+  const failed = Boolean(state.error)
+  // Main writes a plain lead sentence and keeps the raw installer error after
+  // "Details:" (electron/bootstrap-failure-copy.ts); show them as two lines.
+  const [failureLead, failureDetail] = splitFailureDetails(state.error)
+  // Count the running stage as half-done so the bar advances *during* a long
+  // stage instead of sitting frozen at the last completed step while its logs
+  // stream (e.g. "0 of 2" pinned at 0% for the whole first stage).
+  const progressUnits = completedCount + (!failed && currentStage ? 0.5 : 0)
+  const progressPct = totalCount > 0 ? Math.round((progressUnits / totalCount) * 100) : 0
+  const currentStartedAt = currentStage ? state.stages[currentStage]?.startedAt : null
+  const currentElapsed = typeof currentStartedAt === 'number' ? formatElapsed(now - currentStartedAt) : ''
+
+  return {
+    stages,
+    currentStage,
+    completedCount,
+    totalCount,
+    failed,
+    failureLead,
+    failureDetail,
+    progressPct,
+    currentElapsed
+  }
+}
+
+function BootstrapProgressHeader({ failed, active }: { failed: boolean; active: boolean }) {
+  const { t } = useI18n()
+  const copy = t.install
+  return (
+        <div className="flex shrink-0 items-start gap-4 p-5 pb-4">
+          {!failed && <BrandMark className="size-11 shrink-0" />}
+          <div className="min-w-0">
+            <h2 className="text-[length:var(--aino-text-title)] font-semibold tracking-tight [overflow-wrap:anywhere]">
+              {failed ? copy.failedTitle : active ? copy.settingUpTitle : copy.finishingTitle}
+            </h2>
+            <p className="mt-1.5 text-[length:var(--aino-text-body)] leading-relaxed text-(--ui-text-secondary)">
+              {failed ? copy.failedDesc : copy.activeDesc}
+            </p>
+          </div>
+        </div>
   )
 }

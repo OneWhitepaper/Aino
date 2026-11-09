@@ -7,7 +7,6 @@ import type {
   AudioTtsLeaseResponse,
   BackendUpdateCheckResponse,
   CuratorStatusResponse,
-  DebugShareResponse,
   ElevenLabsVoicesResponse,
   MemoryProviderConfig,
   MemoryProviderOAuthStatus,
@@ -308,6 +307,16 @@ export function runBackup(): Promise<ActionResponse & { archive?: string }> {
     body: {}
   })
 }
+
+/** `POST /api/ops/debug-share` — shareable diagnostics upload result. */
+export interface DebugShareResponse {
+  ok: boolean
+  urls: Record<string, string>
+  failures: Record<string, string>
+  redacted: boolean
+  auto_delete_seconds: number | null
+}
+
 
 export function runDebugShare(): Promise<DebugShareResponse> {
   return hermesApi<DebugShareResponse>({

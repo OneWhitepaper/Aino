@@ -315,6 +315,7 @@ class HostedRoomAuthorityRPC:
             row = current[0]
             with live.event_stream.lock:
                 if self.authority.executing.get(self.ref.session_id) == row['generation']:
+                    result.update(live.event_stream.progress_for(row['generation']))
                     activity = live.event_stream.activity_for(row['admission_id'], row['generation'])
                     if activity is not None:
                         result['activity'] = activity

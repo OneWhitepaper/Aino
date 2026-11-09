@@ -34,14 +34,14 @@ const ready = () => waitFor(() => expect(input().disabled).toBe(false))
 
 beforeEach(() => {
   Object.defineProperty(window, 'hermesDesktop', { configurable: true, writable: true, value: undefined })
-  request.mockImplementation(async (_route, method) =>
+  request.mockImplementation(async (_route, method, params) =>
     method === 'groups.state'
       ? { room: { name: 'Team', members: [] }, driver_status: {} }
       : method === 'groups.log'
         ? { events: [] }
         : method === 'groups.attachment.upload'
           ? { attachment_id: 'plan-upload', kind: 'file', name: 'plan.txt', mime: 'text/plain', size: 4 }
-          : {}
+          : method === 'groups.send' ? { accepted: true, client_event_id: params.event_id } : {}
   )
 })
 
@@ -110,8 +110,8 @@ it('clears the sent draft after its ACK arrives while the workspace is unmounted
   const gateway = request.getMockImplementation()!
   request.mockImplementation((route, method, params) =>
     method === 'groups.send'
-      ? new Promise<void>(resolve => {
-          acknowledge = resolve
+      ? new Promise(resolve => {
+          acknowledge = () => resolve({ accepted: true, client_event_id: params.event_id })
         })
       : gateway(route, method, params)
   )

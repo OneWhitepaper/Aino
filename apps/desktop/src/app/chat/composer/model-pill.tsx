@@ -14,7 +14,7 @@ import { GlyphSpinner } from '@/components/ui/glyph-spinner'
 import { releaseTypingFocus } from '@/components/ui/keyboard-first'
 import { Tip } from '@/components/ui/tooltip'
 import { useResizeObserver } from '@/hooks/use-resize-observer'
-import { useI18n } from '@/i18n'
+import { type Translations, useI18n } from '@/i18n'
 import { ChevronDown } from '@/lib/icons'
 import { formatModelPillLabel, providerDisplayName } from '@/lib/model-status-label'
 import { cn } from '@/lib/utils'
@@ -260,14 +260,14 @@ export function ModelPill({
       )
     : PILL
 
-  const baseTitle = modelDefaultUnavailable
-    ? copy.openModelPicker
-    : currentProvider
-      ? copy.modelTitle(
-          currentProvider === 'aino' ? t.platformModels.builtIn : providerDisplayName(currentProvider),
-          platformName || currentModel || copy.modelNone
-        )
-      : copy.switchModel
+  const baseTitle = modelPillTitle(
+    copy,
+    t.platformModels.builtIn,
+    modelDefaultUnavailable,
+    currentProvider,
+    currentModel,
+    platformName
+  )
 
   const title = pinnedOverride ? `${baseTitle} — ${copy.modelPinned}` : baseTitle
 
@@ -337,4 +337,22 @@ export function ModelPill({
       </DropdownMenuContent>
     </DropdownMenu>
   )
+}
+
+function modelPillTitle(
+  copy: Translations['shell']['statusbar'],
+  builtIn: string,
+  modelDefaultUnavailable: boolean,
+  currentProvider: string,
+  currentModel: string,
+  platformName: string | undefined
+): string {
+  return modelDefaultUnavailable
+    ? copy.openModelPicker
+    : currentProvider
+      ? copy.modelTitle(
+          currentProvider === 'aino' ? builtIn : providerDisplayName(currentProvider),
+          platformName || currentModel || copy.modelNone
+        )
+      : copy.switchModel
 }

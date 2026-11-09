@@ -8,9 +8,10 @@ const request = vi.hoisted(() => vi.fn())
 vi.mock('@hermes/plugin-sdk', async () => {
   const { pluginSdkMock, createGroupGateway } = await import('./group-test-utils')
   const { en } = await import('@/i18n/en')
+  const { captureGroupRequests } = await import('./canonical-group-contract-test-utils')
   const gateway = createGroupGateway()
 
-  return { ...await pluginSdkMock(gateway.host), host: { ...gateway.host, requestProfile: request },
+  return { ...await pluginSdkMock(gateway.host), host: { ...gateway.host, requestProfile: captureGroupRequests(request).request },
     useI18n: () => ({ locale: 'en', t: en }),
     Button: (props: ComponentProps<'button'>) => <button {...props} />,
     MessageTextContent: ({ text }: { text: string }) => <div data-testid="markdown">{text}</div>,
@@ -29,6 +30,7 @@ vi.mock('./canonical-group-labels', async () => {
     send: 'Send', stop: 'Stop', download: 'Download', discard: 'Discard', cancel: 'Cancel' }) }
 })
 
+import { CANONICAL_GROUP_CAPABILITIES } from './canonical-group-contract-test-utils'
 import { CanonicalGroupWorkspace } from './canonical-group-workspace'
 
 const binding = { connectionId: 'original-owner', profile: 'reviewer', roomId: 'room-one' }
@@ -42,6 +44,8 @@ it('keeps a committed file downloadable in history after Send clears the compose
   window.hermesDesktop = { saveImageBuffer: save } as unknown as typeof window.hermesDesktop
   let sent = false
   request.mockImplementation(async (_route, method, params) => {
+    if (method === 'groups.capabilities') {return CANONICAL_GROUP_CAPABILITIES}
+
     if (method === 'groups.state') {return { room: { name: 'Room' }, driver_status: {} }}
 
     if (method === 'groups.log') {return { events: sent ? [{ seq: 1, room_id: binding.roomId, event_id: 'committed-user-event',
@@ -51,7 +55,7 @@ it('keeps a committed file downloadable in history after Send clears the compose
 
     if (method === 'groups.send') {expect(params.payload.attachments).toEqual([manifest]); sent = true;
 
- return { accepted: true }}
+ return { accepted: true, client_event_id: params.event_id }}
 
     if (method === 'groups.attachment.download') {return { ...manifest, event_id: params.event_id, data_base64: 'QQ==' }}
     throw new Error(`Unexpected method ${method}`)
@@ -92,6 +96,8 @@ it('binds user/member history downloads to their real event and refuses missing 
   ].map(event => ({ ...event, payload: { attachments: [{ ...manifest, event_id: 'not-the-event' }] } }))
 
   request.mockImplementation(async (_route, method, params) => {
+    if (method === 'groups.capabilities') {return CANONICAL_GROUP_CAPABILITIES}
+
     if (method === 'groups.state') {return { room: { name: 'Room' } }}
 
     if (method === 'groups.log') {return { events }}
@@ -117,6 +123,8 @@ it('binds user/member history downloads to their real event and refuses missing 
 
 it('renders only room messages with their author and markdown presentation', async () => {
   request.mockImplementation(async (_route, method) => {
+    if (method === 'groups.capabilities') {return CANONICAL_GROUP_CAPABILITIES}
+
     if (method === 'groups.state') {return { room: { name: 'Room', members: [{ member_id: 'helper', handle: 'helper', profile: 'helper' }] }, driver_status: {} }}
 
     if (method === 'groups.log') {

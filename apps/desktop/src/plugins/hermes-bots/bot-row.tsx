@@ -8,7 +8,6 @@
 
 import {
   cn,
-  coarseElapsed,
   Codicon,
   ContextMenu,
   ContextMenuCheckboxItem,
@@ -41,7 +40,7 @@ import {
   focusedRosterOwner,
   saveSelectedRosterBot
 } from './bot-state'
-import { ensureBotMetadata } from './canonical-chat'
+import { ensureBotMetadata, ensureBotProfile } from './canonical-chat'
 import {
   $botAttention,
   $botMeta,
@@ -69,6 +68,7 @@ import { duplicateBot } from './profile-ops'
 import { botRecentSession, openBotRecentSession } from './recent-session'
 import { openRosterBot } from './roster-actions'
 import { botRosterMeta, botWorkspaceOwnerKey, groupTranscriptSpeakerMeta, setBotsWorkspaceOwner } from './routing'
+import { rowAge } from './row-age'
 import {
   A2A_PREFIX_RE,
   botCanonicalSessionId,
@@ -79,7 +79,7 @@ import {
   workerActiveAt
 } from './row-helpers'
 import { openBotScreen } from './screen-open'
-import type { GroupMember, RosterRow, SidebarRowLabels } from './types'
+import type { GroupMember, RosterRow } from './types'
 import {
   $botSections,
   $draggingBot,
@@ -93,17 +93,6 @@ import {
 
 // ── bot row ──────────────────────────────────────────────────────────────────
 
-/** Row age in the sidebar's compact form ("now", "52m", "3h", "18d").
- *  Deliberately the same `coarseElapsed` + suffix pair the session rows
- *  directly above use, so the two lists in one rail don't disagree about how
- *  an age is spelled. Not `relativeTime` — that's the bidirectional Intl form
- *  ("in 14 hr"), which belongs on a scheduled next-run. */
-function rowAge(ms: number, r: SidebarRowLabels): string {
-  const { unit, value } = coarseElapsed(Date.now() - ms)
-
-  return unit === 'second' ? r.ageNow : `${value}${unit === 'day' ? r.ageDay : unit === 'hour' ? r.ageHour : r.ageMin}`
-}
-
 interface BotRowProps {
   bot: RosterRow
   onDelete: (bot: RosterRow) => void
@@ -112,6 +101,16 @@ interface BotRowProps {
   /** Opens the New section dialog; the bot is filed into it on create. */
   onNewSection: (bot: RosterRow) => void
   showHandle?: boolean
+}
+
+function botMessagePreview(preview: string | undefined, fromBot: ReturnType<typeof previewKind>['fromBot']): string {
+  return stripPreviewMarkdown(fromBot ? (preview || '').replace(A2A_PREFIX_RE, '').trim() || '…' : preview || '')
+}
+
+function groupMessagePreview(fromKind: string | undefined, author: string, text: string, you: string): string {
+  const speaker = fromKind === 'user' ? you : author
+
+  return `${speaker}: ${stripPreviewMarkdown(text) || '…'}`
 }
 
 export function BotRow({ bot, onDelete, onEdit, onGroup, onNewSection, showHandle }: BotRowProps) {
@@ -191,9 +190,7 @@ export function BotRow({ bot, onDelete, onEdit, onGroup, onNewSection, showHandl
   const { fromBot } = previewKind(previewSession?.preview, $lastRoster.get(), bot.connectionId)
 
   // DM previews read like DMs: strip the delivery prefix, keep the message.
-  const displayPreview = stripPreviewMarkdown(
-    fromBot ? (previewSession?.preview || '').replace(A2A_PREFIX_RE, '').trim() || '…' : previewSession?.preview || ''
-  )
+  const displayPreview = botMessagePreview(previewSession?.preview, fromBot)
 
   const handle = botHandle(bot.name, bot)
   const gatewayLabel = rosterConnectionLabel(bot) || (bot.connectionId === 'local' ? b.bot.thisDevice : '')
@@ -414,8 +411,8 @@ export function BotRow({ bot, onDelete, onEdit, onGroup, onNewSection, showHandl
         <ContextMenuSeparator />
         <ContextMenuItem
           onSelect={() =>
-            void ensureBotMetadata(bot)
-              .then(() => onEdit(bot))
+            void ensureBotProfile(bot)
+              .then(onEdit)
               .catch(error => host.notifyError?.(error, b.bot.loadFailed))
           }
         >
@@ -561,7 +558,7 @@ export function GroupRow({ active, group, members, needsYou, onOpen, onDisband, 
     : ''
 
   const preview = last
-    ? `${last.from?.kind === 'user' ? b.group.you : lastName}: ${stripPreviewMarkdown(previewText) || '…'}`
+    ? groupMessagePreview(last.from?.kind, lastName, previewText, b.group.you)
     : b.group.memberCount(members.length)
 
   const availableMembers = members.filter(member => botSourceStatus(member).available).length

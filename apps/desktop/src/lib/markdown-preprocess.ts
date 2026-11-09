@@ -283,7 +283,8 @@ function scrubBacktickNoise(text: string): string {
     protectedRanges.push({ end: balancedFenceRe.lastIndex, start })
   }
 
-  const danglingCodeFenceRe = /(^|\n)[ \t]*(`{3,}|~{3,})([a-z0-9][a-z0-9+#-]{0,15}(?:[ \t]+[^\n]*)?)[ \t]*\n([\s\S]*)$/gi
+  const danglingCodeFenceRe =
+    /(^|\n)[ \t]*(`{3,}|~{3,})([a-z0-9][a-z0-9+#-]{0,15}(?:[ \t]+[^\n]*)?)[ \t]*\n([\s\S]*)$/gi
 
   while ((match = danglingCodeFenceRe.exec(text)) !== null) {
     const start = match.index + match[1].length
@@ -1032,6 +1033,25 @@ function isMathFence(language: string): boolean {
   return MATH_FENCE_LANGUAGES.has(language.toLowerCase())
 }
 
+function classifyClosedFence(language: string, body: string, bodyLines: string[]): 'omit' | 'urls' | 'content' {
+  const trimmed = body.trim()
+
+  if (!trimmed) {
+    return 'omit'
+  }
+
+  // Explicit Markdown is source text, including URLs and local-preview literals.
+  if (isMarkdownCodeLanguage(language)) {
+    return 'content'
+  }
+
+  if (LOCAL_PREVIEW_ONLY_RE.test(trimmed)) {
+    return 'omit'
+  }
+
+  return isUrlOnlyBlock(bodyLines) ? 'urls' : 'content'
+}
+
 function normalizeFenceBlocks(text: string): string {
   const sourceLines = text.split('\n')
   const out: string[] = []
@@ -1066,19 +1086,15 @@ function normalizeFenceBlocks(text: string): string {
     const bodyLines = sourceLines.slice(index + 1, closeIndex === -1 ? sourceLines.length : closeIndex)
     const body = bodyLines.join('\n')
 
-    if (closeIndex !== -1 && !body.trim()) {
+    const presentation = closeIndex === -1 ? 'content' : classifyClosedFence(language, body, bodyLines)
+
+    if (presentation === 'omit') {
       index = closeIndex + 1
 
       continue
     }
 
-    if (closeIndex !== -1 && !isMarkdownCodeLanguage(language) && LOCAL_PREVIEW_ONLY_RE.test(body.trim())) {
-      index = closeIndex + 1
-
-      continue
-    }
-
-    if (closeIndex !== -1 && !isMarkdownCodeLanguage(language) && isUrlOnlyBlock(bodyLines)) {
+    if (presentation === 'urls') {
       extend(out, bodyLines)
       index = closeIndex + 1
 

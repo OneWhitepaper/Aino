@@ -29,7 +29,8 @@ import {
   $sendDiagnostics,
   confirmSendDiagnostics,
   dismissSendDiagnostics,
-  requestSendDiagnostics
+  requestSendDiagnostics,
+  type SendDiagnosticsResult
 } from '@/store/send-diagnostics'
 
 const SUPPORT_LINKS = [{ key: 'github', url: ISSUES_URL }] as const
@@ -39,7 +40,7 @@ export function SendDiagnosticsHost({ crashRecovery = false }: { crashRecovery?:
   const copy = t.sendDiagnostics
   const state = useStore($sendDiagnostics)
 
-  if (!state) {
+  if (!state || state.inline) {
     return null
   }
 
@@ -118,22 +119,7 @@ export function SendDiagnosticsHost({ crashRecovery = false }: { crashRecovery?:
               <DialogTitle>{copy.doneTitle}</DialogTitle>
               <DialogDescription className="text-left">{copy.doneDescription}</DialogDescription>
             </DialogHeader>
-            {state.result?.uploadId && (
-              <div
-                className="flex min-w-0 items-start gap-2 rounded-(--aino-radius-control) bg-(--ui-bg-quaternary) px-3 py-2"
-                data-selectable-text="true"
-              >
-                <code className="min-w-0 flex-1 whitespace-pre-wrap text-[length:var(--aino-text-body)] leading-relaxed text-(--ui-text-secondary) [overflow-wrap:anywhere]">
-                  {copy.uploadIdFallback(state.result.uploadId)}
-                </code>
-                <CopyButton
-                  appearance="inline"
-                  className="shrink-0"
-                  label={copy.copyLink}
-                  text={state.result.uploadId}
-                />
-              </div>
-            )}
+            <DiagnosticsLinkRow result={state.result} />
             <div className="text-[length:var(--aino-text-body)] text-(--ui-text-secondary)">{copy.handoffLead}</div>
             <div className="flex flex-wrap gap-1.5">
               {SUPPORT_LINKS.map(link => (
@@ -147,5 +133,26 @@ export function SendDiagnosticsHost({ crashRecovery = false }: { crashRecovery?:
         )}
       </DialogContent>
     </Dialog>
+  )
+}
+
+/** Aino uploads return a private diagnostic ID; both recovery surfaces share it. */
+export function DiagnosticsLinkRow({ result }: { result?: SendDiagnosticsResult }) {
+  const { t } = useI18n()
+
+  if (!result?.uploadId) {
+    return null
+  }
+
+  return (
+    <div
+      className="flex min-w-0 items-start gap-2 rounded-(--aino-radius-control) bg-(--ui-bg-quaternary) px-3 py-2"
+      data-selectable-text="true"
+    >
+      <code className="min-w-0 flex-1 whitespace-pre-wrap text-[length:var(--aino-text-body)] leading-relaxed text-(--ui-text-secondary) [overflow-wrap:anywhere]">
+        {t.sendDiagnostics.uploadIdFallback(result.uploadId)}
+      </code>
+      <CopyButton appearance="inline" className="shrink-0" label={t.sendDiagnostics.copyLink} text={result.uploadId} />
+    </div>
   )
 }

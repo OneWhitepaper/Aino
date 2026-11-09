@@ -33,6 +33,7 @@ import { type PluginLocaleBundles, type PluginTranslate, usePluginI18n } from '@
 import { useMemo } from 'react'
 
 import { CANONICAL_GROUP_LOCALES } from './canonical-group-locales'
+import { CROSS_GATEWAY_GROUP_LOCALES } from './cross-gateway-locales'
 import { bind, type Bound } from './i18n-bind'
 import { en as legacyEn } from './i18n-en'
 import { ja as legacyJa } from './i18n-ja'
@@ -42,12 +43,12 @@ import { zh as legacyZh } from './i18n-zh'
 import { zhHant as legacyZhHant } from './i18n-zhHant'
 import { getPluginCtx } from './shared'
 
-type BotsMessages = LegacyBotsMessages & Pick<UpstreamBotsMessages, 'canonical'>
+type BotsMessages = LegacyBotsMessages & Pick<UpstreamBotsMessages, 'canonical' | 'crossGateway'>
 
-const en: BotsMessages = { ...legacyEn, canonical: CANONICAL_GROUP_LOCALES.en }
-const ja: BotsMessages = { ...legacyJa, canonical: CANONICAL_GROUP_LOCALES.ja }
-const zh: BotsMessages = { ...legacyZh, canonical: CANONICAL_GROUP_LOCALES.zh }
-const zhHant: BotsMessages = { ...legacyZhHant, canonical: CANONICAL_GROUP_LOCALES['zh-hant'] }
+const en: BotsMessages = { ...legacyEn, canonical: CANONICAL_GROUP_LOCALES.en, crossGateway: CROSS_GATEWAY_GROUP_LOCALES.en }
+const ja: BotsMessages = { ...legacyJa, canonical: CANONICAL_GROUP_LOCALES.ja, crossGateway: CROSS_GATEWAY_GROUP_LOCALES.ja }
+const zh: BotsMessages = { ...legacyZh, canonical: CANONICAL_GROUP_LOCALES.zh, crossGateway: CROSS_GATEWAY_GROUP_LOCALES.zh }
+const zhHant: BotsMessages = { ...legacyZhHant, canonical: CANONICAL_GROUP_LOCALES['zh-hant'], crossGateway: CROSS_GATEWAY_GROUP_LOCALES['zh-hant'] }
 
 /** Registered via `ctx.i18n.register` at plugin load (disposer tracked). */
 export const BOTS_LOCALES: PluginLocaleBundles = {
@@ -57,6 +58,7 @@ export const BOTS_LOCALES: PluginLocaleBundles = {
   'zh-hant': zhHant,
   ar: {
     canonical: CANONICAL_GROUP_LOCALES.ar,
+    crossGateway: CROSS_GATEWAY_GROUP_LOCALES.ar,
     bot: {
       openModelUnavailableMessage:
         'لا يتوفر نموذج قابل للاستخدام لهذا الروبوت. اختر نموذجًا متاحًا في إعدادات النموذج ثم أعد المحاولة.',
@@ -65,6 +67,7 @@ export const BOTS_LOCALES: PluginLocaleBundles = {
   },
   ru: {
     canonical: CANONICAL_GROUP_LOCALES.ru,
+    crossGateway: CROSS_GATEWAY_GROUP_LOCALES.ru,
     bot: {
       openModelUnavailableMessage:
         'У этого бота нет доступной модели. Выберите доступную модель в его настройках и повторите попытку.',
@@ -74,6 +77,7 @@ export const BOTS_LOCALES: PluginLocaleBundles = {
   },
   fr: {
     canonical: CANONICAL_GROUP_LOCALES.fr,
+    crossGateway: CROSS_GATEWAY_GROUP_LOCALES.fr,
     bot: {
       openModelUnavailableMessage:
         'Ce bot n’a aucun modèle utilisable. Choisissez un modèle disponible dans ses paramètres de modèle, puis réessayez.',
@@ -83,6 +87,7 @@ export const BOTS_LOCALES: PluginLocaleBundles = {
   },
   de: {
     canonical: CANONICAL_GROUP_LOCALES.de,
+    crossGateway: CROSS_GATEWAY_GROUP_LOCALES.de,
     bot: {
       openModelUnavailableMessage:
         'Für diesen Bot ist kein nutzbares Modell verfügbar. Wähle in seinen Modelleinstellungen ein verfügbares Modell und versuche es erneut.',
@@ -92,6 +97,7 @@ export const BOTS_LOCALES: PluginLocaleBundles = {
   },
   es: {
     canonical: CANONICAL_GROUP_LOCALES.es,
+    crossGateway: CROSS_GATEWAY_GROUP_LOCALES.es,
     bot: {
       openModelUnavailableMessage:
         'Este bot no tiene un modelo disponible. Elige un modelo disponible en su configuración y vuelve a intentarlo.',

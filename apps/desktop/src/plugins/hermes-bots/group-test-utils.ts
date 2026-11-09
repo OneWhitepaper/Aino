@@ -455,6 +455,13 @@ export function createGroupGateway(options: GatewayOptions = {}): ScriptedGatewa
  *  the `vi.mock` factory rather than hoisted alongside it. */
 export async function pluginSdkMock(host: Record<string, unknown>) {
   const nanostores = await import('nanostores')
+  // Complete pure-component doubles while preserving the shared host object's identity.
+  const defaults = createGroupGateway().host
+
+  for (const [key, value] of Object.entries(defaults)) {
+    if (!(key in host)) {host[key] = value}
+  }
+
   const { Textarea } = await import('@/components/ui/textarea')
   const { cn } = await import('@/lib/utils')
   const { randomUuid } = await import('@hermes/shared')
@@ -529,6 +536,11 @@ export async function pluginSdkMock(host: Record<string, unknown>) {
     createBudgetedLoop: undefined,
     gatewayActivationEpoch: () => 0,
     GlyphSpinner: () => null,
+    // The room views' shared parts (group-room-ui.tsx) wear the main composer's classes.
+    GHOST_ICON_BTN: '',
+    PRIMARY_ICON_BTN: '',
+    composerInputBacking: '',
+    composerSurfaceRing: '',
     useGatewayActivationEpoch: () => 0,
     host,
     randomUuid,

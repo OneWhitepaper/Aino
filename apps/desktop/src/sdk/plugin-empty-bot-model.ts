@@ -69,6 +69,29 @@ function boundRuntimeId(storedId: string, expected: PluginProfileRoute): string 
   return primary ? $activeSessionId.get() : tile?.runtimeId ?? null
 }
 
+function emptyRuntimeSnapshot(runtimeId: string, storedSessionId: string): boolean {
+  const state = $sessionStates.get()[runtimeId]
+
+  return Boolean(state?.storedSessionId === storedSessionId && state.messages.length === 0 &&
+    !state.busy && !state.awaitingResponse && !state.turnLive &&
+    !state.model && !state.provider && !state.platformModel)
+}
+
+function emptyRuntimeModel(info: SessionRuntimeInfo | undefined): boolean {
+  return Boolean(info && info.model !== undefined && info.provider !== undefined &&
+    !info.model && !info.provider && !info.model_id && !info.model_source && !info.running)
+}
+
+function preferredDefaultUnchanged(
+  catalog: ReturnType<typeof platformModelCatalog>, owner: { user_id: string; platform_origin: string },
+  userId: string, scope: ReturnType<typeof platformDefaultScope>, mode: string, preferred: string
+): boolean {
+  const current = catalog.owner.state.get().owner
+
+  return current?.user_id === owner.user_id && current?.platform_origin === owner.platform_origin &&
+    readPlatformDefault(userId, scope, mode, owner.platform_origin) === preferred
+}
+
 /** Restore only a never-used canonical chat after its own saved default was
  * configured. This authorizes an existing runtime; it never creates a chat or
  * submits a prompt, and does not migrate or overwrite any historical choice. */
@@ -89,15 +112,9 @@ export async function restoreEmptyBotModelDefault({
 
   if (!hasPlatformModelIdentity(account)) { return false }
 
-  const emptyRuntime = () => {
-    const state = $sessionStates.get()[runtimeId]
-
-    return isCurrent() && boundRuntimeId(storedSessionId, capturedRoute) === runtimeId &&
-      samePlatformAccount(catalog.account.get(), account) &&
-      state?.storedSessionId === storedSessionId && state.messages.length === 0 &&
-      !state.busy && !state.awaitingResponse && !state.turnLive &&
-      !state.model && !state.provider && !state.platformModel
-  }
+  const emptyRuntime = () =>
+    isCurrent() && boundRuntimeId(storedSessionId, capturedRoute) === runtimeId &&
+    samePlatformAccount(catalog.account.get(), account) && emptyRuntimeSnapshot(runtimeId, storedSessionId)
 
   if (!emptyRuntime()) { return false }
   const scope = platformDefaultScope({ connectionId: capturedRoute.connectionId, profile: capturedRoute.targetProfile })
@@ -113,10 +130,9 @@ export async function restoreEmptyBotModelDefault({
   if (!preferred) { return false }
 
   const preferenceUnchanged = () =>
-    catalog.owner.state.get().owner?.user_id === owner.user_id &&
-    catalog.owner.state.get().owner?.platform_origin === owner.platform_origin &&
-    readPlatformDefault(account.account.id, scope, account.mode, owner.platform_origin) === preferred
+    preferredDefaultUnchanged(catalog, owner, account.account.id, scope, account.mode, preferred)
 
+  const canRestore = () => emptyRuntime() && preferenceUnchanged()
   const row = await getSession(storedSessionId, scope.route) as PersistedBotSession
 
   if (!emptyRuntime() || !emptyCanonical(row, storedSessionId, capturedRoute)) { return false }
@@ -124,10 +140,10 @@ export async function restoreEmptyBotModelDefault({
   const release = await retainGatewayForAgent(capturedRoute.connectionId, capturedRoute.profile)
 
   try {
-    if (!emptyRuntime() || !preferenceUnchanged()) { return false }
+    if (!canRestore()) { return false }
     const resolved = await resolveModelDefault(scope.route, capturedRoute)
 
-    if (!emptyRuntime() || !preferenceUnchanged() || resolved.platform?.modelId !== preferred) { return false }
+    if (!canRestore() || resolved.platform?.modelId !== preferred) { return false }
 
     const request = <T,>(method: string, params?: Record<string, unknown>): Promise<T> =>
       requestForSessionProfile<T>(capturedRoute, () => Promise.reject(new Error('Bot owner route required')), method, params)
@@ -139,9 +155,7 @@ export async function restoreEmptyBotModelDefault({
     const info = options.session_info
 
     if (
-      !emptyRuntime() || !preferenceUnchanged() || !info ||
-      info.model === undefined || info.provider === undefined ||
-      info.model || info.provider || info.model_id || info.model_source || info.running
+      !canRestore() || !emptyRuntimeModel(info)
     ) { return false }
 
     return await switchSessionModel({

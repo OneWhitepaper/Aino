@@ -364,7 +364,10 @@ test('a stalled completion banner is capped, not waited out forever', async () =
 
   try {
     const child = makeFakeChild()
-    const wait = waitForDashboardPort(child, 20)
+    const timeoutMs = 20
+    const completionGraceMs = 50
+    // describeOutputTail and bufferedOutput keep their defaults (no output tail).
+    const wait = waitForDashboardPort(child, timeoutMs, undefined, undefined, completionGraceMs)
     wait.catch(() => {}) // mark handled; the assertion below re-awaits
 
     child.stdout.emit('data', 'hermes: finishing an interrupted source update...\n')

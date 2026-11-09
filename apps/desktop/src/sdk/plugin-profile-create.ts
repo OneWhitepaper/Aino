@@ -8,6 +8,24 @@ import { hasPlatformModelIdentity } from '../../shared/platform-contract'
 
 import type { PluginSessionCreateRoute } from './plugin-session-create'
 
+async function clonedPlatformDefault(
+  source: ReturnType<typeof platformDefaultScope>, saved: string | null,
+  catalog: ReturnType<typeof platformModelCatalog>
+): Promise<string | null> {
+  const configured = await getGlobalModelInfo(source.route)
+
+  // A retained preference behind a third-party pin is not the active default.
+  if (configured.model || configured.provider) { return null }
+
+  if (saved) { return saved }
+
+  // Freeze the API's current default when the source has no local preference.
+  await catalog.load()
+  const state = catalog.state.get()
+
+  return state.phase === 'ready' ? availablePlatformDefault(state.models, null)?.id ?? null : null
+}
+
 /** Cloning a profile copies its runtime config on the server. Its Aino preference
  * lives in this account's desktop storage, so copy that part only after creation succeeds. */
 export async function requestPluginProfileCreate<T>(
@@ -39,21 +57,7 @@ export async function requestPluginProfileCreate<T>(
     const source = platformDefaultScope({ ...connection, profile: cloneFrom })
     const saved = readPlatformDefault(account.account.id, source, account.mode, owner.platform_origin)
 
-    const configured = await getGlobalModelInfo(source.route)
-
-    // A retained preference behind a third-party pin is not the active default.
-    if (!configured.model && !configured.provider) {
-      preferred = saved
-
-      if (!preferred) {
-        // A workspace may follow the API's designated default without a local
-        // preference. Freeze that effective default too: future catalog changes
-        // must not silently retarget an independently configured Bot.
-        await catalog.load()
-        const state = catalog.state.get()
-        preferred = state.phase === 'ready' ? availablePlatformDefault(state.models, null)?.id ?? null : null
-      }
-    }
+    preferred = await clonedPlatformDefault(source, saved, catalog)
   }
 
   if (!samePlatformAccount(catalog.account.get(), account)) { throw new PlatformSelectionError('platform_account_changed') }

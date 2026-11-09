@@ -123,3 +123,14 @@ export function groupHeaderPresentation({
 
   return { stripVisible, verticalCollapse, headerVisible, hideSessionTabStrip, singleSessionHeader, titleInWindowBar }
 }
+
+/** The same zone header owns a tab strip or the native titlebar's reserved space. */
+export function groupTabHeaderVisible({ headerVisible, hideSessionTabStrip, panelTopEdge, verticalCollapse, singleSessionHeader }: {
+  headerVisible: boolean
+  hideSessionTabStrip: boolean
+  panelTopEdge: boolean
+  verticalCollapse: boolean
+  singleSessionHeader: boolean
+}) {
+  return (headerVisible && !hideSessionTabStrip) || (panelTopEdge && !verticalCollapse && !singleSessionHeader)
+}

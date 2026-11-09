@@ -68,6 +68,7 @@ import {
   updateGroupChat
 } from './group-chat'
 import { openGroupChat } from './group-chat-view'
+import { stickyGroupEngine } from './group-engine'
 import { groupWorkspaceOwnerKey } from './group-membership'
 import { clearGroupComposerDrafts, groupOpenOrigin, groupOpenOwnerKey, groupOpenRoute } from './group-panes'
 import { annotateOrphanedGroupChatMembers } from './hygiene'
@@ -385,6 +386,7 @@ export default {
                     room.externalCursors && typeof room.externalCursors === 'object' ? room.externalCursors : {},
                   members: Array.isArray(room.members) ? room.members : [],
                   roomId: typeof room.roomId === 'string' && room.roomId ? room.roomId : null,
+                  ...stickyGroupEngine(room),
                   image: typeof room.image === 'string' && room.image ? room.image : null,
                   rosterOrder: Number.isFinite(room.rosterOrder) ? room.rosterOrder : undefined,
                   pinned: Boolean(room.pinned),

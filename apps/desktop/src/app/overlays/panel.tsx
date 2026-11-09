@@ -286,7 +286,7 @@ export function PanelRowMenu({ items, label }: { items: PanelMenuItem[]; label?:
     <ActionsMenu ariaLabel={resolvedLabel} contentClassName="w-40" items={renderPanelMenuItems(items)}>
       <Button
         aria-label={resolvedLabel}
-        className="size-5 rounded-[4px] bg-transparent text-(--ui-text-tertiary) opacity-0 transition-colors duration-100 hover:bg-(--ui-control-active-background) hover:text-foreground focus-visible:opacity-100 focus-visible:ring-0 group-hover/row:opacity-100 data-[state=open]:bg-(--ui-control-active-background) data-[state=open]:text-foreground data-[state=open]:opacity-100 [&_svg]:size-3.5!"
+        className="size-5 rounded-[4px] bg-transparent text-(--ui-text-tertiary) opacity-0 transition-colors duration-100 hover:bg-(--ui-control-active-background) hover:text-foreground focus-visible:opacity-100 group-hover/row:opacity-100 data-[state=open]:bg-(--ui-control-active-background) data-[state=open]:text-foreground data-[state=open]:opacity-100 [&_svg]:size-3.5!"
         size="icon"
         variant="ghost"
       >

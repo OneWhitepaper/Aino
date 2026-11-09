@@ -496,7 +496,7 @@ export const SessionControlGoalSection = memo(function SessionControlGoalSection
               <textarea
                 aria-label={ctrl.criterionLabel}
                 autoFocus
-                className="w-full rounded-md border border-(--ui-stroke-secondary) bg-transparent p-2 text-xs text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:ring-1 focus:ring-primary"
+                className="w-full rounded-md border border-(--ui-stroke-secondary) bg-transparent p-2 text-xs text-foreground placeholder:text-muted-foreground/60 focus:outline-hidden focus:ring-1 focus:ring-primary"
                 disabled={isBusy}
                 onChange={e => setNewCriterionText(e.target.value)}
                 placeholder={ctrl.addCriterionPlaceholder}
@@ -632,18 +632,24 @@ export const SessionControlGoalSection = memo(function SessionControlGoalSection
       </Dialog>
 
       {/* Confirmation Dialog */}
-      {confirmState && (
-        <ConfirmDialog
-          cancelLabel={t.common.cancel}
-          confirmLabel={confirmState.confirmLabel}
-          description={confirmState.description}
-          destructive={confirmState.destructive}
-          onClose={() => setConfirmState(null)}
-          onConfirm={confirmState.onConfirm}
-          open={Boolean(confirmState)}
-          title={confirmState.title}
-        />
-      )}
+      <GoalConfirmation onClose={() => setConfirmState(null)} state={confirmState} />
     </>
   )
 })
+
+function GoalConfirmation({ state, onClose }: { state: ConfirmState | null; onClose: () => void }) {
+  const { t } = useI18n()
+
+  return state ? (
+    <ConfirmDialog
+      cancelLabel={t.common.cancel}
+      confirmLabel={state.confirmLabel}
+      description={state.description}
+      destructive={state.destructive}
+      onClose={onClose}
+      onConfirm={state.onConfirm}
+      open
+      title={state.title}
+    />
+  ) : null
+}

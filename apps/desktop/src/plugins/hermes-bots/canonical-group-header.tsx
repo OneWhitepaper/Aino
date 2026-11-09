@@ -14,7 +14,7 @@ import {
 } from '@hermes/plugin-sdk'
 import { type ReactNode, useState } from 'react'
 
-import { type CanonicalDriverActivity, type CanonicalMemberPhase, canonicalMemberStatus } from './canonical-group-activity'
+import { type CanonicalDriverActivity, CanonicalGroupAttention, type CanonicalMemberPhase, canonicalMemberStatus } from './canonical-group-activity'
 import { useCanonicalGroupLabels } from './canonical-group-labels'
 import { CanonicalGroupAvatarStack, CanonicalMemberAvatar, useCanonicalMembers } from './canonical-group-members'
 import type { CanonicalGroupBinding, CanonicalRoom, CanonicalRoomMember } from './canonical-groups'
@@ -26,6 +26,7 @@ interface CanonicalGroupHeaderProps {
   binding?: CanonicalGroupBinding
   busy: boolean
   canStop: boolean
+  driver?: CanonicalDriverActivity
   infoOpen?: boolean
   infoPanelId?: string
   onBack?: () => void
@@ -46,6 +47,7 @@ export function CanonicalGroupHeader({
   binding,
   busy,
   canStop,
+  driver,
   infoOpen = false,
   infoPanelId = 'aino-group-info-title-panel',
   mainTab = false,
@@ -88,7 +90,7 @@ export function CanonicalGroupHeader({
               variant="ghost"
             >
               <CanonicalMemberAvatar binding={binding} member={member} size={24} />
-              <span>{nameFor(member)}</span>
+              <span>{nameFor(member)}{(member as { lead?: boolean }).lead && <small className="ml-2">{labels.leadBadge}</small>}</span>
             </Button>
           ))}
           {members.length > 3 && (
@@ -105,6 +107,7 @@ export function CanonicalGroupHeader({
           </p>
         </div>
       </div>
+      <CanonicalGroupAttention driver={driver} labels={labels} />
       <div className="aino-group-header-actions">
         {onSearch && (
           <Button aria-label={labels.searchMessages} onClick={onSearch} size="icon-sm" variant="ghost">
@@ -135,6 +138,9 @@ interface CanonicalGroupInfoProps {
   binding?: CanonicalGroupBinding
   busy: boolean
   files?: ReactNode
+  management?: ReactNode
+  canRename?: boolean
+  canDisband?: boolean
   id?: string
   onClose: () => void
   onDisband: () => Promise<void>
@@ -155,6 +161,9 @@ export function CanonicalGroupInfo({
   busy,
   driver,
   files,
+  management,
+  canRename = true,
+  canDisband = true,
   id = 'aino-group-info-title',
   onClose,
   onDisband,
@@ -225,7 +234,7 @@ export function CanonicalGroupInfo({
                     <li className="aino-group-info-member" data-phase={status?.phase || 'idle'} key={member.member_id}>
                       <CanonicalMemberAvatar binding={binding} member={member} />
                       <div className="aino-group-member-copy">
-                        <span className="aino-group-member-name">{name}</span>
+                        <span className="aino-group-member-name">{name}{(member as { lead?: boolean }).lead && <small className="ml-2">{labels.leadBadge}</small>}</span>
                         <span className="aino-group-member-phase">
                           {status?.label ?? (available ? labels.ready : labels.memberUnavailable)}
                         </span>
@@ -262,9 +271,10 @@ export function CanonicalGroupInfo({
           </TabsContent>
           <TabsContent forceMount hidden={section !== 'manage'} value="manage">
             <section className="aino-group-info-section">
+              {management}
               <Button
                 className="aino-group-info-action"
-                disabled={busy || !room || !!room.disbanded_at}
+                disabled={busy || !room || !!room.disbanded_at || !canRename}
                 onClick={() => setRenaming(room?.name ?? '')}
                 variant="ghost"
               >
@@ -283,7 +293,7 @@ export function CanonicalGroupInfo({
                   <ul>
                     {members.map(member => (
                       <li className="aino-group-info-identifier" key={member.member_id}>
-                        <span>{nameFor(member)}</span>
+                        <span>{nameFor(member)}{(member as { lead?: boolean }).lead && <small className="ml-2">{labels.leadBadge}</small>}</span>
                         <code>@{member.handle}</code>
                       </li>
                     ))}
@@ -292,7 +302,7 @@ export function CanonicalGroupInfo({
               </details>
               <Button
                 className="aino-group-info-action aino-group-info-disband"
-                disabled={busy || !room || !!room.disbanded_at}
+                disabled={busy || !room || !!room.disbanded_at || !canDisband}
                 onClick={() => setEnding(true)}
                 variant="ghost"
               >

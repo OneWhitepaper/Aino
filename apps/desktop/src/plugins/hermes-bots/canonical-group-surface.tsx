@@ -13,8 +13,9 @@ import {
 import type { GroupConversationModelRequest } from '@hermes/plugin-sdk'
 import { useCallback, useId, useRef, useState } from 'react'
 
-import { type CanonicalDriverActivity, canonicalMemberPhases } from './canonical-group-activity'
+import { type CanonicalDriverStatus, canonicalMemberPhases } from './canonical-group-activity'
 import { type CanonicalGroupAttachment, CanonicalGroupAttachments } from './canonical-group-attachments'
+import { type GroupMethods, offersGroupMethod, offersGroupSafetyMethod } from './canonical-group-capabilities'
 import { CanonicalGroupComposer } from './canonical-group-composer'
 import { CanonicalGroupHeader, CanonicalGroupInfo } from './canonical-group-header'
 import {
@@ -24,22 +25,36 @@ import {
 } from './canonical-group-history'
 import { useCanonicalGroupLabels } from './canonical-group-labels'
 import { useCanonicalMembers } from './canonical-group-members'
+import { CanonicalGroupRoomSettings } from './canonical-group-room-settings'
 import type {
   CanonicalGroupBinding,
   CanonicalPendingAction,
   CanonicalRoom,
+  CanonicalRoomContext,
   CanonicalRoomMember
 } from './canonical-groups'
 import type { GroupMentionInputHandle } from './group-chat-parts'
 
 export interface CanonicalGroupSurfaceState {
-  room: CanonicalRoom
-  driver_status?: CanonicalDriverActivity & { pending_actions?: CanonicalPendingAction[] }
+  room: CanonicalRoom & { authority_epoch?: number }
+  context?: CanonicalRoomContext | null
+  driver_status?: CanonicalDriverStatus<CanonicalPendingAction> & { max_continues?: number; routing_modes?: string[] }
   model_requests?: GroupConversationModelRequest[]
 }
 
 export interface CanonicalGroupSurfaceProps {
   mainTab?: boolean
+  methods?: GroupMethods
+  stopping?: boolean
+  sending?: boolean
+  journalError?: string
+  notice?: string
+  sendHint?: string
+  reply?: { name: string; quote: string; thread?: string } | null
+  onCancelReply?: () => void
+  onContinue?: (discussionEventId: string) => unknown
+  onReply?: (member: CanonicalRoomMember | undefined, text: string, thread: string | undefined, author: string) => void
+  onJournalReload?: () => void
   binding: CanonicalGroupBinding
   state: CanonicalGroupSurfaceState | null
   events: CanonicalGroupEvent[]
@@ -65,6 +80,15 @@ export interface CanonicalGroupSurfaceProps {
   onStop: () => void
 }
 
+function surfacePresentation(state: CanonicalGroupSurfaceState | null, restored: boolean, busy: boolean, pending: boolean) {
+  const members = state?.room.members ?? []
+  const phases = canonicalMemberPhases(state?.driver_status)
+  const working = !!state?.driver_status?.working || phases.size > 0
+  const locked = !restored || busy || pending || !!state?.room.disbanded_at
+
+  return { members, phases, working, locked }
+}
+
 /** Presentation stays room-local. All mutations and durable send intents remain in the workspace. */
 export function CanonicalGroupSurface(props: CanonicalGroupSurfaceProps) {
   const { binding, state, events, restored, pending, busy, visible, onBack, onDisband, onRename, onStop } = props
@@ -81,10 +105,7 @@ export function CanonicalGroupSurface(props: CanonicalGroupSurfaceProps) {
   const [query, setQuery] = useState('')
   const mentionAfterClose = useRef<string | null>(null)
   const infoId = useId()
-  const members = state?.room.members ?? []
-  const phases = canonicalMemberPhases(state?.driver_status)
-  const working = !!state?.driver_status?.working || phases.size > 0
-  const locked = !restored || busy || pending || !!state?.room.disbanded_at
+  const { members, phases, working, locked } = surfacePresentation(state, restored, busy, pending)
 
   const resize = useCallback((entries: readonly ResizeObserverEntry[]) => {
     if (entries[0]) {
@@ -121,7 +142,7 @@ export function CanonicalGroupSurface(props: CanonicalGroupSurfaceProps) {
   )
 
   const files = groupFiles.length ? (
-    <CanonicalGroupAttachments attachments={groupFiles} binding={binding} disabled={!visible} readOnly />
+    <CanonicalGroupAttachments attachments={groupFiles} binding={binding} disabled={!visible} downloads={offersGroupMethod(props.methods, 'groups.attachment.download')} readOnly />
   ) : undefined
 
   const info = (
@@ -129,9 +150,13 @@ export function CanonicalGroupSurface(props: CanonicalGroupSurfaceProps) {
       available={state ? !!state.driver_status : undefined}
       binding={binding}
       busy={busy}
+      canDisband={offersGroupMethod(props.methods, 'groups.disband')}
+      canRename={offersGroupMethod(props.methods, 'groups.rename')}
       driver={state?.driver_status}
       files={files}
       id={infoId}
+      management={<CanonicalGroupRoomSettings autoRouting={!!state?.driver_status?.routing_modes?.includes('auto')} binding={binding}
+        context={state?.context} disabled={busy || !offersGroupMethod(props.methods, 'groups.context')} members={members.map(member => ({ ...member, display_name: nameFor(member) }))} onSaved={props.onRefresh} />}
       onClose={() => setInfoOpen(false)}
       onDisband={onDisband}
       onMention={locked ? undefined : mention}
@@ -183,6 +208,7 @@ export function CanonicalGroupSurface(props: CanonicalGroupSurfaceProps) {
         binding={binding}
         busy={busy}
         canStop={working}
+        driver={state?.driver_status}
         infoOpen={infoOpen}
         infoPanelId={`${infoId}-panel`}
         mainTab={props.mainTab}
@@ -226,9 +252,14 @@ export function CanonicalGroupSurface(props: CanonicalGroupSurfaceProps) {
               <CanonicalGroupHistory
                 binding={binding}
                 disabled={!visible}
+                downloads={offersGroupMethod(props.methods, 'groups.attachment.download')}
                 events={events}
                 members={members}
                 onMention={locked ? undefined : mention}
+                onReply={locked ? undefined : props.onReply}
+                pause={{ busy, stopping: props.stopping, maxContinues: state?.driver_status?.max_continues,
+                  onContinue: offersGroupMethod(props.methods, 'groups.continue') ? props.onContinue : undefined,
+                  onStop: offersGroupSafetyMethod(props.methods, 'groups.stop') ? onStop : undefined }}
                 searchQuery={query}
               />
             </div>

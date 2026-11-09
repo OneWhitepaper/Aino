@@ -14,6 +14,7 @@ import {
   type CSSProperties,
   Fragment,
   type ReactNode,
+  type PointerEvent as ReactPointerEvent,
   type RefObject,
   useContext,
   useEffect,
@@ -37,6 +38,7 @@ import {
   PaneTabLabel,
   PaneTabStrip
 } from '@/components/ui/pane-tab'
+import { usePaneTabKeyboard } from '@/components/ui/pane-tab-keyboard'
 import { ContribBoundary, ContribRender } from '@/contrib/react/boundary'
 import { Slot } from '@/contrib/react/slot'
 import { useContributions } from '@/contrib/react/use-contributions'
@@ -99,7 +101,7 @@ import {
 
 import { CompactTabPicker } from './compact-tab-picker'
 import { startPaneDrag } from './drag-session'
-import { groupHeaderPresentation } from './group-header-presentation'
+import { groupHeaderPresentation, groupTabHeaderVisible } from './group-header-presentation'
 import { groupMinimizeLabel, groupNewTab, groupTabActions } from './group-tab-actions'
 import { SessionHeaderPlacement, WindowTitlebarContext } from './header-placement'
 import { KeepAlivePaneSlot, useStablePaneHosts } from './keep-alive-panes'
@@ -430,6 +432,75 @@ function ZoneBodyMenu({ children, label, ...menu }: ZoneBodyMenuProps) {
   )
 }
 
+interface EditVeilProps extends Omit<ZoneMenuProps, 'children'> {
+  label: string
+  onPointerDown: (event: ReactPointerEvent<HTMLDivElement>) => void
+  /** Where the zone's header ends. */
+  top: number
+}
+
+/** The edit-mode drag veil over a zone's body, carrying the zone menu. */
+function EditVeil({ label, onPointerDown, top, ...menu }: EditVeilProps) {
+  return (
+    <ZoneMenu {...menu}>
+      <div
+        // z-50: pane CONTENT may carry its own stacked chrome (the
+        // terminal rail is z-40) — the edit veil must cover all of it.
+        // The scrim mixes the accent over the CHROME BG (not transparent)
+        // so it properly dims content in dark themes instead of leaving a
+        // barely-tinted wash; the light blur reads as "edit mode" the same
+        // way the zone editor's backdrop does.
+        className="absolute inset-x-0 bottom-0 z-50 flex cursor-grab items-center justify-center outline-1 -outline-offset-2 outline-dashed backdrop-blur-[2px]"
+        onPointerDown={onPointerDown}
+        style={{
+          top,
+          background:
+            'color-mix(in srgb, var(--ui-accent) 6%, color-mix(in srgb, var(--ui-bg-chrome) 55%, transparent))',
+          outlineColor: 'color-mix(in srgb, var(--ui-accent) 55%, transparent)'
+        }}
+      >
+        <span className="flex max-w-[calc(100%-1rem)] items-center gap-1.5 rounded-md border border-(--ui-stroke-secondary) bg-popover px-2 py-1 text-[length:var(--aino-text-caption)] font-semibold uppercase tracking-[0.16em] text-(--ui-text-secondary)">
+          <Codicon className="shrink-0" name="gripper" size="0.8125rem" />
+          <span className="min-w-0 truncate">{label}</span>
+        </span>
+      </div>
+    </ZoneMenu>
+  )
+}
+
+interface CollapsedZoneRailProps {
+  activeId: string
+  children: ReactNode
+  menu: Omit<ComponentProps<typeof ZoneMenu>, 'children'>
+  railSide: 'left' | 'right'
+}
+
+function CollapsedZoneRail({ activeId, children, menu, railSide }: CollapsedZoneRailProps) {
+  const { t } = useI18n()
+
+  return (
+    <ZoneMenu {...menu}>
+      <div
+        className={cn(
+          'flex h-full min-h-7 w-7 min-w-7 shrink-0 cursor-pointer select-none flex-col items-stretch bg-(--ui-sidebar-surface-background)',
+          // Strip line faces the content the zone collapsed away from.
+          railSide === 'right' ? PANE_TAB_STRIP_LINE_LEFT : PANE_TAB_STRIP_LINE_RIGHT
+        )}
+        onClick={() => restoreTreePane(activeId)}
+        title={t.zones.restore}
+      >
+        <div
+          aria-orientation="vertical"
+          className="flex min-h-0 flex-col overflow-y-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+          role="tablist"
+        >
+          {children}
+        </div>
+      </div>
+    </ZoneMenu>
+  )
+}
+
 export function TreeGroup({
   node,
   parentAxis,
@@ -613,15 +684,16 @@ export function TreeGroup({
     return chrome.tabTitleText?.() ?? (chrome.tabTitle ? String(pane?.title ?? paneId) : paneTitle(paneId))
   }
 
-  const conversationIds = shown.filter(isConversationPane)
+  const { conversationIds, currentConversationId, headerPanes } = resolveConversationTabs(
+    shown,
+    activeId,
+    memoryKey,
+    editMode
+  )
 
-  const currentConversationId = isConversationPane(activeId)
-    ? activeId
-    : (resolveRememberedActivePane(memoryKey, conversationIds) ?? '')
-
-  // Tools retain their own tabs; conversations occupy one current-title slot.
-  // The layout still owns every retained pane, including explicit splits.
-  const headerPanes = editMode ? shown : shown.filter(id => !isConversationPane(id) || id === currentConversationId)
+  // The horizontal strip keeps other conversations in its picker; only the
+  // collapsed rail renders them as tabs that keyboard focus can reach.
+  const tabKeyboardProps = usePaneTabKeyboard(verticalCollapse ? shown : headerPanes, activeId, ref)
 
   const conversationPicker =
     conversationIds.length > 1 && !editMode ? (
@@ -700,46 +772,34 @@ export function TreeGroup({
           the horizontal strip, just `vertical`. Click a tab to restore +
           activate; click anywhere else on the rail to restore. */}
       {verticalCollapse && (
-        <ZoneMenu {...zoneMenu}>
-          <div
-            className={cn(
-              'flex h-full min-h-7 w-7 min-w-7 shrink-0 cursor-pointer select-none flex-col items-stretch bg-(--ui-sidebar-surface-background)',
-              // Strip line faces the content the zone collapsed away from.
-              railSide === 'right' ? PANE_TAB_STRIP_LINE_LEFT : PANE_TAB_STRIP_LINE_RIGHT
-            )}
-            onClick={() => restoreTreePane(activeId)}
-            title={t.zones.restore}
-          >
-            <div
-              className="flex min-h-0 flex-col overflow-y-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-              role="tablist"
-            >
-              {shown.map(paneId => {
-                const closeable = closeableTab(paneId)
+        <CollapsedZoneRail activeId={activeId} menu={zoneMenu} railSide={railSide}>
+          {shown.map(paneId => {
+            const closeable = closeableTab(paneId)
 
-                return (
-                  <PaneTab
-                    // Match the horizontal minimized strip: no tab is "active"
-                    // while collapsed (there's no content surface to merge into).
-                    aria-selected={paneId === activeId}
-                    data-tree-tab={paneId}
-                    key={paneId}
-                    onClick={event => {
-                      event.stopPropagation()
-                      restoreTreePane(paneId)
-                    }}
-                    onClose={closeable ? () => closeTab(paneId) : undefined}
-                    role="tab"
-                    side={railSide}
-                    vertical
-                  >
-                    <PaneTabLabel>{tabLabel(paneId)}</PaneTabLabel>
-                  </PaneTab>
-                )
-              })}
-            </div>
-          </div>
-        </ZoneMenu>
+            return (
+              <PaneTab
+                {...tabKeyboardProps(paneId)}
+                // Match the horizontal minimized strip: no tab is "active"
+                // while collapsed (there's no content surface to merge into).
+                aria-label={tabText(paneId)}
+                aria-selected={paneId === activeId}
+                data-tree-tab={paneId}
+                key={paneId}
+                onActivate={() => activatePane(paneId)}
+                onClick={event => {
+                  event.stopPropagation()
+                  activatePane(paneId)
+                }}
+                onClose={closeable ? () => closeTab(paneId) : undefined}
+                role="tab"
+                side={railSide}
+                vertical
+              >
+                <PaneTabLabel>{tabLabel(paneId)}</PaneTabLabel>
+              </PaneTab>
+            )
+          })}
+        </CollapsedZoneRail>
       )}
 
       {/* Header: a chat-only zone shows one current-session title — a tile's
@@ -836,7 +896,7 @@ export function TreeGroup({
 
       {/* Keep the header INSIDE its zone: titlebar drops use the same panel
           bounds, strip refs, focus ownership and split geometry as the body. */}
-      {((headerVisible && !hideSessionTabStrip) || (panelTopEdge && !verticalCollapse && !singleSessionHeader)) && (
+      {groupTabHeaderVisible({ headerVisible, hideSessionTabStrip, panelTopEdge, verticalCollapse, singleSessionHeader }) && (
         <div
           className="relative flex min-w-0 shrink-0 bg-(--ui-sidebar-surface-background)"
           data-panel-header=""
@@ -934,10 +994,13 @@ export function TreeGroup({
 
                   const tab = (
                     <PaneTab
+                      {...tabKeyboardProps(paneId)}
                       active={isActive}
-                      aria-selected={isActive}
+                      aria-label={title}
+                      aria-selected={paneId === activeId}
                       data-tree-tab={paneId}
                       key={paneId}
+                      onActivate={() => activatePane(paneId)}
                       onClose={closeable ? () => closeTab(paneId) : undefined}
                       onPointerDown={e => {
                         // Chrome's tab-selection grammar, ahead of activate/drag:
@@ -1195,33 +1258,18 @@ export function TreeGroup({
           starts below the header so tabs/headers stay directly interactive
           (drag any tab, right-click for the zone menu). */}
       {editMode && !dragging && !isEmpty && !node.minimized && (
-        <ZoneMenu {...zoneMenu}>
-          <div
-            // z-50: pane CONTENT may carry its own stacked chrome (the
-            // terminal rail is z-40) — the edit veil must cover all of it.
-            // The scrim mixes the accent over the CHROME BG (not transparent)
-            // so it properly dims content in dark themes instead of leaving a
-            // barely-tinted wash; the light blur reads as "edit mode" the same
-            // way the zone editor's backdrop does.
-            className="absolute inset-x-0 bottom-0 z-50 flex cursor-grab items-center justify-center outline-1 -outline-offset-2 outline-dashed backdrop-blur-[2px]"
-            onPointerDown={e => startPaneDrag(activeId, e, undefined, undefined, tabText(activeId))}
-            style={{
-              top: panelTopEdge
-                ? titlebarHeight + (tabsBelowControls && headerVisible ? stripHeight : 0)
-                : headerVisible
-                  ? stripHeight
-                  : 0,
-              background:
-                'color-mix(in srgb, var(--ui-accent) 6%, color-mix(in srgb, var(--ui-bg-chrome) 55%, transparent))',
-              outlineColor: 'color-mix(in srgb, var(--ui-accent) 55%, transparent)'
-            }}
-          >
-            <span className="flex max-w-[calc(100%-1rem)] items-center gap-1.5 rounded-md border border-(--ui-stroke-secondary) bg-popover px-2 py-1 text-[length:var(--aino-text-caption)] font-semibold uppercase tracking-[0.16em] text-(--ui-text-secondary)">
-              <Codicon className="shrink-0" name="gripper" size="0.8125rem" />
-              <span className="min-w-0 truncate">{tabText(activeId)}</span>
-            </span>
-          </div>
-        </ZoneMenu>
+        <EditVeil
+          {...zoneMenu}
+          label={tabText(activeId)}
+          onPointerDown={e => startPaneDrag(activeId, e, undefined, undefined, tabText(activeId))}
+          top={
+            panelTopEdge
+              ? titlebarHeight + (tabsBelowControls && headerVisible ? stripHeight : 0)
+              : headerVisible
+                ? stripHeight
+                : 0
+          }
+        />
       )}
 
       {/* FancyZones drop overlay — its own component so the per-frame drop
@@ -1392,4 +1440,18 @@ function ZoneDropOverlay({ node }: { node: GroupNode }) {
       />
     </div>
   )
+}
+
+function resolveConversationTabs(shown: string[], activeId: string, memoryKey: string, editMode: boolean) {
+  const conversationIds = shown.filter(isConversationPane)
+
+  const currentConversationId = isConversationPane(activeId)
+    ? activeId
+    : (resolveRememberedActivePane(memoryKey, conversationIds) ?? '')
+
+  // Tools retain their own tabs; conversations occupy one current-title slot.
+  // The layout still owns every retained pane, including explicit splits.
+  const headerPanes = editMode ? shown : shown.filter(id => !isConversationPane(id) || id === currentConversationId)
+
+  return { conversationIds, currentConversationId, headerPanes }
 }

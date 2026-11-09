@@ -18,7 +18,9 @@ import {
   parseRosterKey,
   saveSelectedRosterBot
 } from './bot-state'
-import { CanonicalGroupList } from './canonical-group-registry'
+import { $canonicalRoomLive } from './canonical-group-details'
+import { bindGatewayGroupRoom, useCanonicalGroupSelection, useGatewayGroupRooms } from './canonical-group-registry'
+import { CanonicalGroupRow } from './canonical-group-row'
 /**
  * The Bots pane itself: the roster's selection reconciliation, the
  * workspace-ownership reads its lifecycle keys off, and the pane that lists
@@ -45,7 +47,7 @@ import { $showHiddenBots, isBotHidden } from './hidden-bots'
 import { useBots } from './i18n'
 import { $activityToasts } from './roster-actions'
 import { renderRosterContent } from './roster-pane-content'
-import { deriveRosterPresentation, deriveRosterRows, sortRosterBots } from './roster-pane-derivation'
+import { deriveRosterPresentation, deriveRosterRows, type RosterGroupRow, sortRosterBots } from './roster-pane-derivation'
 import { renderRosterDialogs } from './roster-pane-dialogs'
 import { RosterGroupRowView } from './roster-pane-groups'
 import { $lastSources, usePublishRosterSnapshot } from './roster-pane-lifecycle'
@@ -275,6 +277,9 @@ export function BotsPane() {
   const groupNeedsYou = useValue($groupNeedsYou)
   const groupClarify = useValue($groupClarify)
   const groupRooms = useValue($groupChats)
+  const gatewayRooms = useGatewayGroupRooms()
+  const isCanonicalGroupSelected = useCanonicalGroupSelection()
+  const gatewayRoomLive = useValue($canonicalRoomLive)
   const rememberedSources = useValue($lastSources)
   const rosterHydrated = useValue($rosterHydrated)
   const selectionHydrated = useValue($selectedRosterHydrated)
@@ -352,6 +357,8 @@ export function BotsPane() {
     activityFilter,
     rowKindFilter,
     groupRooms,
+    gatewayRooms,
+    gatewayRoomLive,
     activeRosterKeys,
     gatewayOptions,
     activityOf,
@@ -417,7 +424,7 @@ export function BotsPane() {
   useReconcileRosterOwner(data, error, selectionHydrated, roster, sourceSnapshot, allMeta)
 
   const staleNotice =
-    error && !live && roster.length
+    error && !live && (roster.length || gatewayRooms.length)
       ? 'Roster refresh failed — showing the last good list.' +
         (gatewayUp ? '' : ' Waiting for the gateway to reconnect…')
       : null
@@ -467,7 +474,17 @@ export function BotsPane() {
     />
   )
 
-  const renderGroupRow = (row: { members: GroupMember[]; name: string }) => (
+  // Move up / down reorders Desktop rooms; gateway rooms keep recency order.
+  const desktopGroupRows = sortedGroupRows.filter(row => !row.gateway)
+
+  const renderGroupRow = ({ gateway, ...row }: RosterGroupRow) => gateway ? (
+    <CanonicalGroupRow
+      active={isCanonicalGroupSelected(gateway.binding)}
+      key={gateway.key}
+      onOpen={() => openGroupChat(bindGatewayGroupRoom(gateway), 'key')}
+      room={gateway}
+    />
+  ) : (
     <RosterGroupRowView
       active={groupChatName === row.name}
       b={b}
@@ -480,7 +497,7 @@ export function BotsPane() {
       onDisband={setDeletingGroup}
       onNewSection={target => setSectionDialog({ group: target, mode: 'create' })}
       onOpen={group => openGroupChat(group, 'name')}
-      sortedGroupRows={sortedGroupRows}
+      sortedGroupRows={desktopGroupRows}
     />
   )
 
@@ -532,13 +549,6 @@ export function BotsPane() {
         setGatewayFilter
       })}
       <div className="aino-roster-scroll">
-        <CanonicalGroupList
-          hidden={rowKindFilter === 'bots'}
-          onCreate={() => setGroupCreateOpen(true)}
-          onOpen={openGroupChat}
-          query={query}
-          roster={roster}
-        />
         {renderRosterToolbar({
           b,
           activityToasts,
@@ -566,7 +576,7 @@ export function BotsPane() {
           staleNotice,
           isLoading,
           initialRosterLoading,
-          roster,
+          listedCount: roster.length + gatewayRooms.length,
           error,
           gatewayUp,
           refetch,

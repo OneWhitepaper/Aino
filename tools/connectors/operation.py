@@ -52,6 +52,8 @@ class Target:
     repair_id: Optional[str] = None
     # The exact non-secret configuration the user reviews before a custom MCP install.
     mcp_config: Optional[dict[str, Any]] = None
+    # What an MCP row will run or contact ({kind, target, env?, cwd?}), scrubbed; the card shows it before consent.
+    launch: Optional[dict[str, Any]] = None
 
     @property
     def resolved(self) -> bool:
@@ -78,6 +80,8 @@ class Target:
             out["required_env"] = self.required_env
         if self.mcp_config is not None:
             out["mcp_config"] = self.mcp_config
+        if self.launch:
+            out["launch"] = self.launch
         out.update(self.extra)
         return out
 
@@ -247,6 +251,7 @@ class ConnectionOperation:
         for target in result["targets"]:
             target.pop("connection_id", None)
             target.pop("resolved", None)  # the card's flag; the model reads state
+            target.pop("launch", None)  # the card's consent line; the model named the server itself
         if result.get("settled_at") is None:
             return result
         from tools.registry import registry

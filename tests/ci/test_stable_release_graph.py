@@ -67,7 +67,7 @@ def test_release_reuses_whole_ci_and_docker_before_publication():
     # both Windows arches, and the Linux groups are not called at all.
     assert "candidates" not in jobs
     for name, group in zip(candidate_calls, ("darwin-arm64", "darwin-x64", "win32-arm64",
-                                            "win32-x64", "win32-bundle", "termux")):
+                                            "win32-x64", "win32-bundle", "termux"), strict=True):
         call = jobs[name]
         assert call["uses"] == "./.github/workflows/desktop-bundled-release.yml"
         assert call["with"]["release-phase"] == "candidate"

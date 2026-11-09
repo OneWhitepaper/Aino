@@ -16,7 +16,7 @@ export const menuMotionClass =
 // Radix rows take real focus (`focus:`), cmdk rows stay behind the input and
 // mark `data-selected="true"`.
 export const menuItemClass =
-  "relative flex min-h-8 items-center gap-2 rounded-(--aino-radius-control) px-2 py-1.5 text-[length:var(--aino-text-ui)] leading-[1.125rem] outline-hidden select-none [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4"
+  "relative flex min-h-8 items-center gap-2 rounded-(--aino-radius-control) px-2 py-1.5 text-[length:var(--aino-text-ui)] leading-[1.125rem] focus-visible:outline-hidden select-none [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4"
 
 export const menuItemFocusClass = 'focus:bg-(--ui-control-active-background) focus:text-foreground'
 

@@ -1,3 +1,4 @@
+import { useStore } from '@nanostores/react'
 import type * as React from 'react'
 import { useState } from 'react'
 
@@ -13,12 +14,14 @@ import { localizedMessagingPlatformName } from '@/i18n/messaging-platforms'
 import { PRODUCT_NAME } from '@/lib/brand'
 import { openExternalLink } from '@/lib/external-link'
 import { ExternalLink, Save, Trash2 } from '@/lib/icons'
+import { $activeConnectionId } from '@/store/connections'
 
 import { CREDENTIAL_CONTROL_CLASS } from '../settings/credential-key-ui'
 import { credentialPreview } from '../settings/helpers'
 import { ListRow } from '../settings/primitives'
 
 import { AllowlistField } from './allowlist-field'
+import { RelayLinkSetup } from './relay-link'
 import { TelegramQrSetup } from './telegram-qr-setup'
 
 const pairingKey = (user: PairingUser) => user.platform + ':' + user.user_id
@@ -81,11 +84,7 @@ export function PlatformDetail({
 }) {
   const { t } = useI18n()
   const m = t.messaging
-  const [showAdvanced, setShowAdvanced] = useState(false)
-  const requiredFields = platform.env_vars.filter(field => field.required)
-  const optionalFields = platform.env_vars.filter(field => !field.required && !fieldCopy(field, m).advanced)
-  const advancedFields = platform.env_vars.filter(field => !field.required && fieldCopy(field, m).advanced)
-  const hiddenCount = advancedFields.length
+  const connectionId = useStore($activeConnectionId)
 
   return (
     <>
@@ -155,6 +154,57 @@ export function PlatformDetail({
         </section>
       )}
 
+      {platform.relay_fronted && (
+        <section>
+          <RelayLinkSetup
+            key={`${connectionId ?? 'local'}:${scopeProfile ?? ''}:${platform.id}`}
+            platform={platform}
+            scopeProfile={scopeProfile}
+          />
+        </section>
+      )}
+      {platform.disabled_by_relay && !platform.relay_exclusive && (
+        <p className="text-[length:var(--aino-text-ui)] text-muted-foreground">
+          {m.relayLink.managedNote(platform.name)}
+        </p>
+      )}
+      {!platform.relay_exclusive && (
+        <DirectSetupSections
+          edits={edits}
+          onClear={onClear}
+          onEdit={onEdit}
+          onTelegramApplied={onTelegramApplied}
+          platform={platform}
+          saving={saving}
+          scopeProfile={scopeProfile}
+        />
+      )}
+    </>
+  )
+}
+
+function DirectSetupSections({
+  edits,
+  onClear,
+  onEdit,
+  onTelegramApplied,
+  platform,
+  saving,
+  scopeProfile
+}: Pick<
+  React.ComponentProps<typeof PlatformDetail>,
+  'edits' | 'onClear' | 'onEdit' | 'onTelegramApplied' | 'platform' | 'saving' | 'scopeProfile'
+>) {
+  const { t } = useI18n()
+  const m = t.messaging
+  const [showAdvanced, setShowAdvanced] = useState(false)
+  const requiredFields = platform.env_vars.filter(field => field.required)
+  const optionalFields = platform.env_vars.filter(field => !field.required && !fieldCopy(field, m).advanced)
+  const advancedFields = platform.env_vars.filter(field => !field.required && fieldCopy(field, m).advanced)
+  const hiddenCount = advancedFields.length
+
+  return (
+    <>
       {platform.id === 'telegram' && (
         <section>
           <TelegramQrSetup onApplied={onTelegramApplied} platform={platform} scopeProfile={scopeProfile} />
@@ -282,17 +332,21 @@ export function PlatformActionBar({
   const name = localizedMessagingPlatformName(locale, platform.id, platform.name)
   const isSavingEnv = saving === `env:${platform.id}`
 
+  if (platform.relay_exclusive) {
+    return null
+  }
+
   return (
     <>
       <label className="flex cursor-pointer items-center gap-2 text-xs text-muted-foreground">
         <Switch
           aria-label={platform.enabled ? m.disableAria(name) : m.enableAria(name)}
           checked={platform.enabled}
-          disabled={saving === `enabled:${platform.id}`}
+          disabled={platform.disabled_by_relay || saving === `enabled:${platform.id}`}
           onCheckedChange={onToggle}
           size="xs"
         />
-        {platform.enabled ? m.enabled : m.disabled}
+        {platform.disabled_by_relay ? m.relayLink.managed : platform.enabled ? m.enabled : m.disabled}
       </label>
 
       <div className="messaging-save-actions ml-auto flex items-center gap-2">

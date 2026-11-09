@@ -1,3 +1,4 @@
+import { atom } from '@hermes/plugin-sdk'
 /**
  * The window-local state a group-chat room needs but never renders: the
  * per-composer drafts, and the registry of MAIN-window tabs a room is open in.
@@ -7,10 +8,9 @@
  * tab without any of those paths importing a view.
  */
 
-import { atom } from '@hermes/plugin-sdk'
-
 import type { CanonicalGroupAttachment } from './canonical-group-attachments'
 import type { CanonicalGroupOrigin } from './canonical-group-registry'
+import type { CanonicalRoomMember } from './canonical-groups'
 import type { CanonicalGroupBinding, CanonicalGroupRoute } from './canonical-groups'
 import { $groupChatWorkspace, groupChatRoomKey } from './group-chat'
 import type { GroupChatRoom } from './group-chat'
@@ -22,7 +22,11 @@ import type { Attachment } from './types'
 // metadata (where another Desktop would see half-typed text or attachment
 // bytes). Current rooms key by immutable roomId; legacy rooms fall back to the
 // display name until they are upgraded.
+export interface CanonicalDraftReply { member?: CanonicalRoomMember; name: string; quote: string; thread?: string }
+export interface CanonicalHeldDraft { text: string; attachments: CanonicalGroupAttachment[]; reply: CanonicalDraftReply | null }
 export interface GroupComposerDraft {
+  canonicalReply?: CanonicalDraftReply | null
+  canonicalHeld?: CanonicalHeldDraft | null
   activeReplyThread: null | string
   main: string
   /** Gateway upload manifests stay local until this room explicitly sends. */

@@ -1,4 +1,4 @@
-import { Alert, AlertDescription, atom, Button, Codicon, host, randomUuid, Tip, useValue } from '@hermes/plugin-sdk'
+import { Alert, AlertDescription, atom, Button, Codicon, host, randomUuid, Tip, useQuery, useValue } from '@hermes/plugin-sdk'
 import { useEffect, useMemo, useState } from 'react'
 
 import { $botChatFocused } from './bot-state'
@@ -6,37 +6,47 @@ import { seatableGroupBots, useGroupCapability } from './canonical-group-capabil
 import { useCanonicalGroupLabels } from './canonical-group-labels'
 import { canonicalMemberName } from './canonical-group-members'
 import { CanonicalGroupRow } from './canonical-group-row'
-import { canonicalGroupRequest, captureCanonicalGroupRoute, discoverCanonicalGroups } from './canonical-groups'
-import type { CanonicalGroupBinding, CanonicalGroupRoute, CanonicalRoom } from './canonical-groups'
+import { canonicalGroupRequest, discoverCanonicalGroups, listCanonicalRooms } from './canonical-groups'
+import type { CanonicalGroupBinding, CanonicalGroupRoute, CanonicalRoom, CanonicalRoomMember } from './canonical-groups'
 import { $botMeta } from './data'
 import { $groupChatWorkspace } from './group-chat'
 import { $groupMainTabsRev, closeGroupChatMainTab, closeGroupMainViews, groupChatMainTabs, groupOpenOrigin, groupOpenRoute, groupWorkspacePaneId } from './group-panes'
 import { useBots } from './i18n'
+import { rpcMethodMissing } from './rpc-errors'
+import { ID } from './shared'
 import type { RosterRow } from './types'
 
 export const $canonicalGroupBindings = atom<Record<string, CanonicalGroupBinding>>({})
-// Bumped when a room leaves outside the list's own Refresh, so the sidebar re-reads `groups.list`.
+// Bumped when this window creates or disbands a room, so the roster re-reads `groups.list` now.
 const $canonicalGroupListRevision = atom(0)
+// Rooms this window saw disbanded. A `groups.list` that started before the
+// disband (or a failed re-read keeping the last good list) never lists them again.
+const $disbandedGatewayRooms = atom<ReadonlySet<string>>(new Set())
 
-/** Drop a disbanded room's key and every alias to it, then re-read the sidebar list. */
-export function forgetCanonicalGroup({ connectionId, profile, roomId }: CanonicalGroupBinding): void {
-  $canonicalGroupBindings.set(
-    Object.fromEntries(
-      Object.entries($canonicalGroupBindings.get()).filter(
-        ([, binding]) =>
-          binding.connectionId !== connectionId || binding.profile !== profile || binding.roomId !== roomId
-      )
-    )
-  )
+export function refreshGatewayGroupRooms(): void {
   $canonicalGroupListRevision.set($canonicalGroupListRevision.get() + 1)
 }
 
+/** Drop a disbanded room's key and every alias to it, then re-read the sidebar list. */
+export function forgetCanonicalGroup({ connectionId, profile, roomId }: CanonicalGroupBinding): void {
+  $disbandedGatewayRooms.set(new Set($disbandedGatewayRooms.get()).add(canonicalGroupKey({ connectionId, profile }, roomId)))
+  $canonicalGroupBindings.set(Object.fromEntries(Object.entries($canonicalGroupBindings.get()).filter(([, binding]) =>
+    binding.connectionId !== connectionId || binding.profile !== profile || binding.roomId !== roomId)))
+  refreshGatewayGroupRooms()
+}
+
+function canonicalGroupKey(route: CanonicalGroupRoute, roomId: string): string {
+  return `canonical:${encodeURIComponent(route.connectionId)}:${encodeURIComponent(route.profile)}:${roomId}`
+}
+
 export function registerCanonicalGroup(route: CanonicalGroupRoute, room: CanonicalRoom): string {
-  const key = `canonical:${encodeURIComponent(route.connectionId)}:${encodeURIComponent(route.profile)}:${room.room_id}`
-  $canonicalGroupBindings.set({
-    ...$canonicalGroupBindings.get(),
-    [key]: { ...route, roomId: room.room_id, roomName: room.name }
-  })
+  const key = canonicalGroupKey(route, room.room_id)
+  const current = $canonicalGroupBindings.get()[key]
+
+  // The roster re-lists on a poll: an unchanged room must not wake every binding reader.
+  if (current?.connectionId !== route.connectionId || current.profile !== route.profile || current.roomName !== room.name) {
+    $canonicalGroupBindings.set({ ...$canonicalGroupBindings.get(), [key]: { ...route, roomId: room.room_id, roomName: room.name } })
+  }
 
   return key
 }
@@ -174,17 +184,94 @@ function canonicalGroupViews({ connectionId, profile, roomId }: CanonicalGroupBi
   return views
 }
 
-interface ListedRoom {
+/** One gateway Group Chat as the roster lists it: its exact authority binding and
+ *  the `canonical:` key the open path takes. */
+export interface GatewayGroupRoom {
   binding: CanonicalGroupBinding
   key: string
-  memberCount: number
-  members: CanonicalRoom['members']
+  members: CanonicalRoomMember[]
   name: string
+  room: CanonicalRoom
+  /** Milliseconds; the room's last change, its recency in the roster. */
+  updatedAt: number
+}
+
+/** Bind the room the user clicked, then hand back the key to open. Binding
+ *  happens here, at the gesture, never in the list read: a slow read must not
+ *  re-bind a room disbanded since, or rename one re-read since. */
+export function bindGatewayGroupRoom({ binding, room }: GatewayGroupRoom): string {
+  return registerCanonicalGroup(binding, room)
+}
+
+/** The active source's rooms. A backend that predates gateway Group Chats has none. */
+async function listGatewayGroupRooms(route: CanonicalGroupRoute): Promise<GatewayGroupRoom[]> {
+  let rooms: CanonicalRoom[]
+
+  try {
+    rooms = await listCanonicalRooms(route)
+  } catch (error) {
+    if (rpcMethodMissing(error)) {return []}
+    throw error
+  }
+
+  const listed = rooms.map(room => ({
+    binding: { ...route, roomId: room.room_id, roomName: room.name },
+    key: canonicalGroupKey(route, room.room_id),
+    members: room.members ?? [],
+    name: room.name,
+    room,
+    updatedAt: (room.updated_at ?? 0) * 1000
+  }))
+
+  // A disbanded room this read no longer lists is gone at the gateway: stop hiding it.
+  const prefix = canonicalGroupKey(route, '')
+  const keys = new Set(listed.map(room => room.key))
+  const hidden = $disbandedGatewayRooms.get()
+  const kept = [...hidden].filter(key => !key.startsWith(prefix) || keys.has(key))
+
+  if (kept.length !== hidden.size) {$disbandedGatewayRooms.set(new Set(kept))}
+
+  return listed
+}
+
+const ROOMS_KEY = [ID, 'gateway-group-rooms']
+
+/** Gateway Group Chats for the Bots roster, kept current without a refresh
+ *  button: re-read on a poll, on every socket/source change and after a
+ *  create or disband here. A failed read keeps the last good list (the roster
+ *  shows rooms, never a transport error); a window whose connection has no
+ *  registry id cannot bind a room to an authority, so it lists none. */
+export function useGatewayGroupRooms(): GatewayGroupRoom[] {
+  const connectionId = useValue(host.state.connectionId)
+  const profile = useValue(host.state.profile)
+  const gateway = useValue(host.state.gateway)
+  const revision = useValue($canonicalGroupListRevision)
+  const disbanded = useValue($disbandedGatewayRooms)
+
+  const { data, refetch } = useQuery({
+    queryKey: [...ROOMS_KEY, connectionId, profile],
+    enabled: Boolean(connectionId && profile) && gateway === 'open',
+    queryFn: () => listGatewayGroupRooms({ connectionId: connectionId!, profile }),
+    refetchInterval: 10_000,
+    retry: false,
+    // Always stale, so the socket reopening (boot, reconnect, wake) re-reads at once.
+    staleTime: 0
+  })
+
+  // A create or disband here re-reads now; a failed re-read keeps the last good list.
+  useEffect(() => {
+    if (revision && host.state.gateway.get() === 'open') {void refetch()}
+  }, [revision, refetch])
+
+  return useMemo(
+    () => (connectionId ? (data ?? []).filter(room => !disbanded.has(room.key)) : []),
+    [connectionId, data, disbanded]
+  )
 }
 
 /** Disband on the room's own gateway, then retire it everywhere this window shows it.
  *  A refusal rejects before anything is dropped, so the row stays and the confirm shows why. */
-async function disbandListedRoom(room: ListedRoom, doneMessage: string): Promise<void> {
+export async function disbandGatewayGroupRoom(room: GatewayGroupRoom, doneMessage: string): Promise<void> {
   await canonicalGroupRequest(room.binding, 'groups.disband', { room_id: room.binding.roomId, cancel_id: randomUuid() })
   // Collect before forgetting: the bindings are the only record of which views alias this room.
   canonicalGroupViews(room.binding).add(room.key).forEach(group => {
@@ -223,7 +310,7 @@ function CanonicalGroupCreateAction({ onCreate, roster }: { onCreate: () => void
 }
 
 export function canonicalGroupMatchesQuery(
-  room: Pick<ListedRoom, 'name' | 'members'>,
+  room: Pick<GatewayGroupRoom, 'name' | 'members'>,
   query: string,
   nameFor?: (member: CanonicalRoom['members'][number]) => string
 ): boolean {
@@ -237,15 +324,8 @@ export function canonicalGroupMatchesQuery(
   )
 }
 
-export function CanonicalGroupList({
-  onOpen,
-  query = '',
-  hidden = false,
-  onCreate,
-  roster = []
-}: CanonicalGroupListProps) {
-  const labels = useCanonicalGroupLabels()
-  const b = useBots()
+/** Selection follows the visible owner tab, including source-qualified name aliases. */
+export function useCanonicalGroupSelection() {
   const activeGroup = useValue($groupChatWorkspace)
   const botFocused = useValue($botChatFocused)
   const bindings = useValue($canonicalGroupBindings)
@@ -263,10 +343,32 @@ export function CanonicalGroupList({
 
   const activeVisible = useValue($activeVisible)
   const connectionId = useValue(host.state.connectionId)
+  const profile = useValue(host.state.profile)
+
+  const activeBinding =
+    activeGroup && connectionId
+      ? canonicalGroupBindingFor(bindings, groupOpenRoute(activeGroup) ?? { connectionId, profile }, activeGroup, groupOpenOrigin(activeGroup))
+      : undefined
+
+  return (binding: CanonicalGroupBinding): boolean => Boolean(activeVisible &&
+    activeBinding?.connectionId === binding.connectionId && activeBinding.profile === binding.profile && activeBinding.roomId === binding.roomId)
+}
+
+export function CanonicalGroupList({
+  onOpen,
+  query = '',
+  hidden = false,
+  onCreate,
+  roster = []
+}: CanonicalGroupListProps) {
+  const labels = useCanonicalGroupLabels()
+  const b = useBots()
+  const isSelected = useCanonicalGroupSelection()
+  const connectionId = useValue(host.state.connectionId)
   const allMeta = useValue($botMeta)
   const profile = useValue(host.state.profile)
   const gateway = useValue(host.state.gateway)
-  const [rooms, setRooms] = useState<ListedRoom[]>([])
+  const [rooms, setRooms] = useState<GatewayGroupRoom[]>([])
   const [error, setError] = useState('')
   const [refresh, setRefresh] = useState(0)
   const revision = useValue($canonicalGroupListRevision)
@@ -280,7 +382,7 @@ export function CanonicalGroupList({
     }
 
     void (async () => {
-      const route = captureCanonicalGroupRoute()
+      const route = { connectionId: connectionId ?? '', profile }
       const result = await discoverCanonicalGroups(route)
 
       if (!cancelled) {
@@ -288,7 +390,8 @@ export function CanonicalGroupList({
           result.rooms.map(room => ({
             binding: { ...route, roomId: room.room_id, roomName: room.name },
             key: registerCanonicalGroup(route, room),
-            memberCount: room.members?.length ?? 0,
+            room,
+            updatedAt: (room.updated_at ?? 0) * 1000,
             members: room.members ?? [],
             name: room.name
           }))
@@ -308,11 +411,6 @@ export function CanonicalGroupList({
   const matchingRooms = rooms.filter(room => canonicalGroupMatchesQuery(room, query,
     member => canonicalMemberName(member, room.binding, roster, allMeta, connectionId)))
 
-  const activeBinding =
-    activeGroup && connectionId
-      ? canonicalGroupBindingFor(bindings, groupOpenRoute(activeGroup) ?? { connectionId, profile }, activeGroup, groupOpenOrigin(activeGroup))
-      : undefined
-
   if (hidden) {
     return null
   }
@@ -322,9 +420,9 @@ export function CanonicalGroupList({
       <div className="aino-roster-section-heading">
         <span>{b.roster.groupChats}</span>
         <div className="aino-roster-section-actions">
-          <Tip label={labels.refreshGroups}>
+          <Tip label={labels.refresh}>
             <Button
-              aria-label={labels.refreshGroups}
+              aria-label={labels.refresh}
               onClick={() => setRefresh(value => value + 1)}
               size="icon-xs"
               variant="ghost"
@@ -344,19 +442,10 @@ export function CanonicalGroupList({
       <div className="aino-roster-rows">
         {matchingRooms.map(room => (
           <CanonicalGroupRow
-            active={
-              activeVisible &&
-              activeBinding?.connectionId === room.binding.connectionId &&
-              activeBinding.profile === room.binding.profile &&
-              activeBinding.roomId === room.binding.roomId
-            }
-            binding={room.binding}
+            active={isSelected(room.binding)}
             key={room.key}
-            memberCount={room.memberCount}
-            members={room.members}
-            name={room.name}
-            onDelete={() => disbandListedRoom(room, labels.disbanded(room.name))}
             onOpen={() => onOpen(room.key, 'key')}
+            room={room}
           />
         ))}
         {!!query.trim() && !matchingRooms.length && (

@@ -42,7 +42,7 @@ export function GroupCreateMembers({ allMeta, atCap, checked, disabled = false, 
         const isChecked = Boolean(checked[key])
         const unavailable = disabled || (!isChecked && atCap)
         const source = rosterConnectionLabel(bot) || (!bot.remoteSource ? b.bot.thisDevice : '')
-        const detail = [meta?.description || bot.description, source].filter(Boolean).join(' · ')
+        const detail = meta?.description || bot.description
 
         return <label className={cn('aino-group-create-member', unavailable && 'opacity-50')} key={key}>
           <BotFace color={avatarColor(color, bot.name)} image={image && !isBackfilledFacePng(image) ? image : null}
@@ -50,6 +50,7 @@ export function GroupCreateMembers({ allMeta, atCap, checked, disabled = false, 
           <span className="aino-group-create-member-copy">
             <strong>{displayName(bot, meta)}</strong>
             {detail && <span>{detail}</span>}
+            {source && <span data-device-badge>{source}</span>}
           </span>
           <Checkbox checked={isChecked} disabled={unavailable} onCheckedChange={value => onToggle(key, Boolean(value))} />
         </label>

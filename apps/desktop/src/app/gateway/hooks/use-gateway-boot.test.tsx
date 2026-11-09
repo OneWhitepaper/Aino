@@ -56,8 +56,9 @@ import { warnIfTerminalBackendUnavailable } from '@/store/terminal-backend-warni
 import { deferred } from '../../../test/deferred'
 import { FakeWebSocket } from '../../../test/fake-gateway-socket'
 
+import { coderConn, primaryConn, remotePrimaryConn } from './gateway-boot-test-connections'
 import { takeGatewaySurvivor } from './gateway-hmr-survivor'
-import { primaryRuntimeConnectionId, useGatewayBoot } from './use-gateway-boot'
+import { useGatewayBoot } from './use-gateway-boot'
 
 vi.mock(import('@/store/notifications'), async importOriginal => ({
   ...(await importOriginal()),
@@ -83,39 +84,8 @@ let connectionApplied: null | (() => void) = null
 let powerResume: null | (() => void) = null
 let backendExit: null | ((payload?: unknown) => void) = null
 
-describe('primaryRuntimeConnectionId', () => {
-  it('uses the registry identity when the primary connection has one', () => {
-    expect(primaryRuntimeConnectionId({ connectionId: ' tower ', mode: 'remote' })).toBe('tower')
-  })
 
-  it('uses the stable local identity for an app-managed backend', () => {
-    expect(primaryRuntimeConnectionId({ mode: 'local' })).toBe('local')
-  })
 
-  it('returns null for an unknown remote identity so the caller falls back to live-connection scoping', () => {
-    expect(primaryRuntimeConnectionId({ mode: 'remote' })).toBeNull()
-  })
-})
-
-const primaryConn = {
-  authMode: 'token' as 'oauth' | 'token',
-  baseUrl: 'https://vps.example.com',
-  connectionId: 'primary-vps',
-  profile: 'default',
-  token: 't',
-  wsUrl: 'wss://vps.example.com/api/ws?token=t'
-}
-
-const remotePrimaryConn = { ...primaryConn, mode: 'remote' as const }
-
-const coderConn = {
-  authMode: 'token' as const,
-  baseUrl: 'https://coder.example.com',
-  connectionId: 'coder-remote',
-  profile: 'coder',
-  token: 'c',
-  wsUrl: 'wss://coder.example.com/api/ws?token=c'
-}
 
 function fakeDesktop() {
   let bootProgressHandler: ((payload: Record<string, unknown>) => void) | null = null

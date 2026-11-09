@@ -7,6 +7,18 @@ import { displayName } from './labels'
 import { botRosterMeta } from './routing'
 import type { BotMeta, RosterRow } from './types'
 
+function memberPresentationName(member: CanonicalRoomMember, row: RosterRow | undefined, meta: BotMeta | undefined): string {
+  const namedRow =
+    row && (meta?.title?.trim() || row.display_name?.trim() || row.title || row.ui_meta?.['hermes-bots']?.title)
+
+  return (namedRow && row ? displayName(row, meta) : meta?.title?.trim()) ||
+    member.display_name?.trim() ||
+    member.handle ||
+    member.profile ||
+    member.member_id
+
+}
+
 /** A room's frozen @handle is an address. Presentation may use a newer title,
  * but only from the same connection and target profile as the room member. */
 export function resolveCanonicalMember(
@@ -41,15 +53,7 @@ export function resolveCanonicalMember(
   const localMeta = binding?.connectionId === activeConnectionId ? allMeta[member.profile] : undefined
   const meta = qualifiedMeta || rowMeta || localMeta
 
-  const namedRow =
-    row && (meta?.title?.trim() || row.display_name?.trim() || row.title || row.ui_meta?.['hermes-bots']?.title)
-
-  const name =
-    (namedRow ? displayName(row, meta) : meta?.title?.trim()) ||
-    member.display_name?.trim() ||
-    member.handle ||
-    member.profile ||
-    member.member_id
+  const name = memberPresentationName(member, row, meta)
 
   return { name, appearance: botAppearance(row?.name || member.profile || member.member_id, meta) }
 }

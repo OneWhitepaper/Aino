@@ -12,6 +12,12 @@ export function canonicalCompletedReplies(events: CanonicalGroupEvent[], binding
   }
 
   const ordered = [...unique.values()].sort((a, b) => a.seq - b.seq)
+  const source = replySource(ordered)
+
+  return source ? completedRepliesForSource(ordered, source) : undefined
+}
+
+function replySource(ordered: CanonicalGroupEvent[]): CanonicalGroupEvent | undefined {
   const pending = new Map<string, CanonicalGroupEvent>()
   let latest: CanonicalGroupEvent | undefined
 
@@ -42,6 +48,10 @@ export function canonicalCompletedReplies(events: CanonicalGroupEvent[], binding
 
   if (!source?.event_id || !source.payload.thread_id) {return undefined}
 
+  return source
+}
+
+function completedRepliesForSource(ordered: CanonicalGroupEvent[], source: CanonicalGroupEvent): number {
   const related = ordered.filter(event =>
     event.seq > source.seq &&
     event.payload.discussion_event_id === source.event_id &&

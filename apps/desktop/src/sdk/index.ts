@@ -23,7 +23,7 @@ import type { ReactNode } from 'react'
 
 import { ambientOwnerConnectionId, capabilityScoped, getApiRequestConnection } from '@/api/client'
 import { mutateSessionFenced } from '@/api/sessions'
-import { openSession, type OpenSessionIntent, revealSessionWorkspace } from '@/app/open-session'
+import { type OpenSessionIntent, revealSessionWorkspace } from '@/app/open-session'
 import { syncWorkspaceRoute } from '@/app/routes'
 import {
   $newSessionTabAction,
@@ -86,7 +86,6 @@ import {
   $sessions,
   getSessionOwnerHints,
   rememberedSessionProfile,
-  requestSessionResume,
   sessionMatchesStoredId,
   setResumeExhaustedSessionId,
   setSessionOwnerHint
@@ -98,8 +97,7 @@ import {
   $sessionStates,
   $sessionTiles,
   dropTilesForProfile,
-  focusWorkspaceOwnerSessionTile,
-  sessionTileDelegate
+  focusWorkspaceOwnerSessionTile
 } from '@/store/session-states'
 import { setSettingsScope } from '@/store/settings-scope'
 import { runGatewayRestart } from '@/store/system-actions'
@@ -114,6 +112,7 @@ import { i18nHost } from './i18n'
 import { restoreEmptyBotModelDefault } from './plugin-empty-bot-model'
 import { planPluginOpenSession } from './plugin-open-session-plan'
 import { requestPluginActiveGateway } from './plugin-session-create'
+import { navigatePluginSession, refreshPluginSessionAfterOpen, refreshVisiblePluginSession } from './plugin-session-navigation'
 import { dropLeftoverProfilePrefs, warmProfile } from './profile-local'
 import {
   type PluginProfileRequestOptions,
@@ -1000,104 +999,15 @@ export const host = {
             throw new Error('Session open was superseded by a newer selection.')
           }
 
-          const navigate = (to: string, opts?: { replace?: boolean }) => {
-            const target = to.startsWith('#') ? to : `#${to}`
-
-            if (opts?.replace) {
-              window.location.replace(target)
-            } else {
-              window.location.hash = target
-            }
-          }
-
-          const intent = options.intent ?? 'in-place'
-
-          // Background refresh (refreshInPlace): this wake was triggered by
-          // something that HAPPENED in the background (a reclaim, roster
-          // activity), not by the user navigating. Never touch the route or
-          // the tab strip — the user may be reading the Kanban board, a
-          // settings page, or another chat (issue 121874: /kanban was
-          // replaced by the Bot Chat route). Refresh only whichever surface
-          // already holds the session: its tile via resumeTile
-          // (refreshTranscript), or main via the armed explicit-resume
-          // request — the same lever markRuntimeGone pulls for background
-          // reclaims, consumed only while the route already points at the
-          // session, so it can never navigate. A session that is not on
-          // screen resolves without re-opening anything; the next explicit
-          // open owns that.
           if (options.refreshInPlace) {
-            const existingTile = $sessionTiles.get().some(tile => tile.storedSessionId === storedSessionId)
-            const tileDelegate = existingTile ? sessionTileDelegate() : null
-            // Main is refreshed only when it is actually showing this
-            // session — the same surface discriminator the hydration probe
-            // uses. An off-screen chat re-opens nothing: the request would
-            // sit unconsumed and the wake would silently no-op.
-            const mainShowing = $selectedStoredSessionId.get() === storedSessionId
-
-            if (tileDelegate) {
-              await tileDelegate.resumeTile(storedSessionId, { refreshTranscript: true })
-            } else if (mainShowing) {
-              requestSessionResume(storedSessionId, ownerRoute || undefined)
-            }
+            await refreshVisiblePluginSession(storedSessionId, ownerRoute)
 
             break
           }
 
-          if (options.workspaceMode === 'bots') {
-            openSession(storedSessionId, navigate, intent, {
-              ownerRoute: ownerRoute ?? undefined,
-              workspaceMode: 'bots',
-              workspaceOwnerKey: options.workspaceOwnerKey,
-              ...(options.tabTitle ? { workspaceTabTitle: options.tabTitle } : {})
-            })
-          } else {
-            openSession(storedSessionId, navigate, intent)
-          }
-
-          // Accept this open's own synchronous navigation, then keep guarding
-          // its destination through hydration, recovery and any retry.
-          navigationHash = window.location.hash
-
-          // Judge the main surface AFTER the open: on a cold start the persisted
-          // route can already point at this session while selection has not
-          // settled, so a pre-open "already selected" precondition skips the
-          // resume exactly when it is needed (#89206 — blank Bot Chat with the
-          // roster preview intact). The surface is healthy only when this stored
-          // session is selected, a runtime is bound, and the expected transcript
-          // is present; anything less gets an explicit sequenced resume request.
-          // The route-resume effect only honors the request while the route
-          // points at this session, and consumes it alongside any resume the
-          // navigation itself triggers, so a redundant request is a no-op.
-          const surfaceHealthy =
-            $selectedStoredSessionId.get() === storedSessionId &&
-            Boolean($activeSessionId.get()) &&
-            (!expectHistory || $messages.get().length > 0)
-
-          // surfaceHealthy trusts ANY non-empty cached transcript, so it
-          // cannot distinguish a fresh transcript from a stale snapshot the
-          // session-states cache kept across a bot switch (#93604). Callers
-          // that represent an explicit user navigation pass forceResume to
-          // skip the heuristic entirely; the resume is idempotent either way.
-          //
-          // Bot Chat opens as a tab/tile. requestSessionResume is consumed
-          // only when the MAIN route is that session, so a roster reopen of
-          // an already-mounted tile would paint the idle snapshot and never
-          // pull messages that arrived while the panel WS was down (#96183).
-          // Refresh the tile transcript in place instead.
-          if (options.awaitHydration && (options.forceResume || !surfaceHealthy)) {
-            const existingTile = $sessionTiles.get().some(tile => tile.storedSessionId === storedSessionId)
-            const tileDelegate = existingTile ? sessionTileDelegate() : null
-
-            if (tileDelegate) {
-              try {
-                await tileDelegate.resumeTile(storedSessionId, { refreshTranscript: true })
-              } catch {
-                requestSessionResume(storedSessionId, ownerRoute || undefined)
-              }
-            } else {
-              requestSessionResume(storedSessionId, ownerRoute || undefined)
-            }
-          }
+          // Capture synchronous navigation before a transcript refresh can yield.
+          navigationHash = navigatePluginSession(storedSessionId, options, ownerRoute)
+          await refreshPluginSessionAfterOpen(storedSessionId, options, ownerRoute)
 
           if (options.awaitHydration) {
             await waitForFocusedSessionHydration({
@@ -1634,6 +1544,9 @@ export {
   type ComposerModelPillContext,
   type ComposerModelPillProvider
 } from '@/app/chat/composer/contrib'
+/** The main composer's surface pieces, so a plugin composer (Bot Mode rooms) reads as the
+ *  same input: the ring, the fill layer behind the editor, and the ghost / primary icon buttons. */
+export { GHOST_ICON_BTN, PRIMARY_ICON_BTN } from '@/app/chat/composer/control-classes'
 /** THE session status dot — the one primitive the sidebar row, the pane tabs
  *  and the session switcher render, so a session's status can never disagree
  *  between surfaces. Pass the STORED session id and it resolves the rest
@@ -1664,6 +1577,7 @@ export { WorkspacePageHeaderControl } from '@/app/contrib/workspace-page-header'
  *  that prints a next run switches its label on this (`t.cron.next` →
  *  `t.cron.overdueSince`) so a dead scheduler never reads as "Next: 7 hr ago". */
 export { nextRunOverdueMs } from '@/app/cron/job-state'
+
 /** Master-detail components for pane content; the overlay-bound Panel root is deliberately private. */
 export {
   PanelAction,
@@ -1683,7 +1597,6 @@ export {
   PanelRowMenu,
   PanelSectionLabel
 } from '@/app/overlays/panel'
-
 export {
   type ProfileGroupHeaderContribution,
   type ProfileGroupRoute,
@@ -1739,6 +1652,7 @@ export type { TitlebarTool } from '@/app/shell/titlebar-controls'
  * `MEDIA:` delivery directives) and the same rich Markdown/media components as
  * core chat. Prefer this over raw Streamdown for transcript-style messages. */
 export { MessageTextContent } from '@/components/assistant-ui/markdown-text'
+export { composerInputBacking, composerSurfaceRing } from '@/components/chat/composer-dock'
 /** The oversized Collapse lettering an empty chat is titled with — core writes
  *  "HERMES AGENT" with it, a `chat.empty` contribution writes its own name. */
 export { Wordmark } from '@/components/chat/wordmark'

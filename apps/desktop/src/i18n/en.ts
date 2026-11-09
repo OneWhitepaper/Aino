@@ -30,6 +30,7 @@ import { enNotifications } from './en_notifications'
 import { enOnboarding } from './en_onboarding'
 import { enPluginPreviewAccess } from './en_plugin_preview_access'
 import { enPluginUpdate } from './en_plugin_update'
+import { enPluginUpdateAll } from './en_plugin_update_all'
 import { enPreviewWeb } from './en_preview_web'
 import { enProfiles } from './en_profiles'
 import { enProjects } from './en_projects'
@@ -2624,6 +2625,7 @@ export const en: Translations = {
         `Pinned to commit ${sha}. Updates are refused until it is reinstalled with a new pin.`,
       pinnedBadge: (sha: string) => `pinned @ ${sha}`,
       ...enPluginUpdate,
+      ...enPluginUpdateAll,
       ...enPluginPreviewAccess,
       uninstall: 'Uninstall',
       uninstallTip: (name: string, profile: string) => `Uninstall ${name} from ${profile}`,
@@ -4532,7 +4534,9 @@ export const en: Translations = {
       fastFailed: 'Fast mode update failed',
       multiAgent: 'multi-agent',
 
-      multiAgentSends: (level: string) => `multi-agent, sends ${level}`
+      multiAgentSends: (level: string) => `multi-agent, sends ${level}`,
+      daybreak: 'Daybreak',
+      daybreakFailed: 'Daybreak update failed'
     },
     gatewayMenu: {
       gateway: 'Gateway',
@@ -4653,6 +4657,15 @@ export const en: Translations = {
           subagent_definitions: 'Subagent definitions',
           system_prompt: 'System prompt',
           tool_definitions: 'Tool definitions'
+        },
+        compact: {
+          action: 'Compact conversation',
+          busyHint: 'Finish or stop the current reply first',
+          confirm: 'Compact',
+          hint: 'Summarize older context to make room. Continue in this same conversation.',
+          question: 'Compress this chat into a summary?',
+          questionNamed: title => `Compress “${title}” into a summary?`,
+          working: 'Compacting…'
         },
         empty: 'No context data yet',
         detailsUnavailable: 'Category details are temporarily unavailable. Current usage is still shown.',
@@ -5197,6 +5210,10 @@ tabActions: title => `Actions for ${title}`
       authorized: server => `Authorized ${server}`,
       failed: server => `Setup failed for ${server}`,
       toolCount: count => (count === 1 ? '1 tool' : `${count} tools`),
+      launchCommand: target => `Runs: ${target}`,
+      launchRemote: target => `Connects to: ${target}`,
+      launchEnv: keys => `Env: ${keys}`,
+      launchCwd: dir => `Working dir: ${dir}`,
       envRequired: 'Fill in the required credentials first',
       sendFailed: 'Could not send MCP setup response',
       reloadFailed: 'Server saved, but reloading MCP tools failed — they load next session',

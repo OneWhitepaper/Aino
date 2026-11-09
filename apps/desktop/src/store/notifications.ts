@@ -3,6 +3,7 @@ import { atom } from 'nanostores'
 import { translateNow } from '@/i18n'
 import { isOutOfSyncRpcParams } from '@/lib/gateway-rpc'
 import { triggerHaptic } from '@/lib/haptics'
+import { servedByHermesCloud } from '@/lib/hermes-cloud-host'
 import { isTimeoutError } from '@/lib/with-timeout'
 import { type ErrorToastCategory, recordFriction } from '@/store/desktop-metrics'
 import { requestBackendRestart, requestRoute } from '@/store/recovery-requests'
@@ -221,6 +222,10 @@ export const RECOVERY_ACTIONS = {
     label: translateNow('notifications.updateHermes'),
     onClick: () => import('@/store/updates').then(({ openUpdatesWindow }) => openUpdatesWindow())
   }),
+  reload: (): NotificationAction => ({
+    label: translateNow('commandCenter.reloadWindow'),
+    onClick: () => window.location.reload()
+  }),
   restartHermes: (): NotificationAction => ({
     label: translateNow('notifications.actions.restartHermes'),
     onClick: requestBackendRestart
@@ -324,7 +329,8 @@ const ERROR_SUMMARIES: ErrorSummaryRule[] = [
     category: 'rpc_out_of_sync',
     test: msg => isOutOfSyncRpcParams(msg),
     summarize: () => translateNow('notifications.errors.rpcOutOfSync'),
-    action: () => RECOVERY_ACTIONS.openUpdates()
+    // A Webapp served by Hermes Cloud has no updater: reloading picks up the agent's new app.
+    action: () => (servedByHermesCloud() ? RECOVERY_ACTIONS.reload() : RECOVERY_ACTIONS.openUpdates())
   },
   {
     category: 'restart_required',
@@ -437,16 +443,8 @@ export function notify(input: NotificationInput): string {
   return showNotification(input, input.kind === 'error' ? 'other' : null)
 }
 
-function showNotification(input: NotificationInput, errorCategory: ErrorToastCategory | null): string {
-  const kind = input.kind ?? 'info'
-
-  if (errorCategory) {
-    recordFriction('error_toast', errorCategory)
-  }
-
-  // Only passive feedback can be safely coalesced without an explicit owner ID.
-  // Identical labels on two actions can target different accounts or connections.
-  const duplicate = input.id
+function duplicateNotification(input: NotificationInput, kind: AppNotification['kind']): AppNotification | undefined {
+  return input.id
     ? $notifications.get().find(item => item.id === input.id)
     : !input.action && !input.secondaryAction && !input.onDismiss
       ? $notifications
@@ -463,6 +461,19 @@ function showNotification(input: NotificationInput, errorCategory: ErrorToastCat
               item.meta === input.meta
           )
       : undefined
+
+}
+
+function showNotification(input: NotificationInput, errorCategory: ErrorToastCategory | null): string {
+  const kind = input.kind ?? 'info'
+
+  if (errorCategory) {
+    recordFriction('error_toast', errorCategory)
+  }
+
+  // Only passive feedback can be safely coalesced without an explicit owner ID.
+  // Identical labels on two actions can target different accounts or connections.
+  const duplicate = duplicateNotification(input, kind)
 
   const id = input.id ?? duplicate?.id ?? `${Date.now()}-${notificationCounter++}`
 

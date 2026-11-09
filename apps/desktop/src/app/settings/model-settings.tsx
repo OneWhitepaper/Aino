@@ -942,16 +942,7 @@ export function ModelSettings({
       {!showMain && errorNotice}
       {showMain && (
         <DefaultMainModel
-          appliedModelLabel={
-            defaultMain.appliedSource !== 'aino'
-              ? mainModel?.model || ''
-              : defaultMain.appliedPlatformModel?.display_name || defaultMain.appliedPlatformId
-          }
-          appliedSourceLabel={
-            defaultMain.appliedSource !== 'aino'
-              ? `${defaultMain.appliedSource === 'custom' ? sourceCopy.customSource : sourceCopy.providerSource} · ${findCatalogProvider(providers, mainModel?.provider || '')?.name || mainModel?.provider || ''}`
-              : m.defaultMain.builtIn
-          }
+          {...appliedModelLabels(defaultMain, mainModel, providers, sourceCopy, m.defaultMain.builtIn)}
           applying={applying}
           builtinControls={
             <PlatformModelSettings
@@ -1226,4 +1217,24 @@ export function ModelSettings({
       )}
     </div>
   )
+}
+
+function appliedModelLabels(
+  defaults: ReturnType<typeof useDefaultMainModel>,
+  main: Parameters<typeof useDefaultMainModel>[0],
+  providers: Parameters<typeof findCatalogProvider>[0],
+  copy: ReturnType<typeof modelSourceCopy>,
+  builtIn: string
+) {
+  if (defaults.appliedSource === 'aino') {
+    return {
+      appliedModelLabel: defaults.appliedPlatformModel?.display_name || defaults.appliedPlatformId,
+      appliedSourceLabel: builtIn
+    }
+  }
+
+  const source = defaults.appliedSource === 'custom' ? copy.customSource : copy.providerSource
+  const provider = findCatalogProvider(providers, main?.provider || '')?.name || main?.provider || ''
+
+  return { appliedModelLabel: main?.model || '', appliedSourceLabel: `${source} · ${provider}` }
 }

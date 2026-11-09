@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import {
   MACOS_TAHOE_DARWIN_MAJOR,
@@ -30,6 +30,8 @@ describe('titlebar sizing', () => {
 })
 
 describe('titlebarControlsPosition', () => {
+  afterEach(() => vi.restoreAllMocks())
+
   it('aligns the left toolbar with the compact traffic-light group', () => {
     expect(titlebarControlsPosition({ x: 15, y: 10 }).left).toBe(80)
   })
@@ -42,8 +44,14 @@ describe('titlebarControlsPosition', () => {
     expect(titlebarControlsPosition(null).left).toBe(TITLEBAR_EDGE_INSET)
   })
 
-  it('uses the macOS fallback while the initial window state is unknown', () => {
-    expect(titlebarControlsPosition(undefined).left).toBe(TITLEBAR_FALLBACK_WINDOW_BUTTON_X + TITLEBAR_CONTROL_OFFSET_X)
+  it('does not move macOS tools when the native traffic-light position arrives', () => {
+    vi.spyOn(navigator, 'platform', 'get').mockReturnValue('MacIntel')
+    expect(titlebarControlsPosition(undefined)).toEqual(titlebarControlsPosition({ x: TITLEBAR_FALLBACK_WINDOW_BUTTON_X, y: 10 }))
+  })
+
+  it.each(['Win32', 'Linux x86_64'])('preserves the previous startup spacing on %s', platform => {
+    vi.spyOn(navigator, 'platform', 'get').mockReturnValue(platform)
+    expect(titlebarControlsPosition(undefined).left).toBe(24 + TITLEBAR_CONTROL_OFFSET_X)
   })
 })
 

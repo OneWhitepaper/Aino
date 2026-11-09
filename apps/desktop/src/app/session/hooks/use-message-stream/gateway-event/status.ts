@@ -209,6 +209,39 @@ function handleGatewayError(ctx: GatewayEventContext): void {
   }
 }
 
+function handleAgentNotification(ctx: GatewayEventContext): void {
+  const { event, deps } = ctx
+  // Driver-agnostic agent notice (credits usage/grant/depleted/restored
+  // from `agent/credits_tracker.py`). The Ink TUI renders these in its
+  // status bar; the desktop renders them as toasts. The notice key doubles
+  // as the toast id, so the escalating 50→75→90 credits line replaces in
+  // place instead of stacking. Account-wide signal — shown regardless of
+  // which session is focused.
+  const notice = event.payload as AgentNoticePayload | undefined
+
+  reportPlatformCredentialRejection(notice?.code, notice?.owner_user_id, notice?.managed_credential_version)
+
+  showAgentNotice(notice, { connectionId: event.connectionId ?? null,
+    profile: event.profile ?? deps.activeGatewayProfile, sessionId: event.session_id || null })
+
+  // The urgent pair (access paused / restored) also breaks through as a
+  // native OS notification when Hermes is backgrounded; dispatch is gated
+  // by the user's notification prefs + backgrounded check.
+  const native = nativeNoticeInput(notice, translateNow('notifications.native.creditsTitle'))
+
+  if (native) {
+    dispatchNativeNotification(native)
+  }
+}
+
+function clearAgentNotification(ctx: GatewayEventContext): void {
+  const { event, deps } = ctx
+
+  clearAgentNotice((event.payload as AgentNoticePayload | undefined)?.key, {
+    connectionId: event.connectionId ?? null, profile: event.profile ?? deps.activeGatewayProfile
+  })
+}
+
 export function handleStatusEvent(ctx: GatewayEventContext): boolean {
   const { deps, event, payload, sessionId, isActiveEvent, occurredAt } = ctx
 
@@ -424,38 +457,13 @@ export function handleStatusEvent(ctx: GatewayEventContext): boolean {
   }
 
   if (event.type === 'notification.show') {
-    // Driver-agnostic agent notice (credits usage/grant/depleted/restored
-    // from `agent/credits_tracker.py`). The Ink TUI renders these in its
-    // status bar; the desktop renders them as toasts. The notice key doubles
-    // as the toast id, so the escalating 50→75→90 credits line replaces in
-    // place instead of stacking. Account-wide signal — shown regardless of
-    // which session is focused.
-    const notice = event.payload as AgentNoticePayload | undefined
-
-    reportPlatformCredentialRejection(notice?.code, notice?.owner_user_id, notice?.managed_credential_version)
-
-    showAgentNotice(notice, { connectionId: event.connectionId ?? null,
-      profile: event.profile ?? deps.activeGatewayProfile, sessionId: event.session_id || null })
-
-    // The urgent pair (access paused / restored) also breaks through as a
-    // native OS notification when Hermes is backgrounded; dispatch is gated
-    // by the user's notification prefs + backgrounded check.
-    const native = nativeNoticeInput(notice, translateNow('notifications.native.creditsTitle'))
-
-    if (native) {
-      dispatchNativeNotification(native)
-    }
+    handleAgentNotification(ctx)
 
     return true
   }
 
   if (event.type === 'notification.clear') {
-    // Key-matched dismissal (e.g. credits restored clears the depleted
-    // notice). notify() keys the toast by the notice key, so this maps
-    // straight to dismissNotification(key).
-    clearAgentNotice((event.payload as AgentNoticePayload | undefined)?.key, {
-      connectionId: event.connectionId ?? null, profile: event.profile ?? deps.activeGatewayProfile
-    })
+    clearAgentNotification(ctx)
 
     return true
   }

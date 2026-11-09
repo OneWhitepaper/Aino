@@ -6,40 +6,43 @@ import {
   ContextMenuContent,
   ContextMenuItem,
   ContextMenuSeparator,
-  ContextMenuTrigger
+  ContextMenuTrigger,
+  GlyphSpinner,
+  haptic,
+  useI18n,
+  useValue
 } from '@hermes/plugin-sdk'
 import { useState } from 'react'
 
+import { $canonicalRoomLive, canonicalRoomLiveKey } from './canonical-group-details'
 import { useCanonicalGroupLabels } from './canonical-group-labels'
 import { CanonicalMemberAvatar } from './canonical-group-members'
-import type { CanonicalGroupBinding, CanonicalRoomMember } from './canonical-groups'
+import { disbandGatewayGroupRoom, type GatewayGroupRoom } from './canonical-group-registry'
 import { useBots } from './i18n'
+import { rowAge } from './row-age'
 
 interface CanonicalGroupRowProps {
-  active?: boolean
-  binding?: CanonicalGroupBinding
-  members?: CanonicalRoomMember[]
-  memberCount: number
-  name: string
-  /** Rejects with the gateway's refusal so the confirm stays open and shows it. */
-  onDelete: () => Promise<void>
+  active: boolean
   onOpen: () => void
+  room: GatewayGroupRoom
 }
 
-/** One gateway Group Chat in the roster list, with the same right-click Open /
- *  Delete a Desktop-local group row has (#143571). */
-export function CanonicalGroupRow({
-  active = false,
-  binding,
-  members,
-  memberCount,
-  name,
-  onDelete,
-  onOpen
-}: CanonicalGroupRowProps) {
+/** One gateway Group Chat in the Bots roster. Same shape as a Desktop group
+ *  row (tile, name, age, member line) so the two kinds read as one list; the
+ *  live state is whatever an open view of the room last published. */
+export function CanonicalGroupRow({ active, onOpen, room }: CanonicalGroupRowProps) {
+  const { t } = useI18n()
   const labels = useCanonicalGroupLabels()
   const { group } = useBots()
   const [confirming, setConfirming] = useState(false)
+  const live = useValue($canonicalRoomLive)[canonicalRoomLiveKey(room.binding, room.binding.roomId)]
+  const state = live?.needsYou ? 'needsYou' : live?.failed ? 'failed' : live?.working ? 'working' : null
+  const memberCount = group.memberCount(room.members.length)
+
+  const open = () => {
+    haptic('tap')
+    onOpen()
+  }
 
   return (
     <>
@@ -47,16 +50,16 @@ export function CanonicalGroupRow({
         <ContextMenuTrigger asChild>
           <Button
             aria-current={active || undefined}
-            aria-description={`${memberCount} ${labels.members}`}
-            aria-label={name}
+            aria-description={memberCount}
+            aria-label={room.name}
             className="aino-group-roster-row"
-            onClick={onOpen}
+            onClick={open}
             variant="ghost"
           >
-            {members?.length ? (
+            {room.members.length ? (
               <span aria-hidden="true" className="aino-roster-group-avatar">
-                {members.slice(0, 4).map(member => (
-                  <CanonicalMemberAvatar binding={binding} key={member.member_id} member={member} size={12} />
+                {room.members.slice(0, 4).map(member => (
+                  <CanonicalMemberAvatar binding={room.binding} key={member.member_id} member={member} size={12} />
                 ))}
               </span>
             ) : (
@@ -65,8 +68,31 @@ export function CanonicalGroupRow({
               </span>
             )}
             <span className="aino-roster-group-copy">
-              <span className="aino-group-roster-name">{name}</span>
-              <span className="aino-roster-group-preview">{group.memberCount(memberCount)}</span>
+              <span className="aino-group-roster-name">{room.name}</span>
+              <span className="aino-roster-group-preview">{memberCount}</span>
+                {state ? (
+                  <span className="inline-flex shrink-0 items-center self-center text-[0.6875rem]" data-room-state={state}>
+                    {state === 'working' ? (
+                      <span aria-hidden="true" className="text-(--ui-accent)">
+                        <GlyphSpinner />
+                      </span>
+                    ) : (
+                      <Codicon
+                        className={state === 'failed' ? 'text-destructive' : 'text-(--ui-accent)'}
+                        name={state === 'failed' ? 'error' : 'bell-dot'}
+                      />
+                    )}
+                    <span className="sr-only">
+                      {state === 'working' ? labels.rowWorking : state === 'failed' ? labels.rowFailed : labels.rowNeedsYou}
+                    </span>
+                  </span>
+                ) : null}
+                {room.updatedAt ? (
+                  <span className="shrink-0 text-[0.6875rem] text-(--ui-text-quaternary)">
+                    {rowAge(room.updatedAt, t.sidebar.row)}
+                  </span>
+                ) : null}
+
             </span>
           </Button>
         </ContextMenuTrigger>
@@ -85,14 +111,14 @@ export function CanonicalGroupRow({
           description={
             <span>
               {labels.disbandDescPrefix}
-              <span className="font-medium text-foreground">{name}</span>
-              {labels.disbandDescSuffix(memberCount)}
+              <span className="font-medium text-foreground">{room.name}</span>
+              {labels.disbandDescSuffix(room.members.length)}
             </span>
           }
           destructive
           doneLabel={labels.disbandDone}
           onClose={() => setConfirming(false)}
-          onConfirm={onDelete}
+          onConfirm={() => disbandGatewayGroupRoom(room, labels.disbanded(room.name))}
           open
           title={labels.disbandTitle}
         />

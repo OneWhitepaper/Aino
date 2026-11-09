@@ -1608,23 +1608,7 @@ export function ChatSidebar({
             groups={displayAgentGroups}
             headerAction={
               <div className="flex shrink-0 items-center gap-0.5">
-                {unreadCount > 0 && (
-                  <Tip label={s.markAllRead}>
-                    <Button
-                      aria-label={s.markAllRead}
-                      className={HEADER_ACTION_BTN}
-                      onClick={event => {
-                        event.stopPropagation()
-                        markAllSessionsRead()
-                        ackAllSessionsRead()
-                      }}
-                      size="icon-xs"
-                      variant="ghost"
-                    >
-                      <Codicon name="check-all" size="0.75rem" />
-                    </Button>
-                  </Tip>
-                )}
+                {unreadCount > 0 && <MarkAllReadButton label={s.markAllRead} />}
                 <SidebarSectionAddButton
                   ariaLabel={s.nav['new-session']}
                   onNewSessionSplit={onNewSessionSplit}
@@ -1737,4 +1721,24 @@ interface MessagingSection {
   sessions: SessionInfo[]
   total: number
   hasMore: boolean
+}
+
+function MarkAllReadButton({ label }: { label: string }) {
+  return (
+    <Tip label={label}>
+      <Button
+        aria-label={label}
+        className={HEADER_ACTION_BTN}
+        onClick={event => {
+          event.stopPropagation()
+          markAllSessionsRead()
+          ackAllSessionsRead()
+        }}
+        size="icon-xs"
+        variant="ghost"
+      >
+        <Codicon name="check-all" size="0.75rem" />
+      </Button>
+    </Tip>
+  )
 }

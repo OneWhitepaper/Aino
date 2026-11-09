@@ -12,6 +12,7 @@
 import { atom, host, randomUuid } from '@hermes/plugin-sdk'
 
 import { $botMeta, $lastRoster, botRosterKey } from './data'
+import { stickyGroupEngine } from './group-engine'
 import { groupMemberReferencesConnection, markOrphanedGroupMemberDescriptor } from './hygiene'
 import { botsText } from './i18n'
 import { displayName } from './labels'
@@ -60,6 +61,7 @@ let groupChatSyncTimer: ReturnType<typeof setTimeout> | null = null
 /** One room inside the bounded ui_meta projection: a compacted log plus the
  *  identity fields, without any of `GroupChat`'s runtime/orchestration state. */
 interface GroupChatSyncRoom {
+  engine?: 'desktop'
   holdDetection?: boolean
   image?: null | string
   log: GroupMessage[]
@@ -355,6 +357,7 @@ export function groupChatSyncSnapshot(
           }
         : {}),
       log,
+      ...stickyGroupEngine(room),
       holdDetection: room.holdDetection !== false,
       revision: Math.max(0, Number(room?.syncRevision ?? room?.revision ?? 0)),
       members: (Array.isArray(room.members) ? room.members : []).slice(0, GROUP_CHAT_MAX_MEMBERS).map(member => ({
@@ -595,6 +598,8 @@ export function mergeGroupChatSyncSnapshots(
         return byTime || groupChatSyncEntryKey(left).localeCompare(groupChatSyncEntryKey(right))
       }),
       holdDetection,
+      // Set once at creation and never cleared, so either side's mark holds.
+      ...stickyGroupEngine(localRoom, remoteRoom),
       members,
       revision: Math.max(remoteRevision, localRevision),
       ...(omitted > 0
@@ -835,6 +840,7 @@ export function mergeRemoteGroupChatSnapshotIntoRooms(
       externalCursors:
         existing.externalCursors && typeof existing.externalCursors === 'object' ? existing.externalCursors : {},
       members: [...members.values()],
+      ...stickyGroupEngine(existing, projected),
       ...(projectedRoomId || existing.roomId
         ? {
             roomId: existing.roomId || projectedRoomId
@@ -926,6 +932,7 @@ export function durableGroupChatRooms(all: Record<string, GroupChat> = $groupCha
       // name-keyed identity — same field updateGroupChat's inline map
       // already carries.
       roomId: typeof room.roomId === 'string' && room.roomId ? room.roomId : null,
+      ...stickyGroupEngine(room),
       image: room.image || null,
       rosterOrder: room.rosterOrder,
       pinned: room.pinned,
@@ -1643,6 +1650,8 @@ export function updateGroupChat(
         members: Array.isArray(room.members) ? room.members : [],
         // Immutable room identity: the member-session title for new rooms.
         roomId: typeof room.roomId === 'string' && room.roomId ? room.roomId : null,
+        // A Desktop-driven room stays one across reloads (plugin.tsx hydration).
+        ...stickyGroupEngine(room),
         // Room picture (small data URL, same normalization as bot avatars).
         image: room.image || null,
         rosterOrder: room.rosterOrder,

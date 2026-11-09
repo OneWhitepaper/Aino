@@ -1,5 +1,5 @@
 import { useStore } from '@nanostores/react'
-import { cleanup, fireEvent, render } from '@testing-library/react'
+import { act, cleanup, fireEvent, render } from '@testing-library/react'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { registry } from '@/contrib/registry'
@@ -139,6 +139,26 @@ describe('Sessions/Bots strip — #91223', () => {
 
     expect(tablist()).toBeNull()
   })
+
+  it('lets keyboard focus move between tabs without activating until Enter or Space', () => {
+    render(<LiveTreeGroup parentAxis="row" />)
+    const sessions = tabEl('sessions') as HTMLElement
+    const bots = tabEl('hermes-bots:pane') as HTMLElement
+    act(() => sessions.focus())
+
+    expect(sessions.tabIndex).toBe(0)
+    expect(bots.tabIndex).toBe(-1)
+    fireEvent.keyDown(sessions, { key: 'ArrowRight' })
+    expect(globalThis.document.activeElement).toBe(bots)
+    expect(zoneAt(0).active).toBe('sessions')
+    fireEvent.keyDown(bots, { key: 'Enter' })
+    expect(zoneAt(0).active).toBe('hermes-bots:pane')
+    expect(globalThis.document.activeElement).toBe(bots)
+    fireEvent.keyDown(bots, { key: 'Home' })
+    fireEvent.keyDown(sessions, { key: ' ' })
+    expect(zoneAt(0).active).toBe('sessions')
+    expect(globalThis.document.activeElement).toBe(sessions)
+  })
 })
 
 describe('docked tool tile — collapsing keeps the restore chip', () => {
@@ -196,6 +216,73 @@ describe('docked tool tile — collapsing keeps the restore chip', () => {
   })
 })
 
+describe('conversation picker and visible tool tabs share keyboard navigation', () => {
+  beforeEach(() => {
+    const panes = [
+      'keyboard-tool-before',
+      'session-tile:keyboard-hidden-first',
+      'session-tile:keyboard-current',
+      'session-tile:keyboard-hidden-middle',
+      'keyboard-tool-after',
+      'session-tile:keyboard-hidden-last'
+    ]
+
+    panes.forEach(id => registerPane(id, { placement: 'main' }))
+    $layoutTree.set(
+      group(panes, { active: 'session-tile:keyboard-current', id: 'g-keyboard-mixed', tabStrip: 'always' })
+    )
+  })
+
+  it('arrows and Home/End skip conversations represented only by the picker', () => {
+    render(<LiveTreeGroup parentAxis="row" />)
+    const current = tabEl('session-tile:keyboard-current') as HTMLElement
+    const before = tabEl('keyboard-tool-before') as HTMLElement
+    const after = tabEl('keyboard-tool-after') as HTMLElement
+    expect(tabEl('session-tile:keyboard-hidden-middle')).toBeNull()
+    expect(tabEl('session-tile:keyboard-hidden-last')).toBeNull()
+    act(() => current.focus())
+
+    fireEvent.keyDown(current, { key: 'ArrowRight' })
+    expect(globalThis.document.activeElement).toBe(after)
+    fireEvent.keyDown(after, { key: 'Home' })
+    expect(globalThis.document.activeElement).toBe(before)
+    fireEvent.keyDown(before, { key: 'End' })
+    expect(globalThis.document.activeElement).toBe(after)
+    fireEvent.keyDown(after, { key: 'ArrowRight' })
+    expect(globalThis.document.activeElement).toBe(before)
+    expect(zoneAt(0).active).toBe('session-tile:keyboard-current')
+  })
+
+  it('closing a focused tool moves focus to the next rendered tab', () => {
+    render(<LiveTreeGroup parentAxis="row" />)
+    const before = tabEl('keyboard-tool-before') as HTMLElement
+    act(() => before.focus())
+
+    fireEvent.keyDown(before, { key: 'Delete' })
+
+    expect(tabEl('keyboard-tool-before')).toBeNull()
+    expect(tabEl('session-tile:keyboard-hidden-first')).toBeNull()
+    expect(globalThis.document.activeElement).toBe(tabEl('session-tile:keyboard-current'))
+  })
+
+  it('keeps every conversation reachable in the collapsed rail and focuses the restored title', () => {
+    setTreeGroupMinimized('g-keyboard-mixed', true)
+    render(<LiveTreeGroup parentAxis="row" />)
+    const current = tabEl('session-tile:keyboard-current') as HTMLElement
+    const next = tabEl('session-tile:keyboard-hidden-middle') as HTMLElement
+    act(() => current.focus())
+
+    fireEvent.keyDown(current, { key: 'ArrowDown' })
+    expect(globalThis.document.activeElement).toBe(next)
+    fireEvent.keyDown(next, { key: 'Enter' })
+
+    expect(zoneAt(0).minimized).toBeFalsy()
+    expect(zoneAt(0).active).toBe('session-tile:keyboard-hidden-middle')
+    expect(tabEl('session-tile:keyboard-current')).toBeNull()
+    expect(globalThis.document.activeElement).toBe(tabEl('session-tile:keyboard-hidden-middle'))
+  })
+})
+
 describe('tool-panel tab activation', () => {
   it('reopens a visible tool tab through its owner when the owner is off', () => {
     const paneId = 'terminal-activation-test'
@@ -245,5 +332,25 @@ describe('a stacked tool zone collapsed in a row keeps a vertical restore rail',
     expect(tabEl('logs')).toBeTruthy()
     expect(tabEl('terminal')?.getAttribute('data-vertical')).toBe('true')
     expect(tabEl('logs')?.getAttribute('data-vertical')).toBe('true')
+  })
+
+  it('uses vertical arrows and restores the matching keyboard tab without losing focus', () => {
+    setTreeGroupMinimized('g-tools', true)
+    render(<LiveTreeGroup index={1} parentAxis="row" />)
+    const terminal = tabEl('terminal') as HTMLElement
+    const logs = tabEl('logs') as HTMLElement
+    act(() => terminal.focus())
+
+    expect(tablist()?.getAttribute('aria-orientation')).toBe('vertical')
+    expect(fireEvent.keyDown(terminal, { key: 'ArrowRight' })).toBe(true)
+    fireEvent.keyDown(terminal, { key: 'ArrowDown' })
+    expect(globalThis.document.activeElement).toBe(logs)
+    expect(zoneAt(1).minimized).toBe(true)
+    fireEvent.keyDown(logs, { key: 'Enter' })
+
+    expect(zoneAt(1).minimized).toBeFalsy()
+    expect(zoneAt(1).active).toBe('logs')
+    expect(tablist()?.getAttribute('aria-orientation')).toBe('horizontal')
+    expect(globalThis.document.activeElement).toBe(tabEl('logs'))
   })
 })

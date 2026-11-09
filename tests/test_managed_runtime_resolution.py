@@ -28,7 +28,7 @@ from __future__ import annotations
 import ast
 import functools
 import json
-import os
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -210,25 +210,15 @@ class _ResolutionSiteVisitor(ast.NodeVisitor):
 
 
 def _source_files() -> list[Path]:
-    files: list[Path] = []
-    # os.walk instead of Path.rglob: rglob raises FileNotFoundError when a
-    # directory vanishes mid-scan — a sibling CI job's sdist extraction
-    # (hermes_agent-<version>/) gets created and deleted concurrently, and
-    # that TOCTOU failed this guard on runs 33531869442/33455779041-era
-    # workspaces. os.walk tolerates vanishing dirs (onerror=None), and
-    # pruning exempt/packaging dirs at the top level also skips their
-    # subtrees entirely.
-    for dirpath, dirnames, filenames in os.walk(REPO_ROOT):
-        rel_dir = Path(dirpath).relative_to(REPO_ROOT)
-        if rel_dir == Path("."):
-            dirnames[:] = [
-                d for d in dirnames
-                if d not in _EXEMPT_DIRS and not _is_packaging_copy(d)
-            ]
-        for fname in filenames:
-            if fname.endswith(".py"):
-                files.append(Path(dirpath) / fname)
-    return files
+    # Include new source before it is staged, but never descend into ignored dependency
+    # trees such as the Desktop packager's embedded Python standard library.
+    names = subprocess.check_output(
+        ["git", "ls-files", "--cached", "--others", "--exclude-standard", "-z", "--", "*.py"],
+        cwd=REPO_ROOT,
+    )
+    paths = {Path(name.decode()) for name in names.split(b"\0") if name}
+    return [REPO_ROOT / path for path in sorted(paths)
+            if path.parts[0] not in _EXEMPT_DIRS and not _is_packaging_copy(path.parts[0])]
 
 
 @functools.cache
@@ -373,3 +363,24 @@ def test_managed_uv_helpers_exist():
 
     assert callable(managed_uv.resolve_uv)
     assert callable(managed_uv.ensure_uv)
+
+
+def test_source_inventory_includes_new_code_but_excludes_ignored_packaged_runtime(tmp_path, monkeypatch):
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
+    (tmp_path / ".gitignore").write_text("apps/desktop/build/\n")
+    tracked = tmp_path / "agent" / "tracked.py"
+    tracked.parent.mkdir()
+    tracked.write_text("pass\n")
+    subprocess.run(["git", "add", "agent/tracked.py"], cwd=tmp_path, check=True)
+    added = tmp_path / "gateway" / "new.py"
+    added.parent.mkdir()
+    added.write_text("pass\n")
+    packaged = tmp_path / "apps" / "desktop" / "build" / "python" / "stdlib.py"
+    packaged.parent.mkdir(parents=True)
+    packaged.write_text("import shutil\nshutil.which('node')\n")
+    monkeypatch.setitem(globals(), "REPO_ROOT", tmp_path)
+    _is_packaging_copy.cache_clear()
+    try:
+        assert set(_source_files()) == {tracked, added}
+    finally:
+        _is_packaging_copy.cache_clear()

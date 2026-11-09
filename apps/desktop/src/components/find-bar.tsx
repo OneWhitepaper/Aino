@@ -315,7 +315,7 @@ export function FindBar() {
       <input
         aria-label={t.keybinds.actions['view.findInPage'] ?? 'Find in page'}
         autoComplete="off"
-        className="h-8 w-40 min-w-0 flex-1 bg-transparent text-[length:var(--aino-text-ui)] text-(--ui-text-primary) outline-none placeholder:text-(--ui-text-tertiary)"
+        className="h-8 w-40 min-w-0 flex-1 bg-transparent text-[length:var(--aino-text-ui)] text-(--ui-text-primary) focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring placeholder:text-(--ui-text-tertiary)"
         onChange={onInput}
         onKeyDown={onKeyDown}
         placeholder={t.keybinds.actions['view.findInPage'] ?? 'Find in page'}

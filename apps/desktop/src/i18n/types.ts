@@ -25,13 +25,14 @@ import type { ExternalOpenFailedCopy } from './types_external_open'
 import type { FirstRunCopy } from './types_first_run'
 import type { GatewayHostTranslations } from './types_gateway_host'
 import type { MemoryLayersTranslations } from './types_memory_layers'
+import type { MessagingTranslations } from './types_messaging'
 import type { ModelMenuTranslations } from './types_model_menu'
 import type { ModelSettingsTranslations } from './types_model_settings'
 import type { NoticeTranslations } from './types_notices'
 import type { NotificationSettingsTranslations } from './types_notifications'
 import type { OnboardingTranslations } from './types_onboarding'
 import type { PluginPreviewAccessTranslations } from './types_plugin_preview_access'
-import type { PluginUpdateTranslations } from './types_plugin_update'
+import type { PluginUpdateAllTranslations, PluginUpdateTranslations } from './types_plugin_update'
 import type { SidebarProjectsTranslations } from './types_projects'
 import type { SharedMetricsTranslations } from './types_shared_metrics'
 import type { SummaryTranslations } from './types_summary_surface'
@@ -2245,6 +2246,7 @@ export interface UpstreamTranslations extends NoticeTranslations {
     skillArchivedMessage: string
     tabPlugins: string
     plugins: PluginUpdateTranslations &
+      PluginUpdateAllTranslations &
       PluginPreviewAccessTranslations & {
         agentTitle: string
         agentBlurb: string
@@ -2691,129 +2693,7 @@ export interface UpstreamTranslations extends NoticeTranslations {
     }
   }
 
-  messaging: {
-    directory: {
-      statusFilters: string
-      title: string
-      subtitle: string
-      common: string
-      commonHint: string
-      more: string
-      moreHint: string
-      integrations: string
-      integrationsHint: string
-      all: string
-      configured: string
-      attention: string
-      configure: string
-      sendOnly: string
-      privacy: string
-      noMatches: string
-      noMatchesHint: string
-      showAll: string
-      discardTitle: string
-      discardHint: string
-      discard: string
-    }
-    search: string
-    statusFilter: Record<'all' | 'bad' | 'good' | 'muted' | 'warn', string>
-    loading: string
-    loadFailed: string
-    states: Record<string, string>
-    unknown: string
-    hintPendingRestart: string
-    sharedListenerUrl: string
-    hintGatewayStopped: string
-    credentialsSet: string
-    needsSetup: string
-    gatewayStopped: string
-    getCredentials: string
-    openSetupGuide: string
-    required: string
-    recommended: string
-    advanced: (count: number) => string
-    noTokenNeeded: string
-    enabled: string
-    disabled: string
-    unsavedChanges: string
-    saving: string
-    saveChanges: string
-    saved: string
-    replaceValue: string
-    openDocs: string
-    clearField: (key: string) => string
-    addListEntry: string
-    removeListEntry: string
-    listEntryPlaceholder: string
-    enableAria: (name: string) => string
-    disableAria: (name: string) => string
-    platformEnabled: (name: string) => string
-    platformDisabled: (name: string) => string
-    restartToApply: string
-    setupSaved: (name: string) => string
-    restartToReconnect: string
-    appliedLive: string
-    connectingLive: string
-    keyCleared: (key: string) => string
-    setupUpdated: (name: string) => string
-    failedUpdate: (name: string) => string
-    failedSave: (name: string) => string
-    failedClear: (key: string) => string
-    pendingRequests: (count: number) => string
-    pendingAria: (count: number) => string
-    approvedUsers: (count: number) => string
-    approve: string
-    approving: string
-    revoke: string
-    revoking: string
-    revokeAria: (name: string) => string
-    revokeTitle: string
-    revokeDesc: (name: string) => string
-    approvedUser: (name: string) => string
-    approvedHint: string
-    revokedUser: (name: string) => string
-    failedApprove: (name: string) => string
-    failedRevoke: (name: string) => string
-    pairingLockedOut: string
-    waitingSince: (minutes: number) => string
-    restartNeeded: string
-    restartNow: string
-    restarting: string
-    restartFailedManual: string
-    restartFailedManualDetail: string
-    restartAgain: string
-    openLogs: string
-    telegramQr: {
-      title: string
-      subtitle: string
-      quickSetup: string
-      recommended: string
-      quickHelp: string
-      createWithQr: string
-      starting: string
-      replaceWarning: string
-      scanHint: string
-      waiting: string
-      expiresIn: (remaining: string) => string
-      expired: string
-      openTelegram: string
-      ready: string
-      allowedUsers: string
-      ownerDetected: string
-      addAtLeastOne: string
-      userIdPlaceholder: string
-      add: string
-      numericOnly: string
-      saveAndRestart: string
-      applying: string
-      pairingExpired: string
-      stillWaiting: (detail: string) => string
-      savedRestarting: string
-      savedRestartFailed: (detail: string) => string
-    }
-    fieldCopy: Record<string, { label?: string; help?: string; placeholder?: string }>
-    platformIntro: Record<string, string>
-  }
+  messaging: MessagingTranslations
 
   webhooks: {
     search: string
@@ -4179,6 +4059,8 @@ export interface UpstreamTranslations extends NoticeTranslations {
       multiAgent: string
 
       multiAgentSends: (level: string) => string
+      daybreak: string
+      daybreakFailed: string
     }
     gatewayMenu: {
       gateway: string
@@ -4301,6 +4183,15 @@ export interface UpstreamTranslations extends NoticeTranslations {
           system_prompt: string
           tool_definitions: string
         }
+        compact: {
+          action: string
+          busyHint: string
+          confirm: string
+          hint: string
+          question: string
+          questionNamed: (title: string) => string
+          working: string
+        }
         empty: string
         detailsUnavailable: string
         unavailable: string
@@ -4401,18 +4292,18 @@ export interface UpstreamTranslations extends NoticeTranslations {
 
     terminalStartFailed: (error: string) => string
 
-terminalNewOn: string
-terminalGatewayRemoved: string
-terminalGatewayRemovedBody: string
-terminalGatewayNoShellBody: string
-terminalDisconnectedBody: string
-terminalDropUploadFailed: (name: string) => string
-terminalDropTooLargeTitle: string
-terminalDropTooLarge: (names: string, limit: string) => string
-terminalDropControlTitle: string
-terminalDropControl: (paths: string) => string
-terminalDropUnquotable: (shell: string, paths: string) => string
-}
+    terminalNewOn: string
+    terminalGatewayRemoved: string
+    terminalGatewayRemovedBody: string
+    terminalGatewayNoShellBody: string
+    terminalDisconnectedBody: string
+    terminalDropUploadFailed: (name: string) => string
+    terminalDropTooLargeTitle: string
+    terminalDropTooLarge: (names: string, limit: string) => string
+    terminalDropControlTitle: string
+    terminalDropControl: (paths: string) => string
+    terminalDropUnquotable: (shell: string, paths: string) => string
+  }
 
   preview: {
     tab: string
@@ -4662,8 +4553,8 @@ terminalDropUnquotable: (shell: string, paths: string) => string
       quad: string
     }
 
-tabActions: (title: string) => string
-}
+    tabActions: (title: string) => string
+  }
 
   contextMenu: {
     link: {
@@ -4915,6 +4806,11 @@ tabActions: (title: string) => string
       authorized: (server: string) => string
       failed: (server: string) => string
       toolCount: (count: number) => string
+      launchCommand: (target: string) => string
+      launchRemote: (target: string) => string
+      /** The env var names a stdio server adds (comma-joined); values never reach the card. */
+      launchEnv: (keys: string) => string
+      launchCwd: (dir: string) => string
       envRequired: string
       sendFailed: string
       reloadFailed: string

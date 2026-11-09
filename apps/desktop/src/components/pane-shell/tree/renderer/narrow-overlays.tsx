@@ -14,6 +14,7 @@ import { $workspaceIsPage, workspacePageKeepsPane } from '@/app/routes'
 import { useTitlebarHeight } from '@/app/shell/use-touch-titlebar'
 import { Codicon } from '@/components/ui/codicon'
 import { PaneStripGlyph, PaneTab, PaneTabLabel, PaneTabStrip } from '@/components/ui/pane-tab'
+import { usePaneTabKeyboard } from '@/components/ui/pane-tab-keyboard'
 import { ContribBoundary, ContribRender } from '@/contrib/react/boundary'
 import { Slot } from '@/contrib/react/slot'
 import { useContributions } from '@/contrib/react/use-contributions'
@@ -383,6 +384,7 @@ function NarrowOverlayTabs({
   setReveal
 }: NarrowOverlayTabsProps) {
   const { locale, t } = useI18n()
+  const tabKeyboardProps = usePaneTabKeyboard(zonePanes.map(pane => pane.id), revealed.id, tabsRef)
 
   return (
     <>
@@ -444,10 +446,15 @@ function NarrowOverlayTabs({
           >
             {zonePanes.map(pane => (
               <PaneTab
+                {...tabKeyboardProps(pane.id)}
                 active={pane.id === revealed.id}
                 aria-selected={pane.id === revealed.id}
                 data-narrow-overlay-tab={pane.id}
                 key={pane.id}
+                onActivate={() => {
+                  if (revealedGroup) {activateTreePane(revealedGroup.id, pane.id)}
+                  setReveal(current => ({ id: pane.id, pinned: current?.pinned ?? false }))
+                }}
                 onClose={
                   toolPanel && !paneChrome(pane).hideOnly && !paneChrome(pane).uncloseable
                     ? () => closeTabPane(pane.id)

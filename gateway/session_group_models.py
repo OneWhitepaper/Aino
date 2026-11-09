@@ -113,11 +113,11 @@ def _grant(connection, params, owner):
 
 
 def _rpc(grant):
-    from gateway.session_contract import Principal
+    from gateway.session_contract import SessionActor
     from gateway.session_hosted_rpc import HostedRoomAuthorityRPC
     from gateway.session_hosted_transport import _CAPS, _principal
     if grant.source is grant.target:
-        principal = Principal(grant.owner_subject, grant.target.profile_id, _CAPS,
+        principal = SessionActor(grant.owner_subject, grant.target.profile_id, _CAPS,
                               'hosted:' + grant.room_id + ':' + grant.member_id)
     else:
         principal = _principal(grant.target, {'source_home': grant.source.profile_id,

@@ -17,7 +17,7 @@ vi.mock('@hermes/plugin-sdk', async () => {
   const { CopyButton } = await import('@/components/ui/copy-button')
 
   // The shell's shared message renderer; media marks whether MEDIA: paths would resolve locally.
-  const MessageTextContent = ({ decorateText, media = true, text }: { decorateText?: (children: ReactNode) => ReactNode; media?: boolean; text: string }) => {
+  const MessageTextContent = ({ decorateText, media = true, previewOnly = false, text }: { decorateText?: (children: ReactNode) => ReactNode; media?: boolean; previewOnly?: boolean; text: string }) => {
     // Streamdown's component map accepts intrinsic props AND an open custom-tag
     // record. The fixture consumes only children, so it accepts both shapes.
     const decorate = (props: object) => {
@@ -32,10 +32,10 @@ vi.mock('@hermes/plugin-sdk', async () => {
       td: (props: object) => <td>{decorate(props)}</td>
     }
 
-    return <div data-media={String(media)} data-testid="message-text"><Streamdown components={components}>{text}</Streamdown></div>
+    return <div data-media={String(media)} data-preview-only={String(previewOnly)} data-testid="message-text"><Streamdown components={components}>{text}</Streamdown></div>
   }
 
-  return { CopyButton, MessageTextContent, Streamdown, relativeTime, useI18n: () => ({ locale: 'en', t: en }),
+  return { ...await (await import('./group-test-utils')).pluginSdkMock({}), CopyButton, MessageTextContent, Streamdown, relativeTime, useI18n: () => ({ locale: 'en', t: en }),
     Button: (props: ComponentProps<'button'>) => <button {...props} />,
     Codicon: () => <span />, Tip: ({ children }: { children: ReactNode }) => <>{children}</> }
 })
@@ -94,6 +94,8 @@ it('renders the canonical log actors, timestamps and Markdown without transport 
   expect(screen.queryByText('turn.settled')).toBeNull()
   // Room text goes through the shared renderer, never resolving MEDIA: paths on this gateway.
   expect(screen.getAllByTestId('message-text').map(node => node.dataset.media)).toEqual(['false', 'false', 'false', 'false'])
+  // Its images, file links and directive cards stay inert too.
+  expect(screen.getAllByTestId('message-text').map(node => node.dataset.previewOnly)).toEqual(['true', 'true', 'true', 'true'])
   expect([...container.querySelectorAll('time')].map(node => node.dateTime)).toEqual(
     events.slice(0, 4).map(event => new Date(event.created_at * 1000).toISOString())
   )

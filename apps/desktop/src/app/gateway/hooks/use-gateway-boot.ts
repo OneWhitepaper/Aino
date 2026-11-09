@@ -37,6 +37,7 @@ import {
   setDesktopBootStep
 } from '@/store/boot'
 import { resetBackgroundPollingGuard } from '@/store/composer-status'
+import { primaryWireSource, recordConnectionWire } from '@/store/connection-wire'
 import { noteBackendDrop, noteBackendExited } from '@/store/desktop-metrics'
 import {
   $gateway,
@@ -59,6 +60,7 @@ import {
   setPrimaryGateway,
   setPrimaryGatewayConnection
 } from '@/store/gateway'
+import { $primaryGatewayRoute } from '@/store/gateway-primary-route'
 import { type GatewayReconnectOptions, reconnectGateway, registerGatewayReconnect } from '@/store/gateway-reconnect'
 import {
   $gatewaySwitching,
@@ -488,6 +490,14 @@ export function useGatewayBoot({
       }, LIVENESS_REPROBE_DELAY_MS)
     }
 
+    const readPrimaryReconnectDescriptor = () =>
+      primaryConnection?.registryScoped && primaryConnection.connectionId
+            ? (desktop.getConnectionFor?.({
+                connectionId: primaryConnection.connectionId,
+                profile: primaryConnection.profile
+              }) ?? Promise.reject(new Error('Registry gateway connection is unavailable')))
+            : desktop.getConnection(primaryConnection?.profile)
+
     const attemptReconnect = async (
       manual?: { profile: string; activationEpoch: number },
       reportFailure = false
@@ -519,12 +529,7 @@ export function useGatewayBoot({
         const lookupRevision = primaryRouteRevision
 
         const conn = await withTimeout(
-          primaryConnection?.registryScoped && primaryConnection.connectionId
-            ? (desktop.getConnectionFor?.({
-                connectionId: primaryConnection.connectionId,
-                profile: primaryConnection.profile
-              }) ?? Promise.reject(new Error('Registry gateway connection is unavailable')))
-            : desktop.getConnection(primaryConnection?.profile),
+          readPrimaryReconnectDescriptor(),
           RECONNECT_ATTEMPT_TIMEOUT_MS,
           translateNow('boot.errors.gatewayReconnectTimeout')
         )
@@ -1234,6 +1239,11 @@ export function useGatewayBoot({
     const sourceProfileNow = () => normalizeProfileKey($activeGatewayProfile.get())
 
     const offEvent = gateway.onEvent(event => {
+      // The composer reads the wire per owner connection; the primary's own route names it.
+      if (event.type === 'gateway.ready') {
+        recordConnectionWire(primaryWireSource($primaryGatewayRoute.get(), $connection.get()), gateway.sessionWire)
+      }
+
       const connectionId = activeGatewayConnectionId()
       const sourceProfile = canonicalOwnerProfile(event) ?? sourceProfileNow()
 

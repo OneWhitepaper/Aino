@@ -24,8 +24,10 @@ def test_info_returns_only_its_current_admission_activity_and_clears_on_executio
     assert first['execution_generation'] == 17
     assert rows[0][1]['generation'] != first['execution_generation']
     assert first['activity'] == 'reading'
+    assert first['tool'] == 'read_file' and first['progress_at'] > 0
     assert second['activity'] == 'running_command'
     assert 'private' not in repr(first)
     authority.executing.pop(rows[0][0])
-    assert 'activity' not in rpcs[0].info(**coords, session_id=rows[0][0])
+    ended = rpcs[0].info(**coords, session_id=rows[0][0])
+    assert 'activity' not in ended and 'tool' not in ended and 'progress_at' not in ended
     assert rpcs[1].info(**coords, session_id=rows[1][0])['activity'] == 'running_command'

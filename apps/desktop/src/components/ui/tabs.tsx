@@ -36,7 +36,7 @@ function TabsTrigger({ className, size = 'default', ...props }: TabsTriggerProps
   return (
     <TabsPrimitive.Trigger
       className={cn(
-        'inline-flex items-center justify-center font-medium whitespace-nowrap transition-colors outline-none focus-visible:bg-background focus-visible:text-foreground focus-visible:ring-[0.1875rem] focus-visible:ring-ring/35 disabled:pointer-events-none disabled:opacity-50 data-[state=active]:text-foreground [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0',
+        'inline-flex items-center justify-center font-medium whitespace-nowrap transition-colors focus-visible:outline-hidden focus-visible:bg-background focus-visible:text-foreground focus-visible:ring-[0.1875rem] focus-visible:ring-ring/35 disabled:pointer-events-none disabled:opacity-50 data-[state=active]:text-foreground [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0',
         size === 'navigation'
           ? 'h-full cursor-pointer gap-2 border-b-2 border-transparent px-0.5 text-[length:var(--aino-text-ui)] hover:text-foreground data-[state=active]:border-(--ui-text-primary)'
           : 'h-7 gap-1.5 rounded-(--aino-radius-control) px-3 text-[length:var(--aino-text-ui)] data-[state=active]:bg-(--ui-bg-elevated) data-[state=active]:shadow-xs',

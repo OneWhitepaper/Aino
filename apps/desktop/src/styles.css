@@ -1086,11 +1086,21 @@
 @layer utilities {
   /* Keep relational selectors on their owning row, not inside a universal
      group-has descendant match: that invalidates unrelated chat panes. */
-  .row-hover:has([data-pr-link]:hover) .session-row-tail {
+  .row-hover:is(:hover, :has([data-session-actions]:is(:focus-visible, [data-state='open']))) .session-row-tail {
+    opacity: 0;
+  }
+
+  .row-hover:has([data-pr-link]:is(:hover, :focus-visible)):not(
+      :has([data-session-actions]:is(:focus-visible, [data-state='open']))
+    )
+    .session-row-tail {
     opacity: 1;
   }
 
-  .row-hover:has([data-pr-link]:hover) .session-row-kebab {
+  .row-hover:has([data-pr-link]:is(:hover, :focus-visible)):not(
+      :has([data-session-actions]:is(:focus-visible, [data-state='open']))
+    )
+    .session-row-kebab {
     pointer-events: none;
     opacity: 0;
   }
@@ -1407,18 +1417,6 @@
   }
 }
 
-/* Pointer focus stays quiet; keyboard controls use the shared outline below.
-   Suppress duplicate Tailwind rings without removing input/composer focus glow. */
-*:focus,
-*:focus-visible {
-  outline: none;
-}
-
-*:focus-visible {
-  --tw-ring-shadow: 0 0 #0000 !important;
-  --tw-ring-offset-shadow: 0 0 #0000 !important;
-}
-
 button {
   -webkit-app-region: no-drag;
 }
@@ -1584,6 +1582,19 @@ code {
   border-color: var(--ui-accent);
   box-shadow: var(--aino-focus-ring);
   outline: none;
+}
+
+/* Forced colors flattens focus border tints and removes shadow rings. The
+   field's chrome owns this fallback, including adorned inputs; independent
+   trailing buttons keep their own focus indicator. */
+@media (forced-colors: active) {
+  .desktop-input-chrome:focus-visible,
+  .desktop-input-chrome:has(> input:focus-visible),
+  [data-slot='composer-surface']:has([data-slot='composer-rich-input']:focus-visible),
+  .ui-prompt-input__container:has(> .ui-prompt-input-editor__input:focus-visible) {
+    outline: 2px solid Highlight;
+    outline-offset: 2px;
+  }
 }
 
 .desktop-input-chrome[aria-invalid='true'] {
@@ -2479,6 +2490,13 @@ body:not(:has([data-settings-workspace])):has([data-chat-surface][data-conversat
   border-color: var(--ui-stroke-secondary) !important;
 }
 
+/* The editor delegates focus chrome to its existing surface border. Restrict
+   this to editor focus so a focused toolbar button does not get two indicators. */
+[data-slot='composer-surface']:has([data-slot='composer-rich-input']:focus-visible),
+.ui-prompt-input__container:has(> .ui-prompt-input-editor__input:focus-visible) {
+  border-color: var(--dt-composer-ring) !important;
+}
+
 [data-slot='composer-fade'] {
   min-height: 2.375rem;
 }
@@ -2814,7 +2832,6 @@ button[data-slot='aui_msg-reactions'] {
   border: 0;
   border-radius: 0;
   background: transparent;
-  box-shadow: none;
   padding: 0;
   gap: 0;
   height: auto;
@@ -2825,6 +2842,11 @@ button[data-slot='aui_msg-reactions'] {
   cursor: pointer;
   color: var(--color-muted-foreground);
   opacity: 0.5;
+}
+
+[data-slot='aui_msg-actions'] button:not(:focus-visible),
+button[data-slot='aui_msg-reactions']:not(:focus-visible) {
+  box-shadow: none;
 }
 
 /* A landed reaction is content, not a dimmed affordance — emoji render at

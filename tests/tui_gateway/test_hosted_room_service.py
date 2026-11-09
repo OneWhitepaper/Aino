@@ -321,7 +321,7 @@ def test_stop_room_snapshots_tasks_before_status_transitions(monkeypatch, tmp_pa
     """One running task must not be counted again after it becomes stopping."""
 
     identity = driver.TaskIdentity("room-1", "task-1", "thread-1", "turn-1")
-    task = {"identity": identity, "status": "running", "cancel_id": None}
+    task = {"identity": identity, "status": "running", "cancel_id": None, "payload": {"source_event_seq": 1}}
     calls = []
 
     def listed(_db, *, room_id, status):
@@ -340,7 +340,7 @@ def test_stop_room_snapshots_tasks_before_status_transitions(monkeypatch, tmp_pa
         "request_room_stop",
         lambda _db, *, room_id, cancel_id, **_authority: {
             "room_id": room_id,
-            "cancel_id": cancel_id,
+            "cancel_id": cancel_id, "seq": 2,
         },
     )
     service = HostedRoomService(_server(), db_path=tmp_path / "state.db")
@@ -1810,8 +1810,11 @@ def test_dispatch_refresh_marks_route_for_reauthorization_on_drift(
     assert peer.dispatches == []
 
 
-def test_local_room_approval_uses_the_exact_hidden_session(tmp_path: Path):
+def test_local_room_approval_uses_the_exact_hidden_session(tmp_path: Path, monkeypatch):
     service = HostedRoomService(_server(), db_path=tmp_path / "state.db")
+    monkeypatch.setattr(driver, "list_tasks", lambda *_a, **_kw: [{
+        "identity": driver.TaskIdentity("room-1", "task-local-1", "thread-1", "turn-1"),
+        "execution_generation": 1, "status": "running", "payload": {"target_profile": "local"}}])
     rpc = _FakeRPC()
     service.rpc = rpc
     service.runtime.rpc = rpc
