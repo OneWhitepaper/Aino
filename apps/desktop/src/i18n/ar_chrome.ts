@@ -588,6 +588,7 @@ terminalDisconnectedBody:
       'انقطع اتصال الطرفية. اضغط Enter لبدء صدفة جديدة؛ يُحفظ سجل التمرير.'
 },
   zones: {
+    switchConversation: 'تبديل المحادثة',
     sidebarModeMenu: 'تبديل وضع المحادثة',
     sidebarSessionsDescription: 'المشاريع والملفات والمحادثات اليومية',
     showTabStrip: 'إظهار علامات التبويب',

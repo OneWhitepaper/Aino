@@ -424,12 +424,14 @@ export function ConnectionsRegistrySection() {
 
     try {
       const result = await bridge.remove(removeTarget.id)
+
+      if (!result.ok) {
+        throw new Error(s.removeFailed)
+      }
+
       publishRegistry(result.registry)
-    } catch (err) {
-      notifyError(err, s.removeFailed)
     } finally {
       setBusyId(null)
-      setRemoveTarget(null)
     }
   }, [bridge, publishRegistry, removeTarget, s.removeFailed])
 

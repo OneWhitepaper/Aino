@@ -1,5 +1,6 @@
 import {
   Button,
+  Codicon,
   ConfirmDialog,
   ContextMenu,
   ContextMenuContent,
@@ -10,9 +11,14 @@ import {
 import { useState } from 'react'
 
 import { useCanonicalGroupLabels } from './canonical-group-labels'
+import { CanonicalMemberAvatar } from './canonical-group-members'
+import type { CanonicalGroupBinding, CanonicalRoomMember } from './canonical-groups'
 import { useBots } from './i18n'
 
 interface CanonicalGroupRowProps {
+  active?: boolean
+  binding?: CanonicalGroupBinding
+  members?: CanonicalRoomMember[]
   memberCount: number
   name: string
   /** Rejects with the gateway's refusal so the confirm stays open and shows it. */
@@ -22,7 +28,15 @@ interface CanonicalGroupRowProps {
 
 /** One gateway Group Chat in the roster list, with the same right-click Open /
  *  Delete a Desktop-local group row has (#143571). */
-export function CanonicalGroupRow({ memberCount, name, onDelete, onOpen }: CanonicalGroupRowProps) {
+export function CanonicalGroupRow({
+  active = false,
+  binding,
+  members,
+  memberCount,
+  name,
+  onDelete,
+  onOpen
+}: CanonicalGroupRowProps) {
   const labels = useCanonicalGroupLabels()
   const { group } = useBots()
   const [confirming, setConfirming] = useState(false)
@@ -31,8 +45,29 @@ export function CanonicalGroupRow({ memberCount, name, onDelete, onOpen }: Canon
     <>
       <ContextMenu>
         <ContextMenuTrigger asChild>
-          <Button onClick={onOpen} variant="ghost">
-            {name}
+          <Button
+            aria-current={active || undefined}
+            aria-description={`${memberCount} ${labels.members}`}
+            aria-label={name}
+            className="aino-group-roster-row"
+            onClick={onOpen}
+            variant="ghost"
+          >
+            {members?.length ? (
+              <span aria-hidden="true" className="aino-roster-group-avatar">
+                {members.slice(0, 4).map(member => (
+                  <CanonicalMemberAvatar binding={binding} key={member.member_id} member={member} size={12} />
+                ))}
+              </span>
+            ) : (
+              <span className="aino-group-roster-icon">
+                <Codicon name="organization" />
+              </span>
+            )}
+            <span className="aino-roster-group-copy">
+              <span className="aino-group-roster-name">{name}</span>
+              <span className="aino-roster-group-preview">{group.memberCount(memberCount)}</span>
+            </span>
           </Button>
         </ContextMenuTrigger>
         <ContextMenuContent>

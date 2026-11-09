@@ -41,7 +41,7 @@ export function AddServerForm({ draft, nameTaken, onChange }: AddServerFormProps
 
       <Field label={copy.name}>
         <Input onChange={event => set({ name: event.currentTarget.value })} size="sm" value={draft.name} />
-        {nameTaken ? <p className="text-[0.65rem] text-(--ui-red)">{copy.nameTaken}</p> : null}
+        {nameTaken ? <p className="text-[length:var(--aino-text-caption)] text-(--ui-red)">{copy.nameTaken}</p> : null}
       </Field>
 
       <Fieldset label={copy.type}>
@@ -178,12 +178,14 @@ function PasteBox({
     <Fieldset label={copy.pasteLabel}>
       <Textarea
         aria-label={copy.pasteLabel}
-        className="max-h-32 min-h-16 font-mono text-[0.68rem]"
+        className="max-h-32 min-h-16 font-mono text-[length:var(--aino-text-caption)]"
         onChange={event => read(event.currentTarget.value)}
         placeholder={copy.pastePlaceholder}
         value={text}
       />
-      {failed ? <p className="text-[0.65rem] text-(--ui-text-tertiary)">{copy.pasteNoMatch}</p> : null}
+      {failed ? (
+        <p className="text-[length:var(--aino-text-caption)] text-(--ui-text-tertiary)">{copy.pasteNoMatch}</p>
+      ) : null}
     </Fieldset>
   )
 }

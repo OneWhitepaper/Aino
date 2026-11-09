@@ -12,6 +12,7 @@ export function RemoteDisplayBanner() {
     void window.hermesDesktop?.getRemoteDisplayReason?.().then(reason => {
       if (reason) {
         notify({
+          id: 'remote-display',
           durationMs: 0,
           kind: 'info',
           message: translateNow('remoteDisplayBanner.message', reason),

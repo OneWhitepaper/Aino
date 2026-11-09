@@ -59,35 +59,44 @@ export const BOTS_LOCALES: PluginLocaleBundles = {
     canonical: CANONICAL_GROUP_LOCALES.ar,
     bot: {
       openModelUnavailableMessage:
-        'لا يتوفر نموذج قابل للاستخدام لهذا الروبوت. افتح «متقدم» في إعداداته لاختيار مزوّد ونموذج.'
+        'لا يتوفر نموذج قابل للاستخدام لهذا الروبوت. اختر نموذجًا متاحًا في إعدادات النموذج ثم أعد المحاولة.',
+      openModelSettingsSourceMismatch: 'انتقل إلى اتصال هذا الروبوت في إعدادات الاتصال، ثم افتح إعدادات النموذج مجددًا.'
     }
   },
   ru: {
     canonical: CANONICAL_GROUP_LOCALES.ru,
     bot: {
       openModelUnavailableMessage:
-        'У этого бота нет доступной модели. Откройте «Дополнительно» в его настройках и выберите провайдера и модель.'
+        'У этого бота нет доступной модели. Выберите доступную модель в его настройках и повторите попытку.',
+      openModelSettingsSourceMismatch:
+        'Выберите подключение этого бота в настройках подключений, затем снова откройте настройки модели.'
     }
   },
   fr: {
     canonical: CANONICAL_GROUP_LOCALES.fr,
     bot: {
       openModelUnavailableMessage:
-        'Ce bot n’a aucun modèle utilisable. Ouvrez les options avancées de ses paramètres pour choisir un fournisseur et un modèle.'
+        'Ce bot n’a aucun modèle utilisable. Choisissez un modèle disponible dans ses paramètres de modèle, puis réessayez.',
+      openModelSettingsSourceMismatch:
+        'Sélectionnez la connexion de ce bot dans les paramètres de connexion, puis rouvrez ses paramètres de modèle.'
     }
   },
   de: {
     canonical: CANONICAL_GROUP_LOCALES.de,
     bot: {
       openModelUnavailableMessage:
-        'Für diesen Bot ist kein nutzbares Modell verfügbar. Öffne „Erweitert“ in seinen Einstellungen und wähle einen Anbieter und ein Modell.'
+        'Für diesen Bot ist kein nutzbares Modell verfügbar. Wähle in seinen Modelleinstellungen ein verfügbares Modell und versuche es erneut.',
+      openModelSettingsSourceMismatch:
+        'Wechsle in den Verbindungseinstellungen zur Verbindung dieses Bots und öffne dann seine Modelleinstellungen erneut.'
     }
   },
   es: {
     canonical: CANONICAL_GROUP_LOCALES.es,
     bot: {
       openModelUnavailableMessage:
-        'Este bot no tiene un modelo disponible. Abre las opciones avanzadas de su configuración para elegir un proveedor y un modelo.'
+        'Este bot no tiene un modelo disponible. Elige un modelo disponible en su configuración y vuelve a intentarlo.',
+      openModelSettingsSourceMismatch:
+        'Cambia a la conexión de este bot en la configuración de conexiones y vuelve a abrir su configuración de modelo.'
     }
   }
 }

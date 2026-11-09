@@ -27,8 +27,7 @@ const popoverContentVariants = cva(
       variant: {
         // The same paper and elevation as menus. The arrow reads this exact
         // variable as well, so panel and arrow never acquire different fills.
-        default:
-          'border border-(--stroke-nous) bg-(--popover-surface) text-popover-foreground shadow-nous [--popover-surface:var(--ui-bg-elevated)]',
+        default: 'bg-(--popover-surface) text-popover-foreground shadow-nous [--popover-surface:var(--ui-bg-elevated)]',
         // A high-emphasis announcement uses the same graphite/inverse pair as
         // the primary action. Its arrow stays borderless and shares the fill.
         accent: 'bg-(--popover-surface) text-(--aino-action-fg) shadow-nous [--popover-surface:var(--aino-action-bg)]',

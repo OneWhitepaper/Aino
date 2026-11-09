@@ -211,7 +211,7 @@ export function MainModelPicker({
         <ListRow
           action={
             needsSetup ? (
-              <span className="text-[12px] leading-relaxed text-muted-foreground">
+              <span className="text-[length:var(--aino-text-caption)] leading-relaxed text-muted-foreground">
                 {source === 'custom' ? copy.customEmpty : copy.noModels}
               </span>
             ) : (

@@ -488,7 +488,10 @@ export function useGatewayBoot({
       }, LIVENESS_REPROBE_DELAY_MS)
     }
 
-    const attemptReconnect = async (manual?: { profile: string; activationEpoch: number }) => {
+    const attemptReconnect = async (
+      manual?: { profile: string; activationEpoch: number },
+      reportFailure = false
+    ) => {
       if (cancelled || primaryReauthError || reconnecting || gatewayOpen() || $gatewaySwitching.get()) {
         return
       }
@@ -609,6 +612,12 @@ export function useGatewayBoot({
           reauthNotified = true
           notifyPrimaryReauth(primaryReauthError, () => primaryReauthError ?? '')
         }
+
+        // Automatic attempts keep their bounded backoff. A clicked recovery
+        // must return its failure to the existing notice instead of dismissing it.
+        if (reportFailure) {
+          throw err
+        }
       } finally {
         reconnecting = false
 
@@ -619,6 +628,7 @@ export function useGatewayBoot({
 
           if (Date.now() - reconnectFailingSince >= RECONNECT_ESCALATE_AFTER_MS && !escalated) {
             escalated = true
+            const noticeRouteRevision = primaryRouteRevision
             // Non-blocking: chat stays readable/draftable while we keep retrying.
             // Settings / Gateway menu remain reachable without a modal lockout.
             notify({
@@ -628,7 +638,13 @@ export function useGatewayBoot({
               durationMs: 0,
               action: {
                 label: translateNow('boot.errors.reconnectNow'),
-                onClick: () => void reconnectGateway().catch(() => undefined)
+                onClick: () => {
+                  if (!isActivePrimary() || primaryRouteRevision !== noticeRouteRevision) {
+                    return Promise.reject(new Error(translateNow('desktop.gatewayReconnectUnavailable')))
+                  }
+
+                  return reconnectGateway()
+                }
               },
               secondaryAction: RECOVERY_ACTIONS.openGateways()
             })
@@ -1291,6 +1307,10 @@ export function useGatewayBoot({
 
     const offGatewayReconnect = registerGatewayReconnect(async (options?: GatewayReconnectOptions) => {
       if (cancelled || !bootCompleted || $gatewaySwitching.get()) {
+        if (options?.source !== 'restart-followthrough') {
+          throw new Error(translateNow('desktop.gatewayReconnectUnavailable'))
+        }
+
         return
       }
 
@@ -1320,7 +1340,11 @@ export function useGatewayBoot({
         await attemptReconnect({
           profile: normalizeProfileKey($activeGatewayProfile.get()),
           activationEpoch: gatewayActivationEpoch()
-        })
+        }, true)
+
+        if (!gatewayOpen()) {
+          throw new Error(translateNow('desktop.gatewayReconnectUnavailable'))
+        }
 
         return
       }
@@ -1372,7 +1396,11 @@ export function useGatewayBoot({
       await attemptReconnect({
         profile: normalizeProfileKey($activeGatewayProfile.get()),
         activationEpoch: gatewayActivationEpoch()
-      })
+      }, true)
+
+      if (!gatewayOpen()) {
+        throw new Error(translateNow('desktop.gatewayReconnectUnavailable'))
+      }
     })
 
     // Registry lifecycle: a removed connection's secondaries must close NOW
@@ -1507,6 +1535,7 @@ export function useGatewayBoot({
       // Post-boot: the shell's restart intent recycles a local service via main
       // (or re-dials a remote one) and does not depend on this hook's
       // reconnect gate, unlike reconnectGateway().
+      const noticeRouteRevision = primaryRouteRevision
       notify({
         kind: 'error',
         title: translateNow('boot.errors.backendStopped'),
@@ -1514,7 +1543,13 @@ export function useGatewayBoot({
         durationMs: 0,
         action: {
           label: translateNow('boot.errors.restartHermes'),
-          onClick: requestBackendRestart
+          onClick: () => {
+            if (!isActivePrimary() || primaryRouteRevision !== noticeRouteRevision) {
+              throw new Error(translateNow('desktop.gatewayReconnectUnavailable'))
+            }
+
+            requestBackendRestart()
+          }
         },
         secondaryAction: {
           label: translateNow('boot.errors.openLogs'),

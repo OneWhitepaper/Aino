@@ -120,7 +120,7 @@ interface SidebarSessionsSectionProps {
   sessions: SessionInfo[]
   activeSessionId: null | string
   onResumeSession: (sessionId: string, session?: SessionInfo) => void
-  onDeleteSession: (sessionId: string) => void
+  onDeleteSession: (sessionId: string) => Promise<void> | void
   onArchiveSession: (sessionId: string) => void
   onBranchSession?: (sessionId: string, profile?: string) => void
   onTogglePin: (sessionId: string) => void

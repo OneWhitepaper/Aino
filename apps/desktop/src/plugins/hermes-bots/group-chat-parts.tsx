@@ -8,13 +8,34 @@
  * controls without either surface importing the other.
  */
 
-import { Button, cn, Codicon, host, Input, RowButton, Textarea, useI18n, useValue } from '@hermes/plugin-sdk'
-import type { ClipboardEvent } from 'react'
-import { useRef, useState } from 'react'
+import {
+  Button,
+  cn,
+  Codicon,
+  host,
+  Input,
+  Popover,
+  PopoverAnchor,
+  PopoverContent,
+  RowButton,
+  Textarea,
+  useI18n,
+  useValue
+} from '@hermes/plugin-sdk'
+import type { ClipboardEvent, ReactNode, Ref } from 'react'
+import { useId, useImperativeHandle, useRef, useState } from 'react'
 
+import { avatarColor, botAppearance, BotFace } from './avatar'
 import { $imagenAvailable, normalizeAvatarImage, pickImageFromDevice, probeImagen } from './avatar-image'
 import { $botMeta, botHandle, botMentionTag } from './data'
 import { appendGroupChatEntry } from './group-chat'
+import { groupMentionClipboardHandlers } from './group-chat-mention-clipboard'
+import {
+  editGroupMentions,
+  groupMentionDisplayOffset,
+  projectGroupMentions,
+  replaceGroupMentionRange
+} from './group-chat-mentions'
 import { groupMemberKey } from './group-membership'
 import { answerGroupClarify } from './group-turns'
 import { useBots } from './i18n'
@@ -123,36 +144,20 @@ export function GroupImageControls({ image, onImage, seedName, seedMembers }: Gr
 
 interface MentionToken {
   query: string
-  /** Index of the '@' the token starts at. */
   start: number
 }
 
-/** Merged room view for one group: shared timeline with per-member
- *  attribution, a composer that drives the round-robin, and a working
- *  indicator while member turns run. Renders identically in the MAIN chat
- *  window (host.openWorkspace tile) and in the bots panel (older-desktop
- *  fallback); `onBack` is where the Back button routes — the main tile's
- *  closer, or clearing the in-panel workspace atom. */
-/** The active @-token at the caret: text from the nearest '@' (that begins a
- *  word) up to the caret, or null when the caret isn't inside a mention. */
 function mentionTokenAt(text: string, caret: number): MentionToken | null {
-  const upto = String(text || '').slice(0, caret)
-  const match = /(^|\s)@([a-z0-9._-]*)$/i.exec(upto)
+  const match = /(^|\s)@([^\s@]*)$/u.exec(text.slice(0, caret))
 
-  if (!match) {
-    return null
-  }
-
-  return {
-    query: match[2].toLowerCase(),
-    start: caret - match[2].length - 1
-  }
+  return match ? { query: match[2].toLocaleLowerCase(), start: caret - match[2].length - 1 } : null
 }
 
-/** One row of the mention popover: the handle inserted, plus its subtitle. */
 interface MentionOption {
   handle: string
-  meta: string
+  label: string
+  detail?: string
+  avatar: ReactNode
 }
 
 interface GroupMentionInputProps {
@@ -160,75 +165,116 @@ interface GroupMentionInputProps {
   autoFocus?: boolean
   className?: string
   disabled?: boolean
-  /** The exact token a member's mention inserts, for rooms that resolve only frozen handles. */
+  appearance?: 'field' | 'composer'
+  ref?: Ref<GroupMentionInputHandle>
+  /** Addresses stay frozen; the name/avatar resolvers must belong to this room's source. */
   handleFor?: (member: GroupMember) => string | undefined
+  nameFor?: (member: GroupMember) => string
+  avatarFor?: (member: GroupMember) => ReactNode
+  detailFor?: (member: GroupMember) => string | undefined
+  everyoneLabel?: string
+  pickerLabel?: string
+  /** Exact room and source authority; clipboard recipient bindings never cross it. */
+  mentionScope?: string
+  onInvalidMentionPaste?: () => void
   members: GroupMember[]
   onChange: (value: string) => void
   onPaste?: (event: ClipboardEvent<HTMLTextAreaElement>) => void
   onSubmitDraft?: () => void
   placeholder?: string
+  /** Canonical draft text, including frozen addresses rather than display names. */
   value: string
 }
 
-/** Mention-aware composer input for group rooms. The core composer's
- *  @-completion area doesn't mount inside workspace tiles (#89049), so this
- *  wraps the plain SDK Input with a member-scoped popover: @everyone/@all
- *  quick picks plus each seated member's handle. Insertion produces exactly
- *  the strings parseGroupChatMentions resolves. Keyboard: Up/Down navigate,
- *  Enter/Tab insert (Enter falls through to submit when the popover is
- *  closed), Escape dismisses. */
-export function GroupMentionInput({ handleFor, members, onChange, onSubmitDraft, value, ...inputProps }: GroupMentionInputProps) {
+export interface GroupMentionInputHandle {
+  focus: () => void
+  openMentions: () => void
+  mention: (handle: string) => void
+}
+
+/** The native textarea shows names while its owning draft keeps exact addresses.
+ * Display names never become a lookup key, including when names are duplicated. */
+export function GroupMentionInput({
+  handleFor,
+  nameFor,
+  avatarFor,
+  detailFor,
+  everyoneLabel,
+  pickerLabel,
+  mentionScope,
+  onInvalidMentionPaste,
+  members,
+  onChange,
+  onSubmitDraft,
+  value,
+  appearance = 'field',
+  ref,
+  ...inputProps
+}: GroupMentionInputProps) {
   const b = useBots()
   const allMeta: Record<string, BotMeta> = useValue($botMeta)
   const inputRef = useRef<HTMLTextAreaElement | null>(null)
+  const editSelection = useRef<{ start: number; end: number } | undefined>(undefined)
+  const composing = useRef(false)
   const [token, setToken] = useState<MentionToken | null>(null)
   const [selected, setSelected] = useState(0)
-  const options: MentionOption[] = []
+  const listId = useId()
+  const allLabel = everyoneLabel || b.group.everyoneMeta
 
-  if (token) {
-    for (const pick of ['everyone', 'all']) {
-      if (pick.startsWith(token.query)) {
-        options.push({
-          handle: pick,
-          meta: b.group.everyoneMeta
-        })
-      }
-    }
+  const seats = groupMentionSeats({ members, handleFor, nameFor, avatarFor, detailFor }, allMeta)
 
-    for (const member of members) {
-      const handle = String(botHandle(member.name, member) || '').trim()
-      const display = displayName(member, botRosterMeta(member, allMeta))
-      // Renamed members complete on their friendly tag; parser resolves both.
-      const tag = String(handleFor?.(member) ?? (botMentionTag(member) || handle)).trim()
+  const identities = [...seats, { handle: 'everyone', label: allLabel }, { handle: 'all', label: allLabel }]
+  const projection = projectGroupMentions(value, identities)
+  const query = token?.query || ''
 
-      if (!tag) {
-        continue
-      }
-
-      if (
-        token.query &&
-        !tag.toLowerCase().startsWith(token.query) &&
-        !(handle && handle.toLowerCase().startsWith(token.query)) &&
-        !display.toLowerCase().startsWith(token.query)
-      ) {
-        continue
-      }
-
-      options.push({
-        handle: tag,
-        meta: display
-      })
-    }
-  }
+  const options: MentionOption[] = token
+    ? [
+        ...(['everyone', 'all', allLabel.toLocaleLowerCase()].some(key => key.includes(query))
+          ? [{ handle: 'everyone', label: allLabel, avatar: <Codicon name="organization" /> }]
+          : []),
+        ...seats
+          .filter(
+            member =>
+              member.handle.toLocaleLowerCase().includes(query) || member.label.toLocaleLowerCase().includes(query)
+          )
+          .map(member => ({
+            ...member,
+            // Only an otherwise indistinguishable duplicate needs its address as a secondary detail.
+            detail:
+              member.detail ||
+              (seats.some(other => other.handle !== member.handle && other.label === member.label)
+                ? `@${member.handle}`
+                : undefined)
+          }))
+      ]
+    : []
 
   const open = Boolean(token) && options.length > 0
   const active = open ? Math.min(selected, options.length - 1) : 0
 
-  // The onClick below passes `event.target`, which React types as a bare
-  // EventTarget even though a click on this textarea always targets it.
   const refreshToken = (target: HTMLTextAreaElement) => {
-    setToken(mentionTokenAt(target.value, target.selectionStart ?? target.value.length))
+    const caret = target.selectionStart ?? target.value.length
+    const bound = projection.spans.some(span => caret > span.start && caret <= span.end)
+    setToken(bound ? null : mentionTokenAt(target.value, caret))
     setSelected(0)
+  }
+
+  const update = (next: { raw: string; rawCaret: number }, focus = true) => {
+    onChange(next.raw)
+    const pos = groupMentionDisplayOffset(projectGroupMentions(next.raw, identities), next.rawCaret)
+    requestAnimationFrame(() => {
+      const el = inputRef.current
+
+      if (!el || composing.current || (!focus && el.ownerDocument.activeElement !== el)) {
+        return
+      }
+
+      if (focus) {
+        el.focus()
+      }
+
+      el.setSelectionRange(pos, pos)
+    })
   }
 
   const insert = (handle: string) => {
@@ -236,118 +282,281 @@ export function GroupMentionInput({ handleFor, members, onChange, onSubmitDraft,
       return
     }
 
-    const caret = inputRef.current?.selectionStart ?? value.length
-    const next = `${value.slice(0, token.start)}@${handle} ${value.slice(caret)}`
-    onChange(next)
+    update(
+      replaceGroupMentionRange(
+        projection,
+        token.start,
+        inputRef.current?.selectionStart ?? projection.text.length,
+        `@${handle} `
+      )
+    )
     setToken(null)
-
-    // Restore focus with the caret after the inserted mention.
-    const pos = token.start + handle.length + 2
-    requestAnimationFrame(() => {
-      const el = inputRef.current
-
-      if (el) {
-        el.focus()
-
-        try {
-          el.setSelectionRange(pos, pos)
-        } catch {
-          /* input type without selection support */
-        }
-      }
-    })
   }
 
+  const clipboard = groupMentionClipboardHandlers({
+    scope: mentionScope,
+    projection,
+    identities,
+    onPaste: inputProps.onPaste,
+    onInvalidMentionPaste,
+    update,
+    rememberSelection: selection => {
+      editSelection.current = selection
+    },
+    closePicker: () => setToken(null)
+  })
+
+  useImperativeHandle(ref, () => {
+    const append = (handle?: string) => {
+      if (inputProps.disabled) {
+        return
+      }
+
+      const el = inputRef.current
+      const start = el?.selectionStart ?? projection.text.length
+      const end = el?.selectionEnd ?? start
+      const prefix = projection.text.slice(0, start)
+      const address = `${prefix && !/\s$/.test(prefix) ? ' ' : ''}@${handle === undefined ? '' : `${handle} `}`
+      const next = replaceGroupMentionRange(projection, start, end, address)
+      update(next)
+      const pos = groupMentionDisplayOffset(projectGroupMentions(next.raw, identities), next.rawCaret)
+      setToken(handle === undefined ? { start: pos - 1, query: '' } : null)
+      setSelected(0)
+    }
+
+    return { focus: () => inputRef.current?.focus(), openMentions: () => append(), mention: handle => append(handle) }
+  })
+
   return (
-    <div className="relative min-w-0 flex-1">
-      {open ? (
-        <div className="absolute bottom-full left-0 z-50 mb-1 max-h-48 w-64 max-w-full overflow-y-auto rounded-(--aino-radius-menu) border border-(--stroke-nous) bg-(--ui-bg-elevated) py-1 shadow-nous">
-          {options.map((option, index) => (
-            <RowButton
-              className={cn(
-                'flex w-full min-w-0 items-baseline gap-2 px-2 py-1 text-left text-xs',
-                index === active ? 'bg-(--ui-control-hover-background) text-foreground' : 'text-(--ui-text-secondary)'
-              )} // preventDefault on mousedown so the input keeps focus.
-              key={option.handle}
-              onMouseDown={event => {
-                event.preventDefault()
-                insert(option.handle)
-              }}
-              onMouseEnter={() => setSelected(index)}
-            >
-              <span className="min-w-0 wrap-anywhere font-medium">{`@${option.handle}`}</span>
-              <span className="min-w-0 truncate text-[length:var(--aino-text-caption)] text-(--ui-text-tertiary)">{option.meta}</span>
-            </RowButton>
-          ))}
-        </div>
-      ) : null}
-      <Textarea
-        {...inputProps}
-        // Input whose form submitted on every Enter — newlines were
-        // impossible. Enter (no Shift) still submits via onSubmitDraft;
-        // Shift+Enter falls through to the textarea's native newline.
-        // Grow with wrapped text/newlines so long briefs stay reviewable
-        // (#95300), then scroll internally before the composer takes over
-        // the room — same field-sizing idiom as the Kanban drawer.
-        className={cn(
-          'field-sizing-content max-h-[min(50vh,24rem)] min-h-9 resize-none overflow-y-auto',
-          inputProps.className
-        )}
-        onBlur={() => setToken(null)}
-        onChange={event => {
-          onChange(event.target.value)
-          refreshToken(event.target)
-        }}
-        onClick={event => refreshToken(event.target as HTMLTextAreaElement)}
-        onKeyDown={event => {
-          // IME composition guard (same as the core composer): Enter here
-          // confirms the composed Chinese/Japanese/Korean text — it must not
-          // insert a mention nor submit the draft. nativeEvent.isComposing
-          // covers Chromium; keyCode 229 covers macOS Chinese IMEs that fire
-          // Enter after compositionend with isComposing already false.
-          if (event.nativeEvent?.isComposing || event.keyCode === 229) {
-            return
-          }
+    <Popover
+      onOpenChange={next => {
+        if (!next) {
+          setToken(null)
+        }
+      }}
+      open={open}
+    >
+      <PopoverAnchor asChild>
+        <div className="aino-group-mention-input relative min-w-0 flex-1">
+          <Textarea
+            {...inputProps}
+            {...clipboard}
+            appearance={appearance}
+            aria-activedescendant={open ? `${listId}-${active}` : undefined}
+            aria-controls={open ? listId : undefined}
+            aria-expanded={open}
+            aria-haspopup="listbox"
+            className={cn(
+              appearance === 'composer'
+                ? 'field-sizing-content max-h-40 overflow-y-auto'
+                : 'field-sizing-content max-h-[min(50vh,24rem)] min-h-9 resize-none overflow-y-auto',
+              inputProps.className
+            )}
+            onBeforeInput={event => {
+              editSelection.current = {
+                start: event.currentTarget.selectionStart,
+                end: event.currentTarget.selectionEnd
+              }
+            }}
+            onBlur={() => setToken(null)}
+            onChange={event => {
+              const next = editGroupMentions(
+                projection,
+                event.target.value,
+                event.target.selectionStart ?? event.target.value.length,
+                editSelection.current
+              )
 
-          if (open) {
-            if (event.key === 'ArrowDown') {
-              event.preventDefault()
-              setSelected((active + 1) % options.length)
-
-              return
-            }
-
-            if (event.key === 'ArrowUp') {
-              event.preventDefault()
-              setSelected((active - 1 + options.length) % options.length)
-
-              return
-            }
-
-            if (event.key === 'Enter' || event.key === 'Tab') {
-              event.preventDefault()
-              insert(options[active].handle)
-
-              return
-            }
-
-            if (event.key === 'Escape') {
-              event.preventDefault()
+              editSelection.current = undefined
+              update(next, false)
+              setToken(
+                composing.current
+                  ? null
+                  : mentionTokenAt(event.target.value, event.target.selectionStart ?? event.target.value.length)
+              )
+              setSelected(0)
+            }}
+            onClick={event => refreshToken(event.target as HTMLTextAreaElement)}
+            onCompositionEnd={event => {
+              composing.current = false
+              refreshToken(event.currentTarget)
+            }}
+            onCompositionStart={() => {
+              composing.current = true
               setToken(null)
+            }}
+            onKeyDown={event => {
+              editSelection.current = {
+                start: event.currentTarget.selectionStart,
+                end: event.currentTarget.selectionEnd
+              }
 
-              return
-            }
-          }
+              if (event.nativeEvent?.isComposing || event.keyCode === 229) {
+                return
+              }
 
-          if (event.key === 'Enter' && !event.shiftKey) {
+              if (open) {
+                if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+                  event.preventDefault()
+                  setSelected((active + (event.key === 'ArrowDown' ? 1 : -1) + options.length) % options.length)
+
+                  return
+                }
+
+                if (event.key === 'Enter' || event.key === 'Tab') {
+                  event.preventDefault()
+                  insert(options[active].handle)
+
+                  return
+                }
+
+                if (event.key === 'Escape') {
+                  event.preventDefault()
+                  event.stopPropagation()
+                  setToken(null)
+
+                  return
+                }
+              }
+
+              if (
+                (event.key === 'Backspace' || event.key === 'Delete') &&
+                event.currentTarget.selectionStart === event.currentTarget.selectionEnd
+              ) {
+                const caret = event.currentTarget.selectionStart
+
+                const span = projection.spans.find(span =>
+                  event.key === 'Backspace'
+                    ? caret > span.start && caret <= span.end
+                    : caret >= span.start && caret < span.end
+                )
+
+                if (span) {
+                  event.preventDefault()
+                  update(replaceGroupMentionRange(projection, span.start, span.end, ''))
+                  setToken(null)
+
+                  return
+                }
+              }
+
+              if (event.key === 'Enter' && !event.shiftKey) {
+                event.preventDefault()
+                onSubmitDraft?.()
+              }
+            }}
+            ref={inputRef}
+            rows={1}
+            value={projection.text}
+          />
+        </div>
+      </PopoverAnchor>
+      <PopoverContent
+        align="start"
+        className="aino-group-mention-popover"
+        onCloseAutoFocus={event => event.preventDefault()}
+        onInteractOutside={event => {
+          if (inputRef.current?.contains(event.target as Node)) {
             event.preventDefault()
-            onSubmitDraft?.()
           }
         }}
-        ref={inputRef}
-        rows={1} // Multi-line room prompts (#89884): the composer was a single-line
-        value={value}
-      />
+        onOpenAutoFocus={event => event.preventDefault()}
+        showArrow={false}
+        side="top"
+        sideOffset={12}
+      >
+        {pickerLabel && <div className="aino-group-mention-heading">{pickerLabel}</div>}
+        <GroupMentionOptions
+          active={active}
+          listId={listId}
+          onActiveChange={setSelected}
+          onSelect={insert}
+          options={options}
+          pickerLabel={pickerLabel}
+        />
+      </PopoverContent>
+    </Popover>
+  )
+}
+
+function groupMentionSeats(
+  {
+    members,
+    handleFor,
+    nameFor,
+    avatarFor,
+    detailFor
+  }: Pick<GroupMentionInputProps, 'members' | 'handleFor' | 'nameFor' | 'avatarFor' | 'detailFor'>,
+  allMeta: Record<string, BotMeta>
+): MentionOption[] {
+  return members
+    .map(member => {
+      const meta = botRosterMeta(member, allMeta)
+      const handle = String(handleFor?.(member) ?? (botMentionTag(member) || botHandle(member.name, member))).trim()
+      const label = nameFor?.(member) || displayName(member, meta)
+      const appearance = botAppearance(member.name, meta)
+
+      return {
+        handle,
+        label,
+        detail: detailFor?.(member) || member.connectionLabel,
+        avatar: avatarFor?.(member) ?? (
+          <BotFace {...appearance} color={avatarColor(appearance.color, member.name)} name={member.name} size={30} />
+        )
+      }
+    })
+    .filter(member => member.handle)
+}
+
+interface GroupMentionOptionsProps {
+  active: number
+  listId: string
+  onActiveChange: (index: number) => void
+  onSelect: (handle: string) => void
+  options: MentionOption[]
+  pickerLabel?: string
+}
+
+function GroupMentionOptions({
+  active,
+  listId,
+  onActiveChange,
+  onSelect,
+  options,
+  pickerLabel
+}: GroupMentionOptionsProps) {
+  return (
+    <div aria-label={pickerLabel} className="aino-group-mention-list" id={listId} role="listbox">
+      {options.map((option, index) => (
+        <RowButton
+          aria-selected={index === active}
+          className="aino-group-mention-option"
+          data-selected={index === active || undefined}
+          id={`${listId}-${index}`}
+          key={option.handle}
+          onClick={() => onSelect(option.handle)}
+          onMouseDown={event => {
+            event.preventDefault()
+            onSelect(option.handle)
+          }}
+          onMouseEnter={() => onActiveChange(index)}
+          role="option"
+          tabIndex={-1}
+        >
+          <span aria-hidden="true" className="aino-group-mention-avatar">
+            {option.avatar}
+          </span>
+          <span className="aino-group-mention-person">
+            <span className="aino-group-mention-name">{option.label}</span>
+            {option.detail && <span className="aino-group-mention-detail">{option.detail}</span>}
+          </span>
+          {index === active && (
+            <span aria-hidden="true" className="aino-group-mention-enter">
+              <Codicon name="arrow-small-right" />
+            </span>
+          )}
+        </RowButton>
+      ))}
     </div>
   )
 }
@@ -386,6 +595,8 @@ export function GroupClarifyCard({ entry, members }: GroupClarifyCardProps) {
   const { group } = entry
   const isApproval = entry.kind === 'approval'
   const member = members.find(m => groupMemberKey(m) === entry.memberKey) || members.find(m => m.name === entry.member)
+  const allMeta = useValue($botMeta)
+  const memberName = member ? displayName(member, botRosterMeta(member, allMeta)) : b.canonical.memberGeneric
   const [drafts, setDrafts] = useState<Record<string, string>>({})
   const [picked, setPicked] = useState<Record<string, string[]>>({})
   const [sending, setSending] = useState(false)
@@ -463,7 +674,7 @@ export function GroupClarifyCard({ entry, members }: GroupClarifyCardProps) {
     } catch (err: any) {
       host.notify({
         kind: 'error',
-        message: b.group.answerFailed(botHandle(entry.member, member), String(err?.message || err))
+        message: b.group.answerFailed(memberName, String(err?.message || err))
       })
     } finally {
       setSending(false)
@@ -474,12 +685,10 @@ export function GroupClarifyCard({ entry, members }: GroupClarifyCardProps) {
     <div className="grid gap-1.5 rounded-md border border-(--ui-accent)/50 bg-(--ui-accent)/5 px-2.5 py-2">
       <div className="flex items-center gap-1.5 text-xs font-medium">
         <Codicon className="shrink-0 text-(--ui-accent)" name={isApproval ? 'shield' : 'question'} />
-        {isApproval
-          ? b.group.wantsToRunCommand(botHandle(entry.member, member))
-          : b.group.asks(botHandle(entry.member, member))}
+        {isApproval ? b.group.wantsToRunCommand(memberName) : b.group.asks(memberName)}
       </div>
       {isApproval && entry.command ? (
-        <code className="block overflow-x-auto rounded bg-(--ui-bg-secondary,rgba(0,0,0,0.25)) px-2 py-1 font-mono text-[0.7rem] whitespace-pre-wrap break-all">
+        <code className="block overflow-x-auto rounded bg-(--ui-bg-secondary,rgba(0,0,0,0.25)) px-2 py-1 font-mono text-[length:var(--aino-text-caption)] whitespace-pre-wrap break-all">
           {entry.command}
         </code>
       ) : null}
@@ -494,7 +703,7 @@ export function GroupClarifyCard({ entry, members }: GroupClarifyCardProps) {
                 return (
                   <Button
                     className={cn(
-                      'h-6 px-2 text-[0.7rem]',
+                      'h-6 px-2 text-[length:var(--aino-text-caption)]',
                       isApproval && choice === 'deny' && !chosen && 'text-destructive'
                     )}
                     disabled={sending || !member}

@@ -3,7 +3,7 @@ import { afterEach, expect, it, vi } from 'vitest'
 
 import { setApiRequestConnection, setApiRequestProfile } from '@/api/client'
 import { platformAccountActions } from '@/api/platform'
-import { I18nProvider } from '@/i18n'
+import { I18nProvider, translateNow } from '@/i18n'
 import { clearGatewayManagedCapabilities, recordGatewayReadyCapability } from '@/store/gateway-managed-capability'
 import { readPlatformDefault } from '@/store/platform-models'
 import { deferred } from '@/test/deferred'
@@ -68,6 +68,22 @@ it('stages a model only on confirmation and never saves a second default', async
   fireEvent.click(screen.getByRole('button', { name: 'Confirm choice' }))
   await waitFor(() => expect(onSelect).toHaveBeenCalledWith(expect.objectContaining({ id: 'other' })))
   expect(readPlatformDefault('user-a', { connectionId: 'remote-a', profile: 'work' }, 'development')).toBeNull()
+})
+
+it('recognizes retained device access without offering management reauthorization while offline', async () => {
+  await installCatalog()
+  window.hermesDesktop.platformAccount.status = async () => ({ ...platformSnapshot(), phase: 'offline', model_identity_ready: true })
+  window.hermesDesktop.platformModels.reauthorize = vi.fn()
+  await platformAccountActions(window.hermesDesktop.platformAccount).refresh()
+  render(
+    <I18nProvider configClient={null} initialLocale="en">
+      <PlatformModelSettings onSelect={() => {}} scopeProfile="work" selectedId="chosen" />
+    </I18nProvider>
+  )
+
+  expect(await screen.findByText(translateNow('settings.model.defaultMain.ainoConnected'))).toBeTruthy()
+  expect(screen.queryByText('Sign in to Aino before using this model')).toBeNull()
+  expect(screen.queryByRole('button', { name: 'Reauthorize this device' })).toBeNull()
 })
 
 it('gates the picker using the inspected profile rather than another supported profile', async () => {

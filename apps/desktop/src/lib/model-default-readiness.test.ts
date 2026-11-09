@@ -6,7 +6,7 @@ import { platformModel } from '@/test/platform-model'
 import type { PlatformModel } from '../../shared/platform-contract'
 
 const catalog = vi.hoisted(() => {
-  const account = { phase: 'signed_in', account: { id: 'user' }, revision: 1, mode: 'platform' }
+  const account = { phase: 'signed_in', account: { id: 'user' }, revision: 1, mode: 'platform', model_identity_ready: false }
   const state: { phase: string; models: PlatformModel[] } = { phase: 'ready', models: [] }
 
   return {
@@ -33,6 +33,7 @@ import { evaluateModelDefaultReadiness } from './model-default'
 
 beforeEach(() => {
   catalog.models.models = []
+  Object.assign(catalog.account.get(), { phase: 'signed_in', model_identity_ready: false })
 })
 
 it('keeps text inference unavailable when the account only offers image generation', async () => {
@@ -59,3 +60,20 @@ it('keeps an available text model selectable even when no default has been chose
     source: 'platform_model'
   })
 })
+
+it.each(['offline', 'reauth_required'])(
+  'checks the retained device model catalog when account management is %s', async phase => {
+    Object.assign(catalog.account.get(), { phase, model_identity_ready: true })
+    catalog.models.models = [platformModel()]
+    const requestGateway = vi.fn()
+
+    expect(await evaluateModelDefaultReadiness(requestGateway, 'default')).toMatchObject({
+      ready: true, model: 'catalog-a', source: 'platform_model'
+    })
+    catalog.models.models = []
+    expect(await evaluateModelDefaultReadiness(requestGateway, 'default')).toMatchObject({
+      ready: false, source: 'platform_model'
+    })
+    expect(requestGateway).not.toHaveBeenCalled()
+  }
+)

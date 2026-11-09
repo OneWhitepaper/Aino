@@ -1,13 +1,20 @@
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { atom } from 'nanostores'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
+import { $workspaceOwnerLabels, setWorkspaceOwnerLabel } from '@/components/pane-shell/workspace-scope'
 import { renameSession } from '@/hermes'
 import { refreshProjectTree } from '@/store/projects'
+import { $botChatScopes, $sessionTiles } from '@/store/session-states'
 
 import { SessionActionsMenu, SessionContextMenu } from './session-actions-menu'
 
-afterEach(cleanup)
+afterEach(() => {
+  cleanup()
+  $workspaceOwnerLabels.set({})
+  $botChatScopes.set({})
+  $sessionTiles.set([])
+})
 
 // Exercises the real SessionActionsMenu end-to-end (no DropdownMenu mock) so
 // a broken asChild composition on the kebab trigger fails here — the menu
@@ -106,6 +113,7 @@ vi.mock('@/store/session-color', () => ({
   setSessionColorOverride: vi.fn()
 }))
 vi.mock('@/store/session-states', () => ({
+  $botChatScopes: atom<Record<string, unknown>>({}),
   $sessionStates: atom<Record<string, unknown>>({}),
   $sessionTiles: atom<unknown[]>([]),
   closeAllOpenSessionTiles: vi.fn(),
@@ -306,6 +314,44 @@ describe('SessionActionsMenu', () => {
     expect(onDelete).toHaveBeenCalledTimes(1)
   })
 
+  it('names the exact bot owner in deletion confirmation while preserving its canonical session identity', async () => {
+    const onDelete = vi.fn()
+    setWorkspaceOwnerLabel('bot:right', '创建修复验证')
+    setWorkspaceOwnerLabel('bot:other', '另一个机器人')
+    $botChatScopes.set({
+      'bot-chat': { workspaceMode: 'bots', workspaceOwnerKey: 'bot:right', workspaceTabTitle: 'Bot Chat' }
+    })
+    $sessionTiles.set([
+      { storedSessionId: 'other-chat', workspaceMode: 'bots', workspaceOwnerKey: 'bot:other', workspaceTabTitle: 'Bot Chat' }
+    ])
+    render(
+      <SessionActionsMenu onDelete={onDelete} renameable={false} sessionId="bot-chat" title="Bot Chat">
+        <button>Actions</button>
+      </SessionActionsMenu>
+    )
+
+    const openDelete = async () => {
+      const trigger = screen.getByRole('button', { name: 'Actions' })
+      fireEvent.pointerDown(trigger, { button: 0, pointerType: 'mouse' })
+      fireEvent.pointerUp(trigger, { button: 0, pointerType: 'mouse' })
+      fireEvent.click(trigger)
+      fireEvent.click(await screen.findByRole('menuitem', { name: /delete/i }))
+      await screen.findByRole('dialog')
+    }
+
+    await openDelete()
+    expect(screen.getByText('Delete 创建修复验证?')).toBeTruthy()
+    expect(screen.queryByText('Delete Bot Chat?')).toBeNull()
+    expect(screen.queryByText('Delete 另一个机器人?')).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+    act(() => setWorkspaceOwnerLabel('bot:right', '新机器人名称'))
+    await openDelete()
+    expect(screen.getByText('Delete 新机器人名称?')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+    expect(onDelete).not.toHaveBeenCalled()
+    expect($botChatScopes.get()['bot-chat'].workspaceTabTitle).toBe('Bot Chat')
+  })
+
   it('disables the delete item when no onDelete is provided', async () => {
     render(
       <SessionActionsMenu sessionId="s1" title="My session">
@@ -322,6 +368,22 @@ describe('SessionActionsMenu', () => {
 
     const deleteItem = await screen.findByRole('menuitem', { name: /delete/i })
     expect(deleteItem.getAttribute('aria-disabled')).toBe('true')
+  })
+
+  it('retains a rejected deletion in the original dialog for retry', async () => {
+    const onDelete = vi.fn().mockRejectedValueOnce(new Error('Delete refused')).mockResolvedValue(undefined)
+    render(<SessionActionsMenu onDelete={onDelete} sessionId="s1" title="My session"><button>Actions</button></SessionActionsMenu>)
+    const trigger = screen.getByRole('button', { name: 'Actions' })
+    fireEvent.pointerDown(trigger, { button: 0, pointerType: 'mouse' })
+    fireEvent.pointerUp(trigger, { button: 0, pointerType: 'mouse' })
+    fireEvent.click(trigger)
+    fireEvent.click(await screen.findByRole('menuitem', { name: /delete/i }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Delete' }))
+    expect(await screen.findByText('Delete refused')).toBeTruthy()
+    expect(screen.queryByText('Session deleted')).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Delete' }))
+    expect(await screen.findByText('Session deleted')).toBeTruthy()
+    expect(onDelete).toHaveBeenCalledTimes(2)
   })
 
   // The sidebar's Archived view reuses this menu; its rows must offer the

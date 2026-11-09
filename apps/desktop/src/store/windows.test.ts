@@ -19,7 +19,8 @@ const initialHermesDesktop = desktopWindow.hermesDesktop
 const notifyError = vi.fn()
 
 vi.mock('./notifications', () => ({
-  notifyError: (...args: unknown[]) => notifyError(...args)
+  notifyError: (...args: unknown[]) => notifyError(...args),
+  resetNotifications: vi.fn()
 }))
 
 function installBridge(

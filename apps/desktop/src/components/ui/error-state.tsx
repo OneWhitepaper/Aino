@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 
+import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Codicon } from '@/components/ui/codicon'
 import { AlertTriangle } from '@/lib/icons'
 import { cn } from '@/lib/utils'
@@ -11,20 +12,14 @@ export function ErrorIcon({ className, size = '1.75rem' }: { className?: string;
   return <Codicon className={cn('text-destructive', className)} name="error" size={size} />
 }
 
-// Inline error banner for detail panes (born in Messaging's platform error,
-// now shared with the MCP config pane): warn glyph + tinted rounded box.
+// Inline errors in detail panes share the same readable alert surface.
 // For centered full-surface failures use ErrorState below instead.
 export function ErrorBanner({ children, className }: { children: ReactNode; className?: string }) {
   return (
-    <div
-      className={cn(
-        'flex items-start gap-2 rounded-xl border border-destructive/30 bg-destructive/10 px-3 py-2 text-[length:var(--conversation-caption-font-size)] leading-(--conversation-caption-line-height) text-destructive',
-        className
-      )}
-    >
-      <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
-      <span className="min-w-0 whitespace-pre-wrap break-words">{children}</span>
-    </div>
+    <Alert className={className} variant="destructive">
+      <AlertTriangle />
+      <AlertDescription className="row-start-1 whitespace-pre-wrap">{children}</AlertDescription>
+    </Alert>
   )
 }
 
@@ -56,7 +51,9 @@ export function ErrorState({ children, className, description, icon, title }: Er
         )}
 
         {typeof description === 'string' ? (
-          <p className="max-w-prose text-center text-sm leading-5 text-muted-foreground">{description}</p>
+          <p className="max-w-prose text-center text-[length:var(--aino-text-ui)] leading-relaxed text-(--ui-text-secondary)">
+            {description}
+          </p>
         ) : (
           description
         )}

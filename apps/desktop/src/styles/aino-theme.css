@@ -6,12 +6,13 @@
   --aino-radius-panel: 1rem;
   --aino-radius-menu: 0.75rem;
   --aino-radius-card: 0.875rem;
-  --aino-radius-composer: 1.5rem;
+  --aino-radius-composer: 1.25rem;
   --aino-text-caption: 0.75rem;
   --aino-text-label: 0.8125rem;
-  --aino-text-ui: 0.875rem;
+  --aino-text-ui: 0.8125rem;
   --aino-text-body: 0.875rem;
   --aino-text-title: 1rem;
+  --aino-text-dialog-title: 1.125rem;
   --aino-text-page-title: 1.5rem;
   --aino-line-height: 1.6;
   /* Base roles are shared; transcript/editor scopes apply the user's scale once. */
@@ -53,7 +54,7 @@
   --aino-action-bg: var(--dt-primary-solid);
   --aino-action-fg: var(--dt-primary-solid-foreground);
   --aino-action-hover: color-mix(in srgb, var(--aino-action-bg) 88%, var(--ui-bg-editor));
-  --aino-scrim: rgb(0 0 0 / 12%);
+  --aino-scrim: rgb(18 23 35 / 22%);
   --aino-focus-ring: 0 0 0 2px color-mix(in srgb, var(--ui-accent) 16%, transparent);
 }
 
@@ -64,26 +65,35 @@
   --ui-bg-chrome: var(--theme-sidebar-seed);
   --ui-bg-sidebar: var(--theme-sidebar-seed);
   --ui-bg-editor: var(--dt-muted);
-  --ui-bg-input: var(--dt-muted);
+  --ui-bg-input: var(--theme-card-seed);
   --ui-bg-elevated: var(--theme-card-seed);
+  --ui-bg-card: var(--theme-card-seed);
   --ui-text-primary: var(--theme-foreground);
   --ui-text-secondary: var(--dt-secondary-foreground);
   --ui-text-tertiary: var(--dt-muted-foreground);
-  --ui-text-quaternary: color-mix(in srgb, var(--ui-text-tertiary) 72%, var(--ui-bg-elevated));
+  --ui-text-quaternary: var(--ui-text-tertiary);
   --ui-stroke-primary: var(--dt-border);
   --ui-stroke-secondary: var(--dt-border);
-  --ui-stroke-tertiary: color-mix(in srgb, var(--dt-border) 65%, var(--ui-bg-elevated));
+  --ui-stroke-tertiary: var(--dt-border);
   --ui-stroke-quaternary: color-mix(in srgb, var(--ui-stroke-tertiary) 60%, transparent);
   --ui-row-active-background: var(--theme-accent-soft);
-  --ui-row-hover-background: color-mix(in srgb, var(--ui-base) 5%, var(--ui-bg-sidebar));
+  --ui-row-hover-background: var(--theme-accent-soft);
   --ui-bg-tertiary: var(--theme-secondary);
-  --ui-bg-quaternary: var(--dt-muted);
+  --ui-bg-quaternary: var(--theme-secondary);
+  --ui-control-hover-background: var(--theme-accent-soft);
+  --ui-control-active-background: var(--theme-accent-soft);
+  --aino-notice-warning: #966419;
+  --aino-notice-success: #287054;
+  --ui-yellow: var(--aino-notice-warning);
+  --ui-green: var(--aino-notice-success);
 }
 
 :root.dark {
   --aino-action-bg: var(--theme-primary);
   --aino-action-fg: var(--dt-primary-foreground);
   --aino-scrim: rgb(0 0 0 / 32%);
+  --aino-notice-warning: #ebbd71;
+  --aino-notice-success: #8fd0ae;
 }
 
 /* Landing and navigation consume the same roles as portals and page chrome. */
@@ -108,7 +118,7 @@
   --aino-landing-workspace: var(--ui-bg-quaternary);
   --shadow-aino-landing-composer: 0 1px 2px color-mix(in srgb, var(--ui-base) 3%, transparent);
   --aino-landing-font: var(--dt-font-sans);
-  --aino-band-row2: 2.25rem;
+  --aino-band-row2: 3.5rem;
   --ui-chat-bubble-background: var(--theme-bubble-seed);
   --aino-table-header-background: color-mix(in srgb, var(--ui-blue) 3%, var(--aino-surface-bg));
 }

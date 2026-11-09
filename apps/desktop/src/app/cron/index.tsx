@@ -73,11 +73,7 @@ import {
 } from '../overlays/panel'
 import type { SetStatusbarItemGroup } from '../shell/statusbar-controls'
 
-import {
-  localizedBlueprintCopy,
-  localizedBlueprintDisplayDefaults,
-  localizedBlueprintField
-} from './blueprint-copy'
+import { localizedBlueprintCopy, localizedBlueprintDisplayDefaults, localizedBlueprintField } from './blueprint-copy'
 import { BlueprintSlotControl, blueprintSlotHelp, cleanBlueprintFieldError, initialBlueprintValues } from './blueprints'
 import { CatchUpField } from './catch-up-field'
 import { mutateAndRefreshCronJobs, refreshCronJobs, triggerAndRefreshCronJobs } from './cron-actions'
@@ -935,7 +931,7 @@ function CronJobDetail({
       <header className="space-y-3">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="flex min-w-0 flex-wrap items-center gap-2">
-            <h3 className="min-w-0 text-[0.95rem] font-semibold tracking-tight text-foreground [overflow-wrap:anywhere]">
+            <h3 className="min-w-0 text-[length:var(--aino-text-title)] font-semibold tracking-tight text-foreground [overflow-wrap:anywhere]">
               {jobTitle(job)}
             </h3>
             {scriptOnly && <PanelPill tone="muted">{c.scriptBadge}</PanelPill>}

@@ -714,7 +714,7 @@ def hosted_owner(tmp_path, monkeypatch):
     from gateway.session_authority import initialize_session_authority
     from gateway.session_contract import Principal
     from gateway import run, session_policy
-    monkeypatch.setattr(run, '_load_gateway_config', lambda: {'model': {'default': 'fixture'}, 'platform_toolsets': {'cli': []}})
+    monkeypatch.setattr(run, '_load_gateway_config', lambda *args: {'model': {'default': 'fixture'}, 'platform_toolsets': {'cli': []}})
     monkeypatch.setattr(run, '_resolve_gateway_model', lambda cfg: 'fixture')
     # Parent-owned private restore hook, explicitly not an ordinary-daemon proof.
     original = session_policy.restore_policy

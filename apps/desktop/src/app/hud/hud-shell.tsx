@@ -2,6 +2,7 @@ import { useStore } from '@nanostores/react'
 import { type CSSProperties, useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router'
 
+import { NotificationStack } from '@/components/notifications'
 import { useViewedInterval } from '@/hooks/use-viewed-interval'
 import { chatMessageText } from '@/lib/chat-messages'
 import { $activeSessionAwaitingInput } from '@/store/prompts'
@@ -348,7 +349,9 @@ export function HudShell() {
           it paints behind the transcript. */}
       <div aria-hidden data-hud-glass />
 
-      <WiredPane part="chatRoutes" />
+      <NotificationStack>
+        <WiredPane part="chatRoutes" />
+      </NotificationStack>
 
       {/* CanvasTTY-style resize frame. Windows/macOS/X11 get every edge and
           corner; native Wayland gets the right/bottom handles it can honour

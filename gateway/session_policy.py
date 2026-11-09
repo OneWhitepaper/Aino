@@ -225,6 +225,13 @@ class LocalSessionPolicy:
                     agent[key] = live_agent[key]
                 else:
                     agent.pop(key, None)
+        if self.source == 'bot_room':
+            # A followed profile can change tools, but room controls still cannot
+            # answer clarify. Keep that surface restriction at every turn boundary.
+            from agent.skill_utils import parse_config_string_list
+            agent = config.setdefault('agent', {})
+            agent['disabled_toolsets'] = sorted(
+                set(parse_config_string_list(agent.get('disabled_toolsets'))) | {'clarify'})
         source = (config.get('model') or {}).get('api_key_from') if isinstance(config.get('model'), dict) else None
         if source:
             # ``/model <alias>`` with a literal key: the receipt points at the alias entry's secret.

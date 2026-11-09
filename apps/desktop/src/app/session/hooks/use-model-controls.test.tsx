@@ -61,7 +61,8 @@ vi.mock('@/store/confirm', () => ({
 vi.mock('@/store/notifications', () => ({
   dismissNotification: (...args: Parameters<typeof dismissNotification>) => dismissNotification(...args),
   notify: (...args: Parameters<typeof notify>) => notify(...args),
-  notifyError: (...args: Parameters<typeof notifyError>) => notifyError(...args)
+  notifyError: (...args: Parameters<typeof notifyError>) => notifyError(...args),
+  resetNotifications: vi.fn()
 }))
 
 type Controls = ReturnType<typeof useModelControls>

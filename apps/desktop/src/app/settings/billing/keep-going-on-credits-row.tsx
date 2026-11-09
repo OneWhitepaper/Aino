@@ -109,7 +109,9 @@ export function KeepGoingOnCreditsRow({ enabled }: { enabled: boolean }) {
       <div className={`${CAPTION} text-(--ui-text-tertiary)`}>
         <span>{copy.approveInBrowser}</span>
         {stepUp.verification?.code && (
-          <span className="font-mono text-[0.72rem] font-semibold text-foreground">{stepUp.verification.code}</span>
+          <span className="font-mono text-[length:var(--aino-text-caption)] font-semibold text-foreground">
+            {stepUp.verification.code}
+          </span>
         )}
         {stepUp.verification && (
           <Button onClick={stepUp.openVerification} size="sm" type="button" variant="outline">

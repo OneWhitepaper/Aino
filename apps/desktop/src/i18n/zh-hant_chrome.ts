@@ -531,6 +531,7 @@ terminalDisconnectedBody:
 },
 
   zones: {
+    switchConversation: '切換對話',
     sidebarModeMenu: '切換對話模式',
     sidebarSessionsDescription: '專案、檔案與日常對話',
     showTabStrip: '顯示分頁',

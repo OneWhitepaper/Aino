@@ -2,6 +2,7 @@ import { useStore } from '@nanostores/react'
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router'
 
+import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -127,7 +128,30 @@ export function McpInstallDeepLinkDialog() {
 
   return (
     <Dialog onOpenChange={value => !value && close()} open>
-      <DialogContent className="max-w-lg">
+      <DialogContent
+        className="max-w-lg"
+        footer={
+          <DialogFooter>
+            <Button
+              className="max-w-full whitespace-normal"
+              disabled={saving}
+              onClick={close}
+              type="button"
+              variant="ghost"
+            >
+              {t.common.cancel}
+            </Button>
+            <Button
+              className="max-w-full whitespace-normal"
+              disabled={saving || !nameValid || nameConflict || checkingConflicts}
+              onClick={() => void confirm()}
+              variant={request.transport === 'stdio' ? 'destructive' : 'default'}
+            >
+              {saving ? t.common.saving : m.deepLinkConfirm}
+            </Button>
+          </DialogFooter>
+        }
+      >
         <DialogHeader>
           <DialogTitle>{m.deepLinkTitle}</DialogTitle>
           <DialogDescription>{m.deepLinkDescription}</DialogDescription>
@@ -135,10 +159,10 @@ export function McpInstallDeepLinkDialog() {
 
         <div className="flex flex-col gap-3">
           {request.transport === 'stdio' && (
-            <div className="flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">
-              <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
-              <span>{m.deepLinkStdioWarning}</span>
-            </div>
+            <Alert role="note" variant="warning">
+              <AlertTriangle aria-hidden />
+              <AlertDescription>{m.deepLinkStdioWarning}</AlertDescription>
+            </Alert>
           )}
 
           <label className="flex flex-col gap-1 text-xs text-muted-foreground">
@@ -153,31 +177,18 @@ export function McpInstallDeepLinkDialog() {
 
           <div className="flex flex-col gap-1 text-xs text-muted-foreground">
             {m.serverJson}
-            <pre className="max-h-64 overflow-auto rounded-md border border-border bg-muted/40 p-2 font-mono text-xs whitespace-pre-wrap break-all text-foreground">
+            <pre className="min-w-0 max-w-full rounded-md border border-border bg-muted/40 p-3 font-mono text-[0.8125rem] leading-5 whitespace-pre-wrap [overflow-wrap:anywhere] text-foreground">
               {JSON.stringify(request.config, null, 2)}
             </pre>
           </div>
 
           {error && (
-            <div className="flex items-start gap-2 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">
-              <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
-              <span>{error}</span>
-            </div>
+            <Alert variant="destructive">
+              <AlertTriangle aria-hidden />
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
           )}
         </div>
-
-        <DialogFooter>
-          <Button disabled={saving} onClick={close} type="button" variant="ghost">
-            {t.common.cancel}
-          </Button>
-          <Button
-            disabled={saving || !nameValid || nameConflict || checkingConflicts}
-            onClick={() => void confirm()}
-            variant={request.transport === 'stdio' ? 'destructive' : 'default'}
-          >
-            {saving ? t.common.saving : m.deepLinkConfirm}
-          </Button>
-        </DialogFooter>
       </DialogContent>
     </Dialog>
   )

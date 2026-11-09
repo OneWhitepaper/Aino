@@ -11,13 +11,13 @@ interface AlertStyle {
   icon: IconComponent
 }
 
-// GitHub's five alert kinds, mapped to our icon set + a tinted accent.
+// Content keeps GitHub's five meanings; chrome uses the desktop's semantic roles.
 const ALERT_STYLES: Record<AlertType, AlertStyle> = {
-  caution: { accent: 'text-rose-600 dark:text-rose-400', icon: AlertTriangle },
-  important: { accent: 'text-violet-600 dark:text-violet-400', icon: AlertCircle },
-  note: { accent: 'text-blue-600 dark:text-blue-400', icon: Info },
-  tip: { accent: 'text-emerald-600 dark:text-emerald-400', icon: Zap },
-  warning: { accent: 'text-amber-600 dark:text-amber-400', icon: AlertTriangle }
+  caution: { accent: 'text-destructive', icon: AlertTriangle },
+  important: { accent: 'text-(--ui-text-secondary)', icon: AlertCircle },
+  note: { accent: 'text-(--ui-blue)', icon: Info },
+  tip: { accent: 'text-(--ui-green)', icon: Zap },
+  warning: { accent: 'text-(--ui-yellow)', icon: AlertTriangle }
 }
 
 export function getAlertLabel(
@@ -120,11 +120,11 @@ export function MarkdownAlert({ children, type }: { children: ReactNode; type: A
 
   return (
     <div
-      className="my-2 rounded-lg border border-(--ui-stroke-tertiary) bg-muted/25 px-3 py-2 [&>*:first-child]:mt-0 [&>*:last-child]:mb-0"
+      className="my-2 rounded-(--aino-radius-card) border border-(--ui-stroke-tertiary) bg-(--ui-bg-quaternary) px-3 py-2 [&>*:first-child]:mt-0 [&>*:last-child]:mb-0"
       data-slot="aui_markdown-alert"
     >
-      <div className={cn('mb-1 flex items-center gap-1.5 text-[0.8125rem] font-semibold', style.accent)}>
-        <Icon className="size-4 shrink-0" />
+      <div className="mb-1 flex items-center gap-1.5 text-[length:var(--aino-text-body)] font-medium text-foreground">
+        <Icon className={cn('size-4 shrink-0', style.accent)} />
         {getAlertLabel(type, t.assistant.markdown.alerts)}
       </div>
       {children}

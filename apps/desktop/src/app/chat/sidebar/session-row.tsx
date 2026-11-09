@@ -66,7 +66,7 @@ interface SidebarSessionRowProps extends React.ComponentProps<'div'> {
   unread: boolean
   onArchive: () => void
   onBranch?: () => void
-  onDelete: () => void
+  onDelete: () => Promise<void> | void
   onPin: () => void
   /** Toggle the persisted read-state watermark. */
   onToggleUnread: () => void
@@ -597,7 +597,7 @@ function SidebarSessionRowImpl({
                     {density !== 'compact' && details.metadata && (
                       <span
                         className={cn(
-                          'mt-0.5 block truncate text-[0.625rem] text-(--ui-text-tertiary)',
+                          'mt-0.5 block truncate text-[length:var(--aino-text-caption)] text-(--ui-text-tertiary)',
                           SIDEBAR_TRUNCATED_LEADING
                         )}
                       >
@@ -607,7 +607,7 @@ function SidebarSessionRowImpl({
                     {density === 'detailed' && details.preview && (
                       <span
                         className={cn(
-                          'mt-1 block truncate text-[0.625rem] text-(--ui-text-quaternary)',
+                          'mt-1 block truncate text-[length:var(--aino-text-caption)] text-(--ui-text-quaternary)',
                           SIDEBAR_TRUNCATED_LEADING
                         )}
                       >
@@ -632,7 +632,7 @@ function SidebarSessionRowImpl({
                   <SessionRowSlot area={SESSION_ROW_AREAS.leading} sessionId={sessionPinId(session)} />
                   <span
                     className={cn(
-                      'min-w-0 flex-1 truncate text-[0.6875rem] text-(--ui-text-tertiary)',
+                      'min-w-0 flex-1 truncate text-[length:var(--aino-text-caption)] text-(--ui-text-tertiary)',
                       SIDEBAR_TRUNCATED_LEADING
                     )}
                   >
@@ -652,7 +652,7 @@ function SidebarSessionRowImpl({
                     <OverflowTip label={title} placement="row">
                       <SidebarRowLabel
                         className={cn(
-                          'aino-sidebar-session-label hover-marquee text-[0.8125rem] font-medium text-(--ui-text-primary) group-data-[working=true]:text-foreground',
+                          'aino-sidebar-session-label hover-marquee text-[length:var(--aino-text-label)] font-medium text-(--ui-text-primary) group-data-[working=true]:text-foreground',
                           SIDEBAR_TRUNCATED_LEADING
                         )}
                         data-sidebar-session-label=""
@@ -666,7 +666,7 @@ function SidebarSessionRowImpl({
                   {session.preview && rowMeta.includes('preview') ? (
                     <span
                       className={cn(
-                        'min-w-0 truncate text-[0.625rem] text-(--ui-text-quaternary)',
+                        'min-w-0 truncate text-[length:var(--aino-text-caption)] text-(--ui-text-quaternary)',
                         SIDEBAR_TRUNCATED_LEADING
                       )}
                     >
@@ -677,7 +677,7 @@ function SidebarSessionRowImpl({
                 {model || size || todoProgress ? (
                   <span
                     className={cn(
-                      'flex min-w-0 items-baseline gap-2 text-[0.625rem] text-(--ui-text-tertiary)',
+                      'flex min-w-0 items-baseline gap-2 text-[length:var(--aino-text-caption)] text-(--ui-text-tertiary)',
                       SIDEBAR_TRUNCATED_LEADING
                     )}
                   >

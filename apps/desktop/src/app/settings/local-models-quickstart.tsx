@@ -64,7 +64,7 @@ export function LocalModelsQuickstart({
                   the composer drops speed/ETA when bytes aren't moving —
                   showing a stale rate across a stage hand-off would read as
                   progress loss. A paused job keeps its frozen counter. */}
-              <p className="mt-2 min-h-10 text-[0.8rem] leading-5 text-muted-foreground">
+              <p className="mt-2 min-h-10 text-[length:var(--aino-text-ui)] leading-5 text-muted-foreground">
                 {downloadStatusText(qJob, copy)}
               </p>
 
@@ -84,7 +84,7 @@ export function LocalModelsQuickstart({
                 {stages.map((label, i) => (
                   <span
                     className={cn(
-                      'inline-flex items-center gap-1.5 text-[0.72rem]',
+                      'inline-flex items-center gap-1.5 text-[length:var(--aino-text-caption)]',
                       i < stageIndex && 'text-(--ui-text-tertiary)',
                       i === stageIndex && 'font-medium text-foreground',
                       i > stageIndex && 'text-(--ui-text-tertiary) opacity-60'
@@ -105,7 +105,7 @@ export function LocalModelsQuickstart({
             </>
           ) : heroModel ? (
             <>
-              <p className="mt-2 text-[0.8rem] leading-5 text-muted-foreground">
+              <p className="mt-2 text-[length:var(--aino-text-ui)] leading-5 text-muted-foreground">
                 {heroModel.downloaded
                   ? copy.quickstartDetailReady(heroModel.display_name)
                   : copy.quickstartDetail(heroModel.display_name, heroModel.size_label)}
@@ -124,7 +124,7 @@ export function LocalModelsQuickstart({
           ) : null}
 
           {lastError?.kind === 'quickstart' && !qJob && (
-            <p className="mt-4 text-[0.75rem] text-destructive">{lastError.error}</p>
+            <p className="mt-4 text-[length:var(--aino-text-caption)] text-destructive">{lastError.error}</p>
           )}
         </div>
       </div>

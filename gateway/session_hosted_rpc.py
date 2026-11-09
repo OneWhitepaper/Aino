@@ -94,9 +94,10 @@ class HostedRoomAuthorityRPC:
         agent = dict(config.get('agent') or {})
         agent['disabled_toolsets'] = sorted(
             set(parse_config_string_list(agent.get('disabled_toolsets'))) | {'clarify'})
-        policy = build_policy({'source': 'gui'}, {**config, 'agent': agent}, private_secrets=private)
+        policy = build_policy({'source': 'gui', 'follow_profile_config': True},
+                              {**config, 'agent': agent}, private_secrets=private)
         policy = replace(policy, source='bot_room', platform='bot_room',
-                         model=policy.model or _resolve_gateway_model(policy.config()),
+                         model=policy.model or _resolve_gateway_model(policy.config()) or None,
                          toolsets=tuple(sorted(set(policy.toolsets) | {'bot_room'})))
         staged = stage_local_session(self.authority, self.principal, {'request_id': self.creation_id},
                                      trusted_policy=policy, trusted_secrets=private)
@@ -114,8 +115,66 @@ class HostedRoomAuthorityRPC:
         return await self._resume(params)
 
     async def _resume(self, params):
+        await self._repair_empty_policy()
         await self.authority.resolve(self.principal, self.ref)
         return {'session_id': self.ref.session_id, 'title': f'Group: {self.room_id}'}
+
+    async def _repair_empty_policy(self):
+        """Recover only this producer's old empty-model receipt, keeping its input identity.
+
+        Older room creation committed an empty string before restore rejected it. The
+        original immutable request stays byte-for-byte; the existing adoption marker
+        lets that policy follow its own profile without minting another conversation.
+        """
+        from gateway.session_runtime_workers import tracked_write
+        from hermes_state_local import local_receipt
+        if self.authority.db.get_session(self.ref.session_id) is None:
+            return
+        receipt = local_receipt(self.authority.db, self.ref.session_id)
+        if receipt.get('policy', {}).get('model') != '':
+            return
+        changed = await tracked_write(self.authority, partial(self._repair_policy_receipt, receipt))
+        if changed and self.ref.session_id in self.authority.sessions:
+            from gateway.session_local import publish_local_policy
+            publish_local_policy(self.authority, self.ref.session_id)
+
+    def _repair_policy_receipt(self, expected):
+        from gateway.session_local_recovery import owned_receipt
+        from gateway.session_policy import FOLLOW_ADOPTED, restore_policy
+        from hermes_state_local import POLICY_PREFIX
+        from hermes_state_runtime import _epoch
+        sid = self.ref.session_id
+        try:
+            receipt, _, _, _ = owned_receipt(self.authority, sid)
+            policy = receipt['policy']
+            if (receipt != expected or receipt['request_id'] != self.creation_id
+                    or receipt['principal_id'] != self.principal.subject
+                    or policy['source'] != 'bot_room' or policy['platform'] != 'bot_room'
+                    or policy['model'] != '' or json.loads(policy['request_json']) != {'source': 'gui'}):
+                raise ValueError('not the old hosted creation')
+            config = json.loads(policy['config_json'])
+            model = config.get('model') or {}
+            if (not isinstance(model, dict) or any(model.get(key) for key in (
+                    'default', 'model', 'provider', 'model_source', 'model_id'))):
+                raise ValueError('not an unset hosted model')
+            repaired = {**policy, 'model': None,
+                        'config_json': json.dumps({**config, FOLLOW_ADOPTED: True})}
+            restore_policy(repaired)  # every other stored-policy invariant still applies
+        except (KeyError, TypeError, ValueError) as exc:
+            raise RuntimeStoreError('storage_unavailable') from exc
+
+        def write(conn):
+            _epoch(conn, self.authority.epoch)
+            old = conn.execute('SELECT value FROM state_meta WHERE key=?', (POLICY_PREFIX + sid,)).fetchone()
+            row = conn.execute('SELECT source,session_key,chat_id,user_id FROM sessions WHERE id=?', (sid,)).fetchone()
+            if (old is None or json.loads(old[0]) != expected or row is None
+                    or tuple(row) != ('bot_room', receipt['route'], sid, self.principal.subject)):
+                raise RuntimeStoreError('storage_unavailable')
+            conn.execute('UPDATE state_meta SET value=? WHERE key=? AND value=?',
+                         (json.dumps({**receipt, 'policy': repaired}), POLICY_PREFIX + sid, old[0]))
+            conn.execute('UPDATE sessions SET model=NULL WHERE id=? AND model=?', (sid, ''))
+            return True
+        return self.authority.db._execute_write(write)
 
     def _rows(self):
         self.authority.authorize(self.principal, self.ref, 'session:read')
@@ -249,6 +308,16 @@ class HostedRoomAuthorityRPC:
                   'execution_generation': current[2] if current else None,
                   'status': current[0]['status'] if current else 'idle'}
         snapshot = await self.authority.attach(self.principal, self.ref, history=False)  # prompts only
+        # Hosted and canonical execution generations are different namespaces. The admission
+        # binds them; a completed/replaced claim must never lend its last tool to a later task.
+        live = self.authority.sessions.get(self.ref.session_id)
+        if current is not None and current[0]['status'] == 'started' and live is not None:
+            row = current[0]
+            with live.event_stream.lock:
+                if self.authority.executing.get(self.ref.session_id) == row['generation']:
+                    activity = live.event_stream.activity_for(row['admission_id'], row['generation'])
+                    if activity is not None:
+                        result['activity'] = activity
         if snapshot.prompts:
             prompt = next((p for p in snapshot.prompts if p.get('kind') == 'approval'), None)
             if prompt:

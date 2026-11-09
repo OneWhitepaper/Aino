@@ -6,8 +6,10 @@ import { expectDownloaded, observeDownloads } from './canonical-download-test-ut
 
 const request = vi.hoisted(() => vi.fn())
 vi.mock('@hermes/plugin-sdk', async () => ({
+  ...(await import('@/components/ui/alert')),
   randomUuid: (await import('@hermes/shared')).randomUuid,
   host: { requestProfile: request },
+  Codicon: () => null,
   Button: (props: ComponentProps<'button'>) => <button {...props} />
 }))
 vi.mock('./canonical-group-labels', () => ({
@@ -64,14 +66,36 @@ it('downloads only the selected committed attachment from its captured owner', a
   })
   const submit = vi.fn(event => event.preventDefault())
   const changed = vi.fn()
-  render(<form onSubmit={submit}><CanonicalGroupAttachments attachments={[attachment]} binding={binding} disabled={false} onChange={changed} /></form>)
-  fireEvent.click(screen.getByRole('button', { name: 'Download' }))
+  const view = render(<form onSubmit={submit}><CanonicalGroupAttachments attachments={[attachment]} binding={binding} disabled={false} readOnly /></form>)
+  fireEvent.click(screen.getByRole('button', { name: /^Download\b/ }))
   await waitFor(() => expect(observed.downloads).toHaveLength(1))
   await expectDownloaded(observed, new Uint8Array([0, 1, 2, 255]), attachment.name, attachment.mime)
   expect(save).not.toHaveBeenCalled()
   expect(request).toHaveBeenCalledTimes(1)
+  // The composer can remove a draft attachment; history only offers downloads.
+  view.rerender(<form onSubmit={submit}><CanonicalGroupAttachments attachments={[attachment]} binding={binding} disabled={false} onChange={changed} /></form>)
   await waitFor(() => expect((screen.getByRole('button', { name: 'Remove' }) as HTMLButtonElement).disabled).toBe(false))
   fireEvent.click(screen.getByRole('button', { name: 'Remove' }))
   expect(changed).toHaveBeenCalledWith([])
   expect(submit).not.toHaveBeenCalled()
+})
+
+it('keeps draft attachments after a failed upload and allows another upload attempt', async () => {
+  const existing = { attachment_id: 'existing', kind: 'file', name: 'existing.txt', mime: 'text/plain' }
+  const added = { attachment_id: 'added', kind: 'file', name: 'added.txt', mime: 'text/plain' }
+  const file = new File(['draft'], added.name, { type: added.mime })
+  const changed = vi.fn()
+  request.mockRejectedValueOnce(new Error('Upload interrupted'))
+  const view = render(<CanonicalGroupAttachments attachments={[existing]} binding={binding} disabled={false} onChange={changed} />)
+
+  fireEvent.change(view.container.querySelector('input')!, { target: { files: [file] } })
+  expect((await screen.findByRole('alert')).textContent).toContain('Upload interrupted')
+  expect(screen.getByText(existing.name)).toBeTruthy()
+  expect(changed).not.toHaveBeenCalled()
+
+  request.mockResolvedValueOnce({ ...added, size: file.size, sha256: 'digest', state: 'uploaded', created_at: 123,
+    idempotent: false, room_id: binding.roomId, authority: { gateway_id: 'owner', epoch: 1 } })
+  fireEvent.change(view.container.querySelector('input')!, { target: { files: [file] } })
+  await waitFor(() => expect(changed).toHaveBeenCalledWith([existing, { ...added, size: file.size }]))
+  expect(screen.queryByRole('alert')).toBeNull()
 })

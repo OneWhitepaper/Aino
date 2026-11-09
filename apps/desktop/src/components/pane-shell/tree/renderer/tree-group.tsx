@@ -57,8 +57,7 @@ import {
   $workspaceMode,
   $workspaceOwnerKey,
   rememberActivePane,
-  resolveRememberedActivePane,
-  workspaceScopeKey
+  resolveRememberedActivePane
 } from '../../workspace-scope'
 import type { DropPosition, GroupNode } from '../model'
 import {
@@ -91,6 +90,12 @@ import {
 import { TabKeyHint } from '../tab-key-hints'
 import { $tabSelection, isToggleSelectClick, selectionFor, selectTabRange, toggleTabSelected } from '../tab-selection'
 import { isToolPanelGroup } from '../tool-panel-policy'
+import {
+  isConversationPane,
+  workspaceActivePane,
+  workspacePaneMemoryKey,
+  workspaceShownPaneIds
+} from '../workspace-presentation'
 
 import { CompactTabPicker } from './compact-tab-picker'
 import { startPaneDrag } from './drag-session'
@@ -311,7 +316,8 @@ function groupPanePresentation({
     )
   })
 
-  const shown = pageOnly ? available.filter(workspacePageKeepsPane) : available
+  const pagePanes = pageOnly ? available.filter(workspacePageKeepsPane) : available
+  const shown = editMode ? pagePanes : workspaceShownPaneIds(pagePanes)
   const sidebarGroup = !node.panes.some(id => id === 'workspace' || paneChrome(paneFor(id)).placement === 'main')
 
   const modePanes = sidebarModePanes(
@@ -329,6 +335,7 @@ function useGroupPaneLifecycle({
   available,
   node,
   pageCovered,
+  shown,
   paneFor,
   stableHosts
 }: {
@@ -336,6 +343,7 @@ function useGroupPaneLifecycle({
   available: string[]
   node: GroupNode
   pageCovered: boolean
+  shown: string[]
   paneFor: (id: string) => Contribution | undefined
   stableHosts: boolean
 }) {
@@ -352,7 +360,7 @@ function useGroupPaneLifecycle({
       activeId,
       keepAlive: id =>
         Boolean(paneChrome(paneFor(id)).lifecycleKeepAlive) ||
-        (pageCovered &&
+        ((pageCovered || !shown.includes(id)) &&
           Boolean(lifecycleRef.current.entries[id] && lifecycleRef.current.entries[id].lifecycle !== 'parked')),
       // Covering the work area retains only panes already warm; unseen tabs
       // remain lazy. Normal bounded eviction resumes when the page closes.
@@ -465,8 +473,8 @@ export function TreeGroup({
   const hiddenPanes = useStore($hiddenTreePanes)
   const workspacePage = useStore($workspaceIsPage)
   const narrow = useStore($narrowViewport)
-  const workspaceMode = useStore($workspaceMode)
-  const workspaceOwnerKey = useStore($workspaceOwnerKey)
+  useStore($workspaceMode)
+  useStore($workspaceOwnerKey)
   const newSessionTabAction = useStore($newSessionTabAction)
   const tabStripDefault = useStore($tabStripDefault)
   const panesWithCloser = useStore($panesWithCloser)
@@ -497,17 +505,15 @@ export function TreeGroup({
     editMode
   })
 
-  const memoryKey = workspaceScopeKey(workspaceMode, workspaceOwnerKey)
-
-  const activeId = shown.includes(node.active)
-    ? node.active
-    : (resolveRememberedActivePane(memoryKey, shown) ?? shown[0] ?? '')
+  const memoryKey = workspacePaneMemoryKey(node.id)
+  const activeId = workspaceActivePane(node, shown)
 
   const active = paneFor(activeId)
   const isEmpty = shown.length === 0
   const tabSurface = shown.some(isMainStripPane) ? 'main' : 'sidebar'
   const activeChrome = paneChrome(active)
   const toolPanel = isToolPanelGroup(node, paneFor)
+  const conversationTabs = !toolPanel && shown.some(isConversationPane)
 
   const headerLayout = useZoneHeaderLayout({
     measuredBelowControls,
@@ -519,12 +525,12 @@ export function TreeGroup({
 
   const compactTabs = headerLayout.compactTabs && !toolPanel
   const { titlebarHeight, tabsBelowControls, tabsInTitlebar } = headerLayout
-  const stripHeight = toolPanel ? 45 : headerLayout.tabStripHeight
+  const stripHeight = toolPanel ? 45 : conversationTabs ? 43 : headerLayout.tabStripHeight
   const pageHeader = activeChrome.headerContent
 
   const newTab = groupNewTab({ activeId, node, shown, paneFor, toolPanel, newSessionTabAction, t })
   useEffect(() => {
-    if (activeId) {
+    if (activeId && isConversationPane(activeId)) {
       rememberActivePane(memoryKey, activeId)
     }
   }, [activeId, memoryKey])
@@ -534,6 +540,7 @@ export function TreeGroup({
     available,
     node,
     pageCovered: workspacePage && !editMode,
+    shown,
     paneFor,
     stableHosts
   })
@@ -605,6 +612,28 @@ export function TreeGroup({
 
     return chrome.tabTitleText?.() ?? (chrome.tabTitle ? String(pane?.title ?? paneId) : paneTitle(paneId))
   }
+
+  const conversationIds = shown.filter(isConversationPane)
+
+  const currentConversationId = isConversationPane(activeId)
+    ? activeId
+    : (resolveRememberedActivePane(memoryKey, conversationIds) ?? '')
+
+  // Tools retain their own tabs; conversations occupy one current-title slot.
+  // The layout still owns every retained pane, including explicit splits.
+  const headerPanes = editMode ? shown : shown.filter(id => !isConversationPane(id) || id === currentConversationId)
+
+  const conversationPicker =
+    conversationIds.length > 1 && !editMode ? (
+      <CompactTabPicker
+        activeId={currentConversationId}
+        newTab={null}
+        onSelect={activatePane}
+        presentation="conversation"
+        tabActions={paneId => paneChrome(paneFor(paneId)).tabActions?.()}
+        tabs={conversationIds.map(id => ({ id, label: tabLabel(id), title: tabText(id) }))}
+      />
+    ) : null
 
   // Collapse/restore a tool panel (or plain minimize elsewhere) — the header
   // chevron, routed so ⌃`/the titlebar toggle stay truthful. The strip itself
@@ -776,17 +805,18 @@ export function TreeGroup({
                       <span className="ml-2 -mr-1 flex shrink-0 items-center">{chrome.tabLead()}</span>
                     ) : null}
                     <PaneTabLabel
-                      className="text-[0.875rem] font-semibold normal-case tracking-normal"
+                      className="text-[length:var(--aino-text-body)] font-semibold normal-case tracking-normal"
                       data-current-session-title=""
-                      overflowLabel={titleInWindowBar ? paneTitle(activeId) : undefined}
+                      overflowLabel={titleInWindowBar ? tabText(activeId) : undefined}
                     >
-                      {titleInWindowBar ? paneTitle(activeId) : tabLabel(activeId)}
+                      {tabLabel(activeId)}
                     </PaneTabLabel>
                   </PaneTab>
                 )
 
                 return chrome.tabWrap ? chrome.tabWrap(title) : title
               })()}
+              {conversationPicker}
               {/* Codex pairs the current-session title with a visible ⋯ — the
                 single header carries no hover ✕, so this is the discoverable
                 session-actions entry. Pane drag starts on the strip background
@@ -864,7 +894,13 @@ export function TreeGroup({
                   }
                 }}
                 ref={stripRef}
-                style={{ cursor: 'grab', WebkitAppRegion: dragging ? 'no-drag' : undefined } as CSSProperties}
+                style={
+                  {
+                    height: tabsBelowControls ? stripHeight : undefined,
+                    cursor: 'grab',
+                    WebkitAppRegion: dragging ? 'no-drag' : undefined
+                  } as CSSProperties
+                }
                 surface={tabSurface}
                 titlebar={tabsInTitlebar}
                 trailing={
@@ -886,9 +922,10 @@ export function TreeGroup({
                     <StripDropCaret groupId={node.id} stripRef={stripRef} />
                   </>
                 }
-                variant={toolPanel ? 'tool' : 'default'}
+                variant={toolPanel ? 'tool' : conversationTabs ? 'conversation' : 'default'}
               >
-                {shown.map((paneId, index) => {
+                {headerPanes.map(paneId => {
+                  const index = shown.indexOf(paneId)
                   const isActive = paneId === activeId && !node.minimized
                   const chrome = paneChrome(paneFor(paneId))
                   const closeable = closeableTab(paneId)
@@ -991,7 +1028,12 @@ export function TreeGroup({
 
                   // A pane may wrap ITS tab in a domain menu (session verbs on a
                   // tile tab); the wrapper needs the key since it's the root.
-                  return <Fragment key={paneId}>{chrome.tabWrap ? chrome.tabWrap(tab) : tab}</Fragment>
+                  return (
+                    <Fragment key={paneId}>
+                      {chrome.tabWrap ? chrome.tabWrap(tab) : tab}
+                      {paneId === currentConversationId ? conversationPicker : null}
+                    </Fragment>
+                  )
                 })}
 
                 {/* Plain "+" after the last tab — it mints another tab of the kind
@@ -1134,7 +1176,7 @@ export function TreeGroup({
                       </PaneGroupContext.Provider>
                     ) : (
                       isActive && (
-                        <div className="p-3 font-mono text-[11px] text-(--ui-text-quaternary)">
+                        <div className="p-3 font-mono text-[length:var(--aino-text-caption)] text-(--ui-text-quaternary)">
                           {t.zones.missingPane(paneId)}
                         </div>
                       )
@@ -1174,7 +1216,7 @@ export function TreeGroup({
               outlineColor: 'color-mix(in srgb, var(--ui-accent) 55%, transparent)'
             }}
           >
-            <span className="flex max-w-[calc(100%-1rem)] items-center gap-1.5 rounded-md border border-(--ui-stroke-secondary) bg-popover px-2 py-1 text-[0.64rem] font-semibold uppercase tracking-[0.16em] text-(--ui-text-secondary)">
+            <span className="flex max-w-[calc(100%-1rem)] items-center gap-1.5 rounded-md border border-(--ui-stroke-secondary) bg-popover px-2 py-1 text-[length:var(--aino-text-caption)] font-semibold uppercase tracking-[0.16em] text-(--ui-text-secondary)">
               <Codicon className="shrink-0" name="gripper" size="0.8125rem" />
               <span className="min-w-0 truncate">{tabText(activeId)}</span>
             </span>

@@ -11,6 +11,7 @@ from tui_gateway.transport import FanoutTransport
 
 class SessionEvents:
     def __init__(self):
+        from gateway.session_activity import ExecutionActivity
         self.lock = threading.RLock()
         self.fanout = FanoutTransport()
         # A private lifetime key prevents two profiles (or legacy TUI owners)
@@ -23,6 +24,7 @@ class SessionEvents:
         self.sequence = 0
         self._public_id = None
         self.execution = {}
+        self._activity = ExecutionActivity()
         # Synchronous same-thread recipients (API run projections): unlike fanout peers they
         # cannot lose a frame to a detach that races the writer thread.
         self.observers = set()
@@ -35,6 +37,7 @@ class SessionEvents:
         now. A later publish or attach finds them gone and starts a new epoch, as after eviction."""
         with self.lock:
             event_replay.release_key(self._key)
+            self._activity.clear()
 
     def watermark(self):
         with self.lock:
@@ -43,12 +46,25 @@ class SessionEvents:
                 # sequence in the old epoch, even if publication resumes later.
                 self.epoch = uuid.uuid4().hex
                 self.sequence = 0
+                self._activity.clear()
             return self.epoch, self.sequence
+
+    def activity_for(self, admission_id, generation):
+        """Read only this claim's sanitized activity, without subscribing or claiming delivery."""
+        with self.lock:
+            self.watermark()
+            if (self.execution.get('admission_id') != admission_id
+                    or self.execution.get('execution_generation') != generation):
+                return None
+            return self._activity.current(self.execution)
 
     def publish(self, session_id, payload, *, event_type="message.complete", execution=None):
         # ``execution`` stamps this frame alone; the shared stamp is read without the lock elsewhere.
         with self.lock:
             self.watermark()
+            stamp = self.execution if execution is None else execution
+            if stamp == self.execution:
+                self._activity.update(stamp, event_type, payload)
             frame = {'jsonrpc': '2.0', 'method': 'event', 'params': {
                 **(self.execution if execution is None else execution), 'type': event_type, 'session_id': self._key,
                 'payload': deepcopy(payload), 'replay_epoch': self.epoch}}

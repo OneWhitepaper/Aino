@@ -3,11 +3,13 @@ import { atom } from 'nanostores'
 import { useContext } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
+import { platformAccountActions } from '@/api/platform'
 import type { ChatBarState } from '@/app/chat/composer/types'
 import { type SessionView, SessionViewProvider } from '@/app/chat/session-view'
 import { ModelMenuCloseContext } from '@/app/shell/model-menu-panel'
 import { registry } from '@/contrib/registry'
 import { formatModelPillLabel } from '@/lib/model-status-label'
+import { platformModelCatalog } from '@/store/platform-models'
 import {
   $activeSessionId,
   $currentModel,
@@ -16,6 +18,7 @@ import {
   setCurrentModel,
   setCurrentModelSource
 } from '@/store/session'
+import { platformModel, platformSnapshot } from '@/test/platform-model'
 
 import { COMPOSER_AREAS, type ComposerModelPillContext, type ComposerModelPillProvider } from './contrib'
 import { requestModelMenuToggle } from './focus'
@@ -200,6 +203,34 @@ it('returns to the exact caret or backward selection after the model menu closes
 })
 
 describe('ModelPill per-surface model label', () => {
+  it('uses the Aino catalog name for both the visible model and accessible picker label', async () => {
+    Object.defineProperty(window, 'hermesDesktop', {
+      configurable: true,
+      value: {
+        platformAccount: {
+          status: async () => platformSnapshot(),
+          capabilities: async () => ({}),
+          onChanged: () => () => undefined
+        },
+        platformModels: { list: async () => [{ ...platformModel('g9'), display_name: 'GLM-5' }] }
+      }
+    })
+
+    try {
+      await platformAccountActions(window.hermesDesktop.platformAccount).refresh()
+      await platformModelCatalog().load()
+      render(
+        <ModelPill disabled={false} model={modelState({ model: 'g9', provider: 'aino', modelMenuContent: <div /> })} />
+      )
+
+      expect(screen.getByText('GLM-5')).toBeDefined()
+      expect(screen.getByRole('button', { name: /GLM-5/ })).toBeDefined()
+      expect(screen.queryByRole('button', { name: /g9/ })).toBeNull()
+    } finally {
+      Reflect.deleteProperty(window, 'hermesDesktop')
+    }
+  })
+
   it('shows the resolved default model and follows later model updates', () => {
     setCurrentModelSource('default')
 

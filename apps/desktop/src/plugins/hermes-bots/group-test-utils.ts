@@ -458,18 +458,64 @@ export async function pluginSdkMock(host: Record<string, unknown>) {
   const { Textarea } = await import('@/components/ui/textarea')
   const { cn } = await import('@/lib/utils')
   const { randomUuid } = await import('@hermes/shared')
+  const { Button } = await import('@/components/ui/button')
+  const { Alert, AlertDescription } = await import('@/components/ui/alert')
+  const { CopyButton } = await import('@/components/ui/copy-button')
+  const { Codicon } = await import('@/components/ui/codicon')
+  const { ConfirmDialog } = await import('@/components/ui/confirm-dialog')
+  const { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } = await import('@/components/ui/dialog')
+  const { Input } = await import('@/components/ui/input')
+  const { RowButton } = await import('@/components/ui/row-button')
+  const { SearchField } = await import('@/components/ui/search-field')
+  const { Popover, PopoverAnchor, PopoverContent } = await import('@/components/ui/popover')
+  const { Tabs, TabsContent, TabsList, TabsTrigger } = await import('@/components/ui/tabs')
+  const { Tip } = await import('@/components/ui/tooltip')
+  const { useResizeObserver } = await import('@/hooks/use-resize-observer')
+  const { profileColor } = await import('@/lib/profile-color')
+  const { relativeTime } = await import('@/lib/time')
+  const { useStickToBottom } = await import('use-stick-to-bottom')
 
   // The gateway Group Chat row's right-click menu (#143571) renders the real one.
   const { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } =
     await import('@/components/ui/context-menu')
 
+  const { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } =
+    await import('@/components/ui/dropdown-menu')
+
   return {
+    Alert,
+    AlertDescription,
+    Button,
+    CopyButton,
+    Codicon,
+    ConfirmDialog,
+    Dialog,
+    DialogContent,
+    DialogHeader,
+    DialogTitle,
+    DialogDescription,
+    Input,
+    RowButton,
+    SearchField,
+    Popover,
+    PopoverAnchor,
+    PopoverContent,
+    Tabs,
+    TabsContent,
+    TabsList,
+    TabsTrigger,
+    Tip,
     Textarea,
     ContextMenu,
     ContextMenuContent,
     ContextMenuItem,
     ContextMenuSeparator,
     ContextMenuTrigger,
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuSeparator,
+    DropdownMenuTrigger,
     cn,
     // Real value: approval.respond forwards it as its client deadline (#60654).
     APPROVAL_RESPOND_TIMEOUT_MS: 300_000,
@@ -486,6 +532,10 @@ export async function pluginSdkMock(host: Record<string, unknown>) {
     useGatewayActivationEpoch: () => 0,
     host,
     randomUuid,
+    profileColor,
+    relativeTime,
+    useResizeObserver,
+    useStickToBottom,
     CapabilitiesView: undefined,
     MessageTextContent: undefined,
     Streamdown: undefined,

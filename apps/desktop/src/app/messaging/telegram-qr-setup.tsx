@@ -306,7 +306,7 @@ export function TelegramQrSetup({ onApplied, platform, scopeProfile }: TelegramQ
 
                 <div className="grid gap-2">
                   <div className="flex flex-wrap items-center gap-2">
-                    <span className="text-[0.7rem] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                    <span className="text-[length:var(--aino-text-ui)] font-medium text-(--ui-text-secondary)">
                       {q.allowedUsers}
                     </span>
                     {detectedOwnerId && allowedIds.includes(detectedOwnerId) && (

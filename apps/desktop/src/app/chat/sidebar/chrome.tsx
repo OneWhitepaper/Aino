@@ -288,7 +288,7 @@ export function SidebarGroupRow({
         // group, never both at once.
         facts.length ? (
           <div className="relative flex items-center">
-            <span className="min-w-9 whitespace-nowrap text-right text-[0.625rem] leading-none text-(--ui-text-tertiary) transition-opacity group-hover/workspace:opacity-0">
+            <span className="min-w-9 whitespace-nowrap text-right text-[length:var(--aino-text-caption)] leading-none text-(--ui-text-tertiary) transition-opacity group-hover/workspace:opacity-0">
               {facts.join(' · ')}
             </span>
             {actions ? <div className="absolute right-0 flex items-center">{actions}</div> : null}

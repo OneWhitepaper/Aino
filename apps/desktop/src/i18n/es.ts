@@ -34,6 +34,7 @@ import { esUpdateChannel } from './es_update_channel'
 import { homeGuidance } from './home-guidance'
 import { introEs } from './intro-es'
 import { messagingDirectory } from './messaging-directory'
+import { notificationCenterCopy } from './notification-center'
 import { runtimeFeatureCopy } from './runtime-feature-copy'
 import { toolPanel } from './tool-panel'
 import { workspacePage } from './workspace-page'
@@ -321,6 +322,7 @@ const configPageFieldDescriptions: Record<string, string> = defineFieldCopy({
 })
 
 const esBaseOverrides = {
+  notificationCenter: notificationCenterCopy['es'],
   platformModels: {
     permanent: "Sin caducidad",
     reauthorize: "Volver a autorizar este dispositivo",
@@ -846,6 +848,7 @@ const esBaseOverrides = {
   },
   ...esNotices,
   sendDiagnostics: {
+    closeWhileUploadingHint: 'Cerrar esta ventana no cancela una carga que ya haya comenzado.',
     title: 'Enviar diagnósticos a Aino',
     privacyNotice:
       'Se sube un paquete privado al servicio de tu cuenta Aino: información del sistema, estado de configuración (sin claves) y registros del agente, gateway y escritorio (hasta 512 KB cada uno). Pueden contener conversaciones, resultados de herramientas y rutas de archivos. Las claves se ocultan, pero pueden quedar otros datos sensibles. Solo administradores autorizados de Aino pueden leerlo. El acceso caduca a los 14 días y los datos en línea se borran en la hora siguiente. Las copias de seguridad existentes siguen la política del despliegue.',
@@ -4959,6 +4962,7 @@ memoryLayers: esMemoryLayers
     }
   },
   zones: {
+    switchConversation: 'Cambiar conversación',
     sidebarModeMenu: 'Cambiar modo de conversación',
     sidebarSessionsDescription: 'Proyectos, archivos y conversaciones cotidianas',
     showTabStrip: 'Mostrar pestañas',

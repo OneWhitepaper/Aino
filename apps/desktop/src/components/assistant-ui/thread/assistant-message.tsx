@@ -85,6 +85,7 @@ import { markAssistantIdSpoken } from '@/lib/spoken-reply'
 import { $touchPointer } from '@/lib/touch-interaction'
 import type { TurnMetrics } from '@/lib/turn-metrics'
 import { useEnterAnimation } from '@/lib/use-enter-animation'
+import { useStoresSelector } from '@/lib/use-session-slice'
 import { cn } from '@/lib/utils'
 import { playSpeechText, stopVoicePlayback } from '@/lib/voice-playback'
 import { $billingBlock, requestBillingSettings, runBillingRecovery } from '@/store/billing-block'
@@ -96,8 +97,21 @@ import { createPlatformSignInRecovery, platformRecoveryActionForCode } from '@/s
 import { $activeGatewayProfile, normalizeProfileKey, requestFreshSession } from '@/store/profile'
 import { sessionApprovalRequest } from '@/store/prompts'
 import { requestSendDiagnostics } from '@/store/send-diagnostics'
-import { $connection, $currentModel, setModelPickerOpen } from '@/store/session'
-import { sessionTileDelegate } from '@/store/session-states'
+import {
+  $activeSessionId,
+  $connection,
+  $currentModel,
+  $selectedStoredSessionId,
+  setModelPickerOpen
+} from '@/store/session'
+import {
+  $botChatSessionIds,
+  $sessionStates,
+  $sessionTiles,
+  isBotChatSession,
+  sessionTileDelegate,
+  storedSessionIdForRuntimeId
+} from '@/store/session-states'
 import { notifyThreadEditOpen } from '@/store/thread-scroll'
 import { $voicePlayback } from '@/store/voice-playback'
 
@@ -195,7 +209,7 @@ const InterAgentCollapsedNotice: FC<{ sender: string }> = ({ sender }) => {
   const copy = t.assistant.thread
 
   return (
-    <div className="flex max-w-[min(86%,44rem)] flex-col gap-0.5 self-center px-2 py-0.5 text-[0.6875rem] leading-5 text-muted-foreground/60">
+    <div className="flex max-w-[min(86%,44rem)] flex-col gap-0.5 self-center px-2 py-0.5 text-[length:var(--aino-text-caption)] leading-5 text-muted-foreground/60">
       <span className="flex items-center justify-center gap-1.5">
         <Codicon className="shrink-0 text-muted-foreground/55" name="arrow-small-right" size="0.8125rem" />
         <span className="wrap-anywhere">{copy.repliedTo(sender)}</span>
@@ -204,7 +218,7 @@ const InterAgentCollapsedNotice: FC<{ sender: string }> = ({ sender }) => {
         <summary className="cursor-pointer select-none text-center text-muted-foreground/45 hover:text-muted-foreground/70">
           {copy.showReply}
         </summary>
-        <div className="mt-1 max-w-[36rem] rounded-lg border border-(--ui-stroke-tertiary) px-3 py-2 text-left text-[0.75rem] leading-5 text-foreground/85">
+        <div className="mt-1 max-w-[36rem] rounded-lg border border-(--ui-stroke-tertiary) px-3 py-2 text-left text-[length:var(--aino-text-caption)] leading-5 text-foreground/85">
           {MESSAGE_PARTS}
         </div>
       </details>
@@ -341,6 +355,7 @@ const AssistantMessageBody: FC<AssistantMessageProps & { collapsedNotice?: null 
     >
       {collapsedNotice ?? (
         <>
+          <AssistantBrandMark />
           <div
             className="wrap-anywhere min-w-0 max-w-full overflow-hidden text-pretty text-[length:var(--conversation-text-font-size)] leading-(--dt-line-height) text-foreground"
             data-slot="aui_assistant-message-content"
@@ -380,6 +395,29 @@ const AssistantMessageBody: FC<AssistantMessageProps & { collapsedNotice?: null 
         </>
       )}
     </MessagePrimitive.Root>
+  )
+}
+
+/** The existing bot-session resolver keeps another agent's reply unbranded. */
+const AssistantBrandMark: FC = () => {
+  const runtimeId = useStore(useSessionView().$runtimeId)
+
+  const ordinarySession = useStoresSelector(
+    [$botChatSessionIds, $sessionStates, $sessionTiles, $activeSessionId, $selectedStoredSessionId],
+    () => Boolean(runtimeId && storedSessionIdForRuntimeId(runtimeId) && !isBotChatSession(runtimeId))
+  )
+
+  if (!ordinarySession) {
+    return null
+  }
+
+  return (
+    <img
+      alt=""
+      aria-hidden="true"
+      data-slot="aui_assistant-brand"
+      src={`${import.meta.env.BASE_URL}apple-touch-icon.png`}
+    />
   )
 }
 
@@ -955,7 +993,9 @@ function PlatformRecoveryActions({ recovery }: { recovery: ReturnType<typeof pla
           {t.boot.errors.signInAgain}
         </button>
       )}
-      {(recovery === 'account' || recovery === 'account-models') && inRouter && <AccountRecoveryAction label={t.platformModels.myAccount} />}
+      {(recovery === 'account' || recovery === 'account-models') && inRouter && (
+        <AccountRecoveryAction label={t.platformModels.myAccount} />
+      )}
       {recovery === 'new-chat' && (
         <button className="aui-error-action" data-action="new-chat" onClick={requestFreshSession} type="button">
           {t.platformModels.newChatCurrentAccount}
@@ -1581,7 +1621,7 @@ const AssistantActionBar: FC<MessageActionProps & { durationS?: number }> = ({
             tooltip={copy.react}
           >
             {shownReactions.length > 0 ? (
-              <span className="flex items-center gap-0.5 text-[0.8125rem] leading-none">
+              <span className="flex items-center gap-0.5 text-[length:var(--aino-text-label)] leading-none">
                 {shownReactions.map(reaction => (
                   <span className="reaction-pop" key={`${reaction.author}-${reaction.emoji}`}>
                     {reaction.emoji}

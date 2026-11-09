@@ -121,7 +121,9 @@ function RouteRow({ route, isDefault, providerName, onEdit, onMakeDefault, onDel
         <span className="text-[length:var(--conversation-caption-font-size)] leading-(--conversation-caption-line-height) text-(--ui-text-secondary)">
           {route.description}
         </span>
-        <span className="truncate font-mono text-[0.68rem] text-(--ui-text-tertiary)">{facts.join(' · ')}</span>
+        <span className="truncate font-mono text-[length:var(--aino-text-caption)] text-(--ui-text-tertiary)">
+          {facts.join(' · ')}
+        </span>
       </button>
       <ActionsMenu
         ariaLabel={r.routeActions(route.name)}

@@ -126,8 +126,8 @@ export function renderRosterContent({
           />
         </div>
       ) : (
-        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain" data-slot="bots-roster">
-          <div className="grid w-full min-w-0 gap-0.5 px-1.5 pb-2">
+        <div className="aino-roster-content" data-slot="bots-roster">
+          <div className="aino-roster-rows">
             {showGatewaySections
               ? [
                   sortedGroupRows.length ? renderGroupChatSection() : null,
@@ -143,7 +143,7 @@ export function renderRosterContent({
                 {hasRosterConstraint ? (
                   <div className="flex w-full items-center gap-1 px-2 py-1.5 text-[length:var(--aino-text-caption)] font-medium text-(--ui-text-tertiary)">
                     <Codicon name="eye-closed" />
-                    <span>Hidden</span>
+                    <span>{b.roster.hidden}</span>
                     <span className="text-(--ui-text-quaternary)">{matchingHiddenBots.length}</span>
                   </div>
                 ) : (
@@ -153,7 +153,7 @@ export function renderRosterContent({
                     onClick={() => $showHiddenBots.set(!hiddenExpanded)}
                   >
                     <DisclosureCaret open={hiddenExpanded} />
-                    <span>Hidden</span>
+                    <span>{b.roster.hidden}</span>
                     <span className="text-(--ui-text-quaternary)">{hiddenBots.length}</span>
                   </RowButton>
                 )}
@@ -165,7 +165,9 @@ export function renderRosterContent({
                       matchingHiddenBots.map((bot: RosterRow) => renderBotRow(bot, 'hidden:'))
                     )
                   ) : (
-                    <div className="px-2 py-2 text-[length:var(--aino-text-caption)] text-(--ui-text-tertiary)">{b.roster.noHiddenMatch}</div>
+                    <div className="px-2 py-2 text-[length:var(--aino-text-caption)] text-(--ui-text-tertiary)">
+                      {b.roster.noHiddenMatch}
+                    </div>
                   )
                 ) : null}
               </div>

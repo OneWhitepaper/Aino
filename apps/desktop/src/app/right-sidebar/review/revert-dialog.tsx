@@ -3,7 +3,6 @@ import { useStore } from '@nanostores/react'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { useI18n } from '@/i18n'
 import { displayPath } from '@/lib/display-path'
-import { notifyError } from '@/store/notifications'
 import { $reviewRevertTarget, cancelRevert, confirmRevert } from '@/store/review'
 
 /** One confirmation host shared by Review and the session Summary. */
@@ -21,7 +20,7 @@ export function ReviewRevertDialog() {
           {revertingAll ? copy.revertAllConfirm : copy.revertConfirm}
           {!revertingAll && revertTarget?.path && (
             <span
-              className="mt-2 block truncate font-mono text-[0.7rem] text-(--ui-text-secondary)"
+              className="mt-2 block truncate font-mono text-[length:var(--aino-text-caption)] text-(--ui-text-secondary)"
               title={displayPath(revertTarget.path)}
             >
               {displayPath(revertTarget.path)}
@@ -30,9 +29,8 @@ export function ReviewRevertDialog() {
         </>
       }
       destructive
-      dismissOnConfirm
       onClose={cancelRevert}
-      onConfirm={() => confirmRevert().catch(error => void notifyError(error, copy.revert))}
+      onConfirm={confirmRevert}
       open={revertTarget !== undefined}
       title={revertingAll ? copy.revertAll : copy.revert}
     />

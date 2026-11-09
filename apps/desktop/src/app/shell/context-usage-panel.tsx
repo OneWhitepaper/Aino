@@ -88,11 +88,14 @@ export function ContextUsagePanel({
   }
 
   return (
-    <div className="flex w-full min-w-0 flex-col gap-3 p-3 text-[0.75rem]" data-slot="context-usage-panel">
+    <div
+      className="flex w-full min-w-0 flex-col gap-3 p-3 text-[length:var(--aino-text-caption)]"
+      data-slot="context-usage-panel"
+    >
       <div className="flex items-baseline justify-between gap-2">
         {showTitle && <p className="font-medium text-foreground">{copy.title}</p>}
 
-        <span className="text-[0.6875rem] text-muted-foreground">{summary}</span>
+        <span className="text-[length:var(--aino-text-caption)] text-muted-foreground">{summary}</span>
       </div>
 
       {compacting && (
@@ -102,7 +105,7 @@ export function ContextUsagePanel({
       )}
 
       {contextPercent !== null && (
-        <p className="flex items-center justify-between gap-2 text-[0.6875rem] text-foreground">
+        <p className="flex items-center justify-between gap-2 text-[length:var(--aino-text-caption)] text-foreground">
           <span>
             {usage.context_estimated ? '~' : ''}
             {copy.percentFull(contextPercent)}
@@ -214,13 +217,13 @@ function ContextUsageEmptyState({
   }
 
   if (loading) {
-    return <p className="text-[0.6875rem] text-muted-foreground">{copy.loading}</p>
+    return <p className="text-[length:var(--aino-text-caption)] text-muted-foreground">{copy.loading}</p>
   }
 
   if (unavailable) {
     return (
       <div className="flex items-center justify-between gap-3">
-        <p className="text-[0.6875rem] text-muted-foreground" role="status">
+        <p className="text-[length:var(--aino-text-caption)] text-muted-foreground" role="status">
           {hasContextData ? copy.detailsUnavailable : copy.unavailable}
         </p>
         {onRetry && (
@@ -234,7 +237,7 @@ function ContextUsageEmptyState({
 
   const message = hasContextData ? (breakdown ? copy.pendingDetails : null) : copy.empty
 
-  return message ? <p className="text-[0.6875rem] text-muted-foreground">{message}</p> : null
+  return message ? <p className="text-[length:var(--aino-text-caption)] text-muted-foreground">{message}</p> : null
 }
 
 /** The statusbar meter's trailing `[bar] N%`, plus a quiet `layers N` once the

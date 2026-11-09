@@ -149,7 +149,10 @@ export function PreviewBrowserBar({
   }
 
   return (
-    <div className="flex min-h-8 shrink-0 items-center gap-1 border-b border-border/60 bg-background px-1.5 py-1" data-preview-toolbar="">
+    <div
+      className="flex min-h-8 shrink-0 items-center gap-1 border-b border-border/60 bg-background px-1.5 py-1"
+      data-preview-toolbar=""
+    >
       <PaneStripGlyph
         disabled={!canGoBack}
         icon={<Codicon name="arrow-left" size="0.8125rem" />}
@@ -229,7 +232,7 @@ export function PreviewBrowserBar({
       ) : null}
       {annotateMode ? (
         <span
-          className="hidden shrink-0 items-center rounded-full px-2 py-0.5 text-[0.625rem] font-semibold tracking-wide text-white uppercase sm:inline-flex"
+          className="hidden shrink-0 items-center rounded-full px-2 py-0.5 text-[length:var(--aino-text-caption)] font-semibold tracking-wide text-white uppercase sm:inline-flex"
           data-annotate-status="commenting"
           style={{ background: ANNOTATE_BLUE }}
         >
@@ -238,7 +241,7 @@ export function PreviewBrowserBar({
       ) : null}
       {commentCount > 0 && onFlushComments ? (
         <button
-          className="shrink-0 rounded-full px-2 py-0.5 text-[0.6875rem] font-semibold text-white"
+          className="shrink-0 rounded-full px-2 py-0.5 text-[length:var(--aino-text-caption)] font-semibold text-white"
           onClick={onFlushComments}
           style={{ background: ANNOTATE_BLUE }}
           type="button"

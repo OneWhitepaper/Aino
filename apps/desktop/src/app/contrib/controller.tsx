@@ -13,12 +13,14 @@ import tabSessionsIcon from '@/assets/aino-home/tab-sessions.svg'
 import { AinoDesignIcon } from '@/components/aino-design-icon'
 import { InlinePreviewDirective } from '@/components/assistant-ui/inline-preview-directive'
 import { IdleMount } from '@/components/idle-mount'
+import { NotificationStack } from '@/components/notifications'
 import { $layoutEditMode, toggleLayoutEditMode } from '@/components/pane-shell/edit-mode'
 import { allPaneIds, findGroupOfPane } from '@/components/pane-shell/tree/model'
 import { LayoutTreeRoot } from '@/components/pane-shell/tree/renderer'
 import { WindowTitlebarContext } from '@/components/pane-shell/tree/renderer/header-placement'
 import {
   $layoutTree,
+  $paneVisible,
   activateTreePane,
   bindPaneVisibility,
   declareDefaultTree,
@@ -49,16 +51,7 @@ import { registry } from '@/contrib/registry'
 import { discoverRuntimePlugins } from '@/contrib/runtime-loader'
 import { LocalizedTabTitle, translateNow } from '@/i18n'
 import { newSessionTitle, sessionTitle as storedSessionTitle } from '@/lib/chat-runtime'
-import {
-  Download,
-  FileText,
-  LayoutDashboard,
-  PanelTop,
-  SlidersHorizontal,
-  Upload,
-  Users,
-  Zap
-} from '@/lib/icons'
+import { Download, FileText, LayoutDashboard, PanelTop, SlidersHorizontal, Upload, Users, Zap } from '@/lib/icons'
 import { type KeybindContribution, KEYBINDS_AREA } from '@/lib/keybinds/actions'
 import { TRANSCRIPT_DIRECTIVE_AREA, type TranscriptDirectiveContribution } from '@/lib/transcript-directives'
 import { setYoloEnabled } from '@/lib/yolo-session'
@@ -150,9 +143,22 @@ import { WorkspacePageHeaderHostContext } from './workspace-page-header'
 // the contribution (new title) and a fresh closure would remount the chat.
 // The host context marks this subtree as the one whose zone paints
 // WORKSPACE_PAGE_HEADER_AREA; route tiles and the HUD render outside it.
+const $workspaceVisible = $paneVisible('workspace')
+
+function WorkspaceNotificationFrame() {
+  const visible = useStore($workspaceVisible)
+  const location = useLocation()
+
+  return (
+    <NotificationStack active={visible && appViewForPath(location.pathname) !== 'settings'}>
+      <WiredPane part="chatRoutes" />
+    </NotificationStack>
+  )
+}
+
 const renderWorkspacePane = () => (
   <WorkspacePageHeaderHostContext.Provider value={true}>
-    <WiredPane part="chatRoutes" />
+    <WorkspaceNotificationFrame />
   </WorkspacePageHeaderHostContext.Provider>
 )
 
@@ -386,16 +392,7 @@ registry.registerMany([
     label: 'Toggle profile rail',
     action: 'view.toggleProfileRail',
     icon: Users,
-    keywords: [
-      'profile rail',
-      'profile bar',
-      'profile strip',
-      'profiles',
-      'sidebar',
-      'hide',
-      'show',
-      'chrome'
-    ],
+    keywords: ['profile rail', 'profile bar', 'profile strip', 'profiles', 'sidebar', 'hide', 'show', 'chrome'],
     get: () => $profileRailVisible.get(),
     set: enabled => $profileRailVisible.set(enabled)
   }),
@@ -539,6 +536,11 @@ const syncWorkspaceTitle = () => {
       selected ? $botChatScopes.get()[selected] : undefined
     ),
     data: {
+      workspaceScope: () => {
+        const scope = $botChatScopes.get()[$selectedStoredSessionId.get() ?? '']
+
+        return { mode: scope?.workspaceMode ?? 'sessions', ownerKey: scope?.workspaceOwnerKey }
+      },
       // The tab's status dot — the SAME primitive the sidebar row and session
       // tiles render, so the main tab never disagrees with its sidebar row. A
       // fresh draft has no session to key by, which IS its status: the dot
@@ -662,9 +664,7 @@ $terminalTakeover.listen(open => {
 })
 // Without the statusbar, the rail is the only way to switch profiles or gateways.
 $profiles.subscribe(profiles => setModeContext({ profileCount: profiles.length }))
-$connectionsRegistry.subscribe(registry =>
-  setModeContext({ connectionCount: registry?.connections.length ?? 0 })
-)
+$connectionsRegistry.subscribe(registry => setModeContext({ connectionCount: registry?.connections.length ?? 0 }))
 // ⌘K door onto the same pane the keybind and statusbar pill flip.
 registry.register(terminalPaletteToggle)
 
@@ -855,6 +855,7 @@ function TitlebarSlot({ area, className }: TitlebarSlotProps) {
 
 export function ContribController() {
   const sidebarOpen = useStore($sidebarOpen)
+  const workspaceVisible = useStore($workspaceVisible)
   const location = useLocation()
   const view = appViewForPath(location.pathname)
   const settingsPage = view === 'settings'
@@ -936,38 +937,34 @@ export function ContribController() {
               }}
             >
               <TitlebarSlot area="titleBar.left" className="flex h-full min-w-0 items-center gap-2" />
-              <TitlebarSlot
-                area="titleBar.center"
-                className="flex h-full min-w-0 w-full items-center gap-2"
-              />
-              <TitlebarSlot
-                area="titleBar.right"
-                className="flex h-full min-w-0 items-center justify-end gap-2"
-              />
+              <TitlebarSlot area="titleBar.center" className="flex h-full min-w-0 w-full items-center gap-2" />
+              <TitlebarSlot area="titleBar.right" className="flex h-full min-w-0 items-center justify-end gap-2" />
             </div>
           </div>
 
-          {/* Keep the tiling tree mounted while Settings owns the foreground.
+          <NotificationStack active={settingsPage || !workspaceVisible}>
+            {/* Keep the tiling tree mounted while Settings owns the foreground.
               Visibility preserves terminal/session lifecycles and restores the
               user's layout instantly when they return to chat. */}
-          <div
-            className={
-              settingsPage
-                ? 'pointer-events-none invisible absolute inset-0 flex min-h-0 min-w-0'
-                : 'relative flex min-h-0 min-w-0 flex-1'
-            }
-            inert={settingsPage}
-          >
-            <WindowTitlebarContext.Provider value={view === 'chat' && !isAuxiliaryWindow()}>
-              <LayoutTreeRoot />
-            </WindowTitlebarContext.Provider>
-          </div>
-
-          {settingsPage && (
-            <div className="relative min-h-0 min-w-0 flex-1 overflow-hidden">
-              <WiredPane part="settings" />
+            <div
+              className={
+                settingsPage
+                  ? 'pointer-events-none invisible absolute inset-0 flex min-h-0 min-w-0'
+                  : 'relative flex min-h-0 min-w-0 flex-1'
+              }
+              inert={settingsPage}
+            >
+              <WindowTitlebarContext.Provider value={view === 'chat' && !isAuxiliaryWindow()}>
+                <LayoutTreeRoot />
+              </WindowTitlebarContext.Provider>
             </div>
-          )}
+
+            {settingsPage && (
+              <div className="relative min-h-0 min-w-0 flex-1 overflow-hidden">
+                <WiredPane part="settings" />
+              </div>
+            )}
+          </NotificationStack>
 
           {/* "Close running tab?" — the busy/input-blocked tile close gate. */}
           {!settingsPage && <SessionTileCloseConfirm />}

@@ -141,15 +141,15 @@ export function ModelVisibilityDialog({
   return (
     <Dialog onOpenChange={onOpenChange} open={open}>
       <DialogContent bodyClassName="gap-0 overflow-hidden p-0" className="max-w-xs">
-        <DialogHeader className="px-3 pb-1 pt-3">
-          <DialogTitle className="text-[0.8125rem]">{copy.title}</DialogTitle>
+        <DialogHeader className="px-5 pb-2 pt-5">
+          <DialogTitle>{copy.title}</DialogTitle>
         </DialogHeader>
 
         <div className="flex items-center gap-1.5 px-3 py-1.5">
-          <Search className="pointer-events-none size-3.5 shrink-0 text-muted-foreground/70" />
+          <Search className="pointer-events-none size-4 shrink-0 text-(--ui-text-tertiary)" />
           <input
             autoFocus
-            className="h-5 w-full bg-transparent text-xs text-foreground placeholder:text-(--ui-text-tertiary) focus:outline-none"
+            className="h-8 w-full bg-transparent text-[length:var(--aino-text-ui)] text-foreground placeholder:text-(--ui-text-tertiary) focus:outline-none"
             onChange={event => setSearch(event.target.value)}
             placeholder={copy.search}
             type="text"
@@ -184,7 +184,7 @@ export function ModelVisibilityDialog({
                 <div className="py-0.5" key={provider.slug}>
                   <div className="flex items-center gap-2 px-3 pb-0.5 pt-1">
                     <button
-                      className="group/label flex w-full items-center gap-1 pb-0.5 pt-0.5 text-left text-[0.625rem] font-semibold uppercase tracking-wider text-(--ui-text-secondary) hover:bg-transparent"
+                      className="group/label flex w-full items-center gap-1 pb-0.5 pt-0.5 text-left text-[length:var(--aino-text-caption)] font-semibold normal-case tracking-normal text-(--ui-text-secondary) hover:bg-transparent"
                       onClick={() => toggleCollapsedProvider(provider.slug)}
                       type="button"
                     >
@@ -209,7 +209,7 @@ export function ModelVisibilityDialog({
 
                       return (
                         <label
-                          className="flex cursor-pointer items-center gap-2 px-3 py-1 text-xs hover:bg-(--ui-control-active-background)"
+                          className="flex cursor-pointer items-center gap-2 px-4 py-2 text-[length:var(--aino-text-ui)] hover:bg-(--ui-control-active-background)"
                           key={key}
                         >
                           <span className="min-w-0 flex-1 truncate">
@@ -245,12 +245,12 @@ export function ModelVisibilityDialog({
           )}
           {customSlug && providers.length > 0 && (
             <div className="py-0.5">
-              <div className="px-3 pb-0.5 pt-1 text-[0.625rem] font-semibold uppercase tracking-wider text-(--ui-text-tertiary)">
+              <div className="px-3 pb-0.5 pt-1 text-[length:var(--aino-text-caption)] font-semibold normal-case tracking-normal text-(--ui-text-tertiary)">
                 {copy.addCustomModel}
               </div>
               {providers.map(provider => (
                 <RowButton
-                  className="flex w-full items-center gap-2 px-3 py-1 text-left text-xs hover:bg-(--ui-control-active-background)"
+                  className="flex w-full items-center gap-2 px-4 py-2 text-left text-[length:var(--aino-text-ui)] hover:bg-(--ui-control-active-background)"
                   key={`custom:${provider.slug}`}
                   onClick={() => {
                     addCustomModel(provider.slug, customSlug, provider)

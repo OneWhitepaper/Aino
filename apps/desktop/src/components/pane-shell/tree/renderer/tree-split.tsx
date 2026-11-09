@@ -1,3 +1,4 @@
+import { useStore } from '@nanostores/react'
 /**
  * Split node renderer — a flex row/column whose 1px seams double as resize
  * sashes (the seam IS the boundary — junction-owned, never doubled). Sizing
@@ -5,8 +6,6 @@
  * flex tracks share the leftover by weight, and an all-fixed run lets an
  * UNCAPPED last track absorb the slack (capped sidebars stay put).
  */
-
-import { useStore } from '@nanostores/react'
 import { type PointerEvent as ReactPointerEvent, useCallback, useMemo, useRef, useSyncExternalStore } from 'react'
 
 import { $workspaceIsPage, workspacePageKeepsPane } from '@/app/routes'
@@ -18,6 +17,7 @@ import { cn } from '@/lib/utils'
 import { $paneStates, type PaneStateSnapshot, setPaneHeightOverride, setPaneWidthOverride } from '@/store/panes'
 
 import { $layoutEditMode, $layoutEditRevealsHidden } from '../../edit-mode'
+import { $workspaceMode, $workspaceOwnerKey } from '../../workspace-scope'
 import type { LayoutNode, SplitNode } from '../model'
 import { allPaneIds } from '../model'
 import {
@@ -29,9 +29,9 @@ import {
   persistTree,
   presetSplitWeights,
   setTreeGroupMinimized,
-  setTreeSplitWeights
-} from '../store'
+  setTreeSplitWeights} from '../store'
 import { $maximizedToolGroup, containsMaximizedToolGroup } from '../tool-panel-view'
+import { workspaceShownPaneIds } from '../workspace-presentation'
 
 import {
   allFixedAbsorberIndex,
@@ -117,6 +117,8 @@ export function TreeSplit({
   // re-render — not every split in the tree.
   const overrides = useSubtreeOverrides(useMemo(() => allPaneIds(node), [node]))
   const editMode = useStore($layoutEditMode)
+  useStore($workspaceMode)
+  useStore($workspaceOwnerKey)
   const revealsHidden = useStore($layoutEditRevealsHidden)
   const collapsedSides = useStore($collapsedTreeSides)
   const maximizedToolGroup = useStore($maximizedToolGroup)
@@ -144,6 +146,7 @@ export function TreeSplit({
   // is narrow and the pane is collapsible (edge overlay instead).
   const paneFor = (id: string) => panes.find(p => p.id === id)
   const narrowTools = narrowToolPaneIds(node, paneFor)
+  const scopePanes = new Set(workspaceShownPaneIds(allPaneIds(node)))
 
   // Layout-edit mode (in Advanced) forces toggle-hidden panes (terminal off,
   // review/preview closed) visible so they're rearrangeable — only truly-absent
@@ -151,6 +154,7 @@ export function TreeSplit({
   // (render-only).
   const paneGone = (id: string) =>
     !paneFor(id) ||
+    (!editMode && id !== 'workspace' && !scopePanes.has(id)) ||
     (!revealsHidden && hiddenPanes.has(id)) ||
     (workspacePage && !editMode && !workspacePageKeepsPane(id)) ||
     (narrow && (narrowTools.has(id) || Boolean(paneChrome(paneFor(id)).collapsible)))

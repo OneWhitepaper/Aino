@@ -19,6 +19,8 @@ import type {
   PlatformPublicCapabilities
 } from '../../../shared/platform-contract'
 
+import { AccountLoginLinks, AccountPhoneLoginHelp, AccountRememberControl } from './account-login-support'
+
 type LoginStep = 'phone' | 'code' | 'existing' | 'totp' | 'wechat'
 
 export interface AccountLoginCardProps {
@@ -28,38 +30,8 @@ export interface AccountLoginCardProps {
   loading?: boolean
   onRequestPhoneCode: (phone: string) => Promise<PhoneChallengeDTO | null>
   onVerifyPhoneCode: (input: PhoneVerifyDTO) => Promise<PlatformAuthResult | null>
-  onLoginExisting: (input: {
-    email: string
-    password: string
-    remember: boolean
-  }) => Promise<PlatformAuthResult | null>
+  onLoginExisting: (input: { email: string; password: string; remember: boolean }) => Promise<PlatformAuthResult | null>
   onCompleteSecondFactor: (code: string) => Promise<unknown>
-}
-
-interface AccountRememberControlProps {
-  browserHosted: boolean
-  loading: boolean
-  remember: boolean
-  onChange: (remember: boolean) => void
-}
-
-function AccountRememberControl({ browserHosted, loading, remember, onChange }: AccountRememberControlProps) {
-  const { t } = useI18n()
-  const copy = t.settings.account
-
-  return browserHosted ? (
-    <p className="aino-account-remember">{copy.browserSessionOnly}</p>
-  ) : (
-    <label className="aino-account-remember">
-      <Checkbox
-        aria-label={copy.rememberLabel}
-        checked={remember}
-        disabled={loading}
-        onCheckedChange={value => onChange(value === true)}
-      />
-      <span>{copy.rememberLabel}</span>
-    </label>
-  )
 }
 
 export function AccountLoginCard({
@@ -82,6 +54,7 @@ export function AccountLoginCard({
   const [totpCode, setTotpCode] = useState('')
   const [invitationCode, setInvitationCode] = useState('')
   const [step, setStep] = useState<LoginStep>('phone')
+  const [secondFactorReturn, setSecondFactorReturn] = useState<'code' | 'existing'>('existing')
   const [retryAt, setRetryAt] = useState(0)
   const [retrySeconds, setRetrySeconds] = useState(0)
   const [acceptedTerms, setAcceptedTerms] = useState(false)
@@ -92,13 +65,15 @@ export function AccountLoginCard({
   const [openingRegistration, setOpeningRegistration] = useState(false)
   const [registrationOpened, setRegistrationOpened] = useState(false)
   const [registrationError, setRegistrationError] = useState(false)
+  const [dismissedError, setDismissedError] = useState<AccountError | null | undefined>(null)
 
+  const busy = loading || openingRegistration
   const agreementRequired = capabilities?.login_agreement_enabled === true
 
   const invitationRequired = Boolean(
     capabilities?.registration_enabled &&
-      capabilities.phone_registration_enabled &&
-      capabilities.invitation_code_enabled
+    capabilities.phone_registration_enabled &&
+    capabilities.invitation_code_enabled
   )
 
   const phoneEnabled = capabilities?.phone_login_enabled === true
@@ -108,10 +83,27 @@ export function AccountLoginCard({
 
   const codeLength = Math.max(1, Math.min(64, capabilities?.phone_code_length ?? 6))
 
-  const changeStep = (nextStep: LoginStep) => {
+  const dismissFeedback = () => {
+    setTermsRequired(false)
     setRegistrationError(false)
+
+    // Only dismiss this form's feedback. Missing capabilities still need the
+    // account gate's service error and Retry action, owned by the account store.
+    if (capabilities) {
+      setDismissedError(error)
+    }
+  }
+
+  const changeStep = (nextStep: LoginStep) => {
+    dismissFeedback()
     setStep(nextStep)
   }
+
+  useEffect(() => {
+    if (capabilities && !phoneEnabled && step === 'phone') {
+      setStep('existing')
+    }
+  }, [capabilities, phoneEnabled, step])
 
   useEffect(() => {
     if (!retryAt) {
@@ -137,7 +129,7 @@ export function AccountLoginCard({
   const requestCode = async () => {
     const value = phone.trim()
 
-    if (!value || loading || !phoneEnabled || retrySeconds > 0) {
+    if (!value || busy || !phoneEnabled || retrySeconds > 0) {
       return
     }
 
@@ -164,7 +156,7 @@ export function AccountLoginCard({
   }
 
   const verifyCode = async () => {
-    if (!challenge || code.length !== codeLength || loading) {
+    if (!challenge || code.length !== codeLength || busy) {
       return
     }
 
@@ -182,22 +174,23 @@ export function AccountLoginCard({
 
     if (result?.status === 'requires_2fa') {
       setTotpCode('')
+      setSecondFactorReturn('code')
       changeStep('totp')
     }
   }
 
   const loginExisting = async () => {
-    if (!email.trim() || !password || loading) {
+    if (!email.trim() || !password || busy) {
       return
     }
 
     setRegistrationError(false)
-
     const result = await onLoginExisting({ email: email.trim(), password, remember })
     setPassword('')
 
     if (result?.status === 'requires_2fa') {
       setTotpCode('')
+      setSecondFactorReturn('existing')
       changeStep('totp')
     }
   }
@@ -205,19 +198,18 @@ export function AccountLoginCard({
   const completeSecondFactor = async () => {
     const value = totpCode.replace(/\D/g, '')
 
-    if (!value || loading) {
+    if (!value || busy) {
       return
     }
 
     setRegistrationError(false)
-
     await onCompleteSecondFactor(value)
   }
 
   const openRegistration = async () => {
     const url = capabilities?.registration_url
 
-    if (!capabilities?.registration_enabled || !url || openingRegistration) {
+    if (!capabilities?.registration_enabled || !url || busy) {
       return
     }
 
@@ -235,24 +227,21 @@ export function AccountLoginCard({
     }
   }
 
+  const visibleError = error && (!capabilities || error !== dismissedError) ? error : null
+
   const errorText = termsRequired
     ? copy.termsRequired
     : registrationError
       ? copy.registrationOpenFailed
-      : error
-        ? copy.platformError(error.code, error.retryAfter)
+      : visibleError
+        ? copy.platformError(visibleError.code, visibleError.retryAfter)
         : null
 
   const documents = capabilities?.login_agreement_documents ?? []
   const activeDocument = legalDocument === null ? null : documents[legalDocument]
 
   const rememberControl = (
-    <AccountRememberControl
-      browserHosted={browserHosted}
-      loading={loading}
-      onChange={setRemember}
-      remember={remember}
-    />
+    <AccountRememberControl browserHosted={browserHosted} loading={busy} onChange={setRemember} remember={remember} />
   )
 
   return (
@@ -273,9 +262,12 @@ export function AccountLoginCard({
               aria-label={copy.phoneLabel}
               autoComplete="tel"
               className="aino-account-input"
-              disabled={loading}
+              disabled={busy}
               inputMode="tel"
-              onChange={event => setPhone(event.target.value)}
+              onChange={event => {
+                dismissFeedback()
+                setPhone(event.target.value)
+              }}
               placeholder={copy.phonePlaceholder}
               value={phone}
             />
@@ -284,33 +276,31 @@ export function AccountLoginCard({
                 aria-label={copy.invitationCodeLabel}
                 autoComplete="off"
                 className="aino-account-input aino-account-secondary-input"
-                disabled={loading}
-                onChange={event => setInvitationCode(event.target.value)}
+                disabled={busy}
+                onChange={event => {
+                  dismissFeedback()
+                  setInvitationCode(event.target.value)
+                }}
                 placeholder={copy.invitationCodePlaceholder}
                 value={invitationCode}
               />
             )}
             <Button
               className="aino-account-submit"
-              disabled={loading || !phoneEnabled || !phone.trim() || retrySeconds > 0}
+              disabled={busy || !phoneEnabled || !phone.trim() || retrySeconds > 0}
               type="submit"
             >
               {loading && <Loader2 className="animate-spin" />}
               {retrySeconds > 0 ? copy.resendIn(retrySeconds) : copy.sendCode}
             </Button>
-            {capabilities && !fixedCodeHint && (
-              <div className="mt-3 space-y-1 text-center text-xs text-(--ui-text-tertiary)">
-                {phoneRegistrationEnabled && <p>{copy.phoneAutoRegister}</p>}
-                {!phoneEnabled && <p>{copy.phoneLoginUnavailable}</p>}
-                {phoneRegistrationEnabled && <p>{copy.existingAccountPhoneHint}</p>}
-              </div>
-            )}
+            {capabilities && !fixedCodeHint && phoneRegistrationEnabled && <AccountPhoneLoginHelp disabled={busy} />}
             {agreementRequired && (
               <div className="aino-account-terms">
                 <Checkbox
                   aria-label={copy.termsLabel}
                   checked={acceptedTerms}
                   className="aino-account-checkbox"
+                  disabled={busy}
                   onCheckedChange={value => {
                     setAcceptedTerms(value === true)
                     setTermsRequired(false)
@@ -334,26 +324,6 @@ export function AccountLoginCard({
               </div>
             )}
             {rememberControl}
-            <Button
-              className="aino-account-switch"
-              disabled={loading}
-              onClick={() => changeStep('existing')}
-              size="inline"
-              type="button"
-              variant="text"
-            >
-              {copy.existingAccount}
-            </Button>
-            <Button
-              className="aino-account-switch aino-account-switch-compact"
-              disabled={loading}
-              onClick={() => changeStep('wechat')}
-              size="inline"
-              type="button"
-              variant="text"
-            >
-              {copy.switchWechat}
-            </Button>
           </form>
         )}
         {step === 'code' && (
@@ -372,20 +342,23 @@ export function AccountLoginCard({
               aria-label={copy.codeLabel}
               autoComplete="one-time-code"
               className="aino-account-input aino-account-code"
-              disabled={loading}
+              disabled={busy}
               inputMode="numeric"
               maxLength={codeLength}
-              onChange={event => setCode(event.target.value.replace(/\D/g, '').slice(0, codeLength))}
+              onChange={event => {
+                dismissFeedback()
+                setCode(event.target.value.replace(/\D/g, '').slice(0, codeLength))
+              }}
               placeholder={copy.codePlaceholder}
               value={code}
             />
-            <Button className="aino-account-submit" disabled={loading || code.length !== codeLength} type="submit">
+            <Button className="aino-account-submit" disabled={busy || code.length !== codeLength} type="submit">
               {loading && <Loader2 className="animate-spin" />}
               {copy.verify}
             </Button>
             <Button
               className="aino-account-resend"
-              disabled={loading || retrySeconds > 0}
+              disabled={busy || retrySeconds > 0}
               onClick={() => void requestCode()}
               size="inline"
               type="button"
@@ -395,7 +368,7 @@ export function AccountLoginCard({
             </Button>
             <Button
               className="aino-account-back"
-              disabled={loading}
+              disabled={busy}
               onClick={() => changeStep('phone')}
               size="inline"
               type="button"
@@ -422,8 +395,11 @@ export function AccountLoginCard({
               aria-label={copy.emailLabel}
               autoComplete="username"
               className="aino-account-input"
-              disabled={loading}
-              onChange={event => setEmail(event.target.value)}
+              disabled={busy}
+              onChange={event => {
+                dismissFeedback()
+                setEmail(event.target.value)
+              }}
               placeholder={copy.emailPlaceholder}
               type="email"
               value={email}
@@ -432,19 +408,23 @@ export function AccountLoginCard({
               aria-label={copy.passwordLabel}
               autoComplete="current-password"
               className="aino-account-input aino-account-secondary-input"
-              disabled={loading}
-              onChange={event => setPassword(event.target.value)}
+              disabled={busy}
+              onChange={event => {
+                dismissFeedback()
+                setPassword(event.target.value)
+              }}
               placeholder={copy.passwordPlaceholder}
               type="password"
               value={password}
             />
-            <Button className="aino-account-submit" disabled={loading || !email.trim() || !password} type="submit">
+            <Button className="aino-account-submit" disabled={busy || !email.trim() || !password} type="submit">
               {loading && <Loader2 className="animate-spin" />}
               {copy.continueExisting}
             </Button>
             {rememberControl}
             <Button
               className="aino-account-back"
+              disabled={busy}
               onClick={() => changeStep('phone')}
               size="inline"
               type="button"
@@ -467,20 +447,24 @@ export function AccountLoginCard({
               aria-label={copy.totpLabel}
               autoComplete="one-time-code"
               className="aino-account-input aino-account-code"
-              disabled={loading}
+              disabled={busy}
               inputMode="numeric"
               maxLength={8}
-              onChange={event => setTotpCode(event.target.value.replace(/\D/g, '').slice(0, 8))}
+              onChange={event => {
+                dismissFeedback()
+                setTotpCode(event.target.value.replace(/\D/g, '').slice(0, 8))
+              }}
               placeholder={copy.codePlaceholder}
               value={totpCode}
             />
-            <Button className="aino-account-submit" disabled={loading || !totpCode} type="submit">
+            <Button className="aino-account-submit" disabled={busy || !totpCode} type="submit">
               {loading && <Loader2 className="animate-spin" />}
               {copy.completeSecondFactor}
             </Button>
             <Button
               className="aino-account-back"
-              onClick={() => changeStep('existing')}
+              disabled={busy}
+              onClick={() => changeStep(secondFactorReturn)}
               size="inline"
               type="button"
               variant="text"
@@ -495,29 +479,28 @@ export function AccountLoginCard({
             <div className="aino-account-wechat-unavailable" role="status">
               {copy.wechatUnavailable}
             </div>
-            <Button className="aino-account-switch" onClick={() => changeStep('phone')} size="inline" variant="text">
+            <Button
+              className="aino-account-switch"
+              disabled={busy}
+              onClick={() => changeStep('phone')}
+              size="inline"
+              variant="text"
+            >
               {copy.switchPhone}
             </Button>
           </>
         )}
-        {!fixedCodeHint && capabilities && (step === 'phone' || step === 'existing') && (
-          <>
-            <Button
-              className="aino-account-switch aino-account-switch-compact"
-              disabled={
-                loading || openingRegistration || !capabilities.registration_enabled || !capabilities.registration_url
-              }
-              onClick={() => void openRegistration()}
-              size="inline"
-              type="button"
-              variant="text"
-            >
-              {copy.registerAccount}
-            </Button>
-            {!capabilities.registration_enabled && (
-              <p className="mt-2 text-center text-xs text-(--ui-text-tertiary)">{copy.registrationClosed}</p>
-            )}
-          </>
+        {(step === 'phone' || step === 'existing') && (
+          <AccountLoginLinks
+            disabled={busy}
+            onExisting={() => changeStep('existing')}
+            onRegistration={() => void openRegistration()}
+            onWechat={() => changeStep('wechat')}
+            phoneStep={step === 'phone'}
+            registrationClosed={capabilities?.registration_enabled === false}
+            registrationEnabled={Boolean(capabilities?.registration_enabled && capabilities.registration_url)}
+            showRegistration={!fixedCodeHint && Boolean(capabilities)}
+          />
         )}
         {errorText && (
           <p className="mt-4 text-center text-sm text-destructive" role="alert">

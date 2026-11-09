@@ -12,7 +12,17 @@
  * attaches is bounded to a few rapid retries before the error state.
  */
 
-import { Button, Codicon, EmptyState, GlyphSpinner, host, Tip, useValue } from '@hermes/plugin-sdk'
+import {
+  Alert,
+  AlertDescription,
+  Button,
+  Codicon,
+  EmptyState,
+  GlyphSpinner,
+  host,
+  Tip,
+  useValue
+} from '@hermes/plugin-sdk'
 import type { RpcEvent } from '@hermes/plugin-sdk'
 import { useCallback, useEffect, useRef, useState } from 'react'
 
@@ -465,7 +475,12 @@ export function BotScreenPane({ bot }: { bot: RosterRow }) {
               {t.screen.imageSwitchKeep}
             </Button>
           </div>
-          {error ? <div className="text-xs text-red-500">{error}</div> : null}
+          {error ? (
+            <Alert className="text-left" variant="destructive">
+              <Codicon aria-hidden className="mt-0.5 text-destructive" name="error" />
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          ) : null}
         </div>
       </div>
     )
@@ -481,7 +496,12 @@ export function BotScreenPane({ bot }: { bot: RosterRow }) {
             {busy ? <GlyphSpinner /> : <Codicon name="play" />}
             {t.screen.start}
           </Button>
-          {error ? <div className="text-xs text-red-500">{error}</div> : null}
+          {error ? (
+            <Alert className="text-left" variant="destructive">
+              <Codicon aria-hidden className="mt-0.5 text-destructive" name="error" />
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          ) : null}
         </div>
       </div>
     )
@@ -510,14 +530,14 @@ export function BotScreenPane({ bot }: { bot: RosterRow }) {
         {lease?.holder === 'human' && lease.reason ? (
           // Why control was taken stays readable while the human acts.
           <span
-            className="max-w-[40%] truncate rounded bg-amber-500/15 px-2 py-0.5 text-amber-600 dark:text-amber-400"
+            className="max-w-[40%] truncate rounded bg-(--ui-yellow)/10 px-2 py-0.5 text-(--ui-yellow)"
             title={lease.reason}
           >
             <Codicon name="bell" /> {lease.reason}
           </span>
         ) : null}
         {iHold ? (
-          <span className="rounded bg-red-500/15 px-2 py-0.5 font-medium text-red-600 dark:text-red-400">
+          <span className="rounded bg-(--ui-red)/10 px-2 py-0.5 font-medium text-destructive">
             {t.screen.youControl}
           </span>
         ) : humanOther ? (
@@ -558,6 +578,12 @@ export function BotScreenPane({ bot }: { bot: RosterRow }) {
           </Button>
         </Tip>
       </div>
+      {evicted ? (
+        <Alert className="shrink-0 rounded-none border-x-0 border-t-0" role="status" variant="warning">
+          <Codicon aria-hidden className="mt-0.5 text-(--ui-yellow)" name="warning" />
+          <AlertDescription>{t.screen.controlTaken}</AlertDescription>
+        </Alert>
+      ) : null}
       <div
         className={
           iHold ? 'relative min-h-0 grow bg-black ring-2 ring-inset ring-red-500/70' : 'relative min-h-0 grow bg-black'
@@ -573,16 +599,17 @@ export function BotScreenPane({ bot }: { bot: RosterRow }) {
             <GlyphSpinner /> {t.screen.attaching}
           </div>
         ) : null}
-        {evicted ? (
-          <div className="pointer-events-none absolute inset-x-0 top-0 bg-amber-950/80 px-3 py-1.5 text-center text-xs text-amber-100">
-            {t.screen.controlTaken}
-          </div>
-        ) : null}
-        {conn === 'error' && error ? (
-          <div className="absolute inset-x-0 bottom-0 bg-red-950/80 px-3 py-1.5 text-xs text-red-200">{error}</div>
-        ) : null}
         <ScreenNeedsHttps label={t.screen.needsHttps} />
       </div>
+      {conn === 'error' && error ? (
+        <Alert
+          className="max-h-[40%] shrink-0 overflow-y-auto rounded-none border-x-0 border-b-0"
+          variant="destructive"
+        >
+          <Codicon aria-hidden className="mt-0.5 text-destructive" name="error" />
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      ) : null}
     </div>
   )
 }

@@ -32,7 +32,10 @@ function NewGroupChatItem({ label, onSelect, roster }: NewGroupChatItemProps) {
   const { connectionId, mode, seatable } = useGroupCapability(true)
 
   return (
-    <DropdownMenuItem disabled={seatableGroupBots(roster, { connectionId, mode, seatable }).length < 2} onSelect={onSelect}>
+    <DropdownMenuItem
+      disabled={seatableGroupBots(roster, { connectionId, mode, seatable }).length < 2}
+      onSelect={onSelect}
+    >
       <Codicon className="mr-1.5" name="organization" />
       {label}
     </DropdownMenuItem>
@@ -68,11 +71,56 @@ interface renderRosterToolbarProps {
 export function renderRosterToolbar({
   b,
   activityToasts,
-  activeSourceRoster,
   roster,
   setCreateOpen,
   setGroupCreateOpen,
-  setSectionDialog,
+  setSectionDialog
+}: renderRosterToolbarProps) {
+  return (
+    <>
+      <div className="aino-roster-section-heading">
+        <span className="text-[length:var(--aino-text-caption)] font-medium text-(--ui-text-tertiary)">
+          {b.canonical.botsHeading}
+        </span>
+        <div className="flex items-center gap-0.5">
+          <Tip label={activityToasts ? b.roster.activityToastsOn : b.roster.activityToastsOff}>
+            <Button
+              aria-label={activityToasts ? b.roster.activityToastsOn : b.roster.activityToastsOff}
+              onClick={() => setActivityToasts(!activityToasts)}
+              size="icon-xs"
+              variant="ghost"
+            >
+              <Codicon name={activityToasts ? 'bell' : 'bell-slash'} />
+            </Button>
+          </Tip>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button aria-label={b.roster.newBotOrGroup} size="icon-xs" variant="ghost">
+                <Codicon name="add" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onSelect={() => setCreateOpen(true)}>
+                <Codicon className="mr-1.5" name="hubot" />
+                {b.bot.newTitle}
+              </DropdownMenuItem>
+              <NewGroupChatItem label={b.group.newTitle} onSelect={() => setGroupCreateOpen(true)} roster={roster} />
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onSelect={() => setSectionDialog({ mode: 'create' })}>
+                <Codicon className="mr-1.5" name="new-folder" />
+                {b.sections.newSection}
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      </div>
+    </>
+  )
+}
+
+/** One search controls both gateway groups and the existing bot/legacy-group filters. */
+export function renderRosterSearch({
+  b,
   showRosterTools,
   showRosterSearch,
   showRosterFilters,
@@ -89,76 +137,31 @@ export function renderRosterToolbar({
 }: renderRosterToolbarProps) {
   return (
     <>
-      <div className="flex items-center justify-between gap-2 px-2.5 pt-2.5 pb-1.5">
-        <span className="text-[length:var(--aino-text-caption)] font-medium text-(--ui-text-tertiary)">
-          Bots
-        </span>
-        <div className="flex items-center gap-0.5">
-          <Tip
-            label={activityToasts ? 'Activity toasts on — click to silence' : 'Activity toasts off — click to enable'}
-          >
-            <Button
-              className="rounded-md text-(--ui-text-tertiary) hover:text-foreground"
-              onClick={() => setActivityToasts(!activityToasts)}
-              size="icon-xs"
-              variant="ghost"
-            >
-              <Codicon name={activityToasts ? 'bell' : 'bell-slash'} />
-            </Button>
-          </Tip>
-          <DropdownMenu>
-            <Tip label="New…">
-              <DropdownMenuTrigger asChild>
-                <Button
-                  aria-label={b.roster.newBotOrGroup}
-                  className="rounded-md text-(--ui-text-tertiary) hover:text-foreground"
-                  size="icon-xs"
-                  variant="ghost"
-                >
-                  <Codicon name="add" />
-                </Button>
-              </DropdownMenuTrigger>
-            </Tip>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem onSelect={() => setCreateOpen(true)}>
-                <Codicon className="mr-1.5" name="hubot" />
-                {b.bot.newTitle}
-              </DropdownMenuItem>
-              <NewGroupChatItem label={b.group.newTitle} onSelect={() => setGroupCreateOpen(true)} roster={roster} />
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onSelect={() => setSectionDialog({ mode: 'create' })}>
-                <Codicon className="mr-1.5" name="new-folder" />
-                {b.sections.newSection}
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
-      </div>
       {showRosterTools ? (
-        <div className="flex min-w-0 items-center gap-1 px-2.5 pb-1.5">
+        <div className="aino-roster-search">
           {showRosterSearch ? (
             <SearchField
               aria-label={b.roster.search}
-              containerClassName={cn('min-w-0 flex-1', query ? 'opacity-100!' : 'opacity-50 focus-within:opacity-100')}
-              inputClassName="w-full text-[0.75rem] placeholder:text-(--ui-text-tertiary)"
+              containerClassName="min-w-0 flex-1"
+              inputClassName="w-full"
               key={'roster-search'}
               onChange={setQuery}
               placeholder={b.roster.searchPlaceholder}
               value={query}
+              variant="box"
             />
           ) : (
             <span className="min-w-0 flex-1" key={'roster-search-spacer'} />
           )}
           {showRosterFilters ? (
             <DropdownMenu key={'roster-filters'}>
-              <Tip label={activeFilterCount ? `Filters (${activeFilterCount} active)` : 'Filter roster'}>
+              <Tip label={activeFilterCount ? b.roster.filterRosterActive(activeFilterCount) : b.roster.filterRoster}>
                 <DropdownMenuTrigger asChild>
                   <Button
-                    aria-label={activeFilterCount ? `Filter roster, ${activeFilterCount} active` : 'Filter roster'}
-                    className={cn(
-                      'size-7 shrink-0 rounded-md text-(--ui-text-tertiary) hover:text-foreground',
-                      activeFilterCount && 'text-(--ui-accent)'
-                    )}
+                    aria-label={
+                      activeFilterCount ? b.roster.filterRosterActive(activeFilterCount) : b.roster.filterRoster
+                    }
+                    className={cn('shrink-0', activeFilterCount && 'text-(--ui-accent)')}
                     size="icon-xs"
                     variant="ghost"
                   >
@@ -197,7 +200,7 @@ export function renderRosterToolbar({
                 {gatewayOptions.length > 1 ? (
                   <DropdownMenuItem onSelect={() => setGatewayFilter('all')}>
                     <Codicon className="mr-1.5" name="globe" />
-                    <span className="min-w-0 flex-1">All gateways</span>
+                    <span className="min-w-0 flex-1">{b.roster.allGateways}</span>
                     {gatewayFilter === 'all' ? <Codicon name="check" /> : null}
                   </DropdownMenuItem>
                 ) : null}
@@ -214,7 +217,7 @@ export function renderRosterToolbar({
                           onSelect={() => setGatewayFilter(option.connectionId)}
                         >
                           <GatewayKindGlyph
-                            className={cn('mr-1.5', !status.available && 'text-amber-600 dark:text-amber-300')}
+                            className={cn('mr-1.5', !status.available && 'text-(--ui-yellow)')}
                             kind={option.kind}
                           />
                           <span className="min-w-0 flex-1 truncate">{option.label || option.connectionId}</span>

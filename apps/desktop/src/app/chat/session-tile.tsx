@@ -574,7 +574,7 @@ export function SessionTilePane({ storedSessionId }: { storedSessionId: string }
   if (tile?.error) {
     return (
       <div className="grid h-full place-items-center p-4">
-        <div className="max-w-[24rem] space-y-2 text-center font-mono text-[11px]">
+        <div className="max-w-[24rem] space-y-2 text-center font-mono text-[length:var(--aino-text-caption)]">
           <div className="text-(--ui-danger,#f87171)">{t.desktop.resumeStrandedTitle}</div>
           <div className="break-words text-(--ui-text-quaternary)">{tile.error}</div>
           <Button onClick={() => patchSessionTile(storedSessionId, { error: undefined })} size="sm" variant="outline">
@@ -741,7 +741,8 @@ function tileWorkspaceScope(storedSessionId: string): Parameters<typeof workspac
 }
 
 /** The tab's CAPTION: a bot chat's owner name over the canonical stored title
- *  (#99152). The menu keeps `tileTitle` — rename/delete show the real row. */
+ *  (#99152). Menus retain the registry title; destructive confirmation resolves
+ *  this same owner caption without changing the stored identity. */
 function tileCaption(storedSessionId: string): string {
   return workspaceOwnerTitle(
     tileTitle(storedSessionId),
@@ -985,7 +986,7 @@ export function SessionHeaderMenu({
       onArchive={() => void sessionTileDelegate()?.archiveSession(storedSessionId)}
       onBranch={() => void sessionTileDelegate()?.branchSession(storedSessionId)}
       onClose={onClose}
-      onDelete={() => void sessionTileDelegate()?.deleteSession(storedSessionId)}
+      onDelete={() => sessionTileDelegate()?.deleteSession(storedSessionId)}
       onPin={() => (pinned ? unpinSession(pinId) : pinSession(pinId))}
       pinned={pinned}
       profile={profile}
@@ -1035,6 +1036,11 @@ const tileTabTarget = (storedSessionId: string): SessionTabMenuTarget => ({
 /** Keep pane contributions mirroring `$sessionTiles` (+ titles from
  *  `$sessions`). Tiles dock against main on the chosen edge, flex width. */
 export const watchSessionTiles = paneMirror<SessionTile>({
+  workspaceScope: storedSessionId => {
+    const tile = $sessionTiles.get().find(item => item.storedSessionId === storedSessionId)
+
+    return { mode: tile?.workspaceMode ?? 'sessions', ownerKey: tile?.workspaceOwnerKey }
+  },
   source: $sessionTiles,
   // $projectTree: a tile whose session is older than the recents page resolves
   // its title through the tree, which loads after the tiles register.

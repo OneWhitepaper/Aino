@@ -147,3 +147,125 @@ def test_inherit_launch_model_preserves_explicit_profile_selection(
 
     assert srv._inherit_launch_model(profile) is False
     assert read_user_config_raw(profile / "config.yaml") == before
+
+
+@pytest.fixture
+def clone_source_and_launch(tmp_path, monkeypatch):
+    """The user clones default while another workspace uses a third-party model."""
+    home = tmp_path / ".hermes"
+    launch = home / "profiles" / "launch"
+    launch.mkdir(parents=True)
+    monkeypatch.setattr(Path, "home", lambda: tmp_path)
+    monkeypatch.setenv("HERMES_HOME", str(launch))
+    monkeypatch.setattr(srv, "_hermes_home", launch)
+    atomic_config_write(
+        home / "config.yaml",
+        {
+            "model": {"provider": "", "default": ""},
+            "providers": {
+                "source-gateway": {"base_url": "http://127.0.0.1:11435/v1"},
+            },
+            "_config_version": DEFAULT_CONFIG["_config_version"],
+        },
+    )
+    atomic_config_write(
+        launch / "config.yaml",
+        {
+            "model": {"provider": "custom:launch-gateway", "default": "launch-model"},
+            "providers": {
+                "launch-gateway": {"base_url": "http://127.0.0.1:11434/v1"},
+            },
+            "_config_version": DEFAULT_CONFIG["_config_version"],
+        },
+    )
+    return home
+
+
+def _create_profile_model(params):
+    response = srv._methods["profiles.create"](
+        1, {"name": "scout", "no_alias": True, **params}
+    )
+    assert "error" not in response, response.get("error")
+    result = response["result"]
+    assert result["ok"] is True
+    return result, read_user_config_raw(Path(result["path"]) / "config.yaml")
+
+
+@pytest.mark.parametrize("source_has_model", [False, True])
+def test_create_respects_explicit_clone_source_model(clone_source_and_launch, source_has_model):
+    home = clone_source_and_launch
+    source = read_user_config_raw(home / "config.yaml")
+    if source_has_model:
+        source["model"] = {"provider": "custom:source-gateway", "default": "source-model"}
+        atomic_config_write(home / "config.yaml", source)
+
+    result, created = _create_profile_model({"clone_from": "default"})
+
+    # An empty runtime model is intentional for a desktop-managed Aino default. It must not
+    # silently become the model of the workspace that happened to host this creation RPC.
+    assert created["model"] == source["model"]
+    assert "launch-gateway" not in created.get("providers", {})
+    assert result["mirrored"]["model_inherited"] is False
+
+
+def test_create_allows_explicit_model_override_of_clone_source(clone_source_and_launch):
+    result, created = _create_profile_model({
+        "clone_from": "default", "provider": "custom:source-gateway", "model": "chosen-model",
+    })
+
+    assert result["model_set"] is True
+    assert created["model"]["provider"] == "custom:source-gateway"
+    assert created["model"]["default"] == "chosen-model"
+    assert result["mirrored"]["model_inherited"] is False
+
+
+def test_clone_snapshots_complete_model_configuration_independently(clone_source_and_launch):
+    home = clone_source_and_launch
+    source_path = home / "config.yaml"
+    source = read_user_config_raw(source_path)
+    inherited = {
+        "model": {"provider": "", "default": "", "context_length": 131072},
+        "agent": {"reasoning_effort": "high", "service_tier": "normal", "max_turns": 40},
+        "context": {"engine": "compressor"},
+        "compression": {"enabled": True, "threshold": 0.78, "threshold_tokens": 80000},
+        "auxiliary": {
+            "compression": {"provider": "auto", "model": "", "reasoning_effort": "low"},
+            "vision": {"provider": "custom:source-gateway", "model": "vision-model"},
+        },
+        "fallback_providers": [{"provider": "custom:source-gateway", "model": "backup-model"}],
+        "image_gen": {"provider": "aino", "model": "aino-image-model", "quality": "auto"},
+    }
+    source.update(inherited)
+    atomic_config_write(source_path, source)
+    source_before = read_user_config_raw(source_path)
+
+    result, created = _create_profile_model({"clone_from": "default"})
+
+    for section, value in inherited.items():
+        assert created[section] == value, section
+    assert created["providers"] == source_before["providers"]
+
+    # A clone is a one-time settings snapshot. A Bot can subsequently customize
+    # every model section without mutating the original workspace's settings.
+    child_path = Path(result["path"]) / "config.yaml"
+    created["agent"]["reasoning_effort"] = "low"
+    created["model"]["context_length"] = 65536
+    created["compression"]["threshold"] = 0.65
+    created["auxiliary"]["vision"]["model"] = "bot-vision-model"
+    created["fallback_providers"][0]["model"] = "bot-backup-model"
+    created["image_gen"]["model"] = "bot-image-model"
+    atomic_config_write(child_path, created)
+    assert read_user_config_raw(child_path) == created
+    assert read_user_config_raw(source_path) == source_before
+
+    source_before["image_gen"]["quality"] = "high"
+    atomic_config_write(source_path, source_before)
+    assert read_user_config_raw(child_path)["image_gen"]["quality"] == "auto"
+
+
+def test_create_without_clone_keeps_launch_model_inheritance(clone_source_and_launch):
+    _, created = _create_profile_model({"clone_from": None, "no_skills": True})
+
+    assert created["model"]["provider"] == "custom:launch-gateway"
+    assert created["model"]["default"] == "launch-model"
+    assert "launch-gateway" in created["providers"]

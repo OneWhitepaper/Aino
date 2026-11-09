@@ -227,7 +227,7 @@ function BlockedBanner({ message, action, scope }: { message: string; action?: R
       data-slot="delegation-blocked"
       role="alert"
     >
-      <AlertTriangle className="mt-0.5 size-4 shrink-0 text-amber-600 dark:text-amber-300" />
+      <AlertTriangle className="mt-0.5 size-4 shrink-0 text-(--ui-yellow)" />
       <div className="grid min-w-0 flex-1 basis-64 gap-0.5">
         <span className="text-[length:var(--conversation-text-font-size)] font-medium text-foreground">{message}</span>
         <span className="text-[length:var(--conversation-caption-font-size)] leading-(--conversation-caption-line-height) text-(--ui-text-secondary)">

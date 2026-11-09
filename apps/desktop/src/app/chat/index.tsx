@@ -101,7 +101,7 @@ interface ChatViewProps extends Omit<React.ComponentProps<'div'>, 'onSubmit'> {
   reasoningMenuContent?: React.ReactNode
   requestModelOptionsForOwner?: <T>(method: string, params?: Record<string, unknown>) => Promise<T>
   onToggleSelectedPin: () => void
-  onDeleteSelectedSession: () => void
+  onDeleteSelectedSession: () => Promise<void> | void
   onCancel: () => Promise<void> | void
   onAddContextRef: (refText: string, label?: string, detail?: string) => void
   onAddUrl: (url: string) => void
@@ -130,7 +130,7 @@ interface ChatViewProps extends Omit<React.ComponentProps<'div'>, 'onSubmit'> {
 interface ChatHeaderProps {
   activeSessionId: null | string
   isRoutedSessionView: boolean
-  onDeleteSelectedSession: () => void
+  onDeleteSelectedSession: () => Promise<void> | void
   onToggleSelectedPin: () => void
   selectedSessionId: null | string
 }

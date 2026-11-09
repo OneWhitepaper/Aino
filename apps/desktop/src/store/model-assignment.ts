@@ -1,41 +1,14 @@
 import { type ProfileScope, setModelAssignment } from '@/hermes'
 import { translateNow } from '@/i18n'
-import { dismissNotification, notify } from '@/store/notifications'
+import { confirm } from '@/store/confirm'
 import type { ModelAssignmentRequest, ModelAssignmentResponse } from '@/types/hermes'
 
-/**
- * Selection-guard warning as a confirm toast. Resolves true on Confirm, false
- * on dismiss. The desktop has no blocking confirm API; this is the same
- * notify-with-action pattern the in-session model picker uses.
- */
+/** Selection guards use the shared dialog; closing it declines the assignment. */
 function confirmModelWarning(message: string): Promise<boolean> {
-  const id = `model-warning-confirm-${Date.now()}`
-
-  return new Promise(resolve => {
-    let settled = false
-
-    const finish = (value: boolean) => {
-      if (settled) {
-        return
-      }
-
-      settled = true
-      dismissNotification(id)
-      resolve(value)
-    }
-
-    notify({
-      id,
-      kind: 'warning',
-      title: translateNow('modelAssignment.confirmTitle'),
-      message: message || translateNow('modelAssignment.confirmDetail'),
-      detail: translateNow('modelAssignment.confirmDetail'),
-      action: {
-        label: translateNow('modelAssignment.confirmAction'),
-        onClick: () => finish(true)
-      },
-      onDismiss: () => finish(false)
-    })
+  return confirm({
+    title: translateNow('modelAssignment.confirmTitle'),
+    description: message || translateNow('modelAssignment.confirmDetail'),
+    confirmLabel: translateNow('modelAssignment.confirmAction')
   })
 }
 

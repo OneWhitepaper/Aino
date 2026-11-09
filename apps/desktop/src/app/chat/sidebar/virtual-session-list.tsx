@@ -49,7 +49,7 @@ export interface VirtualSessionListProps {
   rows: SidebarListRow[]
   onArchiveSession: (sessionId: string) => void
   onBranchSession?: (sessionId: string, profile?: string) => void
-  onDeleteSession: (sessionId: string) => void
+  onDeleteSession: (sessionId: string) => Promise<void> | void
   onResumeSession: (sessionId: string, session?: SessionInfo) => void
   onTogglePin: (sessionId: string) => void
   onToggleUnread: (sessionId: string) => void

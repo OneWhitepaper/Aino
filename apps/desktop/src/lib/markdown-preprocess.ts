@@ -1,6 +1,6 @@
 import { normalizeMathDelimiters } from '@assistant-ui/react-streamdown'
 
-import { isLikelyProseFence, sanitizeLanguageTag } from '@/lib/markdown-code'
+import { isLikelyProseFence, isMarkdownCodeLanguage, sanitizeLanguageTag } from '@/lib/markdown-code'
 import { clampHtmlNestingDepth } from '@/lib/markdown-html-depth'
 import { mediaKind, mediaMarkdownHref } from '@/lib/media'
 import { previewMarkdownHref } from '@/lib/preview-targets'
@@ -283,7 +283,7 @@ function scrubBacktickNoise(text: string): string {
     protectedRanges.push({ end: balancedFenceRe.lastIndex, start })
   }
 
-  const danglingCodeFenceRe = /(^|\n)[ \t]*(`{3,}|~{3,})([a-z0-9][a-z0-9+#-]{0,15})[ \t]*\n([\s\S]*)$/gi
+  const danglingCodeFenceRe = /(^|\n)[ \t]*(`{3,}|~{3,})([a-z0-9][a-z0-9+#-]{0,15}(?:[ \t]+[^\n]*)?)[ \t]*\n([\s\S]*)$/gi
 
   while ((match = danglingCodeFenceRe.exec(text)) !== null) {
     const start = match.index + match[1].length
@@ -300,29 +300,37 @@ function scrubBacktickNoise(text: string): string {
 
   protectedRanges.sort((a, b) => a.start - b.start)
 
-  const fenceNoiseRe = /`{3,}/g
+  const cleanNoise = (fragment: string): string => {
+    let cleaned = fragment.replace(/`{3,}/g, '')
+
+    for (let pass = 0; pass < 2; pass += 1) {
+      // Exactly two backticks: do not splice adjacent triple-backtick fences.
+      // Both cleanups apply only to prose; source listings keep literal ticks.
+      cleaned = cleaned.replace(/(?<!`)``(?!`)\s*(?<!`)``(?!`)/g, '')
+      cleaned = cleaned.replace(/(^|[^`])``(?=\s|[.,;:!?)\]'"\u2014\u2013-]|$)/g, '$1')
+    }
+
+    return cleaned
+  }
+
   let out = ''
   let cursor = 0
 
   for (const range of protectedRanges) {
-    out += text.slice(cursor, range.start).replace(fenceNoiseRe, '')
-    out += text.slice(range.start, range.end)
+    // A streaming outer fence may contain a closed inner listing. Its
+    // protected range overlaps the inner one; never append that text twice.
+    if (range.end <= cursor) {
+      continue
+    }
+
+    const start = Math.max(cursor, range.start)
+
+    out += cleanNoise(text.slice(cursor, start))
+    out += text.slice(start, range.end)
     cursor = range.end
   }
 
-  out += text.slice(cursor).replace(fenceNoiseRe, '')
-
-  for (let pass = 0; pass < 2; pass += 1) {
-    // Match EXACTLY 2 backticks (not part of a longer run) on each side.
-    // Without the lookbehind/lookahead, two adjacent triple-backtick
-    // fences with only whitespace between them get spliced together —
-    // e.g. ```bash\n...\n```\n\n```latex matches the regex's
-    // last-2-of-bash-close + \n\n + first-2-of-latex-open and the
-    // surrounding fence markers collapse into a single longer block,
-    // which the markdown parser then treats as ONE giant code block.
-    out = out.replace(/(?<!`)``(?!`)\s*(?<!`)``(?!`)/g, '')
-    out = out.replace(/(^|[^`])``(?=\s|[.,;:!?)\]'"\u2014\u2013-]|$)/g, '$1')
-  }
+  out += cleanNoise(text.slice(cursor))
 
   return out
 }
@@ -1064,13 +1072,13 @@ function normalizeFenceBlocks(text: string): string {
       continue
     }
 
-    if (closeIndex !== -1 && LOCAL_PREVIEW_ONLY_RE.test(body.trim())) {
+    if (closeIndex !== -1 && !isMarkdownCodeLanguage(language) && LOCAL_PREVIEW_ONLY_RE.test(body.trim())) {
       index = closeIndex + 1
 
       continue
     }
 
-    if (closeIndex !== -1 && isUrlOnlyBlock(bodyLines)) {
+    if (closeIndex !== -1 && !isMarkdownCodeLanguage(language) && isUrlOnlyBlock(bodyLines)) {
       extend(out, bodyLines)
       index = closeIndex + 1
 

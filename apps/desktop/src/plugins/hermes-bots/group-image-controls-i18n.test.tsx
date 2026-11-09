@@ -18,6 +18,10 @@ vi.mock('@hermes/plugin-sdk', () => ({
   useValue: () => imageState.value
 }))
 
+// Mention avatars are a separate consumer of this shared file. The image
+// control test exercises generation/error copy without mounting any avatars.
+vi.mock('./avatar', () => ({ avatarColor: () => '#888', botAppearance: () => ({}), BotFace: () => null }))
+
 vi.mock('./avatar-image', () => ({
   $imagenAvailable: { get: () => imageState.value, set: (value: boolean) => (imageState.value = value) },
   normalizeAvatarImage: vi.fn(async (value: string) => value),

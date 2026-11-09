@@ -15,7 +15,7 @@ export const PANE_TAB_STRIP_LINE_RIGHT = 'shadow-[inset_-1px_0_0_var(--ui-stroke
 // Surface tokens become transparent under glass; the body owns the tint.
 // The close-button fade masks the label, so it needs no second surface fill.
 const TAB =
-  'group/tab relative flex shrink-0 items-center border-transparent bg-(--tab-bg) text-[0.6875rem] font-medium [-webkit-app-region:no-drag]'
+  'group/tab relative flex shrink-0 items-center border-transparent bg-(--tab-bg) text-[length:var(--aino-text-caption)] font-medium [-webkit-app-region:no-drag]'
 
 // Full height: with the strip's rule removed there is no last-pixel row to
 // leave uncovered, so tabs fill the bar and no sliver of gutter shows through.
@@ -248,7 +248,7 @@ export const PaneTabLabel = React.forwardRef<HTMLElement, PaneTabLabelProps>(fun
 })
 
 interface PaneTabStripProps extends React.ComponentProps<'div'> {
-  variant?: 'default' | 'tool'
+  variant?: 'default' | 'tool' | 'conversation'
   /** The scrolling tab list — receives `role="tablist"`. */
   children: React.ReactNode
   /** Semantic surface the strip belongs to. Main workspace strips share the
@@ -286,11 +286,14 @@ export const PaneTabStrip = React.forwardRef<HTMLDivElement, PaneTabStripProps>(
           ? 'h-full flex-1 [-webkit-app-region:drag]'
           : variant === 'tool'
             ? 'h-[45px] [-webkit-app-region:no-drag]'
-            : 'h-7 [-webkit-app-region:no-drag]',
+            : variant === 'conversation'
+              ? 'h-[43px] [-webkit-app-region:no-drag]'
+              : 'h-7 [-webkit-app-region:no-drag]',
         className
       )}
       data-pane-surface={surface}
-      data-pane-variant={variant === 'tool' ? 'tool' : undefined}
+      data-pane-titlebar={titlebar || undefined}
+      data-pane-variant={variant !== 'default' ? variant : undefined}
       ref={ref}
       {...props}
     >

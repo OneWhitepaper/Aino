@@ -263,7 +263,10 @@ export function ModelPill({
   const baseTitle = modelDefaultUnavailable
     ? copy.openModelPicker
     : currentProvider
-      ? copy.modelTitle(providerDisplayName(currentProvider), currentModel || copy.modelNone)
+      ? copy.modelTitle(
+          currentProvider === 'aino' ? t.platformModels.builtIn : providerDisplayName(currentProvider),
+          platformName || currentModel || copy.modelNone
+        )
       : copy.switchModel
 
   const title = pinnedOverride ? `${baseTitle} — ${copy.modelPinned}` : baseTitle

@@ -126,7 +126,7 @@ describe('ConnectionSwitcher', () => {
     expect(group.className).toContain('max-w-40')
     expect(group.className).toContain('shrink')
     expect(group.className).toContain('overflow-hidden')
-    expect(trigger.className).toContain('text-[0.6875rem]')
+    expect(trigger.className).toContain('text-[length:var(--aino-text-caption)]')
     expect(trigger.className).toContain('min-w-0')
     expect(trigger.className).toContain('overflow-hidden')
     expect(trigger.textContent).toContain('This device')

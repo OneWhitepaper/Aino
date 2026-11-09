@@ -29,6 +29,7 @@ import { I18nProvider } from '@/i18n'
 
 import { $editingBot } from './bot-state'
 import type * as DataModule from './data'
+import { groupComposerDraftSnapshot, updateGroupComposerDraft } from './group-panes'
 import type * as RoutingModule from './routing'
 import type { RosterRow } from './types'
 
@@ -181,7 +182,7 @@ afterEach(() => {
   $editingBot.set(null)
 })
 
-it('clears an open editor when the signed-in account changes and on plugin teardown', async () => {
+it('clears the editor and window-local group drafts when the signed-in account changes', async () => {
   const snapshot = (revision: number, id: null | string) => ({
     revision,
     phase: id ? ('signed_in' as const) : ('signed_out' as const),
@@ -224,16 +225,21 @@ it('clears an open editor when the signed-in account changes and on plugin teard
   expect($editingBot.get()).toBeNull()
 
   $editingBot.set(bot)
+  updateGroupComposerDraft('account-bound-group', draft => ({ ...draft, main: 'Account A private draft' }))
   publish(snapshot(2, 'account-b'))
   expect($editingBot.get()).toBeNull()
+  expect(groupComposerDraftSnapshot('account-bound-group').main).toBe('')
 
   $editingBot.set(bot)
+  updateGroupComposerDraft('account-bound-group', draft => ({ ...draft, main: 'Account B private draft' }))
   const accountB = snapshot(3, 'account-b')
   publish({ ...accountB, account: { ...accountB.account!, display_name: 'Account B' } })
   expect($editingBot.get()).toBe(bot)
+  expect(groupComposerDraftSnapshot('account-bound-group').main).toBe('Account B private draft')
 
   publish({ ...snapshot(4, 'account-b'), mode: 'development' })
   expect($editingBot.get()).toBeNull()
+  expect(groupComposerDraftSnapshot('account-bound-group').main).toBe('')
 
   harness.dispose()
   expect(unbind).toHaveBeenCalledOnce()
@@ -467,6 +473,7 @@ describe('entering Agent Hub', () => {
       expect($openBotChat.get()).toBeNull()
 
       if (cancelled) {
+        store('sessions').set(true)
         store('hermes-bots:pane').set(false)
       }
 
@@ -494,22 +501,72 @@ describe('entering Agent Hub', () => {
 })
 
 describe('returning to Sessions', () => {
-  it('drops a cold bot open still pending (#120277)', async () => {
+  it.each(['sessions-first', 'bots-first'])(
+    'drops a cold bot open only on selecting Sessions (%s)',
+    async order => {
+      const store = paneStores()
+      const harness = recordingContext()
+      const { $pendingBotOpen } = await import('./shared')
+
+      plugin.register(harness.ctx)
+      await settle()
+      store(`hermes-bots:pane`).set(true)
+      $pendingBotOpen.set({ generation: 1, key: 'local::bravo' })
+
+      if (order === 'sessions-first') {
+        store('sessions').set(true)
+        store('hermes-bots:pane').set(false)
+      } else {
+        store('hermes-bots:pane').set(false)
+        store('sessions').set(true)
+      }
+
+      expect($pendingBotOpen.get()).toBeNull()
+      expect(mocks.setWorkspaceScope).toHaveBeenCalledWith('sessions')
+
+      harness.dispose()
+    }
+  )
+
+  it.each(['bot', 'group'])('keeps the current %s workspace when its navigation sidebar is hidden', async kind => {
+    const store = paneStores()
+    const harness = recordingContext()
+    const { $pendingBotOpen } = await import('./shared')
+    const { $groupChatWorkspace } = await import('./group-chat')
+
+    plugin.register(harness.ctx)
+    await settle()
+    store('hermes-bots:pane').set(true)
+    $groupChatWorkspace.set(kind === 'group' ? 'project-room' : null)
+    const pending = { generation: 1, key: 'local::bravo' }
+    $pendingBotOpen.set(pending)
+    mocks.setWorkspaceScope.mockClear()
+
+    store('hermes-bots:pane').set(false)
+
+    try {
+      expect(mocks.setWorkspaceScope).not.toHaveBeenCalledWith('sessions')
+      expect($pendingBotOpen.get()).toBe(pending)
+    } finally {
+      harness.dispose()
+      $groupChatWorkspace.set(null)
+    }
+  })
+
+  it('cancels its pending navigation on plugin disable without changing another workspace', async () => {
     const store = paneStores()
     const harness = recordingContext()
     const { $pendingBotOpen } = await import('./shared')
 
     plugin.register(harness.ctx)
     await settle()
-    store(`hermes-bots:pane`).set(true)
+    store('hermes-bots:pane').set(true)
     $pendingBotOpen.set({ generation: 1, key: 'local::bravo' })
-
-    store(`hermes-bots:pane`).set(false)
+    mocks.setWorkspaceScope.mockClear()
+    harness.dispose()
 
     expect($pendingBotOpen.get()).toBeNull()
-    expect(mocks.setWorkspaceScope).toHaveBeenCalledWith('sessions')
-
-    harness.dispose()
+    expect(mocks.setWorkspaceScope).not.toHaveBeenCalled()
   })
 })
 

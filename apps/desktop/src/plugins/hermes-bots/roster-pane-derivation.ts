@@ -173,8 +173,8 @@ export function deriveRosterPresentation({
   const allBotsHidden =
     !hasRosterConstraint && visibleRoster.length === 0 && groupNames.length === 0 && hiddenBots.length > 0
 
-  const showRosterSearch =
-    gatewayOptions.length > 1 || rosterItemCount >= BOT_ROSTER_SEARCH_THRESHOLD || Boolean(query.trim())
+  // Search is a stable navigation affordance, including small and empty rosters.
+  const showRosterSearch = true
 
   const showRosterFilters =
     gatewayOptions.length > 1 ||

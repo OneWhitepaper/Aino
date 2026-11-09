@@ -98,7 +98,8 @@ const { createProjectFolder } = vi.hoisted(() => ({ createProjectFolder: vi.fn()
 vi.mock('@/lib/desktop-fs', () => ({ createProjectFolder, desktopFsCacheKey: () => 'local' }))
 
 vi.mock('@/store/notifications', () => ({
-  notifyError: vi.fn()
+  notifyError: vi.fn(),
+  resetNotifications: vi.fn()
 }))
 
 // Fill the create form and click Create once the form is actually submittable

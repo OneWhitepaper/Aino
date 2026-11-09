@@ -86,6 +86,7 @@ export const zhHantDiagnostics = {
   },
 
   sendDiagnostics: {
+    closeWhileUploadingHint: '關閉視窗不會取消已經開始的上傳。',
     title: "向 Aino 傳送診斷資訊",
     privacyNotice:
       "這會將私人診斷包上傳至你的 Aino 帳號服務。包含系統資訊、設定狀態（不含金鑰本身），以及智慧體、閘道和桌面日誌（每份最多 512 KB）。日誌可能包含對話、工具輸出和檔案路徑。上傳前會遮蔽金鑰，但仍可能含有其他敏感內容。僅授權的 Aino 管理員可查看。14 天後立即停止存取，隨後 1 小時內清除線上資料；既有備份依部署備份政策清理。",

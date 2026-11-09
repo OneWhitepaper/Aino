@@ -425,7 +425,7 @@ function MessagingField({
 }
 
 function SectionTitle({ children }: { children: React.ReactNode }) {
-  return <h4 className="text-[0.7rem] font-semibold uppercase tracking-[0.14em] text-muted-foreground">{children}</h4>
+  return <h4 className="text-[length:var(--aino-text-ui)] font-medium text-(--ui-text-secondary)">{children}</h4>
 }
 
 function PlatformHint({ platform }: { platform: MessagingPlatformInfo }) {

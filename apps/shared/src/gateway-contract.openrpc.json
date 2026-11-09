@@ -16284,6 +16284,268 @@
         "title": "ContextFileSource",
         "type": "object"
       },
+      "ConversationModel": {
+        "additionalProperties": false,
+        "properties": {
+          "model_id": {
+            "maxLength": 256,
+            "minLength": 1,
+            "title": "Model Id",
+            "type": "string"
+          },
+          "model_source": {
+            "enum": [
+              "aino",
+              "provider"
+            ],
+            "title": "Model Source",
+            "type": "string"
+          },
+          "provider": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Provider"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "maxLength": 256,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Name"
+          },
+          "owner": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PlatformOwner"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          }
+        },
+        "required": [
+          "model_id",
+          "model_source"
+        ],
+        "title": "ConversationModel",
+        "type": "object"
+      },
+      "ConversationModelParams": {
+        "additionalProperties": false,
+        "properties": {
+          "session_id": {
+            "title": "Session Id",
+            "type": "string"
+          },
+          "action": {
+            "enum": [
+              "list",
+              "select",
+              "selection"
+            ],
+            "title": "Action",
+            "type": "string"
+          },
+          "query": {
+            "anyOf": [
+              {
+                "maxLength": 256,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Query"
+          },
+          "provider": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Provider"
+          }
+        },
+        "required": [
+          "session_id",
+          "action"
+        ],
+        "title": "ConversationModelParams",
+        "type": "object"
+      },
+      "ConversationModelRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "request_id": {
+            "title": "Request Id",
+            "type": "string"
+          },
+          "session_id": {
+            "title": "Session Id",
+            "type": "string"
+          },
+          "profile": {
+            "title": "Profile",
+            "type": "string"
+          },
+          "action": {
+            "enum": [
+              "list",
+              "select"
+            ],
+            "title": "Action",
+            "type": "string"
+          },
+          "query": {
+            "anyOf": [
+              {
+                "maxLength": 256,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Query"
+          },
+          "provider": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Provider"
+          },
+          "room_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Room Id"
+          },
+          "member_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Member Id"
+          }
+        },
+        "required": [
+          "request_id",
+          "session_id",
+          "profile",
+          "action"
+        ],
+        "title": "ConversationModelRequest",
+        "type": "object"
+      },
+      "ConversationModelResult": {
+        "additionalProperties": false,
+        "properties": {
+          "status": {
+            "anyOf": [
+              {
+                "enum": [
+                  "available",
+                  "selected",
+                  "scheduled",
+                  "not_found",
+                  "ambiguous",
+                  "unavailable"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Status"
+          },
+          "models": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/ConversationModel"
+                },
+                "maxItems": 2048,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Models"
+          },
+          "selection": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ConversationModel"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "effective": {
+            "anyOf": [
+              {
+                "const": "next_message",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Effective"
+          }
+        },
+        "title": "ConversationModelResult",
+        "type": "object"
+      },
       "CorrectionStatus": {
         "enum": [
           "queued",
@@ -20589,6 +20851,55 @@
         "title": "GroupsLogResult",
         "type": "object"
       },
+      "GroupsModelRespondParams": {
+        "additionalProperties": false,
+        "properties": {
+          "profile": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Profile"
+          },
+          "room_id": {
+            "title": "Room Id",
+            "type": "string"
+          },
+          "request_id": {
+            "title": "Request Id",
+            "type": "string"
+          },
+          "result": {
+            "$ref": "#/components/schemas/ConversationModelResult"
+          }
+        },
+        "required": [
+          "room_id",
+          "request_id",
+          "result"
+        ],
+        "title": "GroupsModelRespondParams",
+        "type": "object"
+      },
+      "GroupsModelRespondResult": {
+        "additionalProperties": false,
+        "properties": {
+          "accepted": {
+            "title": "Accepted",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "accepted"
+        ],
+        "title": "GroupsModelRespondResult",
+        "type": "object"
+      },
       "GroupsPeerInviteParams": {
         "additionalProperties": false,
         "properties": {
@@ -20865,6 +21176,190 @@
           }
         },
         "title": "GroupsPeerRevokeResult",
+        "type": "object"
+      },
+      "GroupsPrepareModelParams": {
+        "additionalProperties": false,
+        "properties": {
+          "profile": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Profile"
+          },
+          "room_id": {
+            "title": "Room Id",
+            "type": "string"
+          },
+          "member_id": {
+            "title": "Member Id",
+            "type": "string"
+          },
+          "model_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Model Id"
+          },
+          "owner": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PlatformOwner"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "follow_profile_config": {
+            "anyOf": [
+              {
+                "const": true,
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Follow Profile Config"
+          },
+          "inspect_selection": {
+            "anyOf": [
+              {
+                "const": true,
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Inspect Selection"
+          },
+          "apply_selection": {
+            "anyOf": [
+              {
+                "const": true,
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Apply Selection"
+          }
+        },
+        "required": [
+          "room_id",
+          "member_id"
+        ],
+        "title": "GroupsPrepareModelParams",
+        "type": "object"
+      },
+      "GroupsPrepareModelResult": {
+        "additionalProperties": false,
+        "properties": {
+          "profile": {
+            "title": "Profile",
+            "type": "string"
+          },
+          "session_id": {
+            "title": "Session Id",
+            "type": "string"
+          },
+          "model_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Model Id"
+          },
+          "session_ticket": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Session Ticket"
+          },
+          "follow_profile_config": {
+            "anyOf": [
+              {
+                "const": true,
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Follow Profile Config"
+          },
+          "managed_model_binding": {
+            "const": 1,
+            "default": 1,
+            "title": "Managed Model Binding",
+            "type": "integer"
+          },
+          "managed_model_context_window": {
+            "const": true,
+            "default": true,
+            "title": "Managed Model Context Window",
+            "type": "boolean"
+          },
+          "managed_image_binding": {
+            "const": 1,
+            "default": 1,
+            "title": "Managed Image Binding",
+            "type": "integer"
+          },
+          "managed_device_key": {
+            "const": 1,
+            "default": 1,
+            "title": "Managed Device Key",
+            "type": "integer"
+          },
+          "selection": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ConversationModel"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          }
+        },
+        "required": [
+          "profile",
+          "session_id"
+        ],
+        "title": "GroupsPrepareModelResult",
         "type": "object"
       },
       "GroupsPromoteParams": {
@@ -21376,6 +21871,21 @@
               }
             ],
             "default": null
+          },
+          "model_requests": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/ConversationModelRequest"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Model Requests"
           }
         },
         "required": [
@@ -36156,7 +36666,7 @@
       },
       "RoomMemberActivity": {
         "additionalProperties": false,
-        "description": "One live room task: ``status`` is ``queued``, ``running`` or ``stopping``.",
+        "description": "One live room task. ``activity`` is a redacted current-attempt projection only;\nolder gateways omit it. Task coordinates fence queued/running/stopping presentation.",
         "properties": {
           "member_id": {
             "title": "Member Id",
@@ -36165,6 +36675,41 @@
           "status": {
             "title": "Status",
             "type": "string"
+          },
+          "activity": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RoomMemberActivityKind"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "task_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Task Id"
+          },
+          "execution_generation": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Execution Generation"
           }
         },
         "required": [
@@ -36173,6 +36718,21 @@
         ],
         "title": "RoomMemberActivity",
         "type": "object"
+      },
+      "RoomMemberActivityKind": {
+        "enum": [
+          "thinking",
+          "reading",
+          "editing",
+          "searching",
+          "running_command",
+          "browser",
+          "image",
+          "replying",
+          "working"
+        ],
+        "title": "RoomMemberActivityKind",
+        "type": "string"
       },
       "RoomMemberInput": {
         "additionalProperties": true,
@@ -50380,6 +50940,42 @@
       }
     },
     {
+      "name": "groups.model_respond",
+      "summary": "Answer the current room member model request with public model identities only.",
+      "params": [
+        {
+          "name": "params",
+          "schema": {
+            "$ref": "#/components/schemas/GroupsModelRespondParams"
+          }
+        }
+      ],
+      "result": {
+        "name": "result",
+        "schema": {
+          "$ref": "#/components/schemas/GroupsModelRespondResult"
+        }
+      }
+    },
+    {
+      "name": "groups.prepare_model",
+      "summary": "Prepare one served local member under the current room owner; issue its independent managed-model ticket.",
+      "params": [
+        {
+          "name": "params",
+          "schema": {
+            "$ref": "#/components/schemas/GroupsPrepareModelParams"
+          }
+        }
+      ],
+      "result": {
+        "name": "result",
+        "schema": {
+          "$ref": "#/components/schemas/GroupsPrepareModelResult"
+        }
+      }
+    },
+    {
       "name": "groups.retry",
       "summary": "",
       "params": [
@@ -50430,6 +51026,24 @@
         "name": "result",
         "schema": {
           "$ref": "#/components/schemas/KanbanRunResult"
+        }
+      }
+    },
+    {
+      "name": "model.session",
+      "summary": "Ask the owning desktop for available models or schedule a conversation-only selection for the next message.",
+      "params": [
+        {
+          "name": "params",
+          "schema": {
+            "$ref": "#/components/schemas/ConversationModelParams"
+          }
+        }
+      ],
+      "result": {
+        "name": "result",
+        "schema": {
+          "$ref": "#/components/schemas/ConversationModelResult"
         }
       }
     },
@@ -50990,6 +51604,24 @@
         "name": "result",
         "schema": {
           "$ref": "#/components/schemas/ValueResult"
+        }
+      }
+    },
+    {
+      "name": "model.session",
+      "summary": "Resolve models from the current desktop account and configured providers without sending credentials.",
+      "params": [
+        {
+          "name": "params",
+          "schema": {
+            "$ref": "#/components/schemas/ConversationModelRequest"
+          }
+        }
+      ],
+      "result": {
+        "name": "result",
+        "schema": {
+          "$ref": "#/components/schemas/ConversationModelResult"
         }
       }
     },

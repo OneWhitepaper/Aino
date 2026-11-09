@@ -206,7 +206,7 @@ export function CredentialKeyCard({
   return (
     <div
       className={cn(
-        '@container group/card rounded-[6px] p-3 transition-colors',
+        '@container group/card rounded-(--aino-radius-control) p-3 transition-colors',
         expandable && 'cursor-pointer',
         expandable && !expanded && 'row-hover',
         expanded && 'bg-(--ui-bg-quaternary) ring-1 ring-(--ui-stroke-secondary)'
@@ -299,7 +299,7 @@ export function ProviderKeyRows({ expanded, group, onExpand, onToggle, rowProps 
   return (
     <div
       className={cn(
-        '@container group/card rounded-[6px] p-3 transition-colors',
+        '@container group/card rounded-(--aino-radius-control) p-3 transition-colors',
         expandable && 'cursor-pointer',
         expandable && !expanded && 'row-hover',
         expanded && 'bg-(--ui-bg-quaternary) ring-1 ring-(--ui-stroke-secondary)'

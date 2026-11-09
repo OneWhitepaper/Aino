@@ -7,10 +7,10 @@ import { cn } from '@/lib/utils'
 const COMPACT_KEY = /^[\p{L}\p{N}⌘⌥⇧⌃↵⇥⌫↑↓←→@/?]$/u
 
 const kbdSurface = [
-  'border-[color-mix(in_srgb,var(--ui-stroke-secondary)_75%,transparent)]',
-  'bg-[color-mix(in_srgb,var(--ui-bg-elevated)_94%,var(--dt-foreground)_6%)]',
-  'text-[color-mix(in_srgb,var(--dt-foreground)_58%,transparent)]',
-  'shadow-[0_1px_0_0_color-mix(in_srgb,var(--ui-stroke-tertiary)_85%,transparent),0_1px_2px_0_color-mix(in_srgb,var(--dt-foreground)_7%,transparent)]'
+  'border-(--ui-stroke-secondary)',
+  'bg-(--ui-bg-quaternary)',
+  'text-(--ui-text-secondary)',
+  'shadow-none'
 ]
 
 const kbdVariants = cva(
@@ -19,12 +19,7 @@ const kbdVariants = cva(
     variants: {
       variant: {
         default: kbdSurface,
-        ghost: [
-          ...kbdSurface,
-          'text-[color-mix(in_srgb,var(--dt-foreground)_38%,transparent)]',
-          'bg-[color-mix(in_srgb,var(--ui-bg-elevated)_72%,var(--dt-foreground)_3%)]',
-          'border-[color-mix(in_srgb,var(--ui-stroke-tertiary)_80%,transparent)]'
-        ],
+        ghost: [...kbdSurface, 'text-(--ui-text-tertiary)', 'bg-transparent', 'border-transparent'],
         capturing: [
           'border-[color-mix(in_srgb,var(--theme-primary)_50%,var(--ui-stroke-secondary))]',
           'bg-[color-mix(in_srgb,var(--theme-primary)_10%,var(--ui-bg-elevated))]',
@@ -39,8 +34,8 @@ const kbdVariants = cva(
         ]
       },
       size: {
-        sm: 'rounded-[0.2rem] text-[0.625rem]',
-        md: 'rounded-[0.25rem] text-[0.6875rem]'
+        sm: 'rounded-[0.25rem] text-[length:var(--aino-text-caption)]',
+        md: 'rounded-(--aino-radius-control) text-[length:var(--aino-text-caption)]'
       }
     },
     defaultVariants: {

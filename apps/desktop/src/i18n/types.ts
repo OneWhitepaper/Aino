@@ -3,12 +3,13 @@ import type { TipId } from '@/lib/tips/catalog'
 
 import type { AppearancePageCopy } from './appearance-page'
 import type { CloudSyncCopy } from './cloud-sync'
+import type { NotificationCenterTranslations } from './notification-center'
 // health: allow FILE_LINES -- the copy contract for the usage-window plan keys every locale adds (allowance gauges, Large/Free tags, the limit card)
 // `Translations` is the single source of truth for every translatable string
 // surface. Fully translated locale files may satisfy this interface directly;
 // Partial locales use `defineLocale()` to fall back to English with typed keys.
 import type { ToolPanelCopy } from './tool-panel'
-import type { AccountPageTranslations } from './types_account_page'
+import type { AccountLoginCopy, AccountPageTranslations } from './types_account_page'
 import type { AppTourTranslations } from './types_app_tour'
 import type { BillingTranslations } from './types_billing'
 import type { BillingSurfaceTranslations } from './types_billing_surface'
@@ -436,6 +437,8 @@ export interface UpstreamTranslations extends NoticeTranslations {
 
   boot: BootTranslations
 
+  notificationCenter: NotificationCenterTranslations
+
   notifications: {
     sharedProfileWarning: string
     region: string
@@ -546,6 +549,7 @@ export interface UpstreamTranslations extends NoticeTranslations {
   billingBlock: BillingTranslations['billingBlock']
 
   sendDiagnostics: {
+    closeWhileUploadingHint: string
     title: string
     privacyNotice: string
     upload: string
@@ -2047,7 +2051,7 @@ export interface UpstreamTranslations extends NoticeTranslations {
       }
     }
 
-    account: {
+    account: AccountLoginCopy & {
       displayNameLabel: string
       editDisplayName: string
       displayNameHint: string
@@ -4593,6 +4597,7 @@ terminalDropUnquotable: (shell: string, paths: string) => string
   }
 
   zones: {
+    switchConversation: string
     sidebarModeMenu: string
     sidebarSessionsDescription: string
     showTabStrip: string

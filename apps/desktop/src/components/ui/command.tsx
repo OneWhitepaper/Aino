@@ -24,7 +24,7 @@ function Command({
       <CommandPrimitive
         className={cn(
           'flex h-full w-full flex-col overflow-hidden text-popover-foreground',
-          variant === 'menu' ? 'bg-transparent' : 'rounded-md bg-popover',
+          variant === 'menu' ? 'bg-transparent' : 'rounded-(--aino-radius-control) bg-popover',
           className
         )}
         data-slot="command"
@@ -71,7 +71,7 @@ function CommandInput({ className, right, ...props }: CommandInputProps) {
       <SearchIcon className="size-4 shrink-0 text-muted-foreground" />
       <CommandPrimitive.Input
         className={cn(
-          'flex h-10 w-full rounded-md bg-transparent py-3 text-sm outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50',
+          'flex h-10 w-full rounded-(--aino-radius-control) bg-transparent py-3 text-[length:var(--aino-text-ui)] outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50',
           className
         )}
         data-slot="command-input"

@@ -18,6 +18,7 @@ vi.mock('@hermes/plugin-sdk', async () => {
   const { onGatewayEvent } = await import('../../contrib/events')
 
   return {
+    ...(await import('@/components/ui/alert')),
     Button: ({ children, ...props }: React.ButtonHTMLAttributes<HTMLButtonElement>) => (
       <button {...props}>{children}</button>
     ),

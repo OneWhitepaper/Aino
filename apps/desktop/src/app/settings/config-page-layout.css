@@ -14,7 +14,7 @@
 }
 .config-page-context > p {
   color: var(--ui-text-secondary);
-  font-size: 0.75rem;
+  font-size: var(--aino-text-caption);
   line-height: 1.65;
 }
 .config-page-scope {
@@ -36,7 +36,7 @@
 .config-page-tabs > button {
   height: auto;
   padding: 0 0 0.6875rem;
-  font-size: 0.8125rem;
+  font-size: var(--aino-text-ui);
   font-weight: 400;
   line-height: 1.5;
 }
@@ -51,7 +51,7 @@
 }
 .config-page-section .settings-section-heading {
   margin-bottom: 0.75rem;
-  font-size: 0.875rem;
+  font-size: var(--aino-text-title);
 }
 .config-page-layout .settings-group {
   padding-inline: 1.1875rem;
@@ -63,12 +63,12 @@
   padding-block: 1.125rem;
 }
 .config-page-layout .settings-row-label {
-  font-size: 0.8125rem;
+  font-size: var(--aino-text-body);
   font-weight: 500;
 }
 .config-page-layout .settings-row-description {
   max-width: 37rem;
-  font-size: 0.75rem;
+  font-size: var(--aino-text-caption);
   line-height: 1.65;
 }
 .config-page-layout [data-slot='input'],
@@ -76,7 +76,7 @@
 .config-page-layout [data-slot='searchable-select-trigger'],
 .config-page-layout [data-slot='input-group'] {
   min-height: 2.25rem;
-  font-size: 0.8125rem;
+  font-size: var(--aino-text-ui);
 }
 .config-page-layout [data-slot='input-group'] [data-slot='input'] {
   min-height: 0;

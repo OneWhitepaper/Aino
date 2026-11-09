@@ -2,7 +2,13 @@ import { atom, computed } from 'nanostores'
 
 import { findGroup, findGroupOfPane } from '@/components/pane-shell/tree/model'
 import { $activeTreeGroup, $layoutTree } from '@/components/pane-shell/tree/store'
-import { $workspaceMode } from '@/components/pane-shell/workspace-scope'
+import {
+  isConversationPane,
+  workspaceActivePane,
+  workspaceShownPaneIds
+} from '@/components/pane-shell/tree/workspace-presentation'
+import { $workspaceMode, $workspaceOwnerKey } from '@/components/pane-shell/workspace-scope'
+import { $registryVersion } from '@/contrib/registry'
 
 import { $selectedStoredSessionId } from './session'
 
@@ -10,7 +16,7 @@ import { $selectedStoredSessionId } from './session'
 // zone can show — the sessions list, Files, Terminal, a preview tab — is chrome.
 export const TILE_PANE_PREFIX = 'session-tile:'
 
-const isChatPane = (paneId?: string): boolean => paneId === 'workspace' || Boolean(paneId?.startsWith(TILE_PANE_PREFIX))
+const isChatPane = (paneId?: string): boolean => Boolean(paneId && isConversationPane(paneId))
 
 // Chrome can own keyboard focus, but working in it (navigating the sessions
 // list, browsing Files, typing in Terminal) must not replace the chat being
@@ -22,7 +28,8 @@ const $lastContentPane = atom<null | string>(null)
 const rememberContentPane = () => {
   const groupId = $activeTreeGroup.get()
   const tree = $layoutTree.get()
-  const active = groupId && tree ? findGroup(tree, groupId)?.active : undefined
+  const focusedGroup = groupId && tree ? findGroup(tree, groupId) : null
+  const active = focusedGroup ? workspaceActivePane(focusedGroup) : undefined
 
   if (!groupId || isChatPane(active)) {
     $lastContentPane.set(active ?? null)
@@ -35,25 +42,34 @@ const rememberContentPane = () => {
   const last = $lastContentPane.get()
   const content = last && tree ? findGroupOfPane(tree, last) : null
 
-  if (content && isChatPane(content.active)) {
-    $lastContentPane.set(content.active)
+  const contentActive = content ? workspaceActivePane(content) : undefined
+
+  if (isChatPane(contentActive)) {
+    $lastContentPane.set(contentActive ?? null)
   }
 }
 
 $activeTreeGroup.subscribe(rememberContentPane)
 $layoutTree.listen(rememberContentPane)
+$workspaceMode.listen(rememberContentPane)
+$workspaceOwnerKey.listen(rememberContentPane)
+$registryVersion.listen(rememberContentPane)
 
 export const $focusedTreePaneId = computed(
-  [$activeTreeGroup, $layoutTree, $workspaceMode, $lastContentPane],
-  (groupId, tree, workspaceMode, lastContentPane) => {
-    let active = groupId && tree ? findGroup(tree, groupId)?.active : undefined
+  [$activeTreeGroup, $layoutTree, $workspaceMode, $workspaceOwnerKey, $lastContentPane, $registryVersion],
+  (groupId, tree, workspaceMode, _ownerKey, lastContentPane) => {
+    const focusedGroup = groupId && tree ? findGroup(tree, groupId) : null
+    const mainGroup = tree ? findGroupOfPane(tree, 'workspace') : null
+    let active = focusedGroup ? workspaceActivePane(focusedGroup) : undefined
 
     if (groupId && tree && !isChatPane(active)) {
       // Keep the remembered chat while chrome or a preview covers it.
       active =
-        lastContentPane && findGroupOfPane(tree, lastContentPane)
+        lastContentPane && workspaceShownPaneIds([lastContentPane]).length && findGroupOfPane(tree, lastContentPane)
           ? lastContentPane
-          : findGroupOfPane(tree, 'workspace')?.active
+          : mainGroup
+            ? workspaceActivePane(mainGroup)
+            : undefined
     }
 
     if (active?.startsWith(TILE_PANE_PREFIX)) {
@@ -63,7 +79,7 @@ export const $focusedTreePaneId = computed(
     // Bot chats are tiles, never the primary selection. Sidebar roster focus
     // must not publish a null session and let the Bots home reclaim the chat.
     if (workspaceMode === 'bots' && tree) {
-      const mainActive = findGroupOfPane(tree, 'workspace')?.active
+      const mainActive = mainGroup ? workspaceActivePane(mainGroup) : undefined
 
       if (mainActive?.startsWith(TILE_PANE_PREFIX)) {
         return mainActive
@@ -87,6 +103,12 @@ export const $focusedSessionIsTile = computed($focusedTreePaneId, active =>
   Boolean(active?.startsWith(TILE_PANE_PREFIX))
 )
 
-export const $focusedStoredSessionId = computed([$focusedTreePaneId, $selectedStoredSessionId], (active, selected) =>
-  active?.startsWith(TILE_PANE_PREFIX) ? active.slice(TILE_PANE_PREFIX.length) : selected
+export const $focusedStoredSessionId = computed(
+  [$focusedTreePaneId, $selectedStoredSessionId, $workspaceMode],
+  (active, selected) =>
+    active?.startsWith(TILE_PANE_PREFIX)
+      ? active.slice(TILE_PANE_PREFIX.length)
+      : (active && active !== 'workspace' && isConversationPane(active)) || !workspaceShownPaneIds(['workspace']).length
+        ? null
+        : selected
 )

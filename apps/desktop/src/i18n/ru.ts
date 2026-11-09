@@ -10,6 +10,7 @@ import { configPagesFor } from './config-pages'
 import { defineLocale, type TranslationOverrides } from './define-locale'
 import { homeGuidance } from './home-guidance'
 import { messagingDirectory } from './messaging-directory'
+import { notificationCenterCopy } from './notification-center'
 import { ruBoot } from './ru_boot'
 import { ruCatalog, ruSkillDeepLink } from './ru_catalog'
 import { ruClarify } from './ru_clarify'
@@ -325,6 +326,7 @@ const configPageFieldDescriptions: Record<string, string> = defineFieldCopy({
 })
 
 const ruBaseOverrides = {
+  notificationCenter: notificationCenterCopy['ru'],
   platformModels: {
     permanent: "Без срока действия",
     reauthorize: "Повторно авторизовать устройство",
@@ -3720,6 +3722,7 @@ const ruBaseOverrides = {
     }
   },
   zones: {
+    switchConversation: 'Переключить разговор',
     sidebarModeMenu: 'Переключить режим общения',
     sidebarSessionsDescription: 'Проекты, файлы и повседневные беседы',
     showTabStrip: 'Показать вкладки',

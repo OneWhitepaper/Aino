@@ -2763,7 +2763,7 @@ export function useSessionActions({
   )
 
   const removeSession = useCallback(
-    async (storedSessionId: string) => {
+    async (storedSessionId: string, options?: { throwOnError?: boolean }) => {
       clearNotifications()
 
       // The row may live in the main list, the messaging/cron sidebar slices,
@@ -2790,7 +2790,13 @@ export function useSessionActions({
         !profile?.trim() &&
         $profiles.get().filter(item => item.name.trim()).length > 1
       ) {
-        notifyError(new Error(copy.sessionOwnershipUnavailable), copy.deleteFailed)
+        const error = new Error(copy.sessionOwnershipUnavailable)
+
+        if (options?.throwOnError) {
+          throw error
+        }
+
+        notifyError(error, copy.deleteFailed)
 
         return
       }
@@ -2887,7 +2893,11 @@ export function useSessionActions({
           }).catch(() => undefined)
         }
 
-        await deleteSession(storedSessionId, removedOwner)
+        const result = await deleteSession(storedSessionId, removedOwner)
+
+        if (!result.ok) {
+          throw new Error(copy.deleteFailed)
+        }
 
         dropTranscriptTailEverywhere(storedSessionId)
         // Only after the RPC lands — the optimistic eviction above can roll
@@ -2966,6 +2976,10 @@ export function useSessionActions({
             setActiveSessionId(closingRuntimeId)
             activeSessionIdRef.current = closingRuntimeId
           }
+        }
+
+        if (options?.throwOnError) {
+          throw err
         }
 
         notifyError(err, copy.deleteFailed)

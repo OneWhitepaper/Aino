@@ -43,7 +43,7 @@ export function CatalogDiscovery({
 }: {
   entries: CatalogEntry[]
   kind: CatalogKind
-  card: (entry: CatalogEntry, index: number, variant: CatalogCardVariant, placement?: React.CSSProperties) => ReactNode
+  card: (entry: CatalogEntry, variant: CatalogCardVariant, placement?: React.CSSProperties) => ReactNode
   onCategory: (category: string) => void
   actions?: ReactNode
   /** A tier filter is on: the shelves show only those tiers, so no hero pick. */
@@ -108,7 +108,7 @@ export function CatalogDiscovery({
   const bento = (items: CatalogEntry[], rows?: number, flip = false) => (
     <div className="catalog-bento" data-catalog-hover-group>
       {packBento(items, BENTO_COLUMNS, rows, flip).map(tile =>
-        card(tile.entry, tile.row, tile.variant, {
+        card(tile.entry, tile.variant, {
           '--bento-x': tile.column + 1,
           '--bento-y': tile.row + 1,
           '--bento-w': tile.w,
@@ -131,7 +131,7 @@ export function CatalogDiscovery({
           <header className="catalog-section-heading">
             <h2>{t.catalog.discoverKind(title)}</h2>
           </header>
-          <CatalogFeaturedSlider slides={featured.map((entry, index) => card(entry, index, 'hero'))} />
+          <CatalogFeaturedSlider slides={featured.map(entry => card(entry, 'hero'))} />
         </section>
       )}
       {tiered.map(({ tier, title: tierTitle, blurb, items }, index) => (
@@ -233,7 +233,7 @@ function SkillsDiscovery({
             <h2>{t.catalog.startHere}</h2>
             <p>{t.catalog.featuredHint}</p>
           </header>
-          <div className="catalog-recommendation-row">{featured.map((entry, index) => card(entry, index, 'hero'))}</div>
+          <div className="catalog-recommendation-row">{featured.map(entry => card(entry, 'hero'))}</div>
         </section>
       )}
       {others.length > 0 && (
@@ -246,7 +246,7 @@ function SkillsDiscovery({
             {sortControl && <div className="catalog-sort-control">{sortControl}</div>}
           </header>
           <div className="catalog-directory-grid" data-catalog-hover-group>
-            {others.slice(0, skillsLimit).map((entry, index) => card(entry, index, 'compact'))}
+            {others.slice(0, skillsLimit).map(entry => card(entry, 'compact'))}
           </div>
           {others.length > skillsLimit && (
             <Button className="mt-4" onClick={() => setSkillsLimit(value => value + 60)} size="sm" variant="text">

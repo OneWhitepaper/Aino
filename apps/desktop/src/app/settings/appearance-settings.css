@@ -11,26 +11,26 @@
 .appearance-page-intro p {
   margin: 0;
   color: var(--ui-text-secondary);
-  font-size: 0.75rem;
+  font-size: var(--aino-text-caption);
   line-height: 1.6;
 }
 .appearance-habit-preview {
   margin-top: 1.5rem;
   padding: 1.25rem;
   border: 1px solid var(--ui-stroke-tertiary);
-  border-radius: 0.625rem;
+  border-radius: var(--aino-radius-card);
   background: var(--ui-chat-surface-background);
 }
 .appearance-habit-preview h3 {
   margin: 0;
-  font-size: 0.9375rem;
+  font-size: var(--aino-text-body);
   line-height: 1.5;
   font-weight: 500;
 }
 .appearance-habit-preview p {
   margin: 0.375rem 0 0;
   color: var(--ui-text-secondary);
-  font-size: 0.75rem;
+  font-size: var(--aino-text-caption);
   line-height: 1.6;
 }
 .appearance-tabs {
@@ -49,7 +49,7 @@
   padding: 0 0 0.6875rem;
   color: var(--ui-text-secondary);
   background: transparent;
-  font-size: 0.75rem;
+  font-size: var(--aino-text-caption);
   font-weight: 400;
   line-height: 1.5;
 }
@@ -72,12 +72,12 @@
   margin-top: 1.625rem;
 }
 .appearance-group .settings-section-heading {
-  font-size: 0.875rem;
+  font-size: var(--aino-text-title);
   margin-bottom: 0.8125rem;
 }
 .appearance-page .settings-group {
   border-color: var(--ui-stroke-tertiary);
-  border-radius: 0.625rem;
+  border-radius: var(--aino-radius-card);
   padding-inline: 1.0625rem;
 }
 .appearance-page [data-settings-row-body] {
@@ -95,18 +95,18 @@
   justify-content: flex-end;
 }
 .appearance-page .settings-row-label {
-  font-size: 0.8125rem;
+  font-size: var(--aino-text-body);
   font-weight: 500;
 }
 .appearance-page .settings-row-description {
-  font-size: 0.75rem;
+  font-size: var(--aino-text-caption);
   line-height: 1.55;
 }
 .appearance-page .appearance-select {
   width: auto;
   min-width: 6.25rem;
   max-width: 12rem;
-  font-size: 0.75rem;
+  font-size: var(--aino-text-caption);
 }
 .appearance-page [data-slot='switch'] {
   width: 2rem;
@@ -129,7 +129,7 @@
   align-items: center;
   gap: 0.4375rem;
   padding: 0.9375rem 0;
-  font-size: 0.8125rem;
+  font-size: var(--aino-text-ui);
   font-weight: 500;
   text-align: start;
 }
@@ -161,7 +161,7 @@
   min-width: 0;
   padding: 0.4375rem;
   border: 1px solid var(--ui-stroke-tertiary);
-  border-radius: 0.5625rem;
+  border-radius: var(--aino-radius-card);
   background: var(--ui-editor-surface-background);
   color: var(--ui-text-secondary);
   text-align: start;
@@ -177,7 +177,7 @@
   justify-content: space-between;
   gap: 0.25rem;
   padding: 0.0625rem;
-  font-size: 0.75rem;
+  font-size: var(--aino-text-caption);
   line-height: 1.5;
 }
 .appearance-mode-card > span > svg {
@@ -195,7 +195,7 @@
   height: 3.875rem;
   margin-bottom: 0.4375rem;
   overflow: hidden;
-  border: 1px solid #dfe2ea;
+  border: 1px solid #e4e6eb;
   border-radius: 0.3125rem;
   background: #fff;
 }
@@ -203,7 +203,7 @@
   display: grid;
   align-content: start;
   gap: 0.3125rem;
-  background: #f2f3f7;
+  background: #f6f7f9;
   padding: 0.5625rem 0.25rem;
 }
 .appearance-mode-mini > div:last-child {
@@ -217,32 +217,32 @@
   width: 80%;
   height: 0.25rem;
   border-radius: 0.125rem;
-  background: #e0e3eb;
+  background: #e4e6eb;
 }
 .appearance-mode-mini > div:first-child i {
   width: 100%;
   height: 0.1875rem;
-  background: #d7dce8;
+  background: #e9ebf0;
 }
 .appearance-mode-mini > div:last-child i:first-child {
   width: 43%;
-  background: #bdc6dc;
+  background: #677080;
 }
 .appearance-mode-card[data-mode='dark'] .appearance-mode-mini {
-  border-color: #3b3f4b;
-  background: #272a32;
+  border-color: #3a3e48;
+  background: #26282f;
 }
 .appearance-mode-card[data-mode='dark'] .appearance-mode-mini > div:first-child {
-  background: #20222a;
+  background: #202127;
 }
 .appearance-mode-card[data-mode='dark'] .appearance-mode-mini i {
-  background: #454b59;
+  background: #3a3e48;
 }
 .appearance-mode-card[data-mode='system'] .appearance-mode-mini {
-  background: linear-gradient(90deg, #fff 50%, #272a32 50%);
+  background: linear-gradient(90deg, #fff 50%, #26282f 50%);
 }
 .appearance-mode-card[data-mode='system'] .appearance-mode-mini > div:last-child i {
-  background: linear-gradient(90deg, #e0e3eb 50%, #454b59 50%);
+  background: linear-gradient(90deg, #e4e6eb 50%, #3a3e48 50%);
 }
 @container appearance (max-width: 43rem) {
   .appearance-split {

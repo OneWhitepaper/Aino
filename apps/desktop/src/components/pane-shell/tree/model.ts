@@ -626,8 +626,13 @@ export function migratePersistedTree(node: LayoutNode): LayoutNode {
   if (node.type === 'group') {
     const { headerHidden, ...rest } = node as GroupNode & { headerHidden?: unknown }
     const tabStrip = rest.tabStrip === 'always' || rest.tabStrip === 'never' ? rest.tabStrip : undefined
+    // Older bot/group headers could collapse the primary workspace. Restore
+    // that zone on load without changing saved side/tool folds or split sizes.
+    const minimized = rest.panes.includes('workspace') && rest.minimized ? false : rest.minimized
 
-    return headerHidden === undefined && rest.tabStrip === tabStrip ? node : { ...rest, tabStrip }
+    return headerHidden === undefined && rest.tabStrip === tabStrip && rest.minimized === minimized
+      ? node
+      : { ...rest, minimized, tabStrip }
   }
 
   return { ...node, children: node.children.map(migratePersistedTree) }

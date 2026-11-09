@@ -9,6 +9,7 @@ import type {
   PlatformPublicCapabilities
 } from '../../shared/platform-contract'
 
+import { resetNotifications } from './notifications'
 import { reconcilePlatformDraftAccount } from './platform-draft-model'
 
 export type AccountRecord = NonNullable<PlatformAccountSnapshot['account']>
@@ -99,6 +100,12 @@ export function createAccountActions(adapter: AccountAdapter) {
 
     if (adapter.kind === 'platform') {
       reconcilePlatformDraftAccount(next)
+    }
+
+    const previous = snapshot.get()
+
+    if (previous && (previous.account?.id !== next.account?.id || previous.mode !== next.mode)) {
+      resetNotifications()
     }
 
     snapshot.set(next)

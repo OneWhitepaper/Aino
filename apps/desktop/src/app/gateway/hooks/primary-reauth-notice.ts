@@ -2,6 +2,7 @@ import { translateNow } from '@/i18n'
 import { WEBAPP_LAUNCH_REQUIRED } from '@/lib/browser-launch-session'
 import { failDesktopBoot } from '@/store/boot'
 import { isActivePrimary } from '@/store/gateway'
+import { $primaryGatewayRoute } from '@/store/gateway-primary-route'
 import { notify, RECOVERY_ACTIONS } from '@/store/notifications'
 
 /**
@@ -13,9 +14,15 @@ import { notify, RECOVERY_ACTIONS } from '@/store/notifications'
 export function notifyPrimaryReauth(detail: string, currentError: () => string): void {
   const foreground = isActivePrimary()
 
-  if (foreground && detail === WEBAPP_LAUNCH_REQUIRED) {return}
+  if (foreground && detail === WEBAPP_LAUNCH_REQUIRED) {
+    return
+  }
+
+  // A background primary keeps its own identity while another connection is in front.
+  const connectionId = $primaryGatewayRoute.get().connectionId
 
   notify({
+    id: connectionId ? `gateway-reauth:${connectionId}` : undefined,
     kind: 'error',
     title: translateNow('boot.errors.gatewaySignInRequired'),
     message: translateNow('boot.errors.gatewaySignInRequiredDetail'),

@@ -32,7 +32,6 @@ import { ExternalOpenFailedDialog } from '@/components/external-open-failed-dial
 import { FindBar } from '@/components/find-bar'
 import { FreeTierSignInDialog } from '@/components/free-tier/sign-in-dialog'
 import { GatewayConnectingOverlay } from '@/components/gateway-connecting-overlay'
-import { NotificationStack } from '@/components/notifications'
 import { DesktopOnboardingOverlay } from '@/components/onboarding'
 import { firstRunIntro } from '@/components/onboarding/first-run/kickoff'
 import { OnboardingEnd } from '@/components/onboarding/onboarding-end'
@@ -1104,10 +1103,10 @@ export function ContribWiring({ children }: { children: ReactNode }) {
       const id = $selectedStoredSessionId.get()
 
       if (id) {
-        void removeSession(id)
+        return removeSession(id, { throwOnError: true })
       }
     },
-    onDeleteSession: sessionId => void removeSession(sessionId),
+    onDeleteSession: sessionId => removeSession(sessionId, { throwOnError: true }),
     onDismissError: dismissError,
     onEdit: editMessage,
     onLoadMoreMessaging: loadMoreMessagingForPlatform,
@@ -1317,7 +1316,7 @@ export function ContribWiring({ children }: { children: ReactNode }) {
             <CommandCenterView
               initialSection={commandCenterInitialSection}
               onClose={closeOverlayToPreviousRoute}
-              onDeleteSession={removeSession}
+              onDeleteSession={sessionId => removeSession(sessionId, { throwOnError: true })}
               onNavigateRoute={path => navigateToWorkspacePage(navigate, path)}
               onOpenSession={sessionId => openSession(sessionId, navigate)}
             />
@@ -1350,9 +1349,6 @@ export function ContribWiring({ children }: { children: ReactNode }) {
             <StarmapView onClose={closeOverlayToPreviousRoute} />
           </Suspense>
         )}
-
-        {/* Toasts above everything. */}
-        <NotificationStack />
 
         {/* Backs confirm() from @/store/confirm — renders only while one is open. */}
         <ConfirmHost />

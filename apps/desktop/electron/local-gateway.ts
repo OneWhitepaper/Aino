@@ -101,7 +101,7 @@ export async function runGatewayOwnerRestart(
   return result.code === 2 && /unrecognized arguments:.*--detach/.test(result.stderr) ? run(args) : result
 }
 
-/** One restart per (owner process, stale gateway, client) per Desktop process. An owner a restart cannot move
+/** One restart per (canonical owner home, stale gateway, client) per Desktop process. An owner a restart cannot move
  *  (a service unit pinned to another checkout) is then attached as-is instead of being restarted
  *  on every dial. */
 export function createStaleGatewayRestarter(
@@ -113,7 +113,10 @@ export function createStaleGatewayRestarter(
   const restarts = new Map<string, { done: boolean; promise: Promise<void> }>()
 
   return async (endpoint, stale) => {
-    const key = `${gatewayOwnerProfile(endpoint)}\n${stale.gateway}\n${stale.client}`.toLowerCase()
+    // Every account has a "default" profile, but each owns a different home.
+    // Served siblings share the multiplexer home; unrelated accounts do not.
+    const ownerHome = endpoint.control_home || endpoint.profile_id
+    const key = JSON.stringify([ownerHome, stale.gateway.toLowerCase(), stale.client.toLowerCase()])
     const pending = restarts.get(key)
 
     if (pending && !pending.done) {

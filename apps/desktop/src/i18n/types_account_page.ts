@@ -25,3 +25,7 @@ export interface AccountPageTranslations {
   }
   viewOrder: string
 }
+
+export interface AccountLoginCopy {
+  loginHelp: string
+}

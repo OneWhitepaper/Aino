@@ -68,7 +68,9 @@ def test_status_names_the_member_answering_while_its_turn_runs(tmp_path: Path):
         assert service.rpc.started.wait(timeout=5)
         status = service.status("room-1")
         assert status["working"] is True
-        assert status["member_activity"] == [{"member_id": "ops", "status": "running"}]
+        active, = status["member_activity"]
+        assert active['member_id'] == 'ops' and active['status'] == 'running'
+        assert active['task_id'] and active['execution_generation'] >= 1
 
         service.rpc.release.set()
         wait_until(lambda: service.status("room-1")["member_activity"] == [], timeout=5)

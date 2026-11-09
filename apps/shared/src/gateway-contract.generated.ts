@@ -1790,6 +1790,7 @@ export interface GroupsStateParams {
 export interface GroupsStateResult {
   room: Room
   driver_status?: RoomDriverStatus | null
+  model_requests?: ConversationModelRequest[] | null
 }
 /** ``HostedRoomService.status(room_id)``; ``pending_actions`` rows are the exact attempt (``hosted_room_service.attempt_action``: ``kind`` + ``member_id``/``task_id``/``execution_generation``) or the driver's approval action (``kind: approval`` + run/session/approval context), or a stalled room preparation's Retry (``task_id`` ``prepare:<room_id>``, ``member_id`` the members not woken). ``member_activity`` lists live tasks in admission order (absent from older gateways). ``last_error`` is this room's last preparation failure, null once one succeeds. */
 export interface RoomDriverStatus {
@@ -1802,15 +1803,29 @@ export interface RoomDriverStatus {
   last_error?: string | null
   peer_routes: PeerRouteStatus[]
 }
-/** One live room task: ``status`` is ``queued``, ``running`` or ``stopping``. */
+/** One live room task. ``activity`` is a redacted current-attempt projection only; older gateways omit it. Task coordinates fence queued/running/stopping presentation. */
 export interface RoomMemberActivity {
   member_id: string
   status: string
+  activity?: RoomMemberActivityKind | null
+  task_id?: string | null
+  execution_generation?: number | null
 }
+export type RoomMemberActivityKind = 'thinking' | 'reading' | 'editing' | 'searching' | 'running_command' | 'browser' | 'image' | 'replying' | 'working'
 export interface PeerRouteStatus {
   room_id: string
   member_id: string
   status: string
+}
+export interface ConversationModelRequest {
+  request_id: string
+  session_id: string
+  profile: string
+  action: 'list' | 'select'
+  query?: string | null
+  provider?: string | null
+  room_id?: string | null
+  member_id?: string | null
 }
 export interface GroupsSendParams {
   profile?: string | null
@@ -4877,6 +4892,25 @@ export interface PromptResolveUnknownParams {
   admission_id: string
   execution_generation: number
 }
+export interface ConversationModelParams {
+  session_id: string
+  action: 'list' | 'select' | 'selection'
+  query?: string | null
+  provider?: string | null
+}
+export interface ConversationModelResult {
+  status?: 'available' | 'selected' | 'scheduled' | 'not_found' | 'ambiguous' | 'unavailable' | null
+  models?: ConversationModel[] | null
+  selection?: ConversationModel | null
+  effective?: 'next_message' | null
+}
+export interface ConversationModel {
+  model_id: string
+  model_source: 'aino' | 'provider'
+  provider?: string | null
+  name?: string | null
+  owner?: PlatformOwner | null
+}
 /** ``operation`` + ``payload`` are validated by ``hermes_state_mutations.validate_action``; ``expected_generation`` is required for delete/rewind/reset/branch/model/compress/reasoning/workspace. ``reasoning`` (``{effort}``) and ``workspace`` (``{cwd}``, refused ``session_busy`` mid-turn) rewrite the session's frozen policy: session-scope ``/reasoning`` and Desktop's Move to project. ``edit_policy`` (``{policy}``: ask / workspace_session / session) is an ACP session's edit approval (main's ACP modes). */
 export interface SessionMutateParams {
   session_id: string
@@ -5174,6 +5208,37 @@ export interface WorkerPersistParams {
 }
 /** The operation's durable receipt (``message_id`` for an append, delegation results, …). */
 export type WorkerPersistResult = Record<string, unknown>
+export interface GroupsPrepareModelParams {
+  profile?: string | null
+  room_id: string
+  member_id: string
+  model_id?: string | null
+  owner?: PlatformOwner | null
+  follow_profile_config?: true | null
+  inspect_selection?: true | null
+  apply_selection?: true | null
+}
+export interface GroupsPrepareModelResult {
+  profile: string
+  session_id: string
+  model_id?: string | null
+  session_ticket?: string | null
+  follow_profile_config?: true | null
+  managed_model_binding?: 1
+  managed_model_context_window?: true
+  managed_image_binding?: 1
+  managed_device_key?: 1
+  selection?: ConversationModel | null
+}
+export interface GroupsModelRespondParams {
+  profile?: string | null
+  room_id: string
+  request_id: string
+  result: ConversationModelResult
+}
+export interface GroupsModelRespondResult {
+  accepted: boolean
+}
 export interface CanonicalCreateParams {
   profile?: string | null
   request_id?: string | null
@@ -7150,10 +7215,16 @@ export interface CanonicalRpcMethods {
   'groups.create': { params: CanonicalRoomCreateParams; result: GroupsCreateResult }
   /** Discard one indeterminate room task after explicit user confirmation. */
   'groups.discard': { params: GroupsDiscardParams; result: GroupsDiscardResult }
+  /** Answer the current room member model request with public model identities only. */
+  'groups.model_respond': { params: GroupsModelRespondParams; result: GroupsModelRespondResult }
+  /** Prepare one served local member under the current room owner; issue its independent managed-model ticket. */
+  'groups.prepare_model': { params: GroupsPrepareModelParams; result: GroupsPrepareModelResult }
   'groups.retry': { params: CanonicalRoomAttemptParams; result: GroupsRetryResult }
   'image.attach_bytes': { params: ImageAttachBytesParams; result: CanonicalAttachedImageResult }
   /** Native-owner only: admit the dispatcher's current claim on a kanban task. */
   'kanban.run': { params: KanbanRunParams; result: KanbanRunResult }
+  /** Ask the owning desktop for available models or schedule a conversation-only selection for the next message. */
+  'model.session': { params: ConversationModelParams; result: ConversationModelResult }
   'profiles.list': { params: CanonicalProfilesParams; result: CanonicalProfilesResult }
   /** Retire a queued admission; a started one is interrupted in the same call. */
   'prompt.cancel': { params: PromptCancelParams; result: AdmissionStatus }
@@ -7222,9 +7293,12 @@ export const CANONICAL_RPC_METHODS = [
   'groups.attachment.upload',
   'groups.create',
   'groups.discard',
+  'groups.model_respond',
+  'groups.prepare_model',
   'groups.retry',
   'image.attach_bytes',
   'kanban.run',
+  'model.session',
   'profiles.list',
   'prompt.cancel',
   'prompt.receipt',
@@ -7263,6 +7337,8 @@ export interface ServerRequestMap {
   clarify: { params: ClarifyRequestParams; result: ClarifyResult }
   /** Masked sudo password for the Bot Screen package install; app-level (empty session). */
   'display.install.sudo': { params: DisplayInstallSudoParams; result: ValueResult }
+  /** Resolve models from the current desktop account and configured providers without sending credentials. */
+  'model.session': { params: ConversationModelRequest; result: ConversationModelResult }
   /** Click / type / scroll / annotate inside the in-app browser preview. */
   'preview.act': { params: PreviewActRequestParams; result: ValueResult }
   /** Read the in-app browser preview's text (JSON text answer). */
@@ -7295,6 +7371,7 @@ export const SERVER_REQUEST_METHODS = [
   'approval',
   'clarify',
   'display.install.sudo',
+  'model.session',
   'preview.act',
   'preview.read',
   'secret',

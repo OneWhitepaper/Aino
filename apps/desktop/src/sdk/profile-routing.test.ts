@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
+import { setApiRequestConnection, setApiRequestLocalMode } from '@/api/client'
 import { setRuntimeI18nLocale } from '@/i18n'
+import { $settingsScopeProfile, setSettingsScope } from '@/store/settings-scope'
 import type { ProfileInfo } from '@/types/hermes'
 
 vi.mock('@/app/chat/session-view', async () => {
@@ -9,6 +11,7 @@ vi.mock('@/app/chat/session-view', async () => {
   return { PRIMARY_SESSION_VIEW: { $awaitingResponse: atom(false), $busy: atom(false) } }
 })
 vi.mock('@/app/open-session', () => ({ openSession: vi.fn() }))
+vi.mock('./plugin-empty-bot-model', () => ({ restoreEmptyBotModelDefault: vi.fn(async () => false) }))
 vi.mock('@/components/pane-shell/tree/store', async () => {
   const { atom } = await import('nanostores')
 
@@ -24,7 +27,7 @@ vi.mock('@/components/pane-shell/tree/store', async () => {
 })
 vi.mock('@/contrib/events', () => ({ onGatewayEvent: vi.fn() }))
 vi.mock('@/hermes', () => ({ deleteProfile: vi.fn(), getLogs: vi.fn(), getStatus: vi.fn(), hermesApi: vi.fn() }))
-vi.mock('@/store/notifications', () => ({ notify: vi.fn(), notifyError: vi.fn() }))
+vi.mock('@/store/notifications', () => ({ notify: vi.fn(), notifyError: vi.fn(), resetNotifications: vi.fn() }))
 vi.mock('@/store/system-actions', () => ({ runGatewayRestart: vi.fn() }))
 vi.mock('@/store/session', async () => {
   const { atom } = await import('nanostores')
@@ -140,6 +143,7 @@ vi.mock('@/store/gateway', async () => {
 })
 
 const { HYDRATION_SYNC_BADGE_TIMEOUT_MS, host } = await import('./index')
+const { restoreEmptyBotModelDefault } = await import('./plugin-empty-bot-model')
 
 const { openSession: openSessionCore } = await import('@/app/open-session')
 const { deleteProfile, hermesApi } = await import('@/hermes')
@@ -195,6 +199,9 @@ const profile = (name: string): ProfileInfo => ({
 })
 
 afterEach(() => {
+  setApiRequestConnection(null)
+  setApiRequestLocalMode(false)
+  setSettingsScope('remote-worker')
   setRuntimeI18nLocale('en')
   vi.clearAllMocks()
   vi.mocked(sessionTileDelegate).mockReturnValue(null)
@@ -214,6 +221,65 @@ afterEach(() => {
   $profiles.set([profile('cached-only')])
   setWorkspaceScope('sessions')
   delete (window as unknown as { hermesDesktop?: unknown }).hermesDesktop
+})
+
+describe('owner-scoped model settings recovery', () => {
+  it.each(['local', 'remote'] as const)('opens the exact %s backend profile without moving the workspace', mode => {
+    const connectionId = mode === 'local' ? 'local' : 'source-a'
+    setApiRequestConnection(mode === 'local' ? null : connectionId)
+    setApiRequestLocalMode(mode === 'local')
+    const navigate = vi.spyOn(host, 'navigate').mockImplementation(() => undefined)
+
+    try {
+      expect(host.openModelSettings({ connectionId, mode, profile: 'worker-alias', targetProfile: 'worker' })).toBe(
+        true
+      )
+      expect($settingsScopeProfile.get()).toBe('worker')
+      expect(navigate).toHaveBeenCalledWith('/settings?tab=config:model')
+      expect($activeGatewayProfile.get()).toBe('remote-worker')
+      expect(ensureGatewayProfile).not.toHaveBeenCalled()
+    } finally {
+      navigate.mockRestore()
+    }
+  })
+
+  it('refuses another source instead of editing the ambient profile with the same name', () => {
+    setApiRequestConnection('source-b')
+    setSettingsScope('current-profile')
+    const navigate = vi.spyOn(host, 'navigate').mockImplementation(() => undefined)
+
+    try {
+      expect(
+        host.openModelSettings({
+          connectionId: 'source-a',
+          mode: 'remote',
+          profile: 'default',
+          targetProfile: 'default'
+        })
+      ).toBe(false)
+      expect($settingsScopeProfile.get()).toBe('current-profile')
+      expect(navigate).not.toHaveBeenCalled()
+    } finally {
+      navigate.mockRestore()
+    }
+  })
+
+  it('does not assume an untagged remote REST connection is the local source', () => {
+    setApiRequestConnection(null)
+    setApiRequestLocalMode(false)
+    setSettingsScope('current-profile')
+    const navigate = vi.spyOn(host, 'navigate').mockImplementation(() => undefined)
+
+    try {
+      expect(
+        host.openModelSettings({ connectionId: 'local', mode: 'local', profile: 'ops', targetProfile: 'ops' })
+      ).toBe(false)
+      expect($settingsScopeProfile.get()).toBe('current-profile')
+      expect(navigate).not.toHaveBeenCalled()
+    } finally {
+      navigate.mockRestore()
+    }
+  })
 })
 
 describe('connection-aware plugin host APIs', () => {
@@ -347,14 +413,20 @@ describe('connection-aware plugin host APIs', () => {
       })
     )
     expect(hermesApi).toHaveBeenNthCalledWith(2, {
-      connectionId: 'source-a', path: '/api/sessions/bot-chat/mutation-snapshot?profile=backend-worker'
+      connectionId: 'source-a',
+      path: '/api/sessions/bot-chat/mutation-snapshot?profile=backend-worker'
     })
     expect(hermesApi).toHaveBeenNthCalledWith(3, {
       connectionId: 'source-a',
       path: '/api/sessions/bot-chat',
       method: 'PATCH',
-      body: { hidden: true, profile: 'backend-worker', expected_revision: 31,
-        expected_generation: 5, request_id: expect.any(String) }
+      body: {
+        hidden: true,
+        profile: 'backend-worker',
+        expected_revision: 31,
+        expected_generation: 5,
+        request_id: expect.any(String)
+      }
     })
     expect(vi.mocked(hermesApi).mock.calls.every(([request]) => !('profile' in request))).toBe(true)
     expect(requestGatewayForAgent).not.toHaveBeenCalled()
@@ -592,6 +664,60 @@ describe('connection-aware plugin host APIs', () => {
 })
 
 describe('profile-aware plugin session opens', () => {
+  it.each([
+    { name: 'empty Bot', workspaceMode: 'bots', expectHistory: false, refreshInPlace: false, restores: true },
+    {
+      name: 'ordinary session',
+      workspaceMode: 'sessions',
+      expectHistory: false,
+      refreshInPlace: false,
+      restores: false
+    },
+    { name: 'Bot with history', workspaceMode: 'bots', expectHistory: true, refreshInPlace: false, restores: false },
+    {
+      name: 'background Bot refresh',
+      workspaceMode: 'bots',
+      expectHistory: false,
+      refreshInPlace: true,
+      restores: false
+    }
+  ] as const)('only checks confirmed defaults after hydrating an $name', async options => {
+    const route = {
+      connectionId: 'source-a',
+      mode: 'remote' as const,
+      profile: 'writer-alias',
+      targetProfile: 'writer'
+    }
+
+    setMockAtom($focusedStoredSessionId, 'candidate')
+    setMockAtom($focusedRuntimeId, 'candidate-runtime')
+    setMockAtom($focusedSessionState, {
+      messages: options.expectHistory ? [{ id: 'history', parts: [], role: 'assistant' }] : [],
+      storedSessionId: 'candidate'
+    } as never)
+
+    await host.openSession('candidate', {
+      awaitHydration: true,
+      hydrationTimeoutMs: 1_000,
+      expectHistory: options.expectHistory,
+      refreshInPlace: options.refreshInPlace,
+      route,
+      workspaceMode: options.workspaceMode,
+      workspaceOwnerKey: 'bot:source-a::writer'
+    })
+
+    if (options.restores) {
+      expect(restoreEmptyBotModelDefault).toHaveBeenCalledOnce()
+      expect(restoreEmptyBotModelDefault).toHaveBeenCalledWith({
+        storedSessionId: 'candidate',
+        route,
+        isCurrent: expect.any(Function)
+      })
+    } else {
+      expect(restoreEmptyBotModelDefault).not.toHaveBeenCalled()
+    }
+  })
+
   it('does not stamp mode local when a profile open has no owner route and the live connection is remote', async () => {
     $connection.set({
       baseUrl: 'http://127.0.0.1:9',
@@ -780,6 +906,189 @@ describe('profile-aware plugin session opens', () => {
     await expect(opening).rejects.toThrow(/superseded/i)
     expect(openSessionCore).not.toHaveBeenCalled()
     expect(setResumeExhaustedSessionId).not.toHaveBeenCalled()
+  })
+
+  it('does not reopen a Bot after its caller leaves while the owner socket is dialing', async () => {
+    let releaseDial: (() => void) | undefined
+    let current = true
+    vi.mocked(openGatewayForAgent).mockImplementationOnce(
+      () =>
+        new Promise<void>(resolve => {
+          releaseDial = resolve
+        })
+    )
+
+    const opening = host.openSession('late-bot-chat', {
+      openingStillCurrent: () => current,
+      route: { connectionId: 'source-a', mode: 'remote', profile: 'writer', targetProfile: 'writer' },
+      workspaceMode: 'bots',
+      workspaceOwnerKey: 'bot:source-a::writer'
+    })
+
+    // Settings changes the page while retaining the Bot sidebar and owner.
+    current = false
+    releaseDial?.()
+
+    await expect(opening).rejects.toThrow(/superseded/i)
+    expect(openSessionCore).not.toHaveBeenCalled()
+    expect(setResumeExhaustedSessionId).not.toHaveBeenCalled()
+  })
+
+  it('finishes Bot hydration when its own navigation changes the caller page', async () => {
+    let current = true
+    vi.mocked(openSessionCore).mockImplementationOnce(() => {
+      current = false
+      setMockAtom($focusedStoredSessionId, 'bot-chat')
+      setMockAtom($focusedRuntimeId, 'runtime-bot-chat')
+      setMockAtom($focusedSessionState, {
+        messages: [{ id: 'bot-history', parts: [], role: 'assistant' }],
+        storedSessionId: 'bot-chat'
+      } as never)
+    })
+
+    await expect(
+      host.openSession('bot-chat', {
+        awaitHydration: true,
+        expectHistory: true,
+        hydrationTimeoutMs: 1_000,
+        openingStillCurrent: () => current,
+        route: { connectionId: 'source-a', mode: 'remote', profile: 'writer', targetProfile: 'writer' },
+        workspaceMode: 'bots',
+        workspaceOwnerKey: 'bot:source-a::writer'
+      })
+    ).resolves.toBeUndefined()
+    expect(openSessionCore).toHaveBeenCalledTimes(1)
+  })
+
+  it('cancels delayed Bot hydration when the user leaves its own navigation target', async () => {
+    const previousHash = window.location.hash
+    window.location.hash = '#/agent-hub'
+    const callerHash = window.location.hash
+    vi.mocked(openSessionCore).mockImplementationOnce((_storedId, navigate) => navigate('/bot-chat'))
+
+    try {
+      const opening = host.openSession('bot-chat', {
+        awaitHydration: true,
+        expectHistory: false,
+        hydrationTimeoutMs: 1_000,
+        openingStillCurrent: () => window.location.hash === callerHash,
+        route: { connectionId: 'source-a', mode: 'remote', profile: 'writer', targetProfile: 'writer' },
+        workspaceMode: 'bots',
+        workspaceOwnerKey: 'bot:source-a::writer'
+      })
+
+      const outcome = opening.then(
+        () => null,
+        error => error as Error
+      )
+
+      await vi.waitFor(() => expect(openSessionCore).toHaveBeenCalledOnce())
+
+      window.location.hash = '#/settings?tab=config:model'
+      // No runtime/store update arrives. Leaving alone must cancel the wait.
+      expect((await outcome)?.message).toMatch(/superseded/i)
+      expect(restoreEmptyBotModelDefault).not.toHaveBeenCalled()
+      expect(setResumeExhaustedSessionId).not.toHaveBeenCalled()
+      expect(openSessionCore).toHaveBeenCalledOnce()
+      expect(window.location.hash).toBe('#/settings?tab=config:model')
+    } finally {
+      window.location.hash = previousHash
+    }
+  })
+
+  it('invalidates empty Bot recovery while its persisted-row check is pending', async () => {
+    const previousHash = window.location.hash
+    window.location.hash = '#/agent-hub'
+    const callerHash = window.location.hash
+    let finishRead = () => undefined as void
+    let recoveryStillCurrent = true
+    vi.mocked(restoreEmptyBotModelDefault).mockImplementationOnce(async ({ isCurrent }) => {
+      await new Promise<void>(resolve => {
+        finishRead = resolve
+      })
+      recoveryStillCurrent = isCurrent()
+
+      return false
+    })
+    vi.mocked(openSessionCore).mockImplementationOnce((_storedId, navigate) => {
+      navigate('/bot-chat')
+      setMockAtom($focusedStoredSessionId, 'bot-chat')
+      setMockAtom($focusedRuntimeId, 'runtime-bot-chat')
+    })
+
+    try {
+      const opening = host.openSession('bot-chat', {
+        awaitHydration: true,
+        expectHistory: false,
+        hydrationTimeoutMs: 1_000,
+        openingStillCurrent: () => window.location.hash === callerHash,
+        route: { connectionId: 'source-a', mode: 'remote', profile: 'writer', targetProfile: 'writer' },
+        workspaceMode: 'bots',
+        workspaceOwnerKey: 'bot:source-a::writer'
+      })
+
+      const outcome = opening.then(
+        () => null,
+        error => error as Error
+      )
+
+      await vi.waitFor(() => expect(restoreEmptyBotModelDefault).toHaveBeenCalledOnce())
+
+      window.location.hash = '#/settings?tab=config:model'
+      finishRead()
+      expect((await outcome)?.message).toMatch(/superseded/i)
+      expect(recoveryStillCurrent).toBe(false)
+      expect(window.location.hash).toBe('#/settings?tab=config:model')
+    } finally {
+      window.location.hash = previousHash
+    }
+  })
+
+  it('does not retry navigation after the user leaves during route revalidation', async () => {
+    const previousHash = window.location.hash
+    window.location.hash = '#/agent-hub'
+    const callerHash = window.location.hash
+    const route = { connectionId: 'source-a', mode: 'remote' as const, profile: 'writer', targetProfile: 'writer' }
+    let finishRoutes = () => undefined as void
+
+    const getProfileRoutes = vi.fn(
+      () =>
+        new Promise<(typeof route)[]>(resolve => {
+          finishRoutes = () => resolve([route])
+        })
+    )
+
+    ;(window as unknown as { hermesDesktop: unknown }).hermesDesktop = { getProfileRoutes }
+    vi.mocked(openSessionCore).mockImplementation((_storedId, navigate) => navigate('/bot-chat'))
+
+    try {
+      const opening = host.openSession('bot-chat', {
+        awaitHydration: true,
+        expectHistory: true,
+        hydrationTimeoutMs: 1,
+        retryHydrationTimeoutOnce: true,
+        openingStillCurrent: () => window.location.hash === callerHash,
+        route,
+        workspaceMode: 'bots',
+        workspaceOwnerKey: 'bot:source-a::writer'
+      })
+
+      const outcome = opening.then(
+        () => null,
+        error => error as Error
+      )
+
+      await vi.waitFor(() => expect(getProfileRoutes).toHaveBeenCalledOnce())
+
+      window.location.hash = '#/settings?tab=config:model'
+      finishRoutes()
+      expect((await outcome)?.message).toMatch(/superseded/i)
+      expect(openSessionCore).toHaveBeenCalledOnce()
+      expect(window.location.hash).toBe('#/settings?tab=config:model')
+    } finally {
+      vi.mocked(openSessionCore).mockImplementation(() => undefined)
+      window.location.hash = previousHash
+    }
   })
 
   it('revalidates an exact route before the one allowed hydration retry', async () => {

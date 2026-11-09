@@ -13,6 +13,7 @@ from .base import JsonValue, Params, Result, WireEnum
 from .common import OkResult, OpenModel, ProfileParams
 from .registry import method
 from .server_requests import ApprovalChoice
+from .model_session import ConversationModelRequest
 
 # ── shared room shapes ────────────────────────────────────────────────────────────────────────
 
@@ -214,11 +215,27 @@ class PeerRouteStatus(Result):
     status: str
 
 
+class RoomMemberActivityKind(WireEnum):
+    thinking = 'thinking'
+    reading = 'reading'
+    editing = 'editing'
+    searching = 'searching'
+    running_command = 'running_command'
+    browser = 'browser'
+    image = 'image'
+    replying = 'replying'
+    working = 'working'
+
+
 class RoomMemberActivity(Result):
-    """One live room task: ``status`` is ``queued``, ``running`` or ``stopping``."""
+    """One live room task. ``activity`` is a redacted current-attempt projection only;
+    older gateways omit it. Task coordinates fence queued/running/stopping presentation."""
 
     member_id: str
     status: str
+    activity: RoomMemberActivityKind | None = None
+    task_id: str | None = None
+    execution_generation: int | None = None
 
 
 class RoomDriverStatus(Result):
@@ -242,6 +259,7 @@ class RoomDriverStatus(Result):
 class GroupsStateResult(Result):
     room: Room
     driver_status: RoomDriverStatus | None = None
+    model_requests: list[ConversationModelRequest] | None = None
 
 
 method("groups.state", params=GroupsStateParams, result=GroupsStateResult,

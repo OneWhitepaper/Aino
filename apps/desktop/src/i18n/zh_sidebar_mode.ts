@@ -2,6 +2,7 @@ import type { Translations } from './types'
 
 export const sidebarMode: Pick<
   Translations['zones'],
+  | 'switchConversation'
   | 'sidebarModeMenu'
   | 'sidebarSessionsDescription'
   | 'showTabStrip'
@@ -10,6 +11,7 @@ export const sidebarMode: Pick<
   | 'hideStripTab'
   | 'toggleStripTab'
 > = {
+  switchConversation: '切换会话',
   sidebarModeMenu: '切换会话模式',
   sidebarSessionsDescription: '项目、文件与日常对话',
   showTabStrip: '显示标签',

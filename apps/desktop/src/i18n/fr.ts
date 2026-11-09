@@ -34,6 +34,7 @@ import { frUpdateChannel } from './fr_update_channel'
 import { homeGuidance } from './home-guidance'
 import { introFr } from './intro-fr'
 import { messagingDirectory } from './messaging-directory'
+import { notificationCenterCopy } from './notification-center'
 import { runtimeFeatureCopy } from './runtime-feature-copy'
 import { toolPanel } from './tool-panel'
 import { workspacePage } from './workspace-page'
@@ -320,6 +321,7 @@ const configPageFieldDescriptions: Record<string, string> = defineFieldCopy({
 })
 
 const frBaseOverrides = {
+  notificationCenter: notificationCenterCopy['fr'],
   platformModels: {
     permanent: "Sans expiration",
     reauthorize: "Réautoriser cet appareil",
@@ -842,6 +844,7 @@ const frBaseOverrides = {
   },
   ...frNotices,
   sendDiagnostics: {
+    closeWhileUploadingHint: 'Fermer cette fenêtre n’annule pas un envoi déjà commencé.',
     title: 'Envoyer les diagnostics à Aino',
     privacyNotice:
       'Un paquet privé est envoyé au service de votre compte Aino : informations système, état de configuration (sans clés) et journaux de l’agent, de la passerelle et du bureau (512 Ko maximum chacun). Ils peuvent contenir conversations, résultats d’outils et chemins de fichiers. Les clés sont masquées, mais d’autres données sensibles peuvent subsister. Seuls les administrateurs Aino autorisés peuvent le lire. L’accès expire après 14 jours ; les données en ligne sont supprimées dans l’heure suivante. Les sauvegardes existantes suivent la politique du déploiement.',
@@ -4984,6 +4987,7 @@ memoryLayers: frMemoryLayers
     }
   },
   zones: {
+    switchConversation: 'Changer de conversation',
     sidebarModeMenu: 'Changer de mode de conversation',
     sidebarSessionsDescription: 'Projets, fichiers et conversations quotidiennes',
     showTabStrip: 'Afficher les onglets',

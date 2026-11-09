@@ -11,7 +11,7 @@ const TEXT_ACTION_ICON = '[&_.codicon]:no-underline [&_svg]:no-underline'
 // Controls share the chat surface's soft corners and restrained primary actions.
 // Padding-driven sizes still allow labels to scale without fixed-height clipping.
 const buttonVariants = cva(
-  "inline-flex shrink-0 cursor-pointer items-center justify-center gap-1.5 rounded-(--aino-radius-control) text-[length:var(--aino-text-ui)] leading-4 font-medium whitespace-nowrap shadow-none transition-colors duration-100 outline-none focus-visible:border-ring focus-visible:ring-[0.1875rem] focus-visible:ring-ring/50 disabled:pointer-events-none disabled:cursor-default disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-3.5",
+  "inline-flex shrink-0 cursor-pointer items-center justify-center gap-1.5 rounded-(--aino-radius-control) text-[length:var(--aino-text-ui)] leading-4 font-medium whitespace-nowrap shadow-none transition-colors duration-100 outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:cursor-default disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
   {
     variants: {
       variant: {
@@ -47,7 +47,7 @@ const buttonVariants = cva(
       size: {
         default: 'min-h-8 px-3 py-1.5 has-[>svg]:px-2.5',
         xs: "min-h-6 gap-1 px-2 py-0.5 text-[length:var(--aino-text-caption)] leading-4 has-[>svg]:px-1.5 [&_svg:not([class*='size-'])]:size-3",
-        sm: 'min-h-7 px-2.5 py-1 has-[>svg]:px-2',
+        sm: 'min-h-8 px-2.5 py-1 has-[>svg]:px-2',
         lg: 'px-5 py-2 text-sm leading-5 has-[>svg]:px-4',
         touch: 'min-h-11 min-w-11 px-3 py-2 text-sm',
         // Flush inline text action — no box padding/height. Pair with text/link
@@ -60,6 +60,7 @@ const buttonVariants = cva(
         icon: 'size-9 rounded-(--aino-radius-control)',
         'icon-xs': "size-6 rounded-(--aino-radius-control) [&_svg:not([class*='size-'])]:size-3",
         'icon-sm': 'size-8 rounded-(--aino-radius-control)',
+        'icon-send': 'size-8 rounded-full',
         'icon-lg': 'size-10 rounded-(--aino-radius-control)',
         grip: 'h-4 w-12 rounded-full p-0',
         'icon-titlebar':

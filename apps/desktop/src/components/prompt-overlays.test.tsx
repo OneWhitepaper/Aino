@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import {
@@ -8,6 +8,7 @@ import {
 import { I18nProvider } from '@/i18n'
 import { createClientSessionState } from '@/lib/chat-runtime'
 import { $gateway } from '@/store/gateway'
+import { registerGatewayReconnect } from '@/store/gateway-reconnect'
 import { notifyError } from '@/store/notifications'
 import { $secretRequest, $sudoRequest, clearAllPrompts, setSecretRequest, setSudoRequest } from '@/store/prompts'
 import { hasOpenServerRequest, rememberServerRequest, resetServerRequestsForTests } from '@/store/server-requests'
@@ -16,10 +17,13 @@ import { $activeSessionId } from '@/store/session'
 import { PromptOverlays } from './prompt-overlays'
 
 vi.mock('@/lib/haptics', () => ({ triggerHaptic: vi.fn() }))
-vi.mock('@/store/notifications', () => ({ notifyError: vi.fn() }))
+vi.mock('@/store/notifications', async importOriginal => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  notifyError: vi.fn()
+}))
 
 function renderPrompts(sessionId: string | null = 's1') {
-  render(
+  return render(
     <I18nProvider configClient={null}>
       <PromptOverlays sessionId={sessionId} />
     </I18nProvider>
@@ -157,6 +161,82 @@ describe('PromptOverlays', () => {
 
     await waitFor(() => expect($secretRequest.get()).toBeNull())
     expect(request).not.toHaveBeenCalled()
+    expect(notifyError).not.toHaveBeenCalled()
+  })
+
+  it('keeps a disconnected secret failure in its dialog and reconnects without replaying the secret', async () => {
+    const respond = vi.fn()
+    const reconnect = vi.fn()
+    const unregister = registerGatewayReconnect(reconnect)
+    $activeSessionId.set('s1')
+    rememberServerRequest({ fail: vi.fn(), id: 'secret-disconnected', method: 'secret', params: {}, respond })
+    setSecretRequest({
+      envVar: 'TEST_SECRET',
+      prompt: 'Paste a secret',
+      requestId: 'secret-disconnected',
+      sessionId: 's1'
+    })
+    renderPrompts()
+
+    try {
+      const input = screen.getByPlaceholderText('TEST_SECRET') as HTMLInputElement
+      fireEvent.change(input, { target: { value: 'fixture-secret' } })
+      fireEvent.submit(input.closest('form')!)
+
+      expect(screen.getByRole('alert').textContent).toContain('Could not send secret')
+      expect(screen.getByRole('dialog').contains(screen.getByRole('alert'))).toBe(true)
+      fireEvent.click(screen.getByRole('button', { name: 'Reconnect' }))
+      await waitFor(() => expect(reconnect).toHaveBeenCalledOnce())
+      expect(respond).not.toHaveBeenCalled()
+      expect(input.value).toBe('fixture-secret')
+      expect($secretRequest.get()?.requestId).toBe('secret-disconnected')
+      expect(notifyError).not.toHaveBeenCalled()
+    } finally {
+      unregister()
+    }
+  })
+
+  it('does not carry failure feedback to a newly delivered request that reuses its id', () => {
+    setSecretRequest({ envVar: 'OLD_SECRET', prompt: 'Old request', requestId: 'reused-id', sessionId: 's1' })
+    renderPrompts()
+    const input = screen.getByPlaceholderText('OLD_SECRET')
+    fireEvent.change(input, { target: { value: 'fixture-secret' } })
+    fireEvent.submit(input.closest('form')!)
+    expect(screen.getByRole('alert')).toBeTruthy()
+
+    act(() =>
+      setSecretRequest({ envVar: 'NEW_SECRET', prompt: 'New request', requestId: 'reused-id', sessionId: 's1' })
+    )
+
+    expect(screen.getByText('NEW_SECRET')).toBeTruthy()
+    expect(screen.queryByRole('alert')).toBeNull()
+    expect(notifyError).not.toHaveBeenCalled()
+  })
+
+  it('keeps the diagnostic detail available inside the failed prompt without exposing it by default', () => {
+    const detail = 'ENOSPC: no space left on device while saving provider credentials'
+
+    const respond = vi.fn(() => {
+      throw new Error(detail)
+    })
+
+    $gateway.set({ request: vi.fn() } as never)
+    rememberServerRequest({ fail: vi.fn(), id: 'secret-storage', method: 'secret', params: {}, respond })
+    setSecretRequest({ envVar: 'TEST_SECRET', prompt: 'Paste a secret', requestId: 'secret-storage', sessionId: 's1' })
+    renderPrompts()
+
+    const input = screen.getByPlaceholderText('TEST_SECRET') as HTMLInputElement
+
+    fireEvent.change(input, { target: { value: 'fixture-secret' } })
+    fireEvent.submit(input.closest('form')!)
+
+    const disclosure = screen.getByText('Details').closest('details')!
+
+    expect(disclosure.open).toBe(false)
+    expect(disclosure.textContent).toContain(detail)
+    expect(screen.getByRole('dialog').contains(disclosure)).toBe(true)
+    expect(input.value).toBe('fixture-secret')
+    expect(respond).toHaveBeenCalledExactlyOnceWith({ value: 'fixture-secret' })
     expect(notifyError).not.toHaveBeenCalled()
   })
 })

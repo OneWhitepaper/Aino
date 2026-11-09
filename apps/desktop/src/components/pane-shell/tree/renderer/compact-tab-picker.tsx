@@ -16,6 +16,8 @@ import { useI18n } from '@/i18n'
 import type { TabActionsMenu } from './track-model'
 
 interface CompactTabPickerProps {
+  /** Desktop conversations retain one draggable title beside this small menu. */
+  presentation?: 'tabs' | 'conversation'
   activeId: string
   tabs: { id: string; title: string; label?: ReactNode }[]
   onSelect: (id: string) => void
@@ -27,6 +29,7 @@ interface CompactTabPickerProps {
 }
 
 interface PickerRowProps {
+  compact?: boolean
   /** Called when the row MOUNTS (each time the picker opens): the main tab
    *  gains its menu once it holds a session, and the picker's own props do
    *  not change when that happens. */
@@ -35,18 +38,18 @@ interface PickerRowProps {
   tab: CompactTabPickerProps['tabs'][number]
 }
 
-function PickerRow({ hasActions, onActions, tab }: PickerRowProps) {
+function PickerRow({ compact, hasActions, onActions, tab }: PickerRowProps) {
   const { t } = useI18n()
 
   return (
     <div className="flex items-stretch">
-      <DropdownMenuRadioItem className="min-h-11 min-w-0 flex-1" value={tab.id}>
+      <DropdownMenuRadioItem className={compact ? 'min-h-8 min-w-0 flex-1' : 'min-h-11 min-w-0 flex-1'} value={tab.id}>
         <span className="min-w-0 whitespace-normal break-words">{tab.label ?? tab.title}</span>
       </DropdownMenuRadioItem>
       {hasActions() && (
         <DropdownMenuItem
           aria-label={t.zones.tabActions(tab.title)}
-          className="min-h-11 min-w-11 shrink-0 justify-center"
+          className={compact ? 'min-h-8 min-w-8 shrink-0 justify-center' : 'min-h-11 min-w-11 shrink-0 justify-center'}
           onSelect={onActions}
         >
           <Codicon name="ellipsis" />
@@ -59,7 +62,15 @@ function PickerRow({ hasActions, onActions, tab }: PickerRowProps) {
 /** A phone's strip shows its current tab and a count; every open tab stays
  * reachable without a hidden horizontal drag gesture, and so does every tab's
  * menu (archive, delete, rename…) — a phone has no strip to right-click. */
-export function CompactTabPicker({ activeId, tabs, onSelect, onClose, newTab, tabActions }: CompactTabPickerProps) {
+export function CompactTabPicker({
+  activeId,
+  tabs,
+  onSelect,
+  onClose,
+  newTab,
+  tabActions,
+  presentation = 'tabs'
+}: CompactTabPickerProps) {
   const { t } = useI18n()
   const labelId = useId()
   const countId = useId()
@@ -73,21 +84,36 @@ export function CompactTabPicker({ activeId, tabs, onSelect, onClose, newTab, ta
   const active = tabs.find(tab => tab.id === activeId)
   const count = t.zones.tabCount(tabs.length)
   const menuFor = menu ? tabActions?.(menu.id) : undefined
+  const conversation = presentation === 'conversation'
 
   return (
-    <div className="relative flex min-w-0 flex-1 items-stretch" onPointerDown={event => event.stopPropagation()}>
+    <div
+      className={
+        conversation ? 'relative flex shrink-0 items-center self-center' : 'relative flex min-w-0 flex-1 items-stretch'
+      }
+      onPointerDown={event => event.stopPropagation()}
+    >
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button
-            aria-labelledby={`${countId} ${labelId}`}
-            className="min-w-0 flex-1 justify-between"
-            data-slot="compact-tab-picker"
+            aria-label={conversation ? t.zones.switchConversation : undefined}
+            aria-labelledby={conversation ? undefined : `${countId} ${labelId}`}
+            className={conversation ? 'size-6 p-0 text-(--ui-text-tertiary)' : 'min-w-0 flex-1 justify-between'}
+            data-slot={conversation ? 'conversation-switcher' : 'compact-tab-picker'}
             ref={pickerRef}
-            size="touch"
+            size={conversation ? 'icon' : 'touch'}
             variant="ghost"
           >
-            <span className="truncate" id={labelId}>{active?.label ?? active?.title}</span>
-            <span className="shrink-0 text-xs text-muted-foreground" id={countId}>{count}</span>
+            {!conversation && (
+              <span className="truncate" id={labelId}>
+                {active?.label ?? active?.title}
+              </span>
+            )}
+            {!conversation && (
+              <span className="shrink-0 text-xs text-muted-foreground" id={countId}>
+                {count}
+              </span>
+            )}
             <Codicon name="chevron-down" />
           </Button>
         </DropdownMenuTrigger>
@@ -105,6 +131,7 @@ export function CompactTabPicker({ activeId, tabs, onSelect, onClose, newTab, ta
           <DropdownMenuRadioGroup onValueChange={onSelect} value={activeId}>
             {tabs.map(tab => (
               <PickerRow
+                compact={conversation}
                 hasActions={() => Boolean(tabActions?.(tab.id))}
                 key={tab.id}
                 onActions={() => {

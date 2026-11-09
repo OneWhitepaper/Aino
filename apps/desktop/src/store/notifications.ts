@@ -2,6 +2,7 @@ import { atom } from 'nanostores'
 
 import { translateNow } from '@/i18n'
 import { isOutOfSyncRpcParams } from '@/lib/gateway-rpc'
+import { triggerHaptic } from '@/lib/haptics'
 import { isTimeoutError } from '@/lib/with-timeout'
 import { type ErrorToastCategory, recordFriction } from '@/store/desktop-metrics'
 import { requestBackendRestart, requestRoute } from '@/store/recovery-requests'
@@ -10,7 +11,7 @@ export type NotificationKind = 'error' | 'warning' | 'info' | 'success'
 
 export interface NotificationAction {
   label: string
-  onClick: () => void
+  onClick: () => unknown
 }
 
 export type NotificationPlacement = 'default' | 'bottom-right'
@@ -27,14 +28,22 @@ export interface AppNotification {
   title?: string
   message: string
   detail?: string
+  sourceKey?: string
   action?: NotificationAction
   /** Second, quieter button beside `action` (e.g. "Disable" next to "Sign in"). */
   secondaryAction?: NotificationAction
   onDismiss?: () => void
   createdAt: number
+  /** A different account/source may reuse a code-defined ID, never its reading context. */
+  epoch?: number
+  instance?: number
   placement?: NotificationPlacement
   /** Survives clearNotifications: a standing offer, not feedback on the last turn. */
   persistent?: boolean
+  repeatCount?: number
+  pendingAction?: 'action' | 'secondaryAction'
+  actionError?: string
+  actionErrorDetail?: string
 }
 
 export interface NotificationInput {
@@ -46,6 +55,7 @@ export interface NotificationInput {
   title?: string
   message: string
   detail?: string
+  sourceKey?: string
   action?: NotificationAction
   secondaryAction?: NotificationAction
   onDismiss?: () => void
@@ -55,9 +65,115 @@ export interface NotificationInput {
 }
 
 let notificationCounter = 0
-const timers = new Map<string, number>()
+interface NotificationTimer {
+  handle?: number
+  remaining: number
+  startedAt: number
+  readers: Set<string>
+}
+const timers = new Map<string, NotificationTimer>()
+const readersById = new Map<string, Set<string>>()
+const actionRuns = new Map<string, { slot: 'action' | 'secondaryAction' }>()
 
 export const $notifications = atom<AppNotification[]>([])
+export const $notificationEpoch = atom(0)
+
+function stopTimer(id: string) {
+  window.clearTimeout(timers.get(id)?.handle)
+  timers.delete(id)
+}
+
+function startTimer(id: string, timer: NotificationTimer) {
+  timer.startedAt = Date.now()
+  timer.handle = window.setTimeout(() => dismissNotification(id), timer.remaining)
+}
+
+/** Pointer, keyboard and detail-panel readers independently own expiry pauses. */
+export function pauseNotification(id: string, reader: string) {
+  if (!$notifications.get().some(item => item.id === id)) {
+    return
+  }
+
+  const readers = readersById.get(id) ?? new Set<string>()
+  readersById.set(id, readers)
+
+  if (readers.has(reader)) {
+    return
+  }
+
+  const timer = timers.get(id)
+
+  if (timer && !readers.size) {
+    window.clearTimeout(timer.handle)
+    timer.remaining = Math.max(0, timer.remaining - (Date.now() - timer.startedAt))
+  }
+
+  readers.add(reader)
+}
+
+export function resumeNotification(id: string, reader: string) {
+  const readers = readersById.get(id)
+
+  if (!readers?.delete(reader) || readers.size) {
+    return
+  }
+
+  const timer = timers.get(id)
+
+  if (timer) {
+    startTimer(id, timer)
+  }
+}
+
+export async function runNotificationAction(id: string, slot: 'action' | 'secondaryAction') {
+  const notification = $notifications.get().find(item => item.id === id)
+  const action = notification?.[slot]
+
+  if (!notification || !action || actionRuns.has(id)) {
+    return
+  }
+
+  const run = { slot }
+  actionRuns.set(id, run)
+  const pending: AppNotification = { ...notification, actionError: undefined, pendingAction: slot }
+  $notifications.set($notifications.get().map(item => (item === notification ? pending : item)))
+  pauseNotification(id, 'action')
+
+  try {
+    await action.onClick()
+
+    if ($notifications.get().includes(pending)) {
+      dismissNotification(id)
+    }
+  } catch (error) {
+    if (actionRuns.get(id) !== run) {
+      return
+    }
+
+    const failure = readableError(error, translateNow('errors.genericFailure'))
+    // Recovery remains persistent after failure, even for a normally short-lived notice.
+    stopTimer(id)
+    $notifications.set(
+      $notifications
+        .get()
+        .map(item =>
+          item.id === id
+            ? { ...item, pendingAction: undefined, actionError: failure.message, actionErrorDetail: failure.detail }
+            : item
+        )
+    )
+  } finally {
+    if (actionRuns.get(id) === run) {
+      actionRuns.delete(id)
+      $notifications.set(
+        $notifications
+          .get()
+          .map(item => (item.id === id && item.pendingAction ? { ...item, pendingAction: undefined } : item))
+      )
+      resumeNotification(id, 'action')
+    }
+  }
+}
 
 function defaultDuration(kind: NotificationKind) {
   if (kind === 'error' || kind === 'warning') {
@@ -67,13 +183,9 @@ function defaultDuration(kind: NotificationKind) {
   return 5_000
 }
 
-// Only interruptions worth a top-center toast: errors, warnings, and anything
-// with an action button the user needs to notice and click (restart gateway,
-// update available, sign-in prompts). Everything else — the bulk of routine
-// "saved"/"enabled"/"archived" confirmations across settings, MCP, cron,
-// profiles, messaging — is ambient feedback and defaults to a quiet
-// bottom-right toast instead. Callers can still force `placement: 'default'`
-// for a specific case.
+// Preserve caller placement metadata for compatibility. NotificationStack
+// presents every entry in the same in-flow summary and reading panel; these
+// legacy values no longer select separate corner portals.
 function defaultPlacement(kind: NotificationKind, action?: NotificationAction): NotificationPlacement {
   if (kind === 'error' || kind === 'warning' || action) {
     return 'default'
@@ -107,7 +219,7 @@ const MAINTENANCE_ROUTE = '/command-center?section=maintenance'
 export const RECOVERY_ACTIONS = {
   openUpdates: (): NotificationAction => ({
     label: translateNow('notifications.updateHermes'),
-    onClick: () => void import('@/store/updates').then(({ openUpdatesWindow }) => openUpdatesWindow())
+    onClick: () => import('@/store/updates').then(({ openUpdatesWindow }) => openUpdatesWindow())
   }),
   restartHermes: (): NotificationAction => ({
     label: translateNow('notifications.actions.restartHermes'),
@@ -301,7 +413,10 @@ export function readableError(
   const unwrapped = raw.match(/Error invoking remote method '[^']+': Error: (.+)$/)?.[1] ?? raw
   const cleaned = cleanErrorText(unwrapped)
   const rpcData = error && typeof error === 'object' ? (error as { data?: unknown }).data : undefined
-  const rpcError = rpcData && typeof rpcData === 'object' ? rpcData as { detail?: unknown; reason?: unknown } : undefined
+
+  const rpcError =
+    rpcData && typeof rpcData === 'object' ? (rpcData as { detail?: unknown; reason?: unknown }) : undefined
+
   const rpcDetail = typeof rpcError?.detail === 'string' ? cleanErrorText(rpcError.detail) : undefined
   const detail = rpcDetail ?? cleaned.match(/"detail"\s*:\s*"([^"]+)"/)?.[1] ?? cleaned
   const reason = typeof rpcError?.reason === 'string' ? rpcError.reason : undefined
@@ -329,7 +444,27 @@ function showNotification(input: NotificationInput, errorCategory: ErrorToastCat
     recordFriction('error_toast', errorCategory)
   }
 
-  const id = input.id ?? `${Date.now()}-${notificationCounter++}`
+  // Only passive feedback can be safely coalesced without an explicit owner ID.
+  // Identical labels on two actions can target different accounts or connections.
+  const duplicate = input.id
+    ? $notifications.get().find(item => item.id === input.id)
+    : !input.action && !input.secondaryAction && !input.onDismiss
+      ? $notifications
+          .get()
+          .find(
+            item =>
+              !item.action &&
+              !item.secondaryAction &&
+              !item.onDismiss &&
+              item.kind === kind &&
+              item.title === input.title &&
+              item.message === input.message &&
+              item.detail === input.detail &&
+              item.meta === input.meta
+          )
+      : undefined
+
+  const id = input.id ?? duplicate?.id ?? `${Date.now()}-${notificationCounter++}`
 
   const notification: AppNotification = {
     id,
@@ -340,26 +475,38 @@ function showNotification(input: NotificationInput, errorCategory: ErrorToastCat
     title: input.title,
     message: input.message,
     detail: input.detail,
+    sourceKey: input.sourceKey,
     action: input.action,
     secondaryAction: input.secondaryAction,
     onDismiss: input.onDismiss,
     createdAt: Date.now(),
+    epoch: $notificationEpoch.get(),
+    instance: duplicate?.instance ?? ++notificationCounter,
     placement: input.placement ?? defaultPlacement(kind, input.action),
-    persistent: input.persistent
+    persistent: input.persistent,
+    repeatCount: (duplicate?.repeatCount ?? 0) + 1,
+    pendingAction: actionRuns.get(id)?.slot
   }
 
-  window.clearTimeout(timers.get(id))
-  timers.delete(id)
-  // Visual depth is capped by CardStack, not by discarding queued notifications.
+  const readers = readersById.get(id) ?? new Set<string>()
+  readersById.set(id, readers)
+  stopTimer(id)
+  // Replacement stays at its current reading position; arrivals never reorder it.
   $notifications.set([notification, ...$notifications.get().filter(item => item.id !== id)])
 
-  const duration = input.durationMs ?? defaultDuration(kind)
+  if (kind === 'success' || kind === 'error' || kind === 'warning') {
+    triggerHaptic(kind)
+  }
+
+  const duration = input.durationMs ?? (input.action || input.secondaryAction ? 0 : defaultDuration(kind))
 
   if (duration > 0) {
-    timers.set(
-      id,
-      window.setTimeout(() => dismissNotification(id), duration)
-    )
+    const timer = { remaining: duration, startedAt: Date.now(), readers }
+    timers.set(id, timer)
+
+    if (!readers.size) {
+      startTimer(id, timer)
+    }
   }
 
   return id
@@ -405,8 +552,9 @@ export function notifyError(
 }
 
 export function dismissNotification(id: string) {
-  window.clearTimeout(timers.get(id))
-  timers.delete(id)
+  stopTimer(id)
+  readersById.delete(id)
+  actionRuns.delete(id)
   const dismissed = $notifications.get().find(item => item.id === id)
   $notifications.set($notifications.get().filter(item => item.id !== id))
   dismissed?.onDismiss?.()
@@ -414,12 +562,26 @@ export function dismissNotification(id: string) {
 
 export function clearNotifications() {
   const all = $notifications.get()
-  const cleared = all.filter(item => !item.persistent)
-  $notifications.set(all.filter(item => item.persistent))
+  const cleared = all.filter(item => !item.persistent && !item.pendingAction)
+  $notifications.set(all.filter(item => item.persistent || item.pendingAction))
 
   for (const item of cleared) {
-    window.clearTimeout(timers.get(item.id))
-    timers.delete(item.id)
+    stopTimer(item.id)
+    readersById.delete(item.id)
+    item.onDismiss?.()
+  }
+}
+
+/** Retire callbacks and late completions when their account/source is replaced. */
+export function resetNotifications() {
+  const retired = $notifications.get()
+  $notificationEpoch.set($notificationEpoch.get() + 1)
+  $notifications.set([])
+
+  for (const item of retired) {
+    stopTimer(item.id)
+    readersById.delete(item.id)
+    actionRuns.delete(item.id)
     item.onDismiss?.()
   }
 }

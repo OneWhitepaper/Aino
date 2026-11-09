@@ -18,7 +18,7 @@ interface CustomModelEditorProps {
   dialog?: boolean
 }
 
-const fieldClass = 'grid min-w-0 gap-2 text-[13px] font-medium text-(--ui-text-secondary)'
+const fieldClass = 'grid min-w-0 gap-2 text-[length:var(--aino-text-ui)] font-medium text-(--ui-text-secondary)'
 
 function ConnectionFields({ editor }: { editor: CustomEndpointEditor }) {
   const { t } = useI18n()
@@ -98,7 +98,7 @@ function CustomModelKeyFields({
           value={form.apiKey}
         />
         <Button
-          className="h-10 shrink-0 px-3 text-[13px]"
+          className="h-10 shrink-0 px-3 text-[length:var(--aino-text-ui)]"
           disabled={disabled || editor.testing || !form.baseUrl.trim()}
           onClick={() => void editor.validate()}
           type="button"
@@ -109,13 +109,13 @@ function CustomModelKeyFields({
         </Button>
       </div>
       {selected?.has_api_key && !form.apiKey && (
-        <span className="text-[12px] font-normal text-muted-foreground">{copy.keepKey}</span>
+        <span className="text-[length:var(--aino-text-caption)] font-normal text-muted-foreground">{copy.keepKey}</span>
       )}
       {editor.validation && (
         <p
           aria-live="polite"
           className={cn(
-            'text-[12px] font-normal leading-relaxed',
+            'text-[length:var(--aino-text-caption)] font-normal leading-relaxed',
             editor.validation.kind === 'success'
               ? 'text-(--ui-green)'
               : editor.validation.kind === 'error'
@@ -150,7 +150,9 @@ export function CustomModelEditor({ editor, dialog = false }: CustomModelEditorP
     <div className="space-y-5">
       {selected && (
         <div className="flex items-center justify-between gap-3">
-          <span className="min-w-0 truncate text-[13px] text-(--ui-text-secondary)">{selected.name}</span>
+          <span className="min-w-0 truncate text-[length:var(--aino-text-ui)] text-(--ui-text-secondary)">
+            {selected.name}
+          </span>
           <Button
             disabled={disabled}
             onClick={() => {
@@ -181,16 +183,20 @@ export function CustomModelEditor({ editor, dialog = false }: CustomModelEditorP
           placeholder={c.defaultModelPlaceholder}
           value={form.model}
         />
-        <span className="text-[12px] font-normal leading-relaxed text-muted-foreground">{copy.modelHint}</span>
+        <span className="text-[length:var(--aino-text-caption)] font-normal leading-relaxed text-muted-foreground">
+          {copy.modelHint}
+        </span>
       </label>
 
       <details className="group border-t border-border/50 pt-3">
-        <summary className="flex cursor-pointer list-none items-center gap-1.5 py-1 text-[12px] font-medium text-muted-foreground transition-colors hover:text-foreground [&::-webkit-details-marker]:hidden">
+        <summary className="flex cursor-pointer list-none items-center gap-1.5 py-1 text-[length:var(--aino-text-caption)] font-medium text-muted-foreground transition-colors hover:text-foreground [&::-webkit-details-marker]:hidden">
           <ChevronDown className="size-3.5 -rotate-90 transition-transform group-open:rotate-0" />
           {copy.advanced}
         </summary>
         <div className="space-y-4 pt-3">
-          <p className="text-[12px] leading-relaxed text-muted-foreground">{copy.advancedHint}</p>
+          <p className="text-[length:var(--aino-text-caption)] leading-relaxed text-muted-foreground">
+            {copy.advancedHint}
+          </p>
           <fieldset className={fieldClass} disabled={disabled}>
             <legend className="mb-2">{c.apiMode}</legend>
             <SegmentedControl
@@ -224,7 +230,7 @@ export function CustomModelEditor({ editor, dialog = false }: CustomModelEditorP
               />
             </label>
           </div>
-          <div className="grid gap-3 text-[12px] text-muted-foreground">
+          <div className="grid gap-3 text-[length:var(--aino-text-caption)] text-muted-foreground">
             {!dialog && (
               <label className="flex items-center gap-2">
                 <Checkbox
@@ -248,13 +254,15 @@ export function CustomModelEditor({ editor, dialog = false }: CustomModelEditorP
       </details>
       {endpoints.length > 0 && (
         <details className="group border-t border-border/50 pt-3">
-          <summary className="flex cursor-pointer list-none items-center gap-1.5 py-1 text-[12px] font-medium text-muted-foreground transition-colors hover:text-foreground [&::-webkit-details-marker]:hidden">
+          <summary className="flex cursor-pointer list-none items-center gap-1.5 py-1 text-[length:var(--aino-text-caption)] font-medium text-muted-foreground transition-colors hover:text-foreground [&::-webkit-details-marker]:hidden">
             <ChevronDown className="size-3.5 -rotate-90 transition-transform group-open:rotate-0" />
             {copy.savedConfigurations}
             <span className="ms-auto font-normal tabular-nums">{endpoints.length}</span>
           </summary>
           <div className="space-y-2 pt-3">
-            <p className="text-[12px] leading-relaxed text-muted-foreground">{copy.savedExplanation}</p>
+            <p className="text-[length:var(--aino-text-caption)] leading-relaxed text-muted-foreground">
+              {copy.savedExplanation}
+            </p>
             {endpoints.map(endpoint => (
               <div className="flex items-center gap-1" key={endpoint.id}>
                 <Button
@@ -269,8 +277,10 @@ export function CustomModelEditor({ editor, dialog = false }: CustomModelEditorP
                   variant={endpoint.id === selected?.id ? 'secondary' : 'ghost'}
                 >
                   <span className="grid min-w-0 gap-1">
-                    <span className="truncate text-[13px]">{endpoint.name}</span>
-                    <span className="truncate text-[12px] font-normal text-muted-foreground">{endpoint.base_url}</span>
+                    <span className="truncate text-[length:var(--aino-text-ui)]">{endpoint.name}</span>
+                    <span className="truncate text-[length:var(--aino-text-caption)] font-normal text-muted-foreground">
+                      {endpoint.base_url}
+                    </span>
                   </span>
                 </Button>
                 {endpoint.source !== 'direct-config' && (

@@ -9,6 +9,8 @@ import { $activeConnectionId } from '@/store/connections'
 import { $gatewayManagedCapabilities, managedModelRouteCapabilityFrom } from '@/store/gateway-managed-capability'
 import { platformModelCatalog, readPlatformDefault } from '@/store/platform-models'
 
+import { hasPlatformModelIdentity } from '../../../shared/platform-contract'
+
 import type { DefaultMainModelSource } from './default-main-model'
 import { appliedMainModelSource } from './default-main-model-source'
 
@@ -41,7 +43,7 @@ export function useDefaultMainModel(
   )
 
   const platformOwnerReady =
-    platform.account?.phase === 'signed_in' &&
+    hasPlatformModelIdentity(platform.account) &&
     capability === 'supported' &&
     owner?.user_id === platform.account.account?.id
 

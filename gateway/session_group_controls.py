@@ -16,6 +16,8 @@ GROUP_METHODS = {
     'groups.state': 'session:read',
     'groups.log': 'session:read',
     'groups.create': 'session:control',
+    'groups.prepare_model': 'session:control',
+    'groups.model_respond': 'session:control',
     'groups.rename': 'session:control',
     'groups.disband': 'session:control',
     'groups.send': 'session:submit',
@@ -32,6 +34,8 @@ _FIELDS = {
     'groups.state': {'room_id', 'include_disbanded'},
     'groups.log': {'room_id', 'since_seq', 'limit', 'include_disbanded'},
     'groups.create': {'room_id', 'name', 'members'},
+    'groups.prepare_model': {'room_id', 'member_id', 'model_id', 'owner', 'follow_profile_config', 'inspect_selection', 'apply_selection'},
+    'groups.model_respond': {'room_id', 'request_id', 'result'},
     'groups.rename': {'room_id', 'event_id', 'name'},
     'groups.disband': {'room_id', 'cancel_id'},
     'groups.send': {'room_id', 'event_id', 'payload'},
@@ -66,6 +70,12 @@ async def dispatch_group_control(connection, method, params):
     if profile and not profile_matches_home(profile, home):
         raise RuntimeStoreError('profile_mismatch')
     supplied = {key: value for key, value in params.items() if key != 'profile'}
+    if method == 'groups.prepare_model':
+        from gateway.session_group_models import prepare_group_model
+        return await prepare_group_model(connection, supplied)
+    if method == 'groups.model_respond':
+        from gateway.session_model_requests import respond_group_model
+        return await respond_group_model(connection, supplied)
     siblings = _roster_siblings(connection, supplied) if method == 'profiles.list' else ()
 
     def invoke():
@@ -82,7 +92,11 @@ async def dispatch_group_control(connection, method, params):
                 raise RuntimeStoreError(getattr(exc, 'reason', None) or 'invalid_params') from exc
             except (ValueError, TypeError) as exc:
                 raise RuntimeStoreError('invalid_params') from exc
-    return await asyncio.to_thread(invoke)
+    result = await asyncio.to_thread(invoke)
+    if method == 'groups.state':
+        from gateway.session_model_requests import model_requests_for_room
+        result['model_requests'] = await asyncio.to_thread(model_requests_for_room, connection, supplied.get('room_id'))
+    return result
 
 
 def _group(authority, actor, method, params, *, host_scope=False):

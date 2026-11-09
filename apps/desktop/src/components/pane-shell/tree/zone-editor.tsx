@@ -409,7 +409,7 @@ export function ZoneEditor() {
           <h2 className="text-sm font-semibold text-foreground">{t.zones.zoneEditorTitle}</h2>
           <p className="text-xs text-muted-foreground/80">
             {t.zones.editorHintPre}
-            <kbd className="rounded border border-(--ui-stroke-secondary) bg-foreground/5 px-1 font-mono text-[10px]">
+            <kbd className="rounded border border-(--ui-stroke-secondary) bg-foreground/5 px-1 font-mono text-[length:var(--aino-text-caption)]">
               ⇧
             </kbd>
             {t.zones.editorHintPost}
@@ -469,7 +469,7 @@ export function ZoneEditor() {
             >
               {/* Quiet zone tag — the app's small-caps label voice, not a
                   billboard number. */}
-              <span className="select-none text-[0.64rem] font-semibold uppercase tracking-[0.16em] text-(--ui-text-tertiary)">
+              <span className="select-none text-[length:var(--aino-text-caption)] font-semibold uppercase tracking-[0.16em] text-(--ui-text-tertiary)">
                 {t.zones.zoneTag(zone.index + 1)}
               </span>
             </div>
@@ -549,12 +549,7 @@ export function ZoneEditor() {
         {/* Merge affordance at drag-release point. */}
         {mergeAt && selection.length > 1 && (
           <div className="absolute z-20 flex gap-1" style={{ left: mergeAt.x, top: mergeAt.y }}>
-            <Button
-              onClick={merge}
-              onPointerDown={e => e.stopPropagation()}
-              size="sm"
-              variant="outline"
-            >
+            <Button onClick={merge} onPointerDown={e => e.stopPropagation()} size="sm" variant="outline">
               {t.zones.mergeZones(selection.length)}
             </Button>
           </div>

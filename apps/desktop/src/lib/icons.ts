@@ -10,6 +10,7 @@ import {
 } from '@tabler/icons-react'
 import { createElement, forwardRef } from 'react'
 
+import codiconIconNodes from '@/assets/aino-icons/codicon-nodes.json'
 import approvedIconNodes from '@/assets/aino-icons/icon-park-nodes.json'
 
 interface IconNode {
@@ -18,14 +19,22 @@ interface IconNode {
   children: IconNode[]
 }
 
+interface OfficialIcon {
+  viewBox: string
+  nodes: IconNode[]
+}
+
 function renderIconNode(node: IconNode, key: number): React.ReactNode {
   return createElement(node.tag, { ...node.attrs, key }, node.children.map(renderIconNode))
 }
 
-/** Approved IconPark paths, exported at build time: no additional runtime icon library. */
+/** Official Codicon geometry matches the approved comp without a runtime library.
+ * Specialty symbols keep their existing semantic shape at the same optical weight. */
 function designIcon(name: keyof typeof approvedIconNodes) {
+  const official = (codiconIconNodes as Record<string, OfficialIcon>)[name]
+
   const Icon = forwardRef<SVGSVGElement, IconProps>(function ApprovedIcon(
-    { children, className, color = 'currentColor', size = 24, stroke = 1.7, strokeWidth = stroke, title, ...props },
+    { children, className, color = 'currentColor', size = 24, stroke = 3, strokeWidth = stroke, title, ...props },
     ref
   ) {
     return createElement(
@@ -35,20 +44,28 @@ function designIcon(name: keyof typeof approvedIconNodes) {
         className,
         color,
         'data-aino-icon': name,
-        fill: 'none',
+        'data-aino-icon-family': official ? 'codicon' : 'specialty',
+        fill: official ? 'currentColor' : 'none',
         height: size,
         ref,
-        stroke: 'currentColor',
+        stroke: official ? 'none' : 'currentColor',
         strokeLinecap: 'round',
         strokeLinejoin: 'round',
         strokeWidth,
-        viewBox: '0 0 48 48',
+        viewBox: official?.viewBox ?? '0 0 16 16',
         width: size,
         ...props
       },
       title && createElement('title', {}, title),
-      (approvedIconNodes[name] as IconNode[]).map(renderIconNode),
-      children
+      official
+        ? official.nodes.map(renderIconNode)
+        : createElement(
+            'g',
+            { transform: 'scale(0.3333333333333333)' },
+            (approvedIconNodes[name] as IconNode[]).map(renderIconNode),
+            children
+          ),
+      official ? children : null
     )
   })
 

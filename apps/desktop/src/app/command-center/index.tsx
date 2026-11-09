@@ -584,7 +584,7 @@ export function CommandCenterView({
           destructive
           doneLabel={t.sidebar.row.deleted}
           onClose={() => setPendingDelete(null)}
-          onConfirm={() => void onDeleteSession(pendingDelete.id)}
+          onConfirm={() => onDeleteSession(pendingDelete.id)}
           open
           title={t.sidebar.row.deleteTitle}
         />

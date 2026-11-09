@@ -21,7 +21,7 @@
 import { computed, type ReadableAtom } from 'nanostores'
 import type { ReactNode } from 'react'
 
-import { capabilityScoped, getApiRequestConnection } from '@/api/client'
+import { ambientOwnerConnectionId, capabilityScoped, getApiRequestConnection } from '@/api/client'
 import { mutateSessionFenced } from '@/api/sessions'
 import { openSession, type OpenSessionIntent, revealSessionWorkspace } from '@/app/open-session'
 import { syncWorkspaceRoute } from '@/app/routes'
@@ -38,7 +38,8 @@ import {
   $workspaceMode,
   $workspaceOwnerKey,
   setWorkspaceScope as publishWorkspaceScope,
-  setWorkspaceOwnerLabel
+  setWorkspaceOwnerLabel,
+  type WorkspacePaneScope
 } from '@/components/pane-shell/workspace-scope'
 import { onGatewayEvent } from '@/contrib/events'
 import { registry } from '@/contrib/registry'
@@ -100,6 +101,7 @@ import {
   focusWorkspaceOwnerSessionTile,
   sessionTileDelegate
 } from '@/store/session-states'
+import { setSettingsScope } from '@/store/settings-scope'
 import { runGatewayRestart } from '@/store/system-actions'
 import type { PaginatedSessions, UsageStats } from '@/types/hermes'
 
@@ -109,6 +111,7 @@ import { pluginDecisions, profiles, skills, toolsets } from './bridge'
 import { composerHost } from './composer'
 import { $focusedAwaitingResponse, $focusedBusy } from './focused-turn'
 import { i18nHost } from './i18n'
+import { restoreEmptyBotModelDefault } from './plugin-empty-bot-model'
 import { planPluginOpenSession } from './plugin-open-session-plan'
 import { requestPluginActiveGateway } from './plugin-session-create'
 import { dropLeftoverProfilePrefs, warmProfile } from './profile-local'
@@ -128,6 +131,8 @@ import { switchWorkspaceScope } from './workspace-navigation'
 export * from './areas'
 /** The plugin authoring contract (`HermesPlugin`, `PluginContext`, `ctx.*` door types). */
 export type * from './plugin-contract'
+export { respondPluginGroupModelRequests } from './plugin-group-models'
+export type { GroupConversationModelRequest } from './plugin-group-models'
 export type { PluginProfileRequestOptions, PluginProfileRoute } from './profile-request'
 
 // -- state: readonly views over the app's live atoms -------------------------
@@ -262,6 +267,9 @@ export interface PluginOpenSessionOptions {
   hydrationTimeoutMs?: number
   intent?: OpenSessionIntent
   keepAllProfilesScope?: boolean
+  /** Recheck caller intent after a cold dial, before navigating. Once this
+   *  open navigates, its own page change must not cancel transcript hydration. */
+  openingStillCurrent?: (() => boolean) | null
   /** Refresh an already-on-screen surface IN PLACE — no navigation, no
    *  tile-minting, no focus steal. The canonical-chats re-resume
    *  (session.reclaimed, roster activity) is a BACKGROUND refresh: the user
@@ -465,6 +473,8 @@ function waitForFocusedSessionHydration({
     unbinds.push($sessionStates.listen(check))
     unbinds.push($workspaceMode.listen(check))
     unbinds.push($workspaceOwnerKey.listen(check))
+    window.addEventListener('hashchange', check)
+    unbinds.push(() => window.removeEventListener('hashchange', check))
 
     timer = window.setTimeout(() => {
       finish(new Error(`Timed out loading ${profile}'s session history.`))
@@ -628,6 +638,23 @@ export const host = {
     // the tile. Reveal imperatively, the same way `navigateToWorkspacePage`
     // does for the sidebar and keybinds.
     syncWorkspaceRoute(to)
+  },
+
+  /** Open the existing model settings for this owner without activating its
+   *  workspace. Settings currently shares the ambient REST connection, so a
+   *  different source must be selected explicitly before this door is usable. */
+  openModelSettings: (owner: PluginProfileRoute | string): boolean => {
+    const route = typeof owner === 'string' ? null : owner
+    const profile = (typeof owner === 'string' ? owner : owner.targetProfile).trim()
+
+    if (!profile || (route && (!route.connectionId || route.connectionId !== ambientOwnerConnectionId()))) {
+      return false
+    }
+
+    setSettingsScope(profile)
+    host.navigate('/settings?tab=config:model')
+
+    return true
   },
 
   warmProfile,
@@ -802,7 +829,12 @@ export const host = {
    *  and would otherwise look like every session disappeared. Pass false to
    *  also scope chrome onto that profile and collapse the sidebar. */
   openSession: async (storedSessionId: string, options: PluginOpenSessionOptions = {}): Promise<void> => {
+    if (options.openingStillCurrent && !options.openingStillCurrent()) {
+      throw new Error('Session open was superseded by a newer selection.')
+    }
+
     const generation = ++openSessionGeneration
+    let navigationHash: string | null = null
 
     // A new wake owns the syncing affordance — a lingering badge from an
     // earlier paint-first wake must not survive into this one.
@@ -852,6 +884,9 @@ export const host = {
 
     const openingStillCurrent = () =>
       generation === openSessionGeneration &&
+      (navigationHash === null
+        ? !options.openingStillCurrent || options.openingStillCurrent()
+        : window.location.hash === navigationHash) &&
       (options.workspaceMode !== 'bots' ||
         options.refreshInPlace ||
         ($workspaceMode.get() === 'bots' && $workspaceOwnerKey.get() === (options.workspaceOwnerKey ?? null)))
@@ -961,6 +996,10 @@ export const host = {
       // again inside the same wake — that is the Retry surface's job.
       for (let attempt = 1; attempt <= maxAttempts; attempt++) {
         try {
+          if (!openingStillCurrent()) {
+            throw new Error('Session open was superseded by a newer selection.')
+          }
+
           const navigate = (to: string, opts?: { replace?: boolean }) => {
             const target = to.startsWith('#') ? to : `#${to}`
 
@@ -1015,6 +1054,10 @@ export const host = {
             openSession(storedSessionId, navigate, intent)
           }
 
+          // Accept this open's own synchronous navigation, then keep guarding
+          // its destination through hydration, recovery and any retry.
+          navigationHash = window.location.hash
+
           // Judge the main surface AFTER the open: on a cold start the persisted
           // route can already point at this session while selection has not
           // settled, so a pre-open "already selected" precondition skips the
@@ -1068,13 +1111,30 @@ export const host = {
               storedSessionId,
               timeoutMs: hydrationTimeoutMs
             })
+
+            if (
+              options.workspaceMode === 'bots' &&
+              options.expectHistory === false &&
+              !options.refreshInPlace &&
+              ownerRoute
+            ) {
+              await restoreEmptyBotModelDefault({
+                storedSessionId,
+                route: { ...ownerRoute, targetProfile: explicitRoute?.targetProfile || ownerRoute.profile },
+                isCurrent: openingStillCurrent
+              })
+            }
+
+            if (!openingStillCurrent()) {
+              throw new Error('Session open was superseded by a newer selection.')
+            }
           }
 
           break
         } catch (error) {
           const retryable =
             options.awaitHydration &&
-            generation === openSessionGeneration &&
+            openingStillCurrent() &&
             attempt < maxAttempts &&
             error instanceof Error &&
             error.message.startsWith('Timed out loading ')
@@ -1088,6 +1148,10 @@ export const host = {
           // so checking it would spuriously abort a local bot's hydration retry.
           if (explicitRoute && !(await pluginRouteStillRegistered(explicitRoute))) {
             throw new Error(`The ${targetProfile} gateway is no longer available.`)
+          }
+
+          if (!openingStillCurrent()) {
+            throw new Error('Session open was superseded by a newer selection.')
           }
 
           // Logged per attempt so a support bundle shows the retry happened at
@@ -1157,6 +1221,12 @@ export const host = {
       minWidth?: string
       onClose?: () => void
       render: () => ReactNode
+      /** Existing pane chrome: the workspace owns its icon and live label. */
+      tabLead?: () => ReactNode
+      tabTitle?: () => ReactNode
+      tabTitleText?: () => string
+      tabPresentation?: 'conversation'
+      workspaceScope?: WorkspacePaneScope
       title?: string
       uncloseable?: boolean
     }
@@ -1178,6 +1248,15 @@ export const host = {
         headerVeto: options.headerVeto,
         minWidth: options.minWidth ?? '22rem',
         placement: 'main',
+        tabLead: options.tabLead,
+        tabTitle: options.tabTitle,
+        tabTitleText: options.tabTitleText,
+        tabPresentation: options.tabPresentation,
+        workspaceScope:
+          options.workspaceScope ??
+          (options.tabPresentation === 'conversation'
+            ? { mode: $workspaceMode.get(), ownerKey: $workspaceOwnerKey.get() }
+            : undefined),
         uncloseable: options.uncloseable
       },
       id: paneId,
@@ -1196,6 +1275,11 @@ export const host = {
     // core-sourced contributed pane only dismisses it and the registration
     // would leak past the plugin surface that owns it.
     registerPaneCloser(paneId, close)
+
+    if (options.tabPresentation === 'conversation') {
+      revealSessionWorkspace(host.navigate)
+    }
+
     revealTreePane(paneId)
 
     return close
@@ -1665,6 +1749,7 @@ export { Wordmark } from '@/components/chat/wordmark'
  *  `width`/`height`. */
 export type { FloatingAnchor } from '@/components/pane-shell/tree/renderer/floating-rect'
 export { StatusDot, type StatusTone } from '@/components/status-dot'
+export { Alert, AlertDescription } from '@/components/ui/alert'
 export { Badge } from '@/components/ui/badge'
 export { Button } from '@/components/ui/button'
 export { Checkbox } from '@/components/ui/checkbox'
@@ -1720,7 +1805,7 @@ export { Kbd, KbdGroup } from '@/components/ui/kbd'
  *  page loads) — the same one every core page uses. */
 export { Loader, type LoaderType } from '@/components/ui/loader'
 export { LogView } from '@/components/ui/log-view'
-export { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+export { Popover, PopoverAnchor, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 /** Full-row / region click target. Imposes NO styling — the caller keeps its own
  *  layout classes — it just bakes in `type="button"` and a stable `data-slot`.
  *  Use it for rows and regions; `Button` is for ordinary compact actions. */
@@ -1736,7 +1821,7 @@ export { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 export { Separator } from '@/components/ui/separator'
 export { Skeleton } from '@/components/ui/skeleton'
 export { Switch } from '@/components/ui/switch'
-export { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
+export { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 export { Textarea } from '@/components/ui/textarea'
 export { Tip, Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 export type { GatewayEventListener } from '@/contrib/events'
@@ -1746,18 +1831,19 @@ export type { GatewayEventListener } from '@/contrib/events'
  *  `ctx.register` stays the door for permanent contributions. Namespace the
  *  id with your plugin slug (`kanban:board-switcher`). */
 export { Contribute, type ContributeProps } from '@/contrib/react/contribute'
-
-// -- contracts ----------------------------------------------------------------
-
 /** Settings ▸ Plugins entries (`ctx.registerSettingsPage`); `pluginSettingsHref` deep-links one. */
 export { pluginSettingsHref, SETTINGS_PLUGINS_AREA } from '@/contrib/settings-pages'
 export type { Contribution } from '@/contrib/types'
+
+// -- contracts ----------------------------------------------------------------
+
 /** The live gateway instance type — for typing the `gateway` prop `ConnectorsTab`
  *  takes; obtain the instance from `host.getGateway()`. */
 export type { HermesGateway } from '@/hermes'
 /** Grab-to-pan for overflow containers (boards, timelines, wide tables) —
  *  the shared scrub primitive; don't hand-roll drag-to-scroll. */
 export { type GrabScroll, useGrabScroll } from '@/hooks/use-grab-scroll'
+export { useResizeObserver } from '@/hooks/use-resize-observer'
 /** Localized copy. `useI18n` reuses the app's strings; `usePluginI18n(id)` +
  *  `ctx.i18n.register` let a plugin ship its OWN locale bundles, scoped like
  *  `ctx.storage` and resolved against the app's active locale — no core edit.
@@ -1835,7 +1921,6 @@ export { PROFILE_SWATCHES, profileColor, profileColorSoft } from '@/lib/profile-
  *  `ctx.socket` frame invalidating a query). Inside components keep using
  *  `useQueryClient`. */
 export { queryClient } from '@/lib/query-client'
-
 /** Compact labels for the reasoning levels exported from @hermes/shared, so a
  *  plugin surfacing a thinking depth uses the same spelling as the app. */
 export { reasoningEffortLabel } from '@/lib/reasoning-effort'
@@ -1844,6 +1929,7 @@ export { reasoningEffortLabel } from '@/lib/reasoning-effort'
  *  setup.runtime_check, reconciled) — pass `host.request`. Don't hand-roll
  *  readiness from raw RPC shapes. */
 export { evaluateRuntimeReadiness, type RuntimeReadinessResult } from '@/lib/runtime-readiness'
+
 /** Row-decoration slots: register a `data` contribution with a `render` for
  *  `SESSION_ROW_AREAS.leading` / `.trailing` to decorate sidebar session rows
  *  (the props carry the row's stored session id). */
@@ -1957,3 +2043,4 @@ export { atom, computed } from 'nanostores'
 /** Markdown renderer (same pipeline core chat surfaces use) so plugins render
  *  message text as a preview instead of raw Markdown source. */
 export { Streamdown } from 'streamdown'
+export { useStickToBottom } from 'use-stick-to-bottom'

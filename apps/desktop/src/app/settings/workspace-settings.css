@@ -8,7 +8,7 @@
 .workspace-settings-intro {
   margin: 0 0 1.5rem;
   color: var(--ui-text-secondary);
-  font-size: 0.75rem;
+  font-size: var(--aino-text-caption);
   line-height: 1.6;
 }
 .workspace-settings-tabs-root {
@@ -30,7 +30,7 @@
   border-bottom: 2px solid transparent;
   color: var(--ui-text-secondary);
   background: transparent;
-  font-size: 0.8125rem;
+  font-size: var(--aino-text-ui);
   font-weight: 400;
   line-height: 1.5;
 }
@@ -45,7 +45,7 @@
 }
 .workspace-settings-section .settings-section-heading {
   margin-bottom: 0.75rem;
-  font-size: 0.875rem;
+  font-size: var(--aino-text-title);
 }
 .workspace-settings-page .settings-group {
   padding-inline: 1.1875rem;
@@ -67,27 +67,27 @@
   justify-content: flex-end;
 }
 .workspace-settings-page .settings-row-label {
-  font-size: 0.8125rem;
+  font-size: var(--aino-text-body);
   font-weight: 500;
 }
 .workspace-settings-page .settings-row-description {
   max-width: 37rem;
-  font-size: 0.75rem;
+  font-size: var(--aino-text-caption);
   line-height: 1.65;
 }
 .workspace-settings-page [data-slot='input'],
 .workspace-settings-page [data-slot='input-group'] {
   min-height: 2.25rem;
-  font-size: 0.8125rem;
+  font-size: var(--aino-text-ui);
 }
 .workspace-settings-page [data-slot='input-group'] [data-slot='input'] {
   min-height: 0;
 }
 .workspace-directory-input {
-  font-family: var(--dt-font-mono);
+  font-family: var(--font-mono);
 }
 .workspace-directory-input [data-slot='input'] {
-  font-size: 0.75rem;
+  font-size: var(--aino-text-caption);
 }
 .workspace-directory-input svg {
   width: 1rem;
@@ -100,7 +100,7 @@
 .workspace-help {
   margin: 0.5625rem 0 0;
   color: var(--ui-text-secondary);
-  font-size: 0.6875rem;
+  font-size: var(--aino-text-caption);
   line-height: 1.65;
 }
 .workspace-list-input {
@@ -108,8 +108,8 @@
   min-height: 5.125rem;
   resize: vertical;
   padding: 0.5rem 0.625rem;
-  font-family: var(--dt-font-mono);
-  font-size: 0.75rem;
+  font-family: var(--font-mono);
+  font-size: var(--aino-text-caption);
   line-height: 1.5;
 }
 .workspace-settings-page [data-slot='switch'] {
@@ -139,7 +139,7 @@
   border-top: 1px solid var(--ui-stroke-tertiary);
   padding-block: 0.75rem;
   color: var(--ui-text-secondary);
-  font-size: 0.75rem;
+  font-size: var(--aino-text-caption);
   line-height: 1.65;
 }
 .workspace-discovery-summary svg,
@@ -155,7 +155,7 @@
   align-items: flex-start;
   margin: 0.8125rem 0 0;
   color: var(--ui-text-secondary);
-  font-size: 0.75rem;
+  font-size: var(--aino-text-caption);
   line-height: 1.65;
 }
 .workspace-group-note {
@@ -173,7 +173,7 @@
   align-items: flex-start;
   gap: 0.6875rem;
   border: 1px solid var(--ui-stroke-tertiary);
-  border-radius: 0.5625rem;
+  border-radius: var(--aino-radius-control);
   padding: 0.875rem;
   background: var(--ui-editor-surface-background);
   cursor: pointer;
@@ -198,18 +198,18 @@
   flex-wrap: wrap;
   align-items: center;
   gap: 0.4375rem;
-  font-size: 0.8125rem;
+  font-size: var(--aino-text-ui);
   font-weight: 500;
 }
 .workspace-mode-option small {
-  font-size: 0.6875rem;
+  font-size: var(--aino-text-caption);
   font-weight: 400;
   color: var(--ui-text-secondary);
 }
 .workspace-mode-description {
   display: block;
   margin-top: 0.25rem;
-  font-size: 0.75rem;
+  font-size: var(--aino-text-caption);
   line-height: 1.65;
   color: var(--ui-text-secondary);
 }
@@ -230,13 +230,13 @@
   font-variant-numeric: tabular-nums;
 }
 .workspace-read-number > span {
-  font-size: 0.75rem;
+  font-size: var(--aino-text-caption);
   color: var(--ui-text-secondary);
   white-space: nowrap;
 }
 .workspace-invalid {
   margin: 0.5625rem 0 0;
-  font-size: 0.75rem;
+  font-size: var(--aino-text-caption);
   line-height: 1.5;
   color: var(--destructive);
 }
@@ -250,7 +250,7 @@
   list-style: none;
   cursor: pointer;
   color: var(--ui-text-secondary);
-  font-size: 0.75rem;
+  font-size: var(--aino-text-caption);
 }
 .workspace-config-names summary::-webkit-details-marker {
   display: none;
@@ -261,15 +261,15 @@
   gap: 0.5rem;
   margin-top: 0.75rem;
   color: var(--ui-text-secondary);
-  font-size: 0.75rem;
+  font-size: var(--aino-text-caption);
 }
 .workspace-config-names dd {
   margin: 0;
   color: var(--ui-text-primary);
 }
 .workspace-config-names code {
-  font-family: var(--dt-font-mono);
-  font-size: 0.6875rem;
+  font-family: var(--font-mono);
+  font-size: var(--aino-text-caption);
   overflow-wrap: anywhere;
 }
 @container workspace-settings (max-width: 43rem) {
@@ -286,7 +286,7 @@
     gap: 0.5rem 1.25rem;
   }
   .workspace-settings-tabs > button {
-    font-size: 0.75rem;
+    font-size: var(--aino-text-caption);
   }
   .workspace-settings-page .settings-group {
     padding-inline: 0.9375rem;

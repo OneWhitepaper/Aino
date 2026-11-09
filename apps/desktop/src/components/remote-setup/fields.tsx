@@ -1,10 +1,12 @@
 import type { ReactElement, ReactNode } from 'react'
 
 import { ListRow, Pill } from '@/app/settings/primitives'
+import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
+import { ErrorIcon } from '@/components/ui/error-state'
 import { Input } from '@/components/ui/input'
 import { useI18n } from '@/i18n'
-import { AlertCircle, Check, Loader2, LogIn } from '@/lib/icons'
+import { Check, Loader2, LogIn } from '@/lib/icons'
 
 import type { RemoteSetup } from './use-remote-setup'
 
@@ -85,10 +87,10 @@ export function RemoteSetupFields({
         </div>
       ) : null}
       {!registry && setup.probeStatus === 'error' ? (
-        <div className="flex items-center gap-2 text-sm text-destructive">
-          <AlertCircle className="size-4" />
-          {copy.probeError}
-        </div>
+        <Alert variant="destructive">
+          <ErrorIcon size="1rem" />
+          <AlertDescription>{copy.probeError}</AlertDescription>
+        </Alert>
       ) : null}
       {registry && !urlOnly ? (
         <Field stacked={false} title={g.authTitle}>
@@ -148,8 +150,20 @@ export function RemoteSetupFields({
           />
         </Field>
       ) : null}
-      {setup.error ? <div className="text-sm text-destructive">{setup.error}</div> : null}
-      {setup.success ? <div className="text-sm text-primary">{setup.success}</div> : null}
+      {setup.error ? (
+        <Alert variant="destructive">
+          <ErrorIcon size="1rem" />
+          <AlertDescription>{setup.error}</AlertDescription>
+        </Alert>
+      ) : null}
+      {setup.success ? (
+        <div
+          className="min-w-0 text-[length:var(--aino-text-body)] leading-relaxed text-(--ui-text-secondary) [overflow-wrap:anywhere]"
+          role="status"
+        >
+          {setup.success}
+        </div>
+      ) : null}
     </div>
   )
 }

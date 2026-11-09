@@ -1,5 +1,6 @@
 import { JSON_RPC_INTERNAL_ERROR, type SetupBeat } from '@hermes/shared'
 
+import { answerPlatformConversationModelRequest } from '@/api/platform-conversation-models'
 import {
   hasLivePreviewSurface,
   requestPopoutPreviewAct,
@@ -786,6 +787,21 @@ const setupBeat: Handler = ctx => {
 export const SERVER_REQUEST_HANDLERS: Record<string, Handler> = {
   approval,
   clarify,
+  'model.session': ({ request }) => {
+    const action = request.params.action
+
+    if (action !== 'list' && action !== 'select') {
+      request.respond({ status: 'unavailable' })
+
+      return
+    }
+
+    void answerPlatformConversationModelRequest({ connectionId: request.connectionId, profile: request.profile }, {
+      action,
+      ...(typeof request.params.query === 'string' ? { query: request.params.query } : {}),
+      ...(typeof request.params.provider === 'string' ? { provider: request.params.provider } : {})
+    }).then(result => request.respond({ ...result }), () => request.respond({ status: 'unavailable' }))
+  },
   'display.install.sudo': displayInstallSudo,
   'preview.act': previewAct,
   'preview.read': previewRead,

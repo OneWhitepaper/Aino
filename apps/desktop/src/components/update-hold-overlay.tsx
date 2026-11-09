@@ -1,7 +1,10 @@
 import { useStore } from '@nanostores/react'
-import { useEffect, useId, useState } from 'react'
+import { Dialog as DialogPrimitive } from 'radix-ui'
+import { useEffect, useRef, useState } from 'react'
 
+import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
+import { Dialog, DialogDescription, DialogFooter, DialogPortal, DialogTitle } from '@/components/ui/dialog'
 import type { UpdateHoldWire } from '@/global'
 import { useI18n } from '@/i18n'
 import { AlertTriangle, FileText, Loader2, Power, RefreshCw } from '@/lib/icons'
@@ -23,7 +26,7 @@ const formatTime = (ms: number) =>
 export function UpdateHoldOverlay() {
   const boot = useStore($desktopBoot)
   const { t } = useI18n()
-  const titleId = useId()
+  const safeActionRef = useRef<HTMLButtonElement>(null)
   const [busy, setBusy] = useState<Busy>(null)
   const [confirming, setConfirming] = useState(false)
   const [refused, setRefused] = useState(false)
@@ -41,6 +44,10 @@ export function UpdateHoldOverlay() {
     setConfirming(false)
     setBusy(null)
   }, [holdId])
+
+  useEffect(() => {
+    safeActionRef.current?.focus()
+  }, [confirming, holdId])
 
   if (!hold) {
     return null
@@ -81,84 +88,119 @@ export function UpdateHoldOverlay() {
   const openLogs = () => void window.hermesDesktop?.revealLogs().catch(() => undefined)
 
   return (
-    <div
-      aria-labelledby={titleId}
-      aria-modal="true"
-      className="fixed inset-0 z-(--z-setup) flex items-center justify-center bg-(--ui-chat-surface-background) p-6"
-      // Masks the whole app while the boot is blocked — must stay filled under
-      // window glass. Contract: `[data-glass-opaque]` in styles.css.
-      data-glass-opaque=""
-      data-testid="update-hold-overlay"
-      role="alertdialog"
-    >
-      <div className="relative w-full max-w-[40rem] overflow-hidden rounded-xl border border-(--stroke-nous) bg-(--ui-chat-bubble-background) shadow-nous">
-        <div className="flex items-start gap-3 px-5 py-4">
-          <AlertTriangle className="mt-0.5 size-5 shrink-0 text-amber-500" />
-          <div>
-            <h2 className="text-[0.9375rem] font-semibold tracking-tight" id={titleId}>
-              {confirming ? copy.confirmTitle : unverified ? copy.titleUnverified : copy.title}
-            </h2>
-            <p className="mt-1 text-[0.8125rem] leading-5 text-(--ui-text-tertiary)">
-              {confirming ? copy.confirmBody : copy.description}
-            </p>
-          </div>
-        </div>
-
-        <div className="grid gap-4 p-5 pt-0">
+    <Dialog open>
+      <DialogPortal>
+        <DialogPrimitive.Content
+          asChild
+          onEscapeKeyDown={event => event.preventDefault()}
+          onInteractOutside={event => event.preventDefault()}
+          onOpenAutoFocus={event => {
+            event.preventDefault()
+            safeActionRef.current?.focus()
+          }}
+          role="alertdialog"
+        >
           <div
-            className="rounded-2xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-xs text-(--ui-text-secondary)"
-            data-testid="update-hold-detail"
+            className="fixed inset-0 z-(--z-setup) flex items-center justify-center bg-(--ui-chat-surface-background) p-4"
+            // The full-screen opaque layer also owns the modal focus trap.
+            data-glass-opaque=""
+            data-testid="update-hold-overlay"
           >
-            <p>{unverified ? copy.unverified : hold.ownerPid ? copy.heldByProcess(hold.ownerPid) : copy.heldUnknown}</p>
-            <p className="mt-1 text-muted-foreground">
-              {copy.since(formatTime(hold.since))} · {copy.lastChecked(formatTime(hold.checkedAt))}
-            </p>
-          </div>
-
-          {refused ? <p className="text-xs text-destructive">{copy.startAnywayRefused}</p> : null}
-
-          {confirming ? (
-            <div className="flex flex-wrap gap-2">
-              <Button disabled={Boolean(busy)} onClick={() => setConfirming(false)} variant="secondary">
-                {copy.confirmKeepWaiting}
-              </Button>
-              <Button disabled={Boolean(busy)} onClick={() => void startAnyway()} variant="destructive">
-                {busy === 'start' ? <Loader2 className="animate-spin" /> : null}
-                {copy.confirmStart}
-              </Button>
-            </div>
-          ) : (
-            <div className="grid gap-2">
-              <div className="flex flex-wrap gap-2">
-                <Button disabled={Boolean(busy)} onClick={() => void recheck()}>
-                  {busy === 'recheck' ? <Loader2 className="animate-spin" /> : <RefreshCw />}
-                  {copy.checkAgain}
-                </Button>
-                <Button disabled={Boolean(busy)} onClick={() => void quit()} variant="secondary">
-                  {busy === 'quit' ? <Loader2 className="animate-spin" /> : <Power />}
-                  {copy.quit}
-                </Button>
-                <Button onClick={openLogs} variant="ghost">
-                  <FileText />
-                  {copy.openLogs}
-                </Button>
-                <Button
-                  className="ml-auto"
-                  disabled={Boolean(busy)}
-                  onClick={() => {
-                    setRefused(false)
-                    setConfirming(true)
-                  }}
-                  variant="ghost"
-                >
-                  {copy.startAnyway}
-                </Button>
+            <div className="relative flex max-h-[85vh] w-full max-w-[40rem] flex-col overflow-hidden rounded-(--aino-radius-panel) border border-(--stroke-nous) bg-(--ui-bg-elevated) text-[length:var(--aino-text-body)] shadow-nous">
+              <div
+                className="grid min-h-0 min-w-0 gap-4 overflow-y-auto overscroll-contain p-5"
+                data-slot="update-hold-body"
+              >
+                <div className="flex min-w-0 items-start gap-3">
+                  <AlertTriangle className="mt-0.5 size-5 shrink-0 text-(--ui-yellow)" />
+                  <div className="min-w-0">
+                    <DialogTitle>
+                      {confirming ? copy.confirmTitle : unverified ? copy.titleUnverified : copy.title}
+                    </DialogTitle>
+                    <DialogDescription className="mt-1">
+                      {confirming ? copy.confirmBody : copy.description}
+                    </DialogDescription>
+                  </div>
+                </div>
+                <Alert data-testid="update-hold-detail" role="status" variant="warning">
+                  <AlertDescription className="col-span-2 col-start-1">
+                    <p>
+                      {unverified
+                        ? copy.unverified
+                        : hold.ownerPid
+                          ? copy.heldByProcess(hold.ownerPid)
+                          : copy.heldUnknown}
+                    </p>
+                    <p className="text-[length:var(--aino-text-caption)] text-muted-foreground">
+                      {copy.since(formatTime(hold.since))} · {copy.lastChecked(formatTime(hold.checkedAt))}
+                    </p>
+                  </AlertDescription>
+                </Alert>
+                {refused ? (
+                  <p
+                    className="min-w-0 leading-relaxed text-(--ui-text-secondary) [overflow-wrap:anywhere]"
+                    role="alert"
+                  >
+                    {copy.startAnywayRefused}
+                  </p>
+                ) : null}
               </div>
-              <p className="text-xs text-muted-foreground">{copy.recoveryHint}</p>
+              <div
+                className="min-w-0 shrink-0 border-t border-(--ui-stroke-tertiary) p-5"
+                data-slot="update-hold-footer"
+              >
+                {confirming ? (
+                  <DialogFooter>
+                    <Button
+                      disabled={Boolean(busy)}
+                      onClick={() => setConfirming(false)}
+                      ref={safeActionRef}
+                      variant="secondary"
+                    >
+                      {copy.confirmKeepWaiting}
+                    </Button>
+                    <Button disabled={Boolean(busy)} onClick={() => void startAnyway()} variant="destructive">
+                      {busy === 'start' ? <Loader2 className="animate-spin" /> : null}
+                      {copy.confirmStart}
+                    </Button>
+                  </DialogFooter>
+                ) : (
+                  <div className="grid gap-2">
+                    <div className="flex flex-wrap gap-2">
+                      <Button disabled={Boolean(busy)} onClick={() => void recheck()} ref={safeActionRef}>
+                        {busy === 'recheck' ? <Loader2 className="animate-spin" /> : <RefreshCw />}
+                        {copy.checkAgain}
+                      </Button>
+                      <Button disabled={Boolean(busy)} onClick={() => void quit()} variant="secondary">
+                        {busy === 'quit' ? <Loader2 className="animate-spin" /> : <Power />}
+                        {copy.quit}
+                      </Button>
+                      <Button onClick={openLogs} variant="ghost">
+                        <FileText />
+                        {copy.openLogs}
+                      </Button>
+                      <Button
+                        className="ml-auto"
+                        disabled={Boolean(busy)}
+                        onClick={() => {
+                          setRefused(false)
+                          setConfirming(true)
+                        }}
+                        variant="ghost"
+                      >
+                        {copy.startAnyway}
+                      </Button>
+                    </div>
+                    <p className="min-w-0 text-[length:var(--aino-text-caption)] leading-relaxed text-muted-foreground [overflow-wrap:anywhere]">
+                      {copy.recoveryHint}
+                    </p>
+                  </div>
+                )}
+              </div>
             </div>
-          )}
-        </div>
-      </div>
-    </div>
+          </div>
+        </DialogPrimitive.Content>
+      </DialogPortal>
+    </Dialog>
   )
 }

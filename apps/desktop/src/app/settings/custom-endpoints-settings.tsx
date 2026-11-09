@@ -55,8 +55,8 @@ function CustomModelConfigDialogContent({
   return (
     <DialogContent bodyClassName="gap-5 p-6" className="max-w-[540px]">
       <DialogHeader className="gap-1.5 pr-6 text-left">
-        <DialogTitle className="text-[17px]">{copy.title}</DialogTitle>
-        <DialogDescription className="text-[12px]">{copy.description}</DialogDescription>
+        <DialogTitle className="text-[length:var(--aino-text-title)]">{copy.title}</DialogTitle>
+        <DialogDescription className="text-[length:var(--aino-text-caption)]">{copy.description}</DialogDescription>
       </DialogHeader>
       {editor.loading ? <SettingsSkeleton sections={[{ rows: 3 }]} /> : <CustomModelEditor dialog editor={editor} />}
       <DialogFooter className="flex-row justify-end gap-2 border-t border-border/50 pt-4">
@@ -97,7 +97,7 @@ function EndpointList({ editor }: { editor: CustomEndpointEditor }) {
               type="button"
             >
               <div className="flex min-w-0 items-center gap-2">
-                <span className="truncate text-[13px] font-medium">{endpoint.name}</span>
+                <span className="truncate text-[length:var(--aino-text-ui)] font-medium">{endpoint.name}</span>
                 {endpoint.is_current && (
                   <Pill tone="primary">
                     <Check className="size-3" />
@@ -106,8 +106,10 @@ function EndpointList({ editor }: { editor: CustomEndpointEditor }) {
                 )}
                 {endpoint.source === 'direct-config' && <Pill>config.yaml</Pill>}
               </div>
-              <div className="mt-1 truncate text-[12px] text-muted-foreground">{endpoint.base_url}</div>
-              <div className="mt-1 flex flex-wrap gap-2 text-[12px] text-muted-foreground">
+              <div className="mt-1 truncate text-[length:var(--aino-text-caption)] text-muted-foreground">
+                {endpoint.base_url}
+              </div>
+              <div className="mt-1 flex flex-wrap gap-2 text-[length:var(--aino-text-caption)] text-muted-foreground">
                 <span>{endpoint.model}</span>
                 {endpoint.has_api_key && <span>{c.apiKeySet}</span>}
               </div>

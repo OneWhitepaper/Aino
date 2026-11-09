@@ -189,10 +189,8 @@
     0 0 0 0.0625rem color-mix(in srgb, var(--dt-foreground) 8%, transparent),
     0 0.25rem 1rem color-mix(in srgb, #000 8%, transparent),
     0 1rem 2rem -1.5rem color-mix(in srgb, #000 18%, transparent);
-  /* Shared downward elevation for floating panels and both composer layouts. */
-  --shadow-nous:
-    0 0.1875rem 0.4375rem color-mix(in srgb, #000 2%, transparent),
-    0 0.625rem 1.75rem -0.875rem color-mix(in srgb, #000 9%, transparent);
+  /* Approved desktop surfaces share one soft, downward elevation. */
+  --shadow-nous: var(--aino-shadow-panel);
   /* Hairline border paired with --shadow-nous on borderless overlays.
      currentColor resolves per-element, so it adapts to text color/theme. */
   --stroke-nous: color-mix(in srgb, currentColor 3%, transparent);
@@ -206,18 +204,20 @@
 @layer base {
   :root {
     color-scheme: light;
+    --aino-shadow-panel: 0 0.75rem 2.25rem rgb(25 32 48 / 13%);
+    --aino-shadow-notice: 0 0.1875rem 1rem rgb(25 32 48 / 9%);
 
-    --theme-foreground: #17171a;
-    --theme-primary: #0053fd;
-    --theme-secondary: color-mix(in srgb, #0053fd 7%, #ffffff);
-    --theme-accent-soft: color-mix(in srgb, #0053fd 10%, #ffffff);
-    --theme-midground: #0053fd;
+    --theme-foreground: #252831;
+    --theme-primary: #353a49;
+    --theme-secondary: #f0f1f4;
+    --theme-accent-soft: #e9ebf0;
+    --theme-midground: #353a49;
     --theme-warm: #cf806d;
-    --theme-background-seed: #f8faff;
-    --theme-sidebar-seed: #f3f7ff;
+    --theme-background-seed: #fcfcfd;
+    --theme-sidebar-seed: #f6f7f9;
     --theme-card-seed: #ffffff;
     --theme-elevated-seed: #ffffff;
-    --theme-bubble-seed: color-mix(in srgb, #0053fd 6%, #ffffff);
+    --theme-bubble-seed: #f0f1f4;
     --theme-neutral-chrome: #f3f3f3;
     --theme-neutral-sidebar: #f3f3f3;
     --theme-neutral-card: #fcfcfc;
@@ -315,7 +315,7 @@
       var(--theme-neutral-card)
     );
     --ui-bg-card: color-mix(in srgb, var(--ui-accent) 4%, color-mix(in srgb, var(--ui-base) 4%, transparent));
-    --ui-bg-input: #fcfcfc;
+    --ui-bg-input: #ffffff;
     --ui-bg-primary: color-mix(
       in srgb,
       var(--ui-accent) var(--theme-fill-primary-accent-mix),
@@ -417,7 +417,7 @@
     --ui-chat-bubble-opaque-background: var(--ui-bg-editor);
     --ui-inline-code-background: color-mix(in srgb, #141414 5%, transparent);
     --ui-inline-code-foreground: color-mix(in srgb, #141414 88%, transparent);
-    --ui-selection-background: color-mix(in srgb, #ffd24a 55%, transparent);
+    --ui-selection-background: var(--dt-primary);
 
     --dt-background: var(--ui-bg-chrome);
     --dt-foreground: var(--ui-text-primary);
@@ -428,12 +428,12 @@
     --dt-popover: color-mix(in srgb, var(--ui-bg-elevated) 96%, transparent);
     --dt-popover-foreground: var(--ui-text-primary);
     --dt-primary: var(--theme-primary);
-    --dt-primary-foreground: #fcfcfc;
+    --dt-primary-foreground: #ffffff;
     /* Boot-paint fallbacks. themes/context.tsx replaces --dt-primary-solid with
        the hue deepened until #fcfcfc clears AA on it; until it runs, the raw
        primary is the closest honest guess. */
     --dt-primary-solid: var(--theme-primary);
-    --dt-primary-solid-foreground: #fcfcfc;
+    --dt-primary-solid-foreground: #ffffff;
     --dt-secondary: var(--theme-secondary);
     --dt-secondary-foreground: var(--ui-text-secondary);
     --dt-accent: var(--theme-accent-soft);
@@ -462,7 +462,7 @@
        own surfaces — chroma 0 is the only thing removed. */
     --dt-scrollbar-thumb: oklch(from var(--dt-midground) l 0 h);
     --dt-composer-ring: var(--ui-base);
-    --dt-destructive: #cf2d56;
+    --dt-destructive: #b33e3e;
     --dt-destructive-foreground: #ffffff;
     --dt-sidebar-bg: var(--ui-bg-sidebar);
     --dt-sidebar-border: var(--ui-stroke-secondary);
@@ -475,8 +475,8 @@
     --dt-user-bubble-border: var(--ui-stroke-tertiary);
 
     --dt-font-sans:
-      'PingFang SC', 'Microsoft YaHei UI', 'Noto Sans CJK SC', -apple-system, BlinkMacSystemFont, 'Segoe UI',
-      sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji', emoji;
+      -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif, 'Apple Color Emoji',
+      'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji', emoji;
     /* Key caps always use the native UI face — never theme typography overrides. */
     --dt-font-kbd: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', system-ui, sans-serif;
     /* JetBrains Mono first — the face we bundle (@font-face above) and the
@@ -595,6 +595,8 @@
   }
 
   :root.dark {
+    --aino-shadow-panel: 0 0.75rem 2.25rem rgb(0 0 0 / 32%);
+    --aino-shadow-notice: 0 0.1875rem 1rem rgb(0 0 0 / 32%);
     /* Per-mode mix knobs — overridden inline by `applyTheme()` per skin. */
     --theme-mix-chrome: 74%;
     --theme-mix-card: 38%;
@@ -622,7 +624,7 @@
 
     --ui-inline-code-background: color-mix(in srgb, #ffffff 7%, transparent);
     --ui-inline-code-foreground: color-mix(in srgb, #ffffff 88%, transparent);
-    --ui-selection-background: color-mix(in srgb, #ffd24a 38%, transparent);
+    --ui-selection-background: var(--dt-primary);
     /* A dark card sits ABOVE the chrome (#161618 over #0d0d0e), so an inline
        widget wearing the raw card fill reads as a lit panel. Take it down a
        touch — still clearly a surface, no longer the brightest thing in the
@@ -808,7 +810,7 @@
     background: var(--ui-chat-surface-background);
     color: var(--dt-foreground);
     font-family: var(--dt-font-sans);
-    font-size: var(--aino-text-ui);
+    font-size: var(--aino-text-body);
     line-height: var(--dt-line-height, 1.55);
     letter-spacing: var(--dt-letter-spacing, 0);
     -webkit-user-select: none;
@@ -836,7 +838,7 @@
 
   *::selection {
     background: var(--ui-selection-background);
-    color: inherit;
+    color: var(--dt-primary-foreground);
   }
 }
 
@@ -1203,9 +1205,9 @@
    base tokens: the thread and composer scopes derive the final ones from
    these times the chat text scale. */
 [data-setup-chat] {
-  --conversation-text-base-size: 0.9375rem;
-  --conversation-tool-base-size: 0.75rem;
-  --conversation-caption-base-size: 0.8125rem;
+  --conversation-text-base-size: var(--aino-text-body);
+  --conversation-tool-base-size: var(--aino-text-ui);
+  --conversation-caption-base-size: var(--aino-text-caption);
   --conversation-base-line-height: 1.375rem;
 }
 
@@ -1547,24 +1549,22 @@ code {
   -moz-tab-size: 2;
 }
 
-/* Arc-style multicolor action surface (static, not animated). Reusable on any
-   Button via className. Unlayered so it beats Tailwind's bg- and text- variant
-   utilities. */
+/* Legacy upgrade actions share the approved neutral primary treatment. */
 .btn-arc {
-  background-image: linear-gradient(110deg, #5b6cff 0%, #8b5cf6 28%, #d946ef 58%, #fb7185 82%, #fb923c 100%);
-  color: #fff;
+  background: var(--dt-primary-solid);
+  color: var(--dt-primary-solid-foreground);
   border-color: transparent;
 }
 
 .btn-arc:hover:not(:disabled) {
-  filter: brightness(1.08) saturate(1.06);
+  filter: brightness(1.1);
 }
 
 /* Shared input chrome — mirrors composer hover/focus FX. Unlayered to beat Tailwind utilities. */
 /* Animate the border and focus glow only; field fills stay stable under Glass.
    Focus follows hover so a focused field retains its visible treatment. */
 .desktop-input-chrome {
-  background: var(--ui-bg-editor);
+  background: var(--ui-bg-input);
   border-color: var(--ui-stroke-secondary);
   box-shadow: none;
   transition:
@@ -2497,19 +2497,19 @@ body:not(:has([data-settings-workspace])):has([data-chat-surface][data-conversat
    `background: var(--composer-fill)`, so every state matches by construction. */
 :root {
   /* Fallback for drawers outside the main composer (e.g. edit-message). */
-  --composer-fill: color-mix(in srgb, var(--dt-card) 90%, var(--dt-background));
+  --composer-fill: var(--ui-bg-input);
 }
 
 [data-slot='composer-root'] {
-  --composer-fill: color-mix(in srgb, var(--dt-card) 88%, transparent);
+  --composer-fill: var(--ui-bg-input);
 }
 
 [data-slot='composer-root'][data-thread-scrolled-up] {
-  --composer-fill: color-mix(in srgb, var(--dt-card) 80%, transparent);
+  --composer-fill: var(--ui-bg-input);
 }
 
 [data-slot='composer-dock']:is(:hover, :focus-within) [data-slot='composer-root'][data-thread-scrolled-up] {
-  --composer-fill: color-mix(in srgb, var(--dt-card) 88%, transparent);
+  --composer-fill: var(--ui-bg-input);
 }
 
 /* Tool/thinking blocks now live at message-text alignment (no leading
@@ -4307,7 +4307,7 @@ html[data-hermes-desktop-host='browser'] [data-slot='sidebar-container'] {
   overflow: clip;
   border: 1px solid var(--ui-stroke-tertiary);
   border-radius: var(--aino-radius-card);
-  background: var(--ui-bg-card);
+  background: var(--ui-bg-elevated);
   padding: 0.75rem;
   color: var(--err-ink);
   font-size: var(--aino-text-ui);
@@ -4315,8 +4315,8 @@ html[data-hermes-desktop-host='browser'] [data-slot='sidebar-container'] {
 }
 
 .aui-error-card[data-severity='blocking'] {
-  border-color: color-mix(in srgb, var(--err-alert) 18%, transparent);
-  background: color-mix(in srgb, var(--err-alert) 5%, transparent);
+  border-color: var(--ui-stroke-tertiary);
+  background: var(--ui-bg-elevated);
 }
 
 .aui-error-card-head {

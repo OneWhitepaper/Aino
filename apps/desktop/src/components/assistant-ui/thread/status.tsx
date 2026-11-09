@@ -56,8 +56,8 @@ const StatusRow: FC<{ children: ReactNode; label: string } & React.ComponentProp
   </div>
 )
 
-const HintText: FC<{ children: ReactNode }> = ({ children }) => (
-  <span className={cn(SCAFFOLD_LABEL_CLASS, 'shimmer min-w-0 flex-1 truncate')}>{children}</span>
+const HintText: FC<{ children: ReactNode; animated?: boolean }> = ({ children, animated = true }) => (
+  <span className={cn(SCAFFOLD_LABEL_CLASS, 'min-w-0 flex-1 truncate', animated && 'shimmer')}>{children}</span>
 )
 
 // Provider slug of the managed local server (inventory.py's _local_runtime_row).
@@ -186,6 +186,7 @@ function useThreadSessionStatus() {
     compacting,
     drafting,
     providerWait,
+    sessionId,
     // Epoch ms this surface's turn began, or undefined between turns. The
     // origin for anything measuring the WHOLE turn rather than one phase of
     // it — including the first seconds of a brand-new chat, where the value is
@@ -264,13 +265,15 @@ export const ResponseLoadingIndicator: FC = () => {
 
   return (
     <StatusRow data-slot="aui_response-loading" label={label}>
-      <StatusPulse aria-hidden="true" className={SCAFFOLD_ACTIVITY_GLYPH_CLASS} kind="opacity" />
+      {(hint || localLoad) && (
+        <StatusPulse aria-hidden="true" className={SCAFFOLD_ACTIVITY_GLYPH_CLASS} kind="opacity" />
+      )}
       {hint ? (
         <WaitHint hint={hint} />
       ) : localLoad ? (
         <ProgressHint label={t.assistant.thread.loadingLocalModel(localLoad.model)} percent={localLoad.percent} />
       ) : (
-        <HintText>{t.assistant.thread.thinking}</HintText>
+        <HintText animated={false}>{t.assistant.thread.thinking}</HintText>
       )}
       {(hint || localLoad) && <ActivityTimerText className={SCAFFOLD_META_CLASS} seconds={elapsed} />}
     </StatusRow>
@@ -326,14 +329,20 @@ export const BackgroundResumeNotice: FC = () => {
 
 // Hands a turn back from the user, re-arming the quiet mark: see the call site.
 function useHandBackQuiet(
+  sessionId: string | null,
+  messageId: string,
   awaitingInput: boolean,
   turnStartedAt: number | undefined,
-  setQuietSince: (since: number) => void
+  setQuietSince: (since: number | undefined) => void
 ) {
-  const [handBack, setHandBack] = useState({ awaitingInput, turnStartedAt })
+  const [handBack, setHandBack] = useState({ sessionId, messageId, awaitingInput, turnStartedAt })
 
-  if (handBack.awaitingInput !== awaitingInput || handBack.turnStartedAt !== turnStartedAt) {
-    setHandBack({ awaitingInput, turnStartedAt })
+  if (handBack.sessionId !== sessionId || handBack.messageId !== messageId) {
+    // A reused transcript must not carry the previous conversation's wait.
+    setHandBack({ sessionId, messageId, awaitingInput, turnStartedAt })
+    setQuietSince(undefined)
+  } else if (handBack.awaitingInput !== awaitingInput || handBack.turnStartedAt !== turnStartedAt) {
+    setHandBack({ sessionId, messageId, awaitingInput, turnStartedAt })
 
     if (turnStartedAt !== undefined && turnStartedAt !== handBack.turnStartedAt) {
       setQuietSince(turnStartedAt)
@@ -362,13 +371,15 @@ const TurnActivityRow: FC<TurnActivityRowProps> = ({ active, elapsed, hint, loca
     >
       {active && (
         <>
-          <StatusPulse aria-hidden="true" className={SCAFFOLD_ACTIVITY_GLYPH_CLASS} kind="opacity" />
+          {(hint || localLoad) && (
+            <StatusPulse aria-hidden="true" className={SCAFFOLD_ACTIVITY_GLYPH_CLASS} kind="opacity" />
+          )}
           {hint ? (
             <WaitHint hint={hint} />
           ) : localLoad ? (
             <ProgressHint label={t.assistant.thread.loadingLocalModel(localLoad.model)} percent={localLoad.percent} />
           ) : (
-            <HintText>{t.assistant.thread.thinking}</HintText>
+            <HintText animated={false}>{t.assistant.thread.thinking}</HintText>
           )}
           {(hint || localLoad) && (
             <ActivityTimerText aria-hidden={true} className={SCAFFOLD_META_CLASS} seconds={elapsed} />
@@ -399,12 +410,13 @@ export const TurnActivityIndicator: FC<{ thinking?: boolean }> = ({ thinking = f
   const showReasoning = useStore($showReasoning)
   const onboardingChat = useOnboardingChatActive()
   const reasoningShown = showReasoning && !onboardingChat
+  const messageId = useAuiState(s => s.message.id)
   const activity = useAuiState(s => activitySignature(s.message.content, reasoningShown))
 
   // Keep the last-progress timestamp so a later named wait can measure its
   // own gap rather than the lifetime of the whole assistant message.
   const [quietSince, setQuietSince] = useState<number | undefined>(undefined)
-  const { awaitingInput, busy, compacting, drafting, providerWait, turnStartedAt } = useThreadSessionStatus()
+  const { sessionId, awaitingInput, busy, compacting, drafting, providerWait, turnStartedAt } = useThreadSessionStatus()
   const hint = useStatusHint(drafting, providerWait, t.assistant.tool.runSummary)
 
   // A tool run at the tail already narrates the wait — its summary counts the
@@ -424,19 +436,29 @@ export const TurnActivityIndicator: FC<{ thinking?: boolean }> = ({ thinking = f
   const localLoad = useLocalModelLoad(working && !hint && !toolNarrating)
 
   useEffect(() => {
-    setQuietSince(undefined)
+    if (!working || awaitingInput || toolNarrating) {
+      setQuietSince(undefined)
+
+      return
+    }
+
+    // Delay the first generic wait, but keep an already-visible row through
+    // sparse stream chunks. Collapsing it on every delta changes scrollHeight
+    // and makes bottom-following jump, then jump again after the quiet delay.
+    // A tool, user input, compaction or the turn ending hands this row off.
     const seenAt = Date.now()
+    setQuietSince(previous => previous === undefined ? undefined : seenAt)
     const id = window.setTimeout(() => setQuietSince(seenAt), TURN_QUIET_S * 1000)
 
     return () => window.clearTimeout(id)
-  }, [activity])
+  }, [activity, awaitingInput, messageId, sessionId, toolNarrating, working])
 
   // The user handing the turn back is progress too: a hidden setup prompt
   // starts a fresh turn under the card it answers, and an answered question
   // card resumes the turn it paused. Neither is a gap between two quick calls,
   // so the wait after it shows at once, timed from that moment, the way a
   // normal send's row does.
-  useHandBackQuiet(awaitingInput, turnStartedAt, setQuietSince)
+  useHandBackQuiet(sessionId, messageId, awaitingInput, turnStartedAt, setQuietSince)
 
   // Every second the app claims to be working belongs to something. A named
   // wait says what it is straight away; an unnamed gap has to go quiet for

@@ -78,9 +78,9 @@ const TONE_STYLES: Record<EmptyStateTone, { cube: string; primary: string }> = {
     primary: 'border-border bg-background text-foreground hover:bg-accent'
   },
   warning: {
-    cube: 'text-amber-500/70 dark:text-amber-300/70',
+    cube: 'text-(--ui-yellow)',
     primary:
-      'border-amber-400/40 bg-amber-50 text-amber-900 hover:bg-amber-100 dark:border-amber-300/30 dark:bg-amber-300/15 dark:text-amber-100 dark:hover:bg-amber-300/20'
+      'border-(--ui-stroke-tertiary) bg-(--aino-action-bg) text-(--aino-action-fg) hover:bg-(--aino-action-hover)'
   }
 }
 
@@ -306,7 +306,7 @@ const MD_TAG_CLASSES = {
   h1: 'mb-3 mt-6 text-[1.6875rem] font-semibold leading-[1.4] tracking-tight first:mt-0',
   h2: 'mb-2.5 mt-7 text-lg font-semibold leading-normal tracking-tight first:mt-0',
   h3: 'mb-2.5 mt-5 text-sm font-semibold leading-normal first:mt-0',
-  h4: 'mb-2 mt-4 text-[0.8125rem] font-semibold leading-normal first:mt-0',
+  h4: 'mb-2 mt-4 text-[length:var(--aino-text-label)] font-semibold leading-normal first:mt-0',
   p: 'mb-3 leading-[1.9] text-(--ui-text-secondary) last:mb-0',
   ul: 'mb-4 list-disc pl-6 marker:text-muted-foreground/70 last:mb-0',
   ol: 'mb-4 list-decimal pl-6 marker:text-muted-foreground/70 last:mb-0',
@@ -314,8 +314,8 @@ const MD_TAG_CLASSES = {
   blockquote: 'mb-4 border-l-2 border-border pl-3 text-muted-foreground italic last:mb-0',
   pre: 'mb-4 overflow-hidden rounded-md border border-(--ui-stroke-tertiary) bg-(--ui-bg-editor) font-mono text-xs leading-relaxed last:mb-0 [&_pre]:m-0 [&_pre]:overflow-x-auto [&_pre]:bg-transparent! [&_pre]:p-3 [&_pre]:font-mono',
   hr: 'my-6 border-border',
-  th: 'px-3 py-2 text-left text-[0.8125rem] font-medium text-foreground',
-  td: 'px-3 py-2 align-top text-[0.8125rem] leading-relaxed',
+  th: 'px-3 py-2 text-left text-[length:var(--aino-text-label)] font-medium text-foreground',
+  td: 'px-3 py-2 align-top text-[length:var(--aino-text-label)] leading-relaxed',
   thead: 'bg-muted/35 text-muted-foreground'
 } as const
 
@@ -474,7 +474,7 @@ export function MarkdownPreview({ filePath, text }: { filePath?: string; text: s
   return (
     <PreviewNoteContext.Provider value={filePath}>
       <div
-        className="preview-markdown mx-auto w-full max-w-3xl px-4 py-3 text-[0.8125rem] text-(--ui-text-secondary)"
+        className="preview-markdown mx-auto w-full max-w-3xl px-4 py-3 text-[length:var(--aino-text-label)] text-(--ui-text-secondary)"
         data-preview-markdown=""
         data-selectable-text="true"
       >
@@ -674,7 +674,7 @@ export function SourceView({ filePath, language, text }: { filePath?: string; la
 
   return (
     <div className="h-full overflow-auto" onScroll={onScroll} ref={scrollerRef}>
-      <div className="grid min-w-max grid-cols-[auto_minmax(0,1fr)] font-mono text-[0.7rem] leading-relaxed">
+      <div className="grid min-w-max grid-cols-[auto_minmax(0,1fr)] font-mono text-[length:var(--aino-text-caption)] leading-relaxed">
         {beforeRows > 0 && <div aria-hidden className="col-span-2" style={{ height: beforeRows * SOURCE_LINE_PX }} />}
         {visibleChunks.map(chunk => (
           <Fragment key={chunk.start}>
@@ -689,7 +689,7 @@ export function SourceView({ filePath, language, text }: { filePath?: string; la
                       'h-5 w-9 pr-2 leading-5 tabular-nums transition-colors',
                       filePath && 'cursor-pointer',
                       selected
-                        ? 'bg-amber-200/45 text-amber-900 dark:bg-amber-300/20 dark:text-amber-100'
+                        ? 'bg-(--ui-control-active-background) text-(--ui-text-primary)'
                         : filePath && 'hover:text-foreground'
                     )}
                     draggable={Boolean(filePath)}
@@ -1109,7 +1109,7 @@ export function LocalFilePreview({
           trailing={<EditControls dirty={dirty} onCancel={cancelEdit} onSave={() => void saveEdit()} saving={saving} />}
         />
         {conflict && (
-          <div className="shrink-0 border-b border-amber-400/40 bg-amber-50 px-3 py-2 text-[0.7rem] text-amber-900 dark:border-amber-300/30 dark:bg-amber-300/10 dark:text-amber-100">
+          <div className="shrink-0 border-b border-(--ui-stroke-tertiary) bg-(--ui-bg-quaternary) px-3 py-2 text-[length:var(--aino-text-label)] text-(--ui-text-primary)">
             <div className="font-semibold">{t.preview.diskChangedTitle}</div>
             <div className="mt-0.5 leading-relaxed">{t.preview.diskChangedBody}</div>
             <div className="mt-1.5 flex gap-3">
@@ -1131,7 +1131,7 @@ export function LocalFilePreview({
           </div>
         )}
         {saveError && (
-          <div className="shrink-0 border-b border-destructive/40 bg-destructive/10 px-3 py-1.5 text-[0.7rem] text-destructive">
+          <div className="shrink-0 border-b border-destructive/40 bg-destructive/10 px-3 py-1.5 text-[length:var(--aino-text-caption)] text-destructive">
             {t.preview.saveFailed(saveError)}
           </div>
         )}
@@ -1273,7 +1273,7 @@ export function LocalFilePreview({
         ref={readViewRef}
       >
         {state.truncated && (
-          <div className="border-b border-border/60 bg-muted/35 px-3 py-1.5 text-[0.68rem] text-muted-foreground">
+          <div className="border-b border-border/60 bg-muted/35 px-3 py-1.5 text-[length:var(--aino-text-caption)] text-muted-foreground">
             {t.preview.truncated}
           </div>
         )}

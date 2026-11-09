@@ -120,6 +120,49 @@ async function kickoffTextSent(): Promise<string> {
 }
 
 describe('the lazy row is materialized before anything else touches it', () => {
+  it('does not claim a created canonical chat was opened after the caller left', async () => {
+    let current = true
+    respondWith(method => {
+      if (method === 'session.create') {
+        current = false
+
+        return { session_id: 'runtime-1', stored_session_id: 'stored-1' }
+      }
+
+      return {}
+    })
+    const { openBotCanonicalChat } = await loadModule()
+
+    await expect(openBotCanonicalChat('ops', { openingStillCurrent: () => current })).resolves.toBeNull()
+    expect(hostMock.openSession).not.toHaveBeenCalled()
+    expect(requestForBotMock).toHaveBeenCalledWith(expect.anything(), 'session.title', {
+      session_id: 'runtime-1',
+      title: 'Bot Chat'
+    })
+  })
+
+  it('claims a created canonical chat when its own open changed the caller page', async () => {
+    let current = true
+    respondWith(method =>
+      method === 'session.create' ? { session_id: 'runtime-1', stored_session_id: 'stored-1' } : {}
+    )
+    hostMock.openSession.mockImplementationOnce(async () => {
+      current = false
+    })
+    const { openBotCanonicalChat } = await loadModule()
+
+    await expect(openBotCanonicalChat('ops', { openingStillCurrent: () => current })).resolves.toEqual({
+      registryId: 'stored-1',
+      openedId: 'stored-1'
+    })
+    expect(hostMock.openSession).toHaveBeenCalledWith(
+      'stored-1',
+      expect.objectContaining({
+        openingStillCurrent: expect.any(Function)
+      })
+    )
+  })
+
   it('titles the created row, then opens it, and sends no intro', async () => {
     respondWith((method, params) => {
       events.push(method)
@@ -213,6 +256,57 @@ describe('the lazy row is materialized before anything else touches it', () => {
       'stored-1',
       expect.objectContaining({ tabTitle: 'Bot Chat', workspaceMode: 'bots', workspaceOwnerKey: 'bot:ops' })
     )
+  })
+
+  it.each([false, true])(
+    'opens a fresh local bot without switching the ordinary workspace (kickoff: %s)',
+    async kickoff => {
+      respondWith(method =>
+        method === 'session.create' ? { session_id: 'runtime-1', stored_session_id: 'stored-1' } : {}
+      )
+
+      const { createCanonicalChat } = await loadModule()
+
+      await createCanonicalChat('ops', { kickoff })
+
+      // This SDK flag is the public boundary: false explicitly switches the
+      // ordinary workspace; true opens only this bot's owner-scoped chat.
+      expect(hostMock.openSession).toHaveBeenCalledWith(
+        'stored-1',
+        expect.objectContaining({
+          profile: 'ops',
+          keepAllProfilesScope: true,
+          workspaceMode: 'bots',
+          workspaceOwnerKey: 'bot:ops'
+        })
+      )
+    }
+  )
+
+  it('the roster creation path introduces a new canonical chat once and adopts it on a repeated open', async () => {
+    let created = false
+    respondWith(method => {
+      if (method === 'session.list') {
+        return { sessions: created ? [{ id: 'stored-1', title: 'Bot Chat', live_message_count: 1 }] : [] }
+      }
+
+      if (method === 'session.create') {
+        return { session_id: 'runtime-1', stored_session_id: 'stored-1' }
+      }
+
+      if (method === 'session.title') {
+        created = true
+      }
+
+      return {}
+    })
+
+    const { openBotCanonicalChat } = await loadModule()
+    await openBotCanonicalChat('ops', { kickoff: true })
+    await openBotCanonicalChat('ops', { kickoff: true })
+
+    expect(requestForBotMock.mock.calls.filter(([, method]) => method === 'session.create')).toHaveLength(1)
+    expect(requestForBotMock.mock.calls.filter(([, method]) => method === 'prompt.submit')).toHaveLength(1)
   })
 
   it('speaks the intro in the active locale (#91827)', async () => {

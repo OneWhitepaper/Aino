@@ -33,6 +33,7 @@ import { jaSharedMetrics } from './ja_shared_metrics'
 import { jaThemePicker } from './ja_theme_picker'
 import { jaUpdateChannel } from './ja_update_channel'
 import { messagingDirectory } from './messaging-directory'
+import { notificationCenterCopy } from './notification-center'
 import { runtimeFeatureCopy } from './runtime-feature-copy'
 import { toolPanel } from './tool-panel'
 import { workspacePage } from './workspace-page'
@@ -279,6 +280,7 @@ const configPageFieldDescriptions: Record<string, string> = defineFieldCopy({
 })
 
 const jaBaseOverrides = {
+  notificationCenter: notificationCenterCopy['ja'],
   appearancePage: appearancePage.ja,
   home: homeGuidance.ja,
   toolPanel: toolPanel['ja'],
@@ -368,6 +370,7 @@ const jaBaseOverrides = {
   boot: jaBoot.boot,
 
   notifications: {
+    actions: { restartHermes: 'Aino を再起動', openKeys: 'ツールとキーを開く', openGateways: '接続設定を開く', openMaintenance: '整理の設定を確認' },
     sharedProfileWarning:
       '別の Hermes インストールがこのプロファイルを使用しています。両方が設定とデータを共有しているため、変更が競合する可能性があります。このまま続けるか、変更する前にもう一方を終了してください。',
     region: '通知',
@@ -460,6 +463,7 @@ const jaBaseOverrides = {
   ...jaNotices,
 
   sendDiagnostics: {
+    closeWhileUploadingHint: 'このウィンドウを閉じても、開始済みのアップロードは取り消されません。',
     title: 'Aino に診断情報を送信',
     privacyNotice:
       '非公開の診断パッケージを Aino アカウントのサービスに送信します。システム情報、設定状況（キー自体は含まない）、エージェント・ゲートウェイ・デスクトップのログ（各最大 512 KB）を含みます。ログには会話、ツール出力、ファイルパスが含まれる場合があります。キーは伏せられますが、他の機密情報が残る可能性があります。閲覧できるのは許可された Aino 管理者のみです。14 日後にアクセスが無効となり、その後 1 時間以内にオンラインデータを削除します。既存のバックアップには運用環境の保存方針が適用されます。',
@@ -1446,7 +1450,7 @@ const jaBaseOverrides = {
       existingAccount: '既存のアカウントでログイン',
       registerAccount: 'アカウントを作成',
       registrationClosed: '新規登録は現在受け付けていません。',
-      phoneAutoRegister: '未登録の電話番号は、認証に成功すると自動で登録されます。',
+      phoneAutoRegister: '未登録の番号は認証後に自動登録されます。',
       phoneLoginUnavailable: '電話番号でのログインは現在利用できません。既存のアカウントをご利用ください。',
       existingAccountPhoneHint:
         'ウェブサイトのアカウントをお持ちの場合は、先にログインして電話番号を連携してください。',
@@ -3571,6 +3575,7 @@ terminalDisconnectedBody:
   },
 
   zones: {
+    switchConversation: '会話を切り替え',
     sidebarModeMenu: '会話モードを切り替え',
     sidebarSessionsDescription: 'プロジェクト、ファイル、日常の会話',
     showTabStrip: 'タブを表示',

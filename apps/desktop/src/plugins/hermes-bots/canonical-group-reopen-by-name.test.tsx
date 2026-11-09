@@ -17,6 +17,7 @@ import { translateBots } from './i18n-test-helper'
 const { request, notify, openWorkspace, catalog } = vi.hoisted(() => ({
   request: vi.fn(), notify: vi.fn(), openWorkspace: vi.fn(), catalog: { patch: null as null | ((t: Record<string, unknown>) => unknown) }
 }))
+
 vi.mock('@hermes/plugin-sdk', async importOriginal => {
   const sdk = await importOriginal<typeof HermesSdk>()
   const { en } = await import('@/i18n/en')
@@ -92,6 +93,31 @@ function gateway(list: (params: Record<string, unknown>) => unknown) {
 }
 
 const methods = () => request.mock.calls.map(call => call[1])
+
+it.each(['checking', 'unavailable', 'missing', 'lookup-failed'] as const)('keeps one host title in the %s main workspace gate and names the fallback', async phase => {
+  const name = 'Unresolved group'
+
+  if (phase === 'checking') {
+    request.mockReturnValue(new Promise(() => undefined))
+  } else if (phase === 'unavailable') {
+    state.gateway.set('closed')
+  } else {
+    gateway(() => {
+      if (phase === 'lookup-failed') {throw new Error('Lookup refused')}
+
+      return { rooms: [], next_offset: null }
+    })
+  }
+
+  const view = await act(async () => render(<GroupChatWorkspace group={name} mainTab members={[]} />))
+  expect(screen.getByRole('region', { name })).toBeTruthy()
+  expect(screen.queryByRole('heading', { name })).toBeNull()
+  expect(screen.getByRole('button', { name: 'Start gateway group' })).toBeTruthy()
+  view.rerender(<GroupChatWorkspace group={name} members={[]} />)
+  expect(screen.getByRole('heading', { name, level: 2 })).toBeTruthy()
+
+  if (phase === 'lookup-failed') {expect(screen.getByRole('alert').textContent).toBe('Lookup refused')}
+})
 
 it('adopts the existing gateway room by name instead of minting a fork', async () => {
   gateway(() => ({ rooms: [{ room_id: 'other', name: 'Elsewhere', members }, original], next_offset: null }))
@@ -176,9 +202,12 @@ it('a late lookup from a superseded connection does not publish its room', async
   let releaseA: (value: unknown) => void = () => undefined
   const pendingA = new Promise(resolve => { releaseA = resolve })
   routedGateway(route => route.connectionId === 'local' ? pendingA : { rooms: [], next_offset: null })
-  await act(async () => { render(<GroupChatWorkspace group="Team" members={roster} />) })
+  const view = await act(async () => render(<GroupChatWorkspace group="Team" members={roster} route={{ connectionId: 'local', profile: 'default' }} />))
 
-  await act(async () => { state.connectionId.set('remote') })
+  await act(async () => {
+    state.connectionId.set('remote')
+    view.rerender(<GroupChatWorkspace group="Team" members={roster} route={{ connectionId: 'remote', profile: 'default' }} />)
+  })
   expect((screen.getByRole('button', { name: 'Start gateway group' }) as HTMLButtonElement).disabled).toBe(false)
 
   await act(async () => { releaseA({ rooms: [original], next_offset: null }) })

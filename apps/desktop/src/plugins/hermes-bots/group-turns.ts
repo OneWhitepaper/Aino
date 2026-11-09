@@ -8,7 +8,7 @@
 
 import { APPROVAL_RESPOND_TIMEOUT_MS, host, randomUuid } from '@hermes/plugin-sdk'
 
-import { noteBotAttention } from './data'
+import { $botMeta, noteBotAttention } from './data'
 import { groupFailureReason, recordGroupActivity } from './group-activity'
 import { $groupChats, $groupClarify, appendGroupChatEntry, updateGroupChat } from './group-chat'
 import type { GroupChatRoom } from './group-chat'
@@ -31,7 +31,8 @@ import {
   formatFreshThreadRoomContext,
   GROUP_PROMPT_HEADER_PREFIX
 } from './group-round-prompt'
-import { botConnectionRoute, requestForBot } from './routing'
+import { displayName } from './labels'
+import { botConnectionRoute, botRosterMeta, requestForBot } from './routing'
 import type { Attachment, GroupMember, GroupPrompt, GroupPromptQuestion, ProfileRoute } from './types'
 
 /** "(pass)" (loosely: pass / (pass) / pass.) or empty = the member stayed silent. */
@@ -948,7 +949,7 @@ async function stageGroupTurnAttachments(member: GroupMember, runtime: string, i
       }
     } catch (error) {
       failed.push(label)
-      host.notifyError?.(error, `Could not attach ${label} for ${member.title || member.name}`)
+      host.notifyError?.(error, `Could not attach ${label} for ${displayName(member, botRosterMeta(member, $botMeta.get()))}`)
     }
   }
 

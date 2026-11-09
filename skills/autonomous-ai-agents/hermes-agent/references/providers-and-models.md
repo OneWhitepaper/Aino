@@ -4,6 +4,30 @@ Set via `hermes model` (picker) or `hermes setup`. 35+ provider profiles ship as
 plugins under `plugins/model-providers/`; user plugins of the same name override.
 Full docs: https://hermes-agent.nousresearch.com/docs/integrations/providers
 
+### Aino desktop conversations and Agent Hub groups
+
+For a request such as “switch to DeepSeek”, query the actual available models first:
+
+```bash
+hermes model --list --json
+hermes model --set '<exact-model-id-from-the-list>' --provider aino --json
+```
+
+The listing comes from the connected desktop's current Aino account and configured
+providers. Aino built-in models already use the account's device Key: users do not
+need a separate official-provider key for those models. Prefer a matching available
+Aino built-in model, then a matching configured provider. Use its exact listed ID
+and provider. If several models fit, show the candidates and let the user choose;
+do not invent a model ID, provider, endpoint or credential availability.
+
+This schedules a choice for this conversation's **next message**. The current reply
+keeps its original model. It does not change the saved default model or another
+robot's conversation. A `scheduled` result is acceptance, not a successful model
+inference; report that distinction. If no desktop answers, report unavailable and
+retain the previous route. Never use `hermes config set/unset model.*` or edit
+profile YAML/auth.json to work around the conversation's managed-model binding.
+Configure provider accounts and global defaults through Settings when requested.
+
 ### Providers
 
 | Provider | Auth | Key env var(s) |

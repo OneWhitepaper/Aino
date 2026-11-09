@@ -1862,7 +1862,7 @@ export const zhHantSettings = {
       existingAccount: '登入現有帳戶',
       registerAccount: '註冊帳戶',
       registrationClosed: '註冊暫未開放。',
-      phoneAutoRegister: '尚未註冊的手機號碼驗證成功後會自動註冊。',
+      phoneAutoRegister: '未註冊手機號碼驗證後自動註冊。',
       phoneLoginUnavailable: '手機號碼登入暫未開放，請使用現有帳戶登入。',
       existingAccountPhoneHint: '已有網站帳戶？請先登入原帳戶，再綁定手機號碼。',
       registrationReturnHint: '註冊完成後，使用相同電子郵件和密碼登入。網站與桌面共用一個帳戶。',

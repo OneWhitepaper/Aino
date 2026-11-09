@@ -183,7 +183,7 @@ const NEUTRAL_CHROME = { light: '#f3f3f3', dark: '#0d0d0e' } as const
 // The one foreground --dt-primary-solid is built to carry. Fixed rather than
 // measured: the surface is derived to suit IT, not the other way round.
 // styles.css --dt-primary-solid-foreground fallback — keep in sync.
-const PRIMARY_SOLID_FOREGROUND = '#fcfcfc'
+const PRIMARY_SOLID_FOREGROUND = '#ffffff'
 
 const chromeBackground = (background: string, isDark: boolean) =>
   mix(background, NEUTRAL_CHROME[isDark ? 'dark' : 'light'], isDark ? 0.26 : 0.08)

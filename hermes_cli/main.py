@@ -1848,6 +1848,9 @@ cmd_mcp = _forward_command("cmd_mcp", "hermes_cli.mcp_config", "mcp_command", fo
 
 def cmd_model(args):
     """Select default model — starts with provider selection, then model picker."""
+    if getattr(args, 'list_models', False) or getattr(args, 'set_model', None) is not None:
+        from hermes_cli.conversation_model import conversation_model_command
+        return conversation_model_command(args)
     _require_tty("model")
     if getattr(args, "refresh", False):
         try:
@@ -1865,10 +1868,7 @@ def cmd_model(args):
         )
 
 
-# Provider id -> flow(config, current_model, args). Lambdas resolve the
-# _model_flow_* names at call time so test monkeypatches keep intercepting.
-# ``custom:*``, remove-custom and the generic API-key set are the fallthrough
-# branches in select_provider_and_model.
+# Model flow callbacks resolve at call time for provider setup and test injection.
 _PROVIDER_MODEL_FLOWS = {
     "openrouter": lambda c, m, a: _model_flow_openrouter(c, m),
     "moa": lambda c, m, a: _model_flow_moa(c, m),

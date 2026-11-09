@@ -1832,7 +1832,7 @@ describe('useGatewayBoot remote reconnect loop (real hook, fake socket)', () => 
     FakeWebSocket.mode = 'fail'
 
     await act(async () => {
-      const reconnect = reconnectGateway()
+      const reconnect = expect(reconnectGateway()).rejects.toThrow()
       await vi.advanceTimersByTimeAsync(0)
       await ensureGatewayForAgent('coder-remote', 'coder')
       $sessionTiles.set(tiles)
@@ -2008,6 +2008,26 @@ describe('useGatewayBoot remote reconnect loop (real hook, fake socket)', () => 
     expect(toast?.action).toBeTruthy()
     toast?.action?.onClick()
     expect($backendRestartRequest.get()).toBe(before + 1)
+  })
+
+  it('a primary backend exit cannot restart the healthy secondary currently being viewed', async () => {
+    ;(window as { hermesDesktop?: unknown }).hermesDesktop = {
+      ...fakeDesktop(),
+      getConnectionFor: vi.fn(async () => coderConn),
+      getGatewayWsUrlFor: vi.fn(async () => coderConn.wsUrl)
+    }
+    render(<Harness />)
+    await flushAsync()
+    vi.useRealTimers()
+    await ensureGatewayForAgent('coder-remote', 'coder')
+    const secondary = FakeWebSocket.instances[1]
+    const before = $backendRestartRequest.get()
+
+    act(() => backendExit?.({ code: 1 }))
+    const notice = $notifications.get().find(entry => entry.kind === 'error')
+    expect(() => notice?.action?.onClick()).toThrow()
+    expect($backendRestartRequest.get()).toBe(before)
+    expect(secondary.readyState).toBe(FakeWebSocket.OPEN)
   })
 
   it('seeds the configured default project dir pre-connect — no route-resume race (#71873)', async () => {

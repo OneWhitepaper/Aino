@@ -10,6 +10,7 @@ import { useRuntimeMessageRepository } from '@/app/chat/runtime-repository'
 import { __resetElapsedTimerRegistryForTests } from '@/components/chat/activity-timer'
 import type { ChatMessage } from '@/lib/chat-messages'
 import { useIncrementalExternalStoreRuntime } from '@/lib/incremental-external-store-runtime'
+import { setSessionProviderWait } from '@/store/provider-wait'
 import { $activeSessionId, $busy, $messages, $turnStartedAt } from '@/store/session'
 
 import { stubThreadEnvironment, ThreadRuntime, userMessage } from '../test-utils'
@@ -77,6 +78,7 @@ describe('the thinking indicator covers the gaps, not just the streaming', () =>
     $activeSessionId.set(null)
     $turnStartedAt.set(null)
     $busy.set(false)
+    setSessionProviderWait(sessionId, '')
     __resetElapsedTimerRegistryForTests()
     vi.restoreAllMocks()
     vi.useRealTimers()
@@ -106,6 +108,68 @@ describe('the thinking indicator covers the gaps, not just the streaming', () =>
 
     expect(container.querySelector('[data-slot="aui_turn-activity"]')).not.toBeNull()
     expect(container.querySelector('[data-slot="aui_turn-activity"]')?.textContent).toBe('Thinking')
+  })
+
+  it('keeps an already visible wait in place across sparse streamed chunks', async () => {
+    const messages = (text: string) => [
+      userMessage('u1', 'do the thing'),
+      assistant('a1', [{ type: 'text', text }], true)
+    ]
+
+    const { container, rerender } = render(<Harness messages={messages('Working.')} />)
+
+    act(() => vi.advanceTimersByTime(2_100))
+    const row = container.querySelector<HTMLElement>('[data-slot="aui_turn-activity"]')
+    expect(row?.dataset.state).toBe('active')
+
+    for (const text of ['Working. One', 'Working. One more', 'Working. One more step']) {
+      await act(async () => rerender(<Harness messages={messages(text)} />))
+      // A slow stream must not collapse this row, then reinsert it two seconds
+      // later: that changes scrollHeight and moves the bottom-following view.
+      expect(container.querySelector('[data-slot="aui_turn-activity"]')).toBe(row)
+      expect(row?.dataset.state).toBe('active')
+      expect(row?.textContent).toBe('Thinking')
+      act(() => vi.advanceTimersByTime(2_100))
+    }
+
+    act(() => {
+      $busy.set(false)
+      $turnStartedAt.set(null)
+    })
+    expect(row?.dataset.state).toBe('idle')
+    expect(row?.textContent).toBe('')
+  })
+
+  it('hands a visible wait to a tool and waits out quick gaps before showing it again', async () => {
+    const messages = (content: unknown[]) => [userMessage('u1', 'read it'), assistant('a1', content, true)]
+    const { container, rerender } = render(<Harness messages={messages([{ type: 'text', text: 'Working.' }])} />)
+    act(() => vi.advanceTimersByTime(2_100))
+    const row = container.querySelector<HTMLElement>('[data-slot="aui_turn-activity"]')
+    expect(row?.dataset.state).toBe('active')
+
+    await act(async () => rerender(<Harness messages={messages([toolCall('read_file', false)])} />))
+    act(() => vi.advanceTimersByTime(3_000))
+    expect(row?.dataset.state).toBe('idle')
+
+    await act(async () => rerender(<Harness messages={messages([toolCall('read_file', true)])} />))
+    expect(row?.dataset.state).toBe('idle')
+    act(() => vi.advanceTimersByTime(1_999))
+    expect(row?.dataset.state).toBe('idle')
+    act(() => vi.advanceTimersByTime(1))
+    expect(row?.dataset.state).toBe('active')
+  })
+
+  it('still dates a later named wait from the most recent streamed progress', async () => {
+    const messages = (text: string) => [userMessage('u1', 'continue'), assistant('a1', [{ type: 'text', text }], true)]
+    const { container, rerender } = render(<Harness messages={messages('Working.')} />)
+    act(() => vi.advanceTimersByTime(7_000))
+
+    await act(async () => rerender(<Harness messages={messages('Working. Progress.')} />))
+    act(() => setSessionProviderWait(sessionId, 'Waiting for provider'))
+    act(() => vi.advanceTimersByTime(1_000))
+
+    const row = container.querySelector('[data-slot="aui_turn-activity"]')
+    expect(row?.textContent).toBe('Waiting for provider1s')
   })
 
   it('stays silent under a tool call still in flight — that row has its own timer', () => {

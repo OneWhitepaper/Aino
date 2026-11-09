@@ -1,15 +1,19 @@
 import type * as HermesSdk from '@hermes/plugin-sdk'
-import { useValue } from '@hermes/plugin-sdk'
+import { host, useValue } from '@hermes/plugin-sdk'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { atom } from 'nanostores'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 
+// eslint-disable-next-line no-restricted-imports
+import { setApiRequestConnection, setApiRequestLocalMode } from '@/api/client'
 // Exercise the real notification button and editor across the plugin boundary.
 // eslint-disable-next-line no-restricted-imports
 import { NotificationStack } from '@/components/notifications'
 // eslint-disable-next-line no-restricted-imports
 import { clearNotifications } from '@/store/notifications'
+// eslint-disable-next-line no-restricted-imports
+import { $settingsScopeProfile, setSettingsScope } from '@/store/settings-scope'
 
 import { $editingBot } from './bot-state'
 import { notifyBotOpenFailure } from './canonical-chat'
@@ -39,6 +43,7 @@ vi.mock('@hermes/plugin-sdk', async importOriginal => {
 vi.mock('./avatar-picker', () => ({ AvatarPicker: () => null }))
 
 const $paneVisible = atom(false)
+const openModelSettings = host.openModelSettings
 
 function RecoveryEditor() {
   const visible = useValue($paneVisible)
@@ -53,6 +58,7 @@ beforeEach(() => {
   $botMeta.set({})
   $editingBot.set(null)
   $paneVisible.set(false)
+  host.openModelSettings = undefined as never
   mocks.revealPane.mockImplementation(() => $paneVisible.set(true))
   mocks.request.mockRejectedValue(new Error('The foreground profile must not receive bot configuration'))
   mocks.requestProfile.mockImplementation(async (_route, method) => {
@@ -72,10 +78,41 @@ afterEach(() => {
   cleanup()
   clearNotifications()
   $editingBot.set(null)
+  host.openModelSettings = openModelSettings
+  setApiRequestConnection(null)
+  setApiRequestLocalMode(false)
+  setSettingsScope('default')
+})
+
+it('opens the failed Bot’s actual model settings from its localized error notification', async () => {
+  host.openModelSettings = openModelSettings
+  setApiRequestLocalMode(true)
+  const previousHash = window.location.hash
+
+  const bot: RosterRow = {
+    name: 'ops-alias',
+    connectionId: 'local',
+    sourceScoped: true,
+    route: { connectionId: 'local', mode: 'local', profile: 'ops-alias', targetProfile: 'ops' }
+  }
+
+  try {
+    render(<NotificationStack />)
+    act(() => notifyBotOpenFailure(Object.assign(new Error('模型不可用'), { code: 'model_unavailable' }), bot, 'open'))
+    fireEvent.click(screen.getByRole('button', { name: 'Configure model' }))
+
+    await waitFor(() => expect($settingsScopeProfile.get()).toBe('ops'))
+    expect(window.location.hash).toBe('#/settings?tab=config:model')
+    expect(mocks.requestProfile).not.toHaveBeenCalled()
+    expect(mocks.request).not.toHaveBeenCalled()
+    expect($editingBot.get()).toBeNull()
+  } finally {
+    window.location.hash = previousHash
+  }
 })
 
 it.each(['local', 'remote'] as const)(
-  'opens a hidden editor and saves the failed %s bot model on its captured owner',
+  'on an older SDK, opens a hidden editor and saves the failed %s bot model on its captured owner',
   async mode => {
     const bot: RosterRow = {
       name: 'ops-alias',

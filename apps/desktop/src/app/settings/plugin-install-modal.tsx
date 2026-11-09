@@ -4,6 +4,7 @@ import { useLocation, useNavigate } from 'react-router'
 
 import { useGatewayRequest } from '@/app/gateway/hooks/use-gateway-request'
 import { NEW_CHAT_ROUTE, SETTINGS_ROUTE } from '@/app/routes'
+import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
@@ -28,13 +29,7 @@ import {
   openPluginInstallRequest,
   type PluginInstallRequest
 } from '@/store/plugin-install-request'
-import {
-  $activeGatewayProfile,
-  $profiles,
-  $profileScope,
-  normalizeProfileKey,
-  profileLabel
-} from '@/store/profile'
+import { $activeGatewayProfile, $profiles, $profileScope, normalizeProfileKey, profileLabel } from '@/store/profile'
 import { $connection } from '@/store/session'
 
 import { PluginInstallDetails } from './plugin-install-details'
@@ -73,9 +68,7 @@ function repoName(repo: string): string {
 }
 
 function pluginTitle(request: PluginInstallRequest, probe: null | ProbeResult): string {
-  return (
-    request.title || request.catalogName || probe?.agentName || probe?.desktopName || repoName(request.repo)
-  )
+  return request.title || request.catalogName || probe?.agentName || probe?.desktopName || repoName(request.repo)
 }
 
 /** The inspection's one-line reason, when it could not read the repository. An environment that cannot
@@ -97,24 +90,19 @@ function nothingInstallable(request: PluginInstallRequest, probe: null | ProbeRe
 }
 
 function ProbeWarnings({ copy, probe }: { copy: InstallModalCopy; probe: null | ProbeResult }) {
-  const warnings = [
-    ...new Set([...(probe?.warnings ?? []), probe?.insecure ? copy.insecureWarning : ''])
-  ].filter(Boolean)
+  const warnings = [...new Set([...(probe?.warnings ?? []), probe?.insecure ? copy.insecureWarning : ''])].filter(
+    Boolean
+  )
 
   if (!probe?.ok || warnings.length === 0) {
     return null
   }
 
   return (
-    <div
-      className={cn(
-        CAPTION,
-        'flex items-start gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-foreground'
-      )}
-    >
-      <AlertTriangle aria-hidden className="mt-0.5 size-3.5 shrink-0 text-amber-600 dark:text-amber-400" />
-      <span>{warnings.join(' ')}</span>
-    </div>
+    <Alert role="note" variant="warning">
+      <AlertTriangle aria-hidden />
+      <AlertDescription>{warnings.join(' ')}</AlertDescription>
+    </Alert>
   )
 }
 
@@ -189,10 +177,7 @@ export function PluginInstallModal() {
       }}
       open={request !== null && !onSettings}
     >
-      <DialogContent
-        className="max-w-lg"
-        onOpenAutoFocus={request?.repo ? preventCloseButtonAutoFocus : undefined}
-      >
+      <DialogContent className="max-w-lg" onOpenAutoFocus={request?.repo ? preventCloseButtonAutoFocus : undefined}>
         {request && !request.repo && (
           <>
             <DialogHeader>
@@ -345,9 +330,12 @@ function SourceMovedNotice({ copy, failure, probe, request, shown }: SourceMoved
   }
 
   return (
-    <p className={cn(CAPTION, 'text-(--ui-text-secondary)')} role="status">
-      {copy.sourceMoved(probe?.ok ? (reviewedCommit({ probe, request })?.slice(0, 12) ?? '') : '')}
-    </p>
+    <Alert role="status">
+      <AlertTriangle aria-hidden className="text-(--ui-text-secondary)" />
+      <AlertDescription>
+        {copy.sourceMoved(probe?.ok ? (reviewedCommit({ probe, request })?.slice(0, 12) ?? '') : '')}
+      </AlertDescription>
+    </Alert>
   )
 }
 
@@ -398,19 +386,22 @@ function InstallNotices({ confirmUnreviewed, copy, failure, partial, uncertain }
   return (
     <>
       {partial && !failure && (
-        <p className={cn(CAPTION, 'text-destructive')} role="alert">
-          {partial}
-        </p>
+        <Alert variant="destructive">
+          <AlertTriangle aria-hidden />
+          <AlertDescription>{partial}</AlertDescription>
+        </Alert>
       )}
       {confirmUnreviewed && (
-        <p className={cn(CAPTION, 'text-foreground')} role="alert">
-          {copy.legacyBackendConfirm}
-        </p>
+        <Alert variant="warning">
+          <AlertTriangle aria-hidden />
+          <AlertDescription>{copy.legacyBackendConfirm}</AlertDescription>
+        </Alert>
       )}
       {uncertain && (
-        <p className={cn(CAPTION, 'text-(--ui-text-secondary)')} role="status">
-          {copy.installUncertain}
-        </p>
+        <Alert role="status" variant="warning">
+          <AlertTriangle aria-hidden />
+          <AlertDescription>{copy.installUncertain}</AlertDescription>
+        </Alert>
       )}
     </>
   )
@@ -433,8 +424,7 @@ interface InstallGate {
 function installEnabled(gate: InstallGate): boolean {
   const { force, installing, partial, pinInvalid, probe, rereview, uncertain, verified } = gate
 
-  const reviewed =
-    rereview === 'idle' ? verified || Boolean(probe?.ok) : rereview === 'shown' && Boolean(probe?.ok)
+  const reviewed = rereview === 'idle' ? verified || Boolean(probe?.ok) : rereview === 'shown' && Boolean(probe?.ok)
 
   return !installing && !uncertain && !pinInvalid && (!partial || force) && reviewed
 }
@@ -607,9 +597,10 @@ function InstallView({ request, installing, onInstallingChange }: InstallViewPro
         </Disclosure>
 
         {failure && (
-          <p className={cn(CAPTION, 'text-destructive')} role="alert">
-            {failure}
-          </p>
+          <Alert variant="destructive">
+            <AlertTriangle aria-hidden />
+            <AlertDescription>{failure}</AlertDescription>
+          </Alert>
         )}
         <SourceMovedNotice copy={m} failure={failure} probe={probe} request={request} shown={sourceMoved} />
         <InstallNotices

@@ -6,10 +6,11 @@ import { expectDownloaded, observeDownloads } from './canonical-download-test-ut
 
 const request = vi.hoisted(() => vi.fn())
 vi.mock('@hermes/plugin-sdk', async () => {
+  const { pluginSdkMock, createGroupGateway } = await import('./group-test-utils')
   const { en } = await import('@/i18n/en')
-  const { Textarea } = await import('@/components/ui/textarea')
+  const gateway = createGroupGateway()
 
-  return { Textarea, atom: (await import('nanostores')).atom, host: { requestProfile: request }, randomUuid: (await import('@hermes/shared')).randomUuid,
+  return { ...await pluginSdkMock(gateway.host), host: { ...gateway.host, requestProfile: request },
     useI18n: () => ({ locale: 'en', t: en }),
     Button: (props: ComponentProps<'button'>) => <button {...props} />,
     MessageTextContent: ({ text }: { text: string }) => <div data-testid="markdown">{text}</div>,
@@ -67,7 +68,7 @@ it('keeps a committed file downloadable in history after Send clears the compose
   expect(history.queryByRole('button', { name: 'Attach files' })).toBeNull()
   expect(history.queryByRole('button', { name: 'Remove attachment' })).toBeNull()
   expect(view.container.querySelector('form')?.textContent).not.toContain(manifest.name)
-  fireEvent.click(history.getByRole('button', { name: 'Download' }))
+  fireEvent.click(history.getByRole('button', { name: /^Download\b/ }))
   await waitFor(() => expect(observed.downloads).toHaveLength(1))
   await expectDownloaded(observed, new Uint8Array([65]), manifest.name, manifest.mime)
   expect(save).not.toHaveBeenCalled()
@@ -100,8 +101,8 @@ it('binds user/member history downloads to their real event and refuses missing 
   })
   render(<CanonicalGroupWorkspace binding={binding} />)
   const history = within(screen.getByRole('log'))
-  await waitFor(() => expect(history.getAllByRole('button', { name: 'Download' })).toHaveLength(4))
-  const buttons = history.getAllByRole('button', { name: 'Download' }) as HTMLButtonElement[]
+  await waitFor(() => expect(history.getAllByRole('button', { name: /^Download\b/ })).toHaveLength(4))
+  const buttons = history.getAllByRole('button', { name: /^Download\b/ }) as HTMLButtonElement[]
   expect(buttons.map(button => button.disabled)).toEqual([false, false, true, true])
   fireEvent.click(buttons[0])
   await waitFor(() => expect(observed.downloads).toHaveLength(1))
@@ -131,6 +132,7 @@ it('renders only room messages with their author and markdown presentation', asy
   const history = within(screen.getByRole('log'))
 
   await waitFor(() => expect(history.getByText(/helper/)).toBeTruthy())
+  fireEvent.click(screen.getByRole('button', { name: 'Group info' }))
   expect(screen.getByRole('list', { name: 'Members' }).textContent).toContain('helper')
   expect(history.getByTestId('markdown').textContent).toBe('**Done**')
   expect(history.queryByText('turn.settled')).toBeNull()

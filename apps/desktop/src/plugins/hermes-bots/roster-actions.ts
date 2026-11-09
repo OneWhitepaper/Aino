@@ -144,11 +144,13 @@ export function trackInboundActivity(roster: RosterRow[]) {
  *  yanked away by background activity — and never mid-turn, when the
  *  activity is the turn itself, already streaming.
  *
- *  BACKGROUND wake: passed through as `background` so the refresh runs
- *  refreshInPlace and never navigates — this fires on roster activity,
- *  not a user gesture, so whatever route is showing stays showing (issue
- *  121874). */
-function refreshOpenBotChat(bot: RosterRow, { allowWhileBusy = false }: { allowWhileBusy?: boolean } = {}) {
+ *  Roster activity stays a background refresh that cannot navigate (#121874).
+ *  An explicit row click completes normal hydration, including recovery of
+ *  a never-used canonical chat after its model has been configured. */
+function refreshOpenBotChat(
+  bot: RosterRow,
+  { allowWhileBusy = false, foreground = false }: { allowWhileBusy?: boolean; foreground?: boolean } = {}
+) {
   const canonicalIds = [bot.canonical_session?.id, bot.canonical_session?.resolved_id].filter(Boolean).map(String)
   const focused = String(host.state.focusedStoredSessionId?.get?.() || '')
 
@@ -157,11 +159,17 @@ function refreshOpenBotChat(bot: RosterRow, { allowWhileBusy = false }: { allowW
   }
 
   const generation = getBotOpenGeneration()
+  const page = window.location.hash
+  const stillCurrent = () => generation === getBotOpenGeneration() && (!foreground || window.location.hash === page)
+
   void openBotCanonicalChat(bot, {
-    background: true,
-    openingStillCurrent: () => generation === getBotOpenGeneration()
-  }).catch(() => {
-    /* the next click or reclaim event re-resolves it */
+    background: !foreground,
+    openingStillCurrent: stillCurrent
+  }).catch(error => {
+    if (foreground && stillCurrent()) {
+      notifyBotOpenFailure(error, bot, 'open')
+    }
+    // Background failures remain quiet; the next explicit click owns recovery.
   })
 }
 
@@ -227,14 +235,26 @@ function focusExistingBotTab(bot: RosterRow): null | { registryId: string; store
  *  remembers only this transient opened-view observation; it never stores or
  *  resolves a canonical-chat id. */
 export interface OpenRosterBotOptions {
+  /** Creation callers can leave the page before the source has finished waking. */
+  openingStillCurrent?: () => boolean
+  /** New Bot creation only. Existing canonical chats never repeat the intro. */
+  kickoff?: boolean
   /** `tab`: open the Bot Chat as a stacked tab beside the current chat
    *  (⌘/⌃-click, "Open in new tab") instead of loading it into main. An
    *  already-open Bot Chat is fronted either way. */
   intent?: BotChatOpenIntent
 }
 
-export async function openRosterBot(bot: RosterRow, { intent = 'in-place' }: OpenRosterBotOptions = {}): Promise<boolean> {
+export async function openRosterBot(
+  bot: RosterRow,
+  { intent = 'in-place', kickoff, openingStillCurrent }: OpenRosterBotOptions = {}
+): Promise<boolean> {
+  if (openingStillCurrent && !openingStillCurrent()) {
+    return false
+  }
+
   const generation = bumpBotOpenGeneration()
+  const canNavigate = () => generation === getBotOpenGeneration() && (!openingStillCurrent || openingStillCurrent())
   const key = botRosterKey(bot)
   const meta = botRosterMeta(bot, $botMeta.get())
   // Keep the currently visible group as a fallback until this explicit action
@@ -301,7 +321,7 @@ export async function openRosterBot(bot: RosterRow, { intent = 'in-place' }: Ope
     // message_agent). Force a registry open so forceResume re-pulls the
     // latest transcript instead of leaving a stale snapshot until the next
     // user turn (#99393 class; #95600 only covered the not-yet-open path).
-    refreshOpenBotChat(bot, { allowWhileBusy: true })
+    refreshOpenBotChat(bot, { allowWhileBusy: true, foreground: true })
 
     return true
   }
@@ -316,7 +336,7 @@ export async function openRosterBot(bot: RosterRow, { intent = 'in-place' }: Ope
     // after that by the owner profile's "Bot Chat" title registry.
     await prepareBotSource(bot)
   } catch (error) {
-    if (generation === getBotOpenGeneration()) {
+    if (canNavigate()) {
       $openBotChat.set(null)
       restorePreviousGroup()
       notifyBotOpenFailure(error, bot, 'reach')
@@ -327,7 +347,7 @@ export async function openRosterBot(bot: RosterRow, { intent = 'in-place' }: Ope
     return false
   }
 
-  if (generation !== getBotOpenGeneration()) {
+  if (!canNavigate()) {
     settlePendingBotOpen(generation)
 
     return false
@@ -336,7 +356,8 @@ export async function openRosterBot(bot: RosterRow, { intent = 'in-place' }: Ope
   try {
     const opened = await openBotCanonicalChat(bot, {
       intent,
-      openingStillCurrent: () => generation === getBotOpenGeneration()
+      ...(kickoff === undefined ? {} : { kickoff }),
+      openingStillCurrent: canNavigate
     })
 
     if (generation !== getBotOpenGeneration()) {
@@ -363,12 +384,18 @@ export async function openRosterBot(bot: RosterRow, { intent = 'in-place' }: Ope
       return true
     }
   } catch (error) {
-    if (generation === getBotOpenGeneration()) {
+    if (canNavigate()) {
       $openBotChat.set(null)
       restorePreviousGroup()
       notifyBotOpenFailure(error, bot, 'open', displayName(bot, meta))
     }
 
+    settlePendingBotOpen(generation)
+
+    return false
+  }
+
+  if (!canNavigate()) {
     settlePendingBotOpen(generation)
 
     return false

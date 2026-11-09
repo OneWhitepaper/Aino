@@ -23,6 +23,9 @@ TITLE_SOURCE_DERIVED = "derived"
 TITLE_SOURCE_LLM = "llm"
 TITLE_SOURCE_USER = "user"
 
+# A native catalog choice belongs to one conversation across its compression segments.
+CONVERSATION_MODEL_SELECTION_KEY = 'conversation_model_selection'
+
 
 # Session preview = head of the first user message (shown when a session has no title).  A /skill invocation
 # embeds the whole skill body, so scaffolded rows take a wider excerpt (whole message under budget, else head +

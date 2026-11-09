@@ -79,12 +79,10 @@ export function TreeThumbnail({ node, resting }: { node: LayoutNode; resting: Re
   )
 }
 
-/** Small-caps section heading — the app's SidebarPanelLabel voice. */
+/** The layout palette uses the same quiet section label as navigation. */
 function PickerSectionLabel({ children }: { children: ReactNode }) {
   return (
-    <span className="text-[0.6rem] font-semibold uppercase tracking-[0.16em] text-(--ui-text-quaternary)">
-      {children}
-    </span>
+    <span className="text-[length:var(--aino-text-caption)] font-normal text-(--ui-text-tertiary)">{children}</span>
   )
 }
 
@@ -111,7 +109,10 @@ function PresetCard({ preset }: { preset: Contribution }) {
           <TreeThumbnail node={tree} resting={layoutPresetResting(preset.id)} />
         </div>
         <span
-          className={cn('truncate text-[0.68rem] font-medium', active ? 'text-foreground' : 'text-muted-foreground/80')}
+          className={cn(
+            'truncate text-[length:var(--aino-text-caption)] font-medium',
+            active ? 'text-foreground' : 'text-muted-foreground/80'
+          )}
         >
           {title}
         </span>
@@ -152,10 +153,17 @@ function ModeCard({ mode }: { mode: InterfaceMode }) {
       onClick={() => setInterfaceMode(mode)}
       type="button"
     >
-      <span className={cn('text-[0.68rem] font-medium', active ? 'text-foreground' : 'text-muted-foreground/80')}>
+      <span
+        className={cn(
+          'text-[length:var(--aino-text-caption)] font-medium',
+          active ? 'text-foreground' : 'text-muted-foreground/80'
+        )}
+      >
         {copy.label}
       </span>
-      <span className="text-[0.62rem] leading-snug text-(--ui-text-tertiary)">{copy.description}</span>
+      <span className="text-[length:var(--aino-text-caption)] leading-snug text-(--ui-text-tertiary)">
+        {copy.description}
+      </span>
     </button>
   )
 }
@@ -195,7 +203,7 @@ export function LayoutPicker() {
             <ModeCard key={mode} mode={mode} />
           ))}
         </div>
-        <p className="text-[0.62rem] text-(--ui-text-quaternary)">{t.interfaceMode.hint}</p>
+        <p className="text-[length:var(--aino-text-caption)] text-(--ui-text-quaternary)">{t.interfaceMode.hint}</p>
       </section>
 
       <section className="flex flex-col gap-2">

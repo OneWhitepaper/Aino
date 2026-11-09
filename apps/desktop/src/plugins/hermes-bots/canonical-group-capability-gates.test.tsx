@@ -445,3 +445,53 @@ it.each([
   fireEvent.click(item)
   expect(setGroupCreateOpen).toHaveBeenCalledTimes(disabled ? 0 : 1)
 })
+
+it('shows readable member names and freezes creation until a failure can be retried without losing the selection', async () => {
+  const namedRoster: RosterRow[] = [
+    { name: 'u6d4b-u8bd5', handle: 'u6d4b-u8bd5', display_name: '研究助手', description: '整理研究资料', connectionId: 'local' },
+    { name: 'u521b-u5efa', handle: 'u521b-u5efa', display_name: '设计助手', connectionId: 'local' }
+  ]
+
+  let rejectCreate: ((error: Error) => void) | undefined
+  const onCreated = vi.fn()
+  const onClose = vi.fn()
+  request.mockImplementation(async (_route, method, params) => {
+    if (method === 'groups.capabilities') {return { driver: true, persistent_process: true }}
+
+    if (method === 'groups.create') {
+      return new Promise((_resolve, reject) => { rejectCreate = reject })
+    }
+
+    throw new Error(`Unexpected RPC: ${method}: ${String(params)}`)
+  })
+
+  render(<CreateGroupChatDialog onClose={onClose} onCreated={onCreated} open roster={namedRoster} />)
+  await screen.findByText('研究助手')
+  expect(screen.getByText('设计助手')).toBeTruthy()
+  expect(screen.getByText(/整理研究资料/)).toBeTruthy()
+  expect(screen.queryByText(/@u6d4b/)).toBeNull()
+
+  for (const checkbox of screen.getAllByRole('checkbox')) {fireEvent.click(checkbox)}
+  const nameInput = screen.getByRole('textbox', { name: botsText().group.nameLabel })
+  fireEvent.change(nameInput, { target: { value: '产品研究' } })
+  fireEvent.click(screen.getByRole('button', { name: `${botsText().group.newTitle} (2)` }))
+  await waitFor(() => expect(rejectCreate).toBeTypeOf('function'))
+
+  const pending = screen.getByRole('button', { name: botsText().editor.creating }) as HTMLButtonElement
+  expect(pending.disabled).toBe(true)
+  expect(pending.getAttribute('aria-busy')).toBe('true')
+  expect(screen.getAllByRole('checkbox').every(input => (input as HTMLButtonElement).disabled)).toBe(true)
+  fireEvent.click(pending)
+  expect(request.mock.calls.filter(call => call[1] === 'groups.create')).toHaveLength(1)
+  expect(request.mock.calls.find(call => call[1] === 'groups.create')?.[2]).toMatchObject({
+    name: '产品研究', members: [{ profile: 'u6d4b-u8bd5' }, { profile: 'u521b-u5efa' }]
+  })
+
+  await act(async () => rejectCreate!(new Error('群聊创建暂时失败')))
+  expect(screen.getByRole('alert').textContent).toBe('群聊创建暂时失败')
+  expect((nameInput as HTMLInputElement).value).toBe('产品研究')
+  expect(screen.getAllByRole('checkbox').every(input => input.getAttribute('aria-checked') === 'true')).toBe(true)
+  expect((screen.getByRole('button', { name: `${botsText().group.newTitle} (2)` }) as HTMLButtonElement).disabled).toBe(false)
+  expect(onCreated).not.toHaveBeenCalled()
+  expect(onClose).not.toHaveBeenCalled()
+})

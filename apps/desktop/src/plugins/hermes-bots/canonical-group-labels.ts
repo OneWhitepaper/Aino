@@ -9,8 +9,18 @@ export function useCanonicalGroupLabels() {
 
   return {
     ...canonical,
+    memberActivities: {
+      thinking: t.assistant.thread.thinking,
+      reading: t.assistant.tool.actions.reading,
+      editing: t.assistant.tool.runSummary.edit.present,
+      searching: t.assistant.tool.actions.searching,
+      running_command: t.assistant.tool.titles.terminal.pending,
+      browser: canonical.memberBrowsing,
+      image: t.assistant.tool.titles.image_generate.pending
+    },
     back: t.common.back,
     cancel: t.common.cancel,
+    close: t.common.close,
     refresh: t.common.refresh,
     retry: t.common.retry,
     send: t.common.send,

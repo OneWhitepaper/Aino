@@ -1,13 +1,14 @@
 // health: allow FILE_LINES -- locale data: translated copy for the usage-window plan UI (allowance gauges, Large/Free tags, the limit card), one key per string
 import { defineFieldCopy } from '@/app/settings/field-copy'
 
-import { accountPage } from './account-page'
+import { accountLogin, accountPage } from './account-page'
 import { appearancePage } from './appearance-page'
 import { cloudSync } from './cloud-sync'
 import { configPagesFor } from './config-pages'
 import { defineLocale, type TranslationOverrides } from './define-locale'
 import { homeGuidance } from './home-guidance'
 import { introZh } from './intro-zh'
+import { notificationCenterCopy } from './notification-center'
 import { zhAccountErrors } from './platform-account-errors'
 import { toolPanel } from './tool-panel'
 import { workspacePage } from './workspace-page'
@@ -317,6 +318,7 @@ const configPageFieldDescriptions: Record<string, string> = defineFieldCopy({
 })
 
 export const zhOverrides = {
+  notificationCenter: notificationCenterCopy['zh'],
   appearancePage: appearancePage.zh,
   toolPanel: toolPanel['zh'],
   workspacePage: workspacePage.zh,
@@ -561,6 +563,7 @@ export const zhOverrides = {
   },
 
   notifications: {
+    actions: { restartHermes: '重启 Aino', openKeys: '打开工具与密钥', openGateways: '打开连接设置', openMaintenance: '查看整理选项' },
     sharedProfileWarning:
       '另一个 Hermes 安装实例正在使用此配置。两个实例共享此配置的设置和数据，因此更改可能发生冲突。你可以继续使用，也可以在更改前关闭另一个实例。',
     region: '通知',
@@ -670,6 +673,7 @@ export const zhOverrides = {
   },
 
   sendDiagnostics: {
+    closeWhileUploadingHint: '关闭窗口不会取消已经开始的上传。',
     title: '向 Aino 发送诊断信息',
     privacyNotice:
       '这会将私有诊断包上传至你的 Aino 账号服务。包含系统信息、配置状态（不含密钥本身），以及智能体、网关和桌面端日志（每份最多 512 KB）。日志可能包含对话、工具输出和文件路径。上传前会脱敏密钥，但仍可能含有其他敏感内容。仅授权的 Aino 管理员可查看。14 天后立即停止访问，随后 1 小时内清除在线数据；已有备份按部署备份策略清理。',
@@ -2438,7 +2442,7 @@ export const zhOverrides = {
         }
       }
     },
-    account: {
+    account: { ...accountLogin.zh,
       browserSessionOnly: '此浏览器仅在当前标签页内保持登录，关闭或刷新后需要重新登录。',
       displayNameLabel: '昵称',
       editDisplayName: '修改昵称',
@@ -2460,7 +2464,7 @@ export const zhOverrides = {
       existingAccount: '已有账户登录',
       registerAccount: '注册账户',
       registrationClosed: '注册暂未开放。',
-      phoneAutoRegister: '未注册的手机号验证成功后将自动注册。',
+      phoneAutoRegister: '未注册手机号验证后自动注册。',
       phoneLoginUnavailable: '手机号登录暂未开放，请使用已有账户登录。',
       existingAccountPhoneHint: '已有网站账户？请先登录原账户，再绑定手机号。',
       registrationReturnHint: '注册完成后，使用同一邮箱和密码登录。网站与桌面共用一个账户。',

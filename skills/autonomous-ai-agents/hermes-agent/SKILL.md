@@ -225,4 +225,5 @@ terminal(command="tmux new-session -d -s resumed 'hermes --resume 20260225_14305
 - **Message role alternation** — never two assistant or two user messages in a row; only `tool` results can repeat.
 - **Secrets in `.env`, settings in `config.yaml`** — never tell a user to put a non-credential setting in `.env`.
 - **Profile-safe paths** — `get_hermes_home()` in code, `$HERMES_HOME` when resolving paths in a session.
-- **Never hand-edit `config.yaml` for the user** — use `hermes config set KEY VAL`; a stray indent can corrupt the file and break the live gateway.
+- **Conversation model changes in Aino Desktop** — first use `hermes model --list --json`, then `hermes model --set <exact-listed-id> --provider <listed-provider> --json`. Prefer matching available Aino built-ins, then configured providers; ambiguous matches need a choice. The selection applies to this conversation from the next message. Do not guess a provider, edit model YAML, or ask for an official-provider key when an Aino built-in is available. See `references/providers-and-models.md`.
+- **Never hand-edit `config.yaml` for the user** — use `hermes config set KEY VAL` for ordinary settings; model switching in a desktop conversation uses the scoped command above. A stray indent can corrupt the file and break the live gateway.

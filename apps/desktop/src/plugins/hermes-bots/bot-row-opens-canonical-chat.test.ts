@@ -14,7 +14,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as CanonicalChat from './canonical-chat'
 import type { RosterRow } from './types'
 
-const { openBotCanonicalChat, prepareBotSource } = vi.hoisted(() => ({
+const { notifyBotOpenFailure, openBotCanonicalChat, prepareBotSource } = vi.hoisted(() => ({
+  notifyBotOpenFailure: vi.fn(),
   openBotCanonicalChat: vi.fn(),
   prepareBotSource: vi.fn()
 }))
@@ -23,25 +24,37 @@ vi.mock('./canonical-chat', async () => ({
   CANONICAL_CHAT_TITLE: 'Bot Chat',
   ensureBotMetadata: vi.fn(async () => ({})),
   isStaleBotChatTile: (await vi.importActual<typeof CanonicalChat>('./canonical-chat')).isStaleBotChatTile,
-  notifyBotOpenFailure: vi.fn(),
+  notifyBotOpenFailure,
   openBotCanonicalChat,
   prepareBotSource,
   PROFILE_SESSION_LIST_LIMIT: 200
 }))
 
 const { host } = await import('@hermes/plugin-sdk')
-const { $openBotChat, $selectedBot } = await import('./bot-state')
+const { $openBotChat, $selectedBot, $selectedRosterKey } = await import('./bot-state')
 const { openRosterBot, trackInboundActivity } = await import('./roster-actions')
-const { $selectedStoredSessionId } = await import('@/store/session')
 
 const bot = { connectionId: 'local', name: 'alpha' } as RosterRow
+let focusedSessionId: null | string = null
+
+/** The plugin reads the visible session from its host, not the hidden primary. */
+function focusBotChat(storedSessionId = 'bot-chat-tip') {
+  focusedSessionId = storedSessionId
+}
 
 beforeEach(() => {
   vi.clearAllMocks()
-  prepareBotSource.mockResolvedValue(undefined)
-  openBotCanonicalChat.mockResolvedValue({ openedId: 'bot-chat-tip', registryId: 'bot-chat' })
+  focusedSessionId = null
+  vi.spyOn(host.state.focusedStoredSessionId, 'get').mockImplementation(() => focusedSessionId)
+  prepareBotSource.mockReset().mockResolvedValue(undefined)
+  openBotCanonicalChat.mockReset().mockResolvedValue({ openedId: 'bot-chat-tip', registryId: 'bot-chat' })
   $openBotChat.set(null)
   $selectedBot.set('')
+})
+
+afterEach(() => {
+  vi.restoreAllMocks()
+  focusedSessionId = null
 })
 
 describe('a row click lands on the canonical chat, never a remembered side tab', () => {
@@ -73,7 +86,7 @@ describe('a row click lands on the canonical chat, never a remembered side tab',
     })
   })
 
-  it('fronting a busy, already-open Bot Chat refreshes its transcript in place', async () => {
+  it.each([false, true])('explicitly reselects an already-open Bot Chat (busy: %s)', async isBusy => {
     // The front is presentation-only: the pane keeps whatever transcript it
     // last painted, which can predate rows the bot wrote while the user was
     // elsewhere (a cron delivery, a teammate's message_agent, another bot's
@@ -83,21 +96,37 @@ describe('a row click lands on the canonical chat, never a remembered side tab',
     host.focusOpenWorkspaceSession = vi.fn((_key: string, _probe: unknown, only?: readonly string[]) =>
       only?.includes('bot-chat-tip') ? 'bot-chat-tip' : null
     ) as never
-    $selectedStoredSessionId.set('bot-chat-tip')
-    const busy = vi.spyOn(host.state.busy, 'get').mockReturnValue(true)
+    focusBotChat()
+    const busy = vi.spyOn(host.state.busy, 'get').mockReturnValue(isBusy)
 
     try {
       await expect(openRosterBot(canonicalBot)).resolves.toBe(true)
 
       expect(openBotCanonicalChat).toHaveBeenCalledWith(
         canonicalBot,
-        // A fronting refresh re-pulls the transcript without navigating —
-        // background: true threads refreshInPlace (issue 121874).
-        { background: true, openingStillCurrent: expect.any(Function) }
+        // An explicit row click must complete the normal hydration and model
+        // recovery path, even when its existing tab was already fronted.
+        { background: false, openingStillCurrent: expect.any(Function) }
       )
     } finally {
       busy.mockRestore()
-      $selectedStoredSessionId.set(null)
+      focusedSessionId = null
+    }
+  })
+
+  it('offers recovery when the explicit refresh of an open Bot fails', async () => {
+    host.focusOpenWorkspaceSession = vi.fn((_key: string, _probe: unknown, only?: readonly string[]) =>
+      only?.includes('bot-chat-tip') ? 'bot-chat-tip' : null
+    ) as never
+    focusBotChat()
+    const error = new Error('model_unavailable')
+    openBotCanonicalChat.mockRejectedValueOnce(error)
+
+    try {
+      await openRosterBot(canonicalBot)
+      expect(notifyBotOpenFailure).toHaveBeenCalledWith(error, canonicalBot, 'open')
+    } finally {
+      focusedSessionId = null
     }
   })
 
@@ -139,29 +168,33 @@ describe('the open Bot Chat follows its session on the gateway', () => {
 
   it('re-opens the focused Bot Chat when its canonical session advances', () => {
     $selectedBot.set('alpha')
-    $selectedStoredSessionId.set('bot-chat-tip')
+    focusBotChat()
     trackInboundActivity([activeBot(100)]) // seeds the watermark
 
     trackInboundActivity([activeBot(200)])
 
     expect(openBotCanonicalChat).toHaveBeenCalledTimes(1)
-    $selectedStoredSessionId.set(null)
+    expect(openBotCanonicalChat).toHaveBeenCalledWith(activeBot(200), {
+      background: true,
+      openingStillCurrent: expect.any(Function)
+    })
+    focusedSessionId = null
   })
 
   it('leaves the center alone when the Bot Chat is not what is focused', () => {
     $selectedBot.set('alpha')
-    $selectedStoredSessionId.set('some-group-room')
+    focusedSessionId = 'some-group-room'
     trackInboundActivity([activeBot(300)])
 
     trackInboundActivity([activeBot(400)])
 
     expect(openBotCanonicalChat).not.toHaveBeenCalled()
-    $selectedStoredSessionId.set(null)
+    focusedSessionId = null
   })
 
   it('does not re-open a focused Bot Chat from roster activity while its turn is busy', () => {
     $selectedBot.set('alpha')
-    $selectedStoredSessionId.set('bot-chat-tip')
+    focusBotChat()
     const busy = vi.spyOn(host.state.busy, 'get').mockReturnValue(true)
 
     try {
@@ -171,12 +204,62 @@ describe('the open Bot Chat follows its session on the gateway', () => {
       expect(openBotCanonicalChat).not.toHaveBeenCalled()
     } finally {
       busy.mockRestore()
-      $selectedStoredSessionId.set(null)
+      focusedSessionId = null
     }
   })
 })
 
 describe('opening a Bot Chat as a stacked tab (⌘-click / "Open Bot Chat in new tab")', () => {
+  it('does not open after the creation caller leaves its page during source preparation', async () => {
+    let finishPrepare = () => undefined as void
+    let current = true
+    prepareBotSource.mockImplementationOnce(
+      () =>
+        new Promise<void>(resolve => {
+          finishPrepare = resolve
+        })
+    )
+
+    const opening = openRosterBot(bot, { openingStillCurrent: () => current })
+    current = false
+    finishPrepare()
+
+    await expect(opening).resolves.toBe(false)
+    expect(openBotCanonicalChat).not.toHaveBeenCalled()
+    expect($openBotChat.get()).toBeNull()
+  })
+
+  it('keeps a successful open claim when its own navigation changes the caller page', async () => {
+    let current = true
+    openBotCanonicalChat.mockImplementationOnce(async (_bot, options) => {
+      expect(options.openingStillCurrent()).toBe(true)
+      current = false
+
+      return { openedId: 'bot-chat-tip', registryId: 'bot-chat' }
+    })
+
+    await expect(openRosterBot(bot, { openingStillCurrent: () => current })).resolves.toBe(true)
+    expect($openBotChat.get()?.openedSessionId).toBe('bot-chat-tip')
+  })
+
+  it('a newly created bot keeps selection, workspace ownership and its first open on the same source', async () => {
+    const created = { ...bot, sourceScoped: true, connectionKind: 'local' as const }
+
+    await expect(openRosterBot(created, { kickoff: false })).resolves.toBe(true)
+
+    expect($selectedRosterKey.get()).toBe('local::alpha')
+    expect(openBotCanonicalChat).toHaveBeenCalledWith(created, {
+      intent: 'in-place',
+      kickoff: false,
+      openingStillCurrent: expect.any(Function)
+    })
+    expect($openBotChat.get()).toEqual({
+      key: 'local::alpha',
+      openedRegistryId: 'bot-chat',
+      openedSessionId: 'bot-chat-tip'
+    })
+  })
+
   // Two Bot Chats could never be open at once: every row click spent main, so
   // the second bot replaced the first. A `tab` intent reaches the canonical
   // open so the chat stacks beside whatever main holds; a plain click keeps

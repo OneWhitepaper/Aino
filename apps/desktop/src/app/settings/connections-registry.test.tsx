@@ -71,6 +71,19 @@ afterEach(() => {
 })
 
 describe('ConnectionsRegistrySection', () => {
+  it('keeps a failed removal open and only closes after a successful retry', async () => {
+    remove.mockRejectedValueOnce(new Error('Connection is in use'))
+    render(<ConnectionsRegistrySection />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Remove' }))
+    const dialog = await screen.findByRole('dialog')
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Remove' }))
+    expect(await screen.findByText('Connection is in use')).toBeTruthy()
+    expect(screen.getByRole('dialog')).toBeTruthy()
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Remove' }))
+    await waitFor(() => expect(remove).toHaveBeenCalledTimes(2))
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+  })
+
   it('renders the built-in local connection label in the active locale', async () => {
     render(
       <I18nProvider configClient={null} initialLocale="zh">

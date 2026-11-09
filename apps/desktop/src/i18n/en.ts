@@ -1,7 +1,7 @@
 // health: allow FILE_LINES -- locale data: translated copy for the usage-window plan UI (allowance gauges, Large/Free tags, the limit card), one key per string
 import { FIELD_DESCRIPTIONS, FIELD_LABELS } from '@/app/settings/constants'
 
-import { accountPage } from './account-page'
+import { accountLogin, accountPage } from './account-page'
 import { appearancePage } from './appearance-page'
 import { cloudSync } from './cloud-sync'
 import { configPagesFor } from './config-pages'
@@ -39,6 +39,7 @@ import { enThemePicker } from './en_theme_picker'
 import { enUninstallSection } from './en_uninstall_section'
 import { enUpdateChannel } from './en_update_channel'
 import { homeGuidance } from './home-guidance'
+import { notificationCenterCopy } from './notification-center'
 import { enAccountErrors } from './platform-account-errors'
 import { toolPanel } from './tool-panel'
 import type { Translations } from './types'
@@ -49,6 +50,7 @@ const configPageFieldLabels: Record<string, string> = FIELD_LABELS
 const configPageFieldDescriptions: Record<string, string> = FIELD_DESCRIPTIONS
 
 export const en: Translations = {
+  notificationCenter: notificationCenterCopy['en'],
   appearancePage: appearancePage.en,
   toolPanel: toolPanel['en'],
   workspacePage: workspacePage.en,
@@ -527,6 +529,7 @@ export const en: Translations = {
   ...enBilling,
 
   sendDiagnostics: {
+    closeWhileUploadingHint: 'Closing this window will not cancel an upload that has already started.',
     title: 'Send diagnostics to Aino',
     privacyNotice:
       'This sends a private bundle to your Aino account service: system information, configuration status (never keys themselves), and agent, gateway and desktop logs (up to 512 KB each). Logs may contain conversations, tool output and file paths. Keys are redacted before upload, but other sensitive content may remain. Only authorized Aino administrators can read it. Access expires after 14 days; online data is purged within the next hour. Existing backups follow the deployment backup policy.',
@@ -2363,7 +2366,7 @@ export const en: Translations = {
         }
       }
     },
-    account: {
+    account: { ...accountLogin.en,
       browserSessionOnly: 'This browser keeps you signed in only until this tab closes or reloads.',
       displayNameLabel: 'Nickname',
       editDisplayName: 'Edit nickname',
@@ -2385,7 +2388,7 @@ export const en: Translations = {
       existingAccount: 'Sign in to an existing account',
       registerAccount: 'Create an account',
       registrationClosed: 'Registration is currently closed.',
-      phoneAutoRegister: 'Verifying a new phone number automatically creates an account.',
+      phoneAutoRegister: 'New numbers register after verification.',
       phoneLoginUnavailable: 'Phone sign-in is currently unavailable. Use your existing account.',
       existingAccountPhoneHint: 'Already have a website account? Sign in to it before linking your phone number.',
       registrationReturnHint:

@@ -59,12 +59,15 @@ export function FreeTierNoticeStrip() {
   }
 
   return (
-    <StatusRow
-      leading={<Codicon aria-hidden className="text-(--ui-text-tertiary)" name="account" size="0.8rem" />}
-      trailing={
-        <>
+    <StatusRow leading={<Codicon aria-hidden className="text-(--ui-text-tertiary)" name="account" size="0.8rem" />}>
+      <div className="flex min-w-0 flex-1 flex-col items-start gap-1.5 py-1">
+        <p className="min-w-0 text-sm leading-5 text-foreground [overflow-wrap:anywhere]">
+          <span className="font-medium">{copy.stripTitle}</span>
+          <span className="text-[0.8125rem] text-(--ui-text-secondary)"> {copy.stripBody}</span>
+        </p>
+        <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
           <Button
-            className="text-foreground/90 hover:text-foreground"
+            className="min-h-7 max-w-full whitespace-normal text-left text-[0.8125rem] text-foreground hover:text-foreground [overflow-wrap:anywhere]"
             onClick={() => consume(() => setModelPickerOpen(true))}
             size="micro"
             type="button"
@@ -73,7 +76,7 @@ export function FreeTierNoticeStrip() {
             {copy.openModelPicker}
           </Button>
           <Button
-            className="text-foreground/90 hover:text-foreground"
+            className="min-h-7 max-w-full whitespace-normal text-left text-[0.8125rem] text-foreground hover:text-foreground [overflow-wrap:anywhere]"
             onClick={() => consume(() => openFreeTierSignIn())}
             size="micro"
             type="button"
@@ -82,7 +85,7 @@ export function FreeTierNoticeStrip() {
             {copy.signIn}
           </Button>
           <Button
-            className="text-muted-foreground/75 hover:text-foreground/90"
+            className="min-h-7 max-w-full whitespace-normal text-left text-[0.8125rem] text-(--ui-text-secondary) hover:text-foreground [overflow-wrap:anywhere]"
             onClick={() => {
               recordFriction('notice_dismissed', 'free_tier_notice')
               consume()
@@ -93,14 +96,8 @@ export function FreeTierNoticeStrip() {
           >
             {copy.dismiss}
           </Button>
-        </>
-      }
-      trailingVisible
-    >
-      <span className="min-w-0 truncate text-[0.73rem] leading-4 text-foreground/92">
-        <span className="font-medium">{copy.stripTitle}</span>
-        <span className="text-muted-foreground/80"> {copy.stripBody}</span>
-      </span>
+        </div>
+      </div>
     </StatusRow>
   )
 }

@@ -73,7 +73,7 @@ describe('opening a room', () => {
 
     room.view.openGroupChat('Core', 'name')
 
-    expect(host.setWorkspaceScope).toHaveBeenCalledWith('bots', 'group:name:Core', {
+    expect(host.setWorkspaceScope).toHaveBeenCalledWith('bots', 'group:source:["local","default","Core"]', {
       kind: 'blocked',
       message: '新的群组对话将在群组输入框中开始。'
     })

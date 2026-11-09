@@ -340,7 +340,9 @@ def _(rid, params: dict) -> dict:
     model_set = False
     if model and provider:
         model_set = _best_effort(lambda: _pin_profile_model(path, provider, model))
-    elif is_truthy_value(params.get("mirror_credentials", True)):
+    elif not clone_from and is_truthy_value(params.get("mirror_credentials", True)):
+        # An explicitly chosen source owns the model, including an empty runtime selection
+        # used by desktop-managed models. Do not replace it with the launch workspace's model.
         mirrored["model_inherited"] = _try(lambda: _inherit_launch_model(path), False)
     return _ok(rid, {"ok": True, "name": name, "path": str(path), "soul_written": soul_written,
                      "model_set": model_set, "mirrored": mirrored})

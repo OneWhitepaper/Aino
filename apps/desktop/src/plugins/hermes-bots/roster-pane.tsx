@@ -1,3 +1,5 @@
+import './roster-pane.css'
+
 import { Button, Codicon, host, useI18n, useValue } from '@hermes/plugin-sdk'
 import { useEffect, useRef, useState } from 'react'
 
@@ -37,7 +39,7 @@ import {
 import { $groupChats, $groupChatWorkspace, $groupClarify, $groupNeedsYou } from './group-chat'
 import { GroupChatWorkspace, openGroupChat } from './group-chat-view'
 import { groupChatMemberBots } from './group-membership'
-import { $groupMainTabsRev, groupOpenOrigin, shouldRenderGroupChatInPane } from './group-panes'
+import { $groupMainTabsRev, groupOpenOrigin, groupOpenRoute, shouldRenderGroupChatInPane } from './group-panes'
 import { $activeGroupMemberKeys } from './group-presence'
 import { $showHiddenBots, isBotHidden } from './hidden-bots'
 import { useBots } from './i18n'
@@ -48,7 +50,7 @@ import { renderRosterDialogs } from './roster-pane-dialogs'
 import { RosterGroupRowView } from './roster-pane-groups'
 import { $lastSources, usePublishRosterSnapshot } from './roster-pane-lifecycle'
 import { rosterSectionRenderers } from './roster-pane-sections'
-import { renderRosterToolbar } from './roster-pane-toolbar'
+import { renderRosterSearch, renderRosterToolbar } from './roster-pane-toolbar'
 import { botNeedsHandleLabel, rosterGatewayOptions } from './roster-sections'
 import { botWorkspaceOwnerKey, setBotsWorkspaceOwner } from './routing'
 import { activeBots, useTurnBusy } from './row-helpers'
@@ -447,7 +449,7 @@ export function BotsPane() {
   if (shouldRenderGroupChatInPane(groupChatName) && groupChatMembers.length) {
     return (
       <>
-        <GroupChatWorkspace group={groupChatName} members={groupChatMembers} origin={groupOpenOrigin(groupChatName)} />
+        <GroupChatWorkspace group={groupChatName} members={groupChatMembers} origin={groupOpenOrigin(groupChatName)} route={groupOpenRoute(groupChatName)} />
         {dialogs}
       </>
     )
@@ -499,15 +501,15 @@ export function BotsPane() {
     })
 
   return (
-    <div className="flex h-full flex-col">
-      <div className="px-2.5 pt-2">
-        <Button onClick={() => host.navigate('/agents')} size="sm" variant="ghost">
+    <div className="aino-bots-rail">
+      <div className="aino-roster-navigation">
+        <Button className="aino-roster-monitor" onClick={() => host.navigate('/agents')} variant="ghost">
           <Codicon name="list-tree" />
           {t.shell.statusbar.subtaskMonitor}
+          <Codicon name="chevron-right" />
         </Button>
       </div>
-      <CanonicalGroupList onOpen={openGroupChat} />
-      {renderRosterToolbar({
+      {renderRosterSearch({
         b,
         activityToasts,
         activeSourceRoster,
@@ -529,36 +531,67 @@ export function BotsPane() {
         gatewayFilter,
         setGatewayFilter
       })}
-      {renderRosterContent({
-        b,
-        staleNotice,
-        isLoading,
-        initialRosterLoading,
-        roster,
-        error,
-        gatewayUp,
-        refetch,
-        allBotsHidden,
-        hiddenExpanded,
-        rosterRows,
-        matchingHiddenBots,
-        query,
-        selectedGateway,
-        showGatewaySections,
-        sortedGroupRows,
-        gatewaySections,
-        showHiddenSection,
-        hiddenSectionRef,
-        hasRosterConstraint,
-        hiddenBots,
-        showHiddenRows,
-        hiddenGatewaySections,
-        renderBotRow,
-        renderGroupChatSection,
-        renderGatewaySection,
-        renderUserSections,
-        renderHiddenGatewaySection
-      })}
+      <div className="aino-roster-scroll">
+        <CanonicalGroupList
+          hidden={rowKindFilter === 'bots'}
+          onCreate={() => setGroupCreateOpen(true)}
+          onOpen={openGroupChat}
+          query={query}
+          roster={roster}
+        />
+        {renderRosterToolbar({
+          b,
+          activityToasts,
+          activeSourceRoster,
+          roster,
+          setCreateOpen,
+          setGroupCreateOpen,
+          setSectionDialog,
+          showRosterTools: false,
+          showRosterSearch: false,
+          showRosterFilters: false,
+          query,
+          setQuery,
+          activeFilterCount,
+          gatewayOptions,
+          rowKindFilter,
+          setRowKindFilter,
+          activityFilter,
+          setActivityFilter,
+          gatewayFilter,
+          setGatewayFilter
+        })}
+        {renderRosterContent({
+          b,
+          staleNotice,
+          isLoading,
+          initialRosterLoading,
+          roster,
+          error,
+          gatewayUp,
+          refetch,
+          allBotsHidden,
+          hiddenExpanded,
+          rosterRows,
+          matchingHiddenBots,
+          query,
+          selectedGateway,
+          showGatewaySections,
+          sortedGroupRows,
+          gatewaySections,
+          showHiddenSection,
+          hiddenSectionRef,
+          hasRosterConstraint,
+          hiddenBots,
+          showHiddenRows,
+          hiddenGatewaySections,
+          renderBotRow,
+          renderGroupChatSection,
+          renderGatewaySection,
+          renderUserSections,
+          renderHiddenGatewaySection
+        })}
+      </div>
       {dialogs}
     </div>
   )

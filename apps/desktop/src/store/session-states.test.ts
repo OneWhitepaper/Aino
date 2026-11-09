@@ -10,6 +10,7 @@ import {
   setWorkspaceScope,
   workspaceScopeKey
 } from '@/components/pane-shell/workspace-scope'
+import { registry } from '@/contrib/registry'
 import { $connectionsRegistry } from '@/store/connection-registry-state'
 import { setPrimaryGateway, setPrimaryGatewayConnection } from '@/store/gateway'
 import { $activeGatewayProfile } from '@/store/profile'
@@ -63,6 +64,19 @@ import { orderTilesByTree } from '@/store/session-tile-order'
 
 const tile = (storedSessionId: string): SessionTile => ({ storedSessionId })
 const tilePane = (id: string) => `session-tile:${id}`
+const scopeDisposers: (() => void)[] = []
+
+function registerScopedTile(id: string, scope: Pick<SessionTile, 'workspaceMode' | 'workspaceOwnerKey'>) {
+  scopeDisposers.push(registry.register({
+    area: 'panes', id: tilePane(id), title: id, render: () => null,
+    data: { placement: 'main', workspaceScope: { mode: scope.workspaceMode ?? 'sessions', ownerKey: scope.workspaceOwnerKey } }
+  }))
+}
+
+afterEach(() => {
+  scopeDisposers.splice(0).forEach(dispose => dispose())
+  setWorkspaceScope('sessions')
+})
 
 describe('foregroundSessionScopes', () => {
   beforeEach(() => {
@@ -461,6 +475,8 @@ describe('SessionTile workspace scope', () => {
       workspaceTabTitle: 'Bot Chat'
     }
 
+    registerScopedTile('bot-chat', scope)
+    setWorkspaceScope('bots', scope.workspaceOwnerKey)
     openSessionTile('bot-chat', 'center', undefined, undefined, scope)
     $layoutTree.set(group(['workspace', tilePane('bot-chat')], { active: tilePane('bot-chat'), id: 'main' }))
 
@@ -1197,6 +1213,7 @@ describe('$focusedStoredSessionId in Bot Mode (#96062)', () => {
     // NULL "focused session" edge — which the Bots plugin read as "the chat
     // lost the center", releasing its open claim and re-asserting the Bots
     // home over the still-visible chat (the reported "jumps to the list").
+    registerScopedTile('chat-b', { workspaceMode: 'bots', workspaceOwnerKey: 'bot:b' })
     setWorkspaceScope('bots', 'bot:b')
     $selectedStoredSessionId.set(null)
     $layoutTree.set(
@@ -1211,6 +1228,7 @@ describe('$focusedStoredSessionId in Bot Mode (#96062)', () => {
   })
 
   it('the main-zone tile also answers while the tracker sits on the workspace tab itself', () => {
+    registerScopedTile('chat-b', { workspaceMode: 'bots', workspaceOwnerKey: 'bot:b' })
     setWorkspaceScope('bots', 'bot:b')
     $selectedStoredSessionId.set(null)
     $layoutTree.set(group(['workspace', tilePane('chat-b')], { active: tilePane('chat-b'), id: 'grp-main' }))

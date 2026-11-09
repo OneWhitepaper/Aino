@@ -1,0 +1,39 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-11-10T00:00:00+08:00",
+  "title": "Aino Desktop",
+  "extensions": {
+    "shadows": [
+      {
+        "name": "--aino-shadow-panel",
+        "value": "0 12px 36px rgb(25 32 48 / 13%)",
+        "purpose": "Light floating panels and dialogs"
+      },
+      {
+        "name": "--aino-shadow-notice",
+        "value": "0 3px 16px rgb(25 32 48 / 9%)",
+        "purpose": "Light in-flow notification summary"
+      },
+      {
+        "name": "dark elevation",
+        "value": "0 12px 36px rgb(0 0 0 / 32%)",
+        "purpose": "Dark floating panels"
+      },
+      {
+        "name": "dark notification",
+        "value": "0 3px 16px rgb(0 0 0 / 32%)",
+        "purpose": "Dark in-flow notification summary"
+      }
+    ],
+    "breakpoints": [
+      { "name": "notification-panel", "value": "64rem" },
+      { "name": "compact-summary", "value": "42rem" }
+    ],
+    "rules": [
+      "Use DESIGN.md token primitives and existing components across app-owned pages.",
+      "Retain all existing actions, request owners, scopes, keyboard focus and reader preferences.",
+      "User artifacts, native OS windows, terminal content and semantic syntax/diff/chart colors retain their content styling.",
+      "Use the existing notification queue; a right-aligned summary has its own footprint and never covers work."
+    ]
+  }
+}

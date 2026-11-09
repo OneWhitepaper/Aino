@@ -5,28 +5,23 @@ import { RowButton } from '@/components/ui/row-button'
 import { Tip } from '@/components/ui/tooltip'
 import { useI18n } from '@/i18n'
 import { Lock } from '@/lib/icons'
-import { cn } from '@/lib/utils'
 
-import { CARD_ACCENTS, catalogIcon } from './catalog-card'
+import { catalogIcon } from './catalog-card'
 import { type CatalogEntry } from './catalog-data'
 import { catalogDescription, catalogDisplayName } from './catalog-localization'
 
 interface CatalogListRowProps {
   entry: CatalogEntry
-  accentIndex: number
   selected: boolean
   action: ReactNode
   onOpen: (entry: CatalogEntry) => void
 }
 
-export function CatalogListRow({ entry, accentIndex, selected, action, onOpen }: CatalogListRowProps) {
+export function CatalogListRow({ entry, selected, action, onOpen }: CatalogListRowProps) {
   const { t } = useI18n()
 
   return (
-    <div
-      className={cn('catalog-list-row', CARD_ACCENTS[accentIndex % CARD_ACCENTS.length])}
-      data-entry-id={entry.id}
-    >
+    <div className="catalog-list-row" data-entry-id={entry.id}>
       <RowButton
         aria-haspopup="dialog"
         aria-label={catalogDisplayName(entry)}

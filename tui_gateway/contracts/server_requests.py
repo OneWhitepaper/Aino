@@ -15,6 +15,10 @@ from tools.tour_presets import TourPreset
 
 from .base import JsonValue, Params, Payload, Result, WireEnum
 from .registry import event, server_request
+from .model_session import ConversationModelRequest, ConversationModelResult
+
+server_request('model.session', params=ConversationModelRequest, result=ConversationModelResult,
+               doc='Resolve models from the current desktop account and configured providers without sending credentials.')
 
 
 class ServerRequestParams(Params):

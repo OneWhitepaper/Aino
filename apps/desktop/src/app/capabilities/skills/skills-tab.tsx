@@ -5,13 +5,7 @@ import { CodeEditor } from '@/components/chat/code-editor'
 import { Button } from '@/components/ui/button'
 import { Loader } from '@/components/ui/loader'
 import { Tip } from '@/components/ui/tooltip'
-import {
-  editLearningNode,
-  getLearningNode,
-  type ProfileScope,
-  profileScopeKey,
-  setSkillEnabled
-} from '@/hermes'
+import { editLearningNode, getLearningNode, type ProfileScope, profileScopeKey, setSkillEnabled } from '@/hermes'
 import { useI18n } from '@/i18n'
 import { Lock } from '@/lib/icons'
 import { queryClient } from '@/lib/query-client'
@@ -103,9 +97,7 @@ function ScopedSkillsTab({
         }
 
         const previous =
-          queryClient
-            .getQueryData<SkillInfo[]>(skillsQueryKey(profile))
-            ?.find(skill => skill.name === row.name) ?? row
+          queryClient.getQueryData<SkillInfo[]>(skillsQueryKey(profile))?.find(skill => skill.name === row.name) ?? row
 
         setSkills(current => current?.map(skill => (skill.name === row.name ? { ...skill, enabled } : skill)))
 
@@ -116,9 +108,7 @@ function ScopedSkillsTab({
           if (mounted.current) {
             setSkills(current =>
               current?.map(skill =>
-                skill.name === row.name && skill.enabled === enabled
-                  ? { ...skill, enabled: previous.enabled }
-                  : skill
+                skill.name === row.name && skill.enabled === enabled ? { ...skill, enabled: previous.enabled } : skill
               )
             )
           }
@@ -244,11 +234,7 @@ function ScopedSkillsTab({
       {installedError instanceof Error ? installedError.message : null}
     </CatalogAlert>
   ) : installedPending ? (
-    <Loader
-      className="mx-auto my-2 size-6 text-(--ui-text-tertiary)"
-      label={t.skills.loading}
-      type="rose-curve"
-    />
+    <Loader className="mx-auto my-2 size-6 text-(--ui-text-tertiary)" label={t.skills.loading} type="rose-curve" />
   ) : null
 
   return (
@@ -332,7 +318,7 @@ function ScopedSkillsTab({
                 id="skill-editor"
                 onClose={closeSkillEditor}
                 title={
-                  <span className="text-[0.68rem] font-normal text-muted-foreground/60">
+                  <span className="text-[length:var(--aino-text-caption)] font-normal text-(--ui-text-tertiary)">
                     {skillEditor.name}/SKILL.md
                   </span>
                 }
@@ -358,9 +344,8 @@ function ScopedSkillsTab({
             const name = archiveTarget
 
             const snapshot =
-              queryClient
-                .getQueryData<SkillInfo[]>(skillsQueryKey(profile))
-                ?.find(skill => skill.name === name) ?? skills.find(skill => skill.name === name)
+              queryClient.getQueryData<SkillInfo[]>(skillsQueryKey(profile))?.find(skill => skill.name === name) ??
+              skills.find(skill => skill.name === name)
 
             void queryClient.cancelQueries({ queryKey: skillsQueryKey(profile), exact: true })
             setSkills(current => current?.filter(skill => skill.name !== name))
@@ -374,9 +359,7 @@ function ScopedSkillsTab({
             return () => {
               if (mounted.current) {
                 setSkills(current =>
-                  snapshot && current && !current.some(skill => skill.name === name)
-                    ? [...current, snapshot]
-                    : current
+                  snapshot && current && !current.some(skill => skill.name === name) ? [...current, snapshot] : current
                 )
               }
 

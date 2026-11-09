@@ -112,6 +112,9 @@ class HostedRoomService:
         hosted_rooms.prune_disbanded_rooms(self.db_path)
         self._policy_lock = threading.RLock()
         self._pending_actions: dict[tuple[str, str], dict[str, Any]] = {}
+        # Display-only snapshots from the existing exact-attempt info poll. Durable task
+        # state remains the sole authority for running, stopping and terminal transitions.
+        self._task_activities: dict[tuple[str, str, str, int], str] = {}
         self.policy_checkpoint = HostedRoomPolicyCheckpoint(
             self.db_path,
             max_active_events=1 + 2 * discussion.MAX_DISCUSSION_MEMBERS * self.discussion_limits.max_rounds)
@@ -136,6 +139,7 @@ class HostedRoomService:
             transport_resolver=self._resolve_member_transport, turn_lock=self._turn_lock,
             prepare_room=self._prepare_tracked, publish_terminal=self.publish_terminal,
             pending_action=self._set_pending_action,
+            task_activity=self._set_task_activity,
             poll_interval_seconds=_HOSTED_ROOM_IDLE_FALLBACK_SECONDS,
             active_poll_interval_seconds=_HOSTED_ROOM_ACTIVE_POLL_SECONDS,
             turn_timeout_seconds=_hosted_room_turn_timeout_seconds())
@@ -360,6 +364,38 @@ class HostedRoomService:
                 self._pending_actions.pop((room_id, member_id), None)
             else:
                 self._pending_actions[(room_id, member_id)] = {**action, "member_id": member_id}
+
+    @staticmethod
+    def _activity_key(task):
+        return (task['identity'].room_id, task_member_id(task),
+                task['identity'].task_id, task['execution_generation'])
+
+    def _set_task_activity(self, task, info):
+        from gateway.session_activity import ACTIVITY_KINDS
+        key = self._activity_key(task)
+        activity = info.get('activity') if info is not None else None
+        exact = (info is not None and info.get('status') == 'started'
+                 and info.get('task_id') == task['identity'].task_id
+                 and type(info.get('execution_generation')) is int
+                 and info['execution_generation'] == task['execution_generation'])
+        with self._policy_lock:
+            if exact and isinstance(activity, str) and activity in ACTIVITY_KINDS:
+                self._task_activities[key] = activity
+            else:
+                self._task_activities.pop(key, None)
+            if info is None:
+                pending = self._pending_actions.get(key[:2])
+                if pending is not None and (pending.get('task_id'), pending.get('execution_generation')) == key[2:]:
+                    self._pending_actions.pop(key[:2], None)
+
+    def _member_activity_row(self, task):
+        row = {'member_id': task_member_id(task), 'status': str(task['status']),
+               'task_id': task['identity'].task_id, 'execution_generation': task['execution_generation']}
+        with self._policy_lock:
+            activity = self._task_activities.get(self._activity_key(task))
+        if task['status'] == 'running' and activity is not None:
+            row['activity'] = activity
+        return row
 
     def _rotate_route_grant(
         self, room_id: str, member_id: str, grant: str, catalog: GatewayRoomCatalog | None = None
@@ -670,12 +706,14 @@ class HostedRoomService:
         if self._prepare_stalls.stalled(room_id):
             pending_actions.append(prepare_stall.retry_action(room_id, self._room(room_id)))
         with self._policy_lock:
+            live_attempts = {self._activity_key(task) for task in tasks if task['status'] in {'running', 'stopping'}}
             pending_actions.extend(
                 dict(action) for (action_room_id, _member_id), action
-                in self._pending_actions.items() if action_room_id == room_id)
+                in self._pending_actions.items() if action_room_id == room_id
+                and (action_room_id, _member_id, action.get('task_id'), action.get('execution_generation')) in live_attempts)
         # Who is answering right now: clients render per-member working indicators from it.
         member_activity = [
-            {"member_id": task_member_id(task), "status": str(task["status"])}
+            self._member_activity_row(task)
             for task in tasks if task["status"] in _LIVE_STATUSES]
         return {
             "running": runtime["running"], "working": bool(member_activity),

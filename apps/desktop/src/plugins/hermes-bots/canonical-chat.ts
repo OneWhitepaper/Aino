@@ -117,6 +117,7 @@ interface OpenStoredBotChatOptions {
    *  always replaced the first; ⌘-click / "Open in new tab" on a bot row
    *  pass `tab` so two Bot Chats can stay open side by side. */
   intent?: BotChatOpenIntent
+  openingStillCurrent?: (() => boolean) | null
 }
 
 export type BotChatOpenIntent = 'in-place' | 'tab'
@@ -125,7 +126,7 @@ async function openStoredBotChat(
   owner: RosterRow | string,
   storedId: string,
   summary: CanonicalChatRow,
-  { background = false, intent = 'in-place' }: OpenStoredBotChatOptions = {}
+  { background = false, intent = 'in-place', openingStillCurrent }: OpenStoredBotChatOptions = {}
 ): Promise<string> {
   if (!storedId || typeof host.openSession !== 'function') {
     throw new Error(pluginText('bot.storedSessionOpenUnsupported', `This Aino version cannot open stored sessions`))
@@ -184,6 +185,7 @@ async function openStoredBotChat(
     forceResume: true,
     hydrationTimeoutMs,
     keepAllProfilesScope: true,
+    ...(openingStillCurrent ? { openingStillCurrent } : {}),
     ...(background ? { refreshInPlace: true } : {}),
     workspaceMode: 'bots',
     workspaceOwnerKey: ownerKey,
@@ -207,7 +209,10 @@ function isCanonicalBotChatHistory(history: CanonicalChatRow) {
 function botModeGatewayNeedsUpdate(error: unknown) {
   const message = String((error as RpcErrorLike)?.message || error || '')
 
-  return /(?:method not found|no handler for|unknown method|unsupported rpc)/i.test(message)
+  return (
+    botOpenErrorCode(error) === 'unsupported_gateway' ||
+    /(?:method not found|no handler for|unknown method|unsupported rpc)/i.test(message)
+  )
 }
 
 /** The one deep link to the Gateways settings tab (the route
@@ -225,9 +230,26 @@ function errorDetail(error: unknown): string | undefined {
 function botModelNeedsSetup(error: unknown): boolean {
   const message = String((error as RpcErrorLike)?.message || error || '')
 
-  return /model_unavailable|model unavailable|no (?:usable )?model|model (?:missing|not found|unconfigured)/i.test(
-    message
+  return (
+    ['model_unavailable', 'model_not_found'].includes(botOpenErrorCode(error)) ||
+    /model_unavailable|model unavailable|no (?:usable )?model|model (?:missing|not found|unconfigured)/i.test(message)
   )
+}
+
+/** SDK failures keep stable codes while messages are localized. IPC can wrap
+ *  that structured error as a cause; neither path should depend on English. */
+function botOpenErrorCode(error: unknown): string {
+  for (let depth = 0; depth < 3 && error && typeof error === 'object'; depth++) {
+    const current = error as { code?: unknown; cause?: unknown }
+
+    if (typeof current.code === 'string') {
+      return current.code
+    }
+
+    error = current.cause
+  }
+
+  return ''
 }
 
 /** What the caller was doing when the open failed: `'reach'` — activating
@@ -237,22 +259,55 @@ export type BotOpenStep = 'open' | 'reach'
 
 /** Toast a failed bot open. Titles and bodies come from the plugin bundle and
  *  say what happened + what to do; the raw RPC/connection error only ever
- *  rides in `detail`. Model failures open the owning bot's editor, while connection
+ *  rides in `detail`. Model failures open the owning bot's model settings, while connection
  *  failures go to the gateway settings surface. */
 export function notifyBotOpenFailure(error: unknown, bot: RosterRow, step: BotOpenStep, botName?: string) {
   const text = botsText()
   const b = text.bot
+  const gatewayAction = { label: b.openGateways, onClick: () => host.navigate(GATEWAY_SETTINGS_PATH) }
+  const source = bot.connectionId || (typeof host.activeConnectionId === 'function' ? host.activeConnectionId() : null)
 
   const modelAction = {
     label: text.editor.configureModel,
     onClick: async () => {
+      if (typeof host.openModelSettings === 'function') {
+        try {
+          const route = botConnectionRoute(bot)
+
+          const owner =
+            route ||
+            (source
+              ? {
+                  connectionId: source,
+                  mode: bot.remoteSource ? ('remote' as const) : ('local' as const),
+                  profile: bot.name,
+                  targetProfile: bot.targetProfile || bot.name
+                }
+              : null)
+
+          if (owner && host.openModelSettings(owner)) {
+            return
+          }
+        } catch {
+          // A removed owner has the same safe recovery as a different source.
+        }
+
+        host.notify?.({
+          kind: 'error',
+          title: b.openChatFailedTitle(botName || bot.name),
+          message: b.openModelSettingsSourceMismatch,
+          action: gatewayAction
+        })
+
+        return
+      }
+
       const { $editingBot } = await import('./bot-state')
       $editingBot.set(bot)
       host.revealPane('hermes-bots:pane')
     }
   }
 
-  const gatewayAction = { label: b.openGateways, onClick: () => host.navigate(GATEWAY_SETTINGS_PATH) }
   const detail = errorDetail(error)
 
   if (botModeGatewayNeedsUpdate(error)) {
@@ -268,7 +323,28 @@ export function notifyBotOpenFailure(error: unknown, bot: RosterRow, step: BotOp
     return
   }
 
-  if (step === 'reach') {
+  const accountCode = botOpenErrorCode(error)
+
+  if (['platform_account_changed', 'stale_account_revision', 'not_authenticated'].includes(accountCode)) {
+    host.notify?.({
+      kind: 'error',
+      title: b.openChatFailedTitle(botName || bot.name),
+      message: sdk.translateNow(
+        accountCode === 'not_authenticated'
+          ? 'platformModels.not_authenticated'
+          : 'platformModels.platform_account_changed'
+      ),
+      ...(detail ? { detail } : {}),
+      action: {
+        label: sdk.translateNow('platformModels.myAccount'),
+        onClick: () => host.navigate('/settings?tab=account')
+      }
+    })
+
+    return
+  }
+
+  if (step === 'reach' && !botModelNeedsSetup(error)) {
     host.notify?.({
       kind: 'error',
       title: b.openUnreachableTitle,
@@ -383,9 +459,13 @@ async function findExistingCanonicalChat(owner: RosterRow | string): Promise<Can
 interface CreateCanonicalChatOptions {
   kickoff?: boolean
   openingStillCurrent?: (() => boolean) | null
+  /** Registry creation can finish without navigation; report only actual opens. */
+  onOpened?: (storedId: string) => void
 }
 
 interface OpenCanonicalChatOptions {
+  /** New Bot creation only: greet once if the canonical row is still absent. */
+  kickoff?: boolean
   /** Re-resolve and REFRESH the open chat without any navigation: the wake
    *  was triggered by a background event (session.reclaimed, roster
    *  activity), and a background event must never take the route or the
@@ -450,16 +530,34 @@ function kickoffText(): string {
  *  rail in a bot chat until the next click re-opened it scoped. */
 export function createCanonicalChat(
   owner: RosterRow | string,
-  { kickoff = false, openingStillCurrent = null }: CreateCanonicalChatOptions = {}
+  { kickoff = false, openingStillCurrent = null, onOpened }: CreateCanonicalChatOptions = {}
 ): Promise<null | string> {
   const { bot, name, key, route } = botOwner(owner)
   const inflight = canonicalCreations.get(key)
 
+  // A managed binding belongs to its viewer socket. Per-RPC leases alone
+  // close a cold secondary after create/bind, before title/open can publish
+  // a foreground owner; the intro then reaches an unbound session. Keep the
+  // exact route alive through the whole sequence, including a newer opener
+  // adopting an in-flight create. Ambient/older hosts retain their own socket.
+  const withOwnerLease = async (operation: () => Promise<null | string>) => {
+    const release =
+      route && typeof host.retainProfile === 'function'
+        ? await host.retainProfile(route, { spawnPriority: 'foreground' })
+        : () => undefined
+
+    try {
+      return await operation()
+    } finally {
+      release()
+    }
+  }
+
   // Every open of a just-minted row is the same call — adopting a concurrent
   // flight's result, the retry after a failed eager title, the retry after the
   // compat kickoff. Only WHEN differs, so WHAT lives in one place.
-  const openFreshCanonical = (sid: string) =>
-    host.openSession!(sid, {
+  const openFreshCanonical = async (sid: string) => {
+    await host.openSession!(sid, {
       ...(route
         ? {
             route
@@ -467,19 +565,28 @@ export function createCanonicalChat(
         : {}),
       profile: name,
       intent: 'in-place',
-      keepAllProfilesScope: route ? true : false,
+      // Birth and reopen are both Bot navigation. A local bot must not move
+      // the ordinary workspace's gateway home merely because it has no route.
+      keepAllProfilesScope: true,
+      ...(openingStillCurrent ? { openingStillCurrent } : {}),
       workspaceMode: 'bots',
       workspaceOwnerKey: botWorkspaceOwnerKey(bot),
       tabTitle: CANONICAL_CHAT_TITLE
     })
+    onOpened?.(sid)
+  }
+
+  const canNavigate = () => !openingStillCurrent || openingStillCurrent()
 
   if (inflight) {
-    if (!openingStillCurrent) {
+    if (!openingStillCurrent && !onOpened) {
       return inflight.run!
     }
 
-    return inflight.run!.then(async sid => {
-      if (sid && openingStillCurrent() && typeof host.openSession === 'function') {
+    return withOwnerLease(async () => {
+      const sid = await inflight.run!
+
+      if (sid && canNavigate() && typeof host.openSession === 'function') {
         await openFreshCanonical(sid)
       }
 
@@ -491,16 +598,18 @@ export function createCanonicalChat(
     run: null
   }
 
-  const canNavigate = () => !openingStillCurrent || openingStillCurrent()
-
-  const run = (async () => {
+  const run = withOwnerLease(async () => {
     const existing = await findExistingCanonicalChat(owner)
 
     if (existing?.id) {
       if (typeof host.openSession === 'function' && canNavigate()) {
         // The exact-lookup gateway reports the compression-lineage tip as
         // resolved_id; open the tip, the registry row stays the identity.
-        await openStoredBotChat(owner, existing.resolved_id || existing.id, existing)
+        const openedId = await openStoredBotChat(owner, existing.resolved_id || existing.id, existing, {
+          openingStillCurrent
+        })
+
+        onOpened?.(openedId)
       }
 
       return existing.id
@@ -570,7 +679,11 @@ export function createCanonicalChat(
             // round-trip after the user clicked another bot, and every sibling
             // open here is staleness-probed for exactly that reason.
             if (typeof host.openSession === 'function' && canNavigate()) {
-              await openStoredBotChat(owner, winner.resolved_id || winner.id, winner)
+              const openedId = await openStoredBotChat(owner, winner.resolved_id || winner.id, winner, {
+                openingStillCurrent
+              })
+
+              onOpened?.(openedId)
             }
 
             return winner.id
@@ -630,7 +743,7 @@ export function createCanonicalChat(
     }
 
     return sid || null
-  })().finally(() => {
+  }).finally(() => {
     if (canonicalCreations.get(key) === flight) {
       canonicalCreations.delete(key)
     }
@@ -652,7 +765,7 @@ export function createCanonicalChat(
  *  bot's chat opens without re-homing Desktop's chrome. */
 export async function openBotCanonicalChat(
   owner: RosterRow | string,
-  { background = false, openingStillCurrent = null, intent = 'in-place' }: OpenCanonicalChatOptions = {}
+  { background = false, openingStillCurrent = null, intent = 'in-place', kickoff }: OpenCanonicalChatOptions = {}
 ): Promise<{ openedId: string; registryId: string } | null> {
   const existing = await findExistingCanonicalChat(owner)
 
@@ -662,7 +775,7 @@ export async function openBotCanonicalChat(
     }
 
     const openedId = existing.resolved_id || existing.id
-    await openStoredBotChat(owner, openedId, existing, { background, intent })
+    await openStoredBotChat(owner, openedId, existing, { background, intent, openingStillCurrent })
 
     // Both identities matter downstream: the durable registry row names the
     // chat; the resolved lineage tip is what actually takes session focus.
@@ -681,14 +794,20 @@ export async function openBotCanonicalChat(
     return null
   }
 
+  let openedId: string | null = null
+
   const created = await createCanonicalChat(owner, {
-    openingStillCurrent
+    ...(kickoff === undefined ? {} : { kickoff }),
+    openingStillCurrent,
+    onOpened: id => {
+      openedId = id
+    }
   })
 
-  return created
+  return created && openedId
     ? {
         registryId: String(created),
-        openedId: String(created)
+        openedId: String(openedId)
       }
     : null
 }

@@ -26,7 +26,7 @@ interface ReceiptCase {
   name: string
   receipt: DesktopSyncReceipt | null
   headline: RegExp | null
-  tone?: string
+  role?: 'alert' | 'status'
 }
 
 const cases: ReceiptCase[] = [
@@ -51,43 +51,43 @@ const cases: ReceiptCase[] = [
       pm_steps: [{ name: 'sync', ok: false, detail: 'network unavailable' }]
     },
     headline: /rebuild failed — network unavailable/,
-    tone: 'text-destructive'
+    role: 'alert'
   },
   {
     name: 'embedded refused',
     receipt: { ...details, pm_sync_outcome: 'refused' },
     headline: /rebuild failed/,
-    tone: 'text-destructive'
+    role: 'alert'
   },
   {
     name: 'legacy failed',
     receipt: { ...details, outcome: 'failed', venv_rebuild: { ok: false, reason: 'uv sync exited 1' } },
     headline: /rebuild failed — uv sync exited 1/,
-    tone: 'text-destructive'
+    role: 'alert'
   },
   {
     name: 'review beats bisect and updates',
     receipt: details,
     headline: /need update-url review/,
-    tone: 'text-amber-600'
+    role: 'alert'
   },
   {
     name: 'bisect beats updates',
     receipt: { ...details, plugin_checks: details.plugin_checks?.slice(1) },
     headline: /disabled by dependency conflicts/,
-    tone: 'text-amber-600'
+    role: 'alert'
   },
   {
     name: 'updates only',
     receipt: { plugin_checks: details.plugin_checks?.slice(1) },
     headline: /Plugin updates available/,
-    tone: 'text-muted-foreground'
+    role: 'status'
   }
 ]
 
 it.each(cases)(
   '$name receipt paints the dominant warning and subordinate rows',
-  async ({ receipt, headline, tone }: ReceiptCase): Promise<void> => {
+  async ({ receipt, headline, role }: ReceiptCase): Promise<void> => {
     vi.stubGlobal('hermesDesktop', {
       getSyncStatus: async (): Promise<DesktopSyncReceipt | null> => receipt
     } satisfies Pick<Window['hermesDesktop'], 'getSyncStatus'>)
@@ -101,7 +101,7 @@ it.each(cases)(
       return
     }
 
-    expect(screen.getByText(headline).className).toContain(tone)
+    expect(screen.getByRole(role!).textContent).toContain(screen.getByText(headline).textContent)
 
     if (receipt?.plugin_bisect) {
       expect(screen.getByText('conflictor: conflicts with core pin')).toBeTruthy()

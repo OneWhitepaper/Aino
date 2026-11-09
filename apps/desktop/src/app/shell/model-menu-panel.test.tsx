@@ -534,6 +534,67 @@ describe('ModelMenuPanel MoA presets', () => {
 })
 
 describe('ModelMenuPanel current selection', () => {
+  it.each(['runtime-options', 'session-view'] as const)(
+    'opens details and checks the same Aino model confirmed by %s',
+    async source => {
+      const models = [
+        { ...platformModel('model-gpt'), display_name: 'GPT model' },
+        { ...platformModel('model-glm'), display_name: 'GLM model' }
+      ]
+
+      Object.defineProperty(window, 'hermesDesktop', {
+        configurable: true,
+        value: {
+          platformAccount: {
+            status: async () => platformSnapshot(),
+            capabilities: async () => ({}),
+            onChanged: () => () => undefined
+          },
+          platformModels: { list: async () => models }
+        }
+      })
+      await platformAccountActions(window.hermesDesktop.platformAccount).refresh()
+      recordGatewayReadyCapability(
+        { profile: 'default' },
+        { type: 'gateway.ready', payload: { managed_model_binding: 1 } }
+      )
+      getGlobalModelOptions.mockResolvedValue({
+        model: 'model-glm',
+        provider: 'aino',
+        providers: MOCK_PROVIDERS
+      })
+
+      if (source === 'session-view') {
+        // A manually selected live model wins over an older runtime catalog.
+        $currentModel.set('model-gpt')
+        $currentProvider.set('aino')
+      }
+
+      const { content, onSelectModel } = renderPanel()
+      await content.findByText('GLM model', { selector: '.aino-model-menu-name' })
+      const currentLabel = source === 'session-view' ? 'GPT model' : 'GLM model'
+      const currentId = source === 'session-view' ? 'model-gpt' : 'model-glm'
+
+      await vi.waitFor(() => {
+        const details = screen.getByRole('complementary', { name: 'Model details' })
+        expect(within(details).getByText(currentLabel)).toBeDefined()
+        expect(within(details).getByText('In use')).toBeDefined()
+        expect(
+          content
+            .getByText(currentLabel, { selector: '.aino-model-menu-name' })
+            .closest('[role="menuitem"]')
+            ?.getAttribute('aria-current')
+        ).toBe('true')
+      })
+      expect(content.baseElement.querySelectorAll('[data-platform-model-id][aria-current="true"]')).toHaveLength(1)
+      expect(content.baseElement.querySelector('[aria-current="true"]')?.getAttribute('data-platform-model-id')).toBe(
+        currentId
+      )
+      expect(onSelectModel).not.toHaveBeenCalled()
+      expect($currentModel.get()).toBe(source === 'session-view' ? 'model-gpt' : '')
+    }
+  )
+
   it('keeps the checkmark on the live SessionView model when a stale options response disagrees', async () => {
     $currentProvider.set('google')
     $currentModel.set('gemini-3.1-pro')

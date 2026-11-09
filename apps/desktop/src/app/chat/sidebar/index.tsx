@@ -291,7 +291,7 @@ interface ChatSidebarProps extends React.ComponentProps<typeof Sidebar> {
   onLoadMoreSessions: () => Promise<void> | void
   onLoadMoreMessaging?: (platform: string) => Promise<void> | void
   onResumeSession: (sessionId: string, session?: SessionInfo) => void
-  onDeleteSession: (sessionId: string) => void
+  onDeleteSession: (sessionId: string) => Promise<void> | void
   onArchiveSession: (sessionId: string) => void
   onBranchSession: (sessionId: string) => void
   onNewSessionInWorkspace: (path: null | string, options?: { openTab?: boolean; owner?: AgentProfileRoute }) => void
@@ -1520,7 +1520,10 @@ export function ChatSidebar({
               labelMeta={
                 worktreeGroupingActive ? (
                   reposScanning && !projectsSkeletonVisible ? (
-                    <GlyphSpinner ariaLabel={s.loading} className="text-[0.6875rem] text-(--ui-text-quaternary)" />
+                    <GlyphSpinner
+                      ariaLabel={s.loading}
+                      className="text-[length:var(--aino-text-caption)] text-(--ui-text-quaternary)"
+                    />
                   ) : undefined
                 ) : undefined
               }

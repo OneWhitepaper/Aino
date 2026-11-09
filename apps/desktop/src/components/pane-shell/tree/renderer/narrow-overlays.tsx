@@ -30,10 +30,12 @@ import { $layoutEditMode } from '../../edit-mode'
 import { useWindowControlsOverlap } from '../../geometry'
 import { $narrowOverlayPaneIds } from '../../narrow-overlay-state'
 import { NO_PANE_GROUP, SidebarBrandContext } from '../../pane-visibility'
+import { $workspaceMode, $workspaceOwnerKey } from '../../workspace-scope'
 import { allPaneIds, findGroup, findGroupOfPane, type GroupNode, type LayoutNode } from '../model'
-import { $hiddenTreePanes, $layoutTree, $narrowViewport, activateTreePane, closeTabPane } from '../store'
+import { $hiddenTreePanes, $layoutTree, $narrowViewport, activateTreePane, closeTabPane} from '../store'
 import { clearTabSelection } from '../tab-selection'
 import { isToolPanelGroup } from '../tool-panel-policy'
+import { workspaceShownPaneIds } from '../workspace-presentation'
 
 import { KeepAlivePaneSlot, useStablePaneHosts } from './keep-alive-panes'
 import { type NarrowRevealState as RevealState, useNarrowRevealControls } from './narrow-reveal-controls'
@@ -138,6 +140,8 @@ export function NarrowOverlays() {
   const hiddenPanes = useStore($hiddenTreePanes)
   const workspacePage = useStore($workspaceIsPage)
   const editMode = useStore($layoutEditMode)
+  const workspaceMode = useStore($workspaceMode)
+  const workspaceOwnerKey = useStore($workspaceOwnerKey)
   const [reveal, setReveal] = useState<RevealState | null>(null)
 
   // The revealed overlay spans the full viewport height (inset-y-0 below), so
@@ -169,6 +173,13 @@ export function NarrowOverlays() {
     [tree, panes]
   )
 
+  const scopePanes = useMemo(
+    () => new Set(workspaceShownPaneIds(panes.map(pane => pane.id))),
+    // Scope atoms trigger reevaluation of the shared imperative resolver.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [panes, workspaceMode, workspaceOwnerKey]
+  )
+
   const collapsibles = useMemo(
     // Solo adopts sidebar panes without their surrounding sidebar chrome.
     // Suppress every reveal path while those panes are intentionally hidden.
@@ -180,9 +191,10 @@ export function NarrowOverlays() {
               (paneChrome(p).collapsible || narrowTools.has(p.id)) &&
               inTree.has(p.id) &&
               !hiddenPanes.has(p.id) &&
+              (editMode || scopePanes.has(p.id)) &&
               (!workspacePage || workspacePageKeepsPane(p.id))
           ),
-    [solo, panes, inTree, hiddenPanes, workspacePage, narrowTools]
+    [solo, panes, inTree, hiddenPanes, workspacePage, narrowTools, editMode, scopePanes]
   )
 
   useNarrowRevealControls(narrow, solo, reveal, setReveal)

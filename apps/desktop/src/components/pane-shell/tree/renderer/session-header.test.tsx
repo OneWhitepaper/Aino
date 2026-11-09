@@ -281,7 +281,7 @@ describe('single-session header', () => {
 
     expect(bar().textContent).toContain('Promoted conversation')
     expect(inline().querySelector('[data-current-session-title]')).toBeNull()
-    act(() => bar().querySelector('button')!.click())
+    act(() => bar().querySelector<HTMLButtonElement>('button:not([data-slot="conversation-switcher"])')!.click())
     expect(menuClicks).toBe(1)
 
     act(() => $layoutEditMode.set(true))
@@ -422,7 +422,7 @@ describe('single-session header', () => {
     expect(globalThis.document.querySelectorAll('[data-tree-tab]')).toHaveLength(3)
   })
 
-  it('does not collapse a mixed chat and non-chat zone into one title', () => {
+  it('keeps the tool tab beside one current conversation title in a mixed zone', () => {
     const disposePreview = registry.register({
       area: 'panes',
       data: { placement: 'main' },
@@ -440,6 +440,8 @@ describe('single-session header', () => {
 
     render(<TreeGroup node={node} parentAxis="column" />)
 
-    expect(globalThis.document.querySelectorAll('[data-tree-tab]')).toHaveLength(3)
+    expect(globalThis.document.querySelectorAll('[data-tree-tab]')).toHaveLength(2)
+    expect(globalThis.document.querySelector('[data-tree-tab="preview-tile:test"]')).toBeTruthy()
+    expect(globalThis.document.querySelector('[data-slot="conversation-switcher"]')).toBeTruthy()
   })
 })

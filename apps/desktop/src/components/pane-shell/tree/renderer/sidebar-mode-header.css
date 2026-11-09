@@ -1,7 +1,7 @@
 .aino-sidebar-mode-header {
   display: flex;
-  flex: 0 0 61px;
-  height: 61px;
+  flex: 0 0 var(--aino-band-row2);
+  height: var(--aino-band-row2);
   align-items: center;
   min-width: 0;
   padding: 0 14px;
@@ -12,19 +12,19 @@
 .aino-sidebar-mode-static {
   display: flex;
   align-items: center;
-  gap: 9px;
+  gap: 10px;
   min-width: 0;
   max-width: 100%;
   height: 42px;
   padding: 0 9px;
-  border-radius: 12px;
+  border-radius: var(--aino-radius-control);
   color: var(--ui-text-primary);
 }
 
 .aino-sidebar-mode-trigger {
   -webkit-app-region: no-drag;
   cursor: pointer;
-  background: color-mix(in srgb, var(--ui-control-active-background) 70%, transparent);
+  background: transparent;
   transition: background-color 100ms;
 }
 
@@ -40,23 +40,23 @@
 }
 
 .aino-sidebar-mode-header .aino-sidebar-mode-logo {
-  width: 27px;
-  height: 27px;
+  width: 28px;
+  height: 28px;
 }
 
 .aino-sidebar-mode-title {
   overflow: hidden;
-  font-size: 1.0625rem;
+  font-size: var(--aino-text-title);
   font-weight: 600;
   line-height: 1.4;
-  letter-spacing: -0.02em;
+  letter-spacing: normal;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .aino-sidebar-mode-chevron {
   flex: none;
-  margin-left: 3px;
+  margin-left: auto;
   color: var(--ui-text-tertiary);
 }
 

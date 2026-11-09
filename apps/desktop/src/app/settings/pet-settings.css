@@ -14,14 +14,14 @@
 }
 .pet-settings-header h2 {
   margin: 0;
-  font-size: 0.9375rem;
+  font-size: var(--aino-text-body);
   line-height: 1.5;
   font-weight: 500;
 }
 .pet-settings-header p,
 .pet-settings-description {
   margin: 0.25rem 0 0;
-  font-size: 0.75rem;
+  font-size: var(--aino-text-caption);
   line-height: 1.6;
   color: var(--ui-text-tertiary);
 }
@@ -35,14 +35,14 @@
 .pet-settings-empty {
   margin: 0.75rem 0 1rem;
   color: var(--ui-text-tertiary);
-  font-size: 0.75rem;
+  font-size: var(--aino-text-caption);
   line-height: 1.65;
   overflow-wrap: anywhere;
 }
 .pet-settings-notice {
   padding: 0.75rem 0.875rem;
   border: 1px solid var(--ui-stroke-tertiary);
-  border-radius: 0.625rem;
+  border-radius: var(--aino-radius-card);
   background: var(--ui-bg-quinary);
 }
 .pet-settings-installed {
@@ -53,14 +53,14 @@
   align-items: center;
   gap: 0.5rem;
   margin: 0 0 0.75rem;
-  font-size: 0.8125rem;
+  font-size: var(--aino-text-ui);
   line-height: 1.5;
   font-weight: 500;
   text-transform: capitalize;
 }
 .pet-settings-installed h3 > span {
   color: var(--ui-text-tertiary);
-  font-size: 0.75rem;
+  font-size: var(--aino-text-caption);
   font-weight: 400;
 }
 .pet-settings-grid {
@@ -72,7 +72,7 @@
   min-width: 0;
   padding: 0.9375rem;
   border: 1px solid var(--ui-stroke-tertiary);
-  border-radius: 0.625rem;
+  border-radius: var(--aino-radius-card);
   background: var(--ui-editor-surface-background);
 }
 .pet-settings-card[data-current] {
@@ -108,7 +108,7 @@
 .pet-settings-name {
   max-width: 100%;
   color: var(--ui-text-primary);
-  font-size: 0.8125rem;
+  font-size: var(--aino-text-body);
   line-height: 1.5;
   font-weight: 500;
   overflow-wrap: anywhere;
@@ -116,13 +116,13 @@
 .pet-settings-slug {
   max-width: 100%;
   color: var(--ui-text-tertiary);
-  font-size: 0.75rem;
+  font-size: var(--aino-text-caption);
   line-height: 1.5;
   overflow-wrap: anywhere;
 }
 .pet-settings-tag {
   color: var(--ui-text-secondary);
-  font-size: 0.75rem;
+  font-size: var(--aino-text-caption);
   line-height: 1.5;
 }
 .pet-settings-busy {
@@ -146,7 +146,7 @@
   align-items: center;
   gap: 0.25rem;
   color: var(--ui-text-tertiary);
-  font-size: 0.75rem;
+  font-size: var(--aino-text-caption);
   line-height: 1.5;
 }
 .pet-settings-card-status[data-current] {
@@ -170,7 +170,7 @@
   border: 0;
   background: transparent;
   color: var(--ui-text-tertiary);
-  font-size: 0.75rem;
+  font-size: var(--aino-text-caption);
   line-height: 1.5;
   text-align: start;
 }
@@ -200,7 +200,7 @@
   min-height: 1.25rem;
   margin: 0.75rem 0 1.25rem;
   color: var(--ui-text-tertiary);
-  font-size: 0.75rem;
+  font-size: var(--aino-text-caption);
   line-height: 1.6;
 }
 .pet-settings-options {
@@ -211,7 +211,7 @@
   gap: 0.75rem;
   padding: 0.9375rem;
   border: 1px solid var(--ui-stroke-tertiary);
-  border-radius: 0.625rem;
+  border-radius: var(--aino-radius-card);
 }
 @container (max-width: 34rem) {
   .pet-settings-grid {

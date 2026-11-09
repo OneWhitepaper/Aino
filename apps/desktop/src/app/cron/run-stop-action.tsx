@@ -32,7 +32,7 @@ export function LastCancelledNote({ c, reason }: { c: Translations['cron']; reas
   }
 
   return (
-    <p className="text-[0.7rem] text-muted-foreground" data-slot="cron-last-cancelled">
+    <p className="text-[length:var(--aino-text-caption)] text-muted-foreground" data-slot="cron-last-cancelled">
       {c.control.lastCancelled(reason)}
     </p>
   )

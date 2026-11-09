@@ -97,7 +97,7 @@ _PROFILE_IMPLICIT = frozenset({'session.create', 'session.list', 'session.info',
                                'prompt.submit', 'prompt.receipt', 'prompt.cancel', 'prompt.resolve_unknown',
                                'prompt.steer_queued', 'prompt.replace_queued',
                                'session.interrupt', 'session.events.since', 'session.mutate', 'session.stats',
-                               'approval.respond', 'clarify.respond'})
+                               'approval.respond', 'clarify.respond', 'model.session'})
 
 
 def display_projection(history, profile_home, *, db=None, session_id=None):
@@ -278,6 +278,8 @@ class AuthorityConnection:
         handlers.update(connection_handlers(self))
         from gateway.session_control_actions import control
         handlers['session.control'] = partial(control, self)
+        from gateway.session_model_requests import model_session
+        handlers['model.session'] = partial(model_session, self)
         from gateway.session_platform_model import handlers as platform_model_handlers
         handlers.update(platform_model_handlers(self))
         from gateway.session_diagnostics import handlers as diagnostics_handlers

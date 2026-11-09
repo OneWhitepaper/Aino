@@ -367,7 +367,7 @@ export const CodingStatusRow = memo(function CodingStatusRow({
                 />
               ) : untrackedOnly ? (
                 <span
-                  className={`shrink-0 text-[length:var(--aino-text-caption)] leading-4 text-amber-500/90 ${status.ahead === 0 && status.behind === 0 ? 'ml-auto' : ''}`}
+                  className={`shrink-0 text-[length:var(--aino-text-caption)] leading-4 text-(--ui-yellow) ${status.ahead === 0 && status.behind === 0 ? 'ml-auto' : ''}`}
                 >
                   {s.changed(status.untracked)}
                 </span>

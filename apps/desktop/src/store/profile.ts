@@ -30,7 +30,7 @@ import {
   openGatewayForProfile,
   openSecondaryCount
 } from '@/store/gateway'
-import { notifyError } from '@/store/notifications'
+import { notifyError, resetNotifications } from '@/store/notifications'
 import { $poolLimits } from '@/store/pool-limits'
 import { notifyRemoteOverrideAuthFailure } from '@/store/profile-remote-override'
 import { exitProjectScope } from '@/store/project-scope'
@@ -469,6 +469,7 @@ $activeGatewayProfile.subscribe(value => {
   setApiRequestProfile(key)
 
   if (_lastRoutedProfile !== null && _lastRoutedProfile !== key) {
+    resetNotifications()
     // Profile-scoped settings + the unified session list are now stale.
     // Narrowed so account/marketplace/onboarding caches don't refetch on
     // every profile switch.

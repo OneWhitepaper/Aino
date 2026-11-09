@@ -3300,6 +3300,8 @@ def set_config_value(key: str, value: str, force: bool = False):
     is written with a did-you-mean notice), skips the unknown-top-level-key notice AND
     authorizes replacing a mapping section with a scalar. Without it, scalar writes over mappings are refused and bare ``model`` is redirected
     to ``model.default``."""
+    from hermes_cli.conversation_model import guard_conversation_model_write
+    guard_conversation_model_write(key)
     if is_managed():
         managed_error("set configuration values")
         return
@@ -3486,6 +3488,8 @@ def get_config_value(key: str, *, as_json: bool = False, raw: bool = False):
 
 def unset_config_value(key: str):
     """Remove a user-set configuration or .env value."""
+    from hermes_cli.conversation_model import guard_conversation_model_write
+    guard_conversation_model_write(key)
     if is_managed():
         managed_error("unset configuration values")
         return
@@ -3555,8 +3559,7 @@ def _usage_exit(usage: str, examples: list[str], extra: Optional[list[str]] = No
 
 
 def _run_write_command(fn, *args) -> None:
-    """Run a config writer, surfacing the fail-closed write guard's RuntimeError as a clean CLI
-    error instead of a traceback."""
+    """Run a config writer, surfacing fail-closed write errors without a traceback."""
     try:
         fn(*args)
     except RuntimeError as exc:
@@ -3564,16 +3567,13 @@ def _run_write_command(fn, *args) -> None:
 
 
 _USAGE_GET = ("Usage: hermes config get <key> [--json] [--raw]", [
-    "hermes config get model", "hermes config get terminal.backend",
-    "hermes config get skills.config --json"], None)
+    "hermes config get model", "hermes config get terminal.backend", "hermes config get skills.config --json"], None)
 _USAGE_SET = ("Usage: hermes config set [--force] <key> <value>", [
     "hermes config set model anthropic/claude-sonnet-4", "hermes config set terminal.backend docker",
     "hermes config set OPENROUTER_API_KEY sk-or-..."], [
-    "", "  --force: skip the unknown-key notice for unrecognized keys,",
-    "           and allow a scalar to replace a whole mapping section"])
+    "", "  --force: skip the unknown-key notice for unrecognized keys,", "           and allow a scalar to replace a whole mapping section"])
 _USAGE_UNSET = ("Usage: hermes config unset <key>", [
-    "hermes config unset model", "hermes config unset terminal.backend",
-    "hermes config unset OPENROUTER_API_KEY"], None)
+    "hermes config unset model", "hermes config unset terminal.backend", "hermes config unset OPENROUTER_API_KEY"], None)
 
 
 def _cmd_config_get(args):

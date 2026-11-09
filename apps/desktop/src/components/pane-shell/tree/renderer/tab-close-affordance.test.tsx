@@ -62,13 +62,13 @@ afterEach(() => {
   disposers.splice(0).forEach(dispose => dispose())
 })
 
-/** All four panes in ONE zone, so every tab renders in the same strip. */
-function renderOneStrip() {
+/** Tools retain their tabs beside the one current conversation title. */
+function renderOneStrip(active: string) {
   $layoutTree.set(
     split('row', [
       group(
         PANES.map(([id]) => id),
-        { active: 'workspace', id: 'grp-all' }
+        { active, id: 'grp-all' }
       ),
       group(['spacer'], { id: 'grp-spacer' })
     ])
@@ -80,7 +80,7 @@ function renderOneStrip() {
   render(<TreeGroup node={zone} parentAxis="row" />)
 }
 
-const tabEl = (paneId: string) => document.querySelector<HTMLElement>(`[data-tree-tab="${paneId}"]`)
+const tabEl = (paneId: string) => globalThis.document.querySelector<HTMLElement>(`[data-tree-tab="${paneId}"]`)
 
 /** Does this tab advertise a ✕? */
 const hasCloseButton = (paneId: string) => Boolean(tabEl(paneId)?.querySelector('button[aria-label]'))
@@ -98,7 +98,7 @@ function middleClickCloses(paneId: string): boolean {
 describe('a tab advertises exactly the close gesture it honors', () => {
   for (const [paneId] of PANES) {
     it(`${paneId}: ✕ presence matches middle-click`, () => {
-      renderOneStrip()
+      renderOneStrip(paneId)
 
       expect(tabEl(paneId)).toBeTruthy()
 

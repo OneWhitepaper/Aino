@@ -34,6 +34,7 @@ import { defineLocale, type TranslationOverrides } from './define-locale'
 import { homeGuidance } from './home-guidance'
 import { introDe } from './intro-de'
 import { messagingDirectory } from './messaging-directory'
+import { notificationCenterCopy } from './notification-center'
 import { runtimeFeatureCopy } from './runtime-feature-copy'
 import { toolPanel } from './tool-panel'
 import { workspacePage } from './workspace-page'
@@ -319,6 +320,7 @@ const configPageFieldDescriptions: Record<string, string> = defineFieldCopy({
 })
 
 const deBaseOverrides = {
+  notificationCenter: notificationCenterCopy['de'],
   platformModels: {
     permanent: "Ohne Ablaufdatum",
     reauthorize: "Dieses Gerät erneut autorisieren",
@@ -841,6 +843,7 @@ const deBaseOverrides = {
   },
   ...deNotices,
   sendDiagnostics: {
+    closeWhileUploadingHint: 'Das Schließen dieses Fensters bricht einen bereits gestarteten Upload nicht ab.',
     title: 'Diagnosedaten an Aino senden',
     privacyNotice:
       'Ein privates Paket wird an deinen Aino-Kontodienst hochgeladen: Systeminformationen, Konfigurationsstatus (keine Schlüssel) und Agent-, Gateway- und Desktop-Protokolle (je bis 512 KB). Diese können Gespräche, Werkzeugausgaben und Dateipfade enthalten. Schlüssel werden geschwärzt; andere sensible Inhalte können verbleiben. Nur autorisierte Aino-Administratoren erhalten Zugriff. Der Zugriff endet nach 14 Tagen; Onlinedaten werden innerhalb der folgenden Stunde gelöscht. Bestehende Sicherungen folgen der Backup-Richtlinie der Bereitstellung.',
@@ -4975,6 +4978,7 @@ memoryLayers: deMemoryLayers
     }
   },
   zones: {
+    switchConversation: 'Gespräch wechseln',
     sidebarModeMenu: 'Gesprächsmodus wechseln',
     sidebarSessionsDescription: 'Projekte, Dateien und alltägliche Gespräche',
     showTabStrip: 'Tabs anzeigen',

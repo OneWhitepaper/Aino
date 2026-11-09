@@ -1,3 +1,4 @@
+import { backendScopeKey, type GatewayEvent, LOCAL_CONNECTION_ID, registryBackendScopeKey } from '@hermes/shared'
 /**
  * MULTI-SESSION VIEW STATE — the reactive face of the per-runtime session
  * cache (`sessionStateByRuntimeIdRef` in use-session-state-cache).
@@ -15,8 +16,6 @@
  * owns resume/submit (it has the gateway + cache internals) and registers
  * itself here as the delegate so tile UI stays dependency-light.
  */
-
-import { backendScopeKey, type GatewayEvent, LOCAL_CONNECTION_ID, registryBackendScopeKey } from '@hermes/shared'
 import { atom, computed } from 'nanostores'
 
 import { setSessionOwnerResolver } from '@/api/client'
@@ -31,6 +30,7 @@ import {
   noteActiveTreeGroup,
   revealTreePane
 } from '@/components/pane-shell/tree/store'
+import { workspaceShownPaneIds } from '@/components/pane-shell/tree/workspace-presentation'
 import { resolveRememberedActivePane, workspaceScopeKey } from '@/components/pane-shell/workspace-scope'
 import type { WorkspaceMode } from '@/contrib/types'
 import { dropBrowserProfilePrefs, migrateBrowserProfilePrefs } from '@/lib/browser-profile-prefs'
@@ -84,7 +84,7 @@ import {
   setTurnStartedAt
 } from './session'
 import { secondaryProfileOwnerForEvent } from './session-event-provenance'
-import { $focusedStoredSessionId, TILE_PANE_PREFIX } from './session-focus'
+import { $focusedStoredSessionId, $focusedTreePaneId, TILE_PANE_PREFIX } from './session-focus'
 import { turnHasReply, withNoReplyNotice } from './session-no-reply'
 import { assertSessionOwnerResolved } from './session-owner-resolution'
 import {
@@ -2660,7 +2660,7 @@ export function closeAllOpenSessionTiles(paneId: string): void {
   const tree = $layoutTree.get()
   // Copy the live group list. closeSessionTile can rewrite the layout
   // tree; iterating the original array would skip every other pane.
-  const panes = [...((tree ? findGroupOfPane(tree, paneId) : null)?.panes ?? [])]
+  const panes = workspaceShownPaneIds((tree ? findGroupOfPane(tree, paneId) : null)?.panes ?? [])
 
   for (const id of panes) {
     if (id.startsWith(TILE_PANE_PREFIX)) {
@@ -2911,16 +2911,15 @@ export const $openStoredSessionIds = computed(
   (selected, tiles) => new Set([...(selected ? [selected] : []), ...tiles.map(t => t.storedSessionId)])
 )
 
-/** Live runtime id of the focused session (a tile's bound runtime, else the
- *  primary's active session). */
+/** Live runtime of the focused conversation; hidden primary work stays independent. */
 export const $focusedRuntimeId = computed(
-  [$focusedStoredSessionId, $selectedStoredSessionId, $activeSessionId, $sessionTiles],
+  [$focusedStoredSessionId, $selectedStoredSessionId, $activeSessionId, $sessionTiles, $focusedTreePaneId],
   (focused, selected, primaryRuntime, tiles) => {
     if (focused && focused !== selected) {
       return tiles.find(t => t.storedSessionId === focused)?.runtimeId ?? null
     }
 
-    return primaryRuntime
+    return workspaceShownPaneIds(['workspace']).length ? primaryRuntime : null
   }
 )
 
@@ -2947,8 +2946,7 @@ function focusedSessionRow(storedSessionId: string): SessionInfo | undefined {
   )
 }
 
-/** The workspace CWD of the currently focused session (the focused tile's cwd,
- *  else the primary session's confirmed workspace cwd, with fallback to historical session cwd). */
+/** Workspace CWD follows the visible conversation, with its cached historical fallback. */
 export const $focusedWorkspaceCwd = computed(
   [
     $focusedStoredSessionId,
@@ -2959,11 +2957,9 @@ export const $focusedWorkspaceCwd = computed(
     $workspaceCwdOwner,
     $unlistedSessionOwnerRows,
     $projectTree,
-    // focusedSessionRow reads the cron/messaging slices through the owner
-    // lookup; listing them keeps a cron/messaging row landing reactive without
-    // reading them eagerly in the computed body.
     $cronSessions,
-    $messagingSessions
+    $messagingSessions,
+    $focusedTreePaneId
   ],
   (
     focusedStoredId,
@@ -2973,6 +2969,10 @@ export const $focusedWorkspaceCwd = computed(
     currentCwd,
     workspaceCwdOwner
   ) => {
+    if (!focusedStoredId && !workspaceShownPaneIds(['workspace']).length) {
+      return ''
+    }
+
     const isTile = Boolean(focusedStoredId && focusedStoredId !== selectedStoredId)
 
     if (isTile && focusedStoredId) {

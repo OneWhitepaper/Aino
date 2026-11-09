@@ -71,7 +71,7 @@ it('keeps known model controls in place during an explicit refresh of the same a
       <ModelControls />
     </QueryClientProvider>
   )
-  const modelButton = screen.getByRole('button', { name: /catalog-a/i })
+  const modelButton = screen.getByRole('button', { name: name => name.includes(model.display_name) })
   const reasoningButton = screen.getByTestId('reasoning-pill')
   let refresh!: Promise<void>
 
@@ -85,7 +85,7 @@ it('keeps known model controls in place during an explicit refresh of the same a
 
   expect(catalog.state.get().phase).toBe('loading')
   expect(list).toHaveBeenCalledTimes(2)
-  expect(screen.getByRole('button', { name: /catalog-a/i })).toBe(modelButton)
+  expect(screen.getByRole('button', { name: name => name.includes(model.display_name) })).toBe(modelButton)
   expect(screen.getByText(model.display_name)).toBeTruthy()
   expect(screen.queryByTestId('reasoning-pill')).toBe(reasoningButton)
 
@@ -94,6 +94,6 @@ it('keeps known model controls in place during an explicit refresh of the same a
     await refresh
   })
 
-  expect(screen.getByRole('button', { name: /catalog-a/i })).toBe(modelButton)
+  expect(screen.getByRole('button', { name: name => name.includes(model.display_name) })).toBe(modelButton)
   expect(screen.queryByTestId('reasoning-pill')).toBeNull()
 })

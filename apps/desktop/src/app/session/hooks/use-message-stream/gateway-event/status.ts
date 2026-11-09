@@ -434,7 +434,8 @@ export function handleStatusEvent(ctx: GatewayEventContext): boolean {
 
     reportPlatformCredentialRejection(notice?.code, notice?.owner_user_id, notice?.managed_credential_version)
 
-    showAgentNotice(notice)
+    showAgentNotice(notice, { connectionId: event.connectionId ?? null,
+      profile: event.profile ?? deps.activeGatewayProfile, sessionId: event.session_id || null })
 
     // The urgent pair (access paused / restored) also breaks through as a
     // native OS notification when Hermes is backgrounded; dispatch is gated
@@ -452,7 +453,9 @@ export function handleStatusEvent(ctx: GatewayEventContext): boolean {
     // Key-matched dismissal (e.g. credits restored clears the depleted
     // notice). notify() keys the toast by the notice key, so this maps
     // straight to dismissNotification(key).
-    clearAgentNotice((event.payload as AgentNoticePayload | undefined)?.key)
+    clearAgentNotice((event.payload as AgentNoticePayload | undefined)?.key, {
+      connectionId: event.connectionId ?? null, profile: event.profile ?? deps.activeGatewayProfile
+    })
 
     return true
   }

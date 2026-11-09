@@ -87,7 +87,7 @@ export function SidebarPinnedEmptyState({ archived, filtered }: { archived: bool
 
   return (
     <div
-      className="flex min-h-7 items-center gap-1.5 rounded-lg pl-2 text-[0.75rem] text-(--ui-text-tertiary)"
+      className="flex min-h-7 items-center gap-1.5 rounded-lg pl-2 text-[length:var(--aino-text-caption)] text-(--ui-text-tertiary)"
       data-sidebar-pinned-hint=""
     >
       <span className="grid w-3.5 shrink-0 place-items-center text-(--ui-text-quaternary)">
@@ -144,7 +144,7 @@ export function SidebarStorageCorruptNotice({
         <AlertDescription>
           <p>{copy.body(profiles.join(', '))}</p>
           <p>{copy.action}</p>
-          <code className="break-all text-[0.7rem]">
+          <code className="break-all text-[length:var(--aino-text-caption)]">
             hermes sessions recover --source &lt;state.db&gt; --inspect-only
           </code>
           <Button

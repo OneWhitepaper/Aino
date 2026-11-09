@@ -62,8 +62,8 @@ export const SessionControlLoopSection = memo(function SessionControlLoopSection
     loop.status === 'done'
       ? 'text-muted-foreground/70'
       : loop.status === 'paused' || loop.deferred_by_goal
-        ? 'text-amber-500'
-        : 'text-emerald-500'
+        ? 'text-(--ui-yellow)'
+        : 'text-(--ui-green)'
 
   const handleAction = useCallback(
     async (action: SessionControlAction, args?: SessionControlActionArgs): Promise<boolean> => {
@@ -201,7 +201,10 @@ export const SessionControlLoopSection = memo(function SessionControlLoopSection
               label={headerLabel}
             >
               <div>
-                <StatusControlRow className="text-[0.73rem] leading-4 text-foreground/92 break-words" icon="comment">
+                <StatusControlRow
+                  className="text-[length:var(--aino-text-caption)] leading-4 text-foreground/92 break-words"
+                  icon="comment"
+                >
                   {loop.prompt}
                 </StatusControlRow>
                 <StatusControlRow icon="clock">

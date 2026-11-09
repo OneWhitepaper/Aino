@@ -7,14 +7,14 @@ import { cn } from '@/lib/utils'
 // Small status/metadata tag. App radius (not a full pill); tones map to the
 // shared accent/muted/destructive surfaces so badges read consistently.
 const badgeVariants = cva(
-  'inline-flex w-fit shrink-0 items-center gap-1 rounded-[3px] font-medium leading-none whitespace-nowrap [&_svg]:pointer-events-none',
+  'inline-flex w-fit shrink-0 items-center gap-1 rounded-(--aino-radius-control) font-medium leading-none whitespace-nowrap [&_svg]:pointer-events-none',
   {
     variants: {
       variant: {
         default: 'bg-primary/10 text-primary',
         muted: 'bg-muted text-muted-foreground',
-        success: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-300',
-        warn: 'bg-amber-500/10 text-amber-600 dark:text-amber-300',
+        success: 'bg-(--aino-notice-success)/10 text-(--aino-notice-success)',
+        warn: 'bg-(--aino-notice-warning)/10 text-(--aino-notice-warning)',
         destructive: 'bg-destructive/10 text-destructive',
         outline: 'border border-(--ui-stroke-secondary) text-muted-foreground',
         // Solid fill — icon-corner counts (titlebar unread, etc.).
@@ -22,8 +22,9 @@ const badgeVariants = cva(
       },
       size: {
         default: 'px-1.5 py-0.5 text-[length:var(--aino-text-caption)] [&_svg]:size-3',
-        xs: 'px-1 py-px text-[0.6875rem] [&_svg]:size-2.5',
-        overlay: 'h-2 min-w-2 justify-center rounded-[2px] px-px text-[7px] font-semibold tabular-nums'
+        xs: 'px-1 py-0.5 text-[length:var(--aino-text-caption)] [&_svg]:size-3',
+        overlay:
+          'h-4 min-w-4 justify-center rounded-full px-1 text-[length:var(--aino-text-caption)] font-medium tabular-nums'
       }
     },
     defaultVariants: { variant: 'default', size: 'default' }
